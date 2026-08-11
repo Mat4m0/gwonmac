@@ -5,14 +5,9 @@
 //
 // The two compile-time claims are asserted with `@ts-expect-error`, which is a
 // real assertion: it *fails* when the line it guards type-checks. Node strips
-// types and never sees them, so `node --test` alone cannot fail on them — they
-// are checked by `tsc -p tsconfig.tests.json` (the project that exists so that
-// `tests/**/*.ts` is checked against the real production types rather than
-// merely stripped). Run both, or this file only half-runs:
-//
-//   node --import ./tests/ts-hook.mjs --experimental-strip-types --test \
-//     tests/unit/a-build-library-record-cannot-hold-an-impossible-build.test.ts
-//   npx tsc -p tsconfig.tests.json
+// types and never sees them, so the normal unit and typecheck gates are both
+// required: the former executes behavior and the latter executes these type
+// assertions against the production contracts.
 //
 //   1. A skill bar is a fixed-length tuple. A nine-slot bar is not a build with
 //      a small mistake in it; it is not a build, and it must not be spellable.

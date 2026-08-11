@@ -17,7 +17,7 @@ import {
 
 const [beforePath, afterPath] = process.argv.slice(2);
 if (!beforePath || !afterPath) {
-  console.error("usage: pnpm diagnostics:compare <before.gwdiag> <after.gwdiag>");
+  console.error("usage: pnpm diagnostics:compare <before.zip> <after.zip>");
   process.exitCode = 2;
 } else {
   await withCapture(resolve(beforePath), async (before) => {

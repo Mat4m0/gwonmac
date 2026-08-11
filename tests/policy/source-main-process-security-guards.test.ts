@@ -2,7 +2,7 @@
 //
 // Eleven of the fourteen security-posture assertions this repository used to
 // make about src/main by regular expression are asked of the running
-// application instead, in tests/electron/sandbox.spec.ts (P5.18). These three
+// application instead, in tests/electron/sandbox.spec.ts. These three
 // are what is left. Each one is a call site: the predicate it calls is executed
 // by a unit test, and what has no executable form is that main still asks it.
 // They are here, under a filename

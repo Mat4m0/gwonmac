@@ -1,5 +1,5 @@
-// P5.6, executed rather than asserted about. The preload's channel constants
-// used to be a hand-maintained copy of `IPC`; a release test policed the copy by
+// This invariant is executed rather than asserted about. The preload's channel
+// constants used to be a hand-maintained copy of `IPC`; a release test policed the copy by
 // searching the preload's text for every channel string, which proved the copy
 // existed and nothing about what the preload did with it.
 //

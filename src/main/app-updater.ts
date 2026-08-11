@@ -7,16 +7,19 @@
  * gates are provable without running a timer; an open game socket defers a
  * check because a Squirrel download must not compete with live game traffic.
  *
- * One other module reads from this project's releases:
- * `certification/certificate-feed-delivery.ts` fetches two published assets.
- * It does not ask the releases API, it makes no install decision, and it fires
- * on this class's trigger rather than on one of its own — `main.ts` calls both
- * from one place. The consent promise therefore stays checkable: the same
- * predicate gates both, and with automatic checks off a launch reaches
- * github.com zero times.
+ * One transitional module also reads from this project's releases:
+ * `certification/certificate-feed-delivery.ts` attempts two fixed asset URLs.
+ * At the accepted plan's 2026-08-10 evidence baseline, no recent release
+ * published either asset. It does not ask the releases API, make an install
+ * decision, or own a trigger — `main.ts` calls both from one place. The
+ * accepted refactor deletes that path. Until then, the consent promise remains
+ * checkable: the same predicate gates both, and with automatic checks off a
+ * launch reaches github.com zero times.
  *
- * Only a package carrying the release marker may reach Squirrel.Mac. A stable
- * install is never offered a preview, a preview may advance to stable, and a
+ * Only a package carrying the release marker may reach Squirrel.Mac. A
+ * release-identity stable version is never offered a prerelease; a
+ * release-identity prerelease may advance to a later eligible prerelease or
+ * stable. The separately signed Preview tester app cannot reach this owner. A
  * ready update waits for a restart rather than taking one.
  */
 import type {

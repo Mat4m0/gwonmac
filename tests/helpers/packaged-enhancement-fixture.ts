@@ -29,8 +29,7 @@ import {
 import { stopChildProcess } from "./child-process.ts";
 // The canonical tables, not their emitted copies. `pnpm typecheck` runs before
 // `pnpm build` in `pnpm verify`, so a static import of `build/` here would make
-// checking depend on output that may not exist yet — the dependency Phase 0b
-// removed from the tooling scripts for the same reason. The packaged app under
+// checking depend on output that may not exist yet. The packaged app under
 // test is built from these same sources.
 import {
   ENHANCEMENT_BUILDS,

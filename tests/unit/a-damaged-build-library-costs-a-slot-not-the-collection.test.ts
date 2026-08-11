@@ -20,9 +20,6 @@
 // The third never deletes. `settings.ts` recovers to defaults because defaults
 // are a fine place to be; there is no such thing as a good default library, so
 // the original file is renamed rather than replaced and `onRecovered` fires.
-//
-//   node --import ./tests/ts-hook.mjs --experimental-strip-types --test \
-//     tests/unit/a-damaged-build-library-costs-a-slot-not-the-collection.test.ts
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

@@ -24,6 +24,7 @@ test("no downloaded game artifacts or generated output are tracked", () => {
     /(^|\/)Gw\.snapshot$/i,
     /(^|\/)(manifest|version)\.json$/i,
     /\.gwdiag$/i,
+    /(^|\/)guild-wars-diagnostics[^/]*\.zip$/i,
     /\.dmp$/i,
     /(^|\/)credentials\.bin$/i,
     /^(build|out|node_modules|gwpatch-cache)\//i,
@@ -84,10 +85,10 @@ test("no second production runtime remains", () => {
 });
 
 test("no private key material is tracked", () => {
-  // The certificate feed's signing key lives in a gated CI environment secret
-  // and nowhere else; `certificates/public-key.txt` holds the public half or
-  // its placeholder. Tests generate throwaway keypairs per run, so no fixture
-  // needs one either — which makes any encoded private key in the tree a
+  // The transitional certificate feed's signing key lives in a gated CI
+  // environment secret and nowhere else; `certificates/public-key.txt` holds
+  // only the real public half. Tests generate throwaway keypairs per run, so no
+  // fixture needs one either — which makes any encoded private key in the tree a
   // mistake rather than a special case.
   const material = /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/;
   const hits = tracked.filter((file) => {

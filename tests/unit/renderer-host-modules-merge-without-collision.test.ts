@@ -1,5 +1,5 @@
-// P6.5 turned the `window.gwInstall*` globals into ESM exports, and harness.ts's
-// boot() merges the module namespaces into one `host` object
+// The installers are ESM exports rather than `window.gwInstall*` globals, and
+// harness.ts's boot() merges the module namespaces into one `host` object
 // it calls from `instantiateWasm` and `loadGlue`. A merge is silent about a
 // collision: two modules exporting the same name would leave one installer
 // unreachable, and the harness would install a graphics adapter or a

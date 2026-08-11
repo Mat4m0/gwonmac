@@ -6,7 +6,7 @@
 // all resolve to src/main/paths.ts.
 //
 // Every boundary is executed, including the nine apps/website `.vue` SFCs:
-// P0.3 added vue-eslint-parser, so the rule runs on them rather than a weaker
+// vue-eslint-parser lets the rule run on them rather than a weaker
 // text scan standing in for it.
 //
 // The only override is turning off typescript-eslint's project service, which

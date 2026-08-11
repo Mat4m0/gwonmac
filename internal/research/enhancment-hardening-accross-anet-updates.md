@@ -1,5 +1,15 @@
 # Surviving ArenaNet Client Updates — Research
 
+> **Status: historical research evidence.** The remote certificate-feed
+> recommendation and placeholder-pin statements below are superseded by
+> `plans/full-refactor-optimization.md`. The repository already had a real pin,
+> but recent releases published no feed assets, and an old application
+> cannot gain newly measured Enhancement facts from the feed. The accepted
+> direction is to delete that remote authority, keep the local structural
+> verifier and scheduled recertification, and ship new Enhancement facts through
+> a signed application release. Preserve the body below as the investigation
+> that led to the decision; do not use it as an implementation roadmap.
+
 **Date:** 2026-08-04
 **Question:** We now have native mouse cursor, native double click, template saving,
 a map/target readout, and soon hero build management. All of them reach into
@@ -168,7 +178,7 @@ So the honest formulation of the problem is:
 | **Cursor-refresh retry, pointer-lock gating**   | Pure renderer logic reading published cursor state                                                                                                                           | none                                             | Survives (useless without the cursor cert, but never harmful)                                       |
 | **"Map cursor"**                                | Not a separate feature — it is the cursor bitmap pipeline plus the map-state words above                                                                                     | —                                                | covered above                                                                                       |
 | **Keyboard label offset**                       | Investigation only; nothing ships (`internal/upstream/keyboard-label-offset.md`)                                                                                             | —                                                | n/a — filed upstream                                                                                |
-| **Hero build management**                       | **Planned** (`plans/tools/hero-builds/`, `plans/safe/05-…`)                                                                                                                  | see §6                                           | —                                                                                                   |
+| **Hero build management**                       | Host-side codec, storage, and UI; certified reads/actions degrade independently                                                                                              | hero, skill, and action facts                    | Host data persists; running-game availability remains certification-dependent                        |
 
 Key numbers for intuition: the fragile surface is currently **4 function/table
 indices + 36 layout words + 13 message IDs + 1 body hash** — about 54 facts.
@@ -350,10 +360,12 @@ Good news from the research: most of it is _not_ new fragile surface.
   GWToolbox ships an independent pure-C++ codec, and even documents the
   party-wide "teambuild" string format (magic byte `0x1F`). Encode/decode/
   store/share can be implemented entirely host-side — survives every update.
-- **Applying a build to the player** may need _zero_ new client facts: the
+- **Applying a build to the player** may need _zero_ new client facts when
+  template publication is certified: the
   game's own `Templates/Skills` folder is already load-bearing in this repo —
   the game reads templates from disk, and our template-save bridge already
-  owns that directory. (This is finding #1 in `plans/tools/hero-builds/primitives.md`.)
+  owns that directory. Without certification, publication into the running
+  game remains unavailable.
 - **Listing heroes** is reads only, and the party layout words for it are
   partially certified already (heroes array walk in the kernel). The hero
   roster (`hero_info` array: id, level, professions, name) is one more
@@ -364,9 +376,9 @@ Good news from the research: most of it is _not_ new fragile surface.
   timeout) → `LoadSkillTemplate(hero_agent_id, code)` → set disabled skills →
   `SetHeroBehavior`. GWCAjs has already located and partly live-verified the
   WASM equivalents (the `CharMsgSend…` packet functions with their opcodes).
-  Calling client functions is a new capability class for us —
-  `plans/safe/05-hero-automation-investigation.md` already defines the
-  supervised, one-proven-action-at-a-time path for it.
+  Calling client functions is a separate capability class. Add one bounded,
+  user-initiated action at a time only after its exact-build facts and refusal
+  behavior are independently proved.
 - **Skill names/icons** are ArenaNet content we won't redistribute — so it's a
   certified read of the client's own skill table, or no names. The plans flag
   this as the most under-estimated primitive.
@@ -485,8 +497,8 @@ In order of leverage:
    every accepted fix permanently deletes fragile surface. Add the name-map
    ask (item 8 above) to the conversation.
 6. **Build hero build management data-first:** codec + storage + UI (pure
-   host), then the certified read model (hero roster), then — via the
-   `plans/safe/05` supervised path — one certified action at a time.
+   host), then the certified read model (hero roster), then one bounded,
+   certified action at a time.
 
 ---
 

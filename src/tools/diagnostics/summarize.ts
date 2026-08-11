@@ -14,7 +14,7 @@ import { withCapture, validateCapture } from "./common.js";
 
 const input = process.argv[2];
 if (!input) {
-  console.error("usage: pnpm diagnostics:summarize <capture.gwdiag>");
+  console.error("usage: pnpm diagnostics:summarize <capture.zip>");
   process.exitCode = 2;
 } else {
   await withCapture(resolve(input), (capture) => {

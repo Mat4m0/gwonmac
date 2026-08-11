@@ -1,5 +1,5 @@
-// P5.13, executed rather than asserted about. The main process now sends a
-// failure *code* on the progress channel and as a download outcome, so the
+// This behavior is executed rather than asserted about. The main process sends
+// a failure *code* on the progress channel and as a download outcome, so the
 // sentence the player reads is chosen here. These run the real map: every
 // member of the catalogue must produce prose, the two surfaces must give
 // different advice for the same fault, and an unnamed code must land on one

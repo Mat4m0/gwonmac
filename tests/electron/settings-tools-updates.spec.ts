@@ -88,10 +88,12 @@ test.describe("tools and update settings", () => {
               ? [{
                   tag_name: tag,
                   draft: false,
-                  // A stable offer is the one shape every install accepts: a
-                  // preview may advance to stable, while a stable install is
-                  // never offered a preview — so a preview fixture would be
-                  // refused the day the app version loses its suffix.
+                  // A stable offer is the one shape every release-identity
+                  // install accepts: a prerelease may advance to stable, while
+                  // a stable install is never offered a prerelease — so a
+                  // prerelease fixture would be refused the day the app version
+                  // loses its suffix. The Preview tester identity cannot reach
+                  // AppUpdater at all.
                   prerelease: false,
                   assets: [
                     {

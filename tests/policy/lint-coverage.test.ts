@@ -1,4 +1,4 @@
-// P0.3: files that ESLint used to skip entirely are linted again. An ignore
+// Files that ESLint used to skip entirely are linted again. An ignore
 // entry is invisible in a green `pnpm lint`, so it needs its own assertion.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -26,7 +26,7 @@ test("ESLint covers the packaging config and every website source", async () => 
 });
 
 test("every website .vue source is linted, not just the one named above", async () => {
-  // P0.3 resolved: vue-eslint-parser and eslint-plugin-vue are installed, so the
+  // vue-eslint-parser and eslint-plugin-vue are installed, so the
   // SFCs are parsed. This enumerates them from git rather than a literal list,
   // because a new page added outside the config's glob would otherwise be
   // unlinted and invisible in a green `pnpm lint`.

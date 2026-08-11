@@ -60,8 +60,8 @@ const SEO = {
     de: "Guild Wars auf dem Mac spielen — Native App für Apple Silicon (kostenlos) | GWonMac",
   },
   description: {
-    en: "Run ArenaNet’s official Guild Wars client natively on Apple Silicon, without Windows, Wine, CrossOver, or Parallels. Free, open source, signed and notarized. Testers report up to 5K and 60–120 FPS.",
-    de: "Führe ArenaNets offiziellen Guild-Wars-Client nativ auf Apple Silicon aus, ohne Windows, Wine, CrossOver oder Parallels. Kostenlos, Open Source, signiert und notarisiert. Tester berichten bis zu 5K und 60–120 FPS.",
+    en: "Run ArenaNet’s official Guild Wars client natively on Apple Silicon, without Windows, Wine, CrossOver, or Parallels. Free, open source, signed and notarized, with selectable Retina render scale.",
+    de: "Führe ArenaNets offiziellen Guild-Wars-Client nativ auf Apple Silicon aus, ohne Windows, Wine, CrossOver oder Parallels. Kostenlos, Open Source, signiert und notarisiert, mit wählbarer Retina-Skalierung.",
   },
 };
 
@@ -84,8 +84,8 @@ const HERO = {
 
 const STATS = [
   { value: "1-click", label: { en: "install, then it updates itself", de: "Installation, danach hält es sich aktuell" } },
-  { value: "4K–5K", label: { en: "Retina-sharp on any display", de: "Retina-scharf auf jedem Display" } },
-  { value: "60–120", label: { en: "FPS on Apple Silicon", de: "FPS auf Apple Silicon" } },
+  { value: "1×–2×", label: { en: "selectable render scale", de: "wählbare Render-Skalierung" } },
+  { value: "arm64", label: { en: "built for Apple Silicon", de: "für Apple Silicon gebaut" } },
   { value: "GPL-3.0", label: { en: "fully open source", de: "vollständig Open Source" } },
 ];
 
@@ -116,7 +116,7 @@ const FEATURES = [
   },
   {
     kicker: { en: "Display", de: "Anzeige" },
-    title: { en: "Retina, up to 5K", de: "Retina, bis 5K" },
+    title: { en: "Selectable Retina render scale", de: "Wählbare Retina-Skalierung" },
     description: {
       en: "Native rendering on internal and external displays, with selectable render scale and the client’s graphics settings.",
       de: "Natives Rendering auf internen und externen Displays, mit wählbarer Render-Skalierung und den Grafikeinstellungen des Clients.",
@@ -124,10 +124,10 @@ const FEATURES = [
   },
   {
     kicker: { en: "Performance", de: "Leistung" },
-    title: { en: "Up to 120 FPS on Apple Silicon", de: "Bis zu 120 FPS auf Apple Silicon" },
+    title: { en: "Built for Apple Silicon", de: "Für Apple Silicon gebaut" },
     description: {
-      en: "Testers report steady 60 FPS on an M1 MacBook Air and up to 120 FPS on newer Pro models. Actual performance depends on your machine, resolution, and graphics settings.",
-      de: "Tester berichten von stabilen 60 FPS auf einem MacBook Air mit M1 und bis zu 120 FPS auf neueren Pro-Modellen. Die tatsächliche Leistung hängt von Gerät, Auflösung und Grafikeinstellungen ab.",
+      en: "The arm64 app runs ArenaNet’s WebAssembly client directly in bundled Chromium. Actual performance depends on your Mac, render scale, and the client’s graphics settings.",
+      de: "Die arm64-App führt ArenaNets WebAssembly-Client direkt im mitgelieferten Chromium aus. Die tatsächliche Leistung hängt von deinem Mac, der Render-Skalierung und den Grafikeinstellungen des Clients ab.",
     },
   },
   {
@@ -164,30 +164,10 @@ const AVATAR_HUES = ["#8a2508", "#6d5222", "#45280f"];
 const TESTIMONIALS = [
   {
     quote:
-      "I was getting a steady 120 FPS on max settings. I’m very happy. Thanks for the work you’ve put into this!",
-    user: "Banton1992",
-    device: "MacBook M5 Pro",
-    href: "https://reddit.com/r/GuildWars/comments/1v4sehu/guild_wars_native_experience_achieved_on_apple/ozfnd0a/",
-  },
-  {
-    quote: "This is amazing! Getting 60 fps on a M2 Air at full 5k. Max settings.",
-    user: "Zarraya",
-    device: "MacBook Air M2",
-    href: "https://reddit.com/r/GuildWars/comments/1v4sehu/guild_wars_native_experience_achieved_on_apple/ozi9sny/",
-  },
-  {
-    quote:
       "Made a reddit account to say thank you so much for sharing this! Wow, I can’t even believe I’m able to play gw1 again.",
     user: "aer0_dynamic",
     device: "MacBook Pro M1",
     href: "https://reddit.com/r/GuildWars/comments/1v4sehu/guild_wars_native_experience_achieved_on_apple/ozrm8xi/",
-  },
-  {
-    quote:
-      "Playing on an M4 MBA. It plays great, solid 60fps on my default screen resolution. Controller works too. Amazing job.",
-    user: "Eshiik",
-    device: "MacBook Air M4",
-    href: "https://reddit.com/r/GuildWars/comments/1v4sehu/guild_wars_native_experience_achieved_on_apple/ozdr9x1/",
   },
   {
     quote:
@@ -238,8 +218,8 @@ const FAQ: FaqItem[] = [
   {
     q: { en: "Will this get me banned?", de: "Kann ich dafür gebannt werden?" },
     a: {
-      en: "Nobody outside ArenaNet can guarantee that, so here is what we actually know. We contacted ArenaNet before launch: in late July 2026 a staff member ran GWonMac on their own Mac and said they are fine with what the project does as things stand. That is not an endorsement or a policy, and ArenaNet could take a different view later. GWonMac runs ArenaNet’s unmodified official client, hooks into nothing, and automates nothing. If ArenaNet ever says stop, the project is deprecated and everyone is told the same day.",
-      de: "Niemand außerhalb von ArenaNet kann das garantieren, deshalb hier, was wir tatsächlich wissen. Wir haben ArenaNet vor dem Launch kontaktiert: Ende Juli 2026 hat ein Mitarbeiter GWonMac auf seinem eigenen Mac ausgeführt und gesagt, dass er nach aktuellem Stand damit einverstanden ist. Das ist keine Freigabe und keine Richtlinie, und ArenaNet kann das künftig anders bewerten. GWonMac führt ArenaNets offiziellen Client unverändert aus, klinkt sich nirgends ein und automatisiert nichts. Sagt ArenaNet jemals Stopp, wird das Projekt eingestellt und alle erfahren es am selben Tag.",
+      en: "Nobody outside ArenaNet can guarantee that, so here is what we actually know. We contacted ArenaNet before launch: in late July 2026 a staff member ran GWonMac on their own Mac and said they are fine with what the project does as things stand. That is not an endorsement or a policy, and ArenaNet could take a different view later. GWonMac downloads and verifies ArenaNet’s official client and preserves that download unchanged. A separate hash-verified copy runs only after the exact build passes GWonMac’s bounded compatibility proof; live Tools additionally require shipped exact-build facts. It injects no native code and performs no autonomous gameplay. If ArenaNet ever says stop, the project is deprecated and everyone is told the same day.",
+      de: "Niemand außerhalb von ArenaNet kann das garantieren, deshalb hier, was wir tatsächlich wissen. Wir haben ArenaNet vor dem Launch kontaktiert: Ende Juli 2026 hat ein Mitarbeiter GWonMac auf seinem eigenen Mac ausgeführt und gesagt, dass er nach aktuellem Stand damit einverstanden ist. Das ist keine Freigabe und keine Richtlinie, und ArenaNet kann das künftig anders bewerten. GWonMac lädt und prüft ArenaNets offiziellen Client und bewahrt diesen Download unverändert auf. Eine separate, per Hash geprüfte Kopie läuft erst, wenn der exakte Build GWonMacs begrenzte Kompatibilitätsprüfung besteht; Live-Tools benötigen zusätzlich mit der App ausgelieferte Fakten für den exakten Build. Nativer Code wird nicht injiziert und das Spiel nicht selbstständig gesteuert. Sagt ArenaNet jemals Stopp, wird das Projekt eingestellt und alle erfahren es am selben Tag.",
     },
     link: {
       label: { en: "Read the full safety page", de: "Zur ausführlichen Sicherheitsseite" },
@@ -263,8 +243,8 @@ const FAQ: FaqItem[] = [
   {
     q: { en: "Which Macs are supported?", de: "Welche Macs werden unterstützt?" },
     a: {
-      en: "Every Apple Silicon Mac, from the M1 MacBook Air to the latest Pro machines, running macOS 12 Monterey or later. Testers report steady 60 FPS on an M1 Air and up to 120 FPS on newer chips. Intel Macs are not supported.",
-      de: "Jeder Apple-Silicon-Mac, vom M1 MacBook Air bis zu den neuesten Pro-Geräten, mit macOS 12 Monterey oder neuer. Tester berichten von konstant 60 FPS auf einem M1 Air und bis zu 120 FPS auf neueren Chips. Intel-Macs werden nicht unterstützt.",
+      en: "Every Apple Silicon Mac, from the M1 MacBook Air to the latest Pro machines, running macOS 12 Monterey or later. Performance depends on the Mac, render scale, and the client’s graphics settings. Intel Macs are not supported.",
+      de: "Jeder Apple-Silicon-Mac, vom M1 MacBook Air bis zu den neuesten Pro-Geräten, mit macOS 12 Monterey oder neuer. Die Leistung hängt vom Mac, der Render-Skalierung und den Grafikeinstellungen des Clients ab. Intel-Macs werden nicht unterstützt.",
     },
   },
   {
@@ -302,8 +282,8 @@ const FAQ: FaqItem[] = [
   {
     q: { en: "Do I need a Guild Wars account? Does Steam login work?", de: "Brauche ich ein Guild-Wars-Konto? Geht der Steam-Login?" },
     a: {
-      en: "Yes. You sign in with your existing Guild Wars account; Steam login works too. The app never sees or stores your credentials.",
-      de: "Ja. Du meldest dich mit deinem bestehenden Guild-Wars-Konto an; auch der Steam-Login funktioniert. Die App sieht und speichert deine Zugangsdaten nie.",
+      en: "Yes. You sign in with your existing Guild Wars account; Steam login works too. Credentials are sent only to the selected provider and ArenaNet’s official client and services—never to a GWonMac service. If you enable saved login, they are kept in this Mac’s device-only Keychain.",
+      de: "Ja. Du meldest dich mit deinem bestehenden Guild-Wars-Konto an; auch der Steam-Login funktioniert. Zugangsdaten werden nur an den gewählten Anbieter sowie ArenaNets offiziellen Client und Dienste gesendet – niemals an einen GWonMac-Dienst. Wenn du die gespeicherte Anmeldung aktivierst, liegen sie ausschließlich im gerätegebundenen Schlüsselbund dieses Macs.",
     },
   },
   {

@@ -11,7 +11,7 @@ import {
 } from "../apps/website/server/utils/release-select.ts";
 import { stopChildProcess } from "./helpers/child-process.ts";
 
-// P3.25 — the download button, executed rather than described. The server
+// The download button, executed rather than described. The server
 // route's selection policy runs here against release payloads shaped like the
 // ones the release workflow publishes; the rendered pages below prove what a
 // visitor gets before any of that resolves.
@@ -213,6 +213,34 @@ async function load(pathname: string): Promise<Response> {
   throw new Error(`website server did not start:\n${stderr}`);
 }
 
+async function assertNoUnsupportedPerformancePromises(
+  pathname: string,
+): Promise<void> {
+  const response = await load(pathname);
+  assert.equal(response.status, 200, `${pathname} did not render`);
+  const html = await response.text();
+  assert.doesNotMatch(
+    html,
+    /\b\d+(?:[.,]\d+)?(?:\s*(?:–|-|to|bis)\s*\d+(?:[.,]\d+)?)?\s*FPS\b/i,
+    `${pathname} publishes an unsupported frame-rate promise`,
+  );
+  assert.doesNotMatch(
+    html,
+    /\b(?:4K|5K)\b/i,
+    `${pathname} publishes an unsupported display-resolution promise`,
+  );
+  assert.doesNotMatch(
+    html,
+    /\b(?:CPU|RAM)\b/i,
+    `${pathname} publishes unsupported resource-use marketing`,
+  );
+  assert.doesNotMatch(
+    html,
+    /\b(?:about a minute|under a minute)\b|~\s*4\s*GB/i,
+    `${pathname} publishes an unsupported fixed time or download-size promise`,
+  );
+}
+
 // Every rendered download button points at /download, the live redirect, in the
 // HTML itself. Resolving the DMG in the browser instead left the buttons on the
 // releases page until hydration finished, and a third of clicks arrived first.
@@ -233,6 +261,10 @@ try {
     /https:\/\/plausible\.io\/js\/pa--X4qMlLVyMnUW4L8emwE_\.js/,
   );
   assert.match(html, /window\.plausible\.init\(\)/);
+  assert.match(html, /selectable render scale/i);
+  assert.match(html, /built for Apple Silicon/i);
+  assert.doesNotMatch(html, /(?:60|120)\s*(?:–|-|to)?\s*(?:120\s*)?FPS/i);
+  assert.doesNotMatch(html, /(?:4K|5K)/i);
 
   // Hero and final CTA.
   assert.equal(downloadLinks(html).length, 2);
@@ -254,6 +286,23 @@ try {
   for (const href of downloadLinks(germanHtml)) {
     assert.match(href, /^\/(de\/)?download$/);
   }
+
+  // Public performance-sensitive prose stays qualitative. Controlled, dated
+  // measurements belong in docs/performance-electron.md, not in marketing
+  // pages assembled from individual tester reports.
+  await assertNoUnsupportedPerformancePromises("/docs/guides/performance");
+  await assertNoUnsupportedPerformancePromises(
+    "/docs/guides/play-guild-wars-on-mac",
+  );
+  await assertNoUnsupportedPerformancePromises(
+    "/de/dokumentation/anleitungen/leistung",
+  );
+  await assertNoUnsupportedPerformancePromises(
+    "/de/dokumentation/anleitungen/guild-wars-auf-dem-mac-spielen",
+  );
+  await assertNoUnsupportedPerformancePromises(
+    "/blog/guild-wars-native-on-apple-silicon",
+  );
 
   // The install guide replaced the old /install page and still hands the
   // visitor the releases page.

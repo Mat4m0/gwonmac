@@ -76,7 +76,7 @@ test.describe("extended memory settings", () => {
     }
   });
 
-  // P5.1: the menu item used to run a string of JavaScript in the renderer.
+  // The menu item used to run a string of JavaScript in the renderer.
   // It now sends a typed command, and this is the only caller of `settings.open`
   // — every other spec dispatches the renderer event directly, which would keep
   // passing if the main-process half were removed entirely.

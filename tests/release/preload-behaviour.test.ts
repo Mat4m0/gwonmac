@@ -2,7 +2,7 @@
 // preload — build/preload/preload.cjs, the file a packaged app actually runs —
 // in a vm with a recording `ipcRenderer` and calls every capability it exposes.
 //
-// This is what replaced the source scans P5.16 deleted. The old release suite
+// This behavior test replaced the deleted source scans. The old release suite
 // searched the preload's text for all 32 channel strings, which proved a copy
 // existed and nothing about what the preload did with it. Here the channels are
 // read from the canonical `IPC`, every exposed method is called, and the set of

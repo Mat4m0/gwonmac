@@ -1,4 +1,4 @@
-// Fault injection for the P1.2 orphan sweep. Run as a child process by
+// Fault injection for the orphan sweep. Run as a child process by
 // tests/unit/atomic-file.test.ts: publish a document with `writeAtomic`, then
 // SIGKILL this process from inside the temp file's `fsync` — after every byte
 // is durable and before `rename` can promote it. That is the exact instant a

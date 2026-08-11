@@ -321,7 +321,8 @@ Certification still requires:
 - loading, reload, target clearing, and clean shutdown;
 - a new exact-hash manifest entry and tests.
 
-Unknown builds continue serving the official client unchanged.
+Unknown builds preserve the verified official artifact and serve it unless the
+isolated local proof can derive only the bounded template-save repair.
 
 The two transforms are chained, not alternatives. Both rewrite the same official
 module, so neither output contains the other's fix; main prepares the

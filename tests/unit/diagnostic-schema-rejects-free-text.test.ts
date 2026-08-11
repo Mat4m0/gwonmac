@@ -1,5 +1,5 @@
-// P2.2, executed rather than asserted about. The claim is "adding a `string`
-// field to any diagnostic event fails `tsc`", so this runs the real TypeScript
+// This invariant is executed rather than asserted about. The claim is "adding
+// a `string` field to any diagnostic event fails `tsc`", so this runs the real TypeScript
 // compiler over the real schema source with that field added, and checks the
 // compile fails *for the right reason* — a diagnostic that is merely a broken
 // probe would pass a bare "did it error" check.

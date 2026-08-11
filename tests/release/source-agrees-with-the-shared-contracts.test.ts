@@ -58,10 +58,10 @@ test("renderer and main process use the same diagnostic event allowlist", async 
 test("every main→renderer event channel is named somewhere in main", async () => {
   // What used to be a 35-channel × 2 source scan. Both halves it policed are
   // now compile-time or executed facts:
-  //  - the preload's constants are generated from `IPC` (P5.6), and
+  //  - the preload's constants are generated from `IPC`, and
   //    tests/release/preload-behaviour.test.ts calls every capability the
   //    generated bridge exposes;
-  //  - the handler registry is `satisfies Record<InvokeChannel, …>` (P5.9), so
+  //  - the handler registry is `satisfies Record<InvokeChannel, …>`, so
   //    an `invoke` channel with no handler fails `tsc`.
   // The event channels have neither a registry nor a caller to execute:
   // main sends them, and a channel main never sends is dead weight nothing else

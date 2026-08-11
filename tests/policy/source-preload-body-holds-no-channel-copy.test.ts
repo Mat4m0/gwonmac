@@ -1,5 +1,5 @@
-// Reads repository text, and says so in its filename. P5.6 made the preload's
-// channel constants generated from src/shared/contracts.ts; this is the one
+// Reads repository text, and says so in its filename. The preload's channel
+// constants are generated from src/shared/contracts.ts; this is the one
 // assertion that keeps them generated. A `"gw:…"` literal back in the body
 // would be a reintroduced copy — the generator would still splice the canonical
 // `IPC`, the copy would shadow or shadow-compete with it, and nothing else

@@ -8,7 +8,7 @@ delta cannot prove three hook semantics and every structure field. It therefore
 requires a new exact certificate after all three hooks and every address are re-derived. Until
 then the untouched official module is used, so the client keeps working and
 only unproven compatibility features are disabled. Startup logs the verifier
-outcome, and `client.buildCertification` in a `.gwdiag` says `certified`,
+outcome, and `client.buildCertification` in a diagnostics ZIP says `certified`,
 `template-only`, or `uncertified` — **check that first when someone reports a
 regression.**
 
@@ -262,7 +262,7 @@ filesystem, then drive the forwarders directly. This catches contract mistakes
 that unit tests with hand-made fixtures miss:
 
 ```js
-// P6.5: the bridge is an ESM module. It reads the markers off the page as it
+// The bridge is an ESM module. It reads the markers off the page as it
 // is imported, so the fake page has to exist before the import.
 Object.assign(globalThis, {
   window: { gwNative: { init: {}, wasmBridgeMarkers: WASM_BRIDGE_MARKERS } },

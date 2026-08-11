@@ -7,7 +7,7 @@ import {
 } from "../../src/main/diagnostics/text-scan.ts";
 
 /**
- * P2.7 — the adversarial corpus, executed.
+ * The adversarial corpus is executed rather than described.
  *
  * This covers the Chromium content trace only. Everything this application
  * records itself is closed by the schema and checked by the detector, which

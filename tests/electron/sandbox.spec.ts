@@ -132,7 +132,7 @@ test.describe("sandbox boundary", () => {
     }
   });
 
-  // P5.18. This was fourteen regular expressions over src/main/window.ts,
+  // This used to be fourteen regular expressions over src/main/window.ts,
   // src/main/ipc.ts and src/main/protocol.ts in the release suite — a test that
   // proved those files contained certain characters. Eleven of them are asked
   // of the running application here instead: the preferences Chromium actually

@@ -209,7 +209,8 @@ renderer init payload and enables two console-only traces:
   outcome
 
 Both record counts and outcomes only — no filename, path or content — and
-neither crosses IPC or appears in `.gwdiag`. Normal launches are unaffected.
+neither crosses IPC or appears in the diagnostics ZIP. Normal launches are
+unaffected.
 
 ```bash
 GW_TEMPLATE_FS_TRACE=1 ELECTRON_ENABLE_LOGGING=1 \

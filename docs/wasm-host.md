@@ -64,7 +64,7 @@ Before instantiation, the renderer then wraps the official module's
 `fd_pwrite`, `fd_seek`, and `fd_close` imports.
 The bounded console trace records only the template kind, flags, descriptor,
 errno, and requested/written byte counts. It never records a filename, path, or
-file content, does not cross IPC, and is not included in `.gwdiag` exports.
+file content, does not cross IPC, and is not included in diagnostics exports.
 Normal launches retain the original imports unchanged.
 
 Resetting the saved Guild Wars files clears exactly this mount. After native
@@ -186,10 +186,10 @@ developer switches over the Enhancement half. `src/main/core/` keeps only what
 is not about certification and what certification depends on — the WASM section
 codec and the derived-artifact cache — so the dependency runs one way and there
 is no second place to look. `src/tools/certification.ts` is the one command
-line over it, with `doctor`, `recertify`, `template` and `transform`
-subcommands; `scripts/verify-companion-kernel.mjs` stays separate because it
-certifies the Rust companion kernel against the compile recipe in
-`scripts/build.mjs`, not a client build.
+line over it, with `doctor`, `recertify`, `template`, `transform`, and
+`double-click` subcommands; `scripts/verify-companion-kernel.mjs` stays
+separate because it certifies the Rust companion kernel against the compile
+recipe in `scripts/build.mjs`, not a client build.
 
 The two transforms are chained but keyed by **different** hashes: template-save
 by the official build's hash, Enhancement by the hash of what the template-save
@@ -207,7 +207,7 @@ template-save transform throws is published as `uncertified`, because it is
 degraded exactly that far.
 
 `ClientRuntime` publishes the state once per activated client as
-`client.buildCertification` in a `.gwdiag`, and the older
+`client.buildCertification` in a diagnostics export, and the older
 `wasm.templateSaveCompatible` boolean is derived from the same object rather
 than computed separately, so the two cannot disagree. The renderer reads the
 state over `gw:client:session` together with the client hash and whether this
@@ -264,106 +264,44 @@ whose whole point is that it cannot do anything on its own.
 
 Three properties make this safe to leave running unattended. It holds no secret;
 its only credential is the run's own `GITHUB_TOKEN` and the strongest thing it
-can do is propose. It uploads evidence — reports, the candidate feed, the source
+can do is propose. It uploads evidence — reports and the candidate source
 diff — and never client bytes, because this project does not redistribute
 ArenaNet's binaries. And its branch certifies nothing until the pull request's
 own `pnpm verify` gate passes on it, which is the same gate every other change
-faces. The Enhancement table stays untouched by machine for the reason the feed's
-enhancement half is exact-build only: its layout words are client-memory
-addresses no structural anchor re-derives.
+faces. The Enhancement table stays untouched by machine because its layout
+words are client-memory addresses no structural anchor re-derives.
 
-## The certificate feed
+## Transitional remote certificate feed
 
-The tables above are compiled in, so today a new ArenaNet build waits for an
-application release. The feed is how that changes without moving any authority:
-it is a versioned, signed **data-only** document — hashes, addresses, function
-indices, message identifiers, and nothing that could be an instruction or a
-path — carrying the same two records `certifyClientBuild` already consumes.
-`src/main/certification/certificate-feed.ts` owns the schema, one hand-written
-parser that refuses rather than repairs, and the snapshot the shipped tables
-derive. The TypeScript tables stay the authoring source, because the isolated
-proof runs in a process that cannot read a file; `pnpm build` writes the derived
-copy to `build/certificates/feed.json`.
+Runtime feed code still exists in the reviewed build, but it is not the
+supported ArenaNet patch-recovery path.
 
-A feed only ever **proposes**, and its two halves are held to different rules
-because they are not equally re-derivable.
-`src/main/certification/certificate-feed-proof.ts` owns both and answers in the
-same three states as the rest of the chain.
+The committed pin is a real Ed25519 key, so an update-capable release may ask
+the two fixed current-release asset URLs for `certificate-feed.json` and its
+detached signature on the ordinary application-update trigger. At the
+2026-08-10 evidence baseline, recent public releases carried neither asset.
+The machinery is therefore active but operationally empty, not the historical
+placeholder/no-request state.
 
-The template-save half is **proved**: the transform re-checks each stub body and
-call-site signature against the client bytes on the machine and must reproduce
-the claimed output hash. Nothing about it is taken on the signature's word, so a
-feed may certify template saving for a build no release has seen.
+Its useful authority is also narrower than the old architecture text implied:
 
-The enhancement half is **exact-build only**. Its hook signatures and table slot
-are structurally checked, but the layout words are client-memory addresses the
-companion kernel reads and writes and the message identifiers are numbers;
-neither has a structural anchor, so a profile hash computed over the signer's own
-chosen addresses would reproduce and prove only that the signer is consistent. A
-feed's enhancement record is therefore accepted only as an exact restatement of
-the shipped `ENHANCEMENT_BUILDS` table — the same rule the isolated local proof
-applies to an unrecognised client — and the four certified profile hashes are
-then still re-derived against these bytes. Extending a feed to certify
-enhancement for a new build waits on layout facts gaining anchors of their own.
+- template-save entries are proposals and must survive the same local
+  structural transform proof against the exact official bytes;
+- Enhancement entries are accepted only when they exactly restate
+  `ENHANCEMENT_BUILDS` already compiled into this application; and
+- official bytes remain the fallback.
 
-So the worst a stolen signing key achieves is withholding a certificate; it
-cannot mint one for a transform that does something else.
+An older application cannot gain newly measured Enhancement layouts, messages,
+or commands from this feed. Those facts require a signed application release.
+The only distinct potential value is rare template-only recovery when the local
+structural verifier cannot derive the entry.
 
-Only fetched feeds are signed. `src/main/certification/certificate-feed-trust.ts`
-verifies a detached Ed25519 signature over the exact bytes under the key pinned
-in [`certificates/public-key.txt`](../certificates/public-key.txt), whose
-committed content is a placeholder — so a clone of this repository trusts no
-remote feed at all and uses the bundled snapshot.
-[`certificates/README.md`](../certificates/README.md) owns the one-time key
-ceremony. The bundled snapshot carries no signature of its own: it is derived
-from tables compiled into an application that is already signed and notarised,
-so there is nothing an attacker could replace independently.
-
-Two feeds are ordered by an unsigned, monotonic `sequence` and nothing else. A
-candidate must be strictly newer to replace the feed in hand, so a captured
-older feed replayed at the application cannot withdraw a certificate it already
-holds.
-
-### How a feed arrives
-
-`src/main/certification/certificate-feed-delivery.ts` owns where a feed is
-fetched from, how a verified one is stored, and which of the feeds in hand
-governs a session.
-
-A check is two GETs — `certificate-feed.json` and `certificate-feed.json.sig`,
-published as assets on the current release and addressed through
-`latestReleaseAssetUrl`. It is the same host and redirect chain the updater's
-own asset requests already follow, so the feed adds no egress destination, and
-the application adds nothing to either request: no body, no header, no query, no
-credential.
-`tests/unit/no-game-traffic-is-uploaded.test.ts` executes that.
-
-There is no second scheduler. `main.ts` triggers the delivery from the same
-place it triggers the release check — at launch, on the periodic tick that
-`periodicCheckDue` gates, when the player switches automatic checks on, and when
-they press **Check for Updates** — so one predicate governs both and
-`docs/content-pipeline.md` owns it. With no pinned key the module makes no
-request at all: refusing an answer to a question already decided would spend a
-connection for nothing.
-
-A verified feed is stored in the profile at `game/certificate-feed.json` as one
-versioned record holding the exact bytes and the exact detached signature. That
-record is verified by the same code path as a fresh fetch at every launch, so a
-file edited on this machine is refused and rotating the pin retroactively
-refuses everything the old key signed — there is no weaker rule for a feed that
-is already ours. A record the application does not fully understand is deleted
-rather than partially read, and the bundled snapshot governs.
-
-The governing feed is read once per certification pass. A build the shipped
-tables already certify is unaffected: the feed is consulted only where the
-answer would otherwise be `uncertified`, and what it proposes still has to
-survive `certificate-feed-proof.ts` against the client bytes. So a feed can
-widen where a certificate comes from and can never withdraw one.
-
-`.gwdiag` carries `certificateFeed.source`, `certificateFeed.sequence`,
-`certificateFeed.outcome` and `certificateFeed.lastSuccessAt`, which is what
-makes a stuck feed visible rather than silent — `outcome` is a closed
-vocabulary naming exactly what stopped the last check.
+[`plans/full-refactor-optimization.md`](../plans/full-refactor-optimization.md)
+therefore schedules a hard cut: remove the remote signer, publication workflow,
+runtime delivery, persisted record, diagnostics vocabulary, and feed-specific
+tests. Keep compiled tables, the local verifier, scheduled recertification, and
+official fallback. Until that PR lands, do not extend or add consumers to the
+feed.
 
 ## Enhancement instrumentation
 

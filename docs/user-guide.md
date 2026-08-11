@@ -8,17 +8,10 @@ not bundle game binaries.
 
 Published builds are signed with Developer ID and notarized by Apple.
 
-To build from source:
-
-```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm package
-```
-
-Local source builds remain ad-hoc signed. Published releases use a `.dmg`:
-open it, drag Guild Wars Reforged into Applications, then launch it normally.
-Do not disable Gatekeeper globally.
+The [development instructions](../README.md#development) own source-build
+prerequisites and commands. Local source builds remain ad-hoc signed.
+Published releases use a `.dmg`: open it, drag Guild Wars Reforged into
+Applications, then launch it normally. Do not disable Gatekeeper globally.
 
 Published releases include SHA-256 checksums, an SPDX SBOM, and GitHub
 build/SBOM attestations. Follow [Verify a release](release-verification.md)
@@ -395,14 +388,14 @@ against a real crash it was wrong by enough to matter in both directions, and
 a number on a banner is a promise. What is worth acting on is that the warning
 appeared.
 
-**Reload Guild Wars** restarts the client with fresh memory. It takes under a minute,
-and Guild Wars puts you back where you were — the same way it handles a
-dropped connection. That was tested from inside an instance on every way this
-app can reload the game, and progress survived each time; a town or outpost is
-still the one place with nothing at all to lose. **Later** dismisses the current
-level for this session; escalation from Low to Critical shows the same notice
-again. **Details** expands the effective 2 GB or 4 GB limit inline without
-opening a modal over the game.
+**Reload Guild Wars** restarts the client with fresh memory; the time depends
+on your Mac and cached game data. Guild Wars puts you back where you were — the
+same way it handles a dropped connection. That was tested from inside an
+instance on every way this app can reload the game, and progress survived each
+time; a town or outpost is still the one place with nothing at all to lose.
+**Later** dismisses the current level for this session; escalation from Low to
+Critical shows the same notice again. **Details** expands the effective 2 GB
+or 4 GB limit inline without opening a modal over the game.
 
 ## If the game crashes
 
@@ -452,14 +445,13 @@ the app contacts GitHub only when you choose **Check for Updates** — on the
 loading screen, in the application menu, on a client-compatibility notice, or
 under **Settings → Updates**. Turning it back on immediately checks once.
 
-A check asks GitHub for two things: whether a newer version of the app exists,
-and whether the project has published a newer compatibility record for Guild
-Wars client builds. The second is how an ArenaNet update that would otherwise
-switch template saving off can be repaired without you installing anything. It
-is a signed list of hashes and nothing else — no program and no instruction —
-and the app still re-derives every claim against the client on your machine
-before anything switches back on. Neither request sends anything about you or
-your installation.
+A check asks GitHub whether a newer version of the app exists. The current build
+also attempts two fixed legacy compatibility-record assets on that same
+consented trigger. At the 2026-08-10 evidence baseline, recent releases
+published neither asset, so this is not a player-facing patch-recovery
+guarantee; the accepted refactor plan removes those requests and keeps
+compatibility changes in signed app releases. Neither current request sends
+anything about you or your installation.
 
 **At launch, an update lands before the game starts.** While the launch check
 or its download is running, the loading screen holds at that step instead of
@@ -476,19 +468,22 @@ install on the next ordinary restart. Restarting while Guild Wars is
 connected asks before disconnecting. The app saves its persistent game
 filesystem before either kind of restart.
 
-Stable installations receive stable releases only. Preview installations may
-receive a newer preview or advance to stable. A failed check is never reported
-as “up to date,” and **Last checked** records the last completed catalog check.
-ArenaNet client updates remain separate and automatic.
+A release-identity stable version receives stable releases only. A
+release-identity prerelease may advance to a later eligible prerelease or
+stable. The separately signed Preview tester app cannot use AppUpdater. A
+failed check is never reported as “up to date,” and **Last checked** records the
+last completed catalog check. ArenaNet client updates remain separate and
+automatic.
 
 ## When the client build is not certified
 
 Each ArenaNet client build is checked separately for Core compatibility and the
 exact Tools transform. When ArenaNet
 ships a new build, the launcher checks a local copy in an isolated process.
-When the structures it uses are unchanged or have only moved in the one
-supported way, everything continues normally without an app update or an
-extra choice.
+When the template structures are unchanged or have only moved in the one
+supported way, the isolated check can preserve template/file compatibility
+without an app update. Live Tools observations and Apply still require exact
+Enhancement facts shipped with the app.
 
 If that check cannot prove compatibility — or proves saving files but not the
 GWonMac Tools you selected — the loading screen says so once for that build,

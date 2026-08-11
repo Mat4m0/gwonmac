@@ -15,11 +15,13 @@ refuses to read it rather than guessing what was meant.
 
 Prereleases append a channel and a sequence — `2026.7.0-alpha.1`,
 `-beta.1`, `-rc.1` — and order `alpha` < `beta` < `rc` < the release itself.
-An install running a stable release is never offered a prerelease. During the
-initial launch phase, the website download button offers the newest release,
-including previews; `WEBSITE_RELEASE_CHANNEL` in
-`apps/website/app/composables/useLatestRelease.ts` is the single switch back to
-stable-only downloads once the first stable release is available.
+An install running a stable release is never offered a prerelease. The current
+website selector is `SITE_RELEASE_CHANNEL` in
+`apps/website/server/utils/release-select.ts`. Its launch-phase `beta` value
+currently accepts every parsed prerelease stage, including any alpha candidate.
+That is current behavior, not the desired public-Beta contract: the accepted
+refactor plan requires the website and application selectors to exclude alpha
+before public Stable/Beta updates are advertised.
 
 **What the number does not mean.** It is not a compatibility promise, and in
 particular it says nothing about which Guild Wars client build the release
@@ -32,9 +34,10 @@ A newer app version fixes an uncertified client build only if it contains a
 baseline for the changed structure, so a higher number on its own is not the
 answer.
 
-Automatic checks remain user-controlled and on by default; stable
-installations are never offered a preview — see
-[Updates](user-guide.md#updates).
+Automatic checks remain user-controlled and on by default. A release-identity
+stable version receives stable releases only; a release-identity prerelease may
+advance to a later eligible prerelease or stable. The separately signed Preview
+tester app cannot use AppUpdater. See [Updates](user-guide.md#updates).
 
 Temporary `snapshot-<run>-<commit>` prereleases are tester builds, not
 application versions. Their tags deliberately do not parse as one of the
@@ -59,7 +62,7 @@ publishes independently useful evidence:
 - the notarized DMG for installation;
 - the notarized application ZIP used by automatic updates;
 - `RELEASES.json`, naming that exact ZIP;
-- `SHA256SUMS.txt`, covering the DMG, ZIP, feed, and SBOM;
+- `SHA256SUMS.txt`, covering the release assets actually published;
 - an SPDX SBOM describing the packaged application.
 
 GitHub also stores signed build-provenance attestations for the DMG and ZIP and
@@ -85,28 +88,23 @@ workflow text, so the release path is reproducible off CI:
 application, and its optional second argument against the disk image that
 carries it. The script's header states what it needs.
 
-## Identity correction and saved-login rollout
+## Historical identity correction and saved-login rollout
 
 `2026.7.0-beta.2` was the first Developer ID package, but it inherited the
 unrelated `com.gwdevhub.guildwars` bundle identifier and Chromium Safe Storage
-path. The next beta is the deliberate one-time correction to
-`io.github.mat4m0.gwonmac` and the Data Protection Keychain. Treat it as a
-manual DMG replacement: quit the old app, replace it in `/Applications`, and
-launch the new copy. The explicit application-support path remains
-`~/Library/Application Support/Guild Wars`, so launcher settings, templates,
-diagnostics, and downloaded game data remain. Only `credentials.bin` and
-`steam-session.bin` are retired, and both login routes require one new sign-in.
+path. The following rollout made the deliberate one-time correction to
+`io.github.mat4m0.gwonmac` and the Data Protection Keychain. Crossing that
+identity boundary required a manual DMG replacement; the explicit
+`~/Library/Application Support/Guild Wars` path preserved ordinary profile
+data while both login routes required one new sign-in.
 
-Do not claim that Squirrel crosses this identity boundary without a signed
-end-to-end proof. Publish one more beta from the corrected identity and prove
-automatic updating from the cutover beta on both a clean profile and an
-existing profile before shipping a stable release.
-
-The `release` environment variable `SIGNED_BETA_UPDATE_PROVEN` is deliberately
-unset during this rollout. After the follow-up beta has installed
-automatically, retained the profile and both Data Protection Keychain items,
-set it to exactly `true`. The release workflow refuses every stable version
-until that evidence gate is opened; preview releases do not depend on it.
+`SIGNED_BETA_UPDATE_PROVEN` belongs only to that historical bundle-identity
+and Keychain cutover. It records that a corrected-identity beta installed over
+another corrected-identity build and retained the profile and secrets. Do not
+reuse it for the planned recurring Stable/Beta data-compatibility gate. Every
+future public beta/RC instead proves an actual latest-stable → candidate →
+latest-stable semantic round-trip as specified by
+`plans/full-refactor-optimization.md`.
 
 ## Verify the downloaded files
 

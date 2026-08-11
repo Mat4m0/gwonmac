@@ -41,13 +41,27 @@ certified client module; after that, individual tool toggles are live. Optional
 observers, UI, and command access are disabled in PvP, guild halls, and unknown
 regions.
 
+“Tools Beta” is a feature-maturity label, not an application update channel.
+Preview remains the separately signed tester application; the planned public
+Stable/Beta application track is defined in
+[the accepted refactor plan](plans/full-refactor-optimization.md)
+and is not shipped behavior yet.
+
+The required product boundary is that Build and Team authoring is host-owned
+while observations and Apply are exact-client capabilities. Host authoring must
+remain usable when those capabilities refuse. The current production mount does
+not yet prove that unknown-build path, so the focused continuity PR in the
+accepted plan owns it; public documentation must not claim it before that story
+passes.
+
 ## Non-goals
 
 Refusals, not a backlog.
 
 - **No Windows or Linux build.**
-- **No modification of ArenaNet's client.** The downloaded artifact stays
-  canonical and is never redistributed.
+- **No mutation or redistribution of ArenaNet's downloaded artifact.** It stays
+  canonical. Any platform repair or optional Tools transform produces a
+  separate, exact-hash-verified runtime copy and fails back to canonical bytes.
 - **No autonomous gameplay automation.** The app never chooses a target, moves
   a character, uses a skill, sends chat, farms, or acts without an explicit
   player command. Team Apply is a bounded, user-initiated PvE configuration
@@ -56,28 +70,30 @@ Refusals, not a backlog.
   replay one bounded out-and-back pointer hit-test when Guild Wars emitted no
   cursor event; it cannot originate a click or leave the pointer displaced.
 - **No account features.** No bots, macros, multiboxing help, or trading tools.
-- **No telemetry.** Nothing leaves the machine unless the player attaches a
-  diagnostics file to a bug report themselves.
+- **No Mac app telemetry.** Required login and game traffic goes only to the
+  selected provider and ArenaNet services. The app sends no diagnostics,
+  library, account, or gameplay data to a GWonMac service; a player may attach
+  a diagnostics file to a bug report themselves.
 - **No plugin ABI, and no port of the Windows one.** Native injection, GWCA
   pointers, Direct3D/ImGui rendering, and DLL plugins are replacement work.
-- **No disk-usage promise.** The full download is about 4 GB and stays until
-  the player clears it; the app does not silently evict game data to stay under
-  a cap. Making that promise means building eviction first.
+- **No disk-usage promise.** A full download stays until the player clears it;
+  the app does not silently evict game data to stay under a cap. Making a fixed
+  size promise means building and measuring that policy first.
 - **No forced update.** Automatic checking and downloading is on by default,
   declared plainly at first run, and one checkbox turns it off for good. A
   ready update waits for the player to restart or choose **Restart to Update**.
 
 ## Claims we stand behind
 
-Exactly the ones with a test behind them.
-[`docs/diagnostics.md`](docs/diagnostics.md#verification-boundaries) maps each
-public claim to something that executes, and its rule is the product rule: **a
-public claim with no row does not ship, and a row whose proof reads _none_ is a
-claim to narrow or delete, not a claim to explain.**
+Consequential privacy, data, release, update, and performance promises need
+executable evidence. [`docs/diagnostics.md`](docs/diagnostics.md#verification-boundaries)
+maps those public invariants to their proofs. Ordinary explanatory copy does
+not need a duplicate row; an unsupported consequential promise is narrowed or
+deleted rather than defended with prose.
 
-Two website capability claims — "up to 60 FPS, tuned for Apple Silicon" and
-"up to 4K" — have no proof today. They get narrowed to what the render-scale
-and packaging tests establish, or dropped. Measured frame rates live in
+The former website FPS and fixed-resolution promises had no proof and have
+been removed. Public copy now says only what the render-scale and arm64
+packaging tests establish. Measured frame rates live in
 [`docs/performance-electron.md`](docs/performance-electron.md) as evidence from
 specific machines, never as a promise.
 

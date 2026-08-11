@@ -142,8 +142,9 @@ last. Teardown reverses safety order: disable,
 stop observers and UI, clear slot 4683 only by callback identity, free regions,
 drop references.
 
-Unknown builds run the official client unchanged. Template save may be
-shape-recertified locally, but Enhancement is exact-build only until a future
+Unknown builds start from the verified official artifact. A separate
+template-save-compatible copy may be shape-recertified locally, but Enhancement
+is exact-build only until a future
 verifier independently recovers every hook and address. A common relocation
 alone is not enough evidence for that decision.
 

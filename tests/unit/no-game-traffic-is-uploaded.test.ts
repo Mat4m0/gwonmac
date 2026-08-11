@@ -1,8 +1,7 @@
-// P3.24. The website answers "Is Guild Wars Reforged for macOS safe?" with:
-// "does not upload telemetry, credentials, account identifiers, or game
-// traffic". One review read the game-traffic half as an overclaim. It is not —
-// but until now it was backed by three modules' own tests that happen to add up
-// to it, and nothing named for the claim. This is that test.
+// The public promise is not that an online game sends nothing: required login
+// and gameplay traffic goes to ArenaNet. It is that none of that data can be
+// redirected to GWonMac or another arbitrary endpoint, and that diagnostics
+// never contain the payload. This test owns those two executable boundaries.
 //
 // Two properties make game packets un-uploadable, and both run here:
 //

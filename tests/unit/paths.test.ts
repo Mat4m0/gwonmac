@@ -18,7 +18,7 @@ import {
 // up to ~4 GB of downloaded game data and the userData root already exists on
 // alpha machines, so a silent relocation costs a user a re-download or a reset.
 // Changing a literal here is a product decision with a migration attached, not
-// a rename. See plans/refactor.md P1.23.
+// a rename.
 describe("resolved profile paths", () => {
   const root = "/Users/tester/Library/Application Support/Guild Wars";
 
