@@ -35,8 +35,8 @@ need a plugin platform.
 
 ## Tools
 
-Core cursor and template support run when the exact client proof permits them.
-Optional **gwonmac Tools Beta** is off by default.
+Required template compatibility and Core cursor support run when their exact
+client proofs permit them. Optional **gwonmac Tools Beta** is off by default.
 
 Tools provides Build and Team authoring, party capture, team-code exchange,
 Target Distance, and explicit Team Apply. Team Apply is a bounded configuration

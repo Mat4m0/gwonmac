@@ -24,6 +24,8 @@
 
 ![gwonmac running Guild Wars Reforged on macOS](docs/assets/gwonmac-game.jpeg)
 
+<p align="center"><sub>Development screenshot. Published Release builds can update themselves.</sub></p>
+
 ## What gwonmac does
 
 gwonmac hosts ArenaNet's official WebAssembly client in a sandboxed macOS app.
@@ -102,7 +104,7 @@ An update found during the launch check installs before play unless you choose
 The app never performs an automatic downgrade.
 
 Application updates and ArenaNet game updates are separate systems. See the
-[user guide](docs/user-guide.md#application-updates) for player instructions.
+[user guide](docs/user-guide.md#updates) for player instructions.
 
 ## Build from source
 
