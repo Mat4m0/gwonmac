@@ -4,6 +4,9 @@
 import type { LatestRelease } from "../utils/release-select";
 
 export default defineEventHandler(async (event) => {
-  const latest = await $fetch<LatestRelease>("/api/latest");
+  const channel = new URL(event.path, "http://localhost").searchParams.get("channel");
+  const latest = await $fetch<LatestRelease>(
+    channel === "beta" ? "/api/latest?channel=beta" : "/api/latest",
+  );
   return sendRedirect(event, latest.url, 302);
 });

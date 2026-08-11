@@ -26,8 +26,9 @@ const localize = (value: Localized) => getLocalizedSiteText(value, locale.value)
 // the DMG in the browser instead raced hydration: a third of clicks landed on
 // the releases page because the fetch had not answered yet.
 const DOWNLOAD_PATH = "/download";
+const BETA_DOWNLOAD_PATH = "/download?channel=beta";
 // /api/latest resolves the newest downloadable release from GitHub (cached
-// server-side, beta channel during the launch phase). Fetched in the browser so
+// server-side, Stable by default). Fetched in the browser so
 // the prerendered page never bakes in a stale version; it only names the
 // version in the fine print and the click event, so a late answer costs nothing.
 const { data: latestRelease } = useFetch<LatestRelease>("/api/latest", { server: false });
@@ -76,6 +77,9 @@ const HERO = {
   },
   download: { en: "Direct Download", de: "Direkter Download" },
   docs: { en: "Read the docs", de: "Dokumentation lesen" },
+  betaPrompt: { en: "Want earlier builds?", de: "Möchtest du frühere Builds testen?" },
+  betaDownload: { en: "Download Beta", de: "Beta herunterladen" },
+  noAlpha: { en: "Alpha builds are never offered here.", de: "Alpha-Builds werden hier nie angeboten." },
   finePrint: {
     en: "Free · Open source (GPL-3.0) · Signed & notarized",
     de: "Kostenlos · Open Source (GPL-3.0) · Signiert & notarisiert",
@@ -432,6 +436,11 @@ useSchemaJsonLd(() => [
         </div>
         <p class="mt-5 text-[12.5px] tracking-[0.04em] text-(--gw-art-ink-faint)">
           <template v-if="latestRelease?.version">{{ latestRelease.version }} · </template>{{ localize(HERO.finePrint) }}
+        </p>
+        <p class="mt-2 text-xs text-(--gw-art-ink-faint)">
+          {{ localize(HERO.betaPrompt) }}
+          <NuxtLink :to="BETA_DOWNLOAD_PATH" target="_blank" rel="noopener noreferrer" class="underline underline-offset-4">{{ localize(HERO.betaDownload) }}</NuxtLink>.
+          {{ localize(HERO.noAlpha) }}
         </p>
       </div>
       <!-- Stat band, fused into the hero's bottom edge -->

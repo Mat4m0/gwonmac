@@ -73,6 +73,7 @@ const RENDERER_SHARED_MODULES = new Set([
   "enhancement-config.js",
   "enhancement-contracts.js",
   "project-identity.js",
+  "release.js",
   "ui/resize.js",
 ]);
 

@@ -96,7 +96,7 @@ test.describe("release check network policy", () => {
     });
   }
 
-  test("opted out means zero requests; opting back in checks exactly once", async () => {
+  test("opted out means zero requests; preference changes wait for an update check", async () => {
     const fixture = await launchOffline(
       "gw-release-check-optout-e2e-",
       { GW_TEST_DISTRIBUTION_CHANNEL: "release" },
@@ -127,22 +127,20 @@ test.describe("release check network policy", () => {
       // claimed — not even "up to date".
       await expect(page.locator("#loading-update-status")).toBeHidden();
 
-      // Re-enabling the preference is explicit intent and triggers exactly one
-      // immediate check, however many surfaces display the answer.
+      // A settings write is not a network command. Re-enabling the schedule
+      // changes future launch/periodic behaviour without starting an automatic
+      // download over a game connection that may already be open.
       await page.evaluate(() =>
         window.gwNative.settings.set({ autoCheckUpdates: true }),
       );
-      await expect(page.locator("#loading-update-status")).toBeVisible();
-      expect(await app.evaluate(() => globalThis.__githubRequests)).toBe(1);
+      expect(await app.evaluate(() => globalThis.__githubRequests)).toBe(0);
 
-      // Three mount points, one state. A manual press is fresh user intent, so
-      // it performs one new check rather than being suppressed by the launch
-      // check.
+      // A manual press is fresh user intent and remains the immediate path.
       await page.locator("#loading-update-check").click();
       await expect(page.locator("#loading-update-check")).toHaveText(
         "Check for Updates",
       );
-      expect(await app.evaluate(() => globalThis.__githubRequests)).toBe(2);
+      expect(await app.evaluate(() => globalThis.__githubRequests)).toBe(1);
     } finally {
       await closeOffline(fixture);
     }

@@ -262,6 +262,13 @@ entitlement; none adds Keychain Sharing, App Groups, App Sandbox, or
 `get-task-allow`. Developer ID signing pins the G2 certificate fingerprint
 rather than its non-unique display name.
 
+Stable and Beta application updates both live inside the `release` identity.
+`updateTrack` changes release eligibility only; it never changes the bundle ID,
+profile root, Keychain authority, or updater. Preview remains a separately
+signed tester identity with no AppUpdater access. Returning to an older Stable
+is a manual app replacement through the fixed Releases page, never a second
+updater or an automatic downgrade.
+
 Forge accepts one closed packaging intent: local ad-hoc, Preview handoff,
 signed Release, or signed Development. It generates `distribution-channel.json`
 only for a signed package and runs a preflight before signing. The trusted

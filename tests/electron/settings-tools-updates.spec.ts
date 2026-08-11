@@ -43,15 +43,88 @@ test.describe("tools and update settings", () => {
       await expect(page.locator("#settings-update-version")).toHaveText(
         packageVersion,
       );
-      // The label follows the running version's shape, so this test holds on
-      // both sides of a stable release.
-      await expect(page.locator("#settings-update-channel")).toHaveText(
-        /^\d+\.\d+\.\d+$/u.test(packageVersion) ? "Stable" : "Preview",
+      // Installed release stage and selected update track are separate facts.
+      await expect(page.locator("#settings-update-stage")).toHaveText(
+        packageVersion.includes("-beta.")
+          ? "Beta"
+          : packageVersion.includes("-rc.")
+            ? "Release Candidate"
+            : packageVersion.includes("-alpha.")
+              ? "Alpha"
+              : "Stable",
       );
+      await expect(page.locator('select[name="updateTrack"]')).toHaveValue("stable");
+      await page.locator('select[name="updateTrack"]').selectOption("beta");
+      await expect
+        .poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({ updateTrack: "beta" });
       await expect(page.locator("#settings-update-status")).toContainText(
         "can't update itself",
       );
       await expect(page.locator("#settings-restart-update")).toBeHidden();
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("an older Stable return is presented only as the fixed Releases action", async () => {
+    const fixture = await launchOffline("gw-update-manual-return-e2e-");
+    try {
+      const result = await fixture.page.evaluate(async () => {
+        const root = document.implementation.createHTMLDocument("update proof");
+        root.body.innerHTML = `
+          <a id="loading-update-check"></a>
+          <span id="loading-update-status"></span>
+          <span id="loading-update-when"></span>
+          <a id="loading-update-get"></a>
+          <button id="settings-check-updates"></button>
+          <button id="settings-open-releases"></button>
+          <button id="settings-restart-update"></button>
+          <span id="settings-update-status"></span>
+          <span id="settings-update-when"></span>
+          <span id="settings-update-version"></span>
+          <span id="settings-update-stage"></span>
+          <button id="client-compat-check"></button>
+          <button id="client-compat-releases"></button>
+          <span id="client-compat-update"></span>
+        `;
+        const importRenderer = async <T>(specifier: string): Promise<T> =>
+          import(specifier);
+        const module = await importRenderer<
+          typeof import("../../src/renderer/update-action.js")
+        >("./update-action.js");
+        const action = module.createUpdateAction({
+          getState: async () => ({
+            phase: "manual-stable-return" as const,
+            currentVersion: "2026.8.0-beta.1",
+            checkedAt: "2026-08-10T00:00:00.000Z",
+            stableVersion: "2026.7.0",
+          }),
+          check: async () => undefined,
+          restartAndInstall: async () => undefined,
+          onState: () => () => undefined,
+        });
+        let releases = 0;
+        module.bindUpdateActionDom(root, action, async () => {
+          releases += 1;
+        });
+        await action.initialize();
+        root.getElementById("settings-open-releases")?.click();
+        return {
+          message: root.getElementById("settings-update-status")?.textContent,
+          label: root.getElementById("settings-open-releases")?.textContent,
+          restartHidden: (root.getElementById("settings-restart-update") as HTMLElement).hidden,
+          releases,
+        };
+      });
+
+      expect(result).toEqual({
+        message:
+          "Stable version 2026.7.0 is available. Returning to Stable requires a manual install.",
+        label: "Open Releases to Return to Stable…",
+        restartHidden: true,
+        releases: 1,
+      });
     } finally {
       await closeOffline(fixture);
     }
@@ -88,12 +161,9 @@ test.describe("tools and update settings", () => {
               ? [{
                   tag_name: tag,
                   draft: false,
-                  // A stable offer is the one shape every release-identity
-                  // install accepts: a prerelease may advance to stable, while
-                  // a stable install is never offered a prerelease — so a
-                  // prerelease fixture would be refused the day the app version
-                  // loses its suffix. The Preview tester identity cannot reach
-                  // AppUpdater at all.
+                  // A stable offer is eligible on both tracks and lets a beta
+                  // or RC advance to its final release. The Preview tester
+                  // identity cannot reach AppUpdater at all.
                   prerelease: false,
                   assets: [
                     {

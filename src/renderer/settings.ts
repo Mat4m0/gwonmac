@@ -39,6 +39,7 @@
   const autoCheckUpdates = form.elements.namedItem(
     'autoCheckUpdates',
   ) as HTMLInputElement;
+  const updateTrack = form.elements.namedItem('updateTrack') as HTMLSelectElement;
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
@@ -402,6 +403,10 @@
         return control instanceof globalThis.HTMLInputElement
           ? { autoCheckUpdates: control.checked }
           : null;
+      case 'updateTrack':
+        return control.value === 'stable' || control.value === 'beta'
+          ? { updateTrack: control.value }
+          : null;
       default:
         return null;
     }
@@ -431,6 +436,7 @@
     teamManagement.disabled = !settings.gwonmacTools;
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
+    updateTrack.value = settings.updateTrack;
     void extendedMemorySetting.then((setting) => {
       setting.render(settings.extendedMemoryEnabled, currentSession?.extendedMemory ?? null);
     });

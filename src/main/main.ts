@@ -28,6 +28,7 @@ import {
   type AppSettingsPatch,
   type DownloadProgress,
   type PrefetchProgress,
+  type UpdateTrack,
 } from "../shared/contracts.js";
 import {
   enhancementCapabilitiesFor,
@@ -165,19 +166,16 @@ function revealMainWindow(): void {
 }
 
 /** The one application-update action; AppUpdater owns every outcome. */
-async function checkForAppUpdates(): Promise<void> {
-  await appUpdaterController?.check();
+async function checkForAppUpdates(track?: UpdateTrack): Promise<void> {
+  const selected = track ?? (await loadSettings(gamePaths().settings)).updateTrack;
+  await appUpdaterController?.check(selected);
 }
 
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   return settingsLock.run(async () => {
     const settingsPath = gamePaths().settings;
     const current = await loadSettings(settingsPath);
-    const saved = await saveSettings(settingsPath, { ...current, ...patch });
-    if (!current.autoCheckUpdates && saved.autoCheckUpdates) {
-      void checkForAppUpdates();
-    }
-    return saved;
+    return saveSettings(settingsPath, { ...current, ...patch });
   });
 }
 
@@ -479,7 +477,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       ) {
         new Notification({
           title: "Guild Wars Reforged update ready",
-          body: `Version ${state.latestVersion} will install when you restart.`,
+          body: `Version ${state.latestVersion} is ready to install.`,
           silent: true,
         }).show();
       }
@@ -529,8 +527,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     checkAppUpdates: () => checkForAppUpdates(),
     restartAndInstallUpdate: (win) => {
       if (updateRestartInFlight) return updateRestartInFlight;
+      const updater = appUpdaterController;
       const operation = (async () => {
-        if (appUpdaterController?.getState().phase !== "ready") return;
+        if (updater?.getState().phase !== "ready") return;
         await resetGameInput(win);
         if (sockets.size() > 0) {
           const { response } = await dialog.showMessageBox(win, {
@@ -545,7 +544,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
           if (response !== 0) return;
         }
         await runQuitCleanup();
-        appUpdaterController.quitAndInstall();
+        // Cleanup is deliberately irreversible. If Squirrel refuses the
+        // terminal handoff, leave instead of resuming a process whose sockets,
+        // client runtime, diagnostics, and persistence owners are gone.
+        if (!updater.quitAndInstall()) app.exit(1);
       })().finally(() => {
         if (updateRestartInFlight === operation) updateRestartInFlight = null;
       });
@@ -594,7 +596,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
   ));
   if (settings.autoCheckUpdates) {
-    void checkForAppUpdates();
+    void checkForAppUpdates(settings.updateTrack);
   }
   // A 30-minute tick with a six-hour due-time instead of a six-hour timer:
   // a laptop waking past the boundary checks within half an hour, with no
@@ -610,7 +612,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         lastUpdateCheckAt: current.lastUpdateCheckAt,
         now: Date.now(),
       })) return;
-      void checkForAppUpdates();
+      void checkForAppUpdates(current.updateTrack);
     })().catch(() => {
       // A periodic check is silent by contract; an unreadable settings file
       // already surfaces on the next explicit settings read.

@@ -33,6 +33,11 @@ Releases are numbered by date — `2026.7.1` is a July 2026 build — which says
 how recent a release is and nothing about which game client build it certifies:
 [Release numbering](docs/release-verification.md#release-numbering).
 
+The website and app use Stable by default. Players who deliberately choose
+Beta receive beta and release-candidate app builds under the same release
+identity; alpha builds are never offered. The separately signed Preview tester
+snapshots are not the Beta track and cannot update themselves.
+
 ## How it works
 
 On first launch the app asks how you want game data downloaded, and waits for your choice.
@@ -60,9 +65,14 @@ mid-download with _Play Now Instead_.
 - **Updates check on a declared schedule, or not at all.** The app checks
   GitHub at launch and about every six hours while it stays open — a default
   declared at first run that one checkbox turns off. Switched off, it asks
-  GitHub only when you press **Check for Updates**. A downloaded update is
-  offered as a restart and otherwise installs on the next restart. See
-  [Updates](docs/user-guide.md#updates).
+  GitHub only when you press **Check for Updates**. A launch-check update
+  installs before play unless you choose **Play Without Updating**; one
+  downloaded later is offered as a restart and otherwise installs on the next
+  restart. See [Updates](docs/user-guide.md#updates).
+- **Stable/Beta is one release preference, not another installation identity.**
+  Beta keeps the same profile and saved login. A final Stable updates forward
+  normally; returning to an older Stable opens the Releases page for a manual
+  DMG install because the app never performs an automatic downgrade.
 
 Report security-sensitive findings privately — see [SECURITY.md](SECURITY.md).
 
@@ -161,7 +171,9 @@ settings, and every project link — the launcher and website both import it.
 Releases are cut from `main` by manual dispatch of the macOS workflow. The
 approval-gated workflow signs with Developer ID, notarizes and staples the app
 and DMG, generates the updater feed, checksums and SPDX SBOM, attests the exact
-DMG and ZIP, and publishes only after re-verifying the complete draft.
+DMG and ZIP, and stages a complete draft. A maintainer tests those exact
+checksum-pinned assets; a second protected approval re-downloads the draft and
+publishes it without rebuilding or replacing anything.
 
 The GitHub `release` environment must require a maintainer approval and contain
 these secrets:
@@ -174,6 +186,10 @@ these secrets:
 - `APPLE_API_KEY_P8`: base64 of the App Store Connect API key;
 - `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`, and `APPLE_TEAM_ID`: their Apple
   identifiers.
+
+Stable, Beta, and RC releases reuse this one environment and the exact secret
+names above. They do not need a Beta-specific environment, certificate,
+provisioning profile, notarization key, or signing identity.
 
 On macOS, `base64 -i DeveloperID.p12 | pbcopy`,
 `base64 -i gwonmac.provisionprofile | pbcopy`, and

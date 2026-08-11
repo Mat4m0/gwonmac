@@ -13,15 +13,12 @@ in a number. July is `7`, never `07`: `2026.07.01` is not a valid version, and
 `src/shared/release.ts` — the one parser this app compares versions with —
 refuses to read it rather than guessing what was meant.
 
-Prereleases append a channel and a sequence — `2026.7.0-alpha.1`,
-`-beta.1`, `-rc.1` — and order `alpha` < `beta` < `rc` < the release itself.
-An install running a stable release is never offered a prerelease. The current
-website selector is `SITE_RELEASE_CHANNEL` in
-`apps/website/server/utils/release-select.ts`. Its launch-phase `beta` value
-currently accepts every parsed prerelease stage, including any alpha candidate.
-That is current behavior, not the desired public-Beta contract: the accepted
-refactor plan requires the website and application selectors to exclude alpha
-before public Stable/Beta updates are advertised.
+The parser recognizes the historical prerelease shapes `-alpha.N`, `-beta.N`,
+and `-rc.N`, ordered alpha < beta < RC < the release itself. Public versioned
+releases refuse alpha. Stable is the website and application default; the
+explicit Beta path additionally admits beta and RC builds. Tag syntax and
+GitHub's prerelease flag must agree, and snapshots never parse as application
+versions.
 
 **What the number does not mean.** It is not a compatibility promise, and in
 particular it says nothing about which Guild Wars client build the release
@@ -34,10 +31,12 @@ A newer app version fixes an uncertified client build only if it contains a
 baseline for the changed structure, so a higher number on its own is not the
 answer.
 
-Automatic checks remain user-controlled and on by default. A release-identity
-stable version receives stable releases only; a release-identity prerelease may
-advance to a later eligible prerelease or stable. The separately signed Preview
-tester app cannot use AppUpdater. See [Updates](user-guide.md#updates).
+Automatic checks remain user-controlled and on by default. Stable/Beta is one
+preference inside the release identity; Beta keeps the same profile, Keychain,
+and updater. A matching final Stable is a forward update. An older Stable is a
+manual DMG return through the fixed Releases page, never a native downgrade.
+The separately signed Preview tester app cannot use AppUpdater. See
+[Updates](user-guide.md#updates).
 
 Temporary `snapshot-<run>-<commit>` prereleases are tester builds, not
 application versions. Their tags deliberately do not parse as one of the
@@ -71,16 +70,31 @@ These establish that the file was produced from this repository by the
 published release workflow. They do not replace macOS Gatekeeper or make an
 untrusted repository safe.
 
-The approval-gated `release` environment must contain the G2 Developer ID
-certificate/private key as `APPLE_DEVELOPER_ID_P12`, its export password as
-`APPLE_DEVELOPER_ID_PASSWORD`, and the Developer ID distribution profile for
-`io.github.mat4m0.gwonmac` as `APPLE_DEVELOPER_ID_PROFILE`. The P12 and profile
-are base64-encoded secret values, not repository files. Before it builds, the
-workflow rejects a profile with the wrong team, application identifier,
-distribution type, certificate fingerprint, certificate count, or remaining
-lifetime. It blocks below two years and warns below five. After signing, it
-compares the embedded profile byte-for-byte and checks the top-level app's
-exact three entitlements.
+The protected `release` environment must require a maintainer and contain the
+G2 Developer ID certificate/private key as `APPLE_DEVELOPER_ID_P12`, its export
+password as `APPLE_DEVELOPER_ID_PASSWORD`, and the Developer ID distribution
+profile for `io.github.mat4m0.gwonmac` as `APPLE_DEVELOPER_ID_PROFILE`. The
+PKCS #12 certificate archive and profile are base64-encoded secret values, not
+repository files. Stable, beta, and RC releases all reuse this exact environment,
+secret set, signing identity, and notarization authority. Do not create a
+track-specific environment or duplicate the Apple credentials. The first
+environment approval admits `release-build`: before it builds, the workflow
+rejects a profile with the wrong team, application identifier, distribution
+type, certificate fingerprint, certificate count, or remaining lifetime. It
+blocks below two years and warns below five. After signing, it compares the
+embedded profile byte-for-byte and checks the top-level app's exact three
+entitlements.
+
+Publication is a separate decision after the build. `stage-release` attests
+the verified DMG and ZIP, creates or resumes a complete GitHub draft, downloads
+that draft again, and pins the SHA-256 of its `SHA256SUMS.txt` as a job output.
+The draft is ineligible for both release selectors. Test those exact draft
+assets and complete the record below. Only then approve the final `release` job
+through the protected environment. That job rebuilds and uploads nothing: it
+re-downloads the draft, requires the same tag target and Stable/prerelease
+classification, verifies every asset against the staged checksum digest, and
+then removes the draft flag. A changed asset therefore requires a new staging
+run and a new final approval; it is never replaced during publication.
 
 Those post-signing checks are `scripts/verify-signed-app.ts` rather than
 workflow text, so the release path is reproducible off CI:
@@ -98,13 +112,115 @@ identity boundary required a manual DMG replacement; the explicit
 `~/Library/Application Support/Guild Wars` path preserved ordinary profile
 data while both login routes required one new sign-in.
 
-`SIGNED_BETA_UPDATE_PROVEN` belongs only to that historical bundle-identity
-and Keychain cutover. It records that a corrected-identity beta installed over
-another corrected-identity build and retained the profile and secrets. Do not
-reuse it for the planned recurring Stable/Beta data-compatibility gate. Every
-future public beta/RC instead proves an actual latest-stable → candidate →
-latest-stable semantic round-trip as specified by
-`plans/full-refactor-optimization.md`.
+`SIGNED_BETA_UPDATE_PROVEN` belonged only to that historical bundle-identity
+and Keychain cutover and has been removed from the active release workflow.
+Every public beta/RC now proves an actual latest signed Stable → exact signed
+candidate → the same Stable semantic round-trip. Both binaries must read,
+modify, and rewrite settings, Builds/Teams with tags and references, window
+state, and profile-origin browser storage without quarantine or reset. A beta
+therefore cannot be the first build carrying its own selector: a Stable
+enabler must already be published. The browser-store probe establishes origin
+continuity only. When Electron, Chromium, or the filesystem/persistence
+contract changes, the release also round-trips a real template through the
+production Emscripten IDBFS boundary.
+
+Settings follow expand/contract release ordering without preserving unknown
+fields or values. The latest Stable must already own every durable key and
+accepted value a candidate can write: introduce an inert/defaulted key or wider
+value domain in Stable, use it in a later beta/RC, and remove it only after the
+supported Stable baseline no longer needs it. The release proof compares the
+exact candidate and Stable key sets, exercises every candidate enum plus each
+numeric/null boundary through Stable, then proves the returning Stable reads
+every candidate value and preserves every untouched value while saving its own
+patch. A mismatch refuses the candidate; it does not add an unknown-field bag
+or migration framework.
+
+The first protected approval exposes the Developer ID and notarization
+credentials only long enough to build, notarize, verify the application, ZIP,
+and DMG, and sign the replacement fixture used by the Keychain proof. The job
+then restores the runner's original Keychain and deletes the temporary
+Keychain, certificate, notarization key, and provisioning-profile files before
+running the SBOM action, uploading artifacts, or launching this candidate or a
+downloaded Stable. Those later processes inherit neither signing authority nor
+the GitHub token used to fetch the Stable package.
+
+## Release-only canary record
+
+The person granting the **second**, post-staging GitHub `release` environment
+approval owns these checks. Test the draft's exact DMG/ZIP, then record the
+evidence under a line containing exactly `## Verification` in that draft's
+GitHub release notes. A private note or an unlinked local run is not release
+evidence. At minimum record:
+
+- the release-workflow URL;
+- exact application version and `CFBundleVersion`;
+- every asset name and SHA-256 row from the staged `SHA256SUMS.txt`;
+- pass/fail, macOS version, model, and memory for the maintainer's test Mac; and
+- the ArenaNet module SHA-256 whenever a live client is involved.
+
+The final job mechanically refuses a non-draft, the wrong prerelease class or
+commit, any asset name outside the checksum inventory, a checksum-file digest
+different from staging, a missing `## Verification` heading, or release notes
+that omit any complete staged checksum row.
+It deliberately does not try to interpret free-form hardware observations: the
+protected reviewer must refuse approval when a required result is failed,
+missing, or belongs to different assets. Post-publication updater checks are
+certification, not gates that pretend the build is still private; their bounded
+response is defined below. Neither case creates a fallback updater or weakens
+the check.
+
+For the first public Beta sequence, name the exact Stable enabler `S0`, newer
+Beta candidate `B1`, and matching final Stable `S1`. Later beta/RC candidates
+use the same candidate checklist with the latest published Stable as both the
+starting and returning version.
+
+- **Before every public beta/RC:** the approval-gated signed package job must pass
+  `S0 → candidate → the same S0`. The candidate version must be newer,
+  each launched app must report the expected version, and settings,
+  Builds/Teams with tags/order/references, window state, and profile-origin
+  browser storage must survive a read-modify-write in all three launches with
+  no quarantine or wholesale profile/chunk-directory reset; the directory-reset
+  sentinel must remain. This synthetic proof does not claim either app
+  recognizes a resident client generation or avoids content fetches. Candidate settings must have
+  exactly the latest Stable key set and value domains, and every untouched
+  candidate value must survive Stable's final write. When
+  Electron, Chromium, or persistence changes, also save and reload a real
+  template through production IDBFS and exercise the real Keychain boundary.
+- **Within 30 minutes after publishing a beta/RC:** on one release-identity Stable install with
+  Beta enabled, the production updater must select and install that exact
+  candidate. The app must reopen under the same bundle ID, profile, and
+  Keychain identity. With saved login enabled for the canary account, the
+  account must remain available and complete login without credential re-entry.
+  Record the installed version and workflow/release URL.
+- **Within 30 minutes after publishing the matching Stable:** one installed beta/RC must receive
+  and install exact `S1` through the production updater, preserving the same
+  identity and player data; the same saved-login observation must pass. No
+  automatic older-Stable downgrade is tested or supported.
+- **Before every release:** install the exact staged draft assets on one
+  maintainer-owned Apple Silicon Mac. A 16 GB MacBook Pro is sufficient; a
+  second Mac and oldest/newest-macOS matrix are not release requirements.
+  Record the actual model, memory, and macOS version so the evidence states the
+  coverage truthfully. On that Mac, the canary account must reach a playable
+  character and enter a zone without an authentication loop or crash; the
+  launcher and game must render continuously for ten minutes without a black
+  surface, GPU-process crash, context loss, or persistent corruption. When the
+  release claims Enhancement for ArenaNet's current module, Tools must report
+  the matching client fingerprint, show the observed player/party rather than
+  `unavailable`, and capture a team successfully; any refused or partial
+  capability fails this observation. Record pass/fail, macOS and hardware,
+  client hash, and any diagnostic report fingerprint; never record credentials
+  or game traffic.
+
+The release may publish only when every applicable pre-publication item is
+present and passing. It is certified for announcement/promotion only after its
+post-publication updater check is also recorded as passing. If that check fails,
+the approver stops announcement and promotion immediately. A failed beta/RC is
+returned to draft so the single release selector no longer discovers it. If any
+failed build may already have installed—or if a final Stable fails—the recovery
+is a higher corrective release; assets are never replaced in place and players
+are never automatically downgraded. `Not applicable` must name the unchanged
+boundary (for example, no Electron/persistence change); it is not a substitute
+for the recurring Stable/candidate round-trip or updater checks.
 
 ## Verify the downloaded files
 

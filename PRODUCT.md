@@ -43,10 +43,20 @@ available when client integration is unavailable. Optional observers and
 commands are disabled in PvP, guild halls, and unknown regions.
 
 “Tools Beta” is a feature-maturity label, not an application update channel.
-Preview remains the separately signed tester application; the planned public
-Stable/Beta application track is defined in
-[the accepted refactor plan](plans/full-refactor-optimization.md)
-and is not shipped behavior yet.
+The release application has a separate Stable/Beta update preference: Stable
+is the default, while Beta opts into beta and release-candidate application
+builds under the same bundle, profile, Keychain, and updater identity. Alpha is
+never public. Preview remains the separately signed tester application and has
+no automatic updater.
+
+Returning to Stable is truthful rather than magical. A matching final Stable
+is a normal forward update; when the latest Stable is older than the installed
+Beta, the app opens the fixed Releases page for a manual signed/notarized DMG
+install. It never asks the native updater to downgrade. Every public beta and
+RC is release-gated on the latest Stable reading and rewriting the durable
+state covered by the recurring proof: settings, Builds and Teams, window state,
+and origin-owned browser storage. A real game-IDBFS/template round-trip is also
+required whenever Electron, Chromium, or the filesystem contract changes.
 
 The required product boundary is that Build and Team authoring is host-owned
 while observations and Apply are exact-client capabilities. Host authoring
@@ -80,9 +90,10 @@ Refusals, not a backlog.
 - **No disk-usage promise.** A full download stays until the player clears it;
   the app does not silently evict game data to stay under a cap. Making a fixed
   size promise means building and measuring that policy first.
-- **No forced update.** Automatic checking and downloading is on by default,
-  declared plainly at first run, and one checkbox turns it off for good. A
-  ready update waits for the player to restart or choose **Restart to Update**.
+- **No forced mid-session restart.** Automatic checking and downloading is on
+  by default, declared plainly at first run, and one checkbox turns it off for
+  good. A launch-check update installs before play unless the player chooses
+  **Play Without Updating**; one downloaded later waits for a restart.
 
 ## Claims we stand behind
 

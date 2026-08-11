@@ -443,11 +443,14 @@ six hours while the app stays open, never while a game connection is open, and
 the first-run screen says so before the first check happens. Turn it off and
 the app contacts GitHub only when you choose **Check for Updates** — on the
 loading screen, in the application menu, on a client-compatibility notice, or
-under **Settings → Updates**. Turning it back on immediately checks once.
+under **Settings → Updates**. Turning it back on changes the next launch or due
+background check; choose **Check for Updates** when you want an immediate check.
 
-A check asks GitHub whether a newer version of the app exists. It sends nothing
-about you or your installation. ArenaNet client updates are fetched separately
-from ArenaNet and cannot change which Gwonmac application release is installed.
+A check asks GitHub whether a newer version of the app exists. The app sends no
+diagnostics, account/game data, or installation identifier; GitHub still
+receives ordinary HTTPS request metadata. ArenaNet client updates are fetched
+separately from ArenaNet and cannot change which Gwonmac application release is
+installed.
 
 **At launch, an update lands before the game starts.** While the launch check
 or its download is running, the loading screen holds at that step instead of
@@ -464,12 +467,29 @@ install on the next ordinary restart. Restarting while Guild Wars is
 connected asks before disconnecting. The app saves its persistent game
 filesystem before either kind of restart.
 
-A release-identity stable version receives stable releases only. A
-release-identity prerelease may advance to a later eligible prerelease or
-stable. The separately signed Preview tester app cannot use AppUpdater. A
-failed check is never reported as “up to date,” and **Last checked** records the
-last completed catalog check. ArenaNet client updates remain separate and
-automatic.
+**Stable** is the default update track. Choose **Beta** under **Settings →
+Updates** to also receive beta and release-candidate application builds. Alpha
+builds are never offered. Stable and Beta use the same application identity,
+profile, saved login, and updater; this setting changes only which releases the
+next check may select. Changing tracks makes no request by itself: the new
+choice applies at the next launch, due background check, or manual check. A
+check or download already active finishes under the selection it started with.
+
+A beta or RC normally advances to its final Stable release as an ordinary
+forward update. If you select Stable while the latest Stable is older than the
+installed Beta, GWonMac does **not** ask macOS to downgrade it. It names the
+available Stable and opens the fixed GitHub Releases page. Download that
+release's signed and notarized DMG and install it manually; macOS Gatekeeper
+checks it when opened. GWonMac neither downloads nor independently verifies
+that manual DMG. Public beta and RC releases are tested so the latest Stable
+can read, modify, and rewrite their canonical player data before publication.
+They cannot add a durable settings key until a published Stable already owns
+that key; this avoids a hidden compatibility store when returning to Stable.
+
+The separately signed Preview tester app is a different installation identity,
+not the Beta track, and cannot use AppUpdater. A failed check is never reported
+as “up to date,” and **Last checked** records the last completed catalog check.
+ArenaNet client updates remain separate and automatic.
 
 ## When the client build is not certified
 

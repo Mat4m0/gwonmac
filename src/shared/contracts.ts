@@ -29,8 +29,15 @@ import type {
   EnhancementSelection,
 } from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
+import {
+  DEFAULT_UPDATE_TRACK,
+  UPDATE_TRACKS,
+  type UpdateTrack,
+} from "./release.js";
 
 export { RELEASE_REPO } from "./project-identity.js";
+export { DEFAULT_UPDATE_TRACK, UPDATE_TRACKS };
+export type { UpdateTrack };
 
 export type BuildKind = "jspi";
 
@@ -278,9 +285,16 @@ export interface ClockSyncResponse {
 
 export const UI_STYLES = ["guild-wars", "obsidian"] as const;
 export type UiStyle = (typeof UI_STYLES)[number];
+export const RENDER_SCALES = [1, 1.5, 2] as const;
+export type RenderScale = (typeof RENDER_SCALES)[number];
+export const UI_PANEL_OPACITY_MIN = 65;
+export const UI_PANEL_OPACITY_MAX = 100;
+export const DATA_STRATEGIES = [null, "quick", "full"] as const;
+export type DataStrategy = (typeof DATA_STRATEGIES)[number];
+export const LAST_UPDATE_CHECK_AT_MAX = 8_640_000_000_000_000;
 
 export interface AppSettings {
-  renderScale: 1 | 1.5 | 2;
+  renderScale: RenderScale;
   /** The visual treatment applied to every GWonMac panel. */
   uiStyle: UiStyle;
   /**
@@ -297,7 +311,7 @@ export interface AppSettings {
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
   showDiagnostics: boolean;
-  dataStrategy: "quick" | "full" | null;
+  dataStrategy: DataStrategy;
   /**
    * Automatic release checks: a GitHub request at launch, then at most one
    * every six hours while the app stays open, on by default so players stay
@@ -307,6 +321,13 @@ export interface AppSettings {
    * client build. Opting out is one checkbox, honored forever.
    */
   autoCheckUpdates: boolean;
+  /**
+   * Which release stages the one release updater may discover. This is a
+   * preference inside the `release` distribution identity, not a package or
+   * Keychain identity. Stable is the safe default; Beta additionally admits
+   * beta and release-candidate builds, never alpha builds.
+   */
+  updateTrack: UpdateTrack;
   /**
    * When the last release-check attempt completed, in epoch milliseconds, or
    * `null` if one has never run. An unsupported local build can finish without
@@ -338,6 +359,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,
+  updateTrack: DEFAULT_UPDATE_TRACK,
   lastUpdateCheckAt: null,
   compatibilityNoticeSeenFor: null,
 };
@@ -447,6 +469,17 @@ export type AppUpdateState =
       currentVersion: string;
       latestVersion: string;
       checkedAt: string;
+    }
+  | {
+      /**
+       * Returning to Stable would be a downgrade, which Squirrel must never
+       * perform. The renderer may open only the fixed Releases page and name
+       * this exact stable version; no asset URL crosses the bridge.
+       */
+      phase: "manual-stable-return";
+      currentVersion: string;
+      checkedAt: string;
+      stableVersion: string;
     }
   | {
       phase: "failed";

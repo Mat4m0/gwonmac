@@ -14,6 +14,7 @@ import type {
   AppUpdateErrorCode,
   AppUpdateState,
 } from '../shared/contracts.js';
+import { parseReleaseVersion } from '../shared/release.js';
 
 const FAILURE_MESSAGE: Record<AppUpdateErrorCode, string> = {
   'rate-limited':
@@ -72,6 +73,7 @@ export function launchGateDecision(state: AppUpdateState): LaunchGateDecision {
       return 'hold';
     case 'ready':
       return 'install';
+    case 'manual-stable-return':
     case 'idle':
     case 'up-to-date':
     case 'failed':
@@ -85,7 +87,8 @@ export type UpdateActionView = {
   message: string;
   lastChecked: string;
   currentVersion: string;
-  channel: 'Stable' | 'Preview';
+  installedStage: 'Stable' | 'Beta' | 'Release Candidate' | 'Alpha' | 'Unversioned';
+  releasesLabel: string;
   showReleaseNotes: boolean;
   ready: boolean;
 };
@@ -121,8 +124,25 @@ function messageFor(state: AppUpdateState): string {
       return `Downloading version ${state.latestVersion}…`;
     case 'ready':
       return `Version ${state.latestVersion} is ready to install.`;
+    case 'manual-stable-return':
+      return `Stable version ${state.stableVersion} is available. Returning to Stable requires a manual install.`;
     case 'failed':
       return FAILURE_MESSAGE[state.reason];
+  }
+}
+
+function installedStage(version: string): UpdateActionView['installedStage'] {
+  switch (parseReleaseVersion(version)?.channel) {
+    case 'stable':
+      return 'Stable';
+    case 'beta':
+      return 'Beta';
+    case 'rc':
+      return 'Release Candidate';
+    case 'alpha':
+      return 'Alpha';
+    default:
+      return 'Unversioned';
   }
 }
 
@@ -147,14 +167,16 @@ export function createUpdateAction({
     message: messageFor(state),
     lastChecked: formatLastChecked(checkedAt(state), now()),
     currentVersion: state.currentVersion,
-    channel: /^\d+\.\d+\.\d+$/u.test(state.currentVersion)
-      ? 'Stable'
-      : 'Preview',
+    installedStage: installedStage(state.currentVersion),
+    releasesLabel: state.phase === 'manual-stable-return'
+      ? 'Open Releases to Return to Stable…'
+      : 'View Release Notes…',
     // Also shown when this build cannot update itself: the message points at
     // the Releases page, so the link to it must be on the same surface.
     showReleaseNotes:
       state.phase === 'downloading' ||
       state.phase === 'ready' ||
+      state.phase === 'manual-stable-return' ||
       (state.phase === 'failed' && state.reason === 'updater-unavailable'),
     ready: state.phase === 'ready',
   });
@@ -232,7 +254,7 @@ export function bindUpdateActionDom(
   const settingsStatus = requiredElement(root, 'settings-update-status');
   const settingsWhen = requiredElement(root, 'settings-update-when');
   const settingsVersion = requiredElement(root, 'settings-update-version');
-  const settingsChannel = requiredElement(root, 'settings-update-channel');
+  const settingsStage = requiredElement(root, 'settings-update-stage');
   const compatibilityCheck = requiredButton(root, 'client-compat-check');
   const compatibilityReleases = requiredElement(root, 'client-compat-releases');
   const compatibilityStatus = requiredElement(root, 'client-compat-update');
@@ -245,7 +267,9 @@ export function bindUpdateActionDom(
     // One line on the launcher: when there is a sentence, the sentence is the
     // news and the timestamp yields to it. Settings always shows both.
     launcherWhen.hidden = view.lastChecked === '' || view.message !== '';
-    launcherGet.textContent = view.ready ? 'Restart to Update' : 'Release Notes';
+    launcherGet.textContent = view.ready
+      ? 'Restart to Update'
+      : view.releasesLabel;
     launcherGet.hidden = !view.showReleaseNotes;
 
     settingsCheck.textContent = view.actionLabel;
@@ -255,7 +279,8 @@ export function bindUpdateActionDom(
     settingsWhen.textContent = view.lastChecked;
     settingsWhen.hidden = view.lastChecked === '';
     settingsVersion.textContent = view.currentVersion;
-    settingsChannel.textContent = view.channel;
+    settingsStage.textContent = view.installedStage;
+    settingsReleases.textContent = view.releasesLabel;
     settingsReleases.hidden = !view.showReleaseNotes;
     settingsRestart.hidden = !view.ready;
 
