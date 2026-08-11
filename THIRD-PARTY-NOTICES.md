@@ -28,17 +28,16 @@ The committed `assets/AppIcon.icns` was prepared by the independent
 for macOS. The artwork and Guild Wars marks remain the property of their
 respective owners and are not covered by this project's GPL license.
 
-## Other visual material
+## ArenaNet visual material
 
-Loading-screen photography is credited to
-[Snapshot Henchman](https://bloogum.net/guildwars/). Guild Wars imagery,
-screenshots, loading artwork, and derived favicons are not relicensed under
-GPL-3.0-only. Their inclusion does not grant permission to reuse them
-separately.
+The launcher video, poster, and logo in `src/renderer/images/` were published
+by ArenaNet for Guild Wars Reforged. The installer, project website, and
+documentation also include Guild Wars Reforged logos, backgrounds, and
+screenshots that show Guild Wars imagery.
 
-`docs/assets/gwonmac-game.jpeg` is a screenshot of gwonmac. It includes Guild
-Wars marks and loading artwork. The screenshot does not change the rights in
-that material.
+These assets and the Guild Wars marks remain the property of ArenaNet or their
+respective owners. They are not relicensed under GPL-3.0-only. Their inclusion
+does not grant permission to reuse them separately.
 
 No cursor artwork is distributed with this application. The required native
 cursor reads the bitmap that the player's Guild Wars client decoded in memory.
