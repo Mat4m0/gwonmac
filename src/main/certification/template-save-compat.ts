@@ -48,10 +48,9 @@ export type BridgeKind =
   | "fileExists";
 
 /**
- * The closed set, in the order a certified entry lists it. Order is
- * load-bearing: `certificate-feed.ts` requires an entry's bridges in exactly
- * this sequence, so a certificate has one canonical spelling rather than 120.
- * Reordering here rewrites every serialised feed.
+ * The closed set the isolated verifier accepts. A derived template certificate
+ * must contain all five bridge kinds exactly once; no remote document can widen
+ * this vocabulary.
  */
 export const BRIDGE_KINDS: readonly BridgeKind[] = Object.freeze([
   "ensureDirectory",

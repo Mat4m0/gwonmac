@@ -63,20 +63,13 @@ import {
   periodicCheckDue,
 } from "./app-updater.js";
 import {
-  CertificateFeedDelivery,
-  CERTIFICATE_FEED_REFUSALS,
-} from "./certification/certificate-feed-delivery.js";
-import {
   enableSandboxBeforeReady,
   onAppQuit,
   runQuitCleanup,
   wireLifecycle,
 } from "./lifecycle.js";
 import { sweepOrphanDirectories } from "./core/atomic-file.js";
-import {
-  discardObsoleteEnhancementCache,
-  documentDirectories,
-} from "./core/paths.js";
+import { documentDirectories } from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
@@ -153,7 +146,6 @@ const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
 /** Every settings write is a read-modify-write of one file. */
 const settingsLock = new Mutex();
 let appUpdaterController: AppUpdater | null = null;
-let certificateFeedDelivery: CertificateFeedDelivery | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
 const INJECT_STARTUP_FAILURE =
@@ -172,17 +164,9 @@ function revealMainWindow(): void {
   win.focus();
 }
 
-/**
- * The one "ask this project what is new" action. AppUpdater is the application
- * update owner. The transitional certificate-feed path shares its trigger and
- * consent rather than owning another scheduler; the accepted refactor plan
- * removes that non-operational remote authority.
- */
-async function checkForProjectUpdates(): Promise<void> {
-  await Promise.allSettled([
-    appUpdaterController?.check() ?? Promise.resolve(),
-    certificateFeedDelivery?.refresh() ?? Promise.resolve(),
-  ]);
+/** The one application-update action; AppUpdater owns every outcome. */
+async function checkForAppUpdates(): Promise<void> {
+  await appUpdaterController?.check();
 }
 
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
@@ -191,27 +175,10 @@ function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
     const current = await loadSettings(settingsPath);
     const saved = await saveSettings(settingsPath, { ...current, ...patch });
     if (!current.autoCheckUpdates && saved.autoCheckUpdates) {
-      void checkForProjectUpdates();
+      void checkForAppUpdates();
     }
     return saved;
   });
-}
-
-/**
- * The pinned certificate-feed key. A packaged build reads it from the bundle's
- * Resources, where the code signature seals it; an unpackaged one reads the
- * committed real public key.
- *
- * The unpackaged override is how the Electron suite exercises a signed feed
- * with a keypair it generates per run without changing repository state. It is
- * unreachable from a packaged build.
- */
-function pinnedCertificateFeedKeyPath(): string {
-  if (app.isPackaged) return path.join(process.resourcesPath, "public-key.txt");
-  return (
-    process.env.GW_TEST_CERTIFICATE_FEED_KEY
-    ?? path.join(app.getAppPath(), "certificates", "public-key.txt")
-  );
 }
 
 function resetAppSettings(): Promise<AppSettings> {
@@ -436,17 +403,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
       logEvent({ k: "legacySecrets.cleanupFailed", code: errorCode(failure) });
     }
   }
-  const obsoleteCacheError = await discardObsoleteEnhancementCache(
-    gamePaths(),
-    rm,
-  );
-  if (obsoleteCacheError !== null) {
-    // This is a derived beta cache. Failure must not block the canonical client.
-    logEvent({
-      k: "enhancement.obsoleteCacheDiscardFailed",
-      code: errorCode(obsoleteCacheError),
-    });
-  }
   await clearBrowserCookies("startup");
   await clearBrowserNetworkCache();
   logEvent({ k: "electron.ready" });
@@ -481,33 +437,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const profileMatches =
     !expectedUserData ||
     path.resolve(expectedUserData) === path.resolve(app.getPath("userData"));
-  certificateFeedDelivery = new CertificateFeedDelivery({
-    storePath: paths.certificateFeed,
-    pinnedKeyPath: pinnedCertificateFeedKeyPath(),
-    // The same answer that decides whether an automatic release check may
-    // reach the network. One predicate, so the two cannot disagree about what
-    // the player consented to.
-    enabled: distribution.automaticUpdates,
-    publish: (status) => {
-      gauge("certificateFeed.source", status.source);
-      gauge("certificateFeed.sequence", status.sequence);
-      gauge("certificateFeed.outcome", status.outcome);
-      gauge("certificateFeed.lastSuccessAt", status.lastSuccessAt);
-      if (CERTIFICATE_FEED_REFUSALS.has(status.outcome)) {
-        logEvent({ k: "certificateFeed.refused", outcome: status.outcome });
-      } else {
-        logEvent({
-          k: "certificateFeed.resolved",
-          source: status.source,
-          sequence: status.sequence,
-          outcome: status.outcome,
-        });
-      }
-    },
-  });
-  // Before the first certification pass: a feed that governs only after the
-  // launch it arrived on would answer one question two ways in one session.
-  await certificateFeedDelivery.load();
   const clientRuntime = new ClientRuntime({
     paths,
     hostVersion: HOST_VERSION,
@@ -519,7 +448,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     extendedMemoryEnabled:
       settings.extendedMemoryEnabled
       || process.env.GWONMAC_EXTENDED_MEMORY_RESEARCH === "1",
-    certificateFeed: () => certificateFeedDelivery!.feed,
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });
@@ -598,7 +526,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     // reads it — a second, thrown answer would have been a second owner.
     retryClient: () => clientRuntime.requestUpdate(),
     getAppUpdateState: () => appUpdaterController!.getState(),
-    checkAppUpdates: () => checkForProjectUpdates(),
+    checkAppUpdates: () => checkForAppUpdates(),
     restartAndInstallUpdate: (win) => {
       if (updateRestartInFlight) return updateRestartInFlight;
       const operation = (async () => {
@@ -666,7 +594,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
   ));
   if (settings.autoCheckUpdates) {
-    void checkForProjectUpdates();
+    void checkForAppUpdates();
   }
   // A 30-minute tick with a six-hour due-time instead of a six-hour timer:
   // a laptop waking past the boundary checks within half an hour, with no
@@ -682,7 +610,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         lastUpdateCheckAt: current.lastUpdateCheckAt,
         now: Date.now(),
       })) return;
-      void checkForProjectUpdates();
+      void checkForAppUpdates();
     })().catch(() => {
       // A periodic check is silent by contract; an unreadable settings file
       // already surfaces on the next explicit settings read.

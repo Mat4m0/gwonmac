@@ -529,8 +529,8 @@ describe("client module preparation", () => {
       state: "uncertified",
       enhancementBuild: null,
       // An unrecognised client is served exactly as downloaded, so it also
-      // never reaches the double-click stage: the renderer keeps synthesising
-      // taps rather than being handed a module nothing certified.
+      // never receives the double-click transform: the renderer keeps
+      // synthesising taps rather than being handed a module nothing certified.
       nativeDoubleClick: false,
       failure: null,
     });
@@ -538,6 +538,20 @@ describe("client module preparation", () => {
       assertMissing(value.compatibilityCacheRoot),
       assertMissing(value.enhancementCacheRoot),
     ]);
+  });
+
+  it("closes native double-click preparation when its input disappears", async () => {
+    const value = await fixture();
+    const missingWasmPath = join(value.root, "missing.wasm");
+    const request = options(value, { state: "uncertified" }, CURSOR_TOOLBOX);
+    request.officialWasmPath = missingWasmPath;
+
+    const prepared = await prepareClientModule(request);
+
+    assert.equal(prepared.wasmPath, missingWasmPath);
+    assert.equal(prepared.state, "uncertified");
+    assert.equal(prepared.nativeDoubleClick, false);
+    assert.equal(prepared.failure?.stage, "native-double-click");
   });
 
   it("falls back to the ordinary module when a requested 4 GB pair is unknown", async () => {

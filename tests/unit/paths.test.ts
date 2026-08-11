@@ -1,14 +1,11 @@
 import assert from "node:assert/strict";
-import { basename } from "node:path";
 import { describe, it } from "node:test";
 import {
   clientArtifactPath,
   clientManifestPath,
   diagnosticFramesPath,
-  discardObsoleteEnhancementCache,
   documentDirectories,
   gamePaths,
-  obsoleteEnhancementCachePath,
   snapshotMetadataPath,
   unpackedPath,
 } from "../../src/main/core/paths.ts";
@@ -33,8 +30,6 @@ describe("resolved profile paths", () => {
       artifacts: `${root}/game/artifacts`,
       previousArtifacts: `${root}/game/artifacts.previous`,
       rejectedClient: `${root}/game/rejected-client.json`,
-      localClientVerification: `${root}/game/local-client-verification.json`,
-      certificateFeed: `${root}/game/certificate-feed.json`,
       compatibility: `${root}/game/compatibility`,
       enhancements: `${root}/game/enhancements`,
       nativeDoubleClick: `${root}/game/double-click`,
@@ -67,36 +62,6 @@ describe("resolved profile paths", () => {
       // so `SkillAssets.prepare` collects its own orphans instead — the same
       // owner-recovery exemption the hashed derived-WASM entries take.
     ]);
-  });
-
-  it("pins the obsolete beta cache selected for one-release cleanup", () => {
-    assert.equal(
-      basename(obsoleteEnhancementCachePath(gamePaths(root))),
-      ["tool", "box"].join(""),
-    );
-  });
-
-  it("discards the obsolete cache without making cleanup failure fatal", async () => {
-    const paths = gamePaths(root);
-    const calls: unknown[][] = [];
-    assert.equal(
-      await discardObsoleteEnhancementCache(paths, async (...args) => {
-        calls.push(args);
-      }),
-      null,
-    );
-    assert.deepEqual(calls, [[
-      obsoleteEnhancementCachePath(paths),
-      { recursive: true, force: true },
-    ]]);
-
-    const failure = new Error("injected");
-    assert.equal(
-      await discardObsoleteEnhancementCache(paths, async () => {
-        throw failure;
-      }),
-      failure,
-    );
   });
 
   it("keeps the downloaded chunk cache exactly where the alpha put it", () => {

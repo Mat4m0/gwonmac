@@ -1,14 +1,14 @@
 # Surviving ArenaNet Client Updates — Research
 
 > **Status: historical research evidence.** The remote certificate-feed
-> recommendation and placeholder-pin statements below are superseded by
-> `plans/full-refactor-optimization.md`. The repository already had a real pin,
-> but recent releases published no feed assets, and an old application
-> cannot gain newly measured Enhancement facts from the feed. The accepted
-> direction is to delete that remote authority, keep the local structural
-> verifier and scheduled recertification, and ship new Enhancement facts through
-> a signed application release. Preserve the body below as the investigation
-> that led to the decision; do not use it as an implementation roadmap.
+> recommendation and placeholder-pin statements below are superseded. The
+> repository already had a real pin, but no operational feed, and an old
+> application could not gain newly measured Enhancement facts from it. That
+> remote authority has been removed. Runtime authority now stays in compiled
+> facts and isolated local proof; scheduled recertification proposes changes,
+> and new Enhancement facts ship in a signed application release. Preserve the
+> body below as the investigation that led to the decision; do not use it as an
+> implementation roadmap.
 
 **Date:** 2026-08-04
 **Question:** We now have native mouse cursor, native double click, template saving,

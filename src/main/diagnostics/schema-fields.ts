@@ -33,11 +33,6 @@ import {
 } from "../../shared/release.js";
 import type { AppUpdateStage } from "../app-updater.js";
 import {
-  CERTIFICATE_FEED_OUTCOMES,
-  CERTIFICATE_FEED_SOURCES,
-} from "../certification/certificate-feed-delivery.js";
-import { LOCAL_VERIFICATION_REASONS } from "../certification/local-client-verifier.js";
-import {
   isProxyRoute,
   type ProxyRoute,
 } from "../core/proxy-routes.js";
@@ -246,14 +241,9 @@ export const thermalState = literal([
   "serious",
   "critical",
 ] as const);
-export const localVerificationSource = literal(["cache", "process"] as const);
-export const localVerificationReason = literal(LOCAL_VERIFICATION_REASONS);
 export const buildCertification = literal([
   "certified",
   "template-only",
   "uncertified",
 ] as const);
-export const certificateFeedOutcome = literal(CERTIFICATE_FEED_OUTCOMES);
-export const certificateFeedSource = literal(CERTIFICATE_FEED_SOURCES);
-
 export const none = {} as const;
