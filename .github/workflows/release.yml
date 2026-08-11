@@ -256,6 +256,7 @@ jobs:
           test -d "$app"
           mkdir -p "$(dirname "$replacement")"
           ditto "$app" "$replacement"
+          rm "$replacement/Contents/Resources/distribution-channel.json"
           printf 'newly signed replacement\n' > \
             "$replacement/Contents/Resources/upgrade-proof"
           GW_SIGN_APP_PATH="$replacement" \
