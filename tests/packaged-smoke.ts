@@ -8,8 +8,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { FuseState, FuseV1Options, getCurrentFuseWire } from "@electron/fuses";
 import { extractFile, listPackage, statFile } from "@electron/asar";
-import forgeConfig from "../forge.config.ts";
 import { macOSBundleVersions } from "../scripts/macos-version.js";
+import { ignorePackageFile } from "../scripts/package-ignore.ts";
 import {
   assertNoDeveloperPackageFiles,
   assertRequiredPackageFiles,
@@ -65,8 +65,7 @@ const actualPackageFiles = new Set(
     (file) => !("files" in statFile(asarPath, file.slice(1))),
   ),
 );
-const ignore = forgeConfig.packagerConfig?.ignore;
-const expectedPackageFiles = new Set(forgePackageFiles(root, ignore));
+const expectedPackageFiles = new Set(forgePackageFiles(root, ignorePackageFile));
 assert.deepEqual(
   [...actualPackageFiles].sort(),
   [...expectedPackageFiles].sort(),

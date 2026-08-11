@@ -268,6 +268,11 @@ test("release workflow stages and publishes one tested, attested package version
     workflow,
     /name: Smoke-test signed release candidate[\s\S]*?GW_PACKAGE_INTENT: release[\s\S]*?run: pnpm test:packaged/,
   );
+  assert.doesNotMatch(
+    read("tests/packaged-smoke.ts"),
+    /forge\.config/,
+    "post-signing smoke must not reload credential-bearing packaging config",
+  );
   assert.match(
     workflow,
     /name: Prove signed Data Protection Keychain continuity without signing secrets[\s\S]*?GW_SIGNED_APP_PATH: \$\{\{ steps\.assets\.outputs\.app \}\}[\s\S]*?GW_SIGNED_REPLACEMENT_APP_PATH: \$\{\{ steps\.runtime-fixture\.outputs\.replacement \}\}[\s\S]*?run: pnpm test:signed-keychain/,
