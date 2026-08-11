@@ -122,7 +122,6 @@ export interface IpcContext {
   checkAppUpdates: () => Promise<void>;
   restartAndInstallUpdate: (win: BrowserWindow) => Promise<void>;
   getClientSession: () => ClientSession;
-  exportProblemReport: (win: BrowserWindow) => Promise<void>;
   acquireSteamToken: (
     parent: BrowserWindow,
     record: (event: SteamAcquireEvent) => void,
@@ -355,6 +354,8 @@ const asClipboardText = one((value: unknown): string => {
 const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   if (
     value !== "github" &&
+    value !== "bugReport" &&
+    value !== "featureRequest" &&
     value !== "discord" &&
     value !== "donate" &&
     value !== "releases" &&
@@ -763,10 +764,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     diagnosticsCurrent: channel(nothing, () => diagnosticSummary()),
-
-    diagnosticsExportReport: channel(nothing, async (win) => {
-      await ctx.exportProblemReport(win);
-    }),
 
     appOpenExternal: channel(asExternalLinkKind, async (_win, kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);

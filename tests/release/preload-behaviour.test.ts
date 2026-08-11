@@ -231,12 +231,7 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.diagnosticsRendererMilestone,
   },
   { path: "diagnostics.current", args: [], channel: IPC.diagnosticsCurrent },
-  {
-    path: "diagnostics.exportReport",
-    args: [],
-    channel: IPC.diagnosticsExportReport,
-  },
-  { path: "app.openExternal", args: ["support"], channel: IPC.appOpenExternal },
+  { path: "app.openExternal", args: ["bugReport"], channel: IPC.appOpenExternal },
   { path: "app.reveal", args: ["gameData"], channel: IPC.appRevealPath },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
   {

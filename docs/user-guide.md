@@ -103,9 +103,11 @@ Tools stores authored builds and complete teams. **Export team** creates a
 build to the game's Skills directory. Choose **Refresh List** in Guild Wars
 after publication.
 
-Open **Settings → Templates** after Guild Wars starts. Use it to import a
-Templates folder, `.txt` files, or clipboard codes. The app previews changes and
-writes nothing until you confirm.
+Open **Settings → Templates** after Guild Wars finishes starting and you sign
+in. If you opened it earlier, reopen Templates after signing in so it can
+connect to the game's storage. Use it to import a Templates folder, `.txt`
+files, or clipboard codes. The app previews changes and writes nothing until
+you confirm.
 
 Use **Export…** to create a Windows-compatible `Guild Wars Build Templates`
 folder. A later export uses a new folder name instead of overwriting the first.
@@ -215,7 +217,7 @@ Updates** to look for a newer `gwonmac` release.
 - A corrupt chunk is removed and fetched again.
 - The first unexpected renderer crash starts automatic recovery.
 
-If Guild Wars stops, the launcher shows **Retry** and **Report a Problem…**. A
+If Guild Wars stops, the launcher shows **Retry** and **Report a Bug…**. A
 repeated crash makes reporting the primary action.
 
 Use **Reset Saved Files…** only when the Guild Wars filesystem cannot open. It
@@ -226,20 +228,21 @@ Use **Reset GWonMac settings…** for launcher defaults. Use **View → Reset Wi
 Size and Position** for an off-screen window. These actions do not clear saved
 login.
 
-## Report a problem
+## Bugs and feature requests
 
-Choose **Help → Report a Problem…**.
+Choose **Help → Report a Bug…** or **Help → Request a Feature…**. Each action
+opens its GitHub issue form immediately. GitHub issues are public.
 
-- Use **Export Recent Diagnostics…** for startup, download, graphics, input,
-  audio, login, or crash problems.
+- Diagnostics are optional. To include them with a bug, use
+  **Help → Diagnostics → Export Recent Diagnostics…** and attach the ZIP.
 - Use **Record Performance Problem** for stutter. Reproduce it, press
-  **Command-Shift-M**, and stop the capture.
+  **Command-Shift-M**, stop the capture, and export it when prompted.
 - Use **Show Input Trace** for click problems. It records bounded counts and
   distances, not coordinates. Closing it discards the trace.
 
 The diagnostics ZIP excludes saved login, account request bodies, game traffic,
 chat, and crash dumps. Other text is scanned for known secret and path patterns.
-Review the readable ZIP before you attach it to a public issue.
+Review the readable ZIP before attaching it to a bug issue.
 
 See [Diagnostics and performance](diagnostics.md) for technical details.
 

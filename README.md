@@ -1,48 +1,40 @@
 <p align="center">
-  <img src="assets/AppIcon.png" width="112" alt="gwonmac application icon">
+  <img src="assets/guild-wars-reforged.png" width="350" alt="gwonmac application icon">
 </p>
 
 <h1 align="center">gwonmac</h1>
 
 <p align="center">
   <strong>Guild Wars Reforged for macOS</strong><br>
-  Play ArenaNet's official Guild Wars client on an Apple Silicon Mac.
+  Play ArenaNet's official Guild Wars client finally on an Apple Silicon Mac in high resolution and FPS.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mat4m0/gwonmac/releases">Download</a> ·
+  <a href="https://www.gwonmac.com/">Website</a> ·
+  <a href="https://www.gwonmac.com/download">Download</a> ·
   <a href="docs/user-guide.md">User guide</a> ·
   <a href="https://discord.gg/Z9ft52RBD3">Discord</a> ·
-  <a href="https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml">Report a bug</a>
+  <a href="https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml">Report a bug</a> ·
+  <a href="https://github.com/Mat4m0/gwonmac/issues/new?template=feature-request.yml">Request a feature</a>
 </p>
 
 > [!CAUTION]
 > **DANGER — This is an unofficial client host.**
 > ArenaNet and NCSOFT do not make, sponsor, endorse, or support gwonmac.
-> Use it at your own risk. The app downloads and verifies ArenaNet's official
-> Guild Wars client. It does not include game binaries.
-
-![gwonmac running Guild Wars Reforged on macOS](docs/assets/gwonmac-game.jpeg)
-
-<p align="center"><sub>Development screenshot. Published Release builds can update themselves.</sub></p>
 
 ## What gwonmac does
 
-gwonmac hosts ArenaNet's official WebAssembly client in a sandboxed macOS app.
-You do not need Windows, Wine, or a browser tab.
+gwonmac hosts ArenaNet's official WebAssembly client (what is used in the mobile app) in a sandboxed macOS app.
+You do not need Windows, Wine, VMWare or Crossover.
 
 The app provides:
 
 - native Apple Silicon packaging;
+- high FPS on full retina resolutions;
+- notarized by Apple (checked for Malware);
 - verified downloads from ArenaNet;
-- Quick Start and Full Game download modes;
 - ArenaNet and Steam sign-in;
 - build and team management;
-- optional gwonmac Tools; and
-- local diagnostics that you control.
-
-If an optional Tools feature cannot run safely, the official game remains
-available. See the [product boundaries](PRODUCT.md) for the full policy.
 
 ## Requirements
 
@@ -50,12 +42,11 @@ available. See the [product boundaries](PRODUCT.md) for the full policy.
 - A Guild Wars account.
 - An internet connection for the first download and online play.
 
-gwonmac does not create accounts or bypass sign-in. You can buy Guild Wars from
-the [official store](https://store.guildwars.com/en-us).
+You can buy Guild Wars from the [official store](https://store.guildwars.com/en-us).
 
 ## Install
 
-1. Open the [Releases page](https://github.com/Mat4m0/gwonmac/releases).
+1. Open the [Releases page](https://github.com/Mat4m0/gwonmac/releases) or go to https://gwonmac.com/download
 2. Download the latest Stable `.dmg` file.
 3. Open the file.
 4. Move **Guild Wars Reforged.app** to **Applications**.

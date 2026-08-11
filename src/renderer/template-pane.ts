@@ -45,8 +45,8 @@ import {
  * Settings opens from the launcher and from the app menu long before that.
  */
 const NO_MOUNT =
-  'Templates are saved inside Guild Wars, so they can be imported and '
-  + 'exported once the game has started.';
+  'Finish starting Guild Wars and sign in, then reopen Templates to import or '
+  + 'export build templates.';
 
 /**
  * The client scans each template directory once and caches the answer — see
