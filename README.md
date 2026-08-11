@@ -10,7 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mat4m0/gwonmac/releases">Download</a> ·
+  <a href="https://www.gwonmac.com/">Website</a> ·
+  <a href="https://www.gwonmac.com/download">Download</a> ·
   <a href="docs/user-guide.md">User guide</a> ·
   <a href="https://discord.gg/Z9ft52RBD3">Discord</a> ·
   <a href="https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml">Report a bug</a>
