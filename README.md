@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/AppIcon.png" width="112" alt="gwonmac application icon">
+  <img src="assets/guild-wars-reforged.png" width="350" alt="gwonmac application icon">
 </p>
 
 <h1 align="center">gwonmac</h1>
@@ -19,12 +19,6 @@
 > [!CAUTION]
 > **DANGER — This is an unofficial client host.**
 > ArenaNet and NCSOFT do not make, sponsor, endorse, or support gwonmac.
-> Use it at your own risk. The app downloads and verifies ArenaNet's official
-> Guild Wars client. It does not include game binaries.
-
-![gwonmac running Guild Wars Reforged on macOS](docs/assets/gwonmac-game.jpeg)
-
-<p align="center"><sub>Development screenshot. Published Release builds can update themselves.</sub></p>
 
 ## What gwonmac does
 
