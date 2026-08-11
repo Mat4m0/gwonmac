@@ -8,8 +8,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { FuseState, FuseV1Options, getCurrentFuseWire } from "@electron/fuses";
 import { extractFile, listPackage, statFile } from "@electron/asar";
-import forgeConfig from "../forge.config.ts";
 import { macOSBundleVersions } from "../scripts/macos-version.js";
+import { ignorePackageFile } from "../scripts/package-ignore.ts";
 import {
   assertNoDeveloperPackageFiles,
   assertRequiredPackageFiles,
@@ -65,8 +65,7 @@ const actualPackageFiles = new Set(
     (file) => !("files" in statFile(asarPath, file.slice(1))),
   ),
 );
-const ignore = forgeConfig.packagerConfig?.ignore;
-const expectedPackageFiles = new Set(forgePackageFiles(root, ignore));
+const expectedPackageFiles = new Set(forgePackageFiles(root, ignorePackageFile));
 assert.deepEqual(
   [...actualPackageFiles].sort(),
   [...expectedPackageFiles].sort(),
@@ -201,7 +200,10 @@ const child = spawn(
     cwd: root,
     env: {
       ...process.env,
-      GW_OFFLINE_SHELL: "1",
+      // The smoke only needs the pre-ready renderer/IPC path. Cached-only keeps
+      // it network-independent and reaches a real `not_ready` failure when this
+      // disposable profile contains no client generation.
+      GW_REQUIRE_CACHED_CLIENT: "1",
       ELECTRON_ENABLE_LOGGING: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],

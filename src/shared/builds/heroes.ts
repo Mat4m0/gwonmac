@@ -1,8 +1,8 @@
 /**
  * The client's own numeric reference tables: which hero is id 7, which
- * profession is id 3, which attribute is id 35. Every value here is transcribed
- * from `plans/tools/hero-builds/evidence/hero-and-profession-tables.md`, which
- * carries the file and line each one was read from. These are protocol values,
+ * profession is id 3, which attribute is id 35. Values are transcribed from
+ * reviewed upstream client/GWToolbox constants; source names and exceptional
+ * assumptions stay beside the affected tables. These are protocol values,
  * not presentation: getting one wrong does not produce a visibly broken build,
  * it produces a build that loads the wrong skill on the wrong hero. So this file
  * transcribes and does nothing else — no fallbacks, no derived guesses, no
@@ -18,8 +18,8 @@
  * - `HEROES` is an array, because there is no hero union to key by: the names
  * here *are* the definition, and `HeroName` is derived from them.
  *
- * Three deliberate absences, each of which the evidence document marks
- * **NOT IN SOURCE**. They are absent rather than defaulted, because a plausible
+ * Three deliberate absences are **not present in the reviewed sources**. They
+ * are absent rather than defaulted, because a plausible
  * wrong number is worse here than a missing one:
  *
  * 1. **Hero display names.** Read from the client at runtime and localised
@@ -64,12 +64,12 @@ export type Campaign =
  *
  *  - `"razah"` — Razah alone. His professions are player-chosen exactly as a
  *    mercenary's are, which is why the panel-order comment has to explain where
- *    he sorts. Nothing in either source states a default, so A6 must treat him
- *    as "unknown until observed" rather than pinning him to mesmer (§1.3).
+ *    he sorts. Nothing in either source states a default, so validation must
+ *    treat him as "unknown until observed" rather than pinning him to mesmer.
  *  - `"mercenary"` — `Merc1`-`Merc8`, clones of the account's own characters.
  *    Name, professions and appearance all come from the account, so a team
  *    record naming `Merc3` means something only on the account that wrote it,
- *    and "hero not unlocked" is not a claim we can make about one (§1.4).
+ *    and "hero not unlocked" is not a claim we can make about one.
  */
 export type HeroKind = "campaign" | "razah" | "mercenary";
 
@@ -242,7 +242,7 @@ interface AttributeFacts {
  *  - **26, 27 and 28.** `Constants.h:71` restarts at `DaggerMastery = 29` and
  *    says nothing about the three it skipped. They are valid-width, unknown
  *    ids: a decoder must reject them as a typed failure rather than collapse
- *    them into "none" or assume they are unused (§3.1).
+ *    them into "none" or assume they are unused.
  *  - **`None = 0xff`.** An in-memory "unset" marker that does not fit the
  *    6-bit wire field, so no codec may ever write it. Here, an attribute with
  *    no rank is simply absent from `AttributeRanks`.
@@ -305,8 +305,8 @@ export type AttributeId = (typeof ATTRIBUTES)[Attribute]["id"];
  * entries, and that is exactly why a stored rank stops at 12.
  *
  * The level-20 budget these are spent from is **not** here. It is stated
- * nowhere in either source tree, and A6 must read it from the client rather
- * than inherit a number this file made up.
+ * nowhere in either source tree; validation keeps that assumption outside this
+ * wire-value table.
  */
 export const ATTRIBUTE_POINT_COST: Readonly<Record<AttributeRank, number>> = {
   0: 0,

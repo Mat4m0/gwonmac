@@ -1,12 +1,17 @@
 import {
   _electron as electron,
   type ElectronApplication,
+  type Locator,
   type Page,
 } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  type CachedClientOptions,
+  seedCachedClient,
+} from "../helpers/cached-client.js";
 
 export const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -25,6 +30,16 @@ export interface OfflineFixture {
   readonly userData: string;
 }
 
+/**
+ * Test DOM keyboard ownership without requiring the background Electron window
+ * to become the active macOS application.
+ */
+export async function isDomActiveElement(target: Locator): Promise<boolean> {
+  return target.evaluate(
+    (element) => element.ownerDocument.activeElement === element,
+  );
+}
+
 export async function launchOffline(
   prefix: string,
   environment: Record<string, string> = {},
@@ -40,6 +55,32 @@ export async function launchOffline(
   }
 }
 
+/**
+ * Launch against one explicit verified client generation. Most tests should
+ * use `launchOffline`: its empty cache reaches the network-free error state,
+ * which is enough for shell and pre-ready module coverage. This helper is for
+ * tests that genuinely cross the client/session/snapshot/glue boundary.
+ */
+export async function launchCachedClient(
+  prefix: string,
+  environment: Record<string, string> = {},
+  prepare: (userData: string) => Promise<void> = async () => {},
+  client: CachedClientOptions = {},
+): Promise<OfflineFixture> {
+  return launchOffline(prefix, environment, async (userData) => {
+    await seedCachedClient({
+      artifacts: path.join(userData, "game", "artifacts"),
+      userData,
+    }, {
+      ...client,
+      beforeSeal: async () => {
+        await client.beforeSeal?.();
+        await prepare(userData);
+      },
+    });
+  });
+}
+
 export async function launchOfflineAt(
   userData: string,
   environment: Record<string, string> = {},
@@ -52,11 +93,14 @@ export async function launchOfflineAt(
     if (value !== undefined) env[key] = value;
   }
   Object.assign(env, {
-    GW_OFFLINE_SHELL: "1",
     // Launch without taking keyboard focus. Specs that assert on real OS focus
     // (document.hasFocus, pointer lock, fullscreen) pass GW_BACKGROUND_LAUNCH: "0".
     GW_BACKGROUND_LAUNCH: "1",
     ...environment,
+    // Every default launch is offline by policy. With no seeded generation the
+    // runtime publishes a normal `not_ready` failure; it never fabricates a
+    // ready client for the test harness.
+    GW_REQUIRE_CACHED_CLIENT: "1",
   });
   delete env.ELECTRON_RUN_AS_NODE;
   let app: ElectronApplication | null = null;

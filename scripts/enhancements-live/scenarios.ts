@@ -1,4 +1,5 @@
-// P4.7 — two tiers, drawn here because this is where they meet.
+// Automation and observation are separate tiers, defined here because this is
+// where they meet.
 //
 // **Automation** acts on the player's behalf. Its two capabilities are trusted
 // Playwright input (`page.mouse`, `page.keyboard`, `page.locator`) and the
@@ -13,7 +14,8 @@
 //
 // Before this split every live run exported `GW_ENHANCEMENT_AUTOMATION=1` and got
 // an IPC channel, so the observation surface could not be exercised without the
-// automation surface being present. That is the property P4.7 asks for.
+// automation surface being present. That separation is the property this
+// module protects.
 import type { StdioOptions } from "node:child_process";
 import type { CDPSession, Page } from "playwright";
 import type { AutomationCommand } from "../../src/shared/automation.js";

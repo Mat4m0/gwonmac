@@ -9,19 +9,23 @@ const hostUrl = new URL(
 );
 const { verifyClientLocally } = await import(hostUrl.href);
 
-const [officialWasmPath, cachePath, officialSha256] = process.argv.slice(-3);
-if (!officialWasmPath || !cachePath || !officialSha256) {
-  throw new Error("local verifier fixture requires wasm, cache, and hash");
+const [officialWasmPath, officialSha256] = process.argv.slice(-2);
+if (!officialWasmPath || !officialSha256) {
+  throw new Error("local verifier fixture requires wasm and hash");
 }
 
-const state = /** @type {{ localVerifierOutcome?: unknown }} */ (globalThis);
+const state = /** @type {{
+ *   localVerifierCompleted?: boolean;
+ *   localVerifierOutcome?: unknown;
+ * }} */ (globalThis);
+state.localVerifierCompleted = false;
 state.localVerifierOutcome = null;
 void app.whenReady().then(async () => {
   state.localVerifierOutcome = await verifyClientLocally({
     officialWasmPath,
-    cachePath,
     officialSha256,
   });
+  state.localVerifierCompleted = true;
   const window = new BrowserWindow({ show: false });
   await window.loadURL("data:text/html,local-verifier-complete");
 });

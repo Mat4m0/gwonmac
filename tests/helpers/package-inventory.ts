@@ -6,10 +6,6 @@ import ts from "typescript";
 /** Archive-rooted paths: the leading "/" is the packaged app's root. */
 type PackageInventory = ReadonlySet<string>;
 
-// Derived from Forge's own option rather than restated, because the callers
-// hand this straight through from `forgeConfig.packagerConfig?.ignore` and the
-// guard below is what turns the wider option into the copy filter this walk
-// needs.
 type PackagerIgnore = NonNullable<ForgeConfig["packagerConfig"]>["ignore"];
 
 export const PRELOAD_ENTRY = "/build/preload/preload.cjs";

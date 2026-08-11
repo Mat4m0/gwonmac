@@ -1,4 +1,4 @@
-// `src/shared/builds/validate.ts` is primitive A6's build half, and its whole
+// `src/shared/builds/validate.ts` owns build validation, and its whole
 // value is in *what it says* rather than in whether it says yes or no. A player
 // who is told "this build is invalid" is stuck; a player told "slot 3 is a
 // second elite" is one click from fixed. So every case below drives one rule to
@@ -6,9 +6,8 @@
 // attribute name — not merely that something was reported.
 //
 // The catalogue here is a fixture on purpose and is not a claim about any real
-// skill. Skill-to-profession and the elite flag are primitive A1, an undecided
-// product question (`plans/tools/hero-builds/primitives.md` §A1), so the
-// validator takes the lookup as a parameter and this file supplies nine
+// skill. The validator does not own ArenaNet content, so it takes the lookup as
+// a parameter and this file supplies nine
 // invented ids with the shapes the rules care about: two warrior elites, plain
 // skills of three professions, two common skills, and an id the catalogue does
 // not know. That last one is a rule in its own right — a catalogue that cannot
@@ -30,12 +29,7 @@
 //
 // The first test's `@ts-expect-error` lines are real assertions: they *fail*
 // when the line they guard type-checks. Node strips types and never sees them,
-// so they are checked by `tsc -p tsconfig.tests.json` and this file only
-// half-runs without it:
-//
-//   node --import ./tests/ts-hook.mjs --experimental-strip-types --test \
-//     tests/unit/a-build-that-cannot-exist-in-game-is-rejected.test.ts
-//   npx tsc -p tsconfig.tests.json
+// so the normal unit and typecheck gates are both required.
 //
 // What they pin is the shape of the answer, which no runtime check can: a clean
 // result has no `problems` to read, and an invalid one cannot carry an empty
@@ -85,7 +79,7 @@ const CATALOGUE = new Map<number, CataloguedSkill>([
 
 const catalogue: SkillCatalogue = (skill) => CATALOGUE.get(skill) ?? null;
 
-/** Every id unknown — the degraded state A1 warns the whole UI must survive. */
+/** Every id unknown — a degraded state the whole UI must survive. */
 const emptyCatalogue: SkillCatalogue = () => null;
 
 /** Written out rather than mapped, so the fixture needs no cast to be eight long. */
@@ -391,9 +385,9 @@ test("a primary attribute needs the profession as the primary, not the secondary
   // Every profession's primary attribute is refused to a build that has that
   // profession second, and accepted when it has it first — driven over the
   // module's own table rather than over a copy of it. A copy would assert the
-  // implementation back to itself for the eight rows the evidence document
-  // marks as *assumed* (§3.2 — only the Assassin's and the Ritualist's are
-  // source-asserted), because both literals would have been written from the
+  // implementation back to itself for the eight assumed rows (only the
+  // Assassin's and the Ritualist's are source-asserted), because both literals
+  // would have been written from the
   // same guess. What is worth testing is the rule at both profession positions,
   // and a live read that corrects an entry changes one place and stays green.
   const primaries = Object.entries(PRIMARY_ATTRIBUTE) as readonly (readonly [
@@ -447,7 +441,7 @@ test("a primary attribute needs the profession as the primary, not the secondary
 
 test("a rank above the cap is rejected rather than clamped", () => {
   // Unreachable from a `Build` literal — `AttributeRank` stops at 12 — which is
-  // exactly why the cast is here. A2 decodes ranks off the wire and an imported
+  // exactly why the cast is here. Imported data can carry ranks off the wire and an
   // file is a promise nobody kept; this validator is where such a record first
   // meets the rules, so the runtime check is a boundary and not dead code.
   const decoded = broken({

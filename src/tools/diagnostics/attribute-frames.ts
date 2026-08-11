@@ -202,7 +202,7 @@ if (
   const input = process.argv[2];
   if (!input) {
     console.error(
-      "usage: pnpm diagnostics:attribute-frames <capture.gwdiag> [threshold-ms]",
+      "usage: pnpm diagnostics:attribute-frames <capture.zip> [threshold-ms]",
     );
     process.exitCode = 2;
   } else {

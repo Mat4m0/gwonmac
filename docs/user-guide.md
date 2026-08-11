@@ -1,538 +1,259 @@
-# Guild Wars Reforged user guide
+# `gwonmac` user guide
 
-Guild Wars Reforged is an independent macOS host for ArenaNet’s official Guild
-Wars Reforged client. It is not affiliated with ArenaNet or NCSOFT and does
-not bundle game binaries.
+`gwonmac` is Guild Wars Reforged for macOS on Apple Silicon.
+
+It is an independent, unofficial application. ArenaNet and NCSOFT do not make,
+sponsor, endorse, or support it. The app downloads the official client from
+ArenaNet. It does not include ArenaNet game files.
 
 ## Install and start
 
-Published builds are signed with Developer ID and notarized by Apple.
+Use a published DMG for normal play. Published releases use Developer ID
+signing and Apple notarization.
 
-To build from source:
+1. Download the DMG from a `Mat4m0/gwonmac` GitHub release.
+2. [Verify the assets](release-verification.md#verify-downloaded-assets) if you
+   want to check their origin.
+3. Open the DMG.
+4. Drag **Guild Wars Reforged** to Applications.
+5. Start it normally.
 
-```bash
-corepack enable
-pnpm install --frozen-lockfile
-pnpm package
-```
+Do not disable Gatekeeper.
 
-Local source builds remain ad-hoc signed. Published releases use a `.dmg`:
-open it, drag Guild Wars Reforged into Applications, then launch it normally.
-Do not disable Gatekeeper globally.
+The first start needs an internet connection. The app checks ArenaNet, verifies
+the client files, asks how to store game data, and starts Guild Wars. Later
+starts use verified cached data when possible. Login and online play still need
+ArenaNet.
 
-Published releases include SHA-256 checksums, an SPDX SBOM, and GitHub
-build/SBOM attestations. Follow [Verify a release](release-verification.md)
-before opening a downloaded build.
+A local source build has a temporary identity. It does not share saved-login
+access with the published Release app.
 
-Published tester snapshots are a separately signed and notarized Preview app.
-Release and Preview share game data and settings, but each remembers its own
-login. An ad-hoc pull-request artifact remembers login only until it quits.
+## Game data
 
-The first release using the Data Protection Keychain asks an existing preview
-installation to sign in once again. It removes only the two retired encrypted
-secret files. Launcher settings, window state, downloaded game data,
-diagnostics, screenshots, chat logs, and build templates remain where they
-were.
+**Quick Start** is the recommended default. It downloads areas when the game
+needs them and keeps verified data for later.
 
-The app then:
+**Download Full Game** downloads all available chunks. It needs more time and
+disk space. It does not make login or online play available offline.
 
-1. checks the official game client;
-2. prepares the files needed to start;
-3. starts Guild Wars;
-4. downloads additional areas only when the game asks for them.
+During a full download, you can pause, resume, return to Quick Start, or choose
+**Play While Downloading**. Verified chunks remain when you switch modes. The
+Dock icon shows active progress.
 
-The first start needs an internet connection and takes longer than later
-starts. The ArenaNet client updater and game-data cache always use at most eight
-concurrent ArenaNet requests.
+To change the next launch, open **Guild Wars Reforged → Settings… → Game Data**.
+This does not interrupt the current game.
 
-## Quick Start and the full game
+Use **Clear Game Data…** only to remove downloaded area data. The app confirms
+the action and restarts. It keeps the small official client files.
 
-Quick Start is the default. It keeps the loading screen tied to data the game
-actually needs and caches downloaded areas for later.
+## Display and input
 
-On the first online start, the loading screen asks one question: **Quick
-Start (Recommended)** or **Download Full Game**. A single pre-checked line
-beneath it covers the automatic update check — see [Updates](#updates) — and
-everything else keeps its default; the game tools live under
-**Settings → Controls**. Guild Wars, its audio, networking, and graphics do
-not start before this decision.
+Open **Settings → Display** to select render scale, interface style, and
+panel opacity.
 
-Quick Start starts Guild Wars and downloads areas when needed. Download Full
-Game remains in the launcher, shows verified bytes, speed, and ETA, and does
-not start Guild Wars automatically. When complete, choose **Play Guild Wars**.
-While downloading you may pause, return to Quick Start, or explicitly choose
-**Play While Downloading**; only that last action starts the game early and
-lets the full download continue in the background.
+**Retina — 2×** is the image-quality default. Use 1.5× or 1× to reduce GPU work
+and memory. Settings shows the current backing resolution. The official web
+client can offer only **None** for antialiasing, so use render scale for
+supersampling.
 
-The displayed transfer rate is a short moving average, so chunk-completion
-bursts do not make the number jump between unrealistic highs and lows. While a
-full download is active, progress also appears on the application’s Dock icon.
-macOS may turn the display off, but the app prevents download suspension until
-the task finishes or is paused.
+Mouse and trackpad actions go directly to Guild Wars. There is no input mode.
+Hold the right button to steer the camera. A macOS double-click reaches Guild
+Wars with the system double-click timing.
 
-To schedule the complete game from a running session:
+Main letters, the number row, and ANSI punctuation keep the same physical game
+binding when the macOS input source changes. Text fields still use the active
+input source. An old custom binding can need one manual rebind.
 
-1. Open **Guild Wars Reforged → Settings…**.
-2. Select **Full Game** under **Game data mode**.
+The official client includes browser gamepad support. This project does not have
+a dedicated controller release test.
 
-The current session is not interrupted. The next launch opens the resumable
-full-download launcher when data is still missing. Choose **Start Downloading
-Now** only when you want the same task to run in the background during the
-current session. Switching back to Quick Start stops speculative full download
-work but keeps every verified chunk.
+## Core and optional Tools
 
-The full download is optional. It requires enough free disk space for all
-missing chunks plus a safety margin. It improves offline area availability,
-but login and online play still require ArenaNet’s services.
+Open **Settings → Tools**.
 
-Use **Clear Game Data…** only when you want to remove downloaded game data.
-The app confirms the action and restarts. Small client files stay installed.
+Required compatibility restores persistent game files and template saving when
+its exact proof passes. Certified Core adds the Guild Wars cursor and native
+double-click. These features stay on. The cursor has no player switch. The app
+does not ship or download cursor artwork.
 
-## Settings
+**Enable optional Tools Beta** is off by default. Its first enable asks for one
+restart because the app selects the Tools-capable module before Guild Wars
+starts.
 
-Settings save immediately. **Game Data** owns the canonical Quick Start/Full
-Game strategy, optional current-session download, and cache controls.
-**Graphics quality** changes rendering resolution. **Retina — 2×** is the
-visual-quality default; choose 1.5× or 1× when higher frame rate or lower GPU
-memory use matters more than sharpness.
-Settings shows the backing resolution for the current window beside every
-scale. Compared with 1×, 1.5× renders 2.25 times as many pixels and 2× renders
-four times as many pixels.
-**Interface style** changes every GWonMac surface immediately. **Guild Wars**
-is the ornamental default; **Obsidian** is a borderless charcoal treatment with
-quieter gilt accents. Both use the same controls and keep profession colours.
-**Panel visibility** changes how much of the live game remains visible behind
-either style and does not alter Guild Wars itself.
-Right-drag always locks the pointer while steering the camera and restores it
-on release. Mouse, trackpad, and Magic Mouse clicks and drags pass through to
-Guild Wars unchanged. A macOS double-click reaches Guild Wars as a
-double-click, using your own system double-click speed and distance settings;
-there is no input mode to configure. On a client build this host has not
-certified, double-click is unavailable until it is — the same builds that lose
-build templates and the game's own cursor. Main-block letter, number-row, and punctuation bindings stay on the
-same physical keys when the macOS input source changes, while chat and other
-text fields continue to type the active layout. Extra ISO/JIS keys and the
-numeric keypad retain the official web client's layout behavior. The in-game
-Controls list shows the binding's stable reference character rather than
-relabeling it after an input-source change. A custom binding first saved by an
-older app build under a non-US input source may need to be rebound once; its
-stored character does not retain the physical position needed for migration.
-**Controls** keeps the game's own cursor on as a required Core feature; no
-cursor artwork ships with this app. **GWonMac Tools Beta** is off by default.
-The first enable asks for one restart so the launch can select the certified
-Tools module. Once enabled, **Team Management** and **Target Distance (Test)**
-switch on or off immediately. Team Management stores builds and full teams,
-captures the player and their heroes, exchanges team codes, and applies a
-chosen team after an explicit click in a PvE outpost. An explicit Normal or
-Hard Mode and the player's own build are included.
-**Export team** produces a `gwonmac-team:` code that preserves the complete
-GWonMac team, its referenced builds, repeated slots, notes, tags, and variant
-lineage. **Import team** accepts that code; it is a GWonMac exchange format,
-not a Guild Wars or GWToolbox++ party code. Copy and paste are conveniences—the
-code always remains visible for manual exchange.
-**Export build** shows the standard Guild Wars skill template code and can copy
-it or write the saved build into the game's Templates folder. The manual code
-remains selectable when clipboard access is unavailable. In the build editor,
-drag a filled skill to any occupied or empty slot to reorder the bar. Touch and
-pointer dragging use the same interaction; keyboard users can move the focused
-skill with Command/Control + Left/Right Arrow.
-The skill catalogue's **Placeable** filter hides skills that cannot go into the
-active slot. **Unlocked** is a separate, optional filter: for a hero build it
-uses account-wide unlocks, while for a player build it uses skills learned by
-the current Guild Wars character. Unlock facts are read only in a supported
-PvE area, stay on this Mac for the current session, and are never written into
-the build library or diagnostics.
-If skill names or icons are temporarily unavailable, the saved library remains
-usable. Choose **Retry skill data** in Tools after the game data becomes
-available; restarting the app is not required.
-Tools is the home for authored builds and teams. **Settings → Templates** keeps
-the separate file-migration jobs: importing an old Windows folder, bulk
-clipboard/file import, export, and rescuing templates stranded in subfolders.
-Tools can publish one authored build into Guild Wars; neither surface treats
-the other's files as a second library.
-**Reload Game** reuses the module the launch already chose.
-When the cursor is off — and whenever it cannot be read, or
-your client build is not one this host has certified — you get the normal macOS
-pointer. That is a cosmetic difference only: nothing about how the game plays
-changes with the box either way. The rest of the window always keeps the macOS
-pointer.
-The local performance overlay stays under **Advanced**, outside the normal
-setup path. Settings reopens to the pane most recently used during the current
-session.
+After that restart, these choices update immediately:
 
-**Advanced → Experimental 4 GB memory limit** asks the next Guild Wars launch
-to use the certified 4 GB client module. It is off by default, and changing it
-requires restarting GWonMac because the module is selected before the game
-starts. Settings always shows what the current session is actually using. If a
-Guild Wars update has not passed 4 GB certification yet, GWonMac starts the
-ordinary 2 GB client instead and leaves gameplay available. The larger limit
-provides more headroom during long sessions; it does not stop memory that keeps
-growing.
+- **Team management** (Beta) stores builds and teams. It can observe and capture
+  a PvE party. It can apply a selected team after your explicit action in a PvE
+  outpost.
+- **Target distance and range** (Test) shows the selected target's distance and
+  range band.
 
-The official WebAssembly client currently requests a WebGL context without
-multisampling, so its in-game antialiasing list may contain only **None**. The
-host does not display options the client cannot provide; the 1.5× and 2×
-render scales are the available supersampling choices.
+Optional Tools stop in PvP, guild halls, transitions, and unknown regions. Team
+Apply checks policy before each step and stops when the state changes.
 
-The official client contains browser Gamepad support and community reports
-confirm that controllers work. Physical controller behavior is not part of
-the automated release gate because the project has no dedicated test
-controller yet.
+The saved library still works when live client integration is unavailable. You
+can edit, import, and export. Live party data and Apply remain unavailable.
 
-Settings are always available with **Command-,**, **Guild Wars Reforged → Settings…**,
-or the **Settings** link on the loading screen. **Reset Launcher Settings…**
-under **Advanced** restores launcher defaults, resets the window to a centered
-1280×800 normal window, and makes the download choice appear on the next
-launch. It does not remove downloaded game data, the remembered account name,
-or the saved password.
+## Builds, teams, and templates
 
-The application remembers its last normal size and position plus maximized or
-fullscreen mode. If a saved monitor is disconnected, the window is clamped and
-centered on the primary display instead of opening off-screen. Choose **View →
-Reset Window Size and Position** for an immediate window-only reset.
+Tools stores authored builds and complete teams. **Export team** creates a
+`gwonmac-team:` exchange code. This is not a Guild Wars or GWToolbox++ code.
 
-Guild Wars' **Remember Password** checkbox controls saved login. The password
-and account name are kept together as one opaque, device-only item in Apple's
-Data Protection Keychain by the provisioned Release or Preview app. Each app's
-signed identity authorizes only its own item without the repeated legacy
-Keychain access questions.
-It does not sync through iCloud or move to another Mac. A source or ad-hoc
-build keeps the value only in memory and forgets it when the process quits.
-The game proxy does not accept or return cookies. Browser cookies are also
-cleared at startup and quit.
+**Export build** shows the standard Guild Wars template code. It can publish the
+build to the game's Skills directory. Choose **Refresh List** in Guild Wars
+after publication.
 
-## Signing in with Steam
+Open **Settings → Templates** after Guild Wars finishes starting and you sign
+in. If you opened it earlier, reopen Templates after signing in so it can
+connect to the game's storage. Use it to import a Templates folder, `.txt`
+files, or clipboard codes. The app previews changes and writes nothing until
+you confirm.
 
-If you bought Guild Wars on Steam you have no ArenaNet email or password, so the
-login screen also offers **Sign in with Steam** beside the email and password
-fields. Use whichever matches how you bought the game; adding Steam takes
-nothing away from the email and password route.
+Use **Export…** to create a Windows-compatible `Guild Wars Build Templates`
+folder. A later export uses a new folder name instead of overwriting the first.
 
-Choosing Steam opens a separate Steam sign-in window that this application owns.
-macOS presents it as a sheet attached to the game window, and a sheet draws no
-title bar, so **there is no address bar or origin label for you to check** — you
-cannot verify by eye that the page is Steam's.
+Guild Wars does not list imported templates inside subfolders. Imports go to
+the top level. A source path becomes part of the name. For example,
+`Warrior\Shockaxe` becomes `Warrior - Shockaxe`.
 
-What protects you instead is that the sheet's top-level page may only navigate
-to Steam- and Valve-owned addresses; a top-level navigation anywhere else is
-blocked outright. Like an ordinary browser, Steam may embed resources or frames
-from other providers. They remain inside Chromium's sandbox with no Node,
-preload, application permissions, popups, or downloads, and cannot complete the
-top-level sign-in redirect. The window runs in a throwaway browser session of
-its own with no access to the game or to this application, and the sign-in
-result is read by the application itself rather than by loading whatever page
-the redirect points at. If the sheet ever renders empty or broken, close it and
-use the email and password fields instead of typing your Steam password into it.
+If an older app left a template in a subfolder, use **Move to Top Level**. The
+action does not overwrite a different template.
 
-Once you finish signing in, the window closes by itself and the game continues to
-character select. Everything that window stored while it was open, cookies
-included, is destroyed with it.
+## Saved login
 
-You normally do this once per machine and distribution channel. A provisioned
-Release or Preview app remembers the token as a second opaque, device-only Data
-Protection Keychain item and replays it on
-later launches, so no Steam window appears again until it expires or you sign
-out. A source or ad-hoc build keeps it only for that process. If the item cannot
-be read, or the sign-in has expired or been revoked, you are simply returned to
-the login screen — the application does not fail to start.
+Guild Wars owns its **Remember Password** checkbox.
 
-If an explicit sign-in fails for a reason other than you closing the window, a
-brief status line appears over the login screen saying the sign-in did not
-complete; it disappears on its own. Closing the Steam window yourself shows
-nothing — you already know what happened.
+The published Release app stores the ArenaNet account name and password as one
+device-only Data Protection Keychain item. It does not sync through iCloud. A
+local source build keeps the value only until quit.
 
-Signing out in the game forgets the local copy. It does not unlink your accounts.
+Use **Sign in with Steam** only when Steam is already linked to a Guild Wars
+account. This flow cannot create the link.
 
-**This signs you in to a Steam account that is already linked to a Guild Wars
-account — it cannot create that link.** If Steam authenticates you but the
-account service reports that no Guild Wars account matches, the login is
-refused and you are returned to the login screen. Linking is managed by
-ArenaNet, not here: see the Guild Wars support site at
-<https://help.guildwars.com/> for how Steam and Guild Wars accounts are
-connected.
+Steam opens in a modal sheet without an address bar. The app limits top-level
+navigation, blocks popups and downloads, uses no Node or preload access, and
+destroys the separate browser session when sign-in ends. Close an empty or
+unexpected sheet. Do not enter a password into an unexpected page.
+
+The Release app stores the Steam token and expiry in a separate device-only
+Keychain item. An expired or unavailable item returns you to login. Signing out
+removes the local token but does not unlink the accounts.
+
+The game proxy does not send or accept browser cookies.
 
 ## Copy and paste
 
-Pasting into the game works everywhere text can be typed: press **⌘V** in any
-game text field.
+Press **Command-V** in a Guild Wars text field to paste. **Command-C** copies
+the selected text in the field, or the full field when nothing is selected.
+Password fields are never copied.
 
-Copying out of the game works for the text field you are editing — chat
-entry, a search box, the guild announcement editor. **⌘C** copies the field's
-selected text, or the whole field when nothing is selected, and password
-fields are never copied.
+The official web client cannot copy text that it only displays, such as chat
+history or item names.
 
-Text the game merely displays — chat history, item names, a guild's status
-line — cannot be copied, even where the game lets you highlight it. The web
-build of ArenaNet's client ships without the clipboard support the Windows
-client has, so the highlight never reaches macOS. Until that is fixed
-upstream, retype or screenshot what you need.
+## Extended memory
 
-## Templates
+**Advanced → Experimental 4 GB memory limit** requests the certified 4 GB module
+for the next start. Restart `gwonmac` after changing it.
 
-Guild Wars saves each build as a short template code. On Windows those are
-`.txt` files under `Documents\Guild Wars\Templates`; here they live inside the
-game's own storage, so **Settings → Templates** is how they get in and
-out. Wait until Guild Wars has finished starting and you have signed in before
-using the pane. If you opened Settings earlier, close and reopen it after
-signing in so it can reconnect to the game's storage.
+If the current ArenaNet build has no 4 GB certificate, the app uses the ordinary
+2 GB module. The larger limit can delay a memory-related crash. It cannot stop
+memory that continues to grow.
 
-**Export…** asks for a folder and writes a `Guild Wars Build
-Templates` folder into it: one `.txt` per build, under `Skills` and
-`Equipment`, with the subfolders you made in game. It is the same layout
-Windows uses, so the result is a backup, a way to move builds to another Mac,
-and a folder a Windows install can read. An export never writes into an earlier
-one — a second export becomes `Guild Wars Build Templates 2`.
-
-Import reads that layout back:
-
-- **Import Folder…** takes a folder — one exported here, or the `Templates`
-  folder from a Windows install. Subfolders are kept.
-- **Import Files…** takes individual `.txt` files, including one file holding
-  many codes.
-- **Import from Clipboard** reads codes you copied from a guild page or a forum post.
-
-Codes are recognised on their own, as `Name: code`, as `Name<tab>code`, and in
-the `[Name;code]` form builds are usually shared in. Skill and equipment codes
-are filed correctly on their own.
-
-A bare code carries no name, so when one is pasted the preview offers a **Name**
-field. Type one and it is used as-is; paste several bare codes and they are
-numbered from it. Leave it empty and they are called `Template 1`, `Template 2`,
-and so on. Codes that arrived with a name of their own keep it, and a file
-import never asks — those are named after the file.
-
-Nothing is written until you confirm. After picking a source the pane shows
-what would be imported, what it would skip and why, and whether a name already
-in use should be kept or replaced. Characters Guild Wars refuses in a name are
-adjusted, and the preview says how many.
-
-**Imports always land in the top level of Skills or Equipment.** Guild Wars
-lists only the templates directly in those folders: it shows a subfolder, but
-never reads what is inside one it did not write during the session, so a
-template imported into a subfolder would be saved, would appear in an export,
-and would never be visible in game. A build from a Windows subfolder therefore
-keeps that folder in its name — `Warrior\Shockaxe` arrives as
-`Warrior - Shockaxe`. That also means the game's limit of 550 templates per
-kind applies to everything you import; subfolders cannot be used to get past
-it here. This is a client defect, recorded in `internal/upstream/`.
-
-Guild Wars reads its template list once per session, so **imported builds
-appear after you choose Refresh List** in the game's template manager — or
-after a restart.
-
-Export keeps whatever folders exist in the game's storage, so an export of
-templates the game itself filed into subfolders preserves them; re-importing
-that export folds those folders into names, for the reason above.
-
-If a template is already sitting in a folder Guild Wars cannot read — put
-there by an earlier version of this app, or by the game itself — the pane says
-so and offers **Move to Top Level**. That is the only way out: the game cannot
-list such a template, so it cannot rename or delete it either. Moving keeps the
-folder name as part of the template name and empties the folder away. A
-template whose new name is already taken by a different build is left where it
-is and reported, rather than overwriting either one. The offer appears only
-when there is something to move.
-
-## Report a problem
-
-Open the project’s bug form on GitHub, or choose **Help → Report a Problem…**
-in the app to export diagnostics and open it. Diagnostics are optional.
-
-- For a crash, startup, download, graphics, input, audio, or login problem,
-  choose **Export Recent Diagnostics…**.
-- For stutter, choose **Record Performance Problem**, reproduce it, press
-  **Cmd+Shift+M** when it is visible, then use
-  **Help → Diagnostics → Stop Capture**.
-- For a mouse problem — a click that arrives twice, a double-click that does
-  nothing — choose
-  **Help → Diagnostics → Show Input Trace**, reproduce it, then press **Copy**
-  on the panel and paste the text straight into the report. It is a live list
-  of every button press and release and what the app decided to do with it.
-  Nothing is written to disk and nothing is sent anywhere; the text holds
-  counts and distances, never where your pointer was or where your window is,
-  and closing the trace discards it.
-- When investigating a repeatable long loading stall with a Chromium trace,
-  start the trace and wait five seconds before entering the portal or changing
-  maps. Stop the capture after the destination has rendered. The initial wait
-  keeps CPU-profiler startup outside the transition being investigated.
-
-An always-visible capture indicator shows the recording type and elapsed time.
-After **Cmd+Shift+M**, it confirms that the problem marker was registered.
-
-The app creates one `.zip` file and can reveal it in Finder. Attach it to the
-GitHub bug report as it is. (Earlier releases named the same archive `.gwdiag`;
-the developer tools still read either.)
-
-Your password, saved login, account name, game traffic, and crash dumps are
-never recorded, so they are not in the export to begin with. The event log the
-report is built from is a closed list: each event carries numbers, flags, and
-short codes, so a failure is recorded as a code rather than as its text, and
-an export that cannot account for one of its own events fails instead of being
-written. Everything else in the file — Chromium's trace, the graphics and
-environment report, your launcher settings — is scanned for passwords, tokens,
-email addresses, and file paths, and those are replaced. That scan recognizes
-known patterns, so treat it as strong rather than absolute. The export is an
-ordinary ZIP you can open and read before attaching it. GitHub issues are
-public, so review the bug form’s privacy notice as well.
-
-## If the game warns that memory is running out
-
-Each Guild Wars session has a certified WebAssembly memory limit: 2 GB by
-default, or 4 GB when the experimental option is active. During long sessions
-that visit new content, memory can keep growing instead of settling. At the
-limit, the next large allocation stops the client. This app cannot safely
-discard objects owned by the game, but it can measure the heap and warn before
-the client reaches its effective limit.
-
-A notice appears over the game at two points: once with roughly twenty minutes
-of play left, and again with about five. Those points are worked out from how
-fast memory has been filling in this session, so in areas that load a lot of
-new scenery the warning comes sooner in wall-clock terms, which is the whole
-idea — the same notice used to mean half an hour in the open world and two
-minutes inside a mission.
-
-The notice does not print a countdown. It could be worked out, but replayed
-against a real crash it was wrong by enough to matter in both directions, and
-a number on a banner is a promise. What is worth acting on is that the warning
-appeared.
-
-**Reload Guild Wars** restarts the client with fresh memory. It takes under a minute,
-and Guild Wars puts you back where you were — the same way it handles a
-dropped connection. That was tested from inside an instance on every way this
-app can reload the game, and progress survived each time; a town or outpost is
-still the one place with nothing at all to lose. **Later** dismisses the current
-level for this session; escalation from Low to Critical shows the same notice
-again. **Details** expands the effective 2 GB or 4 GB limit inline without
-opening a modal over the game.
-
-## If the game crashes
-
-When the running game client stops unexpectedly, the launcher screen returns
-with **Retry** and **Report a Problem…**. Retry starts the client again; a
-single crash is usually transient. A crash that ran out of memory says so
-under **Technical details**, with the heap size it reached.
-
-If the client crashes again in the same app run, the message changes to say
-so and leads with reporting: **Report a Problem…** on the launcher is the
-same flow as **Help → Report a Problem…** — it exports the diagnostics
-archive (which includes the crashed session and the reason class of the
-crash) and offers to open the GitHub bug form. What the archive does and does
-not contain is described under [Report a problem](#report-a-problem).
-
-The crash count resets when you quit and reopen the app.
-
-## Recovery behavior
-
-- If startup cannot reach ArenaNet, the previous verified client is restored
-  when available. Otherwise the launcher presents **Retry** as the primary
-  recovery action.
-- Pausing, closing, losing the network, or sleeping during a full download does
-  not discard verified chunks. Choose **Resume Download** to continue.
-- When there is not enough disk space, the download stops before fetching more
-  data. Free space, then resume.
-- Corrupt cached chunks are discarded and fetched again automatically.
-- If Guild Wars saved files cannot be opened, choose **Reset Saved Files…**.
-  After confirmation, this removes local game preferences, build templates,
-  screenshots, and chat logs, then restarts. Downloaded game data and the
-  saved login stay untouched. This recovery is offered only when the game's
-  storage cannot be opened at all, which is also why it cannot export first:
-  keep a copy from **Settings → Templates** while the game runs.
-- The first unexpected renderer crash is recovered automatically. If it
-  repeats, use **View → Reload Game**, then **Help → Report a Problem…**.
+When the app warns about memory, choose **Reload Guild Wars**. Guild Wars
+normally reconnects. Reload in an outpost when you want the lowest gameplay
+risk.
 
 ## Updates
 
-The first Developer ID release must be installed manually from its notarized
-DMG. Later official releases can update themselves.
+ArenaNet game updates and `gwonmac` application updates are independent.
 
-The app checks on a declared schedule. **Automatically check for and download
-app updates** is on by default — it checks once at launch and then about every
-six hours while the app stays open, never while a game connection is open, and
-the first-run screen says so before the first check happens. Turn it off and
-the app contacts GitHub only when you choose **Check for Updates** — on the
-loading screen, in the application menu, on a client-compatibility notice, or
-under **Settings → Updates**. Turning it back on immediately checks once.
+At startup, the app verifies the official ArenaNet client. A changed client is a
+candidate. The app keeps one verified previous generation until the candidate
+renders and connects. It restores that generation when the candidate fails
+early.
 
-A check asks GitHub for two things: whether a newer version of the app exists,
-and whether the project has published a newer compatibility record for Guild
-Wars client builds. The second is how an ArenaNet update that would otherwise
-switch template saving off can be repaired without you installing anything. It
-is a signed list of hashes and nothing else — no program and no instruction —
-and the app still re-derives every claim against the client on your machine
-before anything switches back on. Neither request sends anything about you or
-your installation.
+**Automatically check for and download app updates** is on by default. The app
+checks at launch and can check again about every six hours. It does not run an
+automatic check during a game connection.
 
-**At launch, an update lands before the game starts.** While the launch check
-or its download is running, the loading screen holds at that step instead of
-starting an outdated version; when the update is ready, the app restarts
-itself into the new version and then starts the game. **Play Without
-Updating** on the loading screen skips the wait — the download continues in
-the background and installs on the next restart. A failed or offline check
-never delays play, and with automatic checks off the launch is not held at
-all.
+Turn the setting off to stop automatic GitHub requests. Use **Check for
+Updates** for a manual check.
 
-An update found while you are already playing downloads in the background.
-When it is ready, choose **Restart to Update** or choose Later and let it
-install on the next ordinary restart. Restarting while Guild Wars is
-connected asks before disconnecting. The app saves its persistent game
-filesystem before either kind of restart.
+A launch update installs before play. Choose **Play Without Updating** to start
+while it downloads. An update found during play installs on **Restart to
+Update** or the next normal restart. The app asks before it disconnects a game.
 
-Stable installations receive stable releases only. Preview installations may
-receive a newer preview or advance to stable. A failed check is never reported
-as “up to date,” and **Last checked** records the last completed catalog check.
-ArenaNet client updates remain separate and automatic.
+**Stable** is the default. **Beta** also receives beta and release-candidate
+versions, never alpha. Both tracks use the same app identity, profile, saved
+login, and updater. Changing the track does not start a request.
 
-## When the client build is not certified
+The updater never installs an older Stable automatically. To return from a
+newer candidate, install the signed Stable DMG from GitHub Releases. Preview is
+a separate tester app and is not the Beta track.
 
-Each ArenaNet client build is checked separately for Core compatibility and the
-exact Tools transform. When ArenaNet
-ships a new build, the launcher checks a local copy in an isolated process.
-When the structures it uses are unchanged or have only moved in the one
-supported way, everything continues normally without an app update or an
-extra choice.
+## Unknown ArenaNet build
 
-If that check cannot prove compatibility — or proves saving files but not the
-GWonMac Tools you selected — the loading screen says so once for that build,
-names exactly what is affected, and offers **Play Guild Wars** as the primary
-action. The notice explains; it does not block you.
+ArenaNet can publish a client before the current `gwonmac` release knows its
+Core and Tools layout.
 
-Gameplay is never blocked. If the local check refuses a changed structure, Core
-continues wherever safely certified and optional Tools stay off; support
-may need a new app release; retrying, reinstalling, or clearing downloaded game
-data will not change that decision. The same status is always visible under
-**Settings → Controls**. An uncertified client build does not mean the app is
-out of date — whether a newer release exists is the separate question above,
-which the notice's own **Check for Updates** button answers.
+The app runs an isolated local file check. It keeps only the features that it
+can prove. The launcher explains the result and keeps **Play Guild Wars** as the
+primary action.
 
-Optional tools control their observations independently. Target Distance reads
-only the state needed for its Test readout; Team Management reads party/build
-state and exposes only its fixed certified Apply commands. A disabled optional
-tool stops its observer. A small map-policy read remains so the app can enforce
-the boundary and safely restore tools when the player returns to PvE.
+The official client remains playable. The saved build and team library remains
+safe. Live Target Distance, party observation, Apply, file repair, native
+double-click, or the Guild Wars cursor can be unavailable according to the
+failed proof. The normal macOS pointer remains available.
 
-In PvP, guild halls, and any region the client cannot positively classify,
-every optional surface, observer, and command is disabled. Core remains active.
-Apply additionally requires a positively observed PvE outpost and stops if that
-condition changes while confirmation is in progress.
-The native-cursor tool has one bounded exception: after your own trusted click,
-if Guild Wars emitted no cursor event, it replays an out-and-back pointer
-hit-test so an interaction-mode cursor appears without waiting for physical
-movement. It cannot originate a click and ends at the same coordinates. On a
-certified build the app derives one narrowly patched module that connects the
-client's missing file operations to its
-sandboxed persistent filesystem, which
-is what makes build templates, screenshots, and chat logs work; the downloaded
-official artifact is unchanged whichever way the box is set.
+Reinstalling or clearing game data does not add a certificate. Use **Check for
+Updates** to look for a newer `gwonmac` release.
+
+## Recovery
+
+- An ArenaNet connection failure restores the previous verified client when
+  possible.
+- A paused or interrupted full download keeps verified chunks.
+- Insufficient disk space stops the download before more data is fetched.
+- A corrupt chunk is removed and fetched again.
+- The first unexpected renderer crash starts automatic recovery.
+
+If Guild Wars stops, the launcher shows **Retry** and **Report a Bug…**. A
+repeated crash makes reporting the primary action.
+
+Use **Reset Saved Files…** only when the Guild Wars filesystem cannot open. It
+removes game preferences, templates, screenshots, and chat logs. It keeps game
+data, `gwonmac` settings, and saved login.
+
+Use **Reset GWonMac settings…** for launcher defaults. Use **View → Reset Window
+Size and Position** for an off-screen window. These actions do not clear saved
+login.
+
+## Bugs and feature requests
+
+Choose **Help → Report a Bug…** or **Help → Request a Feature…**. Each action
+opens its GitHub issue form immediately. GitHub issues are public.
+
+- Diagnostics are optional. To include them with a bug, use
+  **Help → Diagnostics → Export Recent Diagnostics…** and attach the ZIP.
+- Use **Record Performance Problem** for stutter. Reproduce it, press
+  **Command-Shift-M**, stop the capture, and export it when prompted.
+- Use **Show Input Trace** for click problems. It records bounded counts and
+  distances, not coordinates. Closing it discards the trace.
+
+The diagnostics ZIP excludes saved login, account request bodies, game traffic,
+chat, and crash dumps. Other text is scanned for known secret and path patterns.
+Review the readable ZIP before attaching it to a bug issue.
+
+See [Diagnostics and performance](diagnostics.md) for technical details.
 
 ## Local data
 
-Settings, cached chunks, client files, and bounded diagnostics live under the
-normal macOS application-support directory, usually
-`~/Library/Application Support/Guild Wars`. **Settings → Game Data → Show in
-Finder** opens the game-data folder directly.
+Settings, verified clients, chunks, and diagnostics are usually under:
 
-Saved ArenaNet and Steam login are not profile files. Release and Preview each
-keep them in two isolated Data Protection Keychain items. On the first Release
-hard-cutover launch, only the retired `credentials.bin` and
-`steam-session.bin` files are removed from the application-support directory;
-all other local data remains. Preview never performs that legacy cleanup.
+```text
+~/Library/Application Support/Guild Wars
+```
+
+Use **Settings → Game Data → Show in Finder** to open the game-data directory.
+Guild Wars preferences and files use the app-owned `gw://app` browser origin.
+ArenaNet and Steam login values are separate Keychain items.

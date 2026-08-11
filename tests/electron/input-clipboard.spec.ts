@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import { closeOffline, launchCachedClient } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 /** The page-side handle the OSK focus guard honours. */
@@ -9,7 +9,7 @@ type OskWindow = typeof window & {
 
 test.describe("renderer clipboard copy", () => {
   test("Cmd+C copies the active game text proxy, and never the password proxy", async () => {
-    const fixture = await launchOffline("gw-clipboard-e2e-");
+    const fixture = await launchCachedClient("gw-clipboard-e2e-");
     try {
       const { app, page } = fixture;
       await startGameInput(page);

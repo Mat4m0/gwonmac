@@ -1,5 +1,5 @@
 /**
- * The `.gwdiag` report: what goes in it, which tier of protection covers each
+ * The diagnostics ZIP: what goes in it, which tier of protection covers each
  * document, and the staging that makes the archive appear whole or not at all.
  *
  * Nothing is written before the detector has passed over the event log, and
@@ -88,7 +88,7 @@ export async function exportDiagnosticsZip(
   await recorder.flush();
   const dir = gamePaths().diagnostics;
   const staging = path.join(dir, `export-${randomUUID()}`);
-  const zipPath = /\.(gwdiag|zip)$/i.test(targetPath) ? targetPath : `${targetPath}.zip`;
+  const zipPath = /\.zip$/i.test(targetPath) ? targetPath : `${targetPath}.zip`;
   const zipPart = path.join(
     path.dirname(zipPath),
     `.${path.basename(zipPath)}.${randomUUID()}.part`,
@@ -99,7 +99,7 @@ export async function exportDiagnosticsZip(
     const exportedEvents = await recorder.exportedEvents();
     const capture = recorder.captureResult();
     const previous = await previousAbnormalSession(dir, recorder.sessionId);
-    // P2.4 — the detector runs before anything is written, and it throws. An
+    // The detector runs before anything is written, and it throws. An
     // event this build cannot account for stops the export rather than being
     // scrubbed on the way out.
     const inspection = inspectEventLog(exportedEvents.text);

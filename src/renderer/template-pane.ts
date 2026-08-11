@@ -45,7 +45,7 @@ import {
  * Settings opens from the launcher and from the app menu long before that.
  */
 const NO_MOUNT =
-  'Finish starting Guild Wars and sign in, then reopen Settings to import or '
+  'Finish starting Guild Wars and sign in, then reopen Templates to import or '
   + 'export build templates.';
 
 /**

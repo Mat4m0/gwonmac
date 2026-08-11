@@ -1,5 +1,5 @@
-// P7.2. The first Enhancement feature. The states here come out of the real
-// decoder, driven by real snapshot bytes, so this executes the last two stages
+// This test covers the first Enhancement feature. The states come out of the
+// real decoder, driven by real snapshot bytes, so this executes the last two stages
 // of the pipeline together — snapshot → decoder → UI — and reads back what
 // landed in the elements the readout owns. Nothing here inspects source text.
 import assert from "node:assert/strict";

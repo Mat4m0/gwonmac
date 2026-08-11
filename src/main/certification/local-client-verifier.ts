@@ -15,14 +15,11 @@
  * given the benefit of the doubt.
  *
  * `isLocalClientVerification` re-validates every field of a result that crossed
- * a process boundary or came back off disk. A verifier ABI or baseline change
- * makes every older result unreadable, so an app update can never inherit a
- * decision made by verifier code it no longer contains.
+ * the process boundary. Profile state is never consulted.
  */
 import { createHash } from "node:crypto";
 import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../shared/enhancement-contracts.js";
 import {
-  ENHANCEMENT_BUILDS,
   findEnhancementBuild,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
@@ -38,20 +35,12 @@ import {
 } from "./template-save-compat.js";
 import {
   preparePostTemplateSaveModule,
-  TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT,
   type PostTemplateSaveModule,
 } from "./template-save-verifier.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
-
-/**
- * Bump when the local proof accepts a different class of client change. The
- * value is stored beside a derived result so an app update never inherits a
- * decision made by older verifier code.
- */
-export const LOCAL_CLIENT_VERIFIER_ABI = 3;
 
 /**
  * Declared as a list rather than a union so the boundary check below and the
@@ -69,8 +58,6 @@ export const LOCAL_VERIFICATION_REASONS = [
 export type LocalVerificationReason = (typeof LOCAL_VERIFICATION_REASONS)[number];
 
 export interface LocalClientVerification {
-  readonly verifierAbi: number;
-  readonly baselineFingerprint: string;
   readonly officialSha256: string;
   readonly templateSaveBuild: KnownTemplateSaveBuild | null;
   readonly enhancementBuild: KnownEnhancementBuild | null;
@@ -80,17 +67,6 @@ export interface LocalClientVerification {
 function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
 }
-
-function baselineFingerprint(): string {
-  return sha256(JSON.stringify({
-    verifierAbi: LOCAL_CLIENT_VERIFIER_ABI,
-    template: TEMPLATE_SAVE_BUILDS[TEMPLATE_SAVE_BUILDS.length - 1],
-    templateSemantics: TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT,
-    enhancement: ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1],
-  }));
-}
-
-export const LOCAL_CLIENT_BASELINE_FINGERPRINT = baselineFingerprint();
 
 function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -118,18 +94,14 @@ function deriveEnhancementBuild(
 
 /**
  * Pure verifier entry point. It reads no profile state and performs no writes;
- * the utility-process host supplies the exact official bytes and owns caching.
+ * the utility-process host supplies the exact official bytes.
  */
 export function verifyLocalClientBytes(
   official: Uint8Array,
 ): LocalClientVerification {
   const officialSha256 = sha256(official);
   const reasons: LocalVerificationReason[] = [];
-  const base = {
-    verifierAbi: LOCAL_CLIENT_VERIFIER_ABI,
-    baselineFingerprint: LOCAL_CLIENT_BASELINE_FINGERPRINT,
-    officialSha256,
-  };
+  const base = { officialSha256 };
   if (!WebAssembly.validate(official)) {
     return {
       ...base,
@@ -251,8 +223,8 @@ function isExactEnhancementBuild(
 }
 
 /**
- * Boundary check for utility-process messages and the derived on-disk cache.
- * Production transforms still re-check every body/callsite before use.
+ * Boundary check for utility-process messages. Production transforms still
+ * re-check every body/callsite before use.
  */
 export function isLocalClientVerification(
   value: unknown,
@@ -261,9 +233,7 @@ export function isLocalClientVerification(
   if (!value || typeof value !== "object") return false;
   const result = value as Partial<LocalClientVerification>;
   if (
-    result.verifierAbi !== LOCAL_CLIENT_VERIFIER_ABI
-    || result.baselineFingerprint !== LOCAL_CLIENT_BASELINE_FINGERPRINT
-    || result.officialSha256 !== officialSha256
+    result.officialSha256 !== officialSha256
     || !isDigest(result.officialSha256)
     || !Array.isArray(result.reasons)
     || !result.reasons.every((reason): reason is LocalVerificationReason =>

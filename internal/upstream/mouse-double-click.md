@@ -1,6 +1,10 @@
 # The client's mouse double-click channel is complete and never fed
 
-The reference for why gwonmac synthesises touch taps, and why it should stop.
+> **Status: confirmed upstream defect with an exact-build local workaround.**
+> This is historical evidence. Current transform and input code define gwonmac
+> behavior.
+
+This record explains why the old synthetic touch-tap workaround was deleted.
 
 Client examined:
 

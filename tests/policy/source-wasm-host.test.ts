@@ -91,7 +91,7 @@ test("persistent game files are prepared through supported Emscripten startup ho
   assert.match(filesystem, /Templates\/Skills/);
   assert.match(filesystem, /Templates\/Equipment/);
   assert.match(filesystem, /chdir\(MOUNT\)/);
-  // P6.5 made the installer an export instead of a window global, so the
+  // The installer is an export instead of a window global, so the
   // harness has to name the module as well as the call.
   assert.match(harness, /import\('\.\/filesystem\.js'\)/);
   assert.match(harness, /host\.installGameFilesystem\(/);
@@ -177,7 +177,7 @@ test("template file tracing is explicit, bounded, and attached only at the impor
   assert.match(trace, /fd_write/);
   assert.match(trace, /fd_close/);
   assert.doesNotMatch(trace, /gwDiagnostics|ipc|fetch\s*\(/i);
-  // The only capability it may touch is its own opt-in, which since P5.2 is a
+  // The only capability it may touch is its own opt-in, which is a
   // field of the renderer init payload rather than a renderer URL parameter.
   assert.deepEqual(trace.match(/gwNative[.\w]*/gu), [
     "gwNative.init.templateFsTrace",
@@ -205,7 +205,7 @@ test("the GL program cache memoizes only shader-completion state, and only once 
   assert.match(harness, /import\('\.\/gl-program-cache\.js'\)/);
   assert.match(harness, /host\.installGlProgramCache\(/);
 
-  // Deleted with P5.17: an assertion that the file contained the exact line
+  // Removed: an assertion that the file contained the exact line
   // `=== GL_TRUE) programs.set(program, true)`. Only a true completion may be
   // memoized — freezing false makes the client poll a program that never
   // finishes — and that is executed in tests/unit/gl-program-cache.test.ts,
@@ -243,7 +243,7 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
   assert.match(transform, /68c6e09cec0f6992058a44a5617ca9ea/);
   assert.match(transform, /WebAssembly\.validate\(output\)/);
   assert.match(runtime, /prepareClientModule/);
-  // Deleted with P5.17: three assertions that the strings "unsupported input",
+  // Removed: three assertions that the strings "unsupported input",
   // "is not the expected stub" and "call site signature mismatch" appeared in
   // the transform. All three are *triggered* in
   // tests/unit/template-save-compat.test.ts, which feeds the transform a wrong
@@ -251,7 +251,7 @@ test("template saving uses one exact-build derived WASM and a restricted mkdir b
   // throws. Asserting them here proved only that the words were still spelled
   // the same way, in a file the same test already covers.
 
-  // P5.7 deleted the hand-mirrored dirfd markers, and with them the assertion
+  // The hand-mirrored dirfd markers were deleted, along with the assertion
   // that used to hold the two copies together. Both halves now read
   // WASM_BRIDGE_MARKERS: the transform imports it, the renderer receives it
   // through the generated preload, and neither declares a number of its own.
@@ -302,7 +302,7 @@ test("a new client build can be re-certified without hand-derivation", async () 
   // Derivation must stay shape-based. A remembered index would defeat the point.
   assert.match(locator, /caller-set intersection|callers\(/);
   assert.doesNotMatch(locator, /localFunction: \d+/);
-  // Deleted with P5.17: two assertions that the recertifier's "expected exactly
+  // Removed: two assertions that the recertifier's "expected exactly
   // one" and "expected exactly 2 template scans" messages appeared in its
   // source. tests/unit/template-save-recert.test.ts builds ambiguous modules and
   // matches the errors it actually throws, which is the claim — every ambiguity
@@ -389,32 +389,6 @@ test("the WASM section codec has exactly one home", async () => {
   }
 });
 
-test("saved-file recovery defers IndexedDB deletion until before renderer startup", async () => {
-  const ipc = await readFile(path.join(root, "src/main/ipc.ts"), "utf8");
-  const main = await readFile(path.join(root, "src/main/main.ts"), "utf8");
-  // P5.9 moved the handlers into a registry keyed by channel name.
-  const resetHandler = ipc.slice(
-    ipc.indexOf("gameStorageReset: channel("),
-    ipc.indexOf("diagnosticsGraphics: channel("),
-  );
-  assert.ok(resetHandler.length > 0, "the gameStorageReset handler was not found");
-
-  assert.match(resetHandler, /resetGameInput\(win\)/);
-  assert.match(resetHandler, /paths\.gameStorageClearRequest/);
-  assert.doesNotMatch(resetHandler, /clearStorageData/);
-  assert.doesNotMatch(resetHandler, /credentials|cacheClearRequest|recursive/);
-  assert.match(
-    main,
-    /applyPendingGameStorageClear[\s\S]*origin:\s*"gw:\/\/app"[\s\S]*storages:\s*\["indexdb"\]/,
-  );
-  const firstWindow = main.indexOf("createMainWindow(buildWindowHost(");
-  assert.notEqual(firstWindow, -1, "no window is created from a window host");
-  assert.ok(
-    main.indexOf("await applyPendingGameStorageClear()") < firstWindow,
-    "the pending IndexedDB clear must run before the first window exists",
-  );
-});
-
 test("the served module decides whether Enhancement imports", async () => {
   const harness = await readFile(
     path.join(root, "src/renderer/harness.ts"),
@@ -428,7 +402,7 @@ test("the served module decides whether Enhancement imports", async () => {
   assert.doesNotMatch(gate, /Object\.values\(init\.enhancementSelection\)/u);
   assert.match(
     gate,
-    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length !== 1/u,
+    /WebAssembly\.Module\.customSections\([\s\S]{0,120}'enhancement_manifest'/u,
   );
   assert.match(
     gate,

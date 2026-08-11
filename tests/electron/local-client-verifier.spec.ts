@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,10 +17,9 @@ const electronPath = path.resolve(
   "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
 );
 
-test("isolates an unknown client decision and reuses its exact-hash cache", async () => {
+test("re-verifies an unknown exact hash in an isolated process", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "gw-local-verifier-"));
   const wasmPath = path.join(root, "unknown.wasm");
-  const cachePath = path.join(root, "verification.json");
   // The smallest valid module has none of the certified shapes. That is useful:
   // the IPC path must return a safe negative decision rather than crash.
   const wasm = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0);
@@ -36,15 +35,15 @@ test("isolates an unknown client decision and reuses its exact-hash cache", asyn
     }
     const application = await electron.launch({
       cwd: path.resolve("."),
-      args: [fixture, wasmPath, cachePath, sha256],
+      args: [fixture, wasmPath, sha256],
       executablePath: electronPath,
       env,
     });
     try {
       await expect.poll(
-        () => outcome(application),
+        () => completed(application),
         { timeout: 10_000 },
-      ).not.toBeNull();
+      ).toBe(true);
       return await outcome(application);
     } finally {
       await application.close();
@@ -54,28 +53,33 @@ test("isolates an unknown client decision and reuses its exact-hash cache", asyn
   try {
     const first = await run();
     expect(first).toMatchObject({
-      source: "process",
-      result: {
-        officialSha256: sha256,
-        templateSaveBuild: null,
-        enhancementBuild: null,
-        reasons: ["template-shape-changed"],
-      },
+      officialSha256: sha256,
+      templateSaveBuild: null,
+      enhancementBuild: null,
+      reasons: ["template-shape-changed"],
     });
-    expect((await stat(cachePath)).mode & 0o777).toBe(0o600);
 
+    // A second launch must re-read the bytes. Profile state cannot preserve the
+    // first positive answer after the official artifact no longer matches.
+    await writeFile(wasmPath, Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 1));
     const second = await run();
-    expect(second).toMatchObject({
-      source: "cache",
-      result: { officialSha256: sha256 },
-    });
-    expect(JSON.parse(await readFile(cachePath, "utf8"))).toHaveProperty(
-      "checksum",
-    );
+    expect(second).toBeNull();
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+function completed(application: ElectronApplication): Promise<boolean> {
+  return application.evaluate(
+    () => Boolean(
+      (
+        globalThis as typeof globalThis & {
+          localVerifierCompleted?: boolean;
+        }
+      ).localVerifierCompleted,
+    ),
+  );
+}
 
 function outcome(application: ElectronApplication): Promise<unknown> {
   return application.evaluate(

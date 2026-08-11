@@ -2,12 +2,10 @@
  * The composition root: it constructs the subsystems, wires them to one
  * another, and owns the order in which a launch happens.
  *
- * Nothing here implements a behaviour. Every rule this file appears to make —
- * what a setting is, when an update may be checked, which module is served,
- * which secrets are available — belongs to the module it hands the work to, and
- * a decision that starts growing here belongs somewhere else. What main owns is
- * sequence and lifetime: the single-instance lock, the work that must precede
- * `ready`, the profile location, and what is registered to run at quit.
+ * Main owns app-wide sequence, lifetime, and presentation: the single-instance
+ * lock, work that must precede `ready`, the profile location, top-level dialogs,
+ * and quit registration. Feature rules belong to the module it hands work to;
+ * a feature decision that starts growing here should move to that owner.
  */
 import {
   app,
@@ -18,7 +16,7 @@ import {
   session,
 } from "electron";
 import { readFileSync } from "node:fs";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
@@ -28,6 +26,7 @@ import {
   type AppSettingsPatch,
   type DownloadProgress,
   type PrefetchProgress,
+  type UpdateTrack,
 } from "../shared/contracts.js";
 import {
   enhancementCapabilitiesFor,
@@ -35,7 +34,7 @@ import {
   type EnhancementSelection,
 } from "../shared/enhancement-contracts.js";
 import { errorCode } from "../shared/errors.js";
-import { EMPTY_PREFETCH, INITIAL_PROGRESS } from "../shared/progress.js";
+import { INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { Mutex } from "./core/mutex.js";
@@ -63,27 +62,20 @@ import {
   periodicCheckDue,
 } from "./app-updater.js";
 import {
-  CertificateFeedDelivery,
-  CERTIFICATE_FEED_REFUSALS,
-} from "./certification/certificate-feed-delivery.js";
-import {
   enableSandboxBeforeReady,
   onAppQuit,
   runQuitCleanup,
   wireLifecycle,
 } from "./lifecycle.js";
 import { sweepOrphanDirectories } from "./core/atomic-file.js";
-import {
-  discardObsoleteEnhancementCache,
-  documentDirectories,
-} from "./core/paths.js";
+import { documentDirectories } from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementSelectionFor,
 } from "./certification/enhancement-policy.js";
-import { installGwProtocolHandler, registerGwScheme, setProtocolDeps } from "./protocol.js";
+import { installGwProtocolHandler, registerGwScheme } from "./protocol.js";
 import {
   createMainWindow,
   flushWindowState,
@@ -93,7 +85,7 @@ import {
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
-import { exportProblemReport } from "./problem-report.js";
+import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import { acquireSteamToken } from "./steam-acquire.js";
@@ -111,6 +103,10 @@ import {
   parseDistributionMarker,
   type DistributionChannel,
 } from "../shared/distribution-channel.js";
+import {
+  applyPendingCacheClear,
+  applyPendingGameStorageReset,
+} from "./settings-actions.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -149,11 +145,9 @@ const HOST_VERSION = (() => {
   return app.getVersion();
 })();
 
-const prefetch: PrefetchProgress = { ...EMPTY_PREFETCH };
 /** Every settings write is a read-modify-write of one file. */
 const settingsLock = new Mutex();
 let appUpdaterController: AppUpdater | null = null;
-let certificateFeedDelivery: CertificateFeedDelivery | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
 const INJECT_STARTUP_FAILURE =
@@ -172,47 +166,18 @@ function revealMainWindow(): void {
   win.focus();
 }
 
-/**
- * The one "ask this project what is new" action, and the only thing that makes
- * either request. A new application and a newer certificate feed are two
- * answers to that one question — the second is how a recovery arrives as data
- * rather than as an install — so they share a trigger, a schedule and a
- * consent switch instead of acquiring a second of each.
- */
-async function checkForProjectUpdates(): Promise<void> {
-  await Promise.allSettled([
-    appUpdaterController?.check() ?? Promise.resolve(),
-    certificateFeedDelivery?.refresh() ?? Promise.resolve(),
-  ]);
+/** The one application-update action; AppUpdater owns every outcome. */
+async function checkForAppUpdates(track?: UpdateTrack): Promise<void> {
+  const selected = track ?? (await loadSettings(gamePaths().settings)).updateTrack;
+  await appUpdaterController?.check(selected);
 }
 
 function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
   return settingsLock.run(async () => {
     const settingsPath = gamePaths().settings;
     const current = await loadSettings(settingsPath);
-    const saved = await saveSettings(settingsPath, { ...current, ...patch });
-    if (!current.autoCheckUpdates && saved.autoCheckUpdates) {
-      void checkForProjectUpdates();
-    }
-    return saved;
+    return saveSettings(settingsPath, { ...current, ...patch });
   });
-}
-
-/**
- * The pinned certificate-feed key. A packaged build reads it from the bundle's
- * Resources, where the code signature seals it; an unpackaged one reads the
- * committed file, which holds the placeholder.
- *
- * The unpackaged override is how the Electron suite exercises a signed feed
- * with a keypair it generates per run, because the committed placeholder is a
- * value it must not change. It is unreachable from a packaged build.
- */
-function pinnedCertificateFeedKeyPath(): string {
-  if (app.isPackaged) return path.join(process.resourcesPath, "public-key.txt");
-  return (
-    process.env.GW_TEST_CERTIFICATE_FEED_KEY
-    ?? path.join(app.getAppPath(), "certificates", "public-key.txt")
-  );
 }
 
 function resetAppSettings(): Promise<AppSettings> {
@@ -242,11 +207,14 @@ function buildSocketManager(): SocketManager {
       emitSocketEvent(ownerId, event);
     },
     { count, observe, gauge, peakGauge },
-    !app.isPackaged && process.env.GW_OFFLINE_SHELL === "1"
+    // An unpackaged Electron test may replace the production destination
+    // validator with one that admits exactly its loopback fixture. Production
+    // still uses the public-ArenaNet allowlist and grants no such exception.
+    !app.isPackaged && process.env.GW_TEST_SOCKET_LOOPBACK === "1"
       ? (destination) => {
           if (destination !== "127.0.0.1:6112") {
             throw new Error(
-              "offline socket fixture permits only 127.0.0.1:6112",
+              "test socket fixture permits only 127.0.0.1:6112",
             );
           }
           return { host: "127.0.0.1", port: 6112, family: 4 };
@@ -261,9 +229,7 @@ function setProgress(next: DownloadProgress): void {
 }
 
 function setPrefetch(next: PrefetchProgress): void {
-  prefetch.completedChunks = next.completedChunks;
-  prefetch.totalChunks = next.totalChunks;
-  sendToRenderer(IPC.prefetchEvent, { ...prefetch });
+  sendToRenderer(IPC.prefetchEvent, { ...next });
 }
 
 function sendToRenderer(channel: string, value: unknown): void {
@@ -300,7 +266,8 @@ async function ensureDirs(): Promise<void> {
   await mkdir(paths.game, { recursive: true });
   await mkdir(paths.chunks, { recursive: true });
   await mkdir(paths.diagnostics, { recursive: true });
-  // P1.2 — first open of the directories we own. A process killed between
+  // On the first open of the directories we own, remove incomplete atomic
+  // writes. A process killed between
   // write and rename leaves `<name>.<pid>.<hex>.tmp` behind, and boot is the
   // only moment at which every one of those directories is known to be idle.
   const removed = await sweepOrphanDirectories(documentDirectories(paths));
@@ -334,36 +301,6 @@ async function clearBrowserNetworkCache(): Promise<void> {
       code: errorCode(error),
     });
   }
-}
-
-async function applyPendingCacheClear(): Promise<void> {
-  const paths = gamePaths();
-  try {
-    await stat(paths.cacheClearRequest);
-  } catch {
-    return;
-  }
-  await rm(paths.chunks, { recursive: true, force: true });
-  await rm(paths.bootChunks, { force: true });
-  await rm(paths.cacheClearRequest, { force: true });
-  logEvent({ k: "cache.clearedAtStartup" });
-}
-
-async function applyPendingGameStorageClear(): Promise<void> {
-  const paths = gamePaths();
-  try {
-    await stat(paths.gameStorageClearRequest);
-  } catch {
-    return;
-  }
-  // Run before a renderer can mount IDBFS, otherwise auto-persisting game
-  // writes can race the destructive clear and recreate entries before quit.
-  await session.defaultSession.clearStorageData({
-    origin: "gw://app",
-    storages: ["indexdb"],
-  });
-  await rm(paths.gameStorageClearRequest, { force: true });
-  logEvent({ k: "filesystem.resetCompleted" });
 }
 
 function buildWindowHost(
@@ -412,8 +349,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
       "Mat4m0/gwonmac · App icon artwork © ArenaNet LLC · QT Friz Quad © 1992 QualiType (SIL OFL 1.1) · Not affiliated with ArenaNet or NCSOFT.",
     website: EXTERNAL_URLS.github,
   });
-  await applyPendingCacheClear();
-  await applyPendingGameStorageClear();
+  const paths = gamePaths();
+  await applyPendingCacheClear(paths);
+  await applyPendingGameStorageReset(paths);
   await ensureDirs();
   await startDiagnostics();
   const distributionChannel = packagedDistributionChannel();
@@ -436,21 +374,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
       logEvent({ k: "legacySecrets.cleanupFailed", code: errorCode(failure) });
     }
   }
-  const obsoleteCacheError = await discardObsoleteEnhancementCache(
-    gamePaths(),
-    rm,
-  );
-  if (obsoleteCacheError !== null) {
-    // This is a derived beta cache. Failure must not block the canonical client.
-    logEvent({
-      k: "enhancement.obsoleteCacheDiscardFailed",
-      code: errorCode(obsoleteCacheError),
-    });
-  }
   await clearBrowserCookies("startup");
   await clearBrowserNetworkCache();
   logEvent({ k: "electron.ready" });
-  const settings = await loadSettings(gamePaths().settings, async () => {
+  const settings = await loadSettings(paths.settings, async () => {
     logEvent({ k: "settings.corruptRecovered" });
     await dialog.showMessageBox({
       type: "warning",
@@ -467,7 +394,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
   );
   await prepareWindowState();
-  const paths = gamePaths();
   const keychain: NativeKeychain = persistentSecrets
     ? loadNativeKeychain({
         packaged: true,
@@ -481,45 +407,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const profileMatches =
     !expectedUserData ||
     path.resolve(expectedUserData) === path.resolve(app.getPath("userData"));
-  certificateFeedDelivery = new CertificateFeedDelivery({
-    storePath: paths.certificateFeed,
-    pinnedKeyPath: pinnedCertificateFeedKeyPath(),
-    // The same answer that decides whether an automatic release check may
-    // reach the network. One predicate, so the two cannot disagree about what
-    // the player consented to.
-    enabled: distribution.automaticUpdates,
-    publish: (status) => {
-      gauge("certificateFeed.source", status.source);
-      gauge("certificateFeed.sequence", status.sequence);
-      gauge("certificateFeed.outcome", status.outcome);
-      gauge("certificateFeed.lastSuccessAt", status.lastSuccessAt);
-      if (CERTIFICATE_FEED_REFUSALS.has(status.outcome)) {
-        logEvent({ k: "certificateFeed.refused", outcome: status.outcome });
-      } else {
-        logEvent({
-          k: "certificateFeed.resolved",
-          source: status.source,
-          sequence: status.sequence,
-          outcome: status.outcome,
-        });
-      }
-    },
-  });
-  // Before the first certification pass: a feed that governs only after the
-  // launch it arrived on would answer one question two ways in one session.
-  await certificateFeedDelivery.load();
   const clientRuntime = new ClientRuntime({
     paths,
     hostVersion: HOST_VERSION,
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
-    offlineShell: process.env.GW_OFFLINE_SHELL === "1",
     enhancementCapabilities,
-    // The environment variable is a developer/qualification shortcut only.
-    // Saved settings remain the sole durable request made by the product UI.
-    extendedMemoryEnabled:
-      settings.extendedMemoryEnabled
-      || process.env.GWONMAC_EXTENDED_MEMORY_RESEARCH === "1",
-    certificateFeed: () => certificateFeedDelivery!.feed,
+    extendedMemoryEnabled: settings.extendedMemoryEnabled,
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });
@@ -551,7 +444,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       ) {
         new Notification({
           title: "Guild Wars Reforged update ready",
-          body: `Version ${state.latestVersion} will install when you restart.`,
+          body: `Version ${state.latestVersion} is ready to install.`,
           silent: true,
         }).show();
       }
@@ -573,10 +466,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     logEvent({ k: "fullDownload.stoppedForSleep" });
     clientRuntime.stopDownload();
   });
-  setProtocolDeps({
+  installGwProtocolHandler({
     getActiveClient: () => clientRuntime.active,
   });
-  installGwProtocolHandler();
   logEvent({ k: "protocol.installed" });
 
   const ipcCleanup = registerIpcHandlers({
@@ -585,7 +477,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     steamSessionStore,
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
-    getSettings: () => loadSettings(gamePaths().settings),
+    getSettings: () => loadSettings(paths.settings),
     updateSettings: updateAppSettings,
     resetSettings: resetAppSettings,
     toolsCapableAtLaunch: settings.gwonmacTools,
@@ -593,16 +485,21 @@ if (primaryInstance) void app.whenReady().then(async () => {
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>
       clientRuntime.confirmCandidateHealthy(token),
-    // A retry is a request to run the update again, nothing more. Whether it
-    // worked is already on the progress channel, which is where the renderer
-    // reads it — a second, thrown answer would have been a second owner.
-    retryClient: () => clientRuntime.requestUpdate(),
+    retryClient: () =>
+      clientRuntime.retryClient(() => {
+        // An active generation may still have protocol reads in flight. End the
+        // process before startup rollback/update renames its artifact paths; the
+        // replacement process then follows the ordinary no-client boot path.
+        app.relaunch();
+        app.quit();
+      }),
     getAppUpdateState: () => appUpdaterController!.getState(),
-    checkAppUpdates: () => checkForProjectUpdates(),
+    checkAppUpdates: () => checkForAppUpdates(),
     restartAndInstallUpdate: (win) => {
       if (updateRestartInFlight) return updateRestartInFlight;
+      const updater = appUpdaterController;
       const operation = (async () => {
-        if (appUpdaterController?.getState().phase !== "ready") return;
+        if (updater?.getState().phase !== "ready") return;
         await resetGameInput(win);
         if (sockets.size() > 0) {
           const { response } = await dialog.showMessageBox(win, {
@@ -617,7 +514,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
           if (response !== 0) return;
         }
         await runQuitCleanup();
-        appUpdaterController.quitAndInstall();
+        // Cleanup is deliberately irreversible. If Squirrel refuses the
+        // terminal handoff, leave instead of resuming a process whose sockets,
+        // client runtime, diagnostics, and persistence owners are gone.
+        if (!updater.quitAndInstall()) app.exit(1);
       })().finally(() => {
         if (updateRestartInFlight === operation) updateRestartInFlight = null;
       });
@@ -630,8 +530,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
       extendedMemory: clientRuntime.extendedMemory,
       healthToken: clientRuntime.healthToken,
     }),
-    exportProblemReport: (win) =>
-      exportProblemReport(win, () => exportDiagnosticsForWindow(win)),
     acquireSteamToken: (parent, record) =>
       acquireSteamToken(STEAM_OAUTH, { parent, record }),
   });
@@ -649,11 +547,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     await ipcCleanup.drainSecrets();
     await flushWindowState();
     sockets.closeAll();
-    updateLongRunningTaskFeedback({
-      ...INITIAL_PROGRESS,
-      phase: "ready",
-      label: "Quitting",
-    });
+    updateLongRunningTaskFeedback(INITIAL_PROGRESS);
     await clientRuntime.shutdown();
     await clearBrowserCookies("quit");
     await stopDiagnostics();
@@ -666,7 +560,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
   ));
   if (settings.autoCheckUpdates) {
-    void checkForProjectUpdates();
+    void checkForAppUpdates(settings.updateTrack);
   }
   // A 30-minute tick with a six-hour due-time instead of a six-hour timer:
   // a laptop waking past the boundary checks within half an hour, with no
@@ -674,7 +568,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   // so a due tick during a download or a ready update is a no-op.
   const periodicCheckTick = setInterval(() => {
     void (async () => {
-      const current = await loadSettings(gamePaths().settings);
+      const current = await loadSettings(paths.settings);
       if (!periodicCheckDue({
         capable: distribution.automaticUpdates,
         autoCheckUpdates: current.autoCheckUpdates,
@@ -682,7 +576,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         lastUpdateCheckAt: current.lastUpdateCheckAt,
         now: Date.now(),
       })) return;
-      void checkForProjectUpdates();
+      void checkForAppUpdates(current.updateTrack);
     })().catch(() => {
       // A periodic check is silent by contract; an unreadable settings file
       // already surfaces on the next explicit settings read.
@@ -717,7 +611,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         detail: "Export it now while the capture context is fresh.",
       });
       if (response === 0) {
-        await exportProblemReport(win, () => exportDiagnosticsForWindow(win));
+        await exportDiagnosticsReport(() => exportDiagnosticsForWindow(win));
       }
     });
   }
@@ -790,7 +684,7 @@ if (primaryInstance) process.on("uncaughtException", (err) => {
     "app.uncaughtException",
     err,
     "Guild Wars stopped unexpectedly",
-    "A fatal application error occurred. After reopening, choose Help → Report a Problem.",
+    "A fatal application error occurred. After reopening, choose Help → Report a Bug.",
   );
 });
 

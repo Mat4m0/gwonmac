@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import {
+  closeOffline,
+  isDomActiveElement,
+  launchCachedClient,
+  launchOffline,
+} from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 /**
@@ -42,7 +47,7 @@ const GAME_POINT = {
 
 test.describe("renderer Tools input", () => {
   test("floats over the game without stealing it", async () => {
-    const fixture = await launchOffline("gw-toolbox-input-e2e-");
+    const fixture = await launchCachedClient("gw-toolbox-input-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -212,7 +217,8 @@ test.describe("renderer Tools input", () => {
       await expect(tool).toHaveAttribute("data-observations", "2");
       await expect(tool).toHaveAttribute("data-hero-id", "24");
 
-      await expect(page.locator("#canvas")).toBeFocused();
+      await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
+        .toBe(true);
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
       await page.keyboard.up("KeyW");
       await expect(body).toHaveAttribute("data-toolbox-game-key-ups", "1");
@@ -230,14 +236,16 @@ test.describe("renderer Tools input", () => {
       await page.locator("#canvas").click({ position: GAME_POINT });
       await expect(tool).toBeVisible();
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
-      await expect(page.locator("#canvas")).toBeFocused();
+      await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
+        .toBe(true);
 
       // Non-activating: operating a tool control does not take the keyboard,
       // and does not leak the click into the game. This is the whole point —
       // the player clicks the panel and can still run.
       await page.getByRole("button", { name: "Tool action" }).click();
       await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
-      await expect(page.locator("#canvas")).toBeFocused();
+      await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
+        .toBe(true);
       await page.keyboard.press("x");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
@@ -245,7 +253,8 @@ test.describe("renderer Tools input", () => {
       // type", so it hands the keyboard over — and what is typed stays inside
       // the overlay rather than reaching the game.
       await page.getByLabel("Tool field").click();
-      await expect(page.getByLabel("Tool field")).toBeFocused();
+      await expect.poll(() => isDomActiveElement(page.getByLabel("Tool field")))
+        .toBe(true);
       await page.keyboard.type("aggro");
       await expect(page.getByLabel("Tool field")).toHaveValue("aggro");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
@@ -254,7 +263,8 @@ test.describe("renderer Tools input", () => {
       // Guild Wars from here, and it does not close the tool: closing is the
       // chord, the menu, or the tool's own close control.
       await page.keyboard.press("Escape");
-      await expect(page.locator("#canvas")).toBeFocused();
+      await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
+        .toBe(true);
       await expect(tool).toBeVisible();
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
@@ -322,7 +332,7 @@ test.describe("renderer Tools input", () => {
   });
 
   test("mounts the shipped embedded Tools window and persists one library change", async () => {
-    const fixture = await launchOffline("gw-toolbox-embedded-e2e-");
+    const fixture = await launchCachedClient("gw-toolbox-embedded-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -340,18 +350,29 @@ test.describe("renderer Tools input", () => {
         ]);
         foundation.createToolboxFoundation(document.body, {
           mountTool: (host, onVisibilityChange) =>
-            toolsHost.mountToolsInto(host, onVisibilityChange, null),
+            toolsHost.mountToolsInto(host, onVisibilityChange, null, true),
         });
       });
 
       const root = page.locator("#toolbox-foundation");
       const panel = page.locator(".tools-window");
+      const canvas = page.locator("#canvas");
+      const settleEmbeddedShow = async () => {
+        // Tools sizes itself on the frame after it becomes visible. Cross that
+        // exact deferred boundary so a show-time focus cannot steal the
+        // keyboard back after the foundation has handed it to the game.
+        await page.evaluate(() => new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }));
+      };
       await page.keyboard.press("Control+Shift+Space");
       await expect(root).toHaveAttribute("data-open", "true");
       await expect(page.locator("#toolbox-tool")).toHaveAttribute("data-ready", "true");
       await expect(page.locator('.tools-stage[data-mode="embedded"]')).toBeVisible();
       await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
       await expect(page.getByText("Saved on this Mac")).toBeVisible();
+      await settleEmbeddedShow();
+      await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
 
       await page.getByRole("button", { name: "New team", exact: true }).click();
       await page.getByLabel("Name optional").fill("Embedded smoke team");
@@ -383,19 +404,21 @@ test.describe("renderer Tools input", () => {
       await expect(panel).toBeVisible();
       await expect(page.locator(".library-row").filter({ hasText: "Embedded smoke team" }))
         .toHaveCount(1);
+      await settleEmbeddedShow();
+      await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
 
       // Establish the boundary explicitly: Escape from a Tools field returns
       // the keyboard to Guild Wars without spending the in-game Escape or
       // closing the window. Reopening intentionally leaves focus on the game.
       const search = page.getByPlaceholder("Search names, tags, heroes, skills");
       await search.focus();
-      await expect(search).toBeFocused();
+      await expect.poll(() => isDomActiveElement(search)).toBe(true);
       await page.keyboard.press("Escape");
       await expect(panel).toBeVisible();
-      await expect(page.locator("#canvas")).toBeFocused();
+      await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
       await page.keyboard.press("Escape");
       await expect(panel).toBeVisible();
-      await expect(page.locator("#canvas")).toBeFocused();
+      await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
     } finally {
       await closeOffline(fixture);
     }

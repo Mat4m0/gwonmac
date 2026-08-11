@@ -1,5 +1,5 @@
-// P5.13, executed rather than asserted about. The main process now sends a
-// failure *code* on the progress channel and as a download outcome, so the
+// This behavior is executed rather than asserted about. The main process sends
+// a failure *code* on the progress channel and as a download outcome, so the
 // sentence the player reads is chosen here. These run the real map: every
 // member of the catalogue must produce prose, the two surfaces must give
 // different advice for the same fault, and an unnamed code must land on one
@@ -131,19 +131,19 @@ describe("renderer failure messages", () => {
     // Network and disk conditions are the player's to fix.
     for (const code of ["net_offline", "http_status", "disk_full", "not_ready", "dns_timeout"]) {
       assert.equal(suggestReport(code), false, code);
-      assert.doesNotMatch(failureDetail(code), /Report a Problem/);
+      assert.doesNotMatch(failureDetail(code), /Report a Bug/);
       assert.match(failureDetail(code), new RegExp(`Error code: ${code}`, "u"));
     }
     // Verification and unclassified failures might genuinely be ours.
     for (const code of ["artifact_unverified", "hash_mismatch", "unknown"]) {
       assert.equal(suggestReport(code), true, code);
-      assert.match(failureDetail(code), /Report a Problem/);
+      assert.match(failureDetail(code), /Report a Bug/);
       assert.match(failureDetail(code), new RegExp(`Error code: ${code}`, "u"));
     }
     // No code keeps the sentence the fail surface has always shown.
     assert.equal(
       failureDetail(),
-      "You can retry, or choose Help → Report a Problem.",
+      "You can retry, or choose Help → Report a Bug.",
     );
   });
 
@@ -151,9 +151,9 @@ describe("renderer failure messages", () => {
     // Unlocking is the player's to do; a missing entitlement is a signing
     // fault in what we shipped, and the two must not share one answer.
     assert.equal(suggestReport("keychain_locked"), false);
-    assert.doesNotMatch(failureDetail("keychain_locked"), /Report a Problem/);
+    assert.doesNotMatch(failureDetail("keychain_locked"), /Report a Bug/);
     assert.equal(suggestReport("keychain_unentitled"), true);
-    assert.match(failureDetail("keychain_unentitled"), /Report a Problem/);
+    assert.match(failureDetail("keychain_unentitled"), /Report a Bug/);
     // Neither reaches a transfer surface, so both take its honest default
     // rather than a sentence invented for a screen that never shows them.
     for (const code of ["keychain_locked", "keychain_unentitled"] as const) {
@@ -174,8 +174,7 @@ describe("renderer failure messages", () => {
     assert.match(first.detail, /usually temporary/);
     assert.match(repeated.label, /keeps stopping/);
     assert.match(repeated.detail, /^Retrying alone may not fix this/);
-    // The privacy half-sentence the player needs before agreeing to export.
-    assert.match(repeated.detail, /not your account or chat/);
+    assert.match(repeated.detail, /Report a Bug/);
     // Buttons are identical across counts: escalation changes the words, not
     // the actions.
     assert.equal(first.retryButton, repeated.retryButton);

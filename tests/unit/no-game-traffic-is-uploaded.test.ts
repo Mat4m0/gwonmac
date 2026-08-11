@@ -1,8 +1,7 @@
-// P3.24. The website answers "Is Guild Wars Reforged for macOS safe?" with:
-// "does not upload telemetry, credentials, account identifiers, or game
-// traffic". One review read the game-traffic half as an overclaim. It is not —
-// but until now it was backed by three modules' own tests that happen to add up
-// to it, and nothing named for the claim. This is that test.
+// The public promise is not that an online game sends nothing: required login
+// and gameplay traffic goes to ArenaNet. It is that none of that data can be
+// redirected to GWonMac or another arbitrary endpoint, and that diagnostics
+// never contain the payload. This test owns those two executable boundaries.
 //
 // Two properties make game packets un-uploadable, and both run here:
 //
@@ -20,24 +19,9 @@
 //     record that carries anything else stops the export instead of being
 //     scrubbed on the way out.
 //
-// A third property joined the claim when the certificate feed gained a
-// delivery path: the app now fetches a document of its own from GitHub, and a
-// request is a place a fact about this installation could travel. The last
-// section holds that request to the same standard — it carries the address and
-// nothing this application added to it.
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { after, describe, it } from "node:test";
+import { describe, it } from "node:test";
 import type { SocketEvent } from "../../src/shared/contracts.ts";
-import {
-  CERTIFICATE_FEED_ASSET,
-  CERTIFICATE_FEED_SIGNATURE_ASSET,
-  CertificateFeedDelivery,
-} from "../../src/main/certification/certificate-feed-delivery.ts";
-import { latestReleaseAssetUrl } from "../../src/shared/project-identity.ts";
 import { allowedName, isAllowedPort } from "../../src/main/core/allowlists.ts";
 import { AppError } from "../../src/shared/errors.ts";
 import { inspectEventLog } from "../../src/main/diagnostics/detector.ts";
@@ -277,97 +261,5 @@ describe("no game traffic is uploaded: what the recorder may hear", () => {
       () => inspectEventLog(line({ socketId: 1, port: 6112, payload: [65, 66, 67] })),
       /undeclared field payload/,
     );
-  });
-});
-
-describe("no game traffic is uploaded: what the certificate feed asks for", () => {
-  const roots: string[] = [];
-  after(async () => {
-    await Promise.all(
-      roots.map((root) => rm(root, { recursive: true, force: true })),
-    );
-  });
-
-  /**
-   * A delivery whose pin is a throwaway public key, so requests happen at all,
-   * and whose fetch records the exact call rather than making one. The private
-   * half is discarded on the next line: nothing here needs to sign.
-   */
-  async function recorded(): Promise<{
-    delivery: CertificateFeedDelivery;
-    calls: { url: string; init: RequestInit | undefined }[];
-  }> {
-    const root = await mkdtemp(path.join(tmpdir(), "gw-feed-request-"));
-    roots.push(root);
-    const spki = generateKeyPairSync("ed25519").publicKey.export({
-      format: "der",
-      type: "spki",
-    });
-    const pinnedKeyPath = path.join(root, "public-key.txt");
-    await writeFile(pinnedKeyPath, spki.subarray(spki.byteLength - 32).toString("base64"));
-    const calls: { url: string; init: RequestInit | undefined }[] = [];
-    return {
-      calls,
-      delivery: new CertificateFeedDelivery({
-        storePath: path.join(root, "certificate-feed.json"),
-        pinnedKeyPath,
-        enabled: true,
-        publish: () => {},
-        fetch: async (input, init) => {
-          calls.push({ url: String(input), init });
-          return new Response(new Uint8Array(), { status: 200 });
-        },
-      }),
-    };
-  }
-
-  it("asks two fixed addresses derived from this project's repository", async () => {
-    const { delivery, calls } = await recorded();
-    await delivery.refresh();
-
-    assert.deepEqual(calls.map(({ url }) => url), [
-      latestReleaseAssetUrl(CERTIFICATE_FEED_ASSET),
-      latestReleaseAssetUrl(CERTIFICATE_FEED_SIGNATURE_ASSET),
-    ]);
-    for (const { url } of calls) {
-      const parsed = new URL(url);
-      // A query string and a fragment are the two places a value could be
-      // smuggled into an address that otherwise looks constant.
-      assert.equal(parsed.origin, "https://github.com");
-      assert.equal(parsed.search, "");
-      assert.equal(parsed.hash, "");
-      assert.equal(parsed.username, "");
-      assert.equal(parsed.password, "");
-    }
-  });
-
-  it("adds nothing to the request: no body, no header, no credential", async () => {
-    const { delivery, calls } = await recorded();
-    await delivery.refresh();
-
-    assert.equal(calls.length, 2);
-    for (const { init } of calls) {
-      assert.ok(init, "the request was made with no init at all");
-      assert.equal(init.method, "GET");
-      // A GET with a body would be the plainest way to upload something. The
-      // rest are the ways an installation could be recognised without one.
-      assert.equal(init.body, undefined);
-      assert.equal(init.headers, undefined);
-      assert.equal(init.credentials, "omit");
-      assert.equal(init.cache, "no-store");
-      assert.equal(init.referrerPolicy, "no-referrer");
-      assert.equal(init.referrer, undefined);
-      assert.equal(init.integrity, undefined);
-      // The transport's own keys are the only ones present, and none of them
-      // names a value this application chose.
-      assert.deepEqual(Object.keys(init).sort(), [
-        "cache",
-        "credentials",
-        "method",
-        "redirect",
-        "referrerPolicy",
-        "signal",
-      ]);
-    }
   });
 });

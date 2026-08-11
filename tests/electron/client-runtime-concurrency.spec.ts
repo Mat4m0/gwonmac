@@ -12,6 +12,115 @@ const patchClientModule = path.join(root, "build/main/core/patch-client.js");
 const pathsModule = path.join(root, "build/main/core/paths.js");
 
 test.describe("client generation coordination", () => {
+  test("serves no client artifact before an active generation publishes", async () => {
+    const fixture = await launchOffline("gw-runtime-no-active-artifacts-e2e-");
+    try {
+      const responses = await fixture.page.evaluate(async () =>
+        Promise.all(
+          ["Gw.jspi.js", "Gw.jspi.wasm", "version.json"].map(async (name) => {
+            const response = await fetch(`gw://app/${name}`);
+            return {
+              name,
+              status: response.status,
+              body: await response.text(),
+            };
+          }),
+        ),
+      );
+      expect(responses).toEqual([
+        { name: "Gw.jspi.js", status: 503, body: "client unavailable" },
+        { name: "Gw.jspi.wasm", status: 503, body: "client unavailable" },
+        { name: "version.json", status: 503, body: "client unavailable" },
+      ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("refuses every ready progress emission until a client is active", async () => {
+    const fixture = await launchOffline("gw-runtime-ready-invariant-e2e-");
+    try {
+      const result = await fixture.app.evaluate(
+        async (_electron, modules) => {
+          const fs = process.getBuiltinModule("node:fs/promises");
+          const { createRequire } = process.getBuiltinModule("node:module");
+          const os = process.getBuiltinModule("node:os");
+          const path = process.getBuiltinModule("node:path");
+          const require = createRequire(path.join(process.cwd(), "package.json"));
+          const { ClientRuntime } = require(modules.clientRuntime);
+          const { gamePaths } = require(modules.paths);
+          const root = await fs.mkdtemp(
+            path.join(os.tmpdir(), "gw-runtime-ready-invariant-"),
+          );
+          const paths = gamePaths(root);
+          const readyObservations: boolean[] = [];
+          const runtime: InstanceType<typeof ClientRuntime> = new ClientRuntime({
+            paths,
+            hostVersion: "test",
+            cachedOnly: true,
+            extendedMemoryEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              toolbox: false,
+            },
+            onProgress: (progress: DownloadProgress) => {
+              if (progress.phase === "ready") {
+                readyObservations.push(runtime.active !== null);
+              }
+            },
+            onPrefetch: () => undefined,
+          });
+          let refusal: string | null = null;
+          try {
+            runtime.publishProgress({
+              phase: "ready",
+              received: 0,
+              total: 0,
+              label: "invalid",
+            });
+          } catch (error) {
+            refusal = error instanceof Error && "code" in error
+              ? String(error.code)
+              : null;
+          }
+          runtime.activeSlot.publish({
+            artifactsDir: paths.artifacts,
+            store: {
+              stop: () => undefined,
+              saveTouched: async () => undefined,
+            },
+            wasmPath: "/active/Gw.jspi.wasm",
+            jsPath: "/active/Gw.jspi.js",
+            compatibility: null,
+            extendedMemory: {
+              requestedAtLaunch: false,
+              status: "standard",
+              effectiveCapBytes: 2_147_483_648,
+              fallbackReason: null,
+            },
+          });
+          runtime.publishProgress({
+            phase: "ready",
+            received: 0,
+            total: 0,
+            label: "valid",
+          });
+          await runtime.shutdown();
+          await fs.rm(root, { recursive: true, force: true });
+          return { refusal, readyObservations };
+        },
+        { clientRuntime: clientRuntimeModule, paths: pathsModule },
+      );
+      expect(result).toEqual({
+        refusal: "not_ready",
+        readyObservations: [true],
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("interrupts a slow update before renderer crash recovery takes the lock", async () => {
     const fixture = await launchOffline("gw-runtime-update-abort-e2e-");
     try {
@@ -35,7 +144,6 @@ test.describe("client generation coordination", () => {
             paths,
             hostVersion: "test",
             cachedOnly: false,
-            offlineShell: false,
             extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
@@ -132,7 +240,6 @@ test.describe("client generation coordination", () => {
             paths,
             hostVersion: "test",
             cachedOnly: false,
-            offlineShell: false,
             extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
@@ -224,7 +331,6 @@ test.describe("client generation coordination", () => {
             paths,
             hostVersion: "test",
             cachedOnly: false,
-            offlineShell: false,
             extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
@@ -278,6 +384,287 @@ test.describe("client generation coordination", () => {
     }
   });
 
+  test("never starts patch publication after a client is active", async () => {
+    const fixture = await launchOffline("gw-runtime-active-update-e2e-");
+    try {
+      const result = await fixture.app.evaluate(
+        async (_electron, modules) => {
+          const fs = process.getBuiltinModule("node:fs/promises");
+          const { createRequire } = process.getBuiltinModule("node:module");
+          const os = process.getBuiltinModule("node:os");
+          const path = process.getBuiltinModule("node:path");
+          const require = createRequire(path.join(process.cwd(), "package.json"));
+          const { ClientRuntime } = require(modules.clientRuntime);
+          const { PatchClient } = require(modules.patchClient);
+          const { gamePaths } = require(modules.paths);
+          const root = await fs.mkdtemp(
+            path.join(os.tmpdir(), "gw-runtime-active-update-probe-"),
+          );
+          const paths = gamePaths(root);
+          await fs.mkdir(paths.artifacts, { recursive: true });
+          const progress: DownloadProgress[] = [];
+          const runtime = new ClientRuntime({
+            paths,
+            hostVersion: "test",
+            cachedOnly: false,
+            extendedMemoryEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              toolbox: false,
+            },
+            onProgress: (value: DownloadProgress) => progress.push(value),
+            onPrefetch: () => undefined,
+          });
+          const activeStore = {
+            stop: () => undefined,
+            saveTouched: async () => undefined,
+          };
+          runtime.activeSlot.publish({
+            artifactsDir: paths.artifacts,
+            store: activeStore,
+            wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
+            jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
+            compatibility: {
+              state: "certified",
+              clientSha256: "d".repeat(64),
+              enhancementActive: false,
+            },
+            extendedMemory: {
+              requestedAtLaunch: false,
+              status: "standard",
+              effectiveCapBytes: 2_147_483_648,
+              fallbackReason: null,
+            },
+          });
+
+          let patchCalls = 0;
+          const originalUpdate = PatchClient.prototype.update;
+          PatchClient.prototype.update = async () => {
+            patchCalls += 1;
+            throw new Error("active client reached PatchClient");
+          };
+
+          try {
+            await runtime.requestUpdate();
+            return {
+              patchCalls,
+              phases: progress.map((value) => value.phase),
+              activeGeneration: runtime.active.generation,
+            };
+          } finally {
+            PatchClient.prototype.update = originalUpdate;
+            await runtime.shutdown();
+            await fs.rm(root, { recursive: true, force: true });
+          }
+        },
+        {
+          clientRuntime: clientRuntimeModule,
+          patchClient: patchClientModule,
+          paths: pathsModule,
+        },
+      );
+
+      expect(result).toEqual({
+        patchCalls: 0,
+        phases: [],
+        activeGeneration: 1,
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("restores an unconfirmed candidate before the next startup update", async () => {
+    const fingerprint = "e".repeat(64);
+    const fixture = await launchOffline("gw-runtime-startup-rollback-e2e-");
+    try {
+      const result = await fixture.app.evaluate(
+        async (_electron, modules) => {
+          const fs = process.getBuiltinModule("node:fs/promises");
+          const { createRequire } = process.getBuiltinModule("node:module");
+          const os = process.getBuiltinModule("node:os");
+          const path = process.getBuiltinModule("node:path");
+          const require = createRequire(path.join(process.cwd(), "package.json"));
+          const { ClientRuntime } = require(modules.clientRuntime);
+          const { PatchClient } = require(modules.patchClient);
+          const { gamePaths } = require(modules.paths);
+          const root = await fs.mkdtemp(
+            path.join(os.tmpdir(), "gw-runtime-startup-rollback-probe-"),
+          );
+          const paths = gamePaths(root);
+          await fs.mkdir(paths.artifacts, { recursive: true });
+          await fs.mkdir(paths.previousArtifacts, { recursive: true });
+          await fs.writeFile(
+            path.join(paths.artifacts, ".candidate.json"),
+            JSON.stringify({
+              formatVersion: 1,
+              fingerprint: modules.fingerprint,
+            }),
+          );
+          await fs.writeFile(
+            path.join(paths.artifacts, "generation"),
+            "candidate",
+          );
+          await fs.writeFile(
+            path.join(paths.previousArtifacts, "generation"),
+            "rollback",
+          );
+          const runtime = new ClientRuntime({
+            paths,
+            hostVersion: "test",
+            cachedOnly: false,
+            extendedMemoryEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              toolbox: false,
+            },
+            onProgress: () => undefined,
+            onPrefetch: () => undefined,
+          });
+          const originalUpdate = PatchClient.prototype.update;
+          let patchCalls = 0;
+          let installedAtPatch = "";
+          let blockedAtPatch: string | null = null;
+          PatchClient.prototype.update = async function observeStartupUpdate(
+            options: { blockedFingerprint?: string | null },
+          ) {
+            patchCalls += 1;
+            installedAtPatch = await fs.readFile(
+              path.join(paths.artifacts, "generation"),
+              "utf8",
+            );
+            blockedAtPatch = options.blockedFingerprint ?? null;
+            throw new Error("stop after rollback proof");
+          };
+
+          try {
+            await runtime.requestUpdate();
+            return {
+              patchCalls,
+              installedAtPatch,
+              blockedAtPatch,
+              rejection: JSON.parse(
+                await fs.readFile(paths.rejectedClient, "utf8"),
+              ),
+              active: runtime.active,
+            };
+          } finally {
+            PatchClient.prototype.update = originalUpdate;
+            await runtime.shutdown();
+            await fs.rm(root, { recursive: true, force: true });
+          }
+        },
+        {
+          clientRuntime: clientRuntimeModule,
+          patchClient: patchClientModule,
+          paths: pathsModule,
+          fingerprint,
+        },
+      );
+
+      expect(result).toEqual({
+        patchCalls: 1,
+        installedAtPatch: "rollback",
+        blockedAtPatch: fingerprint,
+        rejection: {
+          formatVersion: 1,
+          fingerprint,
+          hostVersion: "test",
+        },
+        active: null,
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("keeps active session facts while an unpublished preparation is refused", async () => {
+    const fixture = await launchOffline("gw-runtime-unpublished-facts-e2e-");
+    try {
+      const result = await fixture.app.evaluate(
+        async (_electron, modules) => {
+          const fs = process.getBuiltinModule("node:fs/promises");
+          const { createRequire } = process.getBuiltinModule("node:module");
+          const os = process.getBuiltinModule("node:os");
+          const path = process.getBuiltinModule("node:path");
+          const require = createRequire(path.join(process.cwd(), "package.json"));
+          const { ClientRuntime } = require(modules.clientRuntime);
+          const { gamePaths } = require(modules.paths);
+          const root = await fs.mkdtemp(
+            path.join(os.tmpdir(), "gw-runtime-unpublished-facts-probe-"),
+          );
+          const paths = gamePaths(root);
+          await fs.mkdir(paths.artifacts, { recursive: true });
+          const runtime = new ClientRuntime({
+            paths,
+            hostVersion: "test",
+            cachedOnly: true,
+            extendedMemoryEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              toolbox: false,
+            },
+            onProgress: () => undefined,
+            onPrefetch: () => undefined,
+          });
+          const store = {
+            stop: () => undefined,
+            saveTouched: async () => undefined,
+          };
+          runtime.activeSlot.publish({
+            artifactsDir: paths.artifacts,
+            store,
+            wasmPath: "/active/client.wasm",
+            jsPath: "/active/client.js",
+            compatibility: {
+              state: "certified",
+              clientSha256: "a".repeat(64),
+              enhancementActive: true,
+            },
+            extendedMemory: {
+              requestedAtLaunch: true,
+              status: "active",
+              effectiveCapBytes: 4_294_967_296,
+              fallbackReason: null,
+            },
+          });
+
+          const prepared = await runtime.selectClientWasm();
+          const outcome = {
+            preparedCompatibility: prepared.compatibility,
+            preparedExtendedMemory: prepared.extendedMemory,
+            activeCompatibility: runtime.compatibility,
+            activeExtendedMemory: runtime.extendedMemory,
+          };
+          await runtime.shutdown();
+          await fs.rm(root, { recursive: true, force: true });
+          return outcome;
+        },
+        {
+          clientRuntime: clientRuntimeModule,
+          paths: pathsModule,
+        },
+      );
+
+      expect(result.preparedCompatibility).toBeNull();
+      expect(result.preparedExtendedMemory.status).toBe("standard");
+      expect(result.activeCompatibility).toMatchObject({
+        state: "certified",
+        clientSha256: "a".repeat(64),
+        enhancementActive: true,
+      });
+      expect(result.activeExtendedMemory).toMatchObject({
+        status: "active",
+        effectiveCapBytes: 4_294_967_296,
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("rejects a stale renderer token after the active generation changes", async () => {
     const fingerprint = "a".repeat(64);
     const replacementFingerprint = "b".repeat(64);
@@ -313,7 +700,6 @@ test.describe("client generation coordination", () => {
             paths,
             hostVersion: "test",
             cachedOnly: false,
-            offlineShell: true,
             extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
@@ -330,10 +716,19 @@ test.describe("client generation coordination", () => {
           const generation = runtime.activeSlot.publish({
             artifactsDir: paths.artifacts,
             store,
-            snapshotMeta: {},
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
             jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
-            enhancementBuild: null,
+            compatibility: {
+              state: "certified",
+              clientSha256: "1".repeat(64),
+              enhancementActive: false,
+            },
+            extendedMemory: {
+              requestedAtLaunch: false,
+              status: "standard",
+              effectiveCapBytes: 2_147_483_648,
+              fallbackReason: null,
+            },
           });
           const token = Object.freeze({
             generation: generation.generation,
@@ -359,10 +754,19 @@ test.describe("client generation coordination", () => {
           const replacement = runtime.activeSlot.publish({
             artifactsDir: paths.artifacts,
             store,
-            snapshotMeta: {},
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
             jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
-            enhancementBuild: null,
+            compatibility: {
+              state: "uncertified",
+              clientSha256: "2".repeat(64),
+              enhancementActive: false,
+            },
+            extendedMemory: {
+              requestedAtLaunch: true,
+              status: "unavailable",
+              effectiveCapBytes: 2_147_483_648,
+              fallbackReason: "unsupported-client",
+            },
           });
           await fs.writeFile(
             path.join(paths.artifacts, ".candidate.json"),
@@ -453,7 +857,6 @@ test.describe("client generation coordination", () => {
             paths,
             hostVersion: "test",
             cachedOnly: false,
-            offlineShell: true,
             extendedMemoryEnabled: false,
             enhancementCapabilities: {
               nativeCursor: false,
@@ -470,10 +873,19 @@ test.describe("client generation coordination", () => {
           const generation = runtime.activeSlot.publish({
             artifactsDir: paths.artifacts,
             store,
-            snapshotMeta: {},
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
             jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
-            enhancementBuild: null,
+            compatibility: {
+              state: "certified",
+              clientSha256: "3".repeat(64),
+              enhancementActive: false,
+            },
+            extendedMemory: {
+              requestedAtLaunch: false,
+              status: "standard",
+              effectiveCapBytes: 2_147_483_648,
+              fallbackReason: null,
+            },
           });
           const token = Object.freeze({
             generation: generation.generation,

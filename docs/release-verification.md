@@ -1,142 +1,250 @@
-# Verify a release
+# Verify and publish a release
 
-## Release numbering
+This document gives the release procedure for `gwonmac`.
 
-Releases are numbered by date: `YYYY.M.PATCH`, so `2026.7.0` is the first
-release cut in July 2026 and `2026.7.1` the next one that month. The point of
-the scheme is staleness at a glance — in November, `2026.7.1` tells you the app
-is four months behind, where `0.4.2` would tell you nothing.
+Audience: the maintainer who builds, tests, approves, publishes, or recovers a
+versioned release.
 
-The numbers are written in SemVer syntax because npm, the packaging tools, and
-the release workflow all parse them that way, and SemVer forbids leading zeroes
-in a number. July is `7`, never `07`: `2026.07.01` is not a valid version, and
-`src/shared/release.ts` — the one parser this app compares versions with —
-refuses to read it rather than guessing what was meant.
+This document owns operator decisions and evidence. The release workflow and
+verification scripts own exact credentials, assets, entitlements, and machine
+checks.
 
-Prereleases append a channel and a sequence — `2026.7.0-alpha.1`,
-`-beta.1`, `-rc.1` — and order `alpha` < `beta` < `rc` < the release itself.
-An install running a stable release is never offered a prerelease. During the
-initial launch phase, the website download button offers the newest release,
-including previews; `WEBSITE_RELEASE_CHANNEL` in
-`apps/website/app/composables/useLatestRelease.ts` is the single switch back to
-stable-only downloads once the first stable release is available.
+## Release versions
 
-**What the number does not mean.** It is not a compatibility promise, and in
-particular it says nothing about which Guild Wars client build the release
-works with. ArenaNet ships client builds on its own schedule. The app first
-checks an unknown build locally against its shipped structural baseline and
-uses the untouched official client if that proof refuses; no version number
-can encode that outcome. The app tells you directly instead — see
-[When the client build is not certified](user-guide.md#when-the-client-build-is-not-certified).
-A newer app version fixes an uncertified client build only if it contains a
-baseline for the changed structure, so a higher number on its own is not the
-answer.
+Use `YYYY.M.PATCH`. The first release in August 2026 is `2026.8.0`. The next is
+`2026.8.1`.
 
-Automatic checks remain user-controlled and on by default; stable
-installations are never offered a preview — see
-[Updates](user-guide.md#updates).
+Use no leading zero. The version must be valid SemVer because npm, packaging,
+and the updater parse it.
 
-Temporary `snapshot-<run>-<commit>` prereleases are tester builds, not
-application versions. Their tags deliberately do not parse as one of the
-version shapes above, so neither the website nor the in-app release check
-offers them. They remain available as public downloads on GitHub while their
-bounded retention window is open; pull-request packages instead live as
-signed-in-only GitHub Actions artifacts for three days.
+The supported prerelease suffixes are:
 
-Versions published before this scheme, including the public alpha
-`0.0.1-alpha.1`, used a plain `0.x` number and are older than everything above.
-The macOS bundle also carries a `CFBundleVersion` derived from the release
-version, which is monotonic but not the number you read anywhere in the UI;
-`scripts/macos-version.ts` owns that mapping and `tests/packaged-smoke.ts`
-checks it.
+- `-beta.N` for a public Beta;
+- `-rc.N` for a public release candidate.
 
-## Signing and evidence
+Alpha versions and `snapshot-*` tags are not public application-update
+candidates.
 
-Guild Wars Reforged releases are signed with Developer ID, use the hardened
-runtime, and are notarized and stapled by Apple. Each GitHub release also
-publishes independently useful evidence:
+The version does not describe ArenaNet client compatibility. The app checks the
+official client separately. A higher `gwonmac` version helps only when it ships
+the required client certificate or host fix.
 
-- the notarized DMG for installation;
-- the notarized application ZIP used by automatic updates;
-- `RELEASES.json`, naming that exact ZIP;
-- `SHA256SUMS.txt`, covering the DMG, ZIP, feed, and SBOM;
-- an SPDX SBOM describing the packaged application.
+## One Release identity
 
-GitHub also stores signed build-provenance attestations for the DMG and ZIP and
-an SBOM attestation for the ZIP.
-These establish that the file was produced from this repository by the
-published release workflow. They do not replace macOS Gatekeeper or make an
-untrusted repository safe.
+Stable, Beta, and release-candidate builds use the same Release application
+identity. They use the same profile, Keychain authority, updater, Developer ID
+certificate, and notarization credentials.
 
-The approval-gated `release` environment must contain the G2 Developer ID
-certificate/private key as `APPLE_DEVELOPER_ID_P12`, its export password as
-`APPLE_DEVELOPER_ID_PASSWORD`, and the Developer ID distribution profile for
-`io.github.mat4m0.gwonmac` as `APPLE_DEVELOPER_ID_PROFILE`. The P12 and profile
-are base64-encoded secret values, not repository files. Before it builds, the
-workflow rejects a profile with the wrong team, application identifier,
-distribution type, certificate fingerprint, certificate count, or remaining
-lifetime. It blocks below two years and warns below five. After signing, it
-compares the embedded profile byte-for-byte and checks the top-level app's
-exact three entitlements.
+Use the existing protected `release` GitHub environment. Do not create a Beta
+environment or copy the Apple secrets.
 
-Those post-signing checks are `scripts/verify-signed-app.ts` rather than
-workflow text, so the release path is reproducible off CI:
-`pnpm verify:signed-app` runs every one of them against a notarized
-application, and its optional second argument against the disk image that
-carries it. The script's header states what it needs.
+Preview is a separate tester application. It cannot use the public updater. A
+tester snapshot does not replace a versioned release check.
 
-## Identity correction and saved-login rollout
+The workflow produces a notarized and stapled DMG, an application-update ZIP,
+`RELEASES.json`, `SHA256SUMS.txt`, an SPDX SBOM, and repository-bound
+attestations.
 
-`2026.7.0-beta.2` was the first Developer ID package, but it inherited the
-unrelated `com.gwdevhub.guildwars` bundle identifier and Chromium Safe Storage
-path. The next beta is the deliberate one-time correction to
-`io.github.mat4m0.gwonmac` and the Data Protection Keychain. Treat it as a
-manual DMG replacement: quit the old app, replace it in `/Applications`, and
-launch the new copy. The explicit application-support path remains
-`~/Library/Application Support/Guild Wars`, so launcher settings, templates,
-diagnostics, and downloaded game data remain. Only `credentials.bin` and
-`steam-session.bin` are retired, and both login routes require one new sign-in.
+## Before you start
 
-Do not claim that Squirrel crosses this identity boundary without a signed
-end-to-end proof. Publish one more beta from the corrected identity and prove
-automatic updating from the cutover beta on both a clean profile and an
-existing profile before shipping a stable release.
+Complete this checklist:
 
-The `release` environment variable `SIGNED_BETA_UPDATE_PROVEN` is deliberately
-unset during this rollout. After the follow-up beta has installed
-automatically, retained the profile and both Data Protection Keychain items,
-set it to exactly `true`. The release workflow refuses every stable version
-until that evidence gate is opened; preview releases do not depend on it.
+- [ ] The release commit is on `main`.
+- [ ] `package.json` contains the intended new version.
+- [ ] The version stage matches Stable, Beta, or RC intent.
+- [ ] The current ArenaNet client canary passed within the workflow age limit.
+- [ ] CI for the release commit is green.
+- [ ] Release notes use short player language. Internal refactors need no long
+      explanation.
+- [ ] No active incident makes publication unsafe.
 
-## Verify the downloaded files
+Do not publish a new version only to test the release system. Use the dry run.
 
-Download the DMG, ZIP, `RELEASES.json`, `SHA256SUMS.txt`, and `.spdx.json` from the same
-GitHub release into one folder. In Terminal, change to that folder and run:
+## Safe dry run
+
+Manually run **Versioned release** on `main` with `dry_run` set to `true`.
+
+This path runs the real verification, build, signing, notarization, stapling,
+and package checks. It skips the GitHub mutation jobs.
+
+A dry run does not create a tag, draft release, public release, or attestation.
+It can create normal private GitHub Actions logs and artifacts.
+
+Treat a dry-run failure as a release blocker. Fix the cause and run it again.
+Do not change secrets or add another signing path to bypass the failure.
+
+## Real release flow
+
+Run **Versioned release** on `main` with `dry_run` set to `false`.
+
+The workflow has two decisions:
+
+```text
+approval 1
+  -> build, sign, notarize, staple, and verify
+  -> create or resume one checksum-pinned draft
+  -> maintainer tests the exact draft assets
+approval 2
+  -> re-download and verify the same draft
+  -> publish by removing the draft flag
+```
+
+The first approval exposes the existing Apple material only to the signed build
+job. The job removes its temporary signing material before later test and upload
+steps.
+
+The staging job creates or resumes a complete GitHub draft. The website and
+`AppUpdater` cannot select a draft.
+
+The final job does not rebuild or replace an asset. It downloads the draft,
+checks its commit, release stage, asset inventory, and checksum digest, and then
+removes the draft flag.
+
+If any staged asset changes, start a new staging run and repeat approval. Never
+replace a published asset in place.
+
+## Test the exact draft
+
+Download the DMG, ZIP, `RELEASES.json`, `SHA256SUMS.txt`, and SBOM from the draft.
+Do not test a local development build as release evidence.
+
+On the maintainer Mac:
+
+1. Verify checksums and run the signed-app verifier on the app and DMG.
+2. Install from the DMG and start through Gatekeeper.
+3. Confirm the exact version.
+4. Start the current official client and reach a playable character.
+5. Enter an outpost and an explorable area.
+6. Play for ten minutes and check rendering, input, audio, templates, and saved
+   login.
+7. Confirm current Core certification.
+8. If the release claims Tools support, test the claimed Target Distance and
+   Team Management behavior.
+
+A 16 GB Apple Silicon MacBook Pro is sufficient for this owned check. Record the
+actual model, memory, and macOS version. Do not imply that this one device proves
+all supported hardware.
+
+The run fails if it has an authentication loop, black game surface, GPU-process
+crash, context loss, persistent-file loss, or incorrect client-certification
+status.
+
+## Add the Verification record
+
+Edit the draft release notes. Add a heading with this exact text:
+
+```text
+## Verification
+```
+
+Record the workflow URL, application and bundle versions, every complete staged
+checksum row, test result, Mac model, memory, macOS version, and current ArenaNet
+module SHA-256. Add a diagnostics fingerprint only when it informed the result.
+
+Never record a credential, account identifier, token, or game traffic.
+
+The final workflow checks the heading and checksum rows. The protected reviewer
+must assess the human observations. Automation cannot decide whether the game
+looked and behaved correctly.
+
+Approve publication only when every applicable result passes and belongs to the
+exact draft assets.
+
+## Stable release checks
+
+For every Stable, run the exact-draft checklist. Confirm the Release identity,
+saved login, current client, and claimed Core or Tools behavior. Stable remains
+the default track.
+
+A normal Stable release does not need a new Stable-to-Beta-to-Stable round-trip
+when no public candidate depends on it. The release workflow owns the exact
+condition.
+
+If this Stable is the final version for a public Beta or RC, complete the
+post-publication forward-update check below.
+
+## Beta and RC checks
+
+Before every public Beta or RC, the signed workflow must run this exact sequence
+with a disposable test profile:
+
+```text
+latest published Stable
+  -> exact signed candidate
+  -> the same Stable
+```
+
+Each launch must report its exact version. Settings, Builds, Teams, window state,
+and profile-origin browser storage must remain readable and writable. No profile
+or chunk-directory reset can occur. The candidate must use only settings keys
+and values already owned by Stable. Returning Stable must preserve untouched
+values.
+
+This proof prevents a hidden compatibility store. A public candidate cannot be
+the first release that introduces a durable settings key that it writes.
+
+When Electron, Chromium, Keychain identity, or the persistence contract changes,
+also run the affected real boundary. For example, save and reload a real Guild
+Wars template through production IDBFS.
+
+## Post-publication updater checks
+
+A production updater check cannot happen before publication. Perform it within
+30 minutes after publication.
+
+For a Beta or RC, start from latest signed Stable, select Beta, and install the
+exact candidate through the production updater. Confirm the same identity,
+profile, and saved login. Record the version and release URL.
+
+For the matching final Stable, update the installed candidate to the exact
+newer Stable. Confirm the same profile, player data, and saved login. Record the
+version and release URL.
+
+These checks certify announcement and promotion. They are not a false
+pre-publication gate.
+
+## Failure and recovery
+
+Before publication, stop. Leave the candidate as a draft. Fix the defect and
+stage new immutable assets.
+
+If a published Beta or RC fails before any known install, return it to draft and
+stop announcement and promotion.
+
+If a failed build can already be installed, publish a higher corrective version.
+Do the same for a failed Stable. Do not replace assets and do not reuse the
+version.
+
+The updater never installs an older Stable automatically. A player who returns
+from a newer candidate to an older Stable must install the signed Stable DMG
+manually.
+
+Use `Not applicable` only when you name the unchanged boundary. It cannot replace
+the recurring candidate round-trip or post-publication updater check.
+
+## Verify downloaded assets
+
+Put the files from one release in one directory. Run:
 
 ```bash
 shasum -a 256 -c SHA256SUMS.txt
 ```
 
-Every entry must report `OK`. A mismatch means the files do not belong
-together or were changed; delete them and download the release again.
+Every listed file must report `OK`. A mismatch means that the files do not
+belong together or have changed. Delete the local copies and download them
+again.
 
-If the [GitHub CLI](https://cli.github.com/) is installed, also verify the
-repository-bound attestations:
+If GitHub CLI is installed, verify the repository-bound attestation for the ZIP:
 
 ```bash
-zip="$(find . -maxdepth 1 -name 'Guild-Wars-Reforged-*-macOS-arm64.zip' -print -quit)"
-gh attestation verify "$zip" --repo Mat4m0/gwonmac
+gh attestation verify "Guild-Wars-Reforged-<version>-macOS-arm64.zip" \
+  --repo Mat4m0/gwonmac
 ```
 
-The command must identify `Mat4m0/gwonmac` as the source repository and
-successfully verify the artifact. The release’s provenance and SBOM
-attestations are both attached to that exact ZIP digest.
+The command must identify `Mat4m0/gwonmac` and verify the artifact digest.
 
-## Install without disabling Gatekeeper
+## Install with Gatekeeper
 
-After verification, open the DMG and drag `Guild Wars Reforged.app` to
-Applications. Gatekeeper verifies the Developer ID signature and stapled Apple
-notarization ticket.
+Open the verified DMG. Drag the application to Applications. Start it normally.
 
-Do not disable Gatekeeper globally or run a blanket quarantine-removal
-command.
+Do not disable Gatekeeper. Do not use a blanket quarantine-removal command.

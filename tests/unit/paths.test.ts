@@ -1,15 +1,11 @@
 import assert from "node:assert/strict";
-import { basename } from "node:path";
 import { describe, it } from "node:test";
 import {
   clientArtifactPath,
   clientManifestPath,
   diagnosticFramesPath,
-  discardObsoleteEnhancementCache,
   documentDirectories,
   gamePaths,
-  obsoleteEnhancementCachePath,
-  snapshotMetadataPath,
   unpackedPath,
 } from "../../src/main/core/paths.ts";
 
@@ -18,7 +14,7 @@ import {
 // up to ~4 GB of downloaded game data and the userData root already exists on
 // alpha machines, so a silent relocation costs a user a re-download or a reset.
 // Changing a literal here is a product decision with a migration attached, not
-// a rename. See plans/refactor.md P1.23.
+// a rename.
 describe("resolved profile paths", () => {
   const root = "/Users/tester/Library/Application Support/Guild Wars";
 
@@ -33,8 +29,6 @@ describe("resolved profile paths", () => {
       artifacts: `${root}/game/artifacts`,
       previousArtifacts: `${root}/game/artifacts.previous`,
       rejectedClient: `${root}/game/rejected-client.json`,
-      localClientVerification: `${root}/game/local-client-verification.json`,
-      certificateFeed: `${root}/game/certificate-feed.json`,
       compatibility: `${root}/game/compatibility`,
       enhancements: `${root}/game/enhancements`,
       nativeDoubleClick: `${root}/game/double-click`,
@@ -69,36 +63,6 @@ describe("resolved profile paths", () => {
     ]);
   });
 
-  it("pins the obsolete beta cache selected for one-release cleanup", () => {
-    assert.equal(
-      basename(obsoleteEnhancementCachePath(gamePaths(root))),
-      ["tool", "box"].join(""),
-    );
-  });
-
-  it("discards the obsolete cache without making cleanup failure fatal", async () => {
-    const paths = gamePaths(root);
-    const calls: unknown[][] = [];
-    assert.equal(
-      await discardObsoleteEnhancementCache(paths, async (...args) => {
-        calls.push(args);
-      }),
-      null,
-    );
-    assert.deepEqual(calls, [[
-      obsoleteEnhancementCachePath(paths),
-      { recursive: true, force: true },
-    ]]);
-
-    const failure = new Error("injected");
-    assert.equal(
-      await discardObsoleteEnhancementCache(paths, async () => {
-        throw failure;
-      }),
-      failure,
-    );
-  });
-
   it("keeps the downloaded chunk cache exactly where the alpha put it", () => {
     // Called out separately because this is the expensive one: it is the only
     // path in the table whose relocation costs a full re-download.
@@ -108,10 +72,6 @@ describe("resolved profile paths", () => {
   it("pins the files published inside a client generation", () => {
     const generation = `${root}/game/artifacts`;
     assert.equal(clientManifestPath(generation), `${generation}/manifest.json`);
-    assert.equal(
-      snapshotMetadataPath(generation),
-      `${generation}/snapshot-metadata.json`,
-    );
     assert.equal(
       clientArtifactPath(generation, "Gw.jspi.wasm"),
       `${generation}/Gw.jspi.wasm`,

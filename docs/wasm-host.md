@@ -1,509 +1,241 @@
-# The WASM host and client certification
+# WASM host and client certification
 
-This document owns the surface the official client sees from JavaScript — the
-`Module` contract, the awaited host calls, the persistent game filesystem — and
-the certification that decides which module a session actually runs.
+This document explains how `gwonmac` hosts the official Guild Wars WebAssembly
+client. It also explains how the app enables build-specific repairs and tools.
 
-## The Module contract
+Audience: contributors who change the Emscripten host, persistent game files,
+client transforms, companion kernel, or certification workflow.
 
-`Module` must be declared with `var`; the generated glue redeclares it.
-`Gw.jspi.js` asks for `Gw.wasm`, so `locateFile` explicitly selects
-`Gw.jspi.wasm`. The protocol reads one immutable `ActiveClient` per request;
-its chunk store, snapshot metadata, artifact directory, and selected WASM can
-never come from different client generations. Full-file protocol responses stream from disk, allowing
-`WebAssembly.instantiateStreaming` to compile without first retaining the
-whole module in main-process memory. Cached Enhancement validation also streams
-both hashes; the official bytes are loaded only for a cold transform. Asyncify
-is not a production fallback.
+This document owns the stable architecture and failure rules. Code and tests
+own exact hashes, function indices, table slots, addresses, message IDs, ABI
+sizes, and time limits.
 
-Awaited host calls always return promises:
+## Module contract
+
+The official JavaScript glue reads one global `Module` object. Declare it with
+`var` because the generated glue declares it again.
+
+The host selects the official JSPI WebAssembly file through `locateFile`.
+`gw://app` streams the selected module from disk. This permits streaming
+compilation without first copying the complete file into main-process memory.
+
+Each protocol request reads one immutable `ActiveClient`. The request cannot
+mix a JS file, WASM file, snapshot store, or compatibility result from another
+generation.
+
+Production does not use Asyncify as a fallback.
+
+Awaited image, DNS, saved-login, Steam, advertisement, age, and shop operations
+always return promises. The preload exposes only the required capability. The
+main process keeps validation and native ownership. Steam is the only federated
+provider that the host advertises. Narrow unavailable advertisement and shop
+objects satisfy two defective client absence checks.
+
+## Persistent game filesystem
+
+The renderer initializes one Emscripten IDBFS mount before the official client
+enters `main()`.
+
+The initialization performs these steps:
+
+1. Mount IDBFS under the app-owned `gw://app` origin.
+2. Restore existing data.
+3. Create the Skills and Equipment template directories.
+4. Set the working directory to the mount.
+5. Persist the directory invariant.
+6. Release the Emscripten run dependency.
+
+Startup stops if restore or initial persistence fails. The app must not continue
+with temporary memory while telling the player that files are persistent.
+
+The host normalizes Windows path separators at the Emscripten file-operation
+boundary. Paths must remain relative and must not contain traversal.
+
+The mount stores Guild Wars preferences, build templates, screenshots, and chat
+logs. The app has no arbitrary native-file bridge.
+
+**Reset Saved Files** records a restart request. The next startup clears only
+the owned IDBFS origin before it mounts. This action does not clear ArenaNet
+chunks, application settings, or Keychain items.
+
+The official client restores a large `Gw.dat` file into this synchronous
+filesystem. Do not remove it or bypass IDBFS to reduce a memory chart. Measure a
+proven filesystem replacement with [Diagnostics and performance](diagnostics.md).
+
+## Derived client chain
+
+The downloaded official module is always canonical. The app can create
+rebuildable derived modules:
 
 ```text
-image.cacheAsync
-dns.resolve
-secureStorage.getCredentials/storeCredentials/clearCredentials
-login.getAuthToken
-adProvider.showInterstitial
-ageSignals.check
-shop.initialize/inAppPurchase
+verified official module
+  -> certified file-compatibility transform
+  -> optional certified Core and Tools transform
+  -> selected module for this session
 ```
 
-`secureStorage` and `login.getAuthToken` resolve against the main process's two
-persistent secrets; [Process model and boundaries](process-model.md#saved-login)
-owns that boundary.
+The app never edits the official artifact in place. A cache entry is not proof.
+Reuse requires the bytes, metadata, capability profile, and shipped expected
+hash to agree.
 
-## Host namespaces the client probes
+The two transforms use different input hashes. The second transform consumes
+the first transform's output. They are not alternatives.
 
-Steam is advertised as a federated provider; Apple and Google are not. The
-client probes each one while it builds its login screen, and answering yes for
-Steam is what makes it render a Steam button beside the unchanged ArenaNet
-email/password form. Properly guarded browser, analytics, and age-signal
-namespaces remain absent. The two namespaces with defective absence guards
-(`adProvider` and `shop`) are narrow plain objects whose unavailable operations
-reject with the promise shapes expected by the client.
+## File-compatibility transform
 
-## The persistent game filesystem
+The official web client leaves required file operations incomplete. Without a
+repair, template directories cannot be created or listed. Rename and delete can
+also fail.
 
-The renderer owns one persistent game filesystem initialization before the
-official client enters `main()`. It mounts and restores Emscripten IDBFS at
-`app:`, creates `Templates/Skills` and `Templates/Equipment`, changes the
-working directory to that mount, and persists the directory invariant before
-releasing the run dependency. This keeps the client's relative build-template,
-screenshot, chat-log, and preference writes in one durable origin. A restore
-or initial persist failure stops startup instead of silently running against
-ephemeral memory. At Emscripten's public file-operation boundary, Windows-style
-backslashes are normalized to POSIX separators before lookup, create, rename,
-or delete logic sees them. Static inspection of the current official WASM
-shows that its template path builder normally inserts `/`; the normalization
-is a boundary invariant, not an explanation of template-save success.
+The deterministic transform connects only the affected call sites to bounded
+IDBFS operations. It preserves the original routines for other callers.
 
-For template-save investigation only, launching an unpackaged build with
-`GW_TEMPLATE_FS_TRACE=1` sets `templateFsTrace` in the renderer init payload.
-Before instantiation, the renderer then wraps the official module's
-`__syscall_openat`, `__syscall_ftruncate64`, `fd_read`, `fd_write`,
-`fd_pwrite`, `fd_seek`, and `fd_close` imports.
-The bounded console trace records only the template kind, flags, descriptor,
-errno, and requested/written byte counts. It never records a filename, path, or
-file content, does not cross IPC, and is not included in `.gwdiag` exports.
-Normal launches retain the original imports unchanged.
+The transform validates each complete changed caller. A change to control flow,
+flags, path handling, or an unrelated call makes the proof refuse.
 
-Resetting the saved Guild Wars files clears exactly this mount. After native
-confirmation the action records a restart request, and startup clears only
-IndexedDB for the owned `gw://app` session before a renderer can mount IDBFS,
-then removes the request. It cannot clear the
-separate native chunk cache or either Data Protection Keychain item. There is
-no native arbitrary-file bridge.
+For an unknown hash, one isolated utility process re-reads and verifies the
+artifact. It writes no profile state.
 
-### Official-client memory floor
+A crash, timeout, changed file, malformed result, ambiguous match, unexpected
+layout, or transform error means no proof. The app then serves the verified
+official module.
 
-The generated client mounts Emscripten IDBFS at `app:` and restores
-`app:/Gw.dat` before completing initialization. On the certified profile that
-file is about 919 MB, while the official WASM linear memory is about 369 MiB.
-Restoring IDBFS can therefore create a short-lived RSS peak above 1 GiB in both
-the browser/main and renderer processes even though steady resident memory
-falls sharply after the pages become reclaimable. This is not Enhancement state,
-the 256 MB snapshot LRU, or Chromium's network cache.
+The costly defect and recertification evidence is in `internal/upstream/`. Read
+that archive before changing the transform.
 
-Avoiding that peak requires an architectural replacement for the official
-synchronous Emscripten filesystem—such as a proven lazy native backend or a
-worker-hosted runtime—not a safe local copy removal. Do not clear IDBFS or
-patch the official glue speculatively: `Gw.dat` is persistent client state and
-removing it can turn memory pressure into repeated reconstruction and snapshot
-I/O.
+## Certification states
 
-## The template-save transform
+One owner in `src/main/certification/client-certification.ts` reports one of
+three states:
 
-`internal/upstream/` holds the full record: the defect report written for
-ArenaNet, the client internals we had to recover, the bridge contract, the
-re-certification procedure for a new client build, and the investigation log.
-Read it before changing anything below.
+| State | Meaning |
+| --- | --- |
+| `uncertified` | The app uses the official module. Build-specific file repair and live Tools integration are unavailable. |
+| `template-only` | The file-compatibility transform passed. The exact Core and Tools transform did not pass. |
+| `certified` | An exact Core and Tools certificate exists after the file transform. The requested runtime transform can still fail. |
 
-Every index and offset the transform carries belongs to one exact client build.
-The shape locator is production code under `src/main/certification`; both the launcher
-and `pnpm certification template` call that one implementation. It re-derives
-indices from body bytes, resolved signatures, and caller-set intersections,
-then fingerprints every complete caller body the transform will modify. Only
-the five selected call-index operands are normalised. A changed path
-calculation, flag, branch, immediate, or unrelated call therefore refuses even
-when every call remains at the old byte offset. CLI comparison, diagnostics,
-and paste-ready formatting stay under `src/tools`; they are not part of the
-packaged proof. The command remains the maintainer surface for investigating a
-refusal and for re-measuring semantics.
+Every consumer reads this result. The launcher, Settings, diagnostics, canary,
+and maintainer command must not recompute it.
 
-Four `Base/Os` file routines ship unimplemented and never reach Emscripten FS.
-Creating a directory returns error 2 unconditionally, which is why a build save
-fails before any syscall. Enumerating a directory does nothing, which is why
-"Load from Skills Template" lists nothing, and deriving an entry's name writes
-nothing. Deleting a file is `assert("not implemented")` followed by
-`unreachable`, so removing or renaming a build aborts the client. A fifth
-routine is implemented but wrong: `File::Open` mode 1 is meant to open an
-existing file, and the client uses it to ask whether a rename's destination is
-already taken — but in this build it opens `O_RDWR | O_CREAT`, so the probe
-creates the file it is testing for and every rename is refused. The module
-imports no `mkdir`, `getdents`, or `unlink`, so none of this is reachable from
-JavaScript as shipped.
+The compatibility state and effective activity are separate. If a requested
+runtime transform fails, the state can remain `certified` while
+`enhancementActive` is false. A table entry alone is not runtime success.
 
-For the exact certified client hash, a deterministic transform appends five
-forwarders and repoints only the template, chat-log, and screenshot call sites
-at them. Appending leaves every existing function index valid, and the stub
-bodies stay intact so the model paths that also call them keep today's
-behaviour. Each forwarder passes the stub's arguments to the existing
-`__syscall_newfstatat` import behind a dirfd marker no real call can produce.
-The `File::Open` forwarder is the one exception: it asks the host first and
-calls the real function only when the file is there, so the load and write
-paths keep their own behaviour and only the probe changes.
+The renderer verifies the instantiated module's exact capability manifest.
+Launch intent is not runtime proof.
 
-The renderer answers the five markers against the mounted IDBFS: create a
-directory tree, list a wildcard, turn an entry into the name the client keys a
-template by, delete a file, and answer whether one exists. Renaming needs no
-marker of its own — the client implements it as probe, write the new name, then
-delete the old. Paths must stay relative and free of traversal, so the client
-cannot address anything outside its own mount. Directory entries the
-mount cannot describe are skipped rather than failing the whole listing. The
-listing block is allocated with the client's own `malloc` because the client
-frees it. Ordinary `newfstatat` calls remain unchanged.
+## Certification authority
 
-Three details in that contract are load-bearing, and each one cost a round of
-build, ship, and try again. The enumeration flag selects the entry kind — the
-template scans ask for `*.txt` with files and `*` with directories — so
-answering both with files fills the subdirectory list with folders named after
-the templates. A template is keyed by its path below the type directory in
-Windows form with a leading separator, `\Test`, which is what the client's own
-save path builds and what its list filter matches against the current
-subdirectory; a bare `Test` registers but never lists. And the host removes the
-extension itself, because `Path::RemoveExtension` in this build takes the last
-character of the name with it.
+Compiled certification facts and the isolated local file-compatibility verifier
+are the only runtime authorities.
 
-The downloaded official module remains canonical. The derived module is
-verified by input hash, instruction signature, WebAssembly validation, and
-expected output hash, then atomically cached and streamed by the existing
-protocol path. A hash already in the shipped tables takes the fast path. For an
-unknown hash, Electron starts one utility process with only the artifact path
-and expected hash. That process re-reads and re-hashes the file and may prove
-the template structures above. Enhancement execution is stricter: build 38,797
-proved that its static addresses do not move by one common delta, so an unknown
-post-template hash is never promoted from data topology alone. Until the
-multi-hook verifier can independently recover every function and address from
-semantic anchors, only an exact shipped Enhancement certificate enables the
-kernel.
+The local verifier can authorize only the bounded file repair that it proves.
+Core and Tools hooks use exact shipped certificates until each hook and address
+can be recovered from an independent semantic anchor.
 
-The utility process has a five-second deadline and writes no profile state.
-Only main publishes its checksum-protected, owner-only exact-hash answer to
-`game/local-client-verification.json`; its verifier ABI and baseline
-fingerprint make every code or baseline change invalidate the cache. A crash,
-timeout, changed file, malformed answer, ambiguous locator, unexpected data
-layout, or transform failure is no proof. The launcher then serves the
-untouched official module and starts the game normally. The derived caches are
-rebuildable from the official artifact and old compatibility generations are
-deleted when the selected client changes.
+There is no remote certificate feed. A CI result, cache file, diagnostics file,
+or GitHub issue cannot grant runtime authority.
 
-## Which of three states a client build is in
+New Core or Tools facts require an application release. When those facts are
+missing, the official ArenaNet client remains playable.
 
-`src/main/certification/` is the one directory the whole chain lives in: the two
-certified build tables, the two transforms, the module the launch actually
-serves, the pure structural proof, the utility process it runs in, and the
-developer switches over the Enhancement half. `src/main/core/` keeps only what
-is not about certification and what certification depends on — the WASM section
-codec and the derived-artifact cache — so the dependency runs one way and there
-is no second place to look. `src/tools/certification.ts` is the one command
-line over it, with `doctor`, `recertify`, `template` and `transform`
-subcommands; `scripts/verify-companion-kernel.mjs` stays separate because it
-certifies the Rust companion kernel against the compile recipe in
-`scripts/build.mjs`, not a client build.
+## Required compatibility and optional Tools
 
-The two transforms are chained but keyed by **different** hashes: template-save
-by the official build's hash, Enhancement by the hash of what the template-save
-transform produces. Certification can therefore succeed at step one and fail at
-step two — templates saved, cursors gone — which is the normal intermediate
-during a recertification, because the transform that breaks saving is fixed
-before the one that draws a pointer.
+Required compatibility has two certification stages. The file-compatibility
+transform restores persistent template operations. Certified Core adds the
+Guild Wars cursor and native double-click. These behaviors have no player
+switch when their proof passes.
 
-`src/main/certification/client-certification.ts` composes the shipped lookups or one local
-proof into the same answer: `uncertified`, `template-only`, or `certified`. It
-is the single owner, and every consumer asks it rather than composing the chain
-again — the launcher notice, the settings status, the diagnostics gauges, the
-weekly canary, and `pnpm certification doctor`. A certified build whose
-template-save transform throws is published as `uncertified`, because it is
-degraded exactly that far.
+Optional Tools are off by default. The master **Enable optional Tools Beta**
+setting selects a commands-capable derived module on the next start. The first
+enable therefore requires a restart.
 
-`ClientRuntime` publishes the state once per activated client as
-`client.buildCertification` in a `.gwdiag`, and the older
-`wasm.templateSaveCompatible` boolean is derived from the same object rather
-than computed separately, so the two cannot disagree. The renderer reads the
-state over `gw:client:session` together with the client hash and whether this
-session actually prepared the Enhancement module. The renderer combines those
-facts with the canonical per-tool selection; the effective bit keeps a
-certified build whose transform failed from being reported as available.
-`src/renderer/client-compatibility-notice.ts` turns them into the sentences
-both surfaces show.
+After that restart, these choices update during the session:
 
-## Noticing the patch
+- **Team management** controls party observation, the Tools panel, and the
+  fixed Team Apply operations.
+- **Target distance and range** controls the shipped Test readout and its target
+  observation.
 
-Everything above decides correctly on a machine that already has the new bytes.
-What it does not do is tell anyone a new build exists, and a certificate nobody
-starts deriving is a week of `template-only` for every player.
+Disabled optional observers stop their domain reads. Core cursor observation
+stays active. A small map-policy projection remains active so the app can remove
+optional behavior in PvP, guild halls, transitions, and unknown regions.
 
-`.github/workflows/client-recertification.yml` is that first layer, and it is
-built to be boring. A quarter-hourly job fetches one patch manifest, fingerprints
-`Gw.jspi.js` and `Gw.jspi.wasm` through `fingerprintClientGeneration`, and
-compares the result against `certificates/certified-client.json`. Matching, it
-ends in about a second having installed nothing, compiled nothing, and
-downloaded no client byte — Node runs the detector script directly, because
-`pnpm <script>` would resolve this repository's whole dependency tree first and
-that install, not the fetch, is what a cheap path has to exclude. A scheduled
-run that cannot reach the patch service fails, and that visible failure is how a
-silently dead detector is noticed.
+If live integration is unavailable, the host can still mount the saved-library
+part of Tools. Players can edit, import, and export builds and teams. Live party
+observation and Apply remain unavailable. This host-only surface does not become
+certification authority.
 
-A generation that already has a branch or an open tracking issue is treated the
-same way as an unchanged one. Certifying a new build takes a person, and every
-quarter hour of that latency would otherwise re-run the whole derivation and
-file the proposal again; the red runs it produced would bury the heartbeat the
-paragraph above depends on.
+## Companion architecture
 
-The identity is deliberately narrower than `clientFingerprint`, which also
-covers `Gw.snapshot` and `version.json` because it answers a different question —
-whether an *installed* generation may be rolled back to. Game content moves
-constantly; folding it in here would run a full derivation every content patch to
-conclude nothing changed.
+The Core and Tools transform installs one fixed dispatcher. It preserves each
+game-owned original and calls that original exactly once before optional
+observation.
 
-On a change, a macOS job downloads the code artifacts through the same
-`PatchClient` the application uses — chunk-hash verified, and `Gw.snapshot` is
-never assembled — and runs `certification template --write` and
-`certification recertify` against them. What it can derive it derives; what it
-cannot, it reports. Then a third job pushes a branch carrying the regenerated
-authoring table and the recorded generation, opens a pull request, and opens a
-tracking issue either way: *auto-derived, PR ready*, or *layout changed,
-investigation needed*. The issue closes itself on the first detector run that
-finds the published generation recorded on `main`.
+One dependency-free Rust `no_std` side module reads bounded game memory. It has
+no game-function imports. It cannot call back into Guild Wars from an observer.
 
-The pull request is a proposal and nothing more, and it says so out loud: GitHub
-starts no workflow for a pull request opened by a run's own token, so the body
-asks whoever picks it up to close and reopen it. The alternative is a personal
-access token, which is a secret this workflow would then be holding for a job
-whose whole point is that it cannot do anything on its own.
+The renderer allocates one bounded private block for the companion's data and
+stack. A separate private table satisfies the side-module ABI. The companion
+does not consume an existing game table entry for its own table.
 
-Three properties make this safe to leave running unattended. It holds no secret;
-its only credential is the run's own `GITHUB_TOKEN` and the strongest thing it
-can do is propose. It uploads evidence — reports, the candidate feed, the source
-diff — and never client bytes, because this project does not redistribute
-ArenaNet's binaries. And its branch certifies nothing until the pull request's
-own `pnpm verify` gate passes on it, which is the same gate every other change
-faces. The Enhancement table stays untouched by machine for the reason the feed's
-enhancement half is exact-build only: its layout words are client-memory
-addresses no structural anchor re-derives.
+The build verifies the kernel's ABI, imports, exports, private memory, lack of a
+start function, and reproducible output. The renderer checks its hash before
+compilation.
 
-## The certificate feed
+The companion publishes fixed-size typed snapshots. A sequence lock rejects
+torn reads. Snapshots contain scalar values and no pointers. No per-frame memory
+view crosses preload or IPC. Domain modules own decoding and presentation;
+`certified-companion-installation.ts` owns only installation and teardown.
 
-The tables above are compiled in, so today a new ArenaNet build waits for an
-application release. The feed is how that changes without moving any authority:
-it is a versioned, signed **data-only** document — hashes, addresses, function
-indices, message identifiers, and nothing that could be an instruction or a
-path — carrying the same two records `certifyClientBuild` already consumes.
-`src/main/certification/certificate-feed.ts` owns the schema, one hand-written
-parser that refuses rather than repairs, and the snapshot the shipped tables
-derive. The TypeScript tables stay the authoring source, because the isolated
-proof runs in a process that cannot read a file; `pnpm build` writes the derived
-copy to `build/certificates/feed.json`.
+Do not add a generic hook registry, plugin loader, raw memory API, arbitrary
+function call, shared-memory packet bus, or second game model.
 
-A feed only ever **proposes**, and its two halves are held to different rules
-because they are not equally re-derivable.
-`src/main/certification/certificate-feed-proof.ts` owns both and answers in the
-same three states as the rest of the chain.
+## Command boundary
 
-The template-save half is **proved**: the transform re-checks each stub body and
-call-site signature against the client bytes on the machine and must reproduce
-the claimed output hash. Nothing about it is taken on the signature's word, so a
-feed may certify template saving for a build no release has seen.
+The commands profile contains only named, certified team operations. It does
+not carry a generic opcode or address.
 
-The enhancement half is **exact-build only**. Its hook signatures and table slot
-are structurally checked, but the layout words are client-memory addresses the
-companion kernel reads and writes and the message identifiers are numbers;
-neither has a structural anchor, so a profile hash computed over the signer's own
-chosen addresses would reproduce and prove only that the signer is consistent. A
-feed's enhancement record is therefore accepted only as an exact restatement of
-the shipped `ENHANCEMENT_BUILDS` table — the same rule the isolated local proof
-applies to an unrecognised client — and the four certified profile hashes are
-then still re-derived against these bytes. Extending a feed to certify
-enhancement for a new build waits on layout facts gaining anchors of their own.
+Team Apply requires enabled Tools and Team management, an exact commands
+profile, a positively classified PvE outpost, fresh party state, and an explicit
+player action.
 
-So the worst a stolen signing key achieves is withholding a certificate; it
-cannot mint one for a transform that does something else.
+The runner checks policy before each command and while it confirms results. A
+map transition or policy change stops the operation. A refusal is an explicit
+result. It is not inferred from a command builder's return value.
 
-Only fetched feeds are signed. `src/main/certification/certificate-feed-trust.ts`
-verifies a detached Ed25519 signature over the exact bytes under the key pinned
-in [`certificates/public-key.txt`](../certificates/public-key.txt), whose
-committed content is a placeholder — so a clone of this repository trusts no
-remote feed at all and uses the bundled snapshot.
-[`certificates/README.md`](../certificates/README.md) owns the one-time key
-ceremony. The bundled snapshot carries no signature of its own: it is derived
-from tables compiled into an application that is already signed and notarised,
-so there is nothing an attacker could replace independently.
+The companion remains read-only. Command construction and confirmation stay in
+the named team domain.
 
-Two feeds are ordered by an unsigned, monotonic `sequence` and nothing else. A
-candidate must be strictly newer to replace the feed in hand, so a captured
-older feed replayed at the application cannot withdraw a certificate it already
-holds.
+## Patch-day flow
 
-### How a feed arrives
+The scheduled workflow detects ArenaNet code changes. It ignores normal content
+changes. For a new generation it downloads verified code artifacts, runs the
+file derivation, produces bounded candidate evidence, and opens a proposal.
 
-`src/main/certification/certificate-feed-delivery.ts` owns where a feed is
-fetched from, how a verified one is stored, and which of the feeds in hand
-governs a session.
+Automation cannot publish a runtime certificate. A maintainer reviews the
+evidence, runs offline proof and the minimum live semantic checks, and ships new
+exact facts in an application release.
 
-A check is two GETs — `certificate-feed.json` and `certificate-feed.json.sig`,
-published as assets on the current release and addressed through
-`latestReleaseAssetUrl`. It is the same host and redirect chain the updater's
-own asset requests already follow, so the feed adds no egress destination, and
-the application adds nothing to either request: no body, no header, no query, no
-credential.
-`tests/unit/no-game-traffic-is-uploaded.test.ts` executes that.
+The workflow never uploads ArenaNet client bytes. It uploads reports and source
+changes only.
 
-There is no second scheduler. `main.ts` triggers the delivery from the same
-place it triggers the release check — at launch, on the periodic tick that
-`periodicCheckDue` gates, when the player switches automatic checks on, and when
-they press **Check for Updates** — so one predicate governs both and
-`docs/content-pipeline.md` owns it. With no pinned key the module makes no
-request at all: refusing an answer to a question already decided would spend a
-connection for nothing.
+## Failure and teardown
 
-A verified feed is stored in the profile at `game/certificate-feed.json` as one
-versioned record holding the exact bytes and the exact detached signature. That
-record is verified by the same code path as a fresh fetch at every launch, so a
-file edited on this machine is refused and rotating the pin retroactively
-refuses everything the old key signed — there is no weaker rule for a feed that
-is already ours. A record the application does not fully understand is deleted
-rather than partially read, and the bundled snapshot governs.
+Installation validates the manifest, exports, table, kernel ABI, and allocation
+ranges. It enables dispatch last.
 
-The governing feed is read once per certification pass. A build the shipped
-tables already certify is unaffected: the feed is consulted only where the
-answer would otherwise be `uncertified`, and what it proposes still has to
-survive `certificate-feed-proof.ts` against the client bytes. So a feed can
-widen where a certificate comes from and can never withdraw one.
+Teardown uses the reverse safety order:
 
-`.gwdiag` carries `certificateFeed.source`, `certificateFeed.sequence`,
-`certificateFeed.outcome` and `certificateFeed.lastSuccessAt`, which is what
-makes a stuck feed visible rather than silent — `outcome` is a closed
-vocabulary naming exactly what stopped the last check.
+1. Disable dispatch.
+2. Stop observers and UI.
+3. Clear the callback only when its identity matches.
+4. Free owned regions.
+5. Drop references.
 
-## Enhancement instrumentation
+Failure falls back to the strongest proven earlier stage. A Tools failure uses
+the file-compatible module. A complete certification failure uses the official
+module.
 
-The official `Gw.jspi.wasm` remains canonical. A session with the Enhancement
-switched off applies only the certified template-save compatibility transform
-described above: it does no Enhancement transform, fetches no kernel, installs no
-Enhancement hook, starts no snapshot observer, and contains no Enhancement UI.
-
-The one shipped tool is `nativeCursor`: it defaults to **true** and reads only
-Guild Wars' cursor state. The target readout is developer-only — reachable
-through the `target-observer` program, never from user settings — and owns
-`src/renderer/enhancement-readout.ts`: a fixed line at the top centre of the
-game view showing the selected target's distance in game units and range band.
-It is the last stage of the read-only pipeline — manifest → transform/kernel →
-snapshot → decoder → here — and writes nothing back. It renders nothing without
-a selected target, on a loading screen, after a torn read, or on an unsupported
-build. It is `pointer-events: none` and `aria-live="off"`. Automation selects no
-feature. One explicit unpackaged `toolbox-foundation` program mounts the proof in
-`docs/gwonmac-tools-wasm.md`; that surface is unreachable in packaged builds.
-
-`ENHANCEMENTS` and `EnhancementSelection` live in the shared contracts. Main
-snapshots the required Core state, the stored Tools Beta master opt-in, and one
-fixed developer program at startup, then derives the exact cursor,
-target-observation, Toolbox, and commands capabilities with the shared canonical
-function. That capability set owns the transform, manifest, config, and cache
-identity. The renderer recomputes it from the same immutable launch intent and
-requires an exact manifest match. Developer automation permission remains
-unreachable from a packaged build and selects no capability. Packaged Team
-Apply instead receives only the closed commands profile selected by the master
-opt-in. A developer program replaces rather than merges with saved choices.
-
-Those inputs resolve to the six closed profiles in
-`ENHANCEMENT_CAPABILITY_PROFILES`, including the two commands-bearing Toolbox
-profiles. Each exact Enhancement certificate pins every output SHA-256. Cache metadata records what
-was published but is never authority: reuse requires the bytes and metadata to
-match the capability-specific hash shipped in the application. A missing hash
-or any other capability combination fails closed before transformation.
-
-The first Tools opt-in changes which derived client module the renderer needs,
-so that one write is paired with a confirmed restart. Once that commands-capable
-module is resident, individual Target and Team toggles update the kernel's
-active-observer mask live. Core cursor observation stays active; disabled
-optional observers stop traversing their target or party graphs. The minimal
-map-policy projection remains live to enforce PvP/guild-hall/unknown shutdown
-and restore the selected tools on return to PvE.
-
-The harness uses request and effective state without conflating them. A selected
-tool or fixed developer program requests a capability, while the
-`enhancement_manifest` on the instantiated WebAssembly module proves that this
-launch received exactly that certified derivative. A requested but uncertified
-launch imports no Enhancement module and fetches no kernel. Cursor-observer mode
-publishes the selected cursor without a target scan; target-observer mode
-explicitly enables map/player/target state; Toolbox uses tick and UI callbacks
-without allocating the target snapshot.
-
-After publication, certification matches the official hash to the exact
-template-save record and then matches that record's output hash to the exact
-Enhancement record. The template record may be shipped or locally proven; the
-Enhancement record is currently exact-shipped only. Downstream code has no
-second path. `client-module.ts` consumes them directly and owns the
-official → template-save → optional Enhancement chain, cache reuse, stale-cache
-discard, and atomic publication. Disabled and unsupported stages delete their
-cache. An Enhancement transform failure serves the verified template-save
-module; an uncertified build serves the official module, so the game stays
-playable and the cursor falls back to the plain macOS pointer.
-
-`enhancement-transform.ts` is the pure byte transform. The exact capability set
-chooses the fixed hooks and masks every inactive layout/message word to zero;
-the set is also part of the manifest and cache fingerprint. The renderer does
-not maintain a second field-order list. Recertification derives and compares all
-four output hashes, so adding a capability profile is an explicit certificate
-change rather than a cache-metadata convention.
-
-Build 38,797 hooks three certified functions: exported
-`EmscriptenExeThreadMainLoop` at 446, the five-argument cursor publisher at
-2469, and the three-argument UI dispatcher at 6842. The transform extends the
-stock fixed table from 4,683 to 4,684 entries and reserves only the new terminal
-slot 4,683 for one fixed `(i32 × 6) -> void` Rust dispatcher. The mutable global
-stores `slot + 1`, preserving zero as disabled. Existing cursor table slot 922
-continues to point to function 2469, and stock slot 0 remains untouched: live
-character entry proved that its static null value is a runtime sentinel rather
-than spare plugin capacity.
-
-After runtime initialization in an enabled, manifested session, the renderer
-dynamically loads the Enhancement runtime, allocates its enabled bounded regions
-through the game's allocator, and reserves one further 64 KiB heap block for
-the companion's own data and stack. The dependency-free
-`wasm32-unknown-unknown` companion is a position-independent side module: it
-imports the exported game memory for bounded reads, while injected memory-base
-and stack globals confine its writes to that reserved block. A private empty
-table satisfies the side-module ABI without consuming a game table entry. The
-renderer then installs its callback and enables the dispatcher last. Each
-dispatch branch calls its matching relocated original in the game module
-exactly once before notifying the passive companion. Cursor events
-mark the bitmap dirty; the next tick reads it only when dirty, while a tiny
-show-count check preserves visibility changes. A trusted click that produced
-no cursor callback receives one zero-distance hit-test refresh, fixing mode
-changes such as salvage without moving the physical pointer. When the click's
-answer is a hidden cursor — a server-validated mode change the game has not
-resolved yet — the refresh asks again on the next observer frame and then
-every 150 ms, following the pointer while it stays on the canvas, until art
-resolves it, the pointer leaves the canvas, or 2.5 s
-passes; while that same window is open, the consumer keeps the last visible
-art on screen instead of `cursor: none`, so the eye sees one swap rather than
-an invisible gap. Every stop lands on the pre-retry behaviour. The gap and
-retry count reach diagnostics through the runtime stats surface.
-
-The build does not publish rustc output directly. Rustc writes an unserved
-candidate; the next build step validates its Wasm, absence of a start function,
-exact `dylink.0` footprint, import surface, and eight-function export surface.
-It also instantiates the candidate against sentinel-filled memory and permits
-active-data writes only inside the declared private footprint, which must fit
-one 64 KiB page. Only then does it publish the module and seal its SHA-256 into
-the emitted renderer. The renderer hashes fetched bytes and compares that seal
-before `WebAssembly.compile`, while the canonical kernel verifier independently
-checks exact function types and reproducible rustc output.
-
-Snapshot ABI v1 uses a named 196-byte `repr(C)` configuration and 64-byte core
-`Snapshot`,
-compile-time size assertions, checked pointer arithmetic, and an odd/even
-sequence lock. It contains no pointers. When target observation is enabled, the
-snapshot observer reads at most once per animation frame and rejects unknown
-flags, invalid IDs/types/bands, and non-finite values. It publishes structured
-`gwCompanionState`; only the separately selected readout renders that state. The
-cursor consumer is installed and polled only when `nativeCursor` is selected,
-and reaches production DOM only as an inline `cursor` on the game canvas;
-losing the cursor clears that value and nothing else. No memory view or
-per-frame call crosses preload or IPC. The explicit Toolbox program allocates
-one 64-byte Toolbox snapshot and no core target snapshot. It carries only scalar chat count,
-cursor event count, first-owned-hero identity, and observed panel state. The UI
-dispatcher observes player-chat and hero-panel events without retaining either
-pointer-shaped argument. Exactly ten build-certified hero-readiness, map
-lifecycle, and party-membership messages mark party state dirty; unrelated
-traffic through the central UI dispatcher does not schedule a traversal. The
-next tick resolves only the game/party vector and at most seven owned heroes,
-with one low-rate reconciliation every 120 ticks. It never scans the agent array
-for Toolbox. The kernel republishes only changed scalar state, and the renderer
-stores it as the companion projection only when decoded values change — the
-overlay draws none of it; the tool it hosts draws its own. There is no hero
-Show/Hide command: the companion has
-no game-function imports and never writes the game's PropContext slot. The
-thirteen observed/dirty message IDs come from the exact build certificate
-through the kernel config; Rust contains no second unversioned copy.
+Use [Enhancement development](enhancement-development.md) for change and
+recertification procedures.

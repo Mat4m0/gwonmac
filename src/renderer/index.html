@@ -87,12 +87,12 @@
       </div>
       <!-- Shown only after a game-client crash; loading.ts writes the label.
            Left of Retry so the primary action keeps the rightmost spot. -->
-      <button type="button" id="loading-report" hidden>Report a Problem…</button>
+      <button type="button" id="loading-report" hidden>Report a Bug…</button>
       <button type="button" id="loading-retry" hidden>Retry</button>
     </div>
 
     <!-- The crash's own message and heap-at-death, renderer-local: the
-         exported report deliberately carries neither, so this disclosure is
+         diagnostics export deliberately carries neither, so this disclosure is
          where a player reads or screenshots the real text before reloading. -->
     <details id="loading-crash-detail" hidden>
       <summary>Technical details</summary>
@@ -499,13 +499,21 @@
           <p class="settings-pane-intro">Keep GWonMac current without interrupting an active game connection.</p>
           <p class="settings-status">
             Version <span id="settings-update-version">—</span>
-            · <span id="settings-update-channel">Preview</span>
+            · <span id="settings-update-stage">Unversioned</span>
           </p>
+          <label class="settings-field">
+            <span>Update track</span>
+            <select name="updateTrack" class="ui-select">
+              <option value="stable">Stable</option>
+              <option value="beta">Beta</option>
+            </select>
+          </label>
+          <p class="settings-note">Beta also receives beta and release-candidate builds, never alpha builds. Switching back to Stable stops future Beta discovery; if the latest Stable is older, GWonMac opens the Releases page for a manual install instead of downgrading itself.</p>
           <label class="settings-check ui-check">
             <input type="checkbox" name="autoCheckUpdates">
             <span>Automatically check for and download app updates</span>
           </label>
-          <p class="settings-note">Checks run at launch and about every six hours, but never during an active game connection. Downloads install when you restart. Turn this off to check manually.</p>
+          <p class="settings-note">Checks run at launch and about every six hours, but never during an active game connection. A launch-check update installs before play unless you skip it; one downloaded later installs when you restart. Turn this off to check manually.</p>
           <div class="settings-actions-row">
             <button type="button" id="settings-check-updates" class="ui-button">
               Check for Updates

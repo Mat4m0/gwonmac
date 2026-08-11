@@ -1,110 +1,72 @@
-# wasm tooling
+# WASM analysis tools
 
-Operates on `Gw.wasm` / `Gw.jspi.wasm` as bytes. Nothing here needs the client
-running: wasm code is immutable after instantiation, so the module bytes *are*
-the running code, and every question about them can be answered offline.
+The tools in this directory analyze `Gw.wasm` and `Gw.jspi.wasm` offline. They
+do not authorize a client build or a runtime transform.
 
-Outputs land in `build/` and are gitignored — they are derived game binaries.
+Write derived output to `build/`. Git ignores that directory. Do not commit or
+redistribute derived ArenaNet binaries.
 
-## Two facts that bite
+## Important WASM rules
 
-**Constants use non-canonical, zero-padded LEB128.** `i32.const 0x102820`
-encodes as `41 a0 d0 c0 80 00`, not the canonical `41 a0 d0 c0 00`, because
-LLVM emits fixed-width relocatable encodings. Anything looking for a constant
-must **decode**, not byte-match an encoded needle — searching for the canonical
-form finds nothing, silently, and looks exactly like "never referenced". Three
-analyses returned clean, plausible, entirely wrong zeroes before this was
-caught.
+### Decode constants
 
-**Code is not in linear memory.** A running module cannot read its own code
-section; there is no address that reaches it. Scanning therefore happens over
-the module bytes, never in-process.
+LLVM can emit fixed-width, non-canonical LEB128 values. Decode each value. Do
+not search for the canonical byte sequence.
 
-## Scripts
+For example, `i32.const 0x102820` can use this encoding:
 
-### `wasmscan.py` — decoder and scanner
-Full instruction decode (build 38,771: 17,600/17,600 functions, no failures).
-Resolves string and assertion anchors to function indices, and byte patterns to
-code offsets.
+```text
+41 a0 d0 c0 80 00
+```
 
-    python3 tools/wasmscan.py dist/Gw.jspi.wasm "!s_context"
+A canonical byte search can return no result for a constant that is present.
 
-Source paths are stored as `../../../../Gw/Ui/UiRoot.cpp` — relative prefix,
-forward slashes — so Win32-form paths need normalising and tail-matching.
+### Scan module bytes
 
-### Production targeted transform
+WebAssembly code is not in linear memory. A running module cannot read its own
+code section. Scan the module file bytes.
 
-The application and developer CLI share the TypeScript transformer in
-`src/main/certification/enhancement-transform.ts`. It accepts only an exact supported hash,
-clones one selected function, inserts one typed dispatcher, and uses the
-verified null table slot without growing the table:
+## Tools
 
-    pnpm certification transform dist/Gw.jspi.wasm build/Gw.enhancement.wasm
+| Tool | Purpose |
+| --- | --- |
+| `wasmscan.py` | Decode instructions and find string, assertion, and byte-pattern references. |
+| `packet_builders.py` | Find client-to-server message builders by opcode. |
+| `gensyms.py` | Add recovered names and create string-reference data for analysis tools. |
+| `gwca_anchor_probe.py` | Check which source assertion anchors still identify one WASM function. |
 
-The former table-growth and all-functions detour experiments were removed.
-They rewrote far more of the client than the production hook requires.
-`src/main/certification/client-module.ts` owns the production transform chain,
-derived-cache validation, and atomic publication. The CLI invokes the same
-pure byte transform directly for an explicit input and output.
+Example commands:
 
-### `packet_builders.py` — the client-to-server message table
+```bash
+python3 tools/wasmscan.py dist/Gw.jspi.wasm "!s_context"
+python3 tools/packet_builders.py dist/Gw.jspi.wasm 30 31 21
+python3 tools/gensyms.py dist/Gw.jspi.wasm build/
+python3 tools/gwca_anchor_probe.py path/to/GWCA/Source dist/Gw.jspi.wasm
+```
 
-Every message the client sends goes through one sender. Each message has one
-small builder that writes its opcode at the head of a stack buffer, copies the
-caller's arguments after it, and hands the buffer to that sender. This finds
-all of them and keys them by opcode.
+Use the message opcode as the stable search key. Do not use a function index as
+an identity. Function indices can change between ArenaNet builds. A recovered
+builder also gives the arity and payload size that the analysis must verify.
 
-    python3 tools/packet_builders.py dist/Gw.jspi.wasm 30 31 21
+## Certification command
 
-On build 38,797: 147 builders, 147 distinct opcodes, no collisions.
+`pnpm certification` is the maintainer interface to the production
+certification code:
 
-**Use the opcode, never the function index.** The opcode is the wire protocol
-and is identical in every build — the server is on the other end of it.
-Indices are not: GWCAjs records deltas of −2/−6/−7/−9 between *adjacent*
-builds, and this repository's own hand-written list of eight hero-command
-indices was off by exactly three against the build it claimed to describe. A
-bare index carries no way to check itself; recovering it from the opcode brings
-the arity and payload size back with it, so a mismatch is a refusal rather than
-a call to the wrong function.
+```text
+doctor         inspect the local cached workspace
+template       derive or check the template-save record
+recertify      report Enhancement candidates and evidence
+transform      transform one certified post-template module
+double-click   derive and check the native double-click records
+```
 
-### `gensyms.py` — symbol recovery
-The module is stripped, but naming information survives: 219 imports and 44
-exports carry real names, and all 850 source paths in `.data` are referenced
-from code, so most functions can be attributed to the `.cpp` they came from.
-Writes that into a standard `name` custom section, which Ghidra, `wasm-dis`,
-`wasm-objdump`, Binaryen and Chrome DevTools all read.
+The production Enhancement transform validates the certified hooks and their
+active table entries. It then adds one new terminal table slot for its fixed
+dispatcher. It does not reuse an assumed empty slot. Exact functions, table
+slots, hashes, and output profiles belong to the compiled certification tables.
 
-Also emits `string_xrefs.csv` plus a Ghidra importer. Ghidra cannot derive those
-xrefs itself: `i32.const 1052749` is just an integer, and code and linear memory
-are separate address spaces, so nothing marks a constant as a pointer.
-
-### `gwca_anchor_probe.py` — GWCA source-anchor survival
-
-Compares `Scanner::FindAssertion(file, message, ...)` calls in a GWCA source
-tree with strings and decoded references in a Guild Wars WASM build. It reports
-which old file/assertion pairs still identify exactly one WASM function:
-
-    python3 tools/gwca_anchor_probe.py path/to/GWCA/Source dist/Gw.jspi.wasm
-
-This does not claim that the old function signature or structure layout still
-matches. It is a triage tool for choosing re-derivation targets.
-
-## Pipeline
-
-    python3 tools/wasmscan.py dist/Gw.jspi.wasm "!s_context"
-    python3 tools/gensyms.py dist/Gw.jspi.wasm build/
-    pnpm certification transform dist/Gw.jspi.wasm build/Gw.enhancement.wasm
-
-## enhancement workspace
-
-    pnpm certification doctor
-    pnpm certification recertify path/to/Gw.jspi.wasm
-    GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario target
-
-`certification doctor` is local-only. `certification recertify` reports semantic hook and
-table candidates without publishing a transformed client. The live runner is
-cached-only unless `--allow-update` is explicitly supplied. Observation-tier
-scenarios receive only the fixed typed cursor projection and a clock; scenarios
-that need the page, CDP, input, or the command channel are explicitly automation-tier.
-Its coordinator, fixed gameplay scenarios, and paired performance capture are
-kept in separate modules under `scripts/enhancements-live/`.
+The application owns the complete transform chain in
+`src/main/certification/client-module.ts`. Analysis output and
+`certificates/certified-client.json` do not grant runtime authority. See the
+[Enhancement runbook](../docs/enhancement-development.md) before a live run.

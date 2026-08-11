@@ -4,8 +4,8 @@
  *
  * Isolation is the whole point. The verifier walks a multi-megabyte module this
  * project did not produce, so it runs where a crash or a runaway loop costs the
- * launch nothing. The host owns the timeout and the caching; this process holds
- * no state and writes no files.
+ * launch nothing. The host owns the timeout; this process holds no state and
+ * writes no files.
  *
  * Every refusal is its own exit code, and no message is posted unless the
  * result also passes the boundary check, so the parent never has to interpret a

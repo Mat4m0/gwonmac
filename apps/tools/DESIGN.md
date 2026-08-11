@@ -1,105 +1,78 @@
-# GWonMac interface system
+# gwonmac interface system
 
-GWonMac uses one component system with two visual styles. **Guild Wars** is the
-default: an interface inspired by the original client. **Obsidian** is its
-borderless, minimal projection. Settings, Tools, dialogs, lists, skill bars,
-and feedback always consume the same shipped tokens and components.
+This file defines the interface rules for gwonmac surfaces. Settings, Tools,
+dialogs, lists, and skill bars use one component system.
 
-## Direction
+## Visual styles
 
-The default visual grammar comes from Guild Wars itself:
+The system has two styles:
 
-- ivory metal rings with brighter corner caps;
-- engraved parchment text in a Palatino-style serif;
-- blue-black selected and primary faces;
-- graphite secondary controls;
-- recessed translucent black wells;
-- gilt selection, focus, and elite-skill accents;
-- blue client-like scrollbars;
-- profession colours that keep their established game meaning.
+- **Guild Wars** is the default. It uses ivory metal, parchment text,
+  blue-black primary controls, graphite secondary controls, and gilt accents.
+- **Obsidian** uses warm-black layers, system sans-serif text, muted gilt
+  accents, and limited shadow.
 
-The UI remains a dense utility. Ornament belongs to the frame and control
-materials; content remains compact, aligned, and scannable.
+Both styles use the same information hierarchy, components, layout, and
+behavior. Profession colors keep their game meaning in both styles. Do not add
+a third component system for a new style.
 
-Obsidian keeps that information hierarchy and density while replacing the
-ornament with warm-black tonal layers, system sans type, muted gilt selection,
-and restrained shadow. Profession colours retain their game meaning in both
-styles.
+## Source files
 
-## One runtime source
-
-| File | Owns |
+| File | Owner |
 | --- | --- |
-| [`src/shared/ui/tokens.css`](../../src/shared/ui/tokens.css) | every colour, material, corner, edge, duration, and layer |
-| [`src/shared/ui/components.css`](../../src/shared/ui/components.css) | reusable panels, controls, navigation, fields, rows, slots, feedback, and resize affordance |
+| [`src/shared/ui/tokens.css`](../../src/shared/ui/tokens.css) | Colors, materials, edges, corners, motion durations, and layers |
+| [`src/shared/ui/components.css`](../../src/shared/ui/components.css) | Reusable panels, controls, fields, rows, slots, feedback, and resize controls |
 
-The renderer links both files from `src/renderer/index.html`. Embedded Tools
-inherits those links and does not bundle a second copy. The standalone Tools
-fixture imports them because it has no renderer around it.
+The main renderer loads both files. Embedded Tools uses the same loaded styles.
+The standalone Tools fixture imports the files because it has no parent
+renderer.
 
-Consumer stylesheets own layout only. The invariant test rejects component
-colour literals, literal corners, unnamed stacking values, and style selectors
-outside the single Obsidian token projection.
+Consumer stylesheets own layout. They must not define a second color, material,
+corner, or layer system.
 
-## Materials and primitives
+## Component rules
 
-Three primitives establish the material model:
+- Use `.ui-frame` for a framed panel.
+- Use `.ui-well` for a recessed content surface.
+- Use `.ui-raised` for a pressable raised surface.
+- Use the shared components for buttons, fields, checks, tabs, rows, skill
+  slots, progress, empty states, banners, toasts, and resize grips.
+- Give each interactive control visible hover, focus, active, selected,
+  and disabled states.
+- Use the bright focus token. Focus must remain visible over game artwork.
 
-- `.ui-frame`: a translucent panel with the ivory ring and corner swell;
-- `.ui-well`: a recessed black surface for content and tracks;
-- `.ui-raised`: a graphite, metal-ringed pressable surface.
+The saved interface style is `guild-wars` or `obsidian`. Panel opacity is from
+65% through 100%. These preferences must not change component markup, layout
+density, or behavior.
 
-The reusable vocabulary also includes panel head/body/foot, buttons and links,
-fields and inputs, checks, segments, tabs, rails, rows, chips, keyboard hints,
-skill slots, profession marks, progress, empty states, banners, toasts, and the
-`.ui-resize-grip` shared by floating Settings and Tools windows.
+## Window and interaction rules
 
-Every interactive component provides visible hover, focus, active, selected,
-and disabled states. Focus uses its own bright gilt token so it remains visible
-over live game art.
+- Settings and Tools use the same visible resize grip.
+- Pointer resize uses capture and handles cancellation and lost capture.
+- Arrow keys resize the window. Shift increases the step.
+- Start a Tools drag only from title-bar furniture.
+- Do not start a drag from an interactive child.
+- Keep a dragged window inside the viewport.
+- Keep scrolling flex and grid children shrinkable.
+- Use container width to change panel layout.
+- Keep the skill bar usable with pointer, touch, and keyboard input.
+- Do not show drag behavior on a read-only skill bar.
+- Keep exported text visible after copy succeeds or fails.
+- Remove nonessential motion when reduced motion is active.
 
-## Visual preferences
+Tools chrome must receive input only inside its controls. Guild Wars must keep
+normal keyboard and pointer input outside those controls.
 
-Interface style is persisted as the closed choice `guild-wars | obsidian`.
-Panel opacity is persisted at 65–100% and controls how much of the game remains
-visible behind either style. Neither preference changes component markup,
-layout density, or behaviour. Free-form theme, density, border, and radius
-selectors do not exist.
+## Verification
 
-Older settings files may still contain those retired fields. Full settings
-parsing ignores them, and the next ordinary save writes only current fields.
+Open [`docs/ui-gallery.html`](../../docs/ui-gallery.html) to inspect the shipped
+tokens and components. Run this command for the automated visual sweep:
 
-## Window and layout behavior
+```bash
+node scripts/ui-visual-sweep.mjs
+```
 
-- Floating Tools and Settings windows expose the same visible resize grip.
-- Pointer resize uses capture and handles cancellation/lost capture.
-- The grip supports Arrow keys; Shift increases the step.
-- Tools dragging begins only on title-bar furniture, never on an interactive
-  descendant, and the window is kept inside the viewport.
-- Every flex/grid link in a scrolling window carries `min-width: 0` and
-  `min-height: 0` where required.
-- Panels respond to their own container width. At narrow widths the library and
-  detail become separate views, and team rows stack without horizontal scroll.
-- The editable skill bar is one sortable surface with animated pointer/touch
-  feedback, empty-slot targets, cancellation-safe updates, and equivalent
-  Command/Control + Arrow keyboard moves. Read-only bars never advertise drag.
-- Build and team export stay inline. Copy success or denial never removes the
-  selected manual code, and writing a build into Guild Wars remains a separate
-  explicit action.
-- Reduced motion removes nonessential transitions.
-
-## Seeing and verifying it
-
-[`docs/ui-gallery.html`](../../docs/ui-gallery.html) directly links the shipped
-stylesheets. Its controls are the same interface-style and panel-opacity values
-Settings writes. The deliberately bright backing makes transparency failures
-visible.
-
-`node scripts/ui-visual-sweep.mjs` captures the gallery and Tools at minimum,
-default, and opaque panel values and audits overflow, clipping, hit targets,
-frame material, and missing fills. Browser review must also cover 320×800,
-360×800, 640×900, 1024×420, and desktop Tools states plus the live Settings
-dialog.
-
-Before shipping, verify body text at 4.5:1 and large text at 3:1 against panel
-and well fills at minimum opacity and a bright, detailed game backing.
+Check narrow, wide, short, transparent, and opaque states. Check the live
+Settings dialog too. Body text must have a contrast ratio of at least 4.5:1.
+Large text must have a ratio of at least 3:1. Test minimum opacity over bright,
+detailed game artwork.

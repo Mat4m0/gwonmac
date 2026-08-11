@@ -1,145 +1,176 @@
-# Game content and updates
+# Game content and ArenaNet updates
 
-This document owns everything that arrives over the network: the ArenaNet
-client artifacts and the rollback generation beside them, the content-addressed
-chunk store behind `Gw.snapshot`, what each download mode does, and this
-application's own release updater.
+This document explains how `gwonmac` gets and stores official Guild Wars data.
 
-## The client artifacts
+Audience: contributors who change ArenaNet downloads, client generations,
+snapshot ranges, download progress, or recovery.
 
-The main process downloads only:
+This document owns the game-data flow. It does not own updates to the `gwonmac`
+application. [Verify a release](release-verification.md) owns application
+release operations.
+
+## Two independent update systems
+
+`gwonmac` has two update sources:
+
+| Update | Source | Runtime owner | Player choice |
+| --- | --- | --- | --- |
+| Guild Wars client and game data | ArenaNet patch service | `ClientRuntime` and `PatchClient` | Quick Start or Full Game |
+| `gwonmac` application | Published GitHub releases | `AppUpdater` | Stable or Beta, automatic or manual checks |
+
+These systems do not authorize each other. An ArenaNet update cannot install a
+new `gwonmac` release. A `gwonmac` release cannot make an unknown ArenaNet
+client build certified.
+
+## ArenaNet data flow
 
 ```text
-Gw.jspi.js
-Gw.jspi.wasm
-version.json
+ArenaNet manifest
+  -> bounded parse and topology validation
+  -> hash-verified executable artifacts
+  -> content-addressed snapshot chunks
+  -> staged client generation
+  -> ClientRuntime activation
+  -> immutable ActiveClient
+  -> gw://app responses
 ```
 
-The remote manifest has bounded size, file and directory counts, names,
-parent topology, and chunk references. Required product basenames must be
-unique. Network bodies are streamed beneath call-site byte ceilings and gzip
-decoding cannot exceed the manifest's exact expected chunk length.
-Existing artifacts are verified chunk-by-chunk against the current manifest;
-equal file length is not treated as proof of equality. New artifacts are built
-in a part file, synced, and renamed only after every content hash passes.
-The published local manifest retains the executable artifacts' sizes and chunk
-hashes, so offline fallback is independently verifiable. A changed client is
-kept as a candidate beside one verified previous generation until it has both
-presented a frame and opened a game TCP connection. A login-screen frame alone
-cannot discard the rollback generation. Before loading the game glue, the
-renderer captures the active candidate's generation and fingerprint. It returns
-that exact token only after observing both signals; main revalidates the active
-generation and marker under the generation lock before deleting rollback state.
-A stale renderer therefore cannot confirm a replacement generation. Failure
-before both signals durably rejects that exact client fingerprint for the
-current host version and restores the previous generation.
-Renderer-crash recovery aborts an in-flight manifest/chunk preparation before
-waiting for the generation lock. Retries and assembly observe that signal and
-discard the stage; once the short verified-directory swap begins, it finishes
-atomically and recovery rolls the published candidate back under the same lock.
-Invalid or legacy-unverifiable state is never promoted into the rollback slot.
+`PatchClient` downloads and verifies data. `ClientRuntime` decides when that
+data can become active. `ActiveClient` binds one generation to its artifacts,
+chunk store, selected WASM module, and compatibility result.
 
-## The chunk store and snapshot cache
+Only `ClientRuntime` can publish the ready state that the renderer uses.
 
-`Gw.snapshot` is never assembled for on-demand mode. `ChunkStore` maps each
-range onto 256 KB chunks, coalesces concurrent requests by content hash,
-verifies downloaded bytes, and publishes chunks atomically. Its in-memory
-residency set is initialized with one directory scan and updated on
-publication. Snapshot requests never rescan every hash on disk.
+## Executable artifacts
 
-The renderer keeps a disposable 256 MB LRU of chunk bytes. The main-process
-content store is canonical. Snapshot range responses are `no-store`, and
-Chromium's derived network cache is cleared at startup; otherwise it duplicates
-hundreds of megabytes of already-resident native chunks. This does not remove
-or redownload the canonical chunk store. `image.fileSize` stays synchronous
-because the snapshot metadata is obtained before the Emscripten glue is
-appended. Adjacent demand chunks already queued in the same renderer turn share
-one bounded range request and are split back into compact cache entries; the
-eight-request ceiling continues to count chunks, not HTTP requests. A
-multi-chunk `image.cacheAsync` queues its whole range through the same
-scheduler. Demand runs before queued prefetch, and the eighth slot is reserved
-for demand: an active request cannot be recalled within the ceiling, so
-prefetch is capped at seven concurrent chunks to keep a cold demand read from
-waiting a full round trip behind background work.
+The app prepares the official JSPI JavaScript, JSPI WebAssembly, and version
+metadata. It does not modify the downloaded files in place.
 
-## Download concurrency and progress
+The remote manifest has limits for bytes, entries, names, directories, parent
+relationships, and chunk references. Required artifact names must be unique.
 
-Download concurrency is capped at eight. This is a conduct constraint as well
-as a performance setting: every installation uses the public client access key
-against ArenaNet’s production service. Individual patch requests have a
-30-second ceiling and retain the existing bounded exponential retry policy.
+The app verifies existing artifacts against the current chunk hashes. File
+length alone is not proof. The app builds new files in temporary paths. It
+syncs and renames them only after every hash passes.
 
-Full-image progress uses one time-weighted rate average after a short warm-up;
-the same value drives the displayed transfer rate and ETA. The main process
-derives native task feedback from the canonical `image` progress phase: the
-Dock shows determinate or indeterminate progress and
-`prevent-app-suspension` remains active until the download completes, pauses,
-or fails. There is no renderer-owned download or power state.
+The local published manifest retains enough artifact information for an
+offline integrity check.
 
-## Download modes
+## Candidate health and rollback
 
-Before `Gw.jspi.js` is appended, the renderer resolves the single
-`dataStrategy` setting against native cache residency. `null` owns the
-first-run choice, `quick` releases boot immediately, and incomplete `full`
-owns the foreground downloader. Main owns native download execution, canonical
-progress, and power state; the renderer keeps one coalesced UI operation phase
-and derives presentation from progress plus cache residency. The game, audio
-context, sockets, and WebGL runtime cannot start behind the launcher. Cache
-residency—not a saved progress counter—is the download truth. Full Game
-additionally runs the bounded content-hash verification pass at startup even
-when every expected filename is resident; corruption cannot bypass the repair
-path.
+A changed executable client starts as a candidate. The app keeps one verified
+previous generation while it evaluates that candidate.
 
-## This app's own updater
+The candidate becomes healthy only after the same renderer session proves both
+of these events:
 
-`src/main/app-updater.ts` is the single update owner. It asks the bounded GitHub
-release list only after a manual request or an automatic check that `main.ts`
-schedules: one at launch, then a 30-minute tick that re-checks when
-`periodicCheckDue` says so — the build is update-capable, `autoCheckUpdates` is
-on, no game socket is open, and the recorded `lastUpdateCheckAt` is at least
-six hours old. The tick-plus-due-time shape survives sleep without a resume
-handler: a laptop waking past the boundary checks within half an hour. Failures
-also record `lastUpdateCheckAt`, so a failing environment retries at the same
-six-hour spacing. `autoCheckUpdates` defaults on and is declared plainly at
-first run and in Settings; switched off, a launch reaches github.com zero
-times.
+1. The client presents a frame.
+2. The client opens a game TCP connection.
 
-That one trigger asks for two things. `main.ts` calls the updater and
-`src/main/certification/certificate-feed-delivery.ts` from the same place, so
-the certificate feed inherits the schedule, the deferral behind a game socket
-and the consent switch instead of acquiring its own. The feed's request is two
-GETs for release assets published at
-`releases/latest/download/` — the same host and redirect chain the updater's own
-asset requests follow, so there is no second egress destination — and the
-application adds nothing to either: no body, no header, no query, no credential.
-`docs/wasm-host.md` owns what arrives and what it is allowed to do.
+A login-screen frame alone is not sufficient.
 
-Only a packaged macOS build whose generated `distribution-channel.json` names
-`release` may update. The marker has the exact shape
-`{ schema: 1, repository, channel }`; capabilities are derived from that closed
-channel rather than stored as booleans. Preview, Development, malformed, and
-unmarked packages fail as `updater-unavailable` before making a request. Stable
-installs ignore previews. Preview installs may advance through previews or to
-stable. Drafts, malformed tags, duplicate assets, unexpected download URLs,
-and a `RELEASES.json` that does not name the exact release ZIP fail closed.
+Before the renderer loads the client, it captures the exact generation and
+fingerprint. It returns that token with the health proof. `ClientRuntime`
+rechecks the token under the generation lock before it removes rollback state.
+A stale renderer cannot confirm a newer generation.
 
-The main process gives the validated single-release server response to
-Electron's Squirrel.Mac `autoUpdater`, which downloads the ZIP. Main has already
-made the version decision; the feed is deliberately not Squirrel's static
-multi-release format because its native numeric comparison cannot represent
-this project's SemVer preview suffixes. It publishes one discriminated
-`AppUpdateState`: `idle`, `checking`, `up-to-date`, `downloading`, `ready`, or
-`failed` with a closed reason. The renderer receives no network text or URL.
-A check left without a readable answer — `offline`, `timeout`, or `unreadable`,
-whether the body never parsed or parsed into something that is not a releases
-list — also records `appUpdate.requestFailed` naming which request lost it, the
-releases list or one release's own feed, beside the same closed reason. An
-error behind the fault is redacted and logged, never recorded.
-`lastUpdateCheckAt` is persisted by main after a catalog check completes.
+If startup fails before both events, `ClientRuntime` rejects that exact client
+fingerprint for the current host version. It restores the verified previous
+generation when one exists.
 
-A ready update is offered nonmodally. Restart is explicit; choosing Later lets
-Squirrel apply it on the next ordinary restart. The update restart uses the
-same quit path as a normal quit, including a bounded renderer `FS.syncfs(false)`
-before native cleanup. An active game socket requires confirmation. The first
-Developer ID release is a manual DMG bootstrap because an older ad-hoc
-signature cannot update into the new signing identity.
+Invalid or legacy state that cannot be verified never becomes rollback state.
+
+## Cancellation and concurrent work
+
+One generation lock protects directory moves for update, confirmation, and
+rollback. Full-game chunk download does not hold this lock.
+
+Renderer-crash recovery cancels an active client preparation before it waits
+for the generation lock. Fetch and assembly work observe the cancellation
+signal and discard their stage.
+
+An atomic directory swap that has already started completes under the lock.
+Recovery can then roll it back as one operation. This rule avoids a half-moved
+generation.
+
+`ClientRuntime` keeps the chunk store for a full download beside that download's
+promise. A generation change must not stop or redirect work by reading a newer
+active store by mistake.
+
+## Snapshot chunk store
+
+The ArenaNet snapshot remains chunked in Quick Start mode. The app does not
+assemble one full snapshot file for on-demand use.
+
+`ChunkStore` maps a requested range to content-addressed chunks. It coalesces
+concurrent requests for the same hash. It verifies bytes before atomic
+publication.
+
+The main-process chunk store is canonical. The renderer has a bounded,
+disposable byte cache for active play. Chromium responses use `no-store` so its
+network cache does not become a second copy of the game-data store.
+
+At startup, the native store scans chunk residency once. It updates the
+in-memory residency set after publication. A range request does not rescan the
+chunk directory.
+
+Demand reads take priority over prefetch. The scheduler keeps capacity for a
+cold demand read while a full download is active.
+
+## Download limits and progress
+
+The app uses a fixed maximum of eight concurrent ArenaNet requests. This limit
+protects both the client and the public patch service.
+
+Each request has a time limit and bounded retry policy. A compressed response
+cannot expand beyond its expected chunk length.
+
+The main process owns download execution, progress, Dock feedback, and the
+power assertion. The renderer does not create a second download state.
+
+Cache residency is the download truth. A saved counter is not download proof.
+Progress, transfer rate, and estimated time come from the native operation.
+
+## Quick Start and Full Game
+
+The `dataStrategy` setting records intent:
+
+- `null` means the player has not made the first-run choice;
+- `quick` starts after the required data is ready and fetches areas on demand;
+- `full` prepares all missing snapshot chunks before normal start, unless the
+  player explicitly chooses to play while it downloads.
+
+The renderer resolves this intent against native cache residency before it
+starts the official client. Guild Wars networking, audio, and graphics do not
+start behind the first-run choice.
+
+Full Game verifies the content hashes at startup. It does this even when all
+expected chunk names are present. Corrupt data re-enters the repair path.
+
+Pausing or leaving Full Game stops speculative work. It does not remove
+verified chunks. A later run resumes from verified residency.
+
+## Offline behavior
+
+A cached launch can use a verified published client and resident snapshot
+chunks. Missing data still requires ArenaNet.
+
+When client preparation cannot reach ArenaNet, `ClientRuntime` restores the
+previous verified client when possible. If no verified client exists, the
+launcher shows a retry action.
+
+Corrupt cached chunks are removed and fetched again. Insufficient disk space
+stops work before more data is requested. The player can free space and resume.
+
+## Application update boundary
+
+`AppUpdater` checks published `gwonmac` releases only when the signed Release
+identity permits it. Stable accepts final releases. Beta also accepts beta and
+release-candidate versions. Alpha versions are never public update candidates.
+
+Changing the update track or automatic-check setting does not start a request.
+A launch check, due background check, or manual **Check for Updates** action
+uses the saved choice.
+
+Application update behavior for players is in [Updates](user-guide.md#updates).
+Signing and publication behavior is in [Verify a release](release-verification.md).

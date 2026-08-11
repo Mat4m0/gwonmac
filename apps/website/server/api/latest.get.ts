@@ -9,17 +9,16 @@
 
 import {
   GITHUB_API_URL,
-  SITE_RELEASE_CHANNEL,
   selectLatestRelease,
   type LatestRelease,
-  type SiteReleaseChannel,
 } from "../utils/release-select";
+import type { UpdateTrack } from "../../../../src/shared/release.js";
 
 // The dependency tree carries both h3 v1 and v2 typings, whose H3Event types
 // conflict under `getQuery` — read the channel from the event path instead.
-function requestedChannel(event: { path: string }): SiteReleaseChannel {
+function requestedChannel(event: { path: string }): UpdateTrack {
   const channel = new URL(event.path, "http://localhost").searchParams.get("channel");
-  return channel === "stable" ? "stable" : SITE_RELEASE_CHANNEL;
+  return channel === "beta" ? "beta" : "stable";
 }
 
 export default defineCachedEventHandler(

@@ -4,16 +4,6 @@ import {
   ActiveClientSlot,
   type ClientGeneration,
 } from "../../src/main/active-client.js";
-import type { SnapshotMetadata } from "../../src/shared/contracts.js";
-
-function snapshot(size: number): SnapshotMetadata {
-  return {
-    size,
-    chunkSize: size,
-    chunkHashes: ["a".repeat(32)],
-    residentBits: new Uint8Array([1]),
-  };
-}
 
 function generation(
   wasmPath: string,
@@ -22,10 +12,26 @@ function generation(
   return {
     artifactsDir: `/client/${size}`,
     store: { size } as ClientGeneration["store"],
-    snapshotMeta: snapshot(size),
     wasmPath,
     jsPath: wasmPath.replace(/\.wasm$/, ".js"),
-    enhancementBuild: null,
+    compatibility: {
+      state: size === 10 ? "certified" : "uncertified",
+      clientSha256: String(size).padStart(64, "0"),
+      enhancementActive: size === 20,
+    },
+    extendedMemory: size === 10
+      ? {
+          requestedAtLaunch: false,
+          status: "standard",
+          effectiveCapBytes: 2_147_483_648,
+          fallbackReason: null,
+        }
+      : {
+          requestedAtLaunch: true,
+          status: "active",
+          effectiveCapBytes: 4_294_967_296,
+          fallbackReason: null,
+        },
   };
 }
 
@@ -35,21 +41,30 @@ describe("atomic active client publication", () => {
     const previous = slot.publish(generation("/previous/official.wasm", 10));
     const candidate = slot.publish(generation("/candidate/derived.wasm", 20));
     assert.equal(slot.current, candidate);
-    assert.equal(slot.current?.snapshotMeta.size, 20);
     assert.equal(slot.current?.wasmPath, "/candidate/derived.wasm");
+    assert.equal(slot.current?.compatibility?.state, "uncertified");
+    assert.equal(slot.current?.extendedMemory.status, "active");
 
     const rollback = slot.publish(generation("/previous/official.wasm", 10));
     assert.notEqual(rollback.generation, previous.generation);
-    assert.equal(slot.current?.snapshotMeta.size, 10);
     assert.equal(slot.current?.wasmPath, "/previous/official.wasm");
+    assert.equal(slot.current?.compatibility?.state, "certified");
+    assert.equal(slot.current?.extendedMemory.status, "standard");
   });
 
-  it("rejects stale residency completion from an older generation", () => {
+  it("does not expose prepared facts until the complete generation publishes", () => {
     const slot = new ActiveClientSlot();
     const previous = slot.publish(generation("/previous.wasm", 10));
-    const current = slot.publish(generation("/current.wasm", 20));
-    assert.equal(slot.replaceSnapshot(previous.generation, snapshot(99)), false);
-    assert.equal(slot.current, current);
-    assert.equal(slot.current?.snapshotMeta.size, 20);
+    const prepared = generation("/candidate.wasm", 20);
+
+    assert.equal(slot.current, previous);
+    assert.equal(slot.current?.compatibility?.state, "certified");
+    assert.equal(slot.current?.extendedMemory.status, "standard");
+
+    const candidate = slot.publish(prepared);
+    assert.equal(slot.current, candidate);
+    assert.equal(slot.current?.wasmPath, "/candidate.wasm");
+    assert.equal(slot.current?.compatibility?.state, "uncertified");
+    assert.equal(slot.current?.extendedMemory.status, "active");
   });
 });

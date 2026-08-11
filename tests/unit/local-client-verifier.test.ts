@@ -3,8 +3,6 @@ import { describe, it } from "node:test";
 import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
 import {
   isLocalClientVerification,
-  LOCAL_CLIENT_BASELINE_FINGERPRINT,
-  LOCAL_CLIENT_VERIFIER_ABI,
   type LocalClientVerification,
 } from "../../src/main/certification/local-client-verifier.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
@@ -15,8 +13,6 @@ const TEMPLATE = TEMPLATE_SAVE_BUILDS.find(
 )!;
 function valid(): LocalClientVerification {
   return {
-    verifierAbi: LOCAL_CLIENT_VERIFIER_ABI,
-    baselineFingerprint: LOCAL_CLIENT_BASELINE_FINGERPRINT,
     officialSha256: TEMPLATE.sha256,
     templateSaveBuild: TEMPLATE,
     // What deriveEnhancementBuild actually emits: the relocated layout under
@@ -35,17 +31,6 @@ function valid(): LocalClientVerification {
 describe("local client verification boundary", () => {
   it("accepts the verifier's complete baseline proof", () => {
     assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256), true);
-  });
-
-  it("expires cached answers when verifier code changes", () => {
-    assert.equal(isLocalClientVerification(
-      { ...valid(), verifierAbi: LOCAL_CLIENT_VERIFIER_ABI + 1 },
-      TEMPLATE.sha256,
-    ), false);
-    assert.equal(isLocalClientVerification(
-      { ...valid(), baselineFingerprint: "0".repeat(64) },
-      TEMPLATE.sha256,
-    ), false);
   });
 
   it("rejects a proof for any other official client", () => {

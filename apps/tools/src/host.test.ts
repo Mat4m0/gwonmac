@@ -3,13 +3,27 @@ import type { GwNativeApi } from "../../../src/shared/contracts";
 import type { TeamApplyPlan } from "../../../src/shared/builds/team-apply";
 import { liveParty } from "../../../src/shared/builds/live-party";
 import type { TeamApplyCommands } from "../../../src/shared/builds/team-apply-runner";
-import { demoParty } from "./fixtures";
+import { demoLibrary, demoParty } from "./fixtures";
 import { createNativeHost } from "./host";
 
 describe("native Tools host diagnostics", () => {
   afterEach(() => {
     Reflect.deleteProperty(window, "gwTeamApplyProbe");
     vi.restoreAllMocks();
+  });
+
+  it("refuses template publication before writing when the client cannot list it", async () => {
+    const host = createNativeHost(
+      {} as GwNativeApi,
+      null,
+      null,
+      "Team Apply is unavailable.",
+    );
+
+    expect(host.publishUnavailable).toMatch(/unavailable for this client build/);
+    await expect(host.publishBuild(demoLibrary.builds[0]!)).rejects.toThrow(
+      "Saving into Guild Wars is unavailable for this client build.",
+    );
   });
 
   it("publishes bounded evidence when Team Apply refuses", async () => {

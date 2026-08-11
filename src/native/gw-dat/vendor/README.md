@@ -1,49 +1,51 @@
 # Guild Wars archive and texture decoding
 
 This directory is a source port from
-[GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), where it is distributed
-under the MIT License. GWToolbox++ identifies these files as derived from
+[GWToolbox++](https://github.com/gwdevhub/GWToolboxpp). GWToolbox++ distributes
+the source under the MIT License. GWToolbox++ identifies these files as derived
+from
 [GuildWarsMapBrowser](https://github.com/Jonathan-Greve/GuildWarsMapBrowser) by
 Jonathan Bjørn Greve.
 
-Both grants and the required upstream credit are preserved beside the source:
+Keep both grants and the required upstream credit beside the source:
 
 - `COPYING-GWTOOLBOX`
 - `COPYING-GUILDWARSMAPBROWSER`
 
-`xentax.cpp` decompresses an archive stream; the three `Atex*` files decode a
-texture once decompressed. Skill icons are `DXTL`, which is the `'L'` case in
+`xentax.cpp` decompresses an archive stream. The three `Atex*` files decode a
+texture after decompression. Skill icons use `DXTL`. This is the `'L'` case in
 `ProcessImageFile`.
 
-## Treat this as a black box
+## Do not modify the vendored algorithm
 
-These are hand-transcribed from compiled x86 — variables are named after the
-registers they occupied (`EBPminus8`, `ESIplus8`). They are not maintained here
-and should not be edited to fix a bug; take the upstream change instead. The
-wrapper in the parent directory is where this project's own code lives, and it
-bounds every input and output dimension before the derived routines run.
+> [!CAUTION]
+> Treat these files as a black box. Take an upstream change instead of cleaning
+> up or correcting the transcribed code.
 
-Three local build adjustments are required and are applied in `scripts/build.mjs`
-rather than by patching the sources, so they stay diffable against upstream:
+The source was transcribed by hand from compiled x86 code. Some variables have
+register-based names such as `EBPminus8` and `ESIplus8`. Put project-owned
+validation and fixes in the wrapper in the parent directory. The wrapper must
+bound each input and output dimension before it calls the vendored code.
 
-- `-D__int64="long long"` — `__int64` is an MSVC builtin that clang lacks.
-- `-Wno-multichar` — `ProcessImageFile` compares four-character constants.
-- `-Wno-constant-logical-operand` — see below.
+`scripts/build.mjs` applies three required compiler adjustments:
 
-## The `&&` in `AtexDecompress.cpp:24` is not a bug to fix
+- `-D__int64="long long"` supplies the MSVC integer type to Clang.
+- `-Wno-multichar` permits the four-character constants in `ProcessImageFile`.
+- `-Wno-constant-logical-operand` permits the verified expression below.
 
-    int AlphaDataSize2 = ((ImageFormat && 21) - 1) & 2;
+## Preserve the logical AND expression
 
-clang warns that the logical `&&` was probably meant to be a bitwise `&`, and
-read as English it clearly was. Do not change it.
+`AtexDecompress.cpp` contains this expression:
 
-`AlphaDataSize2` is summed into `BlockSize`, so it affects every decode. As
-written, any non-zero `ImageFormat` makes the parenthesised term `1`, so the
-whole expression is `0` and the term is dead. With `&`, DXTL — format `0x12`,
-which is what skill icons are — would instead yield `2` and shift every block.
+```cpp
+int AlphaDataSize2 = ((ImageFormat && 21) - 1) & 2;
+```
 
-Skill icons decode correctly with the code exactly as it stands here, verified
-against real archive contents rather than by reading it. This is also the form
-GWToolbox++ ships and uses in production. Whatever the original author intended,
-`0` is the value that produces correct images, so the warning is silenced rather
-than the source corrected.
+Do not change `&&` to `&`. The expression looks suspicious, but the current
+result is required. For each nonzero `ImageFormat`, the expression makes
+`AlphaDataSize2` equal to zero.
+
+Changing it to `&` makes DXTL format `0x12` add two bytes to each block. This
+shifts the decoded data. Real archive tests show that skill icons decode
+correctly with the current expression. GWToolbox++ also ships and uses this
+form. Silence the warning; do not change the result.

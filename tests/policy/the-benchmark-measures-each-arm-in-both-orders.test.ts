@@ -1,4 +1,4 @@
-// P7.10 — the live benchmark's order bias, executed rather than described.
+// The live benchmark's order-bias defence is executed rather than described.
 //
 // The old schedule measured the disabled arm first and the enabled arm second,
 // every time. This drives the real scheduler from

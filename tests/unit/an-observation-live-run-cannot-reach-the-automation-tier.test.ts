@@ -1,4 +1,4 @@
-// P4.7 — the automation/observation line, executed rather than described.
+// The automation/observation boundary is executed rather than described.
 //
 // Every one of these runs the real decision functions from
 // scripts/enhancements-live/scenarios.ts: the launch plan the runner spawns

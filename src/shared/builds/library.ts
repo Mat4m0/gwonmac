@@ -3,10 +3,8 @@
  * team is, and what a stored library file holds. Several other modules read
  * these shapes, so this is deliberately the only place any of them exist.
  *
- * The model is not invented here. It is the model the UX prototype at
- * `plans/research/toolbox/11-teams-ux-prototype.html` already decided, and two
- * of its decisions are load-bearing enough that the types enforce them rather
- * than trusting callers:
+ * Two product decisions are load-bearing enough that the types enforce them
+ * rather than trusting callers:
  *
  * 1. A team slot *references* a build by id; it never embeds one. Builds are
  * shared atoms, and every affordance the prototype designs around — the
@@ -38,8 +36,7 @@
  * prototype's `"livia"`-style slugs. The slugs were a mock's convenience;
  * the codecs and the client both speak numbers.
  * - Attribute ranks stop at 12, which is what the game's own cumulative cost
- * table admits (13 entries, ranks 0-12; see
- * `plans/tools/hero-builds/evidence/hero-and-profession-tables.md` §3.4).
+ * table admits (13 entries, ranks 0-12).
  * The prototype's 16-entry table extends past anything a stored build can
  * hold, and a rank of 15 in a saved record is not a value to round-trip,
  * it is a bug to make unrepresentable.

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import { closeOffline, launchCachedClient } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 type KeyboardInputWindow = typeof window & {
@@ -16,7 +16,7 @@ type OskModuleHost = NonNullable<Window["Module"]> & {
 
 test.describe("renderer keyboard input", () => {
   test("keeps game text entry native-assistance free without blurring the game", async () => {
-    const fixture = await launchOffline("gw-text-input-e2e-");
+    const fixture = await launchCachedClient("gw-text-input-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -66,7 +66,7 @@ test.describe("renderer keyboard input", () => {
     }
   });
   test("uses physical main-block keys without changing typed text", async () => {
-    const fixture = await launchOffline("gw-physical-key-e2e-");
+    const fixture = await launchCachedClient("gw-physical-key-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);

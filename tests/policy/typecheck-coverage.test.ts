@@ -1,4 +1,4 @@
-// P0b.6: a source file that is an input to no tsconfig project is checked by
+// A source file that is an input to no tsconfig project is checked by
 // nothing, and a green `pnpm typecheck` says the same thing either way. That
 // silence is what let `forge.config.ts`, `eslint.config.js` and 41 test files
 // sit outside every project unnoticed, so the coverage needs its own assertion
@@ -28,8 +28,8 @@ const SOURCE = /\.(?:m|c)?[jt]sx?$/u;
 // staleness assertion below, and a new source file that escapes fails the
 // coverage assertion, so growing it is always a deliberate, reviewed edit.
 //
-// It is empty. Phase 4 emptied it by widening `tsconfig.tests.json`'s include
-// to name every remaining extension under `tests` and `scripts`, which enrolled
+// It is empty because `tsconfig.tests.json` names every remaining extension
+// under `tests` and `scripts`, which enrolled
 // the last holdouts — `scripts/ts-hook.mjs` and `scripts/ts-resolve.mjs`, which
 // stay JavaScript because they install the loader everything else resolves
 // through and so cannot be resolved through it themselves.

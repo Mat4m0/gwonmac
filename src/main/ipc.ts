@@ -9,12 +9,12 @@
  * window, its main frame, the canonical renderer URL — because a page that
  * navigated away is no longer the renderer the capability was granted to.
  *
- * Transport, not policy. What a socket, a secret, a setting or a chunk means is
- * decided behind these handlers; this file validates arguments, names the
- * subsystem that answers, and returns codes rather than inventing prose.
+ * Multi-step feature policy lives behind these handlers. This file validates
+ * arguments and either forwards one owner-local capability directly or calls
+ * the workflow owner; it returns codes rather than inventing prose.
  */
-import { BrowserWindow, clipboard, dialog, ipcMain, shell, app } from "electron";
-import { statfs, writeFile } from "node:fs/promises";
+import { BrowserWindow, clipboard, ipcMain, shell, app } from "electron";
+import { statfs } from "node:fs/promises";
 import type {
   AppSettings,
   AppSettingsPatch,
@@ -50,7 +50,12 @@ import {
 } from "../shared/diagnostics.js";
 import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
-import { AllowlistError, errorCode, ValidationError } from "../shared/errors.js";
+import {
+  AllowlistError,
+  errorCode,
+  NotReadyError,
+  ValidationError,
+} from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
 import {
   loadBuildLibrary,
@@ -72,7 +77,6 @@ import type {
 } from "./steam-acquire.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
-import { buildSnapshotMetadata } from "./core/snapshot.js";
 import { FREE_MARGIN, type ChunkStore } from "./core/chunk-store.js";
 import {
   count,
@@ -91,8 +95,13 @@ import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
-import { getMainWindow, resetWindowState } from "./window.js";
-import { resetGameInput } from "./renderer-commands.js";
+import { getMainWindow } from "./window.js";
+import {
+  applySettingsChange,
+  confirmSettingsReset,
+  requestCacheClear,
+  requestGameStorageReset,
+} from "./settings-actions.js";
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -113,7 +122,6 @@ export interface IpcContext {
   checkAppUpdates: () => Promise<void>;
   restartAndInstallUpdate: (win: BrowserWindow) => Promise<void>;
   getClientSession: () => ClientSession;
-  exportProblemReport: (win: BrowserWindow) => Promise<void>;
   acquireSteamToken: (
     parent: BrowserWindow,
     record: (event: SteamAcquireEvent) => void,
@@ -346,6 +354,8 @@ const asClipboardText = one((value: unknown): string => {
 const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   if (
     value !== "github" &&
+    value !== "bugReport" &&
+    value !== "featureRequest" &&
     value !== "discord" &&
     value !== "donate" &&
     value !== "releases" &&
@@ -519,20 +529,6 @@ const asMilestone: Parser<ParsedMilestone> = (args) => {
   };
 };
 
-async function confirmToolsRestart(win: BrowserWindow): Promise<boolean> {
-  await resetGameInput(win);
-  const { response } = await dialog.showMessageBox(win, {
-    type: "warning",
-    buttons: ["Enable and Restart", "Cancel"],
-    defaultId: 1,
-    cancelId: 1,
-    message: "Enable GWonMac Tools Beta?",
-    detail:
-      "The optional Tools capability is prepared when the app starts, so the first enable needs one restart and closes any game in progress. After that, individual tools can be changed live.",
-  });
-  return response === 0;
-}
-
 async function chunkStoreInfo(
   store: ChunkStore | null,
   volumeDir: string,
@@ -610,17 +606,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     snapshotMetadata: channel(nothing, async () => {
       const store = ctx.getChunkStore();
       if (!store) {
-        const offlineSize =
-          process.env.GW_OFFLINE_SHELL === "1"
-            ? Number(process.env.GW_OFFLINE_SNAPSHOT_SIZE ?? 0)
-            : 0;
-        return buildSnapshotMetadata({
-          size:
-            Number.isSafeInteger(offlineSize) && offlineSize > 0 ? offlineSize : 0,
-          chunkSize: 262144,
-          chunkHashes: [],
-          residentIndices: [],
-        });
+        throw new NotReadyError("no active client snapshot is available");
       }
       const bits = await store.residentBits();
       return {
@@ -679,57 +665,19 @@ export function registerIpcHandlers(ctx: IpcContext): {
       }
     }),
 
-    settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
-      try {
-        const previous = await ctx.getSettings();
-        const restartForTools = patch.gwonmacTools === true
-          && !ctx.toolsCapableAtLaunch;
-        if (restartForTools && !(await confirmToolsRestart(win))) return previous;
-        const saved = await ctx.updateSettings(patch);
-        if (previous.dataStrategy !== saved.dataStrategy) {
-          logEvent({ k: "launcher.strategyChanged",
-            strategy: saved.dataStrategy ?? "unselected",
-          });
-        }
-        if (restartForTools) {
-          app.relaunch();
-          app.quit();
-        }
-        return saved;
-      } catch (error) {
-        logEvent({ k: "settings.saveFailed", code: errorCode(error) });
-        throw error;
-      }
-    }),
+    settingsSet: channel(one(parseSettingsPatch), (win, patch) =>
+      applySettingsChange(
+        win,
+        patch,
+        ctx.toolsCapableAtLaunch,
+        ctx.getSettings,
+        ctx.updateSettings,
+      ),
+    ),
 
-    settingsReset: channel(nothing, async (win) => {
-      await resetGameInput(win);
-      try {
-        const { response } = await dialog.showMessageBox(win, {
-          type: "warning",
-          buttons: ["Reset GWonMac Settings", "Cancel"],
-          defaultId: 1,
-          cancelId: 1,
-          message: "Reset GWonMac settings?",
-          detail: "Display, tools, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
-        });
-        if (response !== 0) return null;
-        const settings = await ctx.resetSettings();
-        try {
-          await resetWindowState(win);
-        } catch {
-          // The settings file is already durably reset. Window geometry is a
-          // separate document, so its failure must not turn that committed
-          // result into a false "settings reset failed" answer.
-          logEvent({ k: "window.stateResetFailed" });
-        }
-        logEvent({ k: "settings.reset" });
-        return settings;
-      } catch (error) {
-        logEvent({ k: "settings.resetFailed", code: errorCode(error) });
-        throw error;
-      }
-    }),
+    settingsReset: channel(nothing, (win) =>
+      confirmSettingsReset(win, ctx.resetSettings),
+    ),
 
     credentialsLoad: channel(nothing, async () => {
       try {
@@ -772,57 +720,17 @@ export function registerIpcHandlers(ctx: IpcContext): {
       }
     }),
 
-    cacheClear: channel(nothing, async (win) => {
-      await resetGameInput(win);
-      const { response } = await dialog.showMessageBox(win, {
-        type: "warning",
-        buttons: ["Clear and Restart", "Cancel"],
-        defaultId: 1,
-        cancelId: 1,
-        message: "Clear downloaded game data?",
-        detail:
-          "The app will restart. Client files stay installed, but game data will download again.",
-      });
-      if (response !== 0) return false;
-      try {
-        await writeFile(paths.cacheClearRequest, "", { mode: 0o600 });
-        logEvent({ k: "cache.clearRequested" });
-        app.relaunch();
-        app.quit();
-        return true;
-      } catch (error) {
-        logEvent({ k: "cache.clearRequestFailed", code: errorCode(error) });
-        throw error;
-      }
-    }),
+    cacheClear: channel(nothing, (win) =>
+      requestCacheClear(win, paths.cacheClearRequest),
+    ),
 
     cacheDownloadAll: channel(nothing, () => ctx.downloadFullGame()),
 
     cacheStopDownload: channel(nothing, () => ctx.stopFullDownload()),
 
-    gameStorageReset: channel(nothing, async (win) => {
-      await resetGameInput(win);
-      const { response } = await dialog.showMessageBox(win, {
-        type: "warning",
-        buttons: ["Reset and Restart", "Cancel"],
-        defaultId: 1,
-        cancelId: 1,
-        message: "Reset saved Guild Wars files?",
-        detail:
-          "This removes local Guild Wars settings, build templates, screenshots, and chat logs. Downloaded game data and your saved login stay untouched.",
-      });
-      if (response !== 0) return false;
-      try {
-        await writeFile(paths.gameStorageClearRequest, "", { mode: 0o600 });
-        logEvent({ k: "filesystem.resetRequested" });
-        app.relaunch();
-        app.quit();
-        return true;
-      } catch (error) {
-        logEvent({ k: "filesystem.resetFailed", code: errorCode(error) });
-        throw error;
-      }
-    }),
+    gameStorageReset: channel(nothing, (win) =>
+      requestGameStorageReset(win, paths.gameStorageClearRequest),
+    ),
 
     diagnosticsGraphics: channel(asGraphics, (_win, value) => {
       recordGraphics(value);
@@ -856,10 +764,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     diagnosticsCurrent: channel(nothing, () => diagnosticSummary()),
-
-    diagnosticsExportReport: channel(nothing, async (win) => {
-      await ctx.exportProblemReport(win);
-    }),
 
     appOpenExternal: channel(asExternalLinkKind, async (_win, kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);

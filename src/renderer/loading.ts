@@ -97,7 +97,7 @@ window.gwLoading = (function (): LoadingController {
       recovery = 'client';
       showFailureFrame(
         text,
-        failDetail ?? 'You can retry, or choose Help → Report a Problem.',
+        failDetail ?? 'You can retry, or choose Help → Report a Bug.',
       );
       retry.textContent = 'Retry';
     },
@@ -235,7 +235,11 @@ window.gwLoading = (function (): LoadingController {
         );
         return;
       }
-      window.location.reload();
+      // A no-client retry completes only after publishing a ready generation,
+      // at which point this document can safely load it. An active client
+      // instead asks main to relaunch and reports `starting`; reloading here
+      // would unload the renderer while quit cleanup is still syncing IDBFS.
+      if (progress.phase === 'ready') window.location.reload();
     } catch {
       if (requestedRecovery === 'filesystem') {
         api.failFilesystem();
@@ -247,12 +251,11 @@ window.gwLoading = (function (): LoadingController {
     }
   });
 
-  // Main owns the whole report flow — save dialog, export, follow-up dialog,
-  // and its own failure dialog — so there is nothing to render here beyond
-  // preventing a second dialog while one is up.
+  // A crash report goes straight to GitHub. Diagnostics remain an optional,
+  // separate Help-menu action.
   report.addEventListener('click', () => {
     report.disabled = true;
-    void window.gwNative.diagnostics.exportReport()
+    void window.gwNative.app.openExternal('bugReport')
       .catch(() => {})
       .finally(() => { report.disabled = false; });
   });

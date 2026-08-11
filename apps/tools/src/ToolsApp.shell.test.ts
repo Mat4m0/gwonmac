@@ -213,6 +213,35 @@ describe("ToolsApp shell and library", () => {
     wrapper.unmount();
   });
 
+  it("keeps export available while explaining unavailable in-game publication", async () => {
+    const demo = createDemoHost();
+    const wrapper = await workbench({
+      ...demo,
+      publishUnavailable:
+        "Saving into Guild Wars is unavailable for this client build.",
+      publishBuild: async () => {
+        throw new Error("unreachable publication");
+      },
+    });
+    await wrapper.get("#builds-library-tab").trigger("click");
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper
+      .findAll(".authoring-actions .ui-button")
+      .find((button) => button.text().includes("Export build"))!
+      .trigger("click");
+    await flushPromises();
+
+    const save = wrapper
+      .findAll(".build-export .ui-button")
+      .find((button) => button.text().includes("Save to Guild Wars"))!;
+    expect(save.attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain(
+      "Saving into Guild Wars is unavailable for this client build.",
+    );
+    expect(wrapper.find(".build-export textarea").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it("keeps build export selectable when clipboard access is refused", async () => {
     const demo = createDemoHost();
     const wrapper = await workbench({

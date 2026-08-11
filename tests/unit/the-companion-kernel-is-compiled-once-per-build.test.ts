@@ -1,4 +1,4 @@
-// P4.2 — scripts/build.mjs is the single build producer. copy-renderer.mjs runs
+// scripts/build.mjs is the single build producer. copy-renderer.mjs runs
 // to completion without rustc, copies assets and no code, and emits no kernel;
 // the canonical build step list holds exactly one rustc invocation, and orders
 // the producers that write into build/renderer so none erases another.
@@ -98,8 +98,8 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       readFileSync(path.join(root, "build/renderer/images/hero-video.webm"), "utf8"),
       "webm",
     );
-    // Not the preload: P5.6 moved that to scripts/generate-preload.ts, which
-    // splices the canonical channel constants in and is the only producer of
+    // Not the preload: scripts/generate-preload.ts owns that output, splices
+    // the canonical channel constants in and is the only producer of
     // build/preload/preload.cjs.
     assert.equal(existsSync(path.join(root, "build/preload")), false);
   });

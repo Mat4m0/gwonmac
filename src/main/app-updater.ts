@@ -4,20 +4,17 @@
  *
  * It is also the only caller of the releases API in this project.
  * `periodicCheckDue` holds every gate on an automatic check and is pure, so the
- * gates are provable without running a timer; an open game socket defers a
- * check because a Squirrel download must not compete with live game traffic.
+ * gates are provable without running a timer; an open game socket defers an
+ * automatic check because a Squirrel download must not compete with live game
+ * traffic.
  *
- * One other module reads from this project's releases:
- * `certification/certificate-feed-delivery.ts` fetches two published assets.
- * It does not ask the releases API, it makes no install decision, and it fires
- * on this class's trigger rather than on one of its own — `main.ts` calls both
- * from one place. The consent promise therefore stays checkable: the same
- * predicate gates both, and with automatic checks off a launch reaches
- * github.com zero times.
- *
- * Only a package carrying the release marker may reach Squirrel.Mac. A stable
- * install is never offered a preview, a preview may advance to stable, and a
- * ready update waits for a restart rather than taking one.
+ * Only a package carrying the release marker may reach Squirrel.Mac. The
+ * selected Stable/Beta track is read once per check. Stable admits only
+ * stable releases; Beta additionally admits beta and RC releases. Alpha is
+ * never eligible. The separately signed Preview tester app cannot reach this
+ * owner. This owner never chooses when to restart: the launch gate may install
+ * a ready update before play, while later readiness waits for user or ordinary
+ * restart orchestration.
  */
 import type {
   AppUpdateErrorCode,
@@ -28,10 +25,11 @@ import { releaseAssetUrl } from "../shared/project-identity.js";
 import {
   compareReleaseVersions,
   formatReleaseVersion,
-  isOfferedUpgrade,
-  isPrerelease,
+  isReleaseEligibleForTrack,
   parseReleaseVersion,
+  releaseMetadataMatchesStage,
   type ReleaseVersion,
+  type UpdateTrack,
 } from "../shared/release.js";
 import { redactDiagnosticText } from "./diagnostics/text-scan.js";
 
@@ -87,9 +85,6 @@ export class AppUpdater {
   private readonly options: AppUpdaterOptions;
   private state: AppUpdateState;
   private inFlight: Promise<void> | null = null;
-  private expectedDownload:
-    | { latestVersion: string; checkedAt: string }
-    | null = null;
   private installStarted = false;
   private readonly fetchImpl: typeof fetch;
   private readonly now: () => number;
@@ -128,7 +123,7 @@ export class AppUpdater {
     });
   }
 
-  check(): Promise<void> {
+  check(track: UpdateTrack): Promise<void> {
     if (
       this.inFlight
       || this.state.phase === "downloading"
@@ -136,7 +131,10 @@ export class AppUpdater {
     ) {
       return this.inFlight ?? Promise.resolve();
     }
-    const operation = this.runCheck().finally(() => {
+    // Capture the canonical preference once. A settings change while this
+    // request is running applies to the next check instead of changing the
+    // meaning of a response halfway through validation.
+    const operation = this.runCheck(track).finally(() => {
       if (this.inFlight === operation) this.inFlight = null;
     });
     this.inFlight = operation;
@@ -144,37 +142,50 @@ export class AppUpdater {
   }
 
   updateDownloaded(): void {
-    const expected = this.expectedDownload;
-    if (!expected || this.state.phase !== "downloading") return;
+    if (this.state.phase !== "downloading") return;
+    const downloading = this.state;
+    // The native transition is complete. A late `error` or
+    // `update-not-available` event belongs to no active download and must not
+    // turn a ready update into a failure.
     this.setState({
       phase: "ready",
       currentVersion: this.options.currentVersion,
-      latestVersion: expected.latestVersion,
-      checkedAt: expected.checkedAt,
+      latestVersion: downloading.latestVersion,
+      checkedAt: downloading.checkedAt,
     });
   }
 
   updateFailed(): void {
-    if (!this.expectedDownload) return;
-    const lastCheckedAt = this.expectedDownload.checkedAt;
-    this.expectedDownload = null;
-    this.fail("download-failed", lastCheckedAt);
+    if (this.state.phase !== "downloading") return;
+    this.fail("download-failed", this.state.checkedAt);
   }
 
   updateNotAvailable(): void {
-    if (!this.expectedDownload) return;
-    const lastCheckedAt = this.expectedDownload.checkedAt;
-    this.expectedDownload = null;
-    this.fail("feed-invalid", lastCheckedAt);
+    if (this.state.phase !== "downloading") return;
+    this.fail("feed-invalid", this.state.checkedAt);
   }
 
-  quitAndInstall(): void {
-    if (this.state.phase !== "ready" || this.installStarted) return;
+  /**
+   * Hands the already-ready update to Squirrel exactly once. `false` is a
+   * terminal refusal for the caller that has already completed quit cleanup;
+   * retrying inside that dismantled process would be unsafe.
+   */
+  quitAndInstall(): boolean {
+    if (this.state.phase !== "ready" || this.installStarted) return false;
     this.installStarted = true;
-    this.options.nativeUpdater.quitAndInstall();
+    try {
+      this.options.nativeUpdater.quitAndInstall();
+      return true;
+    } catch (error) {
+      // Cleanup has already completed, so diagnostics are closed. Preserve the
+      // native cause in the local developer console without reviving updater
+      // state or exporting native prose.
+      console.error("native update installation refused", error);
+      return false;
+    }
   }
 
-  private async runCheck(): Promise<void> {
+  private async runCheck(track: UpdateTrack): Promise<void> {
     const previous = this.lastCheckedAt();
     this.setState({
       phase: "checking",
@@ -227,7 +238,7 @@ export class AppUpdater {
         );
         return;
       }
-      const candidates = parseCandidates(body, current);
+      const candidates = parseCandidates(body, track);
       if (candidates === null) {
         await this.failAndRemember(this.noteFailure("releases", "unreadable"));
         return;
@@ -236,13 +247,35 @@ export class AppUpdater {
       const checkedAtValue = this.now();
       const checkedAt = new Date(checkedAtValue).toISOString();
       await this.remember(checkedAtValue);
-      if (!latest || !isOfferedUpgrade(current, latest.version)) {
+      if (!latest) {
         this.setState({
           phase: "up-to-date",
           currentVersion: this.options.currentVersion,
-          latestVersion: latest
-            ? formatReleaseVersion(latest.version)
-            : this.options.currentVersion,
+          latestVersion: this.options.currentVersion,
+          checkedAt,
+        });
+        return;
+      }
+
+      const comparison = compareReleaseVersions(latest.version, current);
+      if (
+        track === "stable"
+        && current.channel !== "stable"
+        && comparison < 0
+      ) {
+        this.setState({
+          phase: "manual-stable-return",
+          currentVersion: this.options.currentVersion,
+          checkedAt,
+          stableVersion: formatReleaseVersion(latest.version),
+        });
+        return;
+      }
+      if (comparison <= 0) {
+        this.setState({
+          phase: "up-to-date",
+          currentVersion: this.options.currentVersion,
+          latestVersion: formatReleaseVersion(latest.version),
           checkedAt,
         });
         return;
@@ -254,14 +287,22 @@ export class AppUpdater {
         return;
       }
       const latestVersion = formatReleaseVersion(latest.version);
-      this.expectedDownload = { latestVersion, checkedAt };
-      this.options.nativeUpdater.setFeedURL({ url: feed.url });
+      // Publish the owned transition before calling native code. A synchronous
+      // native event or refusal can then close this exact download instead of
+      // racing a later transition back to `downloading`.
       this.setState({
         phase: "downloading",
         currentVersion: this.options.currentVersion,
         latestVersion,
         checkedAt,
       });
+      try {
+        this.options.nativeUpdater.setFeedURL({ url: feed.url });
+      } catch {
+        this.updateFailed();
+        return;
+      }
+      if (this.state.phase !== "downloading") return;
       try {
         this.options.nativeUpdater.checkForUpdates();
       } catch {
@@ -277,7 +318,9 @@ export class AppUpdater {
     signal: AbortSignal,
   ): Promise<FeedValidation> {
     const manifests = release.assets.filter((asset) => asset.name === "RELEASES.json");
-    const zips = release.assets.filter((asset) => asset.name.endsWith(".zip"));
+    const expectedZip =
+      `Guild-Wars-Reforged-${formatReleaseVersion(release.version)}-macOS-arm64.zip`;
+    const zips = release.assets.filter((asset) => asset.name === expectedZip);
     if (manifests.length !== 1 || zips.length !== 1) {
       return { reason: "feed-invalid" };
     }
@@ -408,20 +451,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseCandidates(
   body: unknown,
-  current: ReleaseVersion,
+  track: UpdateTrack,
 ): ReleaseCandidate[] | null {
   if (!Array.isArray(body)) return null;
   const candidates: ReleaseCandidate[] = [];
+  const versions = new Set<string>();
   for (const value of body) {
-    if (!isRecord(value) || value.draft === true) continue;
+    // A missing or malformed publication flag is not evidence that a release
+    // is public. This also keeps a staged approval draft out of both tracks.
+    if (!isRecord(value) || value.draft !== false) continue;
     const tag = value.tag_name;
     if (typeof tag !== "string") continue;
     const version = parseReleaseVersion(tag);
     if (!version) continue;
-    if (
-      !isPrerelease(current)
-      && (value.prerelease === true || isPrerelease(version))
-    ) continue;
+    if (typeof value.prerelease !== "boolean") continue;
+    // GitHub metadata and the canonical tag must describe the same release.
+    // Refusing disagreement prevents an incorrectly flagged alpha or stable
+    // build from crossing the selected-track boundary.
+    if (!releaseMetadataMatchesStage(version, value.prerelease)) continue;
+    if (!isReleaseEligibleForTrack(version, track)) continue;
+    const canonical = formatReleaseVersion(version);
+    if (versions.has(canonical)) return null;
+    versions.add(canonical);
     if (!Array.isArray(value.assets)) return null;
     const assets: ReleaseAsset[] = [];
     for (const asset of value.assets) {

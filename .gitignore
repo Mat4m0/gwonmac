@@ -6,6 +6,7 @@ access.key
 *.key
 credentials.bin
 *.gwdiag
+guild-wars-diagnostics*.zip
 *.dmp
 
 # Game artifacts ----------------------------------------------------------
@@ -66,9 +67,3 @@ coverage/
 .DS_Store
 .nuxt
 .output
-
-plans/*
-!plans/research-tool-architecture.md
-!plans/build-team-plan.md
-!plans/memory-bug.md
-!plans/full-refactor-optimization.md

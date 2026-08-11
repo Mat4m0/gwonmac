@@ -15,6 +15,7 @@
  * refusal instead of to plausible numbers.
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
+import { COMPANION_ABI } from "../shared/companion-abi.js";
 
 export const COMPANION_SNAPSHOT_ABI = COMPANION_ABI.snapshot.abi;
 export const COMPANION_SNAPSHOT_BYTES = COMPANION_ABI.snapshot.bytes;
@@ -856,4 +857,3 @@ export function readChangedCompanionParty(
     state,
   });
 }
-import { COMPANION_ABI } from "../shared/companion-abi.js";

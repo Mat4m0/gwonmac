@@ -31,6 +31,8 @@ allowBuilds:
 # repository-owned PNG background and copies the ICNS icon without parsing it.
 auditConfig:
   ignoreGhsas:
-    - GHSA-mh99-v99m-4gvg
     - GHSA-w3rx-r6r6-pgpr
     - GHSA-5p2g-fcmc-qvqq
+    # The affected esbuild serve-directory path exists only on Windows. Owned
+    # automation runs on macOS/Linux, and fontless invokes only transform.
+    - GHSA-g7r4-m6w7-qqqr

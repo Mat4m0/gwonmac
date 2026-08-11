@@ -24,6 +24,7 @@ declare global {
   interface Window {
     // The renderer probe this spec installs; it exists only while it runs.
     __diagnosticExportReleasedInput?: boolean;
+    __feedbackInputResetCount?: number;
   }
 }
 
@@ -187,7 +188,7 @@ test.describe("diagnostics", () => {
       await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
 
-      const target = path.join(diagnosticRoot, "capture.gwdiag");
+      const target = path.join(diagnosticRoot, "capture.zip");
       await app.evaluate(async ({ app: electronApp }, args) => {
         const load = process
           .getBuiltinModule("node:module")
@@ -224,7 +225,7 @@ test.describe("diagnostics", () => {
     const fixture = await launchOffline("gw-trace-stop-failure-e2e-");
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-stop-failure-"));
     try {
-      const target = path.join(diagnosticRoot, "capture.gwdiag");
+      const target = path.join(diagnosticRoot, "capture.zip");
       const modulePath = path.join(root, "build/main/diagnostics.js");
       const contractsPath = path.join(root, "build/shared/contracts.js");
       const stopped = await fixture.app.evaluate(
@@ -298,7 +299,7 @@ test.describe("diagnostics", () => {
     }
   });
 
-  // P5.9 moved every channel's parser into the handler registry, ahead of the
+  // Every channel's parser lives in the handler registry, ahead of the
   // handler's own try/catch. Two channels used to parse inside it and record
   // `credentials.saveFailed` / `settings.saveFailed`, so until the registry
   // recorded the rejection itself, "my saved login stopped working" produced an
@@ -466,20 +467,52 @@ test.describe("diagnostics", () => {
     }
   });
 
-  test("releases game input before opening the diagnostics save panel", async () => {
-    const fixture = await launchOffline("gw-diagnostic-dialog-input-e2e-");
+  test("opens bug and feature issues directly after releasing game input", async () => {
+    const fixture = await launchOffline("gw-feedback-links-e2e-");
     try {
       const { app, page } = fixture;
-      await app.evaluate(({ dialog }) => {
-        dialog.showMessageBox = async () => ({
-          response: 0,
-          checkboxChecked: false,
-        });
-        dialog.showSaveDialog = async () => ({
-          canceled: true,
-          filePath: "",
+      await app.evaluate(({ dialog, shell }) => {
+        (globalThis as { __openedExternalUrls?: string[] }).__openedExternalUrls = [];
+        shell.openExternal = async (url) => {
+          const state = globalThis as { __openedExternalUrls?: string[] };
+          state.__openedExternalUrls?.push(url);
+        };
+        dialog.showSaveDialog = async () => {
+          throw new Error("feedback actions must not open a save dialog");
+        };
+      });
+      await page.evaluate(() => {
+        window.__feedbackInputResetCount = 0;
+        window.addEventListener("gw:input-reset", () => {
+          window.__feedbackInputResetCount =
+            (window.__feedbackInputResetCount ?? 0) + 1;
         });
       });
+
+      await clickMenu(app, "report-bug");
+      await clickMenu(app, "request-feature");
+
+      await expect.poll(() => page.evaluate(() => window.__feedbackInputResetCount)).toBe(2);
+      await expect.poll(() => app.evaluate(() =>
+        (globalThis as { __openedExternalUrls?: string[] }).__openedExternalUrls,
+      )).toEqual([
+        "https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml",
+        "https://github.com/Mat4m0/gwonmac/issues/new?template=feature-request.yml",
+      ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("exports diagnostics separately after releasing game input", async () => {
+    const fixture = await launchOffline("gw-diagnostic-dialog-input-e2e-");
+    const saveRoot = await mkdtemp(path.join(tmpdir(), "gw-diagnostic-menu-export-"));
+    const target = path.join(saveRoot, "diagnostics.zip");
+    try {
+      const { app, page } = fixture;
+      await app.evaluate(({ dialog }, filePath) => {
+        dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+      }, target);
       await page.evaluate(() => {
         window.__diagnosticExportReleasedInput = false;
         window.addEventListener("gw:input-reset", () => {
@@ -487,21 +520,23 @@ test.describe("diagnostics", () => {
         });
       });
 
-      await clickMenu(app, "report-problem");
+      await clickMenu(app, "export-diagnostics");
       await expect
         .poll(() =>
           page.evaluate(() => window.__diagnosticExportReleasedInput),
         )
         .toBe(true);
+      await expect
+        .poll(async () => (await stat(target).catch(() => null))?.size ?? 0)
+        .toBeGreaterThan(0);
     } finally {
       await closeOffline(fixture);
+      await rm(saveRoot, { recursive: true, force: true });
     }
   });
 
   test("a crashed client offers reporting and recovers a sandboxed renderer", async () => {
     const fixture = await launchOffline("gw-crash-panel-e2e-");
-    const saveRoot = await mkdtemp(path.join(tmpdir(), "gw-crash-export-"));
-    const target = path.join(saveRoot, "crash-report.zip");
     try {
       const { app, page } = fixture;
       // Offline boot settles into its own generic failure first; the crash
@@ -520,19 +555,21 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#loading-label")).toHaveText(/keeps stopping/);
       await expect(page.locator("#loading-report")).toBeVisible();
 
-      // The launcher button drives the same main-owned flow as the Help menu:
-      // save dialog, export, follow-up dialog ("Done" is response 2).
-      await app.evaluate(({ dialog }, filePath) => {
-        dialog.showSaveDialog = async () => ({ canceled: false, filePath });
-        dialog.showMessageBox = async () => ({
-          response: 2,
-          checkboxChecked: false,
-        });
-      }, target);
+      await app.evaluate(({ dialog, shell }) => {
+        delete (globalThis as { __openedExternalUrl?: string }).__openedExternalUrl;
+        shell.openExternal = async (url) => {
+          (globalThis as { __openedExternalUrl?: string }).__openedExternalUrl = url;
+        };
+        dialog.showSaveDialog = async () => {
+          throw new Error("crash reporting must not open a save dialog");
+        };
+      });
       await page.click("#loading-report");
       await expect
-        .poll(async () => (await stat(target).catch(() => null))?.size ?? 0)
-        .toBeGreaterThan(0);
+        .poll(() => app.evaluate(() =>
+          (globalThis as { __openedExternalUrl?: string }).__openedExternalUrl,
+        ))
+        .toBe("https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml");
 
       // A subsequent progress state clears the crash actions.
       await page.evaluate(() => {
@@ -563,7 +600,6 @@ test.describe("diagnostics", () => {
         .toBe(true);
     } finally {
       await closeOffline(fixture);
-      await rm(saveRoot, { recursive: true, force: true });
     }
   });
 
@@ -641,7 +677,7 @@ test.describe("diagnostics", () => {
       await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
 
-      const target = path.join(diagnosticRoot, "capture.gwdiag");
+      const target = path.join(diagnosticRoot, "capture.zip");
       const modulePath = path.join(root, "build/main/diagnostics.js");
       await app.evaluate(
         async ({ app: electronApp }, args) => {
@@ -677,7 +713,7 @@ test.describe("diagnostics", () => {
       const manifest = JSON.parse(
         await readFile(path.join(extracted, "manifest.json"), "utf8"),
       );
-      // P2.5 — `redaction` is the detector's result, not a literal the exporter
+      // `redaction` is the detector's result, not a literal the exporter
       // writes about itself. Every app-authored record is schema-certified,
       // while traceBytesScanned states the separate pattern-scanner coverage.
       expect(manifest.redaction).toMatchObject({

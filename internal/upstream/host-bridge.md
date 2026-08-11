@@ -1,232 +1,172 @@
-# The host bridge
+# Template host-bridge evidence
 
-What we ship to work around the defects in
-[upstream-defects.md](upstream-defects.md).
+> **Status: implemented workaround; historical detail.** Current code and
+> [WASM host](../../docs/wasm-host.md) define runtime behavior. This file keeps
+> the contract details and failed-path lessons needed to inspect a refusal.
 
-## Shape
+## Conclusion
 
-Two halves, one contract:
+The official client does not import the filesystem operations needed to repair
+template management from JavaScript. gwonmac therefore derives a module for an
+exact certified client hash and routes only the proven broken call sites to a
+renderer-local filesystem bridge.
 
-| Half | File | Job |
+The official module remains canonical on disk. If any proof fails, gwonmac uses
+the untouched official module. The game remains playable and the unproven
+template capability becomes unavailable.
+
+## Owners
+
+| Owner | File | Responsibility |
 | --- | --- | --- |
-| Main | [`src/main/certification/template-save-compat.ts`](../../src/main/certification/template-save-compat.ts) | derive one module from the certified official hash |
-| Renderer | [`src/renderer/template-save-compatibility.ts`](../../src/renderer/template-save-compatibility.ts) | answer the derived module's calls against the mounted IDBFS |
+| Main process | [`template-save-compat.ts`](../../src/main/certification/template-save-compat.ts) | Verify the exact input and derive one module. |
+| Renderer | [`template-save-compatibility.ts`](../../src/renderer/template-save-compatibility.ts) | Answer bridge calls against the mounted IDBFS. |
+| Composition | [`client-module.ts`](../../src/main/certification/client-module.ts) and [`client-runtime.ts`](../../src/main/client-runtime.ts) | Select and cache the derived module. |
+| Installation | [`harness.ts`](../../src/renderer/harness.ts) | Wrap imports before WebAssembly instantiation. |
 
-Selection and caching live in
-[`client-module.ts`](../../src/main/certification/client-module.ts) and
-[`client-runtime.ts`](../../src/main/client-runtime.ts). Installation is
-[`harness.ts`](../../src/renderer/harness.ts) inside `Module.instantiateWasm`,
-before instantiation, so the import object can be wrapped.
+## Why the module bytes change
 
-## Why a derived module at all
+Four client routines are stubs. The client never reaches a syscall for them and
+imports no `mkdir`, `getdents`, or `unlink`. The fifth routine reaches `openat`,
+but its broken flags are also valid for a real create. A JavaScript wrapper
+cannot distinguish those calls.
 
-The client never reaches a syscall for four of the five operations, and imports
-no `mkdir`, `getdents` or `unlink`. The fifth does reach a syscall, but with
-flags we cannot distinguish from a legitimate create. There is no
-JavaScript-only fix in either case: these are internal WebAssembly functions, so
-the module bytes have to change.
+## Transform
 
-## How the transform works
+For a certified input hash, the transform:
 
-For the certified input hash only:
+1. Appends one forwarder for each bridge operation. Existing function indices
+   keep their meaning.
+2. Repoints only the call sites listed in
+   [client-internals.md](client-internals.md#the-broken-routines-and-their-call-sites).
+3. Leaves the original target bodies and all unapproved callers unchanged.
 
-1. **Append** one forwarder per bridged routine to the type, function and code
-   sections. Appending leaves every existing function index valid, so nothing
-   else in the module changes meaning. Each forwarder reuses its target's own
-   type index.
-2. **Repoint** the specific call sites listed in
-   [client-internals.md](client-internals.md#the-broken-routines-and-their-call-sites)
-   at the forwarders. The `call` immediates use LLVM's 5-byte padded encoding,
-   so the replacement is the same width and no body length changes.
-3. **Leave the target bodies intact.** Callers we did not certify keep exactly
-   today's behaviour — which matters for `MdlDecomp.cpp` and `MdlTex.cpp`, which
-   also call 416 and currently take a working fallback branch, and for the load
-   path and the write call that still use the real `File::Open`.
+The selected calls use LLVM's five-byte padded index encoding. The replacement
+has the same width, so no function body length changes.
 
-Each forwarder hands its arguments to `__syscall_newfstatat` (import 207) behind
-a dirfd no real call can produce:
-
-```wasm
-;; ensureDirectory(path, recursive) -> errno
-i32.const -70001
-local.get 0        ;; path
-i32.const 0
-local.get 1        ;; recursive
-call 207
-```
-
-`__syscall_newfstatat` was chosen because it already exists, takes four `i32`
-arguments and returns one, and its first argument is a directory descriptor —
-`AT_FDCWD` (-100) or a real fd, never our markers. Ordinary calls pass through
-untouched.
-
-### Markers
+Each forwarder calls `__syscall_newfstatat` import 207 with a directory
+descriptor that no real call can produce. A normal call uses `AT_FDCWD` (-100)
+or a real file descriptor. These markers are outside that space:
 
 | Marker | Operation |
 | --- | --- |
-| `-70001` | ensure directory |
-| `-70002` | find files |
-| `-70003` | entry name |
-| `-70004` | delete file |
-| `-70005` | does this file exist |
+| `-70001` | Ensure a directory. |
+| `-70002` | Find files. |
+| `-70003` | Derive an entry name. |
+| `-70004` | Delete a file. |
+| `-70005` | Test whether a file exists. |
 
-Neither half holds them by hand any more. `WASM_BRIDGE_MARKERS` in
-`src/shared/contracts.ts` is the one source: the transform imports it, and the
-renderer — a sandboxed module that may not reach the main process — receives it
-through the preload that `scripts/generate-preload.ts` produces. They used to
-be two copies, and drift would have silently turned every bridged call into a
-real `stat`.
+`WASM_BRIDGE_MARKERS` in `src/shared/contracts.ts` is the one source of truth.
+The transform imports it. The generated preload supplies it to the sandboxed
+renderer. Two copies previously risked turning a bridge call into a real
+`stat`.
 
-Renaming needs no marker of its own: the client implements it as
-write-the-new-name followed by delete-the-old, gated by the existence probe.
+Renaming needs no separate operation. The client writes the new file and then
+deletes the old file after an existence check.
 
-### Failing closed
+### Refusal checks
 
-`rewriteTemplateSaveWasm` rejects, in order: an unexpected input hash, a stub
-whose body is not byte-for-byte what we certified (where we certify one — the
-`File::Open` bridge fronts a real implementation, and there the call site's own
-target index is the certification), a call site that does not
-contain the expected `call`, an output hash that differs from the pinned one,
-and a module that fails `WebAssembly.validate`. Any failure falls back to the
-untouched official module. A new client build therefore degrades to "templates
-broken again", never to a corrupted client.
+`rewriteTemplateSaveWasm` refuses when:
 
-The derived module is cached under `game/compatibility/<input hash>/<abi>/` and
-is rebuildable from the official artifact at any time.
+- the input hash is unknown;
+- a certified stub body changed;
+- a call site does not target the expected function;
+- the derived hash differs from the certified output hash; or
+- `WebAssembly.validate` rejects the result.
 
-## Bridge contract
+For `File::Open`, the call-site target is the proof because the target is a real
+implementation, not a stub. The rebuildable cache lives below
+`game/compatibility/<input-hash>/<abi>/`.
 
-### ensure directory
+## Renderer contract
 
-`(path) -> errno`, 0 on success. `FS.mkdirTree` on the normalised path.
+### Ensure directory
 
-### find files
+Input: `(path)`. Output: an errno. Zero means success. The bridge uses
+`FS.mkdirTree` on the normalized path.
 
-`(pattern, out, flags) -> 0`
+### Find files
 
-- split the pattern at its last `/` into directory and glob; `*` and `?` match
-  within one component, case-insensitively
-- include an entry when `FS.isDir(mode) ? (flags & 2) : (flags & 1)`
-- sort by name, for a stable list
-- allocate `count * 544` bytes with **the client's own `malloc`**, because the
-  client frees the block; take every heap view *after* the allocation, since it
-  can grow memory
-- zero the 24-byte header, write the name (with extension) at +24
-- publish `entries` at `out+0` and `count` at `out+8`
+Input: `(pattern, out, flags)`. Output: zero.
 
-An entry the mount cannot describe is skipped rather than failing the listing —
-the client has no way to report a partial read.
+The bridge splits the last path component, matches `*` and `?` within one
+component without case sensitivity, applies the file/directory flag, and sorts
+by name. It allocates `count * 544` bytes with the client's `malloc` because the
+client frees the block. It creates heap views after allocation because memory
+can grow.
 
-### entry name
+Each entry has a zeroed 24-byte header and a UTF-16 name with extension at byte
+24. The bridge writes the block pointer at `out+0` and the count at `out+8`. It
+skips an entry that the mount cannot describe because the client has no partial
+listing error.
 
-`(path, dst, chars) -> written`
+### Derive entry name
 
-Returns the client's internal record form: a leading `\`, backslash separators,
-**extension removed**.
+Input: `(path, dst, chars)`. Output: the number of written characters.
 
-Removing the extension here is not tidiness. The client calls
-`Path::RemoveExtension` on this result and that function is off by one (defect
-5), so anything with an extension loses its last character. Handing it a bare
-name leaves it nothing to trim. If ArenaNet fixes defect 5, this stays correct —
-stripping an absent extension is a no-op.
+The result uses a leading backslash and backslash separators. It has no file
+extension. The bridge removes the extension because the examined client's
+`Path::RemoveExtension` also removes the preceding character. Calling that
+function with a name that has no extension is a safe no-op.
 
-### delete file
+### Delete file
 
-`(path) -> deleted`, **non-zero on success** — that is what the caller reads.
-`FS.unlink` on the normalised path.
+Input: `(path)`. Output: non-zero on success. The bridge calls `FS.unlink`.
+The success polarity is part of the client contract.
 
-### does this file exist
+### Test whether a file exists
 
-`(path) -> exists`
+The client uses `File::Open(path, 1)` as a no-overwrite probe. In the examined
+build, mode 1 has `O_CREAT`, so it creates the destination and reports it as
+taken.
 
-The one bridge that fronts a working function rather than replacing a stub.
-`#9757`'s no-overwrite probe calls `File::Open(path, 1)` to ask whether a
-rename's destination is taken, and mode 1 creates the file (defect 6). The
-forwarder asks the host first and only calls the real `File::Open` when the file
-is genuinely there:
+The forwarder asks the host first. If the file exists, it calls the original
+`File::Open` and returns the real handle. If the file does not exist, it returns
+zero. An undecidable path is treated as existing so that rename refuses instead
+of overwriting data. Only this probe is repointed. The write and load calls keep
+the original function.
 
-```wasm
-i32.const -70005
-local.get 0
-i32.const 0
-i32.const 0
-call 207           ;; newfstatat -> 1 exists, 0 absent
-if (result i32)
-  local.get 0
-  local.get 1
-  local.get 2
-  call 771         ;; the real File::Open, so the caller gets a real handle
-else
-  i32.const 0
-end
-```
+Returning the real handle matters because the caller releases it and asserts on
+an invalid handle.
 
-Returning a handle rather than a boolean matters: the caller passes the result
-to `Handle::Release`, which asserts on null.
+## Path normalization
 
-An undecidable path answers "exists", which refuses the rename rather than
-silently overwriting a template.
+Apply these steps in order:
 
-Only the probe is repointed. The write call at `9538+226` and the load path in
-`#9753` keep the real function untouched.
+1. Convert backslashes to forward slashes.
+2. Collapse repeated separators.
+3. Remove leading and trailing separators.
+4. Remove an `app:/` prefix.
+5. Reject an empty, `.` or `..` segment.
 
-### Path normalisation
+The client produces `Templates/Skills/\Test.txt`. After backslash conversion,
+this contains a repeated separator. Collapse it before applying the traversal
+guard. Rejecting it first breaks delete and rename even though the path does not
+escape the mount.
 
-Applies to every operation:
+## Invariants and lessons
 
-1. backslashes to forward slashes
-2. collapse runs of separators — the client produces `Templates/Skills/\Test.txt`
-   on every file operation against a listed template
-3. strip leading and trailing separators
-4. drop an `app:/` prefix
-5. reject the path if any remaining segment is empty, `.` or `..`
+- Transform only a derived copy for an exact certified hash.
+- Keep unapproved callers on the original client functions.
+- Keep the bridge in the renderer. Do not add IPC, `fetch`, or a native bridge.
+- Allocate listing memory with the client allocator.
+- Bump `TEMPLATE_SAVE_TRANSFORM_ABI` when derived bytes or the contract change.
+- Test the exact path shapes produced by the client. Cleaner fixtures hid two
+  real failures.
+- A filtered trace cannot prove that no call occurred.
 
-Step 5 keeps the client inside its own mount. Step 2 has to come first: without
-it the doubled separator produces an empty segment and step 5 rejects a
-perfectly ordinary path. That cost us a round on delete and rename.
+## Opt-in trace
 
-## Invariants
+`GW_TEMPLATE_FS_TRACE=1` enables console-only `[template-fs-trace]` and
+`[template-fs-bridge]` records in an unpackaged build. They include counts and
+outcomes only. They do not include names, paths, or contents. They do not cross
+IPC or enter a diagnostics ZIP.
 
-- The official module stays canonical on disk; only the derived copy is
-  transformed, and only for an exact hash.
-- Function bodies are never modified, only call sites — so uncertified callers
-  are untouched.
-- The bridge stays inside the renderer: no IPC, no `fetch`, no native bridge.
-  Asserted in `tests/policy/source-wasm-host.test.ts`.
-- The listing block comes from the client's allocator.
-- Bump `TEMPLATE_SAVE_TRANSFORM_ABI` whenever the derived bytes or the bridge
-  contract change; it is part of the cache key.
-
-## Diagnostics
-
-`GW_TEMPLATE_FS_TRACE=1` on an unpackaged build sets `templateFsTrace` in the
-renderer init payload and enables two console-only traces:
-
-- `[template-fs-trace]` — the syscall wrappers, from
-  [`template-filesystem-trace.ts`](../../src/renderer/template-filesystem-trace.ts)
-- `[template-fs-bridge]` — the bridge itself: which marker fired, how many
-  entries were listed and matched, whether the block was published, and each
-  outcome
-
-Both record counts and outcomes only — no filename, path or content — and
-neither crosses IPC or appears in `.gwdiag`. Normal launches are unaffected.
-
-```bash
-GW_TEMPLATE_FS_TRACE=1 ELECTRON_ENABLE_LOGGING=1 \
-  "…/Guild Wars.app/Contents/MacOS/Guild Wars" 2>&1 \
-  | rg --line-buffered 'template-fs'
-```
-
-Reading a trace:
+Interpret the trace as follows:
 
 | Shape | Meaning |
 | --- | --- |
-| only `installed` | the client never asked — the operation fails before the bridge |
-| `"listed":-1,"failed":…` | `FS.readdir` rejected the directory |
-| `"listed":N,"matched":0` | directory reads, the glob or the kind filter is wrong |
-| `"published":true` | the host handed over a correct list; any remaining failure is past the bridge |
-
-A trace that filters cannot prove absence. The first version of the syscall
-trace only recorded paths it recognised as template paths, and its silence was
-read as "no filesystem activity at all" — see
-[investigation-log.md](investigation-log.md).
+| Only `installed` | The client failed before it called the bridge. |
+| `listed:-1` | `FS.readdir` rejected the directory. |
+| `listed:N` and `matched:0` | The directory was read, but the glob or kind filter was wrong. |
+| `published:true` | The bridge supplied a list. Continue the investigation inside the client. |

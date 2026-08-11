@@ -32,7 +32,9 @@ test.describe("client compatibility", () => {
       server.once("error", reject);
       server.listen(6112, "127.0.0.1", resolve);
     });
-    const fixture = await launchOffline("gw-client-host-e2e-");
+    const fixture = await launchOffline("gw-client-host-e2e-", {
+      GW_TEST_SOCKET_LOOPBACK: "1",
+    });
     try {
       await fixture.page.waitForFunction(() => {
         const game = window.Module as ModuleWithSocket | undefined;
@@ -106,7 +108,7 @@ test.describe("client compatibility", () => {
       // import — that an incomplete program is never frozen, and that a
       // completed one stops costing a round trip. Whether *boot* installs it is
       // not assertable here: installGlProgramCache runs from
-      // Module.instantiateWasm, and the offline shell has no client, so the
+      // Module.instantiateWasm, and this cached-only fixture has no client, so the
       // glue never loads.
       expect(
         await fixture.page.evaluate(async () => {

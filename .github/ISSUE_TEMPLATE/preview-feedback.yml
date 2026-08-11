@@ -9,7 +9,7 @@ body:
       value: |
         Thanks for testing a snapshot. Snapshots are temporary and unsupported, so the exact tag is required to connect your report to its source.
 
-        GitHub issues are public. Diagnostics stay on your Mac unless you explicitly attach them. The app excludes credentials, account identifiers, packet contents, HTTP bodies, headers, cookies, filesystem paths, and crash dumps from a `.gwdiag`.
+        GitHub issues are public. Diagnostics stay on your Mac unless you explicitly attach them. The app excludes credentials, account identifiers, packet contents, HTTP bodies, headers, cookies, filesystem paths, and crash dumps from the diagnostics ZIP.
   - type: input
     id: snapshot
     attributes:
@@ -67,7 +67,7 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostics (optional)
-      description: If you choose to share a `.gwdiag`, Control-click it in Finder, choose **Compress**, then drag the resulting `.zip` here. GitHub does not accept `.gwdiag` directly.
+      description: If you choose to share diagnostics, drag the `.zip` exported by GWonmac here.
       placeholder: Drag the .zip file here, or leave this blank.
     validations:
       required: false

@@ -13,16 +13,12 @@ import {
   buildCertification,
   captureLevel,
   captureStopReason,
-  certificateFeedOutcome,
-  certificateFeedSource,
   code,
   digestOrNull,
   finiteNumber,
   incompleteCommandOutcome,
   launcherStrategy,
   literal,
-  localVerificationReason,
-  localVerificationSource,
   none,
   nullable,
   steamBlocked,
@@ -49,6 +45,18 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     subsystem: "app",
     level: "error",
     fields: { code },
+  },
+  "app.relaunchFailed": {
+    subsystem: "app",
+    level: "error",
+    fields: {
+      action: literal([
+        "toolsEnable",
+        "cacheClear",
+        "gameStorageReset",
+      ] as const),
+      code,
+    },
   },
   "app.beforeQuit": { subsystem: "app", level: "info", fields: none },
   "app.unexpectedUserData": {
@@ -557,48 +565,12 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
   "wasm.localVerificationCompleted": {
     subsystem: "wasm",
     level: "info",
-    fields: {
-      source: localVerificationSource,
-      certification: buildCertification,
-    },
+    fields: { certification: buildCertification },
   },
   "wasm.localVerificationUnavailable": {
     subsystem: "wasm",
     level: "warn",
     fields: none,
-  },
-  // The certificate feed reports under `wasm` rather than `update` or
-  // `release`: it decides what a WebAssembly build may become, and nothing
-  // else. Where its bytes came from is transport, and transport is not what a
-  // reader of these events is looking for.
-  "certificateFeed.resolved": {
-    subsystem: "wasm",
-    level: "info",
-    fields: {
-      source: certificateFeedSource,
-      sequence: finiteNumber,
-      outcome: certificateFeedOutcome,
-    },
-  },
-  "certificateFeed.refused": {
-    subsystem: "wasm",
-    level: "warn",
-    fields: { outcome: certificateFeedOutcome },
-  },
-  "certificateFeed.proved": {
-    subsystem: "wasm",
-    level: "info",
-    fields: { sequence: finiteNumber, certification: buildCertification },
-  },
-  "certificateFeed.withheld": {
-    subsystem: "wasm",
-    level: "warn",
-    fields: { reason: localVerificationReason },
-  },
-  "certificateFeed.proofUnavailable": {
-    subsystem: "wasm",
-    level: "warn",
-    fields: { code },
   },
   "wasm.templateSavePrepareFailed": {
     subsystem: "wasm",
@@ -614,6 +586,11 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     subsystem: "wasm",
     level: "info",
     fields: none,
+  },
+  "wasm.nativeDoubleClickPrepareFailed": {
+    subsystem: "wasm",
+    level: "warn",
+    fields: { code },
   },
   "wasm.extendedMemory": {
     subsystem: "wasm",
@@ -649,11 +626,6 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     subsystem: "wasm",
     level: "info",
     fields: none,
-  },
-  "enhancement.obsoleteCacheDiscardFailed": {
-    subsystem: "wasm",
-    level: "warn",
-    fields: { code },
   },
   "patch.updateFallback": {
     subsystem: "update",

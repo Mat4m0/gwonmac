@@ -197,14 +197,6 @@ async function discardEnhancementCache(
 }
 
 /**
- * Select and prepare the one client module this launch serves.
- *
- * The chain is fixed: official -> template-save -> optional Enhancement. Unknown
- * and disabled stages delete caches they cannot use. A transform failure is
- * graceful and leaves the last good cache intact, but never serves it for a
- * different input.
- */
-/**
  * The last stage, applied to whatever the chain above settled on.
  *
  * It is deliberately not part of the certification *state*: a module it cannot
@@ -216,16 +208,16 @@ async function withNativeDoubleClick(
   prepared: PreparedWasmClientModule,
   cacheRoot: string,
 ): Promise<PreparedWasmClientModule> {
-  const inputSha256 = await sha256File(prepared.wasmPath);
-  const build = findNativeDoubleClickBuild(inputSha256);
-  const expectedOutputSha256 = build
-    ? nativeDoubleClickOutputSha256(build, inputSha256)
-    : null;
-  if (!build || expectedOutputSha256 === null) {
-    await discardDerivedWasm(cacheRoot).catch(() => undefined);
-    return prepared;
-  }
   try {
+    const inputSha256 = await sha256File(prepared.wasmPath);
+    const build = findNativeDoubleClickBuild(inputSha256);
+    const expectedOutputSha256 = build
+      ? nativeDoubleClickOutputSha256(build, inputSha256)
+      : null;
+    if (!build || expectedOutputSha256 === null) {
+      await discardDerivedWasm(cacheRoot).catch(() => undefined);
+      return prepared;
+    }
     return {
       ...prepared,
       wasmPath: await prepareDerivedWasm(
@@ -301,6 +293,14 @@ export async function prepareClientModule(
   }
 }
 
+/**
+ * Select and prepare the one client module this launch serves.
+ *
+ * The chain is fixed: official -> template-save -> optional Enhancement. Unknown
+ * and disabled stages delete caches they cannot use. A transform failure is
+ * graceful and leaves the last good cache intact, but never serves it for a
+ * different input.
+ */
 async function prepareCertifiedChain(
   options: PrepareClientModuleOptions,
 ): Promise<PreparedWasmClientModule> {

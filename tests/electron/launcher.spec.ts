@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   closeOffline,
+  launchCachedClient,
   launchOffline,
   launchOfflineAt,
 } from "./fixtures.mjs";
@@ -19,16 +19,34 @@ declare global {
   // in the renderer. They exist only while it runs.
   var __failLauncherDownloadTest: ((result: DownloadOutcome) => void) | undefined;
   var __fullGameVerificationCalls: number | undefined;
+  var __gameStorageReset: {
+    accept: boolean;
+    quit: number;
+    relaunch: number;
+    originalDialog: Electron.Dialog["showMessageBox"];
+    originalQuit: Electron.App["quit"];
+    originalRelaunch: Electron.App["relaunch"];
+  };
+  var __clientRetryRestart: {
+    quit: number;
+    relaunch: number;
+    originalQuit: Electron.App["quit"];
+    originalRelaunch: Electron.App["relaunch"];
+  };
   interface Window {
     __nativeInputReset?: boolean;
+    __clientRetryPageMarker?: boolean;
   }
 }
 
 test.describe("launcher recovery", () => {
   test("keeps verified data, retries interruption, and verifies before startup", async () => {
-    const fixture = await launchOffline("gw-launcher-e2e-", {
-      GW_OFFLINE_SNAPSHOT_SIZE: String(8 * 1024 ** 3),
-    });
+    const fixture = await launchCachedClient(
+      "gw-launcher-e2e-",
+      {},
+      async () => undefined,
+      { snapshotSize: 8 * 1024 ** 3 },
+    );
     try {
       const { app, page } = fixture;
       await expect(page.locator("#data-choice")).toBeVisible();
@@ -137,24 +155,134 @@ test.describe("launcher recovery", () => {
     }
   });
 
-  test("offers retry and diagnostics when the game client cannot start", async () => {
+  test("offers retry when no game client is available", async () => {
     const fixture = await launchOffline("gw-startup-recovery-e2e-");
     try {
-      await fixture.page.evaluate(() => {
-        window.gwLoading.fail(
-          "ArenaNet is unavailable and no previous game client could be restored.",
-        );
-      });
+      // The empty cached-only launch owns one refusal. Assert the renderer's
+      // projection of that canonical state instead of racing it with an
+      // injected second failure presentation.
+      await expect.poll(() => fixture.page.evaluate(async () =>
+        window.gwNative.progress.current(),
+      )).toMatchObject({ phase: "error", errorCode: "not_ready" });
+      await expect(fixture.page.locator("#loading-label")).toHaveText(
+        "No game client has been downloaded yet, and ArenaNet could not be reached.",
+      );
       await expect(fixture.page.locator("#loading-retry")).toBeVisible();
       await expect(fixture.page.locator("#loading-detail")).toHaveText(
-        "You can retry, or choose Help → Report a Problem.",
+        "Error code: not_ready",
       );
       await fixture.page.locator("#loading-retry").click();
       await expect(fixture.page.locator("#loading-label")).toHaveText(
-        "The game client could not be loaded.",
+        "No game client has been downloaded yet, and ArenaNet could not be reached.",
+      );
+      await expect(fixture.page.locator("#loading-detail")).toHaveText(
+        "Error code: not_ready",
       );
       await expect(fixture.page.locator("#loading-retry")).toBeVisible();
     } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("refuses snapshot metadata until an active client exists", async () => {
+    const fixture = await launchOffline("gw-snapshot-not-ready-e2e-");
+    try {
+      await expect.poll(() => fixture.page.evaluate(async () =>
+        window.gwNative.progress.current(),
+      )).toMatchObject({ phase: "error", errorCode: "not_ready" });
+      const result = await fixture.page.evaluate(async () => {
+        const session = await window.gwNative.client.session();
+        try {
+          await window.gwNative.snapshot.metadata();
+          return { session, refusal: null };
+        } catch (error) {
+          return {
+            session,
+            refusal: error instanceof Error ? error.message : String(error),
+          };
+        }
+      });
+      expect(result.session).toMatchObject({
+        compatibility: null,
+        extendedMemory: null,
+        healthToken: null,
+      });
+      expect(result.refusal).toContain("no active client snapshot is available");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("relaunches an active client before startup retry can move its files", async () => {
+    const fixture = await launchCachedClient("gw-active-client-retry-e2e-");
+    try {
+      const { app, page } = fixture;
+      await expect.poll(() => page.evaluate(async () => {
+        const [session, progress] = await Promise.all([
+          window.gwNative.client.session(),
+          window.gwNative.progress.current(),
+        ]);
+        return {
+          active: session.compatibility !== null,
+          phase: progress.phase,
+        };
+      })).toEqual({ active: true, phase: "ready" });
+      await app.evaluate(({ app: electronApp }) => {
+        globalThis.__clientRetryRestart = {
+          quit: 0,
+          relaunch: 0,
+          originalQuit: electronApp.quit,
+          originalRelaunch: electronApp.relaunch,
+        };
+        electronApp.quit = () => {
+          globalThis.__clientRetryRestart.quit += 1;
+        };
+        electronApp.relaunch = () => {
+          globalThis.__clientRetryRestart.relaunch += 1;
+          throw new Error("injected client-retry relaunch refusal");
+        };
+      });
+
+      await page.evaluate(() => window.gwNative.client.retry());
+      expect(await app.evaluate(() => ({
+        quit: globalThis.__clientRetryRestart.quit,
+        relaunch: globalThis.__clientRetryRestart.relaunch,
+      }))).toEqual({ quit: 0, relaunch: 1 });
+      await expect.poll(() => page.evaluate(async () =>
+        window.gwNative.progress.current(),
+      )).toMatchObject({ phase: "error", errorCode: "unknown" });
+
+      await app.evaluate(({ app: electronApp }) => {
+        electronApp.relaunch = () => {
+          globalThis.__clientRetryRestart.relaunch += 1;
+        };
+      });
+      await page.evaluate(() => {
+        window.__clientRetryPageMarker = true;
+        window.gwLoading.fail("Injected active-client retry");
+      });
+      await page.locator("#loading-retry").dispatchEvent("click");
+      await expect.poll(() => app.evaluate(() => ({
+        quit: globalThis.__clientRetryRestart.quit,
+        relaunch: globalThis.__clientRetryRestart.relaunch,
+      }))).toEqual({ quit: 1, relaunch: 2 });
+      await expect.poll(() => page.evaluate(async () =>
+        window.gwNative.progress.current(),
+      )).toMatchObject({
+        phase: "starting",
+        label: "Restarting the game client",
+      });
+      await expect.poll(() => page.evaluate(() =>
+        !(document.getElementById("loading-retry") as HTMLButtonElement).disabled,
+      )).toBe(true);
+      // Main now owns relaunch and quit cleanup. The renderer must stay alive
+      // long enough for that cleanup instead of starting its own page reload.
+      expect(await page.evaluate(() => window.__clientRetryPageMarker)).toBe(true);
+    } finally {
+      await fixture.app.evaluate(({ app: electronApp }) => {
+        electronApp.quit = globalThis.__clientRetryRestart.originalQuit;
+        electronApp.relaunch = globalThis.__clientRetryRestart.originalRelaunch;
+      }).catch(() => undefined);
       await closeOffline(fixture);
     }
   });
@@ -163,7 +291,7 @@ test.describe("launcher recovery", () => {
     const fixture = await launchOffline("gw-filesystem-recovery-e2e-");
     try {
       const { app, page } = fixture;
-      // Let the offline boot settle so its expected client failure cannot
+      // Let the cached-only boot settle so its expected client failure cannot
       // overwrite the filesystem failure injected below.
       await expect(page.locator("#loading-retry")).toBeVisible();
       await page.evaluate(() => {
@@ -198,9 +326,10 @@ test.describe("launcher recovery", () => {
     }
   });
 
-  test("clears saved files before the replacement renderer can mount IDBFS", async () => {
+  test("confirms, persists, and applies a saved-files reset before replacement startup", async () => {
     let fixture = await launchOffline("gw-filesystem-reset-e2e-");
     const { userData } = fixture;
+    const marker = path.join(userData, "clear-game-storage-on-start");
     try {
       await fixture.page.evaluate(
         () =>
@@ -219,11 +348,63 @@ test.describe("launcher recovery", () => {
             };
           }),
       );
+
+      await fixture.app.evaluate(({ app: electronApp, dialog }) => {
+        globalThis.__gameStorageReset = {
+          accept: false,
+          quit: 0,
+          relaunch: 0,
+          originalDialog: dialog.showMessageBox,
+          originalQuit: electronApp.quit,
+          originalRelaunch: electronApp.relaunch,
+        };
+        dialog.showMessageBox = async () => ({
+          response: globalThis.__gameStorageReset.accept ? 0 : 1,
+          checkboxChecked: false,
+        });
+        electronApp.relaunch = () => {
+          globalThis.__gameStorageReset.relaunch += 1;
+        };
+        electronApp.quit = () => {
+          globalThis.__gameStorageReset.quit += 1;
+        };
+      });
+
+      expect(
+        await fixture.page.evaluate(() =>
+          window.gwNative.gameStorage.resetAndRestart(),
+        ),
+      ).toBe(false);
+      expect(existsSync(marker)).toBe(false);
+      expect(
+        await fixture.app.evaluate(() => ({
+          quit: globalThis.__gameStorageReset.quit,
+          relaunch: globalThis.__gameStorageReset.relaunch,
+        })),
+      ).toEqual({ quit: 0, relaunch: 0 });
+
+      await fixture.app.evaluate(() => {
+        globalThis.__gameStorageReset.accept = true;
+      });
+      expect(
+        await fixture.page.evaluate(() =>
+          window.gwNative.gameStorage.resetAndRestart(),
+        ),
+      ).toBe(true);
+      expect(existsSync(marker)).toBe(true);
+      expect(
+        await fixture.app.evaluate(() => ({
+          quit: globalThis.__gameStorageReset.quit,
+          relaunch: globalThis.__gameStorageReset.relaunch,
+        })),
+      ).toEqual({ quit: 1, relaunch: 1 });
+
+      await fixture.app.evaluate(({ app: electronApp, dialog }) => {
+        dialog.showMessageBox = globalThis.__gameStorageReset.originalDialog;
+        electronApp.quit = globalThis.__gameStorageReset.originalQuit;
+        electronApp.relaunch = globalThis.__gameStorageReset.originalRelaunch;
+      });
       await fixture.app.close();
-      await writeFile(
-        path.join(userData, "clear-game-storage-on-start"),
-        "",
-      );
 
       fixture = await launchOfflineAt(userData);
       expect(
@@ -234,7 +415,7 @@ test.describe("launcher recovery", () => {
         ),
       ).toBe(false);
       expect(
-        existsSync(path.join(userData, "clear-game-storage-on-start")),
+        existsSync(marker),
       ).toBe(false);
     } finally {
       await closeOffline(fixture);

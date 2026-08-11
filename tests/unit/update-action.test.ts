@@ -73,6 +73,15 @@ describe("update action", () => {
     );
     assert.equal(
       launchGateDecision({
+        phase: "manual-stable-return",
+        checkedAt: "2026-08-03T10:00:00.000Z",
+        stableVersion: "2026.7.0",
+        ...current,
+      }),
+      "proceed",
+    );
+    assert.equal(
+      launchGateDecision({
         phase: "failed",
         reason: "offline",
         ...current,
@@ -108,8 +117,31 @@ describe("update action", () => {
     });
 
     assert.equal(views.at(-1)?.message, "Version 2026.7.0-beta.2 is ready to install.");
-    assert.equal(views.at(-1)?.channel, "Preview");
+    assert.equal(views.at(-1)?.installedStage, "Beta");
     assert.equal(views.at(-1)?.ready, true);
+  });
+
+  it("makes a downgrade a truthful manual Stable return", async () => {
+    const views: UpdateActionView[] = [];
+    const action = createUpdateAction({
+      getState: async () => ({
+        phase: "manual-stable-return",
+        currentVersion: "2026.8.0-beta.1",
+        checkedAt: "2026-08-03T10:00:00.000Z",
+        stableVersion: "2026.7.0",
+      }),
+      check: async () => undefined,
+      restartAndInstall: async () => undefined,
+      onState: () => () => undefined,
+    });
+    action.subscribe((view) => views.push(view));
+
+    await action.initialize();
+
+    assert.match(views.at(-1)?.message ?? "", /manual install/);
+    assert.equal(views.at(-1)?.releasesLabel, "Open Releases to Return to Stable…");
+    assert.equal(views.at(-1)?.showReleaseNotes, true);
+    assert.equal(views.at(-1)?.ready, false);
   });
 
   it("renders closed failure reasons and never says up to date", async () => {

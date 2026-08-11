@@ -3,7 +3,7 @@ import pluginVue from "eslint-plugin-vue";
 import tseslint from "typescript-eslint";
 import vueParser from "vue-eslint-parser";
 
-// P0.2 — each boundary is one regular expression, so every spelling that
+// Each boundary is one regular expression, so every spelling that
 // resolves across it is rejected rather than only the shortest one:
 // `../paths.js`, `../../main/paths.js` and `../../../src/main/paths.js` all
 // name the same file. `no-restricted-imports` sees static imports and
@@ -105,12 +105,11 @@ export default tseslint.config(
       "playwright-report/**",
       "test-results/**",
       "tools/**",
-      "plans/**",
       "*.py",
     ],
   },
   {
-    // P0.2 — architectural boundaries that already hold, pinned so they keep
+    // Architectural boundaries that already hold are pinned so they keep
     // holding. src/main/core/** has no Electron dependency and no upward
     // imports into src/main/*.ts.
     files: ["src/main/core/**/*.ts"],
@@ -175,7 +174,7 @@ export default tseslint.config(
     },
   },
   {
-    // P0.2 — the renderer owns presentation and the game host; it never reaches
+    // The renderer owns presentation and the game host; it never reaches
     // into the main process. Every renderer source extension, not only .js:
     // src/renderer/gw-native.d.ts is a real tracked file.
     files: ["src/renderer/**/*.{js,mjs,cjs,ts}"],
@@ -187,13 +186,13 @@ export default tseslint.config(
       "no-restricted-syntax": ["error", ...crossings(INTO_MAIN, NO_MAIN_FROM_RENDERER)],
     },
   },
-  // P0.3 — `flat/essential` only: the rules that catch errors. `flat/recommended`
+  // Use `flat/essential` only: the rules that catch errors. `flat/recommended`
   // adds 96 attribute-line-break opinions, and nothing else in this repository
   // enforces formatting, so adopting them would be churn rather than coverage.
   ...pluginVue.configs["flat/essential"],
   {
-    // P0.3 — the .vue SFCs are most of the website (9 files against 4 .ts), so
-    // leaving them unparsed left the P0.2 boundary below unenforced exactly
+    // The .vue SFCs are most of the website (9 files against 4 .ts), so
+    // leaving them unparsed left the website boundary below unenforced exactly
     // where the code is. vue-eslint-parser reads the SFC; its inner parser
     // reads `<script setup lang="ts">`.
     files: ["**/*.vue"],
@@ -213,7 +212,7 @@ export default tseslint.config(
     },
   },
   {
-    // P0.2 — the website may read canonical contracts, never main-process code.
+    // The website may read canonical contracts, never main-process code.
     files: ["apps/{website,tools}/**/*.{js,mjs,ts,vue}"],
     rules: {
       "no-restricted-imports": [
@@ -224,7 +223,7 @@ export default tseslint.config(
     },
   },
   {
-    // P0.3 — forge.config.ts was excluded from linting entirely.
+    // forge.config.ts used to be excluded from linting entirely.
     files: ["forge.config.ts"],
     languageOptions: {
       globals: { process: "readonly" },

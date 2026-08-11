@@ -1,4 +1,4 @@
-// P7.10 — the benchmark's schedule and its arithmetic, with no page, no CDP
+// The benchmark's schedule and its arithmetic, with no page, no CDP
 // session and no build behind them, so a test can execute the order it claims
 // to measure in.
 //
@@ -14,7 +14,7 @@
  * The two arms one session can measure. **Both run the transformed module**:
  * the module is chosen in the main process at generation activation, long
  * before the renderer boots, so the official module is not reachable from the
- * session that measures these (P7.11 — see plans/refactor.md). The names say
+ * session that measures these. The names say
  * which is which, so a delta between them cannot be read as the Enhancement's
  * total cost against an untransformed client.
  */

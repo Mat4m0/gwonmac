@@ -1,76 +1,61 @@
-# Upstream client defects and the host workaround
+# Upstream client evidence
 
-Everything we learned reverse-engineering ArenaNet's WebAssembly Guild Wars
-client while fixing [issue #5](https://github.com/Mat4m0/gwonmac/issues/5),
-"Can't save builds".
+> **Status: historical and non-normative.** These files preserve measurements,
+> failed hypotheses, and exact-build facts from investigations of ArenaNet's
+> WebAssembly client. They do not define current gwonmac behavior. Read
+> [WASM host](../../docs/wasm-host.md) for runtime ownership and
+> [Enhancement development](../../docs/enhancement-development.md) for the
+> current certification procedure.
 
-The short version: the client's entire template file-management layer ships
-unimplemented. Saving, listing, naming and deleting a build are four separate
-stubs in `Base/Os/Emscripten`. Two further defects finish the job: an off-by-one
-in `Path::RemoveExtension` corrupts every name that survives the first four, and
-`File::Open` mode 1 creates the file it is asked to test for, so no rename can
-ever succeed.
+## Why this archive exists
 
-None of it is a macOS, Electron or IDBFS problem, and none of it can be repaired
-from JavaScript alone, because the module imports no `mkdir`, `getdents` or
-`unlink`: the client never reaches a syscall we could answer.
+Several ArenaNet client defects need host-side workarounds. The expensive part
+was not writing the workaround. It was learning the client contract without
+symbols and rejecting plausible but incorrect explanations.
 
-We work around it with one derived module, accepted only for an exact official
-hash, that routes the broken routines back into the host.
+Keep this evidence so that a future client update does not repeat those wrong
+turns. Exact addresses, indices, hashes, and offsets apply only to the build
+named in the file that contains them.
 
-## The documents
+## Current map
 
-| File | Audience | Contents |
+| File | Purpose | Current conclusion |
 | --- | --- | --- |
-| [upstream-defects.md](upstream-defects.md) | **ArenaNet** | Six defects, each with the function, signature, observed behaviour, reproduction, and expected behaviour. Self-contained; needs nothing from this repo. |
-| [client-internals.md](client-internals.md) | us | The reference we had to build: function indices, data layouts, path conventions, the list filter. Everything a future change to this area needs. |
-| [host-bridge.md](host-bridge.md) | us | What we actually ship: the transform, the five markers, the bridge contract, and the invariants that must hold. |
-| [recertify.md](recertify.md) | us | The procedure when ArenaNet publishes a new client. Every index and offset below is build-specific. |
-| [mouse-double-click.md](mouse-double-click.md) | **ArenaNet** and us | A second, unrelated finding: the client's mouse path carries a double-click flag all the way to `FrMouse`, and the Emscripten glue never writes it. Why the host synthesises touch taps, what that costs, and the one byte that would end it. |
-| [investigation-log.md](investigation-log.md) | us | The chronology, including every wrong turn and what corrected it. Read this before re-deriving anything. |
-| [memory-exhaustion-log.md](memory-exhaustion-log.md) | us | Open: long-session `wasm.abort`s with the heap pegged at the client's compiled-in 2 GiB cap. The heap-staircase instrumentation and what the next crash bundle must answer. |
-| [upstream-keyboard-labels.md](upstream-keyboard-labels.md) | **ArenaNet** | Every printable key is labelled one position too high, while input is correct. Self-contained; states plainly which parts are observed and which are inferred. |
-| [keyboard-label-offset.md](keyboard-label-offset.md) | us | Open: every printable key is labelled one position too high in the Controls panel and the menus, while input is correct. The key descriptor table, the measurement that isolates the render path, and the two readings a probe still has to choose between. |
-| [investigation-template.md](investigation-template.md) | us | The shape a round takes — hypothesis, what was built, the measurement that killed it, the lesson. Copy it to start the next log. |
+| [upstream-defects.md](upstream-defects.md) | Self-contained ArenaNet report | Eight measured template, cursor, and subdirectory defects exist in the examined builds. |
+| [mouse-double-click.md](mouse-double-click.md) | Self-contained ArenaNet report and local evidence | The client has a complete mouse double-click channel, but its Emscripten input path never feeds the flag. gwonmac uses an exact-build transform. |
+| [upstream-keyboard-labels.md](upstream-keyboard-labels.md) | Self-contained ArenaNet report and local investigation | Printable key labels render one character too high. Input remains correct. No local transform is justified. |
+| [client-internals.md](client-internals.md) | Exact-build reference | Template layouts, call sites, and costly Enhancement foundation measurements. |
+| [host-bridge.md](host-bridge.md) | Implemented workaround record | The template transform and renderer bridge fail closed and keep the official module canonical. |
+| [recertify.md](recertify.md) | Maintainer recovery procedure | First test whether the workaround can be deleted. Re-derive semantics when automated proof refuses. |
+| [investigation-log.md](investigation-log.md) | Wrong-turn archive | Real input shapes and live measurements resolved the template, cursor, modifier, and timer failures. |
+| [memory-exhaustion-log.md](memory-exhaustion-log.md) | Long-session memory evidence | The examined client has a 2 GiB WebAssembly maximum and can exhaust it during normal long runs. A larger maximum buys time but does not fix growth. |
+| [investigation-template.md](investigation-template.md) | Investigation format | Record one hypothesis, one measurement, and one lesson per round. |
 
-## The build this describes
+The retired hero-panel observer has a separate
+[archive note](../archive/hero-panel/README.md).
 
-| | |
-| --- | --- |
-| Artifact | `Gw.jspi.wasm` |
-| SHA-256 | `b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483` |
-| Size | 8,194,484 bytes |
-| Function imports | 219 |
-| Defined functions | 17,600 |
-| Derived module SHA-256 | `68c6e09cec0f6992058a44a5617ca9eac7fab4697be1421943bbf664e6d444f6` |
-| Derived size | 8,194,585 bytes |
+## Evidence standard
 
-Every function index, local index and byte offset in these documents belongs to
-that exact build. A new client invalidates all of them — see
-[recertify.md](recertify.md). The transform refuses unknown hashes and falls
-back to the untouched official module, so a new build degrades to "templates
-broken again" rather than to a corrupted client.
+Static disassembly creates hypotheses. It does not prove runtime meaning.
 
-## The one technique worth remembering
+The template investigation became reliable when it appended export entries to
+ArenaNet's module, instantiated the module with stub imports, and called pure
+client functions directly. This measured path conventions and exposed an
+off-by-one error that static reading missed.
 
-Static disassembly produced one confident, plausible, wrong answer after
-another. What ended the guessing every time was **running ArenaNet's own
-functions**:
-append export entries to the module, instantiate it in Node with stub imports,
-and call the function directly. Pure path helpers need no game state, no
-network and no login.
+Use the least expensive proof that can answer the question:
 
-That turned "I think `_wsplitpath` keeps the trailing separator" into a
-measurement, and it is how we found the `Path::RemoveExtension` off-by-one that
-no amount of reading had revealed. The recipe is in
-[recertify.md](recertify.md#probing-the-clients-own-functions).
+1. Decode the module to identify a candidate.
+2. Call a pure function in isolation when possible.
+3. Run the derived module with the real bridge and an offline filesystem.
+4. Use one bounded live run only for state that needs an initialized client.
 
-## Reporting this upstream
+Do not infer a global function-index or address delta between client builds.
+Do not treat a tool-selected candidate as independent proof.
 
-[upstream-defects.md](upstream-defects.md) is written to be sent as-is. It
-names functions by index and signature rather than by symbol, because the
-shipped module is stripped — an ArenaNet engineer with the source tree will
-recognise each one immediately from its call sites and behaviour.
+## Delete before re-certifying
 
-We would much rather these were fixed at source than carry a growing derived
-module indefinitely.
+When ArenaNet publishes a new client, first test the official behavior. If the
+upstream defect is fixed, delete the local workaround. If a proof refuses, use
+[recertify.md](recertify.md). Until the new facts are proven, serve the untouched
+official client and disable only the optional capability.

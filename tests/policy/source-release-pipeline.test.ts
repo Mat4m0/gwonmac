@@ -13,7 +13,7 @@
 // a real window in tests/electron/sandbox.spec.ts), and the three assertions
 // that still need the compiled build (tests/release/).
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -90,17 +90,6 @@ test("packaged releases carry the project and third-party license notices", () =
     /Guild Wars Reforged application[\s\S]*Apple App Store[\s\S]*gwnative project/,
   );
   assert.match(notices, /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/);
-});
-
-test("packaged releases carry the pinned certificate-feed key", () => {
-  // Read from the bundle's Resources at runtime, where the code signature
-  // seals it. Left out of the package, `certificateFeedTrust` would see no
-  // pinned key at all and every fetched feed would be refused — a failure that
-  // is safe, silent, and would survive a release.
-  assert.match(
-    read("forge.config.ts"),
-    /extraResource:[\s\S]*"certificates\/public-key\.txt"/,
-  );
 });
 
 // What the mapping produces is proved by executing it, in
@@ -190,7 +179,7 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   );
   assert.match(
     workflow,
-    /rm -f "\$APPLE_CERTIFICATE_PATH"[\s\S]*rm -f "\$APPLE_API_KEY_PATH"/,
+    /rm -f "\$APPLE_CERTIFICATE_PATH" "\$APPLE_API_KEY_PATH"[\s\S]*"\$APPLE_PROVISIONING_PROFILE" "\$APPLE_PROFILE_PLIST"/,
   );
   assert.match(workflow, /xcrun notarytool submit/);
   assert.match(workflow, /xcrun stapler staple/);
@@ -198,20 +187,26 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   assert.match(workflow, /7F9A56793C16683742AA7818FE65221A884FA108/);
   assert.match(workflow, /remaining <= 2 \* 365 \* 86400000/);
   assert.match(workflow, /remaining <= 5 \* 365 \* 86400000/);
-  assert.match(
-    workflow,
-    /rm -f "\$APPLE_PROVISIONING_PROFILE"[\s\S]*rm -f "\$APPLE_PROFILE_PLIST"/,
-  );
-
   // The signed-package assertions are the script's, and the workflow's only
   // job is to run it. A release path that can only be exercised by cutting a
   // release is one nobody can reproduce when it breaks, so an assertion that
   // creeps back inline fails here.
   assert.match(script("verify:signed-app"), /scripts\/verify-signed-app\.ts/);
-  assert.match(workflow, /GW_SIGNED_CHANNEL: release\n {8}run: \|\n {10}pnpm verify:signed-app/);
-  assert.match(workflow, /pnpm verify:signed-app "\$unzip_dir\//);
-  assert.doesNotMatch(
+  assert.match(
     workflow,
+    /GW_SIGNED_CHANNEL: release[\s\S]{0,700}pnpm verify:signed-app/,
+  );
+  assert.match(workflow, /pnpm verify:signed-app[\\\s]+"\$unzip_dir\//);
+  assert.match(
+    workflow,
+    /codesign --verify --deep --strict --verbose=2 "\$replacement"/,
+  );
+  const workflowWithoutFixtureVerification = workflow.replace(
+    / {10}codesign --verify --deep --strict --verbose=2 "\$replacement"\n/,
+    "",
+  );
+  assert.doesNotMatch(
+    workflowWithoutFixtureVerification,
     /codesign -dv|codesign --verify|codesign -d --entitlements|spctl|stapler validate/,
   );
   assert.match(verifier, /TeamIdentifier=\$\{APPLE_TEAM_ID\}/);
@@ -254,7 +249,7 @@ test("release entitlements are an exact three-key allowlist", () => {
   );
 });
 
-test("release workflow publishes one tested, attested package version", () => {
+test("release workflow stages and publishes one tested, attested package version", () => {
   const workflow = read(".github/workflows/release.yml");
   const verification = read(".github/workflows/macos-verify.yml");
   assert.match(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
@@ -273,9 +268,14 @@ test("release workflow publishes one tested, attested package version", () => {
     workflow,
     /name: Smoke-test signed release candidate[\s\S]*?GW_PACKAGE_INTENT: release[\s\S]*?run: pnpm test:packaged/,
   );
+  assert.doesNotMatch(
+    read("tests/packaged-smoke.ts"),
+    /forge\.config/,
+    "post-signing smoke must not reload credential-bearing packaging config",
+  );
   assert.match(
     workflow,
-    /name: Prove signed Data Protection Keychain continuity[\s\S]*?GW_SIGNED_APP_PATH="\$app" GW_SIGNED_CHANNEL=release[\s\S]*?pnpm test:signed-keychain/,
+    /name: Prove signed Data Protection Keychain continuity without signing secrets[\s\S]*?GW_SIGNED_APP_PATH: \$\{\{ steps\.assets\.outputs\.app \}\}[\s\S]*?GW_SIGNED_REPLACEMENT_APP_PATH: \$\{\{ steps\.runtime-fixture\.outputs\.replacement \}\}[\s\S]*?run: pnpm test:signed-keychain/,
   );
   assert.match(
     json("package.json").scripts?.["test:signed-keychain"] ?? "",
@@ -303,46 +303,97 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.match(verification, /run: pnpm audit --audit-level=high/);
   const releaseBuild = workflow.slice(
     workflow.indexOf("  release-build:"),
+    workflow.indexOf("\n  stage-release:"),
+  );
+  const releaseStage = workflow.slice(
+    workflow.indexOf("\n  stage-release:"),
     workflow.indexOf("\n  release:"),
   );
   const releasePublish = workflow.slice(workflow.indexOf("\n  release:"));
   assert.match(releaseBuild, /permissions:[\s\S]{0,80}contents: read/);
   assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
   assert.match(releaseBuild, /actions\/upload-artifact@/);
-  assert.match(releasePublish, /actions\/download-artifact@/);
+  assert.match(releaseStage, /actions\/download-artifact@/);
+  assert.match(releaseStage, /actions\/attest@/);
+  assert.doesNotMatch(releaseStage, /--draft=false/);
+  assert.match(releasePublish, /gh release download/);
   assert.doesNotMatch(
     releasePublish,
-    /actions\/checkout|pnpm install|pnpm make|pnpm test/,
+    /actions\/checkout|actions\/download-artifact|actions\/attest|pnpm install|pnpm make|pnpm test|gh release create/,
+  );
+  const signingMaterialRemovedAt = releaseBuild.indexOf(
+    "security delete-keychain \"$APPLE_KEYCHAIN\"\n          rm -f",
+  );
+  assert.ok(signingMaterialRemovedAt > 0);
+  assert.ok(
+    releaseBuild.indexOf("name: Prepare signed Keychain replacement fixture")
+      < signingMaterialRemovedAt,
+  );
+  assert.match(
+    releaseBuild,
+    /ditto "\$app" "\$replacement"[\s\S]*?rm "\$replacement\/Contents\/Resources\/distribution-channel\.json"[\s\S]*?scripts\/sign-distribution-app\.ts/,
+  );
+  assert.ok(
+    signingMaterialRemovedAt
+      < releaseBuild.indexOf("name: Prepare checksum-pinned release assets"),
+  );
+  assert.ok(
+    signingMaterialRemovedAt < releaseBuild.indexOf("uses: anchore/sbom-action@"),
+  );
+  assert.ok(
+    signingMaterialRemovedAt
+      < releaseBuild.indexOf("name: Handoff verified release assets"),
+  );
+  assert.doesNotMatch(
+    releaseBuild.slice(0, signingMaterialRemovedAt),
+    /pnpm test:packaged|pnpm test:signed-keychain|pnpm test:stable-beta-roundtrip/,
+  );
+  const runtimeWithoutSigningSecrets = releaseBuild.slice(signingMaterialRemovedAt);
+  assert.match(runtimeWithoutSigningSecrets, /run: pnpm test:packaged/);
+  assert.match(
+    runtimeWithoutSigningSecrets,
+    /GW_SIGNED_REPLACEMENT_APP_PATH:[^\n]+runtime-fixture\.outputs\.replacement/,
+  );
+  assert.match(
+    runtimeWithoutSigningSecrets,
+    /APPLE_PROVISIONING_PROFILE="\$stable_app\/Contents\/embedded\.provisionprofile"[\\\s]+pnpm verify:signed-app "\$stable_app"/,
+  );
+  assert.match(
+    runtimeWithoutSigningSecrets,
+    /unset GH_TOKEN[\s\S]*pnpm test:stable-beta-roundtrip/,
   );
 
-  // A dry run is only evidence about the real release if it is the real
-  // release minus its publishing: the flag is read once, by the job that tags,
-  // attests, and uploads, and no step that builds or verifies may consult it.
-  // What the run produced is recorded where a skipped release cannot record
-  // it.
+  // A dry run is only evidence about the real build if it is the real build
+  // minus every GitHub mutation. Both mutation jobs are skipped whole; no
+  // build or package-verification step may branch around work for a dry run.
+  // The build records what it produced where skipped jobs cannot hide it.
   assert.match(workflow, /workflow_dispatch:\n {4}inputs:\n {6}dry_run:/);
   assert.match(
-    workflow,
-    /description: Build and verify the release, then publish nothing\.\n {8}default: false\n {8}type: boolean/,
+    releaseStage,
+    /stage-release:\n {4}if: github\.ref == 'refs\/heads\/main' && !inputs\.dry_run/,
   );
   assert.match(
     releasePublish,
     /release:\n {4}if: github\.ref == 'refs\/heads\/main' && !inputs\.dry_run/,
   );
-  assert.equal(workflow.match(/if: [^\n]*dry_run/gu)?.length, 1);
+  assert.equal(workflow.match(/if: [^\n]*dry_run/gu)?.length, 2);
   assert.match(
     releaseBuild,
     /name: Summarize built and verified assets[\s\S]*?cat "\$ASSET_DIR\/SHA256SUMS\.txt"[\s\S]*?>> "\$GITHUB_STEP_SUMMARY"/,
   );
 
   assert.match(workflow, /--prerelease --latest=false/);
+  assert.doesNotMatch(workflow, /SIGNED_BETA_UPDATE_PROVEN/);
+  assert.match(workflow, /\*-alpha\.\*/);
+  assert.match(workflow, /name: Prove beta data returns to latest Stable/);
+  assert.match(workflow, /stable_zip_name="Guild-Wars-Reforged-\$\{stable_version\}-macOS-arm64\.zip"/);
+  assert.match(workflow, /gh attestation verify "\$stable_zip"/);
+  assert.match(workflow, /pnpm verify:signed-app "\$stable_app"/);
+  assert.match(workflow, /GW_STABLE_VERSION="\$stable_version"/);
+  assert.match(workflow, /pnpm test:stable-beta-roundtrip/);
   assert.match(
-    workflow,
-    /SIGNED_BETA_UPDATE_PROVEN: \$\{\{ vars\.SIGNED_BETA_UPDATE_PROVEN \}\}/,
-  );
-  assert.match(
-    workflow,
-    /if \[ "\$prerelease" = "false" \]; then\s+test "\$SIGNED_BETA_UPDATE_PROVEN" = "true"/,
+    script("test:stable-beta-roundtrip"),
+    /verify-stable-beta-roundtrip\.ts/,
   );
   assert.match(workflow, /--draft --generate-notes/);
   assert.match(workflow, /--json isDraft --jq '\.isDraft'\)" != "true"/);
@@ -357,9 +408,37 @@ test("release workflow publishes one tested, attested package version", () => {
   assert.equal(
     workflow.match(/if: steps\.release-state\.outputs\.create == 'true'/gu)
       ?.length,
-    3,
+    1,
   );
-  assert.match(workflow, /gh release edit "\$TAG"[\s\S]*--draft=false/);
+  assert.match(
+    releaseStage,
+    /outputs:\n {6}checksums-sha256: \$\{\{ steps\.draft\.outputs\.checksums-sha256 \}\}/,
+  );
+  assert.match(
+    releaseStage,
+    /name: Verify exact remote draft[\s\S]*cmp release-assets\/SHA256SUMS\.txt "\$remote\/SHA256SUMS\.txt"[\s\S]*echo "checksums-sha256=\$checksums_sha256" >> "\$GITHUB_OUTPUT"/,
+  );
+  assert.match(
+    releasePublish,
+    /needs: \[release-build, stage-release\][\s\S]{0,100}environment: release/,
+  );
+  assert.match(
+    releasePublish,
+    /EXPECTED_CHECKSUMS_SHA256: \$\{\{ needs\.stage-release\.outputs\.checksums-sha256 \}\}/,
+  );
+  assert.match(
+    releasePublish,
+    /--json body,isDraft,isPrerelease,targetCommitish[\s\S]*isDraft'[\s\S]*isPrerelease'[\s\S]*targetCommitish'/,
+  );
+  assert.match(
+    releasePublish,
+    /awk '\{\$1=""; sub\(\/\^\[\[:space:\]\]\+\/, ""\); print\}'[\s\S]*echo SHA256SUMS\.txt[\s\S]*find "\$remote" -maxdepth 1 -type f -exec basename \{\} \\;[\s\S]*cmp "\$expected_assets" "\$actual_assets"/,
+  );
+  assert.match(
+    releasePublish,
+    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*\^## Verification[\s\S]*while IFS= read -r checksum_row[\s\S]*grep -Fq "\$checksum_row"/,
+  );
+  assert.match(releasePublish, /gh release edit "\$TAG"[\s\S]*--draft=false/);
   assert.match(workflow, /RELEASES\.json/);
   assert.match(workflow, /\*\.zip \*\.dmg RELEASES\.json \*\.spdx\.json/);
   assert.match(
@@ -566,15 +645,15 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(feedback, /id: diagnostics[\s\S]*?required: false/);
 });
 
-test("the application ships with no runtime dependency to audit", () => {
+test("the root app and website add no runtime package entries and audit exceptions stay explicit", () => {
   assert.equal(json("package.json").dependencies, undefined);
   assert.equal(json("apps/website/package.json").dependencies, undefined);
   assert.deepEqual(
     read("pnpm-workspace.yaml").match(/GHSA-[a-z0-9-]+/gu),
     [
-      "GHSA-mh99-v99m-4gvg",
       "GHSA-w3rx-r6r6-pgpr",
       "GHSA-5p2g-fcmc-qvqq",
+      "GHSA-g7r4-m6w7-qqqr",
     ],
   );
 });
@@ -759,161 +838,6 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
   const record: unknown = JSON.parse(read("certificates/certified-client.json"));
   assert.ok(record !== null && typeof record === "object");
   assert.deepEqual(Object.keys(record).sort(), ["codeGeneration", "formatVersion"]);
-});
-
-test("the feed publication reproduces twice and signs in isolation", () => {
-  const workflow = read(".github/workflows/certificate-feed-publication.yml");
-  // Blanked rather than dropped, for the reason the detector's scan gives: a
-  // job's prose sits above its key and would be read as part of the job before.
-  const body = workflow
-    .split("\n")
-    .map((line) => (/^\s*#/u.test(line) ? "" : line))
-    .join("\n");
-  const target = body.slice(body.indexOf("\n  target:"), body.indexOf("\n  reproduce:"));
-  const reproduce = body.slice(body.indexOf("\n  reproduce:"), body.indexOf("\n  agree:"));
-  const agree = body.slice(body.indexOf("\n  agree:"), body.indexOf("\n  sign:"));
-  const sign = body.slice(body.indexOf("\n  sign:"));
-  assert.ok(target && reproduce && agree && sign, "the four jobs are not all present");
-
-  assert.match(workflow, /^permissions:\n {2}contents: read$/mu);
-  assert.match(workflow, /group: certificate-feed-publication/);
-  // The tables a feed is derived from, and the pin that decides whether one is
-  // believed. A trigger wider than that publishes on commits that cannot have
-  // changed a single byte of the document.
-  assert.match(
-    workflow,
-    /paths:\n {6}- src\/main\/certification\/template-save-compat\.ts\n {6}- src\/main\/certification\/enhancement-builds\.ts\n {6}- certificates\/public-key\.txt\n/,
-  );
-
-  // Nothing is published while the pin is the committed placeholder, and the
-  // refusal runs the application's own rule rather than restating the sentinel.
-  assert.match(target, /certificateFeedTrust\(pinned\)\.remote/);
-  assert.match(target, /go-live checklist in certificates\/README\.md/);
-
-  // Two runners, and they have to be two different machines for the comparison
-  // to be evidence about this repository rather than about one runner.
-  const runners = reproduce.match(/runner: \[(.+)\]/u)?.[1] ?? "";
-  assert.deepEqual(runners.split(", "), ["ubuntu-latest", "macos-15"]);
-  assert.match(reproduce, /runs-on: \$\{\{ matrix\.runner \}\}/);
-  assert.match(reproduce, /fail-fast: false/);
-  // The derivation is the tree plus a Node and nothing else. A package manager
-  // here would make two runners agree about a registry as much as about the
-  // tables, and would put a thousand install scripts in the reproduction.
-  assert.match(
-    reproduce,
-    /scripts\/generate-certificate-feed\.ts \\\n {12}--sequence "\$SEQUENCE" --out candidate\/certificate-feed\.json/,
-  );
-  assert.doesNotMatch(reproduce, /pnpm|rustup|pnpm build/);
-  assert.match(reproduce, /cp certificates\/public-key\.txt candidate\/public-key\.txt/);
-
-  // A disagreement blocks and files itself with both answers. Without the
-  // hashes in the issue, the run that found it is the only place they exist.
-  assert.match(agree, /permissions:\n {6}contents: read\n {6}issues: write/);
-  // Two hashes that were never computed compare equal, so the gate needs the
-  // pipeline's exit code rather than only its last command's.
-  assert.match(agree, /set -o pipefail\n {10}legs=\(reproduced\/\*\/\)/);
-  assert.match(agree, /if \[ "\$left" = "\$right" \]; then continue; fi/);
-  assert.match(agree, /gh issue create --label certificate-feed/);
-  assert.match(agree, /\$\(basename "\$first"\)[\s\S]*\$left[\s\S]*\$\(basename "\$second"\)[\s\S]*\$right/);
-  assert.match(agree, /--title "Certificate feed reproduction disagreed on \$file"\n {12}exit 1\n/);
-  assert.match(agree, /digest=\$digest/);
-
-  // The tier is computed from the candidate against the feed already in force,
-  // so an entry decides its own tier. Template-save facts are re-derived on the
-  // machine that receives them; Enhancement facts are not, and reach the
-  // approval gate only on a run a person dispatched saying so.
-  assert.match(agree, /moved\.some\(\(entry\) => entry\.enhancement !== null\)/);
-  assert.match(
-    sign,
-    /if: >-\n {6}github\.ref == 'refs\/heads\/main'\n {6}&& \(needs\.agree\.outputs\.tier == 'template' \|\| inputs\.enhancement_facts\)/,
-  );
-
-  // The job that holds the key checks nothing out. A working tree beside a
-  // signing key is every script in it running beside a signing key, and an
-  // artifact is data this job reads rather than code it runs.
-  assert.doesNotMatch(sign, /actions\/checkout|persist-credentials|pnpm|scripts\//);
-  assert.match(sign, /environment: certificate-publishing/);
-  assert.match(sign, /permissions:\n {6}contents: write/);
-  const actions = [...sign.matchAll(/uses: ([^@]+)@/gu)].map((match) => match[1]);
-  assert.deepEqual([...new Set(actions)], ["actions/download-artifact"]);
-
-  // One secret, named in one job of one workflow. Its absence everywhere else
-  // is the assertion, because a second naming is a second job that can read it.
-  const secret = "secrets.CERTIFICATE_FEED_SIGNING_KEY";
-  assert.equal(workflow.split(secret).length - 1, 1);
-  assert.ok(sign.includes(secret));
-  for (const file of readdirSync(path.join(root, ".github/workflows"))) {
-    if (file === "certificate-feed-publication.yml") continue;
-    assert.doesNotMatch(read(`.github/workflows/${file}`), /CERTIFICATE_FEED_SIGNING_KEY/);
-  }
-
-  // The bytes signed are the bytes two runners agreed on, and the key that
-  // signs them is the key installations pin. Neither is taken on trust.
-  assert.match(sign, /shasum -a 256 candidate\/certificate-feed\.json[\s\S]*= "\$DIGEST"/);
-  assert.match(
-    sign,
-    /openssl pkey -in "\$key" -pubout -outform DER \| tail -c 32 \| base64\)" \\\n {12}= "\$\(tr -d '\\n' < candidate\/public-key\.txt\)"/,
-  );
-  assert.match(sign, /openssl pkeyutl -verify -pubin/);
-  assert.match(sign, /name: Delete the signing key\n {8}if: always\(\)/);
-
-  // Sequence enforcement. The floor a candidate must beat is resolved in one
-  // place, by the one job that can see both numbers: a release may ship a
-  // snapshot that has overtaken the published feed, and `published + 1` there
-  // names a sequence the generator's own floor refuses on both reproduction
-  // legs, with no in-band way to publish again.
-  assert.equal(body.match(/echo "sequence=\$\(\(current \+ 1\)\)"/gu)?.length, 1);
-  assert.match(target, /echo "sequence=\$\(\(current \+ 1\)\)"/);
-  assert.match(
-    target,
-    /current="\$bundled"\n {10}if \[ -n "\$published" \] && \[ "\$published" -gt "\$bundled" \]; then\n {12}current="\$published"/,
-  );
-  // What is left for the moment after the approval is that nothing published in
-  // the gap: any feed that reached these assets came through this workflow and
-  // carries at least this candidate's sequence.
-  assert.match(sign, /test "\$SEQUENCE" -gt "\$current"/);
-  // Both scans stop at the newest release carrying a feed rather than at the
-  // newest release: an application release publishes no feed assets, and
-  // restarting the sequence there would publish one every installation refuses.
-  // Which release carries one is asked of the release list, over every release
-  // rather than a window, because `gh release download` exits the same way for
-  // "carries no feed" and "the download failed" — and reading the second as the
-  // first walks the scan past the feed in force, in the signing job disabling
-  // the gate exactly when it cannot see what it guards against.
-  assert.equal(
-    body.match(
-      /gh api --paginate "repos\/\$GITHUB_REPOSITORY\/releases" \\\n {12}--jq '\.\[\]\n {14}\| select\(\.draft == false and \.prerelease == false\)\n {14}\| select\(\[\.assets\[\]\.name\] \| index\("certificate-feed\.json"\)\)\n {14}\| \.tag_name'/gu,
-    )?.length,
-    2,
-  );
-  assert.doesNotMatch(body, /--limit \d+|> \/dev\/null 2>&1/u);
-  assert.match(sign, /gh release upload "\$RELEASE" --repo "\$GITHUB_REPOSITORY" --clobber/);
-  assert.match(sign, /cmp candidate\/certificate-feed\.json "\$fetched\/certificate-feed\.json"/);
-
-  // Only the signing job may write to a release, and nothing in this workflow
-  // may push a branch or open a pull request.
-  assert.equal(body.match(/contents: write/gu)?.length, 1);
-  assert.doesNotMatch(workflow, /pull-requests: write|id-token: write|git push/);
-
-  // The two asset names are the ones the application fetches. A rename here is
-  // a feed published where nothing looks for it.
-  const delivery = read("src/main/certification/certificate-feed-delivery.ts");
-  for (const asset of ["certificate-feed.json", "certificate-feed.json.sig"]) {
-    assert.ok(sign.includes(`candidate/${asset}`), `${asset} is never published`);
-    assert.ok(delivery.includes(`"${asset}"`), `${asset} is not what the app fetches`);
-  }
-});
-
-test("the certificate ceremony documents what the owner has to do by hand", () => {
-  const ceremony = read("certificates/README.md");
-  // These four are settings and secrets in accounts this repository cannot
-  // reach. Scripting around them would mean holding the credentials that can
-  // change them, which is a larger blast radius than the thing being automated.
-  assert.match(ceremony, /## The go-live checklist/);
-  assert.match(ceremony, /allow GitHub Actions to create/i);
-  assert.match(ceremony, /certificate-publishing[\s\S]*required reviewers/);
-  assert.match(ceremony, /CERTIFICATE_FEED_SIGNING_KEY/);
-  assert.match(ceremony, /placeholder line in `public-key\.txt`/);
 });
 
 test("the scheduled canary exercises the latest ArenaNet client conservatively", () => {

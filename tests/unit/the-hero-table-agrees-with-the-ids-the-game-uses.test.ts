@@ -2,15 +2,13 @@
 // transcription is not a crash — it is a build that loads the wrong skill on the
 // wrong hero, or a hero picker whose seventh entry is somebody else. Nothing
 // downstream can detect that, because every value is plausible. So this file
-// checks the table against itself and against the evidence document
-// (`plans/tools/hero-builds/evidence/hero-and-profession-tables.md`) at the
-// points where the document makes a checkable claim: how many heroes there are,
-// where the ids stop, which ids are deliberately missing, and which values the
-// source never supplied.
+// checks the table at the points where the reviewed upstream constants make a
+// checkable claim: how many heroes there are, where the ids stop, which ids are
+// deliberately missing, and which values the source never supplied.
 //
-// That last one is most of the point. The document marks hero display names,
-// hero professions, eight of the ten primary attributes and the level-20 point
-// budget as **NOT IN SOURCE**, and every one of them is a value somebody could
+// That last one is most of the point. Hero display names, hero professions,
+// eight of the ten primary attributes and the level-20 point budget are not in
+// the reviewed source, and every one of them is a value somebody could
 // supply from memory and be right about often enough to be dangerous. A missing
 // value fails loudly at the one place that can resolve it — a live client read.
 // A guessed one never fails at all. The tests below therefore assert the
