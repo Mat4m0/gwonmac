@@ -105,7 +105,6 @@ export default tseslint.config(
       "playwright-report/**",
       "test-results/**",
       "tools/**",
-      "plans/**",
       "*.py",
     ],
   },

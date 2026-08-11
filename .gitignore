@@ -67,6 +67,3 @@ coverage/
 .DS_Store
 .nuxt
 .output
-
-plans/*
-!plans/full-refactor-optimization.md
