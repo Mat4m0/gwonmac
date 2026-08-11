@@ -324,6 +324,10 @@ test("release workflow stages and publishes one tested, attested package version
     releaseBuild.indexOf("name: Prepare signed Keychain replacement fixture")
       < signingMaterialRemovedAt,
   );
+  assert.match(
+    releaseBuild,
+    /ditto "\$app" "\$replacement"[\s\S]*?rm "\$replacement\/Contents\/Resources\/distribution-channel\.json"[\s\S]*?scripts\/sign-distribution-app\.ts/,
+  );
   assert.ok(
     signingMaterialRemovedAt
       < releaseBuild.indexOf("name: Prepare checksum-pinned release assets"),
