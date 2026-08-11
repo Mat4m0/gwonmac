@@ -155,6 +155,9 @@ describe("client compatibility notice", () => {
       );
       assert.match(report.summary, /disabled for your safety/);
       assert.match(report.details[0]!, /You can keep playing/);
+      const said = [report.summary, ...report.details].join(" ");
+      assert.match(said, /local Build and Team library remains available/);
+      assert.match(said, /live game observations and Apply stay off/);
     }
   });
 

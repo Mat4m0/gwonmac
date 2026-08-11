@@ -185,6 +185,9 @@ let gameWasmInstance: WebAssembly.Instance | null = null;
 let gameWasmModule: WebAssembly.Module | null = null;
 let runtimeInitialized = false;
 let enhancementInstallationStarted = false;
+let hostOnlyToolsInstallationStarted = false;
+let templatePublishingAvailable = false;
+let rendererUnloading = false;
 let crashRecorded = false;
 
 /**
@@ -201,6 +204,7 @@ async function escalateRepeatedCrash(): Promise<void> {
   if (count > 1) window.gwLoading?.failCrash(count);
 }
 let disposeSocketHost = () => {};
+let disposeHostOnlyTools = () => {};
 const native = () => window.gwNative;
 const milestone = <
   N extends import('../shared/diagnostics.js').RendererMilestone,
@@ -226,6 +230,39 @@ const log = (...a: unknown[]) => {
   }
 };
 
+/**
+ * Mounts the player-selected Tools application without a client integration.
+ *
+ * Builds, Teams, import/export, and their native library are host features.
+ * They remain useful on the first launch after an ArenaNet update, when the
+ * verified official module has no certified companion manifest. Live party
+ * observation and Apply stay absent by construction: the existing host receives
+ * a null command port and starts with an unavailable party projection.
+ */
+function installHostOnlyTools(): void {
+  if (hostOnlyToolsInstallationStarted || rendererUnloading) return;
+  hostOnlyToolsInstallationStarted = true;
+  void import('./tools-host.js')
+    .then(({ mountHostOnlyTools }) => {
+      if (rendererUnloading) return;
+      const dispose = mountHostOnlyTools(
+        document.body,
+        templatePublishingAvailable,
+      );
+      if (rendererUnloading) {
+        dispose();
+        return;
+      }
+      disposeHostOnlyTools = dispose;
+    })
+    .catch((error) => {
+      log(
+        '[tools]',
+        error instanceof Error ? error.message : String(error),
+      );
+    });
+}
+
 function maybeInstallEnhancements(): void {
   if (enhancementInstallationStarted || !runtimeInitialized) return;
 
@@ -236,16 +273,18 @@ function maybeInstallEnhancements(): void {
   // manifest's exact hook set matches the selected tools or developer program.
   const enhancementRequested =
     init.enhancementProgram !== 'none'
-    || init.enhancementSelection.nativeCursor;
-  if (
-    !enhancementRequested
-    || !gameWasmInstance
-    || !gameWasmModule
-    || WebAssembly.Module.customSections(
-      gameWasmModule,
-      'enhancement_manifest',
-    ).length !== 1
-  ) return;
+    || init.enhancementSelection.nativeCursor
+    || init.enhancementSelection.tools;
+  if (!gameWasmInstance || !gameWasmModule) return;
+  const manifestCount = WebAssembly.Module.customSections(
+    gameWasmModule,
+    'enhancement_manifest',
+  ).length;
+  if (manifestCount !== 1) {
+    if (init.enhancementSelection.tools) installHostOnlyTools();
+    return;
+  }
+  if (!enhancementRequested) return;
 
   enhancementInstallationStarted = true;
   const enhancementInstance = gameWasmInstance;
@@ -258,10 +297,25 @@ function maybeInstallEnhancements(): void {
         init.enhancementSelection,
         init.enhancementProgram,
       ))
-    .catch((error) => log(
-      '[enhancement]',
-      error instanceof Error ? error.message : String(error),
-    ));
+    .then((installation) => {
+      // Unsupported manifests and exports are a normal soft refusal. The
+      // installer returns null for those cases rather than throwing, but the
+      // host-owned library remains just as usable as it is on a module with no
+      // manifest at all.
+      if (installation === null && init.enhancementSelection.tools) {
+        installHostOnlyTools();
+      }
+    })
+    .catch((error) => {
+      log(
+        '[enhancement]',
+        error instanceof Error ? error.message : String(error),
+      );
+      // A certified companion is optional to the host library. If its runtime
+      // installation refuses, keep the game and host-owned Tools usable while
+      // leaving every live observation and command unavailable.
+      if (init.enhancementSelection.tools) installHostOnlyTools();
+    });
 }
 
 window.gwLog = (on = true) => {
@@ -507,8 +561,10 @@ function showLoginStatus(
 }
 
 addEventListener('beforeunload', () => {
+  rendererUnloading = true;
   clientHealthConfirmation?.dispose();
   imageSource?.stop();
+  disposeHostOnlyTools();
   disposeSocketHost();
 });
 
@@ -1148,6 +1204,9 @@ function loadGlue() {
       native().client.session(),
     ]);
     appSettings = settings;
+    templatePublishingAvailable =
+      session.compatibility?.state === 'template-only'
+      || session.compatibility?.state === 'certified';
     applyAppearance(settings);
     clientHealthConfirmation = createClientHealthConfirmation({
       token: session.healthToken,

@@ -486,13 +486,16 @@ GWonMac Tools you selected — the loading screen says so once for that build,
 names exactly what is affected, and offers **Play Guild Wars** as the primary
 action. The notice explains; it does not block you.
 
-Gameplay is never blocked. If the local check refuses a changed structure, Core
-continues wherever safely certified and optional Tools stay off; support
-may need a new app release; retrying, reinstalling, or clearing downloaded game
-data will not change that decision. The same status is always visible under
-**Settings → Controls**. An uncertified client build does not mean the app is
-out of date — whether a newer release exists is the separate question above,
-which the notice's own **Check for Updates** button answers.
+Gameplay is never blocked. If the local check refuses a changed structure, the
+verified official client runs unchanged. Your host-owned Build and Team library
+still opens, edits, imports, exports, and persists; live party observations,
+Target Distance, Team Apply, and client template repair remain unavailable until
+that exact integration is certified. Support may need a new app release;
+retrying, reinstalling, or clearing downloaded game data will not change that
+decision. The same status is always visible under **Settings → Controls**. An
+uncertified client build does not mean the app is out of date — whether a newer
+release exists is the separate question above, which the notice's own **Check
+for Updates** button answers.
 
 Optional tools control their observations independently. Target Distance reads
 only the state needed for its Test readout; Team Management reads party/build

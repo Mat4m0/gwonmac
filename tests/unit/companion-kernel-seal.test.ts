@@ -12,6 +12,7 @@ import { after, describe, it } from "node:test";
 import {
   COMPANION_KERNEL_DYLINK0,
   COMPANION_KERNEL_EXPORT_VALUES,
+  COMPANION_KERNEL_IMPORTS,
   COMPANION_KERNEL_SIGNATURES,
   validateCompanionKernelContract,
 } from "../../scripts/companion-kernel-contract.mjs";
@@ -169,6 +170,27 @@ const rendererSource = [
 ].join("\n");
 
 describe("companion kernel build contract", () => {
+  it("states the exact reviewed import and function vocabulary once", () => {
+    assert.deepEqual(COMPANION_KERNEL_IMPORTS, [
+      "env.__indirect_function_table:table",
+      "env.__memory_base:global",
+      "env.__stack_pointer:global",
+      "env.__table_base:global",
+      "env.memory:memory",
+    ]);
+    assert.deepEqual(COMPANION_KERNEL_SIGNATURES, [
+      { name: "companion_init", typeIndex: 0 },
+      { name: "companion_dispatch", typeIndex: 1 },
+      { name: "companion_cursor_event_count", typeIndex: 2 },
+      { name: "companion_abi", typeIndex: 2 },
+      { name: "companion_config_bytes", typeIndex: 2 },
+      { name: "companion_snapshot_bytes", typeIndex: 2 },
+      { name: "companion_cursor_bytes", typeIndex: 2 },
+      { name: "companion_toolbox_bytes", typeIndex: 2 },
+      { name: "companion_party_bytes", typeIndex: 2 },
+    ]);
+  });
+
   it("accepts exactly the fixed side-module surface", () => {
     const bytes = fixture();
     assert.equal(WebAssembly.validate(bytes), true);

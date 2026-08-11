@@ -146,7 +146,10 @@ Unknown builds start from the verified official artifact. A separate
 template-save-compatible copy may be shape-recertified locally, but Enhancement
 is exact-build only until a future
 verifier independently recovers every hook and address. A common relocation
-alone is not enough evidence for that decision.
+alone is not enough evidence for that decision. When Tools was selected, the
+renderer still mounts the same native-library host with no observation or
+command port. This preserves Build and Team authoring without loading the
+companion kernel or granting the official module any optional capability.
 
 This fail-closed behavior is the last safety net, not the desired update
 experience. ArenaNet update continuity needs three operational layers:

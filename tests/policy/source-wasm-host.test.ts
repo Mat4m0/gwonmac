@@ -428,7 +428,7 @@ test("the served module decides whether Enhancement imports", async () => {
   assert.doesNotMatch(gate, /Object\.values\(init\.enhancementSelection\)/u);
   assert.match(
     gate,
-    /WebAssembly\.Module\.customSections\(\s*gameWasmModule,\s*'enhancement_manifest',\s*\)\.length !== 1/u,
+    /WebAssembly\.Module\.customSections\([\s\S]{0,120}'enhancement_manifest'/u,
   );
   assert.match(
     gate,

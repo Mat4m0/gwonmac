@@ -178,7 +178,7 @@ So the honest formulation of the problem is:
 | **Cursor-refresh retry, pointer-lock gating**   | Pure renderer logic reading published cursor state                                                                                                                           | none                                             | Survives (useless without the cursor cert, but never harmful)                                       |
 | **"Map cursor"**                                | Not a separate feature — it is the cursor bitmap pipeline plus the map-state words above                                                                                     | —                                                | covered above                                                                                       |
 | **Keyboard label offset**                       | Investigation only; nothing ships (`internal/upstream/keyboard-label-offset.md`)                                                                                             | —                                                | n/a — filed upstream                                                                                |
-| **Hero build management**                       | Host-side codec, storage, and UI; certified reads/actions degrade independently                                                                                              | hero, skill, and action facts                    | Host data persists; running-game availability remains certification-dependent                        |
+| **Hero build management**                       | Host-side codec, storage, and UI; certified reads/actions degrade independently                                                                                              | hero, skill, and action facts                    | Host-side features survive; unavailable certified features refuse                                   |
 
 Key numbers for intuition: the fragile surface is currently **4 function/table
 indices + 36 layout words + 13 message IDs + 1 body hash** — about 54 facts.
@@ -364,8 +364,8 @@ Good news from the research: most of it is _not_ new fragile surface.
   template publication is certified: the
   game's own `Templates/Skills` folder is already load-bearing in this repo —
   the game reads templates from disk, and our template-save bridge already
-  owns that directory. Without certification, publication into the running
-  game remains unavailable.
+  owns that directory. Unknown builds may still author and export templates,
+  but must not claim that the game can enumerate them.
 - **Listing heroes** is reads only, and the party layout words for it are
   partially certified already (heroes array walk in the kernel). The hero
   roster (`hero_info` array: id, level, professions, name) is one more

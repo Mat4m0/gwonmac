@@ -105,7 +105,10 @@ watch(
     if (visible) {
       requestAnimationFrame(() => {
         fitPanelToViewport();
-        search.value?.focus();
+        // The embedded palette opens over a running game and must leave the
+        // keyboard with it. Explicitly clicking into a field still focuses the
+        // field; only the standalone window chooses a typing target on show.
+        if (props.mode === "standalone") search.value?.focus();
       });
     }
   },

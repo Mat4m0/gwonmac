@@ -1,12 +1,17 @@
 import {
   _electron as electron,
   type ElectronApplication,
+  type Locator,
   type Page,
 } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  type CachedClientOptions,
+  seedCachedClient,
+} from "../helpers/cached-client.js";
 
 export const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -25,6 +30,16 @@ export interface OfflineFixture {
   readonly userData: string;
 }
 
+/**
+ * Test DOM keyboard ownership without requiring the background Electron window
+ * to become the active macOS application.
+ */
+export async function isDomActiveElement(target: Locator): Promise<boolean> {
+  return target.evaluate(
+    (element) => element.ownerDocument.activeElement === element,
+  );
+}
+
 export async function launchOffline(
   prefix: string,
   environment: Record<string, string> = {},
@@ -38,6 +53,39 @@ export async function launchOffline(
     await rm(userData, { recursive: true, force: true });
     throw error;
   }
+}
+
+/**
+ * Launch against one explicit verified client generation. Most tests should
+ * use `launchOffline`: its empty cache reaches the network-free error state,
+ * which is enough for shell and pre-ready module coverage. This helper is for
+ * tests that genuinely cross the client/session/snapshot/glue boundary.
+ */
+export async function launchCachedClient(
+  prefix: string,
+  environment: Record<string, string> = {},
+  prepare: (userData: string) => Promise<void> = async () => {},
+  client: CachedClientOptions = {},
+): Promise<OfflineFixture> {
+  return launchOffline(prefix, {
+    ...environment,
+    // This helper exists before the stack removes the legacy fake-ready seam.
+    // Force a sealed cached generation even if a caller supplies conflicting
+    // environment values.
+    GW_OFFLINE_SHELL: "0",
+    GW_REQUIRE_CACHED_CLIENT: "1",
+  }, async (userData) => {
+    await seedCachedClient({
+      artifacts: path.join(userData, "game", "artifacts"),
+      userData,
+    }, {
+      ...client,
+      beforeSeal: async () => {
+        await client.beforeSeal?.();
+        await prepare(userData);
+      },
+    });
+  });
 }
 
 export async function launchOfflineAt(

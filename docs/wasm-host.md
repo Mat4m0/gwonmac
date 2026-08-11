@@ -331,7 +331,10 @@ The harness uses request and effective state without conflating them. A selected
 tool or fixed developer program requests a capability, while the
 `enhancement_manifest` on the instantiated WebAssembly module proves that this
 launch received exactly that certified derivative. A requested but uncertified
-launch imports no Enhancement module and fetches no kernel. Cursor-observer mode
+launch imports no Enhancement module and fetches no kernel. If Tools was
+selected, the harness mounts the existing host with an unavailable party and a
+null command port; Build and Team authoring therefore survives without turning
+host UI into transform authority. Cursor-observer mode
 publishes the selected cursor without a target scan; target-observer mode
 explicitly enables map/player/target state; Toolbox uses tick and UI callbacks
 without allocating the target snapshot.

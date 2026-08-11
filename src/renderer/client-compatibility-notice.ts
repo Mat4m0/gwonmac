@@ -85,8 +85,9 @@ export function compatibilityReport(
       details: [
         'You can keep playing. ' + GAMEPLAY,
         'Extras added by this app are limited until an app update confirms '
-          + `this build: ${FEATURES} may not work correctly, and the game `
-          + 'tools stay off.',
+          + `this build: ${FEATURES} may not work correctly. Your local Build `
+          + 'and Team library remains available, while live game observations '
+          + 'and Apply stay off.',
         ...(enhancementDegraded
           ? [
               `Your ${requestedTools} ${

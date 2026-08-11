@@ -43,6 +43,10 @@ export type PublishedTemplate = Readonly<{
   location: string;
 }>;
 
+const PUBLISH_UNAVAILABLE =
+  "Saving into Guild Wars is unavailable for this client build. "
+  + "Your build remains safe in the local library.";
+
 export type LibraryLoad = Readonly<{
   library: BuildLibrary;
   recovered: boolean;
@@ -72,6 +76,8 @@ export interface ToolsHost {
   writeClipboard(text: string): Promise<void>;
   reloadSkills(): Promise<void>;
   publishBuild(build: Build): Promise<PublishedTemplate>;
+  /** Why publishing into the running client's template list is unavailable. */
+  readonly publishUnavailable: string | null;
   applyTeam(
     plan: TeamApplyPlan,
     onEvent?: (event: TeamApplyEvent) => void,
@@ -187,6 +193,7 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
     party: ref(demoParty),
     // The fixture host answers its own apply, so it has nothing to refuse.
     applyUnavailable: null,
+    publishUnavailable: null,
     async loadLibrary() {
       memory = read();
       return { library: cloneLibrary(memory), recovered: false };
@@ -234,7 +241,9 @@ export type PublishableTemplate = Readonly<{ name: string; code: string }>;
 
 export function createNativeHost(
   api: GwNativeApi,
-  publishTemplate: (template: PublishableTemplate) => Promise<PublishedTemplate>,
+  publishTemplate:
+    | ((template: PublishableTemplate) => Promise<PublishedTemplate>)
+    | null,
   /**
    * The certified commands, or `null` for a client module derived without
    * them. The renderer hands them straight through without reading them; the
@@ -321,6 +330,7 @@ export function createNativeHost(
     skills,
     party,
     applyUnavailable,
+    publishUnavailable: publishTemplate === null ? PUBLISH_UNAVAILABLE : null,
     async loadLibrary() {
       const [library, skills] = await Promise.all([
         api.buildLibrary.get(),
@@ -365,6 +375,7 @@ export function createNativeHost(
     writeClipboard: (text) => api.clipboard.writeText(text),
     reloadSkills: loadSkills,
     async publishBuild(build) {
+      if (publishTemplate === null) throw new Error(PUBLISH_UNAVAILABLE);
       const code = encodeSkillTemplate(build);
       if (code === null) {
         throw new Error("This build cannot be written as a template.");
