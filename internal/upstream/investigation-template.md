@@ -1,49 +1,40 @@
-# Investigation log template
+# Investigation record template
 
-The shape [investigation-log.md](investigation-log.md) is written in, extracted
-so the next investigation does not have to invent one. Copy the skeleton below
-into a new log, or as the next round of an existing one, and fill it in while
-the work happens — a round reconstructed afterwards keeps the answer and loses
-the wrong turn, which is the part worth writing down.
+> **Purpose:** preserve an expensive wrong turn so that another maintainer does
+> not repeat it. This is an evidence format, not an architecture document.
 
-## When a log is owed
+Create a record when the cause was not where the symptom suggested, an
+instrument gave a false impression, or a shipped correction needed replacement.
+If the first hypothesis was correct, use a commit message instead.
 
-When the cause was not where the symptom pointed, an instrument lied, or a
-shipped fix had to be replaced. Work whose first hypothesis held needs a commit
-message, not a log.
+Record each round while it happens. A later reconstruction usually keeps the
+answer and loses the useful failed hypothesis.
 
-## The skeleton
+## Template
 
 ```md
-## Round N — wrong: the one-line claim
+## Round N: short result
 
-**Hypothesis.** What was believed, in the terms that made it plausible.
+**Hypothesis:** State what you believed and why it was plausible.
 
-**Built.** What was written on the strength of it, named well enough that a
-later reader can tell which parts survived.
+**Change:** State what you changed because of the hypothesis.
 
-**Wrong because** — the measurement that killed it, quoted. The number, the
-string, the trace line, not "this turned out to be incorrect".
+**Measurement:** Include the exact value, trace line, error, or observed result
+that confirmed or rejected the hypothesis.
 
-**Kept anyway.** Only when part of the wrong build stands on its own merits;
-say what those are without the hypothesis that produced it.
+**Retained work:** List only work that remains correct for an independent
+reason.
 
-**Lesson.** The rule that would have shortened the round, stated so it applies
-to work with nothing else in common with this bug.
+**Lesson:** State the rule that would have shortened this investigation.
 ```
 
-A round that was right keeps the same headings and says so in its title. The
-ratio is part of the record.
+## Evidence rules
 
-## What keeps it worth reading
-
-- A hypothesis retired without a measurement is still alive. Say what was run,
-  and prefer the cheapest level that could decide the question.
-- Name what the instrument could not see. Silence from a filtered trace is not
-  absence, and an instrument gets its own defects recorded like any other.
-- Date a round that lands long after the ones above it; every index, offset and
-  hash in these documents belongs to one client build.
-- Close a finished investigation with what we would do differently and the
-  verification ladder that ended up working, so the next one starts a level up.
-- Probes that read client memory, temporary tracers and one-off patches are
-  removed once they have answered. The log is where they persist.
+- A rejected hypothesis needs a measurement.
+- State what each instrument cannot observe.
+- Treat a misleading instrument as a defect and record it.
+- Record the exact client build for every index, address, offset, and hash.
+- Use the least expensive proof that can decide the question.
+- End the investigation with the current conclusion and evidence boundary.
+- Remove temporary client-memory probes, tracers, and patches after they answer
+  the question. Preserve only their result here.

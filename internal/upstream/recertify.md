@@ -1,304 +1,193 @@
-# Re-certifying a new client build
+# Recover certification after an ArenaNet client update
 
-Every function index, local index and byte offset in these documents belongs to
-one exact build. A new ArenaNet hash triggers the launcher's isolated local
-verifier. It may derive the template-save record when those complete semantics
-remain equivalent. Enhancement does **not** auto-relocate: a shared address
-delta cannot prove three hook semantics and every structure field. It therefore
-requires a new exact certificate after all three hooks and every address are re-derived. Until
-then the untouched official module is used, so the client keeps working and
-only unproven compatibility features are disabled. Startup logs the verifier
-outcome, and `client.buildCertification` in a diagnostics ZIP says `certified`,
-`template-only`, or `uncertified` — **check that first when someone reports a
-regression.**
+> **Status: maintainer recovery guide.** Use this file only when the bounded
+> certification tools refuse. Current commands and runtime rules are owned by
+> [Enhancement development](../../docs/enhancement-development.md) and the code
+> under `src/main/certification/`.
 
-## The short version
+## Safe result
 
-```bash
-# 0. Prove the tool still reproduces today's certified entry. Exits 0.
-pnpm certification template --expect-certified
+An unknown client must remain playable as the untouched official module.
+Template repair can continue only when the isolated verifier proves the full
+affected caller semantics. Enhancement facts require a new exact-build
+certificate. A shared address or function-index delta is not proof.
 
-# 1. Point it at the new client and read the JSON.
-pnpm certification template "<path>/Gw.jspi.wasm"
+`client.buildCertification` in a diagnostics export reports one of these
+states:
 
-# 2. Get a paste-ready entry for TEMPLATE_SAVE_BUILDS (goes to stderr).
-pnpm certification template "<path>/Gw.jspi.wasm" --emit-ts
-```
-
-The command calls the same production locator as the launcher. It re-derives
-every index and call-site offset by shape — body bytes, resolved signatures,
-and caller-set intersection — then runs the derived entry through the
-production transform to fill in `outputSha256`. The launcher additionally
-compares the complete affected caller bodies with the current baseline,
-normalising only the five selected call-index operands. Identical offsets alone
-are not proof. CLI-only comparison, diagnostic prose, and TypeScript formatting
-remain under `src/tools`.
-
-Read the `status` field first:
-
-| `status` | Meaning |
+| State | Meaning |
 | --- | --- |
-| `certified` / `derived` with `matchesCertifiedEntry: true` | nothing to do |
-| `derived` | paste the entry, bump the ABI if the derived bytes changed |
-| `not-applicable` | no create-directory stub — **ArenaNet may have fixed it**, see step 1 below before doing anything else |
-| `failed` | read `diagnostics`; a locator found the wrong number of candidates and named them |
+| `certified` | Template repair and the selected exact-build Tools facts are available. |
+| `template-only` | Template repair is proven. Optional Tools are unavailable. |
+| `uncertified` | Use the official client without unproven transforms. |
 
-**When this manual procedure is required.** The launcher may derive only the
-template-save transform when its complete caller semantics remain unchanged.
-Enhancement accepts only an exact certificate; it performs no address
-relocation. A refusal means a maintainer must recover semantics, not merely
-indices. Step 5 below — re-measuring what the path helpers actually do — still
-has to be done by hand, and skipping it is how you ship a bridge that resolves
-cleanly and behaves wrongly. Every one of the six upstream defects in
-[upstream-defects.md](upstream-defects.md) was a semantic finding, not an index.
+Check this value first when a player reports a regression after an ArenaNet
+update.
 
-## Manual procedure
+## Step 1: try to delete the workaround
 
-Kept because the tool can only fail one way — by refusing — and when it does,
-this is what you fall back to.
+Install the official candidate and test the affected official behavior. If
+ArenaNet fixed the defect, delete the local transform instead of certifying it
+again. The purpose of each transform is to disappear when the official client
+no longer needs it.
 
-### 1. Check whether it is still needed
+## Step 2: use the bounded tools
 
-Install the new client and try to save a build. If ArenaNet has fixed the
-defects, delete the whole bridge rather than re-certifying it — the point was
-never to own this code. `git log` for `template-save-compat` gives the full
-removal surface.
-
-### 2. Regenerate symbols
+First reproduce the current certified template entry:
 
 ```bash
-python3 tools/gensyms.py "<path>/Gw.jspi.wasm" build/
+pnpm certification template --expect-certified
 ```
 
-Produces `build/Gw.named.wasm` (loadable in Ghidra, Chrome DevTools, Binaryen),
-`build/symbols.csv` (function → source file and assertion strings) and
-`build/string_xrefs.csv`.
+Then inspect the new official module:
 
-Function index = local index + the function import count. Get the count from
-`tools/wasmscan.py`; do not assume 219.
-
-### 3. Find the four stubs, then `File::Open`
-
-Each has a recipe that does not depend on the old indices:
-
-**Create directory.** Body is a single `i32.const 2`. Cross-check the callers:
-one in `AcctCliTemplate.cpp`, one in `UiScreen.cpp`, one in `CtChatLog.cpp`, one
-in `ActDlgLogin.cpp`.
-
-**Find files.** Body is empty, signature `(i32,i32,i32) -> ()`. Its callers are
-the same set plus the two `AcctCliTemplate.cpp` scans.
-
-**Entry name.** Body is a single `i32.const 0`, signature `(i32 × 6) -> i32`,
-called from both scans.
-
-Both scans are easiest to reach from the data side — find the UTF-16
-`Templates/Skills` literal and the functions referencing it:
-
-```python
-import sys; sys.path.insert(0, 'tools')
-from wasmscan import WasmModule
-m = WasmModule('<path>/Gw.jspi.wasm')
-for base, blob in m.segs:
-    i = blob.find('Templates/Skills'.encode('utf-16-le'))
-    while i >= 0:
-        print(hex(base + i), m.refs_to(base + i))
-        i = blob.find('Templates/Skills'.encode('utf-16-le'), i + 1)
+```bash
+pnpm certification template "/absolute/path/Gw.jspi.wasm"
+pnpm certification template "/absolute/path/Gw.jspi.wasm" --emit-ts
+pnpm certification recertify "/absolute/path/Gw.jspi.wasm"
+pnpm certification double-click "/absolute/path/Gw.jspi.wasm"
 ```
 
-**Delete file.** Sweep for `assert("not implemented")` bodies and keep the ones
-with a live caller:
+Read the template report status first:
 
-```python
-def text(v):
-    for base, blob in m.segs:
-        if base <= v < base + len(blob):
-            o = v - base
-            return blob[o:blob.find(b'\0', o)].decode('ascii', 'replace')
-for s, e, f in m.funcs:
-    if e - s > 40: continue
-    ops = list(m.decode_body(s, e))
-    kinds = [op for _o, op, _v in ops]
-    if kinds[:3] == [0x41, 0x41, 0x41] and 0x10 in kinds and 0x00 in kinds:
-        consts = [v for _o, op, v in ops if op == 0x41]
-        print(f, text(consts[0]), text(consts[1]), consts[2])
+| Status | Action |
+| --- | --- |
+| `certified` or matching `derived` | No table change is needed. |
+| `derived` | Review the evidence and proposed entry. Do not treat formatting as proof. |
+| `not-applicable` | Test whether ArenaNet fixed the defect. Prefer deletion. |
+| `failed` | Use the manual procedure below. Do not weaken the locator to force a result. |
+
+The template command uses the same production locator as the launcher. It
+derives candidates from body shape, signatures, and caller intersections. The
+runtime verifier also compares complete affected caller bodies while
+normalizing only the selected call-index operands. Matching offsets alone are
+not enough.
+
+The Enhancement report is review evidence only. `candidate`, `ambiguous`, and
+`unavailable` cannot create runtime authority. A maintainer must re-measure
+every required hook, address, structure field, and message ID.
+
+## Manual template recovery
+
+Use this procedure only after an automated refusal.
+
+### 1. Record the artifact
+
+Record the official SHA-256, byte size, build ID, function import count, and
+WASM validity. Do not assume the old import count of 219.
+
+### 2. Generate investigation symbols
+
+```bash
+python3 tools/gensyms.py "/absolute/path/Gw.jspi.wasm" build/
 ```
 
-**File::Open.** The only bridged target that is not a stub, so it has no
-distinguishing body — it is identified by how the template-write function uses
-it. In the write function (a caller of create-directory that is neither of the
-two scans nor a directory sink), find the `(i32,i32,i32) -> i32` callee that is
-called exactly twice, where the first call is preceded by `i32.const 1;
-i32.const 0` and the second by `i32.const 2; i32.const 0`.
+This produces a named investigation module plus function and string-reference
+reports. Generated client artifacts stay untracked.
 
-The mode is the *second*-to-last constant: both calls end with the literal `err`
-argument. Decode two instructions rather than matching raw bytes, or the recipe
-breaks silently the day that argument stops being a literal zero.
+### 3. Locate the template routines by meaning
 
-Only the first of the two — the mode-1 existence probe — is repointed. The
-mode-2 write call and the load path keep the real function.
+Do not search for old indices. Use these measured shapes and call contexts:
 
-### 4. Record the call sites
+| Routine | Locator evidence |
+| --- | --- |
+| Create directory | Body is one `i32.const 2`; callers include account templates, screenshots, chat logs, and login. |
+| Find files | Empty body; signature `(i32, i32, i32) -> ()`; called by both template scans. |
+| Derive entry name | Body is one `i32.const 0`; six `i32` inputs and one `i32` result; called by both scans. |
+| Delete file | Short `assert("not implemented")` body with a live file-delete caller. |
+| `File::Open` | In the template writer, one `(i32, i32, i32) -> i32` callee is called first with mode 1 and later with mode 2. |
 
-For each stub, the callers to repoint and the byte offset of the `call` inside
-each caller's body:
+The mode value is the second-to-last argument. Decode instructions instead of
+matching raw bytes. Only the mode-1 existence probe is repointed. Keep the
+mode-2 writer and the template loader on the original function.
 
-```python
-bodies = {f: (s, e) for s, e, f in m.funcs}
-for caller in CALLERS:
-    s, e = bodies[caller]
-    for off, op, val in m.decode_body(s, e):
-        if op == 0x10 and val == STUB_INDEX:
-            print(caller - IMPORTS, off - s)
+### 4. Record exact call sites
+
+For each approved caller, record the local function index and the decoded byte
+offset of the call. Confirm that the call instruction uses the expected padded
+encoding. If the new toolchain changes the width, the in-place repoint is no
+longer valid. Change the transform design; do not overwrite a different number
+of bytes.
+
+### 5. Measure the client contract
+
+Append temporary export entries to an untracked copy of the official module.
+Instantiate it with zero-returning stub functions and call only pure helpers.
+Appending exports changes only the export section.
+
+Re-measure at least these facts:
+
+- whether `Path::GetDirectory` keeps the trailing separator;
+- which separator `_wmakepath` inserts;
+- whether `Path::RemoveExtension("\\Test.txt")` still drops the last name
+  character;
+- the file and directory enumeration patterns;
+- the meaning of the enumeration flags; and
+- the mode-1 `File::Open` behavior.
+
+`memory` and `malloc` are exported by the examined official module. Use the
+client allocator when a client caller will free the result. Run the same pure
+probes on the derived module to confirm marker arguments and return polarity.
+
+Do not call stateful UI or text functions in a cold instance. Use one bounded
+live instrument for those functions.
+
+### 6. Update and verify
+
+Add a template table entry only after the evidence matches. Start with an empty
+derived output hash, run the production transform, and pin the resulting hash.
+Increase `TEMPLATE_SAVE_TRANSFORM_ABI` if the derived bytes or bridge contract
+changed.
+
+Certify transforms in this order:
+
+1. official module;
+2. template-save output;
+3. optional Enhancement output; and
+4. native double-click output.
+
+Later stages certify the bytes produced by earlier stages. They are not
+alternative transforms.
+
+Run the repository verification defined in `AGENTS.md`. Then use one live
+check for the behavior that offline proof cannot establish.
+
+## Offline bridge check
+
+Instantiate the derived module with the real renderer bridge and an offline fake
+filesystem. Drive the forwarders with the path shapes that the client really
+produces, including:
+
+```text
+Templates/Skills/\Test.txt
 ```
 
-Confirm each is a 6-byte padded encoding (`10` followed by five bytes). If a
-future toolchain emits canonical LEB there instead, the same-width repoint no
-longer applies and the transform needs to splice bodies rather than overwrite in
-place.
+A clean fixture such as `Templates/Skills/Test.txt` previously hid a delete and
+rename failure.
 
-### 5. Re-measure the conventions
+## Minimum live template check
 
-Do not assume the semantics carried over. Re-run the probes in the next section
-for at least:
+Use one account and complete this sequence in one run:
 
-- `Path::GetDirectory` on a full template path — does it still keep the trailing
-  separator?
-- `_wmakepath` — still `/`?
-- `Path::RemoveExtension` on `"\Test.txt"` — is defect 5 still present? If it is
-  fixed, our extension stripping stays correct but the comment explaining it
-  should say so.
-- the enumeration patterns and their `flags` values
+1. Save a skill template and confirm the complete name.
+2. List and load it.
+3. Rename it and confirm that no old or empty duplicate remains.
+4. Delete it and confirm that the client does not abort.
+5. Restart and confirm that the remaining templates persist.
+6. Repeat the save, list, load, rename, and delete sequence for equipment.
+7. Confirm screenshot creation because it uses the same directory and listing
+   routines.
 
-### 6. Update, pin, verify
+The official client does not recursively scan template subdirectories. Do not
+use a nested template as a success criterion for the bridge.
 
-`pnpm certification template <wasm> --emit-ts` does steps 1 and 2 for you.
+## Do not repeat these mistakes
 
-1. Add the new entry to `TEMPLATE_SAVE_BUILDS` with `outputSha256: ""`.
-2. Run the transform; the thrown error reports the actual derived hash. Pin it.
-3. Bump `TEMPLATE_SAVE_TRANSFORM_ABI` if the derived bytes or the contract
-   changed — it is part of the derived cache key.
-4. Update the hashes in `tests/policy/source-wasm-host.test.ts`.
-5. `pnpm check && pnpm build && pnpm test:release`
-6. Run the live checklist below.
-
-## Probing the client's own functions
-
-The technique that ended every round of guessing. Append export entries for the
-functions you care about, instantiate in Node with stub imports, and call them.
-Pure path helpers need no game state, network or login.
-
-Appending exports is safe: it changes only the export section's own length.
-
-```python
-import sys; sys.path.insert(0, 'tools')
-from wasmscan import WasmModule, uleb as rd
-
-def enc(v):
-    out = bytearray()
-    while True:
-        b = v & 0x7f; v >>= 7
-        if v: out.append(b | 0x80)
-        else:
-            out.append(b); return bytes(out)
-
-def name(s):
-    b = s.encode(); return enc(len(b)) + b
-
-WANT = [404, 411, 412, 455, 456, 457, 459, 895]     # whatever you need
-m = WasmModule('<path>/Gw.jspi.wasm'); d = m.d
-p, sec = 8, None
-while p < len(d):
-    sid = d[p]; hp = p; p += 1
-    ln, q = rd(d, p); body = q; p = q + ln
-    if sid == 7: sec = (hp, body, ln)
-hp, body, ln = sec
-n, q = rd(d, body)
-add = b''.join(name(f'probe_{f}') + bytes([0]) + enc(f) for f in WANT)
-new = enc(n + len(WANT)) + d[q:body + ln] + add
-open('build/Gw.probe.wasm', 'wb').write(
-    d[:hp] + bytes([7]) + enc(len(new)) + new + d[body + ln:])
-```
-
-```js
-import { readFile } from 'node:fs/promises';
-
-const mod = new WebAssembly.Module(await readFile('build/Gw.probe.wasm'));
-const imports = {};
-for (const { module, name } of WebAssembly.Module.imports(mod)) {
-  imports[module] ??= {};
-  imports[module][name] = () => 0;
-}
-const E = new WebAssembly.Instance(mod, imports).exports;
-
-const u16 = () => new Uint16Array(E.memory.buffer);
-const w = (a, s) => { const h = u16(), i = a >>> 1;
-  for (let k = 0; k < s.length; k += 1) h[i + k] = s.charCodeAt(k);
-  h[i + s.length] = 0; };
-const r = (a) => { const h = u16(); let i = a >>> 1, o = '';
-  while (h[i]) { o += String.fromCharCode(h[i]); i += 1; } return o; };
-
-// Scratch space well past the data segments; nothing else is running.
-const A = 0x400000, B = 0x410000;
-w(A, '\\Test.txt');
-E.probe_457(B, A, 260);
-console.log(JSON.stringify(r(B)));      // "\Test" if defect 5 is fixed
-```
-
-Notes:
-
-- Stub every import with `() => 0`. Nothing we probe uses them.
-- The stack pointer global is initialised, so functions with locals work without
-  running `__wasm_call_ctors`.
-- `malloc` and `memory` are already exported by the official module, so the
-  client's own allocator is available — that is how we proved the listing block
-  is allocated and freed correctly.
-- Use it on the **derived** module too, to prove the forwarders route to the
-  carrier with the right markers and arguments.
-
-## Integration check without the game
-
-Instantiate the derived module with the **real** bridge source over a fake
-filesystem, then drive the forwarders directly. This catches contract mistakes
-that unit tests with hand-made fixtures miss:
-
-```js
-// The bridge is an ESM module. It reads the markers off the page as it
-// is imported, so the fake page has to exist before the import.
-Object.assign(globalThis, {
-  window: { gwNative: { init: {}, wasmBridgeMarkers: WASM_BRIDGE_MARKERS } },
-  FS: fakeFs,
-});
-const { installTemplateSaveCompatibility } =
-  await import('../src/renderer/template-save-compatibility.js');
-installTemplateSaveCompatibility({
-  imports, module: Module, exports: () => instance?.exports ?? null,
-});
-```
-
-Feed it the path shapes the client actually produces — with the doubled
-separator, `Templates/Skills/\Test.txt`. A cleaner path passes when the real one
-would not; that exact mistake hid the delete bug through one full round.
-
-## Live checklist
-
-Requires a login. Run the whole cycle in order rather than each action alone.
-
-- [ ] Save a build → confirmation names it `"\<name>"`
-- [ ] Open "Load from Skills Template" → the build is listed, name complete
-- [ ] Load it → skills apply, no "Template Code" error
-- [ ] Rename it → the list shows the new name only, no duplicate left behind
-- [ ] Delete it → disappears, no crash
-- [ ] Restart the app → surviving templates are still listed
-- [ ] Create a subdirectory case if possible → nested templates list one level
-      down and not at the root
-- [ ] Take a screenshot → `Screens/` is written
-- [ ] Equipment templates → same cycle, type 1
-
-With `GW_TEMPLATE_FS_TRACE=1`, `[template-fs-bridge]` should show
-`ensureDirectory result 0`, `findFiles … published:true`, one `fileBaseName` per
-entry, `fileExists exists:false` before a rename that is allowed to proceed, and
-`deleteFile deleted:true`.
-
-If the bridge logs nothing at all for an action, the failure is upstream of the
-bridge and no bridge-side change will fix it — read the client's own log instead.
-That is what round 10 cost.
+- Do not bypass a failing create-directory guard. The later null-handle path can
+  abort.
+- Do not use a cleaner path in a fixture than the client supplies.
+- Do not ignore an argument because its meaning is unknown.
+- Do not read a filtered trace as proof that no call occurred.
+- Do not certify a static address without a live invariant.
+- Do not weaken a locator until it returns one result.
+- Do not make optional Tools a requirement for the official client.

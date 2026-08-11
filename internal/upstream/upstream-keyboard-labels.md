@@ -1,6 +1,11 @@
 # Guild Wars WebAssembly client: every printable key is labelled one position too high
 
-A report for ArenaNet. Nothing in it depends on our project.
+> **Status: confirmed upstream defect; local fix deferred.** This report is
+> historical evidence for the examined client build. It does not define current
+> gwonmac behavior.
+
+The report is self-contained for ArenaNet. The last section also preserves the
+local search record so that the same failed approaches are not repeated.
 
 ## Summary
 
@@ -146,3 +151,54 @@ What is directly observed: the rendered labels, the keys that actually work,
 and the contents and layout of the descriptor table. What is inferred: which
 of the two readings above is the real one. We have marked the boundary
 between the two deliberately.
+
+## Local investigation record
+
+Exactly one function references the descriptor table: function 2441, the
+Emscripten input callback registration. It contains `"#canvas"` and callback
+table slots 899 through 909. The function stores the table pointer. It does not
+index the table in place. A search for direct references therefore cannot find
+the display consumer.
+
+These static anchors were tried and did not identify the renderer:
+
+- The table address had only the one reference above.
+- Localized labels such as `Up Arrow`, `Page Up`, and `Num Lock` did not occur
+  in the module.
+- Range checks for unusual ASCII-plus-one bounds reduced the search but were
+  not unique. The strongest candidates were functions 7154, 12320, 10382,
+  13674, 12328, and 15906. Function 7154 was 16,590 bytes.
+
+Cold function calls found function 9718. It writes a key id as one character
+without applying an offset:
+
+```text
+47:/  48:0  49:1  50:2  …  72:H  73:I  74:J  75:K  76:L  77:M  …  90:Z  91:[
+```
+
+This did not locate the renderer. Many generic one-character string helpers
+have the same body. The eight callers of function 9718 and the other
+pointer-returning candidates exited early in a cold instance because the text
+and UI state were not initialized.
+
+One cheaper probe remains useful: call the name-to-id direction with `"k"` and
+observe whether it returns 75 or 76. This would decide how to frame the table.
+It would not prove which live caller renders the label.
+
+To identify the renderer, instrument candidate functions in a live client while
+the Controls panel draws. Do not infer the caller from another generic string
+helper.
+
+### Why gwonmac does not patch this
+
+The visible defect is small. A local transform would add permanent
+recertification work and could damage input if the selected helper is shared
+with the working input path.
+
+Do not add a transform unless both conditions are met:
+
+1. Live evidence identifies the exact render-only caller and the source of the
+   extra one.
+2. A test proves that key input and stored bindings remain unchanged.
+
+Until then, keep the report and let the official client remain authoritative.
