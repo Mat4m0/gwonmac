@@ -103,9 +103,11 @@ Tools stores authored builds and complete teams. **Export team** creates a
 build to the game's Skills directory. Choose **Refresh List** in Guild Wars
 after publication.
 
-Open **Settings → Templates** after Guild Wars starts. Use it to import a
-Templates folder, `.txt` files, or clipboard codes. The app previews changes and
-writes nothing until you confirm.
+Open **Settings → Templates** after Guild Wars finishes starting and you sign
+in. If you opened it earlier, reopen Templates after signing in so it can
+connect to the game's storage. Use it to import a Templates folder, `.txt`
+files, or clipboard codes. The app previews changes and writes nothing until
+you confirm.
 
 Use **Export…** to create a Windows-compatible `Guild Wars Build Templates`
 folder. A later export uses a new folder name instead of overwriting the first.

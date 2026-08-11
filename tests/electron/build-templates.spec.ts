@@ -111,14 +111,22 @@ const openTemplates = async (
 };
 
 test.describe("build templates", () => {
-  test("says the game has to be running before it can reach the templates", async () => {
+  test("tells the player to sign in and refreshes after startup", async () => {
     const fixture = await launchOffline("gw-templates-nomount-e2e-");
     try {
       await openTemplates(fixture.page);
       await expect(fixture.page.locator("#templates-status")).toContainText(
-        "once the game has started",
+        "sign in, then reopen Templates",
       );
       await expect(fixture.page.locator("#templates-actions")).toBeHidden();
+
+      await installFakeMount(fixture.page, {});
+      await fixture.page.locator("#settings-tab-display").click();
+      await fixture.page.locator("#settings-tab-templates").click();
+      await expect(fixture.page.locator("#templates-status")).toHaveText(
+        "No templates saved yet.",
+      );
+      await expect(fixture.page.locator("#templates-actions")).toBeVisible();
     } finally {
       await closeOffline(fixture);
     }
