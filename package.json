@@ -1,7 +1,7 @@
 {
   "name": "guild-wars",
   "productName": "Guild Wars Reforged",
-  "version": "2026.8.5",
+  "version": "2026.8.6",
   "private": true,
   "packageManager": "pnpm@11.13.1",
   "type": "module",
