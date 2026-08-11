@@ -49,10 +49,9 @@ individual officially represents the project in public spaces.
 
 ## Enforcement
 
-To report conduct privately, open a public issue titled **Code of Conduct
-contact request** without incident details, evidence, or identifying
-information. A maintainer will arrange a private channel. Platform abuse can
-also be reported directly through GitHub's reporting tools.
+To report conduct privately, email `matthias@lupinum.com`. Do not include more
+personal information than the report requires. You can also report platform
+abuse through GitHub's reporting tools.
 
 All complaints will be reviewed promptly and fairly. Maintainers must respect
 the privacy and security of reporters.

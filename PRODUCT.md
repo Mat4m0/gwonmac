@@ -1,115 +1,97 @@
 # Product brief
 
-One page of decisions. Behaviour is documented elsewhere:
-[`README.md`](README.md) for the overview,
-[`docs/user-guide.md`](docs/user-guide.md) for what the app does,
-[`docs/`](docs/README.md) for how.
+This document defines the product scope. The [user guide](docs/user-guide.md)
+defines player behavior. The [technical docs](docs/README.md) define the
+implementation boundaries.
 
-## What this is
+## Product
 
-A sandboxed macOS host for ArenaNet's official Guild Wars WebAssembly client.
-It downloads the official client, verifies it, supplies the platform services
-the client asks for, and stays out of the way. It ships no game binaries.
-Where the client is broken on this platform, the app derives a separate patched
-copy, verifies it by hash, and falls back to the untouched official module the
-moment anything about that fails.
+gwonmac is a sandboxed macOS host for ArenaNet's official Guild Wars
+WebAssembly client. It downloads and verifies the official client. It supplies
+the macOS platform services that the client needs. It does not include game
+binaries.
 
-## Who it is for
+When the official client needs a macOS repair, gwonmac creates a separate
+derived copy. It verifies the exact output before use. If verification fails,
+gwonmac uses the untouched official client.
 
-**Guild Wars players on a Mac** who want the official client without Windows,
-Wine, or a browser tab.
+## Users
 
-**The first GWonMac Tools user is a returning player who used GWToolbox++ on
-Windows.**
-They are not asking for a plugin platform. They want the handful of readouts
-the game itself never showed them, and they notice the absence within an hour
-of playing. Exact-build certification, bounded snapshots and commands, and the
-fail-closed transform serve that person without exposing a generic automation
-surface.
+The primary user is a Guild Wars player with an Apple Silicon Mac. The user
+wants the official game without Windows, Wine, or a browser tab.
 
-## The first tool set
+Some returning players also want a small set of familiar tools. They do not
+need a plugin platform.
 
-**Builds and teams.** Players can keep builds and team configurations, capture
-the current player-and-hero party, exchange whole-team codes, and explicitly
-Apply a saved team in a PvE outpost. Apply confirms difficulty, the player's
-build, the hero roster, professions, bars, attributes, and behavior against
-fresh observations. Target distance remains a clearly labelled Test tool.
+## Product promise
 
-Core cursor and template support are always on for a certified client. Optional
-Tools are a Beta opt-in. Their first enable requires one restart to select the
-best client module available for that exact ArenaNet build; after that,
-individual tool toggles are live. Host-owned Build and Team authoring remains
-available when client integration is unavailable. Optional observers and
-commands are disabled in PvP, guild halls, and unknown regions.
+- Keep the official game playable after an unknown ArenaNet update.
+- Make ArenaNet patch-day certification fast and safe.
+- Let optional Tools fail without blocking the game.
+- Keep host-owned Builds and Teams available without live Tools.
+- Give players clear Stable and Beta application-update behavior.
+- Keep local data and diagnostics under the player's control.
+- Keep the project understandable for one new contributor.
 
-“Tools Beta” is a feature-maturity label, not an application update channel.
-The release application has a separate Stable/Beta update preference: Stable
-is the default, while Beta opts into beta and release-candidate application
-builds under the same bundle, profile, Keychain, and updater identity. Alpha is
-never public. Preview remains the separately signed tester application and has
-no automatic updater.
+## Tools
 
-Returning to Stable is truthful rather than magical. A matching final Stable
-is a normal forward update; when the latest Stable is older than the installed
-Beta, the app opens the fixed Releases page for a manual signed/notarized DMG
-install. It never asks the native updater to downgrade. Every public beta and
-RC is release-gated on the latest Stable reading and rewriting the durable
-state covered by the recurring proof: settings, Builds and Teams, window state,
-and origin-owned browser storage. A real game-IDBFS/template round-trip is also
-required whenever Electron, Chromium, or the filesystem contract changes.
+Required template compatibility and Core cursor support run when their exact
+client proofs permit them. Optional **gwonmac Tools Beta** is off by default.
 
-The required product boundary is that Build and Team authoring is host-owned
-while observations and Apply are exact-client capabilities. Host authoring
-remains usable when those capabilities refuse; publishing into the game's
-template list additionally requires certified template support. The packaged
-unknown-build story proves the official module stays active and no companion
-command surface appears.
+Tools provides Build and Team authoring, party capture, team-code exchange,
+Target Distance, and explicit Team Apply. Team Apply is a bounded configuration
+action. It is available only in supported PvE outposts. It checks fresh game
+state after each step.
+
+Build and Team authoring belongs to the host. Live observations and Team Apply
+require exact client capabilities. An unknown client can therefore keep host
+authoring while live integration refuses.
+
+**Tools Beta** describes feature maturity. It is not the application Beta
+update track.
+
+## Application updates
+
+Stable is the default track. Beta also accepts beta and release-candidate
+builds. Both tracks use the same release app identity, profile, Keychain, and
+updater. Alpha is never public.
+
+The Preview app is a separate tester build. It cannot update itself.
+
+The app never performs an automatic downgrade. Every public beta and release
+candidate must preserve the latest Stable version's durable data contract.
+See [Release verification](docs/release-verification.md).
 
 ## Non-goals
 
-Refusals, not a backlog.
+- No Windows or Linux version.
+- No redistribution of ArenaNet game binaries.
+- No autonomous gameplay.
+- No bots, macros, multiboxing support, or trading tools.
+- No generic memory, packet, command, or plugin API.
+- No port of the Windows plugin ABI.
+- No gwonmac telemetry from the Mac app.
+- No silent eviction policy or fixed disk-usage promise.
+- No forced mid-session restart.
+- No compatibility layer that keeps an obsolete internal design alive.
 
-- **No Windows or Linux build.**
-- **No mutation or redistribution of ArenaNet's downloaded artifact.** It stays
-  canonical. Any platform repair or optional Tools transform produces a
-  separate, exact-hash-verified runtime copy and fails back to canonical bytes.
-- **No autonomous gameplay automation.** The app never chooses a target, moves
-  a character, uses a skill, sends chat, farms, or acts without an explicit
-  player command. Team Apply is a bounded, user-initiated PvE configuration
-  action and every step is confirmed before the next. After a trusted click,
-  the native-cursor tool may
-  replay one bounded out-and-back pointer hit-test when Guild Wars emitted no
-  cursor event; it cannot originate a click or leave the pointer displaced.
-- **No account features.** No bots, macros, multiboxing help, or trading tools.
-- **No Mac app telemetry.** Required login and game traffic goes only to the
-  selected provider and ArenaNet services. The app sends no diagnostics,
-  library, account, or gameplay data to a GWonMac service; a player may attach
-  a diagnostics file to a bug report themselves.
-- **No plugin ABI, and no port of the Windows one.** Native injection, GWCA
-  pointers, Direct3D/ImGui rendering, and DLL plugins are replacement work.
-- **No disk-usage promise.** A full download stays until the player clears it;
-  the app does not silently evict game data to stay under a cap. Making a fixed
-  size promise means building and measuring that policy first.
-- **No forced mid-session restart.** Automatic checking and downloading is on
-  by default, declared plainly at first run, and one checkbox turns it off for
-  good. A launch-check update installs before play unless the player chooses
-  **Play Without Updating**; one downloaded later waits for a restart.
+The app can replay one bounded pointer hit-test after a trusted click if Guild
+Wars produced no cursor event. It cannot originate a click. Team Apply acts
+only after an explicit player command. These actions do not permit autonomous
+play.
 
-## Claims we stand behind
+## Evidence standard
 
-Consequential privacy, data, release, update, and performance promises need
-executable evidence. [`docs/diagnostics.md`](docs/diagnostics.md#verification-boundaries)
-maps those public invariants to their proofs. Ordinary explanatory copy does
-not need a duplicate row; an unsupported consequential promise is narrowed or
-deleted rather than defended with prose.
+Consequential privacy, data, release, update, and performance claims need
+executable evidence. [Diagnostics](docs/diagnostics.md) maps these claims to
+their proof boundary.
 
-The former website FPS and fixed-resolution promises had no proof and have
-been removed. Public copy now says only what the render-scale and arm64
-packaging tests establish. Measured frame rates live in
-[`docs/performance-electron.md`](docs/performance-electron.md) as evidence from
-specific machines, never as a promise.
+Do not defend an unsupported promise with more prose. Narrow it or delete it.
+Historical measurements belong in `internal/`, not in current product claims.
 
-Three claims cost us more than the rest, and that is the point: the official
-artifact is preserved, no game traffic or account data is uploaded, and no
-gameplay action is chosen or triggered on a player's behalf. A feature that
-weakens one of those is a feature this project does not ship.
+Three rules take priority:
+
+1. Preserve the official ArenaNet artifact.
+2. Do not upload account data, game traffic, or diagnostics to a gwonmac
+   service.
+3. Do not choose or trigger gameplay for the player.

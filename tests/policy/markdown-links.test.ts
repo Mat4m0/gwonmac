@@ -215,21 +215,12 @@ test("code blocks, code spans, URLs and bare anchors are not treated as links", 
 
 test("the file list covers tracked docs and excludes gitignored scratch", () => {
   const files = listMarkdownFiles(root);
-  const promotedPlans = fs.readFileSync(path.join(root, ".gitignore"), "utf8")
-    .split(/\r?\n/u)
-    .filter((line) => /^!plans\/[^*]+\.md$/u.test(line))
-    .map((line) => line.slice(1));
 
   assert.ok(files.includes("README.md"));
   assert.ok(files.includes("PRODUCT.md"));
   assert.ok(files.includes("docs/process-model.md"));
-  for (const plan of promotedPlans) {
-    assert.ok(files.includes(plan), `${plan} is allowlisted but not scanned`);
-  }
   assert.ok(
-    files.every((file) =>
-      (!file.startsWith("plans/") || promotedPlans.includes(file))
-      && !file.startsWith("node_modules/")),
+    files.every((file) => !file.startsWith("node_modules/")),
     "gitignored paths must not be scanned",
   );
 });

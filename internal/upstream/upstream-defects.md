@@ -1,14 +1,18 @@
 # Guild Wars WebAssembly client: template file management is unimplemented
 
-A report for ArenaNet. Nothing in it depends on our project.
+> **Status: confirmed upstream defects in the named client builds.** This is a
+> self-contained report for ArenaNet. It is historical evidence and does not
+> define current gwonmac behavior.
 
 ## Summary
 
-In the published WebAssembly client, saving, listing, renaming and deleting
-skill and equipment templates cannot work. Six defects are involved: four
-`Base/Os/Emscripten` routines that ship unimplemented, and two logic errors —
-one in path handling and one in the file open modes. The first two routines
-also disable screenshots and chat logs.
+In the published WebAssembly client, saving, listing, renaming, deleting, and
+recursively listing skill and equipment templates cannot work. Eight measured
+defects are recorded here. Seven affect template or file behavior: four
+`Base/Os/Emscripten` routines are unimplemented, two implemented routines have
+logic errors, and the scan does not enter subdirectories. One separate defect
+delays a new cursor after the server confirms a targeting-mode change. The
+first two file routines also disable screenshots and chat logs.
 
 Client examined:
 

@@ -1,7 +1,13 @@
-# Client internals: the template subsystem
+# Client internals evidence
 
-The reference we had to reconstruct. Everything here is for build
-`b0319704…`; indices and offsets are build-specific.
+> **Status: historical and non-normative.** This file preserves exact-build
+> measurements. Current certification tables and code are authoritative. Read
+> [WASM host](../../docs/wasm-host.md) for the current runtime model.
+
+## Template subsystem: build `b0319704…`
+
+This is the template reference that the original workaround required. All
+indices and offsets in this section are build-specific.
 
 Function index = local code-section index + 219 (the function import count).
 
@@ -241,3 +247,125 @@ dirs pattern    : "Templates/Skills/*"         flags 18
 The `Templates/Skills` and `Templates/Equipment` literals are UTF-16 at
 `0x161600` and `0x161622`, reached through the table at `0x161654`
 (`s_templateDirs[type]`).
+
+## Enhancement foundation: build 38,797
+
+This section preserves the unique evidence from the retired Toolbox foundation
+record. It does not describe the current Tools feature set.
+
+### Module identity
+
+| Fact | Measured value |
+| --- | --- |
+| Official SHA-256 | `3229678d3fd7d2f0e309530086a614d97f02e7eeb3ca12650ababfd2eb360817` |
+| Post-template SHA-256 | `9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094` |
+| Program and build | `1` and `38797` |
+| Function imports | 219 |
+| Input table limits | minimum 4683, maximum 4683 |
+
+The original transform plan reused table slot 0 because it was statically
+empty. A bounded live login disproved that plan. Character entry trapped with
+`function signature mismatch` after the transform put the six-argument
+dispatcher in slot 0. The game uses slot 0 as a dynamic sentinel. Transform ABI
+8 kept all input entries and appended terminal slot 4683.
+
+**Do not repeat:** a statically empty table slot is not proof that the running
+client leaves the slot unused.
+
+### Side-module memory collision
+
+The first Rust kernel was a normal imported-memory module. Its data segment and
+stack pointer were both linked at `0x100000`. Instantiation wrote 28 bytes into
+that unreserved game region. Every callback then used the same region as its
+stack. The next live login reached this assertion:
+
+```text
+TextParser.cpp:724 IsParam(data)
+```
+
+The corrected side module was position-independent. The renderer reserved one
+64 KiB block with the game allocator and supplied the data base and stack
+pointer. The side module received a separate empty table. ABI 5 verification
+pinned these properties:
+
+- a 268-byte memory requirement;
+- four-byte alignment;
+- no table entries;
+- deterministic module bytes; and
+- no write to the former fixed region during instantiation.
+
+**Do not repeat:** an imported-memory module cannot choose an address inside
+game memory unless the game allocator reserved that address.
+
+### Tick, cursor, and chat boundaries
+
+The measured exact-build facts were:
+
+- `EmscriptenExeThreadMainLoop`: absolute function 446, signature
+  `(i32) -> void`;
+- cursor boundary: absolute function 2469, signature
+  `(i32, i32, i32, i32, i32) -> void`;
+- cursor table slot: 922;
+- cursor producer functions: 2828 and 2834;
+- player-chat producer: absolute function 8947, with exactly three decoded
+  `i32.const 0x10000082` sites, each calling function 6842; and
+- nearby producers 8942 and 8945 used `0x1000007f` and `0x10000080` with the
+  same target.
+
+Function 6842 had signature `(i32, i32, i32) -> void` and the recovered
+`FrApi.cpp` / `msgId >= FRAME_MSG_EX` assertion shape. A live proof showed one
+ordinary player message once and advanced the counter once. `/age` did not
+advance it. No message text or pointer crossed the companion ABI.
+
+Live cursor proof observed item, ground-arrow, salvage, and restored-arrow
+transitions. A click could change interaction mode without a new cursor callback
+until hit-testing ran. A bounded trusted-click refresh produced two cursor
+events and the salvage bitmap without moving the physical pointer.
+
+### Hero observation and unsafe command attempts
+
+The exact build used `0x100001a3` for Hide Hero Panel and `0x100001a4` for Show
+Hero Panel. The measured party path was:
+
+```text
+GameContext + 0x4c -> PartyContext
+PartyContext + 0x54 -> current PartyInfo
+PartyInfo + 0x24 -> heroes Array
+HeroPartyMember stride 0x18
+  +0x00 AgentID
+  +0x04 owner player number
+  +0x08 HeroID
+```
+
+Ownership was compared with `CharacterContext + 0x2ac`. The observer accepted
+at most seven unique owned HeroIDs and published only these scalar values.
+
+Two command attempts failed for different reasons:
+
+1. Sending Show from the main-loop hook aborted on the
+   `EmscriptenExeProp.cpp` `s_propContext` assertion.
+2. Deferring until the next game-owned UI dispatch avoided that abort but could
+   run inside a nested text-parser producer. A later live run reached
+   `TextParser.cpp:724 IsParam(data)`.
+
+Function 228 showed why. `PropGet` loaded the active context from `0x28cc20` and
+asserted when it was null. Functions 230 and 231 got and set that context.
+Official wrappers used save, install, call, and restore. This proved that the
+mechanism existed. It did not prove that an arbitrary callback had the correct
+lifecycle or parser state.
+
+The foundation ABI therefore became passive. Each wrapper called the game clone
+first and then notified Rust. The side module imported no game function. Show,
+Hide, and synthetic mouse-nudge commands were removed. Later command features
+needed separate, bounded evidence; this foundation did not authorize them.
+
+### Corrected context root
+
+Static analysis first selected `0x5a0ed4` as `contextRoot`. Live hero proof
+showed that it resolved into `FcArchive` state. The corrected address was
+`0x5a0ee0`. Slot 6 then pointed to a `GameContext`, and the character and party
+chains jointly measured map 449, player number 1, and Koss as
+`{agent: 323, owner: 1, hero: 6}`.
+
+**Do not repeat:** a plausible global address needs a live invariant across more
+than one related structure before certification.

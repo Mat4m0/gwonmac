@@ -1,396 +1,217 @@
 # AGENTS.md
 
-Context for humans and agents working on this repository. Each document owns
-one thing, and the others link to it rather than restating it:
+Read this file before you change the repository. It defines how coding agents
+must work in gwonmac.
 
-| Document                    | Owns                                                    |
-| --------------------------- | ------------------------------------------------------- |
-| `docs/process-model.md`     | processes, boundaries, rendering and input, secrets      |
-| `docs/content-pipeline.md`  | client artifacts, chunk store, download modes, updater   |
-| `docs/wasm-host.md`         | the `Module` surface and client certification            |
-| `docs/diagnostics.md`       | the recorder, the export, and the claims that are proved |
-| `docs/user-guide.md`        | current user-facing behaviour                            |
-| `internal/upstream/`        | the investigation record, wrong hypotheses included      |
-| `PRODUCT.md`                | who this is for, the first feature, and the non-goals    |
-| `README.md`, `AGENTS.md`, `docs/README.md` | the way in; they link, they do not restate |
+Use [docs/README.md](docs/README.md) to find the document that owns a subsystem.
+Read the owning document and the executable tests before you edit code.
 
-This file adds what an agent needs before touching the code: the constraints
-that are load-bearing, the invariants that must not drift, and how to verify a
-change. When it disagrees with the code, the code is right and this file is a
-bug.
+## Goal
 
-## What this is
+Produce the simplest correct system that the team can maintain.
 
-Guild Wars is an Emscripten/JSPI WebAssembly client. This repository
-hosts ArenaNet’s official client in a sandboxed macOS Electron application and
-supplies its platform services through a narrow `Module` object.
-
-The retired Python/browser runtime must not return. Electron is the only
-production path.
-
-## Ownership and simplicity
-
-Own the outcome. Prefer, in order:
+Use this preference:
 
 ```text
 delete > simplify > replace > add
 ```
 
-Before adding a table, cache, worker, bridge method, adapter, state machine, or
-compatibility path, identify the invariant it serves and the acceptance test
-that proves it is necessary. Keep one source of truth. Prefer hard cutovers in
-unreleased code and remove superseded paths.
+Do not add a second path when one direct path can own the behavior. Prefer a
+hard cutover. Delete the old path when the new path passes its tests.
 
-Keep domain logic out of preload/IPC transport. Main owns native invariants;
-the renderer owns presentation and the game host. Add tests for invariants,
-not only happy paths.
+Before you add an abstraction, table, cache, state, process, service, adapter,
+registry, or compatibility path, answer these questions:
 
-Every module under `src/` opens with a comment stating what it owns and what it
-refuses to own; `tests/policy/source-module-headers.test.ts` fails a build that
-is missing one. Comments elsewhere state the constraint the code cannot show,
-never what the next line does. Configuration that decides behaviour — the
-Electron fuses, the strictness flags, a workflow's reason to exist — carries the
-reason on the line it governs.
+1. Can you delete something instead?
+2. Can you simplify the existing owner?
+3. Does a second real consumer exist?
+4. Which requirement needs the new concept?
+5. Which executable test proves that requirement?
 
-An investigation that cost a wrong turn is recorded the same way: one round per
-hypothesis, what was built on it, the measurement that killed it, and the lesson
-it leaves. `internal/upstream/investigation-template.md` holds that shape and
-`internal/upstream/investigation-log.md` is the worked example. The next reader
-is meant to inherit the dead ends rather than walk back into them.
+## Sources of truth
 
-## Layout
+Code and tests own exact schemas, values, hashes, limits, and accepted states.
+Current documents own intent, boundaries, failure behavior, and procedures.
+Files under `internal/` are historical evidence. They are not current
+requirements.
 
-| Path                      | Ownership                                                     |
-| ------------------------- | ------------------------------------------------------------- |
-| `src/main/main.ts`        | app-wide composition, sequencing, lifetime, and presentation  |
-| `src/main/client-runtime.ts` | client lifecycle, ready publication, recovery, and update exclusion |
-| `src/main/active-client.ts` | the immutable active client generation                       |
-| `src/main/core/patch-client.ts` | acquire, stage, verify, and publish a client generation   |
-| `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
-| `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, and the Enhancement switches |
-| `certificates/`           | the reviewed ArenaNet client-generation heartbeat used by scheduled recertification |
-| `src/main/protocol.ts`    | secure `gw://app` routing and snapshot ranges                 |
-| `src/main/ipc.ts`         | sender/value validation, channel registration, and direct owner-local operations |
-| `src/main/settings-actions.ts` | settings confirmations, durable reset markers, relaunch, and startup recovery |
-| `src/main/diagnostics.ts` | the diagnostics subsystem's one entry point                   |
-| `src/main/diagnostics/`   | flight recorder, capture, samplers, schema, detector, export  |
-| `src/preload/preload.body.cjs` | frozen sandbox-compatible capability bridge; its channel constants are spliced in by `scripts/generate-preload.ts` |
-| `src/renderer/`           | loading/settings UI, `Module` host, graphics, diagnostics     |
-| `src/shared/`             | canonical contracts and boundary validators                   |
-| `src/tools/certification.ts` | the one certification command line: `doctor`, `recertify`, `template`, `transform`, `double-click` |
-| `src/tools/diagnostics/`  | diagnostics ZIP validation, summary, comparison               |
-| `tests/`                  | unit, integration, Electron, packaged, and release invariants |
-| `tools/`, `gwkey.py`      | developer-only binary analysis                                |
-| `internal/upstream/`      | upstream client defects, workaround, re-certification          |
+When a document and executable behavior disagree, verify the behavior. Correct
+the owning document in the same change.
 
-## Load-bearing constraints
+Every module under `src/` must start with a block comment. State what the module
+owns and why that owner exists. Do not describe implementation steps that the
+code already shows.
 
-- `Module` must be declared with `var`; generated glue redeclares it.
-- `Gw.jspi.js` asks for `Gw.wasm`; `locateFile` must select `Gw.jspi.wasm`.
-- Ten host calls are awaited and must return promises:
-  `image.cacheAsync`, `dns.resolve`, the three `secureStorage` methods,
-  `login.getAuthToken`, `adProvider.showInterstitial`, `ageSignals.check`,
-  `shop.initialize`, and `shop.inAppPurchase`. The client's wait on
-  `getAuthToken` is long enough to cover a whole Steam sign-in, so that call may
-  open a window and keep the client waiting on the player.
-- `image.fileSize` is synchronous, so snapshot metadata loads before glue.
-- Renderer `preRun` owns the single `app:` IDBFS mount. Restore it, create both
-  template directories, and change into it before releasing the run dependency;
-  relative game files must never fall back to ephemeral MEMFS.
-- That `chdir(MOUNT)` is why anything reaching the mount *after* startup
-  addresses it absolutely. `src/renderer/filesystem.ts` spells the template
-  directories mount-relative because it runs before the chdir;
-  `src/renderer/template-store.ts` spells the same two `/app:/Templates/…`
-  because it runs after, and the relative form would resolve to
-  `/app:/app:/Templates/…`. Every read finds nothing, the pane concludes the
-  game is not running, and no fake filesystem catches it — a fake treats a path
-  as an opaque key. Two tests hold this: the directories must agree across the
-  two modules, and the store's must be absolute.
-- Build templates import to the type root only. The client's scan enumerates
-  `Templates/<type>/*.txt` and never descends, so a template written into a
-  subfolder is saved, appears in an export, and is never listed in game —
-  defect 8 in `internal/upstream/upstream-defects.md`. A folder name survives
-  as part of the template name instead.
-- `dataStrategy` is the only launcher-intent state. The renderer resolves it
-  against cache residency before appending `Gw.jspi.js`; no game audio,
-  networking, WebGL, or WASM may start behind the launcher.
-- Progress `phase: "ready"` means the main process has an active client, and
-  only `ClientRuntime.publishReadyProgress` may publish it after checking the
-  exact active generation. `PatchClient` reports
-  download progress and nothing else — its `emit` signature excludes `"ready"`.
-  A premature ready lets the renderer read snapshot metadata before a client
-  exists, receive size 0, and silently stream the whole game over the network.
-- Concurrent chunk reads share one promise per content hash.
-- Renderer and native download schedulers cap ArenaNet concurrency at eight.
-  Demand work outranks queued prefetch; do not raise the ceiling.
-  `ARENANET_REQUEST_CEILING` in `src/shared/contracts.ts` is the one
-  declaration all three schedulers import, and
-  `tests/unit/the-download-schedulers-share-one-ceiling.test.ts` refuses a
-  second. A renderer module may import a `src/shared` *value*, but only from
-  the named allowlist `RENDERER_SHARED_MODULES` in `src/main/protocol.ts`,
-  which is what serves `build/shared` under `gw://app/shared/`. A value import
-  of anything else 404s at runtime, and neither the type checker, the linter
-  nor the unit tests catch it.
-- Snapshot constants can use fixed-width, non-canonical LEB128. Analysis tools
-  must decode values rather than byte-match a canonical encoding.
-- `geodc.arenanetworks.com` can return the datacenter sentinel `0.0.1.2`; raw
-  DNS fallback is intentional.
-- Game infrastructure and web services use different allowlisted domains.
-  Unknown proxy routes fail closed. The web-service proxy uses an
-  uncredentialed Chromium fetch and drops Cookie and Set-Cookie headers; it
-  must not acquire browser login state.
-- WASM packet views must be compacted before crossing `contextBridge`.
-- The main process owns TCP handles, backpressure, destination/port checks,
-  owner cleanup, and final close semantics.
-- Red X means a clean application quit, not a hidden headless process.
-- Main owns atomic owner-only window state. Persist the last normal bounds
-  beneath maximized/fullscreen mode, validate against connected display work
-  areas, never restore minimized, and keep the View-menu recovery action.
-- The three game-facing `secureStorage` methods use the single native
-  `CredentialsStore`. Official Developer ID packages persist its validated
-  `{ username, password }` value in the fixed `arenaNetCredentials` Data
-  Protection Keychain slot. It never enters logs, diagnostics, browser
-  storage, or a profile file.
-- The Steam login token is a second secret with the same guarantees and its own
-  shape. `KeychainJsonStore` is the one mechanism underneath both; each secret
-  supplies its own validator and error codes, so `parseCredentials` — the rule
-  the credential IPC boundary runs — is never loosened for a payload it was not
-  written for. The fixed `steamSession` Data Protection Keychain slot holds
-  `{ token, expiry }` and is the token's sole persistent home: **no environment
-  variable seeds it in any build**, and
-  `tests/policy/source-saved-login-surface.test.ts` scans for one. The token
-  never enters logs, diagnostics, browser storage, or a profile file.
-- Steam sign-in renders in a window the main process owns, never in the game
-  renderer: its own in-memory session partition destroyed with the window,
-  no preload and no Node, deny-by-default permissions and downloads, and
-  top-level navigation confined to a fail-closed allowlist derived from the
-  OAuth config. Subframes and resources remain subject to Chromium's sandbox,
-  origin isolation, disabled Node/preload, permission denial, and popup/download
-  denial; they cannot complete the top-level redirect. That redirect is
-  intercepted before it is fetched with its `state` nonce checked. gwonmac logs
-  in an existing Steam↔Guild Wars link and never creates one.
-- That window is `modal` on its parent, and must stay so: the game window can be
-  restored to fullscreen, and a non-modal parented child gets promoted into that
-  fullscreen space and sized to the whole display. A macOS sheet draws no title
-  bar, so **the sign-in origin is not visible to the player** — the top-level
-  allowlist and the sandbox controls above confine the window, not the player's
-  inspection. Do not write docs or UI that tell a player to verify the origin.
-  `docs/process-model.md` owns the reasoning; `tests/electron/steam-acquire.spec.ts`
-  pins the presentation.
-- Persistent secrets are available only to the provisioned `release`,
-  `preview`, and `development` distribution channels. Their distinct bundle
-  IDs give them mutually isolated Data Protection Keychain groups. The marker
-  is configuration, not authorization; the host bundle ID, application
-  identifier entitlement, and provisioning profile are the authorization.
-  Unpackaged development and ordinary/ad-hoc packages use the volatile
-  in-memory implementation and lose secrets at quit; there is no file,
-  mock-Keychain, or `safeStorage` fallback. Only Release deletes exactly the
-  retired `credentials.bin` and `steam-session.bin`, never other profile data;
-  Preview and Development preserve them. The
-  cookie-encryption fuse is disabled so Chromium cannot create its separate
-  Safe Storage Keychain item. All builds clear browser cookies at startup and
-  quit.
-- Forge accepts one `GW_PACKAGE_INTENT`: `local`, `preview-handoff`, `release`,
-  or `development`. Do not recreate independent channel/signing flags; the
-  closed intent is what makes unsupported package states unrepresentable.
-- Runtime authorization comes from compiled certification tables or the
-  isolated local structural verifier. There is no remote certification
-  authority. Newly measured Enhancement facts ship in a signed application
-  release; when certification refuses, verified official ArenaNet bytes remain
-  playable and optional Tools degrade independently.
-- The app makes no network request the user was not plainly told about.
-  `autoCheckUpdates` (default `true`, declared as one pre-checked line at first
-  run and in Settings → Updates) performs one release check at launch, then at
-  most one every six hours while the app stays open — never while a game
-  connection is open — and governs **every** automatic check without
-  exception, including the one on an unrecognised client build; switched off,
-  a launch reaches github.com zero times, forever. Saving the checkbox or
-  `updateTrack` changes future automatic checks but starts no request; the
-  explicit Check for Updates action is the immediate path.
-  `src/main/app-updater.ts` is the only
-  caller of the releases API and the single owner of application discovery,
-  release validation, download, ready, and install state. Only an official
-  package carrying the release marker may reach Squirrel.Mac. `updateTrack`
-  is the sole Stable/Beta preference inside that release identity: Stable is
-  the default; Beta additionally admits beta and RC releases; alpha is never
-  eligible. Selecting Stable never authorizes a native downgrade. An older
-  Stable is named as a manual return through the fixed Releases page, while a
-  matching final Stable remains a normal forward update. The separately signed
-  Preview tester app cannot use AppUpdater. Every public beta/RC must pass the
-  release-only latest-Stable → candidate → same-Stable semantic data
-  round-trip. Its settings keys and accepted values must already belong to
-  latest Stable: expand them in Stable before a candidate uses them, and
-  contract them only after the supported Stable baseline no longer needs them.
-  Do not preserve unknown fields in a compatibility bag. An update discovered
-  by the launch check installs before play unless the player chooses **Play
-  Without Updating**; an update downloaded after that gate waits for an
-  explicit or ordinary restart.
-  ArenaNet client updates remain separate and automatic.
-  `docs/content-pipeline.md` owns the mechanism and `docs/user-guide.md` owns
-  what the player is told.
+## Project boundaries
 
-## Diagnostics and privacy
+gwonmac is an Electron host for ArenaNet's official Guild Wars WebAssembly
+client. Electron is the only production runtime. The app ships no game
+binaries.
 
-There is one canonical main-process flight recorder and one diagnostics ZIP.
-Renderer console text is not exported. Renderer failures cross IPC only as
-allow-listed names plus non-text fingerprints.
-The closed schema owns every dot-separated event name, subsystem, level, field,
-and field validator. There is no generic string logging API.
+Keep these boundaries:
 
-Never record or export credentials, account identifiers, packet contents,
-request/response bodies, headers, cookies, crash dumps, or filesystem paths.
-Exports are local, bounded, mode `0600`, and fail closed: an event the schema
-cannot account for stops the export instead of being scrubbed on the way out.
+- The main process owns native resources, files, network policy, credentials,
+  windows, application updates, and client lifecycle.
+- The preload transports a small validated capability surface. It does not own
+  domain policy.
+- The renderer owns presentation, browser composition, and game-host setup. It
+  has no Node.js access.
+- `src/shared/` owns values and contracts that two or more real consumers use.
+- `ActiveClientSlot` owns the one published client generation.
+- `ClientRuntime` owns preparation, activation, health, and recovery.
+- `PatchClient` owns verified ArenaNet acquisition and staging.
+- `AppUpdater` owns application-release discovery, download, and ready state.
+- Settings workflows own confirmation and durable reset or relaunch actions.
+  IPC validates and forwards them.
 
-The protection is three tiers and only the first is a proof, so say which one
-you mean. `events.jsonl` is **certified**: every recorded event is a member of
-the closed union in `src/main/diagnostics/schema.ts`, a `string` field there
-fails `tsc`, producers record an `ErrorCode` rather than a message, and
-`src/main/diagnostics/detector.ts` matches every declared record field by
-field before anything is written — it imports neither the recorder nor the
-scanner, which is what makes it evidence rather than agreement. What the
-manifest calls `schemaChecked` is every app-authored record; it must equal
-`records` or export fails. The Chromium trace and the documents whose leaves
-come from OS and Chromium APIs are **pattern-scanned** by
-`src/main/diagnostics/text-scan.ts`, which catches a vocabulary and cannot
-promise more. `docs/diagnostics.md` states which tier covers which file.
+See [Process model](docs/process-model.md) for the full ownership map.
 
-Level 1 captures prove performance. Level 2 Chromium traces locate causes but
-are profiler-contaminated and do not establish gains.
+## Non-negotiable invariants
 
-## Game files and project assets
+### Official client
 
-Do not commit downloaded game binaries, snapshots, manifests, credentials,
-diagnostic exports, or private traffic. The public client access key in
-`src/main/core/access-key.ts` identifies the official client, not a player;
-policy tests exempt that one value and fail on any other UUID-shaped string in
-a tracked file.
+- Keep ArenaNet's downloaded artifact canonical and unchanged.
+- Create a separate derived artifact for a platform repair or optional Tools.
+- Verify the exact derived output before use.
+- Use the verified official artifact when optional certification refuses.
+- Publish the client, compatibility facts, memory choice, and generation as one
+  atomic active value.
+- Publish `ready` only for that exact active generation.
+- Do not replace client artifacts while a generation is active.
 
-Loading artwork is ArenaNet material used by this interoperability project and
-credited in the UI. Do not add third-party fonts or assets without an explicit
-redistribution license.
+Runtime authority comes from compiled facts or the bounded isolated local
+verifier. Do not add a remote certificate authority. See
+[WASM host](docs/wasm-host.md).
 
-The sole bundled font is the unmodified QT Friz Quad OpenType face from
-QualiType. It is pinned by SHA-256 and distributed under SIL OFL 1.1 with
-`COPYING-QUALITYPE` both beside the source font and in the packaged
-application’s Resources directory.
+### Optional Tools
+
+- Keep the official game playable without optional Tools.
+- Keep host-owned Build and Team authoring available when live integration is
+  unavailable.
+- Do not expose raw memory, packets, pointers, generic calls, or generic writes.
+- Keep commands named, typed, bounded, confirmed, and region-gated.
+- Disable observation and commands in unsupported or unknown regions.
+- Team Apply is an explicit PvE-outpost configuration action. It is not
+  autonomous gameplay.
+
+### Processes and IPC
+
+- Validate the sender and the value at every IPC boundary.
+- Keep domain decisions behind the transport handler.
+- Serve only exact allow-listed `gw://app` routes.
+- Do not create an arbitrary filesystem or network bridge.
+- Keep TCP handles, destination checks, backpressure, and cleanup in main.
+- Close the application when the one game window closes.
+- Await durable cleanup before quit or update installation.
+
+### Network and secrets
+
+- Keep game, web, update, and login destinations on closed allowlists.
+- Drop browser cookies from the game web proxy in both directions.
+- Do not store credentials in files, browser storage, logs, or diagnostics.
+- Store provisioned saved login only in its fixed Data Protection Keychain
+  item. Unprovisioned builds keep it only in memory.
+- Do not add a fallback secret store.
+- Keep the shared ArenaNet request ceiling. Demand work must outrank prefetch.
+- Never load-test ArenaNet services.
+
+### Updates
+
+An **ArenaNet game update** changes the official client or game data. A
+**gwonmac application update** changes this repository's packaged app. Do not
+combine these systems.
+
+Stable and Beta are preferences inside the Release identity. Alpha is not a
+public update candidate. Preview is a separate tester identity and cannot use
+the application updater. The app never performs an automatic downgrade.
+
+Saving an update setting must not start an unrequested network call. The
+explicit check is the immediate path. See
+[Release verification](docs/release-verification.md).
+
+### Diagnostics and privacy
+
+Use one closed diagnostics schema and one local ZIP export. Do not add a
+generic text logger.
+
+Never record credentials, account identifiers, packet contents, bodies,
+headers, cookies, crash dumps, or filesystem paths. Reject an unknown event
+before writing it. Treat a pattern scan as a limited scan, not as proof.
+
+Level 1 captures can measure performance. Level 2 traces can locate a cause,
+but the profiler changes the result. See [Diagnostics](docs/diagnostics.md).
+
+## Repository conduct
+
+Preserve unrelated worktree changes. Do not commit downloaded client files,
+game data, credentials, diagnostics, private traffic, generated packages, or
+local Apple signing material.
+
+Do not add third-party assets without a clear redistribution license. Preserve
+all notices for ArenaNet material, QT Friz Quad, GWToolbox++, and
+GuildWarsMapBrowser.
+
+Use offline fixtures for automated tests. Run a live ArenaNet check only when a
+local proof cannot establish the invariant. Keep the live check narrow and
+record what it proves.
 
 ## Verification
 
-`pnpm check` is the inner loop: typecheck, lint, markdown link check, unit
-tests, and policy tests. It needs no build and launches no windows.
+Run the narrowest relevant proof while you work. Then run the repository gate
+before you finish.
 
 ```bash
 pnpm check
 ```
 
-The full gate needs a build first. Entry points (`dev`, `package`, `make`,
-`enhancements:*`) build themselves; the `test:*` suites do not, so build once and
-run them against that output:
+`pnpm check` runs type checks, lint, Markdown links, unit tests, policy tests,
+and Tools unit tests. It does not build or open a window.
+
+Run the complete local application gate before a pull request:
 
 ```bash
-pnpm typecheck
-pnpm build
-pnpm lint
-pnpm check:links
-pnpm test:unit
-pnpm test:integration
-pnpm test:electron
-pnpm test:policy
-pnpm test:release
-pnpm tools:test:e2e
+pnpm verify
 ```
 
-`pnpm test:policy` holds the repository invariants that need no build: import
-boundaries, lint coverage, action pinning, fuses, font licensing, forbidden
-artifacts, and documentation links.
+Run `pnpm test:website` when you change `apps/website`. The website gate is
+separate from the app gate.
 
-`pnpm test:unit` is deterministic: it neither reads an installed Guild Wars
-client nor produces a non-gating coverage artifact. Real client bytes belong to
-`GW_CLIENT_WASM=/absolute/path/Gw.jspi.wasm pnpm test:client-artifact`, which is
-run deliberately during client certification rather than opportunistically on
-one developer's machine and skipped in CI.
+Use signed, packaged, live-client, or release-only tests only for invariants
+that the cheaper layer cannot prove. Do not turn a one-time migration story
+into a permanent default test.
 
-`pnpm verify:runtime` builds once and runs the source, browser, native and
-Electron gates against that output. `pnpm verify` packages that exact build and
-runs the packaged smoke; it never recompiles between runtime and artifact
-proof. Pull requests run the complete form. A release runs the runtime form and
-lets its signed candidate own the one package smoke. The website is not part of
-either: `apps/website` has its own path-filtered workflow, and
-`pnpm test:website` runs that suite locally.
+Before you finish, check:
 
-Electron and integration tests need permission to launch a local app and bind
-loopback fixtures. Test launches set `GW_BACKGROUND_LAUNCH=1` so the window
-appears without stealing keyboard focus; the few specs that assert on real OS
-focus opt out and say why. The production-network smoke is explicitly opt-in:
+- Did you create a second source of truth?
+- Did you leave the old path behind?
+- Did you add structure without a second consumer?
+- Did you make failure or debugging harder?
+- Did you change a trust boundary without an executable refusal test?
+- Did you update the one document that owns the behavior?
 
-```bash
-pnpm build && GW_LIVE_SMOKE=1 pnpm test:electron
-```
+## Documentation style
 
-When an ArenaNet client update lands, a build is in one of three states and
-`src/main/certification/client-certification.ts` is the only thing that decides which. Known
-hashes use the shipped tables. An unknown hash is checked by the bounded
-isolated process in `src/main/certification/local-client-verifier-host.ts`; only an exact
-structural proof may supply locally derived records. The template proof hashes
-the complete affected caller bodies after normalising only the selected call
-indices; the Enhancement proof requires every certified static address in the same
-complete code-reference contexts. Any other change serves the untouched
-official module. The
-`client.buildCertification` gauge in a diagnostics export names it —
-`certified`, `template-only` (templates save, enhancement tools cannot load), or
-`uncertified` — and `wasm.templateSaveCompatible` is the older boolean
-derived from that same answer. `pnpm certification template` re-derives the
-template build entry with the same production locator, and `--write` puts a
-derived entry into the authoring table so a patch-day branch and a developer's
-paste produce the same text. It never writes `ENHANCEMENT_BUILDS`: those layout
-words are client-memory addresses no structural anchor re-derives.
-`internal/upstream/recertify.md` owns investigation when the local proof
-refuses.
+Use `gwonmac` as the project name. Use **Guild Wars Reforged for macOS** as the
+short player-facing description.
 
-`.github/workflows/client-recertification.yml` runs that derivation without
-being asked. Every quarter hour it fetches one patch manifest and compares the
-published JSPI code generation against `certificates/certified-client.json`;
-matching, it exits in about a second, and a scheduled run that cannot fetch
-fails loudly, which is the heartbeat. On a change it downloads the code
-artifacts — never `Gw.snapshot` — runs the same certification command line, and
-pushes a branch with a pull request and a tracking issue, or an issue alone when
-the layout stopped being derivable. It holds no secret, uploads evidence and
-never client bytes, and its branch is worth nothing until the pull request's
-`pnpm verify` gate passes on it. The recorded generation carries no authority;
-it decides only whether that job runs.
+Write editable technical prose with ASD-STE100 Issue 9 principles:
 
-The scheduled `client-recertification.yml` workflow and the local verifier are
-the patch-day owners. There is no remote certificate publication path. Changes
-to compiled Enhancement facts ship through the normal signed application
-release, while an unknown official client remains the fallback.
+- Use one term for each concept.
+- Use active voice.
+- Keep most sentences below 25 words.
+- Put one action in each numbered step.
+- Start an instruction with a verb.
+- Use **Do not** for a prohibition.
+- Preserve exact code identifiers and user-interface labels.
+- Separate an ArenaNet game update from a gwonmac application update.
+- Link to the owner. Do not copy its rules.
 
-For enhancement work, begin with `pnpm certification doctor`, use the offline layers in
-`docs/enhancement-development.md`, and finish with one scoped `enhancements:live`
-scenario. Live enhancement runs are cached-only unless `--allow-update` is
-explicit; do not bypass that guard or use a temporary Electron profile.
+Do not claim formal ASD-STE100 certification. Preserve standard legal text,
+direct quotations, and raw investigation evidence when rewriting them would
+change their meaning.
 
-Certified Core (native cursor and template support) remains active whenever its
-exact build proof passes. GWonMac Tools Beta is optional and off by default; its
-first enable may restart to select the commands derivative, but individual tool
-toggles are live afterward. The existing `ToolsHost` mounts with a null command
-port when an unknown official client has no certified companion manifest, so
-Build and Team authoring remains available without importing Enhancement code.
-`tests/packaged-enhancement-runtime.ts` owns that normal packaged route; a
-manually mounted renderer test is not sufficient. Optional observers and
-commands must be inactive in PvP, guild halls, and unknown regions. Team Apply
-is an explicit PvE-outpost configuration action: include the player, confirm
-every step from observed state, and expose no generic opcode command.
-Unsupported team fields are deleted from the released model rather than stored
-and ignored.
+## Communication
 
-Before finishing, check for a second source of truth, retained old paths,
-unnecessary structure, harder debugging, broken architecture decisions, and
-missing failure-path coverage.
-
-## Conduct
-
-ArenaNet production infrastructure is shared by every installation. Keep the
-honest user agent, exponential backoff, hash verification, and eight-request
-ceiling. Never load-test live services. Use offline fixtures for automated
-tests and one deliberate live confirmation only when needed.
+Lead with the outcome. State assumptions and uncertainty. Connect every
+recommendation to gwonmac evidence. Do not replace a clear technical reason
+with a generic best practice.
