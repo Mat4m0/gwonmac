@@ -88,6 +88,7 @@ test("the canonical build emits one host-only Node-API 8 addon", () => {
 // glob, so adding a third is an edit here as well as there.
 test("Forge unpacks only the two executables from ASAR", () => {
   const forge = read("forge.config.ts");
+  const packageIgnore = read("scripts/package-ignore.ts");
   assert.match(
     forge,
     /asar: \{ unpack: "\*\*\/build\/native\/\{keychain\.node,gw-dat-decode\}" \}/u,
@@ -97,7 +98,7 @@ test("Forge unpacks only the two executables from ASAR", () => {
     /p === "\/build\/native\/keychain\.node"/u,
     /p === "\/build\/native\/gw-dat-decode"/u,
   ]) {
-    assert.match(forge, kept);
+    assert.match(packageIgnore, kept);
   }
   assert.doesNotMatch(forge, /unpackDir|asarUnpack/u);
 });
