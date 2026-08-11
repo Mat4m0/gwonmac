@@ -19,7 +19,7 @@
 </p>
 
 > [!CAUTION]
-> **DANGER — This is an unofficial client host.**
+> **This is an unofficial client host.**
 > ArenaNet and NCSOFT do not make, sponsor, endorse, or support gwonmac.
 
 ## What gwonmac does
