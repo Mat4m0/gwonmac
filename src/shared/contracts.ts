@@ -394,6 +394,8 @@ export interface SteamTokenResult {
 
 export type ExternalLinkKind =
   | "github"
+  | "bugReport"
+  | "featureRequest"
   | "discord"
   | "donate"
   | "releases"
@@ -409,6 +411,8 @@ export type RevealKind = "gameData";
 // The application and website both use this canonical release location.
 export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
   github: `https://github.com/${RELEASE_REPO}`,
+  bugReport: `https://github.com/${RELEASE_REPO}/issues/new?template=bug-report.yml`,
+  featureRequest: `https://github.com/${RELEASE_REPO}/issues/new?template=feature-request.yml`,
   discord: "https://discord.gg/Z9ft52RBD3",
   donate: "https://ko-fi.com/mat4m0",
   releases: `https://github.com/${RELEASE_REPO}/releases`,
@@ -700,7 +704,6 @@ export const IPC = {
   diagnosticsRendererFrames: "gw:diagnostics:rendererFrames",
   diagnosticsRendererMilestone: "gw:diagnostics:rendererMilestone",
   diagnosticsCurrent: "gw:diagnostics:current",
-  diagnosticsExportReport: "gw:diagnostics:exportReport",
   appOpenExternal: "gw:app:openExternal",
   appRevealPath: "gw:app:revealPath",
   appRequestQuit: "gw:app:requestQuit",
@@ -845,12 +848,6 @@ export interface GwNativeApi {
       fields?: RendererMilestoneFields,
     ): Promise<void>;
     current(): Promise<DiagnosticSummary>;
-    /**
-     * The Help-menu "Report a Problem" flow, launched from the renderer. Main
-     * owns everything — save dialog, export, the bug-report follow-up dialog
-     * and its own failure dialog — and nothing crosses back.
-     */
-    exportReport(): Promise<void>;
   };
   app: {
     openExternal(kind: ExternalLinkKind): Promise<void>;

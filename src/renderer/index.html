@@ -87,12 +87,12 @@
       </div>
       <!-- Shown only after a game-client crash; loading.ts writes the label.
            Left of Retry so the primary action keeps the rightmost spot. -->
-      <button type="button" id="loading-report" hidden>Report a Problem…</button>
+      <button type="button" id="loading-report" hidden>Report a Bug…</button>
       <button type="button" id="loading-retry" hidden>Retry</button>
     </div>
 
     <!-- The crash's own message and heap-at-death, renderer-local: the
-         exported report deliberately carries neither, so this disclosure is
+         diagnostics export deliberately carries neither, so this disclosure is
          where a player reads or screenshots the real text before reloading. -->
     <details id="loading-crash-detail" hidden>
       <summary>Technical details</summary>

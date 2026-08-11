@@ -2,9 +2,9 @@
  * The game window: its creation, the navigation and permission handlers bound
  * to it, and the owner-only state persisted beneath it.
  *
- * `window-menu.ts` and `problem-report.ts` own the surfaces that act on the
- * window, so every transition of window state is written here and a menu
- * handler can only ask for one.
+ * `window-menu.ts` owns the surfaces that act on the window, so every
+ * transition of window state is written here and a menu handler can only ask
+ * for one.
  */
 import {
   app,
@@ -454,7 +454,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     } else if (details.reason !== "clean-exit") {
       dialog.showErrorBox(
         "Guild Wars stopped unexpectedly",
-        "Use View → Reload Game to try again. If it repeats, choose Help → Report a Problem.",
+        "Use View → Reload Game to try again. If it repeats, choose Help → Report a Bug.",
       );
     }
   });

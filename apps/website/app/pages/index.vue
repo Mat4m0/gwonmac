@@ -321,8 +321,8 @@ const FAQ: FaqItem[] = [
   {
     q: { en: "How do I report bugs or get help?", de: "Wie melde ich Bugs oder bekomme Hilfe?" },
     a: {
-      en: "Join the Discord for quick help, or use the GitHub bug form. Inside the app, Help → Report a Problem collects redacted diagnostics for you. Credentials and account data are never included.",
-      de: "Komm für schnelle Hilfe auf den Discord oder nutze das GitHub-Bug-Formular. In der App sammelt Hilfe → Problem melden bereinigte Diagnosedaten für dich. Zugangsdaten und Kontodaten sind nie enthalten.",
+      en: "Join the Discord for quick help. In the app, Help → Report a Bug or Help → Request a Feature opens the matching GitHub issue form immediately. Diagnostics are optional and never uploaded automatically.",
+      de: "Komm für schnelle Hilfe auf den Discord. In der App öffnet Hilfe → Bug melden oder Hilfe → Feature vorschlagen sofort das passende GitHub-Issue-Formular. Diagnosedaten sind optional und werden nie automatisch hochgeladen.",
     },
     link: {
       label: { en: "Troubleshooting & known issues", de: "Fehlerbehebung & bekannte Probleme" },

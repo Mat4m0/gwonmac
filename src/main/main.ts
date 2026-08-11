@@ -85,7 +85,7 @@ import {
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
-import { exportProblemReport } from "./problem-report.js";
+import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import { acquireSteamToken } from "./steam-acquire.js";
@@ -530,8 +530,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
       extendedMemory: clientRuntime.extendedMemory,
       healthToken: clientRuntime.healthToken,
     }),
-    exportProblemReport: (win) =>
-      exportProblemReport(win, () => exportDiagnosticsForWindow(win)),
     acquireSteamToken: (parent, record) =>
       acquireSteamToken(STEAM_OAUTH, { parent, record }),
   });
@@ -613,7 +611,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         detail: "Export it now while the capture context is fresh.",
       });
       if (response === 0) {
-        await exportProblemReport(win, () => exportDiagnosticsForWindow(win));
+        await exportDiagnosticsReport(() => exportDiagnosticsForWindow(win));
       }
     });
   }
@@ -686,7 +684,7 @@ if (primaryInstance) process.on("uncaughtException", (err) => {
     "app.uncaughtException",
     err,
     "Guild Wars stopped unexpectedly",
-    "A fatal application error occurred. After reopening, choose Help → Report a Problem.",
+    "A fatal application error occurred. After reopening, choose Help → Report a Bug.",
   );
 });
 
