@@ -12,6 +12,7 @@ declare global {
     quit: boolean;
     relaunch: boolean;
     options: Electron.MessageBoxOptions | null;
+    messages?: Electron.MessageBoxOptions[];
     originalQuit: Electron.App["quit"];
     originalRelaunch: Electron.App["relaunch"];
   };

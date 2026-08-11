@@ -16,7 +16,7 @@ import {
   session,
 } from "electron";
 import { readFileSync } from "node:fs";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
@@ -103,6 +103,10 @@ import {
   parseDistributionMarker,
   type DistributionChannel,
 } from "../shared/distribution-channel.js";
+import {
+  applyPendingCacheClear,
+  applyPendingGameStorageReset,
+} from "./settings-actions.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -299,36 +303,6 @@ async function clearBrowserNetworkCache(): Promise<void> {
   }
 }
 
-async function applyPendingCacheClear(): Promise<void> {
-  const paths = gamePaths();
-  try {
-    await stat(paths.cacheClearRequest);
-  } catch {
-    return;
-  }
-  await rm(paths.chunks, { recursive: true, force: true });
-  await rm(paths.bootChunks, { force: true });
-  await rm(paths.cacheClearRequest, { force: true });
-  logEvent({ k: "cache.clearedAtStartup" });
-}
-
-async function applyPendingGameStorageClear(): Promise<void> {
-  const paths = gamePaths();
-  try {
-    await stat(paths.gameStorageClearRequest);
-  } catch {
-    return;
-  }
-  // Run before a renderer can mount IDBFS, otherwise auto-persisting game
-  // writes can race the destructive clear and recreate entries before quit.
-  await session.defaultSession.clearStorageData({
-    origin: "gw://app",
-    storages: ["indexdb"],
-  });
-  await rm(paths.gameStorageClearRequest, { force: true });
-  logEvent({ k: "filesystem.resetCompleted" });
-}
-
 function buildWindowHost(
   clientRuntime: ClientRuntime,
   sockets: SocketManager,
@@ -375,8 +349,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
       "Mat4m0/gwonmac · App icon artwork © ArenaNet LLC · QT Friz Quad © 1992 QualiType (SIL OFL 1.1) · Not affiliated with ArenaNet or NCSOFT.",
     website: EXTERNAL_URLS.github,
   });
-  await applyPendingCacheClear();
-  await applyPendingGameStorageClear();
+  const paths = gamePaths();
+  await applyPendingCacheClear(paths);
+  await applyPendingGameStorageReset(paths);
   await ensureDirs();
   await startDiagnostics();
   const distributionChannel = packagedDistributionChannel();
@@ -402,7 +377,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   await clearBrowserCookies("startup");
   await clearBrowserNetworkCache();
   logEvent({ k: "electron.ready" });
-  const settings = await loadSettings(gamePaths().settings, async () => {
+  const settings = await loadSettings(paths.settings, async () => {
     logEvent({ k: "settings.corruptRecovered" });
     await dialog.showMessageBox({
       type: "warning",
@@ -419,7 +394,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
   );
   await prepareWindowState();
-  const paths = gamePaths();
   const keychain: NativeKeychain = persistentSecrets
     ? loadNativeKeychain({
         packaged: true,
@@ -503,7 +477,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     steamSessionStore,
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
-    getSettings: () => loadSettings(gamePaths().settings),
+    getSettings: () => loadSettings(paths.settings),
     updateSettings: updateAppSettings,
     resetSettings: resetAppSettings,
     toolsCapableAtLaunch: settings.gwonmacTools,
@@ -596,7 +570,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   // so a due tick during a download or a ready update is a no-op.
   const periodicCheckTick = setInterval(() => {
     void (async () => {
-      const current = await loadSettings(gamePaths().settings);
+      const current = await loadSettings(paths.settings);
       if (!periodicCheckDue({
         capable: distribution.automaticUpdates,
         autoCheckUpdates: current.autoCheckUpdates,

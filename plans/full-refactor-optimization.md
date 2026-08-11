@@ -1,8 +1,8 @@
 # Refactor program: outcome and completion record
 
-Status: accepted and in progress as a six-branch stack. Later stacked PRs
-implement the target outcomes below; the final PR records only what the exact
-stack head has actually proved.
+Status: implemented and locally verified as a six-branch stack. The code and
+deterministic repository gates are complete; merge review and the explicitly
+separate signed/live release operations remain.
 
 Evidence baseline: `main` at `54c6e0806d484fdd6ac4c03b1edf102a16a9bd10`,
 reviewed on 2026-08-10. Workflow steps, contracts, and test inventories belong
@@ -30,7 +30,7 @@ The preference throughout is:
 delete > simplify > replace > add
 ```
 
-This is a target outcome, not a second implementation. Exact schemas live in
+This is an outcome record, not a second implementation. Exact schemas live in
 types, exact release steps live in workflows/scripts, and exact behavior lives
 in tests.
 
@@ -115,7 +115,7 @@ in tests.
 - Performance claims name a measurement boundary; unproved public absolutes are
   removed rather than converted into architecture.
 
-## Target owners
+## Canonical owners
 
 | Concern | Owner | Executable proof |
 | --- | --- | --- |
@@ -189,8 +189,8 @@ packaged story.
 - a second patch-day report representation;
 - another generation token/journal abstraction over existing transaction
   owners;
-- generic `GameHost`, coordinator, cancellation framework, registry, ledger,
-  plugin surface, background job, or database;
+- generic `GameHost`, startup coordinator, cancellation framework, generic
+  feature/plugin registry, ledger, background job, or database;
 - Vue shell rewrite without measured player value;
 - duplicate website release version/track policy;
 - source-regex tests that duplicate packaged behavior; and
@@ -233,35 +233,46 @@ second-device hardware matrix.
 5. repeat the data proof for every public beta/RC; and
 6. on final Stable publication, run one owned `B1/RC → S1` updater canary.
 
-No draft-only feed, second updater, automatic downgrade, or custom DMG
+The staged GitHub draft is the checksum-pinned exact release candidate, not a
+second updater feed. No second updater, automatic downgrade, or custom DMG
 downloader is added to make these checks easier.
 
 ## Final completion gate
 
-The refactor program closes when all applicable boxes are evidenced:
+The local refactor program closes when all locally applicable boxes are
+evidenced:
 
-- [ ] full stack is rebased and each PR remains independently reviewable;
-- [ ] user-owned unrelated worktree changes are unchanged;
-- [ ] typecheck, lint, unit, policy, integration, release, Tools,
+- [x] full stack is rebased and each PR remains independently reviewable;
+- [x] user-owned unrelated worktree changes are unchanged;
+- [x] typecheck, lint, unit, policy, integration, release, Tools,
       website, Electron, packaged runtime, and packaged smoke gates pass against
       the exact final stack head;
-- [ ] the mandatory thermonuclear review has no unresolved P1/P2 finding;
-- [ ] unknown and soft-refused ArenaNet modules keep host-only Tools, while
+- [x] the mandatory thermonuclear review has no unresolved P1/P2 finding;
+- [x] unknown and soft-refused ArenaNet modules keep host-only Tools, while
       live observation/Apply remain absent;
-- [ ] Stable/Beta selection has one release-policy source and every candidate
-      is exact, newer than Stable, and Stable-readable;
-- [ ] WebGate remains stateless and no credential or cookie becomes app state;
-- [ ] multi-step settings workflows are outside IPC; direct owner-local IPC
+- [x] Stable/Beta selection has one release-policy source, and its release gate
+      requires every public candidate to be exact, newer than Stable, and
+      Stable-readable;
+- [x] WebGate remains stateless and no credential or cookie becomes app state;
+- [x] multi-step settings workflows are outside IPC; direct owner-local IPC
       operations remain explicit rather than hidden behind another service;
-- [ ] no remote certificate authority, duplicate updater or release
-      version/track policy, generic `GameHost`, second Tools host, coordinator,
-      registry, migration framework, or refactor-only compatibility shim
-      remains. The one existing `ToolsHost` and released-data readers remain
-      intentionally;
-- [ ] active documents describe shipped behavior and distinguish local proof
-      from signed/live release operations; and
-- [ ] the program stops. Further architecture work requires a reproduced player
+- [x] no remote certificate authority, duplicate updater or release
+      version/track policy, generic `GameHost`, second Tools host, startup
+      coordinator, generic feature/plugin registry, migration framework, or
+      refactor-only compatibility shim remains. The one existing `ToolsHost`
+      and released-data readers remain intentionally;
+- [x] active documents describe the implemented stack and distinguish local
+      proof from signed/live release operations; and
+- [x] the program stops. Further architecture work requires a reproduced player
       or maintainer defect, or a measured performance decision.
+
+Public Beta promotion remains a release operation, not unfinished architecture:
+
+- [ ] the Stable enabler is published and adopted before the first public Beta;
+- [ ] the exact signed `Stable → candidate → same Stable` proof passes for
+      each public beta/RC; and
+- [ ] the bounded production-updater canaries and one owned live hardware check are
+      recorded in the matching release notes.
 
 Passing this gate is “dream enough”: not a claim that software will never
 change, but proof that this architecture program has no unfinished cleanup or

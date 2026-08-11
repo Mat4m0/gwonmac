@@ -389,32 +389,6 @@ test("the WASM section codec has exactly one home", async () => {
   }
 });
 
-test("saved-file recovery defers IndexedDB deletion until before renderer startup", async () => {
-  const ipc = await readFile(path.join(root, "src/main/ipc.ts"), "utf8");
-  const main = await readFile(path.join(root, "src/main/main.ts"), "utf8");
-  // The handlers live in a registry keyed by channel name.
-  const resetHandler = ipc.slice(
-    ipc.indexOf("gameStorageReset: channel("),
-    ipc.indexOf("diagnosticsGraphics: channel("),
-  );
-  assert.ok(resetHandler.length > 0, "the gameStorageReset handler was not found");
-
-  assert.match(resetHandler, /resetGameInput\(win\)/);
-  assert.match(resetHandler, /paths\.gameStorageClearRequest/);
-  assert.doesNotMatch(resetHandler, /clearStorageData/);
-  assert.doesNotMatch(resetHandler, /credentials|cacheClearRequest|recursive/);
-  assert.match(
-    main,
-    /applyPendingGameStorageClear[\s\S]*origin:\s*"gw:\/\/app"[\s\S]*storages:\s*\["indexdb"\]/,
-  );
-  const firstWindow = main.indexOf("createMainWindow(buildWindowHost(");
-  assert.notEqual(firstWindow, -1, "no window is created from a window host");
-  assert.ok(
-    main.indexOf("await applyPendingGameStorageClear()") < firstWindow,
-    "the pending IndexedDB clear must run before the first window exists",
-  );
-});
-
 test("the served module decides whether Enhancement imports", async () => {
   const harness = await readFile(
     path.join(root, "src/renderer/harness.ts"),

@@ -46,6 +46,18 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     level: "error",
     fields: { code },
   },
+  "app.relaunchFailed": {
+    subsystem: "app",
+    level: "error",
+    fields: {
+      action: literal([
+        "toolsEnable",
+        "cacheClear",
+        "gameStorageReset",
+      ] as const),
+      code,
+    },
+  },
   "app.beforeQuit": { subsystem: "app", level: "info", fields: none },
   "app.unexpectedUserData": {
     subsystem: "app",

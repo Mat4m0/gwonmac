@@ -69,7 +69,6 @@ export async function runQuitCleanup(): Promise<void> {
     }
   })();
   const outcome = await Promise.race([pass.then(() => "completed" as const), expired]);
-  clearTimeout(deadline);
   // A task still running past the deadline keeps running; nothing here can
   // cancel it. What the deadline buys is that the process no longer waits for
   // it, and that the record says which of the two happened.
@@ -78,7 +77,19 @@ export async function runQuitCleanup(): Promise<void> {
       ? { k: "quit.cleanupCompleted" }
       : { k: "quit.cleanupTimedOut" },
   );
-  await flushDiagnostics();
+  try {
+    // The final write is part of cleanup, not an operation after it. Reuse the
+    // same deadline so a recorder blocked on the filesystem cannot strand the
+    // process after every registered task has already been bounded.
+    await Promise.race([flushDiagnostics(), expired]);
+  } catch (err) {
+    // There is nowhere durable left to report a recorder failure. Keep the
+    // developer console useful without making diagnostics a prerequisite for
+    // quitting or installing an already-downloaded update.
+    console.error("quit diagnostics flush failed", err);
+  } finally {
+    clearTimeout(deadline);
+  }
 }
 
 /** Call before ready. Enables Chromium renderer sandboxing. */
