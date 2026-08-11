@@ -17,7 +17,7 @@ import {
 } from "electron";
 import { EXTERNAL_URLS } from "../shared/contracts.js";
 import { logEvent } from "./diagnostics.js";
-import { reportProblem } from "./problem-report.js";
+import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import {
   resetGameInput,
   sendRendererCommand,
@@ -170,16 +170,35 @@ export function installApplicationMenu({
           },
         },
         {
-          id: "report-problem",
-          label: "Report a Problem…",
-          click: () => void reportProblem(win, host),
+          id: "report-bug",
+          label: "Report a Bug…",
+          click: async () => {
+            await resetGameInput(win);
+            await shell.openExternal(EXTERNAL_URLS.bugReport);
+          },
         },
-        // Capture tooling supports Report a Problem, so it lives beside it
-        // rather than in View next to everyday commands. Ids are the test
-        // contract and survive the move; ⌘⇧M stays global.
+        {
+          id: "request-feature",
+          label: "Request a Feature…",
+          click: async () => {
+            await resetGameInput(win);
+            await shell.openExternal(EXTERNAL_URLS.featureRequest);
+          },
+        },
+        // Diagnostics are optional support tools, never a gate before filing
+        // an issue. ⌘⇧M stays global for an active performance capture.
         {
           label: "Diagnostics",
           submenu: [
+            {
+              id: "export-diagnostics",
+              label: "Export Recent Diagnostics…",
+              click: async () => {
+                await resetGameInput(win);
+                await exportDiagnosticsReport(host.exportDiagnostics);
+              },
+            },
+            { type: "separator" },
             {
               id: "start-performance-capture",
               label: "Start Performance Capture",

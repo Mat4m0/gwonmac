@@ -10,21 +10,6 @@ body:
         Thanks for reporting a problem. A short description is enough; diagnostics and technical details are optional.
 
         GitHub issues are public. If you attach diagnostics, the app excludes credentials, account identifiers, packet contents, HTTP bodies, headers, cookies, filesystem paths, and crash dumps.
-  - type: dropdown
-    id: area
-    attributes:
-      label: Problem area
-      options:
-        - Crash or unexpected quit
-        - Startup or update
-        - Download or loading
-        - Performance or stutter
-        - Graphics
-        - Input or audio
-        - Login
-        - Other
-    validations:
-      required: true
   - type: textarea
     id: behavior
     attributes:
@@ -47,9 +32,3 @@ body:
       label: Diagnostics (optional)
       description: If you have diagnostics, drag the `.zip` exported by GWonmac here.
       placeholder: Drag the .zip file here, or leave this blank.
-  - type: input
-    id: mac
-    attributes:
-      label: Mac and macOS version (optional)
-      description: Helpful if you are not attaching diagnostics.
-      placeholder: M1 Pro MacBook Pro, macOS 15.5

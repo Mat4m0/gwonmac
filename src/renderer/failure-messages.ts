@@ -155,7 +155,7 @@ export function describeSteamRefusal(
 
 /**
  * Whether the failure is worth a bug report. Network and disk conditions are
- * the player's to fix — suggesting "Report a Problem" for them blames the app
+ * the player's to fix — suggesting "Report a Bug" for them blames the app
  * for the Wi-Fi. Anything else might genuinely be ours.
  *
  * A locked Keychain belongs here for the same reason and `keychain_unentitled`
@@ -181,14 +181,13 @@ export function suggestReport(code: string): boolean {
   return !PLAYER_SIDE.has(code);
 }
 
-const REPORT_HINT = 'You can retry, or choose Help → Report a Problem.';
+const REPORT_HINT = 'You can retry, or choose Help → Report a Bug.';
 
 /**
  * The running game client died (Emscripten abort, or exit with a non-zero
  * code). One crash is usually transient; from the second crash in the same
  * app run the sentence stops promising that a retry will fix it and leads
- * with the report, because a repeating crash is the case a diagnostics
- * bundle exists for.
+ * with reporting, because a repeating crash is the case we need to hear about.
  */
 export interface ClientCrashPresentation {
   label: string;
@@ -198,7 +197,7 @@ export interface ClientCrashPresentation {
 }
 
 const CRASH_RETRY = 'Retry';
-const CRASH_REPORT = 'Report a Problem…';
+const CRASH_REPORT = 'Report a Bug…';
 
 export interface MemoryPressurePresentation {
   label: string;
@@ -280,11 +279,9 @@ export function clientCrashPresentation(
       ? 'The game client keeps stopping unexpectedly.'
       : 'The game client stopped unexpectedly.',
     detail: repeated
-      ? 'Retrying alone may not fix this. Choose Report a Problem to export '
-        + 'diagnostics and open the bug form — the report shows what stopped, '
-        + 'not your account or chat.'
+      ? 'Retrying alone may not fix this. Choose Report a Bug so we can investigate.'
       : 'This is usually temporary — choose Retry to start it again. '
-        + 'If it keeps happening, choose Report a Problem.',
+        + 'If it keeps happening, choose Report a Bug.',
     reportButton: CRASH_REPORT,
     retryButton: CRASH_RETRY,
   };
