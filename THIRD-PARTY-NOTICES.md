@@ -36,12 +36,14 @@ screenshots, loading artwork, and derived favicons are not relicensed under
 GPL-3.0-only. Their inclusion does not grant permission to reuse them
 separately.
 
-No cursor artwork is distributed with this application. When the player turns
-on the optional game cursor, the host reads the bitmap the player's own
-installed Guild Wars client has already decoded in its own memory and draws it
-over the game view for the duration of that session. That artwork is never
-copied into this repository, the packaged application, or any release
-artifact.
+`docs/assets/gwonmac-game.jpeg` is a screenshot of gwonmac. It includes Guild
+Wars marks and loading artwork. The screenshot does not change the rights in
+that material.
+
+No cursor artwork is distributed with this application. The required native
+cursor reads the bitmap that the player's Guild Wars client decoded in memory.
+It draws the bitmap only for that session. The artwork is not copied into this
+repository, the packaged application, or a release artifact.
 
 ## GWToolbox++ and GuildWarsMapBrowser
 

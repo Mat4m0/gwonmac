@@ -1,19 +1,35 @@
 # Security policy
 
-Please do not report credential exposure, relay/proxy boundary bypasses,
-arbitrary native access, or other security-sensitive findings in a public
-issue.
+## Report a vulnerability
 
 Use GitHub's
 [private vulnerability reporting](https://github.com/Mat4m0/gwonmac/security/advisories/new).
-Do not open a public issue or discussion for a suspected vulnerability.
+You can also contact `matthias@lupinum.com`.
 
-Only the latest published alpha is supported. Findings against the current
-`main` branch are also welcome when they affect an upcoming release.
+Do not report a security issue in a public issue, discussion, or pull request.
 
-In the private report, include the affected version, impact, reproduction, and
-the smallest necessary evidence. Do not include real account credentials, game
-packet captures, or unrelated private data.
+Include:
 
-Ordinary crashes and bugs belong in the public bug form with the app’s redacted
-diagnostics `.zip` export.
+- the affected version or commit;
+- the security impact;
+- the smallest reproduction; and
+- only the evidence that is necessary.
+
+Do not include real credentials, game packet captures, or unrelated private
+data.
+
+## Supported versions
+
+We review security findings for:
+
+- the latest published Stable release;
+- the current public Beta or release candidate; and
+- `main` when the finding affects the next release.
+
+Older releases do not receive fixes.
+
+## Ordinary bugs
+
+Report crashes and non-security bugs with the public bug form. You can attach
+the app's local diagnostics `.zip` export. Review the file before you attach
+it.
