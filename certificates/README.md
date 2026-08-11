@@ -1,46 +1,35 @@
-# Client certification record
+# Client certification detector record
 
-This directory contains `certified-client.json`, the ArenaNet JSPI code
-generation already reviewed by this repository. It is a detector heartbeat,
-not runtime authority.
+`certified-client.json` records the ArenaNet JSPI code generation that this
+repository reviewed. The scheduled detector uses this record to decide if it
+must start recertification work.
 
-Runtime authorization stays in the compiled certification tables and isolated
-local structural proof. There is no remote certification authority. Newly
-measured Enhancement facts require a signed application release, and verified
-official ArenaNet bytes remain the fallback when optional transforms refuse.
+> [!IMPORTANT]
+> This record does not authorize a client transform. Runtime authority comes
+> only from compiled certification tables or the isolated local structural
+> proof. There is no remote certification feed or remote authority.
 
-## The certified client generation
+The digest covers these code artifacts:
 
-certified-client.json records one digest: the identity of the ArenaNet JSPI code
-artifacts, Gw.jspi.js and Gw.jspi.wasm, whose current certificate has been
-reviewed on main.
+- `Gw.jspi.js`
+- `Gw.jspi.wasm`
 
-Gw.snapshot and version.json are deliberately outside this identity because
-game content can be republished independently of executable client code.
+It does not cover `Gw.snapshot` or `version.json`. ArenaNet can publish game
+content without changing executable client code.
 
-The file carries no runtime authority. It decides only whether the scheduled
-recertification workflow needs to run its more expensive derivation:
+The file has this closed format:
 
-~~~json
-{ "formatVersion": 1, "codeGeneration": "<64 hex characters>" }
-~~~
+```json
+{ "formatVersion": 1, "codeGeneration": "<64 lowercase hexadecimal characters>" }
+```
 
-pnpm client:official prints the published generation beside the recorded one.
-pnpm client:official --record <digest> writes the exact digest it is handed.
-Recording an explicit digest rather than fetching again prevents a second
-ArenaNet publication during derivation from marking unreviewed bytes as
-reviewed.
+Run `pnpm client:official` to compare the published generation with the
+recorded generation. Run `pnpm client:official --record <digest>` only after you
+review the certification change for that exact digest.
 
-The scheduled detector:
+Record the reviewed digest directly. Do not fetch it again during the write.
+ArenaNet can publish another generation between the review and the write.
 
-1. fetches the bounded official manifest;
-2. compares the published JSPI generation with this record;
-3. exits quickly when they match;
-4. downloads only the code artifacts when they differ;
-5. runs the same local certification implementation;
-6. opens a proposal or a named investigation issue; and
-7. records a new generation only with the reviewed certification change.
-
-A wrong digest costs an unnecessary or delayed derivation. It cannot authorize
-a transform. Runtime authorization remains in the compiled tables and isolated
-local structural proof.
+An incorrect record can start unnecessary work or delay recertification. It
+cannot enable a transform. See the [WASM host](../docs/wasm-host.md) and the
+[Enhancement runbook](../docs/enhancement-development.md).

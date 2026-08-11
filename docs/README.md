@@ -1,20 +1,30 @@
 # Documentation
 
-Each document owns one thing and the others link to it rather than restating
-it. This table exists so a question lands in one document.
+Use this page to find the document that owns your question. Each current
+document owns one subject. Other documents must link to it instead of copying
+its rules.
 
-| Document                                                     | Owns                                                                        |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| [`user-guide.md`](user-guide.md)                             | what the app does from a player's seat                                      |
-| [`process-model.md`](process-model.md)                       | processes, sandbox, `gw://app`, rendering and input, sockets, secrets, signing |
-| [`content-pipeline.md`](content-pipeline.md)                 | client artifacts, the chunk store, download modes, this app's updater       |
-| [`wasm-host.md`](wasm-host.md)                               | the `Module` surface, the game filesystem, and client certification         |
-| [`diagnostics.md`](diagnostics.md)                           | the flight recorder, diagnostics ZIP, and which test proves which claim      |
-| [`enhancement-development.md`](enhancement-development.md)   | the procedure for extending the Enhancement                                 |
-| [`gwonmac-tools-wasm.md`](gwonmac-tools-wasm.md)             | the companion kernel's shape and its developer proof surface                |
-| [`performance-electron.md`](performance-electron.md)         | the measurement record and the conclusions drawn from it                    |
-| [`release-verification.md`](release-verification.md)         | checksums, attestations, and what a version number means                     |
+| Question | Current document |
+| --- | --- |
+| How does a player use or recover the app? | [User guide](user-guide.md) |
+| Which process owns this work? | [Process model](process-model.md) |
+| How do ArenaNet client files and game data update? | [Content pipeline](content-pipeline.md) |
+| How does the official client host and certification work? | [WASM host](wasm-host.md) |
+| What can diagnostics record and export? | [Diagnostics](diagnostics.md) |
+| How do I change or recertify an Enhancement? | [Enhancement development](enhancement-development.md) |
+| How do application releases, Stable, and Beta work? | [Release verification](release-verification.md) |
+| Which UI tokens and components must Tools use? | [Tools design](../apps/tools/DESIGN.md) |
 
-[`AGENTS.md`](../AGENTS.md) holds the constraints a change must not break,
-[`PRODUCT.md`](../PRODUCT.md) who this is for and what will not ship, and
-[`CONTRIBUTING.md`](../CONTRIBUTING.md) how to get a change reviewed.
+Start with these repository documents when their subject applies:
+
+- [`AGENTS.md`](../AGENTS.md) gives instructions and safety rules to coding agents.
+- [`PRODUCT.md`](../PRODUCT.md) defines the product, its users, and its non-goals.
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md) explains how to propose a change.
+
+Some directories have a short local README. It explains only the files and
+hazards in that directory. The current technical document remains the owner of
+the wider behavior.
+
+Files under `internal/` are investigation evidence. They can include failed
+hypotheses and old build facts. Use them to understand past decisions. Do not
+use them as the current product or architecture specification.
