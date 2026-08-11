@@ -13,7 +13,11 @@
  * These are web services. Game infrastructure is allowlisted separately in
  * `allowlists.ts`, and the two lists do not merge.
  */
-import { AppError, AllowlistError } from "../../shared/errors.js";
+import { AllowlistError } from "../../shared/errors.js";
+import {
+  isProxyRouteName,
+  type ProxyRouteName,
+} from "../../shared/proxy-routes.js";
 
 export const PROXY_ROUTES = {
   webgate: "webgate.ncplatform.net",
@@ -21,22 +25,14 @@ export const PROXY_ROUTES = {
   help: "help.guildwars.com",
   store: "store.guildwars.com",
   www: "www.guildwars.com",
-} as const satisfies Readonly<Record<string, string>>;
+} as const satisfies Readonly<Record<ProxyRouteName, string>>;
 
 /**
  * A five-key allowlist, so its keys belong in the type. Diagnostics records
  * which route failed, and `Record<string, string>` would have made that field
  * an open string.
  */
-export type ProxyRoute = keyof typeof PROXY_ROUTES;
-
-const ROUTE_RE = /^\/([a-z0-9][a-z0-9-]{0,30})(\/.*)$/i;
-
-export interface ProxyTarget {
-  route: string;
-  host: string;
-  path: string;
-}
+export type ProxyRoute = ProxyRouteName;
 
 export function resolveProxyHost(route: string): string {
   const key = route.toLowerCase();
@@ -51,7 +47,7 @@ export function resolveProxyHost(route: string): string {
  *  caller to have normalised, and it says so in the type rather than folding
  *  case here and claiming a narrowing it has not proved. */
 export function isProxyRoute(route: string): route is ProxyRoute {
-  return Object.hasOwn(PROXY_ROUTES, route);
+  return isProxyRouteName(route);
 }
 
 export function isProxyFetchDestination(destination: string): boolean {
@@ -89,22 +85,44 @@ export function rewriteProxyRedirect(
   return `gw://app/${route}${next.pathname}${next.search}`;
 }
 
-export function resolveProxyRoute(
-  path: string,
-  routes: Readonly<Record<string, string>> = PROXY_ROUTES,
-): ProxyTarget {
-  const m = ROUTE_RE.exec(path);
-  if (!m) {
-    throw new AppError("proxy_path", `not a proxy path: ${path}`);
+/**
+ * Applies the response half of the stateless proxy boundary.
+ *
+ * `null` means a redirect tried to leave its exact allowlisted host. The main
+ * handler owns the resulting diagnostic and 502 response; this function owns
+ * only the deterministic header decision, including stripping every cookie
+ * and upstream policy header before the custom scheme adds its own policy.
+ */
+export function proxyResponseHeaders(
+  route: ProxyRoute,
+  upstream: string,
+  status: number,
+  source: Headers,
+): Headers | null {
+  let safeLocation = "";
+  if (status >= 300 && status < 400) {
+    const location = source.get("location");
+    if (location) {
+      try {
+        safeLocation = rewriteProxyRedirect(route, location, upstream);
+      } catch {
+        return null;
+      }
+    }
   }
-  const route = m[1]!;
-  const rest = m[2]!;
-  const host = routes[route.toLowerCase()];
-  if (!host) {
-    throw new AppError(
-      "unknown_proxy_route",
-      `unknown proxy route ${JSON.stringify(route)} — known: ${Object.keys(routes).sort().join(", ")}`,
-    );
+
+  const output = new Headers();
+  for (const [name, value] of source) {
+    const lower = name.toLowerCase();
+    if (isProxyCookieHeader(lower)) continue;
+    if (
+      lower === "content-security-policy"
+      || lower === "content-security-policy-report-only"
+      || lower === "x-content-type-options"
+    ) {
+      continue;
+    }
+    output.set(name, lower === "location" && safeLocation ? safeLocation : value);
   }
-  return { route: route.toLowerCase(), host, path: rest };
+  return output;
 }

@@ -1,11 +1,10 @@
 // Reads repository text, and says so in its filename.
 //
-// Eleven of the fourteen security-posture assertions this repository used to
-// make about src/main by regular expression are asked of the running
-// application instead, in tests/electron/sandbox.spec.ts. These three
-// are what is left. Each one is a call site: the predicate it calls is executed
-// by a unit test, and what has no executable form is that main still asks it.
-// They are here, under a filename
+// Most security-posture assertions this repository used to make about
+// src/main by regular expression are now asked of the running application.
+// These are the call sites whose rejected branch cannot be constructed past
+// the surrounding Electron guard. Each predicate is executed by a unit test;
+// this file proves only that main still asks it. It lives under a filename
 // that admits what they are, rather than deleted — a call site nothing checks
 // is exactly how a guard gets dropped in a refactor and noticed in an incident.
 import assert from "node:assert/strict";
@@ -30,14 +29,23 @@ test("IPC still refuses a sender that is not the main frame at the canonical URL
 
 test("the proxy still answers only fetches", () => {
   // `isProxyFetchDestination` is executed over every destination Chromium can
-  // set in tests/unit/proxy-routes.test.ts. Triggering the call site would need
-  // a live request to an ArenaNet host, which no automated test may make.
+  // set in tests/unit/proxy-routes.test.ts. The complete accepted path, cookie
+  // isolation, and refusal outcomes run through the actual protocol handler in
+  // tests/electron/webgate.spec.ts; only this unreachable destination branch
+  // remains a source assertion.
   assert.match(
     read("src/main/protocol.ts"),
     /if \(!isProxyFetchDestination\(destination\)\)/u,
   );
-  assert.equal(
-    read("src/main/protocol.ts").match(/isProxyCookieHeader\(key\)/gu)?.length,
-    2,
+});
+
+test("the proxy response still crosses the canonical header boundary", () => {
+  // The pure boundary is exercised with safe and escaped redirects in
+  // proxy-routes.test.ts. Chromium's custom-protocol fixture cannot expose a
+  // synthetic 302 to net.fetch, so retain only this one production call-site
+  // assertion rather than introducing a second transport implementation.
+  assert.match(
+    read("src/main/protocol.ts"),
+    /proxyResponseHeaders\(\s*route,\s*upstream,\s*res\.status,\s*res\.headers,/u,
   );
 });

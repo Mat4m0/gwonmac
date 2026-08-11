@@ -201,7 +201,10 @@ const child = spawn(
     cwd: root,
     env: {
       ...process.env,
-      GW_OFFLINE_SHELL: "1",
+      // The smoke only needs the pre-ready renderer/IPC path. Cached-only keeps
+      // it network-independent and reaches a real `not_ready` failure when this
+      // disposable profile contains no client generation.
+      GW_REQUIRE_CACHED_CLIENT: "1",
       ELECTRON_ENABLE_LOGGING: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],

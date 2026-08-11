@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import { closeOffline, launchCachedClient } from "./fixtures.mjs";
 import { boxOf, startGameInput } from "./input-helpers.js";
 
 type PointerInputWindow = typeof window & {
@@ -10,7 +10,7 @@ type PointerInputWindow = typeof window & {
 
 test.describe("renderer pointer input", () => {
   test("releases held keys and buttons on an input reset", async () => {
-    const fixture = await launchOffline("gw-input-e2e-");
+    const fixture = await launchCachedClient("gw-input-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -55,7 +55,7 @@ test.describe("renderer pointer input", () => {
   });
 
   test("passes every click run and primary drag through without touch input", async () => {
-    const fixture = await launchOffline("gw-macos-pointer-e2e-");
+    const fixture = await launchCachedClient("gw-macos-pointer-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -134,7 +134,7 @@ test.describe("renderer pointer input", () => {
     }
   });
   test("releases held input when the pointer leaves the app window", async () => {
-    const fixture = await launchOffline("gw-input-window-leave-e2e-");
+    const fixture = await launchCachedClient("gw-input-window-leave-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -177,7 +177,7 @@ test.describe("renderer pointer input", () => {
   });
 
   test("keeps the game canvas interactive through every renderer edge", async () => {
-    const fixture = await launchOffline("gw-input-viewport-edges-e2e-");
+    const fixture = await launchCachedClient("gw-input-viewport-edges-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -250,7 +250,7 @@ test.describe("renderer pointer input", () => {
   });
 
   test("accumulates trackpad pixels without changing discrete wheel input", async () => {
-    const fixture = await launchOffline("gw-wheel-e2e-");
+    const fixture = await launchCachedClient("gw-wheel-e2e-");
     try {
       await startGameInput(fixture.page);
       const result = await fixture.page.evaluate(() => {

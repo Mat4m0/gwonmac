@@ -116,8 +116,6 @@ describe("integration: patch updater", () => {
     assert.equal(initial.candidate, false);
     assert.equal((await readFile(join(artifacts, "Gw.jspi.js"))).toString(), js.toString());
     assert.equal((await stat(join(artifacts, "Gw.jspi.wasm"))).size, wasm.length);
-    assert.ok(await readFile(join(artifacts, "snapshot-metadata.json"), "utf8"));
-
     let fetches = 0;
     const client2 = new PatchClient({
       artifactsDir: artifacts,

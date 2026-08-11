@@ -67,14 +67,7 @@ export async function launchCachedClient(
   prepare: (userData: string) => Promise<void> = async () => {},
   client: CachedClientOptions = {},
 ): Promise<OfflineFixture> {
-  return launchOffline(prefix, {
-    ...environment,
-    // This helper exists before the stack removes the legacy fake-ready seam.
-    // Force a sealed cached generation even if a caller supplies conflicting
-    // environment values.
-    GW_OFFLINE_SHELL: "0",
-    GW_REQUIRE_CACHED_CLIENT: "1",
-  }, async (userData) => {
+  return launchOffline(prefix, environment, async (userData) => {
     await seedCachedClient({
       artifacts: path.join(userData, "game", "artifacts"),
       userData,
@@ -100,11 +93,14 @@ export async function launchOfflineAt(
     if (value !== undefined) env[key] = value;
   }
   Object.assign(env, {
-    GW_OFFLINE_SHELL: "1",
     // Launch without taking keyboard focus. Specs that assert on real OS focus
     // (document.hasFocus, pointer lock, fullscreen) pass GW_BACKGROUND_LAUNCH: "0".
     GW_BACKGROUND_LAUNCH: "1",
     ...environment,
+    // Every default launch is offline by policy. With no seeded generation the
+    // runtime publishes a normal `not_ready` failure; it never fabricates a
+    // ready client for the test harness.
+    GW_REQUIRE_CACHED_CLIENT: "1",
   });
   delete env.ELECTRON_RUN_AS_NODE;
   let app: ElectronApplication | null = null;

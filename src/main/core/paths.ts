@@ -92,11 +92,6 @@ export function clientManifestPath(generationDir: string): string {
   return path.join(generationDir, "manifest.json");
 }
 
-/** The resident-chunk index published beside a generation's artifacts. */
-export function snapshotMetadataPath(generationDir: string): string {
-  return path.join(generationDir, "snapshot-metadata.json");
-}
-
 /** One ArenaNet artifact inside a client generation directory. */
 export function clientArtifactPath(
   generationDir: string,

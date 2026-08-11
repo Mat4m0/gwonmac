@@ -952,7 +952,7 @@ function appendGlue() {
   document.body.appendChild(s);
 }
 
-function loadGlue() {
+function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   if (!appSettings) {
     window.gwLoading.fail('Settings were not ready.');
     return;
@@ -969,7 +969,6 @@ function loadGlue() {
 
   // Outside Capacitor the client rewrites API hosts to same-origin first labels.
   // Map those onto gw://app/<route>/… so the main-process proxy can forward.
-  const PROXY_LABELS = new Set(['webgate', 'account', 'help', 'store', 'www']);
   // The browser's two overloads, viewed as the one variadic signature this
   // wrapper needs: `open(method, url)` and `open(method, url, async)` are
   // different requests, so the tail is forwarded by arity rather than named.
@@ -990,8 +989,8 @@ function loadGlue() {
       const u = new URL(url, location.href);
       const label = u.pathname.replace(/^\/+/, '').split('/')[0] ?? '';
       const hostLabel = u.hostname.split('.')[0] ?? '';
-      if (PROXY_LABELS.has(label) ||
-          (u.hostname === location.hostname && PROXY_LABELS.has(hostLabel))) {
+      if (isProxyRouteLabel(label) ||
+          (u.hostname === location.hostname && isProxyRouteLabel(hostLabel))) {
         const path = u.pathname.startsWith('/') ? u.pathname : '/' + u.pathname;
         const rewritten = `gw://app${path}${u.search}`;
         log(`api: ${method} ${path}`);
@@ -1117,6 +1116,7 @@ function loadGlue() {
     return;
   }
   milestone('renderer.loaded');
+  let isProxyRouteLabel: (route: string) => boolean;
   try {
     const [
       { unavailablePlatformCapabilities },
@@ -1134,6 +1134,7 @@ function loadGlue() {
       templateFilesystemTrace,
       clientHealth,
       appearance,
+      proxyRoutes,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
@@ -1150,6 +1151,7 @@ function loadGlue() {
       import('./template-filesystem-trace.js'),
       import('./client-health.js'),
       import('./appearance.js'),
+      import('../shared/proxy-routes.js'),
     ]);
     host = {
       ...clientExit,
@@ -1167,6 +1169,7 @@ function loadGlue() {
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
     applyAppearance = appearance.applyAppearance;
+    isProxyRouteLabel = proxyRoutes.isProxyRouteName;
     Object.assign(Module, unavailablePlatformCapabilities(log));
     const socketHost = createSocketHost({
       native: native().sockets,
@@ -1276,7 +1279,7 @@ function loadGlue() {
   }
 
   window.gwLoading.set('Starting the game…', null);
-  loadGlue();
+  loadGlue(isProxyRouteLabel);
 })();
 
 })();

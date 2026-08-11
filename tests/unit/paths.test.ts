@@ -6,7 +6,6 @@ import {
   diagnosticFramesPath,
   documentDirectories,
   gamePaths,
-  snapshotMetadataPath,
   unpackedPath,
 } from "../../src/main/core/paths.ts";
 
@@ -73,10 +72,6 @@ describe("resolved profile paths", () => {
   it("pins the files published inside a client generation", () => {
     const generation = `${root}/game/artifacts`;
     assert.equal(clientManifestPath(generation), `${generation}/manifest.json`);
-    assert.equal(
-      snapshotMetadataPath(generation),
-      `${generation}/snapshot-metadata.json`,
-    );
     assert.equal(
       clientArtifactPath(generation, "Gw.jspi.wasm"),
       `${generation}/Gw.jspi.wasm`,

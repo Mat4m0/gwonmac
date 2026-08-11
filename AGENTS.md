@@ -62,7 +62,10 @@ is meant to inherit the dead ends rather than walk back into them.
 
 | Path                      | Ownership                                                     |
 | ------------------------- | ------------------------------------------------------------- |
-| `src/main/main.ts`        | composition root, ArenaNet client update, app state           |
+| `src/main/main.ts`        | app-wide composition, sequencing, lifetime, and presentation  |
+| `src/main/client-runtime.ts` | client lifecycle, ready publication, recovery, and update exclusion |
+| `src/main/active-client.ts` | the immutable active client generation                       |
+| `src/main/core/patch-client.ts` | acquire, stage, verify, and publish a client generation   |
 | `src/main/core/`          | chunks, manifest, DNS, sockets, settings                      |
 | `src/main/certification/` | the official -> template-save -> Enhancement chain: certified tables, both transforms, the isolated proof, and the Enhancement switches |
 | `certificates/`           | the reviewed ArenaNet client-generation heartbeat used by scheduled recertification |
@@ -111,7 +114,8 @@ is meant to inherit the dead ends rather than walk back into them.
   against cache residency before appending `Gw.jspi.js`; no game audio,
   networking, WebGL, or WASM may start behind the launcher.
 - Progress `phase: "ready"` means the main process has an active client, and
-  only `ClientRuntime.clientReady` may publish it. `PatchClient` reports
+  only `ClientRuntime.publishReadyProgress` may publish it after checking the
+  exact active generation. `PatchClient` reports
   download progress and nothing else — its `emit` signature excludes `"ready"`.
   A premature ready lets the renderer read snapshot metadata before a client
   exists, receive size 0, and silently stream the whole game over the network.
@@ -131,7 +135,9 @@ is meant to inherit the dead ends rather than walk back into them.
 - `geodc.arenanetworks.com` can return the datacenter sentinel `0.0.1.2`; raw
   DNS fallback is intentional.
 - Game infrastructure and web services use different allowlisted domains.
-  Unknown proxy routes fail closed.
+  Unknown proxy routes fail closed. The web-service proxy uses an
+  uncredentialed Chromium fetch and drops Cookie and Set-Cookie headers; it
+  must not acquire browser login state.
 - WASM packet views must be compacted before crossing `contextBridge`.
 - The main process owns TCP handles, backpressure, destination/port checks,
   owner cleanup, and final close semantics.
