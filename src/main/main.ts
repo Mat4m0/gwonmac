@@ -39,6 +39,10 @@ import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { Mutex } from "./core/mutex.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
+import {
+  discardRetiredExtendedMemoryCache,
+  retireExtendedMemorySetting,
+} from "./core/retired-extended-memory.js";
 import { SocketManager } from "./core/sockets.js";
 import {
   count,
@@ -485,6 +489,22 @@ if (primaryInstance) void app.whenReady().then(async () => {
   }
   await ensureDirs(activeAccountMode);
   await startDiagnostics();
+  const retiredMemory = await retireExtendedMemorySetting(paths.settings);
+  if (retiredMemory.persistenceError) {
+    logEvent({
+      k: "memoryProfile.retirementFailed",
+      target: "settings",
+      code: errorCode(retiredMemory.persistenceError),
+    });
+  }
+  const retiredCacheError = await discardRetiredExtendedMemoryCache(paths.game);
+  if (retiredCacheError) {
+    logEvent({
+      k: "memoryProfile.retirementFailed",
+      target: "cache",
+      code: errorCode(retiredCacheError),
+    });
+  }
   const distributionChannel = packagedDistributionChannel();
   const distribution = distributionCapabilities(distributionChannel);
   if (!app.isPackaged) {
@@ -524,6 +544,15 @@ if (primaryInstance) void app.whenReady().then(async () => {
         "The settings file was corrupt. Defaults were restored and a diagnostic copy was preserved.",
     });
   });
+  if (retiredMemory.wasEnabled) {
+    await dialog.showMessageBox({
+      type: "warning",
+      buttons: ["Continue"],
+      message: "Experimental 4 GB memory limit removed",
+      detail:
+        "We found that the experimental mode can cause severe graphical corruption during long sessions. GWonMac has restored the standard 2 GB limit. The memory warning and Reload Guild Wars recovery remain available.",
+    });
+  }
   const enhancementSelection = enhancementSelectionFor(settings);
   const enhancementProgram = DEVELOPER_ENHANCEMENT_PROGRAM;
   const enhancementCapabilities = requestedEnhancementCapabilities(
@@ -543,7 +572,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     hostVersion: HOST_VERSION,
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     enhancementCapabilities,
-    extendedMemoryEnabled: settings.extendedMemoryEnabled,
     onProgress: setProgress,
     onPrefetch: setPrefetch,
   });
@@ -685,7 +713,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getClientSession: () => ({
       appVersion: HOST_VERSION,
       compatibility: clientRuntime.compatibility,
-      extendedMemory: clientRuntime.extendedMemory,
       healthToken: clientRuntime.healthToken,
     }),
     recordClientFeatureFailure: (features) => {

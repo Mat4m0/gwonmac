@@ -97,6 +97,31 @@ describe("diagnosticEventRecord", () => {
     );
   });
 
+  it("still decodes withdrawn extended-memory events from old archives", () => {
+    assert.deepEqual(
+      diagnosticEventRecord({
+        k: "wasm.extendedMemory",
+        mode: "active",
+        requested: true,
+        profile: "cursorToolbox",
+        capBytes: 4_294_901_760,
+        fallbackReason: "none",
+      }),
+      {
+        subsystem: "wasm",
+        level: "info",
+        name: "wasm.extendedMemory",
+        fields: {
+          mode: "active",
+          requested: true,
+          profile: "cursorToolbox",
+          capBytes: 4_294_901_760,
+          fallbackReason: "none",
+        },
+      },
+    );
+  });
+
   it("keeps the socket event name closed and the payload declared", () => {
     // `socket.${event.type}` was a templated name whose error branch carried
     // libuv's message; both parts are now fields of a fixed name.

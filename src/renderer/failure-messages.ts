@@ -264,9 +264,8 @@ export function memoryWarningCopy(
     dismissButton: MEMORY_DISMISS,
     explanation:
       `This session can use up to ${capGb} GB. Reloading starts Guild Wars `
-      + 'with fresh memory and puts you back where you were. The experimental '
-      + '4 GB limit provides more headroom, but it cannot stop continued '
-      + 'memory growth.',
+      + 'with fresh memory and puts you back where you were. Reload before '
+      + 'continued memory growth reaches the client limit.',
   };
 }
 

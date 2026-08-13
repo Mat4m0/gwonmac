@@ -147,7 +147,6 @@ export function parseSettings(raw: unknown): AppSettings {
     "xunlaiStorage",
     "travelPalette",
     "targetReadout",
-    "extendedMemoryEnabled",
   ] as const) {
     if (setting in src) out[setting] = asBool(src[setting], setting);
   }

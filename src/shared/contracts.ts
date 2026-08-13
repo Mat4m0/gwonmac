@@ -345,8 +345,6 @@ export interface AppSettings {
   targetReadout: boolean;
   /** Player changes to the three app-owned shortcuts; missing entries use defaults. */
   shortcutOverrides: ShortcutOverrides;
-  /** Request the certified 4 GB client module on the next Guild Wars launch. */
-  extendedMemoryEnabled: boolean;
   showDiagnostics: boolean;
   dataStrategy: DataStrategy;
   /**
@@ -397,7 +395,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   travelShortcuts: DEFAULT_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
-  extendedMemoryEnabled: false,
   showDiagnostics: false,
   dataStrategy: null,
   autoCheckUpdates: true,
@@ -585,26 +582,6 @@ export type EnhancementRuntimeFeature =
  * separate in AppSettings; this is the launch result and therefore the only
  * source for claims about what the current session is actually using.
  */
-export type ExtendedMemoryRuntimeStatus =
-  | Readonly<{
-      requestedAtLaunch: false;
-      status: "standard";
-      effectiveCapBytes: typeof WASM_HEAP_CAP_BYTES;
-      fallbackReason: null;
-    }>
-  | Readonly<{
-      requestedAtLaunch: true;
-      status: "active";
-      effectiveCapBytes: number;
-      fallbackReason: null;
-    }>
-  | Readonly<{
-      requestedAtLaunch: true;
-      status: "unavailable";
-      effectiveCapBytes: typeof WASM_HEAP_CAP_BYTES;
-      fallbackReason: "unsupported-client" | "preparation-failed";
-    }>;
-
 /**
  * The candidate generation this renderer is serving. A renderer captures it
  * before loading the game glue and returns that exact value only after its own
@@ -625,7 +602,6 @@ export interface ClientHealthToken {
 export interface ClientSession {
   appVersion: string;
   compatibility: ClientCompatibility | null;
-  extendedMemory: ExtendedMemoryRuntimeStatus | null;
   healthToken: ClientHealthToken | null;
 }
 
