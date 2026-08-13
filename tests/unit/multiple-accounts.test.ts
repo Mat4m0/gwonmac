@@ -5,11 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
+  addMultiProfile,
+  archiveMultiProfile,
   createMultiWorkspace,
   loadAccountMode,
   loadMultiWorkspace,
   saveAccountMode,
   saveMultiWorkspace,
+  updateMultiProfile,
 } from "../../src/main/core/multiple-accounts.js";
 import {
   parseMultiWorkspace,
@@ -113,5 +116,30 @@ describe("Multiple Accounts documents", () => {
       }),
       AppError,
     );
+  });
+
+  it("adds, updates, and archives profiles without changing stable IDs", () => {
+    const first = createMultiWorkspace({
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "Primary",
+      templates: "private",
+      builds: "private",
+    });
+    const added = addMultiProfile(first, {
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "Storage",
+      templates: "shared",
+      builds: "shared",
+    });
+    const updated = updateMultiProfile(added, added.profiles[1]!.id, {
+      name: "Storage Alt",
+      templates: "private",
+      builds: "shared",
+    });
+    const archived = archiveMultiProfile(updated, updated.profiles[1]!.id);
+    assert.equal(archived.profiles[0]!.name, "Primary");
+    assert.equal(archived.profiles[1]!.id, added.profiles[1]!.id);
+    assert.equal(archived.profiles[1]!.name, "Storage Alt");
+    assert.equal(archived.profiles[1]!.archived, true);
   });
 });

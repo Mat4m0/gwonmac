@@ -572,8 +572,9 @@
                  aria-labelledby="settings-tab-accounts">
           <h3 class="settings-pane-title">Multiple Accounts</h3>
           <p class="settings-pane-intro">Opt in to an account picker that can open several independent Guild Wars windows.</p>
-          <p class="settings-status">Single Account mode is active.</p>
+          <p id="accounts-mode-status" class="settings-status">Checking account mode…</p>
           <p class="settings-note">Your current window, saved login, settings, templates, and builds stay in Single Account mode. Multiple Accounts creates a separate workspace and asks you to sign in once for each profile.</p>
+          <div id="accounts-single-setup">
           <div class="settings-divider" aria-hidden="true"></div>
           <label class="settings-field" for="accounts-first-name">
             <span>First profile name</span>
@@ -603,6 +604,7 @@
             <button type="button" id="accounts-enable" class="ui-button" data-variant="primary">Enable and Restart…</button>
           </div>
           <p id="accounts-setup-status" class="settings-status" role="status" aria-live="polite"></p>
+          </div>
         </section>
       </div>
     </div>

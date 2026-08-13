@@ -29,6 +29,7 @@
       <div class="accounts-actions">
         <button id="accounts-open" class="ui-button" data-variant="primary" type="submit" disabled>Open selected</button>
         <button id="accounts-select-all" class="ui-button" type="button">Select all</button>
+        <button id="accounts-new" class="ui-button" type="button">New profile…</button>
       </div>
       <p id="accounts-status" class="ui-status-line" data-tone="neutral" role="status" aria-live="polite"></p>
     </form>
@@ -38,6 +39,39 @@
       <button id="accounts-single" class="ui-link" type="button">Return to Single Account mode…</button>
     </footer>
   </main>
+  <dialog id="profile-dialog" class="profile-dialog ui-frame" aria-labelledby="profile-dialog-title">
+    <form id="profile-form" class="ui-panel">
+      <header class="ui-panel-head">
+        <h2 id="profile-dialog-title" class="ui-panel-title">New profile</h2>
+        <button id="profile-cancel-x" class="ui-button" data-icon type="button" aria-label="Close">&#10005;</button>
+      </header>
+      <div class="ui-panel-body profile-fields">
+        <label for="profile-name">Profile name</label>
+        <input id="profile-name" class="ui-input" type="text" maxlength="48" autocomplete="off" required>
+        <fieldset>
+          <legend>Build library</legend>
+          <div class="ui-segment" data-fill>
+            <label><input type="radio" name="profileBuilds" value="shared" checked><span>Shared</span></label>
+            <label><input type="radio" name="profileBuilds" value="private"><span>Private</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Build templates</legend>
+          <div class="ui-segment" data-fill>
+            <label><input type="radio" name="profileTemplates" value="shared" checked><span>Shared</span></label>
+            <label><input type="radio" name="profileTemplates" value="private"><span>Private</span></label>
+          </div>
+        </fieldset>
+        <p class="accounts-help">Sharing is only with other Multiple Accounts profiles. Saved login and Guild Wars files always stay private.</p>
+      </div>
+      <footer class="ui-panel-foot profile-actions">
+        <button id="profile-archive" class="ui-button" data-variant="danger" type="button" hidden>Archive profile…</button>
+        <span class="profile-action-spacer"></span>
+        <button id="profile-cancel" class="ui-button" type="button">Cancel</button>
+        <button id="profile-save" class="ui-button" data-variant="primary" type="submit">Create profile</button>
+      </footer>
+    </form>
+  </dialog>
   <script type="module" src="accounts.js"></script>
 </body>
 </html>

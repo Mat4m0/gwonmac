@@ -75,7 +75,7 @@ h1 {
 
 .account-choice {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--ui-space-3);
   min-height: 66px;
@@ -104,6 +104,7 @@ h1 {
 .account-state { color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); text-transform: capitalize; }
 .account-state[data-state="running"] { color: var(--ui-success); }
 .account-state[data-state="failed"] { color: var(--ui-danger); }
+.account-edit { white-space: nowrap; }
 
 .accounts-help,
 .accounts-foot p,
@@ -126,9 +127,24 @@ h1 {
 .accounts-foot p { max-width: 420px; margin: 0; font-size: var(--ui-font-size-sm); }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
+.profile-dialog {
+  width: min(520px, calc(100vw - 32px));
+  padding: 0;
+  border: 0;
+  color: var(--ui-text);
+}
+.profile-dialog::backdrop { background: rgb(0 0 0 / 68%); }
+.profile-dialog .ui-panel { padding: 9px 10px 11px; }
+.profile-fields { display: grid; gap: var(--ui-space-3); }
+.profile-fields fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.profile-fields legend { margin-bottom: var(--ui-space-2); color: var(--ui-text-muted); }
+.profile-fields > label { color: var(--ui-text-muted); }
+.profile-actions { flex-wrap: wrap; }
+.profile-action-spacer { flex: 1; }
+
 @media (max-width: 520px) {
   .accounts-head img { display: none; }
   .accounts-foot { align-items: flex-start; flex-direction: column; }
-  .account-choice { grid-template-columns: auto minmax(0, 1fr); }
+  .account-choice { grid-template-columns: auto minmax(0, 1fr) auto; }
   .account-state { grid-column: 2; }
 }

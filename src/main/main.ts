@@ -26,6 +26,8 @@ import {
   type AppSettingsPatch,
   type AccountsSetupRequest,
   type AccountsState,
+  type AccountProfileRequest,
+  type AccountProfileUpdateRequest,
   type DownloadProgress,
   type PrefetchProgress,
   type UpdateTrack,
@@ -117,10 +119,13 @@ import {
 import { windowRegistry } from "./window-registry.js";
 import {
   createMultiWorkspace,
+  addMultiProfile,
+  archiveMultiProfile,
   loadAccountMode,
   loadMultiWorkspace,
   saveAccountMode,
   saveMultiWorkspace,
+  updateMultiProfile,
 } from "./core/multiple-accounts.js";
 import {
   type AccountMode,
@@ -171,6 +176,7 @@ const HOST_VERSION = (() => {
 
 /** Every settings write is a read-modify-write of one file. */
 const settingsLock = new Mutex();
+const accountsLock = new Mutex();
 let appUpdaterController: AppUpdater | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
@@ -745,6 +751,41 @@ if (primaryInstance) void app.whenReady().then(async () => {
     openAccounts: async (profileIds) => {
       for (const profileId of profileIds) await openProfile(profileId);
     },
+    createAccount: (request: AccountProfileRequest) => accountsLock.run(async () => {
+      if (activeAccountMode !== "multi" || !multiWorkspace) {
+        throw new Error("Multiple Accounts mode is not active");
+      }
+      const next = addMultiProfile(multiWorkspace, request);
+      const profile = next.profiles.at(-1)!;
+      await mkdir(multiProfilePaths(paths, profile.id).root, { recursive: true });
+      await saveMultiWorkspace(paths.multiWorkspace, next);
+      multiWorkspace = next;
+      return accountsState();
+    }),
+    updateAccount: (request: AccountProfileUpdateRequest) => accountsLock.run(async () => {
+      if (activeAccountMode !== "multi" || !multiWorkspace) {
+        throw new Error("Multiple Accounts mode is not active");
+      }
+      const next = updateMultiProfile(multiWorkspace, request.id, request);
+      await saveMultiWorkspace(paths.multiWorkspace, next);
+      multiWorkspace = next;
+      windowRegistry.profileWindow(request.id)?.setTitle(
+        `Guild Wars Reforged — ${request.name}`,
+      );
+      return accountsState();
+    }),
+    archiveAccount: (profileId: ProfileId) => accountsLock.run(async () => {
+      if (activeAccountMode !== "multi" || !multiWorkspace) {
+        throw new Error("Multiple Accounts mode is not active");
+      }
+      if (windowRegistry.profileWindow(profileId)) {
+        throw new Error("Close this account before archiving it");
+      }
+      const next = archiveMultiProfile(multiWorkspace, profileId);
+      await saveMultiWorkspace(paths.multiWorkspace, next);
+      multiWorkspace = next;
+      return accountsState();
+    }),
     useSingleAccountMode,
   });
 

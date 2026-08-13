@@ -630,6 +630,16 @@ export interface AccountsSetupRequest {
   readonly importBuilds: boolean;
 }
 
+export interface AccountProfileRequest {
+  readonly name: string;
+  readonly templates: LibraryScope;
+  readonly builds: LibraryScope;
+}
+
+export interface AccountProfileUpdateRequest extends AccountProfileRequest {
+  readonly id: ProfileId;
+}
+
 /**
  * Prefix of the single `webPreferences.additionalArguments` entry that carries
  * a JSON `RendererInit`. The preload is the only reader.
@@ -758,6 +768,9 @@ export const IPC = {
   accountsGet: "gw:accounts:get",
   accountsSetup: "gw:accounts:setup",
   accountsOpen: "gw:accounts:open",
+  accountsCreate: "gw:accounts:create",
+  accountsUpdate: "gw:accounts:update",
+  accountsArchive: "gw:accounts:archive",
   accountsUseSingle: "gw:accounts:useSingle",
 } as const;
 
@@ -939,6 +952,9 @@ export interface GwNativeApi {
     get(): Promise<AccountsState>;
     setup(value: AccountsSetupRequest): Promise<void>;
     open(profileIds: readonly ProfileId[]): Promise<void>;
+    create(value: AccountProfileRequest): Promise<AccountsState>;
+    update(value: AccountProfileUpdateRequest): Promise<AccountsState>;
+    archive(profileId: ProfileId): Promise<AccountsState>;
     useSingle(): Promise<void>;
   };
 }

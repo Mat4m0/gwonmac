@@ -19,6 +19,8 @@ import type {
   AppSettings,
   AppSettingsPatch,
   AccountsSetupRequest,
+  AccountProfileRequest,
+  AccountProfileUpdateRequest,
   AccountsState,
   AppUpdateState,
   CacheInfo,
@@ -142,6 +144,9 @@ export interface IpcContext {
   getAccountsState: () => AccountsState;
   setupAccounts: (request: AccountsSetupRequest) => Promise<void>;
   openAccounts: (profileIds: readonly ProfileId[]) => Promise<void>;
+  createAccount: (request: AccountProfileRequest) => Promise<AccountsState>;
+  updateAccount: (request: AccountProfileUpdateRequest) => Promise<AccountsState>;
+  archiveAccount: (profileId: ProfileId) => Promise<AccountsState>;
   useSingleAccountMode: () => Promise<void>;
 }
 
@@ -417,6 +422,28 @@ const asAccountsSetup = one((value: unknown): AccountsSetupRequest => {
     importBuilds: input.importBuilds,
   };
 });
+
+function parseAccountProfile(value: unknown): AccountProfileRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("account profile must be an object");
+  }
+  const input = value as Record<string, unknown>;
+  return {
+    name: parseProfileName(input.name),
+    templates: parseLibraryScope(input.templates, "templates"),
+    builds: parseLibraryScope(input.builds, "builds"),
+  };
+}
+
+const asAccountProfile = one(parseAccountProfile);
+const asAccountProfileUpdate = one((value: unknown): AccountProfileUpdateRequest => {
+  const profile = parseAccountProfile(value);
+  return {
+    id: parseProfileId((value as Record<string, unknown>).id),
+    ...profile,
+  };
+});
+const asProfileId = one(parseProfileId);
 
 const asProfileIds = one((value: unknown): readonly ProfileId[] => {
   if (!Array.isArray(value) || value.length === 0 || value.length > 16) {
@@ -888,6 +915,21 @@ export function registerIpcHandlers(ctx: IpcContext): {
     accountsOpen: channel(
       asProfileIds,
       (_win, profileIds) => ctx.openAccounts(profileIds),
+      "hub",
+    ),
+    accountsCreate: channel(
+      asAccountProfile,
+      (_win, request) => ctx.createAccount(request),
+      "hub",
+    ),
+    accountsUpdate: channel(
+      asAccountProfileUpdate,
+      (_win, request) => ctx.updateAccount(request),
+      "hub",
+    ),
+    accountsArchive: channel(
+      asProfileId,
+      (_win, profileId) => ctx.archiveAccount(profileId),
       "hub",
     ),
     accountsUseSingle: channel(

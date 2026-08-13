@@ -15,9 +15,17 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
   const list = required<HTMLFieldSetElement>('accounts-list');
   const open = required<HTMLButtonElement>('accounts-open');
   const selectAll = required<HTMLButtonElement>('accounts-select-all');
+  const newProfile = required<HTMLButtonElement>('accounts-new');
   const status = required<HTMLElement>('accounts-status');
   const single = required<HTMLButtonElement>('accounts-single');
+  const profileDialog = required<HTMLDialogElement>('profile-dialog');
+  const profileForm = required<HTMLFormElement>('profile-form');
+  const profileTitle = required<HTMLElement>('profile-dialog-title');
+  const profileName = required<HTMLInputElement>('profile-name');
+  const profileSave = required<HTMLButtonElement>('profile-save');
+  const profileArchive = required<HTMLButtonElement>('profile-archive');
   let profiles: readonly AccountProfileSummary[] = [];
+  let editing: AccountProfileSummary | null = null;
 
   function setStatus(message: string, tone: 'neutral' | 'progress' | 'success' | 'error') {
     status.textContent = message;
@@ -36,14 +44,16 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
   }
 
   function renderProfile(profile: AccountProfileSummary) {
-    const label = document.createElement('label');
-    label.className = 'account-choice';
+    const row = document.createElement('div');
+    row.className = 'account-choice';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.name = 'profile';
     checkbox.value = profile.id;
     checkbox.checked = profile.state !== 'failed';
-    const details = document.createElement('span');
+    checkbox.id = `profile-${profile.id}`;
+    const details = document.createElement('label');
+    details.htmlFor = checkbox.id;
     const name = document.createElement('span');
     name.className = 'account-name';
     name.textContent = profile.name;
@@ -55,8 +65,35 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     state.className = 'account-state';
     state.dataset.state = profile.state;
     state.textContent = profile.state;
-    label.append(checkbox, details, state);
-    return label;
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'account-edit ui-button';
+    edit.dataset.variant = 'quiet';
+    edit.textContent = 'Edit…';
+    edit.addEventListener('click', () => showProfileDialog(profile));
+    row.append(checkbox, details, state, edit);
+    return row;
+  }
+
+  const choice = (name: string) =>
+    profileForm.elements.namedItem(name) as RadioNodeList;
+
+  function closeProfileDialog() {
+    profileDialog.close();
+    editing = null;
+  }
+
+  function showProfileDialog(profile: AccountProfileSummary | null) {
+    editing = profile;
+    profileTitle.textContent = profile ? `Edit ${profile.name}` : 'New profile';
+    profileSave.textContent = profile ? 'Save changes' : 'Create profile';
+    profileName.value = profile?.name ?? '';
+    choice('profileBuilds').value = profile?.builds ?? 'shared';
+    choice('profileTemplates').value = profile?.templates ?? 'shared';
+    profileArchive.hidden = !profile || profiles.length < 2;
+    profileArchive.disabled = profile?.state === 'running';
+    profileDialog.showModal();
+    profileName.focus();
   }
 
   async function refresh() {
@@ -78,6 +115,46 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     const next = !inputs.every((input) => input.checked);
     for (const input of inputs) input.checked = next;
     syncActions();
+  });
+  newProfile.addEventListener('click', () => showProfileDialog(null));
+  required<HTMLButtonElement>('profile-cancel').addEventListener('click', closeProfileDialog);
+  required<HTMLButtonElement>('profile-cancel-x').addEventListener('click', closeProfileDialog);
+  profileForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!profileForm.reportValidity()) return;
+    profileSave.disabled = true;
+    const request = {
+      name: profileName.value.trim(),
+      builds: choice('profileBuilds').value as 'shared' | 'private',
+      templates: choice('profileTemplates').value as 'shared' | 'private',
+    };
+    const updating = editing !== null;
+    try {
+      if (editing) await window.gwNative.accounts.update({ id: editing.id, ...request });
+      else await window.gwNative.accounts.create(request);
+      closeProfileDialog();
+      setStatus(updating ? 'Profile updated.' : 'Profile created.', 'success');
+      await refresh();
+    } catch {
+      setStatus('The profile could not be saved. Check that its name is unique.', 'error');
+    } finally {
+      profileSave.disabled = false;
+    }
+  });
+  profileArchive.addEventListener('click', async () => {
+    const profile = editing;
+    if (!profile || !window.confirm(`Archive “${profile.name}”? Its saved login and files will be kept.`)) return;
+    profileArchive.disabled = true;
+    try {
+      await window.gwNative.accounts.archive(profile.id);
+      closeProfileDialog();
+      setStatus('Profile archived. Its data was kept.', 'success');
+      await refresh();
+    } catch {
+      setStatus('Close the profile before archiving it, then try again.', 'error');
+    } finally {
+      profileArchive.disabled = false;
+    }
   });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();

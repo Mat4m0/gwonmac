@@ -49,6 +49,8 @@
   const accountsImportBuilds = byId('accounts-import-builds') as HTMLInputElement;
   const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
   const accountsStatus = byId('accounts-setup-status');
+  const accountsModeStatus = byId('accounts-mode-status');
+  const accountsSingleSetup = byId('accounts-single-setup');
   /**
    * The appearance slider beside the `output` that reads it back.
    *
@@ -592,6 +594,17 @@
       accountsEnable.disabled = false;
       accountsStatus.textContent = 'Multiple Accounts could not be enabled. Nothing changed.';
     }
+  });
+
+  void window.gwNative.accounts.get().then((state) => {
+    const singleMode = state.mode === 'single';
+    accountsModeStatus.textContent = singleMode
+      ? 'Single Account mode is active.'
+      : 'Multiple Accounts mode is active. Use the Account Picker to manage profiles or return to Single Account mode.';
+    accountsSingleSetup.hidden = !singleMode;
+  }).catch(() => {
+    accountsModeStatus.textContent = 'Account mode could not be read.';
+    accountsSingleSetup.hidden = true;
   });
 
   window.addEventListener('resize', updateRenderScaleDimensions);

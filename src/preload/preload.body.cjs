@@ -239,6 +239,9 @@ const api = {
     get: () => ipcRenderer.invoke(IPC.accountsGet),
     setup: (value) => ipcRenderer.invoke(IPC.accountsSetup, value),
     open: (profileIds) => ipcRenderer.invoke(IPC.accountsOpen, profileIds),
+    create: (value) => ipcRenderer.invoke(IPC.accountsCreate, value),
+    update: (value) => ipcRenderer.invoke(IPC.accountsUpdate, value),
+    archive: (profileId) => ipcRenderer.invoke(IPC.accountsArchive, profileId),
     useSingle: () => ipcRenderer.invoke(IPC.accountsUseSingle),
   },
 };

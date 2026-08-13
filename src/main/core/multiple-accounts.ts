@@ -14,6 +14,7 @@ import {
   type AccountMode,
   type LibraryScope,
   type MultiWorkspace,
+  type MultiProfile,
   type ProfileId,
 } from "../../shared/multiple-accounts.js";
 import { AppError } from "../../shared/errors.js";
@@ -86,5 +87,58 @@ export function createMultiWorkspace(options: {
       templates: options.templates,
       builds: options.builds,
     }],
+  });
+}
+
+export function addMultiProfile(
+  workspace: MultiWorkspace,
+  options: {
+    readonly name: string;
+    readonly templates: LibraryScope;
+    readonly builds: LibraryScope;
+    readonly id?: string;
+  },
+): MultiWorkspace {
+  const profile: MultiProfile = {
+    id: (options.id ?? randomUUID()) as ProfileId,
+    name: parseProfileName(options.name),
+    archived: false,
+    templates: options.templates,
+    builds: options.builds,
+  };
+  return parseMultiWorkspace({
+    ...workspace,
+    profiles: [...workspace.profiles, profile],
+  });
+}
+
+export function updateMultiProfile(
+  workspace: MultiWorkspace,
+  profileId: ProfileId,
+  changes: Pick<MultiProfile, "name" | "templates" | "builds">,
+): MultiWorkspace {
+  if (!workspace.profiles.some((profile) => profile.id === profileId)) {
+    throw new AppError("bad_multi_workspace", "profile does not exist");
+  }
+  return parseMultiWorkspace({
+    ...workspace,
+    profiles: workspace.profiles.map((profile) =>
+      profile.id === profileId ? { ...profile, ...changes } : profile,
+    ),
+  });
+}
+
+export function archiveMultiProfile(
+  workspace: MultiWorkspace,
+  profileId: ProfileId,
+): MultiWorkspace {
+  if (!workspace.profiles.some((profile) => profile.id === profileId)) {
+    throw new AppError("bad_multi_workspace", "profile does not exist");
+  }
+  return parseMultiWorkspace({
+    ...workspace,
+    profiles: workspace.profiles.map((profile) =>
+      profile.id === profileId ? { ...profile, archived: true } : profile,
+    ),
   });
 }
