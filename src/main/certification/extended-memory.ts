@@ -1,5 +1,5 @@
 /**
- * Opt-in 4 GiB research profile for exact ArenaNet build 38797.
+ * Opt-in 4 GiB research profile for exact ArenaNet builds 38797 and 38833.
  *
  * This is one paired transform. wasm32 addresses above 2 GiB arrive in
  * JavaScript as negative i32 values, so publishing the larger WASM memory
@@ -36,7 +36,7 @@ export const EXTENDED_MEMORY_PROFILES = [
 export type ExtendedMemoryProfile = (typeof EXTENDED_MEMORY_PROFILES)[number];
 
 export interface ExtendedMemoryWasmBuild {
-  readonly buildId: 38_797;
+  readonly buildId: 38_797 | 38_833;
   readonly profile: ExtendedMemoryProfile;
   readonly inputSha256: string;
   readonly outputSha256: string;
@@ -86,6 +86,48 @@ export const EXTENDED_MEMORY_WASM_BUILDS: readonly ExtendedMemoryWasmBuild[] =
       profile: "cursorTargetToolboxCommands" as const,
       inputSha256: "d2efaa8f460acf0d13cf1c1bfe319bbf94d5fde22d9a96de8a9485630c069c51",
       outputSha256: "1aac83397e09d3c42a801ba9447da959b62b04d980370c799e8db927cb1cb4cd",
+    }),
+    Object.freeze({
+      buildId: 38_833 as const,
+      profile: "off" as const,
+      inputSha256: "eeeb4b70edbba53d5ee98a50dbba395dd175e8eebdd3e3bf93f8f9fcfa428a7b",
+      outputSha256: "99ac8364243d7755ad0869b6a4b0edc00e8037823d0cea2e560ffc5edeb1bda4",
+    }),
+    Object.freeze({
+      buildId: 38_833 as const,
+      profile: "cursor" as const,
+      inputSha256: "32a1024878a2f37d34c177d6ae7b1d6b4adaa343c45678d312e3fc9a1a50ed27",
+      outputSha256: "74beebbdb7465d4e95ebf8e6c5437333f4bf459fac30a55c02a419d5d07add93",
+    }),
+    Object.freeze({
+      buildId: 38_833 as const,
+      profile: "target" as const,
+      inputSha256: "86bd364176d26d107393a2fc1edcdc57a75659515d26ef20a73a0f2b2dfa6c4e",
+      outputSha256: "1eedc86f39547e27978bb2a5d54d010ae0aae76d04503b1ef7943a7e8ddd9bc5",
+    }),
+    Object.freeze({
+      buildId: 38_833 as const,
+      profile: "cursorTarget" as const,
+      inputSha256: "13c8cc0d25604cf988ef4e08ddfb3db98f9b8e3b3bbe6eda8c3dd0a3adca9f04",
+      outputSha256: "0669f4dec833fcdc600f5139c0f99a584afa42c7432f7c297cb32cb8c3b25e37",
+    }),
+    Object.freeze({
+      buildId: 38_833 as const,
+      profile: "cursorToolbox" as const,
+      inputSha256: "23bc4e6d9bda59bc9213f24096807fa9d37684c2fb21444abbe9b310135d1c79",
+      outputSha256: "8c04661e68a5695f6856bccd3daa2287352e6fc5cd978073829587e465027020",
+    }),
+    Object.freeze({
+      buildId: 38_833 as const,
+      profile: "cursorToolboxCommands" as const,
+      inputSha256: "2489d91c03d2f58750c41a2135ee49a40c8eccd446e84840095e053fb1257184",
+      outputSha256: "88a4c7e99dc1c0656b93e3e5b05cb6fd857e4c288a560930b6839ffbeff210f2",
+    }),
+    Object.freeze({
+      buildId: 38_833 as const,
+      profile: "cursorTargetToolboxCommands" as const,
+      inputSha256: "202d7305a3d6ff380decc823632905b576edf3dbde306c45d7b3f8919a25e3c1",
+      outputSha256: "a9ca21495a5ac981e8f99934d82874cc2b287853f99e2a00affcaceed1ef1317",
     }),
   ]);
 

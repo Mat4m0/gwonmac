@@ -197,14 +197,45 @@ domain outside the kernel.
 
 ## Recertify an ArenaNet client
 
-Inspect the official candidate with:
+Start from the exact official artifact that triggered the compatibility notice.
+Do not clear the downloaded game data: the unsupported artifact and the
+retained preceding artifact are the most useful migration evidence.
+
+Run the bounded chain in order:
 
 ```bash
-pnpm certification recertify
+pnpm certification doctor
+pnpm certification template "/absolute/path/Gw.jspi.wasm" --emit-ts
+pnpm certification recertify "/absolute/path/Gw.jspi.wasm"
 ```
 
 The tool first selects or derives file compatibility. It then inspects that
 output as the Core and Tools candidate. The transforms are not alternatives.
+
+If the template report derives one unambiguous entry, review it and write it:
+
+```bash
+pnpm certification template "/absolute/path/Gw.jspi.wasm" --write
+```
+
+Then add one complete exact-build Enhancement entry. Do not make a new build
+inherit addresses from the preceding build. Compare the old and new modules
+and record which function bodies, signatures, table slots, data roots and
+message anchors stayed exact. Recompute every capability output; a copied hash
+is not evidence.
+
+Finish the downstream chain only after the Enhancement entry exists:
+
+```bash
+pnpm certification recertify "/absolute/path/Gw.jspi.wasm"
+pnpm certification double-click "/absolute/path/Gw.jspi.wasm"
+pnpm check
+```
+
+`recertify` must report `bundleVerified: true`, `double-click` must report
+`matchesShippedTable: true`, and `doctor` must name the new build before a live
+run. Native double-click and extended-memory tables are cumulative: add the
+new build's seven profile inputs without removing the preceding build.
 
 Each recovered fact needs an independent semantic anchor. A common movement is
 not enough. Automated candidates are review evidence and cannot create runtime
@@ -214,6 +245,14 @@ Recertification requires exact identities, signatures, caller semantics,
 original-call preservation, table and allocation invariants, positive and
 negative layout evidence, lifecycle clearing, offline tests, clean teardown,
 and one bounded live semantic check per changed domain.
+
+The scheduled recertification workflow already detects a new ArenaNet
+generation, downloads and verifies its code artifacts, derives the template
+entry, and publishes `enhancement.json` as review evidence. It deliberately
+does not write Enhancement memory addresses or command facts. Those values can
+affect a running game and still need a human review plus bounded live evidence.
+Automation should shorten that review; it must not turn a matching index into
+runtime authority.
 
 When evidence is incomplete, add no certificate. The verified official client
 must remain playable.

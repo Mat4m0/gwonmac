@@ -369,3 +369,37 @@ chains jointly measured map 449, player number 1, and Koss as
 
 **Do not repeat:** a plausible global address needs a live invariant across more
 than one related structure before certification.
+
+## Build 38,833 patch carry-forward
+
+ArenaNet published official module
+`f19daa7e1293cbd14891411e15124b1be21d70b94195ef9ba5e3eec6fc3e618c`.
+The certified template transform produced
+`7d0ced840d3dc167b823ed0ad6ed411319faf97316345c8e37620e86d86f536e`.
+Function 477 changed its returned build constant from 38,797 to 38,833.
+
+The patch added one defined function but did not move the certified Tools
+boundaries. The following facts matched the preceding post-template module
+exactly:
+
+- 219 imports and table limits of 4,683;
+- main-loop function 446;
+- cursor callback 2469 in active table slot 922 and producer bodies 2828/2834;
+- UI dispatcher 6842 and the certified message IDs and call sites;
+- command sender 5951, drain 6661 in table slot 1721, and every named command
+  builder body hash;
+- native double-click callback 2448 in table slot 903; and
+- all certified memory roots, strides, limits and lifecycle fields.
+
+The static data section retained its size and placement. Its only changed byte
+range was `0x15a318..0x15a397`, outside every certified layout root. The
+recomputed outputs for all seven capability profiles, native double-click and
+extended memory were pinned rather than copied from build 38,797.
+
+`inspectEnhancementStructuralEvidence` reported the cursor candidate as
+unavailable on both build 38,797 and 38,833. Its current heuristic expects two
+direct callers of the table callback, but this callback is reached indirectly
+through table slot 922. This is a limitation of the review helper, not evidence
+of a client change. Do not relax the locator until it returns the desired
+function. Use the exact body, signature, active table relation and bounded live
+cursor behavior together until a stronger semantic locator exists.

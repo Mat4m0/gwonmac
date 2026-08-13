@@ -83,8 +83,8 @@ export interface NativeDoubleClickBuild {
 }
 
 /**
- * Build 38735, whose official module is
- * `3229678d…`. Every hash below is reproduced by
+ * Builds 38797 and 38833 use the same callback function, body, table slot, and
+ * record layout. Every hash below is reproduced by
  * `pnpm certification double-click`, which re-runs the chain from the official
  * bytes; the table is a cache of that derivation, never its authority.
  */
@@ -113,6 +113,21 @@ export const NATIVE_DOUBLE_CLICK_BUILDS: readonly NativeDoubleClickBuild[] = [
         "d95c9ce5ceb7a010261357f4927a434725e33844215d0fda8b7579ae96758a08",
       "2bc4bab43a2c5ea5038bc895e04b294bb40a427c9fb9f2dae5c84274facac8a4":
         "d2efaa8f460acf0d13cf1c1bfe319bbf94d5fde22d9a96de8a9485630c069c51",
+      // Build 38833 template-save output and Enhancement profiles.
+      "7d0ced840d3dc167b823ed0ad6ed411319faf97316345c8e37620e86d86f536e":
+        "eeeb4b70edbba53d5ee98a50dbba395dd175e8eebdd3e3bf93f8f9fcfa428a7b",
+      "dd6dd7285d882ed53777c3778e17cb137014687e970ca2c6a4448ce4b1a154d4":
+        "32a1024878a2f37d34c177d6ae7b1d6b4adaa343c45678d312e3fc9a1a50ed27",
+      "6049890fc3d84f51dbd6fd5078a45574b88b917dcb6e1f4e05d0d8b6fc04cd6b":
+        "86bd364176d26d107393a2fc1edcdc57a75659515d26ef20a73a0f2b2dfa6c4e",
+      "e3e824e81069769bf3b8ba5c878258c296b7d6ca23ca41bd4b8c5d48a0fb7b18":
+        "13c8cc0d25604cf988ef4e08ddfb3db98f9b8e3b3bbe6eda8c3dd0a3adca9f04",
+      "505d2f83b2d19e8c375334ebc739f72654d56766ffb2b0e482b86becc9349b8a":
+        "23bc4e6d9bda59bc9213f24096807fa9d37684c2fb21444abbe9b310135d1c79",
+      "2a3cf36a7edfe8f19452a81c15b92b951234099ce0dbb359c49d1b049e6bc473":
+        "2489d91c03d2f58750c41a2135ee49a40c8eccd446e84840095e053fb1257184",
+      "c69206e7b5e2eb9a63c02f590637432dd559ac67e71837cfa3e1e1ae0fa09c38":
+        "202d7305a3d6ff380decc823632905b576edf3dbde306c45d7b3f8919a25e3c1",
     },
   },
 ];

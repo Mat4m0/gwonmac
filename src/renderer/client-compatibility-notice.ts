@@ -21,19 +21,14 @@ import type { EnhancementSelection } from '../shared/enhancement-contracts.js';
  */
 const FEATURES = 'build templates, screenshots and chat logs';
 
-const GAMEPLAY =
-  'Gameplay itself is unaffected: no stat or timing changes, and no gameplay command is generated.';
+const GAMEPLAY = 'You can keep playing normally.';
 
 /**
- * Recovery is an app update, and the notice offers that check right beside
- * this sentence — action-forward rather than "a separate question", which
- * made the player do the reasoning the UI should do. Naming what cannot fix
- * it spares them trying all three.
+ * Recovery is an app update. The launcher offers that check beside the notice,
+ * so the copy names the action without explaining internal certification.
  */
 const RECOVERY =
-  'A newer version of this app may already support this build — choose Check '
-  + 'for Updates. Retrying, reinstalling or clearing downloaded game data '
-  + 'cannot fix it.';
+  'Check for a GWonMac update to restore the disabled features.';
 
 export type CompatibilityReport = {
   state: ClientCompatibilityState;
@@ -81,13 +76,11 @@ export function compatibilityReport(
       degraded: true,
       enhancementDegraded,
       summary:
-        'ArenaNet updated Guild Wars. Some GWonMac features were disabled for your safety.',
+        'A Guild Wars update temporarily disabled some GWonMac features.',
       details: [
-        'You can keep playing. ' + GAMEPLAY,
-        'Extras added by this app are limited until an app update confirms '
-          + `this build: ${FEATURES} may not work correctly. Your local Build `
-          + 'and Team library remains available, while live game observations '
-          + 'and Apply stay off.',
+        GAMEPLAY,
+        `${capitalise(FEATURES)} may not work correctly. Your local Build `
+          + 'and Team library is still available. Live Tools features are off.',
         ...(enhancementDegraded
           ? [
               `Your ${requestedTools} ${
@@ -105,22 +98,14 @@ export function compatibilityReport(
       state,
       degraded: enhancementDegraded,
       enhancementDegraded,
-      summary:
-        `This game build supports ${FEATURES}, but not yet the game tools.`,
-      details: enhancementDegraded
-        ? [
-            `${capitalise(FEATURES)} work normally.`,
-            `Your ${requestedTools} ${
-              selectedTools.length === 1 ? 'is' : 'are'
-            } unavailable for this session.`,
-            GAMEPLAY,
-            RECOVERY,
-          ]
-        : [
-            `${capitalise(FEATURES)} work normally.`,
-            'The Core game cursor is not confirmed for this build.',
-            RECOVERY,
-          ],
+      summary: enhancementDegraded
+        ? `A Guild Wars update temporarily disabled your ${requestedTools}.`
+        : 'The game cursor is temporarily unavailable after a Guild Wars update.',
+      details: [
+        `${capitalise(FEATURES)} still work.`,
+        GAMEPLAY,
+        RECOVERY,
+      ],
     };
   }
 

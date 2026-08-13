@@ -372,6 +372,307 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
       nearbyPlayerMessageProducers: Object.freeze([8942, 8945] as const),
     }),
     layout: Object.freeze({
+      // Build 38,797's live party-state proof resolved this root to a context
+      // array whose slot 6 points at the GameContext. The relevant code, data
+      // placement and cross-structure relations are exact in this build.
+      contextRoot: 0x5a0ee0,
+      agentArray: 0x5a4e58,
+      manualTargetAgentId: 0x5a394c,
+      automaticTargetAgentId: 0x5a3948,
+      gameContextSlot: 6,
+      characterContext: 0x44,
+      mapId: 0x198,
+      isExplorable: 0x19c,
+      currentMapId: 0x234,
+      currentInstanceType: 0x23c,
+      playerNumber: 0x2ac,
+      agentId: 0x2c,
+      agentX: 0x74,
+      agentY: 0x78,
+      agentType: 0x9c,
+      agentPlayerNumber: 0xf4,
+      agentModelType: 0xf6,
+      // WorldContext::party_profession_states, the same canonical table the
+      // client's skill-template loader uses for player and hero professions.
+      worldProfessionStates: 0x6bc,
+      professionStateStride: 0x14,
+      // WorldContext::unlocked_character_skills, the current character's
+      // learned-skill bitset used by the in-game skill window.
+      worldCharacterSkills: 0x710,
+      cursorActiveArt: 0x5a16e0,
+      cursorSoftwareModel: 0x5a16e4,
+      cursorShowCount: 0x5a16e8,
+      cursorColorBuffer: 0x298e50,
+      cursorArtHotspot: 0x00,
+      cursorArtTexture: 0x0c,
+      cursorHandleKey: 0x08,
+      cursorHandleObject: 0x00,
+      cursorViewTexture: 0x08,
+      cursorTextureType: 0x0c,
+      cursorTextureWidth: 0x14,
+      cursorTextureHeight: 0x18,
+      // GameContext -> PartyContext -> current PartyInfo -> heroes Array.
+      // Only owned HeroID/AgentID pairs cross the companion ABI.
+      partyContext: 0x4c,
+      playerParty: 0x54,
+      partyHeroes: 0x24,
+      heroMemberStride: 0x18,
+      heroAgentId: 0x00,
+      heroOwnerPlayerId: 0x04,
+      heroId: 0x08,
+      // Live-certified on build 38,797 by cross-match against the eight offsets
+      // above. Their code and data relationships are exact in this build.
+      heroLevel: 0x14,
+      partyPlayers: 0x04,
+      partyHenchmen: 0x14,
+      partyFlag: 0x14,
+      // GameContext::account and AccountContext::unlocked_account_skills.
+      // GWCA exposes this exact array through GetIsSkillUnlocked: one bit per
+      // skill id, account-wide and therefore usable by heroes.
+      accountContext: 0x28,
+      accountUnlockedSkills: 0x124,
+      worldContext: 0x2c,
+      // Its hero ids *and* agent ids matched the party array exactly.
+      worldHeroFlags: 0x584,
+      heroFlagStride: 0x24,
+      flagHeroId: 0x00,
+      flagAgentId: 0x04,
+      flagBehavior: 0x0c,
+      // The account's unlock table, not the party: its row count held at two
+      // across kicking both heroes and re-adding one. `infoAgentId` is zero
+      // while a hero is unlocked but out of the party and the live agent id
+      // while it is in, so one array answers ownership and membership both.
+      worldHeroInfo: 0x594,
+      heroInfoStride: 0x9c,
+      infoHeroId: 0x00,
+      infoAgentId: 0x04,
+      infoLevel: 0x08,
+      infoPrimary: 0x0c,
+      infoSecondary: 0x10,
+      // Zero for every non-mercenary observed, as the reference describes. The
+      // mercenary rule itself is untestable on an account that owns none, so
+      // the kernel publishes mercenaries as *unknown* rather than guessing.
+      infoAppearanceBitmap: 0x48,
+      worldSkillbars: 0x6f0,
+      skillbarStride: 0xbc,
+      skillbarAgentId: 0x00,
+      skillbarSkills: 0x04,
+      skillSlotStride: 0x14,
+      skillSlotId: 0x0c,
+      skillbarDisabled: 0xa4,
+      // Live-certified on build 38,797. The stride was proved outright: the
+      // words at +0x43c from each row are the next row's agent id. Every real
+      // entry satisfies `index == id`, and the set of entries present is each
+      // character's primary profession's attributes plus all but one of its
+      // secondary's — the one missing is always that secondary's own primary
+      // attribute, which no character may invest in. Three rows, three
+      // professions pairs, no exception.
+      worldAttributes: 0xac,
+      attributeStride: 0x43c,
+      attributeAgentId: 0x00,
+      attributeEntries: 0x04,
+      attributeEntryStride: 0x14,
+      attributeEntryId: 0x00,
+      // `level_base`. `level` at 0x08 adds runes, and a stored build holds the
+      // invested rank — Devona reads Strength 7 there and 8 with her rune.
+      attributeEntryRank: 0x04,
+      // Exact-build initialised `AreaInfo[mapId]`. Cross-checked against
+      // GWToolbox++'s flags: Lion's Arch (55) is PvE, Random Arenas (188)
+      // carries the PvP bit, and Isle of Wurms (529) the guild-hall bit.
+      areaInfo: 0x1cc630,
+      areaInfoCount: 883,
+      areaInfoStride: 0x7c,
+      areaInfoFlags: 0x10,
+    }),
+  }),
+  Object.freeze({
+    sha256: "7d0ced840d3dc167b823ed0ad6ed411319faf97316345c8e37620e86d86f536e",
+    // Recomputed when the attribute layout landed, as they were for the party
+    // layout before it. All profiles move together whenever the manifest's bytes
+    // do, and the manifest carries the transform ABI and every config word --
+    // so growing the layout changes the output of profiles that do not use one
+    // word of it.
+    //
+    // `pnpm check` cannot catch a stale value here. The transform input is a
+    // derived game binary this repository does not contain, so nothing in the
+    // suite can run the transform; the first thing that notices is a launch
+    // that installs no enhancement at all. Recompute by running
+    // `transformEnhancementWasm` against the real derived module whenever
+    // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
+    outputSha256: Object.freeze({
+      cursor: "dd6dd7285d882ed53777c3778e17cb137014687e970ca2c6a4448ce4b1a154d4",
+      target: "6049890fc3d84f51dbd6fd5078a45574b88b917dcb6e1f4e05d0d8b6fc04cd6b",
+      cursorTarget: "e3e824e81069769bf3b8ba5c878258c296b7d6ca23ca41bd4b8c5d48a0fb7b18",
+      cursorToolbox: "505d2f83b2d19e8c375334ebc739f72654d56766ffb2b0e482b86becc9349b8a",
+      // The only derived module that can send anything. Every other profile
+      // above is byte-identical to one that carries no command thunk at all.
+      cursorToolboxCommands: "2a3cf36a7edfe8f19452a81c15b92b951234099ce0dbb359c49d1b049e6bc473",
+      cursorTargetToolboxCommands: "c69206e7b5e2eb9a63c02f590637432dd559ac67e71837cfa3e1e1ae0fa09c38",
+    }),
+    programId: 1,
+    // Function #477 returns 38,833 as a single i32 constant. The same function
+    // returned 38,797 in the preceding certified client; diagnostics must
+    // confirm that value again during the live patch-day run.
+    buildId: 38833,
+    hookFunction: 446,
+    hookParams: Object.freeze(["i32"] as const),
+    hookResults: Object.freeze([] as const),
+    // The input table is fixed at 4,683 entries. The transform extends both
+    // limits once and owns only this new terminal entry; statically empty input
+    // slot 0 is a game runtime sentinel and must remain untouched.
+    tableSlot: 4683,
+    cursorEvent: Object.freeze({
+      functionIndex: 2469,
+      params: Object.freeze(
+        ["i32", "i32", "i32", "i32", "i32"] as const,
+      ),
+      results: Object.freeze([] as const),
+      tableSlot: 922,
+      producerFunctions: Object.freeze([2828, 2834] as const),
+    }),
+    // Everything a team apply needs, and nothing else. Kick was sent first,
+    // alone, against a live game; the rest joined it once that had worked.
+    //
+    // The sender, drain and every command builder below are byte-identical to
+    // build 38,797, including their signatures and active table relations.
+    // That build's live evidence established that opcode 31 with hero id 38
+    // removes Devona; the historical pre-Devona `0x26` clear-roster sentinel
+    // does not apply. Rebuilds therefore remove observed heroes individually
+    // and confirm each publication before adding the saved order.
+    //
+    commands: Object.freeze({
+      thunkExport: "enhancement_command",
+      professionTrace: Object.freeze({
+        readerExport: "enhancement_profession_trace",
+        // The unique sender shared by all 147 packet builders. The trace
+        // wrapper records only fixed opcode-65 and opcode-93 payloads and then
+        // calls this exact body unchanged.
+        sender: Object.freeze({
+          functionIndex: 5951,
+          params: Object.freeze(["i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "d7f7c74b9cb14ba957ed8de7e74cc18167a3b688301d5f3d765ba04770a8b361",
+        }),
+      }),
+      // GWCA's `GameThread::Enqueue` hooks this recurring frame callback. Its
+      // source anchor is FrApi.cpp's unique `renderElapsed >= 0` assertion;
+      // the active table relation below proves this is the registered callback,
+      // not the nearby one-time frame/message initializer (#6659).
+      drain: Object.freeze({
+        functionIndex: 6661,
+        params: Object.freeze(["i32", "i32"] as const),
+        results: Object.freeze([] as const),
+        tableSlot: 1721,
+        bodySha256:
+          "9fb1ca0dee40f5ceef3d0174846ef38af47a8366bfe76cb8da12e86419b40c41",
+      }),
+      entries: Object.freeze([
+        Object.freeze({
+          opcode: 31,
+          functionIndex: 6887,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "ad54846e78e293ba4c2a6cef392bb3f3cb62fdd5209d8aadf0e99c75a4914e59",
+          label: "CharMsgSendHeroDeactivate(heroId)",
+        }),
+        Object.freeze({
+          opcode: 30,
+          functionIndex: 6886,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "709ce8b36ecd5bb269d211d38a7d504a7577e40312be7c74c125f02bbb3be697",
+          label: "CharMsgSendHeroActivate(heroId)",
+        }),
+        Object.freeze({
+          opcode: 21,
+          functionIndex: 6878,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "e8c9b33da97ad99f4fabcca08fabf29ecb8a08fb400d8e161bba659775234157",
+          label: "CharMsgSendCommandAiMode(agentId, behavior)",
+        }),
+        // The two that carry a payload. Their third and fourth arguments are
+        // addresses of buffers the renderer owns and fills; the client copies
+        // out of them and sends. See `COMMAND_PAYLOAD_WORDS`.
+        Object.freeze({
+          opcode: 93,
+          functionIndex: 6943,
+          params: Object.freeze(["i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "37f53da3c4edecbf9438f093b90e3aff5e65eeac018835da016c472c5fa15a23",
+          label: "skillbar set (agentId, count, skills[])",
+        }),
+        Object.freeze({
+          opcode: 65,
+          functionIndex: 6917,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "7ea3e38a9cb5dd4bd6edc4d86a89f1e98c531d005b4f3e08a8142b50146f688c",
+          label: "CharMsgSendOrderSetProfessionSecondary(agentId, profession)",
+        }),
+        Object.freeze({
+          opcode: 16,
+          functionIndex: 6873,
+          params: Object.freeze(["i32", "i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "c2b8c55c9cddf538e61911cb6d542196a35700c1d6e5a5e693ab627ca4e53041",
+          label: "attributes set (agentId, count, ids[], ranks[])",
+        }),
+        Object.freeze({
+          opcode: 155,
+          functionIndex: 10650,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "99cb42fb99f1503f80beb589f43c7f9bb841352bd95344a7d96f243f0f639287",
+          label: "CharMsgSendSetHardMode(enabled)",
+        }),
+      ] as const),
+    }),
+    uiDispatcher: Object.freeze({
+      functionIndex: 6842,
+      params: Object.freeze(["i32", "i32", "i32"] as const),
+      results: Object.freeze([] as const),
+      playerChatMessage: 0x1000_0082,
+      hideHeroPanelMessage: 0x1000_01a3,
+      showHeroPanelMessage: 0x1000_01a4,
+      // This is the smallest domain-complete dirty set: two hero-readiness
+      // notifications, four distinct map-context lifecycle boundaries, and
+      // the four party membership mutations that can replace playerParty or
+      // its hero vector. Everything else through #6842 remains a no-op for
+      // party traversal and the 120-tick reconciliation is the missed-event
+      // recovery path.
+      partyDirtyMessages: Object.freeze([
+        0x1000_0038, // kHeroAgentAdded
+        0x1000_0039, // kHeroDataAdded
+        0x1000_008c, // kMapLoaded
+        0x1000_0098, // kLoadMapContext
+        0x1000_00c2, // kStartMapLoad
+        0x1000_0111, // kMapChange
+        0x1000_011e, // kPartyAddHero
+        0x1000_011f, // kPartyRemoveHero
+        0x1000_0124, // kPartyAddPlayer
+        0x1000_0126, // kPartyRemovePlayer
+      ] as const),
+      // ChCliApi #8947 contains three independent kPlayerChatMessage sites;
+      // each directly calls #6842. Nearby ChCliApi producers #8942/#8945
+      // emit 0x1000007f/0x10000080 to that same dispatcher.
+      playerChatProducer: 8947,
+      playerChatSites: 3,
+      nearbyPlayerMessages: Object.freeze([
+        0x1000_007f,
+        0x1000_0080,
+      ] as const),
+      nearbyPlayerMessageProducers: Object.freeze([8942, 8945] as const),
+    }),
+    layout: Object.freeze({
       // Live party-state proof resolves this root to a context array whose
       // slot 6 points at the GameContext. The nearby 0x5a0ed4 global belongs
       // to FcArchive and leaves slot 6 null.

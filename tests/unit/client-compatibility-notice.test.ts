@@ -35,7 +35,15 @@ const CURSOR: EnhancementSelection = {
   nativeCursor: true,
   tools: false,
 };
-const SELECTIONS = [NONE, CURSOR];
+const TOOLS: EnhancementSelection = {
+  nativeCursor: false,
+  tools: true,
+};
+const CURSOR_AND_TOOLS: EnhancementSelection = {
+  nativeCursor: true,
+  tools: true,
+};
+const SELECTIONS = [NONE, CURSOR, TOOLS, CURSOR_AND_TOOLS];
 
 const STATES: ClientCompatibilityState[] = [
   "certified",
@@ -147,24 +155,24 @@ describe("client compatibility notice", () => {
     }
   });
 
-  it("leads an ArenaNet update with the safety action and keeps play available", () => {
+  it("leads with the cause and keeps play available", () => {
     for (const selection of SELECTIONS) {
       const report = compatibilityReport(
         compatibility("uncertified", selection),
         selection,
       );
-      assert.match(report.summary, /disabled for your safety/);
-      assert.match(report.details[0]!, /You can keep playing/);
+      assert.match(report.summary, /Guild Wars update/);
+      assert.match(report.details[0]!, /keep playing normally/);
       const said = [report.summary, ...report.details].join(" ");
-      assert.match(said, /local Build and Team library remains available/);
-      assert.match(said, /live game observations and Apply stay off/);
+      assert.match(said, /local Build and Team library is still available/);
+      assert.match(said, /Live Tools features are off/);
     }
   });
 
   it("names all three affected features on an uncertified build", () => {
     for (const selection of SELECTIONS) {
       const said = text("uncertified", selection);
-      assert.match(said, /build templates/);
+      assert.match(said, /Build templates/);
       assert.match(said, /screenshots/);
       assert.match(said, /chat logs/);
       // Not "some things may be broken".
@@ -178,7 +186,7 @@ describe("client compatibility notice", () => {
         compatibility("template-only", selection),
         selection,
       );
-      assert.match(report.details[0]!, /work normally/);
+      assert.match(report.details[0]!, /still work/);
       assert.doesNotMatch([report.summary, ...report.details].join(" "), /untouched module/);
     }
   });
@@ -200,7 +208,7 @@ describe("client compatibility notice", () => {
     }
   });
 
-  it("keeps gameplay and recovery honest wherever certification degrades", () => {
+  it("keeps gameplay and recovery clear wherever certification degrades", () => {
     for (const state of STATES) {
       for (const selection of SELECTIONS) {
         const report = compatibilityReport(
@@ -211,13 +219,9 @@ describe("client compatibility notice", () => {
         // is covered above; this loop pins the certification-gap branches.
         if (!report.degraded || state === "certified") continue;
         const said = [report.summary, ...report.details].join(" ");
-        assert.match(said, /Gameplay itself is unaffected/);
-        // Recovery is an app update, offered as the action right beside the
-        // sentence rather than left as "a separate question".
-        assert.match(said, /Check for Updates/);
-        // Not a retry, a reinstall or a cache clear, and the copy says so
-        // rather than leaving the player to try all three.
-        assert.match(said, /Retrying, reinstalling or clearing/);
+        assert.match(said, /keep playing normally/);
+        assert.match(said, /Check for a GWonMac update/);
+        assert.doesNotMatch(said, /stat|timing|command|retry|reinstall|clearing/i);
       }
     }
   });
@@ -230,11 +234,9 @@ describe("client compatibility notice", () => {
           selection,
         );
         const said = [report.summary, ...report.details].join(" ");
-        // "may already support this build" offers the check without asserting
-        // an update exists — that fact is established by the check itself.
         assert.doesNotMatch(said, /update the app|app is out of date/i);
         if (report.degraded && state !== "certified") {
-          assert.match(said, /may already support this build/);
+          assert.match(said, /Check for a GWonMac update/);
         }
       }
     }

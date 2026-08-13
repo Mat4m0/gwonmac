@@ -311,11 +311,15 @@ jobs:
             echo "- published WASM: \`$BUILD\`"
             echo "- derivation: $SUMMARY"
             echo "- evidence: $RUN_URL"
+            echo "- Tools review evidence: `enhancement.json` in that run artifact"
             echo
             echo "Nothing here is certified until this pull request's verification"
             echo "gate passes. The Enhancement table is deliberately untouched: its"
             echo "layout words are client-memory addresses no structural anchor"
             echo "re-derives, so a person measures them or they do not ship."
+            echo "Follow the patch-day chain in `docs/enhancement-development.md`;"
+            echo "the downstream double-click and memory tables are certified only"
+            echo "after the complete exact-build Enhancement entry is reviewed."
             echo
             echo "**Close and reopen this pull request to start that gate.** GitHub"
             echo "runs no workflow for a pull request opened by the run's own token,"
@@ -363,6 +367,7 @@ jobs:
               echo "- pull request: not opened; review the branch directly"
             fi
             echo "- evidence: $RUN_URL"
+            echo "- Tools review evidence: `enhancement.json` in that run artifact"
             echo
             echo "\`internal/upstream/recertify.md\` owns the investigation when the"
             echo "structural proof refuses. This issue closes itself once the"

@@ -260,9 +260,14 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
       .digest("hex");
   }
   const shipped = NATIVE_DOUBLE_CLICK_BUILDS[0]!.derivations;
-  const matches =
-    JSON.stringify(Object.entries(derivations).sort())
-    === JSON.stringify(Object.entries(shipped).sort());
+  // One structural callback can serve several certified game builds. Compare
+  // only the predecessors produced by this official client; requiring equality
+  // with the whole cumulative table made every later patch look stale merely
+  // because the table also retained the preceding build's derivations.
+  const matches = Object.entries(derivations).every(
+    ([inputSha256, outputSha256]) =>
+      shipped[inputSha256] === outputSha256,
+  );
   process.stdout.write(`${JSON.stringify({
     officialSha256,
     predecessors: predecessors.map(([name]) => name),
