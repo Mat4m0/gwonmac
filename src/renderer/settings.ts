@@ -43,6 +43,12 @@
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
+  const accountsName = byId('accounts-first-name') as HTMLInputElement;
+  const accountsBuilds = form.elements.namedItem('accountsBuilds') as RadioNodeList;
+  const accountsTemplates = form.elements.namedItem('accountsTemplates') as RadioNodeList;
+  const accountsImportBuilds = byId('accounts-import-builds') as HTMLInputElement;
+  const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
+  const accountsStatus = byId('accounts-setup-status');
   /**
    * The appearance slider beside the `output` that reads it back.
    *
@@ -561,6 +567,30 @@
       );
     } catch {
       setFeedback('GWonMac settings could not be reset. Nothing changed; try again.', 'error');
+    }
+  });
+
+  accountsEnable.addEventListener('click', async () => {
+    const name = accountsName.value.trim();
+    if (!name) {
+      accountsName.focus();
+      accountsStatus.textContent = 'Give the first profile a name.';
+      return;
+    }
+    if (!window.confirm('Enable Multiple Accounts and restart GWonMac? Your current Single Account data will stay untouched.')) return;
+    accountsEnable.disabled = true;
+    accountsStatus.textContent = 'Creating the separate workspace…';
+    try {
+      await window.gwNative.accounts.setup({
+        name,
+        templates: accountsTemplates.value as 'shared' | 'private',
+        builds: accountsBuilds.value as 'shared' | 'private',
+        importTemplates: false,
+        importBuilds: accountsImportBuilds.checked,
+      });
+    } catch {
+      accountsEnable.disabled = false;
+      accountsStatus.textContent = 'Multiple Accounts could not be enabled. Nothing changed.';
     }
   });
 

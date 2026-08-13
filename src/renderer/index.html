@@ -269,6 +269,9 @@
         <button type="button" class="settings-rtab" id="settings-tab-updates"
                 role="tab" aria-selected="false" aria-controls="settings-pane-updates"
                 data-pane="updates">Updates</button>
+        <button type="button" class="settings-rtab" id="settings-tab-accounts"
+                role="tab" aria-selected="false" aria-controls="settings-pane-accounts"
+                data-pane="accounts">Accounts</button>
         <button type="button" class="settings-rtab" id="settings-tab-advanced"
                 role="tab" aria-selected="false" aria-controls="settings-pane-advanced"
                 data-pane="advanced">Advanced</button>
@@ -563,6 +566,43 @@
             Reset GWonMac settings…
           </button>
           <p class="settings-danger-sub">Restores display, tools, window position, and launcher choices. Downloaded game data and your login are kept.</p>
+        </section>
+
+        <section class="settings-pane" id="settings-pane-accounts" role="tabpanel"
+                 aria-labelledby="settings-tab-accounts">
+          <h3 class="settings-pane-title">Multiple Accounts</h3>
+          <p class="settings-pane-intro">Opt in to an account picker that can open several independent Guild Wars windows.</p>
+          <p class="settings-status">Single Account mode is active.</p>
+          <p class="settings-note">Your current window, saved login, settings, templates, and builds stay in Single Account mode. Multiple Accounts creates a separate workspace and asks you to sign in once for each profile.</p>
+          <div class="settings-divider" aria-hidden="true"></div>
+          <label class="settings-field" for="accounts-first-name">
+            <span>First profile name</span>
+            <input type="text" id="accounts-first-name" class="ui-input"
+                   maxlength="48" autocomplete="off" placeholder="Main account">
+          </label>
+          <fieldset>
+            <legend>Build library</legend>
+            <div class="settings-seg ui-segment" role="presentation">
+              <label class="settings-radio"><input type="radio" name="accountsBuilds" value="shared" checked><span>Shared</span></label>
+              <label class="settings-radio"><input type="radio" name="accountsBuilds" value="private"><span>Private</span></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Build templates</legend>
+            <div class="settings-seg ui-segment" role="presentation">
+              <label class="settings-radio"><input type="radio" name="accountsTemplates" value="shared" checked><span>Shared</span></label>
+              <label class="settings-radio"><input type="radio" name="accountsTemplates" value="private"><span>Private</span></label>
+            </div>
+          </fieldset>
+          <label class="settings-check ui-check">
+            <input type="checkbox" id="accounts-import-builds">
+            <span>Copy my current build library into the new workspace</span>
+          </label>
+          <p class="settings-note">This is a one-time copy. Single Account data is never moved, linked, or written back.</p>
+          <div class="settings-actions-row">
+            <button type="button" id="accounts-enable" class="ui-button" data-variant="primary">Enable and Restart…</button>
+          </div>
+          <p id="accounts-setup-status" class="settings-status" role="status" aria-live="polite"></p>
         </section>
       </div>
     </div>

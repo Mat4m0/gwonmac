@@ -1,0 +1,134 @@
+/* The Multiple Accounts Hub uses the existing GWonMac material system while
+ * giving profile choice a quiet, full-window home instead of impersonating an
+ * in-game overlay. All colour and control decisions resolve through ui tokens. */
+
+* { box-sizing: border-box; }
+
+html, body { min-height: 100%; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 78% 8%, color-mix(in srgb, var(--ui-accent) 9%, transparent), transparent 34%),
+    var(--ui-well);
+  color: var(--ui-text);
+  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+}
+
+button, input { font: inherit; }
+
+.accounts-shell {
+  width: min(760px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: clamp(32px, 7vw, 68px) clamp(24px, 6vw, 54px) 28px;
+}
+
+.accounts-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ui-space-5);
+  padding-bottom: var(--ui-space-5);
+  border-bottom: 1px solid var(--ui-line-soft);
+}
+
+.accounts-head img {
+  flex: 0 0 auto;
+  object-fit: contain;
+  opacity: .9;
+}
+
+.accounts-kicker {
+  margin: 0 0 var(--ui-space-2);
+  color: var(--ui-accent);
+  font-size: var(--ui-font-size-sm);
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  color: var(--ui-text-bright);
+  font: 700 clamp(30px, 6vw, 46px) / 1.05 var(--ui-font-display);
+  letter-spacing: -.025em;
+}
+
+.accounts-intro {
+  max-width: 590px;
+  margin: var(--ui-space-3) 0 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-lg);
+}
+
+#accounts-form { padding-top: var(--ui-space-5); }
+
+.accounts-list {
+  display: grid;
+  gap: var(--ui-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.account-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ui-space-3);
+  min-height: 66px;
+  padding: var(--ui-space-3) var(--ui-space-4);
+  border: 1px solid var(--ui-line-soft);
+  border-radius: var(--ui-radius);
+  background: var(--ui-row-fill);
+  cursor: pointer;
+  transition: border-color var(--ui-duration) var(--ui-ease-out), background var(--ui-duration) var(--ui-ease-out);
+}
+
+.account-choice:hover,
+.account-choice:has(input:focus-visible) {
+  border-color: var(--ui-line);
+  background: var(--ui-hover);
+}
+
+.account-choice:has(input:checked) {
+  border-color: var(--ui-accent-strong);
+  background: var(--ui-selected);
+}
+
+.account-choice input { width: 18px; height: 18px; accent-color: var(--ui-accent); }
+.account-name { display: block; overflow: hidden; color: var(--ui-text-bright); font-size: var(--ui-font-size-lg); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.account-meta { display: block; margin-top: 2px; color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
+.account-state { color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); text-transform: capitalize; }
+.account-state[data-state="running"] { color: var(--ui-success); }
+.account-state[data-state="failed"] { color: var(--ui-danger); }
+
+.accounts-help,
+.accounts-foot p,
+.accounts-loading { color: var(--ui-text-muted); }
+
+.accounts-help { margin: var(--ui-space-3) 0; }
+.accounts-actions { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); }
+.accounts-actions + .ui-status-line { min-height: 24px; margin: var(--ui-space-3) 0 0; }
+
+.accounts-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-4);
+  margin-top: clamp(36px, 8vw, 70px);
+  padding-top: var(--ui-space-4);
+  border-top: 1px solid var(--ui-line-soft);
+}
+
+.accounts-foot p { max-width: 420px; margin: 0; font-size: var(--ui-font-size-sm); }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 520px) {
+  .accounts-head img { display: none; }
+  .accounts-foot { align-items: flex-start; flex-direction: column; }
+  .account-choice { grid-template-columns: auto minmax(0, 1fr); }
+  .account-state { grid-column: 2; }
+}

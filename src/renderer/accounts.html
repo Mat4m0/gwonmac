@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" data-ui-style="obsidian">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guild Wars Reforged — Accounts</title>
+  <link rel="icon" href="favicon.png" type="image/png" sizes="48x48">
+  <link rel="stylesheet" href="ui/tokens.css">
+  <link rel="stylesheet" href="ui/components.css">
+  <link rel="stylesheet" href="accounts.css">
+</head>
+<body>
+  <main class="accounts-shell" aria-labelledby="accounts-title">
+    <header class="accounts-head">
+      <div>
+        <p class="accounts-kicker">Multiple Accounts</p>
+        <h1 id="accounts-title">Who are you playing?</h1>
+        <p class="accounts-intro">Choose one or more profiles. Each opens in its own window with its own saved login and Guild Wars files.</p>
+      </div>
+      <img src="images/logo.webp" alt="" width="76" height="76">
+    </header>
+
+    <form id="accounts-form">
+      <fieldset id="accounts-list" class="accounts-list" aria-describedby="accounts-help">
+        <legend class="sr-only">Account profiles</legend>
+        <div class="accounts-loading">Loading profiles…</div>
+      </fieldset>
+      <p id="accounts-help" class="accounts-help">Already-open profiles are brought to the front. Other selected profiles open independently.</p>
+      <div class="accounts-actions">
+        <button id="accounts-open" class="ui-button" data-variant="primary" type="submit" disabled>Open selected</button>
+        <button id="accounts-select-all" class="ui-button" type="button">Select all</button>
+      </div>
+      <p id="accounts-status" class="ui-status-line" data-tone="neutral" role="status" aria-live="polite"></p>
+    </form>
+
+    <footer class="accounts-foot">
+      <p>Profiles share the downloaded client, never credentials or browser storage.</p>
+      <button id="accounts-single" class="ui-link" type="button">Return to Single Account mode…</button>
+    </footer>
+  </main>
+  <script type="module" src="accounts.js"></script>
+</body>
+</html>

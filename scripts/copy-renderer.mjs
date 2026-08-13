@@ -12,6 +12,8 @@ import path from "node:path";
 // editor and OS files part of the build, so two clean checkouts could package
 // different applications. A new asset must be reviewed here.
 const ASSETS = [
+  "accounts.css",
+  "accounts.html",
   "favicon.ico",
   "favicon.png",
   "fonts/COPYING-QUALITYPE",
