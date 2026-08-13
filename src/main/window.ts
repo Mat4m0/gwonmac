@@ -66,13 +66,18 @@ export interface WindowHost {
 }
 
 let mainWindow: BrowserWindow | null = null;
-let rendererRecoveryUsed = false;
-let restoredWindowState: WindowState | null = null;
-let lastNormalBounds: WindowBounds | null = null;
-let windowStateTimer: ReturnType<typeof setTimeout> | null = null;
-let windowStateWrite: Promise<void> = Promise.resolve();
-let windowStateReset: Promise<void> = Promise.resolve();
-let windowStateResetDepth = 0;
+const rendererRecoveryUsed = new Set<string>();
+interface WindowStateOwner {
+  readonly path: string;
+  restored: WindowState | null;
+  lastNormalBounds: WindowBounds | null;
+  timer: ReturnType<typeof setTimeout> | null;
+  write: Promise<void>;
+  reset: Promise<void>;
+  resetDepth: number;
+}
+const preparedWindowStates = new Map<string, WindowState | null>();
+const windowStateOwners = new Map<BrowserWindow, WindowStateOwner>();
 let downloadPowerBlockerId: number | null = null;
 
 export function updateLongRunningTaskFeedback(
@@ -105,35 +110,37 @@ function primaryWorkArea(): WindowBounds {
   return { ...screen.getPrimaryDisplay().workArea };
 }
 
-export async function prepareWindowState(): Promise<void> {
-  const loaded = await loadWindowState(gamePaths().windowState, () => {
+export async function prepareWindowState(
+  statePath = gamePaths().windowState,
+): Promise<void> {
+  const loaded = await loadWindowState(statePath, () => {
     logEvent({ k: "window.stateCorruptCleared" });
   });
-  restoredWindowState = loaded
+  const restored = loaded
     ? fitWindowStateToDisplays(loaded, workAreas(), primaryWorkArea())
     : null;
-  lastNormalBounds = restoredWindowState?.bounds ?? null;
-  if (restoredWindowState) {
+  preparedWindowStates.set(statePath, restored);
+  if (restored) {
     logEvent({ k: "window.stateRestored",
-      mode: restoredWindowState.mode,
-      width: restoredWindowState.bounds.width,
-      height: restoredWindowState.bounds.height,
+      mode: restored.mode,
+      width: restored.bounds.width,
+      height: restored.bounds.height,
     });
   }
 }
 
-function currentWindowState(win: BrowserWindow): WindowState {
+function currentWindowState(win: BrowserWindow, owner: WindowStateOwner): WindowState {
   const mode = win.isFullScreen()
     ? "fullscreen"
     : win.isMaximized()
       ? "maximized"
       : "normal";
   if (mode === "normal") {
-    lastNormalBounds = { ...win.getBounds() };
+    owner.lastNormalBounds = { ...win.getBounds() };
   }
   return {
     bounds:
-      lastNormalBounds ??
+      owner.lastNormalBounds ??
       fitWindowStateToDisplays(
         defaultWindowState(primaryWorkArea()),
         workAreas(),
@@ -144,49 +151,56 @@ function currentWindowState(win: BrowserWindow): WindowState {
 }
 
 async function persistWindowState(win: BrowserWindow): Promise<void> {
-  if (win.isDestroyed() || mainWindow !== win) return;
-  const state = currentWindowState(win);
-  restoredWindowState = state;
-  const write = windowStateWrite.then(() =>
-    saveWindowState(gamePaths().windowState, state),
+  const owner = windowStateOwners.get(win);
+  if (win.isDestroyed() || !owner) return;
+  const state = currentWindowState(win, owner);
+  owner.restored = state;
+  const write = owner.write.then(() =>
+    saveWindowState(owner.path, state),
   );
-  windowStateWrite = write.catch(() => undefined);
+  owner.write = write.catch(() => undefined);
   await write;
 }
 
 function scheduleWindowStateSave(win: BrowserWindow): void {
+  const owner = windowStateOwners.get(win);
+  if (!owner) return;
   // Leaving fullscreen/maximized and applying the default bounds emits several
   // intermediate events. Persisting one of those after the explicit reset
   // write can resurrect the old placement.
-  if (windowStateResetDepth > 0) return;
-  if (windowStateTimer) clearTimeout(windowStateTimer);
-  windowStateTimer = setTimeout(() => {
-    windowStateTimer = null;
+  if (owner.resetDepth > 0) return;
+  if (owner.timer) clearTimeout(owner.timer);
+  owner.timer = setTimeout(() => {
+    owner.timer = null;
     void persistWindowState(win).catch(() => {
       logEvent({ k: "window.stateSaveFailed" });
     });
   }, 300);
 }
 
-export async function flushWindowState(): Promise<void> {
-  await windowStateReset;
-  if (windowStateTimer) {
-    clearTimeout(windowStateTimer);
-    windowStateTimer = null;
-  }
-  const win = mainWindow;
+export async function flushWindowState(win = mainWindow): Promise<void> {
   if (!win || win.isDestroyed()) return;
+  const owner = windowStateOwners.get(win);
+  if (!owner) return;
+  await owner.reset;
+  if (owner.timer) {
+    clearTimeout(owner.timer);
+    owner.timer = null;
+  }
   await persistWindowState(win);
-  await windowStateWrite;
+  await owner.write;
 }
 
 export function resetWindowState(win = mainWindow): Promise<void> {
-  const reset = windowStateReset.then(async () => {
-    windowStateResetDepth += 1;
+  if (!win || win.isDestroyed()) return Promise.resolve();
+  const owner = windowStateOwners.get(win);
+  if (!owner) return Promise.resolve();
+  const reset = owner.reset.then(async () => {
+    owner.resetDepth += 1;
     try {
-      if (windowStateTimer) {
-        clearTimeout(windowStateTimer);
-        windowStateTimer = null;
+      if (owner.timer) {
+        clearTimeout(owner.timer);
+        owner.timer = null;
       }
       const requested = defaultWindowState(primaryWorkArea());
       let settled = requested;
@@ -222,22 +236,22 @@ export function resetWindowState(win = mainWindow): Promise<void> {
         win.setBounds(requested.bounds);
         settled = { bounds: { ...win.getBounds() }, mode: "normal" };
       }
-      restoredWindowState = settled;
-      lastNormalBounds = settled.bounds;
-      const write = windowStateWrite.then(() =>
-        saveWindowState(gamePaths().windowState, settled),
+      owner.restored = settled;
+      owner.lastNormalBounds = settled.bounds;
+      const write = owner.write.then(() =>
+        saveWindowState(owner.path, settled),
       );
-      windowStateWrite = write.catch(() => undefined);
+      owner.write = write.catch(() => undefined);
       await write;
       logEvent({ k: "window.stateReset",
         width: settled.bounds.width,
         height: settled.bounds.height,
       });
     } finally {
-      windowStateResetDepth -= 1;
+      owner.resetDepth -= 1;
     }
   });
-  windowStateReset = reset.catch(() => undefined);
+  owner.reset = reset.catch(() => undefined);
   return reset;
 }
 
@@ -274,9 +288,12 @@ export function createMainWindow(
     readonly context?: WindowContext;
     readonly session?: Electron.Session;
     readonly title?: string;
+    readonly windowStatePath?: string;
   } = {},
 ): BrowserWindow {
   const context = options.context ?? { mode: "single", role: "game" };
+  const statePath = options.windowStatePath ?? gamePaths().windowState;
+  const restoredWindowState = preparedWindowStates.get(statePath) ?? null;
   const initialState = restoredWindowState
     ? fitWindowStateToDisplays(
         restoredWindowState,
@@ -307,6 +324,16 @@ export function createMainWindow(
   });
 
   mainWindow = win;
+  const stateOwner: WindowStateOwner = {
+    path: statePath,
+    restored: initialState,
+    lastNormalBounds: initialState?.bounds ?? null,
+    timer: null,
+    write: Promise.resolve(),
+    reset: Promise.resolve(),
+    resetDepth: 0,
+  };
+  windowStateOwners.set(win, stateOwner);
   windowRegistry.register(win, context);
   updateLongRunningTaskFeedback(host.getProgress(), win);
   const rendererId = win.webContents.id;
@@ -320,17 +347,17 @@ export function createMainWindow(
 
   const rememberNormalBounds = (): void => {
     if (
-      windowStateResetDepth > 0 ||
+      stateOwner.resetDepth > 0 ||
       win.isFullScreen() ||
       win.isMaximized()
     ) return;
-    lastNormalBounds = { ...win.getBounds() };
+    stateOwner.lastNormalBounds = { ...win.getBounds() };
     scheduleWindowStateSave(win);
   };
   win.on("move", rememberNormalBounds);
   win.on("resize", rememberNormalBounds);
   const persistMode = (): void => {
-    if (windowStateResetDepth > 0) return;
+    if (stateOwner.resetDepth > 0) return;
     void persistWindowState(win).catch(() => {
       logEvent({ k: "window.stateSaveFailed" });
     });
@@ -439,11 +466,11 @@ export function createMainWindow(
     host.sockets.closeAll(rendererId);
     if (isQuitting()) return;
     if (
-      !rendererRecoveryUsed &&
+      !rendererRecoveryUsed.has(statePath) &&
       details.reason !== "clean-exit" &&
       !win.isDestroyed()
     ) {
-      rendererRecoveryUsed = true;
+      rendererRecoveryUsed.add(statePath);
       logEvent({ k: "renderer.recoveryScheduled" });
       setTimeout(() => {
         if (isQuitting() || win.isDestroyed()) return;
@@ -480,6 +507,7 @@ export function createMainWindow(
 
   win.on("closed", () => {
     windowRegistry.unregister(win);
+    windowStateOwners.delete(win);
     if (mainWindow === win) mainWindow = null;
   });
 
