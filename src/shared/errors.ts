@@ -19,6 +19,8 @@ export const ERROR_CODES = [
   "bad_compression",
   "bad_digest",
   "bad_manifest",
+  "bad_launcher_mode",
+  "bad_multi_workspace",
   "bad_range",
   "bad_settings",
   "bad_window_state",

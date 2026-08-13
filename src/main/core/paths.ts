@@ -13,6 +13,7 @@
  */
 import path from "node:path";
 import type { CLIENT_ARTIFACTS } from "./access-key.js";
+import type { ProfileId } from "../../shared/multiple-accounts.js";
 import { clientGenerationPaths } from "./client-compatibility.js";
 
 export interface GamePaths {
@@ -20,6 +21,13 @@ export interface GamePaths {
   settings: string;
   buildLibrary: string;
   windowState: string;
+  launcherMode: string;
+  multiRoot: string;
+  multiWorkspace: string;
+  multiHubWindowState: string;
+  multiSharedBuildLibrary: string;
+  multiSharedTemplates: string;
+  multiProfiles: string;
   diagnostics: string;
   game: string;
   artifacts: string;
@@ -39,11 +47,19 @@ export interface GamePaths {
 export function gamePaths(userData: string): GamePaths {
   const game = path.join(userData, "game");
   const artifacts = path.join(game, "artifacts");
+  const multiRoot = path.join(userData, "multi");
   return {
     userData,
     settings: path.join(userData, "settings.json"),
     buildLibrary: path.join(userData, "build-library.json"),
     windowState: path.join(userData, "window-state.json"),
+    launcherMode: path.join(userData, "launcher-mode.json"),
+    multiRoot,
+    multiWorkspace: path.join(multiRoot, "workspace.json"),
+    multiHubWindowState: path.join(multiRoot, "hub-window-state.json"),
+    multiSharedBuildLibrary: path.join(multiRoot, "shared", "build-library.json"),
+    multiSharedTemplates: path.join(multiRoot, "shared", "templates.json"),
+    multiProfiles: path.join(multiRoot, "profiles"),
     diagnostics: path.join(userData, "diagnostics"),
     game,
     artifacts,
@@ -64,6 +80,29 @@ export function gamePaths(userData: string): GamePaths {
   };
 }
 
+export interface MultiProfilePaths {
+  readonly root: string;
+  readonly buildLibrary: string;
+  readonly templates: string;
+  readonly templateSync: string;
+  readonly windowState: string;
+}
+
+/** Resolve stores only after `parseProfileId` has made traversal impossible. */
+export function multiProfilePaths(
+  paths: GamePaths,
+  profileId: ProfileId,
+): MultiProfilePaths {
+  const root = path.join(paths.multiProfiles, profileId);
+  return {
+    root,
+    buildLibrary: path.join(root, "build-library.json"),
+    templates: path.join(root, "templates.json"),
+    templateSync: path.join(root, "template-sync.json"),
+    windowState: path.join(root, "window-state.json"),
+  };
+}
+
 /**
  * Stable document roots whose direct atomic-write temporaries need the generic
  * boot-time sweep.
@@ -77,6 +116,7 @@ export function gamePaths(userData: string): GamePaths {
 export function documentDirectories(paths: GamePaths): string[] {
   return [
     paths.userData,
+    paths.multiRoot,
     paths.game,
     paths.diagnostics,
     paths.chunks,
