@@ -337,6 +337,12 @@ export function createMainWindow(
   };
   windowStateOwners.set(win, stateOwner);
   windowRegistry.register(win, context);
+  if (options.title) {
+    win.webContents.on("page-title-updated", (event) => {
+      event.preventDefault();
+      win.setTitle(options.title!);
+    });
+  }
   updateLongRunningTaskFeedback(host.getProgress(), win);
   const rendererId = win.webContents.id;
 
