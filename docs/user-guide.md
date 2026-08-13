@@ -30,13 +30,13 @@ ArenaNet.
 Single Account mode is the default. It starts Guild Wars directly and keeps
 the login, templates, builds, settings, and window state that you already use.
 
-Open **Settings → Accounts**, name the first profile, choose its Shared or
+Open **Settings → Accounts**, name the first account, choose its Shared or
 Private libraries, and select **Enable and Restart…** to create a separate
 Multiple Accounts workspace. Every later Multiple Accounts start opens the
-Account Picker with nothing preselected. Select one or more profiles and choose
-**Open selected**.
+Account Picker with nothing preselected. Select one or more accounts and choose
+**Open**. If an account is already running, the action changes to **Show**.
 
-Each profile signs in separately and keeps separate Guild Wars preferences,
+Each account signs in separately and keeps separate Guild Wars preferences,
 screenshots, chat logs, saved login, and window position. Profiles can use the
 shared Multiple Accounts template and build libraries or private libraries.
 
@@ -44,17 +44,16 @@ Setup can copy templates, builds, and teams from Single Account mode. This is a
 one-time copy. The originals remain in Single Account mode. Later changes do
 not synchronize between the two modes.
 
-Use **Return to Single Account mode…** at the bottom of the Account Picker to
-change the next launch. Your Multiple Accounts profiles and saved logins stay
-available if you restore the mode from **Settings → Accounts** later. The modes
-share verified game downloads, so creating a profile does not download another
+Use Command-, in the Account Picker to open Settings, then choose **Return to
+Single Account…** to change the next launch. Your accounts and saved logins stay
+available if you restore Multiple Accounts from **Settings → Accounts** later. The modes
+share verified game downloads, so creating an account does not download another
 complete copy of Guild Wars.
 
-Use **New profile…** in the Account Picker to add profiles. **Edit…** changes a
-profile's name or library choices; close its game window before changing
-sharing. Archive hides a profile but keeps all its data and saved login. The
-Archived profiles section can restore it or permanently delete it after a
-native confirmation.
+Use **New Account…** in the Account Picker to add accounts. The row's More menu
+contains **Edit Account…** and **Archive Account**; close its game window before
+changing sharing. Archive keeps all account data and saved login. Hub Settings
+can restore it or permanently delete it after a native confirmation.
 
 Every account window is independently controlled. The app does not broadcast
 keyboard, mouse, or controller input between windows.

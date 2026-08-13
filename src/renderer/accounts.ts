@@ -1,3 +1,7 @@
+/**
+ * The Multiple Accounts Hub interaction layer: it projects main-owned account
+ * state, manages selection and sheets, and never invents launch status.
+ */
 import type { AccountProfileSummary } from '../shared/contracts.js';
 
 (function () {

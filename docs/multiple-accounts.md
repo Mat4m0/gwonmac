@@ -34,7 +34,7 @@ takes effect after a restart.
 | Private Multiple Accounts templates | Profile template library |
 | Shared Multiple Accounts builds | Multiple Accounts shared build library |
 | Private Multiple Accounts builds | Profile build library |
-| Running, queued, failed, and crashed status | Live window registry |
+| Ready, queued, opening, checking, running, and failed status | Main-process runtime store and live window registry |
 
 Single Account mode is not a Multiple Accounts profile. No Multiple Accounts
 game window uses the default Electron session or the fixed Single Account
@@ -81,13 +81,28 @@ format but never reconcile with another profile.
 
 ## Lifecycle and recovery
 
-Every cold Multiple Accounts launch opens the Account Picker with no profile
-selected. One profile ID maps to at most one live game window. A duplicate
-launch request focuses that window.
+Every cold Multiple Accounts launch opens the Account Picker with no account
+selected. One profile ID maps to at most one live game window. The Hub shows
+only bounded runtime language: **Ready**, **Waiting**, **Starting**, **Checking
+updated client**, **Open**, and **Needs Attention**. It never describes a loaded
+renderer as game-ready.
 
-The app starts selected profiles in a bounded queue. It confirms a new client
-generation with one canary renderer before it starts the remaining profiles.
-One profile failure does not close another profile.
+The app starts selected accounts in a bounded queue and presents every new game
+window inactive. It confirms a new client generation with one canary renderer
+before it starts the remaining accounts. A canary failure stops the unopened
+queue and returns those rows to Ready. An ordinary account failure does not
+close or stop another account.
+
+After complete success, the Hub hides and focuses the first selected account
+once. Selecting an already-open account shows its existing window. If any
+account fails, the Hub stays visible for recovery and successful accounts stay
+open. Brand-new windows cascade by 32 pixels where display space permits;
+saved window positions take precedence after the first launch.
+
+A renderer gets one automatic recovery per deliberate launch. Recovery keeps
+the same profile ownership and does not affect other accounts. A second crash
+becomes a persistent Needs Attention row with Retry. The Hub remains
+recoverable from Dock activation, and Settings is available with Command-,.
 
 Closing a profile flushes its filesystem and closes only its sockets. Quitting
 the app flushes all live profile filesystems in parallel. After an application
@@ -101,9 +116,27 @@ recovery quarantines the unreadable document and changes the launcher-mode
 document only; it does not open, copy, or clear either mode's player data or
 Keychain items.
 
-Archive is the normal profile-removal action. It preserves the profile session,
+Archive is the normal account-removal action. It preserves the profile session,
 private libraries, and Keychain items. Permanent deletion is a separate,
-confirmed action. It never removes a shared library or Single Account data.
+confirmed action in Hub Settings. It never removes a shared library or Single
+Account data.
+
+## Hub interaction
+
+The Hub is a focused chooser, not an account dashboard. Rows use native
+checkbox semantics and the entire non-action area is clickable. The primary
+action reflects the selection: Open, Open _Account_, Show _Account_, Retry
+_Account_, or Open _n_ Accounts. Edit and Archive live in each row's More menu.
+
+New and Edit Account are modal sheets. Player-facing sharing choices are
+**Builds and teams** and **In-game templates**, each either **Shared between
+Multiple Accounts** or **Separate for this account**. Shared is the default.
+The sheet states that login, game settings, screenshots, chat logs, and Single
+Account data are never shared.
+
+Mode switching, archived-account restoration, and permanent deletion live in
+Settings rather than the launch surface. Game Settings → Accounts carries the
+same mode explanation and Return to Single Account action.
 
 Reset actions name their scope. A Single Account saved-files reset clears only
 the default session. A profile reset clears only the selected persistent
