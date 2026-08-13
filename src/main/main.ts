@@ -15,6 +15,7 @@ import {
   powerMonitor,
   session,
 } from "electron";
+import type { BrowserWindow } from "electron";
 import { readFileSync } from "node:fs";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
@@ -148,6 +149,7 @@ import {
 } from "./core/account-template-library.js";
 import {
   createAccountsWindow,
+  getAccountsWindow,
   revealAccountsWindow,
 } from "./accounts-window.js";
 
@@ -680,16 +682,19 @@ if (primaryInstance) void app.whenReady().then(async () => {
           : (profileLaunchState.get(profile.id) ?? "ready"),
       })),
   });
-  const openProfile = async (profileId: ProfileId): Promise<boolean> => {
+  const openProfile = async (
+    profileId: ProfileId,
+    newWindowOrdinal: number,
+  ): Promise<{ readonly win: BrowserWindow; readonly opened: boolean }> => {
     const profile = profileFor(profileId);
     const existing = windowRegistry.profileWindow(profileId);
     if (existing) {
       if (existing.isMinimized()) existing.restore();
-      existing.show();
-      existing.focus();
-      return false;
+      return { win: existing, opened: false };
     }
-    if (profileLaunchState.get(profileId) === "opening") return false;
+    if (profileLaunchState.get(profileId) === "opening") {
+      throw new Error("Account is already opening");
+    }
     profileLaunchState.set(profileId, "opening");
     try {
       const owner = session.fromPartition(`persist:gw-multi-${profileId}`, {
@@ -713,12 +718,14 @@ if (primaryInstance) void app.whenReady().then(async () => {
         await rm(profilePaths.templateSync, { force: true });
       }
       await mkdir(profilePaths.root, { recursive: true });
-      await prepareWindowState(profilePaths.windowState);
+      await prepareWindowState(profilePaths.windowState, newWindowOrdinal);
       const win = createMainWindow(host, {
         context: { mode: "multi", role: "game", profileId },
         session: owner,
         title: `Guild Wars Reforged — ${profile.name}`,
         windowStatePath: profilePaths.windowState,
+        showInactive: true,
+        onRendererFailure: () => profileLaunchState.set(profileId, "failed"),
       });
       win.on("closed", () => {
         if (profileLaunchState.get(profileId) !== "failed") {
@@ -747,7 +754,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         win.once("closed", closed);
       });
       profileLaunchState.delete(profileId);
-      return true;
+      return { win, opened: true };
     } catch (error) {
       profileLaunchState.set(profileId, "failed");
       const failedWindow = windowRegistry.profileWindow(profileId);
@@ -901,21 +908,34 @@ if (primaryInstance) void app.whenReady().then(async () => {
     openAccounts: async (profileIds) => {
       let canaryChecked = false;
       let firstFailure: unknown = null;
+      let firstSelectedWindow: BrowserWindow | null = null;
       for (let index = 0; index < profileIds.length; index += 1) {
         const profileId = profileIds[index]!;
-        let opened: boolean;
+        let result: { readonly win: BrowserWindow; readonly opened: boolean };
         try {
-          opened = await accountsLock.run(() => openProfile(profileId));
+          result = await accountsLock.run(() => openProfile(profileId, index));
+          firstSelectedWindow ??= result.win;
         } catch (error) {
           firstFailure ??= error;
           continue;
         }
-        if (opened && !canaryChecked) {
+        if (result.opened && !canaryChecked) {
           await waitForCandidateCanary();
           canaryChecked = true;
         }
       }
-      if (firstFailure) throw firstFailure;
+      if (firstFailure) {
+        revealAccountsWindow();
+        throw firstFailure;
+      }
+      const hub = getAccountsWindow();
+      if (hub && !hub.isDestroyed()) hub.hide();
+      if (firstSelectedWindow && !firstSelectedWindow.isDestroyed()) {
+        if (firstSelectedWindow.isMinimized()) firstSelectedWindow.restore();
+        firstSelectedWindow.show();
+        app.focus({ steal: true });
+        firstSelectedWindow.focus();
+      }
     },
     createAccount: (request: AccountProfileRequest) => accountsLock.run(async () => {
       if (activeAccountMode !== "multi" || !multiWorkspace) {

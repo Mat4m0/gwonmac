@@ -29,6 +29,7 @@ import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
 import {
   defaultWindowState,
+  cascadeWindowState,
   fitWindowStateToDisplays,
   loadWindowState,
   saveWindowState,
@@ -116,14 +117,24 @@ function primaryWorkArea(): WindowBounds {
 
 export async function prepareWindowState(
   statePath = gamePaths().windowState,
-): Promise<void> {
+  newWindowOrdinal?: number,
+): Promise<boolean> {
   const loaded = await loadWindowState(statePath, () => {
     logEvent({ k: "window.stateCorruptCleared" });
   });
   const restored = loaded
     ? fitWindowStateToDisplays(loaded, workAreas(), primaryWorkArea())
     : null;
-  preparedWindowStates.set(statePath, restored);
+  const prepared = restored ?? (
+    newWindowOrdinal === undefined
+      ? null
+      : cascadeWindowState(
+          defaultWindowState(primaryWorkArea()),
+          newWindowOrdinal,
+          primaryWorkArea(),
+        )
+  );
+  preparedWindowStates.set(statePath, prepared);
   if (restored) {
     logEvent({ k: "window.stateRestored",
       mode: restored.mode,
@@ -131,6 +142,7 @@ export async function prepareWindowState(
       height: restored.bounds.height,
     });
   }
+  return restored !== null;
 }
 
 function currentWindowState(win: BrowserWindow, owner: WindowStateOwner): WindowState {
@@ -320,6 +332,8 @@ export function createMainWindow(
     readonly session?: Electron.Session;
     readonly title?: string;
     readonly windowStatePath?: string;
+    readonly showInactive?: boolean;
+    readonly onRendererFailure?: () => void;
   } = {},
 ): BrowserWindow {
   const context = options.context ?? { mode: "single", role: "game" };
@@ -378,7 +392,7 @@ export function createMainWindow(
 
   win.once("ready-to-show", () => {
     if (initialState?.mode === "maximized") win.maximize();
-    if (BACKGROUND_LAUNCH) win.showInactive();
+    if (BACKGROUND_LAUNCH || options.showInactive) win.showInactive();
     else win.show();
     if (initialState?.mode === "fullscreen") win.setFullScreen(true);
   });
@@ -522,12 +536,17 @@ export function createMainWindow(
           })
           .finally(() => {
             if (isQuitting() || win.isDestroyed()) return;
+            // Release the immutable profile ownership before registering its
+            // replacement. Destroying afterward keeps the transition local to
+            // this profile and lets the old closed handler remain idempotent.
+            windowRegistry.unregister(win);
             createMainWindow(host, options);
             win.destroy();
             logEvent({ k: "renderer.recovered" });
           });
       }, 500);
     } else if (details.reason !== "clean-exit") {
+      options.onRendererFailure?.();
       dialog.showErrorBox(
         "Guild Wars stopped unexpectedly",
         "Use View → Reload Game to try again. If it repeats, choose Help → Report a Bug.",

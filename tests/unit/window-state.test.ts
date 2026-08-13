@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { AppError } from "../../src/shared/errors.js";
 import {
   defaultWindowState,
+  cascadeWindowState,
   fitWindowStateToDisplays,
   loadWindowState,
   parseWindowState,
@@ -122,6 +123,23 @@ describe("window state", () => {
     assert.deepEqual(defaultWindowState(primary), {
       bounds: { x: 32, y: 57, width: 960, height: 620 },
       mode: "normal",
+    });
+  });
+
+  it("cascades new account windows by 32px and clamps them", () => {
+    const workArea = { x: 0, y: 24, width: 1600, height: 1000 };
+    const base = defaultWindowState(workArea);
+
+    assert.deepEqual(cascadeWindowState(base, 1, workArea).bounds, {
+      ...base.bounds,
+      x: base.bounds.x + 32,
+      y: base.bounds.y + 32,
+    });
+    assert.deepEqual(cascadeWindowState(base, 20, workArea).bounds, {
+      x: workArea.x + workArea.width - base.bounds.width,
+      y: workArea.y + workArea.height - base.bounds.height,
+      width: base.bounds.width,
+      height: base.bounds.height,
     });
   });
 });

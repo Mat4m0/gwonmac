@@ -197,3 +197,28 @@ export function defaultWindowState(primaryWorkArea: WindowBounds): WindowState {
     mode: "normal",
   };
 }
+
+/**
+ * Offset a brand-new account window without ever placing its title bar outside
+ * the active work area. Persisted bounds bypass this helper entirely.
+ */
+export function cascadeWindowState(
+  state: WindowState,
+  ordinal: number,
+  workArea: WindowBounds,
+  step = 32,
+): WindowState {
+  const offset = Math.max(0, Math.trunc(ordinal)) * step;
+  return fitWindowStateToDisplays(
+    {
+      ...state,
+      bounds: {
+        ...state.bounds,
+        x: state.bounds.x + offset,
+        y: state.bounds.y + offset,
+      },
+    },
+    [workArea],
+    workArea,
+  );
+}
