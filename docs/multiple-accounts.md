@@ -94,6 +94,13 @@ the app flushes all live profile filesystems in parallel. After an application
 update or process crash, Multiple Accounts mode returns to the Account Picker.
 It does not reopen profiles automatically.
 
+If the selected mode or profile registry is missing, corrupt, or from an
+unsupported future format, startup does not guess at its contents. It offers to
+preserve the unreadable document and restart in Single Account mode. This
+recovery quarantines the unreadable document and changes the launcher-mode
+document only; it does not open, copy, or clear either mode's player data or
+Keychain items.
+
 Archive is the normal profile-removal action. It preserves the profile session,
 private libraries, and Keychain items. Permanent deletion is a separate,
 confirmed action. It never removes a shared library or Single Account data.

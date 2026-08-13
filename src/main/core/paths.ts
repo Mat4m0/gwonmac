@@ -24,7 +24,6 @@ export interface GamePaths {
   launcherMode: string;
   multiRoot: string;
   multiWorkspace: string;
-  multiHubWindowState: string;
   multiSharedBuildLibrary: string;
   multiSharedTemplates: string;
   multiProfiles: string;
@@ -56,7 +55,6 @@ export function gamePaths(userData: string): GamePaths {
     launcherMode: path.join(userData, "launcher-mode.json"),
     multiRoot,
     multiWorkspace: path.join(multiRoot, "workspace.json"),
-    multiHubWindowState: path.join(multiRoot, "hub-window-state.json"),
     multiSharedBuildLibrary: path.join(multiRoot, "shared", "build-library.json"),
     multiSharedTemplates: path.join(multiRoot, "shared", "templates.json"),
     multiProfiles: path.join(multiRoot, "profiles"),

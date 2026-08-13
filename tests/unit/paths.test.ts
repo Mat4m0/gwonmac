@@ -29,7 +29,6 @@ describe("resolved profile paths", () => {
       launcherMode: `${root}/launcher-mode.json`,
       multiRoot: `${root}/multi`,
       multiWorkspace: `${root}/multi/workspace.json`,
-      multiHubWindowState: `${root}/multi/hub-window-state.json`,
       multiSharedBuildLibrary: `${root}/multi/shared/build-library.json`,
       multiSharedTemplates: `${root}/multi/shared/templates.json`,
       multiProfiles: `${root}/multi/profiles`,

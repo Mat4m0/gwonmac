@@ -57,7 +57,7 @@ export interface WindowHost {
   getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
-  exportDiagnostics: () => Promise<string>;
+  exportDiagnostics: (win: BrowserWindow) => Promise<string>;
   markPerformanceProblem: () => void;
   startCapture: (level: 1 | 2) => Promise<void>;
   stopCapture: () => Promise<void>;
@@ -79,6 +79,9 @@ interface WindowStateOwner {
 }
 const preparedWindowStates = new Map<string, WindowState | null>();
 const windowStateOwners = new Map<BrowserWindow, WindowStateOwner>();
+const ownedWindowTitles = new WeakMap<BrowserWindow, string>();
+const profileCloses = new WeakSet<BrowserWindow>();
+const PROFILE_CLOSE_DEADLINE_MS = 6_000;
 let downloadPowerBlockerId: number | null = null;
 
 export function updateLongRunningTaskFeedback(
@@ -260,6 +263,33 @@ export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
+export function setOwnedWindowTitle(win: BrowserWindow, title: string): void {
+  ownedWindowTitles.set(win, title);
+  win.setTitle(title);
+}
+
+/** Flush and destroy exactly one Multi game window without quitting the app. */
+export async function closeProfileWindow(win: BrowserWindow): Promise<void> {
+  if (win.isDestroyed() || profileCloses.has(win)) return;
+  profileCloses.add(win);
+  try {
+    await Promise.race([
+      (async () => {
+        await sendRendererCommand(win, { type: "filesystem.sync" });
+        await flushWindowState(win);
+      })(),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, PROFILE_CLOSE_DEADLINE_MS);
+      }),
+    ]);
+  } catch (error) {
+    logEvent({ k: "window.stateSaveFailed" });
+    console.error("profile close persistence failed", error);
+  } finally {
+    if (!win.isDestroyed()) win.destroy();
+  }
+}
+
 /** The only renderer URL, and it carries no configuration. */
 export const RENDERER_URL = "gw://app/";
 
@@ -293,7 +323,6 @@ export function createMainWindow(
   } = {},
 ): BrowserWindow {
   const context = options.context ?? { mode: "single", role: "game" };
-  let profileCloseStarted = false;
   const statePath = options.windowStatePath ?? gamePaths().windowState;
   const restoredWindowState = preparedWindowStates.get(statePath) ?? null;
   const initialState = restoredWindowState
@@ -338,9 +367,10 @@ export function createMainWindow(
   windowStateOwners.set(win, stateOwner);
   windowRegistry.register(win, context);
   if (options.title) {
+    ownedWindowTitles.set(win, options.title);
     win.webContents.on("page-title-updated", (event) => {
       event.preventDefault();
-      win.setTitle(options.title!);
+      win.setTitle(ownedWindowTitles.get(win) ?? "Guild Wars Reforged");
     });
   }
   updateLongRunningTaskFeedback(host.getProgress(), win);
@@ -508,14 +538,8 @@ export function createMainWindow(
   win.on("close", (event) => {
     if (isQuitting()) return;
     if (context.mode === "multi") {
-      if (profileCloseStarted) return;
       event.preventDefault();
-      profileCloseStarted = true;
-      void (async () => {
-        await sendRendererCommand(win, { type: "filesystem.sync" });
-        await flushWindowState(win);
-        if (!win.isDestroyed()) win.destroy();
-      })();
+      void closeProfileWindow(win);
       return;
     }
     event.preventDefault();
@@ -530,11 +554,13 @@ export function createMainWindow(
     if (context.mode === "multi") host.gameWindowClosed?.();
   });
 
-  installApplicationMenu({
+  const installMenu = () => installApplicationMenu({
     host,
     win,
     resetWindowState: () => resetWindowState(win),
   });
+  win.on("focus", installMenu);
+  installMenu();
   void win.loadURL(RENDERER_URL);
   return win;
 }

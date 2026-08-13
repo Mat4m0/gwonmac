@@ -104,11 +104,11 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     remove.dataset.variant = 'danger';
     remove.textContent = 'Delete…';
     remove.addEventListener('click', async () => {
-      if (!window.confirm(`Permanently delete “${profile.name}”? Its saved login, Guild Wars files, private templates, builds, and window state cannot be recovered.`)) return;
       remove.disabled = true;
       try {
-        await window.gwNative.accounts.delete(profile.id);
-        setStatus('Profile permanently deleted.', 'success');
+        const state = await window.gwNative.accounts.delete(profile.id);
+        const deleted = !state.profiles.some((item) => item.id === profile.id);
+        setStatus(deleted ? 'Profile permanently deleted.' : 'Deletion cancelled.', deleted ? 'success' : 'neutral');
         await refresh();
       } catch {
         remove.disabled = false;
@@ -232,5 +232,6 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     }
   });
 
+  window.addEventListener('focus', () => { void refresh(); });
   void refresh();
 })();

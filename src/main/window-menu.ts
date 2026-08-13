@@ -195,7 +195,7 @@ export function installApplicationMenu({
               label: "Export Recent Diagnostics…",
               click: async () => {
                 await resetGameInput(win);
-                await exportDiagnosticsReport(host.exportDiagnostics);
+                await exportDiagnosticsReport(() => host.exportDiagnostics(win));
               },
             },
             { type: "separator" },

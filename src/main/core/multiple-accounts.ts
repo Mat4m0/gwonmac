@@ -6,7 +6,7 @@
  * atomic file publisher so setup cannot expose a partial workspace or mode.
  */
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, rename } from "node:fs/promises";
 import {
   parseLauncherMode,
   parseMultiWorkspace,
@@ -69,6 +69,20 @@ export async function saveMultiWorkspace(
   const parsed = parseMultiWorkspace(workspace);
   await writeAtomicJson(path, parsed, DOCUMENT_MODE);
   return parsed;
+}
+
+/** Preserve an unreadable account document before a player-approved recovery. */
+export async function quarantineAccountDocument(
+  filePath: string,
+): Promise<string | null> {
+  const backupPath = `${filePath}.corrupt-${Date.now()}`;
+  try {
+    await rename(filePath, backupPath);
+    return backupPath;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 export function createMultiWorkspace(options: {

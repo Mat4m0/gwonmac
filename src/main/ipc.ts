@@ -13,7 +13,7 @@
  * arguments and either forwards one owner-local capability directly or calls
  * the workflow owner; it returns codes rather than inventing prose.
  */
-import { BrowserWindow, clipboard, ipcMain, shell, app } from "electron";
+import { BrowserWindow, clipboard, ipcMain, shell } from "electron";
 import { statfs } from "node:fs/promises";
 import type {
   AppSettings,
@@ -153,8 +153,12 @@ export interface IpcContext {
   updateAccount: (request: AccountProfileUpdateRequest) => Promise<AccountsState>;
   archiveAccount: (profileId: ProfileId) => Promise<AccountsState>;
   restoreAccount: (profileId: ProfileId) => Promise<AccountsState>;
-  deleteAccount: (profileId: ProfileId) => Promise<AccountsState>;
+  deleteAccount: (
+    parent: BrowserWindow,
+    profileId: ProfileId,
+  ) => Promise<AccountsState>;
   useSingleAccountMode: () => Promise<void>;
+  requestQuit: (win: BrowserWindow) => void;
   loadAccountTemplates: (win: BrowserWindow) => Promise<AccountTemplateLibrary | null>;
   saveAccountTemplates: (
     win: BrowserWindow,
@@ -921,9 +925,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       if (kind === "gameData") shell.showItemInFolder(paths.game);
     }),
 
-    appRequestQuit: channel(nothing, () => {
-      app.quit();
-    }),
+    appRequestQuit: channel(nothing, (win) => ctx.requestQuit(win)),
 
     clipboardWriteText: channel(asClipboardText, (_win, text) => {
       clipboard.writeText(text);
@@ -996,7 +998,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
     accountsDelete: channel(
       asProfileId,
-      (_win, profileId) => ctx.deleteAccount(profileId),
+      (win, profileId) => ctx.deleteAccount(win, profileId),
       "hub",
     ),
     accountsUseSingle: channel(

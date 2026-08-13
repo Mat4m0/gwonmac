@@ -16,7 +16,7 @@ import {
   session,
 } from "electron";
 import { readFileSync } from "node:fs";
-import { copyFile, mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
@@ -42,6 +42,8 @@ import { INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { Mutex } from "./core/mutex.js";
+import { saveBuildLibrary } from "./core/build-library.js";
+import { parseBuildLibrary } from "../shared/builds/parse-library.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
 import {
@@ -87,10 +89,12 @@ import {
 } from "./protocol.js";
 import {
   createMainWindow,
+  closeProfileWindow,
   flushWindowState,
   getMainWindow,
   prepareWindowState,
   RENDERER_URL,
+  setOwnedWindowTitle,
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
@@ -126,12 +130,14 @@ import {
   loadMultiWorkspace,
   saveAccountMode,
   saveMultiWorkspace,
+  quarantineAccountDocument,
   removeArchivedMultiProfile,
   restoreMultiProfile,
   updateMultiProfile,
 } from "./core/multiple-accounts.js";
 import {
   type AccountMode,
+  type MultiWorkspace,
   type ProfileId,
 } from "../shared/multiple-accounts.js";
 import { multiSecretSlot } from "./core/native-keychain.js";
@@ -265,7 +271,11 @@ function buildSocketManager(): SocketManager {
 }
 
 function setProgress(next: DownloadProgress): void {
-  updateLongRunningTaskFeedback(next);
+  const gameWindows = windowRegistry.gameWindows();
+  if (gameWindows.length === 0) updateLongRunningTaskFeedback(next, null);
+  else {
+    for (const win of gameWindows) updateLongRunningTaskFeedback(next, win);
+  }
   sendToRenderer(IPC.progressEvent, next);
 }
 
@@ -347,13 +357,19 @@ async function clearBrowserNetworkCache(): Promise<void> {
   }
 }
 
-async function copyIfPresent(source: string, destination: string): Promise<void> {
+async function importBuildLibraryIfPresent(
+  source: string,
+  destination: string,
+): Promise<void> {
+  let bytes: string;
   try {
-    await mkdir(path.dirname(destination), { recursive: true });
-    await copyFile(source, destination);
+    bytes = await readFile(source, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
   }
+  const library = parseBuildLibrary(JSON.parse(bytes) as unknown);
+  await saveBuildLibrary(destination, library);
 }
 
 function buildWindowHost(
@@ -369,10 +385,7 @@ function buildWindowHost(
     getProgress: () => clientRuntime.progress,
     getSettings: () => loadSettings(gamePaths().settings),
     updateSettings: updateAppSettings,
-    exportDiagnostics: async () => {
-      const win = getMainWindow();
-      return win ? exportDiagnosticsForWindow(win) : "";
-    },
+    exportDiagnostics: (win) => exportDiagnosticsForWindow(win),
     markPerformanceProblem,
     startCapture: startDiagnosticCapture,
     stopCapture: stopDiagnosticCapture,
@@ -409,12 +422,75 @@ if (primaryInstance) void app.whenReady().then(async () => {
     website: EXTERNAL_URLS.github,
   });
   const paths = gamePaths();
-  activeAccountMode = await loadAccountMode(paths.launcherMode);
+  try {
+    activeAccountMode = await loadAccountMode(paths.launcherMode);
+  } catch {
+    const { response } = await dialog.showMessageBox({
+      type: "warning",
+      buttons: ["Open Single Account Mode", "Quit"],
+      defaultId: 0,
+      cancelId: 1,
+      message: "Account mode settings are damaged",
+      detail:
+        "GWonMac can preserve the damaged file and restart in Single Account mode. Your saved login, templates, builds, and downloaded game data will not be changed.",
+    });
+    if (response !== 0) {
+      app.quit();
+      return;
+    }
+    await quarantineAccountDocument(paths.launcherMode);
+    await saveAccountMode(paths.launcherMode, "single");
+    app.relaunch();
+    app.quit();
+    return;
+  }
   // The registry is safe to inspect from Single mode for the explicit Accounts
   // settings pane. Its sessions, libraries, and Keychain items remain closed.
-  let multiWorkspace = await loadMultiWorkspace(paths.multiWorkspace);
+  let multiWorkspace: MultiWorkspace | null;
+  try {
+    multiWorkspace = await loadMultiWorkspace(paths.multiWorkspace);
+  } catch {
+    if (activeAccountMode === "multi") {
+      const { response } = await dialog.showMessageBox({
+        type: "warning",
+        buttons: ["Open Single Account Mode", "Quit"],
+        defaultId: 0,
+        cancelId: 1,
+        message: "Multiple Accounts profiles are damaged",
+        detail:
+          "GWonMac can preserve the damaged workspace and restart in Single Account mode. Single Account data and profile Keychain items will not be changed.",
+      });
+      if (response !== 0) {
+        app.quit();
+        return;
+      }
+      await quarantineAccountDocument(paths.multiWorkspace);
+      await saveAccountMode(paths.launcherMode, "single");
+      app.relaunch();
+      app.quit();
+      return;
+    }
+    await quarantineAccountDocument(paths.multiWorkspace);
+    multiWorkspace = null;
+  }
   if (activeAccountMode === "multi" && !multiWorkspace) {
-    throw new Error("Multiple Accounts mode has no workspace");
+    const { response } = await dialog.showMessageBox({
+      type: "warning",
+      buttons: ["Open Single Account Mode", "Quit"],
+      defaultId: 0,
+      cancelId: 1,
+      message: "Multiple Accounts profiles are missing",
+      detail:
+        "Restart in Single Account mode without changing its saved login, templates, builds, or Guild Wars files.",
+    });
+    if (response !== 0) {
+      app.quit();
+      return;
+    }
+    await saveAccountMode(paths.launcherMode, "single");
+    app.relaunch();
+    app.quit();
+    return;
   }
   await applyPendingCacheClear(paths);
   if (activeAccountMode === "single") {
@@ -604,16 +680,16 @@ if (primaryInstance) void app.whenReady().then(async () => {
           : (profileLaunchState.get(profile.id) ?? "ready"),
       })),
   });
-  const openProfile = async (profileId: ProfileId): Promise<void> => {
+  const openProfile = async (profileId: ProfileId): Promise<boolean> => {
     const profile = profileFor(profileId);
     const existing = windowRegistry.profileWindow(profileId);
     if (existing) {
       if (existing.isMinimized()) existing.restore();
       existing.show();
       existing.focus();
-      return;
+      return false;
     }
-    if (profileLaunchState.get(profileId) === "opening") return;
+    if (profileLaunchState.get(profileId) === "opening") return false;
     profileLaunchState.set(profileId, "opening");
     try {
       const owner = session.fromPartition(`persist:gw-multi-${profileId}`, {
@@ -644,11 +720,50 @@ if (primaryInstance) void app.whenReady().then(async () => {
         title: `Guild Wars Reforged — ${profile.name}`,
         windowStatePath: profilePaths.windowState,
       });
-      win.on("closed", () => profileLaunchState.delete(profileId));
+      win.on("closed", () => {
+        if (profileLaunchState.get(profileId) !== "failed") {
+          profileLaunchState.delete(profileId);
+        }
+      });
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error("profile window did not finish loading"));
+        }, 30_000);
+        const cleanup = () => {
+          clearTimeout(timeout);
+          win.webContents.removeListener("did-finish-load", loaded);
+          win.removeListener("closed", closed);
+        };
+        const loaded = () => {
+          cleanup();
+          resolve();
+        };
+        const closed = () => {
+          cleanup();
+          reject(new Error("profile window closed while loading"));
+        };
+        win.webContents.once("did-finish-load", loaded);
+        win.once("closed", closed);
+      });
       profileLaunchState.delete(profileId);
+      return true;
     } catch (error) {
       profileLaunchState.set(profileId, "failed");
+      const failedWindow = windowRegistry.profileWindow(profileId);
+      if (failedWindow && !failedWindow.isDestroyed()) failedWindow.destroy();
       throw error;
+    }
+  };
+  const waitForCandidateCanary = async (): Promise<void> => {
+    const candidate = clientRuntime.healthToken;
+    if (!candidate) return;
+    const deadline = Date.now() + 60_000;
+    while (clientRuntime.healthToken === candidate && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (clientRuntime.healthToken === candidate) {
+      throw new Error("first profile did not confirm the new client generation");
     }
   };
 
@@ -658,12 +773,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
     }
     multiWorkspace ??= await loadMultiWorkspace(paths.multiWorkspace);
     if (!multiWorkspace) {
-      multiWorkspace = createMultiWorkspace(request);
-      const profile = multiWorkspace.profiles[0]!;
+      const candidate = createMultiWorkspace(request);
+      const profile = candidate.profiles[0]!;
       const profilePaths = multiProfilePaths(paths, profile.id);
       await mkdir(profilePaths.root, { recursive: true });
       if (request.importBuilds) {
-        await copyIfPresent(
+        await importBuildLibraryIfPresent(
           paths.buildLibrary,
           profile.builds === "shared"
             ? paths.multiSharedBuildLibrary
@@ -679,7 +794,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
           entries: request.templateEntries,
         });
       }
-      await saveMultiWorkspace(paths.multiWorkspace, multiWorkspace);
+      await saveMultiWorkspace(paths.multiWorkspace, candidate);
+      multiWorkspace = candidate;
     }
     await saveAccountMode(paths.launcherMode, "multi");
     app.relaunch();
@@ -783,7 +899,23 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getAccountsState: accountsState,
     setupAccounts,
     openAccounts: async (profileIds) => {
-      for (const profileId of profileIds) await openProfile(profileId);
+      let canaryChecked = false;
+      let firstFailure: unknown = null;
+      for (let index = 0; index < profileIds.length; index += 1) {
+        const profileId = profileIds[index]!;
+        let opened: boolean;
+        try {
+          opened = await accountsLock.run(() => openProfile(profileId));
+        } catch (error) {
+          firstFailure ??= error;
+          continue;
+        }
+        if (opened && !canaryChecked) {
+          await waitForCandidateCanary();
+          canaryChecked = true;
+        }
+      }
+      if (firstFailure) throw firstFailure;
     },
     createAccount: (request: AccountProfileRequest) => accountsLock.run(async () => {
       if (activeAccountMode !== "multi" || !multiWorkspace) {
@@ -810,9 +942,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
       const next = updateMultiProfile(multiWorkspace, request.id, request);
       await saveMultiWorkspace(paths.multiWorkspace, next);
       multiWorkspace = next;
-      windowRegistry.profileWindow(request.id)?.setTitle(
-        `Guild Wars Reforged — ${request.name}`,
-      );
+      const profileWindow = windowRegistry.profileWindow(request.id);
+      if (profileWindow) {
+        setOwnedWindowTitle(
+          profileWindow,
+          `Guild Wars Reforged — ${request.name}`,
+        );
+      }
       return accountsState();
     }),
     archiveAccount: (profileId: ProfileId) => accountsLock.run(async () => {
@@ -836,10 +972,24 @@ if (primaryInstance) void app.whenReady().then(async () => {
       multiWorkspace = next;
       return accountsState();
     }),
-    deleteAccount: (profileId: ProfileId) => accountsLock.run(async () => {
+    deleteAccount: (parent, profileId: ProfileId) => accountsLock.run(async () => {
       if (activeAccountMode !== "multi" || !multiWorkspace) {
         throw new Error("Multiple Accounts mode is not active");
       }
+      const profile = multiWorkspace.profiles.find(
+        (candidate) => candidate.id === profileId && candidate.archived,
+      );
+      if (!profile) throw new Error("Only an archived profile can be deleted");
+      const { response } = await dialog.showMessageBox(parent, {
+        type: "warning",
+        buttons: ["Permanently Delete", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        message: `Permanently delete “${profile.name}”?`,
+        detail:
+          "Its saved login, Guild Wars files, private templates, builds, and window state cannot be recovered. Shared libraries and Single Account data stay untouched.",
+      });
+      if (response !== 0) return accountsState();
       const next = removeArchivedMultiProfile(multiWorkspace, profileId);
       const owner = session.fromPartition(`persist:gw-multi-${profileId}`, {
         cache: false,
@@ -896,12 +1046,17 @@ if (primaryInstance) void app.whenReady().then(async () => {
       await saveAccountTemplateLibrary(paths.multiSharedTemplates, merged);
       await saveAccountTemplateLibrary(profilePaths.templateSync, merged);
     }),
+    requestQuit: (win) => {
+      const context = windowRegistry.contextForWebContents(win.webContents.id);
+      if (context?.mode === "multi") void closeProfileWindow(win);
+      else app.quit();
+    },
     useSingleAccountMode,
   });
 
   onAppQuit(async () => {
     const gameWindows = windowRegistry.gameWindows();
-    for (const win of gameWindows) {
+    await Promise.all(gameWindows.map(async (win) => {
       if (!win.isDestroyed()) {
         const outcome = await sendRendererCommand(win, {
           type: "filesystem.sync",
@@ -910,7 +1065,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
           logEvent({ k: "quit.rendererSyncIncomplete", outcome });
         }
       }
-    }
+    }));
     await ipcCleanup.drainSecrets();
     await Promise.all(gameWindows.map((win) => flushWindowState(win)));
     sockets.closeAll();
@@ -963,7 +1118,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     });
   } else {
     setDiagnosticCaptureStoppedHandler(async () => {
-      const win = getMainWindow();
+      const gameWindows = windowRegistry.gameWindows();
+      const win = gameWindows.find((candidate) => candidate.isFocused())
+        ?? gameWindows[0];
       if (!win || win.isDestroyed()) return;
       await resetGameInput(win);
       const { response } = await dialog.showMessageBox(win, {

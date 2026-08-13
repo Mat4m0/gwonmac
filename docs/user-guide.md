@@ -30,9 +30,11 @@ ArenaNet.
 Single Account mode is the default. It starts Guild Wars directly and keeps
 the login, templates, builds, settings, and window state that you already use.
 
-Open **Settings → Advanced → Set Up Multiple Accounts…** to create a separate
+Open **Settings → Accounts**, name the first profile, choose its Shared or
+Private libraries, and select **Enable and Restart…** to create a separate
 Multiple Accounts workspace. Every later Multiple Accounts start opens the
-Account Picker. Select one or more profiles and choose **Open Accounts**.
+Account Picker with nothing preselected. Select one or more profiles and choose
+**Open selected**.
 
 Each profile signs in separately and keeps separate Guild Wars preferences,
 screenshots, chat logs, saved login, and window position. Profiles can use the
@@ -42,10 +44,17 @@ Setup can copy templates, builds, and teams from Single Account mode. This is a
 one-time copy. The originals remain in Single Account mode. Later changes do
 not synchronize between the two modes.
 
-Use **Settings → Accounts → Return to Single Account Mode** to change the next
-launch. Your Multiple Accounts profiles stay available if you enable the mode
-again. The modes share verified game downloads, so creating a profile does not
-download another complete copy of Guild Wars.
+Use **Return to Single Account mode…** at the bottom of the Account Picker to
+change the next launch. Your Multiple Accounts profiles and saved logins stay
+available if you restore the mode from **Settings → Accounts** later. The modes
+share verified game downloads, so creating a profile does not download another
+complete copy of Guild Wars.
+
+Use **New profile…** in the Account Picker to add profiles. **Edit…** changes a
+profile's name or library choices; close its game window before changing
+sharing. Archive hides a profile but keeps all its data and saved login. The
+Archived profiles section can restore it or permanently delete it after a
+native confirmation.
 
 Every account window is independently controlled. The app does not broadcast
 keyboard, mouse, or controller input between windows.

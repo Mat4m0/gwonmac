@@ -10,6 +10,7 @@ import {
   createMultiWorkspace,
   loadAccountMode,
   loadMultiWorkspace,
+  quarantineAccountDocument,
   removeArchivedMultiProfile,
   restoreMultiProfile,
   saveAccountMode,
@@ -63,6 +64,16 @@ describe("Multiple Accounts documents", () => {
     await assert.rejects(loadAccountMode(modePath), AppError);
     await writeFile(workspacePath, JSON.stringify({ formatVersion: 2, profiles: [] }));
     await assert.rejects(loadMultiWorkspace(workspacePath), AppError);
+  });
+
+  it("quarantines a damaged document without rewriting its bytes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-accounts-"));
+    const workspacePath = join(dir, "workspace.json");
+    await writeFile(workspacePath, "{damaged");
+    const backup = await quarantineAccountDocument(workspacePath);
+    assert.ok(backup);
+    assert.equal(await readFile(backup, "utf8"), "{damaged");
+    assert.equal(await loadMultiWorkspace(workspacePath), null);
   });
 
   it("accepts only lowercase UUID v4 identifiers", () => {

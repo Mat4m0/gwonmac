@@ -148,7 +148,13 @@ async function waitForExit(
 }
 
 async function stopElectron(app: ElectronApplication): Promise<void> {
-  const child = app.process();
+  let child: ReturnType<ElectronApplication["process"]>;
+  try {
+    child = app.process();
+  } catch {
+    // Playwright drops its process handle after an app has already exited.
+    return;
+  }
   const closed = await new Promise<boolean>((resolve) => {
     const finish = (value: boolean) => {
       clearTimeout(timeout);

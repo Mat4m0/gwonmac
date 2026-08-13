@@ -29,13 +29,24 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       JSON.stringify({
         formatVersion: 1,
         profiles: [
-          { id: FIRST, name: "Primary", archived: false, templates: "private", builds: "private" },
-          { id: SECOND, name: "Alt", archived: false, templates: "private", builds: "private" },
+          { id: FIRST, name: "Primary", archived: false, templates: "shared", builds: "shared" },
+          { id: SECOND, name: "Alt", archived: false, templates: "shared", builds: "shared" },
         ],
       }),
     );
     await writeFile(path.join(userData, "build-library.json"), "single-sentinel");
     await writeFile(path.join(userData, "clear-game-storage-on-start"), "pending");
+    await mkdir(path.join(userData, "multi", "profiles", FIRST), { recursive: true });
+    await writeFile(
+      path.join(
+        userData,
+        "multi",
+        "profiles",
+        FIRST,
+        "clear-game-storage-on-start",
+      ),
+      "pending",
+    );
   });
   try {
     await expect(fixture.page.locator("h1")).toHaveText("Who are you playing?");
@@ -51,6 +62,7 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     await expect.poll(() => fixture.app.windows().length).toBe(3);
     const games = fixture.app.windows().filter((page) => page !== fixture.page);
     await Promise.all(games.map((page) => page.waitForLoadState("domcontentloaded")));
+    expect(games.map((page) => page.url())).toEqual(["gw://app/", "gw://app/"]);
 
     const titles = await fixture.app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().map((win) => win.getTitle()).sort(),
@@ -87,25 +99,61 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       fixture.page.evaluate(() => window.gwNative.credentials.load()),
     ).rejects.toThrow();
 
-    for (const game of games) {
-      await game.evaluate(async () => {
-        const { library } = await window.gwNative.buildLibrary.get();
-        await window.gwNative.buildLibrary.set(library);
-      });
-    }
+    await Promise.all(games.map((game) =>
+      game.evaluate(() => window.gwNative.accounts.loadTemplates()),
+    ));
+    await games[0]!.evaluate(() => window.gwNative.accounts.saveTemplates([{
+      path: "Skills/Primary.txt",
+      contents: "OQCiUyo8AkVwR4KMMGAAAEAA",
+    }]));
+    await games[1]!.evaluate(() => window.gwNative.accounts.saveTemplates([{
+      path: "Skills/Alt.txt",
+      contents: "OQCiUyo8AkVwR4KMMGAAAEAB",
+    }]));
+    const sharedTemplates = JSON.parse(await readFile(
+      path.join(fixture.userData, "multi", "shared", "templates.json"),
+      "utf8",
+    )) as { entries: Array<{ path: string }> };
+    expect(sharedTemplates.entries.map((entry) => entry.path)).toEqual([
+      "Skills/Alt.txt",
+      "Skills/Primary.txt",
+    ]);
+
+    const libraries = await Promise.all(games.map((game) =>
+      game.evaluate(() => window.gwNative.buildLibrary.get()),
+    ));
+    await games[0]!.evaluate(
+      (library) => window.gwNative.buildLibrary.set({ ...library, tags: ["primary"] }),
+      libraries[0]!.library,
+    );
+    await expect(games[1]!.evaluate(
+      (library) => window.gwNative.buildLibrary.set({ ...library, tags: ["alt"] }),
+      libraries[1]!.library,
+    )).rejects.toThrow();
     expect(await readFile(path.join(fixture.userData, "build-library.json"), "utf8"))
       .toBe("single-sentinel");
-    await stat(path.join(fixture.userData, "multi", "profiles", FIRST, "build-library.json"));
-    await stat(path.join(fixture.userData, "multi", "profiles", SECOND, "build-library.json"));
+    expect(JSON.parse(await readFile(
+      path.join(fixture.userData, "multi", "shared", "build-library.json"),
+      "utf8",
+    ))).toMatchObject({ tags: ["primary"] });
     await stat(path.join(fixture.userData, "clear-game-storage-on-start"));
+    await expect(stat(path.join(
+      fixture.userData,
+      "multi",
+      "profiles",
+      FIRST,
+      "clear-game-storage-on-start",
+    ))).rejects.toMatchObject({ code: "ENOENT" });
+
   } finally {
     await closeOffline(fixture);
   }
 });
 
 test("opt-in publishes a separate workspace before requesting restart", async () => {
+  const singleLibrary = JSON.stringify({ version: 3, builds: [], teams: [], tags: [] });
   const fixture = await launchOffline("gw-multi-setup-e2e-", {}, async (userData) => {
-    await writeFile(path.join(userData, "build-library.json"), "single-stays-here");
+    await writeFile(path.join(userData, "build-library.json"), singleLibrary);
   });
   try {
     await fixture.app.evaluate(({ app }) => {
@@ -122,9 +170,12 @@ test("opt-in publishes a separate workspace before requesting restart", async ()
       name: "Primary",
       templates: "shared",
       builds: "private",
-      importTemplates: false,
-      templateEntries: [],
-      importBuilds: false,
+      importTemplates: true,
+      templateEntries: [{
+        path: "Skills/Imported.txt",
+        contents: "OQCiUyo8AkVwR4KMMGAAAEAA",
+      }],
+      importBuilds: true,
     }));
     expect(JSON.parse(await readFile(
       path.join(fixture.userData, "launcher-mode.json"),
@@ -133,10 +184,31 @@ test("opt-in publishes a separate workspace before requesting restart", async ()
     const workspace = JSON.parse(await readFile(
       path.join(fixture.userData, "multi", "workspace.json"),
       "utf8",
-    )) as { profiles: Array<{ name: string }> };
+    )) as { profiles: Array<{ id: string; name: string }> };
     expect(workspace.profiles.map((profile) => profile.name)).toEqual(["Primary"]);
     expect(await readFile(path.join(fixture.userData, "build-library.json"), "utf8"))
-      .toBe("single-stays-here");
+      .toBe(singleLibrary);
+    expect(JSON.parse(await readFile(
+      path.join(
+        fixture.userData,
+        "multi",
+        "profiles",
+        workspace.profiles[0]!.id,
+        "build-library.json",
+      ),
+      "utf8",
+    ))).toEqual(JSON.parse(singleLibrary));
+    expect(JSON.parse(await readFile(
+      path.join(fixture.userData, "multi", "shared", "templates.json"),
+      "utf8",
+    ))).toEqual({
+      formatVersion: 1,
+      revision: 1,
+      entries: [{
+        path: "Skills/Imported.txt",
+        contents: "OQCiUyo8AkVwR4KMMGAAAEAA",
+      }],
+    });
     expect(await fixture.app.evaluate(() => ({
       quit: globalThis.__multiModeRestart.quit,
       relaunch: globalThis.__multiModeRestart.relaunch,
