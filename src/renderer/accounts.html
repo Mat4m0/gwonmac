@@ -1,81 +1,106 @@
 <!doctype html>
-<html lang="en" data-ui-style="obsidian">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Guild Wars Reforged — Accounts</title>
   <link rel="icon" href="favicon.png" type="image/png" sizes="48x48">
-  <link rel="stylesheet" href="ui/tokens.css">
-  <link rel="stylesheet" href="ui/components.css">
   <link rel="stylesheet" href="accounts.css">
 </head>
 <body>
-  <main class="accounts-shell" aria-labelledby="accounts-title">
-    <header class="accounts-head">
-      <div>
-        <p class="accounts-kicker">Multiple Accounts</p>
-        <h1 id="accounts-title">Who are you playing?</h1>
-        <p class="accounts-intro">Choose one or more profiles. Each opens in its own window with its own saved login and Guild Wars files.</p>
-      </div>
-      <img src="images/logo.webp" alt="" width="76" height="76">
-    </header>
+  <main class="hub">
+    <div class="scene" aria-hidden="true"></div>
+    <img class="brand" src="images/logo.webp" alt="">
 
-    <form id="accounts-form">
-      <fieldset id="accounts-list" class="accounts-list" aria-describedby="accounts-help">
-        <legend class="sr-only">Account profiles</legend>
-        <div class="accounts-loading">Loading profiles…</div>
-      </fieldset>
-      <p id="accounts-help" class="accounts-help">Already-open profiles are brought to the front. Other selected profiles open independently.</p>
-      <div class="accounts-actions">
-        <button id="accounts-open" class="ui-button" data-variant="primary" type="submit" disabled>Open selected</button>
-        <button id="accounts-select-all" class="ui-button" type="button">Select all</button>
-        <button id="accounts-new" class="ui-button" type="button">New profile…</button>
-      </div>
-      <p id="accounts-status" class="ui-status-line" data-tone="neutral" role="status" aria-live="polite"></p>
-      <details id="accounts-archived" class="accounts-archived" hidden>
-        <summary>Archived profiles</summary>
-        <div id="accounts-archived-list" class="accounts-archived-list"></div>
-      </details>
-    </form>
-
-    <footer class="accounts-foot">
-      <p>Profiles share the downloaded client, never credentials or browser storage.</p>
-      <button id="accounts-single" class="ui-link" type="button">Return to Single Account mode…</button>
-    </footer>
-  </main>
-  <dialog id="profile-dialog" class="profile-dialog ui-frame" aria-labelledby="profile-dialog-title">
-    <form id="profile-form" class="ui-panel">
-      <header class="ui-panel-head">
-        <h2 id="profile-dialog-title" class="ui-panel-title">New profile</h2>
-        <button id="profile-cancel-x" class="ui-button" data-icon type="button" aria-label="Close">&#10005;</button>
+    <section class="chooser" aria-labelledby="accounts-title">
+      <header class="chooser-header">
+        <h1 id="accounts-title">Choose Accounts</h1>
+        <p>Select one or more accounts to open.</p>
       </header>
-      <div class="ui-panel-body profile-fields">
-        <label for="profile-name">Profile name</label>
-        <input id="profile-name" class="ui-input" type="text" maxlength="48" autocomplete="off" required>
-        <fieldset>
-          <legend>Build library</legend>
-          <div class="ui-segment" data-fill>
-            <label><input type="radio" name="profileBuilds" value="shared" checked><span>Shared</span></label>
-            <label><input type="radio" name="profileBuilds" value="private"><span>Private</span></label>
-          </div>
+
+      <form id="accounts-form">
+        <fieldset id="accounts-list" class="accounts-list" aria-describedby="accounts-privacy" aria-busy="true">
+          <legend class="sr-only">Accounts</legend>
+          <div class="account-row loading-row" aria-hidden="true"><i></i><span><b></b><small></small></span></div>
+          <div class="account-row loading-row" aria-hidden="true"><i></i><span><b></b><small></small></span></div>
+          <div class="account-row loading-row" aria-hidden="true"><i></i><span><b></b><small></small></span></div>
         </fieldset>
-        <fieldset>
-          <legend>Build templates</legend>
-          <div class="ui-segment" data-fill>
-            <label><input type="radio" name="profileTemplates" value="shared" checked><span>Shared</span></label>
-            <label><input type="radio" name="profileTemplates" value="private"><span>Private</span></label>
-          </div>
-        </fieldset>
-        <p class="accounts-help">Sharing is only with other Multiple Accounts profiles. Saved login and Guild Wars files always stay private.</p>
-      </div>
-      <footer class="ui-panel-foot profile-actions">
-        <button id="profile-archive" class="ui-button" data-variant="danger" type="button" hidden>Archive profile…</button>
-        <span class="profile-action-spacer"></span>
-        <button id="profile-cancel" class="ui-button" type="button">Cancel</button>
-        <button id="profile-save" class="ui-button" data-variant="primary" type="submit">Create profile</button>
+
+        <section id="accounts-empty" class="empty-state" hidden>
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="16" cy="11" r="5"/><path d="M7 27c.8-5.1 4-8 9-8s8.2 2.9 9 8"/><path d="M24 7v6M21 10h6"/></svg>
+          <h2>No accounts yet</h2>
+          <p>Create your first account. Your Single Account data stays untouched.</p>
+          <button id="accounts-empty-new" class="primary" type="button">Create Account</button>
+        </section>
+
+        <p id="accounts-status" class="status-banner" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div class="chooser-actions">
+          <button id="accounts-new" class="quiet" type="button">New Account…</button>
+          <span class="action-group">
+            <button id="accounts-select-all" class="secondary" type="button">Select All</button>
+            <button id="accounts-open" class="primary" type="submit" disabled>Open</button>
+          </span>
+        </div>
+        <p id="accounts-privacy" class="privacy-note">Each account keeps its own saved login and game files.</p>
+      </form>
+    </section>
+  </main>
+
+  <div id="account-menu" class="account-menu" role="menu" hidden>
+    <button id="account-edit" type="button" role="menuitem">Edit Account…</button>
+    <hr>
+    <button id="account-archive" type="button" role="menuitem">Archive Account</button>
+  </div>
+
+  <dialog id="profile-dialog" class="sheet" aria-labelledby="profile-dialog-title">
+    <form id="profile-form" method="dialog">
+      <h2 id="profile-dialog-title">New Account</h2>
+      <p id="profile-dialog-description">Create an independent Guild Wars account.</p>
+      <label class="field" for="profile-name">
+        <span>Account name</span>
+        <input id="profile-name" type="text" maxlength="48" autocomplete="off" placeholder="For example, Pre-Searing" required>
+      </label>
+      <fieldset class="sharing-row">
+        <legend><strong>Builds and teams</strong><small>Choose where this account stores its library.</small></legend>
+        <span class="segmented">
+          <label><input type="radio" name="profileBuilds" value="shared" checked><span>Shared between Multiple Accounts</span></label>
+          <label><input type="radio" name="profileBuilds" value="private"><span>Separate for this account</span></label>
+        </span>
+      </fieldset>
+      <fieldset class="sharing-row">
+        <legend><strong>In-game templates</strong><small>Choose where this account stores its templates.</small></legend>
+        <span class="segmented">
+          <label><input type="radio" name="profileTemplates" value="shared" checked><span>Shared between Multiple Accounts</span></label>
+          <label><input type="radio" name="profileTemplates" value="private"><span>Separate for this account</span></label>
+        </span>
+      </fieldset>
+      <p class="separation-note">Login, game settings, screenshots, chat logs, and Single Account data are never shared.</p>
+      <p id="profile-status" class="sheet-status" role="status" aria-live="polite"></p>
+      <footer class="sheet-actions">
+        <button id="profile-cancel" class="sheet-secondary" type="button">Cancel</button>
+        <button id="profile-save" class="sheet-primary" type="submit">Create Account</button>
       </footer>
     </form>
   </dialog>
+
+  <dialog id="accounts-settings" class="sheet settings-sheet" aria-labelledby="accounts-settings-title">
+    <form method="dialog">
+      <h2 id="accounts-settings-title">Multiple Accounts Settings</h2>
+      <p>Each account has its own login, game settings, screenshots, and chat logs. Shared libraries never connect to Single Account data.</p>
+      <section class="settings-section" aria-labelledby="archived-title">
+        <h3 id="archived-title">Archived Accounts</h3>
+        <div id="accounts-archived-list" class="archived-list"></div>
+        <p id="accounts-no-archived" class="settings-empty">No archived accounts.</p>
+      </section>
+      <section class="settings-section mode-section">
+        <div><h3>Account Mode</h3><p>Returning to Single Account restarts GWonMac. Both workspaces are preserved.</p></div>
+        <button id="accounts-single" class="sheet-secondary" type="button">Return to Single Account…</button>
+      </section>
+      <p id="settings-status" class="sheet-status" role="status" aria-live="polite"></p>
+      <footer class="sheet-actions"><button id="settings-done" class="sheet-primary" type="button">Done</button></footer>
+    </form>
+  </dialog>
+
   <script type="module" src="accounts.js"></script>
 </body>
 </html>

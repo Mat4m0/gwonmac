@@ -54,6 +54,7 @@ function rendererCheckout(): string {
   write("src/renderer/images/logo.webp", "webp");
   write("src/renderer/images/hero-poster.jpg", "jpeg");
   write("src/renderer/images/hero-video.webm", "webm");
+  write("apps/website/public/bg-reforged.jpg", "landscape");
   write("src/renderer/.DS_Store", "local metadata");
   write("src/renderer/images/local-note.txt", "untracked");
   // The design system is a package input that does not live under src/renderer:
@@ -100,6 +101,10 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       readFileSync(path.join(root, "build/renderer/images/hero-video.webm"), "utf8"),
       "webm",
     );
+    assert.equal(
+      readFileSync(path.join(root, "build/renderer/images/bg-reforged.jpg"), "utf8"),
+      "landscape",
+    );
     // Not the preload: scripts/generate-preload.ts owns that output, splices
     // the canonical channel constants in and is the only producer of
     // build/preload/preload.cjs.
@@ -125,6 +130,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "fonts/COPYING-QUALITYPE",
       "fonts/QTFrizQuad.otf",
       "harness.css",
+      "images/bg-reforged.jpg",
       "images/hero-poster.jpg",
       "images/hero-video.webm",
       "images/logo.webp",

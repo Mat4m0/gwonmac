@@ -17,8 +17,130 @@ declare global {
 const FIRST = "00000000-0000-4000-8000-000000000001";
 const SECOND = "00000000-0000-4000-8000-000000000002";
 
+test("Hub exposes the focused chooser, account sheets, and Settings management", async () => {
+  const fixture = await launchOffline("gw-multi-hub-ui-e2e-", {}, async (userData) => {
+    await mkdir(path.join(userData, "multi"), { recursive: true });
+    await writeFile(
+      path.join(userData, "launcher-mode.json"),
+      JSON.stringify({ formatVersion: 1, mode: "multi" }),
+    );
+    await writeFile(
+      path.join(userData, "multi", "workspace.json"),
+      JSON.stringify({
+        formatVersion: 1,
+        profiles: [
+          { id: FIRST, name: "Primary Account With A Deliberately Long Name", archived: false, templates: "shared", builds: "shared" },
+          { id: SECOND, name: "Alt", archived: false, templates: "private", builds: "private" },
+          { id: "00000000-0000-4000-8000-000000000003", name: "Pre-Searing", archived: false, templates: "shared", builds: "shared" },
+          { id: "00000000-0000-4000-8000-000000000004", name: "Storage", archived: false, templates: "shared", builds: "shared" },
+          { id: "00000000-0000-4000-8000-000000000005", name: "PvP", archived: false, templates: "shared", builds: "shared" },
+          { id: "00000000-0000-4000-8000-000000000006", name: "Archived", archived: true, templates: "shared", builds: "shared" },
+        ],
+      }),
+    );
+  });
+  try {
+    await expect(fixture.page.getByRole("heading", { name: "Choose Accounts" })).toBeVisible();
+    await expect(fixture.page.getByText("Each account keeps its own saved login and game files.")).toBeVisible();
+    await expect(fixture.page.getByRole("checkbox")).toHaveCount(5);
+    await expect(fixture.page.getByRole("button", { name: "Open", exact: true })).toBeDisabled();
+
+    const primary = fixture.page.getByRole("checkbox", { name: /Select Primary Account/ });
+    await primary.check();
+    await expect(fixture.page.getByRole("button", { name: /Open Primary Account/ })).toBeEnabled();
+    expect(await fixture.page.locator("#accounts-list").evaluate((element) =>
+      element.scrollHeight >= element.clientHeight)).toBe(true);
+    await expect(fixture.page.locator(".account-copy strong").first()).toHaveAttribute(
+      "title",
+      "Primary Account With A Deliberately Long Name",
+    );
+
+    await fixture.page.getByRole("button", { name: "New Account…" }).click();
+    await expect(fixture.page.getByRole("dialog", { name: "New Account" })).toBeVisible();
+    await expect(fixture.page.getByText("Builds and teams")).toBeVisible();
+    await expect(fixture.page.getByText("In-game templates")).toBeVisible();
+    await expect(fixture.page.getByText(/Single Account data are never shared/)).toBeVisible();
+    await fixture.page.getByRole("button", { name: "Cancel" }).click();
+
+    await fixture.page.getByRole("button", { name: /More options for Primary/ }).click();
+    await expect(fixture.page.getByRole("menuitem", { name: "Edit Account…" })).toBeVisible();
+    await expect(fixture.page.getByRole("menuitem", { name: "Archive Account" })).toBeVisible();
+    await fixture.page.keyboard.press("Escape");
+
+    await fixture.app.evaluate(({ Menu }) => {
+      const item = Menu.getApplicationMenu()?.getMenuItemById("accounts-settings-menu");
+      if (!item?.click) throw new Error("Accounts Settings menu item is unavailable");
+      item.click(item, undefined, {} as Electron.KeyboardEvent);
+    });
+    await expect(fixture.page.getByRole("dialog", { name: "Multiple Accounts Settings" })).toBeVisible();
+    await expect(fixture.page.getByText("Archived", { exact: true })).toBeVisible();
+    await expect(fixture.page.getByRole("button", { name: "Restore" })).toBeVisible();
+    await expect(fixture.page.getByRole("button", { name: "Delete…" })).toBeVisible();
+    await expect(fixture.page.getByRole("button", { name: "Return to Single Account…" })).toBeVisible();
+  } finally {
+    await closeOffline(fixture);
+  }
+});
+
+test("renderer recovery stays with its account and a second crash needs attention", async () => {
+  const fixture = await launchOffline("gw-multi-recovery-e2e-", {}, async (userData) => {
+    await mkdir(path.join(userData, "multi"), { recursive: true });
+    await writeFile(path.join(userData, "launcher-mode.json"), JSON.stringify({ formatVersion: 1, mode: "multi" }));
+    await writeFile(path.join(userData, "multi", "workspace.json"), JSON.stringify({
+      formatVersion: 1,
+      profiles: [
+        { id: FIRST, name: "Primary", archived: false, templates: "shared", builds: "shared" },
+        { id: SECOND, name: "Alt", archived: false, templates: "shared", builds: "shared" },
+      ],
+    }));
+  });
+  try {
+    await fixture.page.evaluate(
+      ([first, second]) => window.gwNative.accounts.open([first, second] as ProfileId[]),
+      [FIRST, SECOND] as const,
+    );
+    const firstRenderer = await fixture.app.evaluate(({ BrowserWindow, dialog }) => {
+      dialog.showErrorBox = () => undefined;
+      const win = BrowserWindow.getAllWindows().find((candidate) => candidate.getTitle().endsWith("Primary"));
+      if (!win) throw new Error("Primary window not found");
+      const id = win.webContents.id;
+      win.webContents.forcefullyCrashRenderer();
+      return id;
+    });
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().find((win) => win.getTitle().endsWith("Primary"))?.webContents.id,
+    )).not.toBe(firstRenderer);
+    await expect.poll(() => fixture.page.evaluate(() =>
+      window.gwNative.accounts.get().then((state) => state.profiles.find((profile) => profile.name === "Primary")?.state),
+    )).toBe("running");
+    expect(await fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().find((win) => win.getTitle().endsWith("Accounts"))?.isVisible(),
+    )).toBe(false);
+
+    await fixture.app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows().find((candidate) => candidate.getTitle().endsWith("Primary"));
+      if (!win) throw new Error("Recovered Primary window not found");
+      win.webContents.forcefullyCrashRenderer();
+    });
+    await expect.poll(() => fixture.page.evaluate(() =>
+      window.gwNative.accounts.get().then((state) => state.profiles.find((profile) => profile.name === "Primary")),
+    )).toMatchObject({ state: "failed", launchIssue: "renderer-crash" });
+    expect(await fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().find((win) => win.getTitle().endsWith("Accounts"))?.isVisible(),
+    )).toBe(true);
+    expect(await fixture.app.evaluate(({ BrowserWindow }) => {
+      const alt = BrowserWindow.getAllWindows().find((win) => win.getTitle().endsWith("Alt"));
+      return !!alt && !alt.webContents.isCrashed();
+    })).toBe(true);
+  } finally {
+    await closeOffline(fixture);
+  }
+});
+
 test("Multi starts at the Hub and isolates two profile windows from Single", async () => {
-  const fixture = await launchOffline("gw-multi-e2e-", {}, async (userData) => {
+  const fixture = await launchOffline("gw-multi-e2e-", {
+    GW_BACKGROUND_LAUNCH: "0",
+  }, async (userData) => {
     await mkdir(path.join(userData, "multi"), { recursive: true });
     await writeFile(
       path.join(userData, "launcher-mode.json"),
@@ -49,16 +171,16 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     );
   });
   try {
-    await expect(fixture.page.locator("h1")).toHaveText("Who are you playing?");
+    await expect(fixture.page.locator("h1")).toHaveText("Choose Accounts");
     const state = await fixture.page.evaluate(() => window.gwNative.accounts.get());
     expect(state.mode).toBe("multi");
     expect(state.profiles.map((profile) => profile.name)).toEqual(["Primary", "Alt"]);
 
-    await fixture.page.evaluate(
-      ([first, second]) =>
-        window.gwNative.accounts.open([first, second] as ProfileId[]),
-      [FIRST, SECOND] as const,
-    );
+    await fixture.page.getByRole("checkbox", { name: "Select Primary" }).check();
+    await expect(fixture.page.getByRole("button", { name: "Open Primary" })).toBeVisible();
+    await fixture.page.getByRole("checkbox", { name: "Select Alt" }).check();
+    await expect(fixture.page.getByRole("button", { name: "Open 2 Accounts" })).toBeVisible();
+    await fixture.page.getByRole("button", { name: "Open 2 Accounts" }).click();
     await expect.poll(() => fixture.app.windows().length).toBe(3);
     const games = fixture.app.windows().filter((page) => page !== fixture.page);
     await Promise.all(games.map((page) => page.waitForLoadState("domcontentloaded")));
@@ -72,6 +194,22 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       "Guild Wars Reforged — Alt",
       "Guild Wars Reforged — Primary",
     ]);
+    const presentation = await fixture.app.evaluate(({ BrowserWindow }) => {
+      const windows = BrowserWindow.getAllWindows();
+      return {
+        focused: BrowserWindow.getFocusedWindow()?.getTitle(),
+        hubVisible: windows.find((win) => win.getTitle() === "Guild Wars Reforged — Accounts")?.isVisible(),
+        bounds: Object.fromEntries(windows
+          .filter((win) => win.getTitle() !== "Guild Wars Reforged — Accounts")
+          .map((win) => [win.getTitle(), win.getBounds()])),
+      };
+    });
+    expect(presentation.focused).toBe("Guild Wars Reforged — Primary");
+    expect(presentation.hubVisible).toBe(false);
+    const primaryBounds = presentation.bounds["Guild Wars Reforged — Primary"]!;
+    const altBounds = presentation.bounds["Guild Wars Reforged — Alt"]!;
+    expect(altBounds.x - primaryBounds.x).toBe(32);
+    expect(altBounds.y - primaryBounds.y).toBe(32);
     const storagePaths = await fixture.app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()
         .filter((win) => win.getTitle() !== "Guild Wars Reforged — Accounts")

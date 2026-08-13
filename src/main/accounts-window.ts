@@ -9,6 +9,7 @@ import { app, BrowserWindow, Menu, session } from "electron";
 import type { ProtocolDeps } from "./protocol.js";
 import { installGwProtocolHandlerForSession } from "./protocol.js";
 import { preloadPath } from "./paths.js";
+import { sendRendererCommand } from "./renderer-commands.js";
 import { windowRegistry } from "./window-registry.js";
 
 const HUB_URL = "gw://app/accounts.html";
@@ -22,6 +23,17 @@ function installAccountsMenu(): void {
           label: app.name,
           submenu: [
             { role: "about" as const },
+            { type: "separator" as const },
+            {
+              id: "accounts-settings-menu",
+              label: "Settings…",
+              accelerator: "CommandOrControl+,",
+              click: () => {
+                void sendRendererCommand(getAccountsWindow(), {
+                  type: "accounts.settings.open",
+                });
+              },
+            },
             { type: "separator" as const },
             { role: "hide" as const },
             { role: "hideOthers" as const },
@@ -70,11 +82,13 @@ export function createAccountsWindow(deps: ProtocolDeps): BrowserWindow {
   owner.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   owner.setPermissionCheckHandler(() => false);
   const win = new BrowserWindow({
-    width: 700,
-    height: 620,
-    minWidth: 560,
-    minHeight: 480,
+    width: 960,
+    height: 700,
+    minWidth: 640,
+    minHeight: 560,
     title: "Guild Wars Reforged — Accounts",
+    titleBarStyle: "hiddenInset",
+    backgroundColor: "#0a0806",
     show: false,
     webPreferences: {
       session: owner,

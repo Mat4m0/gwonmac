@@ -733,16 +733,27 @@ if (primaryInstance) void app.whenReady().then(async () => {
       await mkdir(profilePaths.root, { recursive: true });
       await prepareWindowState(profilePaths.windowState, newWindowOrdinal);
       failureStage = "starting";
+      let hubWasVisibleBeforeRecovery = false;
       const win = createMainWindow(host, {
         context: { mode: "multi", role: "game", profileId },
         session: owner,
         title: `Guild Wars Reforged — ${profile.name}`,
         windowStatePath: profilePaths.windowState,
         showInactive: true,
-        onRendererFailure: () =>
-          profileRuntime.set(profileId, "failed", launchIssueForStage("crashed")),
+        onRendererRecoveryStart: () => {
+          hubWasVisibleBeforeRecovery = getAccountsWindow()?.isVisible() ?? false;
+        },
+        onRendererRecovered: () => {
+          if (!hubWasVisibleBeforeRecovery) getAccountsWindow()?.hide();
+        },
+        onRendererFailure: () => {
+          profileRuntime.set(profileId, "failed", launchIssueForStage("crashed"));
+          revealAccountsWindow();
+        },
       });
       win.on("closed", () => {
+        const replacement = windowRegistry.profileWindow(profileId);
+        if (replacement && replacement !== win) return;
         if (profileRuntime.get(profileId).state !== "failed") {
           profileRuntime.set(profileId, "ready");
         }
@@ -967,9 +978,21 @@ if (primaryInstance) void app.whenReady().then(async () => {
       if (hub && !hub.isDestroyed()) hub.hide();
       if (firstSelectedWindow && !firstSelectedWindow.isDestroyed()) {
         if (firstSelectedWindow.isMinimized()) firstSelectedWindow.restore();
+        const focused = new Promise<void>((resolve) => {
+          if (firstSelectedWindow.isFocused()) {
+            resolve();
+            return;
+          }
+          const timeout = setTimeout(resolve, 1_000);
+          firstSelectedWindow.once("focus", () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+        });
         firstSelectedWindow.show();
         app.focus({ steal: true });
         firstSelectedWindow.focus();
+        await focused;
       }
     },
     createAccount: (request: AccountProfileRequest) => accountsLock.run(async () => {

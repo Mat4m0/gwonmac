@@ -571,16 +571,23 @@
         <section class="settings-pane" id="settings-pane-accounts" role="tabpanel"
                  aria-labelledby="settings-tab-accounts">
           <h3 class="settings-pane-title">Multiple Accounts</h3>
-          <p class="settings-pane-intro">Opt in to an account picker that can open several independent Guild Wars windows.</p>
+          <p class="settings-pane-intro">Open several independent Guild Wars accounts, each in its own window.</p>
           <p id="accounts-mode-status" class="settings-status">Checking account mode…</p>
-          <p class="settings-note">Your current window, saved login, settings, templates, and builds stay in Single Account mode. Multiple Accounts creates a separate workspace and asks you to sign in once for each profile.</p>
+          <p class="settings-note">Your current window, saved login, settings, templates, and builds stay in Single Account mode. Multiple Accounts creates a separate workspace and asks you to sign in once for each account.</p>
+          <div id="accounts-multi-active" hidden>
+            <div class="settings-divider" aria-hidden="true"></div>
+            <p class="settings-note">Login, game settings, screenshots, chat logs, and Single Account data are never shared. Returning to Single Account restarts GWonMac and preserves both workspaces.</p>
+            <div class="settings-actions-row">
+              <button type="button" id="accounts-return-single" class="ui-button">Return to Single Account…</button>
+            </div>
+          </div>
           <div id="accounts-single-setup">
           <div class="settings-divider" aria-hidden="true"></div>
           <div id="accounts-new-workspace-fields">
           <label class="settings-field" for="accounts-first-name">
-            <span>First profile name</span>
+            <span>First account name</span>
             <input type="text" id="accounts-first-name" class="ui-input"
-                   maxlength="48" autocomplete="off" placeholder="Main account">
+                   maxlength="48" autocomplete="off" placeholder="Main">
           </label>
           <fieldset>
             <legend>Build library</legend>

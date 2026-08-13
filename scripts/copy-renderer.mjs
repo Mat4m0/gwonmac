@@ -35,6 +35,9 @@ const ASSETS = [
 const SHARED_ASSETS = [
   ["src/shared/ui/tokens.css", "ui/tokens.css"],
   ["src/shared/ui/components.css", "ui/components.css"],
+  // The website and Hub use one reviewed static painting. Keep it canonical in
+  // the website package and copy it into the renderer at build time.
+  ["apps/website/public/bg-reforged.jpg", "images/bg-reforged.jpg"],
 ];
 
 const dest = path.resolve("build/renderer");

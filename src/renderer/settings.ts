@@ -52,6 +52,8 @@
   const accountsStatus = byId('accounts-setup-status');
   const accountsModeStatus = byId('accounts-mode-status');
   const accountsSingleSetup = byId('accounts-single-setup');
+  const accountsMultiActive = byId('accounts-multi-active');
+  const accountsReturnSingle = byId('accounts-return-single') as HTMLButtonElement;
   const accountsNewWorkspaceFields = byId('accounts-new-workspace-fields');
   /**
    * The appearance slider beside the `output` that reads it back.
@@ -606,16 +608,29 @@
     }
   });
 
+  accountsReturnSingle.addEventListener('click', async () => {
+    if (!window.confirm('Return to Single Account mode? GWonMac will restart. Multiple Accounts and Single Account data will both be preserved.')) return;
+    accountsReturnSingle.disabled = true;
+    accountsModeStatus.textContent = 'Restarting in Single Account mode…';
+    try {
+      await window.gwNative.accounts.useSingle();
+    } catch {
+      accountsReturnSingle.disabled = false;
+      accountsModeStatus.textContent = 'The mode change could not be saved. Nothing changed.';
+    }
+  });
+
   void window.gwNative.accounts.get().then((state) => {
     const singleMode = state.mode === 'single';
     const activeProfiles = state.profiles.filter((profile) => !profile.archived);
     const existingWorkspace = singleMode && activeProfiles.length > 0;
     accountsModeStatus.textContent = existingWorkspace
-      ? `Single Account mode is active. Your ${activeProfiles.length} Multiple Accounts ${activeProfiles.length === 1 ? 'profile is' : 'profiles are'} ready to restore.`
+      ? `Single Account mode is active. Your ${activeProfiles.length} Multiple Accounts ${activeProfiles.length === 1 ? 'account is' : 'accounts are'} ready to restore.`
       : singleMode
         ? 'Single Account mode is active.'
-      : 'Multiple Accounts mode is active. Use the Account Picker to manage profiles or return to Single Account mode.';
+      : 'Multiple Accounts mode is active. Use the Account Picker to open and manage accounts.';
     accountsSingleSetup.hidden = !singleMode;
+    accountsMultiActive.hidden = singleMode;
     if (existingWorkspace) {
       accountsName.value = activeProfiles[0]?.name ?? 'Account';
       accountsNewWorkspaceFields.hidden = true;
@@ -624,6 +639,7 @@
   }).catch(() => {
     accountsModeStatus.textContent = 'Account mode could not be read.';
     accountsSingleSetup.hidden = true;
+    accountsMultiActive.hidden = true;
   });
 
   window.addEventListener('resize', updateRenderScaleDimensions);

@@ -1,8 +1,3 @@
-/**
- * The Multiple Accounts Hub: a small projection of main-owned profile state.
- * Profile IDs originate in main and return only through checked controls; the
- * renderer never constructs paths, partitions, or credential names.
- */
 import type { AccountProfileSummary } from '../shared/contracts.js';
 
 (function () {
@@ -11,163 +6,273 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     if (!value) throw new Error(`missing accounts element: ${id}`);
     return value as T;
   };
+
   const form = required<HTMLFormElement>('accounts-form');
   const list = required<HTMLFieldSetElement>('accounts-list');
+  const empty = required<HTMLElement>('accounts-empty');
   const open = required<HTMLButtonElement>('accounts-open');
   const selectAll = required<HTMLButtonElement>('accounts-select-all');
-  const newProfile = required<HTMLButtonElement>('accounts-new');
   const status = required<HTMLElement>('accounts-status');
-  const single = required<HTMLButtonElement>('accounts-single');
-  const archived = required<HTMLDetailsElement>('accounts-archived');
-  const archivedList = required<HTMLElement>('accounts-archived-list');
+  const menu = required<HTMLElement>('account-menu');
+  const menuEdit = required<HTMLButtonElement>('account-edit');
+  const menuArchive = required<HTMLButtonElement>('account-archive');
   const profileDialog = required<HTMLDialogElement>('profile-dialog');
   const profileForm = required<HTMLFormElement>('profile-form');
   const profileTitle = required<HTMLElement>('profile-dialog-title');
+  const profileDescription = required<HTMLElement>('profile-dialog-description');
   const profileName = required<HTMLInputElement>('profile-name');
   const profileSave = required<HTMLButtonElement>('profile-save');
-  const profileArchive = required<HTMLButtonElement>('profile-archive');
-  let profiles: readonly AccountProfileSummary[] = [];
-  let editing: AccountProfileSummary | null = null;
+  const profileStatus = required<HTMLElement>('profile-status');
+  const settingsDialog = required<HTMLDialogElement>('accounts-settings');
+  const archivedList = required<HTMLElement>('accounts-archived-list');
+  const noArchived = required<HTMLElement>('accounts-no-archived');
+  const settingsStatus = required<HTMLElement>('settings-status');
 
-  function setStatus(message: string, tone: 'neutral' | 'progress' | 'success' | 'error') {
+  let profiles: readonly AccountProfileSummary[] = [];
+  let selected = new Set<AccountProfileSummary['id']>();
+  let editing: AccountProfileSummary | null = null;
+  let menuProfile: AccountProfileSummary | null = null;
+  let refreshInFlight: Promise<void> | null = null;
+
+  const activeProfiles = () => profiles.filter((profile) => !profile.archived);
+  const selectedProfiles = () => activeProfiles().filter((profile) => selected.has(profile.id));
+  const choice = (name: string) => profileForm.elements.namedItem(name) as RadioNodeList;
+
+  function stateLabel(profile: AccountProfileSummary): string {
+    switch (profile.state) {
+      case 'ready': return 'Ready';
+      case 'queued': return 'Waiting';
+      case 'opening': return 'Starting';
+      case 'checking': return 'Checking updated client';
+      case 'running': return 'Open';
+      case 'failed': return 'Needs Attention';
+    }
+  }
+
+  function recoveryText(profile: AccountProfileSummary): string {
+    switch (profile.launchIssue) {
+      case 'profile-preparation': return 'Couldn’t prepare this account.';
+      case 'window-startup': return 'Its game window couldn’t start.';
+      case 'client-validation': return 'The updated client couldn’t be verified.';
+      case 'renderer-crash': return 'The game stopped unexpectedly twice.';
+      default: return 'This account couldn’t be opened.';
+    }
+  }
+
+  function setStatus(message = '', tone: 'neutral' | 'progress' | 'success' | 'error' = 'neutral') {
     status.textContent = message;
     status.dataset.tone = tone;
   }
 
-  function selectedIds() {
-    return [...list.querySelectorAll<HTMLInputElement>('input:checked')]
-      .map((input) => input.value as AccountProfileSummary['id']);
-  }
-
   function syncActions() {
-    const inputs = list.querySelectorAll<HTMLInputElement>('input');
-    open.disabled = selectedIds().length === 0;
-    const allSelected = inputs.length > 0 && selectedIds().length === inputs.length;
-    selectAll.textContent = allSelected ? 'Clear selection' : 'Select all';
+    const active = activeProfiles();
+    const chosen = selectedProfiles();
+    open.disabled = chosen.length === 0 || chosen.some((profile) =>
+      profile.state === 'queued' || profile.state === 'opening' || profile.state === 'checking');
+    if (chosen.length === 0) open.textContent = 'Open';
+    else if (chosen.length > 1) open.textContent = `Open ${chosen.length} Accounts`;
+    else if (chosen[0]!.state === 'running') open.textContent = `Show ${chosen[0]!.name}`;
+    else if (chosen[0]!.state === 'failed') open.textContent = `Retry ${chosen[0]!.name}`;
+    else open.textContent = `Open ${chosen[0]!.name}`;
+    selectAll.textContent = active.length > 0 && chosen.length === active.length ? 'Clear' : 'Select All';
+    selectAll.disabled = active.length === 0;
   }
 
-  function renderProfile(profile: AccountProfileSummary) {
+  async function launch(ids: readonly AccountProfileSummary['id'][]) {
+    if (ids.length === 0) return;
+    open.disabled = true;
+    setStatus('Opening selected accounts…', 'progress');
+    const poll = window.setInterval(() => { void refresh(); }, 180);
+    try {
+      await window.gwNative.accounts.open(ids);
+      setStatus('Selected accounts are open.', 'success');
+    } catch {
+      setStatus('Some accounts need attention. Open accounts were left running.', 'error');
+    } finally {
+      window.clearInterval(poll);
+      await refresh();
+    }
+  }
+
+  function closeMenu() {
+    menu.hidden = true;
+    menuProfile = null;
+  }
+
+  function showMenu(profile: AccountProfileSummary, trigger: HTMLElement) {
+    menuProfile = profile;
+    const bounds = trigger.getBoundingClientRect();
+    menu.style.top = `${Math.min(bounds.bottom + 4, innerHeight - 90)}px`;
+    menu.style.left = `${Math.max(8, Math.min(bounds.right - 190, innerWidth - 198))}px`;
+    menuEdit.disabled = profile.state === 'running';
+    menuEdit.title = profile.state === 'running' ? 'Close this account before editing it.' : '';
+    menuArchive.disabled = profile.state === 'running' || activeProfiles().length < 2;
+    menuArchive.title = profile.state === 'running'
+      ? 'Close this account before archiving it.'
+      : activeProfiles().length < 2 ? 'At least one active account is required.' : '';
+    menu.hidden = false;
+    menuEdit.focus();
+  }
+
+  function renderProfile(profile: AccountProfileSummary): HTMLElement {
     const row = document.createElement('div');
-    row.className = 'account-choice';
+    row.className = 'account-row';
+    row.dataset.profileId = profile.id;
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.name = 'profile';
+    checkbox.name = 'account';
     checkbox.value = profile.id;
-    checkbox.checked = false;
-    checkbox.id = `profile-${profile.id}`;
-    const details = document.createElement('label');
-    details.htmlFor = checkbox.id;
-    const name = document.createElement('span');
-    name.className = 'account-name';
-    name.textContent = profile.name;
-    const meta = document.createElement('span');
-    meta.className = 'account-meta';
-    meta.textContent = `${profile.templates} templates · ${profile.builds} builds`;
-    details.append(name, meta);
-    const state = document.createElement('span');
-    state.className = 'account-state';
-    state.dataset.state = profile.state;
-    state.textContent = profile.state;
-    const edit = document.createElement('button');
-    edit.type = 'button';
-    edit.className = 'account-edit ui-button';
-    edit.dataset.variant = 'quiet';
-    edit.textContent = 'Edit…';
-    edit.addEventListener('click', () => showProfileDialog(profile));
-    row.append(checkbox, details, state, edit);
-    return row;
-  }
-
-  function renderArchivedProfile(profile: AccountProfileSummary) {
-    const row = document.createElement('div');
-    row.className = 'archived-profile';
+    checkbox.id = `account-${profile.id}`;
+    checkbox.checked = selected.has(profile.id);
+    checkbox.setAttribute('aria-label', `Select ${profile.name}`);
+    const copy = document.createElement('label');
+    copy.className = 'account-copy';
+    copy.htmlFor = checkbox.id;
     const name = document.createElement('strong');
     name.textContent = profile.name;
-    const restore = document.createElement('button');
-    restore.type = 'button';
-    restore.className = 'ui-button';
-    restore.textContent = 'Restore';
-    restore.addEventListener('click', async () => {
-      restore.disabled = true;
-      try {
-        await window.gwNative.accounts.restore(profile.id);
-        setStatus('Profile restored.', 'success');
-        await refresh();
-      } catch {
-        restore.disabled = false;
-        setStatus('The profile could not be restored.', 'error');
-      }
+    name.title = profile.name;
+    const state = document.createElement('small');
+    state.textContent = profile.state === 'failed'
+      ? `${stateLabel(profile)} — ${recoveryText(profile)}`
+      : stateLabel(profile);
+    copy.append(name, state);
+    const indicator = document.createElement('span');
+    if (profile.state === 'running') {
+      indicator.className = 'open-indicator';
+      indicator.textContent = 'Open';
+    } else if (profile.state === 'failed') {
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'retry';
+      retry.textContent = 'Retry';
+      retry.setAttribute('aria-label', `Retry ${profile.name}`);
+      retry.addEventListener('click', () => { void launch([profile.id]); });
+      indicator.append(retry);
+    }
+    const trailing = document.createElement('button');
+    trailing.type = 'button';
+    trailing.className = 'more';
+    trailing.textContent = '•••';
+    trailing.setAttribute('aria-label', `More options for ${profile.name}`);
+    trailing.addEventListener('click', () => showMenu(profile, trailing));
+    row.append(checkbox, copy, indicator, trailing);
+    row.addEventListener('click', (event) => {
+      const target = event.target as Element;
+      if (target.closest('button, input, label')) return;
+      checkbox.checked = !checkbox.checked;
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'ui-button';
-    remove.dataset.variant = 'danger';
-    remove.textContent = 'Delete…';
-    remove.addEventListener('click', async () => {
-      remove.disabled = true;
-      try {
-        const state = await window.gwNative.accounts.delete(profile.id);
-        const deleted = !state.profiles.some((item) => item.id === profile.id);
-        setStatus(deleted ? 'Profile permanently deleted.' : 'Deletion cancelled.', deleted ? 'success' : 'neutral');
-        await refresh();
-      } catch {
-        remove.disabled = false;
-        setStatus('The profile could not be fully deleted. Try again.', 'error');
-      }
-    });
-    row.append(name, restore, remove);
     return row;
   }
 
-  const choice = (name: string) =>
-    profileForm.elements.namedItem(name) as RadioNodeList;
+  function renderArchived() {
+    const archived = profiles.filter((profile) => profile.archived);
+    noArchived.hidden = archived.length > 0;
+    archivedList.replaceChildren(...archived.map((profile) => {
+      const row = document.createElement('div');
+      row.className = 'archived-account';
+      const name = document.createElement('strong');
+      name.textContent = profile.name;
+      const restore = document.createElement('button');
+      restore.type = 'button';
+      restore.textContent = 'Restore';
+      restore.addEventListener('click', async () => {
+        restore.disabled = true;
+        try {
+          await window.gwNative.accounts.restore(profile.id);
+          settingsStatus.textContent = `${profile.name} was restored.`;
+          await refresh();
+        } catch {
+          restore.disabled = false;
+          settingsStatus.textContent = 'The account could not be restored.';
+        }
+      });
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'delete';
+      remove.textContent = 'Delete…';
+      remove.addEventListener('click', async () => {
+        remove.disabled = true;
+        try {
+          const next = await window.gwNative.accounts.delete(profile.id);
+          const deleted = !next.profiles.some((candidate) => candidate.id === profile.id);
+          settingsStatus.textContent = deleted ? `${profile.name} was permanently deleted.` : 'Deletion was cancelled.';
+          await refresh();
+        } catch {
+          remove.disabled = false;
+          settingsStatus.textContent = 'The account could not be deleted.';
+        }
+      });
+      row.append(name, restore, remove);
+      return row;
+    }));
+  }
 
-  function closeProfileDialog() {
-    profileDialog.close();
-    editing = null;
+  function render() {
+    const active = activeProfiles();
+    selected = new Set([...selected].filter((id) => active.some((profile) => profile.id === id)));
+    list.replaceChildren(...active.map(renderProfile));
+    list.setAttribute('aria-busy', 'false');
+    list.hidden = active.length === 0;
+    empty.hidden = active.length > 0;
+    renderArchived();
+    syncActions();
+  }
+
+  function refresh(): Promise<void> {
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = window.gwNative.accounts.get()
+      .then((state) => {
+        if (state.mode !== 'multi') throw new Error('Multiple Accounts is not active');
+        profiles = state.profiles;
+        render();
+      })
+      .catch(() => {
+        list.replaceChildren();
+        list.setAttribute('aria-busy', 'false');
+        setStatus('Accounts couldn’t be loaded. Restart GWonMac and try again.', 'error');
+      })
+      .finally(() => { refreshInFlight = null; });
+    return refreshInFlight;
   }
 
   function showProfileDialog(profile: AccountProfileSummary | null) {
     editing = profile;
-    profileTitle.textContent = profile ? `Edit ${profile.name}` : 'New profile';
-    profileSave.textContent = profile ? 'Save changes' : 'Create profile';
+    profileTitle.textContent = profile ? 'Edit Account' : 'New Account';
+    profileDescription.textContent = profile
+      ? `Change how ${profile.name} stores builds and templates.`
+      : 'Create an independent Guild Wars account.';
+    profileSave.textContent = profile ? 'Save Changes' : 'Create Account';
     profileName.value = profile?.name ?? '';
     choice('profileBuilds').value = profile?.builds ?? 'shared';
     choice('profileTemplates').value = profile?.templates ?? 'shared';
-    profileArchive.hidden =
-      !profile || profiles.filter((item) => !item.archived).length < 2;
-    profileArchive.disabled = profile?.state === 'running';
+    profileStatus.textContent = '';
     profileDialog.showModal();
     profileName.focus();
   }
 
-  async function refresh() {
-    try {
-      const state = await window.gwNative.accounts.get();
-      if (state.mode !== 'multi') throw new Error('Multiple Accounts is not active');
-      profiles = state.profiles;
-      const active = profiles.filter((profile) => !profile.archived);
-      const inactive = profiles.filter((profile) => profile.archived);
-      list.replaceChildren(...active.map(renderProfile));
-      archivedList.replaceChildren(...inactive.map(renderArchivedProfile));
-      archived.hidden = inactive.length === 0;
-      syncActions();
-    } catch {
-      list.replaceChildren();
-      setStatus('Profiles could not be loaded. Restart GWonMac and try again.', 'error');
-    }
-  }
-
-  list.addEventListener('change', syncActions);
-  selectAll.addEventListener('click', () => {
-    const inputs = [...list.querySelectorAll<HTMLInputElement>('input')];
-    const next = !inputs.every((input) => input.checked);
-    for (const input of inputs) input.checked = next;
+  list.addEventListener('change', (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (input.checked) selected.add(input.value as AccountProfileSummary['id']);
+    else selected.delete(input.value as AccountProfileSummary['id']);
     syncActions();
   });
-  newProfile.addEventListener('click', () => showProfileDialog(null));
-  required<HTMLButtonElement>('profile-cancel').addEventListener('click', closeProfileDialog);
-  required<HTMLButtonElement>('profile-cancel-x').addEventListener('click', closeProfileDialog);
+  selectAll.addEventListener('click', () => {
+    const active = activeProfiles();
+    selected = selected.size === active.length
+      ? new Set()
+      : new Set(active.map((profile) => profile.id));
+    render();
+  });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void launch(selectedProfiles().map((profile) => profile.id));
+  });
+  required<HTMLButtonElement>('accounts-new').addEventListener('click', () => showProfileDialog(null));
+  required<HTMLButtonElement>('accounts-empty-new').addEventListener('click', () => showProfileDialog(null));
+  required<HTMLButtonElement>('profile-cancel').addEventListener('click', () => profileDialog.close());
+  profileDialog.addEventListener('close', () => { editing = null; profileStatus.textContent = ''; });
   profileForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!profileForm.reportValidity()) return;
@@ -177,59 +282,63 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
       builds: choice('profileBuilds').value as 'shared' | 'private',
       templates: choice('profileTemplates').value as 'shared' | 'private',
     };
-    const updating = editing !== null;
+    const wasEditing = editing !== null;
     try {
       if (editing) await window.gwNative.accounts.update({ id: editing.id, ...request });
       else await window.gwNative.accounts.create(request);
-      closeProfileDialog();
-      setStatus(updating ? 'Profile updated.' : 'Profile created.', 'success');
+      profileDialog.close();
+      setStatus(wasEditing ? 'Account updated.' : 'Account created.', 'success');
       await refresh();
     } catch {
-      setStatus('The profile could not be saved. Check that its name is unique.', 'error');
+      profileStatus.textContent = 'The account could not be saved. Use a unique name and close it before changing sharing.';
     } finally {
       profileSave.disabled = false;
     }
   });
-  profileArchive.addEventListener('click', async () => {
-    const profile = editing;
-    if (!profile || !window.confirm(`Archive “${profile.name}”? Its saved login and files will be kept.`)) return;
-    profileArchive.disabled = true;
+
+  menuEdit.addEventListener('click', () => {
+    const profile = menuProfile;
+    closeMenu();
+    if (profile) showProfileDialog(profile);
+  });
+  menuArchive.addEventListener('click', async () => {
+    const profile = menuProfile;
+    closeMenu();
+    if (!profile || !window.confirm(`Archive “${profile.name}”? Its login and files will be kept.`)) return;
     try {
       await window.gwNative.accounts.archive(profile.id);
-      closeProfileDialog();
-      setStatus('Profile archived. Its data was kept.', 'success');
+      setStatus(`${profile.name} was archived.`, 'success');
+      selected.delete(profile.id);
       await refresh();
     } catch {
-      setStatus('Close the profile before archiving it, then try again.', 'error');
-    } finally {
-      profileArchive.disabled = false;
+      setStatus('Close the account before archiving it, then try again.', 'error');
     }
   });
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const ids = selectedIds();
-    if (ids.length === 0) return;
-    open.disabled = true;
-    setStatus(`Opening ${ids.length === 1 ? 'account' : `${ids.length} accounts`}…`, 'progress');
-    try {
-      await window.gwNative.accounts.open(ids);
-      setStatus('Selected accounts are open.', 'success');
-      await refresh();
-    } catch {
-      setStatus('One or more accounts could not be opened. You can retry them.', 'error');
-      await refresh();
-    }
+  document.addEventListener('pointerdown', (event) => {
+    if (!menu.hidden && !menu.contains(event.target as Node)) closeMenu();
   });
-  single.addEventListener('click', async () => {
-    if (!window.confirm('Return to Single Account mode? All open game windows will close. Your Multi profiles and saved logins are kept.')) return;
-    single.disabled = true;
-    setStatus('Restarting in Single Account mode…', 'progress');
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !menu.hidden) closeMenu();
+  });
+
+  const showSettings = () => {
+    closeMenu();
+    settingsStatus.textContent = '';
+    renderArchived();
+    if (!settingsDialog.open) settingsDialog.showModal();
+  };
+  required<HTMLButtonElement>('settings-done').addEventListener('click', () => settingsDialog.close());
+  required<HTMLButtonElement>('accounts-single').addEventListener('click', async () => {
+    if (!window.confirm('Return to Single Account mode? GWonMac will restart. Multiple Accounts and Single Account data will both be preserved.')) return;
+    settingsStatus.textContent = 'Restarting in Single Account mode…';
     try {
       await window.gwNative.accounts.useSingle();
     } catch {
-      single.disabled = false;
-      setStatus('The mode change could not be saved. Nothing changed.', 'error');
+      settingsStatus.textContent = 'The mode change could not be saved. Nothing changed.';
     }
+  });
+  window.gwNative.commands.handle(async (command) => {
+    if (command.type === 'accounts.settings.open') showSettings();
   });
 
   window.addEventListener('focus', () => { void refresh(); });

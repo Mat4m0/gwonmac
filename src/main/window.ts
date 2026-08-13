@@ -338,6 +338,8 @@ export function createMainWindow(
     readonly title?: string;
     readonly windowStatePath?: string;
     readonly showInactive?: boolean;
+    readonly onRendererRecoveryStart?: () => void;
+    readonly onRendererRecovered?: () => void;
     readonly onRendererFailure?: () => void;
   } = {},
 ): BrowserWindow {
@@ -528,6 +530,7 @@ export function createMainWindow(
       !win.isDestroyed()
     ) {
       rendererRecoveryUsed.add(statePath);
+      options.onRendererRecoveryStart?.();
       logEvent({ k: "renderer.recoveryScheduled" });
       setTimeout(() => {
         if (isQuitting() || win.isDestroyed()) return;
@@ -547,6 +550,7 @@ export function createMainWindow(
             windowRegistry.unregister(win);
             createMainWindow(host, options);
             win.destroy();
+            options.onRendererRecovered?.();
             logEvent({ k: "renderer.recovered" });
           });
       }, 500);
@@ -575,7 +579,11 @@ export function createMainWindow(
     windowRegistry.unregister(win);
     windowStateOwners.delete(win);
     if (mainWindow === win) mainWindow = null;
-    if (context.mode === "multi") host.gameWindowClosed?.();
+    if (
+      context.mode === "multi"
+      && context.role === "game"
+      && !windowRegistry.profileWindow(context.profileId)
+    ) host.gameWindowClosed?.();
   });
 
   const installMenu = () => installApplicationMenu({
