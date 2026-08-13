@@ -13,7 +13,7 @@
  */
 import type { StoredCredentials } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
-import type { NativeKeychain } from "./native-keychain.js";
+import type { NativeKeychain, SecretSlot } from "./native-keychain.js";
 import { KeychainJsonStore, type KeychainSecret } from "./keychain-store.js";
 
 /**
@@ -48,7 +48,10 @@ const CREDENTIALS: KeychainSecret<StoredCredentials> = {
 
 /** The ArenaNet saved login's fixed Data Protection Keychain item. */
 export class CredentialsStore extends KeychainJsonStore<StoredCredentials> {
-  constructor(keychain: NativeKeychain) {
-    super("arenaNetCredentials", keychain, CREDENTIALS);
+  constructor(
+    keychain: NativeKeychain,
+    slot: SecretSlot = "arenaNetCredentials",
+  ) {
+    super(slot, keychain, CREDENTIALS);
   }
 }
