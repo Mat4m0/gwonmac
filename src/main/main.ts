@@ -94,6 +94,7 @@ import {
   flushWindowState,
   getMainWindow,
   prepareWindowState,
+  resetRendererRecovery,
   RENDERER_URL,
   setOwnedWindowTitle,
   type WindowHost,
@@ -142,6 +143,10 @@ import {
   type ProfileId,
 } from "../shared/multiple-accounts.js";
 import { multiSecretSlot } from "./core/native-keychain.js";
+import {
+  launchIssueForStage,
+  ProfileRuntimeStore,
+} from "./core/profile-runtime.js";
 import {
   loadAccountTemplateLibrary,
   reconcileAccountTemplates,
@@ -661,7 +666,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
   );
   const profileProtocolSessions = new Set<ProfileId>();
-  const profileLaunchState = new Map<ProfileId, "opening" | "failed">();
+  const profileRuntime = new ProfileRuntimeStore();
   const profileFor = (profileId: ProfileId) => {
     const profile = multiWorkspace?.profiles.find(
       (candidate) => candidate.id === profileId && !candidate.archived,
@@ -677,9 +682,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
         templates: profile.templates,
         builds: profile.builds,
         archived: profile.archived,
-        state: !profile.archived && windowRegistry.profileWindow(profile.id)
-          ? "running"
-          : (profileLaunchState.get(profile.id) ?? "ready"),
+        state: profileRuntime.get(profile.id).state,
+        ...(profileRuntime.get(profile.id).launchIssue
+          ? { launchIssue: profileRuntime.get(profile.id).launchIssue }
+          : {}),
       })),
   });
   const openProfile = async (
@@ -687,15 +693,23 @@ if (primaryInstance) void app.whenReady().then(async () => {
     newWindowOrdinal: number,
   ): Promise<{ readonly win: BrowserWindow; readonly opened: boolean }> => {
     const profile = profileFor(profileId);
-    const existing = windowRegistry.profileWindow(profileId);
+    let existing = windowRegistry.profileWindow(profileId);
+    const previous = profileRuntime.get(profileId);
+    const profilePaths = multiProfilePaths(paths, profileId);
+    if (previous?.state === "failed") {
+      resetRendererRecovery(profilePaths.windowState);
+      if (existing && !existing.isDestroyed()) existing.destroy();
+      existing = null;
+    }
     if (existing) {
       if (existing.isMinimized()) existing.restore();
       return { win: existing, opened: false };
     }
-    if (profileLaunchState.get(profileId) === "opening") {
+    if (previous?.state === "opening" || previous?.state === "checking") {
       throw new Error("Account is already opening");
     }
-    profileLaunchState.set(profileId, "opening");
+    profileRuntime.set(profileId, "opening");
+    let failureStage: Parameters<typeof launchIssueForStage>[0] = "preparing";
     try {
       const owner = session.fromPartition(`persist:gw-multi-${profileId}`, {
         cache: false,
@@ -708,7 +722,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
         owner.clearStorageData({ storages: ["cookies"] }),
         owner.clearCache(),
       ]);
-      const profilePaths = multiProfilePaths(paths, profileId);
       const reset = await applyPendingSessionStorageReset(
         owner,
         profilePaths.gameStorageClearRequest,
@@ -719,17 +732,19 @@ if (primaryInstance) void app.whenReady().then(async () => {
       }
       await mkdir(profilePaths.root, { recursive: true });
       await prepareWindowState(profilePaths.windowState, newWindowOrdinal);
+      failureStage = "starting";
       const win = createMainWindow(host, {
         context: { mode: "multi", role: "game", profileId },
         session: owner,
         title: `Guild Wars Reforged — ${profile.name}`,
         windowStatePath: profilePaths.windowState,
         showInactive: true,
-        onRendererFailure: () => profileLaunchState.set(profileId, "failed"),
+        onRendererFailure: () =>
+          profileRuntime.set(profileId, "failed", launchIssueForStage("crashed")),
       });
       win.on("closed", () => {
-        if (profileLaunchState.get(profileId) !== "failed") {
-          profileLaunchState.delete(profileId);
+        if (profileRuntime.get(profileId).state !== "failed") {
+          profileRuntime.set(profileId, "ready");
         }
       });
       await new Promise<void>((resolve, reject) => {
@@ -753,10 +768,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
         win.webContents.once("did-finish-load", loaded);
         win.once("closed", closed);
       });
-      profileLaunchState.delete(profileId);
+      profileRuntime.set(profileId, "running");
       return { win, opened: true };
     } catch (error) {
-      profileLaunchState.set(profileId, "failed");
+      profileRuntime.set(profileId, "failed", launchIssueForStage(failureStage));
       const failedWindow = windowRegistry.profileWindow(profileId);
       if (failedWindow && !failedWindow.isDestroyed()) failedWindow.destroy();
       throw error;
@@ -906,6 +921,11 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getAccountsState: accountsState,
     setupAccounts,
     openAccounts: async (profileIds) => {
+      for (const profileId of profileIds) profileFor(profileId);
+      profileRuntime.queue(
+        profileIds,
+        (profileId) => windowRegistry.profileWindow(profileId) !== null,
+      );
       let canaryChecked = false;
       let firstFailure: unknown = null;
       let firstSelectedWindow: BrowserWindow | null = null;
@@ -920,7 +940,22 @@ if (primaryInstance) void app.whenReady().then(async () => {
           continue;
         }
         if (result.opened && !canaryChecked) {
-          await waitForCandidateCanary();
+          if (clientRuntime.healthToken) {
+            profileRuntime.set(profileId, "checking");
+            try {
+              await waitForCandidateCanary();
+            } catch (error) {
+              profileRuntime.set(
+                profileId,
+                "failed",
+                launchIssueForStage("validating"),
+              );
+              profileRuntime.releaseQueued(profileIds.slice(index + 1));
+              revealAccountsWindow();
+              throw error;
+            }
+          }
+          profileRuntime.set(profileId, "running");
           canaryChecked = true;
         }
       }

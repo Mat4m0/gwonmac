@@ -606,8 +606,16 @@ export type MultiProfileRuntimeState =
   | "ready"
   | "queued"
   | "opening"
+  | "checking"
   | "running"
   | "failed";
+
+export type AccountLaunchIssue =
+  | "profile-preparation"
+  | "window-startup"
+  | "client-validation"
+  | "renderer-crash"
+  | "unknown";
 
 export interface AccountProfileSummary {
   readonly id: ProfileId;
@@ -616,6 +624,7 @@ export interface AccountProfileSummary {
   readonly builds: LibraryScope;
   readonly archived: boolean;
   readonly state: MultiProfileRuntimeState;
+  readonly launchIssue?: AccountLaunchIssue;
 }
 
 export interface AccountsState {

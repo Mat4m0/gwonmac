@@ -69,6 +69,11 @@ export interface WindowHost {
 
 let mainWindow: BrowserWindow | null = null;
 const rendererRecoveryUsed = new Set<string>();
+
+/** A deliberate player retry gets one fresh automatic renderer recovery. */
+export function resetRendererRecovery(statePath: string): void {
+  rendererRecoveryUsed.delete(statePath);
+}
 interface WindowStateOwner {
   readonly path: string;
   restored: WindowState | null;
