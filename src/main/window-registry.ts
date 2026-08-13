@@ -27,6 +27,7 @@ interface Entry {
 export class WindowRegistry {
   readonly #byWebContents = new Map<number, Entry>();
   readonly #profileWindows = new Map<ProfileId, RegisteredWindow>();
+  readonly #webContentsIds = new WeakMap<RegisteredWindow, number>();
 
   register(win: RegisteredWindow, context: WindowContext): void {
     const id = win.webContents.id;
@@ -40,13 +41,17 @@ export class WindowRegistry {
       }
       this.#profileWindows.set(context.profileId, win);
     }
+    this.#webContentsIds.set(win, id);
     this.#byWebContents.set(id, { win, context });
   }
 
   unregister(win: RegisteredWindow): void {
-    const entry = this.#byWebContents.get(win.webContents.id);
+    const id = this.#webContentsIds.get(win);
+    if (id === undefined) return;
+    const entry = this.#byWebContents.get(id);
     if (!entry || entry.win !== win) return;
-    this.#byWebContents.delete(win.webContents.id);
+    this.#byWebContents.delete(id);
+    this.#webContentsIds.delete(win);
     if (entry.context.mode === "multi" && entry.context.role === "game") {
       if (this.#profileWindows.get(entry.context.profileId) === win) {
         this.#profileWindows.delete(entry.context.profileId);

@@ -51,6 +51,22 @@ describe("window registry", () => {
     assert.equal(registry.contextForWebContents(1), null);
   });
 
+  it("unregisters after Electron has made webContents unreadable", () => {
+    const registry = new WindowRegistry();
+    let readable = true;
+    const win = {
+      get webContents() {
+        if (!readable) throw new Error("destroyed webContents was read");
+        return { id: 1 };
+      },
+      isDestroyed: () => !readable,
+    };
+    registry.register(win, { mode: "single", role: "game" });
+    readable = false;
+    assert.doesNotThrow(() => registry.unregister(win));
+    assert.equal(registry.contextForWebContents(1), null);
+  });
+
   it("does not return destroyed windows", () => {
     const registry = new WindowRegistry();
     const hub = fake(1);

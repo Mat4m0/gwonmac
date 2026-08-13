@@ -145,6 +145,25 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       "clear-game-storage-on-start",
     ))).rejects.toMatchObject({ code: "ENOENT" });
 
+    const identifiedGames = await Promise.all(games.map(async (game) => ({
+      game,
+      credentials: await game.evaluate(() => window.gwNative.credentials.load()),
+    })));
+    const primaryPage = identifiedGames.find(({ credentials }) =>
+      credentials?.username === "first@example.test")?.game;
+    const altPage = identifiedGames.find(({ credentials }) =>
+      credentials?.username === "second@example.test")?.game;
+    if (!primaryPage || !altPage) throw new Error("profile pages not found");
+    const primaryClosed = primaryPage.waitForEvent("close", { timeout: 12_000 });
+    await primaryPage.evaluate(() => {
+      void window.gwNative.app.requestQuit();
+    });
+    await primaryClosed;
+    expect(await altPage.evaluate(() => window.gwNative.credentials.load())).toEqual({
+      username: "second@example.test",
+      password: "two",
+    });
+    expect(await fixture.page.evaluate(() => document.visibilityState)).toBe("visible");
   } finally {
     await closeOffline(fixture);
   }

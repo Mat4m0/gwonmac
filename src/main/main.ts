@@ -1055,9 +1055,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
 
   onAppQuit(async () => {
-    const gameWindows = windowRegistry.gameWindows();
-    await Promise.all(gameWindows.map(async (win) => {
-      if (!win.isDestroyed()) {
+    if (activeAccountMode === "single") {
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) {
         const outcome = await sendRendererCommand(win, {
           type: "filesystem.sync",
         });
@@ -1065,9 +1065,22 @@ if (primaryInstance) void app.whenReady().then(async () => {
           logEvent({ k: "quit.rendererSyncIncomplete", outcome });
         }
       }
-    }));
-    await ipcCleanup.drainSecrets();
-    await Promise.all(gameWindows.map((win) => flushWindowState(win)));
+      await ipcCleanup.drainSecrets();
+      await flushWindowState();
+    } else {
+      const gameWindows = windowRegistry.gameWindows();
+      await Promise.all(gameWindows.map(async (win) => {
+        if (win.isDestroyed()) return;
+        const outcome = await sendRendererCommand(win, {
+          type: "filesystem.sync",
+        });
+        if (outcome !== "completed") {
+          logEvent({ k: "quit.rendererSyncIncomplete", outcome });
+        }
+      }));
+      await ipcCleanup.drainSecrets();
+      await Promise.all(gameWindows.map((win) => flushWindowState(win)));
+    }
     sockets.closeAll();
     updateLongRunningTaskFeedback(INITIAL_PROGRESS);
     await clientRuntime.shutdown();
