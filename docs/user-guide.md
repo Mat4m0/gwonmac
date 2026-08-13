@@ -78,7 +78,7 @@ uses a safe tap fallback when its repair is unavailable. The cursor has no
 player switch. The app does not ship or download cursor artwork.
 
 **Enable optional Tools Beta** is off by default. Its first enable asks for one
-restart because the app selects the Tools-capable module before Guild Wars
+restart because the app selects the Tools-capable mode before Guild Wars
 starts.
 
 After that restart, these choices update immediately:
