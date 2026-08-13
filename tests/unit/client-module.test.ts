@@ -45,25 +45,25 @@ import {
 const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
-  toolbox: true,
+  partyObservation: true,
   commands: false,
 });
 const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 
@@ -203,9 +203,14 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       cursor: "0".repeat(64),
       target: "0".repeat(64),
       cursorTarget: "0".repeat(64),
-      cursorToolbox: "0".repeat(64),
-      cursorToolboxCommands: "0".repeat(64),
-      cursorTargetToolboxCommands: "0".repeat(64),
+      party: "0".repeat(64),
+      cursorParty: "0".repeat(64),
+      targetParty: "0".repeat(64),
+      cursorTargetParty: "0".repeat(64),
+      partyCommands: "0".repeat(64),
+      cursorPartyCommands: "0".repeat(64),
+      targetPartyCommands: "0".repeat(64),
+      cursorTargetPartyCommands: "0".repeat(64),
     }),
     programId: 1,
     buildId: 1,
@@ -213,7 +218,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 5,
-    commands: {
+    teamApply: {
       thunkExport: "enhancement_command",
       professionTrace: {
         readerExport: "enhancement_profession_trace",
@@ -255,7 +260,8 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       tableSlot: 1,
       producerFunctions: [4, 4],
     },
-    uiDispatcher: {
+    targetObservation: { certified: true },
+    partyObservation: {
       functionIndex: 5,
       params: ["i32", "i32", "i32"],
       results: [],
@@ -435,7 +441,6 @@ describe("client module preparation", () => {
   it("composes both certified transforms in order", async () => {
     const value = await fixture();
     const certification: ClientCertification = {
-      state: "certified",
       templateSaveBuild: value.templateSaveBuild,
       enhancementBuild: value.enhancementBuild,
     };
@@ -444,7 +449,8 @@ describe("client module preparation", () => {
       options(value, certification, CURSOR_TOOLBOX),
     );
 
-    assert.equal(prepared.state, "certified");
+    assert.deepEqual(prepared.gameFileSaving, { status: "available" });
+    assert.deepEqual(prepared.effectiveCapabilities, CURSOR_TOOLBOX);
     assert.equal(prepared.enhancementBuild, value.enhancementBuild);
     assert.equal(prepared.failure, null);
     assert.notEqual(prepared.wasmPath, value.officialWasmPath);
@@ -494,14 +500,15 @@ describe("client module preparation", () => {
       options(
         value,
         {
-          state: "template-only",
           templateSaveBuild: value.templateSaveBuild,
+          enhancementBuild: null,
         },
         CURSOR_TOOLBOX,
       ),
     );
 
-    assert.equal(prepared.state, "template-only");
+    assert.deepEqual(prepared.gameFileSaving, { status: "available" });
+    assert.deepEqual(prepared.effectiveCapabilities, NO_CAPABILITIES);
     assert.equal(prepared.enhancementBuild, null);
     assert.equal(prepared.failure, null);
     assert.equal(
@@ -519,15 +526,17 @@ describe("client module preparation", () => {
     ]);
 
     const prepared = await prepareClientModule(
-      options(value, { state: "uncertified" }, CURSOR_TOOLBOX),
+      options(value, { templateSaveBuild: null, enhancementBuild: null }, CURSOR_TOOLBOX),
     );
 
     assert.deepEqual(prepared, {
       wasmPath: value.officialWasmPath,
       jsPath: value.officialJsPath,
       extendedMemory: { status: "disabled" },
-      state: "uncertified",
+      gameFileSaving: { status: "unavailable", reason: "game-update" },
       enhancementBuild: null,
+      requestedCapabilities: CURSOR_TOOLBOX,
+      effectiveCapabilities: NO_CAPABILITIES,
       // An unrecognised client is served exactly as downloaded, so it also
       // never receives the double-click transform: the renderer keeps
       // synthesising taps rather than being handed a module nothing certified.
@@ -543,20 +552,31 @@ describe("client module preparation", () => {
   it("closes native double-click preparation when its input disappears", async () => {
     const value = await fixture();
     const missingWasmPath = join(value.root, "missing.wasm");
-    const request = options(value, { state: "uncertified" }, CURSOR_TOOLBOX);
+    const request = options(
+      value,
+      { templateSaveBuild: null, enhancementBuild: null },
+      CURSOR_TOOLBOX,
+    );
     request.officialWasmPath = missingWasmPath;
 
     const prepared = await prepareClientModule(request);
 
     assert.equal(prepared.wasmPath, missingWasmPath);
-    assert.equal(prepared.state, "uncertified");
+    assert.deepEqual(prepared.gameFileSaving, {
+      status: "unavailable",
+      reason: "game-update",
+    });
     assert.equal(prepared.nativeDoubleClick, false);
     assert.equal(prepared.failure?.stage, "native-double-click");
   });
 
   it("falls back to the ordinary module when a requested 4 GB pair is unknown", async () => {
     const value = await fixture();
-    const request = options(value, { state: "uncertified" }, CURSOR_TOOLBOX);
+    const request = options(
+      value,
+      { templateSaveBuild: null, enhancementBuild: null },
+      CURSOR_TOOLBOX,
+    );
     request.extendedMemoryEnabled = true;
 
     const prepared = await prepareClientModule(request);
@@ -573,11 +593,11 @@ describe("client module preparation", () => {
   it("keeps an earlier transform failure separate from 4 GB preparation failure", async () => {
     const value = await fixture();
     const request = options(value, {
-      state: "template-only",
       templateSaveBuild: {
         ...value.templateSaveBuild,
         sha256: "0".repeat(64),
       },
+      enhancementBuild: null,
     }, CURSOR_TOOLBOX);
     request.extendedMemoryEnabled = true;
     request.officialJsPath = join(value.root, "missing.js");
@@ -599,7 +619,6 @@ describe("client module preparation", () => {
       options(
         value,
         {
-          state: "certified",
           templateSaveBuild: value.templateSaveBuild,
           enhancementBuild: value.enhancementBuild,
         },
@@ -607,7 +626,7 @@ describe("client module preparation", () => {
       ),
     );
 
-    assert.equal(prepared.state, "certified");
+    assert.deepEqual(prepared.gameFileSaving, { status: "available" });
     assert.equal(prepared.enhancementBuild, null);
     assert.equal(prepared.failure, null);
     assert.equal(
@@ -627,12 +646,15 @@ describe("client module preparation", () => {
     const afterTemplateFailure = await prepareClientModule(
       options(
         templateFailure,
-        { state: "template-only", templateSaveBuild: brokenTemplate },
+        { templateSaveBuild: brokenTemplate, enhancementBuild: null },
         CURSOR_TOOLBOX,
       ),
     );
     assert.equal(afterTemplateFailure.wasmPath, templateFailure.officialWasmPath);
-    assert.equal(afterTemplateFailure.state, "uncertified");
+    assert.deepEqual(afterTemplateFailure.gameFileSaving, {
+      status: "unavailable",
+      reason: "preparation-failed",
+    });
     assert.equal(afterTemplateFailure.failure?.stage, "template-save");
     await assertMissing(templateFailure.enhancementCacheRoot);
 
@@ -645,15 +667,15 @@ describe("client module preparation", () => {
       options(
         enhancementFailure,
         {
-          state: "certified",
           templateSaveBuild: enhancementFailure.templateSaveBuild,
           enhancementBuild: brokenEnhancement,
         },
         CURSOR_TOOLBOX,
       ),
     );
-    assert.equal(afterEnhancementFailure.state, "certified");
-    assert.equal(afterEnhancementFailure.enhancementBuild, null);
+    assert.deepEqual(afterEnhancementFailure.gameFileSaving, { status: "available" });
+    assert.equal(afterEnhancementFailure.enhancementBuild, brokenEnhancement);
+    assert.deepEqual(afterEnhancementFailure.effectiveCapabilities, NO_CAPABILITIES);
     assert.equal(afterEnhancementFailure.failure?.stage, "enhancement");
     assert.equal(
       sha256(await readFile(afterEnhancementFailure.wasmPath)),
@@ -664,7 +686,6 @@ describe("client module preparation", () => {
   it("rebuilds stale compatibility and Enhancement cache entries", async () => {
     const value = await fixture();
     const certification: ClientCertification = {
-      state: "certified",
       templateSaveBuild: value.templateSaveBuild,
       enhancementBuild: value.enhancementBuild,
     };
@@ -705,7 +726,6 @@ describe("client module preparation", () => {
   it("rejects a replacement module even when writable metadata matches it", async () => {
     const value = await fixture();
     const certification: ClientCertification = {
-      state: "certified",
       templateSaveBuild: value.templateSaveBuild,
       enhancementBuild: value.enhancementBuild,
     };
@@ -742,11 +762,11 @@ describe("client module preparation", () => {
     assert.equal(rebuilt.failure, null);
     assert.equal(
       sha256(await readFile(rebuilt.wasmPath)),
-      value.enhancementBuild.outputSha256.cursorToolbox,
+      value.enhancementBuild.outputSha256.cursorParty,
     );
   });
 
-  it("fails closed when a certified build omits the selected profile hash", async () => {
+  it("selects the largest certified subset when a combined hash is absent", async () => {
     const value = await fixture();
     const complete = value.enhancementBuild.outputSha256;
     const incomplete = {
@@ -763,7 +783,6 @@ describe("client module preparation", () => {
       options(
         value,
         {
-          state: "certified",
           templateSaveBuild: value.templateSaveBuild,
           enhancementBuild: missingProfile,
         },
@@ -771,21 +790,19 @@ describe("client module preparation", () => {
       ),
     );
 
-    assert.equal(prepared.state, "certified");
-    assert.equal(prepared.enhancementBuild, null);
-    assert.equal(prepared.failure?.stage, "enhancement");
-    assert.match(String(prepared.failure?.error), /no certified output/);
+    assert.deepEqual(prepared.gameFileSaving, { status: "available" });
+    assert.equal(prepared.enhancementBuild, missingProfile);
+    assert.equal(prepared.failure, null);
+    assert.deepEqual(prepared.effectiveCapabilities, CURSOR_ONLY);
     assert.equal(
       sha256(await readFile(prepared.wasmPath)),
-      value.templateSaveBuild.outputSha256,
+      complete.cursor,
     );
-    await assertMissing(value.enhancementCacheRoot);
   });
 
   it("replaces the cache when capabilities change but hooks do not", async () => {
     const value = await fixture();
     const certification: ClientCertification = {
-      state: "certified",
       templateSaveBuild: value.templateSaveBuild,
       enhancementBuild: value.enhancementBuild,
     };

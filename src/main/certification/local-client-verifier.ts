@@ -87,7 +87,7 @@ function deriveEnhancementBuild(
   transformEnhancementWasm(
     templateOutput,
     build,
-    ENHANCEMENT_CAPABILITY_PROFILES.cursorToolbox,
+    ENHANCEMENT_CAPABILITY_PROFILES.cursorParty,
   );
   return build;
 }

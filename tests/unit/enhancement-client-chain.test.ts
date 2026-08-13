@@ -13,17 +13,11 @@ import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save
 const NO_CAPABILITIES = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
-  toolbox: false,
-  commands: false,
-});
-const UNSUPPORTED_ALL_CAPABILITIES = Object.freeze({
-  nativeCursor: true,
-  targetObservation: true,
-  toolbox: true,
+  partyObservation: false,
   commands: false,
 });
 describe("Enhancement client chain", () => {
-  it("has exactly six source-pinned executable capability profiles", () => {
+  it("has all 11 source-pinned executable capability profiles", () => {
     // Adding a profile costs an
     // `outputSha256` entry and a review; this list is where that becomes
     // unavoidable rather than incidental.
@@ -31,15 +25,25 @@ describe("Enhancement client chain", () => {
       "cursor",
       "target",
       "cursorTarget",
-      "cursorToolbox",
-      "cursorToolboxCommands",
-      "cursorTargetToolboxCommands",
+      "party",
+      "cursorParty",
+      "targetParty",
+      "cursorTargetParty",
+      "partyCommands",
+      "cursorPartyCommands",
+      "targetPartyCommands",
+      "cursorTargetPartyCommands",
     ]);
     assert.deepEqual(
       Object.entries(ENHANCEMENT_CAPABILITY_PROFILES)
         .filter(([, capabilities]) => capabilities.commands)
         .map(([profile]) => profile),
-      ["cursorToolboxCommands", "cursorTargetToolboxCommands"],
+      [
+        "partyCommands",
+        "cursorPartyCommands",
+        "targetPartyCommands",
+        "cursorTargetPartyCommands",
+      ],
     );
     for (const [profile, capabilities] of Object.entries(
       ENHANCEMENT_CAPABILITY_PROFILES,
@@ -52,10 +56,8 @@ describe("Enhancement client chain", () => {
     }
     for (const unsupported of [
       NO_CAPABILITIES,
-      UNSUPPORTED_ALL_CAPABILITIES,
-      { nativeCursor: false, targetObservation: false, toolbox: true, commands: false },
       // Commands without the Toolbox that would drive them are refused.
-      { nativeCursor: false, targetObservation: false, toolbox: false, commands: true },
+      { nativeCursor: false, targetObservation: false, partyObservation: false, commands: true },
     ]) {
       assert.equal(enhancementCapabilityProfile(unsupported), null);
     }

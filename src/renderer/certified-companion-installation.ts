@@ -127,7 +127,7 @@ export async function installCertifiedCompanion(
   // launches always receive `none`; developer observers request their scalar
   // projection explicitly without implicitly mounting the Toolbox overlay.
   const capabilities = enhancementCapabilitiesFor(selection, program);
-  const foundation = capabilities.toolbox;
+  const foundation = capabilities.partyObservation;
   const observeState = capabilities.targetObservation;
   const publishObserverState = program === "target-observer";
   const featureFlags =

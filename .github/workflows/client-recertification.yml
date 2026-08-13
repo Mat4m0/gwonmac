@@ -86,21 +86,6 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-      # The recorded generation is by definition the certified one, so an open
-      # issue naming it has been answered by whatever merged that record.
-      - name: Close tracking issues the certified generation resolves
-        if: steps.published.outputs.changed == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RECORDED: ${{ steps.published.outputs.recorded }}
-        run: |
-          gh issue list --state open --label client-recertification \
-            --search "${RECORDED:0:12} in:title" --json number --jq '.[].number' \
-            | while read -r number; do
-                gh issue close "$number" \
-                  --comment "The published client generation is certified on main."
-              done
-
   # On change only, and on macOS because this is where the application is built
   # and certified. It downloads the JSPI code artifacts — never Gw.snapshot —
   # verifies every byte against the manifest chunk hash that named it, and runs
@@ -195,25 +180,22 @@ jobs:
           GW_CLIENT_WASM: ${{ steps.official.outputs.wasm }}
         run: pnpm test:client-artifact 2>&1 | tee "$EVIDENCE/client-artifact.txt"
 
-      - name: Record the reviewed client generation
-        if: steps.derive.outputs.outcome == 'ready'
-        env:
-          # The digest the download above produced, never a fresh fetch:
-          # ArenaNet may republish inside this job's window, and a refetched
-          # value would record a generation whose bytes nothing here certified —
-          # after which the detector reads published == recorded and hides the
-          # new build until the patch after it.
-          FINGERPRINT: ${{ steps.official.outputs.fingerprint }}
-        run: pnpm client:official --record "$FINGERPRINT"
-
       # Scoped by path, so the branch can only ever carry the authoring table
       # and the recorded generation. Nothing else this job wrote can travel.
       - name: Collect the authoring change
         if: always()
+        env:
+          WASM: ${{ steps.official.outputs.wasm }}
         run: |
           mkdir -p "$EVIDENCE"
           git diff -- src/main/certification/template-save-compat.ts \
-            certificates/certified-client.json > "$EVIDENCE/tables.patch"
+            > "$EVIDENCE/tables.patch"
+          # The same comparison engine and report format are used by operators
+          # locally. It writes carry-forward.json and carry-forward.md; CI does
+          # not maintain its own classification rules.
+          node build/tools/certification.js compare "$WASM" "$EVIDENCE"
+          test -s "$EVIDENCE/carry-forward.json"
+          test -s "$EVIDENCE/carry-forward.md"
           echo "$GITHUB_SHA" > "$EVIDENCE/SOURCE_COMMIT.txt"
 
       # Evidence only. The client artifacts stay in the runner's temporary
@@ -237,7 +219,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      actions: read
+      actions: write
       contents: write
       issues: write
       pull-requests: write
@@ -305,13 +287,42 @@ jobs:
           SHORT: ${{ steps.branch.outputs.short }}
           SUMMARY: ${{ needs.derive.outputs.summary }}
         run: |
+          pm=pnpm
           {
             echo "Derived automatically from the client ArenaNet is publishing now."
             echo
             echo "- published WASM: \`$BUILD\`"
             echo "- derivation: $SUMMARY"
             echo "- evidence: $RUN_URL"
-            echo "- Tools review evidence: `enhancement.json` in that run artifact"
+            echo "- comparison: `carry-forward.md` and `carry-forward.json` in that run artifact"
+            echo
+            cat evidence/carry-forward.md
+            echo
+            echo "## Operator commands"
+            echo
+            echo '```sh'
+            echo "$pm certification recertify <path-to-Gw.jspi.wasm>"
+            echo "$pm certification double-click <path-to-Gw.jspi.wasm>"
+            echo "$pm memory:qualify:4gb <path-to-Gw.jspi.js> <path-to-Gw.jspi.wasm>"
+            echo "$pm verify"
+            echo '```'
+            echo
+            echo "## Live checks"
+            echo
+            echo "- [ ] Cursor input"
+            echo "- [ ] Target distance"
+            echo "- [ ] Party changes and map transition"
+            echo "- [ ] Apply team in a safe test location"
+            echo "- [ ] Record any intentionally unavailable capability and why"
+            echo
+            echo "## Release"
+            echo
+            echo "- [ ] Final reviewed commit records the generation"
+            echo "- [ ] Required macOS verification passed for the exact head SHA"
+            echo "- [ ] Signed Stable release published"
+            echo "- [ ] Start, certification, merge, and release timestamps recorded below"
+            echo
+            echo "Started: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
             echo
             echo "Nothing here is certified until this pull request's verification"
             echo "gate passes. The Enhancement table is deliberately untouched: its"
@@ -320,16 +331,15 @@ jobs:
             echo "Follow the patch-day chain in `docs/enhancement-development.md`;"
             echo "the downstream double-click and memory tables are certified only"
             echo "after the complete exact-build Enhancement entry is reviewed."
-            echo
-            echo "**Close and reopen this pull request to start that gate.** GitHub"
-            echo "runs no workflow for a pull request opened by the run's own token,"
-            echo "and the alternative — a personal access token — is a secret this"
-            echo "workflow refuses to hold for a job that only ever proposes."
           } > proposal.md
           if gh pr create --base main --head "$BRANCH" \
             --title "Certify the ArenaNet client generation $SHORT" \
             --body-file proposal.md; then
             echo "opened=true" >> "$GITHUB_OUTPUT"
+            number="$(gh pr view "$BRANCH" --json number --jq .number)"
+            head="$(gh api "repos/$GITHUB_REPOSITORY/commits/$BRANCH" --jq .sha)"
+            gh workflow run pr-package.yml --ref main \
+              -f checkout_ref="$head" -f pr_number="$number"
           else
             echo "opened=false" >> "$GITHUB_OUTPUT"
           fi
@@ -345,6 +355,7 @@ jobs:
           SHORT: ${{ steps.branch.outputs.short }}
           SUMMARY: ${{ needs.derive.outputs.summary }}
         run: |
+          pm=pnpm
           gh label create client-recertification --force --color 1d76db \
             --description "An ArenaNet client build this repository has not certified"
           if [ "$OUTCOME" = "ready" ]; then
@@ -369,9 +380,33 @@ jobs:
             echo "- evidence: $RUN_URL"
             echo "- Tools review evidence: `enhancement.json` in that run artifact"
             echo
+            cat evidence/carry-forward.md
+            echo
+            echo "## Operator commands"
+            echo
+            echo '```sh'
+            echo "$pm certification recertify <path-to-Gw.jspi.wasm>"
+            echo "$pm certification double-click <path-to-Gw.jspi.wasm>"
+            echo "$pm memory:qualify:4gb <path-to-Gw.jspi.js> <path-to-Gw.jspi.wasm>"
+            echo "$pm verify"
+            echo '```'
+            echo
+            echo "## Live and release checks"
+            echo
+            echo "- [ ] Cursor input"
+            echo "- [ ] Target distance"
+            echo "- [ ] Party changes and map transition"
+            echo "- [ ] Apply team in a safe test location"
+            echo "- [ ] Record any intentionally unavailable capability and why"
+            echo "- [ ] Final reviewed commit records the generation"
+            echo "- [ ] Exact-head macOS verification passed"
+            echo "- [ ] Signed Stable release published"
+            echo
+            echo "Started: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo
             echo "\`internal/upstream/recertify.md\` owns the investigation when the"
-            echo "structural proof refuses. This issue closes itself once the"
-            echo "recorded generation on main is the published one."
+            echo "structural proof refuses. Keep this issue open until every intended"
+            echo "capability is restored, or record why one remains unavailable."
           } > tracking.md
           gh issue create --label client-recertification \
-            --title "$title" --body-file tracking.md
+            --assignee mat4m0 --title "$title" --body-file tracking.md

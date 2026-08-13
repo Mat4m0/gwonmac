@@ -500,34 +500,31 @@ export type SettingsPane =
   | "updates"
   | "advanced";
 
-/**
- * Which of the three client-certification states this session is in. The two
- * WASM transforms are keyed by different hashes, so certification can succeed
- * for template save/load and fail for the Enhancement tools:
- *
- * - `certified`      templates, screenshots and chat logs work; Enhancement may load
- * - `template-only`  those three work; Enhancement may not load
- * - `uncertified`    ArenaNet's untouched module is served; nothing is repaired
- *
- * `src/main/certification/client-certification.ts` is the only producer.
- */
-export type ClientCompatibilityState =
-  | "certified"
-  | "template-only"
-  | "uncertified";
+/** Why a selected or required feature is absent from the served session. */
+export type UnavailableReason = "game-update" | "preparation-failed";
+
+export type RequiredFeatureStatus =
+  | Readonly<{ status: "available" }>
+  | Readonly<{ status: "unavailable"; reason: UnavailableReason }>;
+
+export type OptionalFeatureStatus =
+  | RequiredFeatureStatus
+  | Readonly<{ status: "off" }>;
 
 export interface ClientCompatibility {
-  state: ClientCompatibilityState;
   /**
    * sha256 of ArenaNet's official module for this session. It names the build,
    * so a notice can be acknowledged per build instead of per launch.
    */
   clientSha256: string;
-  /**
-   * Whether the module selected for this session contains the certified
-   * Enhancement transform. This is effective runtime state, not build support.
-   */
-  enhancementActive: boolean;
+  /** Main's effective state from the exact module served for this session. */
+  features: Readonly<{
+    gameFileSaving: RequiredFeatureStatus;
+    nativeCursor: OptionalFeatureStatus;
+    targetObservation: OptionalFeatureStatus;
+    partyObservation: OptionalFeatureStatus;
+    teamApply: OptionalFeatureStatus;
+  }>;
 }
 
 /**

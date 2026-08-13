@@ -214,10 +214,8 @@ test.describe("live client", () => {
         // the alert: run `pnpm certification template`, then recertify the Enhancement
         // build. `template-only` means saving works and selected Enhancement tools
         // do not.
-        expect(
-          compatibility.state,
-          `client module ${compatibility.clientSha256} is not a certified build`,
-        ).toBe("certified");
+        expect(compatibility.features.gameFileSaving.status).toBe("available");
+        expect(compatibility.features.nativeCursor.status).toBe("available");
         expect(identity.certificationGauge).toBe("certified");
         // Emitted into every diagnostics export; a false here means templates, build
         // screenshots and chat logs are broken for every player on this build.

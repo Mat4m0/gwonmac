@@ -22,11 +22,13 @@ import {
   enhancementCapabilityProfile,
   enhancementHooksFor,
   ENHANCEMENT_TRANSFORM_ABI,
+  validEnhancementCapabilities,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
 import {
   findEnhancementBuild,
   enhancementConfigWords,
+  supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import {
@@ -90,11 +92,11 @@ function exactCapabilities(value: unknown): EnhancementCapabilities | null {
     keys.length !== 4
     || !Object.hasOwn(record, "nativeCursor")
     || !Object.hasOwn(record, "targetObservation")
-    || !Object.hasOwn(record, "toolbox")
+    || !Object.hasOwn(record, "partyObservation")
     || !Object.hasOwn(record, "commands")
     || typeof record.nativeCursor !== "boolean"
     || typeof record.targetObservation !== "boolean"
-    || typeof record.toolbox !== "boolean"
+    || typeof record.partyObservation !== "boolean"
     || typeof record.commands !== "boolean"
   ) {
     return null;
@@ -102,7 +104,7 @@ function exactCapabilities(value: unknown): EnhancementCapabilities | null {
   return Object.freeze({
     nativeCursor: record.nativeCursor,
     targetObservation: record.targetObservation,
-    toolbox: record.toolbox,
+    partyObservation: record.partyObservation,
     commands: record.commands,
   });
 }
@@ -328,6 +330,8 @@ function buildManifestSection(
   capabilities: EnhancementCapabilities,
 ): Section {
   const selectedHooks = enhancementHooksFor(capabilities);
+  const cursorEvent = build.cursorEvent;
+  const partyObservation = build.partyObservation;
   const configWords = enhancementConfigWords(build, capabilities);
   const json = new TextEncoder().encode(
     JSON.stringify({
@@ -346,26 +350,26 @@ function buildManifestSection(
           : null,
         cursor: selectedHooks.cursor
           ? {
-              functionIndex: build.cursorEvent.functionIndex,
-              params: build.cursorEvent.params,
-              results: build.cursorEvent.results,
-              existingTableSlot: build.cursorEvent.tableSlot,
+              functionIndex: cursorEvent!.functionIndex,
+              params: cursorEvent!.params,
+              results: cursorEvent!.results,
+              existingTableSlot: cursorEvent!.tableSlot,
             }
           : null,
         ui: selectedHooks.ui
           ? {
-              functionIndex: build.uiDispatcher.functionIndex,
-              params: build.uiDispatcher.params,
-              results: build.uiDispatcher.results,
+              functionIndex: partyObservation!.functionIndex,
+              params: partyObservation!.params,
+              results: partyObservation!.results,
             }
           : null,
       },
       messages: selectedHooks.ui
           ? {
-            playerChat: build.uiDispatcher.playerChatMessage,
-            hideHeroPanel: build.uiDispatcher.hideHeroPanelMessage,
-            showHeroPanel: build.uiDispatcher.showHeroPanelMessage,
-            partyDirty: build.uiDispatcher.partyDirtyMessages,
+            playerChat: partyObservation!.playerChatMessage,
+            hideHeroPanel: partyObservation!.hideHeroPanelMessage,
+            showHeroPanel: partyObservation!.showHeroPanelMessage,
+            partyDirty: partyObservation!.partyDirtyMessages,
           }
         : null,
       configWords,
@@ -492,9 +496,24 @@ export function transformEnhancementWasm(
 ): Uint8Array {
   const capabilities = exactCapabilities(requestedCapabilities)
     ?? fail("capability selection is invalid");
-  if (enhancementCapabilityProfile(capabilities) === null) {
+  if (
+    !validEnhancementCapabilities(capabilities)
+    || enhancementCapabilityProfile(capabilities) === null
+  ) {
     fail("capability profile is not certified");
   }
+  const supported = supportedEnhancementCapabilities(build);
+  if (
+    (capabilities.nativeCursor && !supported.nativeCursor)
+    || (capabilities.targetObservation && !supported.targetObservation)
+    || (capabilities.partyObservation && !supported.partyObservation)
+    || (capabilities.commands && !supported.commands)
+  ) {
+    fail("capability facts are not certified for this build");
+  }
+  const cursorEvent = build.cursorEvent!;
+  const partyObservation = build.partyObservation!;
+  const teamApply = build.teamApply!;
   const selectedHooks = enhancementHooksFor(capabilities);
   const hash = createHash("sha256").update(input).digest("hex");
   if (hash !== build.sha256) fail(`input hash ${hash} is unsupported`);
@@ -543,9 +562,9 @@ export function transformEnhancementWasm(
     selected.push({
       ...resolveHook(
         "cursor",
-        build.cursorEvent.functionIndex,
-        build.cursorEvent.params,
-        build.cursorEvent.results,
+        cursorEvent.functionIndex,
+        cursorEvent.params,
+        cursorEvent.results,
       ),
       dispatchKind: DISPATCH_CURSOR,
     });
@@ -554,9 +573,9 @@ export function transformEnhancementWasm(
     selected.push({
       ...resolveHook(
         "UI dispatcher",
-        build.uiDispatcher.functionIndex,
-        build.uiDispatcher.params,
-        build.uiDispatcher.results,
+        partyObservation.functionIndex,
+        partyObservation.params,
+        partyObservation.results,
       ),
       dispatchKind: DISPATCH_UI,
     });
@@ -571,7 +590,7 @@ export function transformEnhancementWasm(
   // this whole surface was reshaped around -- lands on a different body and is
   // refused here rather than dispatched to.
   const commands = capabilities.commands
-    ? build.commands.entries.map((entry) => {
+    ? teamApply.entries.map((entry) => {
         const localIndex = entry.functionIndex - importCount;
         if (localIndex < 0 || localIndex >= bodies.length) {
           fail(`command opcode ${entry.opcode} is out of range`);
@@ -632,27 +651,27 @@ export function transformEnhancementWasm(
   const packetSender = capabilities.commands
     ? resolveHook(
         "traced packet sender",
-        build.commands.professionTrace.sender.functionIndex,
-        build.commands.professionTrace.sender.params,
-        build.commands.professionTrace.sender.results,
+        teamApply.professionTrace.sender.functionIndex,
+        teamApply.professionTrace.sender.params,
+        teamApply.professionTrace.sender.results,
       )
     : null;
   if (packetSender) {
     const body = createHash("sha256")
       .update(bodies[packetSender.localIndex]!)
       .digest("hex");
-    if (body !== build.commands.professionTrace.sender.bodySha256) {
+    if (body !== teamApply.professionTrace.sender.bodySha256) {
       fail(
         `traced packet sender resolves to function `
-        + `${build.commands.professionTrace.sender.functionIndex}, whose body is `
+        + `${teamApply.professionTrace.sender.functionIndex}, whose body is `
         + `${body} and not the certified `
-        + `${build.commands.professionTrace.sender.bodySha256}`,
+        + `${teamApply.professionTrace.sender.bodySha256}`,
       );
     }
     if (
       selected.some((hook) => hook.localIndex === packetSender.localIndex)
       || commands.some((entry) => entry.functionIndex
-        === build.commands.professionTrace.sender.functionIndex)
+        === teamApply.professionTrace.sender.functionIndex)
     ) {
       fail("traced packet sender must be distinct from hooks and commands");
     }
@@ -660,25 +679,25 @@ export function transformEnhancementWasm(
   const commandDrainBoundary = capabilities.commands
     ? resolveHook(
         "command drain boundary",
-        build.commands.drain.functionIndex,
-        build.commands.drain.params,
-        build.commands.drain.results,
+        teamApply.drain.functionIndex,
+        teamApply.drain.params,
+        teamApply.drain.results,
       )
     : null;
   if (commandDrainBoundary) {
     const body = createHash("sha256")
       .update(bodies[commandDrainBoundary.localIndex]!)
       .digest("hex");
-    if (body !== build.commands.drain.bodySha256) {
+    if (body !== teamApply.drain.bodySha256) {
       fail(
         `command drain boundary resolves to function `
-        + `${build.commands.drain.functionIndex}, whose body is ${body} and not `
-        + `the certified ${build.commands.drain.bodySha256}`,
+        + `${teamApply.drain.functionIndex}, whose body is ${body} and not `
+        + `the certified ${teamApply.drain.bodySha256}`,
       );
     }
     if (
       selected.some((hook) => hook.localIndex === commandDrainBoundary.localIndex)
-      || commands.some((entry) => entry.functionIndex === build.commands.drain.functionIndex)
+      || commands.some((entry) => entry.functionIndex === teamApply.drain.functionIndex)
       || packetSender?.localIndex === commandDrainBoundary.localIndex
     ) {
       fail("command drain boundary must be distinct from hooks, commands, and sender");
@@ -703,23 +722,23 @@ export function transformEnhancementWasm(
     : null;
   if (selectedHooks.cursor) {
     if (
-      tableSlots?.get(build.cursorEvent.tableSlot)
-      !== build.cursorEvent.functionIndex
+      tableSlots?.get(cursorEvent.tableSlot)
+      !== cursorEvent.functionIndex
     ) {
       fail(
-        `cursor table slot ${build.cursorEvent.tableSlot} does not map to ` +
-          `function ${build.cursorEvent.functionIndex}`,
+        `cursor table slot ${cursorEvent.tableSlot} does not map to ` +
+          `function ${cursorEvent.functionIndex}`,
       );
     }
   }
   if (
     commandDrainBoundary
-    && tableSlots?.get(build.commands.drain.tableSlot)
-      !== build.commands.drain.functionIndex
+    && tableSlots?.get(teamApply.drain.tableSlot)
+      !== teamApply.drain.functionIndex
   ) {
     fail(
-      `command drain table slot ${build.commands.drain.tableSlot} does not map `
-      + `to function ${build.commands.drain.functionIndex}`,
+      `command drain table slot ${teamApply.drain.tableSlot} does not map `
+      + `to function ${teamApply.drain.functionIndex}`,
     );
   }
 
@@ -729,8 +748,8 @@ export function transformEnhancementWasm(
   const addedExportNames = capabilities.commands
     ? [
         ENHANCEMENT_HOOK_EXPORT,
-        build.commands.thunkExport,
-        build.commands.professionTrace.readerExport,
+        teamApply.thunkExport,
+        teamApply.professionTrace.readerExport,
       ]
     : [ENHANCEMENT_HOOK_EXPORT];
   for (const name of addedExportNames) {
@@ -876,10 +895,10 @@ export function transformEnhancementWasm(
     uleb(hookGlobalIndex),
     ...(capabilities.commands
       ? [
-          encodeName(build.commands.thunkExport),
+          encodeName(teamApply.thunkExport),
           Uint8Array.of(0x00),
           uleb(commandFunctionIndex),
-          encodeName(build.commands.professionTrace.readerExport),
+          encodeName(teamApply.professionTrace.readerExport),
           Uint8Array.of(0x00),
           uleb(professionTraceReaderIndex),
         ]

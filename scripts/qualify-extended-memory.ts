@@ -13,7 +13,7 @@ import { join } from "node:path";
 import {
   EXTENDED_MEMORY_JS_BUILD,
   EXTENDED_MEMORY_MAX_BYTES,
-  EXTENDED_MEMORY_WASM_BUILDS,
+  findExtendedMemoryWasmBuild,
   prepareExtendedMemoryArtifacts,
   rewriteExtendedMemoryJs,
   rewriteExtendedMemoryWasm,
@@ -106,10 +106,11 @@ try {
 
 const variants = [];
 let allocatorModule: Uint8Array | null = null;
-for (const build of EXTENDED_MEMORY_WASM_BUILDS) {
-  const predecessor = predecessors.get(build.profile);
-  if (!predecessor || sha256(predecessor) !== build.inputSha256) {
-    throw new Error(`${build.profile} predecessor does not match certification`);
+let offOutputSha256: string | null = null;
+for (const [profile, predecessor] of predecessors) {
+  const build = findExtendedMemoryWasmBuild(sha256(predecessor));
+  if (!build || build.profile !== profile) {
+    throw new Error(`${profile} predecessor does not match certification`);
   }
   const output = rewriteExtendedMemoryWasm(predecessor);
   if (
@@ -118,14 +119,17 @@ for (const build of EXTENDED_MEMORY_WASM_BUILDS) {
   ) {
     throw new Error(`${build.profile} output does not match certification`);
   }
-  if (build.profile === "cursorToolbox") allocatorModule = output;
+  if (build.profile === "off") offOutputSha256 = build.outputSha256;
+  if (build.profile === "cursorParty") allocatorModule = output;
   variants.push({
     profile: build.profile,
     inputSha256: build.inputSha256,
     outputSha256: build.outputSha256,
   });
 }
-if (!allocatorModule) throw new Error("allocator qualification variant is missing");
+if (!allocatorModule || !offOutputSha256) {
+  throw new Error("required qualification variant is missing");
+}
 
 const selectionScratch = await mkdtemp(join(tmpdir(), "gwonmac-4gb-selection-"));
 try {
@@ -145,7 +149,7 @@ try {
     enhancementCapabilities: {
       nativeCursor: false,
       targetObservation: false,
-      toolbox: false,
+      partyObservation: false,
       commands: false,
     },
     compatibilityCacheRoot: join(selectionScratch, "compatibility"),
@@ -159,7 +163,7 @@ try {
     || selected.extendedMemory.profile !== "off"
     || sha256(await readFile(selected.jsPath)) !== EXTENDED_MEMORY_JS_BUILD.outputSha256
     || sha256(await readFile(selected.wasmPath))
-      !== EXTENDED_MEMORY_WASM_BUILDS[0]!.outputSha256
+      !== offOutputSha256
   ) throw new Error("production client selection did not publish the certified pair");
 } finally {
   await rm(selectionScratch, { recursive: true, force: true });

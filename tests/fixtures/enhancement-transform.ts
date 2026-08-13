@@ -15,49 +15,49 @@ import {
 export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
-  toolbox: true,
+  partyObservation: true,
   commands: false,
 });
 export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: true,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
-  toolbox: true,
+  partyObservation: true,
   commands: false,
 });
 export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
-  toolbox: true,
+  partyObservation: true,
   commands: true,
 });
 export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
-  toolbox: true,
+  partyObservation: true,
   commands: true,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
@@ -77,9 +77,14 @@ const PLACEHOLDER_OUTPUTS: EnhancementOutputHashes = Object.freeze({
   cursor: "0".repeat(64),
   target: "0".repeat(64),
   cursorTarget: "0".repeat(64),
-  cursorToolbox: "0".repeat(64),
-  cursorToolboxCommands: "0".repeat(64),
-  cursorTargetToolboxCommands: "0".repeat(64),
+  party: "0".repeat(64),
+  cursorParty: "0".repeat(64),
+  targetParty: "0".repeat(64),
+  cursorTargetParty: "0".repeat(64),
+  partyCommands: "0".repeat(64),
+  cursorPartyCommands: "0".repeat(64),
+  targetPartyCommands: "0".repeat(64),
+  cursorTargetPartyCommands: "0".repeat(64),
 });
 
 function uleb(value: number): number[] {
@@ -222,7 +227,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookParams: ["i32"],
     hookResults: [],
     tableSlot: 5,
-    commands: {
+    teamApply: {
       thunkExport: "enhancement_command",
       professionTrace: {
         readerExport: "enhancement_profession_trace",
@@ -280,7 +285,8 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       tableSlot: 1,
       producerFunctions: [4, 4],
     },
-    uiDispatcher: {
+    targetObservation: { certified: true },
+    partyObservation: {
       functionIndex: 5,
       params: ["i32", "i32", "i32"],
       results: [],

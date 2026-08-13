@@ -26,6 +26,7 @@ import {
   type DownloadActivity,
   type DownloadFailure,
   type ExtendedMemoryRuntimeStatus,
+  type OptionalFeatureStatus,
   type DownloadProgress,
   type FullDownloadOutcome,
   type NoticeCode,
@@ -87,6 +88,7 @@ import {
 import type { GamePaths } from "./paths.js";
 import { verifyClientLocally } from "./certification/local-client-verifier-host.js";
 import { extendedMemoryRuntimeStatus } from "./extended-memory-runtime.js";
+import { supportedEnhancementCapabilities } from "./certification/enhancement-builds.js";
 
 export type { ActiveClient } from "./active-client.js";
 
@@ -97,6 +99,22 @@ export type { ActiveClient } from "./active-client.js";
  */
 function digestOrNull(value: string | null | undefined): Digest | null {
   return typeof value === "string" && isDigest(value) ? value : null;
+}
+
+function optionalFeatureStatus(
+  requested: boolean,
+  effective: boolean,
+  supported: boolean,
+  preparationFailed: boolean,
+): OptionalFeatureStatus {
+  if (!requested) return { status: "off" };
+  if (effective) return { status: "available" };
+  return {
+    status: "unavailable",
+    reason: supported && preparationFailed
+      ? "preparation-failed"
+      : "game-update",
+  };
 }
 
 interface ClientRuntimeOptions {
@@ -252,7 +270,7 @@ export class ClientRuntime {
     }
 
     let certification = certifyClientBuild(officialSha256);
-    if (certification.state === "uncertified") {
+    if (certification.templateSaveBuild === null) {
       const local = await verifyClientLocally({
         officialWasmPath: officialWasm,
         officialSha256,
@@ -261,7 +279,11 @@ export class ClientRuntime {
         certification = certificationFromLocalVerification(local);
         logEvent({
           k: "wasm.localVerificationCompleted",
-          certification: certification.state,
+          certification: certification.templateSaveBuild === null
+            ? "uncertified"
+            : certification.enhancementBuild === null
+              ? "template-only"
+              : "certified",
         });
       } else {
         logEvent({ k: "wasm.localVerificationUnavailable" });
@@ -279,14 +301,54 @@ export class ClientRuntime {
       extendedMemoryCacheRoot: this.options.paths.extendedMemory,
       extendedMemoryEnabled: this.options.extendedMemoryEnabled,
     });
-    const state = prepared.state;
+    const preparationFailed = prepared.failure?.stage === "enhancement";
+    const supported = prepared.enhancementBuild
+      ? supportedEnhancementCapabilities(prepared.enhancementBuild)
+      : {
+          nativeCursor: false,
+          targetObservation: false,
+          partyObservation: false,
+          commands: false,
+        };
+    const requested = prepared.requestedCapabilities;
+    const effective = prepared.effectiveCapabilities;
     const compatibility: ClientCompatibility = {
-      state,
       clientSha256: officialSha256,
-      enhancementActive: prepared.enhancementBuild !== null,
+      features: {
+        gameFileSaving: prepared.gameFileSaving,
+        nativeCursor: optionalFeatureStatus(
+          requested.nativeCursor,
+          effective.nativeCursor,
+          supported.nativeCursor,
+          preparationFailed,
+        ),
+        targetObservation: optionalFeatureStatus(
+          requested.targetObservation,
+          effective.targetObservation,
+          supported.targetObservation,
+          preparationFailed,
+        ),
+        partyObservation: optionalFeatureStatus(
+          requested.partyObservation,
+          effective.partyObservation,
+          supported.partyObservation,
+          preparationFailed,
+        ),
+        teamApply: optionalFeatureStatus(
+          requested.commands,
+          effective.commands,
+          supported.commands,
+          preparationFailed,
+        ),
+      },
     };
+    const state = prepared.gameFileSaving.status === "unavailable"
+      ? "uncertified"
+      : prepared.enhancementBuild === null
+        ? "template-only"
+        : "certified";
     gauge("client.buildCertification", state);
-    gauge("wasm.templateSaveCompatible", state !== "uncertified");
+    gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");
 
     if (prepared.failure?.stage === "template-save") {
       logEvent({ k: "wasm.templateSavePrepareFailed",
@@ -317,7 +379,7 @@ export class ClientRuntime {
       });
     } else if (
       enhancementCapabilitiesRequested(this.options.enhancementCapabilities)
-      && state !== "certified"
+      && !enhancementCapabilitiesRequested(prepared.effectiveCapabilities)
     ) {
       logEvent({ k: "enhancement.uncertifiedClientBlocked" });
     }

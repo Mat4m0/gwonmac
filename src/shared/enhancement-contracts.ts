@@ -21,7 +21,7 @@ export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
 export type EnhancementCapabilities = Readonly<{
   nativeCursor: boolean;
   targetObservation: boolean;
-  toolbox: boolean;
+  partyObservation: boolean;
   commands: boolean;
 }>;
 
@@ -29,37 +29,67 @@ export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
   cursor: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
-    toolbox: false,
+    partyObservation: false,
     commands: false,
   }),
   target: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
-    toolbox: false,
+    partyObservation: false,
     commands: false,
   }),
   cursorTarget: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
-    toolbox: false,
+    partyObservation: false,
     commands: false,
   }),
-  cursorToolbox: Object.freeze({
-    nativeCursor: true,
+  party: Object.freeze({
+    nativeCursor: false,
     targetObservation: false,
-    toolbox: true,
+    partyObservation: true,
     commands: false,
   }),
-  cursorToolboxCommands: Object.freeze({
+  cursorParty: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
-    toolbox: true,
-    commands: true,
+    partyObservation: true,
+    commands: false,
   }),
-  cursorTargetToolboxCommands: Object.freeze({
+  targetParty: Object.freeze({
+    nativeCursor: false,
+    targetObservation: true,
+    partyObservation: true,
+    commands: false,
+  }),
+  cursorTargetParty: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
-    toolbox: true,
+    partyObservation: true,
+    commands: false,
+  }),
+  partyCommands: Object.freeze({
+    nativeCursor: false,
+    targetObservation: false,
+    partyObservation: true,
+    commands: true,
+  }),
+  cursorPartyCommands: Object.freeze({
+    nativeCursor: true,
+    targetObservation: false,
+    partyObservation: true,
+    commands: true,
+  }),
+  targetPartyCommands: Object.freeze({
+    nativeCursor: false,
+    targetObservation: true,
+    partyObservation: true,
+    commands: true,
+  }),
+  cursorTargetPartyCommands: Object.freeze({
+    nativeCursor: true,
+    targetObservation: true,
+    partyObservation: true,
     commands: true,
   }),
 } as const satisfies Readonly<Record<string, EnhancementCapabilities>>);
@@ -70,7 +100,7 @@ export type EnhancementCapabilityProfile =
 const NONE: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 
@@ -83,7 +113,7 @@ export function enhancementCapabilityProfile(
     if (
       candidate.nativeCursor === capabilities.nativeCursor
       && candidate.targetObservation === capabilities.targetObservation
-      && candidate.toolbox === capabilities.toolbox
+      && candidate.partyObservation === capabilities.partyObservation
       && candidate.commands === capabilities.commands
     ) return profile;
   }
@@ -99,7 +129,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 25;
+export const ENHANCEMENT_TRANSFORM_ABI = 26;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
@@ -110,11 +140,11 @@ export function enhancementConfigWordActive(
   }
   const activation = ENHANCEMENT_CONFIG_FIELDS[index]?.activation;
   if (activation === "target") return capabilities.targetObservation;
-  if (activation === "target-or-toolbox") {
-    return capabilities.targetObservation || capabilities.toolbox;
+  if (activation === "target-or-party") {
+    return capabilities.targetObservation || capabilities.partyObservation;
   }
   if (activation === "cursor") return capabilities.nativeCursor;
-  return activation === "toolbox" && capabilities.toolbox;
+  return activation === "party" && capabilities.partyObservation;
 }
 
 export type EnhancementHooks = Readonly<{
@@ -130,14 +160,14 @@ export function enhancementCapabilitiesFor(
   switch (program) {
     case "none":
       return selection.tools
-        ? ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetToolboxCommands
+        ? ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommands
         : selection.nativeCursor
           ? ENHANCEMENT_CAPABILITY_PROFILES.cursor
           : NONE;
     case "cursor-observer": return ENHANCEMENT_CAPABILITY_PROFILES.cursor;
     case "target-observer": return ENHANCEMENT_CAPABILITY_PROFILES.target;
-    case "toolbox-foundation": return ENHANCEMENT_CAPABILITY_PROFILES.cursorToolbox;
-    case "toolbox-commands": return ENHANCEMENT_CAPABILITY_PROFILES.cursorToolboxCommands;
+    case "toolbox-foundation": return ENHANCEMENT_CAPABILITY_PROFILES.party;
+    case "toolbox-commands": return ENHANCEMENT_CAPABILITY_PROFILES.partyCommands;
   }
 }
 
@@ -147,7 +177,7 @@ export function enhancementHooksFor(
   return Object.freeze({
     tick: enhancementCapabilitiesRequested(capabilities),
     cursor: capabilities.nativeCursor,
-    ui: capabilities.toolbox,
+    ui: capabilities.partyObservation,
   });
 }
 
@@ -156,6 +186,28 @@ export function enhancementCapabilitiesRequested(
 ): boolean {
   return capabilities.nativeCursor
     || capabilities.targetObservation
-    || capabilities.toolbox
+    || capabilities.partyObservation
     || capabilities.commands;
+}
+
+/** Commands consume live party identity, so no command-only profile is valid. */
+export function validEnhancementCapabilities(
+  capabilities: EnhancementCapabilities,
+): boolean {
+  return !capabilities.commands || capabilities.partyObservation;
+}
+
+/** The exact requested subset that one build's optional certificate groups support. */
+export function intersectEnhancementCapabilities(
+  requested: EnhancementCapabilities,
+  supported: EnhancementCapabilities,
+): EnhancementCapabilities {
+  const partyObservation = requested.partyObservation && supported.partyObservation;
+  return Object.freeze({
+    nativeCursor: requested.nativeCursor && supported.nativeCursor,
+    targetObservation:
+      requested.targetObservation && supported.targetObservation,
+    partyObservation,
+    commands: requested.commands && supported.commands && partyObservation,
+  });
 }

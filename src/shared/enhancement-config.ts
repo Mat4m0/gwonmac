@@ -82,11 +82,11 @@ export interface EnhancementLayout {
   worldCharacterSkills: number;
 }
 
-type Activation = "target" | "target-or-toolbox" | "cursor" | "toolbox";
+type Activation = "target" | "target-or-party" | "cursor" | "party";
 type ConfigField =
   | Readonly<{ source: "layout"; key: keyof EnhancementLayout; activation: Activation }>
-  | Readonly<{ source: "dispatcher"; key: "playerChatMessage" | "hideHeroPanelMessage" | "showHeroPanelMessage"; activation: "toolbox" }>
-  | Readonly<{ source: "party-dirty"; index: number; activation: "toolbox" }>;
+  | Readonly<{ source: "dispatcher"; key: "playerChatMessage" | "hideHeroPanelMessage" | "showHeroPanelMessage"; activation: "party" }>
+  | Readonly<{ source: "party-dirty"; index: number; activation: "party" }>;
 
 const layout = (
   activation: Activation,
@@ -94,16 +94,16 @@ const layout = (
 ): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, activation }));
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
-  ...layout("target-or-toolbox", "contextRoot"),
+  ...layout("target-or-party", "contextRoot"),
   ...layout("target", "agentArray", "manualTargetAgentId", "automaticTargetAgentId"),
-  ...layout("target-or-toolbox", "gameContextSlot", "characterContext", "mapId", "isExplorable", "currentMapId", "currentInstanceType", "playerNumber"),
+  ...layout("target-or-party", "gameContextSlot", "characterContext", "mapId", "isExplorable", "currentMapId", "currentInstanceType", "playerNumber"),
   ...layout("target", "agentId", "agentX", "agentY", "agentType", "agentPlayerNumber", "agentModelType"),
   ...layout("cursor", "cursorActiveArt", "cursorSoftwareModel", "cursorShowCount", "cursorColorBuffer", "cursorArtHotspot", "cursorArtTexture", "cursorHandleKey", "cursorHandleObject", "cursorViewTexture", "cursorTextureType", "cursorTextureWidth", "cursorTextureHeight"),
-  ...layout("toolbox", "partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "accountContext", "accountUnlockedSkills", "worldContext", "worldHeroFlags", "heroFlagStride", "flagHeroId", "flagAgentId", "flagBehavior", "worldHeroInfo", "heroInfoStride", "infoHeroId", "infoAgentId", "infoLevel", "infoPrimary", "infoSecondary", "infoAppearanceBitmap", "worldSkillbars", "skillbarStride", "skillbarAgentId", "skillbarSkills", "skillSlotStride", "skillSlotId", "skillbarDisabled", "worldAttributes", "attributeStride", "attributeAgentId", "attributeEntries", "attributeEntryStride", "attributeEntryId", "attributeEntryRank", "areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags", "worldProfessionStates", "professionStateStride", "worldCharacterSkills"),
-  { source: "dispatcher", key: "playerChatMessage", activation: "toolbox" },
-  { source: "dispatcher", key: "hideHeroPanelMessage", activation: "toolbox" },
-  { source: "dispatcher", key: "showHeroPanelMessage", activation: "toolbox" },
-  ...Array.from({ length: 10 }, (_, index): ConfigField => ({ source: "party-dirty", index, activation: "toolbox" })),
+  ...layout("party", "partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "accountContext", "accountUnlockedSkills", "worldContext", "worldHeroFlags", "heroFlagStride", "flagHeroId", "flagAgentId", "flagBehavior", "worldHeroInfo", "heroInfoStride", "infoHeroId", "infoAgentId", "infoLevel", "infoPrimary", "infoSecondary", "infoAppearanceBitmap", "worldSkillbars", "skillbarStride", "skillbarAgentId", "skillbarSkills", "skillSlotStride", "skillSlotId", "skillbarDisabled", "worldAttributes", "attributeStride", "attributeAgentId", "attributeEntries", "attributeEntryStride", "attributeEntryId", "attributeEntryRank", "areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags", "worldProfessionStates", "professionStateStride", "worldCharacterSkills"),
+  { source: "dispatcher", key: "playerChatMessage", activation: "party" },
+  { source: "dispatcher", key: "hideHeroPanelMessage", activation: "party" },
+  { source: "dispatcher", key: "showHeroPanelMessage", activation: "party" },
+  ...Array.from({ length: 10 }, (_, index): ConfigField => ({ source: "party-dirty", index, activation: "party" })),
 ] as const satisfies readonly ConfigField[]);
 
 export const ENHANCEMENT_LAYOUT_FIELDS = Object.freeze(

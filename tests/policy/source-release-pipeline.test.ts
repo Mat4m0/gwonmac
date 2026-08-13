@@ -484,10 +484,11 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   );
 
   assert.match(pullRequest, /on:\n {2}pull_request:/);
-  assert.doesNotMatch(pullRequest, /workflow_dispatch:|push:/);
+  assert.match(pullRequest, /workflow_dispatch:[\s\S]*checkout_ref:/);
+  assert.doesNotMatch(pullRequest, /push:/);
   assert.match(
     pullRequest,
-    /gwonmac-pr-\{0\}-\{1\}-\{2\}', github\.event\.pull_request\.number, github\.sha, github\.run_attempt/,
+    /checkout-ref: \$\{\{ inputs\.checkout_ref \|\| github\.event\.pull_request\.head\.sha \}\}/,
   );
   assert.match(pullRequest, /artifact-retention-days: 3/);
   assert.match(pullRequest, /dependency-review: true/);
@@ -746,10 +747,7 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
   );
   assert.doesNotMatch(detect, /pnpm|rustup|certification\.js|--download/);
   assert.match(detect, /permissions:\n {6}contents: read\n {6}issues: write/);
-  assert.match(
-    detect,
-    /if: steps\.published\.outputs\.changed == 'false'[\s\S]*gh issue close/,
-  );
+  assert.doesNotMatch(detect, /gh issue close/);
   // A generation with a branch or an open issue is already proposed, and
   // re-deriving it every quarter hour costs a macOS job and buries the
   // fetch-failure heartbeat under a run that fails on the push it repeats.
@@ -790,10 +788,11 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
     derive,
     /elif \[ "\$status" = "certified" \] && \[ "\$template_exit" -eq 1 \]/,
   );
-  // One fetch per derivation: the recorded generation is the one whose bytes
-  // were downloaded and certified, never whatever a later fetch would return.
-  assert.match(derive, /FINGERPRINT: \$\{\{ steps\.official\.outputs\.fingerprint \}\}/);
-  assert.match(derive, /pnpm client:official --record "\$FINGERPRINT"/);
+  // Automation proposes safe file saving, but only a final reviewed commit
+  // advances the recorded generation.
+  assert.doesNotMatch(derive, /client:official --record/);
+  assert.match(derive, /carry-forward\.json/);
+  assert.match(derive, /carry-forward\.md/);
 
   // Evidence only: the sole upload path is the evidence directory, and the
   // downloaded client artifacts live somewhere no upload names.
@@ -805,7 +804,7 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
 
   // Stage one only. It pushes a branch and proposes; a rejected pull request
   // still leaves the branch and an issue naming it.
-  assert.match(publish, /permissions:\n {6}actions: read\n {6}contents: write/);
+  assert.match(publish, /permissions:\n {6}actions: write\n {6}contents: write/);
   assert.doesNotMatch(publish, /pnpm install|pnpm build|pnpm certification/);
   assert.match(publish, /if: always\(\) && needs\.derive\.result != 'skipped'/);
   assert.equal(body.match(/persist-credentials: true/gu)?.length, 1);
@@ -826,12 +825,14 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
     /if gh pr create[\s\S]*?opened=true[\s\S]*?else[\s\S]*?opened=false/,
   );
   assert.match(publish, /continue-on-error: true/);
-  // A pull request opened by the run's own token starts no workflow, so the
-  // proposal has to say how its gate gets run rather than imply it already is.
-  assert.match(publish, /Close and reopen this pull request/);
+  assert.match(publish, /gh workflow run pr-package\.yml --ref main/);
+  assert.match(publish, /-f checkout_ref="\$head"/);
   assert.match(publish, /auto-derived, PR ready/);
   assert.match(publish, /layout changed, investigation needed/);
-  assert.match(publish, /gh issue create --label client-recertification/);
+  assert.match(
+    publish,
+    /gh issue create --label client-recertification[\s\S]*--assignee mat4m0/,
+  );
 
   // The record the detector compares against is data with no authority: one
   // format version and one digest, and no field a decision could hide in.

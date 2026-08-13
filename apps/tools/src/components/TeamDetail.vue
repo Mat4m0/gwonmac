@@ -204,7 +204,7 @@ const runtimeProblemSlots = (problem: TeamApplyRuntimeProblem): readonly number[
 const runtimeProblemGuidance = (problem: TeamApplyRuntimeProblem): string | null => {
   switch (problem.rule) {
     case "party-unavailable": return "Enter the game on a character and wait for party observation.";
-    case "pvp": return "Travel to a PvE outpost; Core tools remain available here.";
+    case "pvp": return "Travel to a PvE outpost. Your saved builds and teams remain available.";
     case "region-unknown": return "Wait for the region check, or travel to a PvE outpost.";
     case "not-outpost": return "Travel to any PvE outpost before applying.";
     case "outpost-unknown": return "Wait for the outpost check to finish.";
@@ -272,7 +272,7 @@ const applyAssessment = computed(() => {
     issues.push({
       id: "command-gateway",
       message: props.controller.applyUnavailable,
-      guidance: "Update GWonMac when a compatible command module is available.",
+      guidance: null,
       slots: [],
       control: null,
     });

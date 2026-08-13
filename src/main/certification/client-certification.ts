@@ -47,18 +47,13 @@ export function certifyClientBuild(
   tables: CertifiedBuildTables = SHIPPED_TABLES,
 ): ClientCertification {
   const templateSave = tables.templateSave(officialSha256);
-  if (!templateSave) return { state: "uncertified" };
-  const enhancementBuild = tables.enhancement(templateSave.outputSha256);
-  return enhancementBuild
-    ? {
-        state: "certified",
-        templateSaveBuild: templateSave,
-        enhancementBuild,
-      }
-    : {
-        state: "template-only",
-        templateSaveBuild: templateSave,
-      };
+  if (!templateSave) {
+    return { templateSaveBuild: null, enhancementBuild: null };
+  }
+  return {
+    templateSaveBuild: templateSave,
+    enhancementBuild: tables.enhancement(templateSave.outputSha256),
+  };
 }
 
 /**
@@ -69,15 +64,8 @@ export function certifyClientBuild(
 export function certificationFromLocalVerification(
   verification: LocalClientVerification,
 ): ClientCertification {
-  if (!verification.templateSaveBuild) return { state: "uncertified" };
-  return verification.enhancementBuild
-    ? {
-        state: "certified",
-        templateSaveBuild: verification.templateSaveBuild,
-        enhancementBuild: verification.enhancementBuild,
-      }
-    : {
-        state: "template-only",
-        templateSaveBuild: verification.templateSaveBuild,
-      };
+  return {
+    templateSaveBuild: verification.templateSaveBuild,
+    enhancementBuild: verification.enhancementBuild,
+  };
 }

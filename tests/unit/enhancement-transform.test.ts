@@ -28,7 +28,6 @@ import {
   NO_CAPABILITIES,
   PARTY_DIRTY_MESSAGES,
   TARGET_ONLY,
-  UNSUPPORTED_ALL_CAPABILITIES,
 } from "../fixtures/enhancement-transform.js";
 describe("targeted Enhancement WebAssembly transform", () => {
   it("is deterministic, valid, and exports only the hook contract", () => {
@@ -270,7 +269,12 @@ describe("targeted Enhancement WebAssembly transform", () => {
       () => transformEnhancementWasm(
         input,
         manifest(input),
-        UNSUPPORTED_ALL_CAPABILITIES,
+        {
+          nativeCursor: true,
+          targetObservation: true,
+          partyObservation: false,
+          commands: true,
+        },
       ),
       /capability profile is not certified/,
     );
@@ -281,7 +285,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const build = manifest(input);
     const brokenUi = {
       ...build,
-      uiDispatcher: { ...build.uiDispatcher, functionIndex: 4 },
+      partyObservation: { ...build.partyObservation!, functionIndex: 4 },
     };
 
     const first = transformEnhancementWasm(
@@ -541,7 +545,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const build = manifest(input);
     const wrongCursorSlot = {
       ...build,
-      cursorEvent: { ...build.cursorEvent, tableSlot: 0 },
+      cursorEvent: { ...build.cursorEvent!, tableSlot: 0 },
     };
     assert.equal(
       WebAssembly.validate(

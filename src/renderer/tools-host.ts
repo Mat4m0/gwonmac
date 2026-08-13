@@ -55,6 +55,7 @@ type ToolsBundle = Readonly<{
         | null;
       commands: TeamApplyCommands | null;
       applyUnavailable: string | null;
+      observationUnavailable: string | null;
       development: boolean;
     },
   ): ToolsAppHandle;
@@ -109,8 +110,7 @@ async function publishTemplate(
  * One constant, so the disabled reason and the refusal cannot drift apart.
  */
 const APPLY_UNAVAILABLE =
-  "Team Apply is unavailable in this session. Your saved teams are safe; "
-  + "you can keep playing and edit, import, or export builds and teams.";
+  "Apply team is unavailable after this Guild Wars update. Your saved team is unchanged.";
 
 /**
  * Loads the Tools bundle and hands the overlay a handle to it.
@@ -144,14 +144,29 @@ export function mountToolsInto(
   // package time. The specifier goes through a variable so the compiler does
   // not try to resolve a file that only exists after the build step.
   const specifier = "./tools/tools-app.js";
-  return import(specifier)
-    .then((bundle: ToolsBundle) => {
+  return Promise.all([import(specifier), window.gwNative.client.session()])
+    .then(([bundle, session]: [ToolsBundle, Awaited<ReturnType<typeof window.gwNative.client.session>>]) => {
+      const applyStatus = session.compatibility?.features.teamApply;
+      const applyUnavailable = commands === null
+        ? applyStatus?.status === 'unavailable'
+          ? applyStatus.reason === 'preparation-failed'
+            ? 'Apply team didn’t start. Your saved team is unchanged. Restart GWonMac to try again.'
+            : APPLY_UNAVAILABLE
+          : 'Apply team is off. Your saved team is unchanged.'
+        : null;
+      const observationStatus = session.compatibility?.features.partyObservation;
+      const observationUnavailable = observationStatus?.status === 'unavailable'
+        ? observationStatus.reason === 'preparation-failed'
+          ? 'Live game information didn’t start. Saved builds and teams still work. Restart GWonMac to try again.'
+          : 'Live game information is temporarily unavailable. Saved builds and teams still work.'
+        : null;
       const app = bundle.mountToolsApp(host, {
         initiallyVisible: false,
         onVisibilityChange,
         publishTemplate: templatePublishingAvailable ? publishTemplate : null,
         commands,
-        applyUnavailable: commands === null ? APPLY_UNAVAILABLE : null,
+        applyUnavailable,
+        observationUnavailable,
         development: window.gwNative.init.development,
       });
       return {

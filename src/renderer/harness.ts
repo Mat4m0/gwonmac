@@ -1208,8 +1208,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     ]);
     appSettings = settings;
     templatePublishingAvailable =
-      session.compatibility?.state === 'template-only'
-      || session.compatibility?.state === 'certified';
+      session.compatibility?.features.gameFileSaving.status === 'available';
     applyAppearance(settings);
     clientHealthConfirmation = createClientHealthConfirmation({
       token: session.healthToken,

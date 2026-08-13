@@ -75,7 +75,7 @@ describe("certified extended memory transform", () => {
         k: "wasm.extendedMemory",
         mode: "active",
         requested: true,
-        profile: "cursorToolbox",
+        profile: "cursorParty",
         capBytes: EXTENDED_MEMORY_MAX_BYTES,
         fallbackReason: "none",
       }),
@@ -86,7 +86,7 @@ describe("certified extended memory transform", () => {
         fields: {
           mode: "active",
           requested: true,
-          profile: "cursorToolbox",
+          profile: "cursorParty",
           capBytes: EXTENDED_MEMORY_MAX_BYTES,
           fallbackReason: "none",
         },

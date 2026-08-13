@@ -67,14 +67,15 @@ input source. An old custom binding can need one manual rebind.
 The official client includes browser gamepad support. This project does not have
 a dedicated controller release test.
 
-## Core and optional Tools
+## Game integration and optional Tools
 
 Open **Settings → Tools**.
 
-Required compatibility restores persistent game files and template saving when
-its exact proof passes. Certified Core adds the Guild Wars cursor and native
-double-click. These features stay on. The cursor has no player switch. The app
-does not ship or download cursor artwork.
+GWonMac checks each game-integration feature independently. File saving, the
+Guild Wars cursor, target distance, live party details, and Apply team can stay
+available or turn off separately after a Guild Wars update. Native double-click
+uses a safe tap fallback when its repair is unavailable. The cursor has no
+player switch. The app does not ship or download cursor artwork.
 
 **Enable optional Tools Beta** is off by default. Its first enable asks for one
 restart because the app selects the Tools-capable module before Guild Wars
@@ -152,12 +153,12 @@ history or item names.
 
 ## Extended memory
 
-**Advanced → Experimental 4 GB memory limit** requests the certified 4 GB module
+**Advanced → Experimental 4 GB memory limit** requests the verified 4 GB mode
 for the next start. Restart `gwonmac` after changing it.
 
-If the current ArenaNet build has no 4 GB certificate, the app uses the ordinary
-2 GB module. The larger limit can delay a memory-related crash. It cannot stop
-memory that continues to grow.
+If the current Guild Wars version does not support 4 GB mode, the app uses the
+ordinary 2 GB mode. The larger limit can delay a memory-related crash. It
+cannot stop memory that continues to grow.
 
 When the app warns about memory, choose **Reload Guild Wars**. Guild Wars
 normally reconnects. Reload in an outpost when you want the lowest gameplay
@@ -191,22 +192,22 @@ The updater never installs an older Stable automatically. To return from a
 newer candidate, install the signed Stable DMG from GitHub Releases. Preview is
 a separate tester app and is not the Beta track.
 
-## Unknown ArenaNet build
+## After a Guild Wars update
 
-ArenaNet can publish a client before the current `gwonmac` release knows its
-Core and Tools layout.
+ArenaNet can publish a client before the current GWonMac release supports every
+optional feature.
 
 The app runs an isolated local file check. It keeps only the features that it
 can prove. The launcher explains the result and keeps **Play Guild Wars** as the
 primary action.
 
-The official client remains playable. The saved build and team library remains
-safe. Live Target Distance, party observation, Apply, file repair, native
-double-click, or the Guild Wars cursor can be unavailable according to the
-failed proof. The normal macOS pointer remains available.
+The official client remains playable. Saved builds and teams remain available.
+File saving, the Guild Wars cursor, target distance, live party details, and
+Apply team have separate support checks. One unavailable feature does not turn
+off the others. The macOS pointer and tap-based double-click fallback remain
+available.
 
-Reinstalling or clearing game data does not add a certificate. Use **Check for
-Updates** to look for a newer `gwonmac` release.
+Use **Check for updates** to look for a newer GWonMac release.
 
 ## Recovery
 

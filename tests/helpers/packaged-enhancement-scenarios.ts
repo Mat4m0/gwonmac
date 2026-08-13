@@ -641,8 +641,8 @@ export async function assertToolboxFoundationLifecycle() {
       bytes: [...installableManifestModule(PRODUCT_TOOLS_CAPABILITIES)],
       layout: ENHANCEMENT_BUILD.layout,
       messages: {
-        playerChat: ENHANCEMENT_BUILD.uiDispatcher.playerChatMessage,
-        showHeroPanel: ENHANCEMENT_BUILD.uiDispatcher.showHeroPanelMessage,
+        playerChat: ENHANCEMENT_BUILD.partyObservation!.playerChatMessage,
+        showHeroPanel: ENHANCEMENT_BUILD.partyObservation!.showHeroPanelMessage,
       },
       tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     });
@@ -882,14 +882,15 @@ export async function assertRollbackAfterTablePublication() {
         ).length,
       };
     }, {
-      bytes: [...installableManifestModule(TOOLBOX_PROGRAM_CAPABILITIES)],
+      bytes: [...installableManifestModule({
+        ...TOOLBOX_PROGRAM_CAPABILITIES,
+        nativeCursor: false,
+      })],
       tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     });
     const rollbackConfigPointer = 0x11_010;
-    const rollbackCursorPointer =
-      (rollbackConfigPointer + CONFIG_BYTES + 7) & ~7;
     const rollbackToolboxPointer =
-      rollbackCursorPointer + COMPANION_CURSOR_BYTES;
+      (rollbackConfigPointer + CONFIG_BYTES + 7) & ~7;
     const rollbackPartyPointer =
       rollbackToolboxPointer + COMPANION_TOOLBOX_BYTES;
     assert.deepEqual(result, {
@@ -899,14 +900,12 @@ export async function assertRollbackAfterTablePublication() {
           pointer: rollbackConfigPointer,
           size: CONFIG_BYTES,
         },
-        { pointer: rollbackCursorPointer, size: COMPANION_CURSOR_BYTES },
         { pointer: rollbackToolboxPointer, size: COMPANION_TOOLBOX_BYTES },
         { pointer: rollbackPartyPointer, size: COMPANION_PARTY_BYTES },
       ],
       freed: [
         rollbackToolboxPointer,
         rollbackPartyPointer,
-        rollbackCursorPointer,
         rollbackConfigPointer,
         0x1000,
       ],

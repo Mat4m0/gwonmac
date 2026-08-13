@@ -73,7 +73,7 @@ test.describe("release check network policy", () => {
         // `updater-unavailable` is produced before the updater's fetch branch,
         // proving the default launch did not reach GitHub.
         await expect(page.locator("#loading-update-status")).toContainText(
-          "can't update itself",
+          "must be updated manually",
         );
         await expect
           .poll(async () =>
@@ -87,7 +87,7 @@ test.describe("release check network policy", () => {
         await app.evaluate(countGithubRequests);
         await page.locator("#loading-update-check").click();
         await expect(page.locator("#loading-update-status")).toContainText(
-          "can't update itself",
+          "must be updated manually",
         );
         expect(await app.evaluate(() => globalThis.__githubRequests)).toBe(0);
       } finally {
@@ -138,7 +138,7 @@ test.describe("release check network policy", () => {
       // A manual press is fresh user intent and remains the immediate path.
       await page.locator("#loading-update-check").click();
       await expect(page.locator("#loading-update-check")).toHaveText(
-        "Check for Updates",
+        "Check for updates",
       );
       expect(await app.evaluate(() => globalThis.__githubRequests)).toBe(1);
     } finally {

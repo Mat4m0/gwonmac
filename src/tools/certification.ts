@@ -23,7 +23,7 @@
  * finding.
  */
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeAtomic } from "../main/core/atomic-file.js";
 import {
@@ -57,11 +57,16 @@ import {
   inspectTemplateSaveCandidate,
   TEMPLATE_SAVE_TABLE,
 } from "./template-save-recert.js";
+import {
+  createCarryForwardReport,
+  formatCarryForwardMarkdown,
+} from "./carry-forward.js";
 
 const USAGE =
   "usage: certification <command>\n"
   + "  doctor [--profile PATH]              why Enhancement is or is not running here\n"
   + "  recertify [PATH/Gw.jspi.wasm]        draft an Enhancement build entry, with evidence\n"
+  + "  compare INPUT.wasm OUTPUT_DIR        write shared JSON and Markdown patch evidence\n"
   + "  template [PATH/Gw.jspi.wasm] [--emit-ts] [--write] [--expect-certified]\n"
   + "                                       re-derive the template-save build entry\n"
   + "  transform INPUT.wasm OUTPUT.wasm     write the derived Enhancement module\n"
@@ -73,7 +78,7 @@ const USAGE =
  * and reproducing that selection here would be a second place where a
  * capability set decides which output is correct.
  */
-const FOUNDATION_CAPABILITIES = ENHANCEMENT_CAPABILITY_PROFILES.cursorToolbox;
+const FOUNDATION_CAPABILITIES = ENHANCEMENT_CAPABILITY_PROFILES.cursorParty;
 
 function installedClientArtifact(): string {
   return path.join(
@@ -111,6 +116,39 @@ async function recertify(argv: readonly string[]): Promise<void> {
   const report = recertifyEnhancementBytes(official, currentMessageAnchors());
   process.stdout.write(`${JSON.stringify(report)}\n`);
   if (!report.candidateInspected) process.exitCode = 2;
+}
+
+async function compare(argv: readonly string[]): Promise<void> {
+  const [filename, outputDirectory, ...extra] = positionalArguments(argv);
+  if (!filename || !outputDirectory || extra.length > 0) {
+    process.stderr.write(USAGE);
+    process.exitCode = 2;
+    return;
+  }
+  const official = new Uint8Array(await readFile(filename));
+  const templateSave = inspectTemplateSaveCandidate(official);
+  const enhancement = recertifyEnhancementBytes(
+    official,
+    currentMessageAnchors(),
+  );
+  const report = createCarryForwardReport(templateSave, enhancement);
+  const directory = path.resolve(outputDirectory);
+  await mkdir(directory, { recursive: true });
+  await Promise.all([
+    writeAtomic(
+      path.join(directory, "carry-forward.json"),
+      `${JSON.stringify(report, null, 2)}\n`,
+    ),
+    writeAtomic(
+      path.join(directory, "carry-forward.md"),
+      formatCarryForwardMarkdown(report),
+    ),
+  ]);
+  process.stdout.write(`${JSON.stringify({
+    json: path.join(directory, "carry-forward.json"),
+    markdown: path.join(directory, "carry-forward.md"),
+    capabilities: report.capabilities,
+  })}\n`);
 }
 
 async function template(argv: readonly string[]): Promise<void> {
@@ -285,6 +323,7 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
 const COMMANDS = Object.freeze({
   doctor,
   recertify,
+  compare,
   template,
   transform,
   "double-click": doubleClick,

@@ -59,7 +59,7 @@ test.describe("tools and update settings", () => {
         .poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ updateTrack: "beta" });
       await expect(page.locator("#settings-update-status")).toContainText(
-        "can't update itself",
+        "must be updated manually",
       );
       await expect(page.locator("#settings-restart-update")).toBeHidden();
     } finally {
@@ -233,9 +233,8 @@ test.describe("tools and update settings", () => {
       await page.locator("#settings-tab-controls").click();
       const controls = page.locator("#settings-pane-controls");
       await expect(controls).toContainText(
-        "Core is on for supported Guild Wars builds",
+        "Guild Wars cursor",
       );
-      await expect(controls).toContainText("native cursor");
       await expect(controls).toContainText("Optional tools stay off in PvP");
       await expect(page.locator('input[name="nativeCursor"]')).toHaveCount(0);
       await expect(page.locator('input[name="teamManagement"]')).toBeDisabled();

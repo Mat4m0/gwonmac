@@ -263,6 +263,10 @@
         exportToDisk: (entries) => window.gwNative.templates.export(entries),
         readClipboard: () => window.gwNative.clipboard.readText(),
       });
+      const fileSaving = currentSession?.compatibility?.features.gameFileSaving;
+      templatePane.setAvailability(
+        fileSaving?.status === 'unavailable' ? fileSaving.reason : null,
+      );
       templatePane.refresh();
     })
     .catch(() => {
@@ -286,6 +290,7 @@
         document,
         action,
         () => window.gwNative.app.openExternal('releases'),
+        () => window.gwNative.client.retry(),
       );
       void action.initialize();
     })
@@ -322,7 +327,10 @@
     renderClientCompatibility(
       document,
       session,
-      window.gwNative.init.enhancementSelection,
+    );
+    const fileSaving = session.compatibility?.features.gameFileSaving;
+    templatePane?.setAvailability(
+      fileSaving?.status === 'unavailable' ? fileSaving.reason : null,
     );
     if (currentSettings) {
       const setting = await extendedMemorySetting;
@@ -348,20 +356,21 @@
     if (!compatibility) return;
     const compatibilityNotice =
       await import('./client-compatibility-notice.js');
-    if (!compatibilityNotice.compatibilityReport(
-      compatibility,
-      window.gwNative.init.enhancementSelection,
-    ).degraded) return;
+    const report = compatibilityNotice.compatibilityReport(compatibility);
+    if (!report.degraded) return;
     const settings = await loadSettings().catch(() => null);
-    if (settings?.compatibilityNoticeSeenFor === compatibility.clientSha256) return;
+    if (
+      report.acknowledgePerBuild
+      && settings?.compatibilityNoticeSeenFor === compatibility.clientSha256
+    ) return;
 
     return compatibilityNotice.showCompatibilityNotice(
       document,
-      () => persistSettings({
-        // Acknowledged for this build only: the next ArenaNet update warns
-        // again.
-        compatibilityNoticeSeenFor: compatibility.clientSha256,
-      }),
+      () => report.acknowledgePerBuild
+        ? persistSettings({
+            compatibilityNoticeSeenFor: compatibility.clientSha256,
+          })
+        : Promise.resolve(),
     );
   }
 

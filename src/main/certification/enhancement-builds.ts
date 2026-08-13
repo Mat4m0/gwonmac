@@ -92,13 +92,16 @@ export function enhancementConfigWords(
   build: KnownEnhancementBuild,
   capabilities: EnhancementCapabilities,
 ): number[] {
-  const words = ENHANCEMENT_CONFIG_FIELDS.map((field) => {
+  return ENHANCEMENT_CONFIG_FIELDS.map((field, index) => {
+    if (!enhancementConfigWordActive(capabilities, index)) return 0;
     if (field.source === "layout") return build.layout[field.key];
-    if (field.source === "dispatcher") return build.uiDispatcher[field.key];
-    return build.uiDispatcher.partyDirtyMessages[field.index] ?? 0;
+    const party = build.partyObservation;
+    if (!party) {
+      throw new Error("party observation configuration is not certified");
+    }
+    if (field.source === "dispatcher") return party[field.key];
+    return party.partyDirtyMessages[field.index] ?? 0;
   });
-  return words.map((word, index) =>
-    enhancementConfigWordActive(capabilities, index) ? word : 0);
 }
 
 export interface KnownEnhancementBuild {
@@ -110,7 +113,7 @@ export interface KnownEnhancementBuild {
   hookParams: readonly ["i32"];
   hookResults: readonly [];
   tableSlot: number;
-  cursorEvent: Readonly<{
+  cursorEvent?: Readonly<{
     functionIndex: number;
     params: readonly ["i32", "i32", "i32", "i32", "i32"];
     results: readonly [];
@@ -131,7 +134,10 @@ export interface KnownEnhancementBuild {
    * that was certified. Recover a new build's indices with
    * `tools/packet_builders.py`.
    */
-  commands: Readonly<{
+  /** Exact read-only memory layout authority for target observation. */
+  targetObservation?: Readonly<{ certified: true }>;
+  /** Exact command authority. Omitted builds can never emit a command thunk. */
+  teamApply?: Readonly<{
     thunkExport: string;
     professionTrace: Readonly<{
       readerExport: string;
@@ -159,7 +165,8 @@ export interface KnownEnhancementBuild {
       label: string;
     }>[];
   }>;
-  uiDispatcher: Readonly<{
+  /** Exact UI-dispatch and party-observation authority. */
+  partyObservation?: Readonly<{
     functionIndex: number;
     params: readonly ["i32", "i32", "i32"];
     results: readonly [];
@@ -173,6 +180,18 @@ export interface KnownEnhancementBuild {
     nearbyPlayerMessageProducers: readonly [number, number];
   }>;
   layout: EnhancementLayout;
+}
+
+export function supportedEnhancementCapabilities(
+  build: KnownEnhancementBuild,
+): EnhancementCapabilities {
+  const partyObservation = build.partyObservation !== undefined;
+  return Object.freeze({
+    nativeCursor: build.cursorEvent !== undefined,
+    targetObservation: build.targetObservation?.certified === true,
+    partyObservation,
+    commands: partyObservation && build.teamApply !== undefined,
+  });
 }
 
 // Canonical support manifest. Every value is verified against the exact input
@@ -201,14 +220,17 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "b0f875b86edb96fbf49d87e6a0063f22737253b7fb1caeb87268bdfa0cd0e6a7",
-      target: "47b39e5a7544a770075c4af7034fe26c375f36233b2c396d38349d3685c7cce9",
-      cursorTarget: "8897cf86bcadd3f03638ddb4f7c937f4e356eee3bc2b08e7d1e325d1262840e3",
-      cursorToolbox: "0cd2a26da5000e9ceff55d2ef5efefbfd3596d82d2797c0f7a6d0c04adf35488",
-      // The only derived module that can send anything. Every other profile
-      // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "d5ada77fae0f61a30d2e8a302d30f255513b5034f78201c2fa578db7c898daa5",
-      cursorTargetToolboxCommands: "2bc4bab43a2c5ea5038bc895e04b294bb40a427c9fb9f2dae5c84274facac8a4",
+      cursor: "6a30db8464650f1a8ad0745c3cb586e02d3d579b75db51ffc2e8854b33723b27",
+      target: "ba812710731835e05e60c37e2118f16c7b477f0694c65b35c6dada8445607d57",
+      cursorTarget: "6888d8ee2e68b7c48466f37031444312e0a3c9b8c234b3b5784cade1aed7f76b",
+      party: "aab4582fdb21d26de4e02ebd8f20912a9e0215c5f5fa99c02afa59404dc6e97f",
+      cursorParty: "adb6789c4a160dc904e993187e96e0c93234d7f39d4b86649515b03e591d036d",
+      targetParty: "354120aff01eabd08d6b42dc8e999fada60351951b2653ae7ffcb00c563f6ac5",
+      cursorTargetParty: "f157b3cc36fae38a261a44d6d81e6efb4b6f08179116c986030db6b88cdce0b3",
+      partyCommands: "ed880ddbf71739b3bb80145950460e5812acac3bb51c27704e4d4fdb616df6ca",
+      cursorPartyCommands: "788a2764fe936411796c703e3c197d41037d4f6894e3eef17d8e4803f55561d2",
+      targetPartyCommands: "8c7c3eac47188d453ce519c2f4cc4a694a89365d84467f9a570cdc62f3bfe803",
+      cursorTargetPartyCommands: "07091013048e13376a39422e08e0d5ccc977f3754ac87624b20ecf43d2d7757e",
     }),
     programId: 1,
     // The client behind this hash identifies itself as build 38797 at runtime
@@ -239,7 +261,8 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // does not apply to this client. Rebuilds therefore remove observed heroes
     // individually and confirm each publication before adding the saved order.
     //
-    commands: Object.freeze({
+    targetObservation: Object.freeze({ certified: true as const }),
+    teamApply: Object.freeze({
       thunkExport: "enhancement_command",
       professionTrace: Object.freeze({
         readerExport: "enhancement_profession_trace",
@@ -335,7 +358,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
         }),
       ] as const),
     }),
-    uiDispatcher: Object.freeze({
+    partyObservation: Object.freeze({
       functionIndex: 6842,
       params: Object.freeze(["i32", "i32", "i32"] as const),
       results: Object.freeze([] as const),
@@ -500,14 +523,17 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // `transformEnhancementWasm` against the real derived module whenever
     // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
     outputSha256: Object.freeze({
-      cursor: "dd6dd7285d882ed53777c3778e17cb137014687e970ca2c6a4448ce4b1a154d4",
-      target: "6049890fc3d84f51dbd6fd5078a45574b88b917dcb6e1f4e05d0d8b6fc04cd6b",
-      cursorTarget: "e3e824e81069769bf3b8ba5c878258c296b7d6ca23ca41bd4b8c5d48a0fb7b18",
-      cursorToolbox: "505d2f83b2d19e8c375334ebc739f72654d56766ffb2b0e482b86becc9349b8a",
-      // The only derived module that can send anything. Every other profile
-      // above is byte-identical to one that carries no command thunk at all.
-      cursorToolboxCommands: "2a3cf36a7edfe8f19452a81c15b92b951234099ce0dbb359c49d1b049e6bc473",
-      cursorTargetToolboxCommands: "c69206e7b5e2eb9a63c02f590637432dd559ac67e71837cfa3e1e1ae0fa09c38",
+      cursor: "3b0c52c9167381797851ab097c9c75a7340f84da729479bf4e308fa06a46d4d9",
+      target: "b8c0b991ec76e38fcf888f3cb6347b523a1f38015a2a1e9e4629e658d7e3a3d0",
+      cursorTarget: "b92ae155065419a7ea42d906a6af55fd6b9830e852ede6b3272a51f01ecd2ef0",
+      party: "41ab635b061f64fcab8c5f6b019450bbe0825ec948ddbbc54cfd3841662e2574",
+      cursorParty: "20516a6a63c527f3e87ade45fe1a9f1dc11a47fb8bdb3bac379d402999bf5112",
+      targetParty: "9ce3e81fb062c1030653f06dcc2a683ea59712555410b731ebad4024c9d34c7f",
+      cursorTargetParty: "636231e0bdb10e2c5432998bf9277749f25e9c93ac66cb7553de3bae58b6a277",
+      partyCommands: "0e1c127dea275e39d543104728811eec7db9ee5c84bd732bd98c48e4ef923485",
+      cursorPartyCommands: "fed08223c3b414e9e2c8a07158573b74fccde760cc65e2831f9ca90e97da9683",
+      targetPartyCommands: "7902cbe81dafa9aae7875f2682b20dca6b60bb03fb637d5a027df7b08c9c16a7",
+      cursorTargetPartyCommands: "72dd16dd1ea1b9d7642017c2df68175022177e2fb0f51da8fa8b42dc15511c7a",
     }),
     programId: 1,
     // Function #477 returns 38,833 as a single i32 constant. The same function
@@ -540,7 +566,8 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
     // does not apply. Rebuilds therefore remove observed heroes individually
     // and confirm each publication before adding the saved order.
     //
-    commands: Object.freeze({
+    targetObservation: Object.freeze({ certified: true as const }),
+    teamApply: Object.freeze({
       thunkExport: "enhancement_command",
       professionTrace: Object.freeze({
         readerExport: "enhancement_profession_trace",
@@ -636,7 +663,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freez
         }),
       ] as const),
     }),
-    uiDispatcher: Object.freeze({
+    partyObservation: Object.freeze({
       functionIndex: 6842,
       params: Object.freeze(["i32", "i32", "i32"] as const),
       results: Object.freeze([] as const),

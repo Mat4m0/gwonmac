@@ -106,22 +106,22 @@ test("one capability plan derives hooks without losing feature identity", () => 
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
-      { nativeCursor: true, targetObservation: false, toolbox: false, commands: false },
+      { nativeCursor: true, targetObservation: false, partyObservation: false, commands: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "target-observer"),
-      { nativeCursor: false, targetObservation: true, toolbox: false, commands: false },
+      { nativeCursor: false, targetObservation: true, partyObservation: false, commands: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-foundation"),
-      { nativeCursor: true, targetObservation: false, toolbox: true, commands: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: false },
     );
     // The read foundation and the write program differ by exactly this bit,
     // and no saved setting reaches the second: choosing the panel can never
     // carry the ability to send a packet in with it.
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-commands"),
-      { nativeCursor: true, targetObservation: false, toolbox: true, commands: true },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: true },
     );
   }
 });
@@ -129,10 +129,10 @@ test("one capability plan derives hooks without losing feature identity", () => 
 test("launch intent resolves to the canonical frozen capability profiles", () => {
   const cases = [
     [{ nativeCursor: true, tools: false }, "none", "cursor"],
-    [{ nativeCursor: true, tools: true }, "none", "cursorTargetToolboxCommands"],
+    [{ nativeCursor: true, tools: true }, "none", "cursorTargetPartyCommands"],
     [{ nativeCursor: false, tools: false }, "cursor-observer", "cursor"],
     [{ nativeCursor: true, tools: false }, "target-observer", "target"],
-    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "cursorToolbox"],
+    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "party"],
   ] as const;
   for (const [selection, program, profile] of cases) {
     const resolved = enhancementCapabilitiesFor(selection, program);

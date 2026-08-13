@@ -62,7 +62,7 @@ test.describe("client generation coordination", () => {
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
-              toolbox: false,
+              partyObservation: false,
             },
             onProgress: (progress: DownloadProgress) => {
               if (progress.phase === "ready") {
@@ -148,7 +148,7 @@ test.describe("client generation coordination", () => {
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
-              toolbox: false,
+              partyObservation: false,
             },
             onProgress: (value: DownloadProgress) => progress.push(value),
             onPrefetch: () => undefined,
@@ -244,7 +244,7 @@ test.describe("client generation coordination", () => {
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
-              toolbox: false,
+              partyObservation: false,
             },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
@@ -335,7 +335,7 @@ test.describe("client generation coordination", () => {
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
-              toolbox: false,
+              partyObservation: false,
             },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
@@ -411,7 +411,7 @@ test.describe("client generation coordination", () => {
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
-              toolbox: false,
+              partyObservation: false,
             },
             onProgress: (value: DownloadProgress) => progress.push(value),
             onPrefetch: () => undefined,
@@ -426,9 +426,14 @@ test.describe("client generation coordination", () => {
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
             jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
             compatibility: {
-              state: "certified",
               clientSha256: "d".repeat(64),
-              enhancementActive: false,
+              features: {
+                gameFileSaving: { status: "available" },
+                nativeCursor: { status: "off" },
+                targetObservation: { status: "off" },
+                partyObservation: { status: "off" },
+                teamApply: { status: "off" },
+              },
             },
             extendedMemory: {
               requestedAtLaunch: false,
@@ -518,7 +523,7 @@ test.describe("client generation coordination", () => {
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
-              toolbox: false,
+              partyObservation: false,
             },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
@@ -605,7 +610,7 @@ test.describe("client generation coordination", () => {
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
-              toolbox: false,
+              partyObservation: false,
             },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
@@ -620,9 +625,14 @@ test.describe("client generation coordination", () => {
             wasmPath: "/active/client.wasm",
             jsPath: "/active/client.js",
             compatibility: {
-              state: "certified",
               clientSha256: "a".repeat(64),
-              enhancementActive: true,
+              features: {
+                gameFileSaving: { status: "available" },
+                nativeCursor: { status: "available" },
+                targetObservation: { status: "available" },
+                partyObservation: { status: "available" },
+                teamApply: { status: "available" },
+              },
             },
             extendedMemory: {
               requestedAtLaunch: true,
@@ -652,9 +662,8 @@ test.describe("client generation coordination", () => {
       expect(result.preparedCompatibility).toBeNull();
       expect(result.preparedExtendedMemory.status).toBe("standard");
       expect(result.activeCompatibility).toMatchObject({
-        state: "certified",
         clientSha256: "a".repeat(64),
-        enhancementActive: true,
+        features: { teamApply: { status: "available" } },
       });
       expect(result.activeExtendedMemory).toMatchObject({
         status: "active",
@@ -704,7 +713,7 @@ test.describe("client generation coordination", () => {
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
-              toolbox: false,
+              partyObservation: false,
             },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
@@ -719,9 +728,14 @@ test.describe("client generation coordination", () => {
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
             jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
             compatibility: {
-              state: "certified",
               clientSha256: "1".repeat(64),
-              enhancementActive: false,
+              features: {
+                gameFileSaving: { status: "available" },
+                nativeCursor: { status: "off" },
+                targetObservation: { status: "off" },
+                partyObservation: { status: "off" },
+                teamApply: { status: "off" },
+              },
             },
             extendedMemory: {
               requestedAtLaunch: false,
@@ -757,9 +771,14 @@ test.describe("client generation coordination", () => {
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
             jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
             compatibility: {
-              state: "uncertified",
               clientSha256: "2".repeat(64),
-              enhancementActive: false,
+              features: {
+                gameFileSaving: { status: "unavailable", reason: "game-update" },
+                nativeCursor: { status: "off" },
+                targetObservation: { status: "off" },
+                partyObservation: { status: "off" },
+                teamApply: { status: "off" },
+              },
             },
             extendedMemory: {
               requestedAtLaunch: true,
@@ -861,7 +880,7 @@ test.describe("client generation coordination", () => {
             enhancementCapabilities: {
               nativeCursor: false,
               targetObservation: false,
-              toolbox: false,
+              partyObservation: false,
             },
             onProgress: () => undefined,
             onPrefetch: () => undefined,
@@ -876,9 +895,14 @@ test.describe("client generation coordination", () => {
             wasmPath: path.join(paths.artifacts, "Gw.jspi.wasm"),
             jsPath: path.join(paths.artifacts, "Gw.jspi.js"),
             compatibility: {
-              state: "certified",
               clientSha256: "3".repeat(64),
-              enhancementActive: false,
+              features: {
+                gameFileSaving: { status: "available" },
+                nativeCursor: { status: "off" },
+                targetObservation: { status: "off" },
+                partyObservation: { status: "off" },
+                teamApply: { status: "off" },
+              },
             },
             extendedMemory: {
               requestedAtLaunch: false,

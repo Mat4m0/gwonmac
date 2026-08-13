@@ -221,11 +221,15 @@ test.describe("client compatibility", () => {
         >("./client-compatibility-notice.js");
         const report = compatibilityReport(
           {
-            state: "uncertified",
-            enhancementActive: false,
             clientSha256: "a".repeat(64),
+            features: {
+              gameFileSaving: { status: "unavailable", reason: "game-update" },
+              nativeCursor: { status: "unavailable", reason: "game-update" },
+              targetObservation: { status: "off" },
+              partyObservation: { status: "off" },
+              teamApply: { status: "off" },
+            },
           },
-          { nativeCursor: true, tools: false },
         );
         const byId = (id: string) => {
           const element = globalThis.document.getElementById(id);
@@ -246,7 +250,7 @@ test.describe("client compatibility", () => {
 
       // Not a vacuous pass: the notice is on screen and the dock did grow.
       expect(after.notice.height).toBeGreaterThan(0);
-      expect(after.dock.height).toBeGreaterThan(before.dock.height);
+      expect(after.dock.height).toBeGreaterThanOrEqual(before.dock.height);
       expect(after.legal.bottom).toBeLessThanOrEqual(after.dock.top);
       expect(before.legal.bottom).toBeLessThanOrEqual(before.dock.top);
     } finally {

@@ -128,19 +128,19 @@ export const ENHANCEMENT_BUILD =
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: true,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
-  toolbox: true,
+  partyObservation: true,
   commands: false,
 });
 export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
-  toolbox: true,
+  partyObservation: true,
   commands: true,
 });
 export const CONFIG_BYTES =
@@ -239,22 +239,22 @@ export function installableManifestModule(
         results: ENHANCEMENT_BUILD.hookResults,
       } : null,
       cursor: hooks.cursor ? {
-        functionIndex: ENHANCEMENT_BUILD.cursorEvent.functionIndex,
-        params: ENHANCEMENT_BUILD.cursorEvent.params,
-        results: ENHANCEMENT_BUILD.cursorEvent.results,
-        existingTableSlot: ENHANCEMENT_BUILD.cursorEvent.tableSlot,
+        functionIndex: ENHANCEMENT_BUILD.cursorEvent!.functionIndex,
+        params: ENHANCEMENT_BUILD.cursorEvent!.params,
+        results: ENHANCEMENT_BUILD.cursorEvent!.results,
+        existingTableSlot: ENHANCEMENT_BUILD.cursorEvent!.tableSlot,
       } : null,
       ui: hooks.ui ? {
-        functionIndex: ENHANCEMENT_BUILD.uiDispatcher.functionIndex,
-        params: ENHANCEMENT_BUILD.uiDispatcher.params,
-        results: ENHANCEMENT_BUILD.uiDispatcher.results,
+        functionIndex: ENHANCEMENT_BUILD.partyObservation!.functionIndex,
+        params: ENHANCEMENT_BUILD.partyObservation!.params,
+        results: ENHANCEMENT_BUILD.partyObservation!.results,
       } : null,
     },
     messages: hooks.ui ? {
-      playerChat: ENHANCEMENT_BUILD.uiDispatcher.playerChatMessage,
-      hideHeroPanel: ENHANCEMENT_BUILD.uiDispatcher.hideHeroPanelMessage,
-      showHeroPanel: ENHANCEMENT_BUILD.uiDispatcher.showHeroPanelMessage,
-      partyDirty: ENHANCEMENT_BUILD.uiDispatcher.partyDirtyMessages,
+      playerChat: ENHANCEMENT_BUILD.partyObservation!.playerChatMessage,
+      hideHeroPanel: ENHANCEMENT_BUILD.partyObservation!.hideHeroPanelMessage,
+      showHeroPanel: ENHANCEMENT_BUILD.partyObservation!.showHeroPanelMessage,
+      partyDirty: ENHANCEMENT_BUILD.partyObservation!.partyDirtyMessages,
     } : null,
     configWords: enhancementConfigWords(ENHANCEMENT_BUILD, capabilities),
   }))];
@@ -539,8 +539,8 @@ export async function assertPackagedOffSession() {
 
     const session = await fixture.page.evaluate(() =>
       window.gwNative.client.session());
-    assert.equal(session.compatibility?.state, "uncertified");
-    assert.equal(session.compatibility?.enhancementActive, false);
+    assert.equal(session.compatibility?.features.gameFileSaving.status, "unavailable");
+    assert.equal(session.compatibility?.features.nativeCursor.status, "unavailable");
     assert.match(
       session.compatibility?.clientSha256 ?? "",
       /^[a-f0-9]{64}$/u,
@@ -701,8 +701,8 @@ export async function assertPackagedHostOnlyToolsSession() {
 
     await waitForRuntime();
     const session = await fixture.page.evaluate(() => window.gwNative.client.session());
-    assert.equal(session.compatibility?.state, "uncertified");
-    assert.equal(session.compatibility?.enhancementActive, false);
+    assert.equal(session.compatibility?.features.gameFileSaving.status, "unavailable");
+    assert.equal(session.compatibility?.features.teamApply.status, "unavailable");
     assert.deepEqual(
       await fixture.page.evaluate(() => window.gwNative.init.enhancementSelection),
       { nativeCursor: true, tools: true },
@@ -712,8 +712,8 @@ export async function assertPackagedHostOnlyToolsSession() {
     await fixture.page.locator(".library-row").first().click();
     await fixture.page.getByRole("button", { name: "Export build" }).click();
     await fixture.page.getByText(
-      "Saving into Guild Wars is unavailable for this client build. "
-      + "Your build remains safe in the local library.",
+      "GWonMac can’t add this build to Guild Wars after this game update. "
+      + "The build is still saved in your library.",
       { exact: true },
     ).waitFor();
     assert.equal(
@@ -731,8 +731,8 @@ export async function assertPackagedHostOnlyToolsSession() {
     await fixture.page.getByLabel("Name optional").fill("Patch-day team");
     await fixture.page.getByRole("button", { name: "Create team" }).click();
     await fixture.page.getByText(
-      "Team Apply is unavailable in this session. Your saved teams are safe; "
-      + "you can keep playing and edit, import, or export builds and teams.",
+      "Apply team is unavailable after this Guild Wars update. "
+      + "Your saved team is unchanged.",
       { exact: true },
     ).first().waitFor();
     assert.ok(
