@@ -25,6 +25,11 @@ import type {
 import type { ErrorCode } from "./errors.js";
 import type { BuildLibrary } from "./builds/library.js";
 import type {
+  AccountMode,
+  LibraryScope,
+  ProfileId,
+} from "./multiple-accounts.js";
+import type {
   EnhancementProgram,
   EnhancementSelection,
 } from "./enhancement-contracts.js";
@@ -597,6 +602,34 @@ export interface RendererInit {
   templateFsTrace: boolean;
 }
 
+export type MultiProfileRuntimeState =
+  | "ready"
+  | "queued"
+  | "opening"
+  | "running"
+  | "failed";
+
+export interface AccountProfileSummary {
+  readonly id: ProfileId;
+  readonly name: string;
+  readonly templates: LibraryScope;
+  readonly builds: LibraryScope;
+  readonly state: MultiProfileRuntimeState;
+}
+
+export interface AccountsState {
+  readonly mode: AccountMode;
+  readonly profiles: readonly AccountProfileSummary[];
+}
+
+export interface AccountsSetupRequest {
+  readonly name: string;
+  readonly templates: LibraryScope;
+  readonly builds: LibraryScope;
+  readonly importTemplates: boolean;
+  readonly importBuilds: boolean;
+}
+
 /**
  * Prefix of the single `webPreferences.additionalArguments` entry that carries
  * a JSON `RendererInit`. The preload is the only reader.
@@ -722,6 +755,10 @@ export const IPC = {
   appUpdatesCheck: "gw:appUpdates:check",
   appUpdatesRestartAndInstall: "gw:appUpdates:restartAndInstall",
   appUpdatesState: "gw:appUpdates:state",
+  accountsGet: "gw:accounts:get",
+  accountsSetup: "gw:accounts:setup",
+  accountsOpen: "gw:accounts:open",
+  accountsUseSingle: "gw:accounts:useSingle",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
@@ -897,5 +934,11 @@ export interface GwNativeApi {
     check(): Promise<void>;
     restartAndInstall(): Promise<void>;
     onState(callback: (state: AppUpdateState) => void): () => void;
+  };
+  accounts: {
+    get(): Promise<AccountsState>;
+    setup(value: AccountsSetupRequest): Promise<void>;
+    open(profileIds: readonly ProfileId[]): Promise<void>;
+    useSingle(): Promise<void>;
   };
 }

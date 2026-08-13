@@ -18,6 +18,8 @@ import { statfs } from "node:fs/promises";
 import type {
   AppSettings,
   AppSettingsPatch,
+  AccountsSetupRequest,
+  AccountsState,
   AppUpdateState,
   CacheInfo,
   ClientHealthToken,
@@ -33,6 +35,12 @@ import type {
   SteamTokenResult,
   StoredCredentials,
 } from "../shared/contracts.js";
+import {
+  parseProfileId,
+  parseProfileName,
+  type LibraryScope,
+  type ProfileId,
+} from "../shared/multiple-accounts.js";
 import type {
   RendererFrameBatch,
   RendererMetrics,
@@ -92,7 +100,10 @@ import {
 } from "./diagnostics.js";
 import { isRendererFingerprint } from "./diagnostics/schema-fields.js";
 import { gamePaths } from "./paths.js";
-import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
+import {
+  isAccountsRendererUrl,
+  isCanonicalRendererUrl,
+} from "./core/renderer-trust.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
 import { windowRegistry, type WindowRegistry } from "./window-registry.js";
@@ -128,6 +139,10 @@ export interface IpcContext {
     parent: BrowserWindow,
     record: (event: SteamAcquireEvent) => void,
   ) => Promise<SteamAcquireResult>;
+  getAccountsState: () => AccountsState;
+  setupAccounts: (request: AccountsSetupRequest) => Promise<void>;
+  openAccounts: (profileIds: readonly ProfileId[]) => Promise<void>;
+  useSingleAccountMode: () => Promise<void>;
 }
 
 type SteamInvokeChannel = "steamToken" | "steamStore" | "steamClear";
@@ -135,16 +150,20 @@ type SteamInvokeChannel = "steamToken" | "steamStore" | "steamClear";
 function assertSender(
   registry: WindowRegistry,
   event: Electron.IpcMainInvokeEvent,
+  role: "game" | "hub" | "any",
 ): BrowserWindow {
   const win = BrowserWindow.fromWebContents(event.sender);
   const context = registry.contextForWebContents(event.sender.id);
-  if (!win || !context || context.role !== "game") {
+  if (!win || !context || (role !== "any" && context.role !== role)) {
     throw new AllowlistError("unowned ipc sender");
   }
   if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
     throw new AllowlistError("ipc sender is not the main frame");
   }
-  if (!isCanonicalRendererUrl(event.senderFrame.url)) {
+  const trusted = context.role === "hub"
+    ? isAccountsRendererUrl(event.senderFrame.url)
+    : isCanonicalRendererUrl(event.senderFrame.url);
+  if (!trusted) {
     throw new AllowlistError("invalid ipc origin");
   }
   return win;
@@ -173,6 +192,7 @@ type Run<In, Out> = (win: BrowserWindow, input: In) => Out | Promise<Out>;
 interface ChannelDef<In, Out> {
   readonly parse: Parser<In>;
   readonly run: Run<In, Out>;
+  readonly role: "game" | "hub" | "any";
 }
 
 /**
@@ -185,14 +205,16 @@ interface ChannelDef<In, Out> {
 interface AnyChannelDef {
   readonly parse: Parser<unknown>;
   readonly run: Run<never, unknown>;
+  readonly role: "game" | "hub" | "any";
 }
 
 /** You cannot construct a channel without a parser. That is the point. */
 function channel<In, Out>(
   parse: Parser<In>,
   run: Run<In, Out>,
+  role: "game" | "hub" | "any" = "game",
 ): ChannelDef<In, Out> {
-  return { parse, run };
+  return { parse, run, role };
 }
 
 /** For the channels that carry nothing. Still a parser, still explicit. */
@@ -370,6 +392,41 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
     throw new ValidationError("invalid external link kind");
   }
   return value;
+});
+
+function parseLibraryScope(value: unknown, field: string): LibraryScope {
+  if (value !== "shared" && value !== "private") {
+    throw new ValidationError(`${field} must be shared or private`);
+  }
+  return value;
+}
+
+const asAccountsSetup = one((value: unknown): AccountsSetupRequest => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("account setup must be an object");
+  }
+  const input = value as Record<string, unknown>;
+  if (typeof input.importTemplates !== "boolean" || typeof input.importBuilds !== "boolean") {
+    throw new ValidationError("account import choices must be booleans");
+  }
+  return {
+    name: parseProfileName(input.name),
+    templates: parseLibraryScope(input.templates, "templates"),
+    builds: parseLibraryScope(input.builds, "builds"),
+    importTemplates: input.importTemplates,
+    importBuilds: input.importBuilds,
+  };
+});
+
+const asProfileIds = one((value: unknown): readonly ProfileId[] => {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 16) {
+    throw new ValidationError("select between 1 and 16 account profiles");
+  }
+  const ids = value.map(parseProfileId);
+  if (new Set(ids).size !== ids.length) {
+    throw new ValidationError("account profile selection contains duplicates");
+  }
+  return ids;
 });
 
 interface ParsedMilestone {
@@ -819,6 +876,25 @@ export function registerIpcHandlers(ctx: IpcContext): {
       nothing,
       (win) => ctx.restartAndInstallUpdate(win),
     ),
+    accountsGet: channel(
+      nothing,
+      () => ctx.getAccountsState(),
+      "any",
+    ),
+    accountsSetup: channel(
+      asAccountsSetup,
+      (_win, request) => ctx.setupAccounts(request),
+    ),
+    accountsOpen: channel(
+      asProfileIds,
+      (_win, profileIds) => ctx.openAccounts(profileIds),
+      "hub",
+    ),
+    accountsUseSingle: channel(
+      nothing,
+      () => ctx.useSingleAccountMode(),
+      "any",
+    ),
   } satisfies Record<Exclude<InvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
 
   registerChannelDefinitions(ctx.windows, handlers);
@@ -856,7 +932,7 @@ function registerChannelDefinitions(
     const def = definition as ChannelDef<unknown, unknown>;
     const name = key as InvokeChannel;
     ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
-      const win = assertSender(windows, event);
+      const win = assertSender(windows, event, def.role);
       let input: unknown;
       try {
         input = def.parse(args);

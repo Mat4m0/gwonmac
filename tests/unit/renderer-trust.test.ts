@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isCanonicalRendererUrl } from "../../src/main/core/renderer-trust.js";
+import {
+  isAccountsRendererUrl,
+  isCanonicalRendererUrl,
+} from "../../src/main/core/renderer-trust.js";
 
 describe("canonical renderer URL", () => {
   it("allows the launcher document and nothing else", () => {
@@ -30,6 +33,7 @@ describe("canonical renderer URL", () => {
     for (const url of [
       "gw://app/account/login",
       "gw://app/Gw.jspi.js",
+      "gw://app/accounts.html",
       "gw://app/#fragment",
       "gw://user@app/",
       "gw://app:443/",
@@ -37,6 +41,18 @@ describe("canonical renderer URL", () => {
       "not a URL",
     ]) {
       assert.equal(isCanonicalRendererUrl(url), false, url);
+    }
+  });
+
+  it("gives the accounts Hub its own document boundary", () => {
+    assert.equal(isAccountsRendererUrl("gw://app/accounts.html"), true);
+    for (const url of [
+      "gw://app/",
+      "gw://app/index.html",
+      "gw://app/accounts.html?profile=one",
+      "gw://app/accounts.html#profile",
+    ]) {
+      assert.equal(isAccountsRendererUrl(url), false, url);
     }
   });
 });

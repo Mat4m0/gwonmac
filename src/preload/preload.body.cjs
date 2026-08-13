@@ -235,6 +235,12 @@ const api = {
       ipcRenderer.invoke(IPC.appUpdatesRestartAndInstall),
     onState: (callback) => listen(IPC.appUpdatesState, callback),
   },
+  accounts: {
+    get: () => ipcRenderer.invoke(IPC.accountsGet),
+    setup: (value) => ipcRenderer.invoke(IPC.accountsSetup, value),
+    open: (profileIds) => ipcRenderer.invoke(IPC.accountsOpen, profileIds),
+    useSingle: () => ipcRenderer.invoke(IPC.accountsUseSingle),
+  },
 };
 for (const namespace of Object.values(api)) Object.freeze(namespace);
 Object.freeze(api);

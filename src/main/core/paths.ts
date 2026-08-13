@@ -116,7 +116,6 @@ export function multiProfilePaths(
 export function documentDirectories(paths: GamePaths): string[] {
   return [
     paths.userData,
-    paths.multiRoot,
     paths.game,
     paths.diagnostics,
     paths.chunks,

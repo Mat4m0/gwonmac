@@ -13,7 +13,7 @@
  * this scheme serves, so no individual handler can serve a document without
  * them.
  */
-import { app, protocol, net } from "electron";
+import { app, protocol, net, type Session } from "electron";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -153,6 +153,14 @@ export function registerGwScheme(): void {
 
 export function installGwProtocolHandler(deps: ProtocolDeps): void {
   protocol.handle("gw", (request) => handleGwRequest(request, deps));
+}
+
+/** A custom partition owns its own protocol registry. */
+export function installGwProtocolHandlerForSession(
+  owner: Session,
+  deps: ProtocolDeps,
+): void {
+  owner.protocol.handle("gw", (request) => handleGwRequest(request, deps));
 }
 
 function headers(extra: Record<string, string> = {}): Headers {
