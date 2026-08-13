@@ -576,6 +576,7 @@
           <p class="settings-note">Your current window, saved login, settings, templates, and builds stay in Single Account mode. Multiple Accounts creates a separate workspace and asks you to sign in once for each profile.</p>
           <div id="accounts-single-setup">
           <div class="settings-divider" aria-hidden="true"></div>
+          <div id="accounts-new-workspace-fields">
           <label class="settings-field" for="accounts-first-name">
             <span>First profile name</span>
             <input type="text" id="accounts-first-name" class="ui-input"
@@ -599,7 +600,12 @@
             <input type="checkbox" id="accounts-import-builds">
             <span>Copy my current build library into the new workspace</span>
           </label>
+          <label class="settings-check ui-check">
+            <input type="checkbox" id="accounts-import-templates">
+            <span>Copy my current Guild Wars build templates into the new workspace</span>
+          </label>
           <p class="settings-note">This is a one-time copy. Single Account data is never moved, linked, or written back.</p>
+          </div>
           <div class="settings-actions-row">
             <button type="button" id="accounts-enable" class="ui-button" data-variant="primary">Enable and Restart…</button>
           </div>

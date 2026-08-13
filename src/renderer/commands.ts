@@ -83,7 +83,15 @@
           }
           fs.syncfs(false, (error?: unknown) => {
             if (error) reject(error);
-            else resolve();
+            else {
+              void import('./template-store.js').then(async ({ exportEntries, templateFilesystem }) => {
+                const templates = templateFilesystem();
+                if (templates) {
+                  await window.gwNative.accounts.saveTemplates(exportEntries(templates));
+                }
+                resolve();
+              }).catch(reject);
+            }
           });
         });
         break;

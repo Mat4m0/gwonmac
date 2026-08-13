@@ -115,6 +115,7 @@ import {
 import {
   applyPendingCacheClear,
   applyPendingGameStorageReset,
+  applyPendingSessionStorageReset,
 } from "./settings-actions.js";
 import { windowRegistry } from "./window-registry.js";
 import {
@@ -125,6 +126,8 @@ import {
   loadMultiWorkspace,
   saveAccountMode,
   saveMultiWorkspace,
+  removeArchivedMultiProfile,
+  restoreMultiProfile,
   updateMultiProfile,
 } from "./core/multiple-accounts.js";
 import {
@@ -132,6 +135,11 @@ import {
   type ProfileId,
 } from "../shared/multiple-accounts.js";
 import { multiSecretSlot } from "./core/native-keychain.js";
+import {
+  loadAccountTemplateLibrary,
+  reconcileAccountTemplates,
+  saveAccountTemplateLibrary,
+} from "./core/account-template-library.js";
 import {
   createAccountsWindow,
   revealAccountsWindow,
@@ -177,6 +185,7 @@ const HOST_VERSION = (() => {
 /** Every settings write is a read-modify-write of one file. */
 const settingsLock = new Mutex();
 const accountsLock = new Mutex();
+const templatesLock = new Mutex();
 let appUpdaterController: AppUpdater | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
@@ -368,11 +377,17 @@ function buildWindowHost(
     startCapture: startDiagnosticCapture,
     stopCapture: stopDiagnosticCapture,
     reloadGame: (win) => {
-      sockets.closeAll(win.webContents.id);
-      void win.loadURL(RENDERER_URL);
+      void (async () => {
+        await sendRendererCommand(win, { type: "filesystem.sync" });
+        sockets.closeAll(win.webContents.id);
+        await win.loadURL(RENDERER_URL);
+      })();
     },
     prepareRendererRecovery: async () => {
       await clientRuntime.recoverRendererCrash();
+    },
+    gameWindowClosed: () => {
+      if (activeAccountMode === "multi") revealAccountsWindow();
     },
   };
 }
@@ -395,9 +410,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   const paths = gamePaths();
   activeAccountMode = await loadAccountMode(paths.launcherMode);
-  let multiWorkspace = activeAccountMode === "multi"
-    ? await loadMultiWorkspace(paths.multiWorkspace)
-    : null;
+  // The registry is safe to inspect from Single mode for the explicit Accounts
+  // settings pane. Its sessions, libraries, and Keychain items remain closed.
+  let multiWorkspace = await loadMultiWorkspace(paths.multiWorkspace);
   if (activeAccountMode === "multi" && !multiWorkspace) {
     throw new Error("Multiple Accounts mode has no workspace");
   }
@@ -578,14 +593,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
   };
   const accountsState = (): AccountsState => ({
     mode: activeAccountMode,
-    profiles: (multiWorkspace?.profiles ?? [])
-      .filter((profile) => !profile.archived)
-      .map((profile) => ({
+    profiles: (multiWorkspace?.profiles ?? []).map((profile) => ({
         id: profile.id,
         name: profile.name,
         templates: profile.templates,
         builds: profile.builds,
-        state: windowRegistry.profileWindow(profile.id)
+        archived: profile.archived,
+        state: !profile.archived && windowRegistry.profileWindow(profile.id)
           ? "running"
           : (profileLaunchState.get(profile.id) ?? "ready"),
       })),
@@ -614,6 +628,14 @@ if (primaryInstance) void app.whenReady().then(async () => {
         owner.clearCache(),
       ]);
       const profilePaths = multiProfilePaths(paths, profileId);
+      const reset = await applyPendingSessionStorageReset(
+        owner,
+        profilePaths.gameStorageClearRequest,
+      );
+      if (reset && profile.templates === "private") {
+        await rm(profilePaths.templates, { force: true });
+        await rm(profilePaths.templateSync, { force: true });
+      }
       await mkdir(profilePaths.root, { recursive: true });
       await prepareWindowState(profilePaths.windowState);
       const win = createMainWindow(host, {
@@ -649,7 +671,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
         );
       }
       if (request.importTemplates) {
-        throw new Error("Template import is not available in this build");
+        const templatePath = profile.templates === "shared"
+          ? paths.multiSharedTemplates
+          : profilePaths.templates;
+        await saveAccountTemplateLibrary(templatePath, {
+          revision: 1,
+          entries: request.templateEntries,
+        });
       }
       await saveMultiWorkspace(paths.multiWorkspace, multiWorkspace);
     }
@@ -688,6 +716,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
       return profile.builds === "shared"
         ? paths.multiSharedBuildLibrary
         : multiProfilePaths(paths, profile.id).buildLibrary;
+    },
+    gameStorageResetMarkerFor: (win) => {
+      const context = windowRegistry.contextForWebContents(win.webContents.id);
+      return context?.mode === "multi" && context.role === "game"
+        ? multiProfilePaths(paths, context.profileId).gameStorageClearRequest
+        : paths.gameStorageClearRequest;
     },
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
@@ -766,6 +800,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
       if (activeAccountMode !== "multi" || !multiWorkspace) {
         throw new Error("Multiple Accounts mode is not active");
       }
+      const current = profileFor(request.id);
+      if (
+        windowRegistry.profileWindow(request.id)
+        && (current.builds !== request.builds || current.templates !== request.templates)
+      ) {
+        throw new Error("Close this account before changing sharing");
+      }
       const next = updateMultiProfile(multiWorkspace, request.id, request);
       await saveMultiWorkspace(paths.multiWorkspace, next);
       multiWorkspace = next;
@@ -785,6 +826,75 @@ if (primaryInstance) void app.whenReady().then(async () => {
       await saveMultiWorkspace(paths.multiWorkspace, next);
       multiWorkspace = next;
       return accountsState();
+    }),
+    restoreAccount: (profileId: ProfileId) => accountsLock.run(async () => {
+      if (activeAccountMode !== "multi" || !multiWorkspace) {
+        throw new Error("Multiple Accounts mode is not active");
+      }
+      const next = restoreMultiProfile(multiWorkspace, profileId);
+      await saveMultiWorkspace(paths.multiWorkspace, next);
+      multiWorkspace = next;
+      return accountsState();
+    }),
+    deleteAccount: (profileId: ProfileId) => accountsLock.run(async () => {
+      if (activeAccountMode !== "multi" || !multiWorkspace) {
+        throw new Error("Multiple Accounts mode is not active");
+      }
+      const next = removeArchivedMultiProfile(multiWorkspace, profileId);
+      const owner = session.fromPartition(`persist:gw-multi-${profileId}`, {
+        cache: false,
+      });
+      await Promise.all([
+        credentialStoreForProfile(profileId).clear(),
+        steamStoreForProfile(profileId).clear(),
+        owner.clearStorageData(),
+        owner.clearCache(),
+      ]);
+      await rm(multiProfilePaths(paths, profileId).root, {
+        recursive: true,
+        force: true,
+      });
+      await saveMultiWorkspace(paths.multiWorkspace, next);
+      credentialsStores.delete(profileId);
+      steamSessionStores.delete(profileId);
+      multiWorkspace = next;
+      return accountsState();
+    }),
+    loadAccountTemplates: async (win) => {
+      const context = windowRegistry.contextForWebContents(win.webContents.id);
+      if (context?.mode !== "multi" || context.role !== "game") return null;
+      const profile = profileFor(context.profileId);
+      const profilePaths = multiProfilePaths(paths, profile.id);
+      const libraryPath = profile.templates === "shared"
+        ? paths.multiSharedTemplates
+        : profilePaths.templates;
+      const library = await loadAccountTemplateLibrary(libraryPath);
+      await saveAccountTemplateLibrary(profilePaths.templateSync, library);
+      return library;
+    },
+    saveAccountTemplates: (win, entries) => templatesLock.run(async () => {
+      const context = windowRegistry.contextForWebContents(win.webContents.id);
+      if (context?.mode !== "multi" || context.role !== "game") return;
+      const profile = profileFor(context.profileId);
+      const profilePaths = multiProfilePaths(paths, profile.id);
+      if (profile.templates === "private") {
+        const current = await loadAccountTemplateLibrary(profilePaths.templates);
+        await saveAccountTemplateLibrary(profilePaths.templates, {
+          revision: current.revision + 1,
+          entries,
+        });
+        return;
+      }
+      const [base, latest] = await Promise.all([
+        loadAccountTemplateLibrary(profilePaths.templateSync),
+        loadAccountTemplateLibrary(paths.multiSharedTemplates),
+      ]);
+      const merged = {
+        revision: latest.revision + 1,
+        entries: reconcileAccountTemplates(base.entries, latest.entries, entries),
+      };
+      await saveAccountTemplateLibrary(paths.multiSharedTemplates, merged);
+      await saveAccountTemplateLibrary(profilePaths.templateSync, merged);
     }),
     useSingleAccountMode,
   });

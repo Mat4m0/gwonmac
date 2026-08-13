@@ -47,10 +47,12 @@
   const accountsBuilds = form.elements.namedItem('accountsBuilds') as RadioNodeList;
   const accountsTemplates = form.elements.namedItem('accountsTemplates') as RadioNodeList;
   const accountsImportBuilds = byId('accounts-import-builds') as HTMLInputElement;
+  const accountsImportTemplates = byId('accounts-import-templates') as HTMLInputElement;
   const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
   const accountsStatus = byId('accounts-setup-status');
   const accountsModeStatus = byId('accounts-mode-status');
   const accountsSingleSetup = byId('accounts-single-setup');
+  const accountsNewWorkspaceFields = byId('accounts-new-workspace-fields');
   /**
    * The appearance slider beside the `output` that reads it back.
    *
@@ -583,11 +585,19 @@
     accountsEnable.disabled = true;
     accountsStatus.textContent = 'Creating the separate workspace…';
     try {
+      let templateEntries: import('../shared/contracts.js').TemplateExportEntry[] = [];
+      if (accountsImportTemplates.checked) {
+        const { exportEntries, templateFilesystem } = await import('./template-store.js');
+        const filesystem = templateFilesystem();
+        if (!filesystem) throw new Error('template filesystem is unavailable');
+        templateEntries = exportEntries(filesystem);
+      }
       await window.gwNative.accounts.setup({
         name,
         templates: accountsTemplates.value as 'shared' | 'private',
         builds: accountsBuilds.value as 'shared' | 'private',
-        importTemplates: false,
+        importTemplates: accountsImportTemplates.checked,
+        templateEntries,
         importBuilds: accountsImportBuilds.checked,
       });
     } catch {
@@ -598,10 +608,19 @@
 
   void window.gwNative.accounts.get().then((state) => {
     const singleMode = state.mode === 'single';
-    accountsModeStatus.textContent = singleMode
-      ? 'Single Account mode is active.'
+    const activeProfiles = state.profiles.filter((profile) => !profile.archived);
+    const existingWorkspace = singleMode && activeProfiles.length > 0;
+    accountsModeStatus.textContent = existingWorkspace
+      ? `Single Account mode is active. Your ${activeProfiles.length} Multiple Accounts ${activeProfiles.length === 1 ? 'profile is' : 'profiles are'} ready to restore.`
+      : singleMode
+        ? 'Single Account mode is active.'
       : 'Multiple Accounts mode is active. Use the Account Picker to manage profiles or return to Single Account mode.';
     accountsSingleSetup.hidden = !singleMode;
+    if (existingWorkspace) {
+      accountsName.value = activeProfiles[0]?.name ?? 'Account';
+      accountsNewWorkspaceFields.hidden = true;
+      accountsEnable.textContent = 'Restore Multiple Accounts and Restart…';
+    }
   }).catch(() => {
     accountsModeStatus.textContent = 'Account mode could not be read.';
     accountsSingleSetup.hidden = true;

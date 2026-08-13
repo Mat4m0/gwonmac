@@ -42,7 +42,7 @@ Keychain items.
 
 ## Setup and mode transitions
 
-Settings shows **Set Up Multiple Accounts…** only in the Advanced pane until
+Settings shows Multiple Accounts setup only in the Accounts pane until
 the player enables the mode.
 
 Setup creates a staged Multiple Accounts workspace and at least one profile.
@@ -64,18 +64,20 @@ transition copies data automatically.
 Sharing applies only among Multiple Accounts profiles. Each profile selects
 **Shared** or **Private** independently for templates and for builds and teams.
 
-Build libraries are main-process documents with revisions. A stale renderer
-cannot replace a newer shared library without an explicit conflict result.
+Build libraries remain main-process documents. Main serializes writes per
+library and refuses a save whose last-read baseline is stale, so one profile
+cannot silently replace another profile's newer shared library.
 
 Every profile keeps an isolated IDBFS mount. A profile that uses Shared
 templates receives a working projection of the canonical Multiple Accounts
 template library. The app reconciles that projection before launch and after a
-clean close. It does not mutate another running renderer's filesystem.
+clean close or reload. It does not mutate another running renderer's filesystem.
 
 Template reconciliation preserves both contents when two different templates
 use the same normalized path. A deletion cannot silently discard a concurrent
 edit. The canonical library and each profile checkpoint use revisions, so a
-projection can be rebuilt.
+projection can be rebuilt. Private template libraries use the same snapshot
+format but never reconcile with another profile.
 
 ## Lifecycle and recovery
 

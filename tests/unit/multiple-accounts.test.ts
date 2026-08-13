@@ -10,6 +10,8 @@ import {
   createMultiWorkspace,
   loadAccountMode,
   loadMultiWorkspace,
+  removeArchivedMultiProfile,
+  restoreMultiProfile,
   saveAccountMode,
   saveMultiWorkspace,
   updateMultiProfile,
@@ -141,5 +143,13 @@ describe("Multiple Accounts documents", () => {
     assert.equal(archived.profiles[1]!.id, added.profiles[1]!.id);
     assert.equal(archived.profiles[1]!.name, "Storage Alt");
     assert.equal(archived.profiles[1]!.archived, true);
+    const restored = restoreMultiProfile(archived, archived.profiles[1]!.id);
+    assert.equal(restored.profiles[1]!.archived, false);
+    const archivedAgain = archiveMultiProfile(restored, restored.profiles[1]!.id);
+    const removed = removeArchivedMultiProfile(
+      archivedAgain,
+      archivedAgain.profiles[1]!.id,
+    );
+    assert.deepEqual(removed.profiles.map((profile) => profile.name), ["Primary"]);
   });
 });

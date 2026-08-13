@@ -142,3 +142,32 @@ export function archiveMultiProfile(
     ),
   });
 }
+
+export function restoreMultiProfile(
+  workspace: MultiWorkspace,
+  profileId: ProfileId,
+): MultiWorkspace {
+  if (!workspace.profiles.some((profile) => profile.id === profileId)) {
+    throw new AppError("bad_multi_workspace", "profile does not exist");
+  }
+  return parseMultiWorkspace({
+    ...workspace,
+    profiles: workspace.profiles.map((profile) =>
+      profile.id === profileId ? { ...profile, archived: false } : profile,
+    ),
+  });
+}
+
+export function removeArchivedMultiProfile(
+  workspace: MultiWorkspace,
+  profileId: ProfileId,
+): MultiWorkspace {
+  const profile = workspace.profiles.find((candidate) => candidate.id === profileId);
+  if (!profile?.archived) {
+    throw new AppError("bad_multi_workspace", "only an archived profile can be deleted");
+  }
+  return parseMultiWorkspace({
+    ...workspace,
+    profiles: workspace.profiles.filter((candidate) => candidate.id !== profileId),
+  });
+}

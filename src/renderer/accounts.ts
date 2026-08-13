@@ -18,6 +18,8 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
   const newProfile = required<HTMLButtonElement>('accounts-new');
   const status = required<HTMLElement>('accounts-status');
   const single = required<HTMLButtonElement>('accounts-single');
+  const archived = required<HTMLDetailsElement>('accounts-archived');
+  const archivedList = required<HTMLElement>('accounts-archived-list');
   const profileDialog = required<HTMLDialogElement>('profile-dialog');
   const profileForm = required<HTMLFormElement>('profile-form');
   const profileTitle = required<HTMLElement>('profile-dialog-title');
@@ -38,8 +40,9 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
   }
 
   function syncActions() {
+    const inputs = list.querySelectorAll<HTMLInputElement>('input');
     open.disabled = selectedIds().length === 0;
-    const allSelected = profiles.length > 0 && selectedIds().length === profiles.length;
+    const allSelected = inputs.length > 0 && selectedIds().length === inputs.length;
     selectAll.textContent = allSelected ? 'Clear selection' : 'Select all';
   }
 
@@ -50,7 +53,7 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     checkbox.type = 'checkbox';
     checkbox.name = 'profile';
     checkbox.value = profile.id;
-    checkbox.checked = profile.state !== 'failed';
+    checkbox.checked = false;
     checkbox.id = `profile-${profile.id}`;
     const details = document.createElement('label');
     details.htmlFor = checkbox.id;
@@ -75,6 +78,47 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     return row;
   }
 
+  function renderArchivedProfile(profile: AccountProfileSummary) {
+    const row = document.createElement('div');
+    row.className = 'archived-profile';
+    const name = document.createElement('strong');
+    name.textContent = profile.name;
+    const restore = document.createElement('button');
+    restore.type = 'button';
+    restore.className = 'ui-button';
+    restore.textContent = 'Restore';
+    restore.addEventListener('click', async () => {
+      restore.disabled = true;
+      try {
+        await window.gwNative.accounts.restore(profile.id);
+        setStatus('Profile restored.', 'success');
+        await refresh();
+      } catch {
+        restore.disabled = false;
+        setStatus('The profile could not be restored.', 'error');
+      }
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'ui-button';
+    remove.dataset.variant = 'danger';
+    remove.textContent = 'Delete…';
+    remove.addEventListener('click', async () => {
+      if (!window.confirm(`Permanently delete “${profile.name}”? Its saved login, Guild Wars files, private templates, builds, and window state cannot be recovered.`)) return;
+      remove.disabled = true;
+      try {
+        await window.gwNative.accounts.delete(profile.id);
+        setStatus('Profile permanently deleted.', 'success');
+        await refresh();
+      } catch {
+        remove.disabled = false;
+        setStatus('The profile could not be fully deleted. Try again.', 'error');
+      }
+    });
+    row.append(name, restore, remove);
+    return row;
+  }
+
   const choice = (name: string) =>
     profileForm.elements.namedItem(name) as RadioNodeList;
 
@@ -90,7 +134,8 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     profileName.value = profile?.name ?? '';
     choice('profileBuilds').value = profile?.builds ?? 'shared';
     choice('profileTemplates').value = profile?.templates ?? 'shared';
-    profileArchive.hidden = !profile || profiles.length < 2;
+    profileArchive.hidden =
+      !profile || profiles.filter((item) => !item.archived).length < 2;
     profileArchive.disabled = profile?.state === 'running';
     profileDialog.showModal();
     profileName.focus();
@@ -101,7 +146,11 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
       const state = await window.gwNative.accounts.get();
       if (state.mode !== 'multi') throw new Error('Multiple Accounts is not active');
       profiles = state.profiles;
-      list.replaceChildren(...profiles.map(renderProfile));
+      const active = profiles.filter((profile) => !profile.archived);
+      const inactive = profiles.filter((profile) => profile.archived);
+      list.replaceChildren(...active.map(renderProfile));
+      archivedList.replaceChildren(...inactive.map(renderArchivedProfile));
+      archived.hidden = inactive.length === 0;
       syncActions();
     } catch {
       list.replaceChildren();

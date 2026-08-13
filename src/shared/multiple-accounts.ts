@@ -39,6 +39,7 @@ const PROFILE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const CONTROL_CHARACTER = /[\p{Cc}\p{Cf}]/u;
 export const PROFILE_NAME_MAX_LENGTH = 48;
+export const MULTI_PROFILE_MAX_COUNT = 16;
 
 function record(value: unknown, owner: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -94,7 +95,11 @@ export function parseLauncherMode(value: unknown): LauncherModeDocument {
 
 export function parseMultiWorkspace(value: unknown): MultiWorkspace {
   const source = record(value, "Multiple Accounts workspace");
-  if (source.formatVersion !== 1 || !Array.isArray(source.profiles)) {
+  if (
+    source.formatVersion !== 1
+    || !Array.isArray(source.profiles)
+    || source.profiles.length > MULTI_PROFILE_MAX_COUNT
+  ) {
     throw new AppError("bad_multi_workspace", "workspace format or profiles are invalid");
   }
   const ids = new Set<string>();

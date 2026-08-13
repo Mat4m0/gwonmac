@@ -14,6 +14,7 @@ import {
   mutationInFlight,
   planImport,
   readTemplates,
+  replaceTemplateProjection,
   rescueStranded,
   strandedTemplates,
   templatePath,
@@ -147,6 +148,22 @@ test("addresses an export the way an export folder is addressed", () => {
     { path: "Equipment/PvP Set.txt", contents: EQUIPMENT },
     { path: "Skills/Warrior/Shockaxe.txt", contents: SKILLS },
   ]);
+});
+
+test("replaces a profile projection with the canonical snapshot", async () => {
+  const fs = fakeFilesystem({
+    [`${SKILLS_DIR}/Old.txt`]: SKILLS,
+    [`${SKILLS_DIR}/Folder/Old child.txt`]: OTHER_SKILLS,
+  });
+  await replaceTemplateProjection(fs, [
+    { path: "Equipment/PvP Set.txt", contents: EQUIPMENT },
+    { path: "Skills/New.txt", contents: OTHER_SKILLS },
+  ]);
+  assert.deepEqual(exportEntries(fs), [
+    { path: "Equipment/PvP Set.txt", contents: EQUIPMENT },
+    { path: "Skills/New.txt", contents: OTHER_SKILLS },
+  ]);
+  assert.equal(fs.syncs, 1);
 });
 
 test("re-importing the same folder does nothing at all", () => {

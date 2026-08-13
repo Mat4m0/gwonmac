@@ -58,7 +58,6 @@ describe("resolved profile paths", () => {
     // — nothing else collects them.
     assert.deepEqual(documentDirectories(gamePaths(root)), [
       root,
-      `${root}/multi`,
       `${root}/game`,
       `${root}/diagnostics`,
       `${root}/game/chunks`,
@@ -81,6 +80,7 @@ describe("resolved profile paths", () => {
       templates: `${root}/multi/profiles/${id}/templates.json`,
       templateSync: `${root}/multi/profiles/${id}/template-sync.json`,
       windowState: `${root}/multi/profiles/${id}/window-state.json`,
+      gameStorageClearRequest: `${root}/multi/profiles/${id}/clear-game-storage-on-start`,
     });
   });
 

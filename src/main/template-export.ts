@@ -16,11 +16,11 @@ import { dialog, type BrowserWindow } from "electron";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import {
-  TEMPLATE_CEILINGS,
   type TemplateExportEntry,
   type TemplateExportResult,
 } from "../shared/contracts.js";
-import { AppError, ValidationError, type ErrorCode } from "../shared/errors.js";
+import { AppError, type ErrorCode } from "../shared/errors.js";
+import { parseTemplateEntries } from "../shared/template-entries.js";
 
 /** The folder an export creates. Numbered rather than merged, so nothing is replaced. */
 const DESTINATION_NAME = "Guild Wars Build Templates";
@@ -30,9 +30,6 @@ const MAX_DESTINATIONS = 99;
  * `Skills/<name>.txt` or `Skills/<folder>/<name>.txt` — two or three segments,
  * which is the deepest the client can key a template.
  */
-const MIN_SEGMENTS = 2;
-const MAX_SEGMENTS = 3;
-
 /**
  * The rule the writer relies on, applied at the boundary rather than trusted.
  *
@@ -42,52 +39,7 @@ const MAX_SEGMENTS = 3;
  * write the player never asked for.
  */
 export function parseExportEntries(value: unknown): TemplateExportEntry[] {
-  if (!Array.isArray(value) || value.length > TEMPLATE_CEILINGS.entries) {
-    throw new ValidationError("invalid template export");
-  }
-  return value.map((entry) => {
-    if (
-      typeof entry !== "object"
-      || entry === null
-      || Object.keys(entry).length !== 2
-    ) {
-      throw new ValidationError("invalid template export entry");
-    }
-    const { path: relative, contents } = entry as Record<string, unknown>;
-    if (
-      typeof relative !== "string"
-      || typeof contents !== "string"
-      || contents.length === 0
-      || contents.length > TEMPLATE_CEILINGS.codeLength
-    ) {
-      throw new ValidationError("invalid template export entry");
-    }
-    assertRelativePath(relative);
-    return { path: relative, contents };
-  });
-}
-
-function assertRelativePath(relative: string): void {
-  const segments = relative.split("/");
-  if (segments.length < MIN_SEGMENTS || segments.length > MAX_SEGMENTS) {
-    throw new ValidationError("invalid template export path");
-  }
-  if (!relative.toLowerCase().endsWith(".txt")) {
-    throw new ValidationError("invalid template export path");
-  }
-  for (const segment of segments) {
-    if (
-      segment.length === 0
-      || segment.length > TEMPLATE_CEILINGS.nameLength + ".txt".length
-      || segment === "."
-      || segment === ".."
-      || segment.includes("\\")
-      || segment.includes(":")
-      || /\p{Cc}/u.test(segment)
-    ) {
-      throw new ValidationError("invalid template export path");
-    }
-  }
+  return parseTemplateEntries(value);
 }
 
 /**

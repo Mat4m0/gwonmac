@@ -113,6 +113,11 @@ h1 {
 .accounts-help { margin: var(--ui-space-3) 0; }
 .accounts-actions { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); }
 .accounts-actions + .ui-status-line { min-height: 24px; margin: var(--ui-space-3) 0 0; }
+.accounts-archived { margin-top: var(--ui-space-4); border-top: 1px solid var(--ui-line-soft); padding-top: var(--ui-space-3); }
+.accounts-archived summary { color: var(--ui-text-muted); cursor: pointer; }
+.accounts-archived-list { display: grid; gap: var(--ui-space-2); margin-top: var(--ui-space-3); }
+.archived-profile { display: flex; align-items: center; gap: var(--ui-space-2); padding: var(--ui-space-2) 0; }
+.archived-profile strong { flex: 1; color: var(--ui-text-bright); }
 
 .accounts-foot {
   display: flex;

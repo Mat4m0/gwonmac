@@ -614,6 +614,7 @@ export interface AccountProfileSummary {
   readonly name: string;
   readonly templates: LibraryScope;
   readonly builds: LibraryScope;
+  readonly archived: boolean;
   readonly state: MultiProfileRuntimeState;
 }
 
@@ -627,7 +628,13 @@ export interface AccountsSetupRequest {
   readonly templates: LibraryScope;
   readonly builds: LibraryScope;
   readonly importTemplates: boolean;
+  readonly templateEntries: readonly TemplateExportEntry[];
   readonly importBuilds: boolean;
+}
+
+export interface AccountTemplateLibrary {
+  readonly revision: number;
+  readonly entries: readonly TemplateExportEntry[];
 }
 
 export interface AccountProfileRequest {
@@ -771,6 +778,10 @@ export const IPC = {
   accountsCreate: "gw:accounts:create",
   accountsUpdate: "gw:accounts:update",
   accountsArchive: "gw:accounts:archive",
+  accountsRestore: "gw:accounts:restore",
+  accountsDelete: "gw:accounts:delete",
+  accountsTemplatesLoad: "gw:accounts:templatesLoad",
+  accountsTemplatesSave: "gw:accounts:templatesSave",
   accountsUseSingle: "gw:accounts:useSingle",
 } as const;
 
@@ -955,6 +966,10 @@ export interface GwNativeApi {
     create(value: AccountProfileRequest): Promise<AccountsState>;
     update(value: AccountProfileUpdateRequest): Promise<AccountsState>;
     archive(profileId: ProfileId): Promise<AccountsState>;
+    restore(profileId: ProfileId): Promise<AccountsState>;
+    delete(profileId: ProfileId): Promise<AccountsState>;
+    loadTemplates(): Promise<AccountTemplateLibrary | null>;
+    saveTemplates(entries: readonly TemplateExportEntry[]): Promise<void>;
     useSingle(): Promise<void>;
   };
 }

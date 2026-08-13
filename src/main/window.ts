@@ -39,7 +39,7 @@ import { logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
-import { toggleTools } from "./renderer-commands.js";
+import { sendRendererCommand, toggleTools } from "./renderer-commands.js";
 import { installApplicationMenu } from "./window-menu.js";
 import { windowRegistry, type WindowContext } from "./window-registry.js";
 
@@ -63,6 +63,7 @@ export interface WindowHost {
   stopCapture: () => Promise<void>;
   reloadGame: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
+  gameWindowClosed?: () => void;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -292,6 +293,7 @@ export function createMainWindow(
   } = {},
 ): BrowserWindow {
   const context = options.context ?? { mode: "single", role: "game" };
+  let profileCloseStarted = false;
   const statePath = options.windowStatePath ?? gamePaths().windowState;
   const restoredWindowState = preparedWindowStates.get(statePath) ?? null;
   const initialState = restoredWindowState
@@ -499,7 +501,17 @@ export function createMainWindow(
 
   win.on("close", (event) => {
     if (isQuitting()) return;
-    if (context.mode === "multi") return;
+    if (context.mode === "multi") {
+      if (profileCloseStarted) return;
+      event.preventDefault();
+      profileCloseStarted = true;
+      void (async () => {
+        await sendRendererCommand(win, { type: "filesystem.sync" });
+        await flushWindowState(win);
+        if (!win.isDestroyed()) win.destroy();
+      })();
+      return;
+    }
     event.preventDefault();
     logEvent({ k: "window.closeRequested" });
     app.quit();
@@ -509,6 +521,7 @@ export function createMainWindow(
     windowRegistry.unregister(win);
     windowStateOwners.delete(win);
     if (mainWindow === win) mainWindow = null;
+    if (context.mode === "multi") host.gameWindowClosed?.();
   });
 
   installApplicationMenu({

@@ -41,6 +41,8 @@ function rendererCheckout(): string {
     writeFileSync(file, contents);
   };
   write("src/renderer/index.html", "<!doctype html>\n");
+  write("src/renderer/accounts.html", "<!doctype html>\n");
+  write("src/renderer/accounts.css", "css");
   write("src/renderer/loading.js", "export {};\n");
   write("src/renderer/gw-native.d.ts", "export {};\n");
   write("src/renderer/favicon.ico", "ico");
@@ -116,6 +118,8 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       .map((file) => path.relative(path.join(root, "build/renderer"), file))
       .sort();
     assert.deepEqual(relative, [
+      "accounts.css",
+      "accounts.html",
       "favicon.ico",
       "favicon.png",
       "fonts/COPYING-QUALITYPE",

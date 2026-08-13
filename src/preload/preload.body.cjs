@@ -242,6 +242,10 @@ const api = {
     create: (value) => ipcRenderer.invoke(IPC.accountsCreate, value),
     update: (value) => ipcRenderer.invoke(IPC.accountsUpdate, value),
     archive: (profileId) => ipcRenderer.invoke(IPC.accountsArchive, profileId),
+    restore: (profileId) => ipcRenderer.invoke(IPC.accountsRestore, profileId),
+    delete: (profileId) => ipcRenderer.invoke(IPC.accountsDelete, profileId),
+    loadTemplates: () => ipcRenderer.invoke(IPC.accountsTemplatesLoad),
+    saveTemplates: (entries) => ipcRenderer.invoke(IPC.accountsTemplatesSave, entries),
     useSingle: () => ipcRenderer.invoke(IPC.accountsUseSingle),
   },
 };

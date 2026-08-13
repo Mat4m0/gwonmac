@@ -7,7 +7,7 @@
  * a settings value or reset marker is durable, a failed relaunch cannot turn
  * that completed write into a false failure response.
  */
-import { app, dialog, session } from "electron";
+import { app, dialog, session, type Session } from "electron";
 import type { BrowserWindow } from "electron";
 import { rm, stat, writeFile } from "node:fs/promises";
 import type {
@@ -208,13 +208,24 @@ export async function applyPendingCacheClear(paths: GamePaths): Promise<void> {
 export async function applyPendingGameStorageReset(
   paths: GamePaths,
 ): Promise<void> {
-  if (!(await pendingMarkerExists(paths.gameStorageClearRequest))) return;
+  await applyPendingSessionStorageReset(
+    session.defaultSession,
+    paths.gameStorageClearRequest,
+  );
+}
+
+export async function applyPendingSessionStorageReset(
+  owner: Session,
+  markerPath: string,
+): Promise<boolean> {
+  if (!(await pendingMarkerExists(markerPath))) return false;
   // This runs before a renderer can mount IDBFS. Clearing it later would race
   // the game's auto-persist and could recreate files before quit.
-  await session.defaultSession.clearStorageData({
+  await owner.clearStorageData({
     origin: "gw://app",
     storages: ["indexdb"],
   });
-  await rm(paths.gameStorageClearRequest, { force: true });
+  await rm(markerPath, { force: true });
   logEvent({ k: "filesystem.resetCompleted" });
+  return true;
 }

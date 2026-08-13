@@ -21,6 +21,7 @@ import type {
   AccountsSetupRequest,
   AccountProfileRequest,
   AccountProfileUpdateRequest,
+  AccountTemplateLibrary,
   AccountsState,
   AppUpdateState,
   CacheInfo,
@@ -36,10 +37,12 @@ import type {
   SteamRefusalReason,
   SteamTokenResult,
   StoredCredentials,
+  TemplateExportEntry,
 } from "../shared/contracts.js";
 import {
   parseProfileId,
   parseProfileName,
+  MULTI_PROFILE_MAX_COUNT,
   type LibraryScope,
   type ProfileId,
 } from "../shared/multiple-accounts.js";
@@ -87,6 +90,7 @@ import type {
 } from "./steam-acquire.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
+import { Mutex } from "./core/mutex.js";
 import { FREE_MARGIN, type ChunkStore } from "./core/chunk-store.js";
 import {
   count,
@@ -122,6 +126,7 @@ export interface IpcContext {
   credentialsStoreFor: (win: BrowserWindow) => CredentialsStore;
   steamSessionStoreFor: (win: BrowserWindow) => SteamSessionStore;
   buildLibraryPathFor: (win: BrowserWindow) => string;
+  gameStorageResetMarkerFor: (win: BrowserWindow) => string;
   getProgress: () => DownloadProgress;
   getChunkStore: () => ChunkStore | null;
   getSettings: () => Promise<AppSettings>;
@@ -147,7 +152,14 @@ export interface IpcContext {
   createAccount: (request: AccountProfileRequest) => Promise<AccountsState>;
   updateAccount: (request: AccountProfileUpdateRequest) => Promise<AccountsState>;
   archiveAccount: (profileId: ProfileId) => Promise<AccountsState>;
+  restoreAccount: (profileId: ProfileId) => Promise<AccountsState>;
+  deleteAccount: (profileId: ProfileId) => Promise<AccountsState>;
   useSingleAccountMode: () => Promise<void>;
+  loadAccountTemplates: (win: BrowserWindow) => Promise<AccountTemplateLibrary | null>;
+  saveAccountTemplates: (
+    win: BrowserWindow,
+    entries: readonly TemplateExportEntry[],
+  ) => Promise<void>;
 }
 
 type SteamInvokeChannel = "steamToken" | "steamStore" | "steamClear";
@@ -419,6 +431,7 @@ const asAccountsSetup = one((value: unknown): AccountsSetupRequest => {
     templates: parseLibraryScope(input.templates, "templates"),
     builds: parseLibraryScope(input.builds, "builds"),
     importTemplates: input.importTemplates,
+    templateEntries: parseExportEntries(input.templateEntries),
     importBuilds: input.importBuilds,
   };
 });
@@ -446,8 +459,14 @@ const asAccountProfileUpdate = one((value: unknown): AccountProfileUpdateRequest
 const asProfileId = one(parseProfileId);
 
 const asProfileIds = one((value: unknown): readonly ProfileId[] => {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 16) {
-    throw new ValidationError("select between 1 and 16 account profiles");
+  if (
+    !Array.isArray(value)
+    || value.length === 0
+    || value.length > MULTI_PROFILE_MAX_COUNT
+  ) {
+    throw new ValidationError(
+      `select between 1 and ${MULTI_PROFILE_MAX_COUNT} account profiles`,
+    );
   }
   const ids = value.map(parseProfileId);
   if (new Set(ids).size !== ids.length) {
@@ -670,6 +689,28 @@ export function registerIpcHandlers(ctx: IpcContext): {
 } {
   const paths = gamePaths();
   const secretOperations = new Set<Promise<unknown>>();
+  const buildBaselines = new WeakMap<BrowserWindow, Map<string, string>>();
+  const buildLocks = new Map<string, Mutex>();
+  const buildLock = (libraryPath: string): Mutex => {
+    let lock = buildLocks.get(libraryPath);
+    if (!lock) {
+      lock = new Mutex();
+      buildLocks.set(libraryPath, lock);
+    }
+    return lock;
+  };
+  const rememberBuildBaseline = (
+    win: BrowserWindow,
+    libraryPath: string,
+    library: unknown,
+  ): void => {
+    let values = buildBaselines.get(win);
+    if (!values) {
+      values = new Map();
+      buildBaselines.set(win, values);
+    }
+    values.set(libraryPath, JSON.stringify(library));
+  };
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
       return Promise.reject(new ValidationError("application is quitting"));
@@ -734,15 +775,31 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     buildLibraryGet: channel(nothing, async (win) => {
-      let recovered = false;
-      const library = await loadBuildLibrary(ctx.buildLibraryPathFor(win), () => {
-        recovered = true;
+      const libraryPath = ctx.buildLibraryPathFor(win);
+      return buildLock(libraryPath).run(async () => {
+        let recovered = false;
+        const library = await loadBuildLibrary(libraryPath, () => {
+          recovered = true;
+        });
+        rememberBuildBaseline(win, libraryPath, library);
+        return { library, recovered };
       });
-      return { library, recovered };
     }),
 
     buildLibrarySet: channel(one(parseBuildLibrary), async (win, library) => {
-      return saveBuildLibrary(ctx.buildLibraryPathFor(win), library);
+      const libraryPath = ctx.buildLibraryPathFor(win);
+      return buildLock(libraryPath).run(async () => {
+        const current = await loadBuildLibrary(libraryPath);
+        const expected = buildBaselines.get(win)?.get(libraryPath);
+        if (expected === undefined || expected !== JSON.stringify(current)) {
+          throw new ValidationError(
+            "build library changed in another account; reload before saving",
+          );
+        }
+        const saved = await saveBuildLibrary(libraryPath, library);
+        rememberBuildBaseline(win, libraryPath, saved);
+        return saved;
+      });
     }),
 
     settingsGet: channel(nothing, async () => {
@@ -818,7 +875,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     cacheStopDownload: channel(nothing, () => ctx.stopFullDownload()),
 
     gameStorageReset: channel(nothing, (win) =>
-      requestGameStorageReset(win, paths.gameStorageClearRequest),
+      requestGameStorageReset(win, ctx.gameStorageResetMarkerFor(win)),
     ),
 
     diagnosticsGraphics: channel(asGraphics, (_win, value) => {
@@ -932,10 +989,28 @@ export function registerIpcHandlers(ctx: IpcContext): {
       (_win, profileId) => ctx.archiveAccount(profileId),
       "hub",
     ),
+    accountsRestore: channel(
+      asProfileId,
+      (_win, profileId) => ctx.restoreAccount(profileId),
+      "hub",
+    ),
+    accountsDelete: channel(
+      asProfileId,
+      (_win, profileId) => ctx.deleteAccount(profileId),
+      "hub",
+    ),
     accountsUseSingle: channel(
       nothing,
       () => ctx.useSingleAccountMode(),
       "any",
+    ),
+    accountsTemplatesLoad: channel(
+      nothing,
+      (win) => ctx.loadAccountTemplates(win),
+    ),
+    accountsTemplatesSave: channel(
+      one(parseExportEntries),
+      (win, entries) => ctx.saveAccountTemplates(win, entries),
     ),
   } satisfies Record<Exclude<InvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
 

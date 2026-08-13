@@ -86,6 +86,7 @@ export interface MultiProfilePaths {
   readonly templates: string;
   readonly templateSync: string;
   readonly windowState: string;
+  readonly gameStorageClearRequest: string;
 }
 
 /** Resolve stores only after `parseProfileId` has made traversal impossible. */
@@ -100,6 +101,7 @@ export function multiProfilePaths(
     templates: path.join(root, "templates.json"),
     templateSync: path.join(root, "template-sync.json"),
     windowState: path.join(root, "window-state.json"),
+    gameStorageClearRequest: path.join(root, "clear-game-storage-on-start"),
   };
 }
 
