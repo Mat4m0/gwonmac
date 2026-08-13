@@ -1,10 +1,10 @@
-import type { AccountProfileSummary } from '../shared/contracts.js';
-
 /**
  * The Multiple Accounts Hub: a small projection of main-owned profile state.
  * Profile IDs originate in main and return only through checked controls; the
  * renderer never constructs paths, partitions, or credential names.
  */
+import type { AccountProfileSummary } from '../shared/contracts.js';
+
 (function () {
   const required = <T extends HTMLElement>(id: string): T => {
     const value = document.getElementById(id);

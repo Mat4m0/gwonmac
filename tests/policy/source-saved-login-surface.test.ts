@@ -63,7 +63,7 @@ test("only provisioned distribution channels enable persistent secrets", () => {
   );
   assert.match(
     main,
-    /if \(persistentSecrets && distribution\.cleanupLegacySecrets\) \{[\s\S]{0,200}cleanupLegacySecretFiles/,
+    /if \(\s*activeAccountMode === "single"\s*&& persistentSecrets\s*&& distribution\.cleanupLegacySecrets\s*\) \{[\s\S]{0,200}cleanupLegacySecretFiles/,
   );
   assert.match(main, /capable: distribution\.automaticUpdates/);
   assert.match(main, /persistentSecrets\s*\? loadNativeKeychain/);

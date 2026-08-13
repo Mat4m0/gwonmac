@@ -1,4 +1,7 @@
-/** The one trust-boundary parser for portable Guild Wars template entries. */
+/**
+ * The one trust-boundary parser for portable Guild Wars template entries.
+ * It validates bounded paths and contents before either process may store them.
+ */
 import {
   TEMPLATE_CEILINGS,
   type TemplateExportEntry,
