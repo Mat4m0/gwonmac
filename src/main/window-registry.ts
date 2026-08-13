@@ -78,3 +78,6 @@ export class WindowRegistry {
     return this.windows((context) => context.role === "game");
   }
 }
+
+/** The process has one native-window authority. */
+export const windowRegistry = new WindowRegistry();

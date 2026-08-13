@@ -41,6 +41,7 @@ import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
 import { toggleTools } from "./renderer-commands.js";
 import { installApplicationMenu } from "./window-menu.js";
+import { windowRegistry, type WindowContext } from "./window-registry.js";
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
 // on every launch. Focus-dependent specs leave the flag unset.
@@ -267,7 +268,15 @@ export function rendererInitArgument(options: {
   return `${RENDERER_INIT_ARGUMENT}${JSON.stringify(init)}`;
 }
 
-export function createMainWindow(host: WindowHost): BrowserWindow {
+export function createMainWindow(
+  host: WindowHost,
+  options: {
+    readonly context?: WindowContext;
+    readonly session?: Electron.Session;
+    readonly title?: string;
+  } = {},
+): BrowserWindow {
+  const context = options.context ?? { mode: "single", role: "game" };
   const initialState = restoredWindowState
     ? fitWindowStateToDisplays(
         restoredWindowState,
@@ -280,7 +289,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     ...(initialState?.bounds ?? { width: 1280, height: 800 }),
     minWidth: 800,
     minHeight: 600,
-    title: "Guild Wars Reforged",
+    title: options.title ?? "Guild Wars Reforged",
     show: false,
     webPreferences: {
       preload: preloadPath(),
@@ -293,10 +302,12 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
       spellcheck: false,
       allowRunningInsecureContent: false,
       experimentalFeatures: false,
+      ...(options.session ? { session: options.session } : {}),
     },
   });
 
   mainWindow = win;
+  windowRegistry.register(win, context);
   updateLongRunningTaskFeedback(host.getProgress(), win);
   const rendererId = win.webContents.id;
 
@@ -446,7 +457,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
           })
           .finally(() => {
             if (isQuitting() || win.isDestroyed()) return;
-            createMainWindow(host);
+            createMainWindow(host, options);
             win.destroy();
             logEvent({ k: "renderer.recovered" });
           });
@@ -461,12 +472,14 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
 
   win.on("close", (event) => {
     if (isQuitting()) return;
+    if (context.mode === "multi") return;
     event.preventDefault();
     logEvent({ k: "window.closeRequested" });
     app.quit();
   });
 
   win.on("closed", () => {
+    windowRegistry.unregister(win);
     if (mainWindow === win) mainWindow = null;
   });
 

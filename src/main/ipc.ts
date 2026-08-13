@@ -95,7 +95,7 @@ import { gamePaths } from "./paths.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
-import { getMainWindow } from "./window.js";
+import { windowRegistry, type WindowRegistry } from "./window-registry.js";
 import {
   applySettingsChange,
   confirmSettingsReset,
@@ -105,8 +105,10 @@ import {
 
 export interface IpcContext {
   sockets: SocketManager;
-  credentialsStore: CredentialsStore;
-  steamSessionStore: SteamSessionStore;
+  windows: WindowRegistry;
+  credentialsStoreFor: (win: BrowserWindow) => CredentialsStore;
+  steamSessionStoreFor: (win: BrowserWindow) => SteamSessionStore;
+  buildLibraryPathFor: (win: BrowserWindow) => string;
   getProgress: () => DownloadProgress;
   getChunkStore: () => ChunkStore | null;
   getSettings: () => Promise<AppSettings>;
@@ -130,9 +132,13 @@ export interface IpcContext {
 
 type SteamInvokeChannel = "steamToken" | "steamStore" | "steamClear";
 
-function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
+function assertSender(
+  registry: WindowRegistry,
+  event: Electron.IpcMainInvokeEvent,
+): BrowserWindow {
   const win = BrowserWindow.fromWebContents(event.sender);
-  if (!win || win !== getMainWindow()) {
+  const context = registry.contextForWebContents(event.sender.id);
+  if (!win || !context || context.role !== "game") {
     throw new AllowlistError("unowned ipc sender");
   }
   if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
@@ -579,7 +585,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
   drainSecrets(): Promise<void>;
 } {
   const paths = gamePaths();
-  const credentials = ctx.credentialsStore;
   const secretOperations = new Set<Promise<unknown>>();
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
@@ -644,16 +649,16 @@ export function registerIpcHandlers(ctx: IpcContext): {
       await ctx.sockets.close(socketId, win.webContents.id);
     }),
 
-    buildLibraryGet: channel(nothing, async () => {
+    buildLibraryGet: channel(nothing, async (win) => {
       let recovered = false;
-      const library = await loadBuildLibrary(paths.buildLibrary, () => {
+      const library = await loadBuildLibrary(ctx.buildLibraryPathFor(win), () => {
         recovered = true;
       });
       return { library, recovered };
     }),
 
-    buildLibrarySet: channel(one(parseBuildLibrary), async (_win, library) => {
-      return saveBuildLibrary(paths.buildLibrary, library);
+    buildLibrarySet: channel(one(parseBuildLibrary), async (win, library) => {
+      return saveBuildLibrary(ctx.buildLibraryPathFor(win), library);
     }),
 
     settingsGet: channel(nothing, async () => {
@@ -679,9 +684,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
       confirmSettingsReset(win, ctx.resetSettings),
     ),
 
-    credentialsLoad: channel(nothing, async () => {
+    credentialsLoad: channel(nothing, async (win) => {
       try {
-        return await secretOperation(() => credentials.load());
+        return await secretOperation(() => ctx.credentialsStoreFor(win).load());
       } catch (error) {
         logEvent({ k: "credentials.loadFailed", code: errorCode(error) });
         throw error;
@@ -692,9 +697,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
     // is that rule, so the boundary is validated without a second opinion.
     credentialsSave: channel(
       one(parseCredentials),
-      async (_win, value: StoredCredentials) => {
+      async (win, value: StoredCredentials) => {
         try {
-          await secretOperation(() => credentials.save(value));
+          await secretOperation(() => ctx.credentialsStoreFor(win).save(value));
         } catch (error) {
           logEvent({ k: "credentials.saveFailed", code: errorCode(error) });
           throw error;
@@ -702,9 +707,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
       },
     ),
 
-    credentialsClear: channel(nothing, async () => {
+    credentialsClear: channel(nothing, async (win) => {
       try {
-        await secretOperation(() => credentials.clear());
+        await secretOperation(() => ctx.credentialsStoreFor(win).clear());
       } catch (error) {
         logEvent({ k: "credentials.clearFailed", code: errorCode(error) });
         throw error;
@@ -816,10 +821,11 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
   } satisfies Record<Exclude<InvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
 
-  registerChannelDefinitions(handlers);
+  registerChannelDefinitions(ctx.windows, handlers);
   const steamSettled = registerSteamIpcHandlers(
     ctx.acquireSteamToken,
-    ctx.steamSessionStore,
+    ctx.steamSessionStoreFor,
+    ctx.windows,
   );
   return {
     async drainSecrets() {
@@ -832,6 +838,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
 }
 
 function registerChannelDefinitions(
+  windows: WindowRegistry,
   handlers: Partial<Record<InvokeChannel, AnyChannelDef>>,
 ): void {
   // One registration, uniform and total: `assertSender` first, then the
@@ -849,7 +856,7 @@ function registerChannelDefinitions(
     const def = definition as ChannelDef<unknown, unknown>;
     const name = key as InvokeChannel;
     ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
-      const win = assertSender(event);
+      const win = assertSender(windows, event);
       let input: unknown;
       try {
         input = def.parse(args);
@@ -864,9 +871,22 @@ function registerChannelDefinitions(
 
 export function registerSteamIpcHandlers(
   acquireSteamToken: IpcContext["acquireSteamToken"],
-  store: SteamSessionStore,
+  storeOrResolver: SteamSessionStore | ((win: BrowserWindow) => SteamSessionStore),
+  windows?: WindowRegistry,
 ): () => Promise<void> {
-  const steam = new SteamSessionCoordinator(store);
+  const storeFor = typeof storeOrResolver === "function"
+    ? storeOrResolver
+    : () => storeOrResolver;
+  const coordinators = new Map<SteamSessionStore, SteamSessionCoordinator>();
+  const coordinatorFor = (win: BrowserWindow): SteamSessionCoordinator => {
+    const store = storeFor(win);
+    let coordinator = coordinators.get(store);
+    if (!coordinator) {
+      coordinator = new SteamSessionCoordinator(store);
+      coordinators.set(store, coordinator);
+    }
+    return coordinator;
+  };
 
   const runSteamSignIn = async (
     win: BrowserWindow,
@@ -893,6 +913,7 @@ export function registerSteamIpcHandlers(
     // rebuilds its own login screen from a refused credential and a rejection
     // here would only turn "no token" into a launch failure.
     steamToken: channel(asSilentFlag, async (win, silent) => {
+      const steam = coordinatorFor(win);
       if (isQuitting()) throw new ValidationError("application is quitting");
       const resolution = await steam.resolve({
         silent,
@@ -920,14 +941,16 @@ export function registerSteamIpcHandlers(
       } satisfies SteamTokenResult;
     }),
 
-    steamStore: channel(asSteamStoreback, async (_win, { token, expiry }) => {
+    steamStore: channel(asSteamStoreback, async (win, { token, expiry }) => {
       if (isQuitting()) throw new ValidationError("application is quitting");
+      const steam = coordinatorFor(win);
       const outcome = await steam.refresh(token, expiry);
       logEvent({ k: "steam.storeback", outcome });
     }),
 
-    steamClear: channel(nothing, async () => {
+    steamClear: channel(nothing, async (win) => {
       if (isQuitting()) throw new ValidationError("application is quitting");
+      const steam = coordinatorFor(win);
       try {
         await steam.clear();
         logEvent({ k: "steam.tokenCleared" });
@@ -938,8 +961,10 @@ export function registerSteamIpcHandlers(
     }),
   } satisfies Record<SteamInvokeChannel, AnyChannelDef>;
 
-  registerChannelDefinitions(handlers);
-  return () => steam.settled();
+  registerChannelDefinitions(windows ?? windowRegistry, handlers);
+  return async () => {
+    await Promise.all([...coordinators.values()].map((steam) => steam.settled()));
+  };
 }
 
 export function emitSocketEvent(ownerId: number, event: SocketEvent): void {

@@ -107,6 +107,7 @@ import {
   applyPendingCacheClear,
   applyPendingGameStorageReset,
 } from "./settings-actions.js";
+import { windowRegistry } from "./window-registry.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -473,8 +474,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   const ipcCleanup = registerIpcHandlers({
     sockets,
-    credentialsStore,
-    steamSessionStore,
+    windows: windowRegistry,
+    credentialsStoreFor: () => credentialsStore,
+    steamSessionStoreFor: () => steamSessionStore,
+    buildLibraryPathFor: () => paths.buildLibrary,
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
     getSettings: () => loadSettings(paths.settings),
