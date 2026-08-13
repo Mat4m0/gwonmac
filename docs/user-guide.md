@@ -25,6 +25,31 @@ the client files, asks how to store game data, and starts Guild Wars. Later
 starts use verified cached data when possible. Login and online play still need
 ArenaNet.
 
+## Single and Multiple Accounts
+
+Single Account mode is the default. It starts Guild Wars directly and keeps
+the login, templates, builds, settings, and window state that you already use.
+
+Open **Settings → Advanced → Set Up Multiple Accounts…** to create a separate
+Multiple Accounts workspace. Every later Multiple Accounts start opens the
+Account Picker. Select one or more profiles and choose **Open Accounts**.
+
+Each profile signs in separately and keeps separate Guild Wars preferences,
+screenshots, chat logs, saved login, and window position. Profiles can use the
+shared Multiple Accounts template and build libraries or private libraries.
+
+Setup can copy templates, builds, and teams from Single Account mode. This is a
+one-time copy. The originals remain in Single Account mode. Later changes do
+not synchronize between the two modes.
+
+Use **Settings → Accounts → Return to Single Account Mode** to change the next
+launch. Your Multiple Accounts profiles stay available if you enable the mode
+again. The modes share verified game downloads, so creating a profile does not
+download another complete copy of Guild Wars.
+
+Every account window is independently controlled. The app does not broadcast
+keyboard, mouse, or controller input between windows.
+
 A local source build has a temporary identity. It does not share saved-login
 access with the published Release app.
 

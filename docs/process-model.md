@@ -14,6 +14,8 @@ those facts.
 ```text
 Electron main process
   application lifecycle
+  active Single or Multiple Accounts mode
+  game-window registry
   ArenaNet client and content updates
   verified client generations and rollback
   native chunk storage
@@ -30,7 +32,7 @@ Sandboxed preload
           | frozen window.gwNative capabilities
           v
 Chromium renderer
-  launcher and settings
+  account picker, launcher, and settings
   Guild Wars Module host
   input and presentation
   required Core features
@@ -46,6 +48,23 @@ routes.
 
 The preload exposes one frozen `window.gwNative` object. It transports
 capabilities. It does not own game rules or persistence rules.
+
+## Account modes
+
+The process captures one account mode at startup. It does not switch storage
+owners while it runs.
+
+Single Account mode uses the existing default Electron session, saved-login
+items, build library, and window state. Multiple Accounts mode does not treat
+Single Account mode as a profile. Each Multiple Accounts profile uses a
+non-default persistent Electron session and profile-scoped native stores.
+
+Both modes use the same verified client generation, chunk store, derived
+client artifacts, and application updater. These stores contain rebuildable
+client infrastructure. They do not contain player account state.
+
+[Multiple Accounts](multiple-accounts.md) owns the complete data and transition
+contract.
 
 ## Client generation ownership
 
@@ -163,10 +182,12 @@ The main process owns these native stores:
 - verified ArenaNet client generations;
 - the content-addressed chunk store;
 - bounded diagnostics files;
-- two saved-login items in Apple's Data Protection Keychain.
+- Single Account and profile-scoped saved-login items in Apple's Data
+  Protection Keychain.
 
-The renderer owns the Guild Wars IDBFS mount under the `gw://app` origin. This
-mount contains game preferences, templates, screenshots, and chat logs.
+Each game renderer owns one Guild Wars IDBFS mount under its isolated
+`gw://app` session. The mount contains game preferences, templates,
+screenshots, and chat logs. Two renderers do not mount the same browser store.
 
 Derived WASM modules and caches are rebuildable. They are never certification
 authority.
@@ -176,9 +197,10 @@ authority.
 The Release, Preview, and signed Development identities use separate Keychain
 authority. Each identity can read only its own provisioned items.
 
-One item stores the ArenaNet user name and password. One item stores the Steam
-access token and expiry. A read failure does not delete an item. The game can
-continue to its login screen when an item is unavailable.
+Each account scope has one item for the ArenaNet user name and password and one
+item for the Steam access token and expiry. The existing fixed items belong
+only to Single Account mode. A read failure does not delete an item. The game
+can continue to its login screen when an item is unavailable.
 
 Unpackaged and ordinary local builds use volatile storage. They do not claim a
 provisioned Keychain item. There is no file or `safeStorage` fallback.
@@ -209,11 +231,13 @@ rollback procedures.
 ## Application lifecycle
 
 The app acquires a single-instance lock before it reads or cleans profile-owned
-files. A second launch focuses the existing window and exits.
+files. In Single Account mode, a second launch focuses the game. In Multiple
+Accounts mode, it opens or focuses the Account Picker.
 
-Closing the game window quits the application. Quit follows one bounded cleanup
-path. It saves the renderer filesystem, closes sockets, stops background work,
-flushes diagnostics, and exits.
+Closing the Single Account game window quits the application. Closing one
+Multiple Accounts game window closes only that profile. Application quit saves
+all live renderer filesystems in parallel, closes sockets, stops background
+work, flushes diagnostics, and exits through one bounded cleanup path.
 
 Main-to-renderer events stop after the window or its `webContents` is destroyed.
 The app attempts renderer recovery only after unexpected renderer loss. It does
