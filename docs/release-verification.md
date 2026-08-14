@@ -83,7 +83,8 @@ The workflow has two decisions:
 approval 1
   -> build, sign, notarize, staple, and verify
   -> create or resume one checksum-pinned draft
-  -> maintainer tests the exact draft assets
+  -> workflow writes the machine-owned Verification record
+  -> maintainer tests the exact draft ZIP
 approval 2
   -> re-download and verify the same draft
   -> publish by removing the draft flag
@@ -105,20 +106,32 @@ replace a published asset in place.
 
 ## Test the exact draft
 
-Download the DMG, ZIP, `RELEASES.json`, `SHA256SUMS.txt`, and SBOM from the draft.
-Do not test a local development build as release evidence.
+Close the installed application, then run:
+
+```bash
+pnpm release:test <tag>
+```
+
+The command downloads every exact draft asset, verifies its checksums, GitHub
+attestations, versions, Release identity, signature, entitlements,
+notarization, and Gatekeeper assessment. It extracts the updater ZIP into a
+temporary directory and launches that signed candidate directly.
+
+The command never changes `/Applications`. If the candidate fails, close it and
+reopen the installed version. There is no backup or rollback state to manage.
+Failed checks before launch remove their downloads automatically. A failure
+after launch retains the temporary candidate and prints its path for diagnosis.
+The command accepts Stable, Beta, and RC drafts; Alpha remains internal.
 
 On the maintainer Mac:
 
-1. Verify checksums and run the signed-app verifier on the app and DMG.
-2. Install from the DMG and start through Gatekeeper.
-3. Confirm the exact version.
-4. Start the current official client and reach a playable character.
-5. Enter an outpost and an explorable area.
-6. Play for ten minutes and check rendering, input, audio, templates, and saved
+1. Confirm the exact version.
+2. Start the current official client and reach a playable character.
+3. Enter an outpost and an explorable area.
+4. Play for ten minutes and check rendering, input, audio, templates, and saved
    login.
-7. Confirm current Core certification.
-8. If the release claims Tools support, test the claimed Target Distance and
+5. Confirm current Core certification.
+6. If the release claims Tools support, test the claimed Target Distance and
    Team Management behavior.
 
 A 16 GB Apple Silicon MacBook Pro is sufficient for this owned check. Record the
@@ -129,23 +142,20 @@ The run fails if it has an authentication loop, black game surface, GPU-process
 crash, context loss, persistent-file loss, or incorrect client-certification
 status.
 
-## Add the Verification record
+## Complete the Verification record
 
-Edit the draft release notes. Add a heading with this exact text:
-
-```text
-## Verification
-```
-
-Record the workflow URL, application and bundle versions, every complete staged
-checksum row, test result, Mac model, memory, macOS version, and current ArenaNet
-module SHA-256. Add a diagnostics fingerprint only when it informed the result.
+The workflow writes the technical fields and checksum rows. After testing,
+close the candidate and type `pass` or `fail`. A pass records the time, Mac
+model, memory, macOS version, and SHA-256 calculated directly from the active
+official ArenaNet module. It changes only the marked Verification block.
 
 Never record a credential, account identifier, token, or game traffic.
 
-The final workflow checks the heading and checksum rows. The protected reviewer
-must assess the human observations. Automation cannot decide whether the game
-looked and behaved correctly.
+The final workflow parses the record and requires an exact-draft result of
+`Passed`. The protected reviewer must still assess the human observation.
+Automation cannot decide whether the game looked and behaved correctly.
+The record is also tied to the original staging workflow URL. Re-run failed
+jobs on that workflow instead of starting another release run.
 
 Approve publication only when every applicable result passes and belongs to the
 exact draft assets.
@@ -245,6 +255,13 @@ The command must identify `Mat4m0/gwonmac` and verify the artifact digest.
 
 ## Install with Gatekeeper
 
-Open the verified DMG. Drag the application to Applications. Start it normally.
+CI builds, signs, notarizes, staples, mounts, and assesses every DMG. It also
+proves that the DMG and updater ZIP contain the same signed application.
+
+Manually install the exact DMG when Electron, Forge, signing, notarization,
+entitlements, bundle identity, DMG layout, or installation behavior changed.
+Open the verified DMG, drag the application to Applications, and start it
+normally. When the change is application-only, the temporary ZIP test is the
+owned human check.
 
 Do not disable Gatekeeper. Do not use a blanket quarantine-removal command.

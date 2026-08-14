@@ -20,6 +20,7 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   approvedDistributionEntitlements,
   distributionAuthorityName,
@@ -110,10 +111,10 @@ function verifyHelpers(channel: DistributionChannel, application: string): void 
   }
 }
 
-function verifyApplication(
+export function verifySignedApplication(
   channel: DistributionChannel,
   application: string,
-  profile: string,
+  profile?: string,
 ): void {
   capture("codesign", [
     "--verify",
@@ -139,7 +140,7 @@ function verifyApplication(
   const embedded = readFileSync(
     path.join(application, "Contents/embedded.provisionprofile"),
   );
-  if (!embedded.equals(readFileSync(profile))) {
+  if (profile && !embedded.equals(readFileSync(profile))) {
     fail(`${application} embeds a provisioning profile other than ${profile}`);
   }
   if (
@@ -155,7 +156,10 @@ function verifyApplication(
   capture("spctl", ["--assess", "--type", "execute", "--verbose=4", application]);
 }
 
-function verifyDiskImage(channel: DistributionChannel, diskImage: string): void {
+export function verifySignedDiskImage(
+  channel: DistributionChannel,
+  diskImage: string,
+): void {
   capture("codesign", ["--verify", "--verbose=2", diskImage]);
   expectSignature(diskImage, [
     `Authority=${distributionAuthorityName(channel)}`,
@@ -176,25 +180,27 @@ function verifyDiskImage(channel: DistributionChannel, diskImage: string): void 
   ]);
 }
 
-const args = process.argv.slice(2);
-const [application, diskImage] = args;
-const channel = process.env.GW_SIGNED_CHANNEL;
-const profile = process.env.APPLE_PROVISIONING_PROFILE;
-// Only an absent second argument means a package with no disk image. An empty
-// one is a caller whose lookup found nothing, and skipping the image
-// assertions for it would let a release pass by verifying less than it asked
-// to.
-if (
-  !application
-  || !isDistributionChannel(channel)
-  || !profile
-  || (args.length > 1 && !diskImage)
-) {
-  throw new Error(
-    "usage: GW_SIGNED_CHANNEL=<channel> APPLE_PROVISIONING_PROFILE=<profile> "
-      + "verify-signed-app <application> [<disk image>]",
-  );
+function main(): void {
+  const args = process.argv.slice(2);
+  const [application, diskImage] = args;
+  const channel = process.env.GW_SIGNED_CHANNEL;
+  const profile = process.env.APPLE_PROVISIONING_PROFILE;
+  // CI keeps the protected profile comparison. Local exact-draft testing can
+  // reuse every public verification check without possessing that secret.
+  if (
+    !application
+    || !isDistributionChannel(channel)
+    || !profile
+    || (args.length > 1 && !diskImage)
+  ) {
+    throw new Error(
+      "usage: GW_SIGNED_CHANNEL=<channel> APPLE_PROVISIONING_PROFILE=<profile> "
+        + "verify-signed-app <application> [<disk image>]",
+    );
+  }
+  verifySignedApplication(channel, application, profile);
+  if (diskImage) verifySignedDiskImage(channel, diskImage);
+  console.log(`Verified the signed ${channel} package at ${application}.`);
 }
-verifyApplication(channel, application, profile);
-if (diskImage) verifyDiskImage(channel, diskImage);
-console.log(`Verified the signed ${channel} package at ${application}.`);
+
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) main();

@@ -319,8 +319,9 @@ test("release workflow stages and publishes one tested, attested package version
   assert.match(releasePublish, /gh release download/);
   assert.doesNotMatch(
     releasePublish,
-    /actions\/checkout|actions\/download-artifact|actions\/attest|pnpm install|pnpm make|pnpm test|gh release create/,
+    /actions\/download-artifact|actions\/attest|pnpm install|pnpm make|pnpm test|gh release create/,
   );
+  assert.match(releasePublish, /actions\/checkout@[0-9a-f]{40}/);
   const signingMaterialRemovedAt = releaseBuild.indexOf(
     "security delete-keychain \"$APPLE_KEYCHAIN\"\n          rm -f",
   );
@@ -396,6 +397,10 @@ test("release workflow stages and publishes one tested, attested package version
     /verify-stable-beta-roundtrip\.ts/,
   );
   assert.match(workflow, /--draft --generate-notes/);
+  assert.match(
+    releaseStage,
+    /name: Prepare machine-owned Verification record[\s\S]*scripts\/release-verification-record\.ts stage/,
+  );
   assert.match(workflow, /--json isDraft --jq '\.isDraft'\)" != "true"/);
   assert.match(
     workflow,
@@ -428,6 +433,10 @@ test("release workflow stages and publishes one tested, attested package version
   );
   assert.match(
     releasePublish,
+    /EXPECTED_WORKFLOW_URL: \$\{\{ needs\.stage-release\.outputs\.workflow-url \}\}/,
+  );
+  assert.match(
+    releasePublish,
     /--json body,isDraft,isPrerelease,targetCommitish[\s\S]*isDraft'[\s\S]*isPrerelease'[\s\S]*targetCommitish'/,
   );
   assert.match(
@@ -436,7 +445,11 @@ test("release workflow stages and publishes one tested, attested package version
   );
   assert.match(
     releasePublish,
-    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*body_file="\$RUNNER_TEMP\/release-body\.md"[\s\S]*line\.trim\(\) === "## Verification"[\s\S]*replace\(\/\[\\t \]\+\/gu, " "\)[\s\S]*Draft release notes are missing checksum row/,
+    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*body_file="\$RUNNER_TEMP\/release-body\.md"[\s\S]*scripts\/release-verification-record\.ts publish/,
+  );
+  assert.match(
+    releaseBuild,
+    /hdiutil attach[\s\S]*diff -qr[\s\S]*Guild Wars Reforged\.app[\s\S]*hdiutil detach/,
   );
   assert.match(releasePublish, /gh release edit "\$TAG"[\s\S]*--draft=false/);
   assert.match(workflow, /RELEASES\.json/);
@@ -683,7 +696,23 @@ test("release verification tells the player to check, never to disable a check",
   const verification = read("docs/release-verification.md");
   assert.match(verification, /shasum -a 256 -c SHA256SUMS\.txt/);
   assert.match(verification, /gh attestation verify/);
+  assert.match(verification, /pnpm release:test <tag>/);
   assert.doesNotMatch(verification, /xattr|spctl --master-disable/);
+});
+
+test("the maintainer tests a temporary exact draft without replacing Applications", () => {
+  const command = read("scripts/test-draft-release.ts");
+  assert.match(script("release:test"), /scripts\/test-draft-release\.ts/);
+  assert.match(command, /mkdtempSync/);
+  assert.match(command, /verifyCandidate: \(application\) => verifySignedApplication\("release", application\)/);
+  assert.match(command, /dependencies\.run\("open", \["-n", candidate\]\)/);
+  assert.match(command, /gh\(dependencies, \["attestation", "verify", zip\]\)/);
+  assert.match(command, /replaceVerificationRecord/);
+  assert.match(command, /finally \{[\s\S]*rmSync\(temporary, \{ recursive: true \}\)/);
+  assert.match(command, /isPrerelease !== releaseTag\.prerelease/);
+  assert.match(command, /\(beta\|rc\)/);
+  assert.doesNotMatch(command, /alpha\|beta\|rc/);
+  assert.doesNotMatch(command, /renameSync|\/\.release-test-backup|--rollback|sudo|xattr/);
 });
 
 test("the website suite runs on its own path-filtered workflow", () => {
