@@ -618,10 +618,26 @@ jobs:
           cmp "$expected_assets" "$actual_assets"
           actual_checksums_sha256="$(shasum -a 256 "$remote/SHA256SUMS.txt" | awk '{print $1}')"
           test "$actual_checksums_sha256" = "$EXPECTED_CHECKSUMS_SHA256"
-          body="$(node -p 'JSON.parse(process.argv[1]).body' "$release_json")"
-          printf '%s\n' "$body" | grep -Eq '^## Verification[[:space:]]*$'
-          while IFS= read -r checksum_row; do
-            test -n "$checksum_row"
-            printf '%s\n' "$body" | grep -Fq "$checksum_row"
-          done < "$remote/SHA256SUMS.txt"
+          body_file="$RUNNER_TEMP/release-body.md"
+          node -e 'process.stdout.write(JSON.parse(process.argv[1]).body)' \
+            "$release_json" > "$body_file"
+          node - "$body_file" "$remote/SHA256SUMS.txt" <<'NODE'
+          const { readFileSync } = require("node:fs");
+          const [bodyPath, checksumsPath] = process.argv.slice(2);
+          const lines = readFileSync(bodyPath, "utf8").split(/\r?\n/u);
+          if (!lines.some((line) => line.trim() === "## Verification")) {
+            console.error("::error::Draft release notes need an exact ## Verification heading.");
+            process.exit(1);
+          }
+          const normalize = (line) => line.trim().replace(/[\t ]+/gu, " ");
+          const releaseRows = new Set(lines.map(normalize));
+          const requiredRows = readFileSync(checksumsPath, "utf8")
+            .split(/\r?\n/u)
+            .filter(Boolean);
+          for (const row of requiredRows) {
+            if (releaseRows.has(normalize(row))) continue;
+            console.error(`::error::Draft release notes are missing checksum row: ${row}`);
+            process.exitCode = 1;
+          }
+          NODE
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

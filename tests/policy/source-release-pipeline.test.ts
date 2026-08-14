@@ -436,7 +436,7 @@ test("release workflow stages and publishes one tested, attested package version
   );
   assert.match(
     releasePublish,
-    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*\^## Verification[\s\S]*while IFS= read -r checksum_row[\s\S]*grep -Fq "\$checksum_row"/,
+    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*body_file="\$RUNNER_TEMP\/release-body\.md"[\s\S]*line\.trim\(\) === "## Verification"[\s\S]*replace\(\/\[\\t \]\+\/gu, " "\)[\s\S]*Draft release notes are missing checksum row/,
   );
   assert.match(releasePublish, /gh release edit "\$TAG"[\s\S]*--draft=false/);
   assert.match(workflow, /RELEASES\.json/);
