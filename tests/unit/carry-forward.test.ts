@@ -21,6 +21,7 @@ describe("patch-day carry-forward report", () => {
     const report = createCarryForwardReport(
       template,
       enhancement,
+      "not-located",
       "2026-08-14T12:00:00.000Z",
     );
 

@@ -56,7 +56,11 @@ const {
   DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementSelectionFor,
+  requestedEnhancementCapabilities,
 } = await import("../../src/main/certification/enhancement-policy.ts");
+const { effectiveCapabilities } = await import(
+  "../../src/renderer/effective-enhancement-capabilities.ts"
+);
 
 test("a packaged build refuses GW_ENHANCEMENT_AUTOMATION=1, so the tools decide alone", () => {
   assert.equal(process.env.GW_ENHANCEMENT_AUTOMATION, "1");
@@ -152,4 +156,42 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
     )),
     null,
   );
+});
+
+test("player settings request only the selected independent features", () => {
+  assert.deepEqual(requestedEnhancementCapabilities({
+    ...DEFAULT_SETTINGS,
+    gwonmacTools: true,
+    teamManagement: false,
+    targetReadout: false,
+  }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorParty);
+  assert.deepEqual(requestedEnhancementCapabilities({
+    ...DEFAULT_SETTINGS,
+    gwonmacTools: true,
+    teamManagement: true,
+    targetReadout: true,
+  }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommands);
+});
+
+test("renderer consumes main's effective subset instead of launch intent", () => {
+  const available = { status: "available" as const };
+  const unavailable = {
+    status: "unavailable" as const,
+    reason: "preparation-failed" as const,
+  };
+  assert.deepEqual(effectiveCapabilities({
+    appVersion: "test",
+    healthToken: null,
+    extendedMemory: null,
+    compatibility: {
+      clientSha256: "a".repeat(64),
+      features: {
+        gameFileSaving: available,
+        nativeCursor: available,
+        targetObservation: available,
+        partyObservation: available,
+        teamApply: unavailable,
+      },
+    },
+  }), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetParty);
 });

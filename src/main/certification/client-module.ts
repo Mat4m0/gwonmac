@@ -40,11 +40,13 @@ import {
 } from "./enhancement-builds.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
+  deriveNativeDoubleClickBuild,
   findNativeDoubleClickBuild,
   nativeDoubleClickOutputSha256,
   NATIVE_DOUBLE_CLICK_TRANSFORM_ABI,
   rewriteNativeDoubleClickWasm,
 } from "./native-double-click.js";
+import { readFile } from "node:fs/promises";
 import {
   EXTENDED_MEMORY_MAX_BYTES,
   prepareExtendedMemoryArtifacts,
@@ -253,7 +255,10 @@ async function withNativeDoubleClick(
 ): Promise<PreparedWasmClientModule> {
   try {
     const inputSha256 = await sha256File(prepared.wasmPath);
-    const build = findNativeDoubleClickBuild(inputSha256);
+    const build = findNativeDoubleClickBuild(inputSha256)
+      ?? deriveNativeDoubleClickBuild(
+        new Uint8Array(await readFile(prepared.wasmPath)),
+      );
     const expectedOutputSha256 = build
       ? nativeDoubleClickOutputSha256(build, inputSha256)
       : null;

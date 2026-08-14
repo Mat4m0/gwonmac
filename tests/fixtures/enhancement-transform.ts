@@ -226,6 +226,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookFunction: 3,
     hookParams: ["i32"],
     hookResults: [],
+    hookBodySha256: createHash("sha256").update(commandBody(bytes, 0)).digest("hex"),
     tableSlot: 5,
     teamApply: {
       thunkExport: "enhancement_command",
@@ -284,8 +285,37 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       results: [],
       tableSlot: 1,
       producerFunctions: [4, 4],
+      producerParams: [
+        ["i32", "i32", "i32", "i32", "i32"],
+        ["i32", "i32", "i32", "i32", "i32"],
+      ],
+      producerResults: [[], []],
+      bodySha256: createHash("sha256").update(commandBody(bytes, 1)).digest("hex"),
+      producerBodySha256: [
+        createHash("sha256").update(commandBody(bytes, 1)).digest("hex"),
+        createHash("sha256").update(commandBody(bytes, 1)).digest("hex"),
+      ],
+      tableNeighbourBodySha256: [
+        createHash("sha256").update(commandBody(bytes, 0)).digest("hex"),
+        createHash("sha256").update(commandBody(bytes, 2)).digest("hex"),
+      ],
+      layout: {
+        cursorActiveArt: 16, cursorSoftwareModel: 17, cursorShowCount: 18,
+        cursorColorBuffer: 19, cursorArtHotspot: 0, cursorArtTexture: 12,
+        cursorHandleKey: 8, cursorHandleObject: 0, cursorViewTexture: 8,
+        cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
+      },
     },
-    targetObservation: { certified: true },
+    commonLayout: {
+      contextRoot: 1, gameContextSlot: 6, characterContext: 4,
+      mapId: 5, isExplorable: 6, currentMapId: 7, currentInstanceType: 8,
+      playerNumber: 9,
+    },
+    targetObservation: { layout: {
+      agentArray: 2, manualTargetAgentId: 3, automaticTargetAgentId: 4,
+      agentId: 10, agentX: 11, agentY: 12, agentType: 13,
+      agentPlayerNumber: 14, agentModelType: 15,
+    } },
     partyObservation: {
       functionIndex: 5,
       params: ["i32", "i32", "i32"],
@@ -298,17 +328,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       playerChatSites: 3,
       nearbyPlayerMessages: [0x1000_007f, 0x1000_0080],
       nearbyPlayerMessageProducers: [5, 5],
-    },
-    layout: {
-      contextRoot: 1, agentArray: 2, manualTargetAgentId: 3,
-      automaticTargetAgentId: 4, gameContextSlot: 6, characterContext: 4,
-      mapId: 5, isExplorable: 6, currentMapId: 7, currentInstanceType: 8,
-      playerNumber: 9, agentId: 10, agentX: 11, agentY: 12, agentType: 13,
-      agentPlayerNumber: 14, agentModelType: 15,
-      cursorActiveArt: 16, cursorSoftwareModel: 17, cursorShowCount: 18,
-      cursorColorBuffer: 19, cursorArtHotspot: 0, cursorArtTexture: 12,
-      cursorHandleKey: 8, cursorHandleObject: 0, cursorViewTexture: 8,
-      cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
+      layout: {
       partyContext: 28, playerParty: 32, partyHeroes: 36,
       heroMemberStride: 24, heroAgentId: 0, heroOwnerPlayerId: 4, heroId: 8,
       // Distinct values rather than zeros: the config ABI is positional, so a
@@ -338,6 +358,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       worldProfessionStates: 76,
       professionStateStride: 77,
       worldCharacterSkills: 80,
+      },
     },
   };
 }

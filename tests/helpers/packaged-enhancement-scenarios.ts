@@ -31,9 +31,10 @@ import {
 } from "./packaged-enhancement-fixture.ts";
 
 async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
-  return page.evaluate(async ({ bytes, tableSize }: {
+  return page.evaluate(async ({ bytes, tableSize, capabilities }: {
     bytes: number[];
     tableSize: number;
+    capabilities: typeof TARGET_ONLY;
   }) => {
     const memory = new WebAssembly.Memory({ initial: 256 });
     const table = new WebAssembly.Table({
@@ -60,11 +61,12 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
     // gw://app/ rather than by the checker against this directory. The
     // annotation is what keeps the import typed: the module it loads is the
     // build of `src/renderer/enhancements.ts`.
-    const specifier = "./enhancements.js";
-    const { installEnhancements }: typeof import("../../src/renderer/enhancements.ts") =
+    const specifier = "./certified-companion-installation.js";
+    const { installCertifiedCompanion }:
+      typeof import("../../src/renderer/certified-companion-installation.ts") =
       await import(specifier);
     globalThis.dispatchEvent(new Event("pagehide"));
-    const runtime = await installEnhancements(
+    const runtime = await installCertifiedCompanion(
       {
         exports: {
           memory,
@@ -75,9 +77,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
         },
       },
       module,
-      // The retired user setting cannot request the readout; its developer
-      // program derives the same `target` capability profile.
-      { nativeCursor: false, tools: false },
+      capabilities,
       "target-observer",
     );
     if (!runtime) throw new Error("target readout did not install");
@@ -135,6 +135,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
   }, {
     bytes: [...moduleBytes],
     tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
+    capabilities: TARGET_ONLY,
   });
 }
 
@@ -314,8 +315,9 @@ export async function assertTargetReadoutLifecycle() {
       "the installed control never fetched the packaged Enhancement kernel",
     );
     assert.ok(
-      resources.some((url) => new URL(url).pathname === "/enhancements.js"),
-      "the installed control never imported the packaged Enhancement runtime",
+      resources.some((url) =>
+        new URL(url).pathname === "/certified-companion-installation.js"),
+      "the installed control never imported the packaged companion installer",
     );
     assert.ok(
       resources.some((url) => new URL(url).pathname === "/shared/contracts.js"),
@@ -350,6 +352,7 @@ export async function assertToolboxFoundationLifecycle() {
       layout,
       messages,
       tableSize,
+      capabilities,
     }) => {
       const memory = new WebAssembly.Memory({ initial: 256 });
       const view = new DataView(memory.buffer);
@@ -518,9 +521,9 @@ export async function assertToolboxFoundationLifecycle() {
       });
 
       const module = new WebAssembly.Module(Uint8Array.from(bytes));
-      const specifier = "./enhancements.js";
-      const { installEnhancements }:
-        typeof import("../../src/renderer/enhancements.ts") =
+      const specifier = "./certified-companion-installation.js";
+      const { installCertifiedCompanion }:
+        typeof import("../../src/renderer/certified-companion-installation.ts") =
           await import(specifier);
       globalThis.dispatchEvent(new Event("pagehide"));
       window.gwToolsSettings = () => Object.freeze({
@@ -528,7 +531,7 @@ export async function assertToolboxFoundationLifecycle() {
         teamManagement: true,
         targetReadout: false,
       });
-      const runtime = await installEnhancements(
+      const runtime = await installCertifiedCompanion(
         {
           exports: {
             memory,
@@ -541,7 +544,7 @@ export async function assertToolboxFoundationLifecycle() {
           },
         },
         module,
-        { nativeCursor: true, tools: true },
+        capabilities,
         "none",
       );
       if (!runtime) throw new Error("Toolbox foundation did not install");
@@ -639,7 +642,13 @@ export async function assertToolboxFoundationLifecycle() {
       return { after, before };
     }, {
       bytes: [...installableManifestModule(PRODUCT_TOOLS_CAPABILITIES)],
-      layout: ENHANCEMENT_BUILD.layout,
+      capabilities: PRODUCT_TOOLS_CAPABILITIES,
+      layout: {
+        ...ENHANCEMENT_BUILD.commonLayout,
+        ...ENHANCEMENT_BUILD.targetObservation!.layout,
+        ...ENHANCEMENT_BUILD.cursorEvent!.layout,
+        ...ENHANCEMENT_BUILD.partyObservation!.layout,
+      },
       messages: {
         playerChat: ENHANCEMENT_BUILD.partyObservation!.playerChatMessage,
         showHeroPanel: ENHANCEMENT_BUILD.partyObservation!.showHeroPanelMessage,
@@ -760,9 +769,10 @@ export async function assertRollbackAfterTablePublication() {
       const { Module } = globalThis as PageGlobals;
       return typeof Module?.socket?.connect === "function";
     });
-    const result = await fixture.page.evaluate(async ({ bytes, tableSize }: {
+    const result = await fixture.page.evaluate(async ({ bytes, tableSize, capabilities }: {
       bytes: number[];
       tableSize: number;
+      capabilities: typeof TOOLBOX_PROGRAM_CAPABILITIES;
     }) => {
       const memory = new WebAssembly.Memory({ initial: 256 });
       const table = new WebAssembly.Table({
@@ -785,9 +795,9 @@ export async function assertRollbackAfterTablePublication() {
       };
       const free = (pointer: number) => freed.push(pointer);
       const module = new WebAssembly.Module(Uint8Array.from(bytes));
-      const specifier = "./enhancements.js";
-      const { installEnhancements }:
-        typeof import("../../src/renderer/enhancements.ts") =
+      const specifier = "./certified-companion-installation.js";
+      const { installCertifiedCompanion }:
+        typeof import("../../src/renderer/certified-companion-installation.ts") =
           await import(specifier);
       const replacementResponse = await fetch("companion-kernel.wasm");
       if (!replacementResponse.ok) {
@@ -846,7 +856,7 @@ export async function assertRollbackAfterTablePublication() {
         globalThis.requestAnimationFrame = () => {
           throw new Error("intentional post-table failure");
         };
-        await installEnhancements(
+        await installCertifiedCompanion(
           {
             exports: {
               memory,
@@ -857,7 +867,7 @@ export async function assertRollbackAfterTablePublication() {
             },
           },
           module,
-          { nativeCursor: false, tools: false },
+          capabilities,
           "toolbox-foundation",
         );
       } catch {
@@ -886,6 +896,7 @@ export async function assertRollbackAfterTablePublication() {
         ...TOOLBOX_PROGRAM_CAPABILITIES,
         nativeCursor: false,
       })],
+      capabilities: { ...TOOLBOX_PROGRAM_CAPABILITIES, nativeCursor: false },
       tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     });
     const rollbackConfigPointer = 0x11_010;

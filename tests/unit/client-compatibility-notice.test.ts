@@ -40,7 +40,7 @@ const IDS = [
   "settings-compat-status", "settings-compat-detail", "settings-compat-version",
   "client-compat-title", "client-compat-detail", "client-compat-version",
   "client-compat", "client-compat-play",
-  "client-compat-check", "client-compat-update",
+  "client-compat-check", "client-compat-restart", "client-compat-update",
   "settings-feature-gameFileSaving", "settings-feature-nativeCursor",
   "settings-feature-targetObservation", "settings-feature-partyObservation",
   "settings-feature-teamApply",
@@ -94,6 +94,30 @@ describe("client compatibility notice", () => {
     assert.match(report.details.join(" "), /saved builds and teams still work/);
   });
 
+  it("names only the unavailable observation", () => {
+    for (const [feature, unavailableName, availableName] of [
+      ["targetObservation", "Target distance", "party details"],
+      ["partyObservation", "Live party details", "Target distance"],
+    ] as const) {
+      const report = compatibilityReport(compatibility({
+        [feature]: unavailable("game-update"),
+      }));
+      assert.match(report.details[0]!, new RegExp(unavailableName, "i"));
+      assert.doesNotMatch(report.details[0]!, new RegExp(availableName, "i"));
+    }
+  });
+
+  it("keeps update and restart recovery distinct when reasons are mixed", () => {
+    const report = compatibilityReport(compatibility({
+      nativeCursor: unavailable("game-update"),
+      teamApply: unavailable("preparation-failed"),
+    }));
+    assert.equal(report.recovery, "both");
+    assert.equal(report.acknowledgePerBuild, false);
+    assert.match(report.details.join(" "), /Restart GWonMac/);
+    assert.match(report.details.join(" "), /check for updates/);
+  });
+
   it("lists several unavailable features and preserves safe local work", () => {
     const report = compatibilityReport(compatibility({
       nativeCursor: unavailable("game-update"),
@@ -130,6 +154,63 @@ describe("client compatibility notice", () => {
         [said.summary, ...said.details].join(" "),
         /\b(Core|Enhancement|certificate|module)\b|command generation|stat|timing|reinstall|cache clearing/i,
       );
+    }
+  });
+
+  it("keeps every feature and reason combination internally consistent", () => {
+    const optional = [
+      available,
+      off,
+      unavailable("game-update"),
+      unavailable("preparation-failed"),
+    ] as const;
+    const required = [
+      available,
+      unavailable("game-update"),
+      unavailable("preparation-failed"),
+    ] as const;
+    for (const gameFileSaving of required) {
+      for (const nativeCursor of optional) {
+        for (const targetObservation of optional) {
+          for (const partyObservation of optional) {
+            for (const teamApply of optional) {
+              const features = {
+                gameFileSaving,
+                nativeCursor,
+                targetObservation,
+                partyObservation,
+                teamApply,
+              } satisfies ClientCompatibility["features"];
+              const report = compatibilityReport({
+                clientSha256: "b".repeat(64),
+                features,
+              });
+              const missing = Object.values(features).filter(
+                (feature) => feature.status === "unavailable",
+              );
+              assert.equal(report.degraded, missing.length > 0);
+              const reasons = new Set(missing.map((feature) =>
+                feature.status === "unavailable" ? feature.reason : null));
+              assert.equal(
+                report.recovery,
+                reasons.size === 0
+                  ? null
+                  : reasons.size === 2
+                    ? "both"
+                    : reasons.has("preparation-failed") ? "restart" : "update",
+              );
+              assert.equal(
+                report.acknowledgePerBuild,
+                reasons.size === 1 && reasons.has("game-update"),
+              );
+              assert.doesNotMatch(
+                [report.summary, ...report.details].join(" "),
+                /\b(Core|Enhancement|certificate|module)\b|command generation|stat|timing|reinstall|cache clearing/i,
+              );
+            }
+          }
+        }
+      }
     }
   });
 

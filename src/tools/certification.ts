@@ -32,9 +32,12 @@ import {
 } from "../main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../main/certification/enhancement-transform.js";
 import {
+  deriveNativeDoubleClickBuild,
+  findNativeDoubleClickBuild,
   NATIVE_DOUBLE_CLICK_BUILDS,
   rewriteWithBuild,
 } from "../main/certification/native-double-click.js";
+import { preparePostTemplateSaveModule } from "../main/certification/template-save-verifier.js";
 import {
   findTemplateSaveBuild,
   rewriteTemplateSaveWasm,
@@ -131,7 +134,21 @@ async function compare(argv: readonly string[]): Promise<void> {
     official,
     currentMessageAnchors(),
   );
-  const report = createCarryForwardReport(templateSave, enhancement);
+  const postTemplate = preparePostTemplateSaveModule(official);
+  const doubleClick = postTemplate
+    && (
+      findNativeDoubleClickBuild(
+        createHash("sha256").update(postTemplate.bytes).digest("hex"),
+      )
+      || deriveNativeDoubleClickBuild(postTemplate.bytes)
+    )
+    ? "exact" as const
+    : "not-located" as const;
+  const report = createCarryForwardReport(
+    templateSave,
+    enhancement,
+    doubleClick,
+  );
   const directory = path.resolve(outputDirectory);
   await mkdir(directory, { recursive: true });
   await Promise.all([

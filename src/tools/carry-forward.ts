@@ -56,15 +56,14 @@ function evidenceStatus(
       : "not-located";
   }
 
-  // Target memory and command semantics have no automatic authority. A
-  // structurally inspectable module is changed evidence until a human records
-  // the exact layout and command relationships in the signed certificate.
-  return "changed";
+  // No locator exists for these facts yet. Inspectability is not location.
+  return "not-located";
 }
 
 export function createCarryForwardReport(
   templateSave: TemplateSaveReport,
   enhancement: EnhancementRecertificationReport,
+  nativeDoubleClick: CarryForwardStatus = "not-located",
   generatedAt = new Date().toISOString(),
 ): CarryForwardReport {
   const canonicalCertificate = enhancement.candidateInspected
@@ -81,7 +80,7 @@ export function createCarryForwardReport(
     generatedAt,
     capabilities: {
       gameFileSaving,
-      nativeDoubleClick: enhancement.bundleVerified ? "exact" : "not-located",
+      nativeDoubleClick,
       nativeCursor: evidenceStatus(enhancement, "cursor"),
       targetObservation: evidenceStatus(enhancement, "target"),
       partyObservation: evidenceStatus(enhancement, "party"),

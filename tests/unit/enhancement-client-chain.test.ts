@@ -6,7 +6,10 @@ import {
 } from "../../src/shared/enhancement-contracts.js";
 import {
   enhancementOutputSha256,
+  enhancementProfilesForBuild,
   ENHANCEMENT_BUILDS,
+  hasCompleteEnhancementProfileHashes,
+  type KnownEnhancementBuild,
 } from "../../src/main/certification/enhancement-builds.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 
@@ -51,13 +54,24 @@ describe("Enhancement client chain", () => {
       assert.equal(enhancementCapabilityProfile(capabilities), profile);
       for (const build of ENHANCEMENT_BUILDS) {
         const output = enhancementOutputSha256(build, capabilities);
-        assert.match(output ?? "", /^[0-9a-f]{64}$/);
+        assert.equal(
+          output !== null,
+          enhancementProfilesForBuild(build).includes(
+            profile as keyof typeof ENHANCEMENT_CAPABILITY_PROFILES,
+          ),
+        );
+        if (output !== null) assert.match(output, /^[0-9a-f]{64}$/);
       }
     }
     for (const unsupported of [
       NO_CAPABILITIES,
       // Commands without the Toolbox that would drive them are refused.
-      { nativeCursor: false, targetObservation: false, partyObservation: false, commands: true },
+      {
+        nativeCursor: false,
+        targetObservation: false,
+        partyObservation: false,
+        commands: true,
+      },
     ]) {
       assert.equal(enhancementCapabilityProfile(unsupported), null);
     }
@@ -76,5 +90,58 @@ describe("Enhancement client chain", () => {
         `Enhancement build ${build.buildId} does not consume any template-save output`,
       );
     }
+  });
+
+  it("requires all and only the hashes implied by optional capability facts", () => {
+    const full = ENHANCEMENT_BUILDS[0]!;
+    assert.equal(hasCompleteEnhancementProfileHashes(full), true);
+
+    const cursorOnly: KnownEnhancementBuild = {
+      ...full,
+      outputSha256: Object.freeze({ cursor: full.outputSha256.cursor! }),
+    };
+    delete cursorOnly.targetObservation;
+    delete cursorOnly.partyObservation;
+    delete cursorOnly.teamApply;
+    assert.deepEqual(enhancementProfilesForBuild(cursorOnly), ["cursor"]);
+    assert.equal(hasCompleteEnhancementProfileHashes(cursorOnly), true);
+
+    assert.equal(
+      hasCompleteEnhancementProfileHashes({
+        ...cursorOnly,
+        outputSha256: Object.freeze({}),
+      }),
+      false,
+      "a supported profile cannot omit its output hash",
+    );
+    assert.equal(
+      hasCompleteEnhancementProfileHashes({
+        ...cursorOnly,
+        outputSha256: Object.freeze({
+          cursor: full.outputSha256.cursor!,
+          target: full.outputSha256.target!,
+        }),
+      }),
+      false,
+      "an unsupported profile cannot retain an output hash",
+    );
+    assert.equal(
+      hasCompleteEnhancementProfileHashes({
+        ...cursorOnly,
+        outputSha256: Object.freeze({ cursor: "not-a-digest" }),
+      }),
+      false,
+      "every implied profile hash must be a digest",
+    );
+    const commonOnly = { ...cursorOnly };
+    delete commonOnly.cursorEvent;
+    assert.equal(
+      hasCompleteEnhancementProfileHashes({
+        ...commonOnly,
+        outputSha256: Object.freeze({}),
+      }),
+      false,
+      "a certificate with no supported profile is not executable",
+    );
   });
 });

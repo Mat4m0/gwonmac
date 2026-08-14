@@ -161,14 +161,16 @@
                 aria-live="polite" hidden></span>
         </p>
       </div>
-      <!-- Recovery is an app update, so the check is the visible secondary
-           action; Play stays primary because play is never blocked. -->
+      <!-- Play stays primary because compatibility never blocks the game. -->
       <div class="client-compat-actions">
         <button type="button" id="client-compat-releases" class="launcher-link" hidden>
           Open releases…
         </button>
         <button type="button" id="client-compat-check" class="launcher-secondary">
           Check for updates
+        </button>
+        <button type="button" id="client-compat-restart" class="launcher-secondary" hidden>
+          Restart GWonMac
         </button>
         <button type="button" id="client-compat-play" class="launcher-primary">
           Play Guild Wars

@@ -13,10 +13,9 @@
  * this module's.
  */
 import {
-  enhancementCapabilitiesFor,
   enhancementCapabilityProfile,
+  type EnhancementCapabilities,
   type EnhancementProgram,
-  type EnhancementSelection,
 } from "../shared/enhancement-contracts.js";
 import { createCursorConsumer } from "./enhancement-cursor.js";
 import { createTargetReadout } from "./enhancement-readout.js";
@@ -120,13 +119,12 @@ function percentile95(samples: readonly number[]): number {
 export async function installCertifiedCompanion(
   instance: WebAssembly.Instance,
   module: WebAssembly.Module,
-  selection: EnhancementSelection,
+  capabilities: EnhancementCapabilities,
   program: EnhancementProgram = "none",
 ) {
   // Program selection is independent from automation permission. Packaged
   // launches always receive `none`; developer observers request their scalar
   // projection explicitly without implicitly mounting the Toolbox overlay.
-  const capabilities = enhancementCapabilitiesFor(selection, program);
   const foundation = capabilities.partyObservation;
   const observeState = capabilities.targetObservation;
   const publishObserverState = program === "target-observer";

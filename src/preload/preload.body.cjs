@@ -227,6 +227,8 @@ const api = {
     retry: () => ipcRenderer.invoke(IPC.clientRetry),
     healthy: (token) => ipcRenderer.invoke(IPC.clientHealthy, token),
     session: () => ipcRenderer.invoke(IPC.clientSession),
+    featureFailure: (features) =>
+      ipcRenderer.invoke(IPC.clientFeatureFailure, features),
   },
   appUpdates: {
     getState: () => ipcRenderer.invoke(IPC.appUpdatesGetState),

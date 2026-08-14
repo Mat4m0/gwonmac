@@ -150,14 +150,13 @@ test.describe("live client", () => {
         };
       });
 
-      // The build's identity, read from the one owner of the three
-      // certification states and from the gauges a diagnostics export carries.
+      // The build's identity and effective features come from the active
+      // session; no second whole-build classification is reconstructed.
       const identity = await page.evaluate(async () => {
         const session = await window.gwNative.client.session();
         const diagnostics = await window.gwNative.diagnostics.current();
         return {
           compatibility: session.compatibility,
-          certificationGauge: diagnostics.latest["client.buildCertification"],
           templateSaveGauge: diagnostics.latest["wasm.templateSaveCompatible"],
         };
       });
@@ -177,7 +176,7 @@ test.describe("live client", () => {
         `ArenaNet client fingerprint: ${publishedClient.clientFingerprint}`,
       );
       console.log(
-        `ArenaNet client module sha256: ${clientSha256} (${identity.certificationGauge})`,
+        `ArenaNet client module sha256: ${clientSha256}`,
       );
       if (process.env.GITHUB_STEP_SUMMARY) {
         appendFileSync(
@@ -187,7 +186,9 @@ test.describe("live client", () => {
             "",
             `- Client fingerprint: \`${publishedClient.clientFingerprint}\``,
             `- Client module sha256: \`${clientSha256}\``,
-            `- Build certification: ${identity.certificationGauge}`,
+            `- Cursor: ${identity.compatibility?.features.nativeCursor.status ?? "unavailable"}`,
+            `- Live party: ${identity.compatibility?.features.partyObservation.status ?? "unavailable"}`,
+            `- Apply team: ${identity.compatibility?.features.teamApply.status ?? "unavailable"}`,
             `- Renderer: ${String(platform.renderer)}`,
             `- JSPI initialized: ${platform.jspi ? "yes" : "no"}`,
             "- Hardware frame submitted: yes",
@@ -209,14 +210,10 @@ test.describe("live client", () => {
           );
         }
         expect(compatibility.clientSha256).toMatch(/^[a-f0-9]{64}$/);
-        // Certification is keyed by hash, so a new ArenaNet build fails here
-        // even though every other assertion in this file still passes. That is
-        // the alert: run `pnpm certification template`, then recertify the Enhancement
-        // build. `template-only` means saving works and selected Enhancement tools
-        // do not.
+        // A new ArenaNet build may preserve independently proved features. The
+        // canary requires the selected feature set, not a coarse build label.
         expect(compatibility.features.gameFileSaving.status).toBe("available");
         expect(compatibility.features.nativeCursor.status).toBe("available");
-        expect(identity.certificationGauge).toBe("certified");
         // Emitted into every diagnostics export; a false here means templates, build
         // screenshots and chat logs are broken for every player on this build.
         expect(identity.templateSaveGauge).toBe(true);

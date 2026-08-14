@@ -153,6 +153,9 @@ export class ClientRuntime {
   private gameUpdateAbort: AbortController | null = null;
   /** Exact candidate identity captured by a renderer before it loads glue. */
   private candidateHealthToken: ClientHealthToken | null = null;
+  private readonly rendererFailedFeatures = new Set<
+    Exclude<keyof ClientCompatibility["features"], "gameFileSaving">
+  >();
   private readonly patchFetch: PatchFetch;
 
   constructor(private readonly options: ClientRuntimeOptions) {
@@ -167,7 +170,36 @@ export class ClientRuntime {
   }
 
   get compatibility(): ClientCompatibility | null {
-    return this.activeSlot.current?.compatibility ?? null;
+    const compatibility = this.activeSlot.current?.compatibility ?? null;
+    if (!compatibility || this.rendererFailedFeatures.size === 0) {
+      return compatibility;
+    }
+    const effectiveStatus = <
+      Feature extends Exclude<keyof ClientCompatibility["features"], "gameFileSaving">,
+    >(feature: Feature): ClientCompatibility["features"][Feature] =>
+      this.rendererFailedFeatures.has(feature)
+        ? { status: "unavailable", reason: "preparation-failed" }
+        : compatibility.features[feature];
+    return Object.freeze({
+      ...compatibility,
+      features: Object.freeze({
+        gameFileSaving: compatibility.features.gameFileSaving,
+        nativeCursor: effectiveStatus("nativeCursor"),
+        targetObservation: effectiveStatus("targetObservation"),
+        partyObservation: effectiveStatus("partyObservation"),
+        teamApply: effectiveStatus("teamApply"),
+      }),
+    });
+  }
+
+  recordRendererFeatureFailure(
+    features: readonly Exclude<keyof ClientCompatibility["features"], "gameFileSaving">[],
+  ): void {
+    for (const feature of features) {
+      if (this.activeSlot.current?.compatibility?.features[feature].status === "available") {
+        this.rendererFailedFeatures.add(feature);
+      }
+    }
   }
 
   get healthToken(): ClientHealthToken | null {
@@ -270,21 +302,20 @@ export class ClientRuntime {
     }
 
     let certification = certifyClientBuild(officialSha256);
-    if (certification.templateSaveBuild === null) {
+    if (
+      certification.templateSaveBuild === null
+      || (
+        certification.enhancementBuild === null
+        && this.options.enhancementCapabilities.nativeCursor
+      )
+    ) {
       const local = await verifyClientLocally({
         officialWasmPath: officialWasm,
         officialSha256,
       });
       if (local) {
         certification = certificationFromLocalVerification(local);
-        logEvent({
-          k: "wasm.localVerificationCompleted",
-          certification: certification.templateSaveBuild === null
-            ? "uncertified"
-            : certification.enhancementBuild === null
-              ? "template-only"
-              : "certified",
-        });
+        logEvent({ k: "wasm.localVerificationCompleted" });
       } else {
         logEvent({ k: "wasm.localVerificationUnavailable" });
       }
@@ -342,13 +373,11 @@ export class ClientRuntime {
         ),
       },
     };
-    const state = prepared.gameFileSaving.status === "unavailable"
-      ? "uncertified"
-      : prepared.enhancementBuild === null
-        ? "template-only"
-        : "certified";
-    gauge("client.buildCertification", state);
     gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");
+    gauge("enhancement.effectiveCursor", effective.nativeCursor);
+    gauge("enhancement.effectiveTargetObservation", effective.targetObservation);
+    gauge("enhancement.effectivePartyObservation", effective.partyObservation);
+    gauge("enhancement.effectiveCommands", effective.commands);
 
     if (prepared.failure?.stage === "template-save") {
       logEvent({ k: "wasm.templateSavePrepareFailed",
@@ -356,7 +385,7 @@ export class ClientRuntime {
       });
     } else {
       logEvent({
-        k: state === "uncertified"
+        k: prepared.gameFileSaving.status === "unavailable"
           ? "wasm.templateSaveUnsupported"
           : "wasm.templateSavePrepared",
       });
@@ -443,6 +472,9 @@ export class ClientRuntime {
       this.recordResidency(store),
     ]);
     const previous = this.activeSlot.current;
+    // Renderer installation failures belong to one served generation. A retry
+    // or game update prepares a fresh session and must get a fresh attempt.
+    this.rendererFailedFeatures.clear();
     const active: ActiveClient = this.activeSlot.publish({
       artifactsDir: this.options.paths.artifacts,
       store,

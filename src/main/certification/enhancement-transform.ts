@@ -583,6 +583,31 @@ export function transformEnhancementWasm(
   if (new Set(selected.map((hook) => hook.localIndex)).size !== selected.length) {
     fail("selected hooks must resolve to distinct functions");
   }
+  const bodyHash = (functionIndex: number): string => {
+    const body = bodies[functionIndex - importCount];
+    if (!body) fail(`function ${functionIndex} has no body`);
+    return createHash("sha256").update(body).digest("hex");
+  };
+  if (bodyHash(build.hookFunction) !== build.hookBodySha256) {
+    fail("tick body does not match its semantic fingerprint");
+  }
+  if (selectedHooks.cursor) {
+    if (bodyHash(cursorEvent.functionIndex) !== cursorEvent.bodySha256) {
+      fail("cursor body does not match its semantic fingerprint");
+    }
+    for (let index = 0; index < cursorEvent.producerFunctions.length; index += 1) {
+      resolveHook(
+        `cursor producer ${index + 1}`,
+        cursorEvent.producerFunctions[index]!,
+        cursorEvent.producerParams[index]!,
+        cursorEvent.producerResults[index]!,
+      );
+      if (
+        bodyHash(cursorEvent.producerFunctions[index]!)
+        !== cursorEvent.producerBodySha256[index]
+      ) fail("cursor producer body does not match its semantic fingerprint");
+    }
+  }
 
   // Every certified command, verified before a byte of the thunk is written.
   // The type check is the same standard the hooks are held to; the body hash is

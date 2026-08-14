@@ -85,6 +85,7 @@ test.describe("tools and update settings", () => {
           <span id="settings-update-version"></span>
           <span id="settings-update-stage"></span>
           <button id="client-compat-check"></button>
+          <button id="client-compat-restart"></button>
           <button id="client-compat-releases"></button>
           <span id="client-compat-update"></span>
         `;

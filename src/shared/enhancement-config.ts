@@ -82,6 +82,25 @@ export interface EnhancementLayout {
   worldCharacterSkills: number;
 }
 
+export type EnhancementCommonLayout = Pick<EnhancementLayout,
+  | "contextRoot" | "gameContextSlot" | "characterContext" | "mapId"
+  | "isExplorable" | "currentMapId" | "currentInstanceType" | "playerNumber"
+>;
+export type EnhancementTargetLayout = Pick<EnhancementLayout,
+  | "agentArray" | "manualTargetAgentId" | "automaticTargetAgentId"
+  | "agentId" | "agentX" | "agentY" | "agentType"
+  | "agentPlayerNumber" | "agentModelType"
+>;
+export type EnhancementCursorLayout = Pick<EnhancementLayout,
+  | "cursorActiveArt" | "cursorSoftwareModel" | "cursorShowCount"
+  | "cursorColorBuffer" | "cursorArtHotspot" | "cursorArtTexture"
+  | "cursorHandleKey" | "cursorHandleObject" | "cursorViewTexture"
+  | "cursorTextureType" | "cursorTextureWidth" | "cursorTextureHeight"
+>;
+export type EnhancementPartyLayout = Omit<EnhancementLayout,
+  keyof EnhancementCommonLayout | keyof EnhancementTargetLayout | keyof EnhancementCursorLayout
+>;
+
 type Activation = "target" | "target-or-party" | "cursor" | "party";
 type ConfigField =
   | Readonly<{ source: "layout"; key: keyof EnhancementLayout; activation: Activation }>

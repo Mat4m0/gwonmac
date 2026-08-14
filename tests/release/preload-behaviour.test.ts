@@ -251,6 +251,11 @@ const INVOCATIONS: Invocation[] = [
   },
   { path: "client.retry", args: [], channel: IPC.clientRetry },
   {
+    path: "client.featureFailure",
+    args: [["nativeCursor"]],
+    channel: IPC.clientFeatureFailure,
+  },
+  {
     path: "client.healthy",
     args: [{ generation: 7, fingerprint: "a".repeat(64) }],
     channel: IPC.clientHealthy,

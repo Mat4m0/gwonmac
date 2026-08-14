@@ -527,6 +527,15 @@ export interface ClientCompatibility {
   }>;
 }
 
+export const ENHANCEMENT_RUNTIME_FEATURES = [
+  "nativeCursor",
+  "targetObservation",
+  "partyObservation",
+  "teamApply",
+] as const;
+export type EnhancementRuntimeFeature =
+  (typeof ENHANCEMENT_RUNTIME_FEATURES)[number];
+
 /**
  * The memory module selected for this running client. Saved intent is kept
  * separate in AppSettings; this is the launch result and therefore the only
@@ -710,6 +719,7 @@ export const IPC = {
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
   clientSession: "gw:client:session",
+  clientFeatureFailure: "gw:client:featureFailure",
   // Main→renderer, and the renderer's acknowledgement. Main waits on the
   // acknowledgement because a capture flush has to finish inside the capture
   // window, which `executeJavaScript`'s awaited result used to guarantee.
@@ -888,6 +898,7 @@ export interface GwNativeApi {
     retry(): Promise<void>;
     healthy(token: ClientHealthToken): Promise<void>;
     session(): Promise<ClientSession>;
+    featureFailure(features: readonly EnhancementRuntimeFeature[]): Promise<void>;
   };
   appUpdates: {
     getState(): Promise<AppUpdateState>;

@@ -952,4 +952,84 @@ test.describe("client generation coordination", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("reports renderer installation failures without hiding preserved features", async () => {
+    const fixture = await launchOffline("gw-runtime-renderer-feature-failure-e2e-");
+    try {
+      const result = await fixture.app.evaluate(
+        async (_electron, modules) => {
+          const fs = process.getBuiltinModule("node:fs/promises");
+          const { createRequire } = process.getBuiltinModule("node:module");
+          const os = process.getBuiltinModule("node:os");
+          const path = process.getBuiltinModule("node:path");
+          const require = createRequire(path.join(process.cwd(), "package.json"));
+          const { ClientRuntime } = require(modules.clientRuntime);
+          const { gamePaths } = require(modules.paths);
+          const root = await fs.mkdtemp(
+            path.join(os.tmpdir(), "gw-runtime-renderer-feature-failure-probe-"),
+          );
+          const paths = gamePaths(root);
+          const runtime = new ClientRuntime({
+            paths,
+            hostVersion: "test",
+            cachedOnly: true,
+            extendedMemoryEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: true,
+              targetObservation: true,
+              partyObservation: true,
+              commands: true,
+            },
+            onProgress: () => undefined,
+            onPrefetch: () => undefined,
+          });
+          runtime.activeSlot.publish({
+            artifactsDir: paths.artifacts,
+            store: {
+              stop: () => undefined,
+              saveTouched: async () => undefined,
+            },
+            wasmPath: "/active/Gw.jspi.wasm",
+            jsPath: "/active/Gw.jspi.js",
+            compatibility: {
+              clientSha256: "4".repeat(64),
+              features: {
+                gameFileSaving: { status: "available" },
+                nativeCursor: { status: "available" },
+                targetObservation: { status: "available" },
+                partyObservation: { status: "available" },
+                teamApply: { status: "available" },
+              },
+            },
+            extendedMemory: {
+              requestedAtLaunch: false,
+              status: "standard",
+              effectiveCapBytes: 2_147_483_648,
+              fallbackReason: null,
+            },
+          });
+
+          runtime.recordRendererFeatureFailure(["nativeCursor", "teamApply"]);
+          const reported = runtime.compatibility;
+          const served = runtime.active.compatibility;
+          await runtime.shutdown();
+          await fs.rm(root, { recursive: true, force: true });
+          return { reported, served };
+        },
+        { clientRuntime: clientRuntimeModule, paths: pathsModule },
+      );
+
+      expect(result.reported?.features).toEqual({
+        gameFileSaving: { status: "available" },
+        nativeCursor: { status: "unavailable", reason: "preparation-failed" },
+        targetObservation: { status: "available" },
+        partyObservation: { status: "available" },
+        teamApply: { status: "unavailable", reason: "preparation-failed" },
+      });
+      expect(result.served.features.nativeCursor).toEqual({ status: "available" });
+      expect(result.served.features.teamApply).toEqual({ status: "available" });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
 });

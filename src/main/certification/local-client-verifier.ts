@@ -9,10 +9,8 @@
  *
  * The two answers are not symmetric and must not be merged. Template save is
  * shape-verifiable, so a client whose affected call sites still match is
- * accepted by proof. Enhancement execution is exact-build only, because a
- * matching address delta is not evidence about hook semantics or layout; an
- * unrecognised client reports `enhancement-layout-changed` rather than being
- * given the benefit of the doubt.
+ * accepted by proof. Of the optional features, only the cursor has a strict
+ * structural locator; memory observation and commands remain exact-build only.
  *
  * `isLocalClientVerification` re-validates every field of a result that crossed
  * the process boundary. Profile state is never consulted.
@@ -20,9 +18,12 @@
 import { createHash } from "node:crypto";
 import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../shared/enhancement-contracts.js";
 import {
+  ENHANCEMENT_BUILDS,
   findEnhancementBuild,
+  enhancementProfilesForBuild,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
+import { locateAutomaticCursor } from "./enhancement-structural-evidence.js";
 import {
   inspectEnhancementCandidate,
   transformEnhancementWasm,
@@ -73,23 +74,57 @@ function sameJson(left: unknown, right: unknown): boolean {
 }
 
 function deriveEnhancementBuild(
-  _official: Uint8Array,
+  official: Uint8Array,
   templateOutput: Uint8Array,
 ): KnownEnhancementBuild | null {
   const report = inspectEnhancementCandidate(templateOutput);
   if (!report.validWasm) return null;
-  // A common address delta is not proof of all three hook semantics or every
-  // layout field. Until those can be re-derived by their own anchors,
-  // enhancement execution is exact-build only. Template save remains
-  // independently shape-verifiable.
+  // A common address delta is not proof of memory layouts or commands. Those
+  // remain exact-build only; the isolated cursor proof below owns only cursor.
   const build = findEnhancementBuild(report.sha256);
-  if (!build) return null;
-  transformEnhancementWasm(
+  if (build) {
+    const profile = enhancementProfilesForBuild(build)[0];
+    if (!profile) return null;
+    transformEnhancementWasm(templateOutput, build, ENHANCEMENT_CAPABILITY_PROFILES[profile]);
+    return build;
+  }
+  const located = locateAutomaticCursor(templateOutput, ENHANCEMENT_BUILDS);
+  if (!located || !report.table || report.table.max === null) return null;
+  const cursor = located.baseline.cursorEvent!;
+  const provisional: KnownEnhancementBuild = Object.freeze({
+    sha256: report.sha256,
+    outputSha256: Object.freeze({}),
+    programId: located.baseline.programId,
+    buildId: Number.parseInt(sha256(official).slice(0, 8), 16) || 1,
+    hookFunction: located.hookFunction,
+    hookParams: Object.freeze(["i32"] as const),
+    hookResults: Object.freeze([] as const),
+    hookBodySha256: located.baseline.hookBodySha256,
+    tableSlot: report.table.min,
+    commonLayout: located.baseline.commonLayout,
+    cursorEvent: Object.freeze({
+      functionIndex: located.cursorFunction,
+      params: cursor.params,
+      results: cursor.results,
+      tableSlot: located.cursorTableSlot,
+      producerFunctions: located.producerFunctions,
+      producerParams: cursor.producerParams,
+      producerResults: cursor.producerResults,
+      bodySha256: cursor.bodySha256,
+      producerBodySha256: cursor.producerBodySha256,
+      tableNeighbourBodySha256: cursor.tableNeighbourBodySha256,
+      layout: cursor.layout,
+    }),
+  });
+  const output = transformEnhancementWasm(
     templateOutput,
-    build,
-    ENHANCEMENT_CAPABILITY_PROFILES.cursorParty,
+    provisional,
+    ENHANCEMENT_CAPABILITY_PROFILES.cursor,
   );
-  return build;
+  return Object.freeze({
+    ...provisional,
+    outputSha256: Object.freeze({ cursor: sha256(output) }),
+  });
 }
 
 /**
@@ -222,6 +257,47 @@ function isExactEnhancementBuild(
   return exact !== null && sameJson(value, exact);
 }
 
+function isAutomaticCursorBuild(
+  value: unknown,
+  inputSha256: string,
+): value is KnownEnhancementBuild {
+  if (!value || typeof value !== "object") return false;
+  const build = value as Partial<KnownEnhancementBuild>;
+  if (
+    build.sha256 !== inputSha256
+    || !isDigest(build.outputSha256?.cursor)
+    || Object.keys(build.outputSha256 ?? {}).join(",") !== "cursor"
+    || build.targetObservation !== undefined
+    || build.partyObservation !== undefined
+    || build.teamApply !== undefined
+    || !isIndex(build.programId)
+    || !isIndex(build.buildId)
+    || !isIndex(build.hookFunction)
+    || !isIndex(build.tableSlot)
+    || !build.cursorEvent
+    || !isIndex(build.cursorEvent.functionIndex)
+    || !isIndex(build.cursorEvent.tableSlot)
+    || build.cursorEvent.producerFunctions.length !== 2
+    || !build.cursorEvent.producerFunctions.every(isIndex)
+  ) return false;
+  return ENHANCEMENT_BUILDS.some((baseline) => {
+    const cursor = baseline.cursorEvent;
+    return cursor !== undefined
+      && build.hookBodySha256 === baseline.hookBodySha256
+      && sameJson(build.hookParams, baseline.hookParams)
+      && sameJson(build.hookResults, baseline.hookResults)
+      && sameJson(build.commonLayout, baseline.commonLayout)
+      && sameJson(build.cursorEvent?.params, cursor.params)
+      && sameJson(build.cursorEvent?.results, cursor.results)
+      && build.cursorEvent?.bodySha256 === cursor.bodySha256
+      && sameJson(build.cursorEvent?.producerBodySha256, cursor.producerBodySha256)
+      && sameJson(build.cursorEvent?.producerParams, cursor.producerParams)
+      && sameJson(build.cursorEvent?.producerResults, cursor.producerResults)
+      && sameJson(build.cursorEvent?.tableNeighbourBodySha256, cursor.tableNeighbourBodySha256)
+      && sameJson(build.cursorEvent?.layout, cursor.layout);
+  });
+}
+
 /**
  * Boundary check for utility-process messages. Production transforms still
  * re-check every body/callsite before use.
@@ -261,8 +337,14 @@ export function isLocalClientVerification(
     );
   }
   return result.reasons.length === 0
-    && isExactEnhancementBuild(
-      result.enhancementBuild,
-      result.templateSaveBuild.outputSha256,
+    && (
+      isExactEnhancementBuild(
+        result.enhancementBuild,
+        result.templateSaveBuild.outputSha256,
+      )
+      || isAutomaticCursorBuild(
+        result.enhancementBuild,
+        result.templateSaveBuild.outputSha256,
+      )
     );
 }

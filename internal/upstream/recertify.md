@@ -12,8 +12,8 @@ Template repair can continue only when the isolated verifier proves the full
 affected caller semantics. Enhancement facts require a new exact-build
 certificate. A shared address or function-index delta is not proof.
 
-`client.buildCertification` remains a compact diagnostics gauge. Player-facing
-code instead receives the effective status of each feature from main:
+Main publishes the effective status of each feature to both diagnostics and
+player-facing code. Do not reconstruct a second whole-build state:
 
 | Feature status | Meaning |
 | --- | --- |

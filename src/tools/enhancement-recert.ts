@@ -27,6 +27,7 @@ import {
 } from "../main/certification/enhancement-transform.js";
 import {
   ENHANCEMENT_BUILDS,
+  enhancementProfilesForBuild,
   enhancementOutputSha256,
   findEnhancementBuild,
   type EnhancementOutputHashes,
@@ -35,7 +36,7 @@ import {
   inspectEnhancementStructuralEvidence,
   type EnhancementStructuralEvidenceReport,
   type PlayerChatMessageAnchors,
-} from "./enhancement-structural-evidence.js";
+} from "../main/certification/enhancement-structural-evidence.js";
 import {
   preparePostTemplateSaveModule,
   type PostTemplateSaveModule,
@@ -158,9 +159,8 @@ function finishPostTemplateEnhancementReport(
   let bundleFailure: string | null = null;
   if (certified) {
     try {
-      const derived = {} as Record<EnhancementCapabilityProfile, string>;
-      for (const profile of Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
-        EnhancementCapabilityProfile[]) {
+      const derived: Partial<Record<EnhancementCapabilityProfile, string>> = {};
+      for (const profile of enhancementProfilesForBuild(certified)) {
         const capabilities = ENHANCEMENT_CAPABILITY_PROFILES[profile];
         const output = transformEnhancementWasm(
           postTemplate,
@@ -170,8 +170,7 @@ function finishPostTemplateEnhancementReport(
         derived[profile] = createHash("sha256").update(output).digest("hex");
       }
       derivedOutputSha256 = Object.freeze(derived);
-      for (const profile of Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
-        EnhancementCapabilityProfile[]) {
+      for (const profile of enhancementProfilesForBuild(certified)) {
         const expected = enhancementOutputSha256(
           certified,
           ENHANCEMENT_CAPABILITY_PROFILES[profile],

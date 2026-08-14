@@ -811,9 +811,28 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
   assert.match(publish, /persist-credentials: true/);
   assert.match(
     publish,
-    /test "\$\(tr -d '\\n' < evidence\/SOURCE_COMMIT\.txt\)" = "\$GITHUB_SHA"/,
+    /\[ ! -s evidence\/SOURCE_COMMIT\.txt \][\s\S]*tr -d '\\n' < evidence\/SOURCE_COMMIT\.txt[\s\S]*"\$GITHUB_SHA"/,
   );
   assert.match(publish, /git apply evidence\/tables\.patch/);
+  // A failed macOS job or artifact transfer still leaves the generation with
+  // reportable metadata and an assigned issue. Missing evidence may never turn
+  // into a branch, but it must not prevent the issue step from running.
+  assert.match(
+    publish,
+    /name: Receive the derivation evidence\n {8}continue-on-error: true/,
+  );
+  assert.match(
+    publish,
+    /name: Ensure failure evidence is reportable\n {8}if: always\(\)[\s\S]*collection-failed/,
+  );
+  assert.match(
+    publish,
+    /name: Open the tracking issue\n {8}if: always\(\)/,
+  );
+  assert.match(
+    publish,
+    /FINGERPRINT: \$\{\{ needs\.derive\.outputs\.fingerprint \|\| needs\.detect\.outputs\.fingerprint \}\}[\s\S]*SHORT=unknown/,
+  );
   // The branch and the issue name the generation the deriver certified, not the
   // one the detector saw a job earlier; those differ when ArenaNet republishes.
   assert.match(
@@ -825,7 +844,8 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
     /if gh pr create[\s\S]*?opened=true[\s\S]*?else[\s\S]*?opened=false/,
   );
   assert.match(publish, /continue-on-error: true/);
-  assert.match(publish, /gh workflow run pr-package\.yml --ref main/);
+  assert.match(publish, /gh workflow run pr-package\.yml --ref "\$BRANCH"/);
+  assert.doesNotMatch(publish, /gh workflow run pr-package\.yml --ref main/);
   assert.match(publish, /-f checkout_ref="\$head"/);
   assert.match(publish, /auto-derived, PR ready/);
   assert.match(publish, /layout changed, investigation needed/);

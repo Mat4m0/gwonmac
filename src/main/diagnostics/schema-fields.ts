@@ -241,9 +241,4 @@ export const thermalState = literal([
   "serious",
   "critical",
 ] as const);
-export const buildCertification = literal([
-  "certified",
-  "template-only",
-  "uncertified",
-] as const);
 export const none = {} as const;

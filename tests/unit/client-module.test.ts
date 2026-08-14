@@ -217,7 +217,13 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     hookFunction: 3,
     hookParams: ["i32"],
     hookResults: [],
+    hookBodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[2]!),
     tableSlot: 5,
+    commonLayout: {
+      contextRoot: 1, gameContextSlot: 6, characterContext: 4,
+      mapId: 5, isExplorable: 6, currentMapId: 7,
+      currentInstanceType: 8, playerNumber: 9,
+    },
     teamApply: {
       thunkExport: "enhancement_command",
       professionTrace: {
@@ -259,8 +265,32 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       results: [],
       tableSlot: 1,
       producerFunctions: [4, 4],
+      producerParams: [
+        ["i32", "i32", "i32", "i32", "i32"],
+        ["i32", "i32", "i32", "i32", "i32"],
+      ],
+      producerResults: [[], []],
+      bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[3]!),
+      producerBodySha256: [
+        sha256(parseCode(sectionById(splitSections(input), 10))[3]!),
+        sha256(parseCode(sectionById(splitSections(input), 10))[3]!),
+      ],
+      tableNeighbourBodySha256: [
+        sha256(parseCode(sectionById(splitSections(input), 10))[2]!),
+        sha256(parseCode(sectionById(splitSections(input), 10))[4]!),
+      ],
+      layout: {
+        cursorActiveArt: 16, cursorSoftwareModel: 17, cursorShowCount: 18,
+        cursorColorBuffer: 19, cursorArtHotspot: 0, cursorArtTexture: 12,
+        cursorHandleKey: 8, cursorHandleObject: 0, cursorViewTexture: 8,
+        cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
+      },
     },
-    targetObservation: { certified: true },
+    targetObservation: { layout: {
+      agentArray: 2, manualTargetAgentId: 3, automaticTargetAgentId: 4,
+      agentId: 10, agentX: 11, agentY: 12, agentType: 13,
+      agentPlayerNumber: 14, agentModelType: 15,
+    } },
     partyObservation: {
       functionIndex: 5,
       params: ["i32", "i32", "i32"],
@@ -284,37 +314,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       playerChatSites: 3,
       nearbyPlayerMessages: [0x1000_007f, 0x1000_0080],
       nearbyPlayerMessageProducers: [5, 5],
-    },
-    layout: {
-      contextRoot: 1,
-      agentArray: 2,
-      manualTargetAgentId: 3,
-      automaticTargetAgentId: 4,
-      gameContextSlot: 6,
-      characterContext: 4,
-      mapId: 5,
-      isExplorable: 6,
-      currentMapId: 7,
-      currentInstanceType: 8,
-      playerNumber: 9,
-      agentId: 10,
-      agentX: 11,
-      agentY: 12,
-      agentType: 13,
-      agentPlayerNumber: 14,
-      agentModelType: 15,
-      cursorActiveArt: 16,
-      cursorSoftwareModel: 17,
-      cursorShowCount: 18,
-      cursorColorBuffer: 19,
-      cursorArtHotspot: 0,
-      cursorArtTexture: 12,
-      cursorHandleKey: 8,
-      cursorHandleObject: 0,
-      cursorViewTexture: 8,
-      cursorTextureType: 12,
-      cursorTextureWidth: 20,
-      cursorTextureHeight: 24,
+      layout: {
       partyContext: 28,
       playerParty: 32,
       partyHeroes: 36,
@@ -363,6 +363,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       worldProfessionStates: 76,
       professionStateStride: 77,
       worldCharacterSkills: 80,
+      },
     },
   };
   const derived = {} as Record<EnhancementCapabilityProfile, string>;
@@ -766,17 +767,15 @@ describe("client module preparation", () => {
     );
   });
 
-  it("selects the largest certified subset when a combined hash is absent", async () => {
+  it("selects the largest safe subset when one profile fails validation", async () => {
     const value = await fixture();
     const complete = value.enhancementBuild.outputSha256;
-    const incomplete = {
-      cursor: complete.cursor,
-      target: complete.target,
-      cursorTarget: complete.cursorTarget,
-    } as EnhancementOutputHashes;
-    const missingProfile = {
+    const failedProfile = {
       ...value.enhancementBuild,
-      outputSha256: incomplete as EnhancementOutputHashes,
+      outputSha256: {
+        ...complete,
+        cursorParty: "0".repeat(64),
+      } satisfies EnhancementOutputHashes,
     };
 
     const prepared = await prepareClientModule(
@@ -784,15 +783,15 @@ describe("client module preparation", () => {
         value,
         {
           templateSaveBuild: value.templateSaveBuild,
-          enhancementBuild: missingProfile,
+          enhancementBuild: failedProfile,
         },
         CURSOR_TOOLBOX,
       ),
     );
 
     assert.deepEqual(prepared.gameFileSaving, { status: "available" });
-    assert.equal(prepared.enhancementBuild, missingProfile);
-    assert.equal(prepared.failure, null);
+    assert.equal(prepared.enhancementBuild, failedProfile);
+    assert.equal(prepared.failure?.stage, "enhancement");
     assert.deepEqual(prepared.effectiveCapabilities, CURSOR_ONLY);
     assert.equal(
       sha256(await readFile(prepared.wasmPath)),

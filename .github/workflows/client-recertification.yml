@@ -188,15 +188,25 @@ jobs:
           WASM: ${{ steps.official.outputs.wasm }}
         run: |
           mkdir -p "$EVIDENCE"
+          echo "$GITHUB_SHA" > "$EVIDENCE/SOURCE_COMMIT.txt"
           git diff -- src/main/certification/template-save-compat.ts \
             > "$EVIDENCE/tables.patch"
           # The same comparison engine and report format are used by operators
           # locally. It writes carry-forward.json and carry-forward.md; CI does
           # not maintain its own classification rules.
-          node build/tools/certification.js compare "$WASM" "$EVIDENCE"
-          test -s "$EVIDENCE/carry-forward.json"
-          test -s "$EVIDENCE/carry-forward.md"
-          echo "$GITHUB_SHA" > "$EVIDENCE/SOURCE_COMMIT.txt"
+          if [ -n "$WASM" ] && [ -f "$WASM" ] \
+            && [ -f build/tools/certification.js ]; then
+            node build/tools/certification.js compare "$WASM" "$EVIDENCE" || true
+          fi
+          if [ ! -s "$EVIDENCE/carry-forward.md" ]; then
+            printf '%s\n' '## Guild Wars patch comparison' '' \
+              'Evidence collection did not complete. Review the failed workflow steps.' \
+              > "$EVIDENCE/carry-forward.md"
+          fi
+          if [ ! -s "$EVIDENCE/carry-forward.json" ]; then
+            printf '%s\n' '{"status":"collection-failed"}' \
+              > "$EVIDENCE/carry-forward.json"
+          fi
 
       # Evidence only. The client artifacts stay in the runner's temporary
       # directory and are never an upload path: this project does not
@@ -233,10 +243,28 @@ jobs:
         with:
           persist-credentials: true
       - name: Receive the derivation evidence
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: client-recertification-${{ github.run_id }}-${{ github.run_attempt }}
           path: evidence
+
+      # A failed or cancelled macOS runner may have no artifact to download. The
+      # tracking issue is still the owner for this generation, so give it a
+      # useful, closed failure record instead of letting a missing `cat` skip it.
+      - name: Ensure failure evidence is reportable
+        if: always()
+        run: |
+          mkdir -p evidence
+          if [ ! -s evidence/carry-forward.md ]; then
+            printf '%s\n' '## Guild Wars patch comparison' '' \
+              'Evidence collection did not complete. Review the failed workflow steps.' \
+              > evidence/carry-forward.md
+          fi
+          if [ ! -s evidence/carry-forward.json ]; then
+            printf '%s\n' '{"status":"collection-failed"}' \
+              > evidence/carry-forward.json
+          fi
 
       - name: Push the recertification branch
         id: branch
@@ -251,15 +279,23 @@ jobs:
         run: |
           if ! [[ "$FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]; then
             echo "Invalid client generation: $FINGERPRINT" >&2
-            exit 1
+            echo "branch=" >> "$GITHUB_OUTPUT"
+            echo "short=unknown" >> "$GITHUB_OUTPUT"
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          # The patch was produced against this commit's tables; applying it to
-          # any other tree would silently propose a diff nobody derived.
-          test "$(tr -d '\n' < evidence/SOURCE_COMMIT.txt)" = "$GITHUB_SHA"
           {
             echo "branch=client-recertification/${FINGERPRINT:0:12}"
             echo "short=${FINGERPRINT:0:12}"
           } >> "$GITHUB_OUTPUT"
+          # Missing evidence is an investigation outcome, not a reason to lose
+          # the issue that will coordinate it. Only an exact source match may
+          # become a branch.
+          if [ ! -s evidence/SOURCE_COMMIT.txt ] \
+            || [ "$(tr -d '\n' < evidence/SOURCE_COMMIT.txt)" != "$GITHUB_SHA" ]; then
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
           if [ "$OUTCOME" != "ready" ] || [ ! -s evidence/tables.patch ]; then
             echo "pushed=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -283,6 +319,7 @@ jobs:
         env:
           BRANCH: ${{ steps.branch.outputs.branch }}
           BUILD: ${{ needs.derive.outputs.build }}
+          FINGERPRINT: ${{ needs.derive.outputs.fingerprint || needs.detect.outputs.fingerprint }}
           GH_TOKEN: ${{ github.token }}
           SHORT: ${{ steps.branch.outputs.short }}
           SUMMARY: ${{ needs.derive.outputs.summary }}
@@ -338,24 +375,37 @@ jobs:
             echo "opened=true" >> "$GITHUB_OUTPUT"
             number="$(gh pr view "$BRANCH" --json number --jq .number)"
             head="$(gh api "repos/$GITHUB_REPOSITORY/commits/$BRANCH" --jq .sha)"
-            gh workflow run pr-package.yml --ref main \
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$BRANCH" --jq .sha)" = "$head"
+            gh workflow run pr-package.yml --ref "$BRANCH" \
               -f checkout_ref="$head" -f pr_number="$number"
           else
             echo "opened=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Open the tracking issue
+        if: always()
         env:
           BRANCH: ${{ steps.branch.outputs.branch }}
           BUILD: ${{ needs.derive.outputs.build }}
           GH_TOKEN: ${{ github.token }}
           OUTCOME: ${{ needs.derive.outputs.outcome }}
+          DERIVE_RESULT: ${{ needs.derive.result }}
           PROPOSED: ${{ steps.proposal.outputs.opened }}
           PUSHED: ${{ steps.branch.outputs.pushed }}
           SHORT: ${{ steps.branch.outputs.short }}
           SUMMARY: ${{ needs.derive.outputs.summary }}
         run: |
           pm=pnpm
+          if [ -z "$SHORT" ]; then
+            if [[ "$FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]; then
+              SHORT="${FINGERPRINT:0:12}"
+            else
+              SHORT=unknown
+            fi
+          fi
+          if [ -z "$SUMMARY" ]; then
+            SUMMARY="evidence collection ended with status $DERIVE_RESULT"
+          fi
           gh label create client-recertification --force --color 1d76db \
             --description "An ArenaNet client build this repository has not certified"
           if [ "$OUTCOME" = "ready" ]; then

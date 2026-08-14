@@ -396,10 +396,12 @@ range was `0x15a318..0x15a397`, outside every certified layout root. The
 recomputed outputs for all seven capability profiles, native double-click and
 extended memory were pinned rather than copied from build 38,797.
 
-`inspectEnhancementStructuralEvidence` reported the cursor candidate as
-unavailable on both build 38,797 and 38,833. Its current heuristic expects two
-direct callers of the table callback, but this callback is reached indirectly
-through table slot 922. This is a limitation of the review helper, not evidence
-of a client change. Do not relax the locator until it returns the desired
-function. Use the exact body, signature, active table relation and bounded live
-cursor behavior together until a stronger semantic locator exists.
+The general review report still describes the cursor callback as unavailable:
+its broad heuristic looks for direct calls, while this callback is reached
+through the active table. Automatic cursor recovery therefore uses a separate,
+narrow proof. It requires one exported main-loop body, one callback with its
+exact signature and active table neighbourhood, and the two measured producer
+body fingerprints. Both certified builds must agree on all semantic anchors.
+Changing or duplicating any anchor rejects recovery. The result authorizes only
+the cursor; memory observation and commands remain exact-build-only and still
+require bounded live review before release.

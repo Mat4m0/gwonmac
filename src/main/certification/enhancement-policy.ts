@@ -14,7 +14,10 @@ import {
   type AppSettings,
 } from "../../shared/contracts.js";
 import {
+  ENHANCEMENT_CAPABILITY_PROFILES,
   ENHANCEMENT_PROGRAMS,
+  enhancementCapabilitiesFor,
+  type EnhancementCapabilities,
   type EnhancementProgram,
   type EnhancementSelection,
 } from "../../shared/enhancement-contracts.js";
@@ -42,3 +45,20 @@ export const enhancementSelectionFor = (
   nativeCursor: true,
   tools: settings.gwonmacTools,
 });
+
+/** The exact features this launch asks main to put in the served module. */
+export function requestedEnhancementCapabilities(
+  settings: AppSettings,
+  program: EnhancementProgram,
+): EnhancementCapabilities {
+  if (program !== "none") {
+    return enhancementCapabilitiesFor(enhancementSelectionFor(settings), program);
+  }
+  if (!settings.gwonmacTools) return ENHANCEMENT_CAPABILITY_PROFILES.cursor;
+  return Object.freeze({
+    nativeCursor: true,
+    targetObservation: settings.targetReadout,
+    partyObservation: true,
+    commands: settings.teamManagement,
+  });
+}

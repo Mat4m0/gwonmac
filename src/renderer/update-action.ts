@@ -264,6 +264,7 @@ export function bindUpdateActionDom(
   const settingsVersion = requiredElement(root, 'settings-update-version');
   const settingsStage = requiredElement(root, 'settings-update-stage');
   const compatibilityCheck = requiredButton(root, 'client-compat-check');
+  const compatibilityRestart = requiredButton(root, 'client-compat-restart');
   const compatibilityReleases = requiredElement(root, 'client-compat-releases');
   const compatibilityStatus = requiredElement(root, 'client-compat-update');
 
@@ -316,6 +317,10 @@ export function bindUpdateActionDom(
       return;
     }
     requestCheck();
+  });
+  compatibilityRestart.addEventListener('click', () => {
+    compatibilityRestart.disabled = true;
+    void restartApp();
   });
   settingsRestart.addEventListener('click', () => {
     void action.restartAndInstall();

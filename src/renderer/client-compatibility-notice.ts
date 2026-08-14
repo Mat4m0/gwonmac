@@ -16,7 +16,7 @@ export type CompatibilityReport = {
   degraded: boolean;
   /** Game-update notices may be acknowledged per build; failures retry. */
   acknowledgePerBuild: boolean;
-  recovery: 'update' | 'restart' | null;
+  recovery: 'update' | 'restart' | 'both' | null;
   summary: string;
   details: string[];
 };
@@ -58,6 +58,21 @@ export function compatibilityReport(
   const preparationFailed = unavailable.some((feature) =>
     compatibility.features[feature].status === 'unavailable'
     && compatibility.features[feature].reason === 'preparation-failed');
+  const gameUpdate = unavailable.some((feature) =>
+    compatibility.features[feature].status === 'unavailable'
+    && compatibility.features[feature].reason === 'game-update');
+  if (preparationFailed && gameUpdate) {
+    return {
+      degraded: true,
+      acknowledgePerBuild: false,
+      recovery: 'both',
+      summary: 'Some GWonMac features are temporarily unavailable.',
+      details: [
+        `Unavailable: ${unavailableNames(unavailable)}.`,
+        'Guild Wars is ready to play. Restart GWonMac to retry features that didn’t start, and check for updates for this Guild Wars version.',
+      ],
+    };
+  }
   if (preparationFailed) {
     return {
       degraded: true,
@@ -98,13 +113,16 @@ export function compatibilityReport(
 
   if (unavailable.every((feature) =>
     feature === 'targetObservation' || feature === 'partyObservation')) {
+    const names = unavailableNames(unavailable);
     return {
       degraded: true,
       acknowledgePerBuild: true,
       recovery: 'update',
       summary: 'Live game information is temporarily unavailable.',
       details: [
-        'Target distance, party details, and party capture are off.',
+        unavailable.length === 2
+          ? 'Target distance, party details, and party capture are off.'
+          : `${names[0]!.toUpperCase()}${names.slice(1)} is off.`,
         'Your saved builds and teams still work.',
       ],
     };
@@ -166,6 +184,7 @@ export function renderClientCompatibility(
   const launcherDetail = requiredElement(root, 'client-compat-detail');
   const launcherVersion = requiredElement(root, 'client-compat-version');
   const recovery = requiredElement(root, 'client-compat-check') as HTMLButtonElement;
+  const restart = requiredElement(root, 'client-compat-restart') as HTMLButtonElement;
   const updateStatus = requiredElement(root, 'client-compat-update');
 
   settingsVersion.textContent = `App version ${session.appVersion}`;
@@ -192,9 +211,16 @@ export function renderClientCompatibility(
   launcherTitle.textContent = report.summary;
   launcherDetail.textContent = detail;
   recovery.dataset.recovery = report.recovery ?? '';
+  restart.hidden = report.recovery !== 'both';
   if (report.recovery === 'restart') {
     recovery.textContent = 'Restart GWonMac';
     updateStatus.hidden = true;
+  } else if (report.recovery === 'both') {
+    recovery.textContent = 'Check for updates';
+    updateStatus.hidden = false;
+  } else {
+    recovery.textContent = 'Check for updates';
+    updateStatus.hidden = false;
   }
   return report;
 }

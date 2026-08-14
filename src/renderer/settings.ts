@@ -297,10 +297,12 @@
     .catch(() => {
       const updateCheck = byId('settings-check-updates') as HTMLButtonElement;
       const compatibilityCheck = byId('client-compat-check') as HTMLButtonElement;
+      const compatibilityRestart = byId('client-compat-restart') as HTMLButtonElement;
       const launcherCheck = byId('loading-update-check');
       const updateStatus = byId('settings-update-status');
       updateCheck.disabled = true;
       compatibilityCheck.disabled = true;
+      compatibilityRestart.disabled = true;
       launcherCheck.hidden = true;
       updateStatus.textContent = 'Update checking is unavailable in this build.';
       updateStatus.hidden = false;
@@ -316,10 +318,10 @@
    * version nor the client's certification can change without a relaunch, so
    * this asks the main process once and remembers the answer.
    */
-  async function readSession() {
+  async function readSession(force = false) {
     // The version is known from the first launch, the certification only once
     // a client has been activated, so an early answer is not cached as final.
-    if (currentSession?.compatibility) return currentSession;
+    if (!force && currentSession?.compatibility) return currentSession;
     const session = await window.gwNative.client.session();
     currentSession = session;
     const { renderClientCompatibility } =
@@ -338,6 +340,10 @@
     }
     return session;
   }
+
+  window.addEventListener('gwonmac:client-compatibility-changed', () => {
+    void readSession(true).catch(() => undefined);
+  });
 
   /**
    * The launcher half. It runs after the data-strategy gate and only while
