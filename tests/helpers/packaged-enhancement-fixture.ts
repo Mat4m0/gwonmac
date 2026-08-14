@@ -708,6 +708,18 @@ export async function assertPackagedHostOnlyToolsSession() {
       { nativeCursor: true, tools: true },
     );
     await openTools();
+    await fixture.page.evaluate(async () => {
+      window.dispatchEvent(new CustomEvent("gw:tools-toggle", { cancelable: true }));
+      const saved = await window.gwNative.settings.set({ teamManagement: false });
+      window.gwApplySettings?.(saved);
+    });
+    await fixture.page.waitForSelector('#toolbox-foundation[data-open="false"]');
+    assert.equal(
+      await fixture.page.locator("#toolbox-foundation").count(),
+      1,
+      "turning Apply off removed the host-owned Build/Team library",
+    );
+    await openTools();
     await fixture.page.getByRole("tab", { name: "Builds" }).click();
     await fixture.page.locator(".library-row").first().click();
     await fixture.page.getByRole("button", { name: "Export build" }).click();

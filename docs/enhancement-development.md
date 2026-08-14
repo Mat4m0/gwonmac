@@ -19,15 +19,14 @@ Core is required and has no player switch. Optional Tools are off by default.
 The first enable selects a Tools-capable module and requires a restart. The
 current optional features are:
 
-- **Team management** (Beta): author builds and teams, observe the current PvE
-  party, capture a team, and apply one after an explicit player action in an
-  outpost.
+- **Apply teams in Guild Wars** (Beta): allow one explicit Apply action in a
+  certified PvE outpost. Build and Team authoring remains local and independent.
 - **Target distance and range** (Test): show the selected target's distance and
   range band.
 
-Both choices then change live. Their observers stop when disabled or when map
-policy refuses them. Host-only authoring remains available without observation
-or command authority.
+Both choices then change live. Live observers and commands stop when disabled
+or when map policy refuses them. Host-only authoring remains available without
+observation or command authority.
 
 ## Use the cheapest proof
 

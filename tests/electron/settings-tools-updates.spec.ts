@@ -236,7 +236,10 @@ test.describe("tools and update settings", () => {
       await expect(controls).toContainText(
         "Guild Wars cursor",
       );
-      await expect(controls).toContainText("Optional tools stay off in PvP");
+      await expect(controls).toContainText(
+        "Your saved Builds and Teams stay available at login and in PvP",
+      );
+      await expect(controls).toContainText("Apply teams in Guild Wars");
       await expect(page.locator('input[name="nativeCursor"]')).toHaveCount(0);
       await expect(page.locator('input[name="teamManagement"]')).toBeDisabled();
       await expect(page.locator('input[name="targetReadout"]')).toBeDisabled();

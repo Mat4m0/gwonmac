@@ -148,8 +148,9 @@ enable therefore requires a restart.
 
 After that restart, these choices update during the session:
 
-- **Team management** controls party observation, the Tools panel, and the
-  fixed Team Apply operations.
+- **Apply teams in Guild Wars** controls only the fixed Team Apply operations.
+  The local Tools panel and saved Build/Team library remain available whenever
+  the master Tools setting is on.
 - **Target distance and range** controls the shipped Test readout and its target
   observation.
 
@@ -192,7 +193,7 @@ function call, shared-memory packet bus, or second game model.
 The commands profile contains only named, certified team operations. It does
 not carry a generic opcode or address.
 
-Team Apply requires enabled Tools and Team management, an exact commands
+Team Apply requires enabled Tools and Apply teams in Guild Wars, an exact commands
 profile, a positively classified PvE outpost, fresh party state, and an explicit
 player action.
 

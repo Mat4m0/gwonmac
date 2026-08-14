@@ -603,7 +603,7 @@ export async function installCertifiedCompanion(
       development: window.gwNative.init.development,
       ready: () => {
         if (cleaned) throw new Error("Enhancement installation is no longer active");
-        if (!teamEnabled()) throw new Error("Team management is disabled");
+        if (!teamEnabled()) throw new Error("Apply team is disabled");
         const currentRegion = playRegion();
         if (currentRegion !== "pve") {
           throw new Error(
@@ -640,16 +640,15 @@ export async function installCertifiedCompanion(
         professionTraceReader,
       );
     }
-    const setTeamEnabled = () => {
-      toolbox?.setEnabled(teamEnabled());
+    const syncToolboxAvailability = () => {
+      toolbox?.setEnabled(policy().tools);
     };
     tracePolicy("launch");
-    setTeamEnabled();
     const onToolSettings = (event: Event) => {
       if (!(event instanceof CustomEvent)) return;
       optionalSettings = event.detail as ReturnType<Window["gwToolsSettings"]>;
       tracePolicy("settings");
-      setTeamEnabled();
+      syncToolboxAvailability();
       setTargetEnabled();
       syncActiveObservers();
     };
@@ -763,7 +762,6 @@ export async function installCertifiedCompanion(
             if (next !== snapshotPlayRegion) {
               snapshotPlayRegion = next;
               tracePolicy("region");
-              setTeamEnabled();
               setTargetEnabled();
               syncActiveObservers();
             }
@@ -786,7 +784,6 @@ export async function installCertifiedCompanion(
             }
             if (playRegion() !== previousRegion) {
               tracePolicy("region");
-              setTeamEnabled();
               setTargetEnabled();
               syncActiveObservers();
             }
@@ -799,6 +796,10 @@ export async function installCertifiedCompanion(
     companionInstallations = installation;
     if (program !== "none") window.gwCompanionRuntime = runtime;
     hookSlot.value = manifest.tableSlot + 1;
+    // Mount local product UI only after the callback and hook are published.
+    // This keeps installation atomic while allowing the saved Build/Team
+    // library to remain available before a live game region is known.
+    syncToolboxAvailability();
 
     window.addEventListener("pagehide", cleanup, { once: true });
     console.info(

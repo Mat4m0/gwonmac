@@ -304,7 +304,7 @@ export interface AppSettings {
   uiPanelOpacity: number;
   /** Master opt-in for the optional executable Tools Beta capability. */
   gwonmacTools: boolean;
-  /** Live selection restored whenever optional tools are allowed. */
+  /** Allow explicit Apply team commands when live-game policy also permits. */
   teamManagement: boolean;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;

@@ -83,14 +83,14 @@ starts.
 
 After that restart, these choices update immediately:
 
-- **Team management** (Beta) stores builds and teams. It can observe and capture
-  a PvE party. It can apply a selected team after your explicit action in a PvE
-  outpost.
+- **Apply teams in Guild Wars** (Beta) allows an explicit Apply action in a PvE
+  outpost. The saved Build and Team library does not depend on this switch.
 - **Target distance and range** (Test) shows the selected target's distance and
   range band.
 
-Optional Tools stop in PvP, guild halls, transitions, and unknown regions. Team
-Apply checks policy before each step and stops when the state changes.
+Live observation and Apply stop in PvP, guild halls, transitions, and unknown
+regions. The saved Build and Team library stays available. Apply checks policy
+before each step and stops when the state changes.
 
 The saved library still works when live client integration is unavailable. You
 can edit, import, and export. Live party data and Apply remain unavailable.

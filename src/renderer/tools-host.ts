@@ -206,7 +206,10 @@ export function mountHostOnlyTools(
   });
   const syncEnabled = () => {
     const settings = window.gwToolsSettings();
-    lifecycle.setEnabled(settings.enabled && settings.teamManagement);
+    // The saved Build/Team library is the Tools surface. Apply team is only
+    // one live-game action inside it, so turning Apply off must not remove the
+    // library or its keyboard shortcut.
+    lifecycle.setEnabled(settings.enabled);
   };
   window.addEventListener("gw:tools-settings", syncEnabled);
   syncEnabled();
