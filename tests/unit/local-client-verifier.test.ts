@@ -39,9 +39,11 @@ describe("local client verification boundary", () => {
       ...valid(),
       enhancementBuild: {
         ...ENHANCEMENT,
-        commonLayout: {
-          ...ENHANCEMENT.commonLayout,
-          currentMapId: ENHANCEMENT.commonLayout.currentMapId + 4,
+        observationBase: {
+          layout: {
+            ...ENHANCEMENT.observationBase!.layout,
+            currentMapId: ENHANCEMENT.observationBase!.layout.currentMapId + 4,
+          },
         },
       },
     }, TEMPLATE.sha256), false);

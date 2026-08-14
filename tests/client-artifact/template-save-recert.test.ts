@@ -98,8 +98,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     ["template-shape-changed"],
   );
 
-  const agentIdentity = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1]!.agentIdentity!;
-  const needle = paddedIndex(agentIdentity.layout.agentArray);
+  const observationBase = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1]!
+    .observationBase!;
+  const needle = paddedIndex(observationBase.layout.agentArray);
   const touched = new Set(
     derived.bridges.flatMap((bridge) =>
       bridge.callSites.map((callSite) => callSite.localFunction)),

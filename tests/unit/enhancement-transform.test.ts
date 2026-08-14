@@ -29,6 +29,14 @@ import {
   PARTY_DIRTY_MESSAGES,
   TARGET_ONLY,
 } from "../fixtures/enhancement-transform.js";
+
+const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
+  nativeCursor: false,
+  targetObservation: false,
+  partyObservation: true,
+  commands: false,
+});
+
 describe("targeted Enhancement WebAssembly transform", () => {
   it("is deterministic, valid, and exports only the hook contract", () => {
     const input = fixture();
@@ -496,36 +504,43 @@ describe("targeted Enhancement WebAssembly transform", () => {
   it("gives party observation shared agent identity without target reads", () => {
     const input = fixture();
     const build = manifest(input);
+    const partyOnlyBuild = { ...build };
+    delete partyOnlyBuild.cursorEvent;
+    delete partyOnlyBuild.targetObservation;
+    delete partyOnlyBuild.teamApply;
+    partyOnlyBuild.outputSha256 = Object.freeze({
+      party: build.outputSha256.party!,
+    });
     const transformed = transformEnhancementWasm(
       input,
-      build,
-      CURSOR_TOOLBOX,
+      partyOnlyBuild,
+      PARTY_ONLY,
     );
     const module = new WebAssembly.Module(new Uint8Array(transformed));
-    const decoded = decodeEnhancementManifest(module, CURSOR_TOOLBOX);
+    const decoded = decodeEnhancementManifest(module, PARTY_ONLY);
     assert.ok(decoded);
     assert.deepEqual(decoded.configWords.slice(0, 17), [
-      build.commonLayout.contextRoot,
-      build.agentIdentity!.layout.agentArray,
+      partyOnlyBuild.observationBase!.layout.contextRoot,
+      partyOnlyBuild.observationBase!.layout.agentArray,
       0,
       0,
-      build.commonLayout.gameContextSlot,
-      build.commonLayout.characterContext,
-      build.commonLayout.mapId,
-      build.commonLayout.isExplorable,
-      build.commonLayout.currentMapId,
-      build.commonLayout.currentInstanceType,
-      build.commonLayout.playerNumber,
-      build.agentIdentity!.layout.agentId,
+      partyOnlyBuild.observationBase!.layout.gameContextSlot,
+      partyOnlyBuild.observationBase!.layout.characterContext,
+      partyOnlyBuild.observationBase!.layout.mapId,
+      partyOnlyBuild.observationBase!.layout.isExplorable,
+      partyOnlyBuild.observationBase!.layout.currentMapId,
+      partyOnlyBuild.observationBase!.layout.currentInstanceType,
+      partyOnlyBuild.observationBase!.layout.playerNumber,
+      partyOnlyBuild.observationBase!.layout.agentId,
       0,
       0,
       0,
-      build.agentIdentity!.layout.agentPlayerNumber,
-      build.agentIdentity!.layout.agentModelType,
+      partyOnlyBuild.observationBase!.layout.agentPlayerNumber,
+      partyOnlyBuild.observationBase!.layout.agentModelType,
     ]);
     assert.deepEqual(
       decoded.configWords.slice(17, 29),
-      enhancementConfigWords(build, CURSOR_TOOLBOX).slice(17, 29),
+      enhancementConfigWords(partyOnlyBuild, PARTY_ONLY).slice(17, 29),
     );
 
     const section = WebAssembly.Module.customSections(

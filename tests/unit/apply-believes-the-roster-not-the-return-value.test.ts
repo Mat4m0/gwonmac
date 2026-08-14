@@ -156,6 +156,24 @@ test("a rejected roster does not multiply into unknown region and mode failures"
   ]);
 });
 
+test("known permanent policy blockers outrank an incomplete roster", () => {
+  const assigned = plan([member({ hero: heroId(6), build: build() })]);
+  const partial = { ...party([]), partial: true };
+  const pvp = preflightTeamApply(assigned, {
+    ...partial,
+    playRegion: "pvp",
+  });
+  assert.deepEqual(pvp.ready ? [] : pvp.blockers, [{ rule: "pvp" }]);
+
+  const explorable = preflightTeamApply(assigned, {
+    ...partial,
+    inOutpost: false,
+  });
+  assert.deepEqual(explorable.ready ? [] : explorable.blockers, [
+    { rule: "not-outpost" },
+  ]);
+});
+
 test("an absent hero's known primary mismatch refuses before roster mutation", async () => {
   const game = harness([]);
   const observed = {

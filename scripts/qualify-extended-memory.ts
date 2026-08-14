@@ -1,4 +1,4 @@
-/** Offline proof that build 38797's complete production chain crosses 2 GiB. */
+/** Offline proof that the retained build's complete production chain crosses 2 GiB. */
 import { createHash } from "node:crypto";
 import {
   mkdtemp,

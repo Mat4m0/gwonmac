@@ -143,6 +143,12 @@ export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze
   partyObservation: true,
   commands: true,
 });
+export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: false,
+  partyObservation: true,
+  commands: true,
+});
 export const CONFIG_BYTES =
   ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT;
 export const TOOLBOX_SNAPSHOT_POINTER = 0x11_010;

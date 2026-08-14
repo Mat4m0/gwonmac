@@ -101,7 +101,6 @@ function deriveEnhancementBuild(
     hookResults: Object.freeze([] as const),
     hookBodySha256: located.baseline.hookBodySha256,
     tableSlot: report.table.min,
-    commonLayout: located.baseline.commonLayout,
     cursorEvent: Object.freeze({
       functionIndex: located.cursorFunction,
       params: cursor.params,
@@ -270,6 +269,7 @@ function isAutomaticCursorBuild(
     || build.targetObservation !== undefined
     || build.partyObservation !== undefined
     || build.teamApply !== undefined
+    || build.observationBase !== undefined
     || !isIndex(build.programId)
     || !isIndex(build.buildId)
     || !isIndex(build.hookFunction)
@@ -286,7 +286,6 @@ function isAutomaticCursorBuild(
       && build.hookBodySha256 === baseline.hookBodySha256
       && sameJson(build.hookParams, baseline.hookParams)
       && sameJson(build.hookResults, baseline.hookResults)
-      && sameJson(build.commonLayout, baseline.commonLayout)
       && sameJson(build.cursorEvent?.params, cursor.params)
       && sameJson(build.cursorEvent?.results, cursor.results)
       && build.cursorEvent?.bodySha256 === cursor.bodySha256

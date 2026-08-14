@@ -278,15 +278,21 @@ export function preflightTeamApply(
   if (party.status !== "ready") {
     return { ready: false, blockers: [{ rule: "party-unavailable" }] };
   }
-  // A rejected roster makes every policy and member fact downstream unknown.
-  // Report that root observation once; do not turn it into separate region,
-  // outpost, player, mode, and hero failures.
+  // Permanent policy facts stay authoritative even when the roster projection
+  // is incomplete. A player in PvP or outside an outpost should not be told to
+  // wait for observation that cannot make Apply legal there.
+  if (party.playRegion === "pvp") {
+    return { ready: false, blockers: [{ rule: "pvp" }] };
+  }
+  if (party.inOutpost === false) {
+    return { ready: false, blockers: [{ rule: "not-outpost" }] };
+  }
+  // A rejected roster makes the remaining member and mode facts downstream
+  // unreliable. Report that root observation once rather than multiplying it.
   if (party.partial) {
     return { ready: false, blockers: [{ rule: "partial-roster" }] };
   }
-  if (party.playRegion === "pvp") blockers.push({ rule: "pvp" });
   if (party.playRegion === "unknown") blockers.push({ rule: "region-unknown" });
-  if (party.inOutpost === false) blockers.push({ rule: "not-outpost" });
   if (party.inOutpost === null) blockers.push({ rule: "outpost-unknown" });
   if (!party.player || party.player.agentId === 0) {
     blockers.push({ rule: "player-unobserved" });

@@ -17,4 +17,5 @@ declare global {
     originalRelaunch: Electron.App["relaunch"];
   };
   var __updateInstallCalls: number;
+  var __capabilityRestartMessages: string[];
 }

@@ -331,4 +331,49 @@ test.describe("tools and update settings", () => {
     }
   });
 
+  test("features omitted at startup require a restart before they can be enabled", async () => {
+    const fixture = await launchOffline(
+      "gw-tools-capability-restart-e2e-",
+      {},
+      async (userData) => {
+        await writeFile(
+          path.join(userData, "settings.json"),
+          JSON.stringify({
+            gwonmacTools: true,
+            targetReadout: false,
+            teamManagement: false,
+          }),
+          { mode: 0o600 },
+        );
+      },
+    );
+    try {
+      const { app, page } = fixture;
+      await app.evaluate(({ dialog }) => {
+        globalThis.__capabilityRestartMessages = [];
+        dialog.showMessageBox = (async (
+          _win: Electron.BaseWindow,
+          options: Electron.MessageBoxOptions,
+        ) => {
+          globalThis.__capabilityRestartMessages?.push(options.message);
+          return { response: 1, checkboxChecked: false };
+        }) as typeof dialog.showMessageBox;
+      });
+
+      await page.evaluate(async () => {
+        await window.gwNative.settings.set({ targetReadout: true });
+        await window.gwNative.settings.set({ teamManagement: true });
+      });
+      expect(await app.evaluate(() => globalThis.__capabilityRestartMessages))
+        .toEqual([
+          "Restart to enable Target distance?",
+          "Restart to enable Apply team?",
+        ]);
+      await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({ targetReadout: false, teamManagement: false });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
 });

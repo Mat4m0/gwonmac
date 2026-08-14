@@ -50,7 +50,7 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     level: "error",
     fields: {
       action: literal([
-        "toolsEnable",
+        "capabilityEnable",
         "cacheClear",
         "gameStorageReset",
       ] as const),

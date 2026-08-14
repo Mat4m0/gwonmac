@@ -1112,7 +1112,6 @@ export function locateAutomaticCursor(
       cursorFunction: value.cursorFunction,
       cursorTableSlot: value.cursorTableSlot,
       producerFunctions: value.producerFunctions,
-      commonLayout: value.baseline.commonLayout,
       cursorLayout: value.baseline.cursorEvent?.layout,
     });
     return matches.every((match) => identity(match) === identity(matches[0]!))
