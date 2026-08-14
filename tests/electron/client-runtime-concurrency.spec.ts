@@ -480,7 +480,7 @@ test.describe("client generation coordination", () => {
     }
   });
 
-  test("restores an unconfirmed candidate before the next startup update", async () => {
+  test("keeps an untested candidate through the next startup update", async () => {
     const fingerprint = "e".repeat(64);
     const fixture = await launchOffline("gw-runtime-startup-rollback-e2e-");
     try {
@@ -550,8 +550,15 @@ test.describe("client generation coordination", () => {
               patchCalls,
               installedAtPatch,
               blockedAtPatch,
-              rejection: JSON.parse(
-                await fs.readFile(paths.rejectedClient, "utf8"),
+              rejected: await fs.stat(paths.rejectedClient).then(
+                () => true,
+                () => false,
+              ),
+              marker: JSON.parse(
+                await fs.readFile(
+                  path.join(paths.artifacts, ".candidate.json"),
+                  "utf8",
+                ),
               ),
               active: runtime.active,
             };
@@ -571,12 +578,12 @@ test.describe("client generation coordination", () => {
 
       expect(result).toEqual({
         patchCalls: 1,
-        installedAtPatch: "rollback",
-        blockedAtPatch: fingerprint,
-        rejection: {
+        installedAtPatch: "candidate",
+        blockedAtPatch: null,
+        rejected: false,
+        marker: {
           formatVersion: 1,
           fingerprint,
-          hostVersion: "test",
         },
         active: null,
       });

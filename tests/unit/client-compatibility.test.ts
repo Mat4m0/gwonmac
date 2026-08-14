@@ -4,11 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
+  clearRejectedClient,
   clientFingerprint,
   confirmClientCandidate,
   markClientCandidate,
+  readClientCandidate,
   readRejectedClient,
-  restoreUnconfirmedClient,
+  rejectClientCandidate,
+  restoreInvalidClientCandidate,
 } from "../../src/main/core/client-compatibility.js";
 import { Manifest, type RawManifest } from "../../src/main/core/manifest.js";
 
@@ -62,7 +65,7 @@ describe("client compatibility", () => {
     assert.notEqual(changed, first);
   });
 
-  it("restores an unconfirmed client once and records its fingerprint", async () => {
+  it("rejects a failed candidate once and records its fingerprint", async () => {
     const root = await mkdtemp(join(tmpdir(), "gw-client-rollback-"));
     const artifacts = join(root, "artifacts");
     const previousArtifacts = join(root, "artifacts.previous");
@@ -75,7 +78,7 @@ describe("client compatibility", () => {
     await markClientCandidate(artifacts, fingerprint);
 
     assert.deepEqual(
-      await restoreUnconfirmedClient({
+      await rejectClientCandidate({
         artifacts,
         rejectedPath,
         hostVersion: "1.0.0",
@@ -87,13 +90,41 @@ describe("client compatibility", () => {
     assert.equal(await readRejectedClient(rejectedPath, "1.0.1"), null);
     assert.equal(await missing(previousArtifacts), true);
     assert.equal(
-      await restoreUnconfirmedClient({
+      await rejectClientCandidate({
         artifacts,
         rejectedPath,
         hostVersion: "1.0.0",
       }),
       null,
     );
+  });
+
+  it("keeps a valid untested candidate pending across an ordinary restart", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gw-client-pending-"));
+    const artifacts = join(root, "artifacts");
+    const fingerprint = clientFingerprint(new Manifest(rawManifest()));
+    await mkdir(artifacts);
+    await markClientCandidate(artifacts, fingerprint);
+
+    assert.deepEqual(await readClientCandidate(artifacts), {
+      status: "pending",
+      fingerprint,
+    });
+    assert.equal(await missing(join(artifacts, ".candidate.json")), false);
+  });
+
+  it("clears only the rejection record for an explicit retry", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gw-client-retry-"));
+    const artifacts = join(root, "artifacts");
+    const rejectedPath = join(root, "rejected-client.json");
+    await mkdir(artifacts);
+    await writeFile(join(artifacts, "client"), "verified");
+    await writeFile(rejectedPath, "rejected");
+
+    await clearRejectedClient(rejectedPath);
+
+    assert.equal(await missing(rejectedPath), true);
+    assert.equal(await readFile(join(artifacts, "client"), "utf8"), "verified");
   });
 
   it("promotes a rendered candidate and removes rollback state", async () => {
@@ -187,7 +218,7 @@ describe("client compatibility", () => {
     await writeFile(join(previousArtifacts, "client"), "working");
 
     assert.deepEqual(
-      await restoreUnconfirmedClient({
+      await restoreInvalidClientCandidate({
         artifacts,
         rejectedPath,
         hostVersion: "1.0.0",

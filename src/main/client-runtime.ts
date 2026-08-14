@@ -59,9 +59,12 @@ import { encodedChunkLimit } from "./core/chunk-format.js";
 import { ChunkStore } from "./core/chunk-store.js";
 import { prepareClientModule } from "./certification/client-module.js";
 import {
+  clearRejectedClient,
   confirmClientCandidate,
+  readClientCandidate,
   readRejectedClient,
-  restoreUnconfirmedClient,
+  rejectClientCandidate,
+  restoreInvalidClientCandidate,
 } from "./core/client-compatibility.js";
 import { sha256File } from "./core/derived-wasm.js";
 import type { Manifest } from "./core/manifest.js";
@@ -537,6 +540,7 @@ export class ClientRuntime {
         "last published client failed integrity verification",
       );
     }
+    const candidate = await readClientCandidate(this.options.paths.artifacts);
     return this.activateStore(
       this.createStore(
         value.size,
@@ -544,6 +548,10 @@ export class ClientRuntime {
         value.chunkHashes,
         value.compressionMode,
       ),
+      candidate.status === "pending" &&
+        candidate.fingerprint === value.clientFingerprint
+        ? candidate.fingerprint
+        : null,
     );
   }
 
@@ -633,16 +641,24 @@ export class ClientRuntime {
     });
     const updateSpan = startClientUpdateSpan();
     try {
-      const rollback = await restoreUnconfirmedClient({
-        artifacts: this.options.paths.artifacts,
-        rejectedPath: this.options.paths.rejectedClient,
-        hostVersion: this.options.hostVersion,
-      });
-      if (rollback) {
-        logEvent({
-          k: "client.candidateRolledBack",
-          fingerprint: digestOrNull(rollback.fingerprint),
+      const installedCandidate = await readClientCandidate(
+        this.options.paths.artifacts,
+      );
+      // A malformed marker cannot identify the candidate it protects. Prefer
+      // the complete verified rollback generation. A valid pending marker is
+      // deliberately preserved: closing the app is not evidence of failure.
+      if (installedCandidate.status === "invalid") {
+        const rollback = await restoreInvalidClientCandidate({
+          artifacts: this.options.paths.artifacts,
+          rejectedPath: this.options.paths.rejectedClient,
+          hostVersion: this.options.hostVersion,
         });
+        if (rollback) {
+          logEvent({
+            k: "client.candidateRolledBack",
+            fingerprint: digestOrNull(rollback.fingerprint),
+          });
+        }
       }
       try {
         const migrated = await migrateLegacyPublishedClientManifest(
@@ -752,7 +768,10 @@ export class ClientRuntime {
     return operation;
   }
 
-  retryClient(relaunch: () => void): Promise<void> {
+  async retryClient(relaunch: () => void): Promise<void> {
+    // Retry is an explicit player decision. Clear only the small rejection
+    // record; verified chunks, the rollback generation and user data remain.
+    await clearRejectedClient(this.options.paths.rejectedClient);
     if (!this.activeSlot.current) return this.requestUpdate();
     this.publishProgress({
       ...INITIAL_PROGRESS,
@@ -764,7 +783,6 @@ export class ClientRuntime {
     } catch (error) {
       this.publishProgress({ phase: "error", errorCode: errorCode(error) });
     }
-    return Promise.resolve();
   }
 
   /**
@@ -885,7 +903,7 @@ export class ClientRuntime {
       new Error("game client update interrupted for renderer recovery"),
     );
     return this.generationLock.run(async () => {
-      const rollback = await restoreUnconfirmedClient({
+      const rollback = await rejectClientCandidate({
         artifacts: this.options.paths.artifacts,
         rejectedPath: this.options.paths.rejectedClient,
         hostVersion: this.options.hostVersion,

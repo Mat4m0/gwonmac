@@ -74,9 +74,15 @@ fingerprint. It returns that token with the health proof. `ClientRuntime`
 rechecks the token under the generation lock before it removes rollback state.
 A stale renderer cannot confirm a newer generation.
 
-If startup fails before both events, `ClientRuntime` rejects that exact client
-fingerprint for the current host version. It restores the verified previous
-generation when one exists.
+An ordinary shutdown before both events leaves the candidate pending. The next
+launch serves the same verified candidate again; closing the launcher is not
+evidence that the game client failed.
+
+If the renderer crashes while the candidate is being served, `ClientRuntime`
+rejects that exact client fingerprint for the current host version. It restores
+the verified previous generation when one exists. An explicit player retry
+clears only that rejection record and gives the exact candidate one fresh
+attempt; downloaded chunks and user data are unchanged.
 
 Invalid or legacy state that cannot be verified never becomes rollback state.
 

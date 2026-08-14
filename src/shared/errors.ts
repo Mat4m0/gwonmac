@@ -22,7 +22,6 @@ export const ERROR_CODES = [
   "bad_range",
   "bad_settings",
   "bad_window_state",
-  "candidate_pending",
   "chunk_count",
   "chunk_decode",
   "chunk_index",
