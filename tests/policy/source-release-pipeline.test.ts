@@ -652,6 +652,7 @@ test("the root app and website add no runtime package entries and audit exceptio
   assert.deepEqual(
     read("pnpm-workspace.yaml").match(/GHSA-[a-z0-9-]+/gu),
     [
+      "GHSA-jmr9-qjv8-65gv",
       "GHSA-w3rx-r6r6-pgpr",
       "GHSA-5p2g-fcmc-qvqq",
       "GHSA-g7r4-m6w7-qqqr",
