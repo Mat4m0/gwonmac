@@ -22,6 +22,7 @@ import {
 } from "../../shared/enhancement-contracts.js";
 import {
   ENHANCEMENT_CONFIG_FIELDS,
+  type EnhancementAgentIdentityLayout,
   type EnhancementCommonLayout,
   type EnhancementCursorLayout,
   type EnhancementPartyLayout,
@@ -107,7 +108,9 @@ export function enhancementConfigWords(
             ? build.targetObservation?.layout
             : field.activation === "party"
               ? build.partyObservation?.layout
-              : build.commonLayout;
+              : field.key in build.commonLayout
+                ? build.commonLayout
+                : build.agentIdentity?.layout;
       const value = layout?.[field.key as keyof typeof layout];
       if (typeof value !== "number") {
         throw new Error(`${field.activation} configuration is not certified`);
@@ -134,6 +137,8 @@ export interface KnownEnhancementBuild {
   hookBodySha256: string;
   tableSlot: number;
   commonLayout: EnhancementCommonLayout;
+  /** Agent identity needed by both target and party observation. */
+  agentIdentity?: Readonly<{ layout: EnhancementAgentIdentityLayout }>;
   cursorEvent?: Readonly<{
     functionIndex: number;
     params: readonly ["i32", "i32", "i32", "i32", "i32"];
@@ -212,10 +217,11 @@ export interface KnownEnhancementBuild {
 export function supportedEnhancementCapabilities(
   build: KnownEnhancementBuild,
 ): EnhancementCapabilities {
-  const partyObservation = build.partyObservation !== undefined;
+  const agentIdentity = build.agentIdentity !== undefined;
+  const partyObservation = agentIdentity && build.partyObservation !== undefined;
   return Object.freeze({
     nativeCursor: build.cursorEvent !== undefined,
-    targetObservation: build.targetObservation !== undefined,
+    targetObservation: agentIdentity && build.targetObservation !== undefined,
     partyObservation,
     commands: partyObservation && build.teamApply !== undefined,
   });
@@ -342,6 +348,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         currentInstanceType: 0x23c,
         playerNumber: 0x2ac,
       }),
+      agentIdentity: Object.freeze({
+        layout: Object.freeze({
+          agentArray: 0x5a4e58,
+          agentId: 0x2c,
+          agentPlayerNumber: 0xf4,
+          agentModelType: 0xf6,
+        }),
+      }),
       cursorEvent: Object.freeze({
         functionIndex: 2469,
         params: Object.freeze(["i32", "i32", "i32", "i32", "i32"] as const),
@@ -391,15 +405,11 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       //
       targetObservation: Object.freeze({
         layout: Object.freeze({
-          agentArray: 0x5a4e58,
           manualTargetAgentId: 0x5a394c,
           automaticTargetAgentId: 0x5a3948,
-          agentId: 0x2c,
           agentX: 0x74,
           agentY: 0x78,
           agentType: 0x9c,
-          agentPlayerNumber: 0xf4,
-          agentModelType: 0xf6,
         }),
       }),
       teamApply: Object.freeze({
@@ -635,17 +645,17 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         cursorTarget:
           "b92ae155065419a7ea42d906a6af55fd6b9830e852ede6b3272a51f01ecd2ef0",
         party:
-          "41ab635b061f64fcab8c5f6b019450bbe0825ec948ddbbc54cfd3841662e2574",
+          "4b77f64d1fa66650134a852d939ee3222ffed89da91e8081cfd15b6250ae0c6f",
         cursorParty:
-          "20516a6a63c527f3e87ade45fe1a9f1dc11a47fb8bdb3bac379d402999bf5112",
+          "d9cae4fe4b287d19f9f6f33b036082953b1af0fc5c531ab8dc45c1b8e53949da",
         targetParty:
           "9ce3e81fb062c1030653f06dcc2a683ea59712555410b731ebad4024c9d34c7f",
         cursorTargetParty:
           "636231e0bdb10e2c5432998bf9277749f25e9c93ac66cb7553de3bae58b6a277",
         partyCommands:
-          "0e1c127dea275e39d543104728811eec7db9ee5c84bd732bd98c48e4ef923485",
+          "6a608dd42b643059ce5d81d8d516e0cd567c4c5500a29ff9dddc5a9ad298c85c",
         cursorPartyCommands:
-          "fed08223c3b414e9e2c8a07158573b74fccde760cc65e2831f9ca90e97da9683",
+          "e90fc2f76adee3809b1cb7d956c119fd63ea78286a14efc177733bc51fae1ffb",
         targetPartyCommands:
           "7902cbe81dafa9aae7875f2682b20dca6b60bb03fb637d5a027df7b08c9c16a7",
         cursorTargetPartyCommands:
@@ -674,6 +684,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         currentMapId: 0x234,
         currentInstanceType: 0x23c,
         playerNumber: 0x2ac,
+      }),
+      agentIdentity: Object.freeze({
+        layout: Object.freeze({
+          agentArray: 0x5a4e58,
+          agentId: 0x2c,
+          agentPlayerNumber: 0xf4,
+          agentModelType: 0xf6,
+        }),
       }),
       cursorEvent: Object.freeze({
         functionIndex: 2469,
@@ -726,15 +744,11 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       //
       targetObservation: Object.freeze({
         layout: Object.freeze({
-          agentArray: 0x5a4e58,
           manualTargetAgentId: 0x5a394c,
           automaticTargetAgentId: 0x5a3948,
-          agentId: 0x2c,
           agentX: 0x74,
           agentY: 0x78,
           agentType: 0x9c,
-          agentPlayerNumber: 0xf4,
-          agentModelType: 0xf6,
         }),
       }),
       teamApply: Object.freeze({

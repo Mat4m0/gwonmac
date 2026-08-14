@@ -493,7 +493,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     );
   });
 
-  it("gives Toolbox only the target-core words its hero path reads", () => {
+  it("gives party observation shared agent identity without target reads", () => {
     const input = fixture();
     const build = manifest(input);
     const transformed = transformEnhancementWasm(
@@ -506,7 +506,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.ok(decoded);
     assert.deepEqual(decoded.configWords.slice(0, 17), [
       build.commonLayout.contextRoot,
-      0,
+      build.agentIdentity!.layout.agentArray,
       0,
       0,
       build.commonLayout.gameContextSlot,
@@ -516,12 +516,12 @@ describe("targeted Enhancement WebAssembly transform", () => {
       build.commonLayout.currentMapId,
       build.commonLayout.currentInstanceType,
       build.commonLayout.playerNumber,
+      build.agentIdentity!.layout.agentId,
       0,
       0,
       0,
-      0,
-      0,
-      0,
+      build.agentIdentity!.layout.agentPlayerNumber,
+      build.agentIdentity!.layout.agentModelType,
     ]);
     assert.deepEqual(
       decoded.configWords.slice(17, 29),
@@ -536,7 +536,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const evidence = JSON.parse(
       new TextDecoder().decode(section),
     ) as { configWords: number[] };
-    evidence.configWords[1] = 1;
+    // A target-only address must remain absent from a party-only profile.
+    evidence.configWords[2] = 1;
     assert.equal(decodeEnhancementManifest(moduleWithManifest(evidence)), null);
   });
 

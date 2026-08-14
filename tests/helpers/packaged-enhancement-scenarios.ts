@@ -645,6 +645,7 @@ export async function assertToolboxFoundationLifecycle() {
       capabilities: PRODUCT_TOOLS_CAPABILITIES,
       layout: {
         ...ENHANCEMENT_BUILD.commonLayout,
+        ...ENHANCEMENT_BUILD.agentIdentity!.layout,
         ...ENHANCEMENT_BUILD.targetObservation!.layout,
         ...ENHANCEMENT_BUILD.cursorEvent!.layout,
         ...ENHANCEMENT_BUILD.partyObservation!.layout,

@@ -86,10 +86,12 @@ export type EnhancementCommonLayout = Pick<EnhancementLayout,
   | "contextRoot" | "gameContextSlot" | "characterContext" | "mapId"
   | "isExplorable" | "currentMapId" | "currentInstanceType" | "playerNumber"
 >;
+export type EnhancementAgentIdentityLayout = Pick<EnhancementLayout,
+  | "agentArray" | "agentId" | "agentPlayerNumber" | "agentModelType"
+>;
 export type EnhancementTargetLayout = Pick<EnhancementLayout,
-  | "agentArray" | "manualTargetAgentId" | "automaticTargetAgentId"
-  | "agentId" | "agentX" | "agentY" | "agentType"
-  | "agentPlayerNumber" | "agentModelType"
+  | "manualTargetAgentId" | "automaticTargetAgentId"
+  | "agentX" | "agentY" | "agentType"
 >;
 export type EnhancementCursorLayout = Pick<EnhancementLayout,
   | "cursorActiveArt" | "cursorSoftwareModel" | "cursorShowCount"
@@ -98,7 +100,8 @@ export type EnhancementCursorLayout = Pick<EnhancementLayout,
   | "cursorTextureType" | "cursorTextureWidth" | "cursorTextureHeight"
 >;
 export type EnhancementPartyLayout = Omit<EnhancementLayout,
-  keyof EnhancementCommonLayout | keyof EnhancementTargetLayout | keyof EnhancementCursorLayout
+  keyof EnhancementCommonLayout | keyof EnhancementAgentIdentityLayout
+  | keyof EnhancementTargetLayout | keyof EnhancementCursorLayout
 >;
 
 type Activation = "target" | "target-or-party" | "cursor" | "party";
@@ -114,9 +117,12 @@ const layout = (
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...layout("target-or-party", "contextRoot"),
-  ...layout("target", "agentArray", "manualTargetAgentId", "automaticTargetAgentId"),
+  ...layout("target-or-party", "agentArray"),
+  ...layout("target", "manualTargetAgentId", "automaticTargetAgentId"),
   ...layout("target-or-party", "gameContextSlot", "characterContext", "mapId", "isExplorable", "currentMapId", "currentInstanceType", "playerNumber"),
-  ...layout("target", "agentId", "agentX", "agentY", "agentType", "agentPlayerNumber", "agentModelType"),
+  ...layout("target-or-party", "agentId"),
+  ...layout("target", "agentX", "agentY", "agentType"),
+  ...layout("target-or-party", "agentPlayerNumber", "agentModelType"),
   ...layout("cursor", "cursorActiveArt", "cursorSoftwareModel", "cursorShowCount", "cursorColorBuffer", "cursorArtHotspot", "cursorArtTexture", "cursorHandleKey", "cursorHandleObject", "cursorViewTexture", "cursorTextureType", "cursorTextureWidth", "cursorTextureHeight"),
   ...layout("party", "partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "accountContext", "accountUnlockedSkills", "worldContext", "worldHeroFlags", "heroFlagStride", "flagHeroId", "flagAgentId", "flagBehavior", "worldHeroInfo", "heroInfoStride", "infoHeroId", "infoAgentId", "infoLevel", "infoPrimary", "infoSecondary", "infoAppearanceBitmap", "worldSkillbars", "skillbarStride", "skillbarAgentId", "skillbarSkills", "skillSlotStride", "skillSlotId", "skillbarDisabled", "worldAttributes", "attributeStride", "attributeAgentId", "attributeEntries", "attributeEntryStride", "attributeEntryId", "attributeEntryRank", "areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags", "worldProfessionStates", "professionStateStride", "worldCharacterSkills"),
   { source: "dispatcher", key: "playerChatMessage", activation: "party" },

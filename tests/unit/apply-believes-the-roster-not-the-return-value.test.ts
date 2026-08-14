@@ -140,6 +140,22 @@ test("a partial roster does not invent hero-specific verification failures", () 
   ]);
 });
 
+test("a rejected roster does not multiply into unknown region and mode failures", () => {
+  const result = preflightTeamApply(
+    plan([member({ hero: heroId(6), build: build() })]),
+    {
+      ...party([], true, false, null),
+      partial: true,
+      playRegion: "unknown",
+      hardMode: null,
+      inOutpost: null,
+    },
+  );
+  assert.deepEqual(result.ready ? [] : result.blockers, [
+    { rule: "partial-roster" },
+  ]);
+});
+
 test("an absent hero's known primary mismatch refuses before roster mutation", async () => {
   const game = harness([]);
   const observed = {
