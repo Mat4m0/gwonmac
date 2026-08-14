@@ -289,6 +289,17 @@ export function preflightTeamApply(
     else if (party.hardMode !== (plan.mode === "hard")) changes.push({ kind: "mode" });
   }
 
+  // A partial projection cannot prove that an individual hero is absent,
+  // locked, or using unknown professions. Keep Apply fail-closed, but report
+  // the one fact we actually know instead of multiplying it into misleading
+  // hero-specific problems.
+  if (party.partial) {
+    const [first, ...rest] = blockers;
+    return first
+      ? { ready: false, blockers: [first, ...rest] }
+      : { ready: false, blockers: [{ rule: "partial-roster" }] };
+  }
+
   const player = plan.members[0];
   if (player?.build) {
     const skills = lockedSkills(player, party.characterSkills);
@@ -375,8 +386,8 @@ export function preflightTeamApply(
 export function teamApplyProblemMessage(problem: TeamApplyRuntimeProblem): string {
   switch (problem.rule) {
     case "party-unavailable": return "Waiting for a playable character and party observation.";
-    case "pvp": return "Core only in PvP and guild halls — Team Apply is unavailable.";
-    case "region-unknown": return "Core only until the current region is safely identified.";
+    case "pvp": return "Apply team is unavailable in PvP and guild halls.";
+    case "region-unknown": return "Apply team is unavailable until GWonMac identifies the current region.";
     case "not-outpost": return "Enter a PvE outpost to apply this team.";
     case "outpost-unknown": return "Waiting to confirm that this is a PvE outpost.";
     case "partial-roster": return "Waiting until the complete party roster is observed.";

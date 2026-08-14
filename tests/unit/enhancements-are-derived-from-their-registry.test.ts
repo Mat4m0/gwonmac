@@ -56,7 +56,11 @@ const {
   DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementSelectionFor,
+  requestedEnhancementCapabilities,
 } = await import("../../src/main/certification/enhancement-policy.ts");
+const { effectiveCapabilities } = await import(
+  "../../src/renderer/effective-enhancement-capabilities.ts"
+);
 
 test("a packaged build refuses GW_ENHANCEMENT_AUTOMATION=1, so the tools decide alone", () => {
   assert.equal(process.env.GW_ENHANCEMENT_AUTOMATION, "1");
@@ -106,22 +110,22 @@ test("one capability plan derives hooks without losing feature identity", () => 
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
-      { nativeCursor: true, targetObservation: false, toolbox: false, commands: false },
+      { nativeCursor: true, targetObservation: false, partyObservation: false, commands: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "target-observer"),
-      { nativeCursor: false, targetObservation: true, toolbox: false, commands: false },
+      { nativeCursor: false, targetObservation: true, partyObservation: false, commands: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-foundation"),
-      { nativeCursor: true, targetObservation: false, toolbox: true, commands: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: false },
     );
     // The read foundation and the write program differ by exactly this bit,
     // and no saved setting reaches the second: choosing the panel can never
     // carry the ability to send a packet in with it.
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-commands"),
-      { nativeCursor: true, targetObservation: false, toolbox: true, commands: true },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: true },
     );
   }
 });
@@ -129,10 +133,10 @@ test("one capability plan derives hooks without losing feature identity", () => 
 test("launch intent resolves to the canonical frozen capability profiles", () => {
   const cases = [
     [{ nativeCursor: true, tools: false }, "none", "cursor"],
-    [{ nativeCursor: true, tools: true }, "none", "cursorTargetToolboxCommands"],
+    [{ nativeCursor: true, tools: true }, "none", "cursorTargetPartyCommands"],
     [{ nativeCursor: false, tools: false }, "cursor-observer", "cursor"],
     [{ nativeCursor: true, tools: false }, "target-observer", "target"],
-    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "cursorToolbox"],
+    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "party"],
   ] as const;
   for (const [selection, program, profile] of cases) {
     const resolved = enhancementCapabilitiesFor(selection, program);
@@ -152,4 +156,42 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
     )),
     null,
   );
+});
+
+test("player settings request only the selected independent features", () => {
+  assert.deepEqual(requestedEnhancementCapabilities({
+    ...DEFAULT_SETTINGS,
+    gwonmacTools: true,
+    teamManagement: false,
+    targetReadout: false,
+  }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorParty);
+  assert.deepEqual(requestedEnhancementCapabilities({
+    ...DEFAULT_SETTINGS,
+    gwonmacTools: true,
+    teamManagement: true,
+    targetReadout: true,
+  }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommands);
+});
+
+test("renderer consumes main's effective subset instead of launch intent", () => {
+  const available = { status: "available" as const };
+  const unavailable = {
+    status: "unavailable" as const,
+    reason: "preparation-failed" as const,
+  };
+  assert.deepEqual(effectiveCapabilities({
+    appVersion: "test",
+    healthToken: null,
+    extendedMemory: null,
+    compatibility: {
+      clientSha256: "a".repeat(64),
+      features: {
+        gameFileSaving: available,
+        nativeCursor: available,
+        targetObservation: available,
+        partyObservation: available,
+        teamApply: unavailable,
+      },
+    },
+  }), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetParty);
 });

@@ -116,7 +116,10 @@ describe("update action", () => {
       checkedAt: "1970-01-01T00:00:01.000Z",
     });
 
-    assert.equal(views.at(-1)?.message, "Version 2026.7.0-beta.2 is ready to install.");
+    assert.equal(
+      views.at(-1)?.message,
+      "GWonMac 2026.7.0-beta.2 is ready. Restart to update.",
+    );
     assert.equal(views.at(-1)?.installedStage, "Beta");
     assert.equal(views.at(-1)?.ready, true);
   });
@@ -159,7 +162,10 @@ describe("update action", () => {
     action.subscribe((view) => views.push(view));
     await action.initialize();
 
-    assert.match(views.at(-1)?.message ?? "", /did not pass validation/);
+    assert.equal(
+      views.at(-1)?.message,
+      "The update could not be verified. Try again later.",
+    );
     assert.doesNotMatch(views.at(-1)?.message ?? "", /latest version/);
   });
 });

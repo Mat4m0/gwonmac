@@ -19,15 +19,14 @@ Core is required and has no player switch. Optional Tools are off by default.
 The first enable selects a Tools-capable module and requires a restart. The
 current optional features are:
 
-- **Team management** (Beta): author builds and teams, observe the current PvE
-  party, capture a team, and apply one after an explicit player action in an
-  outpost.
+- **Apply teams in Guild Wars** (Beta): allow one explicit Apply action in a
+  certified PvE outpost. Build and Team authoring remains local and independent.
 - **Target distance and range** (Test): show the selected target's distance and
   range band.
 
-Both choices then change live. Their observers stop when disabled or when map
-policy refuses them. Host-only authoring remains available without observation
-or command authority.
+Both choices then change live. Live observers and commands stop when disabled
+or when map policy refuses them. Host-only authoring remains available without
+observation or command authority.
 
 ## Use the cheapest proof
 
@@ -197,14 +196,45 @@ domain outside the kernel.
 
 ## Recertify an ArenaNet client
 
-Inspect the official candidate with:
+Start from the exact official artifact that triggered the compatibility notice.
+Do not clear the downloaded game data: the unsupported artifact and the
+retained preceding artifact are the most useful migration evidence.
+
+Run the bounded chain in order:
 
 ```bash
-pnpm certification recertify
+pnpm certification doctor
+pnpm certification template "/absolute/path/Gw.jspi.wasm" --emit-ts
+pnpm certification recertify "/absolute/path/Gw.jspi.wasm"
 ```
 
 The tool first selects or derives file compatibility. It then inspects that
 output as the Core and Tools candidate. The transforms are not alternatives.
+
+If the template report derives one unambiguous entry, review it and write it:
+
+```bash
+pnpm certification template "/absolute/path/Gw.jspi.wasm" --write
+```
+
+Then add one complete exact-build Enhancement entry. Do not make a new build
+inherit addresses from the preceding build. Compare the old and new modules
+and record which function bodies, signatures, table slots, data roots and
+message anchors stayed exact. Recompute every capability output; a copied hash
+is not evidence.
+
+Finish the downstream chain only after the Enhancement entry exists:
+
+```bash
+pnpm certification recertify "/absolute/path/Gw.jspi.wasm"
+pnpm certification double-click "/absolute/path/Gw.jspi.wasm"
+pnpm check
+```
+
+`recertify` must report `bundleVerified: true`, `double-click` must report
+`matchesShippedTable: true`, and `doctor` must name the new build before a live
+run. Native double-click and extended-memory tables are cumulative: add the
+new build's seven profile inputs without removing the preceding build.
 
 Each recovered fact needs an independent semantic anchor. A common movement is
 not enough. Automated candidates are review evidence and cannot create runtime
@@ -214,6 +244,21 @@ Recertification requires exact identities, signatures, caller semantics,
 original-call preservation, table and allocation invariants, positive and
 negative layout evidence, lifecycle clearing, offline tests, clean teardown,
 and one bounded live semantic check per changed domain.
+
+Party certification must prove the complete owned roster, player and hero
+professions, hero unlocks, behaviour, skill bars, and attributes. Proving only
+the hero count or first hero is not enough for Apply team. Each optional party
+detail table is an independent observation: a rejected detail table must erase
+only its own facts and must never erase the verified roster or another valid
+detail group.
+
+The scheduled recertification workflow already detects a new ArenaNet
+generation, downloads and verifies its code artifacts, derives the template
+entry, and publishes `enhancement.json` as review evidence. It deliberately
+does not write Enhancement memory addresses or command facts. Those values can
+affect a running game and still need a human review plus bounded live evidence.
+Automation should shorten that review; it must not turn a matching index into
+runtime authority.
 
 When evidence is incomplete, add no certificate. The verified official client
 must remain playable.

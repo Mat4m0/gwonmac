@@ -12,14 +12,15 @@ Template repair can continue only when the isolated verifier proves the full
 affected caller semantics. Enhancement facts require a new exact-build
 certificate. A shared address or function-index delta is not proof.
 
-`client.buildCertification` in a diagnostics export reports one of these
-states:
+Main publishes the effective status of each feature to both diagnostics and
+player-facing code. Do not reconstruct a second whole-build state:
 
-| State | Meaning |
+| Feature status | Meaning |
 | --- | --- |
-| `certified` | Template repair and the selected exact-build Tools facts are available. |
-| `template-only` | Template repair is proven. Optional Tools are unavailable. |
-| `uncertified` | Use the official client without unproven transforms. |
+| `available` | The served module contains the proven feature. |
+| `off` | The player did not select the optional feature. |
+| `unavailable: game-update` | This exact Guild Wars build does not prove it. |
+| `unavailable: preparation-failed` | Proof exists, but the feature did not start. |
 
 Check this value first when a player reports a regression after an ArenaNet
 update.

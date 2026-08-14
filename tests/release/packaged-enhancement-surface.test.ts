@@ -241,7 +241,7 @@ test("packaged builds refuse automation and developer programs independently", (
   assert.equal(foundation.none, true);
 });
 
-test("Core is required and retired cursor preferences are dropped", async () => {
+test("the cursor is required and retired cursor preferences are dropped", async () => {
   // Loaded from `build/`, which is this suite's subject, and typed from the
   // `src/` modules `build/` is emitted from. The annotation is on the
   // declaration rather than an assertion on the call: a dynamic `import()`
@@ -258,7 +258,7 @@ test("Core is required and retired cursor preferences are dropped", async () => 
   assert.equal(parseSettings({ targetReadout: true }).targetReadout, true);
 
   assert.doesNotMatch(shippedText("/build/renderer/index.html"), /name="nativeCursor"/u);
-  assert.match(shippedText("/build/renderer/index.html"), /Core is on for supported Guild Wars builds/u);
+  assert.match(shippedText("/build/renderer/index.html"), /Guild Wars cursor/u);
   assert.match(shippedText("/build/renderer/index.html"), /name="gwonmacTools"/u);
   assert.match(shippedText("/build/renderer/index.html"), /name="targetReadout"/u);
 });

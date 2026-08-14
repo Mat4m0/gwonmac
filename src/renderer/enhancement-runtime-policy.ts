@@ -35,6 +35,9 @@ export function enhancementRuntimePolicy(
   const developerToolbox = program === "toolbox-foundation"
     || program === "toolbox-commands";
   return Object.freeze({
+    // The saved Build/Team library is local UI. It remains reachable at the
+    // login screen, in PvP, and while live game observations are unavailable.
+    tools: developerToolbox || settings.enabled,
     targetReadout: program === "target-observer"
       || (settings.enabled && settings.targetReadout && pve),
     teamManagement: pve && (

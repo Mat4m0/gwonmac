@@ -4,14 +4,47 @@
  */
 import type {
   EnhancementProgram,
-  EnhancementSelection,
 } from "../shared/enhancement-contracts.js";
 import { installCertifiedCompanion } from "./certified-companion-installation.js";
-export function installEnhancements(
+import { effectiveCapabilities } from "./effective-enhancement-capabilities.js";
+
+const COMPATIBILITY_CHANGED_EVENT = "gwonmac:client-compatibility-changed";
+
+async function reportFeatureFailure(
+  features: readonly ("nativeCursor" | "targetObservation" | "partyObservation" | "teamApply")[],
+): Promise<void> {
+  await window.gwNative.client.featureFailure(features);
+  window.dispatchEvent(new Event(COMPATIBILITY_CHANGED_EVENT));
+}
+
+export async function installEnhancements(
   instance: WebAssembly.Instance,
   module: WebAssembly.Module,
-  selection: EnhancementSelection,
   program: EnhancementProgram = "none",
 ) {
-  return installCertifiedCompanion(instance, module, selection, program);
+  const capabilities = effectiveCapabilities(await window.gwNative.client.session());
+  if (capabilities === null) return null;
+  const features = [
+    capabilities.nativeCursor ? "nativeCursor" as const : null,
+    capabilities.targetObservation ? "targetObservation" as const : null,
+    capabilities.partyObservation ? "partyObservation" as const : null,
+    capabilities.commands ? "teamApply" as const : null,
+  ].filter((feature): feature is NonNullable<typeof feature> => feature !== null);
+  try {
+    const installation = await installCertifiedCompanion(
+      instance,
+      module,
+      capabilities,
+      program,
+    );
+    if (installation === null && features.length > 0) {
+      await reportFeatureFailure(features);
+    }
+    return installation;
+  } catch (error) {
+    if (features.length > 0) {
+      await reportFeatureFailure(features).catch(() => undefined);
+    }
+    throw error;
+  }
 }

@@ -17,23 +17,21 @@ import type {
 import { parseReleaseVersion } from '../shared/release.js';
 
 const FAILURE_MESSAGE: Record<AppUpdateErrorCode, string> = {
-  'rate-limited':
-    "Couldn't check — GitHub is refusing further requests from this network. Try again in an hour.",
-  offline: "Couldn't check — GitHub could not be reached.",
-  timeout: "Couldn't check — GitHub did not answer within five seconds.",
-  server: "Couldn't check — GitHub reported an error.",
-  unreadable: "Couldn't check — GitHub's answer could not be read.",
-  'unsupported-build':
-    "Couldn't check — this build's version is not on the release line.",
+  'rate-limited': 'Too many update checks. Try again in an hour.',
+  offline: "Couldn't check for updates. Check your internet connection and try again.",
+  timeout: "Couldn't check for updates. Try again.",
+  server: "Couldn't check for updates. Try again.",
+  unreadable: "Couldn't check for updates. Try again.",
+  'unsupported-build': "Couldn't check for updates. Try again.",
   // Plain words for a non-technical player: this copy (a development or
   // tester build) has no self-updater, and the fix is a download, not a fault.
   // The Releases link is shown beside this sentence — see `showReleaseNotes`.
   'updater-unavailable':
-    "This version can't update itself — new versions are on the Releases page.",
+    'This version must be updated manually.',
   'feed-invalid':
-    "Couldn't update — the release files did not pass validation.",
+    'The update could not be verified. Try again later.',
   'download-failed':
-    "Couldn't download the update. Try checking again.",
+    "Couldn't download the update. Try again.",
 };
 
 const plural = (value: number, unit: string) =>
@@ -85,6 +83,7 @@ export type UpdateActionView = {
   actionLabel: string;
   busy: boolean;
   message: string;
+  compatibilityMessage: string;
   lastChecked: string;
   currentVersion: string;
   installedStage: 'Stable' | 'Beta' | 'Release Candidate' | 'Alpha' | 'Unversioned';
@@ -117,18 +116,25 @@ function messageFor(state: AppUpdateState): string {
     case 'idle':
       return '';
     case 'checking':
-      return 'Checking for updates…';
+      return 'Checking for a GWonMac update…';
     case 'up-to-date':
-      return "You're on the latest version.";
+      return 'GWonMac is up to date.';
     case 'downloading':
-      return `Downloading version ${state.latestVersion}…`;
+      return `Downloading GWonMac ${state.latestVersion}…`;
     case 'ready':
-      return `Version ${state.latestVersion} is ready to install.`;
+      return `GWonMac ${state.latestVersion} is ready. Restart to update.`;
     case 'manual-stable-return':
       return `Stable version ${state.stableVersion} is available. Returning to Stable requires a manual install.`;
     case 'failed':
       return FAILURE_MESSAGE[state.reason];
   }
+}
+
+function compatibilityMessageFor(state: AppUpdateState): string {
+  if (state.phase === 'up-to-date') {
+    return 'No GWonMac update is available yet.';
+  }
+  return messageFor(state);
 }
 
 function installedStage(version: string): UpdateActionView['installedStage'] {
@@ -162,9 +168,10 @@ export function createUpdateAction({
   const listeners: Array<(view: UpdateActionView) => void> = [];
 
   const view = (): UpdateActionView => ({
-    actionLabel: state.phase === 'checking' ? 'Checking…' : 'Check for Updates',
+    actionLabel: state.phase === 'checking' ? 'Checking…' : 'Check for updates',
     busy: state.phase === 'checking' || running !== null,
     message: messageFor(state),
+    compatibilityMessage: compatibilityMessageFor(state),
     lastChecked: formatLastChecked(checkedAt(state), now()),
     currentVersion: state.currentVersion,
     installedStage: installedStage(state.currentVersion),
@@ -243,6 +250,7 @@ export function bindUpdateActionDom(
   root: Document,
   action: UpdateAction,
   openReleases: () => Promise<unknown>,
+  restartApp: () => Promise<unknown> = () => Promise.resolve(),
 ) {
   const launcherCheck = requiredElement(root, 'loading-update-check');
   const launcherStatus = requiredElement(root, 'loading-update-status');
@@ -256,6 +264,7 @@ export function bindUpdateActionDom(
   const settingsVersion = requiredElement(root, 'settings-update-version');
   const settingsStage = requiredElement(root, 'settings-update-stage');
   const compatibilityCheck = requiredButton(root, 'client-compat-check');
+  const compatibilityRestart = requiredButton(root, 'client-compat-restart');
   const compatibilityReleases = requiredElement(root, 'client-compat-releases');
   const compatibilityStatus = requiredElement(root, 'client-compat-update');
 
@@ -284,10 +293,15 @@ export function bindUpdateActionDom(
     settingsReleases.hidden = !view.showReleaseNotes;
     settingsRestart.hidden = !view.ready;
 
-    compatibilityCheck.textContent = view.actionLabel;
-    compatibilityCheck.disabled = view.busy;
-    compatibilityStatus.textContent = view.message;
-    compatibilityStatus.hidden = view.message === '';
+    const retryPreparation = compatibilityCheck.dataset.recovery === 'restart';
+    compatibilityCheck.textContent = retryPreparation
+      ? 'Restart GWonMac'
+      : view.actionLabel;
+    compatibilityCheck.disabled = retryPreparation ? false : view.busy;
+    compatibilityStatus.textContent = retryPreparation
+      ? ''
+      : view.compatibilityMessage;
+    compatibilityStatus.hidden = retryPreparation || view.compatibilityMessage === '';
   });
 
   const requestCheck = () => void action.check();
@@ -296,7 +310,18 @@ export function bindUpdateActionDom(
     requestCheck();
   });
   settingsCheck.addEventListener('click', requestCheck);
-  compatibilityCheck.addEventListener('click', requestCheck);
+  compatibilityCheck.addEventListener('click', () => {
+    if (compatibilityCheck.dataset.recovery === 'restart') {
+      compatibilityCheck.disabled = true;
+      void restartApp();
+      return;
+    }
+    requestCheck();
+  });
+  compatibilityRestart.addEventListener('click', () => {
+    compatibilityRestart.disabled = true;
+    void restartApp();
+  });
   settingsRestart.addEventListener('click', () => {
     void action.restartAndInstall();
   });

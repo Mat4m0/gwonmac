@@ -11,6 +11,7 @@ export function mountToolsApp(
     publishTemplate: Parameters<typeof createNativeHost>[1];
     commands: Parameters<typeof createNativeHost>[2];
     applyUnavailable: Parameters<typeof createNativeHost>[3];
+    observationUnavailable: string | null;
     development: boolean;
   },
 ) {
@@ -21,6 +22,7 @@ export function mountToolsApp(
       options.commands,
       options.applyUnavailable,
       options.development,
+      options.observationUnavailable,
     ),
     mode: "embedded",
     ...options,

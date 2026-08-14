@@ -126,6 +126,20 @@ test("missing player, partial roster and known-locked hero all send zero command
   }
 });
 
+test("a partial roster does not invent hero-specific verification failures", () => {
+  const result = preflightTeamApply(
+    plan([
+      member({ hero: heroId(6), build: build(), behaviour: "guard" }),
+      member({ hero: heroId(7), build: build(), behaviour: "fight" }),
+    ]),
+    { ...party([]), partial: true },
+  );
+  assert.equal(result.ready, false);
+  assert.deepEqual(result.ready ? [] : result.blockers, [
+    { rule: "partial-roster" },
+  ]);
+});
+
 test("an absent hero's known primary mismatch refuses before roster mutation", async () => {
   const game = harness([]);
   const observed = {

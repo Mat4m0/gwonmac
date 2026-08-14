@@ -53,6 +53,7 @@ import {
   clientFingerprint,
   clientGenerationPaths,
   markClientCandidate,
+  readClientCandidate,
 } from "./client-compatibility.js";
 import {
   decodeChunk,
@@ -391,19 +392,20 @@ export class PatchClient {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       backupExists = false;
     }
-    const candidateExists =
-      currentExists &&
-      (await stat(clientGenerationPaths(this.artifactsDir).marker).then(
-        () => true,
-        () => false,
-      ));
-    if (backupExists && currentExists && !candidateExists) {
-      await rm(backup, { recursive: true, force: true });
-    } else if (backupExists && currentExists) {
-      throw new AppError(
-        "candidate_pending",
-        "client candidate must be confirmed or rolled back before updating",
-      );
+    const candidate = currentExists
+      ? await readClientCandidate(this.artifactsDir)
+      : { status: "none" as const };
+    if (backupExists && currentExists) {
+      if (candidate.status === "none") {
+        await rm(backup, { recursive: true, force: true });
+      } else if (candidate.status === "invalid") {
+        throw new AppError(
+          "artifact_unverified",
+          "client candidate marker is invalid",
+        );
+      }
+      // A pending candidate plus its verified rollback generation is a stable
+      // state, not an interrupted swap. Keep both until confirmation or crash.
     } else if (backupExists) {
       await rename(backup, this.artifactsDir);
     }
@@ -436,6 +438,13 @@ export class PatchClient {
     signal?.throwIfAborted();
     const fingerprint = clientFingerprint(mf);
     const previousGeneration = await this.publishedGeneration();
+    const installedCandidate = await readClientCandidate(this.artifactsDir);
+    const pendingRollbackExists =
+      installedCandidate.status === "pending" &&
+      (await stat(backup).then(
+        () => true,
+        () => false,
+      ));
     signal?.throwIfAborted();
     if (
       fingerprint === options?.blockedFingerprint &&
@@ -599,14 +608,32 @@ export class PatchClient {
         previousGeneration.fingerprint !== fingerprint;
       if (hadCurrent) {
         if (candidate) await markClientCandidate(stage, fingerprint);
-        await rm(backup, { recursive: true, force: true });
-        await rename(this.artifactsDir, backup);
+        if (pendingRollbackExists) {
+          // A second ArenaNet update arrived before the first candidate was
+          // exercised. Discard the superseded candidate, but retain the last
+          // confirmed generation as the rollback target for the new one.
+          await rm(generations.failed, { recursive: true, force: true });
+          await rename(this.artifactsDir, generations.failed);
+        } else {
+          await rm(backup, { recursive: true, force: true });
+          await rename(this.artifactsDir, backup);
+        }
       }
       try {
         await rename(stage, this.artifactsDir);
       } catch (error) {
-        if (hadCurrent) await rename(backup, this.artifactsDir);
+        if (hadCurrent) {
+          await rename(
+            pendingRollbackExists
+              ? generations.failed
+              : backup,
+            this.artifactsDir,
+          );
+        }
         throw error;
+      }
+      if (pendingRollbackExists) {
+        await rm(generations.failed, { recursive: true, force: true });
       }
       if (hadCurrent && !candidate) {
         await rm(backup, { recursive: true, force: true });

@@ -92,7 +92,7 @@ function sameCapabilities(
 ): boolean {
   return left.nativeCursor === right.nativeCursor
     && left.targetObservation === right.targetObservation
-    && left.toolbox === right.toolbox
+    && left.partyObservation === right.partyObservation
     && left.commands === right.commands;
 }
 
@@ -120,7 +120,7 @@ export function decodeEnhancementManifest(
     const capabilityRecord = exactRecord(value.capabilities, [
       "nativeCursor",
       "targetObservation",
-      "toolbox",
+      "partyObservation",
       "commands",
     ]);
     const hooks = exactRecord(value.hooks, ["tick", "cursor", "ui"]);
@@ -129,7 +129,7 @@ export function decodeEnhancementManifest(
       || hooks === null
       || typeof capabilityRecord.nativeCursor !== "boolean"
       || typeof capabilityRecord.targetObservation !== "boolean"
-      || typeof capabilityRecord.toolbox !== "boolean"
+      || typeof capabilityRecord.partyObservation !== "boolean"
       || typeof capabilityRecord.commands !== "boolean"
     ) {
       return null;
@@ -138,7 +138,7 @@ export function decodeEnhancementManifest(
     const capabilities: EnhancementCapabilities = Object.freeze({
       nativeCursor: capabilityRecord.nativeCursor,
       targetObservation: capabilityRecord.targetObservation,
-      toolbox: capabilityRecord.toolbox,
+      partyObservation: capabilityRecord.partyObservation,
       commands: capabilityRecord.commands,
     });
     const selectedHooks: EnhancementHooks = Object.freeze({
@@ -148,7 +148,7 @@ export function decodeEnhancementManifest(
     });
     const expectedHooks = enhancementHooksFor(capabilities);
     const configWords = value.configWords;
-    const messages = capabilities.toolbox
+    const messages = capabilities.partyObservation
       ? exactRecord(value.messages, [
           "playerChat",
           "hideHeroPanel",
@@ -181,8 +181,8 @@ export function decodeEnhancementManifest(
         ))
       || (hooks.ui !== null
         && !functionEvidence(hooks.ui, ["i32", "i32", "i32"], false))
-      || (!capabilities.toolbox && value.messages !== null)
-      || (capabilities.toolbox
+      || (!capabilities.partyObservation && value.messages !== null)
+      || (capabilities.partyObservation
         && (
           messages === null
           || ![

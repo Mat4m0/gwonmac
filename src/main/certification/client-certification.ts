@@ -1,17 +1,15 @@
 /**
- * Which of the three certification states an ArenaNet client build is in.
+ * The two exact lookups in the client transformation chain.
  *
- * The two transforms are chained but keyed by **different** hashes:
+ * The transforms are keyed by **different** hashes:
  * template-save by the official build's hash, Enhancement by the hash of what the
  * template-save transform *produces*. Certification can therefore succeed at
  * step one and fail at step two — templates saved, cursor gone — and that is
  * the normal intermediate during a recertification, because the transform that
  * breaks saving gets fixed before the one that draws a pointer.
  *
- * This is the single owner of that answer: the launcher notice, the settings
- * status, the diagnostics gauges and `certification doctor` all ask here, so
- * the intermediate state has one name and one user-facing sentence rather than
- * being reassembled from two independent gauges at each surface.
+ * Effective per-feature status is produced after preparation in client-runtime;
+ * this file owns only the canonical exact-build lookups.
  */
 import type { ClientCertification } from "./client-module.js";
 import {
@@ -27,10 +25,8 @@ import type { LocalClientVerification } from "./local-client-verifier.js";
 export type { ClientCertification } from "./client-module.js";
 
 /**
- * The two lookups the chain composes. Injectable because the shipped tables
- * hold exactly one certified build today, so `template-only` is unreachable
- * with real data until a recertification lands — and an unreachable state is
- * exactly the one that rots untested.
+ * The two lookups the chain composes. Injectable so the intermediate
+ * template-save-only case remains directly testable.
  */
 export interface CertifiedBuildTables {
   templateSave: (sha256: string) => KnownTemplateSaveBuild | null;
@@ -47,18 +43,13 @@ export function certifyClientBuild(
   tables: CertifiedBuildTables = SHIPPED_TABLES,
 ): ClientCertification {
   const templateSave = tables.templateSave(officialSha256);
-  if (!templateSave) return { state: "uncertified" };
-  const enhancementBuild = tables.enhancement(templateSave.outputSha256);
-  return enhancementBuild
-    ? {
-        state: "certified",
-        templateSaveBuild: templateSave,
-        enhancementBuild,
-      }
-    : {
-        state: "template-only",
-        templateSaveBuild: templateSave,
-      };
+  if (!templateSave) {
+    return { templateSaveBuild: null, enhancementBuild: null };
+  }
+  return {
+    templateSaveBuild: templateSave,
+    enhancementBuild: tables.enhancement(templateSave.outputSha256),
+  };
 }
 
 /**
@@ -69,15 +60,8 @@ export function certifyClientBuild(
 export function certificationFromLocalVerification(
   verification: LocalClientVerification,
 ): ClientCertification {
-  if (!verification.templateSaveBuild) return { state: "uncertified" };
-  return verification.enhancementBuild
-    ? {
-        state: "certified",
-        templateSaveBuild: verification.templateSaveBuild,
-        enhancementBuild: verification.enhancementBuild,
-      }
-    : {
-        state: "template-only",
-        templateSaveBuild: verification.templateSaveBuild,
-      };
+  return {
+    templateSaveBuild: verification.templateSaveBuild,
+    enhancementBuild: verification.enhancementBuild,
+  };
 }

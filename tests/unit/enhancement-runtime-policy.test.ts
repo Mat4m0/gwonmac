@@ -9,14 +9,17 @@ const off = Object.freeze({ enabled: false, targetReadout: false, teamManagement
 
 test("developer programs replace saved optional-tool selection in PvE", () => {
   assert.deepEqual(enhancementRuntimePolicy("toolbox-foundation", off, "pve"), {
+    tools: true,
     targetReadout: false,
     teamManagement: true,
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
+    tools: true,
     targetReadout: false,
     teamManagement: true,
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
+    tools: false,
     targetReadout: true,
     teamManagement: false,
   });
@@ -28,6 +31,7 @@ test("unknown and PvP regions fail closed for every optional command surface", (
     assert.equal(enhancementRuntimePolicy("toolbox-commands", on, region).teamManagement, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).teamManagement, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).targetReadout, false);
+    assert.equal(enhancementRuntimePolicy("none", on, region).tools, true);
   }
 });
 
@@ -44,7 +48,41 @@ test("product tool settings remain live once the capability is present", () => {
     targetReadout: false,
     teamManagement: true,
   }, "pve"), {
+    tools: true,
     targetReadout: false,
     teamManagement: true,
   });
+});
+
+test("local Tools availability never depends on a live-game safety gate", () => {
+  const regions = ["pve", "pvp", "unknown"] as const;
+  const programs = [
+    "none",
+    "cursor-observer",
+    "target-observer",
+    "toolbox-foundation",
+    "toolbox-commands",
+  ] as const;
+  for (const program of programs) {
+    for (const playRegion of regions) {
+      for (const enabled of [false, true]) {
+        for (const teamManagement of [false, true]) {
+          for (const targetReadout of [false, true]) {
+            const policy = enhancementRuntimePolicy(program, {
+              enabled,
+              teamManagement,
+              targetReadout,
+            }, playRegion);
+            assert.equal(
+              policy.tools,
+              enabled
+                || program === "toolbox-foundation"
+                || program === "toolbox-commands",
+              `${program}/${playRegion} coupled local Tools to a live feature`,
+            );
+          }
+        }
+      }
+    }
+  }
 });

@@ -304,7 +304,7 @@ export interface AppSettings {
   uiPanelOpacity: number;
   /** Master opt-in for the optional executable Tools Beta capability. */
   gwonmacTools: boolean;
-  /** Live selection restored whenever optional tools are allowed. */
+  /** Allow explicit Apply team commands when live-game policy also permits. */
   teamManagement: boolean;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
@@ -500,35 +500,41 @@ export type SettingsPane =
   | "updates"
   | "advanced";
 
-/**
- * Which of the three client-certification states this session is in. The two
- * WASM transforms are keyed by different hashes, so certification can succeed
- * for template save/load and fail for the Enhancement tools:
- *
- * - `certified`      templates, screenshots and chat logs work; Enhancement may load
- * - `template-only`  those three work; Enhancement may not load
- * - `uncertified`    ArenaNet's untouched module is served; nothing is repaired
- *
- * `src/main/certification/client-certification.ts` is the only producer.
- */
-export type ClientCompatibilityState =
-  | "certified"
-  | "template-only"
-  | "uncertified";
+/** Why a selected or required feature is absent from the served session. */
+export type UnavailableReason = "game-update" | "preparation-failed";
+
+export type RequiredFeatureStatus =
+  | Readonly<{ status: "available" }>
+  | Readonly<{ status: "unavailable"; reason: UnavailableReason }>;
+
+export type OptionalFeatureStatus =
+  | RequiredFeatureStatus
+  | Readonly<{ status: "off" }>;
 
 export interface ClientCompatibility {
-  state: ClientCompatibilityState;
   /**
    * sha256 of ArenaNet's official module for this session. It names the build,
    * so a notice can be acknowledged per build instead of per launch.
    */
   clientSha256: string;
-  /**
-   * Whether the module selected for this session contains the certified
-   * Enhancement transform. This is effective runtime state, not build support.
-   */
-  enhancementActive: boolean;
+  /** Main's effective state from the exact module served for this session. */
+  features: Readonly<{
+    gameFileSaving: RequiredFeatureStatus;
+    nativeCursor: OptionalFeatureStatus;
+    targetObservation: OptionalFeatureStatus;
+    partyObservation: OptionalFeatureStatus;
+    teamApply: OptionalFeatureStatus;
+  }>;
 }
+
+export const ENHANCEMENT_RUNTIME_FEATURES = [
+  "nativeCursor",
+  "targetObservation",
+  "partyObservation",
+  "teamApply",
+] as const;
+export type EnhancementRuntimeFeature =
+  (typeof ENHANCEMENT_RUNTIME_FEATURES)[number];
 
 /**
  * The memory module selected for this running client. Saved intent is kept
@@ -713,6 +719,7 @@ export const IPC = {
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
   clientSession: "gw:client:session",
+  clientFeatureFailure: "gw:client:featureFailure",
   // Main→renderer, and the renderer's acknowledgement. Main waits on the
   // acknowledgement because a capture flush has to finish inside the capture
   // window, which `executeJavaScript`'s awaited result used to guarantee.
@@ -891,6 +898,7 @@ export interface GwNativeApi {
     retry(): Promise<void>;
     healthy(token: ClientHealthToken): Promise<void>;
     session(): Promise<ClientSession>;
+    featureFailure(features: readonly EnhancementRuntimeFeature[]): Promise<void>;
   };
   appUpdates: {
     getState(): Promise<AppUpdateState>;

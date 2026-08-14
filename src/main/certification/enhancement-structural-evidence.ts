@@ -2,7 +2,10 @@
  * The structural analysis behind a recertification: what a client module's own
  * shape says about where the Enhancement hooks belong.
  *
- * Every answer is evidence with a status attached, never a conclusion.
+ * The broad comparison report is evidence with a status attached, never a
+ * conclusion. The separate `locateAutomaticCursor` export is intentionally
+ * narrower: it is launch authority only for cursor after all signed semantic
+ * fingerprints, signatures, table relations and uniqueness checks match.
  * `candidate` means one location survived all the anchors; `ambiguous` means
  * several did and a human must choose; `unavailable` names the specific reason
  * the analysis could not run. A single best guess is deliberately not offered —
@@ -20,7 +23,8 @@ import {
   valueTypeName,
   type FunctionType,
   type Section,
-} from "../main/core/wasm-binary.js";
+} from "../core/wasm-binary.js";
+import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
@@ -54,6 +58,7 @@ export interface TickEvidenceReport {
   readonly candidate: {
     readonly functionIndex: number;
     readonly signature: FunctionSignatureEvidence;
+    readonly bodySha256: string;
   } | null;
 }
 
@@ -105,6 +110,8 @@ export interface CursorEvidenceReport {
     readonly targetFunctionIndex: number;
     readonly producerFunctionIndices: [number, number];
     readonly activeTableSlot: number;
+    readonly bodySha256: string;
+    readonly producerBodySha256: [string, string];
   } | null;
 }
 
@@ -119,6 +126,14 @@ export interface EnhancementStructuralEvidenceReport {
   readonly tick: TickEvidenceReport;
   readonly playerChatUi: PlayerChatUiEvidenceReport;
   readonly cursor: CursorEvidenceReport;
+}
+
+export interface AutomaticCursorLocation {
+  readonly baseline: KnownEnhancementBuild;
+  readonly hookFunction: number;
+  readonly cursorFunction: number;
+  readonly cursorTableSlot: number;
+  readonly producerFunctions: readonly [number, number];
 }
 
 const MAX_INPUT_BYTES = 64 * 1024 * 1024;
@@ -426,6 +441,12 @@ function functionHasSignature(
   );
 }
 
+function functionBodySha256(module: ModuleShape, functionIndex: number): string {
+  const body = module.bodies[functionIndex - module.functionImportCount];
+  if (!body) throw new EvidenceError("module-shape-unsupported");
+  return createHash("sha256").update(body).digest("hex");
+}
+
 function tickEvidence(module: ModuleShape): TickEvidenceReport {
   const exports = module.exports.filter(
     (entry) => entry.name === "EmscriptenExeThreadMainLoop",
@@ -448,6 +469,7 @@ function tickEvidence(module: ModuleShape): TickEvidenceReport {
       candidate: {
         functionIndex,
         signature: signatureEvidence(module, functionIndex)!,
+        bodySha256: functionBodySha256(module, functionIndex),
       },
     };
   }
@@ -902,6 +924,11 @@ function cursorEvidence(
           candidate.directProducers[1]!.producerFunctionIndex,
         ],
         activeTableSlot: candidate.activeTableSlots[0]!,
+        bodySha256: functionBodySha256(module, candidate.targetFunctionIndex),
+        producerBodySha256: [
+          functionBodySha256(module, candidate.directProducers[0]!.producerFunctionIndex),
+          functionBodySha256(module, candidate.directProducers[1]!.producerFunctionIndex),
+        ],
       },
     };
   }
@@ -1003,5 +1030,95 @@ export function inspectEnhancementStructuralEvidence(
       playerChatUi,
       cursor: unavailableCursor(),
     };
+  }
+}
+
+/**
+ * Strict launch authority for cursor-only recovery on an unknown build.
+ * Locations come from the candidate module; only semantic body fingerprints
+ * and the active table relation come from the signed baselines.
+ */
+export function locateAutomaticCursor(
+  input: Uint8Array,
+  baselines: readonly KnownEnhancementBuild[],
+): AutomaticCursorLocation | null {
+  if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
+  try {
+    const module = parseModule(input);
+    const tick = tickEvidence(module).candidate;
+    if (!tick) return null;
+    const relations = parseActiveTableRelations(module.elementSection);
+    const matches: AutomaticCursorLocation[] = [];
+    for (const baseline of baselines) {
+      const cursor = baseline.cursorEvent;
+      if (!cursor || tick.bodySha256 !== baseline.hookBodySha256) continue;
+      const cursorFunctions = module.functionTypeIndices.flatMap((_, index) => {
+        const slots = relations.get(index) ?? [];
+        if (
+          index < module.functionImportCount
+          || !functionHasSignature(module, index, 5)
+          || functionBodySha256(module, index) !== cursor.bodySha256
+          || slots.length !== 1
+        ) return [];
+        const slot = slots[0]!;
+        const functionAt = (targetSlot: number): number | null => {
+          for (const [functionIndex, mapped] of relations) {
+            if (mapped.includes(targetSlot)) return functionIndex;
+          }
+          return null;
+        };
+        const before = functionAt(slot - 1);
+        const after = functionAt(slot + 1);
+        return before !== null && after !== null
+          && functionBodySha256(module, before) === cursor.tableNeighbourBodySha256[0]
+          && functionBodySha256(module, after) === cursor.tableNeighbourBodySha256[1]
+          ? [index]
+          : [];
+      });
+      const producers = cursor.producerBodySha256.map((fingerprint) =>
+        module.functionTypeIndices.flatMap((_, index) =>
+          index >= module.functionImportCount
+          && functionBodySha256(module, index) === fingerprint
+            ? [index]
+            : []));
+      const producerSignaturesMatch = producers.every((matches, index) => {
+        const functionIndex = matches[0];
+        const signature = functionIndex === undefined
+          ? null
+          : signatureEvidence(module, functionIndex);
+        return signature !== null
+          && signature.params.join() === cursor.producerParams[index]!.join()
+          && signature.results.join() === cursor.producerResults[index]!.join();
+      });
+      if (
+        cursorFunctions.length !== 1
+        || producers[0]?.length !== 1
+        || producers[1]?.length !== 1
+        || producers[0][0] === producers[1][0]
+        || !producerSignaturesMatch
+      ) continue;
+      const cursorFunction = cursorFunctions[0]!;
+      matches.push({
+        baseline,
+        hookFunction: tick.functionIndex,
+        cursorFunction,
+        cursorTableSlot: relations.get(cursorFunction)![0]!,
+        producerFunctions: [producers[0][0]!, producers[1][0]!],
+      });
+    }
+    if (matches.length === 0) return null;
+    const identity = (value: AutomaticCursorLocation) => JSON.stringify({
+      hookFunction: value.hookFunction,
+      cursorFunction: value.cursorFunction,
+      cursorTableSlot: value.cursorTableSlot,
+      producerFunctions: value.producerFunctions,
+      commonLayout: value.baseline.commonLayout,
+      cursorLayout: value.baseline.cursorEvent?.layout,
+    });
+    return matches.every((match) => identity(match) === identity(matches[0]!))
+      ? matches[0]!
+      : null;
+  } catch {
+    return null;
   }
 }

@@ -40,7 +40,7 @@
   <p id="loading-unofficial">Unofficial client for Guild Wars Reforged</p>
 
   <nav id="loading-links">
-    <a href="#" id="loading-update-check">Check for Updates</a>
+    <a href="#" id="loading-update-check">Check for updates</a>
     <a href="#" id="loading-update-get" class="update"
        data-external="releases" hidden>Get the update</a>
     <a href="#" id="loading-update-skip" hidden>Play Without Updating</a>
@@ -161,14 +161,16 @@
                 aria-live="polite" hidden></span>
         </p>
       </div>
-      <!-- Recovery is an app update, so the check is the visible secondary
-           action; Play stays primary because play is never blocked. -->
+      <!-- Play stays primary because compatibility never blocks the game. -->
       <div class="client-compat-actions">
-        <button type="button" id="client-compat-releases" class="launcher-link">
-          Open Releases…
+        <button type="button" id="client-compat-releases" class="launcher-link" hidden>
+          Open releases…
         </button>
         <button type="button" id="client-compat-check" class="launcher-secondary">
-          Check for Updates
+          Check for updates
+        </button>
+        <button type="button" id="client-compat-restart" class="launcher-secondary" hidden>
+          Restart GWonMac
         </button>
         <button type="button" id="client-compat-play" class="launcher-primary">
           Play Guild Wars
@@ -468,27 +470,32 @@
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
                  aria-labelledby="settings-tab-controls">
           <h3 id="settings-controls-title" class="settings-pane-title">Tools</h3>
-          <p class="settings-pane-intro">Core keeps Guild Wars working correctly. Optional tools add conveniences you choose.</p>
-          <p class="settings-status">Core is on for supported Guild Wars builds.</p>
-          <p class="settings-note">Core provides the native cursor, double-click login, persistent files, and build-template saving. These compatibility features are required and stay on.</p>
+          <p class="settings-pane-intro">Choose the GWonMac features you want. File saving stays on when this Guild Wars version supports it.</p>
           <label class="settings-check ui-check">
             <input type="checkbox" name="gwonmacTools" aria-describedby="settings-tools-help">
             <span>Enable optional Tools Beta</span>
           </label>
-          <p id="settings-tools-help" class="settings-note">The first enable asks to restart once. After that, this switch and the choices below update immediately. Optional tools stay off in PvP and when the game region is unknown.</p>
+          <p id="settings-tools-help" class="settings-note">The first enable asks to restart once. Your saved Builds and Teams stay available at login and in PvP. Live game features stop when the game region is not safe.</p>
           <fieldset>
             <legend>Optional tools</legend>
             <label class="settings-check ui-check">
               <input type="checkbox" name="teamManagement">
-              <span>Team management <small>Beta</small></span>
+              <span>Apply teams in Guild Wars <small>Beta</small></span>
             </label>
             <label class="settings-check ui-check">
               <input type="checkbox" name="targetReadout">
               <span>Target distance and range <small>Test</small></span>
             </label>
           </fieldset>
+          <dl class="settings-feature-status" aria-label="Feature availability">
+            <div><dt>Guild Wars file saving</dt><dd id="settings-feature-gameFileSaving">—</dd></div>
+            <div><dt>Guild Wars cursor</dt><dd id="settings-feature-nativeCursor">—</dd></div>
+            <div><dt>Target distance</dt><dd id="settings-feature-targetObservation">—</dd></div>
+            <div><dt>Live party details</dt><dd id="settings-feature-partyObservation">—</dd></div>
+            <div><dt>Apply team</dt><dd id="settings-feature-teamApply">—</dd></div>
+          </dl>
           <p id="settings-compat-status" class="settings-status"
-             role="status"></p>
+             role="status" aria-live="polite"></p>
           <p id="settings-compat-detail" class="settings-note"></p>
           <p id="settings-compat-version" class="settings-note"></p>
         </section>
@@ -516,13 +523,13 @@
           <p class="settings-note">Checks run at launch and about every six hours, but never during an active game connection. A launch-check update installs before play unless you skip it; one downloaded later installs when you restart. Turn this off to check manually.</p>
           <div class="settings-actions-row">
             <button type="button" id="settings-check-updates" class="ui-button">
-              Check for Updates
+              Check for updates
             </button>
             <button type="button" id="settings-restart-update" class="ui-button" data-variant="primary" hidden>
-              Restart to Update
+              Restart and update
             </button>
             <button type="button" id="settings-open-releases" class="ui-button" hidden>
-              View Release Notes…
+              View release notes…
             </button>
           </div>
           <p id="settings-update-status" class="settings-status"

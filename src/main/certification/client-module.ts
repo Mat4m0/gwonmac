@@ -12,11 +12,14 @@
  * it downstream.
  */
 import {
+  ENHANCEMENT_CAPABILITY_PROFILES,
   enhancementCapabilitiesRequested,
+  intersectEnhancementCapabilities,
   ENHANCEMENT_TRANSFORM_ABI,
+  type EnhancementCapabilityProfile,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
-import type { ClientCompatibilityState } from "../../shared/contracts.js";
+import type { RequiredFeatureStatus } from "../../shared/contracts.js";
 import {
   buildFingerprint,
   type DerivedWasmCache,
@@ -32,15 +35,18 @@ import {
 } from "./template-save-compat.js";
 import {
   enhancementOutputSha256,
+  supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
+  deriveNativeDoubleClickBuild,
   findNativeDoubleClickBuild,
   nativeDoubleClickOutputSha256,
   NATIVE_DOUBLE_CLICK_TRANSFORM_ABI,
   rewriteNativeDoubleClickWasm,
 } from "./native-double-click.js";
+import { readFile } from "node:fs/promises";
 import {
   EXTENDED_MEMORY_MAX_BYTES,
   prepareExtendedMemoryArtifacts,
@@ -52,17 +58,10 @@ import {
  * preparation path consumes these records directly; it never looks either
  * build up again.
  */
-export type ClientCertification =
-  | { state: "uncertified" }
-  | {
-      state: "template-only";
-      templateSaveBuild: KnownTemplateSaveBuild;
-    }
-  | {
-      state: "certified";
-      templateSaveBuild: KnownTemplateSaveBuild;
-      enhancementBuild: KnownEnhancementBuild;
-    };
+export interface ClientCertification {
+  readonly templateSaveBuild: KnownTemplateSaveBuild | null;
+  readonly enhancementBuild: KnownEnhancementBuild | null;
+}
 
 export interface ClientModulePreparationFailure {
   readonly stage:
@@ -74,8 +73,10 @@ export interface ClientModulePreparationFailure {
 
 interface PreparedWasmClientModule {
   readonly wasmPath: string;
-  readonly state: ClientCompatibilityState;
+  readonly gameFileSaving: RequiredFeatureStatus;
   readonly enhancementBuild: KnownEnhancementBuild | null;
+  readonly requestedCapabilities: EnhancementCapabilities;
+  readonly effectiveCapabilities: EnhancementCapabilities;
   readonly failure: ClientModulePreparationFailure | null;
   /**
    * Whether the served module carries the client's own mouse double-click
@@ -83,6 +84,50 @@ interface PreparedWasmClientModule {
    * renderer's switch and not merely a report.
    */
   readonly nativeDoubleClick: boolean;
+}
+
+const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
+  nativeCursor: false,
+  targetObservation: false,
+  partyObservation: false,
+  commands: false,
+});
+
+function capabilityCount(capabilities: EnhancementCapabilities): number {
+  return Number(capabilities.nativeCursor)
+    + Number(capabilities.targetObservation)
+    + Number(capabilities.partyObservation)
+    + Number(capabilities.commands);
+}
+
+function isSubset(
+  candidate: EnhancementCapabilities,
+  maximum: EnhancementCapabilities,
+): boolean {
+  return (!candidate.nativeCursor || maximum.nativeCursor)
+    && (!candidate.targetObservation || maximum.targetObservation)
+    && (!candidate.partyObservation || maximum.partyObservation)
+    && (!candidate.commands || maximum.commands);
+}
+
+/** Largest safe profiles first; read-only observations win ties over commands. */
+function enhancementCandidates(
+  build: KnownEnhancementBuild,
+  requested: EnhancementCapabilities,
+): EnhancementCapabilities[] {
+  const maximum = intersectEnhancementCapabilities(
+    requested,
+    supportedEnhancementCapabilities(build),
+  );
+  return (Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
+    EnhancementCapabilityProfile[])
+    .map((profile) => ENHANCEMENT_CAPABILITY_PROFILES[profile])
+    .filter((candidate) =>
+      isSubset(candidate, maximum)
+      && enhancementOutputSha256(build, candidate) !== null)
+    .sort((left, right) =>
+      capabilityCount(right) - capabilityCount(left)
+      || Number(left.commands) - Number(right.commands));
 }
 
 export type ExtendedMemoryMode =
@@ -145,7 +190,7 @@ function enhancementCache(
   const capabilityIdentity = {
     nativeCursor: capabilities.nativeCursor,
     targetObservation: capabilities.targetObservation,
-    toolbox: capabilities.toolbox,
+    partyObservation: capabilities.partyObservation,
   };
   return {
     inputSha256: build.sha256,
@@ -210,7 +255,10 @@ async function withNativeDoubleClick(
 ): Promise<PreparedWasmClientModule> {
   try {
     const inputSha256 = await sha256File(prepared.wasmPath);
-    const build = findNativeDoubleClickBuild(inputSha256);
+    const build = findNativeDoubleClickBuild(inputSha256)
+      ?? deriveNativeDoubleClickBuild(
+        new Uint8Array(await readFile(prepared.wasmPath)),
+      );
     const expectedOutputSha256 = build
       ? nativeDoubleClickOutputSha256(build, inputSha256)
       : null;
@@ -313,11 +361,15 @@ async function prepareCertifiedChain(
     enhancementCacheRoot,
   } = options;
 
-  if (certification.state === "uncertified") {
+  const requestedCapabilities = enhancementCapabilities;
+  const templateSaveBuild = certification.templateSaveBuild;
+  if (templateSaveBuild === null) {
     return {
       wasmPath: officialWasmPath,
-      state: "uncertified",
+      gameFileSaving: { status: "unavailable", reason: "game-update" },
       enhancementBuild: null,
+      requestedCapabilities,
+      effectiveCapabilities: NO_CAPABILITIES,
       nativeDoubleClick: false,
       failure: await discardUnsupportedCaches(
         compatibilityCacheRoot,
@@ -326,13 +378,14 @@ async function prepareCertifiedChain(
     };
   }
 
-  const templateSaveBuild = certification.templateSaveBuild;
   if (templateSaveBuild.sha256 !== officialSha256) {
     await discardUnsupportedCaches(compatibilityCacheRoot, enhancementCacheRoot);
     return {
       wasmPath: officialWasmPath,
-      state: "uncertified",
+      gameFileSaving: { status: "unavailable", reason: "preparation-failed" },
       enhancementBuild: null,
+      requestedCapabilities,
+      effectiveCapabilities: NO_CAPABILITIES,
       nativeDoubleClick: false,
       failure: {
         stage: "template-save",
@@ -354,30 +407,36 @@ async function prepareCertifiedChain(
     await discardDerivedWasm(enhancementCacheRoot).catch(() => undefined);
     return {
       wasmPath: officialWasmPath,
-      state: "uncertified",
+      gameFileSaving: { status: "unavailable", reason: "preparation-failed" },
       enhancementBuild: null,
+      requestedCapabilities,
+      effectiveCapabilities: NO_CAPABILITIES,
       nativeDoubleClick: false,
       failure: { stage: "template-save", error },
     };
   }
 
-  if (certification.state === "template-only") {
+  const enhancementBuild = certification.enhancementBuild;
+  if (enhancementBuild === null) {
     return {
       wasmPath: templateSaveWasm,
-      state: "template-only",
+      gameFileSaving: { status: "available" },
       enhancementBuild: null,
+      requestedCapabilities,
+      effectiveCapabilities: NO_CAPABILITIES,
       nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
   }
 
-  const enhancementBuild = certification.enhancementBuild;
   if (enhancementBuild.sha256 !== templateSaveBuild.outputSha256) {
     await discardDerivedWasm(enhancementCacheRoot).catch(() => undefined);
     return {
       wasmPath: templateSaveWasm,
-      state: "template-only",
+      gameFileSaving: { status: "available" },
       enhancementBuild: null,
+      requestedCapabilities,
+      effectiveCapabilities: NO_CAPABILITIES,
       nativeDoubleClick: false,
       failure: {
         stage: "enhancement",
@@ -389,40 +448,49 @@ async function prepareCertifiedChain(
   if (!enhancementCapabilitiesRequested(enhancementCapabilities)) {
     return {
       wasmPath: templateSaveWasm,
-      state: "certified",
+      gameFileSaving: { status: "available" },
       enhancementBuild: null,
+      requestedCapabilities,
+      effectiveCapabilities: NO_CAPABILITIES,
       nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
   }
 
-  try {
-    return {
-      wasmPath: await prepareDerivedWasm(
-        templateSaveWasm,
-        enhancementCache(
-          enhancementBuild,
-          enhancementCapabilities,
-          enhancementCacheRoot,
+  let firstFailure: unknown = null;
+  for (const candidate of enhancementCandidates(
+    enhancementBuild,
+    enhancementCapabilities,
+  )) {
+    try {
+      return {
+        wasmPath: await prepareDerivedWasm(
+          templateSaveWasm,
+          enhancementCache(enhancementBuild, candidate, enhancementCacheRoot),
+          (base) => transformEnhancementWasm(base, enhancementBuild, candidate),
         ),
-        (base) => transformEnhancementWasm(
-          base,
-          enhancementBuild,
-          enhancementCapabilities,
-        ),
-      ),
-      state: "certified",
-      enhancementBuild,
-      nativeDoubleClick: false,
-      failure: null,
-    };
-  } catch (error) {
-    return {
-      wasmPath: templateSaveWasm,
-      state: "certified",
-      enhancementBuild: null,
-      nativeDoubleClick: false,
-      failure: { stage: "enhancement", error },
-    };
+        gameFileSaving: { status: "available" },
+        enhancementBuild,
+        requestedCapabilities,
+        effectiveCapabilities: candidate,
+        nativeDoubleClick: false,
+        failure: firstFailure === null
+          ? null
+          : { stage: "enhancement", error: firstFailure },
+      };
+    } catch (error) {
+      firstFailure ??= error;
+    }
   }
+  return {
+    wasmPath: templateSaveWasm,
+    gameFileSaving: { status: "available" },
+    enhancementBuild,
+    requestedCapabilities,
+    effectiveCapabilities: NO_CAPABILITIES,
+    nativeDoubleClick: false,
+    failure: firstFailure === null
+      ? null
+      : { stage: "enhancement", error: firstFailure },
+  };
 }

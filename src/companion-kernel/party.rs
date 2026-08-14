@@ -333,9 +333,10 @@ pub(crate) unsafe fn initialize(pointer: u32) {
 
 /// Walks the roster, then fills in whatever the certified layout reaches.
 ///
-/// Returns `None` for any rejection at all. A partly-walked party is the one
-/// thing this must never publish: half a roster is indistinguishable from a
-/// small one, and the interface would present it as the party.
+/// Returns `None` when the roster itself rejects. Detail groups are staged and
+/// committed independently after that: an invalid attribute table must not
+/// erase a complete roster, professions, unlocks, or skill bars that were read
+/// safely. A partly-walked group is still never published.
 unsafe fn collect(
     layout: Layout,
 ) -> Option<(
@@ -487,152 +488,186 @@ unsafe fn collect(
         && layout.profession_state_stride <= 64
         && layout.profession_state_stride & 3 == 0
     {
-        let (buffer, size) = unsafe {
-            read_array(
-                offset(world, layout.world_profession_states)?,
-                layout.profession_state_stride,
-                64,
-            )
-        }?;
-        for index in 0..size {
-            let entry = indexed(buffer, index, layout.profession_state_stride)?;
-            let agent_id = unsafe { field(entry, 0) }?;
-            if agent_id == 0 {
-                continue;
-            }
-            let primary = unsafe { field(entry, 4) }?;
-            let secondary = unsafe { field(entry, 8) }?;
-            for hero in heroes.iter_mut() {
-                if hero.flags & SLOT_OCCUPIED == 0 || hero.agent_id != agent_id {
+        let mut next_heroes = heroes;
+        let mut next_probe = player_profession_probe;
+        let observed = (|| -> Option<()> {
+            let (buffer, size) = unsafe {
+                read_array(
+                    offset(world, layout.world_profession_states)?,
+                    layout.profession_state_stride,
+                    64,
+                )
+            }?;
+            for index in 0..size {
+                let entry = indexed(buffer, index, layout.profession_state_stride)?;
+                let agent_id = unsafe { field(entry, 0) }?;
+                if agent_id == 0 {
                     continue;
                 }
-                if hero.hero_id == 0 {
-                    player_profession_probe[0] = primary | (secondary << 8);
-                    player_profession_probe[3] |= 1;
-                }
-                if let Some(professions) = pack_professions(primary, secondary) {
-                    hero.professions = professions;
-                    hero.flags |= SLOT_PROFESSIONS;
+                let primary = unsafe { field(entry, 4) }?;
+                let secondary = unsafe { field(entry, 8) }?;
+                for hero in next_heroes.iter_mut() {
+                    if hero.flags & SLOT_OCCUPIED == 0 || hero.agent_id != agent_id {
+                        continue;
+                    }
                     if hero.hero_id == 0 {
-                        player_profession_probe[3] |= 2;
+                        next_probe[0] = primary | (secondary << 8);
+                        next_probe[3] |= 1;
+                    }
+                    if let Some(professions) = pack_professions(primary, secondary) {
+                        hero.professions = professions;
+                        hero.flags |= SLOT_PROFESSIONS;
+                        if hero.hero_id == 0 {
+                            next_probe[3] |= 2;
+                        }
                     }
                 }
             }
+            Some(())
+        })();
+        if observed.is_some() {
+            heroes = next_heroes;
+            player_profession_probe = next_probe;
         }
     }
 
     // hero_info: the account's unlock table, and where professions live.
     if layout.world_hero_info != 0 && layout.hero_info_stride != 0 {
-        let (buffer, size) = unsafe {
-            read_array(
-                offset(world, layout.world_hero_info)?,
-                layout.hero_info_stride,
-                64,
-            )
-        }?;
-        for index in 0..size {
-            let entry = indexed(buffer, index, layout.hero_info_stride)?;
-            let hero_id = unsafe { field(entry, layout.info_hero_id) }?;
-            if !(1..=63).contains(&hero_id) {
-                return None;
-            }
-            // Presence means unlocked -- except mercenaries, whose rule needs
-            // the current character's name. Those are left *unknown* rather
-            // than claimed either way, which is what the second bitmap is for.
-            let word = (hero_id / 32) as usize;
-            let bit = 1_u32 << (hero_id % 32);
-            let mercenary = (28..=35).contains(&hero_id);
-            if !mercenary {
-                unlock[word] |= bit;
-                unlock[2 + word] |= bit;
-            }
-            // HeroInfo is account metadata. It supplies professions for the
-            // account-wide hero facts and is a safe roster fallback only when
-            // the canonical live profession-state table had no row for this
-            // agent. Overwriting a live row here serves the hero's previous
-            // secondary after an in-game change and makes Apply skip the very
-            // profession command it needs to send.
-            if layout.info_primary != 0 {
-                let packed =
-                    pack_professions(unsafe { field(entry, layout.info_primary) }?, unsafe {
-                        field(entry, layout.info_secondary)
-                    }?);
-                if let Some(packed) = packed {
-                    if (hero_id as usize) < ACCOUNT_HERO_SLOTS {
-                        account_professions[hero_id as usize] = packed;
-                    }
-                    for hero in heroes.iter_mut() {
-                        if hero.flags & SLOT_OCCUPIED != 0
-                            && hero.flags & SLOT_PROFESSIONS == 0
-                            && hero.hero_id == hero_id
-                        {
-                            hero.professions = packed;
-                            hero.flags |= SLOT_PROFESSIONS;
+        let mut next_heroes = heroes;
+        let mut next_unlock = unlock;
+        let mut next_account_professions = account_professions;
+        let observed = (|| -> Option<()> {
+            let (buffer, size) = unsafe {
+                read_array(
+                    offset(world, layout.world_hero_info)?,
+                    layout.hero_info_stride,
+                    64,
+                )
+            }?;
+            for index in 0..size {
+                let entry = indexed(buffer, index, layout.hero_info_stride)?;
+                let hero_id = unsafe { field(entry, layout.info_hero_id) }?;
+                if !(1..=63).contains(&hero_id) {
+                    return None;
+                }
+                // Presence means unlocked -- except mercenaries, whose rule needs
+                // the current character's name. Those are left *unknown* rather
+                // than claimed either way, which is what the second bitmap is for.
+                let word = (hero_id / 32) as usize;
+                let bit = 1_u32 << (hero_id % 32);
+                let mercenary = (28..=35).contains(&hero_id);
+                if !mercenary {
+                    next_unlock[word] |= bit;
+                    next_unlock[2 + word] |= bit;
+                }
+                // HeroInfo is account metadata. It supplies professions for the
+                // account-wide hero facts and is a safe roster fallback only when
+                // the canonical live profession-state table had no row for this
+                // agent. Overwriting a live row here serves the hero's previous
+                // secondary after an in-game change and makes Apply skip the very
+                // profession command it needs to send.
+                if layout.info_primary != 0 {
+                    let packed = pack_professions(
+                        unsafe { field(entry, layout.info_primary) }?,
+                        unsafe { field(entry, layout.info_secondary) }?,
+                    );
+                    if let Some(packed) = packed {
+                        if (hero_id as usize) < ACCOUNT_HERO_SLOTS {
+                            next_account_professions[hero_id as usize] = packed;
+                        }
+                        for hero in next_heroes.iter_mut() {
+                            if hero.flags & SLOT_OCCUPIED != 0
+                                && hero.flags & SLOT_PROFESSIONS == 0
+                                && hero.hero_id == hero_id
+                            {
+                                hero.professions = packed;
+                                hero.flags |= SLOT_PROFESSIONS;
+                            }
                         }
                     }
                 }
             }
+            Some(())
+        })();
+        if observed.is_some() {
+            heroes = next_heroes;
+            unlock = next_unlock;
+            account_professions = next_account_professions;
+            flags |= FLAG_UNLOCK_OBSERVED;
         }
-        flags |= FLAG_UNLOCK_OBSERVED;
     }
 
     // hero_flags: behaviour, keyed by hero id.
     if layout.world_hero_flags != 0 && layout.hero_flag_stride != 0 {
-        let (buffer, size) = unsafe {
-            read_array(
-                offset(world, layout.world_hero_flags)?,
-                layout.hero_flag_stride,
-                64,
-            )
-        }?;
-        for index in 0..size {
-            let entry = indexed(buffer, index, layout.hero_flag_stride)?;
-            let hero_id = unsafe { field(entry, layout.flag_hero_id) }?;
-            let behaviour = unsafe { field(entry, layout.flag_behavior) }?;
-            if behaviour > 2 {
-                continue;
-            }
-            for hero in heroes.iter_mut() {
-                if hero.flags & SLOT_OCCUPIED != 0 && hero.hero_id == hero_id {
-                    hero.behaviour = behaviour;
-                    hero.flags |= SLOT_BEHAVIOUR;
+        let mut next_heroes = heroes;
+        let observed = (|| -> Option<()> {
+            let (buffer, size) = unsafe {
+                read_array(
+                    offset(world, layout.world_hero_flags)?,
+                    layout.hero_flag_stride,
+                    64,
+                )
+            }?;
+            for index in 0..size {
+                let entry = indexed(buffer, index, layout.hero_flag_stride)?;
+                let hero_id = unsafe { field(entry, layout.flag_hero_id) }?;
+                let behaviour = unsafe { field(entry, layout.flag_behavior) }?;
+                if behaviour > 2 {
+                    continue;
+                }
+                for hero in next_heroes.iter_mut() {
+                    if hero.flags & SLOT_OCCUPIED != 0 && hero.hero_id == hero_id {
+                        hero.behaviour = behaviour;
+                        hero.flags |= SLOT_BEHAVIOUR;
+                    }
                 }
             }
+            Some(())
+        })();
+        if observed.is_some() {
+            heroes = next_heroes;
         }
     }
 
     // skillbars: keyed by agent id, which is why the roster reads it first.
     if layout.world_skillbars != 0 && layout.skillbar_stride != 0 {
-        let (buffer, size) = unsafe {
-            read_array(
-                offset(world, layout.world_skillbars)?,
-                layout.skillbar_stride,
-                64,
-            )
-        }?;
-        for index in 0..size {
-            let entry = indexed(buffer, index, layout.skillbar_stride)?;
-            let agent_id = unsafe { field(entry, layout.skillbar_agent_id) }?;
-            // `Skillbar::IsValid()` is `agent_id > 0`. An empty entry is not a
-            // bar of eight blanks; it is not a bar.
-            if agent_id == 0 {
-                continue;
-            }
-            for hero in heroes.iter_mut() {
-                if hero.flags & SLOT_OCCUPIED == 0 || hero.agent_id != agent_id {
+        let mut next_heroes = heroes;
+        let observed = (|| -> Option<()> {
+            let (buffer, size) = unsafe {
+                read_array(
+                    offset(world, layout.world_skillbars)?,
+                    layout.skillbar_stride,
+                    64,
+                )
+            }?;
+            for index in 0..size {
+                let entry = indexed(buffer, index, layout.skillbar_stride)?;
+                let agent_id = unsafe { field(entry, layout.skillbar_agent_id) }?;
+                // `Skillbar::IsValid()` is `agent_id > 0`. An empty entry is not a
+                // bar of eight blanks; it is not a bar.
+                if agent_id == 0 {
                     continue;
                 }
-                for slot in 0..SKILL_SLOTS {
-                    let at = checked_add(
-                        layout.skillbar_skills,
-                        checked_mul(slot as u32, layout.skill_slot_stride)?,
-                    )?;
-                    hero.skills[slot] =
-                        unsafe { field(entry, checked_add(at, layout.skill_slot_id)?) }?;
+                for hero in next_heroes.iter_mut() {
+                    if hero.flags & SLOT_OCCUPIED == 0 || hero.agent_id != agent_id {
+                        continue;
+                    }
+                    for slot in 0..SKILL_SLOTS {
+                        let at = checked_add(
+                            layout.skillbar_skills,
+                            checked_mul(slot as u32, layout.skill_slot_stride)?,
+                        )?;
+                        hero.skills[slot] =
+                            unsafe { field(entry, checked_add(at, layout.skill_slot_id)?) }?;
+                    }
+                    hero.disabled = unsafe { field(entry, layout.skillbar_disabled) }? & 0xff;
+                    hero.flags |= SLOT_SKILLS;
                 }
-                hero.disabled = unsafe { field(entry, layout.skillbar_disabled) }? & 0xff;
-                hero.flags |= SLOT_SKILLS;
             }
+            Some(())
+        })();
+        if observed.is_some() {
+            heroes = next_heroes;
         }
     }
 
@@ -640,74 +675,84 @@ unsafe fn collect(
     // captured build can be published as a template at all — a bar written out
     // with every attribute at rank 0 is a bar the character cannot use.
     if layout.world_attributes != 0 && layout.attribute_stride != 0 {
-        let (buffer, size) = unsafe {
-            read_array(
-                offset(world, layout.world_attributes)?,
-                layout.attribute_stride,
-                64,
-            )
-        }?;
-        for index in 0..size {
-            let entry = indexed(buffer, index, layout.attribute_stride)?;
-            let agent_id = unsafe { field(entry, layout.attribute_agent_id) }?;
-            if agent_id == 0 {
-                continue;
-            }
-            for hero in heroes.iter_mut() {
-                if hero.flags & SLOT_OCCUPIED == 0 || hero.agent_id != agent_id {
+        let mut next_heroes = heroes;
+        let mut next_probe = player_profession_probe;
+        let observed = (|| -> Option<()> {
+            let (buffer, size) = unsafe {
+                read_array(
+                    offset(world, layout.world_attributes)?,
+                    layout.attribute_stride,
+                    64,
+                )
+            }?;
+            for index in 0..size {
+                let entry = indexed(buffer, index, layout.attribute_stride)?;
+                let agent_id = unsafe { field(entry, layout.attribute_agent_id) }?;
+                if agent_id == 0 {
                     continue;
                 }
-                let mut written = 0_usize;
-                let mut present = [false; 45];
-                for id in 0..=ATTRIBUTE_ID_MAX {
-                    let at = checked_add(
-                        layout.attribute_entries,
-                        checked_mul(id, layout.attribute_entry_stride)?,
-                    )?;
-                    // The array is sparse and indexed by attribute id, so this
-                    // equality is what says the entry is an attribute at all.
-                    // Without it the walk reads whatever the reference struct's
-                    // padding holds past id 44 — which on a live client decodes
-                    // as Air Magic at rank 8 on a Warrior.
-                    if unsafe { field(entry, checked_add(at, layout.attribute_entry_id)?) }? != id {
+                for hero in next_heroes.iter_mut() {
+                    if hero.flags & SLOT_OCCUPIED == 0 || hero.agent_id != agent_id {
                         continue;
                     }
-                    present[id as usize] = true;
-                    let rank =
-                        unsafe { field(entry, checked_add(at, layout.attribute_entry_rank)?) }?;
-                    // 12 is what the client's own cost table can buy. Nothing
-                    // invested is not published: an absent attribute already
-                    // means rank zero on the other side.
-                    if rank == 0 {
-                        continue;
-                    }
-                    if rank > 12 {
-                        return None;
-                    }
-                    // More than a character can have means this is not the
-                    // table we think it is, and a truncated list of ranks is a
-                    // build that looks complete and is not.
-                    if written >= ATTRIBUTE_SLOTS {
-                        return None;
-                    }
-                    hero.attributes[written] = id | (rank << 8);
-                    written += 1;
-                }
-                hero.flags |= SLOT_ATTRIBUTES;
-                if hero.hero_id == 0 {
-                    player_profession_probe[3] |= 4;
+                    let mut written = 0_usize;
+                    let mut present = [false; 45];
                     for id in 0..=ATTRIBUTE_ID_MAX {
-                        if !present[id as usize] {
+                        let at = checked_add(
+                            layout.attribute_entries,
+                            checked_mul(id, layout.attribute_entry_stride)?,
+                        )?;
+                        // The array is sparse and indexed by attribute id, so this
+                        // equality is what says the entry is an attribute at all.
+                        // Without it the walk reads whatever the reference struct's
+                        // padding holds past id 44 — which on a live client decodes
+                        // as Air Magic at rank 8 on a Warrior.
+                        if unsafe { field(entry, checked_add(at, layout.attribute_entry_id)?) }? != id {
                             continue;
                         }
-                        if id < 32 {
-                            player_profession_probe[1] |= 1_u32 << id;
-                        } else {
-                            player_profession_probe[2] |= 1_u32 << (id - 32);
+                        present[id as usize] = true;
+                        let rank = unsafe {
+                            field(entry, checked_add(at, layout.attribute_entry_rank)?)
+                        }?;
+                        // 12 is what the client's own cost table can buy. Nothing
+                        // invested is not published: an absent attribute already
+                        // means rank zero on the other side.
+                        if rank == 0 {
+                            continue;
+                        }
+                        if rank > 12 {
+                            return None;
+                        }
+                        // More than a character can have means this is not the
+                        // table we think it is, and a truncated list of ranks is a
+                        // build that looks complete and is not.
+                        if written >= ATTRIBUTE_SLOTS {
+                            return None;
+                        }
+                        hero.attributes[written] = id | (rank << 8);
+                        written += 1;
+                    }
+                    hero.flags |= SLOT_ATTRIBUTES;
+                    if hero.hero_id == 0 {
+                        next_probe[3] |= 4;
+                        for id in 0..=ATTRIBUTE_ID_MAX {
+                            if !present[id as usize] {
+                                continue;
+                            }
+                            if id < 32 {
+                                next_probe[1] |= 1_u32 << id;
+                            } else {
+                                next_probe[2] |= 1_u32 << (id - 32);
+                            }
                         }
                     }
                 }
             }
+            Some(())
+        })();
+        if observed.is_some() {
+            heroes = next_heroes;
+            player_profession_probe = next_probe;
         }
     }
 

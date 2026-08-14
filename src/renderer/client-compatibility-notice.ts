@@ -9,158 +9,151 @@
 
 import type {
   ClientCompatibility,
-  ClientCompatibilityState,
   ClientSession,
 } from '../shared/contracts.js';
-import type { EnhancementSelection } from '../shared/enhancement-contracts.js';
-
-/**
- * The compatibility transform repairs three call-site families, not one.
- * Naming them is the point: "a compatibility issue" tells a player nothing,
- * and they find out when a build template will not save.
- */
-const FEATURES = 'build templates, screenshots and chat logs';
-
-const GAMEPLAY =
-  'Gameplay itself is unaffected: no stat or timing changes, and no gameplay command is generated.';
-
-/**
- * Recovery is an app update, and the notice offers that check right beside
- * this sentence — action-forward rather than "a separate question", which
- * made the player do the reasoning the UI should do. Naming what cannot fix
- * it spares them trying all three.
- */
-const RECOVERY =
-  'A newer version of this app may already support this build — choose Check '
-  + 'for Updates. Retrying, reinstalling or clearing downloaded game data '
-  + 'cannot fix it.';
 
 export type CompatibilityReport = {
-  state: ClientCompatibilityState;
-  /** Something works worse than in a fully prepared certified session. */
   degraded: boolean;
-  /**
-   * The player selected at least one Enhancement tool and this build cannot
-   * provide it.
-   */
-  enhancementDegraded: boolean;
-  /** One line, shown on both surfaces. */
+  /** Game-update notices may be acknowledged per build; failures retry. */
+  acknowledgePerBuild: boolean;
+  recovery: 'update' | 'restart' | 'both' | null;
   summary: string;
-  /**
-   * The contract: what is affected, what is not, and what recovery actually
-   * requires.
-   */
   details: string[];
 };
 
-function selectedToolNames(selection: EnhancementSelection): string[] {
-  return [
-    selection.nativeCursor ? 'game cursor' : '',
-    selection.tools ? 'GWonMac Tools Beta' : '',
-  ].filter(Boolean);
+type Feature = keyof ClientCompatibility['features'];
+
+const FEATURE_NAMES: Readonly<Record<Feature, string>> = Object.freeze({
+  gameFileSaving: 'Guild Wars file saving',
+  nativeCursor: 'Guild Wars cursor',
+  targetObservation: 'target distance',
+  partyObservation: 'live party details',
+  teamApply: 'Apply team',
+});
+
+function unavailableFeatures(compatibility: ClientCompatibility): Feature[] {
+  return (Object.keys(compatibility.features) as Feature[]).filter(
+    (feature) => compatibility.features[feature].status === 'unavailable',
+  );
 }
 
-function toolList(names: string[]): string {
-  return names.length === 2 ? `${names[0]} and ${names[1]}` : names[0] ?? '';
+function unavailableNames(features: readonly Feature[]): string {
+  return features.map((feature) => FEATURE_NAMES[feature]).join(', ');
 }
 
 export function compatibilityReport(
   compatibility: ClientCompatibility,
-  selection: EnhancementSelection,
 ): CompatibilityReport {
-  const { state } = compatibility;
-  const selectedTools = selectedToolNames(selection);
-  const requestedTools = toolList(selectedTools);
-  const enhancementAvailable =
-    state === 'certified' && compatibility.enhancementActive;
-  const enhancementDegraded = selectedTools.length > 0 && !enhancementAvailable;
-
-  if (state === 'uncertified') {
+  const unavailable = unavailableFeatures(compatibility);
+  if (unavailable.length === 0) {
     return {
-      state,
+      degraded: false,
+      acknowledgePerBuild: false,
+      recovery: null,
+      summary: 'This Guild Wars version is supported.',
+      details: ['Everything you turned on is available.'],
+    };
+  }
+
+  const preparationFailed = unavailable.some((feature) =>
+    compatibility.features[feature].status === 'unavailable'
+    && compatibility.features[feature].reason === 'preparation-failed');
+  const gameUpdate = unavailable.some((feature) =>
+    compatibility.features[feature].status === 'unavailable'
+    && compatibility.features[feature].reason === 'game-update');
+  if (preparationFailed && gameUpdate) {
+    return {
       degraded: true,
-      enhancementDegraded,
-      summary:
-        'ArenaNet updated Guild Wars. Some GWonMac features were disabled for your safety.',
+      acknowledgePerBuild: false,
+      recovery: 'both',
+      summary: 'Some GWonMac features are temporarily unavailable.',
       details: [
-        'You can keep playing. ' + GAMEPLAY,
-        'Extras added by this app are limited until an app update confirms '
-          + `this build: ${FEATURES} may not work correctly. Your local Build `
-          + 'and Team library remains available, while live game observations '
-          + 'and Apply stay off.',
-        ...(enhancementDegraded
-          ? [
-              `Your ${requestedTools} ${
-                selectedTools.length === 1 ? 'is' : 'are'
-              } off for this session.`,
-            ]
-          : []),
-        RECOVERY,
+        `Unavailable: ${unavailableNames(unavailable)}.`,
+        'Guild Wars is ready to play. Restart GWonMac to retry features that didn’t start, and check for updates for this Guild Wars version.',
+      ],
+    };
+  }
+  if (preparationFailed) {
+    return {
+      degraded: true,
+      acknowledgePerBuild: false,
+      recovery: 'restart',
+      summary: unavailable.length === 1 && unavailable[0] === 'nativeCursor'
+        ? 'The Guild Wars cursor didn’t start.'
+        : 'Some GWonMac features didn’t start.',
+      details: [
+        `Unavailable: ${unavailableNames(unavailable)}.`,
+        'Guild Wars is ready to play. Restart GWonMac to try again.',
       ],
     };
   }
 
-  if (state === 'template-only') {
+  if (unavailable.length === 1 && unavailable[0] === 'gameFileSaving') {
     return {
-      state,
-      degraded: enhancementDegraded,
-      enhancementDegraded,
-      summary:
-        `This game build supports ${FEATURES}, but not yet the game tools.`,
-      details: enhancementDegraded
-        ? [
-            `${capitalise(FEATURES)} work normally.`,
-            `Your ${requestedTools} ${
-              selectedTools.length === 1 ? 'is' : 'are'
-            } unavailable for this session.`,
-            GAMEPLAY,
-            RECOVERY,
-          ]
-        : [
-            `${capitalise(FEATURES)} work normally.`,
-            'The Core game cursor is not confirmed for this build.',
-            RECOVERY,
-          ],
-    };
-  }
-
-  if (enhancementDegraded) {
-    return {
-      state,
       degraded: true,
-      enhancementDegraded: true,
-      summary:
-        'The game tools could not be prepared for this session.',
+      acknowledgePerBuild: true,
+      recovery: 'update',
+      summary: 'Some Guild Wars files won’t save in this session.',
       details: [
-        `${capitalise(FEATURES)} work normally.`,
-        `Your ${requestedTools} ${
-          selectedTools.length === 1 ? 'is' : 'are'
-        } unavailable for this session.`,
-        GAMEPLAY,
-        'Restart the app to try preparing the game tools again. If it keeps '
-          + 'failing, export diagnostics and report the problem.',
+        'Build templates, screenshots, and chat logs are unavailable.',
+        'Your saved builds and teams are safe. You can keep playing.',
       ],
     };
   }
 
+  if (unavailable.length === 1 && unavailable[0] === 'nativeCursor') {
+    return {
+      degraded: true,
+      acknowledgePerBuild: true,
+      recovery: 'update',
+      summary: 'The Guild Wars cursor is temporarily unavailable.',
+      details: ['The macOS pointer still works. You can keep playing.'],
+    };
+  }
+
+  if (unavailable.every((feature) =>
+    feature === 'targetObservation' || feature === 'partyObservation')) {
+    const names = unavailableNames(unavailable);
+    return {
+      degraded: true,
+      acknowledgePerBuild: true,
+      recovery: 'update',
+      summary: 'Live game information is temporarily unavailable.',
+      details: [
+        unavailable.length === 2
+          ? 'Target distance, party details, and party capture are off.'
+          : `${names[0]!.toUpperCase()}${names.slice(1)} is off.`,
+        'Your saved builds and teams still work.',
+      ],
+    };
+  }
+
+  if (unavailable.length === 1 && unavailable[0] === 'teamApply') {
+    return {
+      degraded: true,
+      acknowledgePerBuild: true,
+      recovery: 'update',
+      summary: 'Apply team is temporarily unavailable.',
+      details: [
+        'You can still view the live party and edit, import, or export saved builds and teams.',
+      ],
+    };
+  }
+
+  const fileSavingAvailable =
+    compatibility.features.gameFileSaving.status === 'available';
   return {
-    state,
-    degraded: false,
-    enhancementDegraded: false,
-    summary: 'This game client build is fully supported.',
+    degraded: true,
+    acknowledgePerBuild: true,
+    recovery: 'update',
+    summary: 'Some GWonMac features are temporarily unavailable.',
     details: [
-      `${capitalise(FEATURES)} work normally.`,
-      selectedTools.length > 0
-        ? `Your ${requestedTools} ${
-            selectedTools.length === 1 ? 'is' : 'are'
-          } available.`
-        : 'The Core game cursor is available.',
+      `Unavailable: ${unavailableNames(unavailable)}.`,
+      fileSavingAvailable
+        ? 'Build templates and your saved builds and teams still work. You can keep playing.'
+        : 'Your saved builds and teams are safe. You can keep playing.',
     ],
   };
-}
-
-function capitalise(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function requiredElement(root: Document, id: string): HTMLElement {
@@ -169,13 +162,20 @@ function requiredElement(root: Document, id: string): HTMLElement {
   return node;
 }
 
+function featureStatusLabel(status: ClientCompatibility['features'][Feature]): string {
+  switch (status.status) {
+    case 'available': return 'Available';
+    case 'off': return 'Off';
+    case 'unavailable': return 'Temporarily unavailable';
+  }
+}
+
 /**
  * Render the session into both fixed compatibility surfaces.
  */
 export function renderClientCompatibility(
   root: Document,
   session: ClientSession,
-  selection: EnhancementSelection,
 ): CompatibilityReport | null {
   const settingsStatus = requiredElement(root, 'settings-compat-status');
   const settingsDetail = requiredElement(root, 'settings-compat-detail');
@@ -183,6 +183,9 @@ export function renderClientCompatibility(
   const launcherTitle = requiredElement(root, 'client-compat-title');
   const launcherDetail = requiredElement(root, 'client-compat-detail');
   const launcherVersion = requiredElement(root, 'client-compat-version');
+  const recovery = requiredElement(root, 'client-compat-check') as HTMLButtonElement;
+  const restart = requiredElement(root, 'client-compat-restart') as HTMLButtonElement;
+  const updateStatus = requiredElement(root, 'client-compat-update');
 
   settingsVersion.textContent = `App version ${session.appVersion}`;
   // The launcher notice reminds the player it will not nag: acknowledged once
@@ -195,7 +198,11 @@ export function renderClientCompatibility(
     return null;
   }
 
-  const report = compatibilityReport(session.compatibility, selection);
+  const report = compatibilityReport(session.compatibility);
+  for (const feature of Object.keys(session.compatibility.features) as Feature[]) {
+    requiredElement(root, `settings-feature-${feature}`).textContent =
+      featureStatusLabel(session.compatibility.features[feature]);
+  }
   const detail = report.details.join(' ');
   settingsStatus.hidden = false;
   settingsDetail.hidden = false;
@@ -203,6 +210,18 @@ export function renderClientCompatibility(
   settingsDetail.textContent = detail;
   launcherTitle.textContent = report.summary;
   launcherDetail.textContent = detail;
+  recovery.dataset.recovery = report.recovery ?? '';
+  restart.hidden = report.recovery !== 'both';
+  if (report.recovery === 'restart') {
+    recovery.textContent = 'Restart GWonMac';
+    updateStatus.hidden = true;
+  } else if (report.recovery === 'both') {
+    recovery.textContent = 'Check for updates';
+    updateStatus.hidden = false;
+  } else {
+    recovery.textContent = 'Check for updates';
+    updateStatus.hidden = false;
+  }
   return report;
 }
 

@@ -26,23 +26,38 @@ describe("Enhancement command transform", () => {
   // The command queue is the entire write surface. These are the tests that
   // decide whether this app can send a packet, so they instantiate the
   // transformed module and drive the function rather than inspecting bytes.
-  it("emits the command queue for exactly the two certified command profiles", () => {
+  it("emits the command queue only for the four command profiles", () => {
     const input = fixture();
     const build = manifest(input);
-    for (const capabilities of [CURSOR_ONLY, TARGET_ONLY, CURSOR_TARGET, CURSOR_TOOLBOX]) {
+    const partyOnly = { ...CURSOR_TOOLBOX, nativeCursor: false };
+    const targetParty = { ...partyOnly, targetObservation: true };
+    for (const capabilities of [
+      CURSOR_ONLY,
+      TARGET_ONLY,
+      CURSOR_TARGET,
+      partyOnly,
+      CURSOR_TOOLBOX,
+      targetParty,
+      { ...CURSOR_TOOLBOX, targetObservation: true },
+    ]) {
       const output = transformEnhancementWasm(input, build, capabilities);
       const exports = parseExports(sectionById(splitSections(output), 7));
       assert.equal(
-        exports.some((entry) => entry.name === build.commands.thunkExport),
+        exports.some((entry) => entry.name === build.teamApply!.thunkExport),
         false,
         "a read profile must carry no way to reach a packet builder at all",
       );
     }
-    for (const capabilities of [CURSOR_TOOLBOX_COMMANDS, CURSOR_TARGET_TOOLBOX_COMMANDS]) {
+    for (const capabilities of [
+      { ...CURSOR_TOOLBOX_COMMANDS, nativeCursor: false },
+      CURSOR_TOOLBOX_COMMANDS,
+      { ...CURSOR_TARGET_TOOLBOX_COMMANDS, nativeCursor: false },
+      CURSOR_TARGET_TOOLBOX_COMMANDS,
+    ]) {
       const output = transformEnhancementWasm(input, build, capabilities);
       const exports = parseExports(sectionById(splitSections(output), 7));
       assert.equal(
-        exports.filter((entry) => entry.name === build.commands.thunkExport).length,
+        exports.filter((entry) => entry.name === build.teamApply!.thunkExport).length,
         1,
       );
       const module = new WebAssembly.Module(new Uint8Array(output));
@@ -74,7 +89,7 @@ describe("Enhancement command transform", () => {
         tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
       },
     });
-    const command = instance.exports[build.commands.thunkExport] as
+    const command = instance.exports[build.teamApply!.thunkExport] as
       (opcode: number, a0: number, a1: number, a2: number, a3: number) => number;
     const tick = instance.exports.EmscriptenExeThreadMainLoop as (value: number) => void;
     const frame = instance.exports.frame as (value: number, context: number) => void;
@@ -145,10 +160,10 @@ describe("Enhancement command transform", () => {
       (target: number, count: number, skills: number) => void;
     const nativeSender = instance.exports.sender as
       (connection: number, size: number, pointer: number) => void;
-    const enqueue = instance.exports[build.commands.thunkExport] as
+    const enqueue = instance.exports[build.teamApply!.thunkExport] as
       (opcode: number, a0: number, a1: number, a2: number, a3: number) => number;
     const frame = instance.exports.frame as (value: number, context: number) => void;
-    const readTrace = instance.exports[build.commands.professionTrace.readerExport] as
+    const readTrace = instance.exports[build.teamApply!.professionTrace.readerExport] as
       (pointer: number) => number;
     const trace = () => {
       assert.equal(readTrace(64), 30);
@@ -227,9 +242,9 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          commands: {
-            ...build.commands,
-            entries: [{ ...build.commands.entries[0]!, functionIndex: 3 }],
+          teamApply: {
+            ...build.teamApply!,
+            entries: [{ ...build.teamApply!.entries[0]!, functionIndex: 3 }],
           },
         },
         CURSOR_TOOLBOX_COMMANDS,
@@ -241,9 +256,9 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          commands: {
-            ...build.commands,
-            entries: [{ ...build.commands.entries[0]!, functionIndex: 4 }],
+          teamApply: {
+            ...build.teamApply!,
+            entries: [{ ...build.teamApply!.entries[0]!, functionIndex: 4 }],
           },
         },
         CURSOR_TOOLBOX_COMMANDS,
@@ -255,9 +270,9 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          commands: {
-            ...build.commands,
-            entries: [{ ...build.commands.entries[0]!, functionIndex: 9_999 }],
+          teamApply: {
+            ...build.teamApply!,
+            entries: [{ ...build.teamApply!.entries[0]!, functionIndex: 9_999 }],
           },
         },
         CURSOR_TOOLBOX_COMMANDS,
@@ -274,9 +289,9 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          commands: {
-            ...build.commands,
-            drain: { ...build.commands.drain, bodySha256: "0".repeat(64) },
+          teamApply: {
+            ...build.teamApply!,
+            drain: { ...build.teamApply!.drain, bodySha256: "0".repeat(64) },
           },
         },
         CURSOR_TOOLBOX_COMMANDS,
@@ -288,14 +303,14 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          commands: {
-            ...build.commands,
+          teamApply: {
+            ...build.teamApply!,
             // The profession command has the same signature. Identity must still be
             // distinct so command execution and scheduling cannot merge.
             drain: {
-              ...build.commands.drain,
+              ...build.teamApply!.drain,
               functionIndex: 9,
-              bodySha256: build.commands.entries[2]!.bodySha256,
+              bodySha256: build.teamApply!.entries[2]!.bodySha256,
             },
           },
         },
@@ -308,9 +323,9 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          commands: {
-            ...build.commands,
-            drain: { ...build.commands.drain, tableSlot: 0 },
+          teamApply: {
+            ...build.teamApply!,
+            drain: { ...build.teamApply!.drain, tableSlot: 0 },
           },
         },
         CURSOR_TOOLBOX_COMMANDS,
@@ -327,12 +342,12 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          commands: {
-            ...build.commands,
+          teamApply: {
+            ...build.teamApply!,
             professionTrace: {
-              ...build.commands.professionTrace,
+              ...build.teamApply!.professionTrace,
               sender: {
-                ...build.commands.professionTrace.sender,
+                ...build.teamApply!.professionTrace.sender,
                 bodySha256: "0".repeat(64),
               },
             },
@@ -347,12 +362,12 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          commands: {
-            ...build.commands,
+          teamApply: {
+            ...build.teamApply!,
             professionTrace: {
-              ...build.commands.professionTrace,
+              ...build.teamApply!.professionTrace,
               sender: {
-                ...build.commands.professionTrace.sender,
+                ...build.teamApply!.professionTrace.sender,
                 functionIndex: 5,
                 bodySha256: createHash("sha256")
                   .update(commandBody(input, 2))

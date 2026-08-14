@@ -218,7 +218,7 @@ describe("ToolsApp shell and library", () => {
     const wrapper = await workbench({
       ...demo,
       publishUnavailable:
-        "Saving into Guild Wars is unavailable for this client build.",
+        "GWonMac can’t add this build to Guild Wars after this game update.",
       publishBuild: async () => {
         throw new Error("unreachable publication");
       },
@@ -236,7 +236,7 @@ describe("ToolsApp shell and library", () => {
       .find((button) => button.text().includes("Save to Guild Wars"))!;
     expect(save.attributes("disabled")).toBeDefined();
     expect(wrapper.text()).toContain(
-      "Saving into Guild Wars is unavailable for this client build.",
+      "GWonMac can’t add this build to Guild Wars after this game update.",
     );
     expect(wrapper.find(".build-export textarea").exists()).toBe(true);
     wrapper.unmount();

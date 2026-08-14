@@ -28,7 +28,6 @@ import {
   NO_CAPABILITIES,
   PARTY_DIRTY_MESSAGES,
   TARGET_ONLY,
-  UNSUPPORTED_ALL_CAPABILITIES,
 } from "../fixtures/enhancement-transform.js";
 describe("targeted Enhancement WebAssembly transform", () => {
   it("is deterministic, valid, and exports only the hook contract", () => {
@@ -270,7 +269,12 @@ describe("targeted Enhancement WebAssembly transform", () => {
       () => transformEnhancementWasm(
         input,
         manifest(input),
-        UNSUPPORTED_ALL_CAPABILITIES,
+        {
+          nativeCursor: true,
+          targetObservation: true,
+          partyObservation: false,
+          commands: true,
+        },
       ),
       /capability profile is not certified/,
     );
@@ -281,7 +285,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const build = manifest(input);
     const brokenUi = {
       ...build,
-      uiDispatcher: { ...build.uiDispatcher, functionIndex: 4 },
+      partyObservation: { ...build.partyObservation!, functionIndex: 4 },
     };
 
     const first = transformEnhancementWasm(
@@ -501,17 +505,17 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const decoded = decodeEnhancementManifest(module, CURSOR_TOOLBOX);
     assert.ok(decoded);
     assert.deepEqual(decoded.configWords.slice(0, 17), [
-      build.layout.contextRoot,
+      build.commonLayout.contextRoot,
       0,
       0,
       0,
-      build.layout.gameContextSlot,
-      build.layout.characterContext,
-      build.layout.mapId,
-      build.layout.isExplorable,
-      build.layout.currentMapId,
-      build.layout.currentInstanceType,
-      build.layout.playerNumber,
+      build.commonLayout.gameContextSlot,
+      build.commonLayout.characterContext,
+      build.commonLayout.mapId,
+      build.commonLayout.isExplorable,
+      build.commonLayout.currentMapId,
+      build.commonLayout.currentInstanceType,
+      build.commonLayout.playerNumber,
       0,
       0,
       0,
@@ -541,7 +545,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const build = manifest(input);
     const wrongCursorSlot = {
       ...build,
-      cursorEvent: { ...build.cursorEvent, tableSlot: 0 },
+      cursorEvent: { ...build.cursorEvent!, tableSlot: 0 },
     };
     assert.equal(
       WebAssembly.validate(

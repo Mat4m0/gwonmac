@@ -326,23 +326,27 @@ test("Enhancement re-certification inspects only post-template bytes", async () 
   );
 });
 
-test("structural Enhancement candidates remain review-only evidence", async () => {
+test("only the strict cursor locator may turn structural evidence into launch authority", async () => {
   const analyzer = await readFile(
-    path.join(root, "src/tools/enhancement-structural-evidence.ts"),
+    path.join(root, "src/main/certification/enhancement-structural-evidence.ts"),
     "utf8",
   );
   assert.doesNotMatch(
     analyzer,
-    /from "\.\.\/main\/certification\/enhancement-(?:builds|transform)\.js"/,
+    /from "\.\/enhancement-transform\.js"/,
   );
   for (const file of [
     "src/main/certification/client-certification.ts",
     "src/main/certification/client-module.ts",
-    "src/main/certification/local-client-verifier.ts",
   ]) {
     const source = await readFile(path.join(root, file), "utf8");
     assert.doesNotMatch(source, /enhancement-structural-evidence/);
   }
+  const verifier = await readFile(
+    path.join(root, "src/main/certification/local-client-verifier.ts"),
+    "utf8",
+  );
+  assert.match(verifier, /locateAutomaticCursor/);
 });
 
 test("the WASM section codec has exactly one home", async () => {
@@ -362,7 +366,7 @@ test("the WASM section codec has exactly one home", async () => {
   // those transforms without parsing a second time, so it deliberately has no
   // codec dependency of its own.
   const sharers: ReadonlyArray<readonly [file: string, specifier: string]> = [
-    ["src/tools/enhancement-structural-evidence.ts", '../main/core/wasm-binary.js'],
+    ["src/main/certification/enhancement-structural-evidence.ts", '../core/wasm-binary.js'],
     ["src/main/certification/enhancement-transform.ts", '../core/wasm-binary.js'],
     ["src/main/certification/template-save-compat.ts", '../core/wasm-binary.js'],
     ["src/main/certification/template-save-verifier.ts", '../core/wasm-binary.js'],
@@ -406,7 +410,7 @@ test("the served module decides whether Enhancement imports", async () => {
   );
   assert.match(
     gate,
-    /installEnhancements\(\s*enhancementInstance,\s*enhancementModule,\s*init\.enhancementSelection,\s*init\.enhancementProgram,/u,
+    /installEnhancements\(\s*enhancementInstance,\s*enhancementModule,\s*init\.enhancementProgram,/u,
   );
   assert.ok(
     gate.indexOf("customSections") < gate.indexOf("import('./enhancements.js')"),

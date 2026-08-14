@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
   inspectEnhancementStructuralEvidence as inspectStructuralEvidence,
+  locateAutomaticCursor,
   type PlayerChatMessageAnchors,
-} from "../../src/tools/enhancement-structural-evidence.js";
+} from "../../src/main/certification/enhancement-structural-evidence.js";
+import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
 import {
   concat,
   encodeCode,
@@ -55,6 +57,8 @@ interface FixtureOptions {
   readonly splitUiTarget?: boolean;
   readonly unsupportedInstruction?: boolean;
   readonly tableRelation?: "unique" | "missing" | "duplicate" | "passive";
+  /** Adds the exact neighbour and distinct-producer shape required at launch. */
+  readonly automaticCursor?: boolean;
   readonly messageAnchors?: PlayerChatMessageAnchors;
 }
 
@@ -177,7 +181,11 @@ function fixture(options: FixtureOptions = {}): Fixture {
     cursorProducers.push(functions.length);
     functions.push({
       typeIndex: producerType,
-      body: producerBody(cursor, cursorParams, [0]),
+      body: producerBody(
+        cursor,
+        cursorParams,
+        [options.automaticCursor ? producer : 0],
+      ),
     });
   }
 
@@ -247,10 +255,14 @@ function fixture(options: FixtureOptions = {}): Fixture {
   ];
   const tableRelation = options.tableRelation ?? "unique";
   let elementFunctions: number[] = [];
-  if (tableRelation === "unique") elementFunctions = [cursor];
+  if (tableRelation === "unique") {
+    elementFunctions = options.automaticCursor ? [tick, cursor, ui] : [cursor];
+  }
   if (tableRelation === "duplicate") elementFunctions = [cursor, cursor];
   if (options.duplicateCursor && duplicateCursor !== null) {
-    elementFunctions = [cursor, duplicateCursor];
+    elementFunctions = options.automaticCursor
+      ? [tick, cursor, ui, tick, duplicateCursor, ui]
+      : [cursor, duplicateCursor];
   }
   const tableSize = Math.max(1, elementFunctions.length + 1);
   const table = concat(
@@ -327,7 +339,11 @@ describe("review-only Enhancement structural evidence", () => {
     );
     assert.equal(first.validWasm, true);
     assert.deepEqual(first.failures, []);
-    assert.deepEqual(first.tick.candidate, {
+    assert.match(first.tick.candidate?.bodySha256 ?? "", /^[0-9a-f]{64}$/);
+    assert.deepEqual({
+      functionIndex: first.tick.candidate?.functionIndex,
+      signature: first.tick.candidate?.signature,
+    }, {
       functionIndex: input.tick,
       signature: { params: ["i32"], results: [] },
     });
@@ -337,7 +353,13 @@ describe("review-only Enhancement structural evidence", () => {
       nearby7fProducerFunctionIndices: [input.nearby7fProducer],
       nearby80ProducerFunctionIndices: [input.nearby80Producer],
     });
-    assert.deepEqual(first.cursor.candidate, {
+    assert.match(first.cursor.candidate?.bodySha256 ?? "", /^[0-9a-f]{64}$/);
+    assert.equal(first.cursor.candidate?.producerBodySha256.length, 2);
+    assert.deepEqual({
+      targetFunctionIndex: first.cursor.candidate?.targetFunctionIndex,
+      producerFunctionIndices: first.cursor.candidate?.producerFunctionIndices,
+      activeTableSlot: first.cursor.candidate?.activeTableSlot,
+    }, {
       targetFunctionIndex: input.cursor,
       producerFunctionIndices: input.cursorProducers,
       activeTableSlot: 1,
@@ -487,6 +509,91 @@ describe("review-only Enhancement structural evidence", () => {
     );
     assert.equal(duplicate.cursor.status, "ambiguous");
     assert.deepEqual(duplicate.cursor.considered[0]?.activeTableSlots, [1, 2]);
+  });
+
+  it("authorizes exactly one fingerprinted cursor location", () => {
+    const input = fixture({ automaticCursor: true });
+    const evidence = inspectEvidence(input.bytes);
+    const shipped = ENHANCEMENT_BUILDS[0]!;
+    const shippedCursor = shipped.cursorEvent!;
+    const cursor = evidence.cursor.candidate!;
+    const tick = evidence.tick.candidate!;
+    const baseline = Object.freeze({
+      ...shipped,
+      hookBodySha256: tick.bodySha256,
+      cursorEvent: Object.freeze({
+        ...shippedCursor,
+        bodySha256: cursor.bodySha256,
+        producerBodySha256: cursor.producerBodySha256,
+        producerParams: [[], []] as const,
+        producerResults: [[], []] as const,
+        tableNeighbourBodySha256: Object.freeze([
+          tick.bodySha256,
+          createHash("sha256").update(Uint8Array.of(0, 0x0b)).digest("hex"),
+        ] as const),
+      }),
+    });
+
+    assert.deepEqual(locateAutomaticCursor(input.bytes, [baseline]), {
+      baseline,
+      hookFunction: input.tick,
+      cursorFunction: input.cursor,
+      cursorTableSlot: 2,
+      producerFunctions: input.cursorProducers,
+    });
+  });
+
+  it("rejects every changed cursor anchor and duplicate candidate", () => {
+    const input = fixture({ automaticCursor: true });
+    const evidence = inspectEvidence(input.bytes);
+    const shipped = ENHANCEMENT_BUILDS[0]!;
+    const shippedCursor = shipped.cursorEvent!;
+    const cursor = evidence.cursor.candidate!;
+    const tick = evidence.tick.candidate!;
+    const neighbour = createHash("sha256")
+      .update(Uint8Array.of(0, 0x0b))
+      .digest("hex");
+    const baseline = {
+      ...shipped,
+      hookBodySha256: tick.bodySha256,
+      cursorEvent: {
+        ...shippedCursor,
+        bodySha256: cursor.bodySha256,
+        producerBodySha256: cursor.producerBodySha256,
+        producerParams: [[], []] as const,
+        producerResults: [[], []] as const,
+        tableNeighbourBodySha256: [tick.bodySha256, neighbour] as const,
+      },
+    };
+    const changed = "0".repeat(64);
+
+    for (const mutation of [
+      { ...baseline, hookBodySha256: changed },
+      { ...baseline, cursorEvent: { ...baseline.cursorEvent, bodySha256: changed } },
+      {
+        ...baseline,
+        cursorEvent: {
+          ...baseline.cursorEvent,
+          producerBodySha256: [changed, cursor.producerBodySha256[1]] as const,
+        },
+      },
+      {
+        ...baseline,
+        cursorEvent: {
+          ...baseline.cursorEvent,
+          tableNeighbourBodySha256: [changed, neighbour] as const,
+        },
+      },
+    ]) {
+      assert.equal(locateAutomaticCursor(input.bytes, [mutation]), null);
+    }
+    assert.equal(
+      locateAutomaticCursor(
+        fixture({ automaticCursor: true, duplicateCursor: true }).bytes,
+        [baseline],
+      ),
+      null,
+    );
   });
 
   it("fails closed with a deterministic data report for malformed input", () => {
