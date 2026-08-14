@@ -289,6 +289,17 @@ export function preflightTeamApply(
     else if (party.hardMode !== (plan.mode === "hard")) changes.push({ kind: "mode" });
   }
 
+  // A partial projection cannot prove that an individual hero is absent,
+  // locked, or using unknown professions. Keep Apply fail-closed, but report
+  // the one fact we actually know instead of multiplying it into misleading
+  // hero-specific problems.
+  if (party.partial) {
+    const [first, ...rest] = blockers;
+    return first
+      ? { ready: false, blockers: [first, ...rest] }
+      : { ready: false, blockers: [{ rule: "partial-roster" }] };
+  }
+
   const player = plan.members[0];
   if (player?.build) {
     const skills = lockedSkills(player, party.characterSkills);

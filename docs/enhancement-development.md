@@ -245,6 +245,13 @@ original-call preservation, table and allocation invariants, positive and
 negative layout evidence, lifecycle clearing, offline tests, clean teardown,
 and one bounded live semantic check per changed domain.
 
+Party certification must prove the complete owned roster, player and hero
+professions, hero unlocks, behaviour, skill bars, and attributes. Proving only
+the hero count or first hero is not enough for Apply team. Each optional party
+detail table is an independent observation: a rejected detail table must erase
+only its own facts and must never erase the verified roster or another valid
+detail group.
+
 The scheduled recertification workflow already detects a new ArenaNet
 generation, downloads and verifies its code artifacts, derives the template
 entry, and publishes `enhancement.json` as review evidence. It deliberately
