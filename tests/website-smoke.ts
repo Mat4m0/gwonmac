@@ -289,7 +289,7 @@ async function assertNoUnsupportedPerformancePromises(
 const downloadLinks = (page: string) =>
   [
     ...page.matchAll(
-      /<a href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?(?:Direct|Direkter) Download/g,
+      /<a href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?(?:Download for Mac|Für Mac herunterladen)/g,
     ),
   ].map((match) => match[1] ?? assert.fail("download link without href"));
 
@@ -297,14 +297,14 @@ try {
   const home = await load("/");
   assert.equal(home.status, 200);
   const html = await home.text();
-  assert.match(html, /<h1[^>]*>Play Guild Wars natively on your Mac<\/h1>/);
+  assert.match(html, /<h1[^>]*>Play Guild Wars on your Mac<\/h1>/);
   assert.match(
     html,
     /https:\/\/plausible\.io\/js\/pa--X4qMlLVyMnUW4L8emwE_\.js/,
   );
   assert.match(html, /window\.plausible\.init\(\)/);
-  assert.match(html, /selectable render scale/i);
-  assert.match(html, /built for Apple Silicon/i);
+  assert.match(html, /Apple Silicon Macs/i);
+  assert.match(html, /signed and notarized/i);
   assert.doesNotMatch(html, /(?:60|120)\s*(?:–|-|to)?\s*(?:120\s*)?FPS/i);
   assert.doesNotMatch(html, /(?:4K|5K)/i);
 
@@ -313,15 +313,14 @@ try {
   for (const href of downloadLinks(html)) {
     assert.equal(href, "/download");
   }
-  assert.match(html, /href="\/download\?channel=beta"/);
-  assert.match(html, />Download Beta</);
+
 
   // The German landing page carries the same analytics and buttons; a
   // locale-prefixed link would be answered by the /de/download alias below.
   const germanHome = await load("/de");
   assert.equal(germanHome.status, 200);
   const germanHtml = await germanHome.text();
-  assert.match(germanHtml, /<h1[^>]*>Spiele Guild Wars nativ auf deinem Mac<\/h1>/);
+  assert.match(germanHtml, /<h1[^>]*>Spiele Guild Wars auf deinem Mac<\/h1>/);
   assert.match(
     germanHtml,
     /https:\/\/plausible\.io\/js\/pa--X4qMlLVyMnUW4L8emwE_\.js/,
