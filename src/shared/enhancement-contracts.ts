@@ -212,7 +212,9 @@ export function enhancementConfigWordActive(
     return false;
   }
   const owner = ENHANCEMENT_CONFIG_FIELDS[index]?.owner;
-  if (owner === "target") return capabilities.targetObservation;
+  if (owner === "target") {
+    return capabilities.targetObservation || capabilities.storage;
+  }
   if (owner === "observation") {
     return capabilities.targetObservation || capabilities.partyObservation;
   }

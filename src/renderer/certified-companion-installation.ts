@@ -611,10 +611,13 @@ export async function installCertifiedCompanion(
     let toolboxObservation: ToolboxObservation | null = null;
     let companionState: TravelGameState | null = null;
     const teamEnabled = () => policy().teamManagement;
+    const stateObserverEnabled = () => targetEnabled() || capabilities.storage;
     const syncActiveObservers = () => {
       const active =
         (capabilities.nativeCursor ? ENHANCEMENT_FEATURE_NATIVE_CURSOR : 0)
-        | (targetEnabled() ? ENHANCEMENT_FEATURE_TARGET_READOUT : 0)
+        // Local actions need the current map and instance even when the
+        // visible target-distance readout is off.
+        | (stateObserverEnabled() ? ENHANCEMENT_FEATURE_TARGET_READOUT : 0)
         // Keep the bounded policy observer alive even while optional UI and
         // commands are denied. It is the only way an unknown region can later
         // prove that it became PvE without restarting.

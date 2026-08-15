@@ -9,9 +9,12 @@ import type {
 } from "../shared/travel-command.js";
 import {
   createTravelCommand,
+  TRAVEL_PAYLOAD_BYTES,
   type EnhancementTravelConfigure,
   type EnhancementTravelEnqueue,
 } from "./enhancement-travel-command.js";
+
+export { TRAVEL_PAYLOAD_BYTES };
 
 export interface TravelAvailability {
   readonly enabled: boolean;
