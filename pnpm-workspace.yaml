@@ -37,11 +37,6 @@ auditConfig:
     - GHSA-jmr9-qjv8-65gv
     - GHSA-w3rx-r6r6-pgpr
     - GHSA-5p2g-fcmc-qvqq
-    # Electron Forge 7 reaches extract-zip only through Electron Packager's
-    # extraction of the trusted Electron distribution during packaging. The
-    # application never passes user-controlled archives to this dependency,
-    # and no patched extract-zip release currently exists.
-    - GHSA-jmr9-qjv8-65gv
     # The affected esbuild serve-directory path exists only on Windows. Owned
     # automation runs on macOS/Linux, and fontless invokes only transform.
     - GHSA-g7r4-m6w7-qqqr
