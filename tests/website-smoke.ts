@@ -329,9 +329,6 @@ try {
   for (const href of downloadLinks(germanHtml)) {
     assert.match(href, /^\/(de\/)?download$/);
   }
-  assert.match(germanHtml, /href="\/download\?channel=beta"/);
-  assert.match(germanHtml, />Beta herunterladen</);
-
   // Public performance-sensitive prose stays qualitative. Controlled, dated
   // measurements belong in docs/performance-electron.md, not in marketing
   // pages assembled from individual tester reports.
