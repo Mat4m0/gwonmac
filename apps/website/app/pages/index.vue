@@ -57,107 +57,98 @@ const TROUBLE_PATH = {
 // The head query this page exists to win: "play guild wars on mac".
 const SEO = {
   title: {
-    en: "Play Guild Wars on Mac — Native Apple Silicon App (Free) | GWonMac",
-    de: "Guild Wars auf dem Mac spielen — Native App für Apple Silicon (kostenlos) | GWonMac",
+    en: "Play Guild Wars on Mac | GWonMac",
+    de: "Guild Wars auf dem Mac spielen | GWonMac",
   },
   description: {
-    en: "Run ArenaNet’s official Guild Wars client natively on Apple Silicon, without Windows, Wine, CrossOver, or Parallels. Free, open source, signed and notarized, with selectable Retina render scale.",
-    de: "Führe ArenaNets offiziellen Guild-Wars-Client nativ auf Apple Silicon aus, ohne Windows, Wine, CrossOver oder Parallels. Kostenlos, Open Source, signiert und notarisiert, mit wählbarer Retina-Skalierung.",
+    en: "Play ArenaNet’s official Guild Wars client on an Apple Silicon Mac without Windows, Wine, CrossOver, or Parallels. Free, signed, and notarized.",
+    de: "Spiele ArenaNets offiziellen Guild-Wars-Client auf einem Apple-Silicon-Mac – ohne Windows, Wine, CrossOver oder Parallels. Kostenlos, signiert und notarisiert.",
   },
 };
 
 const HERO = {
   title: {
-    en: "Play Guild Wars natively on your Mac",
-    de: "Spiele Guild Wars nativ auf deinem Mac",
+    en: "Play Guild Wars on your Mac",
+    de: "Spiele Guild Wars auf deinem Mac",
   },
   sub: {
-    en: "GWonMac starts the official client as a native macOS app. You don’t need a virtual machine, and there is nothing to patch by hand.",
-    de: "GWonMac startet den offiziellen Client als native macOS-App. Du brauchst keine virtuelle Maschine, und nichts muss von Hand gepatcht werden.",
+    en: "Download GWonMac, sign in with your Guild Wars account, and play. You don’t need Windows, Wine, or a virtual machine.",
+    de: "Lade GWonMac herunter, melde dich mit deinem Guild-Wars-Konto an und spiele. Du brauchst weder Windows noch Wine oder eine virtuelle Maschine.",
   },
-  download: { en: "Direct Download", de: "Direkter Download" },
-  docs: { en: "Read the docs", de: "Dokumentation lesen" },
-  betaPrompt: { en: "Want earlier builds?", de: "Möchtest du frühere Builds testen?" },
-  betaDownload: { en: "Download Beta", de: "Beta herunterladen" },
-  noAlpha: { en: "Alpha builds are never offered here.", de: "Alpha-Builds werden hier nie angeboten." },
+  download: { en: "Download for Mac", de: "Für Mac herunterladen" },
+  docs: { en: "Installation guide", de: "Installationsanleitung" },
+  betaDownload: { en: "Download the Beta", de: "Beta herunterladen" },
   finePrint: {
-    en: "Free · Open source (GPL-3.0) · Signed & notarized",
-    de: "Kostenlos · Open Source (GPL-3.0) · Signiert & notarisiert",
+    en: "Free · For Apple Silicon · Signed & notarized",
+    de: "Kostenlos · Für Apple Silicon · Signiert & notarisiert",
   },
 };
 
 const STATS = [
-  { value: "1-click", label: { en: "install, then it updates itself", de: "Installation, danach hält es sich aktuell" } },
-  { value: "1×–2×", label: { en: "selectable render scale", de: "wählbare Render-Skalierung" } },
-  { value: "arm64", label: { en: "built for Apple Silicon", de: "für Apple Silicon gebaut" } },
-  { value: "GPL-3.0", label: { en: "fully open source", de: "vollständig Open Source" } },
+  { value: "3 steps", label: { en: "download, move, open", de: "laden, verschieben, öffnen" } },
+  { value: "M1+", label: { en: "Apple Silicon Macs", de: "Apple-Silicon-Macs" } },
+  { value: "macOS 12+", label: { en: "Monterey or later", de: "Monterey oder neuer" } },
+  { value: "Free", label: { en: "to download and use", de: "herunterladen und nutzen" } },
 ];
 
 const FEATURES_HEADING = {
-  title: { en: "Set it up once, then just play", de: "Einmal einrichten, dann einfach spielen" },
+  title: { en: "Everything you need to start playing", de: "Alles, was du zum Spielen brauchst" },
   sub: {
-    en: "GWonMac handles installation, game data, and updates. All you need is your existing Guild Wars account.",
-    de: "GWonMac kümmert sich um Installation, Spieldaten und Updates. Du brauchst nur deinen bestehenden Guild-Wars-Account.",
+    en: "Install the app, sign in with your existing account, and let GWonMac take care of the game files and updates.",
+    de: "Installiere die App und melde dich mit deinem bestehenden Konto an. GWonMac kümmert sich um die Spieldaten und Updates.",
   },
 };
 
 const FEATURES = [
   {
-    kicker: { en: "Install", de: "Installation" },
-    title: { en: "Installed in a few steps", de: "In wenigen Schritten installiert" },
+    title: { en: "Download, move, open", de: "Laden, verschieben, öffnen" },
     description: {
-      en: "Download the DMG, drag the app to Applications, and open it. Every release is signed and notarized by Apple. You never need to disable security settings.",
-      de: "DMG herunterladen, App in „Programme“ ziehen und öffnen. Jedes Release ist signiert und von Apple notarisiert. Du musst keine Sicherheitseinstellungen deaktivieren.",
+      en: "Download the DMG, move Guild Wars to Applications, and open it. That’s all you need to install GWonMac.",
+      de: "Lade die DMG-Datei herunter, verschiebe Guild Wars in „Programme“ und öffne die App. Mehr ist für die Installation nicht nötig.",
     },
   },
   {
-    kicker: { en: "Updates", de: "Updates" },
-    title: { en: "Updates without manual work", de: "Updates ohne manuelle Arbeit" },
+    title: { en: "Use your existing account", de: "Nutze dein bestehendes Konto" },
     description: {
-      en: "Game data stays up to date automatically. When a new app version is available, the launcher lets you know and installs it in one click.",
-      de: "Die Spieldaten werden automatisch aktuell gehalten. Sobald eine neue App-Version verfügbar ist, informiert dich der Launcher und installiert sie mit einem Klick.",
+      en: "Sign in with your Guild Wars account or Steam. You don’t need to create a separate GWonMac account.",
+      de: "Melde dich mit deinem Guild-Wars-Konto oder über Steam an. Du brauchst kein eigenes GWonMac-Konto.",
     },
   },
   {
-    kicker: { en: "Display", de: "Anzeige" },
-    title: { en: "Selectable Retina render scale", de: "Wählbare Retina-Skalierung" },
+    title: { en: "A normal Mac installation", de: "Eine normale Mac-Installation" },
     description: {
-      en: "Native rendering on internal and external displays, with selectable render scale and the client’s graphics settings.",
-      de: "Natives Rendering auf internen und externen Displays, mit wählbarer Render-Skalierung und den Grafikeinstellungen des Clients.",
+      en: "Every release is signed and notarized by Apple. You don’t need to turn off any Mac security settings.",
+      de: "Jede Version ist signiert und von Apple notarisiert. Du musst keine Sicherheitseinstellungen auf deinem Mac ausschalten.",
     },
   },
   {
-    kicker: { en: "Performance", de: "Leistung" },
-    title: { en: "Built for Apple Silicon", de: "Für Apple Silicon gebaut" },
+    title: { en: "Made for M-series Macs", de: "Für Macs mit M-Chip" },
     description: {
-      en: "The arm64 app runs ArenaNet’s WebAssembly client directly in bundled Chromium. Actual performance depends on your Mac, render scale, and the client’s graphics settings.",
-      de: "Die arm64-App führt ArenaNets WebAssembly-Client direkt im mitgelieferten Chromium aus. Die tatsächliche Leistung hängt von deinem Mac, der Render-Skalierung und den Grafikeinstellungen des Clients ab.",
+      en: "GWonMac works on Apple Silicon Macs running macOS 12 Monterey or later. Intel Macs are not supported.",
+      de: "GWonMac läuft auf Apple-Silicon-Macs mit macOS 12 Monterey oder neuer. Intel-Macs werden nicht unterstützt.",
     },
   },
   {
-    kicker: { en: "Authentic", de: "Authentisch" },
-    title: { en: "The official client from ArenaNet", de: "Der offizielle Client von ArenaNet" },
+    title: { en: "Game files come from ArenaNet", de: "Spieldaten direkt von ArenaNet" },
     description: {
-      en: "GWonMac uses ArenaNet’s WebAssembly client and downloads game data directly from ArenaNet. Your existing account and Steam login are supported.",
-      de: "GWonMac verwendet ArenaNets WebAssembly-Client und lädt die Spieldaten direkt von ArenaNet. Dein bestehender Account und der Steam-Login werden unterstützt.",
+      en: "GWonMac uses ArenaNet’s official client and downloads the game files directly from ArenaNet. The files are not bundled with the app.",
+      de: "GWonMac nutzt ArenaNets offiziellen Client und lädt die Spieldaten direkt von ArenaNet. Die App enthält keine Spieldaten.",
     },
   },
   {
-    kicker: { en: "Open", de: "Offen" },
-    title: { en: "Free and open source", de: "Kostenlos und Open Source" },
+    title: { en: "Updates are handled for you", de: "Updates ohne Handarbeit" },
     description: {
-      en: "The source code is available on GitHub under GPL-3.0. Optional GWonMac Tools for managing PvE builds and teams are available in Beta.",
-      de: "Der Quellcode ist unter GPL-3.0 auf GitHub verfügbar. Die optionalen GWonMac Tools zum Verwalten von PvE-Builds und Teams sind als Beta verfügbar.",
+      en: "Game data stays up to date automatically. When a new GWonMac version is ready, the app lets you know before it installs.",
+      de: "Die Spieldaten bleiben automatisch aktuell. Wenn eine neue GWonMac-Version bereitsteht, informiert dich die App vor der Installation.",
     },
   },
 ];
 
 const VOICES_HEADING = {
-  eyebrow: { en: "From r/GuildWars", de: "Aus r/GuildWars" },
-  title: { en: "Reports from different Macs", de: "Erfahrungen auf verschiedenen Macs" },
+  title: { en: "What Mac players say", de: "Das sagen Spieler auf dem Mac" },
   sub: {
-    en: "Real feedback from users on M1, M2, M4, and M5 machines, straight from the Reddit release threads.",
-    de: "Echte Rückmeldungen von Nutzern mit M1-, M2-, M4- und M5-Geräten, direkt aus den Reddit-Release-Threads.",
+    en: "Reports from people playing on M1, M2, M4, and M5 Macs in the Guild Wars subreddit.",
+    de: "Erfahrungen von Spielern mit M1-, M2-, M4- und M5-Macs aus dem Guild-Wars-Subreddit.",
   },
 };
 
@@ -209,7 +200,7 @@ const TESTIMONIALS = [
 
 
 const FAQ_HEADING = {
-  title: { en: "Frequently asked questions", de: "Häufige Fragen" },
+  title: { en: "Questions before you install", de: "Fragen vor der Installation" },
 };
 
 type FaqItem = {
@@ -222,8 +213,8 @@ const FAQ: FaqItem[] = [
   {
     q: { en: "Will this get me banned?", de: "Kann ich dafür gebannt werden?" },
     a: {
-      en: "Nobody outside ArenaNet can guarantee that, so here is what we actually know. We contacted ArenaNet before launch: in late July 2026 a staff member ran GWonMac on their own Mac and said they are fine with what the project does as things stand. That is not an endorsement or a policy, and ArenaNet could take a different view later. GWonMac downloads and verifies ArenaNet’s official client and preserves that download unchanged. A separate hash-verified copy runs only after the exact build passes GWonMac’s bounded compatibility proof; live Tools additionally require shipped exact-build facts. It injects no native code and performs no autonomous gameplay. If ArenaNet ever says stop, the project is deprecated and everyone is told the same day.",
-      de: "Niemand außerhalb von ArenaNet kann das garantieren, deshalb hier, was wir tatsächlich wissen. Wir haben ArenaNet vor dem Launch kontaktiert: Ende Juli 2026 hat ein Mitarbeiter GWonMac auf seinem eigenen Mac ausgeführt und gesagt, dass er nach aktuellem Stand damit einverstanden ist. Das ist keine Freigabe und keine Richtlinie, und ArenaNet kann das künftig anders bewerten. GWonMac lädt und prüft ArenaNets offiziellen Client und bewahrt diesen Download unverändert auf. Eine separate, per Hash geprüfte Kopie läuft erst, wenn der exakte Build GWonMacs begrenzte Kompatibilitätsprüfung besteht; Live-Tools benötigen zusätzlich mit der App ausgelieferte Fakten für den exakten Build. Nativer Code wird nicht injiziert und das Spiel nicht selbstständig gesteuert. Sagt ArenaNet jemals Stopp, wird das Projekt eingestellt und alle erfahren es am selben Tag.",
+      en: "Nobody outside ArenaNet can promise that. Before launch, an ArenaNet staff member tested GWonMac and said they were fine with the project as it stood in July 2026. This was not an endorsement or a policy. GWonMac uses ArenaNet’s official client, does not automate gameplay, and will stop if ArenaNet asks.",
+      de: "Niemand außerhalb von ArenaNet kann das versprechen. Vor dem Start hat ein ArenaNet-Mitarbeiter GWonMac getestet und im Juli 2026 gesagt, dass das Projekt für ihn in seiner damaligen Form in Ordnung war. Das war weder eine offizielle Freigabe noch eine Richtlinie. GWonMac nutzt ArenaNets offiziellen Client, automatisiert das Spiel nicht und wird eingestellt, wenn ArenaNet darum bittet.",
     },
     link: {
       label: { en: "Read the full safety page", de: "Zur ausführlichen Sicherheitsseite" },
@@ -231,35 +222,35 @@ const FAQ: FaqItem[] = [
     },
   },
   {
-    q: { en: "Is GWonMac free?", de: "Ist GWonMac kostenlos?" },
-    a: {
-      en: "Yes. Free and open source under GPL-3.0. The app costs nothing and always will.",
-      de: "Ja. Kostenlos und Open Source unter GPL-3.0. Die App kostet nichts und wird es auch nie.",
-    },
-  },
-  {
-    q: { en: "Does it include Guild Wars?", de: "Ist Guild Wars enthalten?" },
-    a: {
-      en: "No. GWonMac downloads the official client and game files directly from ArenaNet instead of bundling them. You need your own Guild Wars account to play.",
-      de: "Nein. GWonMac lädt den offiziellen Client und die Spieldaten direkt von ArenaNet, statt sie mitzuliefern. Zum Spielen brauchst du dein eigenes Guild-Wars-Konto.",
-    },
-  },
-  {
     q: { en: "Which Macs are supported?", de: "Welche Macs werden unterstützt?" },
     a: {
-      en: "Every Apple Silicon Mac, from the M1 MacBook Air to the latest Pro machines, running macOS 12 Monterey or later. Performance depends on the Mac, render scale, and the client’s graphics settings. Intel Macs are not supported.",
-      de: "Jeder Apple-Silicon-Mac, vom M1 MacBook Air bis zu den neuesten Pro-Geräten, mit macOS 12 Monterey oder neuer. Die Leistung hängt vom Mac, der Render-Skalierung und den Grafikeinstellungen des Clients ab. Intel-Macs werden nicht unterstützt.",
+      en: "GWonMac supports Apple Silicon Macs running macOS 12 Monterey or later. Intel Macs are not supported. Performance depends on your Mac and the graphics settings you choose.",
+      de: "GWonMac unterstützt Apple-Silicon-Macs mit macOS 12 Monterey oder neuer. Intel-Macs werden nicht unterstützt. Die Leistung hängt von deinem Mac und den gewählten Grafikeinstellungen ab.",
     },
   },
   {
     q: { en: "How do I install it?", de: "Wie installiere ich es?" },
     a: {
-      en: "Download the DMG, drag Guild Wars to Applications, and open it. Releases are signed with Developer ID, notarized by Apple, and verified by Gatekeeper. You never need to disable security settings to run it.",
-      de: "DMG herunterladen, Guild Wars in „Programme“ ziehen und öffnen. Releases sind mit Developer ID signiert, von Apple notarisiert und werden von Gatekeeper geprüft. Du musst dafür keine Sicherheitseinstellungen deaktivieren.",
+      en: "Download the DMG, move Guild Wars to Applications, and open it. Every release is signed and notarized, so you don’t need to turn off any Mac security settings.",
+      de: "Lade die DMG-Datei herunter, verschiebe Guild Wars in „Programme“ und öffne die App. Jede Version ist signiert und notarisiert. Du musst keine Sicherheitseinstellungen auf deinem Mac ausschalten.",
     },
     link: {
       label: { en: "Step-by-step install guide", de: "Schritt-für-Schritt-Anleitung" },
       href: DOCS_PATH,
+    },
+  },
+  {
+    q: { en: "Do I need a Guild Wars account?", de: "Brauche ich ein Guild-Wars-Konto?" },
+    a: {
+      en: "Yes. Sign in with your existing Guild Wars account or Steam account. GWonMac does not include the game or create a separate account for you.",
+      de: "Ja. Melde dich mit deinem bestehenden Guild-Wars-Konto oder Steam-Konto an. GWonMac enthält das Spiel nicht und erstellt kein eigenes Konto für dich.",
+    },
+  },
+  {
+    q: { en: "Is GWonMac free?", de: "Ist GWonMac kostenlos?" },
+    a: {
+      en: "Yes. GWonMac is free to download and use.",
+      de: "Ja. Du kannst GWonMac kostenlos herunterladen und nutzen.",
     },
   },
   {
@@ -268,8 +259,8 @@ const FAQ: FaqItem[] = [
       de: "Was ist mit CrossOver, Parallels oder Whisky?",
     },
     a: {
-      en: "They can work, but all of them run the Windows client through a compatibility layer or a virtual machine. That means extra cost and more parts that can break. GWonMac runs the official client natively.",
-      de: "Sie können funktionieren, führen aber alle den Windows-Client über eine Kompatibilitätsschicht oder eine virtuelle Maschine aus. Das bedeutet Zusatzkosten und mehr Teile, die kaputtgehen können. GWonMac führt den offiziellen Client nativ aus.",
+      en: "They can work, but they run the Windows client through extra software or a virtual machine. GWonMac runs ArenaNet’s official client directly as a Mac app.",
+      de: "Diese Programme können funktionieren, benötigen dafür aber zusätzliche Software oder eine virtuelle Maschine. GWonMac startet ArenaNets offiziellen Client direkt als Mac-App.",
     },
     link: {
       label: { en: "Every option compared", de: "Alle Optionen im Vergleich" },
@@ -279,15 +270,15 @@ const FAQ: FaqItem[] = [
   {
     q: { en: "Does it update automatically?", de: "Aktualisiert es sich automatisch?" },
     a: {
-      en: "Yes. The game data stays current automatically, and the launcher tells you when a new app version is ready. Updating is one click.",
-      de: "Ja. Die Spieldaten bleiben automatisch aktuell, und der Launcher meldet sich, wenn eine neue App-Version bereitsteht. Das Update ist ein Klick.",
+      en: "Yes. Game data updates automatically. When a new GWonMac version is available, the app tells you before it installs.",
+      de: "Ja. Die Spieldaten werden automatisch aktualisiert. Wenn eine neue GWonMac-Version verfügbar ist, informiert dich die App vor der Installation.",
     },
   },
   {
-    q: { en: "Do I need a Guild Wars account? Does Steam login work?", de: "Brauche ich ein Guild-Wars-Konto? Geht der Steam-Login?" },
+    q: { en: "Does Steam login work?", de: "Funktioniert die Steam-Anmeldung?" },
     a: {
-      en: "Yes. You sign in with your existing Guild Wars account; Steam login works too. Credentials are sent only to the selected provider and ArenaNet’s official client and services—never to a GWonMac service. If you enable saved login, they are kept in this Mac’s device-only Keychain.",
-      de: "Ja. Du meldest dich mit deinem bestehenden Guild-Wars-Konto an; auch der Steam-Login funktioniert. Zugangsdaten werden nur an den gewählten Anbieter sowie ArenaNets offiziellen Client und Dienste gesendet – niemals an einen GWonMac-Dienst. Wenn du die gespeicherte Anmeldung aktivierst, liegen sie ausschließlich im gerätegebundenen Schlüsselbund dieses Macs.",
+      en: "Yes. You can sign in with Steam or a regular Guild Wars account. Your password goes only to your login provider and ArenaNet, never to a GWonMac service. If you save your login, it stays in the Keychain on your Mac.",
+      de: "Ja. Du kannst dich über Steam oder mit einem normalen Guild-Wars-Konto anmelden. Dein Passwort geht nur an deinen Anmeldeanbieter und ArenaNet, niemals an einen GWonMac-Dienst. Wenn du deine Anmeldung speicherst, bleibt sie im Schlüsselbund auf deinem Mac.",
     },
   },
   {
@@ -307,8 +298,8 @@ const FAQ: FaqItem[] = [
   {
     q: { en: "Can I use GWToolbox++?", de: "Kann ich GWToolbox++ nutzen?" },
     a: {
-      en: "No. It hooks into the Windows client, and GWonMac doesn’t run that client. GWonMac Tools Beta is the native alternative for local build and team management. It is optional, limited to supported PvE outposts, and automatically unavailable in PvP, guild halls, and unknown regions.",
-      de: "Nein. Es klinkt sich in den Windows-Client ein, und GWonMac führt diesen Client nicht aus. GWonMac Tools Beta ist die native Alternative für die lokale Build- und Teamverwaltung. Sie ist optional, auf unterstützte PvE-Außenposten beschränkt und in PvP, Gildenhallen und unbekannten Gebieten automatisch nicht verfügbar.",
+      en: "No. GWToolbox++ only works with the Windows client. GWonMac Tools Beta provides its own build and team features. It is optional and works only in supported PvE outposts.",
+      de: "Nein. GWToolbox++ funktioniert nur mit dem Windows-Client. GWonMac Tools Beta bietet eigene Funktionen für Builds und Teams. Die Tools sind optional und funktionieren nur in unterstützten PvE-Außenposten.",
     },
   },
   {
@@ -350,8 +341,8 @@ function handleFaqToggle(event: Event, question: Localized): void {
 const DISCORD = {
   url: "https://discord.gg/Z9ft52RBD3",
   text: {
-    en: "New releases, known issues, quick help: it all lands on Discord first.",
-    de: "Neue Releases, bekannte Probleme, schnelle Hilfe: Alles landet zuerst auf Discord.",
+    en: "Join Discord for release notes, known issues, and help.",
+    de: "Auf Discord findest du Versionshinweise, bekannte Probleme und Hilfe.",
   },
   cta: { en: "Join the Discord", de: "Discord beitreten" },
 };
@@ -361,13 +352,13 @@ const DISCORD_PATH =
   "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z";
 
 const CTA = {
-  title: { en: "Install Guild Wars on your Mac", de: "Guild Wars auf deinem Mac installieren" },
+  title: { en: "Ready to play?", de: "Bereit zum Spielen?" },
   sub: {
-    en: "Download GWonMac for free, sign in with your existing account, and start the official client.",
-    de: "Lade GWonMac kostenlos herunter, melde dich mit deinem bestehenden Account an und starte den offiziellen Client.",
+    en: "Download GWonMac, move it to Applications, and sign in with your Guild Wars account.",
+    de: "Lade GWonMac herunter, verschiebe die App in „Programme“ und melde dich mit deinem Guild-Wars-Konto an.",
   },
-  download: { en: "Direct Download", de: "Direkter Download" },
-  docs: { en: "See the install guide", de: "Installationsanleitung ansehen" },
+  download: { en: "Download for Mac", de: "Für Mac herunterladen" },
+  docs: { en: "Installation guide", de: "Installationsanleitung" },
 };
 
 const docsPath = computed(() => localize(DOCS_PATH));
@@ -437,11 +428,6 @@ useSchemaJsonLd(() => [
         <p class="mt-5 text-[12.5px] tracking-[0.04em] text-(--gw-art-ink-faint)">
           <template v-if="latestRelease?.version">{{ latestRelease.version }} · </template>{{ localize(HERO.finePrint) }}
         </p>
-        <p class="mt-2 text-xs text-(--gw-art-ink-faint)">
-          {{ localize(HERO.betaPrompt) }}
-          <NuxtLink :to="BETA_DOWNLOAD_PATH" target="_blank" rel="noopener noreferrer" class="underline underline-offset-4">{{ localize(HERO.betaDownload) }}</NuxtLink>.
-          {{ localize(HERO.noAlpha) }}
-        </p>
       </div>
       <!-- Stat band, fused into the hero's bottom edge -->
       <dl class="gw-stat-band">
@@ -469,12 +455,7 @@ useSchemaJsonLd(() => [
           :key="feature.title.en"
           class="gw-panel relative min-w-0 p-6"
         >
-          <span
-            class="absolute top-5 right-5 text-[10px] tracking-[0.14em] text-(--gw-accent-quiet) uppercase"
-          >
-            {{ localize(feature.kicker) }}
-          </span>
-          <h3 class="mt-6 font-(family-name:--font-display) text-xl text-(--gw-text)">
+          <h3 class="font-(family-name:--font-display) text-xl text-(--gw-text)">
             {{ localize(feature.title) }}
           </h3>
           <p class="mt-2 text-[13.5px] leading-relaxed text-(--gw-text-faint)">
@@ -487,10 +468,7 @@ useSchemaJsonLd(() => [
     <!-- Testimonials — masonry wall with bottom fade -->
     <section class="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
       <div class="mx-auto flex max-w-2xl flex-col items-center text-center">
-        <p class="text-xs font-semibold tracking-[0.22em] text-(--gw-accent) uppercase">
-          {{ localize(VOICES_HEADING.eyebrow) }}
-        </p>
-        <h2 class="mt-3 font-(family-name:--font-display) text-3xl text-foreground sm:text-4xl">
+        <h2 class="font-(family-name:--font-display) text-3xl text-foreground sm:text-4xl">
           {{ localize(VOICES_HEADING.title) }}
         </h2>
         <p class="mt-3 text-base leading-7 text-muted-foreground">

@@ -7,8 +7,8 @@ export default defineAppConfig({
       url: site.url,
       name: { en: "GWonMac", de: "GWonMac" },
       description: {
-        en: "Play Guild Wars on your Mac. GWonMac runs ArenaNet's official client natively on Apple Silicon — free, open source, signed and notarized.",
-        de: "Spiele Guild Wars auf deinem Mac. GWonMac führt ArenaNets offiziellen Client nativ auf Apple Silicon aus — kostenlos, Open Source, signiert und notarisiert.",
+        en: "Play Guild Wars on your Apple Silicon Mac without Windows, Wine, or a virtual machine. Free, signed, and notarized.",
+        de: "Spiele Guild Wars auf deinem Apple-Silicon-Mac – ohne Windows, Wine oder eine virtuelle Maschine. Kostenlos, signiert und notarisiert.",
       },
       // PNG, not the webp wordmark: this logo is rendered into OG images by
       // Satori, which cannot decode WebP.
@@ -32,8 +32,8 @@ export default defineAppConfig({
       id: "unofficial",
       showOnLanding: true,
       text: {
-        en: "Unofficial Guild Wars Reforged App — a fan project, not affiliated with ArenaNet or NCSoft",
-        de: "Inoffizieller Guild Wars Reforged App — ein Fan-Projekt, nicht mit ArenaNet oder NCSoft verbunden",
+        en: "Unofficial Guild Wars Reforged app — a fan project not affiliated with ArenaNet or NCSOFT",
+        de: "Inoffizielle App für Guild Wars Reforged – ein Fanprojekt ohne Verbindung zu ArenaNet oder NCSOFT",
       },
     },
     social: {
