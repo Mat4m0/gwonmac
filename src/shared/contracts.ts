@@ -24,11 +24,15 @@ import type {
 } from "./diagnostics.js";
 import type { ErrorCode } from "./errors.js";
 import type { BuildLibrary } from "./builds/library.js";
+import type { ProfileId } from "./multiple-accounts.js";
+import type { TemplateExportEntry } from "./template-contracts.js";
 import type {
-  AccountMode,
-  LibraryScope,
-  ProfileId,
-} from "./multiple-accounts.js";
+  AccountProfileCreateRequest,
+  AccountProfileUpdateRequest,
+  AccountsSetupRequest,
+  AccountsState,
+  AccountTemplateLibrary,
+} from "./accounts-contracts.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -43,6 +47,18 @@ import {
 export { RELEASE_REPO } from "./project-identity.js";
 export { DEFAULT_UPDATE_TRACK, UPDATE_TRACKS };
 export type { UpdateTrack };
+export type { TemplateExportEntry } from "./template-contracts.js";
+export type {
+  AccountLaunchIssue,
+  AccountProfileCreateRequest,
+  AccountProfileRequest,
+  AccountProfileSummary,
+  AccountProfileUpdateRequest,
+  AccountsSetupRequest,
+  AccountsState,
+  AccountTemplateLibrary,
+  MultiProfileRuntimeState,
+} from "./accounts-contracts.js";
 
 export type BuildKind = "jspi";
 
@@ -102,11 +118,6 @@ export const TEMPLATE_CEILINGS = {
  * lands. `contents` is the code alone — the game writes no trailing newline and
  * a file that gains one stops being the same file.
  */
-export interface TemplateExportEntry {
-  path: string;
-  contents: string;
-}
-
 /**
  * How an export ended. A value rather than a rejection for the same reason
  * `FullDownloadOutcome` is one: Electron flattens a rejection to its message,
@@ -606,60 +617,6 @@ export interface RendererInit {
   enhancementSelection: EnhancementSelection;
   /** Template filesystem syscall trace. Unpackaged builds only. */
   templateFsTrace: boolean;
-}
-
-export type MultiProfileRuntimeState =
-  | "ready"
-  | "queued"
-  | "opening"
-  | "checking"
-  | "running"
-  | "failed";
-
-export type AccountLaunchIssue =
-  | "profile-preparation"
-  | "window-startup"
-  | "client-validation"
-  | "renderer-crash"
-  | "unknown";
-
-export interface AccountProfileSummary {
-  readonly id: ProfileId;
-  readonly name: string;
-  readonly templates: LibraryScope;
-  readonly builds: LibraryScope;
-  readonly archived: boolean;
-  readonly state: MultiProfileRuntimeState;
-  readonly launchIssue?: AccountLaunchIssue;
-}
-
-export interface AccountsState {
-  readonly mode: AccountMode;
-  readonly profiles: readonly AccountProfileSummary[];
-}
-
-export interface AccountsSetupRequest {
-  readonly templateEntries: readonly TemplateExportEntry[];
-}
-
-export interface AccountTemplateLibrary {
-  readonly revision: number;
-  readonly entries: readonly TemplateExportEntry[];
-}
-
-export interface AccountProfileRequest {
-  readonly name: string;
-  readonly templates: LibraryScope;
-  readonly builds: LibraryScope;
-}
-
-export interface AccountProfileCreateRequest extends AccountProfileRequest {
-  readonly copySingleBuilds: boolean;
-  readonly copySingleTemplates: boolean;
-}
-
-export interface AccountProfileUpdateRequest extends AccountProfileRequest {
-  readonly id: ProfileId;
 }
 
 /**
