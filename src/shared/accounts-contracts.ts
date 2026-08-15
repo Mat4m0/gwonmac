@@ -1,4 +1,7 @@
-/** Renderer/main value contracts owned by the Multiple Accounts feature. */
+/**
+ * Renderer/main value contracts owned by the Multiple Accounts feature.
+ * Durable workspace documents remain in `multiple-accounts.ts`.
+ */
 import type {
   AccountMode,
   LibraryScope,
