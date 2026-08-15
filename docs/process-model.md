@@ -141,6 +141,11 @@ trackpad actions go to Guild Wars without a selectable input mode. The host
 releases held keys and buttons when focus changes or native UI consumes a
 release.
 
+Moving focus from the game canvas into a control in the same renderer does not
+blur Guild Wars. Settings, Tools, Travel, warnings, and game text fields remain
+part of the active game window, so they do not mute game audio. A real window
+blur still reaches Guild Wars and releases held input.
+
 Right-drag uses pointer lock and a virtual cursor. The host bounds drag
 recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
