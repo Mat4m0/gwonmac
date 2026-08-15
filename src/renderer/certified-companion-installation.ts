@@ -232,7 +232,6 @@ export async function installCertifiedCompanion(
     cleaned = true;
     // Disable dispatch before releasing any callback-owned state.
     hookSlot.value = 0;
-    storageInstallation?.dispose(free);
     stopObserver();
     disposeCursorRefresh();
     disposeCursor();
@@ -249,6 +248,7 @@ export async function installCertifiedCompanion(
     if (toolboxPointer) free(toolboxPointer);
     if (partyPointer) free(partyPointer);
     if (payloadPointer) free(payloadPointer);
+    storageInstallation?.dispose(free);
     if (professionTracePointer) free(professionTracePointer);
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
