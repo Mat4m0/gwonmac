@@ -7,14 +7,13 @@ import type {
   EnhancementTravelConfigure,
   EnhancementTravelEnqueue,
 } from "./enhancement-travel-command.js";
+import { TRAVEL_PAYLOAD_BYTES } from "./enhancement-travel-command.js";
 import {
   createTravelController,
   type TravelAvailability,
   type TravelController,
 } from "./enhancement-travel-controller.js";
 import { createTravelPalette } from "./travel-palette.js";
-
-export const TRAVEL_PAYLOAD_BYTES = 8;
 
 export interface TravelInstallation {
   allocate(malloc: (bytes: number) => unknown): void;
