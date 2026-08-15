@@ -44,7 +44,7 @@ import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type {
   EnhancementCommandEnqueue,
 } from "./enhancement-team-commands.js";
-import { createStorageInstallation } from "./enhancement-storage-installation.js";
+import type { StorageInstallation } from "./enhancement-storage-installation.js";
 import {
   COMPANION_ABI as COMPANION_DESCRIPTOR,
 } from "../shared/companion-abi.js";
@@ -182,7 +182,10 @@ export async function installCertifiedCompanion(
   const teamCommands = capabilities.commands
     ? await import("./enhancement-team-commands.js")
     : null;
-  const storageInstallation = createStorageInstallation(exports, capabilities.storage);
+  const storageInstallation: StorageInstallation | null = capabilities.storage
+    ? (await import("./enhancement-storage-installation.js"))
+        .createStorageInstallation(exports, true)
+    : null;
   // The guard above proves `free` is callable, but WebAssembly exports are typed
   // as the bare `Function`, so the kernel's ABI has to be named here or the five
   // call sites below stop checking what they pass.
