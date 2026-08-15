@@ -65,6 +65,110 @@ test.describe("renderer keyboard input", () => {
       await closeOffline(fixture);
     }
   });
+  test("lets the client own Tab focus between login fields", async () => {
+    const fixture = await launchCachedClient("gw-tab-focus-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const email = document.getElementById("osk-input-email");
+        const password = document.getElementById("osk-input-password");
+        const gameModule = window.Module as OskModuleHost | undefined;
+        if (!(email instanceof HTMLInputElement)) throw new Error("email proxy is missing");
+        if (!(password instanceof HTMLInputElement)) throw new Error("password proxy is missing");
+        if (!gameModule) throw new Error("window.Module is not installed");
+        (window as typeof window & { __tabPrevented?: boolean }).__tabPrevented = false;
+        email.addEventListener("keydown", (event) => {
+          if (event.key !== "Tab") return;
+          (window as typeof window & { __tabPrevented?: boolean }).__tabPrevented =
+            event.defaultPrevented;
+          gameModule.oskActiveInput = password;
+          password.focus();
+        }, { once: true });
+        gameModule.oskActiveInput = email;
+        email.focus();
+      });
+
+      await page.keyboard.press("Tab");
+      expect(await page.evaluate(() => {
+        const clientChoice = (window.Module as OskModuleHost).oskActiveInput;
+        return {
+          active: document.activeElement?.id,
+          clientChoice: clientChoice instanceof Element ? clientChoice.id : null,
+          prevented: (window as typeof window & { __tabPrevented?: boolean }).__tabPrevented,
+        };
+      })).toEqual({
+        active: "osk-input-password",
+        clientChoice: "osk-input-password",
+        prevented: true,
+      });
+
+      // A proxy the client did not claim must return focus to the canvas, not
+      // leave the document body as an intermittent keyboard dead end.
+      expect(await page.evaluate(async () => {
+        const email = document.getElementById("osk-input-email");
+        const gameModule = window.Module as OskModuleHost;
+        gameModule.oskActiveInput = null;
+        email?.focus();
+        await Promise.resolve();
+        return document.activeElement?.id;
+      })).toBe("canvas");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("buffers only the first immediate character-selection Enter", async () => {
+    const fixture = await launchCachedClient("gw-character-enter-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const canvas = document.getElementById("canvas");
+        if (!(canvas instanceof HTMLCanvasElement)) throw new Error("canvas is missing");
+        new XMLHttpRequest().open("POST", "/webgate/my_account/token.xml");
+        const started = performance.now();
+        (window as typeof window & { __characterEnters?: unknown[] }).__characterEnters = [];
+        for (const type of ["keydown", "keyup"] as const) {
+          canvas.addEventListener(type, (event) => {
+            if (event.key !== "Enter") return;
+            (window as typeof window & { __characterEnters?: unknown[] })
+              .__characterEnters?.push({
+                type: event.type,
+                trusted: event.isTrusted,
+                afterMs: performance.now() - started,
+              });
+          });
+        }
+        canvas.focus();
+      });
+
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(80);
+      expect(await page.evaluate(() =>
+        (window as typeof window & { __characterEnters?: unknown[] }).__characterEnters,
+      )).toEqual([]);
+      await expect.poll(() => page.evaluate(() =>
+        (window as typeof window & { __characterEnters?: unknown[] }).__characterEnters,
+      )).toHaveLength(2);
+      expect(await page.evaluate(() =>
+        (window as typeof window & {
+          __characterEnters?: Array<{ type: string; trusted: boolean; afterMs: number }>;
+        }).__characterEnters,
+      )).toEqual([
+        { type: "keydown", trusted: false, afterMs: expect.any(Number) },
+        { type: "keyup", trusted: false, afterMs: expect.any(Number) },
+      ]);
+      expect(await page.evaluate(() =>
+        (window as typeof window & {
+          __characterEnters?: Array<{ afterMs: number }>;
+        }).__characterEnters?.[0]?.afterMs,
+      )).toBeGreaterThanOrEqual(140);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("uses physical main-block keys without changing typed text", async () => {
     const fixture = await launchCachedClient("gw-physical-key-e2e-");
     try {

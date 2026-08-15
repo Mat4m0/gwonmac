@@ -17,11 +17,13 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   closeOffline,
+  launchCachedClient,
   launchOffline,
   launchOfflineAt,
   root,
   type OfflineFixture,
 } from "./fixtures.mts";
+import { startGameInput } from "./input-helpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -287,8 +289,8 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("advertises Steam and nothing else", async () => {
-    // The client renders its Steam button beside the
-    // unchanged ArenaNet email/password form.
+    // The client offers Steam in its provider chooser, before the unchanged
+    // ArenaNet email/password form.
     fixture = await launchOffline("gw-steam-providers-");
     const answers = await fixture.page.evaluate(() => {
       const login = (
@@ -324,6 +326,64 @@ test.describe("the Steam credential seam", () => {
     expect(result).toEqual({ settled: "rejected" });
     expect(await windowCount(fixture.app)).toBe(before);
     expect(await readStore(fixture.app)).toBe(null);
+  });
+
+  test("makes the provider chooser operable from the keyboard", async () => {
+    fixture = await launchCachedClient("gw-steam-provider-keyboard-");
+    await startGameInput(fixture.page);
+    expect(await getAuthToken(fixture, "Steam", true)).toEqual({
+      settled: "rejected",
+    });
+    await fixture.page.evaluate(() => {
+      const canvas = document.getElementById("canvas");
+      if (!(canvas instanceof HTMLCanvasElement)) throw new Error("canvas is missing");
+      const events: Array<{ type: string; x: number; y: number; trusted: boolean }> = [];
+      for (const type of ["mousemove", "mousedown", "mouseup", "click"]) {
+        canvas.addEventListener(type, (event) => {
+          if (!(event instanceof MouseEvent)) return;
+          events.push({
+            type: event.type,
+            x: event.clientX,
+            y: event.clientY,
+            trusted: event.isTrusted,
+          });
+        });
+      }
+      (window as typeof window & { __providerMouse?: typeof events }).__providerMouse = events;
+      canvas.focus();
+    });
+
+    await fixture.page.keyboard.press("Tab");
+    await fixture.page.keyboard.press("Enter");
+    const result = await fixture.page.evaluate(() => {
+      const canvas = document.getElementById("canvas") as HTMLCanvasElement;
+      const rect = canvas.getBoundingClientRect();
+      return {
+        events: (window as typeof window & {
+          __providerMouse?: Array<{
+            type: string;
+            x: number;
+            y: number;
+            trusted: boolean;
+          }>;
+        }).__providerMouse,
+        expected: {
+          x: rect.left + rect.width / 2 - rect.height * 161 / 600,
+          y: rect.top + rect.height * 253 / 600,
+        },
+      };
+    });
+    expect(result.events?.map(({ type }) => type)).toEqual([
+      "mousemove",
+      "mousedown",
+      "mouseup",
+      "click",
+    ]);
+    expect(result.events?.every(({ trusted }) => !trusted)).toBe(true);
+    expect(Math.abs((result.events?.at(-1)?.x ?? 0) - result.expected.x))
+      .toBeLessThanOrEqual(1);
+    expect(Math.abs((result.events?.at(-1)?.y ?? 0) - result.expected.y))
+      .toBeLessThanOrEqual(1);
   });
 
   test("drives an explicit request through the real bridge and IPC seam", async () => {
