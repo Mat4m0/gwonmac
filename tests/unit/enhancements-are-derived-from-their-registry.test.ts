@@ -163,26 +163,18 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
   );
 });
 
-test("player settings request only the selected independent features", () => {
-  assert.deepEqual(requestedEnhancementCapabilities({
-    ...DEFAULT_SETTINGS,
-    gwonmacTools: true,
-    teamManagement: false,
-    targetReadout: false,
-  }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorParty);
-  assert.deepEqual(requestedEnhancementCapabilities({
-    ...DEFAULT_SETTINGS,
-    gwonmacTools: true,
-    teamManagement: false,
-    xunlaiStorage: true,
-    targetReadout: false,
-  }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorPartyStorage);
-  assert.deepEqual(requestedEnhancementCapabilities({
-    ...DEFAULT_SETTINGS,
-    gwonmacTools: true,
-    teamManagement: true,
-    targetReadout: true,
-  }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommands);
+test("Tools prepares every certified capability independent of child toggles", () => {
+  for (const settings of [
+    { teamManagement: false, xunlaiStorage: false, targetReadout: false },
+    { teamManagement: false, xunlaiStorage: true, targetReadout: false },
+    { teamManagement: true, xunlaiStorage: true, targetReadout: true },
+  ]) {
+    assert.equal(requestedEnhancementCapabilities({
+      ...DEFAULT_SETTINGS,
+      ...settings,
+      gwonmacTools: true,
+    }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommandsStorage);
+  }
 });
 
 test("renderer consumes main's effective subset instead of launch intent", () => {

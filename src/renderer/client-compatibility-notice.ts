@@ -167,7 +167,7 @@ function featureStatusLabel(status: ClientCompatibility['features'][Feature]): s
   switch (status.status) {
     case 'available': return 'Available';
     case 'off': return 'Off';
-    case 'unavailable': return 'Temporarily unavailable';
+    case 'unavailable': return 'Unavailable';
   }
 }
 

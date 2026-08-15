@@ -52,7 +52,6 @@ import {
 import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
-import type { EnhancementCapabilities } from "../shared/enhancement-contracts.js";
 import {
   AllowlistError,
   errorCode,
@@ -135,8 +134,8 @@ export interface IpcContext {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
-  /** Optional executable capabilities requested when this process started. */
-  capabilitiesAtLaunch: EnhancementCapabilities;
+  /** Whether this process started with every certified Tools capability prepared. */
+  toolsEnabledAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -577,7 +576,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       const saved = await applySettingsChange(
         win,
         patch,
-        ctx.capabilitiesAtLaunch,
+        ctx.toolsEnabledAtLaunch,
         ctx.getSettings,
         ctx.updateSettings,
       );

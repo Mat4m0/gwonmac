@@ -14,7 +14,6 @@ import type {
   AppSettings,
   AppSettingsPatch,
 } from "../shared/contracts.js";
-import type { EnhancementCapabilities } from "../shared/enhancement-contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { logEvent } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
@@ -74,34 +73,21 @@ function requestRelaunch(win: BrowserWindow, action: RelaunchAction): void {
 export async function applySettingsChange(
   win: BrowserWindow,
   patch: AppSettingsPatch,
-  capabilitiesAtLaunch: EnhancementCapabilities,
+  toolsEnabledAtLaunch: boolean,
   read: () => Promise<AppSettings>,
   write: (patch: AppSettingsPatch) => Promise<AppSettings>,
 ): Promise<AppSettings> {
   try {
     const previous = await read();
-    const enabling = [
-      patch.gwonmacTools === true && !capabilitiesAtLaunch.partyObservation
-        ? "GWonMac Tools"
-        : null,
-      patch.targetReadout === true && !capabilitiesAtLaunch.targetObservation
-        ? "Target distance"
-        : null,
-      patch.teamManagement === true && !capabilitiesAtLaunch.commands
-        ? "Apply team"
-        : null,
-      patch.xunlaiStorage === true && !capabilitiesAtLaunch.storage
-        ? "Xunlai storage"
-        : null,
-    ].filter((feature): feature is string => feature !== null);
-    const restartForCapability = enabling.length > 0;
+    const restartForCapability = patch.gwonmacTools === true
+      && !toolsEnabledAtLaunch;
     if (
       restartForCapability
       && !(await confirmAction(win, {
         confirmLabel: "Enable and Restart",
-        message: `Restart to enable ${enabling.join(" and ")}?`,
+        message: "Restart to enable optional Tools?",
         detail:
-          "GWonMac prepares this feature when it starts. Restart now to use the saved change. This closes Guild Wars if it is running.",
+          "GWonMac prepares every certified Tools capability together. Restart once to use the saved change. This closes Guild Wars if it is running.",
       }))
     ) {
       return previous;

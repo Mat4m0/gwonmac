@@ -235,6 +235,7 @@ describe("client compatibility notice", () => {
     assert.ok(report);
     assert.equal(dom.element("settings-compat-status").textContent, report.summary);
     assert.equal(dom.element("client-compat-title").textContent, report.summary);
+    assert.equal(dom.element("settings-feature-nativeCursor").textContent, "Unavailable");
   });
 
   it("dismisses the launcher even when acknowledgement cannot persist", async () => {

@@ -406,7 +406,11 @@ test.describe("tools and update settings", () => {
         return {
           quit,
           relaunch,
-          confirmation: confirmation.buttons,
+          confirmation: {
+            buttons: confirmation.buttons,
+            detail: confirmation.detail,
+            message: confirmation.message,
+          },
           warning: {
             buttons: warning.buttons,
             detail: warning.detail,
@@ -416,7 +420,12 @@ test.describe("tools and update settings", () => {
       })).toEqual({
         quit: false,
         relaunch: true,
-        confirmation: ["Enable and Restart", "Cancel"],
+        confirmation: {
+          buttons: ["Enable and Restart", "Cancel"],
+          detail:
+            "GWonMac prepares every certified Tools capability together. Restart once to use the saved change. This closes Guild Wars if it is running.",
+          message: "Restart to enable optional Tools?",
+        },
         warning: {
           buttons: ["OK"],
           detail: "Your change is saved. Quit and reopen GWonMac to apply it.",
@@ -432,7 +441,7 @@ test.describe("tools and update settings", () => {
     }
   });
 
-  test("features omitted at startup require a restart before they can be enabled", async () => {
+  test("child Tools toggles stay immediate after the one preparation restart", async () => {
     const fixture = await launchOffline(
       "gw-tools-capability-restart-e2e-",
       {},
@@ -466,18 +475,17 @@ test.describe("tools and update settings", () => {
         await window.gwNative.settings.set({ targetReadout: true });
         await window.gwNative.settings.set({ teamManagement: true });
         await window.gwNative.settings.set({ xunlaiStorage: true });
+        await window.gwNative.settings.set({ gwonmacTools: false });
+        await window.gwNative.settings.set({ gwonmacTools: true });
       });
       expect(await app.evaluate(() => globalThis.__capabilityRestartMessages))
-        .toEqual([
-          "Restart to enable Target distance?",
-          "Restart to enable Apply team?",
-          "Restart to enable Xunlai storage?",
-        ]);
+        .toEqual([]);
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({
-          targetReadout: false,
-          teamManagement: false,
-          xunlaiStorage: false,
+          targetReadout: true,
+          teamManagement: true,
+          xunlaiStorage: true,
+          gwonmacTools: true,
         });
     } finally {
       await closeOffline(fixture);

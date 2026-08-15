@@ -55,11 +55,5 @@ export function requestedEnhancementCapabilities(
     return enhancementCapabilitiesFor(enhancementSelectionFor(settings), program);
   }
   if (!settings.gwonmacTools) return ENHANCEMENT_CAPABILITY_PROFILES.cursor;
-  return Object.freeze({
-    nativeCursor: true,
-    targetObservation: settings.targetReadout,
-    partyObservation: true,
-    commands: settings.teamManagement,
-    storage: settings.xunlaiStorage,
-  });
+  return ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommandsStorage;
 }
