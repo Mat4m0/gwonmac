@@ -19,7 +19,6 @@ import type {
   ProfileId,
 } from "../shared/multiple-accounts.js";
 import {
-  createAccountsWindow,
   getAccountsWindow,
   revealAccountsWindow,
 } from "./accounts-window.js";

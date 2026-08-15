@@ -19,7 +19,6 @@ import type {
   AppSettings,
   AppSettingsPatch,
   AccountsSetupRequest,
-  AccountProfileRequest,
   AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
   AccountTemplateLibrary,
@@ -41,27 +40,14 @@ import type {
   StoredCredentials,
   TemplateExportEntry,
 } from "../shared/contracts.js";
-import {
-  parseProfileId,
-  parseProfileName,
-  MULTI_PROFILE_MAX_COUNT,
-  type LibraryScope,
-  type ProfileId,
-} from "../shared/multiple-accounts.js";
+import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
 import type {
   RendererFrameBatch,
   RendererMetrics,
-  RendererMilestone,
-  RendererMilestoneFields,
-  WasmAbortReasonKind,
 } from "../shared/diagnostics.js";
 import {
   isRendererFrameBatch,
   isRendererMetrics,
-  RENDERER_MILESTONES,
-  WASM_ABORT_REASON_KINDS,
-  WASM_GROWTH_OUTCOMES,
-  WASM_MEMORY_PROBE_STATUSES,
 } from "../shared/diagnostics.js";
 import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
@@ -76,7 +62,17 @@ import {
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
 import { parseBuildLibrary } from "../shared/builds/parse-library.js";
 import type { BuildLibrary } from "../shared/builds/library.js";
-import { isGraphicsDiagnostics, toWireSocketEvent } from "./ipc-values.js";
+import {
+  isGraphicsDiagnostics,
+  parseRendererMilestoneArgs,
+  toWireSocketEvent,
+} from "./ipc-values.js";
+import {
+  parseAccountProfileCreate,
+  parseAccountProfileUpdate,
+  parseAccountsSetup,
+  parseProfileIds,
+} from "./accounts-ipc-values.js";
 import { resolveDns } from "./core/dns.js";
 import { exportTemplates, parseExportEntries } from "./template-export.js";
 import {
@@ -104,7 +100,6 @@ import {
   recordClockOffset,
   startDnsResolveSpan,
 } from "./diagnostics.js";
-import { isRendererFingerprint } from "./diagnostics/schema-fields.js";
 import { gamePaths } from "./paths.js";
 import {
   isAccountsRendererUrl,
@@ -438,238 +433,12 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   return value;
 });
 
-function parseLibraryScope(value: unknown, field: string): LibraryScope {
-  if (value !== "shared" && value !== "private") {
-    throw new ValidationError(`${field} must be shared or private`);
-  }
-  return value;
-}
-
-const asAccountsSetup = one((value: unknown): AccountsSetupRequest => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new ValidationError("account setup must be an object");
-  }
-  const input = value as Record<string, unknown>;
-  return {
-    templateEntries: parseExportEntries(input.templateEntries),
-  };
-});
-
-function parseAccountProfile(value: unknown): AccountProfileRequest {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new ValidationError("account profile must be an object");
-  }
-  const input = value as Record<string, unknown>;
-  return {
-    name: parseProfileName(input.name),
-    templates: parseLibraryScope(input.templates, "templates"),
-    builds: parseLibraryScope(input.builds, "builds"),
-  };
-}
-
-const asAccountProfileCreate = one((value: unknown): AccountProfileCreateRequest => {
-  const profile = parseAccountProfile(value);
-  const input = value as Record<string, unknown>;
-  if (
-    typeof input.copySingleBuilds !== "boolean"
-    || typeof input.copySingleTemplates !== "boolean"
-  ) {
-    throw new ValidationError("account copy choices must be booleans");
-  }
-  return {
-    ...profile,
-    copySingleBuilds: input.copySingleBuilds,
-    copySingleTemplates: input.copySingleTemplates,
-  };
-});
-const asAccountProfileUpdate = one((value: unknown): AccountProfileUpdateRequest => {
-  const profile = parseAccountProfile(value);
-  return {
-    id: parseProfileId((value as Record<string, unknown>).id),
-    ...profile,
-  };
-});
+const asAccountsSetup = one(parseAccountsSetup);
+const asAccountProfileCreate = one(parseAccountProfileCreate);
+const asAccountProfileUpdate = one(parseAccountProfileUpdate);
 const asProfileId = one(parseProfileId);
-
-const asProfileIds = one((value: unknown): readonly ProfileId[] => {
-  if (
-    !Array.isArray(value)
-    || value.length === 0
-    || value.length > MULTI_PROFILE_MAX_COUNT
-  ) {
-    throw new ValidationError(
-      `select between 1 and ${MULTI_PROFILE_MAX_COUNT} account profiles`,
-    );
-  }
-  const ids = value.map(parseProfileId);
-  if (new Set(ids).size !== ids.length) {
-    throw new ValidationError("account profile selection contains duplicates");
-  }
-  return ids;
-});
-
-interface ParsedMilestone {
-  name: RendererMilestone;
-  rendererTimestampUs: number;
-  fields: RendererMilestoneFields | undefined;
-}
-
-/** A byte count as the renderer reports one: a non-negative safe integer. */
-const isByteCount = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-
-const asMilestone: Parser<ParsedMilestone> = (args) => {
-  exact(args, 3);
-  const [name, rendererTimestampUs, fields] = args;
-  if (
-    typeof name !== "string" ||
-    !RENDERER_MILESTONES.includes(name as RendererMilestone) ||
-    typeof rendererTimestampUs !== "number" ||
-    !Number.isFinite(rendererTimestampUs) ||
-    rendererTimestampUs < 0 ||
-    rendererTimestampUs > Number.MAX_SAFE_INTEGER
-  ) {
-    throw new ValidationError("invalid renderer milestone");
-  }
-  const record = fields as Record<string, unknown> | undefined;
-  const recordIsObject =
-    record !== undefined
-    && record !== null
-    && typeof record === "object"
-    && !Array.isArray(record);
-  let milestoneFields: RendererMilestoneFields | undefined;
-  if (name === "build.info") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 2
-      && (typeof record.programId === "string" || typeof record.programId === "number")
-      && (typeof record.buildId === "string" || typeof record.buildId === "number")
-      && [record.programId, record.buildId].every(
-        (value) =>
-          (typeof value === "string" && value.length <= 128) ||
-          (typeof value === "number" && Number.isSafeInteger(value) && value >= 0),
-      );
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      programId: record.programId as string | number,
-      buildId: record.buildId as string | number,
-    };
-  } else if (name === "wasm.abort") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 3
-      && typeof record.reasonKind === "string"
-      && (WASM_ABORT_REASON_KINDS as readonly string[]).includes(record.reasonKind)
-      && isRendererFingerprint(record.fingerprint)
-      && isByteCount(record.heapBytes);
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      reasonKind: record.reasonKind as WasmAbortReasonKind,
-      fingerprint: record.fingerprint as string,
-      heapBytes: record.heapBytes as number,
-    };
-  } else if (name === "wasm.exit") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 2
-      && typeof record.code === "number"
-      && Number.isSafeInteger(record.code)
-      && isByteCount(record.heapBytes);
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      code: record.code as number,
-      heapBytes: record.heapBytes as number,
-    };
-  } else if (name === "wasm.memoryProbe") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 1
-      && typeof record.status === "string"
-      && (WASM_MEMORY_PROBE_STATUSES as readonly string[]).includes(record.status);
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      status: record.status as (typeof WASM_MEMORY_PROBE_STATUSES)[number],
-    };
-  } else if (name === "wasm.growthRequested") {
-    const numericFields = [
-      "requestedBytes", "beforeBytes", "afterBytes", "stackDepth",
-      "frame0Function", "frame0Offset", "frame1Function", "frame1Offset",
-      "frame2Function", "frame2Offset", "frame3Function", "frame3Offset",
-      "generatedTextures", "deletedTextures", "liveTextures",
-      "trackedTextures", "knownTextureBytes", "textureUploadBytes",
-      "unknownTextureAllocations",
-    ] as const;
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === numericFields.length + 3
-      && numericFields.every((field) => isByteCount(record[field]))
-      && (record.stackDepth as number) <= 4
-      && (record.trackedTextures as number) <= 4_096
-      && typeof record.outcome === "string"
-      && (WASM_GROWTH_OUTCOMES as readonly string[]).includes(record.outcome)
-      && isRendererFingerprint(record.stackFingerprint)
-      && typeof record.textureTrackingSaturated === "boolean";
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      requestedBytes: record.requestedBytes as number,
-      beforeBytes: record.beforeBytes as number,
-      afterBytes: record.afterBytes as number,
-      outcome: record.outcome as (typeof WASM_GROWTH_OUTCOMES)[number],
-      stackFingerprint: record.stackFingerprint as string,
-      stackDepth: record.stackDepth as number,
-      frame0Function: record.frame0Function as number,
-      frame0Offset: record.frame0Offset as number,
-      frame1Function: record.frame1Function as number,
-      frame1Offset: record.frame1Offset as number,
-      frame2Function: record.frame2Function as number,
-      frame2Offset: record.frame2Offset as number,
-      frame3Function: record.frame3Function as number,
-      frame3Offset: record.frame3Offset as number,
-      generatedTextures: record.generatedTextures as number,
-      deletedTextures: record.deletedTextures as number,
-      liveTextures: record.liveTextures as number,
-      trackedTextures: record.trackedTextures as number,
-      knownTextureBytes: record.knownTextureBytes as number,
-      textureUploadBytes: record.textureUploadBytes as number,
-      unknownTextureAllocations: record.unknownTextureAllocations as number,
-      textureTrackingSaturated: record.textureTrackingSaturated as boolean,
-    };
-  } else if (name === "enhancement.installed") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 3
-      && typeof record.companionAbi === "number"
-      && Number.isSafeInteger(record.companionAbi)
-      && record.companionAbi >= 0
-      && typeof record.installation === "number"
-      && Number.isSafeInteger(record.installation)
-      && record.installation >= 1
-      && typeof record.capabilityProfile === "string"
-      && record.capabilityProfile.length <= 32;
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      companionAbi: record.companionAbi as number,
-      installation: record.installation as number,
-      capabilityProfile: record.capabilityProfile as string,
-    };
-  } else if (name === "enhancement.uninstalled") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 1
-      && typeof record.installation === "number"
-      && Number.isSafeInteger(record.installation)
-      && record.installation >= 1;
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = { installation: record.installation as number };
-  } else if (fields !== undefined) {
-    throw new ValidationError("invalid renderer milestone");
-  }
-  return {
-    name: name as RendererMilestone,
-    rendererTimestampUs,
-    fields: milestoneFields,
-  };
-};
+const asProfileIds = one(parseProfileIds);
+const asMilestone = parseRendererMilestoneArgs;
 
 async function chunkStoreInfo(
   store: ChunkStore | null,
