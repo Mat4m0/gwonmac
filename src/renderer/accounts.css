@@ -76,7 +76,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid color-mix(in srgb
 .account-menu button:disabled { color: #8e8e93; }
 .account-menu hr { height: 1px; margin: 4px 7px; border: 0; background: #3c3c432e; }
 
-.sheet { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; overflow: auto; border: 1px solid #ffffffa6; border-radius: 16px; background: #f6f6f8f7; box-shadow: 0 28px 88px #0007; color: #1b1b1d; }
+.sheet { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; overflow: auto; border: 1px solid #ffffffa6; border-radius: 16px; background: #f6f6f8f7; box-shadow: 0 28px 88px #0007; color: #1b1b1d; -webkit-app-region: no-drag; }
 .sheet::backdrop { background: #0006; backdrop-filter: blur(5px); }
 .sheet form { padding: 22px; }
 .sheet h2 { margin: 0; font-size: 20px; line-height: 1.15; letter-spacing: -.022em; }

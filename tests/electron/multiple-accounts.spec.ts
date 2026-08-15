@@ -51,6 +51,7 @@ test("Hub exposes the focused chooser, account sheets, and Settings management",
           { id: "00000000-0000-4000-8000-000000000004", name: "Storage", archived: false, templates: "shared", builds: "shared" },
           { id: "00000000-0000-4000-8000-000000000005", name: "PvP", archived: false, templates: "shared", builds: "shared" },
           { id: "00000000-0000-4000-8000-000000000006", name: "Archived", archived: true, templates: "shared", builds: "shared" },
+          { id: "00000000-0000-4000-8000-000000000007", name: "Delete Me", archived: true, templates: "shared", builds: "shared" },
         ],
       }),
     );
@@ -90,10 +91,25 @@ test("Hub exposes the focused chooser, account sheets, and Settings management",
       item.click(item, undefined, {} as Electron.KeyboardEvent);
     });
     await expect(fixture.page.getByRole("dialog", { name: "Multiple Accounts Settings" })).toBeVisible();
+    expect(await fixture.page.locator("#accounts-settings").evaluate((element) =>
+      getComputedStyle(element).getPropertyValue("-webkit-app-region"),
+    )).toBe("no-drag");
     await expect(fixture.page.getByText("Archived", { exact: true })).toBeVisible();
-    await expect(fixture.page.getByRole("button", { name: "Restore" })).toBeVisible();
-    await expect(fixture.page.getByRole("button", { name: "Delete…" })).toBeVisible();
+    await expect(fixture.page.getByRole("button", { name: "Restore" })).toHaveCount(2);
+    await expect(fixture.page.getByRole("button", { name: "Delete…" })).toHaveCount(2);
     await expect(fixture.page.getByRole("button", { name: "Return to Single Account…" })).toBeVisible();
+
+    await fixture.page.getByRole("button", { name: "Restore" }).first().click();
+    await expect(fixture.page.getByText("Archived was restored.")).toBeVisible();
+    await expect(fixture.page.getByRole("checkbox", { name: "Select Archived" })).toBeVisible();
+    await expect(fixture.page.getByRole("button", { name: "Restore" })).toHaveCount(1);
+
+    await fixture.app.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+    });
+    await fixture.page.getByRole("button", { name: "Delete…" }).click();
+    await expect(fixture.page.getByText("Delete Me was permanently deleted.")).toBeVisible();
+    await expect(fixture.page.getByText("No archived accounts.")).toBeVisible();
   } finally {
     await closeOffline(fixture);
   }
