@@ -122,7 +122,7 @@ function officialFixture(): Uint8Array {
     0x60, 2, 0x7f, 0x7f, 0,
   ]);
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [11, 0, 0, 2, 3, 4, 5, 5, 4, 4, 2, 0]);
+  const functions = section(3, [12, 0, 0, 2, 3, 4, 5, 5, 4, 4, 2, 0, 3]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -152,7 +152,7 @@ function officialFixture(): Uint8Array {
   const loop = [0, 0x0b];
   const slashParser = [0, 0x41, 0, 0x0b];
   const code = section(10, [
-    11,
+    12,
     ...uleb(STUB_BODY.length), ...STUB_BODY,
     ...uleb(caller.length), ...caller,
     ...uleb(loop.length), ...loop,
@@ -164,6 +164,7 @@ function officialFixture(): Uint8Array {
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(slashParser.length), ...slashParser,
+    ...uleb(loop.length), ...loop,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
@@ -248,11 +249,11 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
           configureExport: "enhancement_configure_travel",
           messageId: 0x1000_0183,
           producer: {
-            functionIndex: 4,
+            functionIndex: 12,
             params: ["i32", "i32", "i32", "i32", "i32"],
             results: [],
             bodySha256: sha256(
-              parseCode(sectionById(splitSections(input), 10))[3]!,
+              parseCode(sectionById(splitSections(input), 10))[11]!,
             ),
           },
         },
