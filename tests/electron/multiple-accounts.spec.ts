@@ -58,6 +58,12 @@ test("Hub exposes the focused chooser, account sheets, and Settings management",
   });
   try {
     await expect(fixture.page.getByRole("heading", { name: "Choose Accounts" })).toBeVisible();
+    expect(await fixture.page.locator(".hub").evaluate((element) =>
+      getComputedStyle(element).getPropertyValue("-webkit-app-region"),
+    )).toBe("no-drag");
+    expect(await fixture.page.locator(".titlebar-drag").evaluate((element) =>
+      getComputedStyle(element).getPropertyValue("-webkit-app-region"),
+    )).toBe("drag");
     await expect(fixture.page.getByText("Each account keeps its own saved login and game files.")).toBeVisible();
     await expect(fixture.page.getByRole("checkbox")).toHaveCount(5);
     await expect(fixture.page.getByRole("button", { name: "Open", exact: true })).toBeDisabled();
@@ -94,6 +100,7 @@ test("Hub exposes the focused chooser, account sheets, and Settings management",
     expect(await fixture.page.locator("#accounts-settings").evaluate((element) =>
       getComputedStyle(element).getPropertyValue("-webkit-app-region"),
     )).toBe("no-drag");
+    await expect(fixture.page.locator(".titlebar-drag")).toBeHidden();
     await expect(fixture.page.getByText("Archived", { exact: true })).toBeVisible();
     await expect(fixture.page.getByRole("button", { name: "Restore" })).toHaveCount(2);
     await expect(fixture.page.getByRole("button", { name: "Delete…" })).toHaveCount(2);
