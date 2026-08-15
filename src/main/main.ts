@@ -15,9 +15,8 @@ import {
   powerMonitor,
   session,
 } from "electron";
-import type { BrowserWindow } from "electron";
 import { readFileSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
@@ -25,10 +24,6 @@ import {
   IPC,
   type AppSettings,
   type AppSettingsPatch,
-  type AccountsSetupRequest,
-  type AccountsState,
-  type AccountProfileCreateRequest,
-  type AccountProfileUpdateRequest,
   type DownloadProgress,
   type PrefetchProgress,
   type UpdateTrack,
@@ -42,8 +37,6 @@ import { INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { Mutex } from "./core/mutex.js";
-import { saveBuildLibrary } from "./core/build-library.js";
-import { parseBuildLibrary } from "../shared/builds/parse-library.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
 import { SocketManager } from "./core/sockets.js";
 import {
@@ -75,7 +68,6 @@ import {
 } from "./lifecycle.js";
 import { sweepOrphanDirectories } from "./core/atomic-file.js";
 import { documentDirectories } from "./core/paths.js";
-import { multiProfilePaths } from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
@@ -85,18 +77,14 @@ import {
 } from "./certification/enhancement-policy.js";
 import {
   installGwProtocolHandler,
-  installGwProtocolHandlerForSession,
   registerGwScheme,
 } from "./protocol.js";
 import {
   createMainWindow,
-  closeProfileWindow,
   flushWindowState,
   getMainWindow,
   prepareWindowState,
-  resetRendererRecovery,
   RENDERER_URL,
-  setOwnedWindowTitle,
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
@@ -104,8 +92,6 @@ import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import { acquireSteamToken } from "./steam-acquire.js";
-import { CredentialsStore } from "./core/credentials.js";
-import { SteamSessionStore } from "./core/steam-session.js";
 import {
   VolatileNativeKeychain,
   type NativeKeychain,
@@ -121,42 +107,21 @@ import {
 import {
   applyPendingCacheClear,
   applyPendingGameStorageReset,
-  applyPendingSessionStorageReset,
 } from "./settings-actions.js";
 import { windowRegistry } from "./window-registry.js";
 import {
-  createMultiWorkspace,
-  addMultiProfile,
-  archiveMultiProfile,
   loadAccountMode,
   loadMultiWorkspace,
-  saveAccountMode,
-  saveMultiWorkspace,
   quarantineAccountDocument,
-  removeArchivedMultiProfile,
-  restoreMultiProfile,
-  updateMultiProfile,
+  saveAccountMode,
 } from "./core/multiple-accounts.js";
-import {
-  type AccountMode,
-  type MultiWorkspace,
-  type ProfileId,
-} from "../shared/multiple-accounts.js";
-import { multiSecretSlot } from "./core/native-keychain.js";
-import {
-  launchIssueForStage,
-  ProfileRuntimeStore,
-} from "./core/profile-runtime.js";
-import {
-  loadAccountTemplateLibrary,
-  reconcileAccountTemplates,
-  saveAccountTemplateLibrary,
-} from "./core/account-template-library.js";
+import type { AccountMode, MultiWorkspace } from "../shared/multiple-accounts.js";
 import {
   createAccountsWindow,
-  getAccountsWindow,
   revealAccountsWindow,
 } from "./accounts-window.js";
+import { MultipleAccountsController } from "./multiple-accounts-controller.js";
+import { BuildLibraryCoordinator } from "./core/build-library-coordinator.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -197,8 +162,6 @@ const HOST_VERSION = (() => {
 
 /** Every settings write is a read-modify-write of one file. */
 const settingsLock = new Mutex();
-const accountsLock = new Mutex();
-const templatesLock = new Mutex();
 let appUpdaterController: AppUpdater | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
@@ -362,21 +325,6 @@ async function clearBrowserNetworkCache(): Promise<void> {
       code: errorCode(error),
     });
   }
-}
-
-async function importBuildLibraryIfPresent(
-  source: string,
-  destination: string,
-): Promise<void> {
-  let bytes: string;
-  try {
-    bytes = await readFile(source, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-    throw error;
-  }
-  const library = parseBuildLibrary(JSON.parse(bytes) as unknown);
-  await saveBuildLibrary(destination, library);
 }
 
 function buildWindowHost(
@@ -558,36 +506,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
         resourcesPath: process.resourcesPath,
       })
     : new VolatileNativeKeychain();
-  const credentialsStores = new Map<string, CredentialsStore>();
-  const steamSessionStores = new Map<string, SteamSessionStore>();
-  const credentialStoreForProfile = (profileId?: ProfileId): CredentialsStore => {
-    const key = profileId ?? "single";
-    let store = credentialsStores.get(key);
-    if (!store) {
-      store = new CredentialsStore(
-        keychain,
-        profileId
-          ? multiSecretSlot(profileId, "arenaNetCredentials")
-          : "arenaNetCredentials",
-      );
-      credentialsStores.set(key, store);
-    }
-    return store;
-  };
-  const steamStoreForProfile = (profileId?: ProfileId): SteamSessionStore => {
-    const key = profileId ?? "single";
-    let store = steamSessionStores.get(key);
-    if (!store) {
-      store = new SteamSessionStore(
-        keychain,
-        profileId
-          ? multiSecretSlot(profileId, "steamSession")
-          : "steamSession",
-      );
-      steamSessionStores.set(key, store);
-    }
-    return store;
-  };
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
   const profileMatches =
     !expectedUserData ||
@@ -665,199 +583,28 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementSelection,
     enhancementProgram,
   );
-  const profileProtocolSessions = new Set<ProfileId>();
-  const profileRuntime = new ProfileRuntimeStore();
-  const profileFor = (profileId: ProfileId) => {
-    const profile = multiWorkspace?.profiles.find(
-      (candidate) => candidate.id === profileId && !candidate.archived,
-    );
-    if (!profile) throw new Error("Unknown Multiple Accounts profile");
-    return profile;
-  };
-  const accountsState = (): AccountsState => ({
+  const accounts = new MultipleAccountsController({
     mode: activeAccountMode,
-    profiles: (multiWorkspace?.profiles ?? []).map((profile) => ({
-        id: profile.id,
-        name: profile.name,
-        templates: profile.templates,
-        builds: profile.builds,
-        archived: profile.archived,
-        state: profileRuntime.get(profile.id).state,
-        ...(profileRuntime.get(profile.id).launchIssue
-          ? { launchIssue: profileRuntime.get(profile.id).launchIssue }
-          : {}),
-      })),
+    workspace: multiWorkspace,
+    paths,
+    keychain,
+    clientRuntime,
+    protocol: protocolDeps,
+    windowHost: host,
   });
-  const openProfile = async (
-    profileId: ProfileId,
-    newWindowOrdinal: number,
-  ): Promise<{ readonly win: BrowserWindow; readonly opened: boolean }> => {
-    const profile = profileFor(profileId);
-    let existing = windowRegistry.profileWindow(profileId);
-    const previous = profileRuntime.get(profileId);
-    const profilePaths = multiProfilePaths(paths, profileId);
-    if (previous?.state === "failed") {
-      resetRendererRecovery(profilePaths.windowState);
-      if (existing && !existing.isDestroyed()) existing.destroy();
-      existing = null;
-    }
-    if (existing) {
-      if (existing.isMinimized()) existing.restore();
-      return { win: existing, opened: false };
-    }
-    if (previous?.state === "opening" || previous?.state === "checking") {
-      throw new Error("Account is already opening");
-    }
-    profileRuntime.set(profileId, "opening");
-    let failureStage: Parameters<typeof launchIssueForStage>[0] = "preparing";
-    try {
-      const owner = session.fromPartition(`persist:gw-multi-${profileId}`, {
-        cache: false,
-      });
-      if (!profileProtocolSessions.has(profileId)) {
-        installGwProtocolHandlerForSession(owner, protocolDeps);
-        profileProtocolSessions.add(profileId);
-      }
-      await Promise.all([
-        owner.clearStorageData({ storages: ["cookies"] }),
-        owner.clearCache(),
-      ]);
-      const reset = await applyPendingSessionStorageReset(
-        owner,
-        profilePaths.gameStorageClearRequest,
-      );
-      if (reset && profile.templates === "private") {
-        await rm(profilePaths.templates, { force: true });
-        await rm(profilePaths.templateSync, { force: true });
-      }
-      await mkdir(profilePaths.root, { recursive: true });
-      await prepareWindowState(profilePaths.windowState, newWindowOrdinal);
-      failureStage = "starting";
-      let hubWasVisibleBeforeRecovery = false;
-      const win = createMainWindow(host, {
-        context: { mode: "multi", role: "game", profileId },
-        session: owner,
-        title: `Guild Wars Reforged — ${profile.name}`,
-        windowStatePath: profilePaths.windowState,
-        showInactive: true,
-        onRendererRecoveryStart: () => {
-          hubWasVisibleBeforeRecovery = getAccountsWindow()?.isVisible() ?? false;
-        },
-        onRendererRecovered: () => {
-          if (!hubWasVisibleBeforeRecovery) getAccountsWindow()?.hide();
-        },
-        onRendererFailure: () => {
-          profileRuntime.set(profileId, "failed", launchIssueForStage("crashed"));
-          revealAccountsWindow();
-        },
-      });
-      win.on("closed", () => {
-        const replacement = windowRegistry.profileWindow(profileId);
-        if (replacement && replacement !== win) return;
-        if (profileRuntime.get(profileId).state !== "failed") {
-          profileRuntime.set(profileId, "ready");
-        }
-      });
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          cleanup();
-          reject(new Error("profile window did not finish loading"));
-        }, 30_000);
-        const cleanup = () => {
-          clearTimeout(timeout);
-          win.webContents.removeListener("did-finish-load", loaded);
-          win.removeListener("closed", closed);
-        };
-        const loaded = () => {
-          cleanup();
-          resolve();
-        };
-        const closed = () => {
-          cleanup();
-          reject(new Error("profile window closed while loading"));
-        };
-        win.webContents.once("did-finish-load", loaded);
-        win.once("closed", closed);
-      });
-      profileRuntime.set(profileId, "running");
-      return { win, opened: true };
-    } catch (error) {
-      profileRuntime.set(profileId, "failed", launchIssueForStage(failureStage));
-      const failedWindow = windowRegistry.profileWindow(profileId);
-      if (failedWindow && !failedWindow.isDestroyed()) failedWindow.destroy();
-      throw error;
-    }
-  };
-  const waitForCandidateCanary = async (): Promise<void> => {
-    const candidate = clientRuntime.healthToken;
-    if (!candidate) return;
-    const deadline = Date.now() + 60_000;
-    while (clientRuntime.healthToken === candidate && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    if (clientRuntime.healthToken === candidate) {
-      throw new Error("first profile did not confirm the new client generation");
-    }
-  };
-
-  const setupAccounts = async (request: AccountsSetupRequest): Promise<void> => {
-    if (activeAccountMode !== "single") {
-      throw new Error("Multiple Accounts mode is already enabled");
-    }
-    multiWorkspace ??= await loadMultiWorkspace(paths.multiWorkspace);
-    if (!multiWorkspace) {
-      const candidate = createMultiWorkspace();
-      await saveMultiWorkspace(paths.multiWorkspace, candidate);
-      multiWorkspace = candidate;
-    }
-    if (multiWorkspace.profiles.length === 0) {
-      await saveAccountTemplateLibrary(paths.multiSingleTemplateImport, {
-        revision: 1,
-        entries: request.templateEntries,
-      });
-    }
-    await saveAccountMode(paths.launcherMode, "multi");
-    app.relaunch();
-    app.quit();
-  };
-
-  const useSingleAccountMode = async (): Promise<void> => {
-    await saveAccountMode(paths.launcherMode, "single");
-    app.relaunch();
-    app.quit();
-  };
+  await accounts.resumePendingDeletions();
+  const buildLibraries = new BuildLibraryCoordinator();
 
   const ipcCleanup = registerIpcHandlers({
     sockets,
     windows: windowRegistry,
-    credentialsStoreFor: (win) => {
-      const context = windowRegistry.contextForWebContents(win.webContents.id);
-      return context?.mode === "multi" && context.role === "game"
-        ? credentialStoreForProfile(context.profileId)
-        : credentialStoreForProfile();
-    },
-    steamSessionStoreFor: (win) => {
-      const context = windowRegistry.contextForWebContents(win.webContents.id);
-      return context?.mode === "multi" && context.role === "game"
-        ? steamStoreForProfile(context.profileId)
-        : steamStoreForProfile();
-    },
-    buildLibraryPathFor: (win) => {
-      const context = windowRegistry.contextForWebContents(win.webContents.id);
-      if (context?.mode !== "multi" || context.role !== "game") {
-        return paths.buildLibrary;
-      }
-      const profile = profileFor(context.profileId);
-      return profile.builds === "shared"
-        ? paths.multiSharedBuildLibrary
-        : multiProfilePaths(paths, profile.id).buildLibrary;
-    },
-    gameStorageResetMarkerFor: (win) => {
-      const context = windowRegistry.contextForWebContents(win.webContents.id);
-      return context?.mode === "multi" && context.role === "game"
-        ? multiProfilePaths(paths, context.profileId).gameStorageClearRequest
-        : paths.gameStorageClearRequest;
-    },
+    credentialsStoreFor: (win) => accounts.credentialsStoreFor(win),
+    steamSessionStoreFor: (win) => accounts.steamSessionStoreFor(win),
+    getBuildLibrary: (win) =>
+      buildLibraries.get(win, accounts.buildLibraryPathFor(win)),
+    setBuildLibrary: (win, library) =>
+      buildLibraries.set(win, accounts.buildLibraryPathFor(win), library),
+    gameStorageResetMarkerFor: (win) => accounts.gameStorageResetMarkerFor(win),
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
     getSettings: () => loadSettings(paths.settings),
@@ -918,232 +665,18 @@ if (primaryInstance) void app.whenReady().then(async () => {
     },
     acquireSteamToken: (parent, record) =>
       acquireSteamToken(STEAM_OAUTH, { parent, record }),
-    getAccountsState: accountsState,
-    setupAccounts,
-    openAccounts: async (profileIds) => {
-      for (const profileId of profileIds) profileFor(profileId);
-      profileRuntime.queue(
-        profileIds,
-        (profileId) => windowRegistry.profileWindow(profileId) !== null,
-      );
-      let canaryChecked = false;
-      let firstFailure: unknown = null;
-      let firstSelectedWindow: BrowserWindow | null = null;
-      for (let index = 0; index < profileIds.length; index += 1) {
-        const profileId = profileIds[index]!;
-        let result: { readonly win: BrowserWindow; readonly opened: boolean };
-        try {
-          result = await accountsLock.run(() => openProfile(profileId, index));
-          firstSelectedWindow ??= result.win;
-        } catch (error) {
-          firstFailure ??= error;
-          continue;
-        }
-        if (result.opened && !canaryChecked) {
-          if (clientRuntime.healthToken) {
-            profileRuntime.set(profileId, "checking");
-            try {
-              await waitForCandidateCanary();
-            } catch (error) {
-              profileRuntime.set(
-                profileId,
-                "failed",
-                launchIssueForStage("validating"),
-              );
-              profileRuntime.releaseQueued(profileIds.slice(index + 1));
-              revealAccountsWindow();
-              throw error;
-            }
-          }
-          profileRuntime.set(profileId, "running");
-          canaryChecked = true;
-        }
-      }
-      if (firstFailure) {
-        revealAccountsWindow();
-        throw firstFailure;
-      }
-      const hub = getAccountsWindow();
-      if (hub && !hub.isDestroyed()) hub.hide();
-      if (firstSelectedWindow && !firstSelectedWindow.isDestroyed()) {
-        if (firstSelectedWindow.isMinimized()) firstSelectedWindow.restore();
-        const focused = new Promise<void>((resolve) => {
-          if (firstSelectedWindow.isFocused()) {
-            resolve();
-            return;
-          }
-          const timeout = setTimeout(resolve, 1_000);
-          firstSelectedWindow.once("focus", () => {
-            clearTimeout(timeout);
-            resolve();
-          });
-        });
-        firstSelectedWindow.show();
-        app.focus({ steal: true });
-        firstSelectedWindow.focus();
-        await focused;
-      }
-    },
-    createAccount: (request: AccountProfileCreateRequest) => accountsLock.run(async () => {
-      if (activeAccountMode !== "multi" || !multiWorkspace) {
-        throw new Error("Multiple Accounts mode is not active");
-      }
-      const firstAccount = multiWorkspace.profiles.length === 0;
-      if (!firstAccount && (request.copySingleBuilds || request.copySingleTemplates)) {
-        throw new Error("Single Account data can be copied only into the first account");
-      }
-      const next = addMultiProfile(multiWorkspace, request);
-      const profile = next.profiles.at(-1)!;
-      const profilePaths = multiProfilePaths(paths, profile.id);
-      await mkdir(profilePaths.root, { recursive: true });
-      if (firstAccount && request.copySingleBuilds) {
-        await importBuildLibraryIfPresent(
-          paths.buildLibrary,
-          profile.builds === "shared"
-            ? paths.multiSharedBuildLibrary
-            : profilePaths.buildLibrary,
-        );
-      }
-      if (firstAccount && request.copySingleTemplates) {
-        const source = await loadAccountTemplateLibrary(paths.multiSingleTemplateImport);
-        await saveAccountTemplateLibrary(
-          profile.templates === "shared"
-            ? paths.multiSharedTemplates
-            : profilePaths.templates,
-          { revision: 1, entries: source.entries },
-        );
-      }
-      await saveMultiWorkspace(paths.multiWorkspace, next);
-      multiWorkspace = next;
-      if (firstAccount) {
-        await rm(paths.multiSingleTemplateImport, { force: true }).catch(() => undefined);
-      }
-      return accountsState();
-    }),
-    updateAccount: (request: AccountProfileUpdateRequest) => accountsLock.run(async () => {
-      if (activeAccountMode !== "multi" || !multiWorkspace) {
-        throw new Error("Multiple Accounts mode is not active");
-      }
-      const current = profileFor(request.id);
-      if (
-        windowRegistry.profileWindow(request.id)
-        && (current.builds !== request.builds || current.templates !== request.templates)
-      ) {
-        throw new Error("Close this account before changing sharing");
-      }
-      const next = updateMultiProfile(multiWorkspace, request.id, request);
-      await saveMultiWorkspace(paths.multiWorkspace, next);
-      multiWorkspace = next;
-      const profileWindow = windowRegistry.profileWindow(request.id);
-      if (profileWindow) {
-        setOwnedWindowTitle(
-          profileWindow,
-          `Guild Wars Reforged — ${request.name}`,
-        );
-      }
-      return accountsState();
-    }),
-    archiveAccount: (profileId: ProfileId) => accountsLock.run(async () => {
-      if (activeAccountMode !== "multi" || !multiWorkspace) {
-        throw new Error("Multiple Accounts mode is not active");
-      }
-      if (windowRegistry.profileWindow(profileId)) {
-        throw new Error("Close this account before archiving it");
-      }
-      const next = archiveMultiProfile(multiWorkspace, profileId);
-      await saveMultiWorkspace(paths.multiWorkspace, next);
-      multiWorkspace = next;
-      return accountsState();
-    }),
-    restoreAccount: (profileId: ProfileId) => accountsLock.run(async () => {
-      if (activeAccountMode !== "multi" || !multiWorkspace) {
-        throw new Error("Multiple Accounts mode is not active");
-      }
-      const next = restoreMultiProfile(multiWorkspace, profileId);
-      await saveMultiWorkspace(paths.multiWorkspace, next);
-      multiWorkspace = next;
-      return accountsState();
-    }),
-    deleteAccount: (parent, profileId: ProfileId) => accountsLock.run(async () => {
-      if (activeAccountMode !== "multi" || !multiWorkspace) {
-        throw new Error("Multiple Accounts mode is not active");
-      }
-      const profile = multiWorkspace.profiles.find(
-        (candidate) => candidate.id === profileId && candidate.archived,
-      );
-      if (!profile) throw new Error("Only an archived profile can be deleted");
-      const { response } = await dialog.showMessageBox(parent, {
-        type: "warning",
-        buttons: ["Permanently Delete", "Cancel"],
-        defaultId: 1,
-        cancelId: 1,
-        message: `Permanently delete “${profile.name}”?`,
-        detail:
-          "Its saved login, Guild Wars files, private templates, builds, and window state cannot be recovered. Shared libraries and Single Account data stay untouched.",
-      });
-      if (response !== 0) return accountsState();
-      const next = removeArchivedMultiProfile(multiWorkspace, profileId);
-      const owner = session.fromPartition(`persist:gw-multi-${profileId}`, {
-        cache: false,
-      });
-      await Promise.all([
-        credentialStoreForProfile(profileId).clear(),
-        steamStoreForProfile(profileId).clear(),
-        owner.clearStorageData(),
-        owner.clearCache(),
-      ]);
-      await rm(multiProfilePaths(paths, profileId).root, {
-        recursive: true,
-        force: true,
-      });
-      await saveMultiWorkspace(paths.multiWorkspace, next);
-      credentialsStores.delete(profileId);
-      steamSessionStores.delete(profileId);
-      multiWorkspace = next;
-      return accountsState();
-    }),
-    loadAccountTemplates: async (win) => {
-      const context = windowRegistry.contextForWebContents(win.webContents.id);
-      if (context?.mode !== "multi" || context.role !== "game") return null;
-      const profile = profileFor(context.profileId);
-      const profilePaths = multiProfilePaths(paths, profile.id);
-      const libraryPath = profile.templates === "shared"
-        ? paths.multiSharedTemplates
-        : profilePaths.templates;
-      const library = await loadAccountTemplateLibrary(libraryPath);
-      await saveAccountTemplateLibrary(profilePaths.templateSync, library);
-      return library;
-    },
-    saveAccountTemplates: (win, entries) => templatesLock.run(async () => {
-      const context = windowRegistry.contextForWebContents(win.webContents.id);
-      if (context?.mode !== "multi" || context.role !== "game") return;
-      const profile = profileFor(context.profileId);
-      const profilePaths = multiProfilePaths(paths, profile.id);
-      if (profile.templates === "private") {
-        const current = await loadAccountTemplateLibrary(profilePaths.templates);
-        await saveAccountTemplateLibrary(profilePaths.templates, {
-          revision: current.revision + 1,
-          entries,
-        });
-        return;
-      }
-      const [base, latest] = await Promise.all([
-        loadAccountTemplateLibrary(profilePaths.templateSync),
-        loadAccountTemplateLibrary(paths.multiSharedTemplates),
-      ]);
-      const merged = {
-        revision: latest.revision + 1,
-        entries: reconcileAccountTemplates(base.entries, latest.entries, entries),
-      };
-      await saveAccountTemplateLibrary(paths.multiSharedTemplates, merged);
-      await saveAccountTemplateLibrary(profilePaths.templateSync, merged);
-    }),
-    requestQuit: (win) => {
-      const context = windowRegistry.contextForWebContents(win.webContents.id);
-      if (context?.mode === "multi") void closeProfileWindow(win);
-      else app.quit();
-    },
-    useSingleAccountMode,
+    getAccountsState: () => accounts.state(),
+    setupAccounts: (request) => accounts.setup(request),
+    openAccounts: (profileIds) => accounts.open(profileIds),
+    createAccount: (request) => accounts.create(request),
+    updateAccount: (request) => accounts.update(request),
+    archiveAccount: (profileId) => accounts.archive(profileId),
+    restoreAccount: (profileId) => accounts.restore(profileId),
+    deleteAccount: (parent, profileId) => accounts.delete(parent, profileId),
+    loadAccountTemplates: (win) => accounts.loadTemplates(win),
+    saveAccountTemplates: (win, entries) => accounts.saveTemplates(win, entries),
+    requestQuit: (win) => accounts.requestQuit(win),
+    useSingleAccountMode: () => accounts.useSingleMode(),
   });
 
   onAppQuit(async () => {

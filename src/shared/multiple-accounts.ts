@@ -33,6 +33,8 @@ export interface MultiProfile {
 export interface MultiWorkspace {
   readonly formatVersion: 1;
   readonly profiles: readonly MultiProfile[];
+  /** Archived profiles whose idempotent native cleanup must finish on startup. */
+  readonly deletingProfileIds: readonly ProfileId[];
 }
 
 const PROFILE_ID_PATTERN =
@@ -127,5 +129,21 @@ export function parseMultiWorkspace(value: unknown): MultiWorkspace {
   if (profiles.length > 0 && !profiles.some((profile) => !profile.archived)) {
     throw new AppError("bad_multi_workspace", "workspace needs an active profile");
   }
-  return { formatVersion: 1, profiles };
+  if (!Array.isArray(source.deletingProfileIds)) {
+    throw new AppError("bad_multi_workspace", "workspace deletions are invalid");
+  }
+  const deletingProfileIds = source.deletingProfileIds.map(parseProfileId);
+  if (new Set(deletingProfileIds).size !== deletingProfileIds.length) {
+    throw new AppError("bad_multi_workspace", "workspace deletions must be unique");
+  }
+  for (const profileId of deletingProfileIds) {
+    const profile = profiles.find((candidate) => candidate.id === profileId);
+    if (!profile?.archived) {
+      throw new AppError(
+        "bad_multi_workspace",
+        "only archived profiles can be pending deletion",
+      );
+    }
+  }
+  return { formatVersion: 1, profiles, deletingProfileIds };
 }

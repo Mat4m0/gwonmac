@@ -44,6 +44,7 @@ test("Hub exposes the focused chooser, account sheets, and Settings management",
       path.join(userData, "multi", "workspace.json"),
       JSON.stringify({
         formatVersion: 1,
+        deletingProfileIds: [],
         profiles: [
           { id: FIRST, name: "Primary Account With A Deliberately Long Name", archived: false, templates: "shared", builds: "shared" },
           { id: SECOND, name: "Alt", archived: false, templates: "private", builds: "private" },
@@ -133,6 +134,7 @@ test("a bank account opens alone and Show never creates a duplicate window", asy
       path.join(userData, "multi", "workspace.json"),
       JSON.stringify({
         formatVersion: 1,
+        deletingProfileIds: [],
         profiles: [
           { id: FIRST, name: "Main", archived: false, templates: "shared", builds: "shared" },
           { id: SECOND, name: "Storage and Materials", archived: false, templates: "shared", builds: "shared" },
@@ -176,6 +178,7 @@ test("renderer recovery stays with its account and a second crash needs attentio
     await writeFile(path.join(userData, "launcher-mode.json"), JSON.stringify({ formatVersion: 1, mode: "multi" }));
     await writeFile(path.join(userData, "multi", "workspace.json"), JSON.stringify({
       formatVersion: 1,
+      deletingProfileIds: [],
       profiles: [
         { id: FIRST, name: "Primary", archived: false, templates: "shared", builds: "shared" },
         { id: SECOND, name: "Alt", archived: false, templates: "shared", builds: "shared" },
@@ -238,6 +241,7 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       path.join(userData, "multi", "workspace.json"),
       JSON.stringify({
         formatVersion: 1,
+        deletingProfileIds: [],
         profiles: [
           { id: FIRST, name: "Primary", archived: false, templates: "shared", builds: "shared" },
           { id: SECOND, name: "Alt", archived: false, templates: "shared", builds: "shared" },
@@ -463,7 +467,7 @@ test("the empty Hub owns first-account creation and optional Single Account copi
     );
     await writeFile(
       path.join(userData, "multi", "workspace.json"),
-      JSON.stringify({ formatVersion: 1, profiles: [] }),
+      JSON.stringify({ formatVersion: 1, profiles: [], deletingProfileIds: [] }),
     );
     await writeFile(
       path.join(userData, "multi", "single-template-import.json"),

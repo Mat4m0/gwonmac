@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import {
   addMultiProfile,
   archiveMultiProfile,
+  beginArchivedProfileDeletion,
   createMultiWorkspace,
   loadAccountMode,
   loadMultiWorkspace,
@@ -91,6 +92,7 @@ describe("Multiple Accounts documents", () => {
     assert.throws(
       () => parseMultiWorkspace({
         formatVersion: 1,
+        deletingProfileIds: [],
         profiles: [
           { id: ID, name: "Main", archived: false, templates: "shared", builds: "shared" },
           {
@@ -107,10 +109,15 @@ describe("Multiple Accounts documents", () => {
   });
 
   it("accepts an empty onboarding workspace but rejects an all-archived workspace", () => {
-    assert.deepEqual(createMultiWorkspace(), { formatVersion: 1, profiles: [] });
+    assert.deepEqual(createMultiWorkspace(), {
+      formatVersion: 1,
+      profiles: [],
+      deletingProfileIds: [],
+    });
     assert.throws(
       () => parseMultiWorkspace({
         formatVersion: 1,
+        deletingProfileIds: [],
         profiles: [{
           id: ID,
           name: "Main",
@@ -161,10 +168,16 @@ describe("Multiple Accounts documents", () => {
     const restored = restoreMultiProfile(archived, archived.profiles[1]!.id);
     assert.equal(restored.profiles[1]!.archived, false);
     const archivedAgain = archiveMultiProfile(restored, restored.profiles[1]!.id);
-    const removed = removeArchivedMultiProfile(
+    const pending = beginArchivedProfileDeletion(
       archivedAgain,
       archivedAgain.profiles[1]!.id,
     );
+    assert.deepEqual(pending.deletingProfileIds, [archivedAgain.profiles[1]!.id]);
+    const removed = removeArchivedMultiProfile(
+      pending,
+      pending.profiles[1]!.id,
+    );
     assert.deepEqual(removed.profiles.map((profile) => profile.name), ["Primary"]);
+    assert.deepEqual(removed.deletingProfileIds, []);
   });
 });

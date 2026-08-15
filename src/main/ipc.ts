@@ -74,11 +74,8 @@ import {
   ValidationError,
 } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
-import {
-  loadBuildLibrary,
-  saveBuildLibrary,
-} from "./core/build-library.js";
 import { parseBuildLibrary } from "../shared/builds/parse-library.js";
+import type { BuildLibrary } from "../shared/builds/library.js";
 import { isGraphicsDiagnostics, toWireSocketEvent } from "./ipc-values.js";
 import { resolveDns } from "./core/dns.js";
 import { exportTemplates, parseExportEntries } from "./template-export.js";
@@ -94,7 +91,6 @@ import type {
 } from "./steam-acquire.js";
 import { parseSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
-import { Mutex } from "./core/mutex.js";
 import { FREE_MARGIN, type ChunkStore } from "./core/chunk-store.js";
 import {
   count,
@@ -129,7 +125,10 @@ export interface IpcContext {
   windows: WindowRegistry;
   credentialsStoreFor: (win: BrowserWindow) => CredentialsStore;
   steamSessionStoreFor: (win: BrowserWindow) => SteamSessionStore;
-  buildLibraryPathFor: (win: BrowserWindow) => string;
+  getBuildLibrary: (
+    win: BrowserWindow,
+  ) => Promise<{ readonly library: BuildLibrary; readonly recovered: boolean }>;
+  setBuildLibrary: (win: BrowserWindow, library: BuildLibrary) => Promise<BuildLibrary>;
   gameStorageResetMarkerFor: (win: BrowserWindow) => string;
   getProgress: () => DownloadProgress;
   getChunkStore: () => ChunkStore | null;
@@ -723,28 +722,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
 } {
   const paths = gamePaths();
   const secretOperations = new Set<Promise<unknown>>();
-  const buildBaselines = new WeakMap<BrowserWindow, Map<string, string>>();
-  const buildLocks = new Map<string, Mutex>();
-  const buildLock = (libraryPath: string): Mutex => {
-    let lock = buildLocks.get(libraryPath);
-    if (!lock) {
-      lock = new Mutex();
-      buildLocks.set(libraryPath, lock);
-    }
-    return lock;
-  };
-  const rememberBuildBaseline = (
-    win: BrowserWindow,
-    libraryPath: string,
-    library: unknown,
-  ): void => {
-    let values = buildBaselines.get(win);
-    if (!values) {
-      values = new Map();
-      buildBaselines.set(win, values);
-    }
-    values.set(libraryPath, JSON.stringify(library));
-  };
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
       return Promise.reject(new ValidationError("application is quitting"));
@@ -808,33 +785,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
       await ctx.sockets.close(socketId, win.webContents.id);
     }),
 
-    buildLibraryGet: channel(nothing, async (win) => {
-      const libraryPath = ctx.buildLibraryPathFor(win);
-      return buildLock(libraryPath).run(async () => {
-        let recovered = false;
-        const library = await loadBuildLibrary(libraryPath, () => {
-          recovered = true;
-        });
-        rememberBuildBaseline(win, libraryPath, library);
-        return { library, recovered };
-      });
-    }),
+    buildLibraryGet: channel(nothing, (win) => ctx.getBuildLibrary(win)),
 
-    buildLibrarySet: channel(one(parseBuildLibrary), async (win, library) => {
-      const libraryPath = ctx.buildLibraryPathFor(win);
-      return buildLock(libraryPath).run(async () => {
-        const current = await loadBuildLibrary(libraryPath);
-        const expected = buildBaselines.get(win)?.get(libraryPath);
-        if (expected === undefined || expected !== JSON.stringify(current)) {
-          throw new ValidationError(
-            "build library changed in another account; reload before saving",
-          );
-        }
-        const saved = await saveBuildLibrary(libraryPath, library);
-        rememberBuildBaseline(win, libraryPath, saved);
-        return saved;
-      });
-    }),
+    buildLibrarySet: channel(one(parseBuildLibrary), (win, library) =>
+      ctx.setBuildLibrary(win, library)),
 
     settingsGet: channel(nothing, async () => {
       try {

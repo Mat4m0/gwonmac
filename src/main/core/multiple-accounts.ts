@@ -89,6 +89,7 @@ export function createMultiWorkspace(): MultiWorkspace {
   return parseMultiWorkspace({
     formatVersion: 1,
     profiles: [],
+    deletingProfileIds: [],
   });
 }
 
@@ -171,5 +172,23 @@ export function removeArchivedMultiProfile(
   return parseMultiWorkspace({
     ...workspace,
     profiles: workspace.profiles.filter((candidate) => candidate.id !== profileId),
+    deletingProfileIds: workspace.deletingProfileIds.filter(
+      (candidate) => candidate !== profileId,
+    ),
+  });
+}
+
+/** Persist this transition before any native resource for the profile is erased. */
+export function beginArchivedProfileDeletion(
+  workspace: MultiWorkspace,
+  profileId: ProfileId,
+): MultiWorkspace {
+  const profile = workspace.profiles.find((candidate) => candidate.id === profileId);
+  if (!profile?.archived) {
+    throw new AppError("bad_multi_workspace", "only an archived profile can be deleted");
+  }
+  return parseMultiWorkspace({
+    ...workspace,
+    deletingProfileIds: [...new Set([...workspace.deletingProfileIds, profileId])],
   });
 }
