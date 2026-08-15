@@ -705,9 +705,10 @@ export async function installCertifiedCompanion(
       toolbox?.setEnabled(policy().tools);
     };
     tracePolicy("launch");
-    const onToolSettings = (event: Event) => {
-      if (!(event instanceof CustomEvent)) return;
-      optionalSettings = event.detail as ReturnType<Window["gwToolsSettings"]>;
+    const onToolSettings = () => {
+      // The event is only a notification. The validated bridge remains the
+      // single source of truth even if page code dispatches a malformed event.
+      optionalSettings = window.gwToolsSettings();
       tracePolicy("settings");
       syncToolboxAvailability();
       setTargetEnabled();
