@@ -61,9 +61,12 @@ test.describe("data and display settings", () => {
           };
         },
       );
-      expect(settingsTypography.font).toContain("ui-sans-serif");
+      // Offline has no active game archive to convert yet, so the selected
+      // Guild Wars face resolves to the homepage's packaged QT fallback. The
+      // dialog must not replace that global choice with its own font.
+      expect(settingsTypography.font).toContain("QTFrizQuad");
       expect(settingsTypography.font).not.toContain("Guild Wars Original");
-      expect(settingsTypography.textShadow).toBe("none");
+      expect(settingsTypography.textShadow).not.toBe("none");
       // Polled, not read once: the save is a round trip through main and the
       // token is written when it returns. The slider's own readout updates on
       // the drag and so proves nothing about the setting having landed.
@@ -95,6 +98,18 @@ test.describe("data and display settings", () => {
       await page.locator('label:has(input[name="uiFont"][value="inter"])').click();
       await expect(root).toHaveAttribute("data-ui-font", "inter");
       await expect(page.locator("#settings-feedback")).toHaveText("Saved.");
+      const interTypography = await page.locator("#settings-dialog").evaluate(
+        (dialog) => {
+          const style = globalThis.getComputedStyle(dialog);
+          return {
+            font: style.fontFamily,
+            textShadow: style.textShadow,
+          };
+        },
+      );
+      expect(interTypography.font).toContain("ui-sans-serif");
+      expect(interTypography.font).not.toContain("QTFrizQuad");
+      expect(interTypography.textShadow).toBe("none");
       expect(
         await page.locator("#settings-dialog").evaluate((element) =>
           globalThis.getComputedStyle(element)
