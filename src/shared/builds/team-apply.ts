@@ -275,29 +275,31 @@ export function preflightTeamApply(
 ): TeamApplyPreflight {
   const blockers: TeamApplyRuntimeProblem[] = [];
   const changes: TeamApplyChange[] = [];
-  if (party.status !== "ready") blockers.push({ rule: "party-unavailable" });
-  if (party.playRegion === "pvp") blockers.push({ rule: "pvp" });
+  if (party.status !== "ready") {
+    return { ready: false, blockers: [{ rule: "party-unavailable" }] };
+  }
+  // Permanent policy facts stay authoritative even when the roster projection
+  // is incomplete. A player in PvP or outside an outpost should not be told to
+  // wait for observation that cannot make Apply legal there.
+  if (party.playRegion === "pvp") {
+    return { ready: false, blockers: [{ rule: "pvp" }] };
+  }
+  if (party.inOutpost === false) {
+    return { ready: false, blockers: [{ rule: "not-outpost" }] };
+  }
+  // A rejected roster makes the remaining member and mode facts downstream
+  // unreliable. Report that root observation once rather than multiplying it.
+  if (party.partial) {
+    return { ready: false, blockers: [{ rule: "partial-roster" }] };
+  }
   if (party.playRegion === "unknown") blockers.push({ rule: "region-unknown" });
-  if (party.inOutpost === false) blockers.push({ rule: "not-outpost" });
   if (party.inOutpost === null) blockers.push({ rule: "outpost-unknown" });
-  if (party.partial) blockers.push({ rule: "partial-roster" });
   if (!party.player || party.player.agentId === 0) {
     blockers.push({ rule: "player-unobserved" });
   }
   if (plan.mode !== "none") {
     if (party.hardMode === null) blockers.push({ rule: "mode-unobserved" });
     else if (party.hardMode !== (plan.mode === "hard")) changes.push({ kind: "mode" });
-  }
-
-  // A partial projection cannot prove that an individual hero is absent,
-  // locked, or using unknown professions. Keep Apply fail-closed, but report
-  // the one fact we actually know instead of multiplying it into misleading
-  // hero-specific problems.
-  if (party.partial) {
-    const [first, ...rest] = blockers;
-    return first
-      ? { ready: false, blockers: [first, ...rest] }
-      : { ready: false, blockers: [{ rule: "partial-roster" }] };
   }
 
   const player = plan.members[0];

@@ -302,8 +302,9 @@ test("configures a fresh team and explains why Apply is waiting", async ({ page 
   await expect(hero.locator(".hero-picker select")).toHaveValue("6");
   await expect(hero.locator(".build-picker select")).toHaveValue("b-discord");
   await expect(page.getByRole("button", { name: "Apply team" })).toBeDisabled();
-  await expect(page.getByRole("heading", { name: "Before you can apply" })).toBeVisible();
-  await expect(page.getByText(/complete party roster/i)).toBeVisible();
+  const readiness = page.locator("#apply-readiness");
+  await expect(readiness.getByRole("heading", { name: "Before you can apply" })).toBeVisible();
+  await expect(readiness.getByText(/complete party roster/i)).toBeVisible();
 });
 
 for (const width of [320, 360, 640]) {

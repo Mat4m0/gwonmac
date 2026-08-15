@@ -5,7 +5,6 @@ import type { Page } from "playwright";
 import {
   COMPANION_CURSOR_BYTES,
   COMPANION_PARTY_BYTES,
-  COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
 import { TEAM_COMMAND_PAYLOAD_BYTES } from "../../src/renderer/enhancement-team-commands.ts";
@@ -19,15 +18,11 @@ import {
   OBSERVER_RUNTIME_KEYS,
   type PageGlobals,
   PRODUCT_RUNTIME_KEYS,
-  PRODUCT_TOOLS_CAPABILITIES,
+  TARGET_OFF_PRODUCT_CAPABILITIES,
   type ReadoutPageGlobals,
   TARGET_ONLY,
-  TOOLBOX_CONFIG_POINTER,
-  TOOLBOX_CURSOR_POINTER,
-  TOOLBOX_PARTY_POINTER,
   TOOLBOX_PROGRAM_CAPABILITIES,
   TOOLBOX_SNAPSHOT_POINTER,
-  TOOLBOX_STATE_POINTER,
 } from "./packaged-enhancement-fixture.ts";
 
 async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
@@ -417,9 +412,6 @@ export async function assertToolboxFoundationLifecycle() {
       view.setUint32(layout.agentArray + 8, 64, true);
       view.setUint32(game.agentBuffer + 42 * 4, game.player, true);
       view.setUint32(game.player + layout.agentId, 42, true);
-      view.setFloat32(game.player + layout.agentX, 10, true);
-      view.setFloat32(game.player + layout.agentY, 20, true);
-      view.setUint32(game.player + layout.agentType, 0xdb, true);
       view.setUint16(game.player + layout.agentPlayerNumber, 42, true);
       view.setUint16(game.player + layout.agentModelType, 0x3000, true);
       view.setUint32(game.game + layout.partyContext, game.party, true);
@@ -641,11 +633,10 @@ export async function assertToolboxFoundationLifecycle() {
       };
       return { after, before };
     }, {
-      bytes: [...installableManifestModule(PRODUCT_TOOLS_CAPABILITIES)],
-      capabilities: PRODUCT_TOOLS_CAPABILITIES,
+      bytes: [...installableManifestModule(TARGET_OFF_PRODUCT_CAPABILITIES)],
+      capabilities: TARGET_OFF_PRODUCT_CAPABILITIES,
       layout: {
-        ...ENHANCEMENT_BUILD.commonLayout,
-        ...ENHANCEMENT_BUILD.targetObservation!.layout,
+        ...ENHANCEMENT_BUILD.observationBase!.layout,
         ...ENHANCEMENT_BUILD.cursorEvent!.layout,
         ...ENHANCEMENT_BUILD.partyObservation!.layout,
       },
@@ -656,18 +647,31 @@ export async function assertToolboxFoundationLifecycle() {
       tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     });
 
+    const configPointer = TOOLBOX_SNAPSHOT_POINTER;
+    const cursorPointer = (configPointer + CONFIG_BYTES + 7) & ~7;
+    const statePointer = (cursorPointer + COMPANION_CURSOR_BYTES + 7) & ~7;
+    const partyPointer = statePointer + COMPANION_TOOLBOX_BYTES;
+    const commandPointer = partyPointer + COMPANION_PARTY_BYTES;
     assert.deepEqual(result.before.allocations, [
       { pointer: 0x1000, size: 65_551 },
-      { pointer: TOOLBOX_SNAPSHOT_POINTER, size: COMPANION_SNAPSHOT_BYTES },
       {
-        pointer: TOOLBOX_CONFIG_POINTER,
+        pointer: configPointer,
         size: CONFIG_BYTES,
       },
-      { pointer: TOOLBOX_CURSOR_POINTER, size: COMPANION_CURSOR_BYTES },
-      { pointer: TOOLBOX_STATE_POINTER, size: COMPANION_TOOLBOX_BYTES },
-      { pointer: TOOLBOX_PARTY_POINTER, size: COMPANION_PARTY_BYTES },
       {
-        pointer: TOOLBOX_PARTY_POINTER + COMPANION_PARTY_BYTES,
+        pointer: cursorPointer,
+        size: COMPANION_CURSOR_BYTES,
+      },
+      {
+        pointer: statePointer,
+        size: COMPANION_TOOLBOX_BYTES,
+      },
+      {
+        pointer: partyPointer,
+        size: COMPANION_PARTY_BYTES,
+      },
+      {
+        pointer: commandPointer,
         size: TEAM_COMMAND_PAYLOAD_BYTES,
       },
     ]);
@@ -679,7 +683,7 @@ export async function assertToolboxFoundationLifecycle() {
     assert.equal(result.before.runtimeFrozen, true);
     assert.deepEqual(result.before.runtimeKeys, PRODUCT_RUNTIME_KEYS);
     const { snapshotReads, ...scalar } = result.before.scalar;
-    assert.ok(snapshotReads > 0);
+    assert.equal(snapshotReads, 0);
     assert.deepEqual(scalar, {
       buildId: ENHANCEMENT_BUILD.buildId,
       companionAbi: COMPANION_ABI.kernel,
@@ -714,6 +718,8 @@ export async function assertToolboxFoundationLifecycle() {
     assert.equal(party?.status, "ready");
     assert.equal(party?.rosterObserved, true);
     assert.equal(party?.inOutpost, true);
+    assert.equal(party?.playRegion, "pve");
+    assert.equal(party?.hardMode, false);
     assert.equal(party?.slotCount, 1);
     assert.deepEqual(party?.slots?.[1], {
       index: 1,
@@ -737,12 +743,11 @@ export async function assertToolboxFoundationLifecycle() {
     assert.equal(result.before.cursorStyle, "");
 
     assert.deepEqual(result.after.freed, [
-      TOOLBOX_STATE_POINTER,
-      TOOLBOX_PARTY_POINTER,
-      TOOLBOX_PARTY_POINTER + COMPANION_PARTY_BYTES,
-      TOOLBOX_CURSOR_POINTER,
-      TOOLBOX_CONFIG_POINTER,
-      TOOLBOX_SNAPSHOT_POINTER,
+      statePointer,
+      partyPointer,
+      commandPointer,
+      cursorPointer,
+      configPointer,
       0x1000,
     ]);
     assert.equal(result.after.hook, 0);

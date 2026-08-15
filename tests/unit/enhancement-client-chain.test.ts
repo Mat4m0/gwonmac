@@ -106,6 +106,24 @@ describe("Enhancement client chain", () => {
     assert.deepEqual(enhancementProfilesForBuild(cursorOnly), ["cursor"]);
     assert.equal(hasCompleteEnhancementProfileHashes(cursorOnly), true);
 
+    const partyOnly: KnownEnhancementBuild = {
+      ...full,
+      outputSha256: Object.freeze({ party: full.outputSha256.party! }),
+    };
+    delete partyOnly.cursorEvent;
+    delete partyOnly.targetObservation;
+    delete partyOnly.teamApply;
+    assert.deepEqual(enhancementProfilesForBuild(partyOnly), ["party"]);
+    assert.equal(hasCompleteEnhancementProfileHashes(partyOnly), true);
+
+    const missingObservationBase = { ...partyOnly };
+    delete missingObservationBase.observationBase;
+    assert.equal(
+      hasCompleteEnhancementProfileHashes(missingObservationBase),
+      false,
+      "party facts require their shared observation base",
+    );
+
     assert.equal(
       hasCompleteEnhancementProfileHashes({
         ...cursorOnly,

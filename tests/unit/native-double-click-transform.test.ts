@@ -207,9 +207,10 @@ test("the shipped entry describes one build and states its own offsets", () => {
   assert.equal(NATIVE_DOUBLE_CLICK_BUILDS.length, 1);
   for (const build of NATIVE_DOUBLE_CLICK_BUILDS) {
     assert.match(build.callbackBodySha256, /^[0-9a-f]{64}$/);
-    // One predecessor per certified capability profile, plus the one where the
-    // Enhancement is off. A missing entry is a launch that silently keeps the
-    // synthetic taps; a stray one is a module nothing produces.
+    // Every retained exact Enhancement profile must continue through this
+    // stage. Template-only predecessors can also be present when their
+    // callback proof matches this build, even if their memory layout is no
+    // longer certified for Enhancement.
     const pairs = Object.entries(build.derivations);
     const expectedInputs = new Set([
       ...ENHANCEMENT_BUILDS.map((entry) => entry.sha256),
@@ -219,11 +220,13 @@ test("the shipped entry describes one build and states its own offsets", () => {
         ),
       ),
     ]);
-    assert.deepEqual(
-      new Set(pairs.map(([input]) => input)),
-      expectedInputs,
-      "every module the preparation chain can produce needs a derivation",
-    );
+    const inputs = new Set(pairs.map(([input]) => input));
+    for (const input of expectedInputs) {
+      assert.ok(
+        inputs.has(input),
+        "every retained Enhancement output needs a double-click derivation",
+      );
+    }
     for (const [input, output] of pairs) {
       assert.match(input, /^[0-9a-f]{64}$/);
       assert.match(output, /^[0-9a-f]{64}$/);

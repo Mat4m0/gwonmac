@@ -219,11 +219,12 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     hookResults: [],
     hookBodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[2]!),
     tableSlot: 5,
-    commonLayout: {
-      contextRoot: 1, gameContextSlot: 6, characterContext: 4,
-      mapId: 5, isExplorable: 6, currentMapId: 7,
-      currentInstanceType: 8, playerNumber: 9,
-    },
+    observationBase: { layout: {
+      contextRoot: 1, agentArray: 2, gameContextSlot: 6,
+      characterContext: 4, mapId: 5, isExplorable: 6,
+      currentMapId: 7, currentInstanceType: 8, playerNumber: 9,
+      agentId: 10, agentPlayerNumber: 14, agentModelType: 15,
+    } },
     teamApply: {
       thunkExport: "enhancement_command",
       professionTrace: {
@@ -287,9 +288,8 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       },
     },
     targetObservation: { layout: {
-      agentArray: 2, manualTargetAgentId: 3, automaticTargetAgentId: 4,
-      agentId: 10, agentX: 11, agentY: 12, agentType: 13,
-      agentPlayerNumber: 14, agentModelType: 15,
+      manualTargetAgentId: 3, automaticTargetAgentId: 4,
+      agentX: 11, agentY: 12, agentType: 13,
     } },
     partyObservation: {
       functionIndex: 5,

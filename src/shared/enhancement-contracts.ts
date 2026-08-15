@@ -129,7 +129,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 26;
+export const ENHANCEMENT_TRANSFORM_ABI = 27;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
@@ -138,13 +138,13 @@ export function enhancementConfigWordActive(
   if (!Number.isInteger(index) || index < 0 || index >= ENHANCEMENT_CONFIG_WORD_COUNT) {
     return false;
   }
-  const activation = ENHANCEMENT_CONFIG_FIELDS[index]?.activation;
-  if (activation === "target") return capabilities.targetObservation;
-  if (activation === "target-or-party") {
+  const owner = ENHANCEMENT_CONFIG_FIELDS[index]?.owner;
+  if (owner === "target") return capabilities.targetObservation;
+  if (owner === "observation") {
     return capabilities.targetObservation || capabilities.partyObservation;
   }
-  if (activation === "cursor") return capabilities.nativeCursor;
-  return activation === "party" && capabilities.partyObservation;
+  if (owner === "cursor") return capabilities.nativeCursor;
+  return owner === "party" && capabilities.partyObservation;
 }
 
 export type EnhancementHooks = Readonly<{

@@ -82,14 +82,14 @@ export interface EnhancementLayout {
   worldCharacterSkills: number;
 }
 
-export type EnhancementCommonLayout = Pick<EnhancementLayout,
+export type EnhancementObservationBaseLayout = Pick<EnhancementLayout,
   | "contextRoot" | "gameContextSlot" | "characterContext" | "mapId"
   | "isExplorable" | "currentMapId" | "currentInstanceType" | "playerNumber"
+  | "agentArray" | "agentId" | "agentPlayerNumber" | "agentModelType"
 >;
 export type EnhancementTargetLayout = Pick<EnhancementLayout,
-  | "agentArray" | "manualTargetAgentId" | "automaticTargetAgentId"
-  | "agentId" | "agentX" | "agentY" | "agentType"
-  | "agentPlayerNumber" | "agentModelType"
+  | "manualTargetAgentId" | "automaticTargetAgentId"
+  | "agentX" | "agentY" | "agentType"
 >;
 export type EnhancementCursorLayout = Pick<EnhancementLayout,
   | "cursorActiveArt" | "cursorSoftwareModel" | "cursorShowCount"
@@ -98,31 +98,52 @@ export type EnhancementCursorLayout = Pick<EnhancementLayout,
   | "cursorTextureType" | "cursorTextureWidth" | "cursorTextureHeight"
 >;
 export type EnhancementPartyLayout = Omit<EnhancementLayout,
-  keyof EnhancementCommonLayout | keyof EnhancementTargetLayout | keyof EnhancementCursorLayout
+  keyof EnhancementObservationBaseLayout | keyof EnhancementTargetLayout
+  | keyof EnhancementCursorLayout
 >;
 
-type Activation = "target" | "target-or-party" | "cursor" | "party";
+type Owner = "observation" | "target" | "cursor" | "party";
 type ConfigField =
-  | Readonly<{ source: "layout"; key: keyof EnhancementLayout; activation: Activation }>
-  | Readonly<{ source: "dispatcher"; key: "playerChatMessage" | "hideHeroPanelMessage" | "showHeroPanelMessage"; activation: "party" }>
-  | Readonly<{ source: "party-dirty"; index: number; activation: "party" }>;
+  | Readonly<{
+    source: "layout";
+    owner: "observation";
+    key: keyof EnhancementObservationBaseLayout;
+  }>
+  | Readonly<{ source: "layout"; owner: "target"; key: keyof EnhancementTargetLayout }>
+  | Readonly<{ source: "layout"; owner: "cursor"; key: keyof EnhancementCursorLayout }>
+  | Readonly<{ source: "layout"; owner: "party"; key: keyof EnhancementPartyLayout }>
+  | Readonly<{
+    source: "dispatcher";
+    key: "playerChatMessage" | "hideHeroPanelMessage" | "showHeroPanelMessage";
+    owner: "party";
+  }>
+  | Readonly<{ source: "party-dirty"; index: number; owner: "party" }>;
 
-const layout = (
-  activation: Activation,
-  ...keys: readonly (keyof EnhancementLayout)[]
-): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, activation }));
+const observation = (
+  ...keys: readonly (keyof EnhancementObservationBaseLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "observation" }));
+const target = (
+  ...keys: readonly (keyof EnhancementTargetLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "target" }));
+const cursor = (
+  ...keys: readonly (keyof EnhancementCursorLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "cursor" }));
+const party = (
+  ...keys: readonly (keyof EnhancementPartyLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "party" }));
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
-  ...layout("target-or-party", "contextRoot"),
-  ...layout("target", "agentArray", "manualTargetAgentId", "automaticTargetAgentId"),
-  ...layout("target-or-party", "gameContextSlot", "characterContext", "mapId", "isExplorable", "currentMapId", "currentInstanceType", "playerNumber"),
-  ...layout("target", "agentId", "agentX", "agentY", "agentType", "agentPlayerNumber", "agentModelType"),
-  ...layout("cursor", "cursorActiveArt", "cursorSoftwareModel", "cursorShowCount", "cursorColorBuffer", "cursorArtHotspot", "cursorArtTexture", "cursorHandleKey", "cursorHandleObject", "cursorViewTexture", "cursorTextureType", "cursorTextureWidth", "cursorTextureHeight"),
-  ...layout("party", "partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "accountContext", "accountUnlockedSkills", "worldContext", "worldHeroFlags", "heroFlagStride", "flagHeroId", "flagAgentId", "flagBehavior", "worldHeroInfo", "heroInfoStride", "infoHeroId", "infoAgentId", "infoLevel", "infoPrimary", "infoSecondary", "infoAppearanceBitmap", "worldSkillbars", "skillbarStride", "skillbarAgentId", "skillbarSkills", "skillSlotStride", "skillSlotId", "skillbarDisabled", "worldAttributes", "attributeStride", "attributeAgentId", "attributeEntries", "attributeEntryStride", "attributeEntryId", "attributeEntryRank", "areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags", "worldProfessionStates", "professionStateStride", "worldCharacterSkills"),
-  { source: "dispatcher", key: "playerChatMessage", activation: "party" },
-  { source: "dispatcher", key: "hideHeroPanelMessage", activation: "party" },
-  { source: "dispatcher", key: "showHeroPanelMessage", activation: "party" },
-  ...Array.from({ length: 10 }, (_, index): ConfigField => ({ source: "party-dirty", index, activation: "party" })),
+  ...observation("contextRoot", "agentArray"),
+  ...target("manualTargetAgentId", "automaticTargetAgentId"),
+  ...observation("gameContextSlot", "characterContext", "mapId", "isExplorable", "currentMapId", "currentInstanceType", "playerNumber", "agentId"),
+  ...target("agentX", "agentY", "agentType"),
+  ...observation("agentPlayerNumber", "agentModelType"),
+  ...cursor("cursorActiveArt", "cursorSoftwareModel", "cursorShowCount", "cursorColorBuffer", "cursorArtHotspot", "cursorArtTexture", "cursorHandleKey", "cursorHandleObject", "cursorViewTexture", "cursorTextureType", "cursorTextureWidth", "cursorTextureHeight"),
+  ...party("partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "accountContext", "accountUnlockedSkills", "worldContext", "worldHeroFlags", "heroFlagStride", "flagHeroId", "flagAgentId", "flagBehavior", "worldHeroInfo", "heroInfoStride", "infoHeroId", "infoAgentId", "infoLevel", "infoPrimary", "infoSecondary", "infoAppearanceBitmap", "worldSkillbars", "skillbarStride", "skillbarAgentId", "skillbarSkills", "skillSlotStride", "skillSlotId", "skillbarDisabled", "worldAttributes", "attributeStride", "attributeAgentId", "attributeEntries", "attributeEntryStride", "attributeEntryId", "attributeEntryRank", "areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags", "worldProfessionStates", "professionStateStride", "worldCharacterSkills"),
+  { source: "dispatcher", key: "playerChatMessage", owner: "party" },
+  { source: "dispatcher", key: "hideHeroPanelMessage", owner: "party" },
+  { source: "dispatcher", key: "showHeroPanelMessage", owner: "party" },
+  ...Array.from({ length: 10 }, (_, index): ConfigField => ({ source: "party-dirty", index, owner: "party" })),
 ] as const satisfies readonly ConfigField[]);
 
 export const ENHANCEMENT_LAYOUT_FIELDS = Object.freeze(
@@ -134,4 +155,4 @@ export const ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT = ENHANCEMENT_CONFIG_FIELDS
   .filter((field) => field.source === "party-dirty").length;
 export const ENHANCEMENT_CONFIG_WORD_COUNT = ENHANCEMENT_CONFIG_FIELDS.length;
 
-export type EnhancementConfigActivation = Activation;
+export type EnhancementConfigOwner = Owner;
