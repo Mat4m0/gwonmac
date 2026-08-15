@@ -24,6 +24,19 @@ function fixture(initial: TravelShortcuts = DEFAULT_TRAVEL_SHORTCUTS) {
 }
 
 describe("TravelPalette", () => {
+  it("opens with Quick Travel only and keeps Close out of the search label", async () => {
+    const { wrapper } = fixture();
+    await flushPromises();
+
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
+    expect(wrapper.text()).toContain("Start typing to search all outposts");
+    expect(wrapper.get('label[for="travel-search-input"]').text())
+      .toBe("Search destinations");
+    expect(wrapper.get('[aria-label="Close Travel"]').element.closest("label"))
+      .toBeNull();
+    wrapper.unmount();
+  });
+
   it("autocompletes aliases and travels to the active result", async () => {
     const { wrapper, travel } = fixture();
     await flushPromises();
@@ -46,6 +59,16 @@ describe("TravelPalette", () => {
     await flushPromises();
 
     await wrapper.get('[role="combobox"]').trigger("keydown", { key: "1" });
+
+    expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
+    wrapper.unmount();
+  });
+
+  it("keeps Quick Travel numbers active after using the district selector", async () => {
+    const { wrapper, travel } = fixture();
+    await flushPromises();
+
+    await wrapper.get(".travel-district-region select").trigger("keydown", { key: "1" });
 
     expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
     wrapper.unmount();
@@ -79,6 +102,7 @@ describe("TravelPalette", () => {
   it("leaves arrow keys to the district controls", async () => {
     const { wrapper } = fixture();
     await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("la");
 
     const region = wrapper.get(".travel-district-region select");
     await region.trigger("keydown", { key: "ArrowDown" });
@@ -100,6 +124,39 @@ describe("TravelPalette", () => {
     expect(saved.slice(6, 8)).toEqual([null, null]);
     expect(saved[8]).toEqual({ mapId: 642, district: "international", districtNumber: 0 });
     expect(wrapper.text()).toContain("Eye of the North is now shortcut 9");
+    wrapper.unmount();
+  });
+
+  it("preserves the previous shortcut and explains a failed save", async () => {
+    const { wrapper, travel, saveShortcuts } = fixture();
+    await flushPromises();
+    saveShortcuts.mockRejectedValueOnce(new Error("private persistence detail"));
+    await wrapper.get('[role="combobox"]').setValue("eotn");
+
+    await wrapper.get(".travel-palette").trigger("keydown", { key: "1", metaKey: true });
+    await flushPromises();
+    expect(wrapper.text()).toContain(
+      "Shortcut could not be saved. Your previous shortcut is still active.",
+    );
+    expect(wrapper.text()).not.toContain("private persistence detail");
+
+    await wrapper.get('[role="combobox"]').setValue("");
+    await wrapper.get(".travel-palette").trigger("keydown", { key: "1" });
+    expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
+    wrapper.unmount();
+  });
+
+  it("turns host travel failures into actionable player copy", async () => {
+    const { wrapper, travel } = fixture();
+    await flushPromises();
+    travel.mockRejectedValueOnce(new Error("private host detail"));
+    await wrapper.get('[role="combobox"]').setValue("kama");
+
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Travel could not start. Check Guild Wars, then try again.");
+    expect(wrapper.text()).not.toContain("private host detail");
     wrapper.unmount();
   });
 });

@@ -48,6 +48,8 @@
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
   const travelPalette = form.elements.namedItem('travelPalette') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
+  const toolFeatures = byId('settings-tool-features');
+  const toolsOff = byId('settings-tools-off');
   const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
   const accountsStatus = byId('accounts-setup-status');
   const accountsModeStatus = byId('accounts-mode-status');
@@ -109,6 +111,7 @@
   function clearShortcutMessages(): void {
     for (const action of shortcutRows.keys()) {
       const { message, replace } = shortcutRowParts(action);
+      message.textContent = '';
       message.hidden = true;
       replace.hidden = true;
     }
@@ -120,7 +123,7 @@
     for (const action of shortcutRows.keys()) {
       const { value, change } = shortcutRowParts(action);
       value.textContent = recordingShortcut === action
-        ? 'Press shortcut…'
+        ? 'Listening…'
         : shortcutDisplay(resolved[action]);
       change.textContent = recordingShortcut === action ? 'Cancel' : 'Change';
     }
@@ -149,10 +152,13 @@
     pendingShortcutReplacement = null;
     clearShortcutMessages();
     await renderShortcuts(currentSettings);
+    const parts = shortcutRowParts(action);
+    parts.message.textContent =
+      'Press Command with a letter or number · Delete clears · Escape cancels.';
+    parts.message.hidden = false;
     const result = await window.gwNative.shortcuts.capture();
     if (recordingShortcut !== action) return;
     recordingShortcut = null;
-    const parts = shortcutRowParts(action);
     if (result.status === 'cancelled') {
       clearShortcutMessages();
       await renderShortcuts(currentSettings);
@@ -244,6 +250,11 @@
     pendingShortcutReplacement = null;
     clearShortcutMessages();
   });
+  // Settings is renderer UI, not game input. Keep its keys inside the modal;
+  // Escape still reaches the dialog's native cancel behavior because stopping
+  // propagation does not cancel the event.
+  dialog.addEventListener('keydown', (event) => event.stopPropagation());
+  dialog.addEventListener('keyup', (event) => event.stopPropagation());
 
   void import('../shared/ui/resize.js').then(({ installResizeGrip }) => {
     installResizeGrip(settingsResize, {
@@ -634,6 +645,8 @@
     travelPalette.checked = settings.travelPalette;
     targetReadout.checked = settings.targetReadout;
     void renderShortcuts(settings);
+    toolFeatures.hidden = !settings.gwonmacTools;
+    toolsOff.hidden = settings.gwonmacTools;
     teamManagement.disabled = !settings.gwonmacTools;
     xunlaiStorage.disabled = !settings.gwonmacTools;
     travelPalette.disabled = !settings.gwonmacTools;
@@ -652,12 +665,20 @@
     await resolveClientCompatibility();
   };
   async function openSettings() {
-    if (!dialog.open) {
+    const wasOpen = dialog.open;
+    const needsSettings = currentSettings === null;
+    form.setAttribute('aria-busy', String(needsSettings));
+    settingsPanes.inert = needsSettings;
+    if (!wasOpen) {
       if (typeof dialog.showModal === 'function') dialog.showModal();
       else dialog.setAttribute('open', '');
     }
-    setFeedback();
+    setFeedback(needsSettings ? 'Loading settings…' : idleFeedback, needsSettings ? 'progress' : 'neutral');
     selectPane(activeSettingsPane);
+    if (!wasOpen) {
+      form.querySelector<HTMLElement>('.settings-rtab[aria-selected="true"]')
+        ?.focus({ preventScroll: true });
+    }
     settingsCache.textContent = 'Checking downloaded game data…';
     try {
       await settingsWrite;
@@ -668,8 +689,12 @@
       // so it is in Settings whether or not the launcher notice was ever seen.
       await readSession().catch(() => undefined);
       await (await dataStrategy).refresh();
+      if (feedback.textContent === 'Loading settings…') setFeedback();
     } catch {
       setFeedback('Settings could not be loaded. Close Settings and try again.', 'error');
+    } finally {
+      form.setAttribute('aria-busy', 'false');
+      settingsPanes.inert = false;
     }
   }
 

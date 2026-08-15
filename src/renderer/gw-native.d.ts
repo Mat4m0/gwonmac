@@ -41,6 +41,21 @@ declare global {
 
   interface GameInputController {
     releaseAll(): void;
+    setLoginProviderChooser(visible: boolean): void;
+    expectCharacterSelection(): void;
+  }
+
+  interface GwonmacSurfaceHandle {
+    setOpen(open: boolean): void;
+    dispose(): void;
+  }
+
+  interface GwonmacSurfaceController {
+    register(surface: Readonly<{
+      root: HTMLElement;
+      priority: number;
+      dismiss(): void;
+    }>): GwonmacSurfaceHandle;
   }
 
   /**
@@ -212,6 +227,7 @@ declare global {
       };
     };
     gwApplySettings?(settings: AppSettings): void;
+    gwSurfaces: GwonmacSurfaceController;
     gwToolsSettings(): Readonly<{
       enabled: boolean;
       teamManagement: boolean;

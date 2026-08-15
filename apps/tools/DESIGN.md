@@ -52,6 +52,14 @@ density, or behavior.
 - Arrow keys resize the window. Shift increases the step.
 - Start a Tools drag only from title-bar furniture.
 - Do not start a drag from an interactive child.
+- Keep a non-modal surface open when the player clicks Guild Wars behind it.
+- Escape closes the topmost GWonMac surface before Guild Wars receives it.
+- Tab enters the topmost open GWonMac surface and wraps inside its controls.
+- Keep native confirmation dialogs above non-modal Tools and Travel surfaces.
+- Open Travel with Quick Travel destinations only; reveal the full catalogue as
+  the player searches.
+- Keep version availability collapsed in Settings unless something is
+  unavailable.
 - Keep a dragged window inside the viewport.
 - Keep scrolling flex and grid children shrinkable.
 - Use container width to change panel layout.

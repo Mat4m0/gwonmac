@@ -42,6 +42,7 @@ type ToolsAppHandle = Readonly<{
   show(): void;
   hide(): void;
   toggle(): void;
+  requestClose(): void;
   update(observation: ToolboxObservation): void;
   dispose(): void;
 }>;
@@ -179,6 +180,7 @@ export function mountToolsInto(
           if (visible) app.show();
           else app.hide();
         },
+        requestClose: app.requestClose,
         update: app.update,
         dispose: app.dispose,
       };

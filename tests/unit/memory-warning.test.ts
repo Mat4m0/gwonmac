@@ -89,4 +89,28 @@ describe("memory warning presenter", () => {
     assert.equal(reloads, 1);
     assert.equal(dom.element("memory-notice").hidden, true);
   });
+
+  it("registers as a dismissible keyboard surface while visible", () => {
+    const dom = memoryDom();
+    const open: boolean[] = [];
+    let dismiss = () => {};
+    const surfaces: GwonmacSurfaceController = {
+      register(surface) {
+        dismiss = surface.dismiss;
+        return {
+          setOpen(value) { open.push(value); },
+          dispose() {},
+        };
+      },
+    };
+    const presenter = bindMemoryWarning(dom.document, () => {}, surfaces);
+    assert.ok(presenter);
+
+    presenter.present("low", 2_147_483_648);
+    assert.deepEqual(open, [true]);
+    dismiss();
+    assert.equal(dom.element("memory-notice").hidden, true);
+    assert.equal(dom.element("canvas").focused, true);
+    assert.deepEqual(open, [true, false]);
+  });
 });

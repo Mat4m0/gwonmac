@@ -53,12 +53,18 @@ export function createTravelPalette(
   let disposed = false;
   let state: TravelGameState = { status: "waiting", reason: "game" };
   let app: TravelPaletteHandle | null = null;
+  const dismissable = window.gwSurfaces.register({
+    root,
+    priority: 6,
+    dismiss: () => setOpen(false),
+  });
 
   const setOpen = (next: boolean) => {
     if (!enabled && next) throw new Error(command.unavailable() ?? "Travel is turned off");
     if (open === next) return;
     open = next;
     root.hidden = !next;
+    dismissable.setOpen(next);
     if (next && parent.ownerDocument.pointerLockElement !== null) {
       parent.ownerDocument.exitPointerLock();
     }
@@ -116,6 +122,7 @@ export function createTravelPalette(
       disposed = true;
       window.removeEventListener("gw:travel-toggle", onCommand);
       app?.dispose();
+      dismissable.dispose();
       style.remove();
       root.remove();
       canvas.focus({ preventScroll: true });

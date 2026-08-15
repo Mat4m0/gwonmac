@@ -109,6 +109,12 @@ type HeldButton = {
 
 type GameInputOptions = {
   canvas: HTMLCanvasElement;
+  /**
+   * The hidden desktop fields the client uses as native text-editing proxies.
+   * They stay out of the browser's tab order; the client owns which one is
+   * active and moves between them itself.
+   */
+  textInputs?: ReadonlySet<EventTarget | null>;
   diagnostics?: GameInputDiagnostics;
   /**
    * The developer trace, when the player has switched it on. It observes and
@@ -131,8 +137,22 @@ type GameInputOptions = {
 // mouse-look, matching the cursor observer's own sampling cadence.
 const POINTER_MODE_INTERVAL_MS = 50;
 
+// The provider chooser is laid out in the client's fixed 600-unit-tall login
+// coordinate system. These are the centres of its two buttons, measured from
+// the current official client. Expressing them through the canvas height keeps
+// the hit targets stable across window sizes and Retina scale factors.
+const PROVIDER_BUTTON_X_FROM_CENTRE = -161 / 600;
+const PROVIDER_BUTTON_Y = [219 / 600, 253 / 600] as const;
+
+// A successful login can paint character selection one or two frames before
+// that screen starts accepting keys. Delay only the first immediate Enter;
+// after this short window, the upstream client is ready and needs no help.
+const CHARACTER_SELECTION_WINDOW_MS = 8_000;
+const CHARACTER_ENTER_DELAY_MS = 180;
+
 export const installGameInput = ({
   canvas,
+  textInputs = new Set(),
   diagnostics,
   trace,
   clientCursorHidden,
@@ -140,6 +160,10 @@ export const installGameInput = ({
 }: GameInputOptions): GameInputController => {
   const heldKeys = new Map<string, HeldKey>();
   const heldButtons = new Map<number, HeldButton>();
+  const suppressedKeyUps = new Set<string>();
+  let providerChooserVisible = false;
+  let providerSelection = 0;
+  let characterSelectionUntil = 0;
   let virtualCursor: { x: number; y: number } | null = null;
   let pointerWanted = false;
   let modeWatch: ReturnType<typeof setInterval> | null = null;
@@ -325,8 +349,101 @@ export const installGameInput = ({
     }
   }
 
+  const providerPoint = (selection = providerSelection) => {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      rect,
+      x: rect.left + rect.width / 2 + rect.height * PROVIDER_BUTTON_X_FROM_CENTRE,
+      y: rect.top + rect.height *
+        (PROVIDER_BUTTON_Y[selection] ?? PROVIDER_BUTTON_Y[0]),
+    };
+  };
+
+  const sendProviderMouse = (
+    type: 'mousemove' | 'mousedown' | 'mouseup' | 'click',
+    buttons: number,
+  ) => {
+    const { x, y } = providerPoint();
+    canvas.dispatchEvent(new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      button: type === 'mousemove' ? -1 : 0,
+      buttons,
+      clientX: x,
+      clientY: y,
+      screenX: window.screenX + x,
+      screenY: window.screenY + y,
+      detail: type === 'click' ? 1 : 0,
+    }));
+  };
+
+  const pointAtProviderSelection = () => sendProviderMouse('mousemove', 0);
+
+  const activateProviderSelection = () => {
+    sendProviderMouse('mousedown', 1);
+    sendProviderMouse('mouseup', 0);
+    sendProviderMouse('click', 0);
+    providerChooserVisible = false;
+  };
+
+  const handleProviderKey = (event: KeyboardEvent) => {
+    if (!providerChooserVisible || event.target !== canvas) return false;
+    const backwards = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ||
+      (event.key === 'Tab' && event.shiftKey);
+    const forwards = event.key === 'ArrowDown' || event.key === 'ArrowRight' ||
+      (event.key === 'Tab' && !event.shiftKey);
+    if (backwards || forwards) {
+      providerSelection = (providerSelection + (backwards ? -1 : 1) + 2) % 2;
+      pointAtProviderSelection();
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      activateProviderSelection();
+    } else {
+      return false;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    suppressedKeyUps.add(event.code);
+    return true;
+  };
+
+  const sendBufferedCharacterEnter = (event: KeyboardEvent) => {
+    const init: KeyboardEventInit = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      key: event.key,
+      code: event.code,
+      location: event.location,
+    };
+    setTimeout(() => {
+      canvas.dispatchEvent(new globalThis.KeyboardEvent('keydown', init));
+      canvas.dispatchEvent(new globalThis.KeyboardEvent('keyup', init));
+    }, CHARACTER_ENTER_DELAY_MS);
+  };
+
   window.addEventListener('keydown', (event) => {
     if (!event.isTrusted) return;
+    if (handleProviderKey(event)) return;
+    if (
+      event.target === canvas &&
+      event.key === 'Enter' &&
+      performance.now() < characterSelectionUntil
+    ) {
+      characterSelectionUntil = 0;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      suppressedKeyUps.add(event.code);
+      sendBufferedCharacterEnter(event);
+      return;
+    }
+    if (performance.now() >= characterSelectionUntil) characterSelectionUntil = 0;
+    // The client changes its active proxy in its own keydown listener. Do not
+    // let Chromium then perform a second Tab move from the newly focused field
+    // to the canvas, which made focus appear to skip at random.
+    if (event.key === 'Tab' && textInputs.has(event.target)) {
+      event.preventDefault();
+    }
     const held = heldKeys.get(event.code);
     const key = clientKey(event, event.repeat ? held?.key : undefined);
     if (event.repeat && held) return;
@@ -348,6 +465,11 @@ export const installGameInput = ({
   }, true);
   window.addEventListener('keyup', (event) => {
     if (!event.isTrusted) return;
+    if (suppressedKeyUps.delete(event.code)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const held = heldKeys.get(event.code);
     const key = clientKey(event, held?.key);
     const modifier = TRACED_MODIFIERS[key];
@@ -637,5 +759,21 @@ export const installGameInput = ({
 
   return Object.freeze({
     releaseAll,
+    setLoginProviderChooser(visible: boolean) {
+      providerChooserVisible = visible;
+      if (!visible) return;
+      characterSelectionUntil = 0;
+      providerSelection = 0;
+      // The rejection resolves just before the client rebuilds this screen.
+      // Two frames let that rebuild install its canvas listeners before the
+      // synthetic move gives the first button its visible hover state.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (providerChooserVisible) pointAtProviderSelection();
+      }));
+    },
+    expectCharacterSelection() {
+      providerChooserVisible = false;
+      characterSelectionUntil = performance.now() + CHARACTER_SELECTION_WINDOW_MS;
+    },
   });
 };

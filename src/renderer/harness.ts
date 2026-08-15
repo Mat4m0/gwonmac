@@ -376,7 +376,11 @@ function requestHeapCap() {
       const capBytes = Module.gwonmacHeapCapBytes ?? WASM_HEAP_CAP_BYTES;
       heapCapBytes = capBytes;
       heapWatch = createHeapPressureWatch({ capBytes });
-      heapWarning = bindMemoryWarning(document, reloadClientSafely);
+      heapWarning = bindMemoryWarning(
+        document,
+        reloadClientSafely,
+        window.gwSurfaces,
+      );
     })
     // A failed load retries on the next tick rather than silencing the
     // warning for the whole session.
@@ -518,6 +522,7 @@ let host: typeof import('./graphics.js') &
   typeof import('./filesystem.js') &
   typeof import('./input.js') &
   typeof import('./input-trace.js') &
+  typeof import('./surface-controller.js') &
   typeof import('./native-double-click.js') &
   typeof import('./clipboard-copy.js') &
   typeof import('./template-save-compatibility.js') &
@@ -697,6 +702,7 @@ Module = {
   // call their fallback without returning. Main owns encrypted persistence.
   secureStorage: {
     async getCredentials() {
+      inputHost?.setLoginProviderChooser(false);
       const stored = await native().credentials.load();
       if (!stored) {
         log('secureStorage: no saved credentials — the module should prompt');
@@ -719,8 +725,8 @@ Module = {
   },
 
   // Steam is the one federated provider this host answers for. Saying yes is
-  // what makes the client render its "Sign in with Steam" button; the ArenaNet
-  // email/password form renders beside it, unchanged.
+  // what makes the client offer its account-provider chooser; choosing the
+  // ArenaNet path then opens the client's unchanged email/password form.
   login: {
     hasProvider(name) {
       const offered = isSteamProvider(name);
@@ -750,9 +756,11 @@ Module = {
         throw new Error('provider not offered');
       }
       const silent = isSilentRequest(options);
+      if (!silent) inputHost?.setLoginProviderChooser(false);
       const result = await native().steam.getToken(silent);
       if (!result.token) {
         log(`login.getAuthToken(silent=${silent}) -> no token`);
+        inputHost?.setLoginProviderChooser(true);
         // The refusal still ends on the client's own login screen; the line
         // below is the one explanation the host may add beside it. A plain
         // cancel stays silent — describeSteamRefusal answers null for it.
@@ -761,6 +769,7 @@ Module = {
       }
       // Never the value: the token must not reach this log, which is bounded
       // and read back into diagnostics.
+      inputHost?.setLoginProviderChooser(false);
       log(`login.getAuthToken(silent=${silent}) -> token vended`);
       return {
         userId: LOCAL_PROFILE_INDEX,
@@ -1009,6 +1018,12 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
         const path = u.pathname.startsWith('/') ? u.pathname : '/' + u.pathname;
         const rewritten = `gw://app${path}${u.search}`;
         log(`api: ${method} ${path}`);
+        // This is the last account-service request before the client opens
+        // character selection. It occurs for password and federated accounts,
+        // including when the player chose not to save credentials.
+        if (path === '/webgate/my_account/token.xml') {
+          inputHost?.expectCharacterSelection();
+        }
         return origOpen.call(this, method, rewritten, ...rest);
       }
     } catch { /* not a URL we can rewrite */ }
@@ -1037,12 +1052,31 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     document.body,
     (text) => native().clipboard.writeText(text),
   );
+  // Install before game input so a key claimed by the topmost GWonMac surface
+  // cannot also reach the official client's window-capture listener.
+  window.gwSurfaces = host.installSurfaceController(document);
   window.addEventListener('gw:input-trace', () => {
     log(`input trace: ${inputTrace?.toggle() ? 'on' : 'off'}`);
   });
 
+  // Text entry runs through these, not through keydown on the canvas. The
+  // input host also needs their identity before the generated glue installs
+  // its own Tab listener, so Chromium cannot perform a second focus move.
+  Module.oskInput = {
+    text:      document.getElementById('osk-input-text'),
+    email:     document.getElementById('osk-input-email'),
+    password:  document.getElementById('osk-input-password'),
+    number:    document.getElementById('osk-input-number'),
+    multiline: document.getElementById('osk-input-multiline'),
+  };
+  Module.oskIsModal = Module.isMobile;
+  const oskInputs = new Set<EventTarget | null>(
+    Object.values(Module.oskInput).filter((input): input is HTMLElement => !!input),
+  );
+
   inputHost = host.installGameInput({
     canvas: c,
+    textInputs: oskInputs,
     diagnostics: window.gwDiagnostics,
     trace: inputTrace,
     // Read through the window global rather than a module handle: input
@@ -1069,19 +1103,8 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     trace: inputTrace,
     log,
   });
-  // Text entry runs through these, not through keydown on the canvas. Stray
-  // focus must bounce off, or a field silently swallows keys meant for the game.
-  Module.oskInput = {
-    text:      document.getElementById('osk-input-text'),
-    email:     document.getElementById('osk-input-email'),
-    password:  document.getElementById('osk-input-password'),
-    number:    document.getElementById('osk-input-number'),
-    multiline: document.getElementById('osk-input-multiline'),
-  };
-  Module.oskIsModal = Module.isMobile;   // on desktop the field stays behind the canvas
-  const oskInputs = new Set<EventTarget | null>(
-    Object.values(Module.oskInput).filter(Boolean),
-  );
+  // Stray focus must bounce off, or a field silently swallows keys meant for
+  // the game. On desktop the active field itself stays behind the canvas.
   host.installClipboardCopy({
     fields: oskInputs,
     writeText: (text) => native().clipboard.writeText(text),
@@ -1109,7 +1132,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     if (!el) { log(`[warn] missing OSK element for "${type}"`); continue; }
     el.addEventListener('focus', () => {
       globalThis.queueMicrotask(() => {
-        if (Module.oskActiveInput !== el && document.activeElement === el) el.blur();
+        if (Module.oskActiveInput !== el && document.activeElement === el) c.focus();
       });
     });
     if (Module.oskIsModal) {
@@ -1143,6 +1166,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       filesystem,
       input,
       inputTraceModule,
+      surfaceController,
       nativeDoubleClickModule,
       clipboardCopy,
       templateSaveCompatibility,
@@ -1160,6 +1184,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       import('./filesystem.js'),
       import('./input.js'),
       import('./input-trace.js'),
+      import('./surface-controller.js'),
       import('./native-double-click.js'),
       import('./clipboard-copy.js'),
       import('./template-save-compatibility.js'),
@@ -1176,6 +1201,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       ...filesystem,
       ...input,
       ...inputTraceModule,
+      ...surfaceController,
       ...nativeDoubleClickModule,
       ...clipboardCopy,
       ...templateSaveCompatibility,

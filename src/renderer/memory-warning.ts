@@ -15,6 +15,7 @@ export interface MemoryWarningPresenter {
 export function bindMemoryWarning(
   document: Document,
   reload: () => void,
+  surfaces: GwonmacSurfaceController | null = null,
 ): MemoryWarningPresenter | null {
   const root = document.getElementById("memory-notice");
   const live = document.getElementById("memory-notice-text");
@@ -34,6 +35,18 @@ export function bindMemoryWarning(
   let currentLevel: MemoryWarningLevel | null = null;
   let dismissedLevel: MemoryWarningLevel | null = null;
   const rank = (level: MemoryWarningLevel) => level === "critical" ? 2 : 1;
+  const dismiss = () => {
+    dismissedLevel = currentLevel;
+    root.hidden = true;
+    details.open = false;
+    dismissable?.setOpen(false);
+    document.getElementById("canvas")?.focus();
+  };
+  const dismissable = surfaces?.register({
+    root,
+    priority: 8,
+    dismiss,
+  }) ?? null;
 
   for (const name of [
     "keydown", "keyup", "pointerdown", "pointerup", "pointermove",
@@ -44,14 +57,10 @@ export function bindMemoryWarning(
 
   reloadButton.addEventListener("click", () => {
     root.hidden = true;
+    dismissable?.setOpen(false);
     reload();
   });
-  laterButton.addEventListener("click", () => {
-    dismissedLevel = currentLevel;
-    root.hidden = true;
-    details.open = false;
-    document.getElementById("canvas")?.focus();
-  });
+  laterButton.addEventListener("click", dismiss);
 
   return {
     present(level, capBytes) {
@@ -67,10 +76,12 @@ export function bindMemoryWarning(
       live.setAttribute("role", level === "critical" ? "alert" : "status");
       live.setAttribute("aria-live", level === "critical" ? "assertive" : "polite");
       root.hidden = false;
+      dismissable?.setOpen(true);
     },
     hide() {
       root.hidden = true;
       details.open = false;
+      dismissable?.setOpen(false);
     },
   };
 }
