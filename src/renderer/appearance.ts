@@ -20,12 +20,19 @@ function loadGuildWarsFont(generation: string): Promise<boolean> {
   if (typeof FontFace === "undefined" || typeof document === "undefined") {
     return Promise.resolve(false);
   }
-  const source = `url("gw://app/game-font.ttf?generation=${encodeURIComponent(generation)}")`;
-  const pending = new FontFace("Guild Wars Original", source, {
-    style: "normal",
-    weight: "400",
-  }).load().then((font) => {
-    document.fonts.add(font);
+  const suffix = `?generation=${encodeURIComponent(generation)}`;
+  const pending = Promise.all([
+    new FontFace("Guild Wars Original", `url("gw://app/game-font.ttf${suffix}")`, {
+      style: "normal",
+      weight: "400",
+    }).load(),
+    new FontFace(
+      "Guild Wars Original Display",
+      `url("gw://app/game-font-display.ttf${suffix}")`,
+      { style: "normal", weight: "400" },
+    ).load(),
+  ]).then((fonts) => {
+    for (const font of fonts) document.fonts.add(font);
     return true;
   }).catch(() => false);
   fontLoads.set(generation, pending);

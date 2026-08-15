@@ -9,6 +9,7 @@ import { GameFontAssets } from "../../src/main/core/game-font-assets.js";
 import {
   buildGuildWarsTrueType,
   decodeGameFontRange,
+  GUILD_WARS_DISPLAY_FONT,
 } from "../../src/main/core/gw-font.ts";
 
 const root = new URL("../../", import.meta.url);
@@ -83,6 +84,22 @@ test("the converted result is a complete checksummed TrueType font", () => {
   assert.ok(font.includes(Buffer.from("Guild Wars Original", "utf16le").swap16()));
 });
 
+test("the original display strike builds as a separate browser family", () => {
+  const font = buildGuildWarsTrueType(repeatedGlyph([0x00, 0x10, 0x01]), {
+    strike: GUILD_WARS_DISPLAY_FONT,
+  });
+  assert.ok(font.includes(
+    Buffer.from("Guild Wars Original Display", "utf16le").swap16(),
+  ));
+  assert.deepEqual(
+    font,
+    buildGuildWarsTrueType(repeatedGlyph([0x00, 0x10, 0x01]), {
+      strike: GUILD_WARS_DISPLAY_FONT,
+      outlineThreshold: 0xe0,
+    }),
+  );
+});
+
 test("the measured contour remains the default and calibration inputs are bounded", () => {
   const strike = repeatedGlyph([0x00, 0x00, 0x00]);
   const font = buildGuildWarsTrueType(strike);
@@ -150,10 +167,12 @@ test("the shared UI offers the local Guild Wars font independently of Inter", ()
   const css = readFileSync(new URL("src/shared/ui/tokens.css", root), "utf8");
   assert.match(css, /data-ui-font="guild-wars"/);
   assert.match(css, /--ui-font: "Guild Wars Original"/);
+  assert.match(css, /--ui-font-display: "Guild Wars Original Display"/);
   assert.match(css, /:root\[data-ui-font="inter"\]/);
   assert.match(css, /font-synthesis-weight: none/);
   assert.doesNotMatch(css, /-1px 1px 0 #000/);
   const appearance = readFileSync(new URL("src/renderer/appearance.ts", root), "utf8");
   assert.match(appearance, /new FontFace\("Guild Wars Original"/);
+  assert.match(appearance, /"Guild Wars Original Display"/);
   assert.match(appearance, /generation=/);
 });

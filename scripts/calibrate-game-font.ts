@@ -3,12 +3,12 @@
  *
  * The player's own archive is the reference. Nothing from it is committed:
  * this command writes a disposable report under `/tmp` unless `--out` says
- * otherwise. Each candidate outline is rasterised by Chromium at 24 physical
- * pixels (the 12 CSS px / Retina case), aligned against the original grayscale
+ * otherwise. Each candidate outline is rasterised by Chromium at the strike's
+ * native physical size, aligned against the original grayscale
  * strike, scored by alpha error, and shown beside a heat-map difference.
  *
  *   pnpm font:calibrate
- *   pnpm font:calibrate -- --out /tmp/my-font-report --text "Seek Party"
+ *   pnpm font:calibrate -- --role display --text "Primary Quests"
  */
 
 import { homedir } from "node:os";
@@ -20,7 +20,8 @@ import { readGameFontStrike } from "../src/main/core/game-font-assets.js";
 import {
   buildGuildWarsTrueType,
   decodeGameFontRange,
-  GUILD_WARS_FONT_METRICS,
+  GUILD_WARS_BODY_FONT,
+  GUILD_WARS_DISPLAY_FONT,
 } from "../src/main/core/gw-font.js";
 import { parsePublishedClientManifest } from "../src/main/core/published-client.js";
 
@@ -34,8 +35,18 @@ const gameDir = path.resolve(flag(
   "game",
   path.join(homedir(), "Library", "Application Support", "Guild Wars", "game"),
 ));
-const outDir = path.resolve(flag("out", "/tmp/gwonmac-font-calibration"));
-const sample = flag("text", "Seek Party");
+const role = flag("role", "body");
+if (role !== "body" && role !== "display") {
+  throw new Error("--role must be body or display");
+}
+const metrics = role === "display" ? GUILD_WARS_DISPLAY_FONT : GUILD_WARS_BODY_FONT;
+const outDir = path.resolve(flag(
+  "out",
+  role === "body"
+    ? "/tmp/gwonmac-font-calibration"
+    : "/tmp/gwonmac-font-calibration-display",
+));
+const sample = flag("text", role === "display" ? "Primary Quests" : "Seek Party");
 const manifestPath = path.join(gameDir, "artifacts", "manifest.json");
 const decoderPath = path.resolve("build/native/gw-dat-decode");
 const thresholds = [0x60, 0x70, 0x80, 0x90, 0xa0, 0xb0, 0xc0, 0xd0, 0xe0];
@@ -51,10 +62,10 @@ const store = new ChunkStore({
   compression: manifest.compressionMode,
   fetch: null,
 });
-const strike = await readGameFontStrike({ store, decoderPath });
+const strike = await readGameFontStrike({ store, decoderPath }, metrics);
 if (!strike) throw new Error("the installed client does not contain the expected Latin strike");
 
-const glyphs = decodeGameFontRange(strike).map((glyph) => ({
+const glyphs = decodeGameFontRange(strike, metrics).map((glyph) => ({
   top: glyph.top,
   width: glyph.width,
   height: glyph.height,
@@ -62,7 +73,7 @@ const glyphs = decodeGameFontRange(strike).map((glyph) => ({
 }));
 const candidates = thresholds.map((threshold) => ({
   threshold,
-  font: buildGuildWarsTrueType(strike, { outlineThreshold: threshold })
+  font: buildGuildWarsTrueType(strike, { outlineThreshold: threshold, strike: metrics })
     .toString("base64"),
 }));
 
@@ -211,21 +222,25 @@ const results = await page.evaluate(
     }
     return output;
   },
-  { candidates, glyphs, metrics: GUILD_WARS_FONT_METRICS, sample },
+  { candidates, glyphs, metrics, sample },
 ) as CandidateResult[];
 
 results.sort((left, right) => left.error - right.error);
 const best = results[0];
 if (!best) throw new Error("font calibration produced no candidates");
+const bestFont = candidates.find(({ threshold }) => threshold === best.threshold);
+if (!bestFont) throw new Error("font calibration lost its best candidate");
 const pngBytes = (dataUrl: string) => Buffer.from(dataUrl.split(",", 2)[1]!, "base64");
 await mkdir(outDir, { recursive: true });
 await Promise.all([
+  writeFile(path.join(outDir, "font.ttf"), Buffer.from(bestFont.font, "base64")),
   writeFile(path.join(outDir, "reference.png"), pngBytes(best.referencePng)),
   writeFile(path.join(outDir, "rendered.png"), pngBytes(best.renderedPng)),
   writeFile(path.join(outDir, "difference.png"), pngBytes(best.differencePng)),
   writeFile(path.join(outDir, "report.json"), JSON.stringify({
     sample,
-    physicalPixelSize: GUILD_WARS_FONT_METRICS.em,
+    role,
+    physicalPixelSize: metrics.em,
     bestThreshold: best.threshold,
     candidates: results.map(({ threshold, error, coverageDelta }) => ({
       threshold,
@@ -250,8 +265,8 @@ await page.setContent(`<!doctype html><meta charset="utf-8"><style>
   th:first-child, td:first-child { text-align: left; }
   tr.best { color: #f2d58e; font-weight: 700; }
 </style>
-<h1>Guild Wars font calibration</h1>
-<p class="summary">“${sample.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}” at 24 physical pixels · best alpha threshold: 0x${best.threshold.toString(16)} · mean error ${(best.error * 100).toFixed(2)}%</p>
+<h1>Guild Wars ${role} font calibration</h1>
+<p class="summary">“${sample.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}” at ${metrics.em} physical pixels · best alpha threshold: 0x${best.threshold.toString(16)} · mean error ${(best.error * 100).toFixed(2)}%</p>
 <div class="grid">
   <article><h2>Original archive strike</h2><img src="${best.referencePng}"></article>
   <article><h2>Chromium render</h2><img src="${best.renderedPng}"></article>
@@ -266,6 +281,8 @@ await browser.close();
 console.log(JSON.stringify({
   report: path.join(outDir, "report.png"),
   data: path.join(outDir, "report.json"),
+  font: path.join(outDir, "font.ttf"),
+  role,
   bestThreshold: `0x${best.threshold.toString(16)}`,
   meanAlphaError: best.error,
   coverageDelta: best.coverageDelta,

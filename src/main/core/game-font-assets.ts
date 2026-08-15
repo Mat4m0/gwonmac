@@ -21,7 +21,9 @@ import {
 } from "./gw-dat-decoder.js";
 import {
   buildGuildWarsTrueType,
-  GUILD_WARS_LATIN_FONT_FILE_ID,
+  GUILD_WARS_BODY_FONT,
+  GUILD_WARS_DISPLAY_FONT,
+  type GameFontStrike,
 } from "./gw-font.js";
 
 const MAX_COMPRESSED_FONT_BYTES = 64 * 1024;
@@ -33,10 +35,17 @@ export interface GameFontSource {
 }
 
 export type GameFontRefusal = "unsupported" | "read-or-format";
+export type GameFontRole = "body" | "display";
+
+const strikes: Readonly<Record<GameFontRole, GameFontStrike>> = {
+  body: GUILD_WARS_BODY_FONT,
+  display: GUILD_WARS_DISPLAY_FONT,
+};
 
 /** Read and decompress only the bounded local strike used by the converter. */
 export async function readGameFontStrike(
   source: GameFontSource,
+  strike: GameFontStrike = GUILD_WARS_BODY_FONT,
 ): Promise<Buffer | null> {
   const { store } = source;
   const headerBytes = await store.readRange(0, 32);
@@ -58,7 +67,7 @@ export async function readGameFontStrike(
     ),
     files,
   );
-  const stream = findStream(files, index, GUILD_WARS_LATIN_FONT_FILE_ID);
+  const stream = findStream(files, index, strike.fileId);
   if (!stream?.compressed || stream.size > MAX_COMPRESSED_FONT_BYTES) return null;
   const compressed = await store.readRange(stream.offset, stream.size);
   return runGwDatDecoder(source.decoderPath, compressed, {
@@ -70,30 +79,35 @@ export async function readGameFontStrike(
 
 export class GameFontAssets {
   private readonly source: GameFontSource;
-  private result: Promise<Buffer | null> | null = null;
+  private readonly results = new Map<GameFontRole, Promise<Buffer | null>>();
   private refusalCode: GameFontRefusal | null = null;
 
   constructor(source: GameFontSource) {
     this.source = source;
   }
 
-  async font(): Promise<Buffer | null> {
-    return this.result ??= this.convert().catch(() => {
+  async font(role: GameFontRole = "body"): Promise<Buffer | null> {
+    const existing = this.results.get(role);
+    if (existing) return existing;
+    const result = this.convert(role).catch(() => {
       this.refusalCode = "read-or-format";
       return null;
     });
+    this.results.set(role, result);
+    return result;
   }
 
   refusal(): GameFontRefusal | null {
     return this.refusalCode;
   }
 
-  private async convert(): Promise<Buffer | null> {
-    const raw = await readGameFontStrike(this.source);
+  private async convert(role: GameFontRole): Promise<Buffer | null> {
+    const strike = strikes[role];
+    const raw = await readGameFontStrike(this.source, strike);
     if (!raw) {
       this.refusalCode = "unsupported";
       return null;
     }
-    return buildGuildWarsTrueType(raw);
+    return buildGuildWarsTrueType(raw, { strike });
   }
 }
