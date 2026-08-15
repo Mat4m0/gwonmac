@@ -129,7 +129,7 @@
 
 .hero-cell strong {
   font-size: var(--ui-font-size-sm);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
 }
 
 .hero-cell small {
@@ -276,7 +276,7 @@
 .apply-issue-list strong {
   color: var(--ui-text-bright);
   font-size: var(--ui-font-size-sm);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
 }
 .apply-issue-list small {
   margin-top: 2px;

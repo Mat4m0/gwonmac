@@ -99,7 +99,7 @@
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-sm);
 }
-.travel-shortcuts header strong { color: var(--ui-text); font-weight: 600; }
+.travel-shortcuts header strong { color: var(--ui-text); font-weight: var(--ui-font-weight-semibold); }
 .travel-shortcuts button {
   display: flex;
   align-items: center;
@@ -136,7 +136,7 @@
 .travel-results button:disabled,
 .travel-shortcuts button:disabled { cursor: default; }
 .travel-results button > span:first-child { display: grid; gap: 1px; }
-.travel-results strong { font-weight: 600; }
+.travel-results strong { font-weight: var(--ui-font-weight-semibold); }
 .travel-results small { color: var(--ui-text-muted); }
 .travel-progress { color: var(--ui-accent); }
 .travel-empty { padding: 20px 12px; color: var(--ui-text-muted); text-align: center; }

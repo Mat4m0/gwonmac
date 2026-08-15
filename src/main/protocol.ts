@@ -481,7 +481,10 @@ async function handleGwRequest(
 
   if (base === "Gw.snapshot") return handleSnapshot(request, deps);
 
-  if (base === "game-font.ttf") {
+  const gameFontRole = base === "game-font.ttf"
+    ? "body"
+    : base === "game-font-display.ttf" ? "display" : null;
+  if (gameFontRole) {
     const missing = () =>
       new Response("not found", {
         status: 404,
@@ -490,7 +493,7 @@ async function handleGwRequest(
     const active = deps.getActiveClient();
     if (!active || request.method !== "GET") return missing();
     const assets = fontFor(active);
-    const font = await assets.font();
+    const font = await assets.font(gameFontRole);
     if (!font && !reportedGameFontRefusals.has(assets)) {
       reportedGameFontRefusals.add(assets);
       logEvent({

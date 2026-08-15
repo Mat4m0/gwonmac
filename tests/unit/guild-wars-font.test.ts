@@ -9,6 +9,7 @@ import { GameFontAssets } from "../../src/main/core/game-font-assets.js";
 import {
   buildGuildWarsTrueType,
   decodeGameFontRange,
+  GUILD_WARS_DISPLAY_FONT,
 } from "../../src/main/core/gw-font.ts";
 
 const root = new URL("../../", import.meta.url);
@@ -83,6 +84,39 @@ test("the converted result is a complete checksummed TrueType font", () => {
   assert.ok(font.includes(Buffer.from("Guild Wars Original", "utf16le").swap16()));
 });
 
+test("the original display strike builds as a separate browser family", () => {
+  const font = buildGuildWarsTrueType(repeatedGlyph([0x00, 0x10, 0x01]), {
+    strike: GUILD_WARS_DISPLAY_FONT,
+  });
+  assert.ok(font.includes(
+    Buffer.from("Guild Wars Original Display", "utf16le").swap16(),
+  ));
+  assert.deepEqual(
+    font,
+    buildGuildWarsTrueType(repeatedGlyph([0x00, 0x10, 0x01]), {
+      strike: GUILD_WARS_DISPLAY_FONT,
+      outlineThreshold: 0xe0,
+    }),
+  );
+});
+
+test("the measured contour remains the default and calibration inputs are bounded", () => {
+  const strike = repeatedGlyph([0x00, 0x00, 0x00]);
+  const font = buildGuildWarsTrueType(strike);
+  assert.deepEqual(
+    font,
+    buildGuildWarsTrueType(strike, { outlineThreshold: 0xa0 }),
+  );
+  assert.notDeepEqual(
+    font,
+    buildGuildWarsTrueType(strike, { outlineThreshold: 0x80 }),
+  );
+  assert.throws(
+    () => buildGuildWarsTrueType(strike, { outlineThreshold: 0 }),
+    /threshold must be an integer from 1 to 254/,
+  );
+});
+
 test("a narrow numeral gets balanced proportional spacing", () => {
   // Most fixture glyphs fill a nine-pixel cell. `1` occupies only its centre
   // pixel, matching the large empty sides found in the game's real digit cell.
@@ -90,7 +124,11 @@ test("a narrow numeral gets balanced proportional spacing", () => {
   const narrow = packedNibbles([0, 8, 1, 0, 1, 0, 3, 8, 0, 3]);
   const glyphs = Array.from({ length: GLYPH_COUNT }, () => full);
   glyphs[0x31 - 0x21] = narrow;
-  const font = buildGuildWarsTrueType(Uint8Array.from(glyphs.flat()));
+  const font = buildGuildWarsTrueType(Uint8Array.from(glyphs.flat()), {
+    // This synthetic one-pixel stem exists to isolate the spacing rule. The
+    // real calibrated strike has a wider `1`; keep the fixture visible here.
+    outlineThreshold: 0x80,
+  });
   const hmtx = tableOffset(font, "hmtx");
   const glyphId = (character: string) => character.charCodeAt(0) - 0x20 + 1;
   const advance = (character: string) =>
@@ -127,10 +165,25 @@ test("a compact oversized strike is refused before outline tracing", () => {
 
 test("the shared UI offers the local Guild Wars font independently of Inter", () => {
   const css = readFileSync(new URL("src/shared/ui/tokens.css", root), "utf8");
+  const harness = readFileSync(new URL("src/renderer/harness.css", root), "utf8");
+  const loading = readFileSync(new URL("src/renderer/loading.css", root), "utf8");
   assert.match(css, /data-ui-font="guild-wars"/);
   assert.match(css, /--ui-font: "Guild Wars Original"/);
+  assert.match(css, /--ui-font-display: "Guild Wars Original Display"/);
+  assert.match(css, /"Guild Wars Original", "QTFrizQuad"/);
   assert.match(css, /:root\[data-ui-font="inter"\]/);
+  assert.match(css, /font-synthesis-weight: none/);
+  assert.match(css, /--ui-font-weight-bold: 400/);
+  assert.match(css, /--ui-font-weight-bold: 700/);
+  assert.match(css, /:where\(strong, b, h1, h2, h3, h4, h5, h6\)/);
+  assert.doesNotMatch(css, /-1px 1px 0 #000/);
+  assert.doesNotMatch(
+    harness.match(/#settings-dialog\s*\{[\s\S]*?\}/u)?.[0] ?? "",
+    /--ui-font(?:-display)?\s*:/u,
+  );
+  assert.match(loading, /font:16px\/1\.5 var\(--ui-font\)/u);
   const appearance = readFileSync(new URL("src/renderer/appearance.ts", root), "utf8");
   assert.match(appearance, /new FontFace\("Guild Wars Original"/);
+  assert.match(appearance, /"Guild Wars Original Display"/);
   assert.match(appearance, /generation=/);
 });

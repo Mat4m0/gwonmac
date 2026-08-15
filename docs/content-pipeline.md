@@ -119,17 +119,32 @@ network cache does not become a second copy of the game-data store.
 ## Original interface font
 
 Guild Wars stores its interface lettering as bitmap strikes, not as a standard
-font file. GWonMac reads the hand-tuned 24-pixel basic-Latin body strike
-(archive file 123027) from the active local game, validates and decompresses
-that one bounded stream, and converts its 94 printable ASCII glyphs to TrueType
-in memory. The shared Guild Wars interface theme loads it from
-`gw://app/game-font.ttf`.
+font file. GWonMac reads two hand-tuned basic-Latin strikes from the active
+local game: the 24-pixel body face (archive file 123027) and the finer 52-pixel
+display face (archive file 123028). It validates and decompresses only those
+bounded streams, then converts their 94 printable ASCII glyphs to separate
+TrueType families in memory. The shared Guild Wars interface theme loads them
+from `gw://app/game-font.ttf` and `gw://app/game-font-display.ttf`.
 
 The local archive remains the source of truth. GWonMac does not commit, cache,
 package, or redistribute the game glyphs or the converted font. If the file is
 missing or ArenaNet changes its format, the request fails closed and the theme
 uses its existing Palatino-compatible serif fallback. Characters outside basic
 ASCII also use that fallback.
+
+### Font calibration
+
+Run `pnpm font:calibrate` after changing the body converter. Add
+`-- --role display --text "Primary Quests"` to calibrate the display face. The
+command reads the selected bounded strike from the local installed game,
+renders threshold candidates through Chromium at its native physical size, and
+writes reference, rendered, difference, and numeric-error results under `/tmp`.
+
+The original grayscale strike is the reference; a screenshot is not. Generated
+reports are disposable local evidence and must not be committed because they
+contain ArenaNet glyph pixels. The converter's default contour threshold is the
+best measured candidate from this loop, while a final visual check still guards
+against a metric rewarding an obviously poor shape.
 
 At startup, the native store scans chunk residency once. It updates the
 in-memory residency set after publication. A range request does not rescan the

@@ -139,7 +139,7 @@ const canCapture = computed(() =>
   min-width: 0;
   flex: 1;
   font-size: var(--ui-font-size);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
 }
 
 .live-party-body {

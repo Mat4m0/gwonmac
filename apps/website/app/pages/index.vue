@@ -26,7 +26,6 @@ const localize = (value: Localized) => getLocalizedSiteText(value, locale.value)
 // the DMG in the browser instead raced hydration: a third of clicks landed on
 // the releases page because the fetch had not answered yet.
 const DOWNLOAD_PATH = "/download";
-const BETA_DOWNLOAD_PATH = "/download?channel=beta";
 // /api/latest resolves the newest downloadable release from GitHub (cached
 // server-side, Stable by default). Fetched in the browser so
 // the prerendered page never bakes in a stale version; it only names the
@@ -77,7 +76,6 @@ const HERO = {
   },
   download: { en: "Download for Mac", de: "Für Mac herunterladen" },
   docs: { en: "Installation guide", de: "Installationsanleitung" },
-  betaDownload: { en: "Download the Beta", de: "Beta herunterladen" },
   finePrint: {
     en: "Free · For Apple Silicon · Signed & notarized",
     de: "Kostenlos · Für Apple Silicon · Signiert & notarisiert",

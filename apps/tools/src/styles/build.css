@@ -263,7 +263,7 @@
   margin: 0;
   color: var(--ui-text-bright);
   font-size: var(--ui-font-size);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
 }
 
 .section-heading p { margin-left: 0; }
@@ -529,7 +529,7 @@
 
 .usage-row strong,
 .usage-row small { display: block; }
-.usage-row strong { font-weight: 500; }
+.usage-row strong { font-weight: var(--ui-font-weight-medium); }
 
 .usage-row small {
   margin-top: 2px;
@@ -540,7 +540,7 @@
   display: block;
   margin-bottom: var(--ui-space-2);
   color: var(--ui-text-bright);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
 }
 
 /* An action that needs explaining before it happens, shown where it will take
@@ -636,7 +636,7 @@
 
 .team-action-buttons .ui-link[data-variant="danger"] { margin: 0 auto 0 0; }
 .apply-details { margin-top: var(--ui-space-1); color: var(--ui-text); }
-.apply-details summary { cursor: pointer; font-weight: 600; }
+.apply-details summary { cursor: pointer; font-weight: var(--ui-font-weight-semibold); }
 .apply-details ul { margin: var(--ui-space-1) 0 0; padding-left: var(--ui-space-4); }
 
 @container detail-pane (max-width: 860px) {

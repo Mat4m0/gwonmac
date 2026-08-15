@@ -75,8 +75,9 @@ describe("appearance settings", () => {
       assert.equal(root.dataset.uiFont, undefined);
       await new Promise<void>((resolve) => setImmediate(resolve));
       assert.equal(root.dataset.uiFont, "guild-wars");
-      assert.equal(added.length, 1);
+      assert.equal(added.length, 2);
       assert.match(sources[0]!, /generation=generation-a/u);
+      assert.match(sources[1]!, /game-font-display\.ttf/u);
 
       applyAppearance({ ...DEFAULT_SETTINGS, uiFont: "inter" }, root, "generation-b");
       await Promise.resolve();

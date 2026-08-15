@@ -192,7 +192,7 @@
   color: var(--ui-text-muted);
   font: inherit;
   font-size: var(--ui-font-size-sm);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
   text-align: left;
 }
 
@@ -216,7 +216,7 @@
 .skill-group-count {
   color: var(--ui-text-faint);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: var(--ui-font-weight-medium);
 }
 
 .skill-group-results:empty { display: none; }

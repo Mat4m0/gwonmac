@@ -45,6 +45,7 @@
     "certification": "pnpm build && node build/tools/certification.js",
     "client:official": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/official-client.ts",
     "enhancements:visual": "pnpm build && node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/enhancements-visual.ts",
+    "font:calibrate": "pnpm build && node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/calibrate-game-font.ts",
     "enhancements:kernel:verify": "pnpm build && node scripts/verify-companion-kernel.mjs",
     "snapshot:prune": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/snapshot-retention.ts",
     "test:website": "pnpm --filter gw-website certify && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/website-smoke.ts",

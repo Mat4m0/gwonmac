@@ -90,16 +90,25 @@
   --ui-font-size-sm: 12px;
   --ui-font-size-lg: 17px;
   --ui-line-height: 1.4;
-  --ui-font: "Palatino Linotype", "Book Antiqua", Palatino,
+  --ui-font: "QTFrizQuad", "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
   --ui-font-display: var(--ui-font);
+  --ui-font-readable: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
   --ui-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* The game-derived and packaged fallback faces each contain one real
+   * weight. Keep their strokes untouched; hierarchy comes from scale, colour,
+   * and spacing. Inter restores its native weight range below. */
+  --ui-font-weight-medium: 400;
+  --ui-font-weight-semibold: 400;
+  --ui-font-weight-bold: 400;
 
   /* Ink and state. */
   --ui-text: #ebe5d3;
   --ui-text-bright: #f5f0e2;
   --ui-text-muted: #b2ac9d;
   --ui-text-faint: #948e7e;
+  --ui-display-text: var(--ui-text-bright);
   --ui-accent: #e6c882;
   --ui-accent-hover: var(--gw-gold-bright);
   --ui-accent-strong: #8a7433;
@@ -135,8 +144,9 @@
   --ui-shadow-raised-soft: 0 2px 5px rgb(0 0 0 / 60%);
   --ui-shadow-selected: 0 1px 3px rgb(0 0 0 / 70%);
   --ui-shadow-row-selected: 0 1px 4px rgb(0 0 0 / 70%);
-  --ui-text-shadow: 1px 1px 0 #000, -1px 1px 0 #000,
-    1px -1px 0 #000, -1px -1px 0 #000, 0 2px 4px rgb(0 0 0 / 90%);
+  --ui-text-shadow: 0 1px 1px #000, 0 2px 3px rgb(0 0 0 / 85%);
+  --ui-display-text-shadow: var(--ui-text-shadow);
+  --ui-display-letter-spacing: 0.045em;
   --ui-frame: var(--gw-ring-bone);
   --ui-frame-top: var(--gw-bone-hi);
   --ui-ring-gilt: var(--gw-ring-gilt);
@@ -181,17 +191,38 @@
   --ui-z-toast: 40;
 }
 
+/* Preserve semantic emphasis in the markup while letting the selected face
+ * decide whether that emphasis is expressed through stroke weight. */
+:where(strong, b, h1, h2, h3, h4, h5, h6) {
+  font-weight: var(--ui-font-weight-bold);
+}
+
 /* The local face becomes active only after the client generation supplied it. */
 :root[data-ui-font="guild-wars"] {
-  --ui-font: "Guild Wars Original", "Palatino Linotype", "Book Antiqua", Palatino,
+  --ui-font: "Guild Wars Original", "QTFrizQuad", "Palatino Linotype",
+    "Book Antiqua", Palatino, "URW Palladio L", Georgia, serif;
+  --ui-font-display: "Guild Wars Original Display", "Guild Wars Original",
+    "QTFrizQuad", "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
-  --ui-font-display: var(--ui-font);
+  --ui-display-text: #f2dfad;
+  --ui-display-text-shadow:
+    0 -0.5px 0 rgb(255 248 220 / 72%),
+    0 1px 0 rgb(115 99 67 / 90%),
+    1px 1px 1px rgb(0 0 0 / 92%),
+    0 2px 2px rgb(0 0 0 / 78%);
+  --ui-display-letter-spacing: 0;
+  /* The local strike has one hand-tuned weight. Chromium's synthetic bold
+   * expands its pixel-shaped outline and makes small labels look blurry. */
+  font-synthesis-weight: none;
 }
 
 /* A player can keep either visual style while selecting modern system type. */
 :root[data-ui-font="inter"] {
-  --ui-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ui-font: var(--ui-font-readable);
   --ui-font-display: var(--ui-font);
+  --ui-font-weight-medium: 500;
+  --ui-font-weight-semibold: 600;
+  --ui-font-weight-bold: 700;
 }
 
 /* Obsidian keeps the same hierarchy and components, then removes ornamental
@@ -204,6 +235,7 @@
   --ui-text-bright: oklch(0.97 0.01 84);
   --ui-text-muted: oklch(0.76 0.014 82);
   --ui-text-faint: oklch(0.64 0.012 82);
+  --ui-display-text: var(--ui-text-bright);
   --ui-accent: oklch(0.79 0.105 83);
   --ui-accent-hover: oklch(0.88 0.095 86);
   --ui-accent-strong: oklch(0.7 0.105 82);
@@ -238,6 +270,7 @@
   --ui-shadow-selected: 0 1px 2px oklch(0 0 0 / 0.36);
   --ui-shadow-row-selected: 0 1px 2px oklch(0 0 0 / 0.28);
   --ui-text-shadow: none;
+  --ui-display-text-shadow: none;
   --ui-frame: transparent;
   --ui-frame-top: transparent;
   --ui-ring-gilt: transparent;

@@ -16,7 +16,40 @@
  * outside basic ASCII fall through to the existing serif stack.
  */
 
-export const GUILD_WARS_LATIN_FONT_FILE_ID = 123027;
+export interface GameFontStrike {
+  readonly fileId: number;
+  readonly family: string;
+  readonly fullName: string;
+  readonly postScriptName: string;
+  readonly em: number;
+  readonly baseline: number;
+  readonly lineHeight: number;
+  readonly spaceWidth: number;
+}
+
+export const GUILD_WARS_BODY_FONT = {
+  fileId: 123027,
+  family: "Guild Wars Original",
+  fullName: "Guild Wars Original Regular",
+  postScriptName: "GuildWarsOriginal-Regular",
+  em: 24,
+  baseline: 18,
+  lineHeight: 25,
+  spaceWidth: 6,
+} as const satisfies GameFontStrike;
+
+export const GUILD_WARS_DISPLAY_FONT = {
+  fileId: 123028,
+  family: "Guild Wars Original Display",
+  fullName: "Guild Wars Original Display Regular",
+  postScriptName: "GuildWarsOriginalDisplay-Regular",
+  em: 52,
+  baseline: 40,
+  lineHeight: 52,
+  spaceWidth: 13,
+} as const satisfies GameFontStrike;
+
+export const GUILD_WARS_LATIN_FONT_FILE_ID = GUILD_WARS_BODY_FONT.fileId;
 
 const ALPHA = Uint8Array.of(
   0x00, 0x66, 0x79, 0x8d, 0x97, 0xa5, 0xaf, 0xbd,
@@ -24,17 +57,23 @@ const ALPHA = Uint8Array.of(
 );
 const FIRST_CHARACTER = 0x21;
 const LAST_CHARACTER = 0x7e;
-const SOURCE_EM = 24;
-const SOURCE_BASELINE = 18;
-const SOURCE_LINE_HEIGHT = 25;
-const SOURCE_SPACE_WIDTH = 6;
-const MAX_SOURCE_DIMENSION = 24;
-const MAX_SOURCE_PIXELS = 24 * 24 * 94;
-const MAX_RECTANGLES_PER_GLYPH = 512;
-const MAX_TOTAL_RECTANGLES = 16_384;
+export const GUILD_WARS_FONT_METRICS = GUILD_WARS_BODY_FONT;
+const MAX_RECTANGLES_PER_GLYPH = 2_048;
+const MAX_TOTAL_RECTANGLES = 65_536;
 const UNITS_PER_EM = 1024;
-const OUTLINE_THRESHOLD = 0x80;
+// Measured by `pnpm font:calibrate` against the original grayscale strike.
+const BODY_OUTLINE_THRESHOLD = 0xa0;
+const DISPLAY_OUTLINE_THRESHOLD = 0xe0;
 const OUTLINE_SAMPLE_SCALE = 4;
+
+export interface GameFontBuildOptions {
+  /** Alpha crossing traced into the monochrome TrueType outline. */
+  readonly outlineThreshold?: number;
+  /** Sub-pixel grid used while locating that crossing. */
+  readonly outlineSampleScale?: 1 | 2 | 4;
+  /** The bounded original bitmap strike being converted. */
+  readonly strike?: GameFontStrike;
+}
 
 export interface GameGlyph {
   readonly top: number;
@@ -85,7 +124,10 @@ class Nibbles {
   }
 }
 
-function decodeGlyph(source: Uint8Array): { glyph: GameGlyph; bytes: number } {
+function decodeGlyph(
+  source: Uint8Array,
+  strike: GameFontStrike,
+): { glyph: GameGlyph; bytes: number } {
   const input = new Nibbles(source);
   const top = input.value();
   const width = input.value() + 1;
@@ -93,12 +135,12 @@ function decodeGlyph(source: Uint8Array): { glyph: GameGlyph; bytes: number } {
   const mode = input.read();
   const pixelCount = width * height;
   if (
-    width > MAX_SOURCE_DIMENSION
-    || height > MAX_SOURCE_DIMENSION
-    || top >= SOURCE_LINE_HEIGHT
-    || top + height > SOURCE_LINE_HEIGHT
+    width > strike.em
+    || height > strike.em
+    || top >= strike.lineHeight
+    || top + height > strike.lineHeight
   ) {
-    throw new Error("font glyph does not match the 24px strike");
+    throw new Error(`font glyph does not match the ${strike.em}px strike`);
   }
 
   const pixels = new Uint8Array(pixelCount);
@@ -123,11 +165,14 @@ function decodeGlyph(source: Uint8Array): { glyph: GameGlyph; bytes: number } {
   return { glyph: { top, width, height, pixels }, bytes: input.bytesRead };
 }
 
-export function decodeGameFontRange(bytes: Uint8Array): readonly GameGlyph[] {
+export function decodeGameFontRange(
+  bytes: Uint8Array,
+  strike: GameFontStrike = GUILD_WARS_BODY_FONT,
+): readonly GameGlyph[] {
   const glyphs: GameGlyph[] = [];
   let at = 0;
   while (at < bytes.byteLength) {
-    const decoded = decodeGlyph(bytes.subarray(at));
+    const decoded = decodeGlyph(bytes.subarray(at), strike);
     if (decoded.bytes <= 0 || at + decoded.bytes > bytes.byteLength) {
       throw new Error("font glyph length is invalid");
     }
@@ -138,7 +183,10 @@ export function decodeGameFontRange(bytes: Uint8Array): readonly GameGlyph[] {
   if (glyphs.length !== expected) {
     throw new Error(`font range has ${glyphs.length} glyphs instead of ${expected}`);
   }
-  if (glyphs.reduce((total, glyph) => total + glyph.pixels.length, 0) > MAX_SOURCE_PIXELS) {
+  if (
+    glyphs.reduce((total, glyph) => total + glyph.pixels.length, 0)
+    > strike.em * strike.em * expected
+  ) {
     throw new Error("font strike exceeds its pixel budget");
   }
   return glyphs;
@@ -190,9 +238,14 @@ interface HorizontalMetrics {
   readonly shift: number;
 }
 
-function interpolatedAlpha(glyph: GameGlyph, x: number, y: number): number {
-  const sourceX = (x + 0.5) / OUTLINE_SAMPLE_SCALE - 0.5;
-  const sourceY = (y + 0.5) / OUTLINE_SAMPLE_SCALE - 0.5;
+function interpolatedAlpha(
+  glyph: GameGlyph,
+  x: number,
+  y: number,
+  sampleScale: number,
+): number {
+  const sourceX = (x + 0.5) / sampleScale - 0.5;
+  const sourceY = (y + 0.5) / sampleScale - 0.5;
   const left = Math.floor(sourceX);
   const top = Math.floor(sourceY);
   const xBlend = sourceX - left;
@@ -217,31 +270,35 @@ function interpolatedAlpha(glyph: GameGlyph, x: number, y: number): number {
  * soft edge crosses half opacity; tracing the source pixels directly produced
  * the visibly stepped curves the bitmap's alpha levels were meant to hide.
  */
-function bitmapRectangles(glyph: GameGlyph): readonly Rectangle[] {
+function bitmapRectangles(
+  glyph: GameGlyph,
+  threshold: number,
+  sampleScale: number,
+): readonly Rectangle[] {
   const complete: Rectangle[] = [];
   let active = new Map<string, Rectangle>();
-  const width = glyph.width * OUTLINE_SAMPLE_SCALE;
-  const height = glyph.height * OUTLINE_SAMPLE_SCALE;
+  const width = glyph.width * sampleScale;
+  const height = glyph.height * sampleScale;
   for (let y = 0; y < height; y++) {
     const next = new Map<string, Rectangle>();
     for (let x = 0; x < width;) {
-      if (interpolatedAlpha(glyph, x, y) < OUTLINE_THRESHOLD) {
+      if (interpolatedAlpha(glyph, x, y, sampleScale) < threshold) {
         x += 1;
         continue;
       }
       const left = x;
       while (
         x < width
-        && interpolatedAlpha(glyph, x, y) >= OUTLINE_THRESHOLD
+        && interpolatedAlpha(glyph, x, y, sampleScale) >= threshold
       ) x += 1;
       const key = `${left}:${x}`;
       const rectangle = active.get(key) ?? {
-        left: left / OUTLINE_SAMPLE_SCALE,
-        right: x / OUTLINE_SAMPLE_SCALE,
-        top: y / OUTLINE_SAMPLE_SCALE,
-        bottom: y / OUTLINE_SAMPLE_SCALE,
+        left: left / sampleScale,
+        right: x / sampleScale,
+        top: y / sampleScale,
+        bottom: y / sampleScale,
       };
-      rectangle.bottom = (y + 1) / OUTLINE_SAMPLE_SCALE;
+      rectangle.bottom = (y + 1) / sampleScale;
       next.set(key, rectangle);
       active.delete(key);
     }
@@ -283,15 +340,16 @@ function trueTypeGlyph(
   glyph: GameGlyph,
   horizontalShift: number,
   rectangles: readonly Rectangle[],
+  strike: GameFontStrike,
 ): Buffer {
-  const scale = UNITS_PER_EM / SOURCE_EM;
+  const scale = UNITS_PER_EM / strike.em;
   if (rectangles.length === 0) return Buffer.alloc(10);
   const points = rectangles.flatMap((rectangle) => {
     const left = Math.round((rectangle.left + horizontalShift) * scale);
     const right = Math.round((rectangle.right + horizontalShift) * scale);
-    const top = Math.round((SOURCE_BASELINE - glyph.top - rectangle.top) * scale);
+    const top = Math.round((strike.baseline - glyph.top - rectangle.top) * scale);
     const bottom = Math.round(
-      (SOURCE_BASELINE - glyph.top - rectangle.bottom) * scale,
+      (strike.baseline - glyph.top - rectangle.bottom) * scale,
     );
     return [[left, top], [right, top], [right, bottom], [left, bottom]] as const;
   });
@@ -341,14 +399,14 @@ function cmapTable(): Buffer {
   return Buffer.concat([u16(0), u16(1), u16(3), u16(1), u32(12), format4]);
 }
 
-function nameTable(): Buffer {
+function nameTable(strike: GameFontStrike): Buffer {
   const names = new Map<number, string>([
-    [1, "Guild Wars Original"],
+    [1, strike.family],
     [2, "Regular"],
-    [3, "Guild Wars Original; locally converted by GWonMac"],
-    [4, "Guild Wars Original Regular"],
+    [3, `${strike.family}; locally converted by GWonMac`],
+    [4, strike.fullName],
     [5, "Version 1.0"],
-    [6, "GuildWarsOriginal-Regular"],
+    [6, strike.postScriptName],
     [8, "Converted locally by GWonMac"],
     [9, "ArenaNet"],
   ]);
@@ -372,8 +430,8 @@ function nameTable(): Buffer {
   ]);
 }
 
-function os2Table(advances: readonly number[]): Buffer {
-  const scale = UNITS_PER_EM / SOURCE_EM;
+function os2Table(advances: readonly number[], strike: GameFontStrike): Buffer {
+  const scale = UNITS_PER_EM / strike.em;
   const out = Buffer.alloc(78);
   out.writeUInt16BE(0, 0);
   out.writeInt16BE(Math.round(advances.reduce((a, b) => a + b, 0) / advances.length), 2);
@@ -398,20 +456,36 @@ function os2Table(advances: readonly number[]): Buffer {
   out.writeUInt16BE(0x40, 62);
   out.writeUInt16BE(0x20, 64);
   out.writeUInt16BE(LAST_CHARACTER, 66);
-  out.writeInt16BE(Math.round(SOURCE_BASELINE * scale), 68);
-  out.writeInt16BE(Math.round((SOURCE_BASELINE - SOURCE_EM) * scale), 70);
-  out.writeInt16BE(Math.round((SOURCE_LINE_HEIGHT - SOURCE_EM) * scale), 72);
-  out.writeUInt16BE(Math.round(SOURCE_BASELINE * scale), 74);
-  out.writeUInt16BE(Math.round((SOURCE_EM - SOURCE_BASELINE) * scale), 76);
+  out.writeInt16BE(Math.round(strike.baseline * scale), 68);
+  out.writeInt16BE(Math.round((strike.baseline - strike.em) * scale), 70);
+  out.writeInt16BE(Math.round((strike.lineHeight - strike.em) * scale), 72);
+  out.writeUInt16BE(Math.round(strike.baseline * scale), 74);
+  out.writeUInt16BE(Math.round((strike.em - strike.baseline) * scale), 76);
   return out;
 }
 
-/** Build a standards-compliant TrueType font from the 24px body strike. */
-export function buildGuildWarsTrueType(source: Uint8Array): Buffer {
-  const glyphs = decodeGameFontRange(source);
+/** Build a standards-compliant TrueType font from one original UI strike. */
+export function buildGuildWarsTrueType(
+  source: Uint8Array,
+  options: GameFontBuildOptions = {},
+): Buffer {
+  const strike = options.strike ?? GUILD_WARS_BODY_FONT;
+  const threshold = options.outlineThreshold ?? (
+    strike.fileId === GUILD_WARS_DISPLAY_FONT.fileId
+      ? DISPLAY_OUTLINE_THRESHOLD
+      : BODY_OUTLINE_THRESHOLD
+  );
+  const sampleScale = options.outlineSampleScale ?? OUTLINE_SAMPLE_SCALE;
+  if (!Number.isSafeInteger(threshold) || threshold <= 0 || threshold >= 0xff) {
+    throw new Error("font outline threshold must be an integer from 1 to 254");
+  }
+  if (sampleScale !== 1 && sampleScale !== 2 && sampleScale !== 4) {
+    throw new Error("font outline sample scale must be 1, 2, or 4");
+  }
+  const glyphs = decodeGameFontRange(source, strike);
   const sourceGlyphs: readonly (GameGlyph | null)[] = [null, null, ...glyphs];
   const rectangles = sourceGlyphs.map((glyph) =>
-    glyph === null ? [] : bitmapRectangles(glyph));
+    glyph === null ? [] : bitmapRectangles(glyph, threshold, sampleScale));
   if (
     rectangles.reduce((total, value) => total + value.length, 0)
     > MAX_TOTAL_RECTANGLES
@@ -425,10 +499,10 @@ export function buildGuildWarsTrueType(source: Uint8Array): Buffer {
           glyphId + FIRST_CHARACTER - 2,
           rectangles[glyphId]!,
         )
-      : { advance: SOURCE_SPACE_WIDTH, shift: 0 });
+      : { advance: strike.spaceWidth, shift: 0 });
   const glyfParts = sourceGlyphs.map((glyph, glyphId) =>
     glyph
-      ? trueTypeGlyph(glyph, metrics[glyphId]!.shift, rectangles[glyphId]!)
+      ? trueTypeGlyph(glyph, metrics[glyphId]!.shift, rectangles[glyphId]!, strike)
       : Buffer.alloc(10));
   const loca: number[] = [0];
   let glyfLength = 0;
@@ -437,11 +511,11 @@ export function buildGuildWarsTrueType(source: Uint8Array): Buffer {
     loca.push(glyfLength);
   }
   const advances = metrics.map(({ advance }) =>
-    Math.max(1, Math.round(advance * UNITS_PER_EM / SOURCE_EM)));
+    Math.max(1, Math.round(advance * UNITS_PER_EM / strike.em)));
   const maxRectangles = Math.max(0, ...rectangles.map((value) => value.length));
-  const ascent = Math.round(SOURCE_BASELINE * UNITS_PER_EM / SOURCE_EM);
-  const descent = Math.round((SOURCE_BASELINE - SOURCE_EM) * UNITS_PER_EM / SOURCE_EM);
-  const lineGap = Math.round((SOURCE_LINE_HEIGHT - SOURCE_EM) * UNITS_PER_EM / SOURCE_EM);
+  const ascent = Math.round(strike.baseline * UNITS_PER_EM / strike.em);
+  const descent = Math.round((strike.baseline - strike.em) * UNITS_PER_EM / strike.em);
+  const lineGap = Math.round((strike.lineHeight - strike.em) * UNITS_PER_EM / strike.em);
 
   const head = Buffer.alloc(54);
   head.writeUInt32BE(0x00010000, 0);
@@ -483,7 +557,7 @@ export function buildGuildWarsTrueType(source: Uint8Array): Buffer {
   post.writeInt16BE(50, 10);
 
   const tables = new Map<string, Buffer>([
-    ["OS/2", os2Table(advances)],
+    ["OS/2", os2Table(advances, strike)],
     ["cmap", cmapTable()],
     ["glyf", Buffer.concat(glyfParts)],
     ["head", head],
@@ -491,7 +565,7 @@ export function buildGuildWarsTrueType(source: Uint8Array): Buffer {
     ["hmtx", Buffer.concat(advances.map((advance) => Buffer.concat([u16(advance), i16(0)])))],
     ["loca", Buffer.concat(loca.map(u32))],
     ["maxp", maxp],
-    ["name", nameTable()],
+    ["name", nameTable(strike)],
     ["post", post],
   ]);
   const entries = [...tables].sort(([a], [b]) => a.localeCompare(b));
