@@ -127,6 +127,25 @@ test.describe("live client", () => {
         )
         .toBeGreaterThan(0);
 
+      await test.step("the locally converted Guild Wars font becomes active", async () => {
+        await expect
+          .poll(
+            () => page.evaluate(() => ({
+              selected: document.documentElement.dataset.uiFont,
+              loaded: document.fonts.check('16px "Guild Wars Original"'),
+              applied: getComputedStyle(document.documentElement)
+                .getPropertyValue("--ui-font-family")
+                .includes("Guild Wars Original"),
+            })),
+            { timeout: 30_000, intervals: [100, 250, 500] },
+          )
+          .toMatchObject({
+            selected: "guild-wars",
+            loaded: true,
+            applied: true,
+          });
+      });
+
       const platform = await page.evaluate(async () => {
         const game = globalThis as GameGlobals;
         const diagnostics = await window.gwNative.diagnostics.current();

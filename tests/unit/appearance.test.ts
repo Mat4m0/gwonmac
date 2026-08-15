@@ -44,4 +44,46 @@ describe("appearance settings", () => {
     assert.equal(root.dataset.uiStyle, undefined);
     assert.equal(root.dataset.uiFont, undefined);
   });
+
+  it("activates a generation-keyed game font only after it loads", async () => {
+    const sources: string[] = [];
+    const added: unknown[] = [];
+    const originalFontFace = globalThis.FontFace;
+    const originalDocument = globalThis.document;
+    class TestFontFace {
+      constructor(_family: string, source: string) {
+        sources.push(source);
+      }
+      async load() { return this; }
+    }
+    Object.defineProperty(globalThis, "FontFace", { configurable: true, value: TestFontFace });
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: { fonts: { add: (font: unknown) => added.push(font) } },
+    });
+    try {
+      const root = {
+        dataset: {} as DOMStringMap,
+        style: {
+          setProperty(name: string, value: string) {
+            void name;
+            void value;
+          },
+        },
+      } as HTMLElement;
+      applyAppearance(DEFAULT_SETTINGS, root, "generation-a");
+      assert.equal(root.dataset.uiFont, undefined);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.equal(root.dataset.uiFont, "guild-wars");
+      assert.equal(added.length, 1);
+      assert.match(sources[0]!, /generation=generation-a/u);
+
+      applyAppearance({ ...DEFAULT_SETTINGS, uiFont: "inter" }, root, "generation-b");
+      await Promise.resolve();
+      assert.equal(root.dataset.uiFont, "inter");
+    } finally {
+      Object.defineProperty(globalThis, "FontFace", { configurable: true, value: originalFontFace });
+      Object.defineProperty(globalThis, "document", { configurable: true, value: originalDocument });
+    }
+  });
 });
