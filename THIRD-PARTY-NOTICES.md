@@ -59,8 +59,10 @@ application's Resources directory.
 This is decoding machinery, not game content. Every fact the build editor shows
 — each skill's name, description, icon, profession, attribute and costs — is
 read at runtime out of the Guild Wars installation on the player's own machine
-and cached there. As with the game cursor described above, none of it is copied
-into this repository, the packaged application, or any release artifact.
+and cached there. The original Latin UI font is also read from that local game
+archive and converted to a browser font in memory. As with the game cursor
+described above, none of this game content is copied into this repository, the
+packaged application, or any release artifact.
 
 ## QT Friz Quad
 

@@ -1,11 +1,12 @@
 /* GWonMac's single visual source of truth.
  *
  * The vocabulary is taken from the original Guild Wars client: an ivory metal
- * ring, engraved parchment text, blue-black selected faces, graphite controls,
+ * ring, parchment text, blue-black selected faces, graphite controls,
  * and recessed black wells. Obsidian is the one optional projection of this
  * vocabulary: it changes tokens, never markup or component behaviour.
  *
- * `--ui-panel-opacity` controls visibility of the game behind either style.
+ * Font and style are independent settings. `--ui-panel-opacity` controls
+ * visibility of the game behind either style.
  * The `--ui-*` names remain the public component vocabulary; consumers do not
  * branch on the selected style.
  */
@@ -180,13 +181,24 @@
   --ui-z-toast: 40;
 }
 
+/* The local face becomes active only after the client generation supplied it. */
+:root[data-ui-font="guild-wars"] {
+  --ui-font: "Guild Wars Original", "Palatino Linotype", "Book Antiqua", Palatino,
+    "URW Palladio L", Georgia, serif;
+  --ui-font-display: var(--ui-font);
+}
+
+/* A player can keep either visual style while selecting modern system type. */
+:root[data-ui-font="inter"] {
+  --ui-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ui-font-display: var(--ui-font);
+}
+
 /* Obsidian keeps the same hierarchy and components, then removes ornamental
- * chrome in favour of warm-black tonal depth, quiet gilt, and system type.
+ * chrome in favour of warm-black tonal depth and quiet gilt.
  * The selector lives here—and only here—so every surface changes together. */
 :root[data-ui-style="obsidian"] {
   --ui-border-width: 0px;
-  --ui-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --ui-font-display: var(--ui-font);
 
   --ui-text: oklch(0.93 0.012 84);
   --ui-text-bright: oklch(0.97 0.01 84);

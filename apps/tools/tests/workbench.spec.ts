@@ -532,6 +532,7 @@ test("reorders team members with keyboard and pointer drag, then removes and und
 test("projects Obsidian through the shared system without layout drift", async ({ page }) => {
   await page.evaluate(() => {
     document.documentElement.dataset.uiStyle = "obsidian";
+    document.documentElement.dataset.uiFont = "inter";
     document.documentElement.style.setProperty("--ui-panel-opacity", "0.65");
   });
   await page.setViewportSize({ width: 360, height: 800 });

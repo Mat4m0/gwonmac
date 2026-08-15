@@ -32,6 +32,7 @@
     'renderScale',
   ) as RadioNodeList;
   const uiStyle = form.elements.namedItem('uiStyle') as RadioNodeList;
+  const uiFont = form.elements.namedItem('uiFont') as RadioNodeList;
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
   ) as HTMLInputElement;
@@ -568,6 +569,10 @@
         return control.value === 'guild-wars' || control.value === 'obsidian'
           ? { uiStyle: control.value }
           : null;
+      case 'uiFont':
+        return control.value === 'guild-wars' || control.value === 'inter'
+          ? { uiFont: control.value }
+          : null;
       case 'uiPanelOpacity':
       {
         // The slider's own min/max/step are the bounds; a value outside them
@@ -615,6 +620,7 @@
   function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
     uiStyle.value = settings.uiStyle;
+    uiFont.value = settings.uiFont;
     for (const { name } of appearanceRanges) {
       const range = appearanceRange(name);
       if (range) range.value = String(settings[name]);

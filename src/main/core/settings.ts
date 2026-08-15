@@ -24,6 +24,7 @@ import {
   UPDATE_TRACKS,
   UI_PANEL_OPACITY_MAX,
   UI_PANEL_OPACITY_MIN,
+  UI_FONTS,
   UI_STYLES,
   type AppSettings,
   type AppSettingsPatch,
@@ -37,6 +38,7 @@ import { writeAtomicJson } from "./atomic-file.js";
 const RENDER_SCALE_VALUES = new Set<AppSettings["renderScale"]>(RENDER_SCALES);
 const DATA_STRATEGY_VALUES = new Set<AppSettings["dataStrategy"]>(DATA_STRATEGIES);
 const UI_STYLE_VALUES = new Set<AppSettings["uiStyle"]>(UI_STYLES);
+const UI_FONT_VALUES = new Set<AppSettings["uiFont"]>(UI_FONTS);
 const UPDATE_TRACK_VALUES = new Set<AppSettings["updateTrack"]>(UPDATE_TRACKS);
 
 /**
@@ -110,6 +112,12 @@ export function parseSettings(raw: unknown): AppSettings {
       throw new AppError("bad_settings", "settings.uiStyle has unknown value");
     }
     out.uiStyle = src.uiStyle as AppSettings["uiStyle"];
+  }
+  if ("uiFont" in src) {
+    if (!UI_FONT_VALUES.has(src.uiFont as AppSettings["uiFont"])) {
+      throw new AppError("bad_settings", "settings.uiFont has unknown value");
+    }
+    out.uiFont = src.uiFont as AppSettings["uiFont"];
   }
   if ("uiPanelOpacity" in src) {
     out.uiPanelOpacity = asBoundedInteger(
