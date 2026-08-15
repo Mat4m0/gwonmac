@@ -116,6 +116,21 @@ The main-process chunk store is canonical. The renderer has a bounded,
 disposable byte cache for active play. Chromium responses use `no-store` so its
 network cache does not become a second copy of the game-data store.
 
+## Original interface font
+
+Guild Wars stores its interface lettering as bitmap strikes, not as a standard
+font file. GWonMac reads the hand-tuned 24-pixel basic-Latin body strike
+(archive file 123027) from the active local game, validates and decompresses
+that one bounded stream, and converts its 94 printable ASCII glyphs to TrueType
+in memory. The shared Guild Wars interface theme loads it from
+`gw://app/game-font.ttf`.
+
+The local archive remains the source of truth. GWonMac does not commit, cache,
+package, or redistribute the game glyphs or the converted font. If the file is
+missing or ArenaNet changes its format, the request fails closed and the theme
+uses its existing Palatino-compatible serif fallback. Characters outside basic
+ASCII also use that fallback.
+
 At startup, the native store scans chunk residency once. It updates the
 in-memory residency set after publication. A range request does not rescan the
 chunk directory.

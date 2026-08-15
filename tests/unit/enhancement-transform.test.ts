@@ -11,11 +11,11 @@ import {
   ENHANCEMENT_LAYOUT_FIELDS,
 } from "../../src/main/certification/enhancement-builds.js";
 import {
-  inspectEnhancementCandidate,
   ENHANCEMENT_HOOK_EXPORT,
   ENHANCEMENT_MANIFEST_SECTION,
   transformEnhancementWasm,
 } from "../../src/main/certification/enhancement-transform.js";
+import { inspectEnhancementCandidate } from "../../src/main/certification/enhancement-candidate.js";
 import { decodeEnhancementManifest } from "../../src/renderer/enhancement-manifest.js";
 import {
   callbackFixture,

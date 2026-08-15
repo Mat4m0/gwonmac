@@ -32,6 +32,7 @@
     'renderScale',
   ) as RadioNodeList;
   const uiStyle = form.elements.namedItem('uiStyle') as RadioNodeList;
+  const uiFont = form.elements.namedItem('uiFont') as RadioNodeList;
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
   ) as HTMLInputElement;
@@ -45,6 +46,7 @@
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
+  const travelPalette = form.elements.namedItem('travelPalette') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
   const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
   const accountsStatus = byId('accounts-setup-status');
@@ -567,6 +569,10 @@
         return control.value === 'guild-wars' || control.value === 'obsidian'
           ? { uiStyle: control.value }
           : null;
+      case 'uiFont':
+        return control.value === 'guild-wars' || control.value === 'inter'
+          ? { uiFont: control.value }
+          : null;
       case 'uiPanelOpacity':
       {
         // The slider's own min/max/step are the bounds; a value outside them
@@ -585,6 +591,7 @@
       case 'gwonmacTools':
       case 'teamManagement':
       case 'xunlaiStorage':
+      case 'travelPalette':
       case 'targetReadout':
         return control instanceof globalThis.HTMLInputElement
           ? { [control.name]: control.checked }
@@ -613,6 +620,7 @@
   function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
     uiStyle.value = settings.uiStyle;
+    uiFont.value = settings.uiFont;
     for (const { name } of appearanceRanges) {
       const range = appearanceRange(name);
       if (range) range.value = String(settings[name]);
@@ -623,10 +631,12 @@
     gwonmacTools.checked = settings.gwonmacTools;
     teamManagement.checked = settings.teamManagement;
     xunlaiStorage.checked = settings.xunlaiStorage;
+    travelPalette.checked = settings.travelPalette;
     targetReadout.checked = settings.targetReadout;
     void renderShortcuts(settings);
     teamManagement.disabled = !settings.gwonmacTools;
     xunlaiStorage.disabled = !settings.gwonmacTools;
+    travelPalette.disabled = !settings.gwonmacTools;
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     updateTrack.value = settings.updateTrack;

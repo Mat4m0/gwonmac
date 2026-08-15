@@ -1,5 +1,8 @@
 import { createNativeHost } from "./host";
 import { mountToolsApp as mount } from "./mount";
+import { createNativeTravelHost } from "./travel-host";
+import { mountTravelPalette as mountTravel } from "./travel-mount";
+import type { TravelCommand } from "../../../src/shared/travel-command";
 
 export { type ToolsAppHandle } from "./mount";
 
@@ -28,5 +31,19 @@ export function mountToolsApp(
     ),
     mode: "embedded",
     ...options,
+  });
+}
+
+export function mountTravelPalette(
+  target: HTMLElement,
+  options: {
+    command: TravelCommand;
+    initiallyVisible?: boolean;
+    onVisibilityChange?: (visible: boolean) => void;
+  },
+) {
+  return mountTravel(target, {
+    ...options,
+    host: createNativeTravelHost(window.gwNative, options.command),
   });
 }

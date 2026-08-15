@@ -5,10 +5,12 @@ import type { Page } from "playwright";
 import {
   COMPANION_CURSOR_BYTES,
   COMPANION_PARTY_BYTES,
+  COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
 import { TEAM_COMMAND_PAYLOAD_BYTES } from "../../src/renderer/enhancement-team-commands.ts";
 import { STORAGE_DATA_WINDOW_BYTES } from "../../src/renderer/enhancement-storage-command.ts";
+import { TRAVEL_PAYLOAD_BYTES } from "../../src/renderer/enhancement-travel-command.ts";
 import { COMPANION_ABI } from "../../src/shared/companion-abi.ts";
 import {
   closePackaged,
@@ -20,6 +22,7 @@ import {
   type PageGlobals,
   PRODUCT_RUNTIME_KEYS,
   TARGET_OFF_PRODUCT_CAPABILITIES,
+  TOOLBOX_CONFIG_POINTER,
   type ReadoutPageGlobals,
   TARGET_ONLY,
   TOOLBOX_PROGRAM_CAPABILITIES,
@@ -364,6 +367,7 @@ export async function assertToolboxFoundationLifecycle() {
       const allocations: { pointer: number; size: number }[] = [];
       const freed: number[] = [];
       const storageConfigurations: number[][] = [];
+      const travelConfigurations: number[][] = [];
       let nextPointer = 0x1000;
       const malloc = (size: number) => {
         const pointer = nextPointer;
@@ -414,6 +418,9 @@ export async function assertToolboxFoundationLifecycle() {
       view.setUint32(layout.agentArray + 8, 64, true);
       view.setUint32(game.agentBuffer + 42 * 4, game.player, true);
       view.setUint32(game.player + layout.agentId, 42, true);
+      view.setFloat32(game.player + layout.agentX, 100, true);
+      view.setFloat32(game.player + layout.agentY, 200, true);
+      view.setUint32(game.player + layout.agentType, 0x400, true);
       view.setUint16(game.player + layout.agentPlayerNumber, 42, true);
       view.setUint16(game.player + layout.agentModelType, 0x3000, true);
       view.setUint32(game.game + layout.partyContext, game.party, true);
@@ -519,11 +526,16 @@ export async function assertToolboxFoundationLifecycle() {
       const { installCertifiedCompanion }:
         typeof import("../../src/renderer/certified-companion-installation.ts") =
           await import(specifier);
+      const snapshotSpecifier = "./companion-snapshot.js";
+      const { readCompanionSnapshot }:
+        typeof import("../../src/renderer/companion-snapshot.ts") =
+          await import(snapshotSpecifier);
       globalThis.dispatchEvent(new Event("pagehide"));
       window.gwToolsSettings = () => Object.freeze({
         enabled: true,
         teamManagement: true,
-        xunlaiStorage: true,
+      xunlaiStorage: true,
+      travelPalette: true,
         targetReadout: false,
       });
       const runtime = await installCertifiedCompanion(
@@ -539,6 +551,11 @@ export async function assertToolboxFoundationLifecycle() {
             enhancement_open_storage: () => 1,
             enhancement_configure_storage: (pointer: number, enabled: number) => {
               storageConfigurations.push([pointer, enabled]);
+              return 1;
+            },
+            enhancement_travel: () => 1,
+            enhancement_configure_travel: (pointer: number, enabled: number) => {
+              travelConfigurations.push([pointer, enabled]);
               return 1;
             },
           },
@@ -612,6 +629,7 @@ export async function assertToolboxFoundationLifecycle() {
         runtimeFrozen: Object.isFrozen(runtime),
         runtimeKeys: Object.keys(runtime).sort(),
         storageConfigurations: [...storageConfigurations],
+        travelConfigurations: [...travelConfigurations],
         scalar: {
           buildId: runtime.buildId,
           companionAbi: runtime.companionAbi,
@@ -622,6 +640,7 @@ export async function assertToolboxFoundationLifecycle() {
           snapshotReads: runtime.snapshotReads,
           status: runtime.status,
         },
+        snapshot: readCompanionSnapshot(memory.buffer, allocations[1]!.pointer),
         tableOwns: table.get(tableSize - 1) === installedCallback,
         targetCount: document.querySelectorAll("#enhancement-target").length,
         toolbox: runtime.toolbox,
@@ -640,6 +659,7 @@ export async function assertToolboxFoundationLifecycle() {
         toolboxCount: document.querySelectorAll("#toolbox-foundation").length,
         transitions,
         storageConfigurations: [...storageConfigurations],
+        travelConfigurations: [...travelConfigurations],
       };
       return { after, before };
     }, {
@@ -649,6 +669,7 @@ export async function assertToolboxFoundationLifecycle() {
         ...ENHANCEMENT_BUILD.observationBase!.layout,
         ...ENHANCEMENT_BUILD.cursorEvent!.layout,
         ...ENHANCEMENT_BUILD.partyObservation!.layout,
+        ...ENHANCEMENT_BUILD.targetObservation!.layout,
       },
       messages: {
         playerChat: ENHANCEMENT_BUILD.partyObservation!.playerChatMessage,
@@ -657,14 +678,20 @@ export async function assertToolboxFoundationLifecycle() {
       tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     });
 
-    const configPointer = TOOLBOX_SNAPSHOT_POINTER;
+    const snapshotPointer = TOOLBOX_SNAPSHOT_POINTER;
+    const configPointer = TOOLBOX_CONFIG_POINTER;
     const cursorPointer = (configPointer + CONFIG_BYTES + 7) & ~7;
     const statePointer = (cursorPointer + COMPANION_CURSOR_BYTES + 7) & ~7;
     const partyPointer = statePointer + COMPANION_TOOLBOX_BYTES;
     const commandPointer = partyPointer + COMPANION_PARTY_BYTES;
     const storagePointer = commandPointer + TEAM_COMMAND_PAYLOAD_BYTES;
+    const travelPointer = (storagePointer + STORAGE_DATA_WINDOW_BYTES + 7) & ~7;
     assert.deepEqual(result.before.allocations, [
       { pointer: 0x1000, size: 65_551 },
+      {
+        pointer: snapshotPointer,
+        size: COMPANION_SNAPSHOT_BYTES,
+      },
       {
         pointer: configPointer,
         size: CONFIG_BYTES,
@@ -689,8 +716,16 @@ export async function assertToolboxFoundationLifecycle() {
         pointer: storagePointer,
         size: STORAGE_DATA_WINDOW_BYTES,
       },
+      {
+        pointer: travelPointer,
+        size: TRAVEL_PAYLOAD_BYTES,
+      },
     ]);
-    assert.deepEqual(result.before.storageConfigurations.at(-1), [storagePointer, 1]);
+    assert.deepEqual(
+      result.before.storageConfigurations.at(-1),
+      [storagePointer, 1],
+    );
+    assert.deepEqual(result.before.travelConfigurations.at(-1), [travelPointer, 1]);
     assert.equal(result.before.companionStatePublished, false);
     assert.equal(result.before.globalRuntimeIsRuntime, false);
     assert.equal(result.before.hook, ENHANCEMENT_BUILD.tableSlot + 1);
@@ -699,7 +734,10 @@ export async function assertToolboxFoundationLifecycle() {
     assert.equal(result.before.runtimeFrozen, true);
     assert.deepEqual(result.before.runtimeKeys, PRODUCT_RUNTIME_KEYS);
     const { snapshotReads, ...scalar } = result.before.scalar;
-    assert.equal(snapshotReads, 0);
+    assert.ok(snapshotReads > 0);
+    assert.equal(result.before.snapshot.status, "ready");
+    assert.equal(result.before.snapshot.mapId, 133);
+    assert.equal(result.before.snapshot.playRegion, "pve");
     assert.deepEqual(scalar, {
       buildId: ENHANCEMENT_BUILD.buildId,
       companionAbi: COMPANION_ABI.kernel,
@@ -763,11 +801,14 @@ export async function assertToolboxFoundationLifecycle() {
       partyPointer,
       commandPointer,
       storagePointer,
+      travelPointer,
       cursorPointer,
       configPointer,
+      snapshotPointer,
       0x1000,
     ]);
     assert.deepEqual(result.after.storageConfigurations.at(-1), [0, 0]);
+    assert.deepEqual(result.after.travelConfigurations.at(-1), [0, 0]);
     assert.equal(result.after.hook, 0);
     assert.equal(result.after.runtime, undefined);
     assert.equal(result.after.tableEmpty, true);
@@ -874,7 +915,8 @@ export async function assertRollbackAfterTablePublication() {
         window.gwToolsSettings = () => Object.freeze({
           enabled: true,
           teamManagement: true,
-          xunlaiStorage: true,
+      xunlaiStorage: true,
+      travelPalette: true,
           targetReadout: false,
         });
         globalThis.requestAnimationFrame = () => {

@@ -483,6 +483,7 @@ window.gwToolsSettings = () => Object.freeze({
   enabled: appSettings?.gwonmacTools ?? false,
   teamManagement: appSettings?.teamManagement ?? true,
   xunlaiStorage: appSettings?.xunlaiStorage ?? false,
+  travelPalette: appSettings?.travelPalette ?? false,
   targetReadout: appSettings?.targetReadout ?? false,
 });
 window.gwApplySettings = (next) => {
@@ -1223,7 +1224,12 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     appSettings = settings;
     templatePublishingAvailable =
       session.compatibility?.features.gameFileSaving.status === 'available';
-    applyAppearance(settings);
+    applyAppearance(
+      settings,
+      document.documentElement,
+      session.compatibility?.clientSha256
+        ?? String(session.healthToken?.generation ?? "active"),
+    );
     clientHealthConfirmation = createClientHealthConfirmation({
       token: session.healthToken,
       confirm: (token) => native().client.healthy(token),

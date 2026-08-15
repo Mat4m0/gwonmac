@@ -9,6 +9,7 @@ export type OptionalToolSettings = Readonly<{
   targetReadout: boolean;
   teamManagement: boolean;
   xunlaiStorage: boolean;
+  travelPalette?: boolean;
 }>;
 
 export type RuntimePlayRegion = "pve" | "pvp" | "unknown";
@@ -50,6 +51,9 @@ export function enhancementRuntimePolicy(
     ),
     xunlaiStorage: pve && (
       developerStorage || (settings.enabled && settings.xunlaiStorage)
+    ),
+    travelPalette: pve && (
+      developerStorage || (settings.enabled && settings.travelPalette === true)
     ),
   });
 }

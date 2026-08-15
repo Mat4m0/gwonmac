@@ -31,7 +31,6 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import { mapPool } from "./async-pool.js";
 import { sweepOrphans, writeAtomic } from "./atomic-file.js";
 import type { ChunkStore } from "./chunk-store.js";
@@ -43,6 +42,10 @@ import {
   readFileTable,
   type FileTable,
 } from "./gw-archive.js";
+import {
+  decodedArchiveBytes,
+  runGwDatDecoder,
+} from "./gw-dat-decoder.js";
 import {
   ATTRIBUTE_BY_ID,
   PROFESSION_BY_ID,
@@ -77,7 +80,6 @@ const EQUIPPABLE = 1;
 const MAX_ICON_BYTES = 256 * 256 * 4 + 8;
 const MAX_SHARD_BYTES = 1024 * 1024 + 8;
 const MAX_STREAM_BYTES = 1024 * 1024;
-const HELPER_TIMEOUT_MS = 5_000;
 /**
  * How many shard decoders run at once. This bounds local processes against
  * local cores; it is deliberately not named for a "job" or a "concurrency"
@@ -194,75 +196,7 @@ export function decodedIconToBmp(decoded: Uint8Array): Buffer {
 
 /** The helper's decompress-only output — `GWDB`, length, then the payload. */
 export function decodedShard(decoded: Uint8Array): Buffer {
-  if (
-    decoded.length < 8
-    || String.fromCharCode(...decoded.subarray(0, 4)) !== "GWDB"
-  ) {
-    throw new Error("the archive decoder returned an invalid shard header");
-  }
-  const length = new DataView(
-    decoded.buffer,
-    decoded.byteOffset + 4,
-    4,
-  ).getUint32(0, true);
-  if (length > MAX_STREAM_BYTES || decoded.byteLength !== length + 8) {
-    throw new Error("the archive decoder returned an invalid shard length");
-  }
-  return Buffer.from(decoded.subarray(8));
-}
-
-function runDecoder(
-  executable: string,
-  input: Uint8Array,
-  options: {
-    readonly args: readonly string[];
-    readonly maxOutput: number;
-    parse(output: Uint8Array): Buffer;
-  },
-): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(executable, options.args, {
-      stdio: ["pipe", "pipe", "ignore"],
-      windowsHide: true,
-    });
-    const chunks: Buffer[] = [];
-    let length = 0;
-    let settled = false;
-    const fail = (error: Error) => {
-      if (settled) return;
-      settled = true;
-      child.kill();
-      reject(error);
-    };
-    const timer = setTimeout(
-      () => fail(new Error("the archive decoder timed out")),
-      HELPER_TIMEOUT_MS,
-    );
-    child.stdout.on("data", (chunk: Buffer) => {
-      length += chunk.length;
-      if (length > options.maxOutput) {
-        fail(new Error("the archive decoder exceeded its output bound"));
-      } else {
-        chunks.push(chunk);
-      }
-    });
-    child.on("error", fail);
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (settled) return;
-      settled = true;
-      if (code !== 0) {
-        reject(new Error("the archive decoder refused the local asset"));
-        return;
-      }
-      try {
-        resolve(options.parse(Buffer.concat(chunks, length)));
-      } catch (error) {
-        reject(error);
-      }
-    });
-    child.stdin.end(input);
-  });
+  return decodedArchiveBytes(decoded, MAX_STREAM_BYTES, "shard");
 }
 
 export interface SkillAssetSource {
@@ -443,7 +377,7 @@ export class SkillAssets {
           stream.size,
         );
         const records = parseStringShard(
-          await runDecoder(this.source.decoderPath, compressed, {
+          await runGwDatDecoder(this.source.decoderPath, compressed, {
             args: ["--raw"],
             maxOutput: MAX_SHARD_BYTES,
             parse: decodedShard,
@@ -596,7 +530,7 @@ export class SkillAssets {
       stream.offset,
       stream.size,
     );
-    const bmp = await runDecoder(this.source.decoderPath, compressed, {
+    const bmp = await runGwDatDecoder(this.source.decoderPath, compressed, {
       args: [],
       maxOutput: MAX_ICON_BYTES,
       parse: decodedIconToBmp,

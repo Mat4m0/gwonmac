@@ -37,6 +37,10 @@ import type {
   ShortcutCaptureResult,
   ShortcutOverrides,
 } from "./keyboard-shortcuts.js";
+import {
+  DEFAULT_TRAVEL_SHORTCUTS,
+  type TravelShortcuts,
+} from "./travel.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -305,6 +309,8 @@ export interface ClockSyncResponse {
 
 export const UI_STYLES = ["guild-wars", "obsidian"] as const;
 export type UiStyle = (typeof UI_STYLES)[number];
+export const UI_FONTS = ["guild-wars", "inter"] as const;
+export type UiFont = (typeof UI_FONTS)[number];
 export const RENDER_SCALES = [1, 1.5, 2] as const;
 export type RenderScale = (typeof RENDER_SCALES)[number];
 export const UI_PANEL_OPACITY_MIN = 65;
@@ -317,6 +323,8 @@ export interface AppSettings {
   renderScale: RenderScale;
   /** The visual treatment applied to every GWonMac panel. */
   uiStyle: UiStyle;
+  /** The typeface applied to every GWonMac panel. */
+  uiFont: UiFont;
   /**
    * The application's Guild Wars panels stay translucent enough to see the
    * game behind them. This is presentation only and never reaches the game.
@@ -328,9 +336,13 @@ export interface AppSettings {
   teamManagement: boolean;
   /** Allow the explicit local Xunlai window command in supported PvE outposts. */
   xunlaiStorage: boolean;
+  /** Allow the focused Travel palette and its explicit map command. */
+  travelPalette: boolean;
+  /** Ordered destinations for the palette's direct 1–9 shortcuts. */
+  travelShortcuts: TravelShortcuts;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
-  /** Player changes to the two app-owned shortcuts; missing entries use defaults. */
+  /** Player changes to the three app-owned shortcuts; missing entries use defaults. */
   shortcutOverrides: ShortcutOverrides;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
@@ -375,10 +387,13 @@ export type AppSettingsPatch = Partial<AppSettings>;
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
   uiStyle: "guild-wars",
+  uiFont: "guild-wars",
   uiPanelOpacity: 94,
   gwonmacTools: false,
   teamManagement: true,
   xunlaiStorage: false,
+  travelPalette: false,
+  travelShortcuts: DEFAULT_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
   extendedMemoryEnabled: false,
@@ -671,6 +686,7 @@ export type RendererCommand =
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
   | { type: "storage.open" }
+  | { type: "travel.toggle" }
   | {
       type: "settings.open";
       pane?: SettingsPane;

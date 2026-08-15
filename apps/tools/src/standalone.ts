@@ -6,12 +6,22 @@ import "../../../src/shared/ui/tokens.css";
 import "../../../src/shared/ui/components.css";
 import { createDemoHost } from "./host";
 import { mountToolsApp } from "./mount";
+import { createDemoTravelHost } from "./travel-host";
+import { mountTravelPalette } from "./travel-mount";
 
 const target = document.getElementById("app");
 if (!target) throw new Error("Tools workbench mount is missing");
 
-mountToolsApp(target, {
-  host: createDemoHost(window.localStorage),
-  mode: "standalone",
-  initiallyVisible: true,
-});
+if (new URLSearchParams(window.location.search).has("travel")) {
+  mountTravelPalette(target, {
+    host: createDemoTravelHost(),
+    initiallyVisible: true,
+  });
+  target.dataset.ready = "true";
+} else {
+  mountToolsApp(target, {
+    host: createDemoHost(window.localStorage),
+    mode: "standalone",
+    initiallyVisible: true,
+  });
+}

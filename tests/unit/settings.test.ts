@@ -20,10 +20,13 @@ describe("settings", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
       uiStyle: "guild-wars",
+      uiFont: "guild-wars",
       uiPanelOpacity: 94,
       gwonmacTools: false,
       teamManagement: true,
       xunlaiStorage: false,
+      travelPalette: false,
+      travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
       extendedMemoryEnabled: false,
@@ -62,9 +65,12 @@ describe("settings", () => {
       uiPanelOpacity: 94,
       renderScale: 1,
       uiStyle: "guild-wars",
+      uiFont: "guild-wars",
       gwonmacTools: false,
       teamManagement: true,
       xunlaiStorage: false,
+      travelPalette: false,
+      travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
       extendedMemoryEnabled: false,
@@ -100,6 +106,13 @@ describe("settings", () => {
     assert.equal(parseSettings({ uiStyle: "obsidian" }).uiStyle, "obsidian");
     assert.throws(() => parseSettings({ uiStyle: "jade" }), AppError);
     assert.throws(() => parseSettings({ uiStyle: true }), AppError);
+  });
+
+  it("accepts only the two supported interface fonts", () => {
+    assert.equal(parseSettings({ uiFont: "guild-wars" }).uiFont, "guild-wars");
+    assert.equal(parseSettings({ uiFont: "inter" }).uiFont, "inter");
+    assert.throws(() => parseSettings({ uiFont: "papyrus" }), AppError);
+    assert.throws(() => parseSettings({ uiFont: false }), AppError);
   });
 
   it("rejects unknown types", () => {
@@ -210,6 +223,9 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ uiStyle: "obsidian" }), {
       uiStyle: "obsidian",
     });
+    assert.deepEqual(parseSettingsPatch({ uiFont: "inter" }), {
+      uiFont: "inter",
+    });
   });
 
   it("loads defaults for missing or corrupt files", async () => {
@@ -240,6 +256,8 @@ describe("settings", () => {
       gwonmacTools: false,
       teamManagement: true,
       xunlaiStorage: false,
+      travelPalette: false,
+      travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
     });
     assert.equal(saved.showDiagnostics, true);
@@ -257,6 +275,9 @@ describe("settings", () => {
       "showDiagnostics",
       "targetReadout",
       "teamManagement",
+      "travelPalette",
+      "travelShortcuts",
+      "uiFont",
       "uiPanelOpacity",
       "uiStyle",
       "updateTrack",
@@ -293,9 +314,12 @@ describe("settings", () => {
       uiPanelOpacity: 94,
       renderScale: 1.5,
       uiStyle: "guild-wars",
+      uiFont: "guild-wars",
       gwonmacTools: false,
       teamManagement: true,
       xunlaiStorage: false,
+      travelPalette: false,
+      travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
       extendedMemoryEnabled: false,

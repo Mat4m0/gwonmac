@@ -78,6 +78,14 @@
         if (result.error !== undefined) throw result.error;
         break;
       }
+      case 'travel.toggle': {
+        const result: { error?: unknown } = {};
+        if (!dispatch('gw:travel-toggle', result)) {
+          throw new Error('Travel is not available in this launch.');
+        }
+        if (result.error !== undefined) throw result.error;
+        break;
+      }
       case 'settings.open':
         dispatch('gw:settings', {
           pane: command.pane,

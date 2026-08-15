@@ -169,3 +169,12 @@ export async function openStorage(win: BrowserWindow): Promise<void> {
   await resetGameInput(win);
   await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
 }
+
+/** Open the focused Travel palette, with Settings as the truthful fallback. */
+export async function toggleTravel(win: BrowserWindow): Promise<void> {
+  await resetGameInput(win);
+  if (await sendRendererCommand(win, { type: "travel.toggle" }) === "completed") {
+    return;
+  }
+  await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
+}

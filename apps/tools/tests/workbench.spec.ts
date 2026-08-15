@@ -44,6 +44,27 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator("#app[data-ready=true]")).toBeAttached();
 });
 
+test("offers destination autocomplete and numbered Travel shortcuts", async ({ page }) => {
+  await page.goto("/?travel=1");
+  await expect(page.getByRole("dialog", { name: "Travel" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Search destinations" }).fill("kama");
+  await expect(page.getByRole("option", { name: /Kamadan, Jewel of Istan/ })).toBeVisible();
+  await page.keyboard.press("Meta+9");
+  await expect(page.getByRole("status")).toContainText("shortcut 9");
+  await page.getByRole("combobox", { name: "Search destinations" }).fill("");
+  await expect(page.getByRole("button", { name: /9 Kamadan, Jewel of Istan/ })).toBeVisible();
+});
+
+test("keeps Travel controls and status visible in a short window", async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 560 });
+  await page.goto("/?travel=1");
+
+  await expect(page.getByRole("dialog", { name: "Travel" })).toBeVisible();
+  await expect(page.getByRole("status")).toBeInViewport();
+  await page.getByRole("spinbutton", { name: "District number" }).fill("1");
+  await expect(page.getByRole("spinbutton", { name: "District number" })).toHaveValue("1");
+});
+
 test("manages teams and finds builds without Electron or the game", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Team composition" })).toBeVisible();
@@ -511,6 +532,7 @@ test("reorders team members with keyboard and pointer drag, then removes and und
 test("projects Obsidian through the shared system without layout drift", async ({ page }) => {
   await page.evaluate(() => {
     document.documentElement.dataset.uiStyle = "obsidian";
+    document.documentElement.dataset.uiFont = "inter";
     document.documentElement.style.setProperty("--ui-panel-opacity", "0.65");
   });
   await page.setViewportSize({ width: 360, height: 800 });

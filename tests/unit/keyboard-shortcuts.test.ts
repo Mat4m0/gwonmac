@@ -22,6 +22,7 @@ describe("keyboard shortcuts", () => {
     }), {
       "tools.toggle": { key: "k", shift: true, option: false },
       "storage.open": null,
+      "travel.open": DEFAULT_SHORTCUTS["travel.open"],
     });
   });
 

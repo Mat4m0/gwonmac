@@ -197,6 +197,18 @@ export interface KnownEnhancementBuild {
   storage?: Readonly<{
     openExport: string;
     configureExport: string;
+    travel: Readonly<{
+      enqueueExport: string;
+      configureExport: string;
+      messageId: number;
+      /** Exact producer that constructs {map, region, language, district}. */
+      producer: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32", "i32", "i32", "i32", "i32"];
+        results: readonly [];
+        bodySha256: string;
+      }>;
+    }>;
     slashParser: Readonly<{
       functionIndex: number;
       params: readonly ["i32", "i32"];
@@ -231,14 +243,19 @@ export function supportedEnhancementCapabilities(
   build: KnownEnhancementBuild,
 ): EnhancementCapabilities {
   const observationBase = build.observationBase !== undefined;
+  const targetObservation = observationBase && build.targetObservation !== undefined;
   const partyObservation = observationBase && build.partyObservation !== undefined;
   const gameThread = build.gameThread !== undefined;
   return Object.freeze({
     nativeCursor: build.cursorEvent !== undefined,
-    targetObservation: observationBase && build.targetObservation !== undefined,
+    targetObservation,
     partyObservation,
     commands: partyObservation && gameThread && build.teamApply !== undefined,
-    storage: partyObservation && gameThread && build.storage !== undefined,
+    storage:
+      targetObservation
+      && partyObservation
+      && gameThread
+      && build.storage !== undefined,
   });
 }
 
@@ -290,6 +307,7 @@ export function hasCompleteEnhancementProfileHashes(
     build.storage !== undefined
     && (
       build.observationBase === undefined
+      || build.targetObservation === undefined
       || build.partyObservation === undefined
       || build.gameThread === undefined
     )

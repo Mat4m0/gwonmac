@@ -24,10 +24,8 @@ import {
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import { locateAutomaticCursor } from "./enhancement-structural-evidence.js";
-import {
-  inspectEnhancementCandidate,
-  transformEnhancementWasm,
-} from "./enhancement-transform.js";
+import { inspectEnhancementCandidate } from "./enhancement-candidate.js";
+import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
   BRIDGE_KINDS,
   TEMPLATE_SAVE_BUILDS,

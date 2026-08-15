@@ -22,6 +22,7 @@ import {
   openStorage,
   resetGameInput,
   sendRendererCommand,
+  toggleTravel,
   toggleTools,
 } from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
@@ -51,6 +52,7 @@ export function installApplicationMenu({
   const dev = isDevBuild();
   const toolsAccelerator = shortcutAccelerator(shortcuts["tools.toggle"]);
   const storageAccelerator = shortcutAccelerator(shortcuts["storage.open"]);
+  const travelAccelerator = shortcutAccelerator(shortcuts["travel.open"]);
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac
@@ -133,6 +135,13 @@ export function installApplicationMenu({
           ...(storageAccelerator ? { accelerator: storageAccelerator } : {}),
           registerAccelerator: false,
           click: () => openStorage(win),
+        },
+        {
+          id: "open-travel",
+          label: "Open Travel",
+          ...(travelAccelerator ? { accelerator: travelAccelerator } : {}),
+          registerAccelerator: false,
+          click: () => toggleTravel(win),
         },
         {
           label: "Toggle Diagnostics",

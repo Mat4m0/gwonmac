@@ -441,7 +441,7 @@
                 <input type="radio" name="uiStyle" value="guild-wars">
                 <span class="settings-style-option">
                   <span>Guild Wars <small>Default</small></span>
-                  <small>Ornamental metal and engraved type</small>
+                  <small>Ornamental metal and classic game surfaces</small>
                 </span>
               </label>
               <label class="settings-radio">
@@ -449,6 +449,26 @@
                 <span class="settings-style-option">
                   <span>Obsidian</span>
                   <small>Borderless charcoal and muted gilt</small>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Interface font</legend>
+            <div class="settings-seg settings-style-seg ui-segment" data-fill role="presentation">
+              <label class="settings-radio">
+                <input type="radio" name="uiFont" value="guild-wars">
+                <span class="settings-style-option">
+                  <span>Guild Wars Original <small>Default</small></span>
+                  <small>Lettering converted locally from your game</small>
+                </span>
+              </label>
+              <label class="settings-radio">
+                <input type="radio" name="uiFont" value="inter">
+                <span class="settings-style-option">
+                  <span>Inter</span>
+                  <small>Clean modern lettering with a system fallback</small>
                 </span>
               </label>
             </div>
@@ -490,6 +510,10 @@
               <span>Open Xunlai storage <small>Beta</small></span>
             </label>
             <label class="settings-check ui-check">
+              <input type="checkbox" name="travelPalette">
+              <span>Quick Travel palette <small>Beta</small></span>
+            </label>
+            <label class="settings-check ui-check">
               <input type="checkbox" name="targetReadout">
               <span>Target distance and range <small>Test</small></span>
             </label>
@@ -511,6 +535,13 @@
               <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
               <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
             </div>
+            <div class="settings-shortcut-row" data-shortcut-action="travel.open">
+              <span class="settings-shortcut-name">Open Travel</span>
+              <kbd class="settings-shortcut-value">—</kbd>
+              <button type="button" class="ui-button settings-shortcut-change">Change</button>
+              <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+              <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
+            </div>
             <button type="button" id="settings-shortcuts-restore" class="ui-link">Restore default shortcuts</button>
           </fieldset>
           <dl class="settings-feature-status" aria-label="Feature availability">
@@ -519,7 +550,7 @@
             <div><dt>Target distance</dt><dd id="settings-feature-targetObservation">—</dd></div>
             <div><dt>Live party details</dt><dd id="settings-feature-partyObservation">—</dd></div>
             <div><dt>Apply team</dt><dd id="settings-feature-teamApply">—</dd></div>
-            <div><dt>Xunlai storage</dt><dd id="settings-feature-xunlaiStorage">—</dd></div>
+            <div><dt>Xunlai / Travel integration</dt><dd id="settings-feature-xunlaiStorage">—</dd></div>
           </dl>
           <p id="settings-compat-status" class="settings-status"
              role="status" aria-live="polite"></p>

@@ -83,8 +83,10 @@ the action and restarts. It keeps the small official client files.
 
 ## Display and input
 
-Open **Settings → Display** to select render scale, interface style, and
-panel opacity.
+Open **Settings → Display** to select render scale, interface style, interface
+font, and panel opacity. **Guild Wars Original** is converted locally from your
+installed game. **Inter** uses the modern font when it is installed and the
+closest system sans-serif otherwise.
 
 **Retina — 2×** is the image-quality default. Use 1.5× or 1× to reduce GPU work
 and memory. Settings shows the current backing resolution. The official web
@@ -107,7 +109,7 @@ a dedicated controller release test.
 Open **Settings → Tools**.
 
 GWonMac checks each certified game-integration feature after a Guild Wars
-update. File saving, the Guild Wars cursor, storage opening, and Apply team can
+update. File saving, the Guild Wars cursor, local actions, and Apply team can
 remain available or turn off independently.
 Native double-click uses a safe tap fallback when its repair is unavailable.
 The cursor has no player switch. The app does not ship or download cursor
@@ -124,13 +126,17 @@ After that restart, these choices update immediately:
 - **Open Xunlai storage** (Beta) allows the Storage button, Command-Shift-C
   shortcut, and the `/chest` and `/xunlai` chat commands in a supported PvE
   outpost.
+- **Quick Travel palette** (Beta) opens with Command-T. Type a destination or
+  alias such as `la`, `kama`, or `eotn`, choose a district, and press Return.
+  With an empty search, press 1–9 to travel through saved quick destinations.
+  Command-1 through Command-9 assigns the selected result to that number.
 - **Target distance and range** (Test) shows the selected target's distance and
 range band.
 
 The same pane lists **Keyboard shortcuts**. Choose **Change**, then press a
 Command shortcut to replace the default. Delete clears a shortcut, Escape
 cancels recording, and **Restore default shortcuts** restores Command-B for
-Tools and Command-Shift-C for Xunlai storage. Shortcuts work only while the
+Tools, Command-Shift-C for Xunlai storage, and Command-T for Travel. Shortcuts work only while the
 Guild Wars window is active. GWonMac keeps normal editing and application
 shortcuts such as Command-C and Command-Q reserved.
 
@@ -142,13 +148,13 @@ interact with an NPC, unlock storage, or change an
 item. Deposits, withdrawals, and gold changes still use the normal game and
 server rules.
 
-Live observation, storage opening, and Apply stop in PvP, guild halls,
+Live observation, storage opening, Travel, and Apply stop in PvP, guild halls,
 transitions, and unknown regions. The saved Build and Team library stays
 available. Apply checks policy before each step and stops when the state
 changes.
 
 The saved library still works when live client integration is unavailable. You
-can edit, import, and export. Live party data, storage opening, and Apply remain
+can edit, import, and export. Live party data, storage opening, Travel, and Apply remain
 unavailable.
 
 ## Builds, teams, and templates

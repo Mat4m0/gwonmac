@@ -142,6 +142,14 @@ describe("Enhancement client chain", () => {
       "party facts require their shared observation base",
     );
 
+    const storageWithoutTarget = { ...full };
+    delete storageWithoutTarget.targetObservation;
+    assert.equal(
+      hasCompleteEnhancementProfileHashes(storageWithoutTarget),
+      false,
+      "storage facts require the target layout used by travel",
+    );
+
     assert.equal(
       hasCompleteEnhancementProfileHashes({
         ...cursorOnly,

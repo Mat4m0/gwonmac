@@ -14,8 +14,6 @@
  * it determines relocated function indices and therefore the resulting bytes,
  * so no capability selection may inherit another's ordering.
  *
- * `inspectEnhancementCandidate` is the read-only half. It reports what a module
- * looks like and certifies nothing.
  */
 import { createHash } from "node:crypto";
 import {
@@ -26,7 +24,6 @@ import {
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
 import {
-  findEnhancementBuild,
   enhancementConfigWords,
   supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
@@ -46,6 +43,8 @@ import {
   storageConfigure,
   storageEnqueue,
   storageSlashParser,
+  travelConfigure,
+  travelEnqueue,
 } from "./enhancement-command-transform.js";
 import {
   concat,
@@ -57,8 +56,6 @@ import {
   parseIndexVector,
   parseExports,
   parseTypes,
-  readSleb,
-  readUleb,
   sectionById,
   sleb,
   splitSections,
@@ -69,6 +66,11 @@ import {
   type FunctionType,
   type Section,
 } from "../core/wasm-binary.js";
+import {
+  encodeEnhancementTable,
+  enhancementTableSlotFunctions,
+  parseEnhancementTable,
+} from "./enhancement-table.js";
 
 declare const WebAssembly: {
   Module: new (bytes: Uint8Array) => unknown;
@@ -126,52 +128,6 @@ function encodeName(value: string): Uint8Array {
   return concat(uleb(bytes.byteLength), bytes);
 }
 
-function parseTable(bytes: Uint8Array): {
-  flags: number;
-  min: number;
-  max: number | null;
-} {
-  const cursor = { offset: 0 };
-  if (readUleb(bytes, cursor) !== 1) fail("expected exactly one table");
-  if (bytes[cursor.offset++] !== 0x70) fail("expected funcref table");
-  const flags = readUleb(bytes, cursor);
-  const min = readUleb(bytes, cursor);
-  const max = (flags & 1) !== 0 ? readUleb(bytes, cursor) : null;
-  if (cursor.offset !== bytes.byteLength) fail("malformed table section");
-  return { flags, min, max };
-}
-
-function encodeTable(flags: number, min: number, max: number): Uint8Array {
-  return concat(
-    uleb(1),
-    Uint8Array.of(0x70),
-    uleb(flags),
-    uleb(min),
-    uleb(max),
-  );
-}
-
-function tableSlotFunctions(bytes: Uint8Array): Map<number, number> {
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  const slots = new Map<number, number>();
-  for (let segment = 0; segment < count; segment += 1) {
-    const flags = readUleb(bytes, cursor);
-    if (flags !== 0) fail(`unsupported element segment flags ${flags}`);
-    if (bytes[cursor.offset++] !== 0x41) fail("expected element i32.const");
-    const base = readSleb(bytes, cursor);
-    if (bytes[cursor.offset++] !== 0x0b) fail("malformed element offset");
-    const entries = readUleb(bytes, cursor);
-    for (let i = 0; i < entries; i += 1) {
-      const functionIndex = readUleb(bytes, cursor);
-      const slot = base + i;
-      if (slots.has(slot)) fail(`duplicate active table slot ${slot}`);
-      slots.set(slot, functionIndex);
-    }
-  }
-  if (cursor.offset !== bytes.byteLength) fail("malformed element section");
-  return slots;
-}
 
 function dispatcher(
   paramCount: number,
@@ -303,80 +259,6 @@ function encodeTypes(types: readonly FunctionType[]): Uint8Array {
   );
 }
 
-export interface EnhancementCandidateReport {
-  sha256: string;
-  validWasm: boolean;
-  certifiedBuildId: number | null;
-  mainLoop: {
-    functionIndex: number;
-    params: string[];
-    results: string[];
-  } | null;
-  table: {
-    min: number;
-    max: number | null;
-    firstEmptySlots: number[];
-  } | null;
-}
-
-export function inspectEnhancementCandidate(
-  input: Uint8Array,
-): EnhancementCandidateReport {
-  const sha256 = createHash("sha256").update(input).digest("hex");
-  if (!WebAssembly.validate(input)) {
-    return {
-      sha256,
-      validWasm: false,
-      certifiedBuildId: null,
-      mainLoop: null,
-      table: null,
-    };
-  }
-  const sections = splitSections(input);
-  const types = parseTypes(sectionById(sections, 1));
-  const importCount = countFunctionImports(sectionById(sections, 2));
-  const functionTypes = parseIndexVector(sectionById(sections, 3));
-  const mainLoopExport = parseExports(sectionById(sections, 7)).find(
-    (entry) => entry.kind === 0 && entry.name === "EmscriptenExeThreadMainLoop",
-  );
-  let mainLoop: EnhancementCandidateReport["mainLoop"] = null;
-  if (mainLoopExport && mainLoopExport.index >= importCount) {
-    const localIndex = mainLoopExport.index - importCount;
-    const typeIndex = functionTypes[localIndex];
-    const type = typeIndex === undefined ? undefined : types[typeIndex];
-    if (type) {
-      mainLoop = {
-        functionIndex: mainLoopExport.index,
-        params: type.params.map(valueTypeName),
-        results: type.results.map(valueTypeName),
-      };
-    }
-  }
-  let table: EnhancementCandidateReport["table"];
-  try {
-    const { min, max } = parseTable(sectionById(sections, 4));
-    const occupied = tableSlotFunctions(sectionById(sections, 9));
-    const firstEmptySlots: number[] = [];
-    for (
-      let slot = 0;
-      slot < min && firstEmptySlots.length < 8;
-      slot += 1
-    ) {
-      if (!occupied.has(slot)) firstEmptySlots.push(slot);
-    }
-    table = { min, max, firstEmptySlots };
-  } catch {
-    table = null;
-  }
-  return {
-    sha256,
-    validWasm: true,
-    certifiedBuildId: findEnhancementBuild(sha256)?.buildId ?? null,
-    mainLoop,
-    table,
-  };
-}
-
 export function transformEnhancementWasm(
   input: Uint8Array,
   build: KnownEnhancementBuild,
@@ -471,9 +353,6 @@ export function transformEnhancementWasm(
       dispatchKind: DISPATCH_UI,
     });
   }
-  if (new Set(selected.map((hook) => hook.localIndex)).size !== selected.length) {
-    fail("selected hooks must resolve to distinct functions");
-  }
   const bodyHash = (functionIndex: number): string => {
     const body = bodies[functionIndex - importCount];
     if (!body) fail(`function ${functionIndex} has no body`);
@@ -534,12 +413,6 @@ export function transformEnhancementWasm(
   if (new Set(commands.map((entry) => entry.opcode)).size !== commands.length) {
     fail("certified commands must have distinct opcodes");
   }
-  if (
-    capabilities.commands
-    && new Set(commands.map((entry) => entry.functionIndex)).size !== commands.length
-  ) {
-    fail("certified commands must resolve to distinct functions");
-  }
   const professionCommand = capabilities.commands
     ? commands.find((entry) => entry.opcode === 65)
       ?? fail("commands capability has no certified profession command")
@@ -594,6 +467,21 @@ export function transformEnhancementWasm(
   ) {
     fail("storage slash parser body does not match its semantic fingerprint");
   }
+  const travelProducer = capabilities.storage
+    ? resolveHook(
+        "travel payload producer",
+        storage.travel.producer.functionIndex,
+        storage.travel.producer.params,
+        storage.travel.producer.results,
+      )
+    : null;
+  if (
+    travelProducer
+    && bodyHash(storage.travel.producer.functionIndex)
+      !== storage.travel.producer.bodySha256
+  ) {
+    fail("travel payload producer body does not match its semantic fingerprint");
+  }
   const packetSender = capabilities.commands
     ? resolveHook(
         "traced packet sender",
@@ -613,13 +501,6 @@ export function transformEnhancementWasm(
         + `${body} and not the certified `
         + `${teamApply.professionTrace.sender.bodySha256}`,
       );
-    }
-    if (
-      selected.some((hook) => hook.localIndex === packetSender.localIndex)
-      || commands.some((entry) => entry.functionIndex
-        === teamApply.professionTrace.sender.functionIndex)
-    ) {
-      fail("traced packet sender must be distinct from hooks and commands");
     }
   }
   const commandDrainBoundary = capabilities.commands || capabilities.storage
@@ -641,41 +522,48 @@ export function transformEnhancementWasm(
         + `the certified ${gameThread.drain.bodySha256}`,
       );
     }
-    if (
-      selected.some((hook) => hook.localIndex === commandDrainBoundary.localIndex)
-      || commands.some((entry) => entry.functionIndex === gameThread.drain.functionIndex)
-      || packetSender?.localIndex === commandDrainBoundary.localIndex
-      || storageHandler?.localIndex === commandDrainBoundary.localIndex
-      || storageSlashParserHook?.localIndex === commandDrainBoundary.localIndex
-    ) {
-      fail("command drain boundary must be distinct from hooks, commands, and sender");
-    }
-  }
-  if (
-    storageHandler
-    && (
-      selected.some((hook) => hook.localIndex === storageHandler.localIndex)
-      || commands.some((entry) => entry.functionIndex
-        === storage.handler.functionIndex)
-      || packetSender?.localIndex === storageHandler.localIndex
-      || storageSlashParserHook?.localIndex === storageHandler.localIndex
-    )
-  ) {
-    fail("DataWindow handler must be distinct from hooks and packet commands");
-  }
-  if (
-    storageSlashParserHook
-    && (
-      selected.some((hook) => hook.localIndex === storageSlashParserHook.localIndex)
-      || commands.some((entry) => entry.functionIndex
-        === storage.slashParser.functionIndex)
-      || packetSender?.localIndex === storageSlashParserHook.localIndex
-    )
-  ) {
-    fail("storage slash parser must be distinct from hooks and packet commands");
   }
 
-  const table = parseTable(sectionById(sections, 4));
+  const exclusiveRoles = [
+    ...selected.map((hook) => ({
+      name: `dispatch hook ${hook.dispatchKind}`,
+      functionIndex: hook.localIndex + importCount,
+    })),
+    ...commands.map((entry) => ({
+      name: `command opcode ${entry.opcode}`,
+      functionIndex: entry.functionIndex,
+    })),
+    ...(packetSender ? [{
+      name: "traced packet sender",
+      functionIndex: packetSender.localIndex + importCount,
+    }] : []),
+    ...(commandDrainBoundary ? [{
+      name: "command drain boundary",
+      functionIndex: commandDrainBoundary.localIndex + importCount,
+    }] : []),
+    ...(storageHandler ? [{
+      name: "DataWindow handler",
+      functionIndex: storageHandler.localIndex + importCount,
+    }] : []),
+    ...(storageSlashParserHook ? [{
+      name: "storage slash parser",
+      functionIndex: storageSlashParserHook.localIndex + importCount,
+    }] : []),
+    ...(travelProducer ? [{
+      name: "travel payload producer",
+      functionIndex: travelProducer.localIndex + importCount,
+    }] : []),
+  ];
+  const roleByFunction = new Map<number, string>();
+  for (const role of exclusiveRoles) {
+    const existing = roleByFunction.get(role.functionIndex);
+    if (existing) {
+      fail(`${role.name} must be distinct from ${existing}`);
+    }
+    roleByFunction.set(role.functionIndex, role.name);
+  }
+
+  const table = parseEnhancementTable(sectionById(sections, 4));
   if (
     table.flags !== 1 ||
     table.max === null ||
@@ -689,7 +577,7 @@ export function transformEnhancementWasm(
   }
   const nextTableSize = table.min + 1;
   const tableSlots = selectedHooks.cursor || commandDrainBoundary
-    ? tableSlotFunctions(sectionById(sections, 9))
+    ? enhancementTableSlotFunctions(sectionById(sections, 9))
     : null;
   if (selectedHooks.cursor) {
     if (
@@ -722,7 +610,12 @@ export function transformEnhancementWasm(
       ? [teamApply.thunkExport, teamApply.professionTrace.readerExport]
       : []),
     ...(capabilities.storage
-      ? [storage.openExport, storage.configureExport]
+      ? [
+          storage.openExport,
+          storage.configureExport,
+          storage.travel.enqueueExport,
+          storage.travel.configureExport,
+        ]
       : []),
   ];
   for (const name of addedExportNames) {
@@ -739,11 +632,13 @@ export function transformEnhancementWasm(
   const hasActions = capabilities.commands || capabilities.storage;
   const hookGlobalIndex = allocateGlobals(1);
   const commandPendingGlobalIndex = hasActions ? allocateGlobals(1) : 0;
-  const commandArgumentGlobalBase = capabilities.commands
+  const commandArgumentGlobalBase = hasActions
     ? allocateGlobals(COMMAND_ARGS)
     : 0;
   const storagePayloadGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
   const storageEnabledGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
+  const travelPayloadGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
+  const travelEnabledGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
   const traceGlobalBase = capabilities.commands
     ? allocateGlobals(PROFESSION_TRACE_WORDS)
     : 0;
@@ -796,6 +691,12 @@ export function transformEnhancementWasm(
   const storageConfigureTypeIndex = capabilities.storage
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
     : null;
+  const travelEnqueueTypeIndex = capabilities.storage
+    ? appendType({ params: Array<number>(COMMAND_ARGS).fill(0x7f), results: [0x7f] })
+    : null;
+  const travelConfigureTypeIndex = capabilities.storage
+    ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
+    : null;
 
   const nextFunctionTypes = [...functionTypes];
   const nextBodies = [...bodies];
@@ -807,6 +708,9 @@ export function transformEnhancementWasm(
   };
   const selectedOriginalIndices = selected.map((hook) =>
     appendFunction(hook.typeIndex, bodies[hook.localIndex]!));
+  const uiOriginalIndex = selectedHooks.ui
+    ? selectedOriginalIndices[selected.findIndex((hook) => hook.dispatchKind === DISPATCH_UI)]!
+    : null;
   selected.forEach((hook, index) => {
     nextBodies[hook.localIndex] = dispatcher(
       hook.type.params.length,
@@ -849,6 +753,13 @@ export function transformEnhancementWasm(
           ? {
               functionIndex: storage.handler.functionIndex,
               payloadGlobalIndex: storagePayloadGlobalIndex,
+            }
+          : null,
+        capabilities.storage
+          ? {
+              dispatcherFunctionIndex: uiOriginalIndex!,
+              messageId: storage.travel.messageId,
+              payloadGlobalIndex: travelPayloadGlobalIndex,
             }
           : null,
       ),
@@ -918,6 +829,29 @@ export function transformEnhancementWasm(
             ),
           ),
         },
+        {
+          name: storage.travel.enqueueExport,
+          index: appendFunction(
+            travelEnqueueTypeIndex!,
+            travelEnqueue(
+              commandPendingGlobalIndex,
+              commandArgumentGlobalBase,
+              travelPayloadGlobalIndex,
+              travelEnabledGlobalIndex,
+            ),
+          ),
+        },
+        {
+          name: storage.travel.configureExport,
+          index: appendFunction(
+            travelConfigureTypeIndex!,
+            travelConfigure(
+              commandPendingGlobalIndex,
+              travelPayloadGlobalIndex,
+              travelEnabledGlobalIndex,
+            ),
+          ),
+        },
       );
     }
   }
@@ -949,7 +883,7 @@ export function transformEnhancementWasm(
     if (section.id === 4) {
       return {
         id: section.id,
-        body: encodeTable(table.flags, nextTableSize, nextTableSize),
+        body: encodeEnhancementTable(table.flags, nextTableSize, nextTableSize),
       };
     }
     if (section.id === 6) return { id: section.id, body: nextGlobals };
