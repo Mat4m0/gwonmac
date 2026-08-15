@@ -5,10 +5,10 @@
    control lives in a slim dock along the bottom edge with the progress rail on
    its top border. Only the dock's text and buttons change between states. */
 
-/* QT Friz Quad is the OFL-licensed QualiType face closest to the former
-   Fremont/Friz Quadrata styling. swap keeps startup progress immediately visible. */
+/* QT Friz Quad is the packaged fallback while the selected original face is
+   still being converted from the active local game. */
 @font-face {
-  font-family: "QT Friz Quad";
+  font-family: "QTFrizQuad";
   src: url("fonts/QTFrizQuad.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
@@ -24,7 +24,7 @@
            display:flex; flex-direction:column;
            --dock-h: 104px;
            background:#0a0806; color:#e8dcc0;
-           font:16px/1.5 "QT Friz Quad","Iowan Old Style",Palatino,Georgia,serif;
+           font:16px/1.5 var(--ui-font);
            transition:opacity .6s ease; }
 #loading.gone { opacity:0; pointer-events:none; }
 
@@ -169,7 +169,8 @@
 #loading-dock:has(#loading-crash-detail:not([hidden])) #loading-boot {
   flex-basis:100%; }
 
-#loading-label { font-size:17px; letter-spacing:.02em; color:#f2e8d2;
+#loading-label { font-size:17px; letter-spacing:var(--ui-display-letter-spacing); color:#f2e8d2;
+                 font-family:var(--ui-font-display);
                  text-shadow:0 1px 6px #000c; }
 #loading-detail { min-height:1.3em; font-size:13px; color:#e8dcc099;
                   text-shadow:0 1px 6px #000c; }
@@ -187,14 +188,16 @@
    beneath it, which is a separate sentence and not a conclusion drawn from
    the heading. */
 #client-compat-title { margin:0 0 2px; font-size:17px; font-weight:400;
-                       letter-spacing:.02em; color:#f2e8d2; }
+                       font-family:var(--ui-font-display);
+                       letter-spacing:var(--ui-display-letter-spacing); color:#f2e8d2; }
 #client-compat-detail { margin:0; font-size:13px; color:#d8caaaad;
                         max-width:104ch; }
 .client-compat-version { margin:3px 0 0; font-size:12.5px; color:#e8dcc08c; }
 
 .dock-info { min-width:0; }
 #data-choice-title { margin:0 0 2px; font-size:17px; font-weight:400;
-                     letter-spacing:.02em; color:#f2e8d2; }
+                     font-family:var(--ui-font-display);
+                     letter-spacing:var(--ui-display-letter-spacing); color:#f2e8d2; }
 .dock-info > p { margin:0; font-size:13px; color:#d8caaaad; }
 /* The gate's save-failure line: never shares a slot with the size label. */
 #data-choice-error { color:#ff8f6b; }

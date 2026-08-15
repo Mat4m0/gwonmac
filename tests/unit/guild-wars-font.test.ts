@@ -165,12 +165,20 @@ test("a compact oversized strike is refused before outline tracing", () => {
 
 test("the shared UI offers the local Guild Wars font independently of Inter", () => {
   const css = readFileSync(new URL("src/shared/ui/tokens.css", root), "utf8");
+  const harness = readFileSync(new URL("src/renderer/harness.css", root), "utf8");
+  const loading = readFileSync(new URL("src/renderer/loading.css", root), "utf8");
   assert.match(css, /data-ui-font="guild-wars"/);
   assert.match(css, /--ui-font: "Guild Wars Original"/);
   assert.match(css, /--ui-font-display: "Guild Wars Original Display"/);
+  assert.match(css, /"Guild Wars Original", "QTFrizQuad"/);
   assert.match(css, /:root\[data-ui-font="inter"\]/);
   assert.match(css, /font-synthesis-weight: none/);
   assert.doesNotMatch(css, /-1px 1px 0 #000/);
+  assert.doesNotMatch(
+    harness.match(/#settings-dialog\s*\{[\s\S]*?\}/u)?.[0] ?? "",
+    /--ui-font(?:-display)?\s*:/u,
+  );
+  assert.match(loading, /font:16px\/1\.5 var\(--ui-font\)/u);
   const appearance = readFileSync(new URL("src/renderer/appearance.ts", root), "utf8");
   assert.match(appearance, /new FontFace\("Guild Wars Original"/);
   assert.match(appearance, /"Guild Wars Original Display"/);

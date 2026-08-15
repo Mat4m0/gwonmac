@@ -238,13 +238,6 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 
 #settings-dialog {
   --ui-panel-opacity: 0.97;
-  /* Settings must remain easy to read while it changes the font everywhere
-     else. The converted game face has one bitmap-derived weight, so using it
-     for dense labels and synthesised bold makes this decision surface muddy. */
-  --ui-font: var(--ui-font-readable);
-  --ui-font-display: var(--ui-font-readable);
-  --ui-text-shadow: none;
-  --ui-display-text-shadow: none;
   width: min(700px, calc(100vw - 32px));
   min-width: min(480px, calc(100vw - 32px));
   height: min(520px, calc(100vh - 32px));
@@ -310,12 +303,12 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 
 .settings-pane-title {
   margin: 0;
-  color: var(--ui-text-bright);
+  color: var(--ui-display-text);
   font-family: var(--ui-font-display);
   font-size: var(--ui-font-size-lg);
   font-weight: 700;
   text-shadow: var(--ui-display-text-shadow);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--ui-display-letter-spacing);
   text-wrap: balance;
 }
 .settings-pane-intro {

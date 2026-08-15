@@ -27,6 +27,6 @@ test("the only bundled font is the pinned OFL-licensed QT Friz Quad", () => {
   assert.match(license, /Copyright \(c\) 1992 QualiType/);
   assert.match(license, /SIL OPEN FONT LICENSE[\s\S]*Version 1\.1/);
   const css = readFileSync(path.join(root, "src/renderer/loading.css"), "utf8");
-  assert.match(css, /font-family: "QT Friz Quad"/);
+  assert.match(css, /font-family: "QTFrizQuad"/);
   assert.match(css, /url\("fonts\/QTFrizQuad\.otf"\)/);
 });
