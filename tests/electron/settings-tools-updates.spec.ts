@@ -124,6 +124,18 @@ test.describe("tools and update settings", () => {
         }),
       ).toBe("CmdOrCtrl+,");
       await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+      await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+        .toBe("settings-tab-data");
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#settings-dialog")).not.toHaveAttribute("open", "");
+      await app.evaluate(({ Menu }) => {
+        Menu.getApplicationMenu()
+          ?.items[0]?.submenu?.items.find(
+            (candidate) => candidate.label === "Settings…",
+          )
+          ?.click();
+      });
+      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
       await page.locator("#settings-done").click();
       await app.evaluate(({ Menu }) => {
         Menu.getApplicationMenu()

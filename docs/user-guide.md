@@ -130,6 +130,11 @@ After that restart, these choices update immediately:
   alias such as `la`, `kama`, or `eotn`, choose a district, and press Return.
   With an empty search, press 1–9 to travel through saved quick destinations.
   Command-1 through Command-9 assigns the selected result to that number.
+
+Tools and Travel stay open when you click Guild Wars behind them. Press Tab to
+move the keyboard into the topmost GWonMac window. Press Escape to close that
+window and return the keyboard to Guild Wars. If a confirmation dialog is open,
+Escape closes the confirmation first.
 - **Target distance and range** (Test) shows the selected target's distance and
 range band.
 

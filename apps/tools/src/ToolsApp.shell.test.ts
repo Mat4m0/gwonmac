@@ -146,6 +146,26 @@ describe("ToolsApp shell and library", () => {
     wrapper.unmount();
   });
 
+  it("protects an unsaved build when the host requests that Tools close", async () => {
+    const wrapper = await workbench();
+    await wrapper.get("#builds-library-tab").trigger("click");
+    await wrapper.findAll(".library-row")[0]!.trigger("click");
+    await wrapper.get("#build-name").setValue("Unsaved keyboard draft");
+
+    (wrapper.vm as unknown as { requestClose(): void }).requestClose();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Save this draft?");
+    expect(wrapper.emitted("close")).toBeUndefined();
+
+    await wrapper
+      .findAll(".leave-dialog .ui-button")
+      .find((button) => button.text() === "Discard changes")!
+      .trigger("click");
+    await flushPromises();
+    expect(wrapper.emitted("close")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
   it("forks a selected build and keeps the operation undoable", async () => {
     const wrapper = await workbench();
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");

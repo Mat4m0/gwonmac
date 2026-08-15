@@ -12,6 +12,7 @@ export type ToolsAppHandle = Readonly<{
   show(): void;
   hide(): void;
   toggle(): void;
+  requestClose(): void;
   /**
    * The companion's latest projection of the running game, from the overlay.
    *
@@ -37,6 +38,7 @@ export function mountToolsApp(
   let lastPartyTrace = "";
   const development = options.development === true;
   const visible = ref(options.initiallyVisible ?? options.mode === "standalone");
+  const tools = ref<InstanceType<typeof ToolsApp> | null>(null);
   const setVisible = (next: boolean) => {
     if (visible.value === next) return;
     if (!next) options.host.cancelApply();
@@ -48,6 +50,7 @@ export function mountToolsApp(
     setup() {
       return () =>
         h(ToolsApp, {
+          ref: tools,
           host: options.host,
           mode: options.mode,
           visible: visible.value,
@@ -68,6 +71,7 @@ export function mountToolsApp(
     show: () => setVisible(true),
     hide: () => setVisible(false),
     toggle: () => setVisible(!visible.value),
+    requestClose: () => tools.value?.requestClose(),
     update: (observation: ToolboxObservation) => {
       options.host.party.value = liveParty(observation);
       const observed = options.host.party.value;

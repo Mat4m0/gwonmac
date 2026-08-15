@@ -63,6 +63,11 @@
   font-size: 17px;
   caret-color: var(--ui-accent);
 }
+.travel-close {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+}
 
 .travel-options {
   display: flex;

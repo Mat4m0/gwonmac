@@ -376,7 +376,11 @@ function requestHeapCap() {
       const capBytes = Module.gwonmacHeapCapBytes ?? WASM_HEAP_CAP_BYTES;
       heapCapBytes = capBytes;
       heapWatch = createHeapPressureWatch({ capBytes });
-      heapWarning = bindMemoryWarning(document, reloadClientSafely);
+      heapWarning = bindMemoryWarning(
+        document,
+        reloadClientSafely,
+        window.gwSurfaces,
+      );
     })
     // A failed load retries on the next tick rather than silencing the
     // warning for the whole session.
@@ -518,6 +522,7 @@ let host: typeof import('./graphics.js') &
   typeof import('./filesystem.js') &
   typeof import('./input.js') &
   typeof import('./input-trace.js') &
+  typeof import('./surface-controller.js') &
   typeof import('./native-double-click.js') &
   typeof import('./clipboard-copy.js') &
   typeof import('./template-save-compatibility.js') &
@@ -1047,6 +1052,9 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     document.body,
     (text) => native().clipboard.writeText(text),
   );
+  // Install before game input so a key claimed by the topmost GWonMac surface
+  // cannot also reach the official client's window-capture listener.
+  window.gwSurfaces = host.installSurfaceController(document);
   window.addEventListener('gw:input-trace', () => {
     log(`input trace: ${inputTrace?.toggle() ? 'on' : 'off'}`);
   });
@@ -1158,6 +1166,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       filesystem,
       input,
       inputTraceModule,
+      surfaceController,
       nativeDoubleClickModule,
       clipboardCopy,
       templateSaveCompatibility,
@@ -1175,6 +1184,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       import('./filesystem.js'),
       import('./input.js'),
       import('./input-trace.js'),
+      import('./surface-controller.js'),
       import('./native-double-click.js'),
       import('./clipboard-copy.js'),
       import('./template-save-compatibility.js'),
@@ -1191,6 +1201,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       ...filesystem,
       ...input,
       ...inputTraceModule,
+      ...surfaceController,
       ...nativeDoubleClickModule,
       ...clipboardCopy,
       ...templateSaveCompatibility,

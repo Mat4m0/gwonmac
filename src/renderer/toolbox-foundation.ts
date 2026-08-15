@@ -54,6 +54,8 @@ const TOGGLE_CODE = "Space";
  */
 export interface MountedTool {
   setVisible(visible: boolean): void;
+  /** Ask the tool to close so it can protect any unsaved authoring work. */
+  requestClose(): void;
   /**
    * The companion's latest projection of the running game.
    *
@@ -145,6 +147,17 @@ export function createToolboxFoundation(
   let state: ToolboxState = Object.freeze({ status: "waiting" });
   let overlayOpen = false;
 
+  const requestClose = () => {
+    if (!overlayOpen) return;
+    if (tool) tool.requestClose();
+    else setOpen(false);
+  };
+  const dismissable = window.gwSurfaces.register({
+    root,
+    priority: 4,
+    dismiss: requestClose,
+  });
+
   const releaseGameInput = () => {
     window.dispatchEvent(new CustomEvent("gw:input-reset"));
   };
@@ -155,6 +168,7 @@ export function createToolboxFoundation(
     if (next) ensureTool();
     tool?.setVisible(next);
     root.dataset.open = String(next);
+    dismissable.setOpen(next);
     // Pointer lock still has to go: the tool is unreachable by a captured
     // cursor. The keyboard, though, stays with the game — opening Tools is not
     // a statement that you have stopped playing.
@@ -164,9 +178,13 @@ export function createToolboxFoundation(
     surface.releaseKeyboard();
   };
 
-  // The global chord is the only key the overlay claims from game focus.
-  // Escape is handled inside the overlay boundary below, so with the game
-  // focused it keeps meaning what Guild Wars says it means.
+  const toggleOpen = () => {
+    if (overlayOpen) requestClose();
+    else setOpen(true);
+  };
+
+  // The global chord toggles Tools. The shared surface controller separately
+  // owns Escape and keyboard entry for whichever GWonMac surface is topmost.
   const onToggleChord = (event: KeyboardEvent) => {
     const toggles =
       event.code === TOGGLE_CODE &&
@@ -177,7 +195,7 @@ export function createToolboxFoundation(
     if (!toggles) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    setOpen(!overlayOpen);
+    toggleOpen();
   };
 
   // Events from Tools chrome stop at this renderer-owned boundary. The game's
@@ -199,17 +217,6 @@ export function createToolboxFoundation(
   ]) {
     root.addEventListener(name, stopAtOverlay);
   }
-
-  // Escape reaches this listener only while the surface holds the keyboard,
-  // which is to say only while the player is typing in the tool. There it means
-  // what it means in any field — stop typing — and hands the game back rather
-  // than closing anything. With the game focused it never fires, so Escape
-  // keeps meaning what Guild Wars says it means.
-  root.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    surface.releaseKeyboard();
-  });
 
   // The native Guild Wars cursor is published as the canvas's style cursor.
   // Mirror it so the game cursor stays the cursor over Tools chrome too;
@@ -233,7 +240,7 @@ export function createToolboxFoundation(
   // build with no menu.
   const onCommand = (event: Event) => {
     event.preventDefault();
-    setOpen(!overlayOpen);
+    toggleOpen();
   };
   window.addEventListener("gw:tools-toggle", onCommand);
   window.addEventListener("keydown", onToggleChord, true);
@@ -257,6 +264,7 @@ export function createToolboxFoundation(
       disposed = true;
       tool?.dispose();
       tool = null;
+      dismissable.dispose();
       surface.dispose();
       cursorMirror.disconnect();
       window.removeEventListener("gw:tools-toggle", onCommand);

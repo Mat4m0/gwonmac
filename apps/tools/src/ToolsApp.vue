@@ -177,6 +177,7 @@ const saveAndNavigate = async () => {
 };
 
 const requestClose = () => navigate(() => emit("close"));
+defineExpose({ requestClose });
 
 const openStorage = async () => {
   storageProblem.value = "";
@@ -333,6 +334,7 @@ onBeforeUnmount(() => {
       class="ui-frame ui-panel tools-window"
       :style="panelStyle"
       aria-label="GWonMac Tools"
+      role="dialog"
     >
       <header class="ui-panel-head window-bar" @pointerdown="startDrag">
         <div class="window-brand" aria-hidden="true">GW</div>

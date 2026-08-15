@@ -67,6 +67,7 @@ test.describe("renderer Tools input", () => {
                 onVisibilityChange: (visible: boolean) => void,
               ): Promise<{
                 setVisible(visible: boolean): void;
+                requestClose(): void;
                 update(state: object): void;
                 dispose(): void;
               } | null>;
@@ -118,6 +119,10 @@ test.describe("renderer Tools input", () => {
             return Promise.resolve({
               setVisible: (visible: boolean) => {
                 panel.style.display = visible ? "block" : "none";
+              },
+              requestClose: () => {
+                panel.style.display = "none";
+                onVisibilityChange(false);
               },
               // A real tool draws the party from this. The stub records what
               // arrived and when, which is the part the overlay is responsible
@@ -224,6 +229,20 @@ test.describe("renderer Tools input", () => {
       await expect(body).toHaveAttribute("data-toolbox-game-key-ups", "1");
       await expect(body).toHaveAttribute("data-toolbox-last-key-up", "KeyW");
 
+      // Tab is the explicit keyboard entry into the open topmost surface. It
+      // is claimed before Guild Wars and wraps inside the surface at its ends.
+      await page.keyboard.press("Tab");
+      await expect.poll(() => isDomActiveElement(
+        page.getByRole("button", { name: "Tool action" }),
+      )).toBe(true);
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
+      await page.getByRole("button", { name: "Close tool" }).focus();
+      await page.keyboard.press("Tab");
+      await expect.poll(() => isDomActiveElement(
+        page.getByRole("button", { name: "Tool action" }),
+      )).toBe(true);
+      await page.locator("#canvas").click({ position: GAME_POINT });
+
       // The tool is open and the game still has the keyboard.
       await page.keyboard.press("x");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
@@ -235,7 +254,7 @@ test.describe("renderer Tools input", () => {
       // tool stays open rather than dismissing itself.
       await page.locator("#canvas").click({ position: GAME_POINT });
       await expect(tool).toBeVisible();
-      await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
+      await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "3");
       await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
         .toBe(true);
 
@@ -243,7 +262,7 @@ test.describe("renderer Tools input", () => {
       // and does not leak the click into the game. This is the whole point —
       // the player clicks the panel and can still run.
       await page.getByRole("button", { name: "Tool action" }).click();
-      await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "2");
+      await expect(body).toHaveAttribute("data-toolbox-game-mouse-downs", "3");
       await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
         .toBe(true);
       await page.keyboard.press("x");
@@ -259,23 +278,29 @@ test.describe("renderer Tools input", () => {
       await expect(page.getByLabel("Tool field")).toHaveValue("aggro");
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
-      // Escape means "stop typing" and gives the game back. It never reaches
-      // Guild Wars from here, and it does not close the tool: closing is the
-      // chord, the menu, or the tool's own close control.
+      // Escape closes the topmost host surface even when a field owns focus.
+      // It does not also spend an in-game Escape.
       await page.keyboard.press("Escape");
       await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
         .toBe(true);
-      await expect(tool).toBeVisible();
+      await expect(tool).toBeHidden();
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
-      // With the game holding the keyboard again, Escape belongs to Guild Wars.
-      await page.keyboard.press("Escape");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "4");
+      await page.keyboard.press("Control+Shift+Space");
       await expect(tool).toBeVisible();
 
-      // The chord toggles from anywhere.
-      await page.keyboard.press("Control+Shift+Space");
+      // The same Escape closes Tools after a game click left focus on canvas.
+      const gameKeysBeforeCanvasEscape = await body.getAttribute(
+        "data-toolbox-game-keys",
+      );
+      await page.keyboard.press("Escape");
       await expect(tool).toBeHidden();
+      await expect(body).toHaveAttribute(
+        "data-toolbox-game-keys",
+        gameKeysBeforeCanvasEscape ?? "",
+      );
+
+      // The chord toggles from anywhere.
       await page.keyboard.press("Control+Shift+Space");
       await expect(tool).toBeVisible();
 
@@ -407,17 +432,18 @@ test.describe("renderer Tools input", () => {
       await settleEmbeddedShow();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
 
-      // Establish the boundary explicitly: Escape from a Tools field returns
-      // the keyboard to Guild Wars without spending the in-game Escape or
-      // closing the window. Reopening intentionally leaves focus on the game.
+      // Escape closes Tools from either a field or the game without spending
+      // the same key in Guild Wars. Reopening leaves focus on the game.
       const search = page.getByPlaceholder("Search names, tags, heroes, skills");
       await search.focus();
       await expect.poll(() => isDomActiveElement(search)).toBe(true);
       await page.keyboard.press("Escape");
-      await expect(panel).toBeVisible();
+      await expect(panel).toBeHidden();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
-      await page.keyboard.press("Escape");
+      await page.keyboard.press("Control+Shift+Space");
       await expect(panel).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
     } finally {
       await closeOffline(fixture);
@@ -429,18 +455,25 @@ test.describe("renderer Tools input", () => {
     try {
       const disposed = await fixture.page.evaluate(async () => {
         const specifier = "./toolbox-foundation.js";
-        const module = await import(specifier) as {
+        const surfaceSpecifier = "./surface-controller.js";
+        const [module, surfaces] = await Promise.all([
+          import(specifier),
+          import(surfaceSpecifier),
+        ]) as [{
           createToolboxFoundation(
             parent: HTMLElement,
             options: { mountTool(): Promise<{
               setVisible(visible: boolean): void;
+              requestClose(): void;
               update(state: object): void;
               dispose(): void;
             }> },
           ): { dispose(): void };
-        };
+        }, typeof import("../../src/renderer/surface-controller.js")];
+        window.gwSurfaces = surfaces.installSurfaceController(document);
         let resolveMount!: (tool: {
           setVisible(visible: boolean): void;
+          requestClose(): void;
           update(state: object): void;
           dispose(): void;
         }) => void;
@@ -452,6 +485,7 @@ test.describe("renderer Tools input", () => {
         foundation.dispose();
         resolveMount({
           setVisible: () => undefined,
+          requestClose: () => undefined,
           update: () => undefined,
           dispose: () => { count += 1; },
         });

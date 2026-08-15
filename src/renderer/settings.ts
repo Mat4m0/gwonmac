@@ -244,6 +244,11 @@
     pendingShortcutReplacement = null;
     clearShortcutMessages();
   });
+  // Settings is renderer UI, not game input. Keep its keys inside the modal;
+  // Escape still reaches the dialog's native cancel behavior because stopping
+  // propagation does not cancel the event.
+  dialog.addEventListener('keydown', (event) => event.stopPropagation());
+  dialog.addEventListener('keyup', (event) => event.stopPropagation());
 
   void import('../shared/ui/resize.js').then(({ installResizeGrip }) => {
     installResizeGrip(settingsResize, {
@@ -652,12 +657,17 @@
     await resolveClientCompatibility();
   };
   async function openSettings() {
-    if (!dialog.open) {
+    const wasOpen = dialog.open;
+    if (!wasOpen) {
       if (typeof dialog.showModal === 'function') dialog.showModal();
       else dialog.setAttribute('open', '');
     }
     setFeedback();
     selectPane(activeSettingsPane);
+    if (!wasOpen) {
+      form.querySelector<HTMLElement>('.settings-rtab[aria-selected="true"]')
+        ?.focus({ preventScroll: true });
+    }
     settingsCache.textContent = 'Checking downloaded game data…';
     try {
       await settingsWrite;

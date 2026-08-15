@@ -45,6 +45,19 @@ declare global {
     expectCharacterSelection(): void;
   }
 
+  interface GwonmacSurfaceHandle {
+    setOpen(open: boolean): void;
+    dispose(): void;
+  }
+
+  interface GwonmacSurfaceController {
+    register(surface: Readonly<{
+      root: HTMLElement;
+      priority: number;
+      dismiss(): void;
+    }>): GwonmacSurfaceHandle;
+  }
+
   /**
    * One thing the input host saw or decided, before the trace stamps it. The
    * union is closed because a trace whose vocabulary can grow by writing a
@@ -214,6 +227,7 @@ declare global {
       };
     };
     gwApplySettings?(settings: AppSettings): void;
+    gwSurfaces: GwonmacSurfaceController;
     gwToolsSettings(): Readonly<{
       enabled: boolean;
       teamManagement: boolean;

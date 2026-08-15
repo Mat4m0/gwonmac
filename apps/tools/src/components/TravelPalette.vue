@@ -69,7 +69,7 @@ watch(() => props.visible, async (visible) => {
   window.clearTimeout(timeout);
   await nextTick();
   input.value?.focus({ preventScroll: true });
-});
+}, { immediate: true, flush: "post" });
 
 watch(() => props.host.state.value, (state) => {
   if (busyMapId.value === null) return;
@@ -212,7 +212,13 @@ onBeforeUnmount(() => {
         spellcheck="false"
         placeholder="Travel to an outpost…"
       >
-      <kbd class="ui-kbd">esc</kbd>
+      <button
+        type="button"
+        class="ui-button travel-close"
+        data-icon
+        aria-label="Close Travel"
+        @click="emit('close')"
+      >×</button>
     </label>
 
     <div class="travel-options">
@@ -267,6 +273,7 @@ onBeforeUnmount(() => {
         type="button"
         class="ui-row"
         role="option"
+        tabindex="-1"
         :aria-selected="index === active"
         :aria-disabled="busyMapId !== null || host.unavailable !== null"
         :disabled="busyMapId !== null || host.unavailable !== null"
