@@ -286,7 +286,7 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       "Guild Wars Reforged — Alt",
       "Guild Wars Reforged — Primary",
     ]);
-    const presentation = await fixture.app.evaluate(({ BrowserWindow }) => {
+    const readPresentation = () => fixture.app.evaluate(({ BrowserWindow }) => {
       const windows = BrowserWindow.getAllWindows();
       return {
         focused: BrowserWindow.getFocusedWindow()?.getTitle(),
@@ -296,6 +296,17 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
           .map((win) => [win.getTitle(), win.getBounds()])),
       };
     });
+    await expect.poll(async () => {
+      const presentation = await readPresentation();
+      return {
+        focused: presentation.focused,
+        hubVisible: presentation.hubVisible,
+      };
+    }).toEqual({
+      focused: "Guild Wars Reforged — Primary",
+      hubVisible: false,
+    });
+    const presentation = await readPresentation();
     expect(presentation.focused).toBe("Guild Wars Reforged — Primary");
     expect(presentation.hubVisible).toBe(false);
     const primaryBounds = presentation.bounds["Guild Wars Reforged — Primary"]!;
