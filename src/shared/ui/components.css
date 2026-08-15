@@ -186,7 +186,7 @@
   color: var(--ui-display-text);
   font-family: var(--ui-font-display);
   font-size: var(--ui-font-size-lg);
-  font-weight: 700;
+  font-weight: var(--ui-font-weight-bold);
   letter-spacing: var(--ui-display-letter-spacing);
   text-shadow: var(--ui-display-text-shadow);
   text-overflow: ellipsis;
@@ -275,7 +275,7 @@
   background: var(--ui-primary-fill) padding-box, var(--ui-ring-gold) border-box;
   box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
   color: var(--ui-primary-ink);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
 }
 
 .ui-button[data-variant="primary"]:hover:not(:disabled):not([aria-disabled="true"]) {
@@ -926,7 +926,7 @@ button.ui-chip[aria-disabled="true"] {
   box-shadow: var(--ui-shadow-inset), 0 0 0 1px var(--ui-outline);
   color: var(--ui-profession-ink);
   font-size: var(--ui-font-size-sm);
-  font-weight: 700;
+  font-weight: var(--ui-font-weight-bold);
   /* The icon carries the meaning; a shadow on a two-letter stand-in blurs it. */
   text-shadow: none;
 }
@@ -1002,7 +1002,7 @@ button.ui-chip[aria-disabled="true"] {
   background: linear-gradient(var(--ui-profession, var(--ui-line)), var(--ui-profession, var(--ui-line))) padding-box,
     var(--ui-ring-mark) border-box;
   color: var(--ui-profession-ink);
-  font-weight: 700;
+  font-weight: var(--ui-font-weight-bold);
   text-shadow: none;
 }
 
@@ -1092,7 +1092,7 @@ button.ui-chip[aria-disabled="true"] {
 .ui-empty strong {
   color: var(--ui-text-bright);
   font-size: var(--ui-font-size-lg);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
 }
 
 .ui-empty p {

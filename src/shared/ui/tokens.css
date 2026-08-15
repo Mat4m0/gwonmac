@@ -96,6 +96,12 @@
   --ui-font-readable: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
   --ui-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* The game-derived and packaged fallback faces each contain one real
+   * weight. Keep their strokes untouched; hierarchy comes from scale, colour,
+   * and spacing. Inter restores its native weight range below. */
+  --ui-font-weight-medium: 400;
+  --ui-font-weight-semibold: 400;
+  --ui-font-weight-bold: 400;
 
   /* Ink and state. */
   --ui-text: #ebe5d3;
@@ -185,6 +191,12 @@
   --ui-z-toast: 40;
 }
 
+/* Preserve semantic emphasis in the markup while letting the selected face
+ * decide whether that emphasis is expressed through stroke weight. */
+:where(strong, b, h1, h2, h3, h4, h5, h6) {
+  font-weight: var(--ui-font-weight-bold);
+}
+
 /* The local face becomes active only after the client generation supplied it. */
 :root[data-ui-font="guild-wars"] {
   --ui-font: "Guild Wars Original", "QTFrizQuad", "Palatino Linotype",
@@ -208,6 +220,9 @@
 :root[data-ui-font="inter"] {
   --ui-font: var(--ui-font-readable);
   --ui-font-display: var(--ui-font);
+  --ui-font-weight-medium: 500;
+  --ui-font-weight-semibold: 600;
+  --ui-font-weight-bold: 700;
 }
 
 /* Obsidian keeps the same hierarchy and components, then removes ornamental

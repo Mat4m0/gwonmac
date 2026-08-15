@@ -58,6 +58,9 @@ test.describe("data and display settings", () => {
           return {
             font: style.fontFamily,
             textShadow: style.textShadow,
+            titleWeight: globalThis.getComputedStyle(
+              globalThis.document.querySelector("#settings-title")!,
+            ).fontWeight,
           };
         },
       );
@@ -67,6 +70,7 @@ test.describe("data and display settings", () => {
       expect(settingsTypography.font).toContain("QTFrizQuad");
       expect(settingsTypography.font).not.toContain("Guild Wars Original");
       expect(settingsTypography.textShadow).not.toBe("none");
+      expect(settingsTypography.titleWeight).toBe("400");
       // Polled, not read once: the save is a round trip through main and the
       // token is written when it returns. The slider's own readout updates on
       // the drag and so proves nothing about the setting having landed.
@@ -104,12 +108,16 @@ test.describe("data and display settings", () => {
           return {
             font: style.fontFamily,
             textShadow: style.textShadow,
+            titleWeight: globalThis.getComputedStyle(
+              globalThis.document.querySelector("#settings-title")!,
+            ).fontWeight,
           };
         },
       );
       expect(interTypography.font).toContain("ui-sans-serif");
       expect(interTypography.font).not.toContain("QTFrizQuad");
       expect(interTypography.textShadow).toBe("none");
+      expect(interTypography.titleWeight).toBe("700");
       expect(
         await page.locator("#settings-dialog").evaluate((element) =>
           globalThis.getComputedStyle(element)

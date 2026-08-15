@@ -173,6 +173,9 @@ test("the shared UI offers the local Guild Wars font independently of Inter", ()
   assert.match(css, /"Guild Wars Original", "QTFrizQuad"/);
   assert.match(css, /:root\[data-ui-font="inter"\]/);
   assert.match(css, /font-synthesis-weight: none/);
+  assert.match(css, /--ui-font-weight-bold: 400/);
+  assert.match(css, /--ui-font-weight-bold: 700/);
+  assert.match(css, /:where\(strong, b, h1, h2, h3, h4, h5, h6\)/);
   assert.doesNotMatch(css, /-1px 1px 0 #000/);
   assert.doesNotMatch(
     harness.match(/#settings-dialog\s*\{[\s\S]*?\}/u)?.[0] ?? "",

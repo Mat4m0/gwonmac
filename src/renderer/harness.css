@@ -306,7 +306,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   color: var(--ui-display-text);
   font-family: var(--ui-font-display);
   font-size: var(--ui-font-size-lg);
-  font-weight: 700;
+  font-weight: var(--ui-font-weight-bold);
   text-shadow: var(--ui-display-text-shadow);
   letter-spacing: var(--ui-display-letter-spacing);
   text-wrap: balance;
@@ -416,7 +416,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   gap: 2px;
   text-align: left;
 }
-.settings-style-option > span { color: var(--ui-text-bright); font-weight: 600; }
+.settings-style-option > span { color: var(--ui-text-bright); font-weight: var(--ui-font-weight-semibold); }
 .settings-style-option small { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); white-space: normal; }
 #settings-form label.settings-radio:has(input:checked) .settings-style-option small { color: var(--ui-text-muted); }
 
@@ -428,11 +428,11 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 #settings-form button.quiet-danger { min-height: 0; }
 .settings-danger-sub { margin: var(--ui-space-1) 0 0; color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
 
-.settings-status { margin: 0; color: var(--ui-text-bright); font-size: var(--ui-font-size); font-weight: 600; }
+.settings-status { margin: 0; color: var(--ui-text-bright); font-size: var(--ui-font-size); font-weight: var(--ui-font-weight-semibold); }
 .settings-feature-status { display:grid; gap:var(--ui-space-2); margin:0; }
 .settings-feature-status > div { display:flex; justify-content:space-between; gap:var(--ui-space-4); }
 .settings-feature-status dt { color:var(--ui-text); }
-.settings-feature-status dd { margin:0; color:var(--ui-text-bright); font-weight:600; text-align:right; }
+.settings-feature-status dd { margin:0; color:var(--ui-text-bright); font-weight:var(--ui-font-weight-semibold); text-align:right; }
 #settings-progress {
   height: var(--ui-space-2);
   margin: var(--ui-space-3) 0 0;

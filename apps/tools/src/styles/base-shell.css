@@ -136,7 +136,7 @@ body:has(.tools-stage[data-mode="standalone"]) {
   color: var(--ui-accent);
   font-family: var(--ui-font-display);
   font-size: var(--ui-font-size-sm);
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
 }
 
 .window-close { font-size: var(--ui-font-size-lg); }
