@@ -526,6 +526,11 @@ export async function assertToolboxFoundationLifecycle() {
       const { installCertifiedCompanion }:
         typeof import("../../src/renderer/certified-companion-installation.ts") =
           await import(specifier);
+      const surfaceSpecifier = "./surface-controller.js";
+      const { installSurfaceController }:
+        typeof import("../../src/renderer/surface-controller.ts") =
+          await import(surfaceSpecifier);
+      window.gwSurfaces = installSurfaceController(document);
       const snapshotSpecifier = "./companion-snapshot.js";
       const { readCompanionSnapshot }:
         typeof import("../../src/renderer/companion-snapshot.ts") =
