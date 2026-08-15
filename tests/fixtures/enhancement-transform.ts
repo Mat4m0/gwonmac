@@ -17,48 +17,63 @@ export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.free
   targetObservation: true,
   partyObservation: true,
   commands: false,
+  storage: false,
 });
 export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: false,
   commands: false,
+  storage: false,
 });
 export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   partyObservation: false,
   commands: false,
+  storage: false,
 });
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: true,
   partyObservation: false,
   commands: false,
+  storage: false,
 });
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: true,
   commands: false,
+  storage: false,
 });
 export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: false,
   commands: false,
+  storage: false,
 });
 export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: true,
   commands: true,
+  storage: true,
 });
 export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   partyObservation: true,
   commands: true,
+  storage: true,
+});
+export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
+  nativeCursor: true,
+  targetObservation: false,
+  partyObservation: true,
+  commands: false,
+  storage: true,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,
@@ -85,6 +100,14 @@ const PLACEHOLDER_OUTPUTS: EnhancementOutputHashes = Object.freeze({
   cursorPartyCommands: "0".repeat(64),
   targetPartyCommands: "0".repeat(64),
   cursorTargetPartyCommands: "0".repeat(64),
+  partyStorage: "0".repeat(64),
+  cursorPartyStorage: "0".repeat(64),
+  targetPartyStorage: "0".repeat(64),
+  cursorTargetPartyStorage: "0".repeat(64),
+  partyCommandsStorage: "0".repeat(64),
+  cursorPartyCommandsStorage: "0".repeat(64),
+  targetPartyCommandsStorage: "0".repeat(64),
+  cursorTargetPartyCommandsStorage: "0".repeat(64),
 });
 
 function uleb(value: number): number[] {
@@ -118,11 +141,12 @@ export function moduleWithManifest(value: unknown): WebAssembly.Module {
 // otherwise.
 export function fixture(hookParamType = 0x7f): Uint8Array {
   const type = section(1, [
-    4,
+    5,
     0x60, 1, hookParamType, 0,
     0x60, 5, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0,
     0x60, 3, 0x7f, 0x7f, 0x7f, 0,
     0x60, 2, 0x7f, 0x7f, 0,
+    0x60, 2, 0x7f, 0x7f, 1, 0x7f,
   ]);
   const env = [3, 101, 110, 118];
   const imports = section(2, [
@@ -131,9 +155,9 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...env, 1, 99, 0, 1,
     ...env, 1, 117, 0, 2,
   ]);
-  // Eight defined functions: three hooks, three commands, the distinct
-  // recurring game-thread callback, and the shared packet sender.
-  const functions = section(3, [8, 0, 1, 2, 0, 2, 3, 3, 2]);
+  // Ten defined functions: three hooks, three commands, the distinct recurring
+  // game-thread callback, shared packet sender, DataWindow, and slash parser.
+  const functions = section(3, [10, 0, 1, 2, 0, 2, 3, 3, 2, 0, 4]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -145,9 +169,10 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
   const professionName = [...new TextEncoder().encode("profession")];
   const skillName = [...new TextEncoder().encode("skill")];
   const senderName = [...new TextEncoder().encode("sender")];
+  const slashName = [...new TextEncoder().encode("slash")];
   const memoryName = [...new TextEncoder().encode("memory")];
   const exports = section(7, [
-    9,
+    10,
     ...tableName, 1, 0,
     ...uleb(memoryName.length), ...memoryName, 2, 0,
     ...uleb(loopName.length), ...loopName, 0, 3,
@@ -157,6 +182,7 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...uleb(professionName.length), ...professionName, 0, 9,
     ...uleb(skillName.length), ...skillName, 0, 7,
     ...uleb(senderName.length), ...senderName, 0, 10,
+    ...uleb(slashName.length), ...slashName, 0, 12,
   ]);
   const mappedSegment = [0, 0x41, 1, 0x0b, 3, 4, 3, 5];
   const frameSegment = [0, 0x41, 4, 0x0b, 1, 8];
@@ -194,8 +220,10 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
   const sender = [
     0, 0x20, 0, 0x20, 1, 0x20, 2, 0x10, 2, 0x0b,
   ];
+  const dataWindow = [0, 0x20, 0, 0x10, 0, 0x0b];
+  const slash = [0, 0x20, 0, 0x10, 0, 0x41, 0, 0x0b];
   const code = section(10, [
-    8,
+    10,
     ...uleb(tick.length), ...tick,
     ...uleb(cursor.length), ...cursor,
     ...uleb(ui.length), ...ui,
@@ -204,6 +232,8 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...uleb(frame.length), ...frame,
     ...uleb(profession.length), ...profession,
     ...uleb(sender.length), ...sender,
+    ...uleb(dataWindow.length), ...dataWindow,
+    ...uleb(slash.length), ...slash,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
@@ -228,6 +258,37 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookResults: [],
     hookBodySha256: createHash("sha256").update(commandBody(bytes, 0)).digest("hex"),
     tableSlot: 5,
+    storage: {
+      openExport: "enhancement_open_storage",
+      configureExport: "enhancement_configure_storage",
+      slashParser: {
+          functionIndex: 12,
+          params: ["i32", "i32"],
+          results: ["i32"],
+          bodySha256: createHash("sha256")
+            .update(commandBody(bytes, 9))
+            .digest("hex"),
+      },
+      handler: {
+          functionIndex: 11,
+          params: ["i32"],
+          results: [],
+          bodySha256: createHash("sha256")
+            .update(commandBody(bytes, 8))
+            .digest("hex"),
+      },
+    },
+    gameThread: {
+      drain: {
+        functionIndex: 8,
+        params: ["i32", "i32"],
+        results: [],
+        tableSlot: 4,
+        bodySha256: createHash("sha256")
+          .update(commandBody(bytes, 5))
+          .digest("hex"),
+      },
+    },
     teamApply: {
       thunkExport: "enhancement_command",
       professionTrace: {
@@ -240,15 +301,6 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
             .update(commandBody(bytes, 7))
             .digest("hex"),
         },
-      },
-      drain: {
-        functionIndex: 8,
-        params: ["i32", "i32"],
-        results: [],
-        tableSlot: 4,
-        bodySha256: createHash("sha256")
-          .update(commandBody(bytes, 5))
-          .digest("hex"),
       },
       entries: [{
         opcode: 31,

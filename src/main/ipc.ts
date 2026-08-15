@@ -109,6 +109,11 @@ import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
 import { windowRegistry, type WindowRegistry } from "./window-registry.js";
 import {
+  cancelWindowShortcutCapture,
+  captureWindowShortcut,
+  updateWindowShortcuts,
+} from "./window-shortcuts.js";
+import {
   applySettingsChange,
   confirmSettingsReset,
   requestCacheClear,
@@ -568,19 +573,28 @@ export function registerIpcHandlers(ctx: IpcContext): {
       }
     }),
 
-    settingsSet: channel(one(parseSettingsPatch), (win, patch) =>
-      applySettingsChange(
+    settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
+      const saved = await applySettingsChange(
         win,
         patch,
         ctx.capabilitiesAtLaunch,
         ctx.getSettings,
         ctx.updateSettings,
-      ),
-    ),
+      );
+      updateWindowShortcuts(win, saved.shortcutOverrides);
+      return saved;
+    }),
 
-    settingsReset: channel(nothing, (win) =>
-      confirmSettingsReset(win, ctx.resetSettings),
-    ),
+    settingsReset: channel(nothing, async (win) => {
+      const saved = await confirmSettingsReset(win, ctx.resetSettings);
+      if (saved) updateWindowShortcuts(win, saved.shortcutOverrides);
+      return saved;
+    }),
+
+    shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
+    shortcutCaptureCancel: channel(nothing, (win) => {
+      cancelWindowShortcutCapture(win);
+    }),
 
     credentialsLoad: channel(nothing, async (win) => {
       try {

@@ -106,11 +106,12 @@ a dedicated controller release test.
 
 Open **Settings → Tools**.
 
-GWonMac checks each game-integration feature independently. File saving, the
-Guild Wars cursor, target distance, live party details, and Apply team can stay
-available or turn off separately after a Guild Wars update. Native double-click
-uses a safe tap fallback when its repair is unavailable. The cursor has no
-player switch. The app does not ship or download cursor artwork.
+GWonMac checks each certified game-integration feature after a Guild Wars
+update. File saving, the Guild Wars cursor, storage opening, and Apply team can
+remain available or turn off independently.
+Native double-click uses a safe tap fallback when its repair is unavailable.
+The cursor has no player switch. The app does not ship or download cursor
+artwork.
 
 **Enable optional Tools Beta** is off by default. Its first enable asks for one
 restart because the app selects the Tools-capable mode before Guild Wars
@@ -120,15 +121,35 @@ After that restart, these choices update immediately:
 
 - **Apply teams in Guild Wars** (Beta) allows an explicit Apply action in a PvE
   outpost. The saved Build and Team library does not depend on this switch.
+- **Open Xunlai storage** (Beta) allows the Storage button, Command-Shift-C
+  shortcut, and the `/chest` and `/xunlai` chat commands in a supported PvE
+  outpost.
 - **Target distance and range** (Test) shows the selected target's distance and
-  range band.
+range band.
 
-Live observation and Apply stop in PvP, guild halls, transitions, and unknown
-regions. The saved Build and Team library stays available. Apply checks policy
-before each step and stops when the state changes.
+The same pane lists **Keyboard shortcuts**. Choose **Change**, then press a
+Command shortcut to replace the default. Delete clears a shortcut, Escape
+cancels recording, and **Restore default shortcuts** restores Command-B for
+Tools and Command-Shift-C for Xunlai storage. Shortcuts work only while the
+Guild Wars window is active. GWonMac keeps normal editing and application
+shortcuts such as Command-C and Command-Q reserved.
+
+In a supported PvE outpost, turn on **Open Xunlai storage** in
+**Settings → Tools**, then choose **Storage** in the Tools title bar or press
+Command-Shift-C. You can also type `/chest` or `/xunlai` in chat. GWonMac opens
+the normal Xunlai window locally. It does not
+interact with an NPC, unlock storage, or change an
+item. Deposits, withdrawals, and gold changes still use the normal game and
+server rules.
+
+Live observation, storage opening, and Apply stop in PvP, guild halls,
+transitions, and unknown regions. The saved Build and Team library stays
+available. Apply checks policy before each step and stops when the state
+changes.
 
 The saved library still works when live client integration is unavailable. You
-can edit, import, and export. Live party data and Apply remain unavailable.
+can edit, import, and export. Live party data, storage opening, and Apply remain
+unavailable.
 
 ## Builds, teams, and templates
 
@@ -237,10 +258,10 @@ can prove. The launcher explains the result and keeps **Play Guild Wars** as the
 primary action.
 
 The official client remains playable. Saved builds and teams remain available.
-File saving, the Guild Wars cursor, target distance, live party details, and
-Apply team have separate support checks. One unavailable feature does not turn
-off the others. The macOS pointer and tap-based double-click fallback remain
-available.
+File saving, the Guild Wars cursor, storage opening, and Apply team have scoped
+support checks. One unavailable command does not turn off the other command,
+the official client, saved builds, or host-owned templates. The macOS pointer
+and tap-based double-click fallback remain available.
 
 Use **Check for updates** to look for a newer GWonMac release.
 

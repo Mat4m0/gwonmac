@@ -5,6 +5,11 @@ import {
   TEAM_COMMAND_PAYLOAD_BYTES,
   type EnhancementCommandEnqueue,
 } from "../../src/renderer/enhancement-team-commands.ts";
+import {
+  createStorageCommand,
+  initializeStorageDataWindow,
+  STORAGE_DATA_WINDOW_BYTES,
+} from "../../src/renderer/enhancement-storage-command.ts";
 import type { ToolboxObservation } from "../../src/shared/builds/live-party.ts";
 import { heroId } from "../../src/shared/builds/library.ts";
 
@@ -83,6 +88,34 @@ test("the closed team surface selects only its reviewed opcodes and payloads", (
     [16, 11, 1, PAYLOAD + 8 * 4, PAYLOAD + 24 * 4, [1], [10]],
   ]);
   assert.equal(TEAM_COMMAND_PAYLOAD_BYTES, 160);
+});
+
+test("the storage command owns one fixed DataWindow payload and refuses unsafe sends", () => {
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  initializeStorageDataWindow(memory, PAYLOAD);
+  assert.equal(STORAGE_DATA_WINDOW_BYTES, 12);
+  assert.deepEqual([...new Uint32Array(memory.buffer, PAYLOAD, 3)], [0, 0, 3]);
+
+  const calls: string[] = [];
+  createStorageCommand(
+    () => { calls.push("send"); return 1; },
+    () => { calls.push("ready"); return null; },
+  ).open();
+  assert.deepEqual(calls, ["ready", "send"]);
+
+  assert.throws(
+    () => createStorageCommand(() => 0, () => null).open(),
+    /command queue is busy/,
+  );
+  let sends = 0;
+  assert.throws(
+    () => createStorageCommand(
+      () => { sends += 1; return 1; },
+      () => "storage is unavailable here",
+    ).open(),
+    /unavailable here/,
+  );
+  assert.equal(sends, 0);
 });
 
 test("invalid values are refused before the command queue", () => {

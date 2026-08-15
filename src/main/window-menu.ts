@@ -19,18 +19,24 @@ import { EXTERNAL_URLS } from "../shared/contracts.js";
 import { logEvent } from "./diagnostics.js";
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import {
+  openStorage,
   resetGameInput,
   sendRendererCommand,
   toggleTools,
 } from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
 import type { WindowHost } from "./window.js";
+import {
+  resolveShortcuts,
+  shortcutAccelerator,
+} from "../shared/keyboard-shortcuts.js";
 
 const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
 export interface ApplicationMenuActions {
   host: WindowHost;
   win: BrowserWindow;
+  shortcuts?: ReturnType<typeof resolveShortcuts>;
   /** Window state stays window.ts's; the menu only asks for the reset. */
   resetWindowState: () => Promise<void>;
 }
@@ -38,10 +44,13 @@ export interface ApplicationMenuActions {
 export function installApplicationMenu({
   host,
   win,
+  shortcuts = resolveShortcuts({}),
   resetWindowState,
 }: ApplicationMenuActions): void {
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
+  const toolsAccelerator = shortcutAccelerator(shortcuts["tools.toggle"]);
+  const storageAccelerator = shortcutAccelerator(shortcuts["storage.open"]);
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac
@@ -114,9 +123,16 @@ export function installApplicationMenu({
           // `before-input-event` in window.ts instead, which runs before the
           // page; `registerAccelerator: false` keeps the shortcut visible here
           // without binding it a second time and firing twice.
-          accelerator: "CmdOrCtrl+B",
+          ...(toolsAccelerator ? { accelerator: toolsAccelerator } : {}),
           registerAccelerator: false,
           click: () => toggleTools(win),
+        },
+        {
+          id: "open-xunlai-storage",
+          label: "Open Xunlai Storage",
+          ...(storageAccelerator ? { accelerator: storageAccelerator } : {}),
+          registerAccelerator: false,
+          click: () => openStorage(win),
         },
         {
           label: "Toggle Diagnostics",

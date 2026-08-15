@@ -17,6 +17,7 @@ describe("native Tools host diagnostics", () => {
       {} as GwNativeApi,
       null,
       null,
+      null,
       "Team Apply is unavailable.",
     );
 
@@ -24,6 +25,24 @@ describe("native Tools host diagnostics", () => {
     await expect(host.publishBuild(demoLibrary.builds[0]!)).rejects.toThrow(
       "GWonMac can’t add this build to Guild Wars after this game update.",
     );
+  });
+
+  it("publishes the current storage refusal and uses the one named action", async () => {
+    let refusal: string | null = "Storage is waiting for the current party";
+    const open = vi.fn();
+    const host = createNativeHost(
+      {} as GwNativeApi,
+      null,
+      null,
+      { open, unavailable: () => refusal },
+      "Team Apply is unavailable.",
+    );
+
+    expect(host.storageUnavailable).toBe(refusal);
+    refusal = null;
+    expect(host.storageUnavailable).toBeNull();
+    await host.openStorage();
+    expect(open).toHaveBeenCalledOnce();
   });
 
   it("publishes bounded evidence when Team Apply refuses", async () => {
@@ -45,6 +64,7 @@ describe("native Tools host diagnostics", () => {
       {} as GwNativeApi,
       vi.fn(),
       commands,
+      null,
       null,
       true,
     );
@@ -102,6 +122,7 @@ describe("native Tools host diagnostics", () => {
       vi.fn(),
       commands,
       null,
+      null,
       true,
     );
     development.party.value = demoParty;
@@ -118,6 +139,7 @@ describe("native Tools host diagnostics", () => {
       {} as GwNativeApi,
       vi.fn(),
       commands,
+      null,
       null,
       false,
     );
@@ -146,6 +168,7 @@ describe("native Tools host diagnostics", () => {
       {} as GwNativeApi,
       vi.fn(),
       commands,
+      null,
       null,
       true,
     );

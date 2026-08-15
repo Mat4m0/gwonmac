@@ -35,6 +35,7 @@ const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   targetObservation: false,
   partyObservation: true,
   commands: false,
+  storage: false,
 });
 
 describe("targeted Enhancement WebAssembly transform", () => {
@@ -282,6 +283,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
           targetObservation: true,
           partyObservation: false,
           commands: true,
+          storage: false,
         },
       ),
       /capability profile is not certified/,

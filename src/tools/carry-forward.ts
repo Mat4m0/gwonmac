@@ -30,6 +30,7 @@ export interface CarryForwardReport {
     readonly targetObservation: CarryForwardStatus;
     readonly partyObservation: CarryForwardStatus;
     readonly teamApply: CarryForwardStatus;
+    readonly xunlaiStorage: CarryForwardStatus;
   };
   readonly templateSave: TemplateSaveReport;
   readonly enhancement: EnhancementRecertificationReport;
@@ -39,7 +40,7 @@ export interface CarryForwardReport {
 
 function evidenceStatus(
   enhancement: EnhancementRecertificationReport,
-  feature: "cursor" | "target" | "party" | "commands",
+  feature: "cursor" | "target" | "party" | "commands" | "storage",
 ): CarryForwardStatus {
   if (enhancement.bundleVerified) return "exact";
   if (!enhancement.candidateInspected) return "not-located";
@@ -85,6 +86,7 @@ export function createCarryForwardReport(
       targetObservation: evidenceStatus(enhancement, "target"),
       partyObservation: evidenceStatus(enhancement, "party"),
       teamApply: evidenceStatus(enhancement, "commands"),
+      xunlaiStorage: evidenceStatus(enhancement, "storage"),
     },
     templateSave,
     enhancement,
@@ -99,6 +101,7 @@ const LABELS: Readonly<Record<keyof CarryForwardReport["capabilities"], string>>
   targetObservation: "Target observation",
   partyObservation: "Party observation",
   teamApply: "Apply team",
+  xunlaiStorage: "Xunlai storage",
 };
 
 export function formatCarryForwardMarkdown(report: CarryForwardReport): string {

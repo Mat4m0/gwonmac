@@ -30,6 +30,7 @@ import {
 } from "../../shared/contracts.js";
 import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
+import { isShortcutOverrides } from "../../shared/keyboard-shortcuts.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALE_VALUES = new Set<AppSettings["renderScale"]>(RENDER_SCALES);
@@ -117,9 +118,16 @@ export function parseSettings(raw: unknown): AppSettings {
       UI_PANEL_OPACITY_MAX,
     );
   }
+  if ("shortcutOverrides" in src) {
+    if (!isShortcutOverrides(src.shortcutOverrides)) {
+      throw new AppError("bad_settings", "settings.shortcutOverrides has invalid bindings");
+    }
+    out.shortcutOverrides = { ...src.shortcutOverrides };
+  }
   for (const setting of [
     "gwonmacTools",
     "teamManagement",
+    "xunlaiStorage",
     "targetReadout",
     "extendedMemoryEnabled",
   ] as const) {

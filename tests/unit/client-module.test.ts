@@ -47,24 +47,28 @@ const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   targetObservation: false,
   partyObservation: true,
   commands: false,
+  storage: false,
 });
 const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: false,
   commands: false,
+  storage: false,
 });
 const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   partyObservation: false,
   commands: false,
+  storage: false,
 });
 const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: false,
   commands: false,
+  storage: false,
 });
 
 const scratchDirs: string[] = [];
@@ -118,7 +122,7 @@ function officialFixture(): Uint8Array {
     0x60, 2, 0x7f, 0x7f, 0,
   ]);
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [9, 0, 0, 2, 3, 4, 5, 5, 4, 4]);
+  const functions = section(3, [11, 0, 0, 2, 3, 4, 5, 5, 4, 4, 2, 0]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -146,8 +150,9 @@ function officialFixture(): Uint8Array {
     0x0b,
   ];
   const loop = [0, 0x0b];
+  const slashParser = [0, 0x41, 0, 0x0b];
   const code = section(10, [
-    9,
+    11,
     ...uleb(STUB_BODY.length), ...STUB_BODY,
     ...uleb(caller.length), ...caller,
     ...uleb(loop.length), ...loop,
@@ -157,6 +162,8 @@ function officialFixture(): Uint8Array {
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
     ...uleb(loop.length), ...loop,
+    ...uleb(loop.length), ...loop,
+    ...uleb(slashParser.length), ...slashParser,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
@@ -211,6 +218,14 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       cursorPartyCommands: "0".repeat(64),
       targetPartyCommands: "0".repeat(64),
       cursorTargetPartyCommands: "0".repeat(64),
+      partyStorage: "0".repeat(64),
+      cursorPartyStorage: "0".repeat(64),
+      targetPartyStorage: "0".repeat(64),
+      cursorTargetPartyStorage: "0".repeat(64),
+      partyCommandsStorage: "0".repeat(64),
+      cursorPartyCommandsStorage: "0".repeat(64),
+      targetPartyCommandsStorage: "0".repeat(64),
+      cursorTargetPartyCommandsStorage: "0".repeat(64),
     }),
     programId: 1,
     buildId: 1,
@@ -225,6 +240,36 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       currentMapId: 7, currentInstanceType: 8, playerNumber: 9,
       agentId: 10, agentPlayerNumber: 14, agentModelType: 15,
     } },
+    storage: {
+        openExport: "enhancement_open_storage",
+        configureExport: "enhancement_configure_storage",
+        slashParser: {
+          functionIndex: 11,
+          params: ["i32", "i32"],
+          results: ["i32"],
+          bodySha256: sha256(
+            parseCode(sectionById(splitSections(input), 10))[10]!,
+          ),
+        },
+        handler: {
+          functionIndex: 10,
+          params: ["i32"],
+          results: [],
+          bodySha256: sha256(
+            parseCode(sectionById(splitSections(input), 10))[9]!,
+          ),
+        },
+    },
+    gameThread: {
+      drain: {
+        functionIndex: 6,
+        params: ["i32", "i32"],
+        results: [],
+        tableSlot: 4,
+        bodySha256:
+          "f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2",
+      },
+    },
     teamApply: {
       thunkExport: "enhancement_command",
       professionTrace: {
@@ -235,14 +280,6 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
           results: [],
           bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[7]!),
         },
-      },
-      drain: {
-        functionIndex: 6,
-        params: ["i32", "i32"],
-        results: [],
-        tableSlot: 4,
-        bodySha256:
-          "f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2",
       },
       entries: [{
         opcode: 65,

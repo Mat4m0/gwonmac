@@ -110,22 +110,26 @@ test("one capability plan derives hooks without losing feature identity", () => 
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
-      { nativeCursor: true, targetObservation: false, partyObservation: false, commands: false },
+      { nativeCursor: true, targetObservation: false, partyObservation: false, commands: false, storage: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "target-observer"),
-      { nativeCursor: false, targetObservation: true, partyObservation: false, commands: false },
+      { nativeCursor: false, targetObservation: true, partyObservation: false, commands: false, storage: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-foundation"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: false, storage: false },
     );
     // The read foundation and the write program differ by exactly this bit,
     // and no saved setting reaches the second: choosing the panel can never
     // carry the ability to send a packet in with it.
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-commands"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: true },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: true, storage: true },
+    );
+    assert.deepEqual(
+      enhancementCapabilitiesFor(selection, "xunlai-storage"),
+      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: false, storage: true },
     );
   }
 });
@@ -133,10 +137,11 @@ test("one capability plan derives hooks without losing feature identity", () => 
 test("launch intent resolves to the canonical frozen capability profiles", () => {
   const cases = [
     [{ nativeCursor: true, tools: false }, "none", "cursor"],
-    [{ nativeCursor: true, tools: true }, "none", "cursorTargetPartyCommands"],
+    [{ nativeCursor: true, tools: true }, "none", "cursorTargetPartyCommandsStorage"],
     [{ nativeCursor: false, tools: false }, "cursor-observer", "cursor"],
     [{ nativeCursor: true, tools: false }, "target-observer", "target"],
     [{ nativeCursor: false, tools: false }, "toolbox-foundation", "party"],
+    [{ nativeCursor: false, tools: false }, "xunlai-storage", "partyStorage"],
   ] as const;
   for (const [selection, program, profile] of cases) {
     const resolved = enhancementCapabilitiesFor(selection, program);
@@ -168,6 +173,13 @@ test("player settings request only the selected independent features", () => {
   assert.deepEqual(requestedEnhancementCapabilities({
     ...DEFAULT_SETTINGS,
     gwonmacTools: true,
+    teamManagement: false,
+    xunlaiStorage: true,
+    targetReadout: false,
+  }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorPartyStorage);
+  assert.deepEqual(requestedEnhancementCapabilities({
+    ...DEFAULT_SETTINGS,
+    gwonmacTools: true,
     teamManagement: true,
     targetReadout: true,
   }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommands);
@@ -191,6 +203,7 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
         targetObservation: available,
         partyObservation: available,
         teamApply: unavailable,
+        xunlaiStorage: unavailable,
       },
     },
   }), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetParty);

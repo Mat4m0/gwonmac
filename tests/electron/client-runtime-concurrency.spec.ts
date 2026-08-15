@@ -986,6 +986,7 @@ test.describe("client generation coordination", () => {
               targetObservation: true,
               partyObservation: true,
               commands: true,
+              storage: false,
             },
             onProgress: () => undefined,
             onPrefetch: () => undefined,

@@ -23,6 +23,7 @@ function compatibility(
       targetObservation: off,
       partyObservation: off,
       teamApply: off,
+      xunlaiStorage: off,
       ...overrides,
     },
   };
@@ -44,6 +45,7 @@ const IDS = [
   "settings-feature-gameFileSaving", "settings-feature-nativeCursor",
   "settings-feature-targetObservation", "settings-feature-partyObservation",
   "settings-feature-teamApply",
+  "settings-feature-xunlaiStorage",
 ] as const;
 
 function compatibilityDom() {
@@ -174,25 +176,27 @@ describe("client compatibility notice", () => {
         for (const targetObservation of optional) {
           for (const partyObservation of optional) {
             for (const teamApply of optional) {
-              const features = {
-                gameFileSaving,
-                nativeCursor,
-                targetObservation,
-                partyObservation,
-                teamApply,
-              } satisfies ClientCompatibility["features"];
-              const report = compatibilityReport({
-                clientSha256: "b".repeat(64),
-                features,
-              });
-              const missing = Object.values(features).filter(
-                (feature) => feature.status === "unavailable",
-              );
-              assert.equal(report.degraded, missing.length > 0);
-              const reasons = new Set(missing.map((feature) =>
-                feature.status === "unavailable" ? feature.reason : null));
-              assert.equal(
-                report.recovery,
+              for (const xunlaiStorage of optional) {
+                const features = {
+                  gameFileSaving,
+                  nativeCursor,
+                  targetObservation,
+                  partyObservation,
+                  teamApply,
+                  xunlaiStorage,
+                } satisfies ClientCompatibility["features"];
+                const report = compatibilityReport({
+                  clientSha256: "b".repeat(64),
+                  features,
+                });
+                const missing = Object.values(features).filter(
+                  (feature) => feature.status === "unavailable",
+                );
+                assert.equal(report.degraded, missing.length > 0);
+                const reasons = new Set(missing.map((feature) =>
+                  feature.status === "unavailable" ? feature.reason : null));
+                assert.equal(
+                  report.recovery,
                 reasons.size === 0
                   ? null
                   : reasons.size === 2
@@ -206,7 +210,8 @@ describe("client compatibility notice", () => {
               assert.doesNotMatch(
                 [report.summary, ...report.details].join(" "),
                 /\b(Core|Enhancement|certificate|module)\b|command generation|stat|timing|reinstall|cache clearing/i,
-              );
+                );
+              }
             }
           }
         }

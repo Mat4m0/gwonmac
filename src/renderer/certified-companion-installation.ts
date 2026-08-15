@@ -41,7 +41,14 @@ import type {
   RendererMilestoneFields,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
-import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
+import type {
+  EnhancementCommandEnqueue,
+} from "./enhancement-team-commands.js";
+import type {
+  EnhancementStorageConfigure,
+  EnhancementStorageOpen,
+} from "./enhancement-storage-command.js";
+import type { StorageController } from "./enhancement-storage-controller.js";
 import {
   COMPANION_ABI as COMPANION_DESCRIPTOR,
 } from "../shared/companion-abi.js";
@@ -168,16 +175,32 @@ export async function installCertifiedCompanion(
         ? exports.enhancement_profession_trace as ProfessionCommandTraceReader
         : null)
     : null;
+  const storageOpen = capabilities.storage
+    ? (typeof exports.enhancement_open_storage === "function"
+        ? exports.enhancement_open_storage as EnhancementStorageOpen
+        : null)
+    : null;
+  const storageConfigure = capabilities.storage
+    ? (typeof exports.enhancement_configure_storage === "function"
+        ? exports.enhancement_configure_storage as EnhancementStorageConfigure
+        : null)
+    : null;
   if (capabilities.commands && commandEnqueue === null) {
     throw new Error("the commands profile derived a module with no command queue");
   }
   if (capabilities.commands && professionTraceReader === null) {
     throw new Error("the commands profile derived a module with no profession trace");
   }
+  if (capabilities.storage && (storageOpen === null || storageConfigure === null)) {
+    throw new Error("the storage profile derived a module with no storage command");
+  }
   // Keep the command implementation out of Core-only sessions altogether.
   // The derived module and its JavaScript boundary arrive as one capability.
   const teamCommands = capabilities.commands
     ? await import("./enhancement-team-commands.js")
+    : null;
+  const storageCommands = capabilities.storage
+    ? await import("./enhancement-storage-controller.js")
     : null;
   // The guard above proves `free` is callable, but WebAssembly exports are typed
   // as the bare `Function`, so the kernel's ABI has to be named here or the five
@@ -205,6 +228,7 @@ export async function installCertifiedCompanion(
   let toolboxPointer = 0;
   let partyPointer = 0;
   let payloadPointer = 0;
+  let storagePayloadPointer = 0;
   let professionTracePointer = 0;
   // What malloc returned, which is what free must be given. The aligned base
   // used by the module lives inside it and is not a valid argument to free.
@@ -214,6 +238,7 @@ export async function installCertifiedCompanion(
   let disposeReadout = () => {};
   let disposeToolbox = () => {};
   let disposeToolSettings = () => {};
+  let storageController: StorageController | null = null;
   let disposeCursorRefresh = () => {};
   let professionTrace: ReturnType<typeof createProfessionCommandTrace> | null = null;
   let installedCallback: CallableFunction | null = null;
@@ -225,6 +250,7 @@ export async function installCertifiedCompanion(
     cleaned = true;
     // Disable dispatch before releasing any callback-owned state.
     hookSlot.value = 0;
+    storageController?.dispose();
     stopObserver();
     disposeCursorRefresh();
     disposeCursor();
@@ -241,6 +267,7 @@ export async function installCertifiedCompanion(
     if (toolboxPointer) free(toolboxPointer);
     if (partyPointer) free(partyPointer);
     if (payloadPointer) free(payloadPointer);
+    if (storagePayloadPointer) free(storagePayloadPointer);
     if (professionTracePointer) free(professionTracePointer);
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
@@ -290,6 +317,11 @@ export async function installCertifiedCompanion(
         );
       }
     }
+    if (capabilities.storage) {
+      storagePayloadPointer = Number(
+        exports.malloc(storageCommands!.STORAGE_DATA_WINDOW_BYTES),
+      );
+    }
     if (
       !runtimeAllocation
       || !configPointer
@@ -298,6 +330,7 @@ export async function installCertifiedCompanion(
       || (foundation && !toolboxPointer)
       || (foundation && !partyPointer)
       || (capabilities.commands && !payloadPointer)
+      || (capabilities.storage && !storagePayloadPointer)
       || (
         capabilities.commands
         && window.gwNative.init.development
@@ -343,6 +376,14 @@ export async function installCertifiedCompanion(
                 }]
               : []),
           ]
+        : []),
+      ...(capabilities.storage
+        ? [{
+            name: "storage payload",
+            pointer: storagePayloadPointer,
+            size: storageCommands!.STORAGE_DATA_WINDOW_BYTES,
+            align: 4,
+          }]
         : []),
     ];
     for (const region of ownedRegions) {
@@ -395,6 +436,10 @@ export async function installCertifiedCompanion(
       configPointer,
       manifest.configWords.length,
     ).set(manifest.configWords);
+    if (capabilities.storage) {
+      storageCommands!.initializeStorageDataWindow(memory, storagePayloadPointer);
+    }
+    storageConfigure?.(storagePayloadPointer, 0);
 
     const response = await fetch("companion-kernel.wasm");
     if (!response.ok) throw new Error("Companion kernel is unavailable");
@@ -559,6 +604,7 @@ export async function installCertifiedCompanion(
         playRegion: playRegion(),
         nativeCursor: capabilities.nativeCursor,
         teamManagement: active.teamManagement,
+        xunlaiStorage: active.xunlaiStorage,
         targetReadout: active.targetReadout,
         commands: commands !== null,
       };
@@ -625,11 +671,26 @@ export async function installCertifiedCompanion(
         return observed;
       },
     });
+    const syncStoragePolicy = () => {
+      storageController?.update({
+        enabled: policy().xunlaiStorage,
+        playRegion: playRegion(),
+        observation: toolboxObservation,
+      });
+    };
+    storageController = storageOpen === null || storageConfigure === null
+      ? null
+      : storageCommands!.createStorageController(
+          storageOpen,
+          storageConfigure,
+          storagePayloadPointer,
+        );
+    const storage = storageController?.command ?? null;
     const toolbox = foundation
       ? createToolboxLifecycle(document.body, {
           mountTool: (host, onVisibilityChange) =>
             import("./tools-host.js").then(({ mountToolsInto }) =>
-              mountToolsInto(host, onVisibilityChange, commands, true),
+              mountToolsInto(host, onVisibilityChange, commands, storage, true),
             ),
         })
       : null;
@@ -651,6 +712,7 @@ export async function installCertifiedCompanion(
       syncToolboxAvailability();
       setTargetEnabled();
       syncActiveObservers();
+      syncStoragePolicy();
     };
     window.addEventListener("gw:tools-settings", onToolSettings);
     disposeToolSettings = () =>
@@ -661,6 +723,7 @@ export async function installCertifiedCompanion(
 
     // Apply opt-in state before the callback becomes reachable from the game.
     syncActiveObservers();
+    syncStoragePolicy();
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;
     const observerRuntime = {
@@ -764,6 +827,7 @@ export async function installCertifiedCompanion(
               tracePolicy("region");
               setTargetEnabled();
               syncActiveObservers();
+              syncStoragePolicy();
             }
             readout?.update(state);
           } }
@@ -787,6 +851,7 @@ export async function installCertifiedCompanion(
               setTargetEnabled();
               syncActiveObservers();
             }
+            syncStoragePolicy();
             toolbox?.update(state);
           } }
         : null,

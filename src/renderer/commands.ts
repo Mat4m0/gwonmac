@@ -68,6 +68,16 @@
           );
         }
         break;
+      case 'storage.open': {
+        const result: { error?: unknown } = {};
+        if (!dispatch('gw:storage-open', result)) {
+          throw new Error(
+            'Xunlai storage is not available in this launch.',
+          );
+        }
+        if (result.error !== undefined) throw result.error;
+        break;
+      }
       case 'settings.open':
         dispatch('gw:settings', {
           pane: command.pane,

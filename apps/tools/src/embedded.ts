@@ -10,7 +10,8 @@ export function mountToolsApp(
     onVisibilityChange?: (visible: boolean) => void;
     publishTemplate: Parameters<typeof createNativeHost>[1];
     commands: Parameters<typeof createNativeHost>[2];
-    applyUnavailable: Parameters<typeof createNativeHost>[3];
+    storage: Parameters<typeof createNativeHost>[3];
+    applyUnavailable: Parameters<typeof createNativeHost>[4];
     observationUnavailable: string | null;
     development: boolean;
   },
@@ -20,6 +21,7 @@ export function mountToolsApp(
       window.gwNative,
       options.publishTemplate,
       options.commands,
+      options.storage,
       options.applyUnavailable,
       options.development,
       options.observationUnavailable,

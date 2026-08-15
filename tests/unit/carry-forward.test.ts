@@ -32,9 +32,11 @@ describe("patch-day carry-forward report", () => {
       targetObservation: "not-located",
       partyObservation: "not-located",
       teamApply: "not-located",
+      xunlaiStorage: "not-located",
     });
     assert.equal(report.canonicalCertificate, null);
     assert.match(formatCarryForwardMarkdown(report), /Apply team \| not-located/);
+    assert.match(formatCarryForwardMarkdown(report), /Xunlai storage \| not-located/);
     assert.match(
       formatCarryForwardMarkdown(report),
       /does not authorize memory reads or Apply team/,

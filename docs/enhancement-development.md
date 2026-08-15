@@ -23,8 +23,11 @@ current optional features are:
   certified PvE outpost. Build and Team authoring remains local and independent.
 - **Target distance and range** (Test): show the selected target's distance and
   range band.
+- **Xunlai storage**: open the normal storage UI from the Tools title bar,
+  Command-Shift-C, `/chest`, or `/xunlai` in a certified PvE outpost. It has a
+  separate Settings opt-in.
 
-Both choices then change live. Live observers and commands stop when disabled
+These features then change live. Live observers and commands stop when disabled
 or when map policy refuses them. Host-only authoring remains available without
 observation or command authority.
 
@@ -233,8 +236,9 @@ pnpm check
 
 `recertify` must report `bundleVerified: true`, `double-click` must report
 `matchesShippedTable: true`, and `doctor` must name the new build before a live
-run. Native double-click and extended-memory tables are cumulative: add the
-new build's seven profile inputs without removing the preceding build.
+run. Native double-click and extended-memory tables are cumulative: add every
+profile emitted by the capability registry without removing the preceding
+build.
 
 Each recovered fact needs an independent semantic anchor. A common movement is
 not enough. Automated candidates are review evidence and cannot create runtime
@@ -244,6 +248,14 @@ Recertification requires exact identities, signatures, caller semantics,
 original-call preservation, table and allocation invariants, positive and
 negative layout evidence, lifecycle clearing, offline tests, clean teardown,
 and one bounded live semantic check per changed domain.
+
+For Xunlai storage, run `pnpm enhancements:live xunlai-storage` from a supported
+PvE outpost. The scenario exercises the same named action as the Tools button
+and keyboard shortcut twice. Also enter `/chest`, `/xunlai`, and one near miss
+such as `/storage`; the first two must be consumed locally and the near miss
+must remain a normal Guild Wars command. Record the slash-parser and DataWindow
+handler indices, signatures, body hashes, and game-thread drain evidence in the
+new certificate. Do not infer them from the preceding build.
 
 Party certification must prove the complete owned roster, player and hero
 professions, hero unlocks, behaviour, skill bars, and attributes. Proving only

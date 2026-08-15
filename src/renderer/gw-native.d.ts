@@ -215,6 +215,7 @@ declare global {
     gwToolsSettings(): Readonly<{
       enabled: boolean;
       teamManagement: boolean;
+      xunlaiStorage: boolean;
       targetReadout: boolean;
     }>;
     gwLoading: LoadingController;

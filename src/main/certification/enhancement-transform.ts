@@ -6,7 +6,7 @@
  * The input hash is checked against the build entry before a byte is read, and
  * every hook's function signature is re-verified against the certified one, so
  * a table entry that has gone stale fails loudly instead of producing a module
- * that traps at runtime. Capability selection is exact — three booleans, no
+ * that traps at runtime. Capability selection is exact — five fields, no
  * extra keys, and a profile that has no certified output hash is refused rather
  * than derived.
  *
@@ -40,6 +40,14 @@ import {
   type ProfessionTraceGlobals,
 } from "./enhancement-command-trace-transform.js";
 import {
+  commandBoundary,
+  commandDrain,
+  commandEnqueue,
+  storageConfigure,
+  storageEnqueue,
+  storageSlashParser,
+} from "./enhancement-command-transform.js";
+import {
   concat,
   countFunctionImports,
   encodeCode,
@@ -63,6 +71,7 @@ import {
 } from "../core/wasm-binary.js";
 
 declare const WebAssembly: {
+  Module: new (bytes: Uint8Array) => unknown;
   validate(bytes: Uint8Array): boolean;
 };
 
@@ -89,15 +98,17 @@ function exactCapabilities(value: unknown): EnhancementCapabilities | null {
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
   if (
-    keys.length !== 4
+    keys.length !== 5
     || !Object.hasOwn(record, "nativeCursor")
     || !Object.hasOwn(record, "targetObservation")
     || !Object.hasOwn(record, "partyObservation")
     || !Object.hasOwn(record, "commands")
+    || !Object.hasOwn(record, "storage")
     || typeof record.nativeCursor !== "boolean"
     || typeof record.targetObservation !== "boolean"
     || typeof record.partyObservation !== "boolean"
     || typeof record.commands !== "boolean"
+    || typeof record.storage !== "boolean"
   ) {
     return null;
   }
@@ -106,6 +117,7 @@ function exactCapabilities(value: unknown): EnhancementCapabilities | null {
     targetObservation: record.targetObservation,
     partyObservation: record.partyObservation,
     commands: record.commands,
+    storage: record.storage,
   });
 }
 
@@ -197,130 +209,6 @@ function dispatcher(
     Uint8Array.of(0x6b, 0x11),
     uleb(dispatchTypeIndex),
     uleb(0),
-    Uint8Array.of(0x0b),
-  );
-}
-
-/** The exact frame-API boundary used by GWCA's game-thread queue. */
-function commandBoundary(
-  paramCount: number,
-  originalIndex: number,
-  drainIndex: number,
-): Uint8Array {
-  const args = Array.from({ length: paramCount }, (_, index) =>
-    concat(Uint8Array.of(0x20), uleb(index)),
-  );
-  return concat(
-    uleb(0),
-    // GWCA's OnLeaveGameThread drains queued work before invoking the original
-    // frame function. Preserve that ordering rather than treating any
-    // game-owned callback as an interchangeable "tick".
-    Uint8Array.of(0x10), uleb(drainIndex),
-    ...args,
-    Uint8Array.of(0x10), uleb(originalIndex),
-    Uint8Array.of(0x0b),
-  );
-}
-
-/**
- * The command enqueue function: one exported function and one
- * `br_table`-free chain of exact opcode comparisons.
- *
- *     enhancement_command(opcode, a0, a1, a2, a3) -> i32   // 1 queued, 0 refused
- *
- * This is the whole write surface and it is deliberately shaped so that there
- * is no other. The companion kernel is a Wasm side module: its only route into
- * the client is the imported function table, and not one packet builder — nor
- * the sender, nor the connection read — is in that table. So without this
- * function there is no call from the kernel to any of them anywhere in the
- * module. Not a forbidden call; a nonexistent one.
- *
- * That property is what makes the capability meaningful. With `commands` off
- * the thunk is not emitted, and "the companion cannot send a packet" is a fact
- * about the bytes rather than a runtime check somebody could get wrong.
- *
- * Calling a client packet builder re-entrantly from JavaScript is not a valid
- * game-thread boundary. The exported function therefore writes at most one
- * command into private globals. The certified frame-API boundary used by
- * GWCA's game-thread queue drains that mailbox before its original function,
- * while execution is on the game-owned call stack with the packet context in
- * scope. Arguments are written before the opcode, which is the mailbox's ready
- * bit.
- *
- * Unknown opcodes and a second command while one is pending return 0 rather
- * than trapping. A refusal the caller can observe is worth more than an abort:
- * a stale or overlapping renderer request becomes a no-op instead of a dead
- * client.
- */
-function commandEnqueue(
-  entries: readonly Readonly<{ opcode: number; functionIndex: number; params: readonly string[] }>[],
-  pendingGlobalIndex: number,
-  argumentGlobalBase: number,
-): Uint8Array {
-  return concat(
-    uleb(0),                                          // no locals
-    Uint8Array.of(0x20), uleb(0),                    // opcode zero cancels
-    Uint8Array.of(0x45),
-    Uint8Array.of(0x04, 0x40),
-    Uint8Array.of(0x41), sleb(0),
-    Uint8Array.of(0x24), uleb(pendingGlobalIndex),
-    Uint8Array.of(0x41), sleb(1),
-    Uint8Array.of(0x0f),
-    Uint8Array.of(0x0b),
-    Uint8Array.of(0x23), uleb(pendingGlobalIndex),    // global.get pending
-    Uint8Array.of(0x45),                              // i32.eqz
-    Uint8Array.of(0x04, 0x40),                        // if mailbox is empty
-    ...entries.map((entry) => concat(
-      Uint8Array.of(0x20), uleb(0),                   // local.get opcode
-      Uint8Array.of(0x41), sleb(entry.opcode),
-      Uint8Array.of(0x46),                            // i32.eq
-      Uint8Array.of(0x04, 0x40),                      // if
-      ...Array.from({ length: COMMAND_ARGS }, (_, index) => concat(
-        Uint8Array.of(0x20), uleb(index + 1),          // local.get argument
-        Uint8Array.of(0x24), uleb(argumentGlobalBase + index),
-      )),
-      Uint8Array.of(0x20), uleb(0),                   // publish opcode last
-      Uint8Array.of(0x24), uleb(pendingGlobalIndex),
-      Uint8Array.of(0x41), sleb(1),
-      Uint8Array.of(0x0f),                            // return
-      Uint8Array.of(0x0b),                            // end if
-    )),
-    Uint8Array.of(0x0b),                              // end mailbox-empty if
-    Uint8Array.of(0x41), sleb(0),                     // refused
-    Uint8Array.of(0x0b),
-  );
-}
-
-/** Runs only from the certified frame-API boundary, never as a JS export. */
-function commandDrain(
-  entries: readonly Readonly<{ opcode: number; functionIndex: number; params: readonly string[] }>[],
-  pendingGlobalIndex: number,
-  argumentGlobalBase: number,
-  traceOriginGlobalIndex: number,
-): Uint8Array {
-  return concat(
-    uleb(0),
-    ...entries.map((entry) => concat(
-      Uint8Array.of(0x23), uleb(pendingGlobalIndex),
-      Uint8Array.of(0x41), sleb(entry.opcode),
-      Uint8Array.of(0x46),
-      Uint8Array.of(0x04, 0x40),
-      // Clear before entering client code so even a re-entrant observer can
-      // never see and dispatch the same command twice.
-      Uint8Array.of(0x41), sleb(0),
-      Uint8Array.of(0x24), uleb(pendingGlobalIndex),
-      // Mark the synchronous builder/sender chain as GWonMac-owned. Native UI
-      // calls see the default zero and are therefore directly comparable.
-      Uint8Array.of(0x41), sleb(1),
-      Uint8Array.of(0x24), uleb(traceOriginGlobalIndex),
-      ...entry.params.map((_, index) =>
-        concat(Uint8Array.of(0x23), uleb(argumentGlobalBase + index))),
-      Uint8Array.of(0x10), uleb(entry.functionIndex),
-      Uint8Array.of(0x41), sleb(0),
-      Uint8Array.of(0x24), uleb(traceOriginGlobalIndex),
-      Uint8Array.of(0x0f),
-      Uint8Array.of(0x0b),
-    )),
     Uint8Array.of(0x0b),
   );
 }
@@ -508,12 +396,15 @@ export function transformEnhancementWasm(
     || (capabilities.targetObservation && !supported.targetObservation)
     || (capabilities.partyObservation && !supported.partyObservation)
     || (capabilities.commands && !supported.commands)
+    || (capabilities.storage && !supported.storage)
   ) {
     fail("capability facts are not certified for this build");
   }
   const cursorEvent = build.cursorEvent!;
   const partyObservation = build.partyObservation!;
+  const gameThread = build.gameThread!;
   const teamApply = build.teamApply!;
+  const storage = build.storage!;
   const selectedHooks = enhancementHooksFor(capabilities);
   const hash = createHash("sha256").update(input).digest("hex");
   if (hash !== build.sha256) fail(`input hash ${hash} is unsupported`);
@@ -673,6 +564,36 @@ export function transformEnhancementWasm(
         skillCommand.results,
       )
     : null;
+  const storageHandler = capabilities.storage
+    ? resolveHook(
+        "DataWindow handler",
+        storage.handler.functionIndex,
+        storage.handler.params,
+        storage.handler.results,
+      )
+    : null;
+  if (
+    storageHandler
+    && bodyHash(storage.handler.functionIndex)
+      !== storage.handler.bodySha256
+  ) {
+    fail("DataWindow handler body does not match its semantic fingerprint");
+  }
+  const storageSlashParserHook = capabilities.storage
+    ? resolveHook(
+        "storage slash parser",
+        storage.slashParser.functionIndex,
+        storage.slashParser.params,
+        storage.slashParser.results,
+      )
+    : null;
+  if (
+    storageSlashParserHook
+    && bodyHash(storage.slashParser.functionIndex)
+      !== storage.slashParser.bodySha256
+  ) {
+    fail("storage slash parser body does not match its semantic fingerprint");
+  }
   const packetSender = capabilities.commands
     ? resolveHook(
         "traced packet sender",
@@ -701,32 +622,57 @@ export function transformEnhancementWasm(
       fail("traced packet sender must be distinct from hooks and commands");
     }
   }
-  const commandDrainBoundary = capabilities.commands
+  const commandDrainBoundary = capabilities.commands || capabilities.storage
     ? resolveHook(
         "command drain boundary",
-        teamApply.drain.functionIndex,
-        teamApply.drain.params,
-        teamApply.drain.results,
+        gameThread.drain.functionIndex,
+        gameThread.drain.params,
+        gameThread.drain.results,
       )
     : null;
   if (commandDrainBoundary) {
     const body = createHash("sha256")
       .update(bodies[commandDrainBoundary.localIndex]!)
       .digest("hex");
-    if (body !== teamApply.drain.bodySha256) {
+    if (body !== gameThread.drain.bodySha256) {
       fail(
         `command drain boundary resolves to function `
-        + `${teamApply.drain.functionIndex}, whose body is ${body} and not `
-        + `the certified ${teamApply.drain.bodySha256}`,
+        + `${gameThread.drain.functionIndex}, whose body is ${body} and not `
+        + `the certified ${gameThread.drain.bodySha256}`,
       );
     }
     if (
       selected.some((hook) => hook.localIndex === commandDrainBoundary.localIndex)
-      || commands.some((entry) => entry.functionIndex === teamApply.drain.functionIndex)
+      || commands.some((entry) => entry.functionIndex === gameThread.drain.functionIndex)
       || packetSender?.localIndex === commandDrainBoundary.localIndex
+      || storageHandler?.localIndex === commandDrainBoundary.localIndex
+      || storageSlashParserHook?.localIndex === commandDrainBoundary.localIndex
     ) {
       fail("command drain boundary must be distinct from hooks, commands, and sender");
     }
+  }
+  if (
+    storageHandler
+    && (
+      selected.some((hook) => hook.localIndex === storageHandler.localIndex)
+      || commands.some((entry) => entry.functionIndex
+        === storage.handler.functionIndex)
+      || packetSender?.localIndex === storageHandler.localIndex
+      || storageSlashParserHook?.localIndex === storageHandler.localIndex
+    )
+  ) {
+    fail("DataWindow handler must be distinct from hooks and packet commands");
+  }
+  if (
+    storageSlashParserHook
+    && (
+      selected.some((hook) => hook.localIndex === storageSlashParserHook.localIndex)
+      || commands.some((entry) => entry.functionIndex
+        === storage.slashParser.functionIndex)
+      || packetSender?.localIndex === storageSlashParserHook.localIndex
+    )
+  ) {
+    fail("storage slash parser must be distinct from hooks and packet commands");
   }
 
   const table = parseTable(sectionById(sections, 4));
@@ -758,154 +704,224 @@ export function transformEnhancementWasm(
   }
   if (
     commandDrainBoundary
-    && tableSlots?.get(teamApply.drain.tableSlot)
-      !== teamApply.drain.functionIndex
+    && tableSlots?.get(gameThread.drain.tableSlot)
+      !== gameThread.drain.functionIndex
   ) {
     fail(
-      `command drain table slot ${teamApply.drain.tableSlot} does not map `
-      + `to function ${teamApply.drain.functionIndex}`,
+      `command drain table slot ${gameThread.drain.tableSlot} does not map `
+      + `to function ${gameThread.drain.functionIndex}`,
     );
   }
 
   const globals = vectorPayload(sectionById(sections, 6));
   const exports = vectorPayload(sectionById(sections, 7));
   const existingExports = parseExports(sectionById(sections, 7));
-  const addedExportNames = capabilities.commands
-    ? [
-        ENHANCEMENT_HOOK_EXPORT,
-        teamApply.thunkExport,
-        teamApply.professionTrace.readerExport,
-      ]
-    : [ENHANCEMENT_HOOK_EXPORT];
+  const addedExportNames = [
+    ENHANCEMENT_HOOK_EXPORT,
+    ...(capabilities.commands
+      ? [teamApply.thunkExport, teamApply.professionTrace.readerExport]
+      : []),
+    ...(capabilities.storage
+      ? [storage.openExport, storage.configureExport]
+      : []),
+  ];
   for (const name of addedExportNames) {
     if (existingExports.some((entry) => entry.name === name)) {
       fail(`export ${name} already exists`);
     }
   }
-  const originalBaseIndex = importCount + bodies.length;
-  const hookGlobalIndex = globals.count;
-  const commandPendingGlobalIndex = hookGlobalIndex + 1;
-  const commandArgumentGlobalBase = commandPendingGlobalIndex + 1;
-  const traceGlobalBase = commandArgumentGlobalBase + COMMAND_ARGS;
-  const traceGlobals: ProfessionTraceGlobals = {
-    origin: traceGlobalBase,
-    builderCount: traceGlobalBase + 1,
-    builderOrigin: traceGlobalBase + 2,
-    builderTarget: traceGlobalBase + 3,
-    builderProfession: traceGlobalBase + 4,
-    skillBuilderCount: traceGlobalBase + 5,
-    skillBuilderOrigin: traceGlobalBase + 6,
-    skillBuilderTarget: traceGlobalBase + 7,
-    skillBuilderSkillCount: traceGlobalBase + 8,
-    senderCount: traceGlobalBase + 9,
-    senderOrigin: traceGlobalBase + 10,
-    senderConnection: traceGlobalBase + 11,
-    senderState: traceGlobalBase + 12,
-    senderTransport: traceGlobalBase + 13,
-    senderCursorBefore: traceGlobalBase + 14,
-    senderCursorAfter: traceGlobalBase + 15,
-    senderFlagBefore: traceGlobalBase + 16,
-    senderFlagAfter: traceGlobalBase + 17,
-    senderSize: traceGlobalBase + 18,
-    senderPayload: traceGlobalBase + 19,
+  let nextGlobalIndex = globals.count;
+  const allocateGlobals = (count: number): number => {
+    const first = nextGlobalIndex;
+    nextGlobalIndex += count;
+    return first;
   };
-  const dispatchTypeIndex = types.length;
+  const hasActions = capabilities.commands || capabilities.storage;
+  const hookGlobalIndex = allocateGlobals(1);
+  const commandPendingGlobalIndex = hasActions ? allocateGlobals(1) : 0;
+  const commandArgumentGlobalBase = capabilities.commands
+    ? allocateGlobals(COMMAND_ARGS)
+    : 0;
+  const storagePayloadGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
+  const storageEnabledGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
+  const traceGlobalBase = capabilities.commands
+    ? allocateGlobals(PROFESSION_TRACE_WORDS)
+    : 0;
+  const traceGlobals: ProfessionTraceGlobals | null = capabilities.commands
+    ? {
+        origin: traceGlobalBase,
+        builderCount: traceGlobalBase + 1,
+        builderOrigin: traceGlobalBase + 2,
+        builderTarget: traceGlobalBase + 3,
+        builderProfession: traceGlobalBase + 4,
+        skillBuilderCount: traceGlobalBase + 5,
+        skillBuilderOrigin: traceGlobalBase + 6,
+        skillBuilderTarget: traceGlobalBase + 7,
+        skillBuilderSkillCount: traceGlobalBase + 8,
+        senderCount: traceGlobalBase + 9,
+        senderOrigin: traceGlobalBase + 10,
+        senderConnection: traceGlobalBase + 11,
+        senderState: traceGlobalBase + 12,
+        senderTransport: traceGlobalBase + 13,
+        senderCursorBefore: traceGlobalBase + 14,
+        senderCursorAfter: traceGlobalBase + 15,
+        senderFlagBefore: traceGlobalBase + 16,
+        senderFlagAfter: traceGlobalBase + 17,
+        senderSize: traceGlobalBase + 18,
+        senderPayload: traceGlobalBase + 19,
+      }
+    : null;
 
-  // After the dispatch type, so `dispatchTypeIndex` is `types.length` whether or
-  // not commands are on and the read profiles gain no unused type.
-  const commandTypeIndex = types.length + 1;
-  const commandDrainTypeIndex = types.length + 2;
-  const professionTraceReaderTypeIndex = types.length + 3;
-  const nextTypes = [
-    ...types,
-    { params: Array<number>(DISPATCH_PARAMS).fill(0x7f), results: [] },
-    ...(capabilities.commands
-      ? [
-          { params: Array<number>(COMMAND_PARAMS).fill(0x7f), results: [0x7f] },
-          { params: [], results: [] },
-          { params: [0x7f], results: [0x7f] },
-        ]
-      : []),
-  ];
-  const nextFunctionTypes = [
-    ...functionTypes,
-    ...selected.map((hook) => hook.typeIndex),
-    ...(commandDrainBoundary
-      ? [
-          commandDrainBoundary.typeIndex,
-          commandTypeIndex,
-          commandDrainTypeIndex,
-          professionBuilder!.typeIndex,
-          skillBuilder!.typeIndex,
-          packetSender!.typeIndex,
-          professionTraceReaderTypeIndex,
-        ]
-      : []),
-  ];
-  const nextBodies = [
-    ...bodies,
-    ...selected.map((hook) => bodies[hook.localIndex]!),
-    ...(commandDrainBoundary
-      ? [
-          bodies[commandDrainBoundary.localIndex]!,
-          commandEnqueue(
-            commands,
-            commandPendingGlobalIndex,
-            commandArgumentGlobalBase,
-          ),
-          commandDrain(
-            commands,
-            commandPendingGlobalIndex,
-            commandArgumentGlobalBase,
-            traceGlobals.origin,
-          ),
-          bodies[professionBuilder!.localIndex]!,
-          bodies[skillBuilder!.localIndex]!,
-          bodies[packetSender!.localIndex]!,
-          professionTraceReader(traceGlobals),
-        ]
-      : []),
-  ];
-  // The frame boundary's relocated original precedes both private command
-  // functions. Only the enqueue function is exported.
-  const commandBoundaryOriginalIndex = originalBaseIndex + selected.length;
-  const commandFunctionIndex = commandBoundaryOriginalIndex + 1;
-  const commandDrainFunctionIndex = commandFunctionIndex + 1;
-  const professionOriginalIndex = commandDrainFunctionIndex + 1;
-  const skillOriginalIndex = professionOriginalIndex + 1;
-  const senderOriginalIndex = skillOriginalIndex + 1;
-  const professionTraceReaderIndex = senderOriginalIndex + 1;
+  const nextTypes = [...types];
+  const appendType = (type: FunctionType): number => {
+    nextTypes.push(type);
+    return nextTypes.length - 1;
+  };
+  const dispatchTypeIndex = appendType({
+    params: Array<number>(DISPATCH_PARAMS).fill(0x7f),
+    results: [],
+  });
+  const commandTypeIndex = capabilities.commands
+    ? appendType({ params: Array<number>(COMMAND_PARAMS).fill(0x7f), results: [0x7f] })
+    : null;
+  const commandDrainTypeIndex = hasActions
+    ? appendType({ params: [], results: [] })
+    : null;
+  const professionTraceReaderTypeIndex = capabilities.commands
+    ? appendType({ params: [0x7f], results: [0x7f] })
+    : null;
+  const storageOpenTypeIndex = capabilities.storage
+    ? appendType({ params: [], results: [0x7f] })
+    : null;
+  const storageConfigureTypeIndex = capabilities.storage
+    ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
+    : null;
+
+  const nextFunctionTypes = [...functionTypes];
+  const nextBodies = [...bodies];
+  const appendFunction = (typeIndex: number, body: Uint8Array): number => {
+    const functionIndex = importCount + nextBodies.length;
+    nextFunctionTypes.push(typeIndex);
+    nextBodies.push(body);
+    return functionIndex;
+  };
+  const selectedOriginalIndices = selected.map((hook) =>
+    appendFunction(hook.typeIndex, bodies[hook.localIndex]!));
   selected.forEach((hook, index) => {
     nextBodies[hook.localIndex] = dispatcher(
       hook.type.params.length,
       hook.dispatchKind,
       dispatchTypeIndex,
-      originalBaseIndex + index,
+      selectedOriginalIndices[index]!,
       hookGlobalIndex,
     );
   });
+
+  const addedFunctionExports: Array<Readonly<{ name: string; index: number }>> = [];
   if (commandDrainBoundary) {
+    const commandBoundaryOriginalIndex = appendFunction(
+      commandDrainBoundary.typeIndex,
+      bodies[commandDrainBoundary.localIndex]!,
+    );
+    const professionOriginalIndex = professionBuilder
+      ? appendFunction(professionBuilder.typeIndex, bodies[professionBuilder.localIndex]!)
+      : null;
+    const skillOriginalIndex = skillBuilder
+      ? appendFunction(skillBuilder.typeIndex, bodies[skillBuilder.localIndex]!)
+      : null;
+    const senderOriginalIndex = packetSender
+      ? appendFunction(packetSender.typeIndex, bodies[packetSender.localIndex]!)
+      : null;
+    const storageSlashParserOriginalIndex = storageSlashParserHook
+      ? appendFunction(
+          storageSlashParserHook.typeIndex,
+          bodies[storageSlashParserHook.localIndex]!,
+        )
+      : null;
+    const commandDrainFunctionIndex = appendFunction(
+      commandDrainTypeIndex!,
+      commandDrain(
+        commands,
+        commandPendingGlobalIndex,
+        commandArgumentGlobalBase,
+        traceGlobals?.origin ?? null,
+        capabilities.storage
+          ? {
+              functionIndex: storage.handler.functionIndex,
+              payloadGlobalIndex: storagePayloadGlobalIndex,
+            }
+          : null,
+      ),
+    );
     nextBodies[commandDrainBoundary.localIndex] = commandBoundary(
       commandDrainBoundary.type.params.length,
       commandBoundaryOriginalIndex,
       commandDrainFunctionIndex,
     );
-    nextBodies[professionBuilder!.localIndex] = tracedProfessionBuilder(
-      professionOriginalIndex,
-      traceGlobals,
-    );
-    nextBodies[skillBuilder!.localIndex] = tracedSkillBuilder(
-      skillOriginalIndex,
-      traceGlobals,
-    );
-    nextBodies[packetSender!.localIndex] = tracedPacketSender(
-      senderOriginalIndex,
-      traceGlobals,
-    );
+    if (capabilities.commands) {
+      nextBodies[professionBuilder!.localIndex] = tracedProfessionBuilder(
+        professionOriginalIndex!,
+        traceGlobals!,
+      );
+      nextBodies[skillBuilder!.localIndex] = tracedSkillBuilder(
+        skillOriginalIndex!,
+        traceGlobals!,
+      );
+      nextBodies[packetSender!.localIndex] = tracedPacketSender(
+        senderOriginalIndex!,
+        traceGlobals!,
+      );
+      addedFunctionExports.push(
+        {
+          name: teamApply.thunkExport,
+          index: appendFunction(
+            commandTypeIndex!,
+            commandEnqueue(commands, commandPendingGlobalIndex, commandArgumentGlobalBase),
+          ),
+        },
+        {
+          name: teamApply.professionTrace.readerExport,
+          index: appendFunction(
+            professionTraceReaderTypeIndex!,
+            professionTraceReader(traceGlobals!),
+          ),
+        },
+      );
+    }
+    if (capabilities.storage) {
+      nextBodies[storageSlashParserHook!.localIndex] = storageSlashParser(
+        storageSlashParserOriginalIndex!,
+        commandPendingGlobalIndex,
+        storagePayloadGlobalIndex,
+        storageEnabledGlobalIndex,
+      );
+      addedFunctionExports.push(
+        {
+          name: storage.openExport,
+          index: appendFunction(
+            storageOpenTypeIndex!,
+            storageEnqueue(
+              commandPendingGlobalIndex,
+              storagePayloadGlobalIndex,
+              storageEnabledGlobalIndex,
+            ),
+          ),
+        },
+        {
+          name: storage.configureExport,
+          index: appendFunction(
+            storageConfigureTypeIndex!,
+            storageConfigure(
+              commandPendingGlobalIndex,
+              storagePayloadGlobalIndex,
+              storageEnabledGlobalIndex,
+            ),
+          ),
+        },
+      );
+    }
   }
-  const addedGlobalCount = capabilities.commands
-    ? 2 + COMMAND_ARGS + PROFESSION_TRACE_WORDS
-    : 1;
+  const addedGlobalCount = nextGlobalIndex - globals.count;
   const nextGlobals = concat(
     uleb(globals.count + addedGlobalCount),
     globals.entries,
@@ -918,16 +934,11 @@ export function transformEnhancementWasm(
     encodeName(ENHANCEMENT_HOOK_EXPORT),
     Uint8Array.of(0x03),
     uleb(hookGlobalIndex),
-    ...(capabilities.commands
-      ? [
-          encodeName(teamApply.thunkExport),
-          Uint8Array.of(0x00),
-          uleb(commandFunctionIndex),
-          encodeName(teamApply.professionTrace.readerExport),
-          Uint8Array.of(0x00),
-          uleb(professionTraceReaderIndex),
-        ]
-      : []),
+    ...addedFunctionExports.map(({ name, index }) => concat(
+      encodeName(name),
+      Uint8Array.of(0x00),
+      uleb(index),
+    )),
   );
 
   const rewritten = sections.map((section): Section => {
@@ -951,6 +962,13 @@ export function transformEnhancementWasm(
     ...rewritten.map(encodeSection),
     encodeSection(buildManifestSection(build, capabilities)),
   );
-  if (!WebAssembly.validate(output)) fail("rewritten module failed validation");
+  if (!WebAssembly.validate(output)) {
+    try {
+      new WebAssembly.Module(output);
+    } catch (error) {
+      fail(`rewritten module failed validation: ${String(error)}`);
+    }
+    fail("rewritten module failed validation");
+  }
   return output;
 }

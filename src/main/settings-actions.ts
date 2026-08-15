@@ -90,6 +90,9 @@ export async function applySettingsChange(
       patch.teamManagement === true && !capabilitiesAtLaunch.commands
         ? "Apply team"
         : null,
+      patch.xunlaiStorage === true && !capabilitiesAtLaunch.storage
+        ? "Xunlai storage"
+        : null,
     ].filter((feature): feature is string => feature !== null);
     const restartForCapability = enabling.length > 0;
     if (

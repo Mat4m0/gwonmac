@@ -60,5 +60,6 @@ export function requestedEnhancementCapabilities(
     targetObservation: settings.targetReadout,
     partyObservation: true,
     commands: settings.teamManagement,
+    storage: settings.xunlaiStorage,
   });
 }

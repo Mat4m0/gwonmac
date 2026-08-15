@@ -364,6 +364,35 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   font-size: var(--ui-font-size);
   letter-spacing: .02em;
 }
+.settings-shortcuts { display: grid; gap: var(--ui-space-2); }
+.settings-shortcuts > .settings-note { margin: 0; }
+.settings-shortcut-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--ui-space-2);
+  align-items: center;
+}
+.settings-shortcut-name { min-width: 0; }
+.settings-shortcut-value {
+  min-width: 4.5rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--ui-edge);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  color: var(--ui-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+.settings-shortcut-message,
+.settings-shortcut-replace {
+  grid-column: 1 / -1;
+  margin: 0;
+  justify-self: start;
+}
+.settings-shortcut-message { color: var(--ui-warning); }
+#settings-shortcuts-restore { justify-self: start; margin-top: var(--ui-space-1); }
 
 .settings-seg { max-width: 100%; }
 .settings-quality-seg { width: min(100%, 560px); }
@@ -486,6 +515,10 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 @media (pointer: coarse) {
   #settings-form #settings-done { width: 44px; min-height: 44px; }
   #settings-form .settings-rtab { min-height: 44px; }
+  .settings-shortcut-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .settings-shortcut-name { grid-column: 1 / -1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

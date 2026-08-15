@@ -70,6 +70,7 @@ const RENDERER_SHARED_MODULES = new Set([
   "contracts.js",
   "enhancement-config.js",
   "enhancement-contracts.js",
+  "keyboard-shortcuts.js",
   "project-identity.js",
   "proxy-routes.js",
   "release.js",

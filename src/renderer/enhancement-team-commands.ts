@@ -1,21 +1,22 @@
 /**
- * The closed, certified team-command surface exposed by an Enhancement build.
+ * The closed, certified game-command surface exposed by an Enhancement build.
  *
  * Lifecycle and memory ownership stay in `enhancements.ts`; this module owns
  * only the command boundary: validating domain values, copying bounded payloads
  * into the one scratch region, and selecting one of the reviewed opcodes.
  * Keeping those concerns apart prevents the installer from becoming the place
- * every new team operation adds another branch.
+ * every new operation adds another branch.
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { TeamApplyCommands } from "../shared/builds/team-apply-runner.js";
 
 const SKILL_WORDS = 8;
 const ATTRIBUTE_WORDS = 16;
+const TEAM_PAYLOAD_WORDS = SKILL_WORDS + ATTRIBUTE_WORDS * 2;
 
 /** The fixed scratch-region size the installer allocates for these commands. */
 export const TEAM_COMMAND_PAYLOAD_BYTES =
-  (SKILL_WORDS + ATTRIBUTE_WORDS * 2) * Uint32Array.BYTES_PER_ELEMENT;
+  TEAM_PAYLOAD_WORDS * Uint32Array.BYTES_PER_ELEMENT;
 
 export type EnhancementCommandEnqueue = (
   opcode: number,

@@ -18,9 +18,10 @@ const NO_CAPABILITIES = Object.freeze({
   targetObservation: false,
   partyObservation: false,
   commands: false,
+  storage: false,
 });
 describe("Enhancement client chain", () => {
-  it("has all 11 source-pinned executable capability profiles", () => {
+  it("source-pins every executable capability profile", () => {
     // Adding a profile costs an
     // `outputSha256` entry and a review; this list is where that becomes
     // unavoidable rather than incidental.
@@ -36,6 +37,14 @@ describe("Enhancement client chain", () => {
       "cursorPartyCommands",
       "targetPartyCommands",
       "cursorTargetPartyCommands",
+      "partyStorage",
+      "cursorPartyStorage",
+      "targetPartyStorage",
+      "cursorTargetPartyStorage",
+      "partyCommandsStorage",
+      "cursorPartyCommandsStorage",
+      "targetPartyCommandsStorage",
+      "cursorTargetPartyCommandsStorage",
     ]);
     assert.deepEqual(
       Object.entries(ENHANCEMENT_CAPABILITY_PROFILES)
@@ -46,6 +55,10 @@ describe("Enhancement client chain", () => {
         "cursorPartyCommands",
         "targetPartyCommands",
         "cursorTargetPartyCommands",
+        "partyCommandsStorage",
+        "cursorPartyCommandsStorage",
+        "targetPartyCommandsStorage",
+        "cursorTargetPartyCommandsStorage",
       ],
     );
     for (const [profile, capabilities] of Object.entries(
@@ -71,6 +84,7 @@ describe("Enhancement client chain", () => {
         targetObservation: false,
         partyObservation: false,
         commands: true,
+        storage: false,
       },
     ]) {
       assert.equal(enhancementCapabilityProfile(unsupported), null);
@@ -103,6 +117,8 @@ describe("Enhancement client chain", () => {
     delete cursorOnly.targetObservation;
     delete cursorOnly.partyObservation;
     delete cursorOnly.teamApply;
+    delete cursorOnly.gameThread;
+    delete cursorOnly.storage;
     assert.deepEqual(enhancementProfilesForBuild(cursorOnly), ["cursor"]);
     assert.equal(hasCompleteEnhancementProfileHashes(cursorOnly), true);
 
@@ -113,6 +129,8 @@ describe("Enhancement client chain", () => {
     delete partyOnly.cursorEvent;
     delete partyOnly.targetObservation;
     delete partyOnly.teamApply;
+    delete partyOnly.gameThread;
+    delete partyOnly.storage;
     assert.deepEqual(enhancementProfilesForBuild(partyOnly), ["party"]);
     assert.equal(hasCompleteEnhancementProfileHashes(partyOnly), true);
 

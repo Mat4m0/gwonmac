@@ -23,7 +23,9 @@ describe("settings", () => {
       uiPanelOpacity: 94,
       gwonmacTools: false,
       teamManagement: true,
+      xunlaiStorage: false,
       targetReadout: false,
+      shortcutOverrides: {},
       extendedMemoryEnabled: false,
       showDiagnostics: false,
       dataStrategy: null,
@@ -62,7 +64,9 @@ describe("settings", () => {
       uiStyle: "guild-wars",
       gwonmacTools: false,
       teamManagement: true,
+      xunlaiStorage: false,
       targetReadout: false,
+      shortcutOverrides: {},
       extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",
@@ -143,6 +147,26 @@ describe("settings", () => {
     assert.throws(() => parseSettings({ lastUpdateCheckAt: "2026-07-26" }), AppError);
   });
 
+  it("accepts only bounded shortcut overrides", () => {
+    assert.deepEqual(parseSettings({
+      shortcutOverrides: {
+        "tools.toggle": { key: "k", shift: true, option: false },
+        "storage.open": null,
+      },
+    }).shortcutOverrides, {
+      "tools.toggle": { key: "k", shift: true, option: false },
+      "storage.open": null,
+    });
+    assert.throws(() => parseSettings({
+      shortcutOverrides: {
+        "tools.toggle": { key: "F1", shift: false, option: false },
+      },
+    }), AppError);
+    assert.throws(() => parseSettingsPatch({
+      shortcutOverrides: { "unknown.action": null },
+    }), AppError);
+  });
+
   it("takes the acknowledged client build only as a client hash", () => {
     const hash = "b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483";
     assert.equal(
@@ -215,6 +239,7 @@ describe("settings", () => {
       renderScale: 1.5,
       gwonmacTools: false,
       teamManagement: true,
+      xunlaiStorage: false,
       targetReadout: false,
     });
     assert.equal(saved.showDiagnostics, true);
@@ -228,12 +253,14 @@ describe("settings", () => {
       "gwonmacTools",
       "lastUpdateCheckAt",
       "renderScale",
+      "shortcutOverrides",
       "showDiagnostics",
       "targetReadout",
       "teamManagement",
       "uiPanelOpacity",
       "uiStyle",
       "updateTrack",
+      "xunlaiStorage",
     ]);
     assert.equal(disk.formatVersion, 1);
   });
@@ -247,6 +274,7 @@ describe("settings", () => {
       renderScale: 1.5,
       gwonmacTools: false,
       teamManagement: true,
+      xunlaiStorage: false,
       targetReadout: false,
       nativeCursor: true,
       touchMode: "translate",
@@ -267,7 +295,9 @@ describe("settings", () => {
       uiStyle: "guild-wars",
       gwonmacTools: false,
       teamManagement: true,
+      xunlaiStorage: false,
       targetReadout: false,
+      shortcutOverrides: {},
       extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",

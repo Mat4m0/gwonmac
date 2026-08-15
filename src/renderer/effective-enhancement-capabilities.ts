@@ -15,5 +15,6 @@ export function effectiveCapabilities(
     targetObservation: features.targetObservation.status === "available",
     partyObservation: features.partyObservation.status === "available",
     commands: features.teamApply.status === "available",
+    storage: features.xunlaiStorage.status === "available",
   });
 }

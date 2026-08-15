@@ -191,6 +191,7 @@ export class ClientRuntime {
         targetObservation: effectiveStatus("targetObservation"),
         partyObservation: effectiveStatus("partyObservation"),
         teamApply: effectiveStatus("teamApply"),
+        xunlaiStorage: effectiveStatus("xunlaiStorage"),
       }),
     });
   }
@@ -343,6 +344,7 @@ export class ClientRuntime {
           targetObservation: false,
           partyObservation: false,
           commands: false,
+          storage: false,
         };
     const requested = prepared.requestedCapabilities;
     const effective = prepared.effectiveCapabilities;
@@ -374,6 +376,12 @@ export class ClientRuntime {
           supported.commands,
           preparationFailed,
         ),
+        xunlaiStorage: optionalFeatureStatus(
+          requested.storage,
+          effective.storage,
+          supported.storage,
+          preparationFailed,
+        ),
       },
     };
     gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");
@@ -381,6 +389,7 @@ export class ClientRuntime {
     gauge("enhancement.effectiveTargetObservation", effective.targetObservation);
     gauge("enhancement.effectivePartyObservation", effective.partyObservation);
     gauge("enhancement.effectiveCommands", effective.commands);
+    gauge("enhancement.effectiveStorage", effective.storage);
 
     if (prepared.failure?.stage === "template-save") {
       logEvent({ k: "wasm.templateSavePrepareFailed",

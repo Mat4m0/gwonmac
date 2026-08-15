@@ -17,6 +17,7 @@ import {
   CURSOR_TARGET_TOOLBOX_COMMANDS,
   CURSOR_TOOLBOX,
   CURSOR_TOOLBOX_COMMANDS,
+  CURSOR_TOOLBOX_STORAGE,
   fixture,
   manifest,
   TARGET_ONLY,
@@ -26,7 +27,7 @@ describe("Enhancement command transform", () => {
   // The command queue is the entire write surface. These are the tests that
   // decide whether this app can send a packet, so they instantiate the
   // transformed module and drive the function rather than inspecting bytes.
-  it("emits the command queue only for the four command profiles", () => {
+  it("emits Team Apply and storage authority independently", () => {
     const input = fixture();
     const build = manifest(input);
     const partyOnly = { ...CURSOR_TOOLBOX, nativeCursor: false };
@@ -47,17 +48,51 @@ describe("Enhancement command transform", () => {
         false,
         "a read profile must carry no way to reach a packet builder at all",
       );
+      assert.equal(
+        exports.some((entry) => entry.name === build.storage!.openExport),
+        false,
+      );
     }
-    for (const capabilities of [
-      { ...CURSOR_TOOLBOX_COMMANDS, nativeCursor: false },
-      CURSOR_TOOLBOX_COMMANDS,
-      { ...CURSOR_TARGET_TOOLBOX_COMMANDS, nativeCursor: false },
-      CURSOR_TARGET_TOOLBOX_COMMANDS,
-    ]) {
+    const commandsOnly = { ...CURSOR_TOOLBOX_COMMANDS, storage: false };
+    const commandsOutput = transformEnhancementWasm(input, build, commandsOnly);
+    const commandsExports = parseExports(sectionById(splitSections(commandsOutput), 7));
+    assert.equal(
+      commandsExports.some((entry) => entry.name === build.teamApply!.thunkExport),
+      true,
+    );
+    assert.equal(
+      commandsExports.some((entry) => entry.name === build.storage!.openExport),
+      false,
+      "Team Apply must not compile or export the storage action",
+    );
+
+    const storageOutput = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_STORAGE);
+    const storageExports = parseExports(sectionById(splitSections(storageOutput), 7));
+    assert.equal(
+      storageExports.some((entry) => entry.name === build.teamApply!.thunkExport),
+      false,
+      "storage must not compile or export the packet-builder thunk",
+    );
+    assert.equal(
+      storageExports.some((entry) => entry.name === build.storage!.openExport),
+      true,
+    );
+
+    for (const capabilities of [CURSOR_TOOLBOX_COMMANDS, CURSOR_TARGET_TOOLBOX_COMMANDS]) {
       const output = transformEnhancementWasm(input, build, capabilities);
       const exports = parseExports(sectionById(splitSections(output), 7));
       assert.equal(
         exports.filter((entry) => entry.name === build.teamApply!.thunkExport).length,
+        1,
+      );
+      assert.equal(
+        exports.filter((entry) => entry.name === build.storage!.openExport).length,
+        1,
+      );
+      assert.equal(
+        exports.filter(
+          (entry) => entry.name === build.storage!.configureExport,
+        ).length,
         1,
       );
       const module = new WebAssembly.Module(new Uint8Array(output));
@@ -71,6 +106,116 @@ describe("Enhancement command transform", () => {
         "a read-only profile must not accept a command-capable manifest",
       );
     }
+  });
+
+  it("queues the named storage action and drains DataWindow on the game thread", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_COMMANDS);
+    const gameCalls: number[] = [];
+    const instance = new WebAssembly.Instance(
+      new WebAssembly.Module(new Uint8Array(output)),
+      {
+        env: {
+          t: (value: number) => { gameCalls.push(value); },
+          c: () => {},
+          u: () => {},
+          tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
+        },
+      },
+    );
+    const memory = instance.exports.memory as WebAssembly.Memory;
+    const words = new Uint32Array(memory.buffer);
+    const frame = instance.exports.frame as (value: number, context: number) => void;
+    const open = instance.exports[build.storage!.openExport] as () => number;
+    const configure = instance.exports[build.storage!.configureExport] as
+      (payload: number, enabled: number) => number;
+    const payload = 64;
+    words.set([0, 0, 3], payload / 4);
+
+    assert.equal(open(), 0, "storage refuses before its payload and policy are installed");
+    assert.equal(configure(payload, 1), 1);
+    assert.equal(open(), 1, "configured storage accepts a named action");
+    assert.equal(open(), 0, "a second action cannot replace the queued one");
+    assert.deepEqual(gameCalls, [], "the named action never calls client code re-entrantly");
+    frame(70, 700);
+    assert.deepEqual(gameCalls, [payload, 70]);
+
+    assert.equal(open(), 1);
+    assert.equal(configure(payload, 0), 1, "disabling cancels a queued storage action");
+    frame(80, 800);
+    assert.deepEqual(gameCalls.slice(-1), [80]);
+  });
+
+  it("consumes only /chest and /xunlai through the storage mailbox", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_COMMANDS);
+    const gameCalls: number[] = [];
+    const instance = new WebAssembly.Instance(
+      new WebAssembly.Module(new Uint8Array(output)),
+      {
+        env: {
+          t: (value: number) => { gameCalls.push(value); },
+          c: () => {},
+          u: () => {},
+          tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
+        },
+      },
+    );
+    const memory = instance.exports.memory as WebAssembly.Memory;
+    const words = new Uint32Array(memory.buffer);
+    const slash = instance.exports.slash as (context: number, message: number) => number;
+    const frame = instance.exports.frame as (value: number, context: number) => void;
+    const command = instance.exports[build.teamApply!.thunkExport] as
+      (opcode: number, a0: number, a1: number, a2: number, a3: number) => number;
+    const configure = instance.exports[build.storage!.configureExport] as
+      (payload: number, enabled: number) => number;
+    const payload = 64;
+    const message = 256;
+    words.set([0, 0, 3], payload / 4);
+    const writeMessage = (value: string) => {
+      const dirtyBuffer = new Uint16Array(memory.buffer, message, 32);
+      dirtyBuffer.fill(0x4141);
+      const destination = dirtyBuffer.subarray(0, value.length + 1);
+      destination.set([...value].map((character) => character.charCodeAt(0)));
+      destination[value.length] = 0;
+    };
+
+    writeMessage("/chest");
+    assert.equal(slash(11, message), 0, "a disabled feature preserves Guild Wars parsing");
+    assert.deepEqual(gameCalls, [11]);
+
+    assert.equal(configure(payload, 1), 1);
+    assert.equal(slash(12, message), 1, "the exact command is consumed");
+    assert.deepEqual(gameCalls, [11], "slash handling only queues the action");
+    frame(70, 700);
+    assert.deepEqual(gameCalls, [11, payload, 70]);
+
+    writeMessage("/xunlai");
+    assert.equal(slash(13, message), 1, "the alias uses the same mailbox");
+    frame(80, 800);
+    assert.deepEqual(gameCalls, [11, payload, 70, payload, 80]);
+
+    assert.equal(command(31, 4242, 0, 0, 0), 1);
+    writeMessage("/chest");
+    assert.equal(
+      slash(14, message),
+      1,
+      "a recognized alias remains consumed while another action owns the mailbox",
+    );
+    frame(90, 900);
+    assert.deepEqual(
+      gameCalls.slice(-2),
+      [4242, 90],
+      "the busy alias neither replaces nor duplicates the queued action",
+    );
+
+    for (const nearMiss of ["/Chest", "/chests", "/chest extra", "/xunlaii", "/storage"]) {
+      writeMessage(nearMiss);
+      assert.equal(slash(99, message), 0, nearMiss);
+    }
+    assert.deepEqual(gameCalls.slice(-5), [99, 99, 99, 99, 99]);
   });
 
   it("dispatches queued commands only from the certified game-thread callback", () => {
@@ -289,9 +434,8 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          teamApply: {
-            ...build.teamApply!,
-            drain: { ...build.teamApply!.drain, bodySha256: "0".repeat(64) },
+          gameThread: {
+            drain: { ...build.gameThread!.drain, bodySha256: "0".repeat(64) },
           },
         },
         CURSOR_TOOLBOX_COMMANDS,
@@ -303,12 +447,11 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          teamApply: {
-            ...build.teamApply!,
-            // The profession command has the same signature. Identity must still be
-            // distinct so command execution and scheduling cannot merge.
+          // The profession command has the same signature. Identity must still be
+          // distinct so command execution and scheduling cannot merge.
+          gameThread: {
             drain: {
-              ...build.teamApply!.drain,
+              ...build.gameThread!.drain,
               functionIndex: 9,
               bodySha256: build.teamApply!.entries[2]!.bodySha256,
             },
@@ -323,9 +466,8 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          teamApply: {
-            ...build.teamApply!,
-            drain: { ...build.teamApply!.drain, tableSlot: 0 },
+          gameThread: {
+            drain: { ...build.gameThread!.drain, tableSlot: 0 },
           },
         },
         CURSOR_TOOLBOX_COMMANDS,
@@ -379,6 +521,28 @@ describe("Enhancement command transform", () => {
         CURSOR_TOOLBOX_COMMANDS,
       ),
       /traced packet sender must be distinct from hooks and commands/,
+    );
+  });
+
+  it("refuses an uncertified storage slash parser", () => {
+    const input = fixture();
+    const build = manifest(input);
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          storage: {
+            ...build.storage!,
+            slashParser: {
+              ...build.storage!.slashParser,
+              bodySha256: "0".repeat(64),
+            },
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /storage slash parser body does not match its semantic fingerprint/,
     );
   });
 

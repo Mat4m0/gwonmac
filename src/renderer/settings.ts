@@ -13,6 +13,8 @@
   type RendererMilestone =
     import('../shared/diagnostics.js').RendererMilestone;
   type UpdateAction = import('./update-action.js').UpdateAction;
+  type ShortcutAction = import('../shared/keyboard-shortcuts.js').ShortcutAction;
+  type ShortcutBinding = import('../shared/keyboard-shortcuts.js').ShortcutBinding;
 
   const byId = (id: string) => {
     const element = document.getElementById(id);
@@ -42,6 +44,7 @@
   const updateTrack = form.elements.namedItem('updateTrack') as HTMLSelectElement;
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
+  const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
   const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
   const accountsStatus = byId('accounts-setup-status');
@@ -75,6 +78,170 @@
   const idleFeedback = 'Changes save automatically.';
   let feedbackTimer: number | null = null;
   let activeSettingsPane = 'data';
+  let recordingShortcut: ShortcutAction | null = null;
+  let pendingShortcutReplacement:
+    | { action: ShortcutAction; conflict: ShortcutAction; binding: ShortcutBinding }
+    | null = null;
+
+  const shortcutModule = import('../shared/keyboard-shortcuts.js');
+  const shortcutRows = new Map<ShortcutAction, HTMLElement>(
+    [...form.querySelectorAll<HTMLElement>('[data-shortcut-action]')].map((row) => [
+      row.dataset.shortcutAction as ShortcutAction,
+      row,
+    ]),
+  );
+
+  function shortcutRowParts(action: ShortcutAction) {
+    const row = shortcutRows.get(action);
+    if (!row) throw new Error(`missing shortcut row: ${action}`);
+    const value = row.querySelector<HTMLElement>('.settings-shortcut-value');
+    const change = row.querySelector<HTMLButtonElement>('.settings-shortcut-change');
+    const message = row.querySelector<HTMLElement>('.settings-shortcut-message');
+    const replace = row.querySelector<HTMLButtonElement>('.settings-shortcut-replace');
+    if (!value || !change || !message || !replace) {
+      throw new Error(`incomplete shortcut row: ${action}`);
+    }
+    return { value, change, message, replace };
+  }
+
+  function clearShortcutMessages(): void {
+    for (const action of shortcutRows.keys()) {
+      const { message, replace } = shortcutRowParts(action);
+      message.hidden = true;
+      replace.hidden = true;
+    }
+  }
+
+  async function renderShortcuts(settings: AppSettings): Promise<void> {
+    const { resolveShortcuts, shortcutDisplay } = await shortcutModule;
+    const resolved = resolveShortcuts(settings.shortcutOverrides);
+    for (const action of shortcutRows.keys()) {
+      const { value, change } = shortcutRowParts(action);
+      value.textContent = recordingShortcut === action
+        ? 'Press shortcut…'
+        : shortcutDisplay(resolved[action]);
+      change.textContent = recordingShortcut === action ? 'Cancel' : 'Change';
+    }
+  }
+
+  async function saveShortcutOverrides(
+    overrides: AppSettings['shortcutOverrides'],
+  ): Promise<void> {
+    setFeedback('Saving…', 'progress');
+    try {
+      await persistSettings({ shortcutOverrides: overrides });
+      setFeedback('Shortcut saved.', 'success', 2200);
+    } catch {
+      setFeedback('The shortcut could not be saved. Your previous shortcuts are still active; try again.', 'error');
+    }
+  }
+
+  async function recordShortcut(action: ShortcutAction): Promise<void> {
+    if (!currentSettings) return;
+    if (recordingShortcut === action) {
+      await window.gwNative.shortcuts.cancelCapture();
+      return;
+    }
+    if (recordingShortcut) await window.gwNative.shortcuts.cancelCapture();
+    recordingShortcut = action;
+    pendingShortcutReplacement = null;
+    clearShortcutMessages();
+    await renderShortcuts(currentSettings);
+    const result = await window.gwNative.shortcuts.capture();
+    if (recordingShortcut !== action) return;
+    recordingShortcut = null;
+    const parts = shortcutRowParts(action);
+    if (result.status === 'cancelled') {
+      clearShortcutMessages();
+      await renderShortcuts(currentSettings);
+      parts.change.focus();
+      return;
+    }
+    if (result.status === 'invalid') {
+      parts.message.textContent = 'Use Command with one letter or number.';
+      parts.message.hidden = false;
+      await renderShortcuts(currentSettings);
+      parts.change.focus();
+      return;
+    }
+    let next = { ...currentSettings.shortcutOverrides };
+    if (result.status === 'cleared') {
+      clearShortcutMessages();
+      const { withShortcutOverride } = await shortcutModule;
+      next = withShortcutOverride(next, action, null);
+      await saveShortcutOverrides(next);
+      parts.change.focus();
+      return;
+    }
+    const {
+      resolveShortcuts,
+      shortcutConflict,
+      shortcutDisplay,
+      shortcutReserved,
+      SHORTCUT_LABELS,
+      withShortcutOverride,
+    } = await shortcutModule;
+    if (shortcutReserved(result.binding)) {
+      parts.message.textContent = `${shortcutDisplay(result.binding)} is reserved by macOS or GWonMac.`;
+      parts.message.hidden = false;
+      await renderShortcuts(currentSettings);
+      parts.change.focus();
+      return;
+    }
+    const conflict = shortcutConflict(
+      action,
+      result.binding,
+      resolveShortcuts(currentSettings.shortcutOverrides),
+    );
+    if (conflict) {
+      pendingShortcutReplacement = { action, conflict, binding: result.binding };
+      parts.message.textContent = `${shortcutDisplay(result.binding)} is used by ${SHORTCUT_LABELS[conflict]}.`;
+      parts.message.hidden = false;
+      parts.replace.hidden = false;
+      await renderShortcuts(currentSettings);
+      parts.replace.focus();
+      return;
+    }
+    next = withShortcutOverride(next, action, result.binding);
+    clearShortcutMessages();
+    await saveShortcutOverrides(next);
+    parts.change.focus();
+  }
+
+  for (const [action, row] of shortcutRows) {
+    row.querySelector<HTMLButtonElement>('.settings-shortcut-change')
+      ?.addEventListener('click', () => void recordShortcut(action));
+    row.querySelector<HTMLButtonElement>('.settings-shortcut-replace')
+      ?.addEventListener('click', () => {
+        const replacement = pendingShortcutReplacement;
+        if (!replacement || replacement.action !== action || !currentSettings) return;
+        const settings = currentSettings;
+        void shortcutModule.then(({ withShortcutOverride }) => {
+          let next = withShortcutOverride(
+            settings.shortcutOverrides,
+            replacement.conflict,
+            null,
+          );
+          next = withShortcutOverride(next, action, replacement.binding);
+          pendingShortcutReplacement = null;
+          clearShortcutMessages();
+          void saveShortcutOverrides(next)
+            .then(() => shortcutRowParts(action).change.focus());
+        });
+      });
+  }
+
+  byId('settings-shortcuts-restore').addEventListener('click', () => {
+    pendingShortcutReplacement = null;
+    clearShortcutMessages();
+    void saveShortcutOverrides({});
+  });
+  dialog.addEventListener('close', () => {
+    if (recordingShortcut) void window.gwNative.shortcuts.cancelCapture();
+    recordingShortcut = null;
+    pendingShortcutReplacement = null;
+    clearShortcutMessages();
+  });
 
   void import('../shared/ui/resize.js').then(({ installResizeGrip }) => {
     installResizeGrip(settingsResize, {
@@ -417,6 +584,7 @@
           : null;
       case 'gwonmacTools':
       case 'teamManagement':
+      case 'xunlaiStorage':
       case 'targetReadout':
         return control instanceof globalThis.HTMLInputElement
           ? { [control.name]: control.checked }
@@ -454,8 +622,11 @@
     extendedMemoryEnabled.checked = settings.extendedMemoryEnabled;
     gwonmacTools.checked = settings.gwonmacTools;
     teamManagement.checked = settings.teamManagement;
+    xunlaiStorage.checked = settings.xunlaiStorage;
     targetReadout.checked = settings.targetReadout;
+    void renderShortcuts(settings);
     teamManagement.disabled = !settings.gwonmacTools;
+    xunlaiStorage.disabled = !settings.gwonmacTools;
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     updateTrack.value = settings.updateTrack;

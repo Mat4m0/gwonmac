@@ -5,13 +5,14 @@
 import type {
   EnhancementProgram,
 } from "../shared/enhancement-contracts.js";
+import type { EnhancementRuntimeFeature } from "../shared/contracts.js";
 import { installCertifiedCompanion } from "./certified-companion-installation.js";
 import { effectiveCapabilities } from "./effective-enhancement-capabilities.js";
 
 const COMPATIBILITY_CHANGED_EVENT = "gwonmac:client-compatibility-changed";
 
 async function reportFeatureFailure(
-  features: readonly ("nativeCursor" | "targetObservation" | "partyObservation" | "teamApply")[],
+  features: readonly EnhancementRuntimeFeature[],
 ): Promise<void> {
   await window.gwNative.client.featureFailure(features);
   window.dispatchEvent(new Event(COMPATIBILITY_CHANGED_EVENT));
@@ -29,6 +30,7 @@ export async function installEnhancements(
     capabilities.targetObservation ? "targetObservation" as const : null,
     capabilities.partyObservation ? "partyObservation" as const : null,
     capabilities.commands ? "teamApply" as const : null,
+    capabilities.storage ? "xunlaiStorage" as const : null,
   ].filter((feature): feature is NonNullable<typeof feature> => feature !== null);
   try {
     const installation = await installCertifiedCompanion(

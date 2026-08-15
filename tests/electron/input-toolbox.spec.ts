@@ -350,7 +350,7 @@ test.describe("renderer Tools input", () => {
         ]);
         foundation.createToolboxFoundation(document.body, {
           mountTool: (host, onVisibilityChange) =>
-            toolsHost.mountToolsInto(host, onVisibilityChange, null, true),
+            toolsHost.mountToolsInto(host, onVisibilityChange, null, null, true),
         });
       });
 
