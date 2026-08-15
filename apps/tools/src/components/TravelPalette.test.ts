@@ -31,7 +31,7 @@ describe("TravelPalette", () => {
     await wrapper.get('[role="combobox"]').setValue("kama");
     expect(wrapper.findAll('[role="option"]')).toHaveLength(1);
     expect(wrapper.text()).toContain("Kamadan, Jewel of Istan");
-    await wrapper.get(".travel-palette").trigger("keydown", { key: "Enter" });
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
 
     expect(travel).toHaveBeenCalledWith({
       mapId: 449,
@@ -45,9 +45,33 @@ describe("TravelPalette", () => {
     const { wrapper, travel } = fixture();
     await flushPromises();
 
-    await wrapper.get(".travel-palette").trigger("keydown", { key: "1" });
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "1" });
 
     expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
+    wrapper.unmount();
+  });
+
+  it("does not treat district input as a Quick Travel shortcut", async () => {
+    const { wrapper, travel } = fixture();
+    await flushPromises();
+
+    const districtNumber = wrapper.get(".travel-district-number input");
+    await districtNumber.setValue("1");
+    await districtNumber.trigger("keydown", { key: "1" });
+
+    expect(travel).not.toHaveBeenCalled();
+    expect((districtNumber.element as HTMLInputElement).value).toBe("1");
+    wrapper.unmount();
+  });
+
+  it("leaves arrow keys to the district controls", async () => {
+    const { wrapper } = fixture();
+    await flushPromises();
+
+    const region = wrapper.get(".travel-district-region select");
+    await region.trigger("keydown", { key: "ArrowDown" });
+
+    expect(wrapper.get('[role="option"]').attributes("aria-selected")).toBe("true");
     wrapper.unmount();
   });
 

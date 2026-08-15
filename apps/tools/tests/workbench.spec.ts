@@ -55,6 +55,16 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   await expect(page.getByRole("button", { name: /9 Kamadan, Jewel of Istan/ })).toBeVisible();
 });
 
+test("keeps Travel controls and status visible in a short window", async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 560 });
+  await page.goto("/?travel=1");
+
+  await expect(page.getByRole("dialog", { name: "Travel" })).toBeVisible();
+  await expect(page.getByRole("status")).toBeInViewport();
+  await page.getByRole("spinbutton", { name: "District number" }).fill("1");
+  await expect(page.getByRole("spinbutton", { name: "District number" })).toHaveValue("1");
+});
+
 test("manages teams and finds builds without Electron or the game", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Team composition" })).toBeVisible();

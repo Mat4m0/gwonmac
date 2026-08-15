@@ -453,6 +453,7 @@ test.describe("tools and update settings", () => {
             targetReadout: false,
             teamManagement: false,
             xunlaiStorage: false,
+            travelPalette: false,
           }),
           { mode: 0o600 },
         );
@@ -475,6 +476,7 @@ test.describe("tools and update settings", () => {
         await window.gwNative.settings.set({ targetReadout: true });
         await window.gwNative.settings.set({ teamManagement: true });
         await window.gwNative.settings.set({ xunlaiStorage: true });
+        await window.gwNative.settings.set({ travelPalette: true });
         await window.gwNative.settings.set({ gwonmacTools: false });
         await window.gwNative.settings.set({ gwonmacTools: true });
       });
@@ -485,6 +487,7 @@ test.describe("tools and update settings", () => {
           targetReadout: true,
           teamManagement: true,
           xunlaiStorage: true,
+          travelPalette: true,
           gwonmacTools: true,
         });
     } finally {
