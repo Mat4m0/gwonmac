@@ -17,6 +17,22 @@ declare global {
 const FIRST = "00000000-0000-4000-8000-000000000001";
 const SECOND = "00000000-0000-4000-8000-000000000002";
 
+test("Single Account remains the invisible default", async () => {
+  const fixture = await launchOffline("gw-single-default-e2e-");
+  try {
+    await expect(fixture.page).toHaveURL("gw://app/");
+    expect((await fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().map((win) => win.getTitle()),
+    )).some((title) => title.endsWith("Accounts"))).toBe(false);
+    expect(await fixture.page.evaluate(() => window.gwNative.accounts.get()))
+      .toMatchObject({ mode: "single", profiles: [] });
+    await expect(stat(path.join(fixture.userData, "multi")))
+      .rejects.toMatchObject({ code: "ENOENT" });
+  } finally {
+    await closeOffline(fixture);
+  }
+});
+
 test("Hub exposes the focused chooser, account sheets, and Settings management", async () => {
   const fixture = await launchOffline("gw-multi-hub-ui-e2e-", {}, async (userData) => {
     await mkdir(path.join(userData, "multi"), { recursive: true });
@@ -57,8 +73,9 @@ test("Hub exposes the focused chooser, account sheets, and Settings management",
 
     await fixture.page.getByRole("button", { name: "New Account…" }).click();
     await expect(fixture.page.getByRole("dialog", { name: "New Account" })).toBeVisible();
-    await expect(fixture.page.getByText("Builds and teams")).toBeVisible();
-    await expect(fixture.page.getByText("In-game templates")).toBeVisible();
+    await expect(fixture.page.getByText("Builds and teams", { exact: true })).toBeVisible();
+    await expect(fixture.page.getByText("In-game templates", { exact: true })).toBeVisible();
+    await expect(fixture.page.getByText("Start with Single Account data")).toBeHidden();
     await expect(fixture.page.getByText(/Single Account data are never shared/)).toBeVisible();
     await fixture.page.getByRole("button", { name: "Cancel" }).click();
 
@@ -77,6 +94,54 @@ test("Hub exposes the focused chooser, account sheets, and Settings management",
     await expect(fixture.page.getByRole("button", { name: "Restore" })).toBeVisible();
     await expect(fixture.page.getByRole("button", { name: "Delete…" })).toBeVisible();
     await expect(fixture.page.getByRole("button", { name: "Return to Single Account…" })).toBeVisible();
+  } finally {
+    await closeOffline(fixture);
+  }
+});
+
+test("a bank account opens alone and Show never creates a duplicate window", async () => {
+  const fixture = await launchOffline("gw-multi-bank-e2e-", {}, async (userData) => {
+    await mkdir(path.join(userData, "multi"), { recursive: true });
+    await writeFile(
+      path.join(userData, "launcher-mode.json"),
+      JSON.stringify({ formatVersion: 1, mode: "multi" }),
+    );
+    await writeFile(
+      path.join(userData, "multi", "workspace.json"),
+      JSON.stringify({
+        formatVersion: 1,
+        profiles: [
+          { id: FIRST, name: "Main", archived: false, templates: "shared", builds: "shared" },
+          { id: SECOND, name: "Storage and Materials", archived: false, templates: "shared", builds: "shared" },
+        ],
+      }),
+    );
+  });
+  try {
+    const bank = fixture.page.getByRole("checkbox", { name: "Select Storage and Materials" });
+    await bank.check();
+    await fixture.page.getByRole("button", { name: "Open Storage and Materials" }).click();
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().filter((win) => !win.getTitle().endsWith("Accounts")).length,
+    )).toBe(1);
+    await expect.poll(() => fixture.page.evaluate(() => window.gwNative.accounts.get()))
+      .toMatchObject({
+        profiles: [
+          { name: "Main", state: "ready" },
+          { name: "Storage and Materials", state: "running" },
+        ],
+      });
+
+    await fixture.app.evaluate(({ app }) => app.emit("activate"));
+    await expect(fixture.page.getByRole("heading", { name: "Choose Accounts" })).toBeVisible();
+    await expect(fixture.page.getByRole("button", { name: "Show Storage and Materials" })).toBeVisible();
+    await fixture.page.getByRole("button", { name: "Show Storage and Materials" }).click();
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().filter((win) => !win.getTitle().endsWith("Accounts")).length,
+    )).toBe(1);
+    expect(await fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getFocusedWindow()?.getTitle(),
+    )).toBe("Guild Wars Reforged — Storage and Materials");
   } finally {
     await closeOffline(fixture);
   }
@@ -324,15 +389,10 @@ test("opt-in publishes a separate workspace before requesting restart", async ()
       app.relaunch = () => { globalThis.__multiModeRestart.relaunch = true; };
     });
     await fixture.page.evaluate(() => window.gwNative.accounts.setup({
-      name: "Primary",
-      templates: "shared",
-      builds: "private",
-      importTemplates: true,
       templateEntries: [{
         path: "Skills/Imported.txt",
         contents: "OQCiUyo8AkVwR4KMMGAAAEAA",
       }],
-      importBuilds: true,
     }));
     expect(JSON.parse(await readFile(
       path.join(fixture.userData, "launcher-mode.json"),
@@ -342,21 +402,11 @@ test("opt-in publishes a separate workspace before requesting restart", async ()
       path.join(fixture.userData, "multi", "workspace.json"),
       "utf8",
     )) as { profiles: Array<{ id: string; name: string }> };
-    expect(workspace.profiles.map((profile) => profile.name)).toEqual(["Primary"]);
+    expect(workspace.profiles).toEqual([]);
     expect(await readFile(path.join(fixture.userData, "build-library.json"), "utf8"))
       .toBe(singleLibrary);
     expect(JSON.parse(await readFile(
-      path.join(
-        fixture.userData,
-        "multi",
-        "profiles",
-        workspace.profiles[0]!.id,
-        "build-library.json",
-      ),
-      "utf8",
-    ))).toEqual(JSON.parse(singleLibrary));
-    expect(JSON.parse(await readFile(
-      path.join(fixture.userData, "multi", "shared", "templates.json"),
+      path.join(fixture.userData, "multi", "single-template-import.json"),
       "utf8",
     ))).toEqual({
       formatVersion: 1,
@@ -376,6 +426,71 @@ test("opt-in publishes a separate workspace before requesting restart", async ()
       app.quit = globalThis.__multiModeRestart.originalQuit;
       app.relaunch = globalThis.__multiModeRestart.originalRelaunch;
     }).catch(() => undefined);
+    await closeOffline(fixture);
+  }
+});
+
+test("the empty Hub owns first-account creation and optional Single Account copies", async () => {
+  const singleLibrary = { version: 3, builds: [], teams: [], tags: ["single"] };
+  const fixture = await launchOffline("gw-multi-first-account-e2e-", {}, async (userData) => {
+    await mkdir(path.join(userData, "multi"), { recursive: true });
+    await writeFile(
+      path.join(userData, "launcher-mode.json"),
+      JSON.stringify({ formatVersion: 1, mode: "multi" }),
+    );
+    await writeFile(
+      path.join(userData, "multi", "workspace.json"),
+      JSON.stringify({ formatVersion: 1, profiles: [] }),
+    );
+    await writeFile(
+      path.join(userData, "multi", "single-template-import.json"),
+      JSON.stringify({
+        formatVersion: 1,
+        revision: 1,
+        entries: [{
+          path: "Skills/Imported.txt",
+          contents: "OQCiUyo8AkVwR4KMMGAAAEAA",
+        }],
+      }),
+    );
+    await writeFile(path.join(userData, "build-library.json"), JSON.stringify(singleLibrary));
+  });
+  try {
+    await expect(fixture.page.getByRole("heading", { name: "No accounts yet" })).toBeVisible();
+    await expect(fixture.page.getByRole("button", { name: "Create First Account" })).toBeVisible();
+    await expect(fixture.page.getByRole("button", { name: "New Account…" })).toBeHidden();
+
+    await fixture.page.getByRole("button", { name: "Create First Account" }).click();
+    const dialog = fixture.page.getByRole("dialog", { name: "Create First Account" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("Start with Single Account data")).toBeVisible();
+    await dialog.getByLabel("Account name").fill("Main");
+    await dialog.getByLabel("Copy builds and teams").check();
+    await dialog.getByLabel("Copy in-game templates").check();
+    await dialog.getByRole("button", { name: "Create First Account" }).click();
+
+    await expect(fixture.page.getByRole("checkbox", { name: "Select Main" })).toBeVisible();
+    const workspace = JSON.parse(await readFile(
+      path.join(fixture.userData, "multi", "workspace.json"),
+      "utf8",
+    )) as { profiles: Array<{ id: string; name: string }> };
+    expect(workspace.profiles.map((profile) => profile.name)).toEqual(["Main"]);
+    expect(JSON.parse(await readFile(
+      path.join(fixture.userData, "multi", "shared", "build-library.json"),
+      "utf8",
+    ))).toEqual(singleLibrary);
+    expect(JSON.parse(await readFile(
+      path.join(fixture.userData, "multi", "shared", "templates.json"),
+      "utf8",
+    ))).toMatchObject({ entries: [{ path: "Skills/Imported.txt" }] });
+    await expect(stat(path.join(
+      fixture.userData,
+      "multi",
+      "single-template-import.json",
+    ))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(path.join(fixture.userData, "build-library.json"), "utf8"))
+      .toBe(JSON.stringify(singleLibrary));
+  } finally {
     await closeOffline(fixture);
   }
 });

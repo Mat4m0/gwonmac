@@ -183,19 +183,18 @@ const INVOCATIONS: Invocation[] = [
   { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {
     path: "accounts.setup",
-    args: [{
-      name: "Primary",
-      templates: "shared",
-      builds: "private",
-      importTemplates: false,
-      templateEntries: [],
-      importBuilds: false,
-    }],
+    args: [{ templateEntries: [] }],
     channel: IPC.accountsSetup,
   },
   {
     path: "accounts.create",
-    args: [{ name: "Alt", templates: "private", builds: "private" }],
+    args: [{
+      name: "Alt",
+      templates: "private",
+      builds: "private",
+      copySingleBuilds: false,
+      copySingleTemplates: false,
+    }],
     channel: IPC.accountsCreate,
   },
   {

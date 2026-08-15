@@ -37,7 +37,7 @@ describe("Multiple Accounts documents", () => {
     const dir = await mkdtemp(join(tmpdir(), "gw-accounts-"));
     const workspacePath = join(dir, "multi", "workspace.json");
     const modePath = join(dir, "launcher-mode.json");
-    const workspace = createMultiWorkspace({
+    const workspace = addMultiProfile(createMultiWorkspace(), {
       id: ID,
       name: "Main",
       templates: "shared",
@@ -106,7 +106,8 @@ describe("Multiple Accounts documents", () => {
     );
   });
 
-  it("requires one active profile and valid binary sharing choices", () => {
+  it("accepts an empty onboarding workspace but rejects an all-archived workspace", () => {
+    assert.deepEqual(createMultiWorkspace(), { formatVersion: 1, profiles: [] });
     assert.throws(
       () => parseMultiWorkspace({
         formatVersion: 1,
@@ -120,8 +121,11 @@ describe("Multiple Accounts documents", () => {
       }),
       AppError,
     );
+  });
+
+  it("requires valid binary sharing choices", () => {
     assert.throws(
-      () => createMultiWorkspace({
+      () => addMultiProfile(createMultiWorkspace(), {
         id: ID,
         name: "Main",
         templates: "linked" as never,
@@ -132,7 +136,7 @@ describe("Multiple Accounts documents", () => {
   });
 
   it("adds, updates, and archives profiles without changing stable IDs", () => {
-    const first = createMultiWorkspace({
+    const first = addMultiProfile(createMultiWorkspace(), {
       id: "00000000-0000-4000-8000-000000000001",
       name: "Primary",
       templates: "private",

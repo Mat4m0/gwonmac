@@ -124,7 +124,7 @@ export function parseMultiWorkspace(value: unknown): MultiWorkspace {
       builds: parseLibraryScope(profile.builds, "builds"),
     };
   });
-  if (!profiles.some((profile) => !profile.archived)) {
+  if (profiles.length > 0 && !profiles.some((profile) => !profile.archived)) {
     throw new AppError("bad_multi_workspace", "workspace needs an active profile");
   }
   return { formatVersion: 1, profiles };

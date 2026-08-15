@@ -30,9 +30,10 @@ ArenaNet.
 Single Account mode is the default. It starts Guild Wars directly and keeps
 the login, templates, builds, settings, and window state that you already use.
 
-Open **Settings → Accounts**, name the first account, choose its Shared or
-Private libraries, and select **Enable and Restart…** to create a separate
-Multiple Accounts workspace. Every later Multiple Accounts start opens the
+Open **Settings → Accounts** and select **Enable and Restart…**. Settings only
+switches the mode; it does not create or manage accounts. GWonMac restarts into
+the Account Picker, where **Create First Account** sets up the first account and
+its Shared or Separate libraries. Every later Multiple Accounts start opens the
 Account Picker with nothing preselected. Select one or more accounts and choose
 **Open**. If an account is already running, the action changes to **Show**.
 
@@ -40,9 +41,10 @@ Each account signs in separately and keeps separate Guild Wars preferences,
 screenshots, chat logs, saved login, and window position. Profiles can use the
 shared Multiple Accounts template and build libraries or private libraries.
 
-Setup can copy templates, builds, and teams from Single Account mode. This is a
-one-time copy. The originals remain in Single Account mode. Later changes do
-not synchronize between the two modes.
+Creating the first account can copy templates, builds, and teams from Single
+Account mode. This is a one-time copy. The originals remain in Single Account
+mode. Later changes do not synchronize between the two modes. All later account
+creation and management also stays in the Account Picker.
 
 Use Command-, in the Account Picker to open Settings, then choose **Return to
 Single Account…** to change the next launch. Your accounts and saved logins stay

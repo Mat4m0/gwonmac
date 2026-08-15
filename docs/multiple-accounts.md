@@ -42,18 +42,20 @@ Keychain items.
 
 ## Setup and mode transitions
 
-Settings shows Multiple Accounts setup only in the Accounts pane until
-the player enables the mode.
+Settings shows one Multiple Accounts enable action in the Accounts pane until
+the player enables the mode. Settings never creates or edits accounts.
 
-Setup creates a staged Multiple Accounts workspace and at least one profile.
-The player signs in separately for every profile. Setup can copy templates,
+Enabling publishes an empty Multiple Accounts workspace and restarts into the
+Account Picker. Its empty state owns **Create First Account**. The player signs
+in separately for every account. Creating the first account can copy templates,
 builds, and teams from Single Account mode. This import reads a stable snapshot
 and writes a new Multiple Accounts destination. It never moves, links, mirrors,
-or later synchronizes the Single Account source.
+or later synchronizes the Single Account source. Later accounts cannot import
+from Single Account mode.
 
 The app publishes the workspace before it publishes the selected mode. A
-cancelled or failed setup leaves Single Account mode selected. An import failure
-does not change its source or the previous destination revision.
+cancelled or failed enable action leaves Single Account mode selected. A failed
+first-account import does not change its source or publish the account.
 
 Returning to Single Account mode preserves the complete Multiple Accounts
 workspace. Re-enabling it restores the profiles and libraries. Neither
@@ -128,7 +130,8 @@ checkbox semantics and the entire non-action area is clickable. The primary
 action reflects the selection: Open, Open _Account_, Show _Account_, Retry
 _Account_, or Open _n_ Accounts. Edit and Archive live in each row's More menu.
 
-New and Edit Account are modal sheets. Player-facing sharing choices are
+The Account Picker is the only account-management surface. New and Edit Account
+are modal sheets. Player-facing sharing choices are
 **Builds and teams** and **In-game templates**, each either **Shared between
 Multiple Accounts** or **Separate for this account**. Shared is the default.
 The sheet states that login, game settings, screenshots, chat logs, and Single

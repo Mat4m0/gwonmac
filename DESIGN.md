@@ -25,6 +25,10 @@ is content-sized and anchored at bottom-right; compact widths turn it into a
 bottom sheet. Account rows scroll within the chooser, so many accounts do not
 move the primary action off-screen.
 
+Game Settings only enables or leaves Multiple Accounts mode. The Hub is the
+single account-management surface, including the empty **Create First Account**
+flow and its optional one-time copy from Single Account data.
+
 The launch surface answers one question: which accounts should open? Account
 administration uses progressive disclosure:
 

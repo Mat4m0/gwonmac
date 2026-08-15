@@ -18,11 +18,12 @@ test.describe("data and display settings", () => {
       await expect(pane).toBeVisible();
       await expect(pane.getByRole("heading", { name: "Multiple Accounts" }))
         .toBeVisible();
-      await expect(page.locator("#accounts-first-name")).toBeVisible();
+      await expect(page.locator("#accounts-first-name")).toHaveCount(0);
       await expect(page.getByRole("group", { name: "Build library" }))
-        .toBeVisible();
+        .toHaveCount(0);
       await expect(page.getByRole("group", { name: "Build templates" }))
-        .toBeVisible();
+        .toHaveCount(0);
+      await expect(pane).toContainText("Create and manage every account there");
       await expect(page.locator("#accounts-enable")).toBeVisible();
     } finally {
       await closeOffline(fixture);

@@ -639,12 +639,7 @@ export interface AccountsState {
 }
 
 export interface AccountsSetupRequest {
-  readonly name: string;
-  readonly templates: LibraryScope;
-  readonly builds: LibraryScope;
-  readonly importTemplates: boolean;
   readonly templateEntries: readonly TemplateExportEntry[];
-  readonly importBuilds: boolean;
 }
 
 export interface AccountTemplateLibrary {
@@ -656,6 +651,11 @@ export interface AccountProfileRequest {
   readonly name: string;
   readonly templates: LibraryScope;
   readonly builds: LibraryScope;
+}
+
+export interface AccountProfileCreateRequest extends AccountProfileRequest {
+  readonly copySingleBuilds: boolean;
+  readonly copySingleTemplates: boolean;
 }
 
 export interface AccountProfileUpdateRequest extends AccountProfileRequest {
@@ -981,7 +981,7 @@ export interface GwNativeApi {
     get(): Promise<AccountsState>;
     setup(value: AccountsSetupRequest): Promise<void>;
     open(profileIds: readonly ProfileId[]): Promise<void>;
-    create(value: AccountProfileRequest): Promise<AccountsState>;
+    create(value: AccountProfileCreateRequest): Promise<AccountsState>;
     update(value: AccountProfileUpdateRequest): Promise<AccountsState>;
     archive(profileId: ProfileId): Promise<AccountsState>;
     restore(profileId: ProfileId): Promise<AccountsState>;

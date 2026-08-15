@@ -30,7 +30,7 @@
           <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="16" cy="11" r="5"/><path d="M7 27c.8-5.1 4-8 9-8s8.2 2.9 9 8"/><path d="M24 7v6M21 10h6"/></svg>
           <h2>No accounts yet</h2>
           <p>Create your first account. Your Single Account data stays untouched.</p>
-          <button id="accounts-empty-new" class="primary" type="button">Create Account</button>
+          <button id="accounts-empty-new" class="primary" type="button">Create First Account</button>
         </section>
 
         <p id="accounts-status" class="status-banner" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -73,6 +73,11 @@
           <label><input type="radio" name="profileTemplates" value="shared" checked><span>Shared between Multiple Accounts</span></label>
           <label><input type="radio" name="profileTemplates" value="private"><span>Separate for this account</span></label>
         </span>
+      </fieldset>
+      <fieldset id="profile-import" class="import-row" hidden>
+        <legend><strong>Start with Single Account data</strong><small>This is a one-time copy. The originals stay untouched and never synchronize.</small></legend>
+        <label><input id="profile-import-builds" type="checkbox"><span>Copy builds and teams</span></label>
+        <label><input id="profile-import-templates" type="checkbox"><span>Copy in-game templates</span></label>
       </fieldset>
       <p class="separation-note">Login, game settings, screenshots, chat logs, and Single Account data are never shared.</p>
       <p id="profile-status" class="sheet-status" role="status" aria-live="polite"></p>

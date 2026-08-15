@@ -85,22 +85,10 @@ export async function quarantineAccountDocument(
   }
 }
 
-export function createMultiWorkspace(options: {
-  readonly name: string;
-  readonly templates: LibraryScope;
-  readonly builds: LibraryScope;
-  readonly id?: string;
-}): MultiWorkspace {
-  const id = (options.id ?? randomUUID()) as ProfileId;
+export function createMultiWorkspace(): MultiWorkspace {
   return parseMultiWorkspace({
     formatVersion: 1,
-    profiles: [{
-      id,
-      name: parseProfileName(options.name),
-      archived: false,
-      templates: options.templates,
-      builds: options.builds,
-    }],
+    profiles: [],
   });
 }
 

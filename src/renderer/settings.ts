@@ -43,18 +43,12 @@
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
-  const accountsName = byId('accounts-first-name') as HTMLInputElement;
-  const accountsBuilds = form.elements.namedItem('accountsBuilds') as RadioNodeList;
-  const accountsTemplates = form.elements.namedItem('accountsTemplates') as RadioNodeList;
-  const accountsImportBuilds = byId('accounts-import-builds') as HTMLInputElement;
-  const accountsImportTemplates = byId('accounts-import-templates') as HTMLInputElement;
   const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
   const accountsStatus = byId('accounts-setup-status');
   const accountsModeStatus = byId('accounts-mode-status');
   const accountsSingleSetup = byId('accounts-single-setup');
   const accountsMultiActive = byId('accounts-multi-active');
   const accountsReturnSingle = byId('accounts-return-single') as HTMLButtonElement;
-  const accountsNewWorkspaceFields = byId('accounts-new-workspace-fields');
   /**
    * The appearance slider beside the `output` that reads it back.
    *
@@ -592,30 +586,14 @@
   });
 
   accountsEnable.addEventListener('click', async () => {
-    const name = accountsName.value.trim();
-    if (!name) {
-      accountsName.focus();
-      accountsStatus.textContent = 'Give the first profile a name.';
-      return;
-    }
     if (!window.confirm('Enable Multiple Accounts and restart GWonMac? Your current Single Account data will stay untouched.')) return;
     accountsEnable.disabled = true;
     accountsStatus.textContent = 'Creating the separate workspace…';
     try {
-      let templateEntries: import('../shared/contracts.js').TemplateExportEntry[] = [];
-      if (accountsImportTemplates.checked) {
-        const { exportEntries, templateFilesystem } = await import('./template-store.js');
-        const filesystem = templateFilesystem();
-        if (!filesystem) throw new Error('template filesystem is unavailable');
-        templateEntries = exportEntries(filesystem);
-      }
+      const { exportEntries, templateFilesystem } = await import('./template-store.js');
+      const filesystem = templateFilesystem();
       await window.gwNative.accounts.setup({
-        name,
-        templates: accountsTemplates.value as 'shared' | 'private',
-        builds: accountsBuilds.value as 'shared' | 'private',
-        importTemplates: accountsImportTemplates.checked,
-        templateEntries,
-        importBuilds: accountsImportBuilds.checked,
+        templateEntries: filesystem ? exportEntries(filesystem) : [],
       });
     } catch {
       accountsEnable.disabled = false;
@@ -647,8 +625,6 @@
     accountsSingleSetup.hidden = !singleMode;
     accountsMultiActive.hidden = singleMode;
     if (existingWorkspace) {
-      accountsName.value = activeProfiles[0]?.name ?? 'Account';
-      accountsNewWorkspaceFields.hidden = true;
       accountsEnable.textContent = 'Restore Multiple Accounts and Restart…';
     }
   }).catch(() => {

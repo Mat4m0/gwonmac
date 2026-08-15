@@ -27,6 +27,9 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
   const profileName = required<HTMLInputElement>('profile-name');
   const profileSave = required<HTMLButtonElement>('profile-save');
   const profileStatus = required<HTMLElement>('profile-status');
+  const profileImport = required<HTMLFieldSetElement>('profile-import');
+  const profileImportBuilds = required<HTMLInputElement>('profile-import-builds');
+  const profileImportTemplates = required<HTMLInputElement>('profile-import-templates');
   const settingsDialog = required<HTMLDialogElement>('accounts-settings');
   const archivedList = required<HTMLElement>('accounts-archived-list');
   const noArchived = required<HTMLElement>('accounts-no-archived');
@@ -36,6 +39,7 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
   let selected = new Set<AccountProfileSummary['id']>();
   let editing: AccountProfileSummary | null = null;
   let menuProfile: AccountProfileSummary | null = null;
+  let menuTrigger: HTMLElement | null = null;
   let refreshInFlight: Promise<void> | null = null;
 
   const activeProfiles = () => profiles.filter((profile) => !profile.archived);
@@ -98,18 +102,22 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     }
   }
 
-  function closeMenu() {
+  function closeMenu(restoreFocus = false) {
     menu.hidden = true;
     menuProfile = null;
+    const trigger = menuTrigger;
+    menuTrigger = null;
+    if (restoreFocus) trigger?.focus();
   }
 
   function showMenu(profile: AccountProfileSummary, trigger: HTMLElement) {
     menuProfile = profile;
+    menuTrigger = trigger;
     const bounds = trigger.getBoundingClientRect();
     menu.style.top = `${Math.min(bounds.bottom + 4, innerHeight - 90)}px`;
     menu.style.left = `${Math.max(8, Math.min(bounds.right - 190, innerWidth - 198))}px`;
-    menuEdit.disabled = profile.state === 'running';
-    menuEdit.title = profile.state === 'running' ? 'Close this account before editing it.' : '';
+    menuEdit.disabled = false;
+    menuEdit.title = '';
     menuArchive.disabled = profile.state === 'running' || activeProfiles().length < 2;
     menuArchive.title = profile.state === 'running'
       ? 'Close this account before archiving it.'
@@ -219,6 +227,7 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
     list.setAttribute('aria-busy', 'false');
     list.hidden = active.length === 0;
     empty.hidden = active.length > 0;
+    form.toggleAttribute('data-empty', active.length === 0);
     renderArchived();
     syncActions();
   }
@@ -242,14 +251,28 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
 
   function showProfileDialog(profile: AccountProfileSummary | null) {
     editing = profile;
+    const sharingInputs = profileForm.querySelectorAll<HTMLInputElement>(
+      'input[name="profileBuilds"], input[name="profileTemplates"]',
+    );
+    const accountIsOpen = profile?.state === 'running';
+    const firstAccount = profile === null && profiles.length === 0;
     profileTitle.textContent = profile ? 'Edit Account' : 'New Account';
     profileDescription.textContent = profile
-      ? `Change how ${profile.name} stores builds and templates.`
-      : 'Create an independent Guild Wars account.';
-    profileSave.textContent = profile ? 'Save Changes' : 'Create Account';
+      ? accountIsOpen
+        ? `Rename ${profile.name}. Close it before changing how its libraries are shared.`
+        : `Change how ${profile.name} stores builds and templates.`
+      : firstAccount
+        ? 'Create the first account in your separate Multiple Accounts workspace.'
+        : 'Create an independent Guild Wars account.';
+    profileTitle.textContent = firstAccount ? 'Create First Account' : profileTitle.textContent;
+    profileSave.textContent = profile ? 'Save Changes' : firstAccount ? 'Create First Account' : 'Create Account';
     profileName.value = profile?.name ?? '';
     choice('profileBuilds').value = profile?.builds ?? 'shared';
     choice('profileTemplates').value = profile?.templates ?? 'shared';
+    for (const input of sharingInputs) input.disabled = accountIsOpen;
+    profileImport.hidden = !firstAccount;
+    profileImportBuilds.checked = false;
+    profileImportTemplates.checked = false;
     profileStatus.textContent = '';
     profileDialog.showModal();
     profileName.focus();
@@ -285,10 +308,19 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
       name: profileName.value.trim(),
       builds: choice('profileBuilds').value as 'shared' | 'private',
       templates: choice('profileTemplates').value as 'shared' | 'private',
+      copySingleBuilds: editing === null && profiles.length === 0 && profileImportBuilds.checked,
+      copySingleTemplates: editing === null && profiles.length === 0 && profileImportTemplates.checked,
     };
     const wasEditing = editing !== null;
     try {
-      if (editing) await window.gwNative.accounts.update({ id: editing.id, ...request });
+      if (editing) {
+        await window.gwNative.accounts.update({
+          id: editing.id,
+          name: request.name,
+          builds: request.builds,
+          templates: request.templates,
+        });
+      }
       else await window.gwNative.accounts.create(request);
       profileDialog.close();
       setStatus(wasEditing ? 'Account updated.' : 'Account created.', 'success');
@@ -321,8 +353,23 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
   document.addEventListener('pointerdown', (event) => {
     if (!menu.hidden && !menu.contains(event.target as Node)) closeMenu();
   });
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !menu.hidden) closeMenu();
+  menu.addEventListener('keydown', (event) => {
+    const items = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')];
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      event.preventDefault();
+      closeMenu(true);
+      return;
+    }
+    if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
+      return;
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const offset = event.key === 'ArrowDown' ? 1 : -1;
+    items[(current + offset + items.length) % items.length]?.focus();
   });
 
   const showSettings = () => {

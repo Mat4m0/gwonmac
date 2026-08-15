@@ -27,7 +27,7 @@ import {
   type AppSettingsPatch,
   type AccountsSetupRequest,
   type AccountsState,
-  type AccountProfileRequest,
+  type AccountProfileCreateRequest,
   type AccountProfileUpdateRequest,
   type DownloadProgress,
   type PrefetchProgress,
@@ -806,29 +806,15 @@ if (primaryInstance) void app.whenReady().then(async () => {
     }
     multiWorkspace ??= await loadMultiWorkspace(paths.multiWorkspace);
     if (!multiWorkspace) {
-      const candidate = createMultiWorkspace(request);
-      const profile = candidate.profiles[0]!;
-      const profilePaths = multiProfilePaths(paths, profile.id);
-      await mkdir(profilePaths.root, { recursive: true });
-      if (request.importBuilds) {
-        await importBuildLibraryIfPresent(
-          paths.buildLibrary,
-          profile.builds === "shared"
-            ? paths.multiSharedBuildLibrary
-            : profilePaths.buildLibrary,
-        );
-      }
-      if (request.importTemplates) {
-        const templatePath = profile.templates === "shared"
-          ? paths.multiSharedTemplates
-          : profilePaths.templates;
-        await saveAccountTemplateLibrary(templatePath, {
-          revision: 1,
-          entries: request.templateEntries,
-        });
-      }
+      const candidate = createMultiWorkspace();
       await saveMultiWorkspace(paths.multiWorkspace, candidate);
       multiWorkspace = candidate;
+    }
+    if (multiWorkspace.profiles.length === 0) {
+      await saveAccountTemplateLibrary(paths.multiSingleTemplateImport, {
+        revision: 1,
+        entries: request.templateEntries,
+      });
     }
     await saveAccountMode(paths.launcherMode, "multi");
     app.relaunch();
@@ -998,15 +984,40 @@ if (primaryInstance) void app.whenReady().then(async () => {
         await focused;
       }
     },
-    createAccount: (request: AccountProfileRequest) => accountsLock.run(async () => {
+    createAccount: (request: AccountProfileCreateRequest) => accountsLock.run(async () => {
       if (activeAccountMode !== "multi" || !multiWorkspace) {
         throw new Error("Multiple Accounts mode is not active");
       }
+      const firstAccount = multiWorkspace.profiles.length === 0;
+      if (!firstAccount && (request.copySingleBuilds || request.copySingleTemplates)) {
+        throw new Error("Single Account data can be copied only into the first account");
+      }
       const next = addMultiProfile(multiWorkspace, request);
       const profile = next.profiles.at(-1)!;
-      await mkdir(multiProfilePaths(paths, profile.id).root, { recursive: true });
+      const profilePaths = multiProfilePaths(paths, profile.id);
+      await mkdir(profilePaths.root, { recursive: true });
+      if (firstAccount && request.copySingleBuilds) {
+        await importBuildLibraryIfPresent(
+          paths.buildLibrary,
+          profile.builds === "shared"
+            ? paths.multiSharedBuildLibrary
+            : profilePaths.buildLibrary,
+        );
+      }
+      if (firstAccount && request.copySingleTemplates) {
+        const source = await loadAccountTemplateLibrary(paths.multiSingleTemplateImport);
+        await saveAccountTemplateLibrary(
+          profile.templates === "shared"
+            ? paths.multiSharedTemplates
+            : profilePaths.templates,
+          { revision: 1, entries: source.entries },
+        );
+      }
       await saveMultiWorkspace(paths.multiWorkspace, next);
       multiWorkspace = next;
+      if (firstAccount) {
+        await rm(paths.multiSingleTemplateImport, { force: true }).catch(() => undefined);
+      }
       return accountsState();
     }),
     updateAccount: (request: AccountProfileUpdateRequest) => accountsLock.run(async () => {

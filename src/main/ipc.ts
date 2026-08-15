@@ -20,6 +20,7 @@ import type {
   AppSettingsPatch,
   AccountsSetupRequest,
   AccountProfileRequest,
+  AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
   AccountTemplateLibrary,
   AccountsState,
@@ -155,7 +156,7 @@ export interface IpcContext {
   getAccountsState: () => AccountsState;
   setupAccounts: (request: AccountsSetupRequest) => Promise<void>;
   openAccounts: (profileIds: readonly ProfileId[]) => Promise<void>;
-  createAccount: (request: AccountProfileRequest) => Promise<AccountsState>;
+  createAccount: (request: AccountProfileCreateRequest) => Promise<AccountsState>;
   updateAccount: (request: AccountProfileUpdateRequest) => Promise<AccountsState>;
   archiveAccount: (profileId: ProfileId) => Promise<AccountsState>;
   restoreAccount: (profileId: ProfileId) => Promise<AccountsState>;
@@ -450,16 +451,8 @@ const asAccountsSetup = one((value: unknown): AccountsSetupRequest => {
     throw new ValidationError("account setup must be an object");
   }
   const input = value as Record<string, unknown>;
-  if (typeof input.importTemplates !== "boolean" || typeof input.importBuilds !== "boolean") {
-    throw new ValidationError("account import choices must be booleans");
-  }
   return {
-    name: parseProfileName(input.name),
-    templates: parseLibraryScope(input.templates, "templates"),
-    builds: parseLibraryScope(input.builds, "builds"),
-    importTemplates: input.importTemplates,
     templateEntries: parseExportEntries(input.templateEntries),
-    importBuilds: input.importBuilds,
   };
 });
 
@@ -475,7 +468,21 @@ function parseAccountProfile(value: unknown): AccountProfileRequest {
   };
 }
 
-const asAccountProfile = one(parseAccountProfile);
+const asAccountProfileCreate = one((value: unknown): AccountProfileCreateRequest => {
+  const profile = parseAccountProfile(value);
+  const input = value as Record<string, unknown>;
+  if (
+    typeof input.copySingleBuilds !== "boolean"
+    || typeof input.copySingleTemplates !== "boolean"
+  ) {
+    throw new ValidationError("account copy choices must be booleans");
+  }
+  return {
+    ...profile,
+    copySingleBuilds: input.copySingleBuilds,
+    copySingleTemplates: input.copySingleTemplates,
+  };
+});
 const asAccountProfileUpdate = one((value: unknown): AccountProfileUpdateRequest => {
   const profile = parseAccountProfile(value);
   return {
@@ -1004,7 +1011,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       "hub",
     ),
     accountsCreate: channel(
-      asAccountProfile,
+      asAccountProfileCreate,
       (_win, request) => ctx.createAccount(request),
       "hub",
     ),
