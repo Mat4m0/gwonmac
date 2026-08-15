@@ -46,6 +46,8 @@ import {
   storageConfigure,
   storageEnqueue,
   storageSlashParser,
+  travelConfigure,
+  travelEnqueue,
 } from "./enhancement-command-transform.js";
 import {
   concat,
@@ -594,6 +596,21 @@ export function transformEnhancementWasm(
   ) {
     fail("storage slash parser body does not match its semantic fingerprint");
   }
+  const travelProducer = capabilities.storage
+    ? resolveHook(
+        "travel payload producer",
+        storage.travel.producer.functionIndex,
+        storage.travel.producer.params,
+        storage.travel.producer.results,
+      )
+    : null;
+  if (
+    travelProducer
+    && bodyHash(storage.travel.producer.functionIndex)
+      !== storage.travel.producer.bodySha256
+  ) {
+    fail("travel payload producer body does not match its semantic fingerprint");
+  }
   const packetSender = capabilities.commands
     ? resolveHook(
         "traced packet sender",
@@ -647,6 +664,7 @@ export function transformEnhancementWasm(
       || packetSender?.localIndex === commandDrainBoundary.localIndex
       || storageHandler?.localIndex === commandDrainBoundary.localIndex
       || storageSlashParserHook?.localIndex === commandDrainBoundary.localIndex
+      || travelProducer?.localIndex === commandDrainBoundary.localIndex
     ) {
       fail("command drain boundary must be distinct from hooks, commands, and sender");
     }
@@ -673,6 +691,18 @@ export function transformEnhancementWasm(
     )
   ) {
     fail("storage slash parser must be distinct from hooks and packet commands");
+  }
+  if (
+    travelProducer
+    && (
+      commands.some((entry) => entry.functionIndex
+        === storage.travel.producer.functionIndex)
+      || packetSender?.localIndex === travelProducer.localIndex
+      || storageHandler?.localIndex === travelProducer.localIndex
+      || storageSlashParserHook?.localIndex === travelProducer.localIndex
+    )
+  ) {
+    fail("travel payload producer must be distinct from hooks and packet commands");
   }
 
   const table = parseTable(sectionById(sections, 4));
@@ -722,7 +752,12 @@ export function transformEnhancementWasm(
       ? [teamApply.thunkExport, teamApply.professionTrace.readerExport]
       : []),
     ...(capabilities.storage
-      ? [storage.openExport, storage.configureExport]
+      ? [
+          storage.openExport,
+          storage.configureExport,
+          storage.travel.enqueueExport,
+          storage.travel.configureExport,
+        ]
       : []),
   ];
   for (const name of addedExportNames) {
@@ -739,11 +774,13 @@ export function transformEnhancementWasm(
   const hasActions = capabilities.commands || capabilities.storage;
   const hookGlobalIndex = allocateGlobals(1);
   const commandPendingGlobalIndex = hasActions ? allocateGlobals(1) : 0;
-  const commandArgumentGlobalBase = capabilities.commands
+  const commandArgumentGlobalBase = hasActions
     ? allocateGlobals(COMMAND_ARGS)
     : 0;
   const storagePayloadGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
   const storageEnabledGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
+  const travelPayloadGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
+  const travelEnabledGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
   const traceGlobalBase = capabilities.commands
     ? allocateGlobals(PROFESSION_TRACE_WORDS)
     : 0;
@@ -796,6 +833,12 @@ export function transformEnhancementWasm(
   const storageConfigureTypeIndex = capabilities.storage
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
     : null;
+  const travelEnqueueTypeIndex = capabilities.storage
+    ? appendType({ params: Array<number>(COMMAND_ARGS).fill(0x7f), results: [0x7f] })
+    : null;
+  const travelConfigureTypeIndex = capabilities.storage
+    ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
+    : null;
 
   const nextFunctionTypes = [...functionTypes];
   const nextBodies = [...bodies];
@@ -807,6 +850,9 @@ export function transformEnhancementWasm(
   };
   const selectedOriginalIndices = selected.map((hook) =>
     appendFunction(hook.typeIndex, bodies[hook.localIndex]!));
+  const uiOriginalIndex = selectedHooks.ui
+    ? selectedOriginalIndices[selected.findIndex((hook) => hook.dispatchKind === DISPATCH_UI)]!
+    : null;
   selected.forEach((hook, index) => {
     nextBodies[hook.localIndex] = dispatcher(
       hook.type.params.length,
@@ -849,6 +895,13 @@ export function transformEnhancementWasm(
           ? {
               functionIndex: storage.handler.functionIndex,
               payloadGlobalIndex: storagePayloadGlobalIndex,
+            }
+          : null,
+        capabilities.storage
+          ? {
+              dispatcherFunctionIndex: uiOriginalIndex!,
+              messageId: storage.travel.messageId,
+              payloadGlobalIndex: travelPayloadGlobalIndex,
             }
           : null,
       ),
@@ -915,6 +968,29 @@ export function transformEnhancementWasm(
               commandPendingGlobalIndex,
               storagePayloadGlobalIndex,
               storageEnabledGlobalIndex,
+            ),
+          ),
+        },
+        {
+          name: storage.travel.enqueueExport,
+          index: appendFunction(
+            travelEnqueueTypeIndex!,
+            travelEnqueue(
+              commandPendingGlobalIndex,
+              commandArgumentGlobalBase,
+              travelPayloadGlobalIndex,
+              travelEnabledGlobalIndex,
+            ),
+          ),
+        },
+        {
+          name: storage.travel.configureExport,
+          index: appendFunction(
+            travelConfigureTypeIndex!,
+            travelConfigure(
+              commandPendingGlobalIndex,
+              travelPayloadGlobalIndex,
+              travelEnabledGlobalIndex,
             ),
           ),
         },

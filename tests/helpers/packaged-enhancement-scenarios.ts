@@ -523,7 +523,8 @@ export async function assertToolboxFoundationLifecycle() {
       window.gwToolsSettings = () => Object.freeze({
         enabled: true,
         teamManagement: true,
-        xunlaiStorage: true,
+      xunlaiStorage: true,
+      travelPalette: true,
         targetReadout: false,
       });
       const runtime = await installCertifiedCompanion(
@@ -874,7 +875,8 @@ export async function assertRollbackAfterTablePublication() {
         window.gwToolsSettings = () => Object.freeze({
           enabled: true,
           teamManagement: true,
-          xunlaiStorage: true,
+      xunlaiStorage: true,
+      travelPalette: true,
           targetReadout: false,
         });
         globalThis.requestAnimationFrame = () => {

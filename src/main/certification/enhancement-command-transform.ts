@@ -6,6 +6,7 @@ import { concat, sleb, uleb } from "../core/wasm-binary.js";
 
 const COMMAND_ARGS = 4;
 const STORAGE_COMMAND = -1;
+const TRAVEL_COMMAND = -2;
 
 type CommandEntry = Readonly<{
   opcode: number;
@@ -52,6 +53,51 @@ export function storageConfigure(
     Uint8Array.of(0x0b, 0x0b),
     Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x0b),
   );
+}
+
+/** Queues one bounded four-scalar travel request. */
+export function travelEnqueue(
+  pendingGlobalIndex: number,
+  argumentGlobalBase: number,
+  payloadGlobalIndex: number,
+  enabledGlobalIndex: number,
+): Uint8Array {
+  const refuse = (condition: Uint8Array) => concat(
+    condition,
+    Uint8Array.of(0x04, 0x40, 0x41), sleb(0), Uint8Array.of(0x0f, 0x0b),
+  );
+  return concat(
+    uleb(0),
+    refuse(concat(Uint8Array.of(0x23), uleb(enabledGlobalIndex), Uint8Array.of(0x45))),
+    refuse(concat(Uint8Array.of(0x23), uleb(payloadGlobalIndex), Uint8Array.of(0x45))),
+    refuse(concat(Uint8Array.of(0x23), uleb(pendingGlobalIndex))),
+    // Map ids are positive and the certified snapshot independently caps them
+    // at 2,000. District is the optional one-based district number.
+    refuse(concat(Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x48))),
+    refuse(concat(Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x41), sleb(2_000), Uint8Array.of(0x4a))),
+    refuse(concat(Uint8Array.of(0x20), uleb(1), Uint8Array.of(0x41), sleb(-2), Uint8Array.of(0x48))),
+    refuse(concat(Uint8Array.of(0x20), uleb(1), Uint8Array.of(0x41), sleb(4), Uint8Array.of(0x4a))),
+    refuse(concat(Uint8Array.of(0x20), uleb(2), Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x48))),
+    refuse(concat(Uint8Array.of(0x20), uleb(2), Uint8Array.of(0x41), sleb(17), Uint8Array.of(0x4a))),
+    refuse(concat(Uint8Array.of(0x20), uleb(3), Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x48))),
+    refuse(concat(Uint8Array.of(0x20), uleb(3), Uint8Array.of(0x41), sleb(255), Uint8Array.of(0x4a))),
+    ...Array.from({ length: COMMAND_ARGS }, (_, index) => concat(
+      Uint8Array.of(0x20), uleb(index),
+      Uint8Array.of(0x24), uleb(argumentGlobalBase + index),
+    )),
+    Uint8Array.of(0x41), sleb(TRAVEL_COMMAND),
+    Uint8Array.of(0x24), uleb(pendingGlobalIndex),
+    Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x0b),
+  );
+}
+
+/** Publishes the installer-owned 16-byte travel payload and live policy. */
+export function travelConfigure(
+  pendingGlobalIndex: number,
+  payloadGlobalIndex: number,
+  enabledGlobalIndex: number,
+): Uint8Array {
+  return storageConfigure(pendingGlobalIndex, payloadGlobalIndex, enabledGlobalIndex);
 }
 
 /** Consumes the two exact storage slash commands into the existing mailbox. */
@@ -171,6 +217,11 @@ export function commandDrain(
   argumentGlobalBase: number,
   traceOriginGlobalIndex: number | null,
   storage: Readonly<{ functionIndex: number; payloadGlobalIndex: number }> | null,
+  travel: Readonly<{
+    dispatcherFunctionIndex: number;
+    messageId: number;
+    payloadGlobalIndex: number;
+  }> | null,
 ): Uint8Array {
   return concat(
     uleb(0),
@@ -181,6 +232,23 @@ export function commandDrain(
           Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x24), uleb(pendingGlobalIndex),
           Uint8Array.of(0x23), uleb(storage.payloadGlobalIndex),
           Uint8Array.of(0x10), uleb(storage.functionIndex),
+          Uint8Array.of(0x0f, 0x0b),
+        )]
+      : []),
+    ...(travel
+      ? [concat(
+          Uint8Array.of(0x23), uleb(pendingGlobalIndex),
+          Uint8Array.of(0x41), sleb(TRAVEL_COMMAND), Uint8Array.of(0x46, 0x04, 0x40),
+          Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x24), uleb(pendingGlobalIndex),
+          ...Array.from({ length: COMMAND_ARGS }, (_, index) => concat(
+            Uint8Array.of(0x23), uleb(travel.payloadGlobalIndex),
+            Uint8Array.of(0x23), uleb(argumentGlobalBase + index),
+            Uint8Array.of(0x36), uleb(2), uleb(index * 4),
+          )),
+          Uint8Array.of(0x41), sleb(travel.messageId),
+          Uint8Array.of(0x23), uleb(travel.payloadGlobalIndex),
+          Uint8Array.of(0x41), sleb(0),
+          Uint8Array.of(0x10), uleb(travel.dispatcherFunctionIndex),
           Uint8Array.of(0x0f, 0x0b),
         )]
       : []),

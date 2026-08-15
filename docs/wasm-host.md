@@ -190,11 +190,12 @@ function call, shared-memory packet bus, or second game model.
 
 ## Command boundary
 
-Team Apply and Xunlai storage are separate certified capabilities. They share
-only the bounded game-thread mailbox and drain proof. A profile contains only
-the selected named operation: storage does not compile or export the Team Apply
-packet-builder thunk, and Team Apply does not compile or export storage. Neither
-profile carries a generic opcode, packet, or address surface.
+Team Apply and local actions are separate certified capabilities. Xunlai and
+Travel share one local-action profile, bounded game-thread mailbox, and drain
+proof; each still has its own setting and runtime gate. The profile exports only
+the named Xunlai and Travel operations. It does not export the Team Apply
+packet-builder thunk, and Team Apply alone does not export local actions.
+Neither profile carries a generic opcode, packet, dispatcher, or address surface.
 
 The same named storage action backs the Tools button and Command-Shift-C. It
 queues a fixed `{ agent: 0, type: 0, data: 3 }` DataWindow payload, then calls
@@ -202,6 +203,12 @@ the certified client DataWindow handler at the existing game-thread drain. It
 does not send that payload to ArenaNet. The action is enabled only with its
 separate Tools setting in a positively classified PvE outpost and is cancelled when that policy
 changes.
+
+Travel accepts only four bounded scalar values: map, region, language, and
+district. Search text, aliases, destinations, and numbered shortcuts stay in
+the host-owned Vue interface. At the certified frame drain, the transform writes
+the four words to its installer-owned payload and calls the exact client Travel
+dispatcher with `kTravel`. It cannot dispatch another client UI message.
 
 Team Apply requires enabled Tools and Apply teams in Guild Wars, an exact commands
 profile, a positively classified PvE outpost, fresh party state, and an explicit
@@ -224,13 +231,15 @@ Automation cannot publish a runtime certificate. A maintainer reviews the
 evidence, runs offline proof and the minimum live semantic checks, and ships new
 exact facts in an application release.
 
-The carry-forward report has separate **Apply team** and **Xunlai storage**
-rows. A changed Team Apply builder must not block storage recertification, and a
-changed slash parser or DataWindow handler must not block Team Apply. For
-storage, confirm both exact aliases are consumed, a near miss still reaches the
-normal parser, the fixed DataWindow payload runs at the certified drain, and
-`pnpm enhancements:live xunlai-storage` opens the normal window in a PvE
-outpost.
+The carry-forward report has separate **Apply team** and **local actions**
+rows. A changed Team Apply builder must not block local-action recertification,
+and a changed slash parser, DataWindow handler, or Travel producer must not
+block Team Apply. For storage, confirm both exact aliases are consumed, a near
+miss still reaches the normal parser, the fixed DataWindow payload runs at the
+certified drain, and `pnpm enhancements:live xunlai-storage` opens the normal
+window in a PvE outpost. For Travel, confirm the producer still writes
+`{ map, region, language, district }` and sends `kTravel`, then perform one
+bounded live trip to an unlocked outpost.
 
 The workflow never uploads ArenaNet client bytes. It uploads reports and source
 changes only.

@@ -27,7 +27,7 @@ describe("Enhancement command transform", () => {
   // The command queue is the entire write surface. These are the tests that
   // decide whether this app can send a packet, so they instantiate the
   // transformed module and drive the function rather than inspecting bytes.
-  it("emits Team Apply and storage authority independently", () => {
+  it("emits Team Apply and local action authority independently", () => {
     const input = fixture();
     const build = manifest(input);
     const partyOnly = { ...CURSOR_TOOLBOX, nativeCursor: false };
@@ -75,6 +75,10 @@ describe("Enhancement command transform", () => {
     );
     assert.equal(
       storageExports.some((entry) => entry.name === build.storage!.openExport),
+      true,
+    );
+    assert.equal(
+      storageExports.some((entry) => entry.name === build.storage!.travel.enqueueExport),
       true,
     );
 
@@ -145,6 +149,60 @@ describe("Enhancement command transform", () => {
     assert.equal(configure(payload, 0), 1, "disabling cancels a queued storage action");
     frame(80, 800);
     assert.deepEqual(gameCalls.slice(-1), [80]);
+  });
+
+  it("queues one bounded Travel request and dispatches it on the game thread", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_STORAGE);
+    const dispatches: number[][] = [];
+    const instance = new WebAssembly.Instance(
+      new WebAssembly.Module(new Uint8Array(output)),
+      {
+        env: {
+          t: () => {},
+          c: () => {},
+          u: (message: number, pointer: number, value: number) => {
+            dispatches.push([message, pointer, value]);
+          },
+          tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
+        },
+      },
+    );
+    const memory = instance.exports.memory as WebAssembly.Memory;
+    const frame = instance.exports.frame as (value: number, context: number) => void;
+    const enqueue = instance.exports[build.storage!.travel.enqueueExport] as
+      (mapId: number, region: number, language: number, district: number) => number;
+    const configure = instance.exports[build.storage!.travel.configureExport] as
+      (payload: number, enabled: number) => number;
+    const payload = 128;
+
+    assert.equal(enqueue(81, -2, 0, 0), 0, "Travel refuses before installation");
+    assert.equal(configure(payload, 1), 1);
+    assert.equal(enqueue(81, -2, 0, 0), 1);
+    assert.equal(enqueue(55, 2, 0, 1), 0, "a queued trip owns the action mailbox");
+    assert.deepEqual(dispatches, [], "enqueue never calls client code re-entrantly");
+    frame(70, 700);
+    assert.deepEqual([...new Int32Array(memory.buffer, payload, 4)], [81, -2, 0, 0]);
+    assert.deepEqual(dispatches, [[build.storage!.travel.messageId, payload, 0]]);
+
+    for (const request of [
+      [0, -2, 0, 0],
+      [2_001, -2, 0, 0],
+      [81, -3, 0, 0],
+      [81, 5, 0, 0],
+      [81, -2, -1, 0],
+      [81, -2, 18, 0],
+      [81, -2, 0, -1],
+      [81, -2, 0, 256],
+    ] as const) {
+      assert.equal(
+        enqueue(request[0], request[1], request[2], request[3]),
+        0,
+        `refuses ${request.join(",")}`,
+      );
+    }
+    assert.deepEqual(dispatches, [[build.storage!.travel.messageId, payload, 0]]);
   });
 
   it("consumes only /chest and /xunlai through the storage mailbox", () => {

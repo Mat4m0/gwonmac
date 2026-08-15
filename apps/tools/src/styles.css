@@ -3,3 +3,120 @@
 @import "./styles/build.css";
 @import "./styles/catalogue.css";
 @import "./styles/team.css";
+/* The Cmd+T surface is a command palette, not a second Tools window. */
+.travel-palette {
+  position: fixed;
+  top: max(72px, 12vh);
+  left: 50%;
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(620px, calc(100vh - 96px));
+  transform: translateX(-50%);
+  overflow: hidden;
+  pointer-events: auto;
+  color: var(--ui-text);
+  background: var(--ui-panel-fill);
+  font: var(--ui-font-size)/var(--ui-line-height) var(--ui-font);
+  box-shadow: var(--ui-shadow);
+  -webkit-font-smoothing: antialiased;
+}
+
+.travel-search {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 14px;
+  gap: 10px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.travel-search > span { color: var(--ui-text-muted); font-size: 18px; }
+.travel-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 17px;
+}
+
+.travel-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ui-line-soft);
+  background: color-mix(in srgb, var(--ui-panel-fill) 82%, black);
+}
+.travel-options select,
+.travel-options input {
+  min-height: 32px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-sm);
+  color: inherit;
+  background: var(--ui-raised-fill);
+}
+.travel-options select { padding: 0 30px 0 9px; }
+.travel-district-number { display: flex; align-items: center; gap: 6px; color: var(--ui-text-muted); }
+.travel-district-number input { width: 54px; padding: 0 7px; font-variant-numeric: tabular-nums; }
+
+.travel-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ui-line-soft);
+}
+.travel-shortcuts button,
+.travel-results button {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.travel-shortcuts button {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 8px;
+  gap: 8px;
+  border-radius: var(--ui-radius-sm);
+}
+.travel-shortcuts button:hover { background: var(--ui-hover); }
+.travel-shortcuts span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.travel-results { overflow-y: auto; max-height: 360px; padding: 6px; }
+.travel-results button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 10px;
+  border-radius: var(--ui-radius-sm);
+}
+.travel-results button[aria-selected="true"] { background: var(--ui-selected); }
+.travel-results button > span:first-child { display: grid; gap: 1px; }
+.travel-results strong { font-weight: 600; }
+.travel-results small { color: var(--ui-text-muted); }
+.travel-progress { color: var(--ui-accent); }
+.travel-empty { padding: 20px 12px; color: var(--ui-text-muted); text-align: center; }
+
+.travel-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--ui-line-soft);
+  color: var(--ui-text-muted);
+  font-size: 11px;
+}
+.travel-footer [data-problem] { color: var(--ui-warning); }
+
+@media (max-width: 520px) {
+  .travel-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .travel-footer > span:last-child { display: none; }
+}

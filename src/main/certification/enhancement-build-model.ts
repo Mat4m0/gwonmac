@@ -197,6 +197,18 @@ export interface KnownEnhancementBuild {
   storage?: Readonly<{
     openExport: string;
     configureExport: string;
+    travel: Readonly<{
+      enqueueExport: string;
+      configureExport: string;
+      messageId: number;
+      /** Exact producer that constructs {map, region, language, district}. */
+      producer: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32", "i32", "i32", "i32", "i32"];
+        results: readonly [];
+        bodySha256: string;
+      }>;
+    }>;
     slashParser: Readonly<{
       functionIndex: number;
       params: readonly ["i32", "i32"];

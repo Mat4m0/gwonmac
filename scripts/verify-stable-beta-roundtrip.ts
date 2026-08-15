@@ -160,6 +160,8 @@ const candidateSettingsDomains = Array.from(
       gwonmacTools: cycle(booleanValues, index),
       teamManagement: cycle(booleanValues, index + 1),
       xunlaiStorage: cycle(booleanValues, index),
+      travelPalette: cycle(booleanValues, index + 1),
+      travelShortcuts: [],
       targetReadout: cycle(booleanValues, index),
       shortcutOverrides: {},
       extendedMemoryEnabled: cycle(booleanValues, index + 1),

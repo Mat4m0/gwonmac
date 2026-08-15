@@ -44,6 +44,17 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator("#app[data-ready=true]")).toBeAttached();
 });
 
+test("offers destination autocomplete and numbered Travel shortcuts", async ({ page }) => {
+  await page.goto("/?travel=1");
+  await expect(page.getByRole("dialog", { name: "Travel" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Search destinations" }).fill("kama");
+  await expect(page.getByRole("option", { name: /Kamadan, Jewel of Istan/ })).toBeVisible();
+  await page.keyboard.press("Meta+9");
+  await expect(page.getByRole("status")).toContainText("shortcut 9");
+  await page.getByRole("combobox", { name: "Search destinations" }).fill("");
+  await expect(page.getByRole("button", { name: /9 Kamadan, Jewel of Istan/ })).toBeVisible();
+});
+
 test("manages teams and finds builds without Electron or the game", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Team composition" })).toBeVisible();

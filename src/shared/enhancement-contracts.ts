@@ -25,7 +25,7 @@ export type EnhancementCapabilities = Readonly<{
   partyObservation: boolean;
   /** Team Apply packet authority. */
   commands: boolean;
-  /** Local Xunlai DataWindow authority. */
+  /** Named Xunlai and Travel authority on one local-action queue. */
   storage: boolean;
 }>;
 
@@ -202,7 +202,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 31;
+export const ENHANCEMENT_TRANSFORM_ABI = 32;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,

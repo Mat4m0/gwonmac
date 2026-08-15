@@ -45,6 +45,7 @@
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
+  const travelPalette = form.elements.namedItem('travelPalette') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
   const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
   const accountsStatus = byId('accounts-setup-status');
@@ -585,6 +586,7 @@
       case 'gwonmacTools':
       case 'teamManagement':
       case 'xunlaiStorage':
+      case 'travelPalette':
       case 'targetReadout':
         return control instanceof globalThis.HTMLInputElement
           ? { [control.name]: control.checked }
@@ -623,10 +625,12 @@
     gwonmacTools.checked = settings.gwonmacTools;
     teamManagement.checked = settings.teamManagement;
     xunlaiStorage.checked = settings.xunlaiStorage;
+    travelPalette.checked = settings.travelPalette;
     targetReadout.checked = settings.targetReadout;
     void renderShortcuts(settings);
     teamManagement.disabled = !settings.gwonmacTools;
     xunlaiStorage.disabled = !settings.gwonmacTools;
+    travelPalette.disabled = !settings.gwonmacTools;
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     updateTrack.value = settings.updateTrack;

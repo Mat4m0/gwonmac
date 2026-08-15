@@ -44,6 +44,7 @@ import {
   openStorage,
   sendRendererCommand,
   toggleTools,
+  toggleTravel,
 } from "./renderer-commands.js";
 import { installApplicationMenu } from "./window-menu.js";
 import {
@@ -476,7 +477,8 @@ export function createMainWindow(
   installWindowShortcuts(win, {
     run(action) {
       if (action === "tools.toggle") void toggleTools(win);
-      else void openStorage(win);
+      else if (action === "storage.open") void openStorage(win);
+      else void toggleTravel(win);
     },
     changed(shortcuts) {
       installApplicationMenu({

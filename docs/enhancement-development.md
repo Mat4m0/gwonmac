@@ -26,6 +26,9 @@ current optional features are:
 - **Xunlai storage**: open the normal storage UI from the Tools title bar,
   Command-Shift-C, `/chest`, or `/xunlai` in a certified PvE outpost. It has a
   separate Settings opt-in.
+- **Quick Travel palette**: Command-T opens host-owned destination autocomplete
+  and 1–9 shortcuts. A named, bounded Travel action reaches the certified client
+  dispatcher only from the game-thread drain. It has a separate Settings opt-in.
 
 These features then change live. Live observers and commands stop when disabled
 or when map policy refuses them. Host-only authoring remains available without

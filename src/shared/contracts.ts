@@ -37,6 +37,10 @@ import type {
   ShortcutCaptureResult,
   ShortcutOverrides,
 } from "./keyboard-shortcuts.js";
+import {
+  DEFAULT_TRAVEL_SHORTCUTS,
+  type TravelShortcuts,
+} from "./travel.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -328,9 +332,13 @@ export interface AppSettings {
   teamManagement: boolean;
   /** Allow the explicit local Xunlai window command in supported PvE outposts. */
   xunlaiStorage: boolean;
+  /** Allow the focused Travel palette and its explicit map command. */
+  travelPalette: boolean;
+  /** Ordered destinations for the palette's direct 1–9 shortcuts. */
+  travelShortcuts: TravelShortcuts;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
-  /** Player changes to the two app-owned shortcuts; missing entries use defaults. */
+  /** Player changes to the three app-owned shortcuts; missing entries use defaults. */
   shortcutOverrides: ShortcutOverrides;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
@@ -379,6 +387,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   gwonmacTools: false,
   teamManagement: true,
   xunlaiStorage: false,
+  travelPalette: false,
+  travelShortcuts: DEFAULT_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
   extendedMemoryEnabled: false,
@@ -671,6 +681,7 @@ export type RendererCommand =
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
   | { type: "storage.open" }
+  | { type: "travel.toggle" }
   | {
       type: "settings.open";
       pane?: SettingsPane;

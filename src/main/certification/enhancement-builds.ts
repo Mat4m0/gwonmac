@@ -27,7 +27,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
     Object.freeze({
       sha256:
         "7d0ced840d3dc167b823ed0ad6ed411319faf97316345c8e37620e86d86f536e",
-      // Recomputed when the bounded Xunlai action and slash aliases landed. All profiles move
+      // Recomputed when the bounded Travel action landed. All profiles move
       // together whenever the manifest's bytes do, and the manifest carries the
       // transform ABI and every config word -- so a command-only change also
       // changes the output of profiles that do not expose commands.
@@ -40,43 +40,43 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         cursor:
-          "13cac908e7fef7873be2f295fb8cb4348d9b5eaa7188207c96fdc79f688b5bd4",
+          "0d8663dd9bf005f0722d287eb3c83e9d6bfc8552f888d6e618ee7507457c244b",
         target:
-          "2cc29a94e731169d4c1aeeda268635264ac020049a5b02ba14a0d243e8a4755a",
+          "70f1fe8c9aadb4653b3908e57254f89cb34249cc275fa8b8279df694fd190bae",
         cursorTarget:
-          "fc6ceaaeeeb3b6c3b739b36b54fee5c737375716abd263ac88b2538675e706e6",
+          "a99b11b931ecd091f6c493eb25acf128a7e2a19d360da017066ffb3f6aef5742",
         party:
-          "0f089212ec505e6b229d32c57d2a509401613d04aff4cb83685617ec2a5128e6",
+          "6e84233490f32fa754a0249132345f9b09ef98c2bd65f6858454813c20f19998",
         cursorParty:
-          "914f22489fd36c203f5ab1f14cc2b152bd7b27e337ac1e44ea6d580f9e06f0b0",
+          "f764101cc5b57095fe65e32154e6571d3c543c6dae1bdfa6275f4368812beac0",
         targetParty:
-          "f148d0409e007a77905a1c0f5ec727243af3425e42b98f8762413a7a965b8c92",
+          "794fb82a4eeb653ae8a189d2214934a4ab4c14194fbea7c9c00d2aa2c394c290",
         cursorTargetParty:
-          "f7ca4ec0cc5dd9bd89f76a2b4cfc983552827ba34d9dfb77f6a1c62689811d4d",
+          "faa30ad12005cefe7cdd2edca5ad1af77181fe3355be10403f3b47105a96a5f9",
         partyCommands:
-          "878c9409c35e52d580764bc874285f7d0bf37583f13f8e7698f4dd5ba1ca8a7e",
+          "c48095e2bd0c5d945226553d47c169e80142a17430772b80656d5dcf86013cc0",
         cursorPartyCommands:
-          "e96b61673d6f1f675cecd48089ec2daaea367af7ad7f1d13675f79e924f86184",
+          "6876309347c839dc6e95d81407a00b5615ad9c891464112d30a9f66706db997c",
         targetPartyCommands:
-          "dfd9baecfbddf16504b6e83e540e1361edaf2225770a8c5ef0e5f81b03b531e6",
+          "d7e532cdf17d217d8e970b257ea34feaf4b2d23c001ff2a9c746b023dcbdc20b",
         cursorTargetPartyCommands:
-          "b1bc9b05a1d4e0bf055b602a414da8b65d783c35a89381fd498c03f621f4fb02",
+          "c134e23276232fad22404ebe5479684416f62126473687f3c0f26945eb72ecdd",
         partyStorage:
-          "1ca5bbd1734924e44bc250b3855e514d40aba1af83390e213eb651c262e2be1b",
+          "84be9b4d06e434ac74fa04c80cca58b6102694ac54a22072b8531aeaf2377f24",
         cursorPartyStorage:
-          "16b9654e24ce51c6a3b3abecb489c6e8f01d9eb0881e41891ce632b5d6fa2eed",
+          "d11f190e2e7982da5e21636c45600bbc79a699e81bd804ef9f16f87a1da93048",
         targetPartyStorage:
-          "ed3e5ffa293f290f445974fcb41af2b4d90e270a66d5251e3ae4544eae062cdd",
+          "e681b50367efbcc933d4c4e9f529cfffa94d38d3f0e25176e4900c66c0d0bf60",
         cursorTargetPartyStorage:
-          "749e046ef6a887088854d105a6dffad89247896ec237f5c3f9570eade47e9682",
+          "15fff41f382574ec664674841e75dc2c11ff3f0877abfcfc03d92129a6b3afcc",
         partyCommandsStorage:
-          "e9c500238b12dc2bb04e3916fff9f6304e50d10186e067fb15c35979459b5e43",
+          "4e1b14bc5725ca2ff1c620c6db89bd34f426ba5b4efa043d0c42280d645ceb5e",
         cursorPartyCommandsStorage:
-          "e25740cb04c8ceb005251d3d4ea537526a01f5437e6c3f05f541cd35305f6fc1",
+          "ac124f6c29774a2211bac75ca60694ae8a2f13494f7f4f7d220059ac467d8d80",
         targetPartyCommandsStorage:
-          "71d6053fcfbe8bc7f9343701c22ab299b3637e7344c130ac5ccc113eed36f80d",
+          "d780fb35bee8fb3fbafa8a06ff24a63b787b6a90fef6714dc586eca9c2e817ba",
         cursorTargetPartyCommandsStorage:
-          "4d70f15840fcdfcc4bc07933704863c1c125c0e330dd63de45a3f4beee9fc2ac",
+          "cc15e0c84bf98aea363ff1cb23a0ad6534dd953ef0252d23a8574f1368f39565",
       }),
       programId: 1,
       // Function #477 returns 38,833 as a single i32 constant. The same function
@@ -169,6 +169,23 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       storage: Object.freeze({
         openExport: "enhancement_open_storage",
         configureExport: "enhancement_configure_storage",
+        travel: Object.freeze({
+          enqueueExport: "enhancement_travel",
+          configureExport: "enhancement_configure_travel",
+          // Current GWCA names this kTravel (0x10000183). ChCliMap #16199
+          // writes its four scalar arguments to {map, region, language,
+          // district} and sends this message through the certified dispatcher.
+          messageId: 0x1000_0183,
+          producer: Object.freeze({
+            functionIndex: 16199,
+            params: Object.freeze([
+              "i32", "i32", "i32", "i32", "i32",
+            ] as const),
+            results: Object.freeze([] as const),
+            bodySha256:
+              "47c2f33dc98226fbb1596d60b2dfe76a9a19f645e94330a0582a6dc50d5be595",
+          }),
+        }),
         // Chat command parser #13703 receives the complete UTF-16 line and
         // returns one when a slash command was handled. It is the first of
         // the two parsers called by chat submit #13714, before the normal

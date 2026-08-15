@@ -2,7 +2,7 @@
  * Canonical app-shortcut actions, defaults, persistence shapes, and pure operations.
  * Main and renderer consume this one model so interception and presentation agree.
  */
-export const SHORTCUT_ACTIONS = ["tools.toggle", "storage.open"] as const;
+export const SHORTCUT_ACTIONS = ["tools.toggle", "storage.open", "travel.open"] as const;
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number];
 
 export interface ShortcutBinding {
@@ -26,12 +26,14 @@ export const DEFAULT_SHORTCUTS: Readonly<Record<ShortcutAction, ShortcutBinding>
   Object.freeze({
     "tools.toggle": Object.freeze({ key: "b", shift: false, option: false }),
     "storage.open": Object.freeze({ key: "c", shift: true, option: false }),
+    "travel.open": Object.freeze({ key: "t", shift: false, option: false }),
   });
 
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
     "tools.toggle": "Toggle Tools",
     "storage.open": "Open Xunlai storage",
+    "travel.open": "Open Travel",
   });
 
 export interface ShortcutInput {
@@ -77,6 +79,9 @@ export function resolveShortcuts(
     "storage.open": overrides["storage.open"] === undefined
       ? DEFAULT_SHORTCUTS["storage.open"]
       : overrides["storage.open"],
+    "travel.open": overrides["travel.open"] === undefined
+      ? DEFAULT_SHORTCUTS["travel.open"]
+      : overrides["travel.open"],
   });
 }
 

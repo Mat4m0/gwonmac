@@ -45,6 +45,8 @@ import type {
   EnhancementCommandEnqueue,
 } from "./enhancement-team-commands.js";
 import type { StorageInstallation } from "./enhancement-storage-installation.js";
+import type { TravelInstallation } from "./enhancement-travel-installation.js";
+import type { TravelGameState } from "../shared/travel-command.js";
 import {
   COMPANION_ABI as COMPANION_DESCRIPTOR,
 } from "../shared/companion-abi.js";
@@ -129,7 +131,7 @@ export async function installCertifiedCompanion(
   // launches always receive `none`; developer observers request their scalar
   // projection explicitly without implicitly mounting the Toolbox overlay.
   const foundation = capabilities.partyObservation;
-  const observeState = capabilities.targetObservation;
+  const observeState = capabilities.targetObservation || capabilities.storage;
   const publishObserverState = program === "target-observer";
   const featureFlags =
     (capabilities.nativeCursor ? ENHANCEMENT_FEATURE_NATIVE_CURSOR : 0)
@@ -185,6 +187,10 @@ export async function installCertifiedCompanion(
   const storageInstallation: StorageInstallation | null = capabilities.storage
     ? (await import("./enhancement-storage-installation.js"))
         .createStorageInstallation(exports, true)
+    : null;
+  const travelInstallation: TravelInstallation | null = capabilities.storage
+    ? (await import("./enhancement-travel-installation.js"))
+        .createTravelInstallation(exports, true)
     : null;
   // The guard above proves `free` is callable, but WebAssembly exports are typed
   // as the bare `Function`, so the kernel's ABI has to be named here or the five
@@ -249,6 +255,7 @@ export async function installCertifiedCompanion(
     if (partyPointer) free(partyPointer);
     if (payloadPointer) free(payloadPointer);
     storageInstallation?.dispose(free);
+    travelInstallation?.dispose(free);
     if (professionTracePointer) free(professionTracePointer);
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
@@ -299,6 +306,7 @@ export async function installCertifiedCompanion(
       }
     }
     storageInstallation?.allocate(exports.malloc as (bytes: number) => unknown);
+    travelInstallation?.allocate(exports.malloc as (bytes: number) => unknown);
     if (
       !runtimeAllocation
       || !configPointer
@@ -308,6 +316,7 @@ export async function installCertifiedCompanion(
       || (foundation && !partyPointer)
       || (capabilities.commands && !payloadPointer)
       || (storageInstallation !== null && !storageInstallation.region().pointer)
+      || (travelInstallation !== null && !travelInstallation.region().pointer)
       || (
         capabilities.commands
         && window.gwNative.init.development
@@ -355,6 +364,7 @@ export async function installCertifiedCompanion(
           ]
         : []),
       ...(storageInstallation === null ? [] : [storageInstallation.region()]),
+      ...(travelInstallation === null ? [] : [travelInstallation.region()]),
     ];
     for (const region of ownedRegions) {
       const end = region.pointer + region.size;
@@ -407,6 +417,7 @@ export async function installCertifiedCompanion(
       manifest.configWords.length,
     ).set(manifest.configWords);
     storageInstallation?.initialize(memory);
+    travelInstallation?.initialize();
 
     const response = await fetch("companion-kernel.wasm");
     if (!response.ok) throw new Error("Companion kernel is unavailable");
@@ -598,6 +609,7 @@ export async function installCertifiedCompanion(
     // The command module owns values and reviewed opcodes; the installer owns
     // the live permission gate and hands it the freshest observed party.
     let toolboxObservation: ToolboxObservation | null = null;
+    let companionState: TravelGameState | null = null;
     const teamEnabled = () => policy().teamManagement;
     const syncActiveObservers = () => {
       const active =
@@ -645,7 +657,15 @@ export async function installCertifiedCompanion(
         observation: toolboxObservation,
       });
     };
+    const syncTravelPolicy = () => {
+      travelInstallation?.update({
+        enabled: policy().travelPalette,
+        playRegion: playRegion(),
+        state: companionState,
+      });
+    };
     storageInstallation?.mount();
+    travelInstallation?.mount(document.body);
     const storage = storageInstallation?.command() ?? null;
     const toolbox = foundation
       ? createToolboxLifecycle(document.body, {
@@ -675,6 +695,7 @@ export async function installCertifiedCompanion(
       setTargetEnabled();
       syncActiveObservers();
       syncStoragePolicy();
+      syncTravelPolicy();
     };
     window.addEventListener("gw:tools-settings", onToolSettings);
     disposeToolSettings = () =>
@@ -686,6 +707,7 @@ export async function installCertifiedCompanion(
     // Apply opt-in state before the callback becomes reachable from the game.
     syncActiveObservers();
     syncStoragePolicy();
+    syncTravelPolicy();
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;
     const observerRuntime = {
@@ -780,6 +802,7 @@ export async function installCertifiedCompanion(
       polledCursor,
       observeState
         ? { update: (state) => {
+            companionState = state;
             const next: RuntimePlayRegion = state.status === "ready"
               && (state.playRegion === "pve" || state.playRegion === "pvp")
               ? state.playRegion
@@ -790,8 +813,10 @@ export async function installCertifiedCompanion(
               setTargetEnabled();
               syncActiveObservers();
               syncStoragePolicy();
+              syncTravelPolicy();
             }
             readout?.update(state);
+            syncTravelPolicy();
           } }
         : null,
       foundation
@@ -814,6 +839,7 @@ export async function installCertifiedCompanion(
               syncActiveObservers();
             }
             syncStoragePolicy();
+            syncTravelPolicy();
             toolbox?.update(state);
           } }
         : null,

@@ -216,6 +216,7 @@ declare global {
       enabled: boolean;
       teamManagement: boolean;
       xunlaiStorage: boolean;
+      travelPalette: boolean;
       targetReadout: boolean;
     }>;
     gwLoading: LoadingController;

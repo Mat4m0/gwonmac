@@ -261,6 +261,19 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     storage: {
       openExport: "enhancement_open_storage",
       configureExport: "enhancement_configure_storage",
+      travel: {
+        enqueueExport: "enhancement_travel",
+        configureExport: "enhancement_configure_travel",
+        messageId: 0x1000_0183,
+        producer: {
+          functionIndex: 4,
+          params: ["i32", "i32", "i32", "i32", "i32"],
+          results: [],
+          bodySha256: createHash("sha256")
+            .update(commandBody(bytes, 1))
+            .digest("hex"),
+        },
+      },
       slashParser: {
           functionIndex: 12,
           params: ["i32", "i32"],
