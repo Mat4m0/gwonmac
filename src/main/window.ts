@@ -40,8 +40,16 @@ import { logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
-import { sendRendererCommand, toggleTools } from "./renderer-commands.js";
+import {
+  openStorage,
+  sendRendererCommand,
+  toggleTools,
+} from "./renderer-commands.js";
 import { installApplicationMenu } from "./window-menu.js";
+import {
+  installWindowShortcuts,
+  updateWindowShortcuts,
+} from "./window-shortcuts.js";
 import { windowRegistry, type WindowContext } from "./window-registry.js";
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
@@ -449,7 +457,7 @@ export function createMainWindow(
     return { action: "deny" };
   });
 
-  // Cmd/Ctrl+B, decided in the main process before the page sees the key.
+  // App shortcuts are decided in the main process before the page sees the key.
   //
   // A menu accelerator is not enough, and the reason is the opposite of what it
   // looks like: Electron dispatches a key to the page first and only considers
@@ -465,12 +473,26 @@ export function createMainWindow(
   // The View menu item carries the same accelerator with
   // `registerAccelerator: false`, so the shortcut is still shown and
   // discoverable without also being bound and fired twice.
-  win.webContents.on("before-input-event", (event, input) => {
-    if (input.type !== "keyDown") return;
-    if (input.key.toLowerCase() !== "b") return;
-    if (!(input.meta || input.control) || input.shift || input.alt) return;
-    event.preventDefault();
-    void toggleTools(win);
+  installWindowShortcuts(win, {
+    run(action) {
+      if (action === "tools.toggle") void toggleTools(win);
+      else void openStorage(win);
+    },
+    changed(shortcuts) {
+      installApplicationMenu({
+        host,
+        win,
+        shortcuts,
+        resetWindowState: () => resetWindowState(win),
+      });
+    },
+  });
+  void host.getSettings().then((settings) => {
+    if (!win.isDestroyed()) {
+      updateWindowShortcuts(win, settings.shortcutOverrides);
+    }
+  }).catch((error) => {
+    logEvent({ k: "settings.loadFailed", code: errorCode(error) });
   });
 
   win.webContents.on("will-navigate", (event, url) => {

@@ -5,6 +5,106 @@ import { closeOffline, launchOffline } from "./fixtures.mjs";
 import { packageVersion } from "./settings-test-fixture.mjs";
 
 test.describe("tools and update settings", () => {
+  test("records, replaces, clears, and restores app shortcuts without firing them", async () => {
+    const fixture = await launchOffline("gw-settings-shortcuts-e2e-");
+    try {
+      const { app, page } = fixture;
+      const sendInput = (
+        keyCode: string,
+        modifiers: Array<"meta" | "shift"> = [],
+      ) => app.evaluate(({ BrowserWindow }, input) => {
+        const contents = BrowserWindow.getAllWindows()[0]?.webContents;
+        contents?.sendInputEvent({
+          type: "keyDown",
+          keyCode: input.keyCode,
+          modifiers: input.modifiers,
+        });
+        contents?.sendInputEvent({
+          type: "keyUp",
+          keyCode: input.keyCode,
+          modifiers: input.modifiers,
+        });
+      }, { keyCode, modifiers });
+      await app.evaluate(({ Menu }) => {
+        Menu.getApplicationMenu()
+          ?.items[0]?.submenu?.items.find((item) => item.label === "Settings…")
+          ?.click();
+      });
+      await page.locator("#settings-tab-controls").click();
+
+      const toolsRow = page.locator('[data-shortcut-action="tools.toggle"]');
+      const storageRow = page.locator('[data-shortcut-action="storage.open"]');
+      await expect(toolsRow.locator("kbd")).toHaveText("⌘B");
+      await expect(storageRow.locator("kbd")).toHaveText("⌘⇧C");
+
+      await page.evaluate(() => {
+        document.body.dataset.shortcutActions = "0";
+        window.addEventListener("gw:tools-toggle", (event) => {
+          event.preventDefault();
+          document.body.dataset.shortcutActions = String(
+            Number(document.body.dataset.shortcutActions ?? "0") + 1,
+          );
+        });
+      });
+
+      await toolsRow.locator(".settings-shortcut-change").click();
+      await expect(toolsRow.locator("kbd")).toHaveText("Press shortcut…");
+      await sendInput("B", ["meta"]);
+      await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({
+          shortcutOverrides: {},
+        });
+      await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "0");
+
+      await toolsRow.locator(".settings-shortcut-change").click();
+      await expect(toolsRow.locator("kbd")).toHaveText("Press shortcut…");
+      await sendInput("K", ["meta", "shift"]);
+      await expect.poll(async () => ({
+        key: await toolsRow.locator("kbd").textContent(),
+        message: await toolsRow.locator(".settings-shortcut-message").textContent(),
+        change: await toolsRow.locator(".settings-shortcut-change").textContent(),
+      })).toEqual({ key: "⌘⇧K", message: "", change: "Change" });
+      await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({
+          shortcutOverrides: {
+            "tools.toggle": { key: "k", shift: true, option: false },
+          },
+        });
+      await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "0");
+      expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu()
+        ?.getMenuItemById("toggle-tools")?.accelerator)).toBe("CmdOrCtrl+Shift+K");
+
+      await storageRow.locator(".settings-shortcut-change").click();
+      await sendInput("K", ["meta", "shift"]);
+      await expect(storageRow.locator(".settings-shortcut-message"))
+        .toContainText("used by Toggle Tools");
+      await storageRow.locator(".settings-shortcut-replace").click();
+      await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({
+          shortcutOverrides: {
+            "tools.toggle": null,
+            "storage.open": { key: "k", shift: true, option: false },
+          },
+        });
+      await expect(toolsRow.locator("kbd")).toHaveText("Not set");
+
+      await storageRow.locator(".settings-shortcut-change").click();
+      await sendInput("Backspace");
+      await expect(storageRow.locator("kbd")).toHaveText("Not set");
+
+      await page.locator("#settings-shortcuts-restore").click();
+      await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({ shortcutOverrides: {} });
+      await expect(toolsRow.locator("kbd")).toHaveText("⌘B");
+      await expect(storageRow.locator("kbd")).toHaveText("⌘⇧C");
+      await page.locator("#settings-done").click();
+      await sendInput("B", ["meta"]);
+      await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "1");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("the application menu opens Settings and the dedicated Updates pane", async () => {
     const fixture = await launchOffline("gw-settings-menu-e2e-");
     try {
@@ -242,6 +342,7 @@ test.describe("tools and update settings", () => {
       await expect(controls).toContainText("Apply teams in Guild Wars");
       await expect(page.locator('input[name="nativeCursor"]')).toHaveCount(0);
       await expect(page.locator('input[name="teamManagement"]')).toBeDisabled();
+      await expect(page.locator('input[name="xunlaiStorage"]')).toBeDisabled();
       await expect(page.locator('input[name="targetReadout"]')).toBeDisabled();
       expect(
         await page.evaluate(
@@ -305,7 +406,11 @@ test.describe("tools and update settings", () => {
         return {
           quit,
           relaunch,
-          confirmation: confirmation.buttons,
+          confirmation: {
+            buttons: confirmation.buttons,
+            detail: confirmation.detail,
+            message: confirmation.message,
+          },
           warning: {
             buttons: warning.buttons,
             detail: warning.detail,
@@ -315,7 +420,12 @@ test.describe("tools and update settings", () => {
       })).toEqual({
         quit: false,
         relaunch: true,
-        confirmation: ["Enable and Restart", "Cancel"],
+        confirmation: {
+          buttons: ["Enable and Restart", "Cancel"],
+          detail:
+            "GWonMac prepares every certified Tools capability together. Restart once to use the saved change. This closes Guild Wars if it is running.",
+          message: "Restart to enable optional Tools?",
+        },
         warning: {
           buttons: ["OK"],
           detail: "Your change is saved. Quit and reopen GWonMac to apply it.",
@@ -331,7 +441,7 @@ test.describe("tools and update settings", () => {
     }
   });
 
-  test("features omitted at startup require a restart before they can be enabled", async () => {
+  test("child Tools toggles stay immediate after the one preparation restart", async () => {
     const fixture = await launchOffline(
       "gw-tools-capability-restart-e2e-",
       {},
@@ -342,6 +452,7 @@ test.describe("tools and update settings", () => {
             gwonmacTools: true,
             targetReadout: false,
             teamManagement: false,
+            xunlaiStorage: false,
           }),
           { mode: 0o600 },
         );
@@ -363,14 +474,19 @@ test.describe("tools and update settings", () => {
       await page.evaluate(async () => {
         await window.gwNative.settings.set({ targetReadout: true });
         await window.gwNative.settings.set({ teamManagement: true });
+        await window.gwNative.settings.set({ xunlaiStorage: true });
+        await window.gwNative.settings.set({ gwonmacTools: false });
+        await window.gwNative.settings.set({ gwonmacTools: true });
       });
       expect(await app.evaluate(() => globalThis.__capabilityRestartMessages))
-        .toEqual([
-          "Restart to enable Target distance?",
-          "Restart to enable Apply team?",
-        ]);
+        .toEqual([]);
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
-        .toMatchObject({ targetReadout: false, teamManagement: false });
+        .toMatchObject({
+          targetReadout: true,
+          teamManagement: true,
+          xunlaiStorage: true,
+          gwonmacTools: true,
+        });
     } finally {
       await closeOffline(fixture);
     }

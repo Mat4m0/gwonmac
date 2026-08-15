@@ -8,6 +8,7 @@ export type OptionalToolSettings = Readonly<{
   enabled: boolean;
   targetReadout: boolean;
   teamManagement: boolean;
+  xunlaiStorage: boolean;
 }>;
 
 export type RuntimePlayRegion = "pve" | "pvp" | "unknown";
@@ -33,7 +34,11 @@ export function enhancementRuntimePolicy(
 ) {
   const pve = playRegion === "pve";
   const developerToolbox = program === "toolbox-foundation"
-    || program === "toolbox-commands";
+    || program === "toolbox-commands"
+    || program === "xunlai-storage";
+  const developerTeam = program === "toolbox-commands";
+  const developerStorage = program === "toolbox-commands"
+    || program === "xunlai-storage";
   return Object.freeze({
     // The saved Build/Team library is local UI. It remains reachable at the
     // login screen, in PvP, and while live game observations are unavailable.
@@ -41,7 +46,10 @@ export function enhancementRuntimePolicy(
     targetReadout: program === "target-observer"
       || (settings.enabled && settings.targetReadout && pve),
     teamManagement: pve && (
-      developerToolbox || (settings.enabled && settings.teamManagement)
+      developerTeam || (settings.enabled && settings.teamManagement)
+    ),
+    xunlaiStorage: pve && (
+      developerStorage || (settings.enabled && settings.xunlaiStorage)
     ),
   });
 }

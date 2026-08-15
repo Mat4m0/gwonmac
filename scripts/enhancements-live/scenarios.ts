@@ -565,6 +565,36 @@ async function runCursorCapture({ readCursorProjection, wait }: ObservationConte
 const noEvidence = async () => null;
 const acceptEvidence = () => {};
 
+async function runXunlaiStorage({ page }: AutomationContext) {
+  return page.evaluate(async () => {
+    const attempt = () => {
+      const detail: { error?: unknown } = {};
+      const event = new CustomEvent("gw:storage-open", {
+        cancelable: true,
+        detail,
+      });
+      window.dispatchEvent(event);
+      return {
+        handled: event.defaultPrevented,
+        error: detail.error instanceof Error
+          ? detail.error.message
+          : detail.error
+            ? String(detail.error)
+            : null,
+      };
+    };
+    const button = document.querySelector<HTMLButtonElement>(".window-storage");
+    const first = attempt();
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    return {
+      enabled: window.gwToolsSettings().xunlaiStorage,
+      buttonDisabled: button?.disabled ?? null,
+      first,
+      second: attempt(),
+    };
+  });
+}
+
 
 export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
   // Reaching a playable character is itself a keypress, so the scenarios that
@@ -644,6 +674,25 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
         || evidence.panelState !== 1
       ) {
         throw new Error("hero panel observation did not settle correctly");
+      }
+    },
+  }),
+  "xunlai-storage": Object.freeze({
+    tier: "automation",
+    program: "xunlai-storage",
+    readiness: "toolbox",
+    run: runXunlaiStorage,
+    validate(result: { evidence?: Awaited<ReturnType<typeof runXunlaiStorage>> }) {
+      const evidence = result.evidence;
+      if (
+        !evidence?.enabled
+        || evidence.buttonDisabled !== false
+        || !evidence.first.handled
+        || evidence.first.error !== null
+        || !evidence.second.handled
+        || evidence.second.error !== null
+      ) {
+        throw new Error("Xunlai storage did not complete both live game-thread actions");
       }
     },
   }),

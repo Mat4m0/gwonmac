@@ -5,31 +5,51 @@ import {
   runtimePlayRegion,
 } from "../../src/renderer/enhancement-runtime-policy.js";
 
-const off = Object.freeze({ enabled: false, targetReadout: false, teamManagement: false });
+const off = Object.freeze({
+  enabled: false,
+  targetReadout: false,
+  teamManagement: false,
+  xunlaiStorage: false,
+});
 
 test("developer programs replace saved optional-tool selection in PvE", () => {
   assert.deepEqual(enhancementRuntimePolicy("toolbox-foundation", off, "pve"), {
     tools: true,
     targetReadout: false,
-    teamManagement: true,
+    teamManagement: false,
+    xunlaiStorage: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
     tools: true,
     targetReadout: false,
     teamManagement: true,
+    xunlaiStorage: true,
+  });
+  assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
+    tools: true,
+    targetReadout: false,
+    teamManagement: false,
+    xunlaiStorage: true,
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
     tools: false,
     targetReadout: true,
     teamManagement: false,
+    xunlaiStorage: false,
   });
 });
 
 test("unknown and PvP regions fail closed for every optional command surface", () => {
-  const on = Object.freeze({ enabled: true, targetReadout: true, teamManagement: true });
+  const on = Object.freeze({
+    enabled: true,
+    targetReadout: true,
+    teamManagement: true,
+    xunlaiStorage: true,
+  });
   for (const region of ["unknown", "pvp"] as const) {
     assert.equal(enhancementRuntimePolicy("toolbox-commands", on, region).teamManagement, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).teamManagement, false);
+    assert.equal(enhancementRuntimePolicy("none", on, region).xunlaiStorage, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).targetReadout, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).tools, true);
   }
@@ -47,10 +67,12 @@ test("product tool settings remain live once the capability is present", () => {
     enabled: true,
     targetReadout: false,
     teamManagement: true,
+    xunlaiStorage: false,
   }, "pve"), {
     tools: true,
     targetReadout: false,
     teamManagement: true,
+    xunlaiStorage: false,
   });
 });
 
@@ -62,24 +84,29 @@ test("local Tools availability never depends on a live-game safety gate", () => 
     "target-observer",
     "toolbox-foundation",
     "toolbox-commands",
+    "xunlai-storage",
   ] as const;
   for (const program of programs) {
     for (const playRegion of regions) {
       for (const enabled of [false, true]) {
         for (const teamManagement of [false, true]) {
           for (const targetReadout of [false, true]) {
-            const policy = enhancementRuntimePolicy(program, {
-              enabled,
-              teamManagement,
-              targetReadout,
-            }, playRegion);
-            assert.equal(
-              policy.tools,
-              enabled
-                || program === "toolbox-foundation"
-                || program === "toolbox-commands",
-              `${program}/${playRegion} coupled local Tools to a live feature`,
-            );
+            for (const xunlaiStorage of [false, true]) {
+              const policy = enhancementRuntimePolicy(program, {
+                enabled,
+                teamManagement,
+                xunlaiStorage,
+                targetReadout,
+              }, playRegion);
+              assert.equal(
+                policy.tools,
+                enabled
+                  || program === "toolbox-foundation"
+                  || program === "toolbox-commands"
+                  || program === "xunlai-storage",
+                `${program}/${playRegion} coupled local Tools to a live feature`,
+              );
+            }
           }
         }
       }

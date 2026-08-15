@@ -27,11 +27,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
     Object.freeze({
       sha256:
         "7d0ced840d3dc167b823ed0ad6ed411319faf97316345c8e37620e86d86f536e",
-      // Recomputed when the attribute layout landed, as they were for the party
-      // layout before it. All profiles move together whenever the manifest's bytes
-      // do, and the manifest carries the transform ABI and every config word --
-      // so growing the layout changes the output of profiles that do not use one
-      // word of it.
+      // Recomputed when the bounded Xunlai action and slash aliases landed. All profiles move
+      // together whenever the manifest's bytes do, and the manifest carries the
+      // transform ABI and every config word -- so a command-only change also
+      // changes the output of profiles that do not expose commands.
       //
       // `pnpm check` cannot catch a stale value here. The transform input is a
       // derived game binary this repository does not contain, so nothing in the
@@ -41,27 +40,43 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         cursor:
-          "7d6f7abd539597d402a130075e208872dd5d2f94543602a4b19039f3cdc8d8a3",
+          "13cac908e7fef7873be2f295fb8cb4348d9b5eaa7188207c96fdc79f688b5bd4",
         target:
-          "f0b25e149db917095a1e2f752ef59cb92928775844324decdede2c64561b8fcd",
+          "2cc29a94e731169d4c1aeeda268635264ac020049a5b02ba14a0d243e8a4755a",
         cursorTarget:
-          "a34ce7d430b730145f31e6a08cc60039a1317b1549f1eed562c458c40afbac89",
+          "fc6ceaaeeeb3b6c3b739b36b54fee5c737375716abd263ac88b2538675e706e6",
         party:
-          "7a2e4da45a3f291da9d803ff2ea4a51ba098f136f80e9920b8571436017a5bf2",
+          "0f089212ec505e6b229d32c57d2a509401613d04aff4cb83685617ec2a5128e6",
         cursorParty:
-          "3e9c925667e37835aa1d9f0e29cf02d63e6fd47e1e1fea3c6ed9e0c63c7ea4f9",
+          "914f22489fd36c203f5ab1f14cc2b152bd7b27e337ac1e44ea6d580f9e06f0b0",
         targetParty:
-          "0079159fa9ac949d915387b48b8837231a161872844f39b40f9e3b3946dcb9f6",
+          "f148d0409e007a77905a1c0f5ec727243af3425e42b98f8762413a7a965b8c92",
         cursorTargetParty:
-          "91795a11bb745876f63ed5649b85789c96a71406052df1bd264c6133c1753f39",
+          "f7ca4ec0cc5dd9bd89f76a2b4cfc983552827ba34d9dfb77f6a1c62689811d4d",
         partyCommands:
-          "7c2c477e1e139252636c854cb82a3c3e07a4dfa4aa4c3a837146666c7fdebc28",
+          "878c9409c35e52d580764bc874285f7d0bf37583f13f8e7698f4dd5ba1ca8a7e",
         cursorPartyCommands:
-          "a0484cf8bf0e966501b8c434764b1cdcc1b6596a0fd80a9de124838a04e19853",
+          "e96b61673d6f1f675cecd48089ec2daaea367af7ad7f1d13675f79e924f86184",
         targetPartyCommands:
-          "b2bbf79650f543f5b33da93f4837bf51dfab4ba5f4dd1f16aed3a1669aeb6841",
+          "dfd9baecfbddf16504b6e83e540e1361edaf2225770a8c5ef0e5f81b03b531e6",
         cursorTargetPartyCommands:
-          "c68e0e5eff1e2e7615592cd18bd2bcb3833e732d21abbc9574adc013a11d469a",
+          "b1bc9b05a1d4e0bf055b602a414da8b65d783c35a89381fd498c03f621f4fb02",
+        partyStorage:
+          "1ca5bbd1734924e44bc250b3855e514d40aba1af83390e213eb651c262e2be1b",
+        cursorPartyStorage:
+          "16b9654e24ce51c6a3b3abecb489c6e8f01d9eb0881e41891ce632b5d6fa2eed",
+        targetPartyStorage:
+          "ed3e5ffa293f290f445974fcb41af2b4d90e270a66d5251e3ae4544eae062cdd",
+        cursorTargetPartyStorage:
+          "749e046ef6a887088854d105a6dffad89247896ec237f5c3f9570eade47e9682",
+        partyCommandsStorage:
+          "e9c500238b12dc2bb04e3916fff9f6304e50d10186e067fb15c35979459b5e43",
+        cursorPartyCommandsStorage:
+          "e25740cb04c8ceb005251d3d4ea537526a01f5437e6c3f05f541cd35305f6fc1",
+        targetPartyCommandsStorage:
+          "71d6053fcfbe8bc7f9343701c22ab299b3637e7344c130ac5ccc113eed36f80d",
+        cursorTargetPartyCommandsStorage:
+          "4d70f15840fcdfcc4bc07933704863c1c125c0e330dd63de45a3f4beee9fc2ac",
       }),
       programId: 1,
       // Function #477 returns 38,833 as a single i32 constant. The same function
@@ -151,6 +166,48 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           agentType: 0x9c,
         }),
       }),
+      storage: Object.freeze({
+        openExport: "enhancement_open_storage",
+        configureExport: "enhancement_configure_storage",
+        // Chat command parser #13703 receives the complete UTF-16 line and
+        // returns one when a slash command was handled. It is the first of
+        // the two parsers called by chat submit #13714, before the normal
+        // path reports an unknown command.
+        slashParser: Object.freeze({
+          functionIndex: 13703,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256:
+            "156c4345c79e43c20b136fa37581d80a62fcf73cf290cabe308ac259387517df",
+        }),
+        // ChCliStoc #8978 is the DataWindow handler. Its seven-way branch
+        // reads `type` at +4; branch zero reads `agent` at +0 and the two
+        // storage unlock bits from `data` at +8, then emits
+        // kShowXunlaiChest (0x10000040). The command supplies the same
+        // header-stripped { agent: 0, type: 0, data: 3 } payload as the
+        // normal server-to-client decoder.
+        handler: Object.freeze({
+          functionIndex: 8978,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "0a46adca4dd597f9430c23457f6ce6ff7ccdfbdaf4a77b449a8158e2c595189a",
+        }),
+      }),
+      gameThread: Object.freeze({
+        // GWCA's `GameThread::Enqueue` hooks this recurring frame callback. Its
+        // source anchor is FrApi.cpp's unique `renderElapsed >= 0` assertion;
+        // the active table relation below proves this is the registered callback,
+        // not the nearby one-time frame/message initializer (#6659).
+        drain: Object.freeze({
+          functionIndex: 6661,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          tableSlot: 1721,
+          bodySha256:
+            "9fb1ca0dee40f5ceef3d0174846ef38af47a8366bfe76cb8da12e86419b40c41",
+        }),
+      }),
       teamApply: Object.freeze({
         thunkExport: "enhancement_command",
         professionTrace: Object.freeze({
@@ -165,18 +222,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
             bodySha256:
               "d7f7c74b9cb14ba957ed8de7e74cc18167a3b688301d5f3d765ba04770a8b361",
           }),
-        }),
-        // GWCA's `GameThread::Enqueue` hooks this recurring frame callback. Its
-        // source anchor is FrApi.cpp's unique `renderElapsed >= 0` assertion;
-        // the active table relation below proves this is the registered callback,
-        // not the nearby one-time frame/message initializer (#6659).
-        drain: Object.freeze({
-          functionIndex: 6661,
-          params: Object.freeze(["i32", "i32"] as const),
-          results: Object.freeze([] as const),
-          tableSlot: 1721,
-          bodySha256:
-            "9fb1ca0dee40f5ceef3d0174846ef38af47a8366bfe76cb8da12e86419b40c41",
         }),
         entries: Object.freeze([
           Object.freeze({

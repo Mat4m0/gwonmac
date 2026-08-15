@@ -151,6 +151,7 @@ try {
       targetObservation: false,
       partyObservation: false,
       commands: false,
+      storage: false,
     },
     compatibilityCacheRoot: join(selectionScratch, "compatibility"),
     enhancementCacheRoot: join(selectionScratch, "enhancements"),

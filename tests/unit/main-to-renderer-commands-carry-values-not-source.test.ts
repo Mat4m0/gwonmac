@@ -96,6 +96,7 @@ function harness(argv: string[]) {
   // when nothing claims it — the ordinary case on a launch without the
   // capability.
   let toolboxListening = false;
+  let storageListening = false;
   const window = {
     gwNative: api,
     gwDiagnostics: {
@@ -120,10 +121,12 @@ function harness(argv: string[]) {
     CustomEvent: class {
       readonly type: string;
       readonly cancelable: boolean;
+      readonly detail: unknown;
       defaultPrevented = false;
-      constructor(type: string, init?: { cancelable?: boolean }) {
+      constructor(type: string, init?: { cancelable?: boolean; detail?: unknown }) {
         this.type = type;
         this.cancelable = Boolean(init?.cancelable);
+        this.detail = init?.detail;
       }
       preventDefault() {
         if (this.cancelable) this.defaultPrevented = true;
@@ -136,6 +139,9 @@ function harness(argv: string[]) {
     }) {
       dispatched.push(event.type);
       if (toolboxListening && event.type === "gw:tools-toggle") {
+        event.preventDefault();
+      }
+      if (storageListening && event.type === "gw:storage-open") {
         event.preventDefault();
       }
       return !event.defaultPrevented;
@@ -165,6 +171,9 @@ function harness(argv: string[]) {
     window,
     installToolbox: () => {
       toolboxListening = true;
+    },
+    installStorage: () => {
+      storageListening = true;
     },
   };
 }
@@ -225,18 +234,22 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
   fixture.deliver(3, { type: "diagnostics.toggle" });
   fixture.installToolbox();
   fixture.deliver(4, { type: "tools.toggle" });
+  fixture.installStorage();
+  fixture.deliver(5, { type: "storage.open" });
   await new Promise(setImmediate);
   assert.deepEqual(fixture.dispatched, [
     "gw:input-reset",
     "gw:settings",
     "gw:diagnostics-toggle",
     "gw:tools-toggle",
+    "gw:storage-open",
   ]);
   assert.deepEqual(fixture.acknowledgements(), [
     [1, "completed"],
     [2, "completed"],
     [3, "completed"],
     [4, "completed"],
+    [5, "completed"],
   ]);
 });
 

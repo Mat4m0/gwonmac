@@ -34,6 +34,10 @@ import type {
   AccountTemplateLibrary,
 } from "./accounts-contracts.js";
 import type {
+  ShortcutCaptureResult,
+  ShortcutOverrides,
+} from "./keyboard-shortcuts.js";
+import type {
   EnhancementProgram,
   EnhancementSelection,
 } from "./enhancement-contracts.js";
@@ -322,8 +326,12 @@ export interface AppSettings {
   gwonmacTools: boolean;
   /** Allow explicit Apply team commands when live-game policy also permits. */
   teamManagement: boolean;
+  /** Allow the explicit local Xunlai window command in supported PvE outposts. */
+  xunlaiStorage: boolean;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
+  /** Player changes to the two app-owned shortcuts; missing entries use defaults. */
+  shortcutOverrides: ShortcutOverrides;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
   showDiagnostics: boolean;
@@ -370,7 +378,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiPanelOpacity: 94,
   gwonmacTools: false,
   teamManagement: true,
+  xunlaiStorage: false,
   targetReadout: false,
+  shortcutOverrides: {},
   extendedMemoryEnabled: false,
   showDiagnostics: false,
   dataStrategy: null,
@@ -540,6 +550,7 @@ export interface ClientCompatibility {
     targetObservation: OptionalFeatureStatus;
     partyObservation: OptionalFeatureStatus;
     teamApply: OptionalFeatureStatus;
+    xunlaiStorage: OptionalFeatureStatus;
   }>;
 }
 
@@ -548,6 +559,7 @@ export const ENHANCEMENT_RUNTIME_FEATURES = [
   "targetObservation",
   "partyObservation",
   "teamApply",
+  "xunlaiStorage",
 ] as const;
 export type EnhancementRuntimeFeature =
   (typeof ENHANCEMENT_RUNTIME_FEATURES)[number];
@@ -658,6 +670,7 @@ export type RendererCommand =
   | { type: "input.reset" }
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
+  | { type: "storage.open" }
   | {
       type: "settings.open";
       pane?: SettingsPane;
@@ -707,6 +720,8 @@ export const IPC = {
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
   settingsReset: "gw:settings:reset",
+  shortcutCapture: "gw:shortcuts:capture",
+  shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   buildLibraryGet: "gw:buildLibrary:get",
   buildLibrarySet: "gw:buildLibrary:set",
   credentialsLoad: "gw:credentials:load",
@@ -823,6 +838,10 @@ export interface GwNativeApi {
     get(): Promise<AppSettings>;
     set(value: AppSettingsPatch): Promise<AppSettings>;
     reset(): Promise<AppSettings | null>;
+  };
+  shortcuts: {
+    capture(): Promise<ShortcutCaptureResult>;
+    cancelCapture(): Promise<void>;
   };
   buildLibrary: {
     get(): Promise<{ library: BuildLibrary; recovered: boolean }>;

@@ -23,6 +23,7 @@ import type {
   TeamApplyPlan,
   TeamApplyResult,
 } from "../../../src/shared/builds/team-apply";
+import type { StorageCommand } from "../../../src/shared/storage-command";
 import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import {
   runTeamApply,
@@ -93,6 +94,8 @@ export interface ToolsHost {
    */
   readonly applyUnavailable: string | null;
   readonly observationUnavailable: string | null;
+  openStorage(): Promise<void>;
+  readonly storageUnavailable: string | null;
   reset?(): Promise<LibraryLoad>;
 }
 
@@ -195,6 +198,7 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
     // The fixture host answers its own apply, so it has nothing to refuse.
     applyUnavailable: null,
     observationUnavailable: null,
+    storageUnavailable: null,
     publishUnavailable: null,
     async loadLibrary() {
       memory = read();
@@ -224,6 +228,9 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
       await new Promise((resolve) => setTimeout(resolve, 180));
       return { commandId: 1, completedChanges: 0, skippedSkills: [] };
     },
+    async openStorage() {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    },
     cancelApply() {},
     async reset() {
       storage?.removeItem(STORAGE_KEY);
@@ -252,6 +259,7 @@ export function createNativeHost(
    * sequence that turns a plan into a party lives here, beside the domain.
    */
   commands: TeamApplyCommands | null,
+  storage: StorageCommand | null,
   applyUnavailable: string | null,
   development = false,
   observationUnavailable: string | null = null,
@@ -334,6 +342,11 @@ export function createNativeHost(
     party,
     applyUnavailable,
     observationUnavailable,
+    get storageUnavailable() {
+      return storage === null
+        ? "Storage is unavailable after this Guild Wars update."
+        : storage.unavailable();
+    },
     publishUnavailable: publishTemplate === null ? PUBLISH_UNAVAILABLE : null,
     async loadLibrary() {
       const [library, skills] = await Promise.all([
@@ -460,6 +473,12 @@ export function createNativeHost(
         if (!operation.signal.aborted) commands.cancelPending();
         if (activeApply === operation) activeApply = null;
       }
+    },
+    async openStorage() {
+      if (storage === null) {
+        throw new Error("Storage is unavailable after this Guild Wars update.");
+      }
+      storage.open();
     },
     cancelApply() {
       if (activeApply !== null) {

@@ -222,6 +222,12 @@ const INVOCATIONS: Invocation[] = [
     args: [[{ path: "Skills/Alt.txt", contents: "OQCiUyo8AkVwR4KMMGAAAEAA" }]],
     channel: IPC.accountsTemplatesSave,
   },
+  { path: "shortcuts.capture", args: [], channel: IPC.shortcutCapture },
+  {
+    path: "shortcuts.cancelCapture",
+    args: [],
+    channel: IPC.shortcutCaptureCancel,
+  },
   { path: "buildLibrary.get", args: [], channel: IPC.buildLibraryGet },
   {
     path: "buildLibrary.set",

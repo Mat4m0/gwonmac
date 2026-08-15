@@ -41,7 +41,10 @@ import type {
   RendererMilestoneFields,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
-import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
+import type {
+  EnhancementCommandEnqueue,
+} from "./enhancement-team-commands.js";
+import type { StorageInstallation } from "./enhancement-storage-installation.js";
 import {
   COMPANION_ABI as COMPANION_DESCRIPTOR,
 } from "../shared/companion-abi.js";
@@ -179,6 +182,10 @@ export async function installCertifiedCompanion(
   const teamCommands = capabilities.commands
     ? await import("./enhancement-team-commands.js")
     : null;
+  const storageInstallation: StorageInstallation | null = capabilities.storage
+    ? (await import("./enhancement-storage-installation.js"))
+        .createStorageInstallation(exports, true)
+    : null;
   // The guard above proves `free` is callable, but WebAssembly exports are typed
   // as the bare `Function`, so the kernel's ABI has to be named here or the five
   // call sites below stop checking what they pass.
@@ -241,6 +248,7 @@ export async function installCertifiedCompanion(
     if (toolboxPointer) free(toolboxPointer);
     if (partyPointer) free(partyPointer);
     if (payloadPointer) free(payloadPointer);
+    storageInstallation?.dispose(free);
     if (professionTracePointer) free(professionTracePointer);
     if (cursorPointer) free(cursorPointer);
     if (configPointer) free(configPointer);
@@ -290,6 +298,7 @@ export async function installCertifiedCompanion(
         );
       }
     }
+    storageInstallation?.allocate(exports.malloc as (bytes: number) => unknown);
     if (
       !runtimeAllocation
       || !configPointer
@@ -298,6 +307,7 @@ export async function installCertifiedCompanion(
       || (foundation && !toolboxPointer)
       || (foundation && !partyPointer)
       || (capabilities.commands && !payloadPointer)
+      || (storageInstallation !== null && !storageInstallation.region().pointer)
       || (
         capabilities.commands
         && window.gwNative.init.development
@@ -344,6 +354,7 @@ export async function installCertifiedCompanion(
               : []),
           ]
         : []),
+      ...(storageInstallation === null ? [] : [storageInstallation.region()]),
     ];
     for (const region of ownedRegions) {
       const end = region.pointer + region.size;
@@ -395,6 +406,7 @@ export async function installCertifiedCompanion(
       configPointer,
       manifest.configWords.length,
     ).set(manifest.configWords);
+    storageInstallation?.initialize(memory);
 
     const response = await fetch("companion-kernel.wasm");
     if (!response.ok) throw new Error("Companion kernel is unavailable");
@@ -559,6 +571,7 @@ export async function installCertifiedCompanion(
         playRegion: playRegion(),
         nativeCursor: capabilities.nativeCursor,
         teamManagement: active.teamManagement,
+        xunlaiStorage: active.xunlaiStorage,
         targetReadout: active.targetReadout,
         commands: commands !== null,
       };
@@ -625,11 +638,20 @@ export async function installCertifiedCompanion(
         return observed;
       },
     });
+    const syncStoragePolicy = () => {
+      storageInstallation?.update({
+        enabled: policy().xunlaiStorage,
+        playRegion: playRegion(),
+        observation: toolboxObservation,
+      });
+    };
+    storageInstallation?.mount();
+    const storage = storageInstallation?.command() ?? null;
     const toolbox = foundation
       ? createToolboxLifecycle(document.body, {
           mountTool: (host, onVisibilityChange) =>
             import("./tools-host.js").then(({ mountToolsInto }) =>
-              mountToolsInto(host, onVisibilityChange, commands, true),
+              mountToolsInto(host, onVisibilityChange, commands, storage, true),
             ),
         })
       : null;
@@ -644,13 +666,15 @@ export async function installCertifiedCompanion(
       toolbox?.setEnabled(policy().tools);
     };
     tracePolicy("launch");
-    const onToolSettings = (event: Event) => {
-      if (!(event instanceof CustomEvent)) return;
-      optionalSettings = event.detail as ReturnType<Window["gwToolsSettings"]>;
+    const onToolSettings = () => {
+      // The event is only a notification. The validated bridge remains the
+      // single source of truth even if page code dispatches a malformed event.
+      optionalSettings = window.gwToolsSettings();
       tracePolicy("settings");
       syncToolboxAvailability();
       setTargetEnabled();
       syncActiveObservers();
+      syncStoragePolicy();
     };
     window.addEventListener("gw:tools-settings", onToolSettings);
     disposeToolSettings = () =>
@@ -661,6 +685,7 @@ export async function installCertifiedCompanion(
 
     // Apply opt-in state before the callback becomes reachable from the game.
     syncActiveObservers();
+    syncStoragePolicy();
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;
     const observerRuntime = {
@@ -764,6 +789,7 @@ export async function installCertifiedCompanion(
               tracePolicy("region");
               setTargetEnabled();
               syncActiveObservers();
+              syncStoragePolicy();
             }
             readout?.update(state);
           } }
@@ -787,6 +813,7 @@ export async function installCertifiedCompanion(
               setTargetEnabled();
               syncActiveObservers();
             }
+            syncStoragePolicy();
             toolbox?.update(state);
           } }
         : null,

@@ -20,6 +20,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         targetObservation: { status: "off" },
         partyObservation: { status: "off" },
         teamApply: { status: "off" },
+        xunlaiStorage: { status: "off" },
       },
     },
     extendedMemory: supported

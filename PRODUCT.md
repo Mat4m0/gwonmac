@@ -45,13 +45,15 @@ Required template compatibility and Core cursor support run when their exact
 client proofs permit them. Optional **gwonmac Tools Beta** is off by default.
 
 Tools provides Build and Team authoring, party capture, team-code exchange,
-Target Distance, and explicit Team Apply. Team Apply is a bounded configuration
-action. It is available only in supported PvE outposts. It checks fresh game
-state after each step.
+Target Distance, local Xunlai storage opening, and explicit Team Apply. Storage
+has its own opt-in and can be opened from Tools, with its customizable
+Command-Shift-C default shortcut, or by
+typing `/chest` or `/xunlai` in supported PvE outposts. Team Apply is a bounded
+configuration action. It checks fresh game state after each step.
 
-Build and Team authoring belongs to the host. Live observations and Team Apply
-require exact client capabilities. An unknown client can therefore keep host
-authoring while live integration refuses.
+Build and Team authoring belongs to the host. Live observations, storage
+opening, and Team Apply require exact client capabilities. An unknown client
+can therefore keep host authoring while live integration refuses.
 
 **Tools Beta** describes feature maturity. It is not the application Beta
 update track.

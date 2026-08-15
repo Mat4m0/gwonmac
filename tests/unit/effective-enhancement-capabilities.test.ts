@@ -26,6 +26,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       targetObservation: selected(capabilities.targetObservation),
       partyObservation: selected(capabilities.partyObservation),
       teamApply: selected(capabilities.commands),
+      xunlaiStorage: selected(capabilities.storage),
     },
   };
   return {
@@ -57,6 +58,7 @@ describe("effective Enhancement capability boundary", () => {
           targetObservation: { status: "unavailable", reason: "game-update" },
           partyObservation: off,
           teamApply: off,
+          xunlaiStorage: off,
         },
       },
     };
@@ -66,6 +68,7 @@ describe("effective Enhancement capability boundary", () => {
       targetObservation: false,
       partyObservation: false,
       commands: false,
+      storage: false,
     });
   });
 

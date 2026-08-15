@@ -8,6 +8,7 @@ import {
   COMPANION_TOOLBOX_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
 import { TEAM_COMMAND_PAYLOAD_BYTES } from "../../src/renderer/enhancement-team-commands.ts";
+import { STORAGE_DATA_WINDOW_BYTES } from "../../src/renderer/enhancement-storage-command.ts";
 import { COMPANION_ABI } from "../../src/shared/companion-abi.ts";
 import {
   closePackaged,
@@ -362,6 +363,7 @@ export async function assertToolboxFoundationLifecycle() {
       );
       const allocations: { pointer: number; size: number }[] = [];
       const freed: number[] = [];
+      const storageConfigurations: number[][] = [];
       let nextPointer = 0x1000;
       const malloc = (size: number) => {
         const pointer = nextPointer;
@@ -521,6 +523,7 @@ export async function assertToolboxFoundationLifecycle() {
       window.gwToolsSettings = () => Object.freeze({
         enabled: true,
         teamManagement: true,
+        xunlaiStorage: true,
         targetReadout: false,
       });
       const runtime = await installCertifiedCompanion(
@@ -533,6 +536,11 @@ export async function assertToolboxFoundationLifecycle() {
             enhancement_hook_slot: hookSlot,
             enhancement_command: () => 1,
             enhancement_profession_trace: () => 30,
+            enhancement_open_storage: () => 1,
+            enhancement_configure_storage: (pointer: number, enabled: number) => {
+              storageConfigurations.push([pointer, enabled]);
+              return 1;
+            },
           },
         },
         module,
@@ -603,6 +611,7 @@ export async function assertToolboxFoundationLifecycle() {
         readout: runtime.readout,
         runtimeFrozen: Object.isFrozen(runtime),
         runtimeKeys: Object.keys(runtime).sort(),
+        storageConfigurations: [...storageConfigurations],
         scalar: {
           buildId: runtime.buildId,
           companionAbi: runtime.companionAbi,
@@ -630,6 +639,7 @@ export async function assertToolboxFoundationLifecycle() {
         targetCount: document.querySelectorAll("#enhancement-target").length,
         toolboxCount: document.querySelectorAll("#toolbox-foundation").length,
         transitions,
+        storageConfigurations: [...storageConfigurations],
       };
       return { after, before };
     }, {
@@ -652,6 +662,7 @@ export async function assertToolboxFoundationLifecycle() {
     const statePointer = (cursorPointer + COMPANION_CURSOR_BYTES + 7) & ~7;
     const partyPointer = statePointer + COMPANION_TOOLBOX_BYTES;
     const commandPointer = partyPointer + COMPANION_PARTY_BYTES;
+    const storagePointer = commandPointer + TEAM_COMMAND_PAYLOAD_BYTES;
     assert.deepEqual(result.before.allocations, [
       { pointer: 0x1000, size: 65_551 },
       {
@@ -674,7 +685,12 @@ export async function assertToolboxFoundationLifecycle() {
         pointer: commandPointer,
         size: TEAM_COMMAND_PAYLOAD_BYTES,
       },
+      {
+        pointer: storagePointer,
+        size: STORAGE_DATA_WINDOW_BYTES,
+      },
     ]);
+    assert.deepEqual(result.before.storageConfigurations.at(-1), [storagePointer, 1]);
     assert.equal(result.before.companionStatePublished, false);
     assert.equal(result.before.globalRuntimeIsRuntime, false);
     assert.equal(result.before.hook, ENHANCEMENT_BUILD.tableSlot + 1);
@@ -746,10 +762,12 @@ export async function assertToolboxFoundationLifecycle() {
       statePointer,
       partyPointer,
       commandPointer,
+      storagePointer,
       cursorPointer,
       configPointer,
       0x1000,
     ]);
+    assert.deepEqual(result.after.storageConfigurations.at(-1), [0, 0]);
     assert.equal(result.after.hook, 0);
     assert.equal(result.after.runtime, undefined);
     assert.equal(result.after.tableEmpty, true);
@@ -856,6 +874,7 @@ export async function assertRollbackAfterTablePublication() {
         window.gwToolsSettings = () => Object.freeze({
           enabled: true,
           teamManagement: true,
+          xunlaiStorage: true,
           targetReadout: false,
         });
         globalThis.requestAnimationFrame = () => {

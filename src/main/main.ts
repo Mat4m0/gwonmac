@@ -610,7 +610,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSettings: () => loadSettings(paths.settings),
     updateSettings: updateAppSettings,
     resetSettings: resetAppSettings,
-    capabilitiesAtLaunch: enhancementCapabilities,
+    toolsEnabledAtLaunch: settings.gwonmacTools,
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>

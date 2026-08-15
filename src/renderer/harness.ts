@@ -482,6 +482,7 @@ let inputTrace: InputTrace | null = null;
 window.gwToolsSettings = () => Object.freeze({
   enabled: appSettings?.gwonmacTools ?? false,
   teamManagement: appSettings?.teamManagement ?? true,
+  xunlaiStorage: appSettings?.xunlaiStorage ?? false,
   targetReadout: appSettings?.targetReadout ?? false,
 });
 window.gwApplySettings = (next) => {

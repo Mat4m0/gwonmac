@@ -151,3 +151,21 @@ export async function toggleTools(win: BrowserWindow): Promise<void> {
     logEvent({ k: "tools.toggleRefused", outcome });
   }
 }
+
+/**
+ * Ask the certified game-thread command queue to open Xunlai storage.
+ *
+ * A refusal opens the closest useful surface: Tools explains live policy such
+ * as PvP or map state, while Settings is the fallback when Tools was not part
+ * of this launch. A shortcut that cannot act must not look broken.
+ */
+export async function openStorage(win: BrowserWindow): Promise<void> {
+  if (await sendRendererCommand(win, { type: "storage.open" }) === "completed") {
+    return;
+  }
+  if (await sendRendererCommand(win, { type: "tools.toggle" }) === "completed") {
+    return;
+  }
+  await resetGameInput(win);
+  await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
+}

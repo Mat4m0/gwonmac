@@ -122,6 +122,7 @@ export function decodeEnhancementManifest(
       "targetObservation",
       "partyObservation",
       "commands",
+      "storage",
     ]);
     const hooks = exactRecord(value.hooks, ["tick", "cursor", "ui"]);
     if (
@@ -131,6 +132,7 @@ export function decodeEnhancementManifest(
       || typeof capabilityRecord.targetObservation !== "boolean"
       || typeof capabilityRecord.partyObservation !== "boolean"
       || typeof capabilityRecord.commands !== "boolean"
+      || typeof capabilityRecord.storage !== "boolean"
     ) {
       return null;
     }
@@ -140,6 +142,7 @@ export function decodeEnhancementManifest(
       targetObservation: capabilityRecord.targetObservation,
       partyObservation: capabilityRecord.partyObservation,
       commands: capabilityRecord.commands,
+      storage: capabilityRecord.storage,
     });
     const selectedHooks: EnhancementHooks = Object.freeze({
       tick: hooks.tick !== null,

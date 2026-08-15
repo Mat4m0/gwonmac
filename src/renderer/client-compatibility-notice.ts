@@ -29,6 +29,7 @@ const FEATURE_NAMES: Readonly<Record<Feature, string>> = Object.freeze({
   targetObservation: 'target distance',
   partyObservation: 'live party details',
   teamApply: 'Apply team',
+  xunlaiStorage: 'Xunlai storage',
 });
 
 function unavailableFeatures(compatibility: ClientCompatibility): Feature[] {
@@ -166,7 +167,7 @@ function featureStatusLabel(status: ClientCompatibility['features'][Feature]): s
   switch (status.status) {
     case 'available': return 'Available';
     case 'off': return 'Off';
-    case 'unavailable': return 'Temporarily unavailable';
+    case 'unavailable': return 'Unavailable';
   }
 }
 

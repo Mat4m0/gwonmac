@@ -52,7 +52,6 @@ import {
 import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
-import type { EnhancementCapabilities } from "../shared/enhancement-contracts.js";
 import {
   AllowlistError,
   errorCode,
@@ -109,6 +108,11 @@ import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
 import { windowRegistry, type WindowRegistry } from "./window-registry.js";
 import {
+  cancelWindowShortcutCapture,
+  captureWindowShortcut,
+  updateWindowShortcuts,
+} from "./window-shortcuts.js";
+import {
   applySettingsChange,
   confirmSettingsReset,
   requestCacheClear,
@@ -130,8 +134,8 @@ export interface IpcContext {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
-  /** Optional executable capabilities requested when this process started. */
-  capabilitiesAtLaunch: EnhancementCapabilities;
+  /** Whether this process started with every certified Tools capability prepared. */
+  toolsEnabledAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -568,19 +572,28 @@ export function registerIpcHandlers(ctx: IpcContext): {
       }
     }),
 
-    settingsSet: channel(one(parseSettingsPatch), (win, patch) =>
-      applySettingsChange(
+    settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
+      const saved = await applySettingsChange(
         win,
         patch,
-        ctx.capabilitiesAtLaunch,
+        ctx.toolsEnabledAtLaunch,
         ctx.getSettings,
         ctx.updateSettings,
-      ),
-    ),
+      );
+      updateWindowShortcuts(win, saved.shortcutOverrides);
+      return saved;
+    }),
 
-    settingsReset: channel(nothing, (win) =>
-      confirmSettingsReset(win, ctx.resetSettings),
-    ),
+    settingsReset: channel(nothing, async (win) => {
+      const saved = await confirmSettingsReset(win, ctx.resetSettings);
+      if (saved) updateWindowShortcuts(win, saved.shortcutOverrides);
+      return saved;
+    }),
+
+    shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
+    shortcutCaptureCancel: channel(nothing, (win) => {
+      cancelWindowShortcutCapture(win);
+    }),
 
     credentialsLoad: channel(nothing, async (win) => {
       try {

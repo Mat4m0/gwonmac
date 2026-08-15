@@ -13,13 +13,15 @@
  * and reports back when it closes itself so the overlay does not go on
  * believing it is open.
  *
- * What is left is the three things the Vue bundle genuinely cannot reach on its
+ * What is left is what the Vue bundle genuinely cannot reach on its
  * own: where a build is written so Guild Wars can load it, whether a team may be
- * applied to the running game, and the companion's observation of that game —
- * which passes straight through, unread. The bundle owns what a party means.
+ * applied to the running game, the named storage action, and the companion's
+ * observation of that game — which passes straight through, unread. The bundle
+ * owns what a party means.
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { TeamApplyCommands } from "../shared/builds/team-apply-runner.js";
+import type { StorageCommand } from "../shared/storage-command.js";
 import {
   createToolboxLifecycle,
   type MountedTool,
@@ -54,6 +56,7 @@ type ToolsBundle = Readonly<{
         | ((template: PublishableTemplate) => Promise<PublishedTemplate>)
         | null;
       commands: TeamApplyCommands | null;
+      storage: StorageCommand | null;
       applyUnavailable: string | null;
       observationUnavailable: string | null;
       development: boolean;
@@ -137,6 +140,7 @@ export function mountToolsInto(
    * import at run time and the Tools bundle compiles in.
    */
   commands: TeamApplyCommands | null,
+  storage: StorageCommand | null,
   /** Whether this session's client can discover templates written to IDBFS. */
   templatePublishingAvailable: boolean,
 ): Promise<MountedTool | null> {
@@ -165,6 +169,7 @@ export function mountToolsInto(
         onVisibilityChange,
         publishTemplate: templatePublishingAvailable ? publishTemplate : null,
         commands,
+        storage,
         applyUnavailable,
         observationUnavailable,
         development: window.gwNative.init.development,
@@ -200,6 +205,7 @@ export function mountHostOnlyTools(
       mountToolsInto(
         host,
         onVisibilityChange,
+        null,
         null,
         templatePublishingAvailable,
       ),

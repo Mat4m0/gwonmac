@@ -14,6 +14,7 @@ export const ENHANCEMENT_PROGRAMS = [
   "target-observer",
   "toolbox-foundation",
   "toolbox-commands",
+  "xunlai-storage",
 ] as const;
 
 export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
@@ -22,7 +23,10 @@ export type EnhancementCapabilities = Readonly<{
   nativeCursor: boolean;
   targetObservation: boolean;
   partyObservation: boolean;
+  /** Team Apply packet authority. */
   commands: boolean;
+  /** Local Xunlai DataWindow authority. */
+  storage: boolean;
 }>;
 
 export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
@@ -31,66 +35,133 @@ export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
     targetObservation: false,
     partyObservation: false,
     commands: false,
+    storage: false,
   }),
   target: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
     partyObservation: false,
     commands: false,
+    storage: false,
   }),
   cursorTarget: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
     partyObservation: false,
     commands: false,
+    storage: false,
   }),
   party: Object.freeze({
     nativeCursor: false,
     targetObservation: false,
     partyObservation: true,
     commands: false,
+    storage: false,
   }),
   cursorParty: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
     partyObservation: true,
     commands: false,
+    storage: false,
   }),
   targetParty: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
     partyObservation: true,
     commands: false,
+    storage: false,
   }),
   cursorTargetParty: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
     partyObservation: true,
     commands: false,
+    storage: false,
   }),
   partyCommands: Object.freeze({
     nativeCursor: false,
     targetObservation: false,
     partyObservation: true,
     commands: true,
+    storage: false,
   }),
   cursorPartyCommands: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
     partyObservation: true,
     commands: true,
+    storage: false,
   }),
   targetPartyCommands: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
     partyObservation: true,
     commands: true,
+    storage: false,
   }),
   cursorTargetPartyCommands: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
     partyObservation: true,
     commands: true,
+    storage: false,
+  }),
+  partyStorage: Object.freeze({
+    nativeCursor: false,
+    targetObservation: false,
+    partyObservation: true,
+    commands: false,
+    storage: true,
+  }),
+  cursorPartyStorage: Object.freeze({
+    nativeCursor: true,
+    targetObservation: false,
+    partyObservation: true,
+    commands: false,
+    storage: true,
+  }),
+  targetPartyStorage: Object.freeze({
+    nativeCursor: false,
+    targetObservation: true,
+    partyObservation: true,
+    commands: false,
+    storage: true,
+  }),
+  cursorTargetPartyStorage: Object.freeze({
+    nativeCursor: true,
+    targetObservation: true,
+    partyObservation: true,
+    commands: false,
+    storage: true,
+  }),
+  partyCommandsStorage: Object.freeze({
+    nativeCursor: false,
+    targetObservation: false,
+    partyObservation: true,
+    commands: true,
+    storage: true,
+  }),
+  cursorPartyCommandsStorage: Object.freeze({
+    nativeCursor: true,
+    targetObservation: false,
+    partyObservation: true,
+    commands: true,
+    storage: true,
+  }),
+  targetPartyCommandsStorage: Object.freeze({
+    nativeCursor: false,
+    targetObservation: true,
+    partyObservation: true,
+    commands: true,
+    storage: true,
+  }),
+  cursorTargetPartyCommandsStorage: Object.freeze({
+    nativeCursor: true,
+    targetObservation: true,
+    partyObservation: true,
+    commands: true,
+    storage: true,
   }),
 } as const satisfies Readonly<Record<string, EnhancementCapabilities>>);
 
@@ -102,6 +173,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
   targetObservation: false,
   partyObservation: false,
   commands: false,
+  storage: false,
 });
 
 export function enhancementCapabilityProfile(
@@ -115,6 +187,7 @@ export function enhancementCapabilityProfile(
       && candidate.targetObservation === capabilities.targetObservation
       && candidate.partyObservation === capabilities.partyObservation
       && candidate.commands === capabilities.commands
+      && candidate.storage === capabilities.storage
     ) return profile;
   }
   return null;
@@ -129,7 +202,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 27;
+export const ENHANCEMENT_TRANSFORM_ABI = 31;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
@@ -160,14 +233,15 @@ export function enhancementCapabilitiesFor(
   switch (program) {
     case "none":
       return selection.tools
-        ? ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommands
+        ? ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommandsStorage
         : selection.nativeCursor
           ? ENHANCEMENT_CAPABILITY_PROFILES.cursor
           : NONE;
     case "cursor-observer": return ENHANCEMENT_CAPABILITY_PROFILES.cursor;
     case "target-observer": return ENHANCEMENT_CAPABILITY_PROFILES.target;
     case "toolbox-foundation": return ENHANCEMENT_CAPABILITY_PROFILES.party;
-    case "toolbox-commands": return ENHANCEMENT_CAPABILITY_PROFILES.partyCommands;
+    case "toolbox-commands": return ENHANCEMENT_CAPABILITY_PROFILES.partyCommandsStorage;
+    case "xunlai-storage": return ENHANCEMENT_CAPABILITY_PROFILES.partyStorage;
   }
 }
 
@@ -187,14 +261,16 @@ export function enhancementCapabilitiesRequested(
   return capabilities.nativeCursor
     || capabilities.targetObservation
     || capabilities.partyObservation
-    || capabilities.commands;
+    || capabilities.commands
+    || capabilities.storage;
 }
 
-/** Commands consume live party identity, so no command-only profile is valid. */
+/** Both live actions consume map/party policy, so neither can stand alone. */
 export function validEnhancementCapabilities(
   capabilities: EnhancementCapabilities,
 ): boolean {
-  return !capabilities.commands || capabilities.partyObservation;
+  return (!capabilities.commands && !capabilities.storage)
+    || capabilities.partyObservation;
 }
 
 /** The exact requested subset that one build's optional certificate groups support. */
@@ -209,5 +285,6 @@ export function intersectEnhancementCapabilities(
       requested.targetObservation && supported.targetObservation,
     partyObservation,
     commands: requested.commands && supported.commands && partyObservation,
+    storage: requested.storage && supported.storage && partyObservation,
   });
 }

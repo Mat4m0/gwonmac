@@ -169,6 +169,10 @@ const api = {
     set: (value) => ipcRenderer.invoke(IPC.settingsSet, value),
     reset: () => ipcRenderer.invoke(IPC.settingsReset),
   },
+  shortcuts: {
+    capture: () => ipcRenderer.invoke(IPC.shortcutCapture),
+    cancelCapture: () => ipcRenderer.invoke(IPC.shortcutCaptureCancel),
+  },
   buildLibrary: {
     get: () => ipcRenderer.invoke(IPC.buildLibraryGet),
     set: (value) => ipcRenderer.invoke(IPC.buildLibrarySet, value),

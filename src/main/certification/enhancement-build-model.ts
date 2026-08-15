@@ -173,13 +173,6 @@ export interface KnownEnhancementBuild {
         bodySha256: string;
       }>;
     }>;
-    drain: Readonly<{
-      functionIndex: number;
-      params: readonly ["i32", "i32"];
-      results: readonly [];
-      tableSlot: number;
-      bodySha256: string;
-    }>;
     entries: readonly Readonly<{
       opcode: number;
       functionIndex: number;
@@ -189,6 +182,33 @@ export interface KnownEnhancementBuild {
       /** What this sends, for the reader. Never used to decide anything. */
       label: string;
     }>[];
+  }>;
+  /** Shared safe point used only by independently certified named actions. */
+  gameThread?: Readonly<{
+    drain: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly [];
+      tableSlot: number;
+      bodySha256: string;
+    }>;
+  }>;
+  /** Exact local Xunlai UI authority, independent from Team Apply packets. */
+  storage?: Readonly<{
+    openExport: string;
+    configureExport: string;
+    slashParser: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly ["i32"];
+      bodySha256: string;
+    }>;
+    handler: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32"];
+      results: readonly [];
+      bodySha256: string;
+    }>;
   }>;
   /** Exact UI-dispatch and party-observation authority. */
   partyObservation?: Readonly<{
@@ -212,11 +232,13 @@ export function supportedEnhancementCapabilities(
 ): EnhancementCapabilities {
   const observationBase = build.observationBase !== undefined;
   const partyObservation = observationBase && build.partyObservation !== undefined;
+  const gameThread = build.gameThread !== undefined;
   return Object.freeze({
     nativeCursor: build.cursorEvent !== undefined,
     targetObservation: observationBase && build.targetObservation !== undefined,
     partyObservation,
-    commands: partyObservation && build.teamApply !== undefined,
+    commands: partyObservation && gameThread && build.teamApply !== undefined,
+    storage: partyObservation && gameThread && build.storage !== undefined,
   });
 }
 
@@ -234,7 +256,8 @@ export function enhancementProfilesForBuild(
       (!value.nativeCursor || supported.nativeCursor) &&
       (!value.targetObservation || supported.targetObservation) &&
       (!value.partyObservation || supported.partyObservation) &&
-      (!value.commands || supported.commands)
+      (!value.commands || supported.commands) &&
+      (!value.storage || supported.storage)
     );
   });
 }
@@ -255,7 +278,21 @@ export function hasCompleteEnhancementProfileHashes(
   }
   if (
     build.teamApply !== undefined
-    && (build.observationBase === undefined || build.partyObservation === undefined)
+    && (
+      build.observationBase === undefined
+      || build.partyObservation === undefined
+      || build.gameThread === undefined
+    )
+  ) {
+    return false;
+  }
+  if (
+    build.storage !== undefined
+    && (
+      build.observationBase === undefined
+      || build.partyObservation === undefined
+      || build.gameThread === undefined
+    )
   ) {
     return false;
   }
