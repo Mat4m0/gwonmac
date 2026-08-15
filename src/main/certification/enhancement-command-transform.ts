@@ -100,28 +100,52 @@ export function travelConfigure(
   return storageConfigure(pendingGlobalIndex, payloadGlobalIndex, enabledGlobalIndex);
 }
 
-/** Consumes the two exact storage slash commands into the existing mailbox. */
-export function storageSlashParser(
+/** Takes and clears the one-shot request to show or hide Quick Travel. */
+export function travelToggleTake(toggleGlobalIndex: number): Uint8Array {
+  return concat(
+    uleb(0),
+    Uint8Array.of(0x23), uleb(toggleGlobalIndex),
+    Uint8Array.of(0x41), sleb(0),
+    Uint8Array.of(0x24), uleb(toggleGlobalIndex),
+    Uint8Array.of(0x0b),
+  );
+}
+
+/** Compares one local UTF-16LE pointer with one exact null-terminated command. */
+function exactSlashCommand(pointerLocalIndex: number, value: string): Uint8Array {
+  const units = Array.from({ length: value.length }, (_, index) =>
+    value.charCodeAt(index),
+  );
+  units.push(0);
+  const comparisons: Uint8Array[] = [];
+  for (let index = 0; index < units.length; index += 2) {
+    const remaining = units.length - index;
+    const width = remaining === 1 ? 2 : 4;
+    const expected = width === 2
+      ? units[index]!
+      : units[index]! | (units[index + 1]! << 16);
+    comparisons.push(concat(
+      Uint8Array.of(0x20), uleb(pointerLocalIndex),
+      Uint8Array.of(width === 2 ? 0x2f : 0x28),
+      uleb(width === 2 ? 1 : 2),
+      uleb(index * 2),
+      Uint8Array.of(0x41), sleb(expected),
+      Uint8Array.of(0x46),
+      ...(index === 0 ? [] : [Uint8Array.of(0x71)]),
+    ));
+  }
+  return concat(...comparisons);
+}
+
+/** Consumes the exact local-action slash commands at their named boundaries. */
+export function localActionSlashParser(
   originalIndex: number,
   pendingGlobalIndex: number,
   payloadGlobalIndex: number,
   enabledGlobalIndex: number,
+  travelEnabledGlobalIndex: number,
+  travelToggleGlobalIndex: number,
 ): Uint8Array {
-  const load = (offset: number) => concat(
-    Uint8Array.of(0x20), uleb(1),
-    Uint8Array.of(0x28), uleb(2), uleb(offset),
-  );
-  const equals = (offset: number, value: number) => concat(
-    load(offset),
-    Uint8Array.of(0x41), sleb(value),
-    Uint8Array.of(0x46),
-  );
-  const equals16 = (offset: number, value: number) => concat(
-    Uint8Array.of(0x20), uleb(1),
-    Uint8Array.of(0x2f), uleb(1), uleb(offset),
-    Uint8Array.of(0x41), sleb(value),
-    Uint8Array.of(0x46),
-  );
   const original = () => concat(
     Uint8Array.of(0x20), uleb(0),
     Uint8Array.of(0x20), uleb(1),
@@ -129,21 +153,22 @@ export function storageSlashParser(
   );
   return concat(
     uleb(0),
+    // Travel has its own setting and does not borrow the storage mailbox or
+    // payload. The renderer takes this bounded signal.
+    Uint8Array.of(0x02, 0x40),
+    exactSlashCommand(1, "/tp"),
+    Uint8Array.of(0x45, 0x0d), uleb(0),
+    Uint8Array.of(0x23), uleb(travelEnabledGlobalIndex),
+    Uint8Array.of(0x45, 0x0d), uleb(0),
+    Uint8Array.of(0x41), sleb(1),
+    Uint8Array.of(0x24), uleb(travelToggleGlobalIndex),
+    Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x0f, 0x0b),
     Uint8Array.of(0x23), uleb(enabledGlobalIndex), Uint8Array.of(0x45, 0x04, 0x40),
     original(), Uint8Array.of(0x0f, 0x0b),
     Uint8Array.of(0x23), uleb(payloadGlobalIndex), Uint8Array.of(0x45, 0x04, 0x40),
     original(), Uint8Array.of(0x0f, 0x0b),
-    // UTF-16LE `/chest\0`. The terminator is one code unit, so its load must
-    // not depend on whatever happens to follow the string in a reused buffer.
-    equals(0, 0x0063_002f),
-    equals(4, 0x0065_0068), Uint8Array.of(0x71),
-    equals(8, 0x0074_0073), Uint8Array.of(0x71),
-    equals16(12, 0), Uint8Array.of(0x71),
-    // UTF-16LE `/xunlai\0`.
-    equals(0, 0x0078_002f),
-    equals(4, 0x006e_0075), Uint8Array.of(0x71),
-    equals(8, 0x0061_006c), Uint8Array.of(0x71),
-    equals(12, 0x0000_0069), Uint8Array.of(0x71),
+    exactSlashCommand(1, "/chest"),
+    exactSlashCommand(1, "/xunlai"),
     Uint8Array.of(0x72, 0x45, 0x04, 0x40),
     original(), Uint8Array.of(0x0f, 0x0b),
     // A recognized local command stays consumed while the bounded mailbox is

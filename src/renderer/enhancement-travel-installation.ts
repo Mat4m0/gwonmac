@@ -6,6 +6,7 @@ import type { TravelCommand } from "../shared/travel-command.js";
 import type {
   EnhancementTravelConfigure,
   EnhancementTravelEnqueue,
+  EnhancementTravelToggleTake,
 } from "./enhancement-travel-command.js";
 import { TRAVEL_PAYLOAD_BYTES } from "./enhancement-travel-command.js";
 import {
@@ -36,7 +37,10 @@ export function createTravelInstallation(
   const configure = typeof exports.enhancement_configure_travel === "function"
     ? exports.enhancement_configure_travel as EnhancementTravelConfigure
     : null;
-  if (enqueue === null || configure === null) {
+  const takeToggle = typeof exports.enhancement_take_travel_toggle === "function"
+    ? exports.enhancement_take_travel_toggle as EnhancementTravelToggleTake
+    : null;
+  if (enqueue === null || configure === null || takeToggle === null) {
     throw new Error("the travel profile derived a module with no travel command");
   }
 
@@ -61,6 +65,9 @@ export function createTravelInstallation(
       controller?.update(availability);
       palette?.setEnabled(availability.enabled);
       if (availability.state !== null) palette?.update(availability.state);
+      if (takeToggle() === 1 && controller?.command.unavailable() === null) {
+        window.dispatchEvent(new CustomEvent("gw:travel-toggle"));
+      }
     },
     command() {
       return controller?.command ?? null;

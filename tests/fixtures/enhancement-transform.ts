@@ -266,6 +266,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       travel: {
         enqueueExport: "enhancement_travel",
         configureExport: "enhancement_configure_travel",
+        toggleExport: "enhancement_take_travel_toggle",
         messageId: 0x1000_0183,
         producer: {
           functionIndex: 13,

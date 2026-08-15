@@ -200,6 +200,7 @@ export interface KnownEnhancementBuild {
     travel: Readonly<{
       enqueueExport: string;
       configureExport: string;
+      toggleExport: string;
       messageId: number;
       /** Exact producer that constructs {map, region, language, district}. */
       producer: Readonly<{

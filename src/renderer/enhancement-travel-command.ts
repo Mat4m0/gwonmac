@@ -22,6 +22,8 @@ export type EnhancementTravelConfigure = (
   enabled: number,
 ) => number;
 
+export type EnhancementTravelToggleTake = () => number;
+
 export function createTravelCommand(
   send: EnhancementTravelEnqueue,
   unavailable: () => string | null,

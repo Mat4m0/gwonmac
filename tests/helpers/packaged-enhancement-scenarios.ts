@@ -563,6 +563,7 @@ export async function assertToolboxFoundationLifecycle() {
               travelConfigurations.push([pointer, enabled]);
               return 1;
             },
+            enhancement_take_travel_toggle: () => 0,
           },
         },
         module,
