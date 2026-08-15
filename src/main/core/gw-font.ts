@@ -28,6 +28,10 @@ const SOURCE_EM = 24;
 const SOURCE_BASELINE = 18;
 const SOURCE_LINE_HEIGHT = 25;
 const SOURCE_SPACE_WIDTH = 6;
+const MAX_SOURCE_DIMENSION = 24;
+const MAX_SOURCE_PIXELS = 24 * 24 * 94;
+const MAX_RECTANGLES_PER_GLYPH = 512;
+const MAX_TOTAL_RECTANGLES = 16_384;
 const UNITS_PER_EM = 1024;
 const OUTLINE_THRESHOLD = 0x80;
 const OUTLINE_SAMPLE_SCALE = 4;
@@ -88,8 +92,13 @@ function decodeGlyph(source: Uint8Array): { glyph: GameGlyph; bytes: number } {
   const height = input.value() + 1;
   const mode = input.read();
   const pixelCount = width * height;
-  if (width > 256 || height > 256 || pixelCount > 65_536) {
-    throw new Error("font glyph dimensions exceed their bound");
+  if (
+    width > MAX_SOURCE_DIMENSION
+    || height > MAX_SOURCE_DIMENSION
+    || top >= SOURCE_LINE_HEIGHT
+    || top + height > SOURCE_LINE_HEIGHT
+  ) {
+    throw new Error("font glyph does not match the 24px strike");
   }
 
   const pixels = new Uint8Array(pixelCount);
@@ -128,6 +137,9 @@ export function decodeGameFontRange(bytes: Uint8Array): readonly GameGlyph[] {
   const expected = LAST_CHARACTER - FIRST_CHARACTER + 1;
   if (glyphs.length !== expected) {
     throw new Error(`font range has ${glyphs.length} glyphs instead of ${expected}`);
+  }
+  if (glyphs.reduce((total, glyph) => total + glyph.pixels.length, 0) > MAX_SOURCE_PIXELS) {
+    throw new Error("font strike exceeds its pixel budget");
   }
   return glyphs;
 }
@@ -237,6 +249,9 @@ function bitmapRectangles(glyph: GameGlyph): readonly Rectangle[] {
     active = next;
   }
   complete.push(...active.values());
+  if (complete.length > MAX_RECTANGLES_PER_GLYPH) {
+    throw new Error("font glyph exceeds its contour budget");
+  }
   return complete;
 }
 
@@ -247,11 +262,14 @@ function bitmapRectangles(glyph: GameGlyph): readonly Rectangle[] {
  * digits balanced two-pixel side bearings for proportional UI text. Wide
  * digits keep the original cell rather than growing past it.
  */
-function horizontalMetrics(glyph: GameGlyph, character: number): HorizontalMetrics {
+function horizontalMetrics(
+  glyph: GameGlyph,
+  character: number,
+  rectangles: readonly Rectangle[],
+): HorizontalMetrics {
   if (character < 0x30 || character > 0x39) {
     return { advance: glyph.width, shift: 0 };
   }
-  const rectangles = bitmapRectangles(glyph);
   if (rectangles.length === 0) return { advance: glyph.width, shift: 0 };
   const inkLeft = Math.min(...rectangles.map(({ left }) => left));
   const inkRight = Math.max(...rectangles.map(({ right }) => right));
@@ -261,9 +279,12 @@ function horizontalMetrics(glyph: GameGlyph, character: number): HorizontalMetri
   return { advance, shift };
 }
 
-function trueTypeGlyph(glyph: GameGlyph, horizontalShift: number): Buffer {
+function trueTypeGlyph(
+  glyph: GameGlyph,
+  horizontalShift: number,
+  rectangles: readonly Rectangle[],
+): Buffer {
   const scale = UNITS_PER_EM / SOURCE_EM;
-  const rectangles = bitmapRectangles(glyph);
   if (rectangles.length === 0) return Buffer.alloc(10);
   const points = rectangles.flatMap((rectangle) => {
     const left = Math.round((rectangle.left + horizontalShift) * scale);
@@ -389,12 +410,26 @@ function os2Table(advances: readonly number[]): Buffer {
 export function buildGuildWarsTrueType(source: Uint8Array): Buffer {
   const glyphs = decodeGameFontRange(source);
   const sourceGlyphs: readonly (GameGlyph | null)[] = [null, null, ...glyphs];
+  const rectangles = sourceGlyphs.map((glyph) =>
+    glyph === null ? [] : bitmapRectangles(glyph));
+  if (
+    rectangles.reduce((total, value) => total + value.length, 0)
+    > MAX_TOTAL_RECTANGLES
+  ) {
+    throw new Error("font strike exceeds its contour budget");
+  }
   const metrics = sourceGlyphs.map((glyph, glyphId) =>
     glyph
-      ? horizontalMetrics(glyph, glyphId + FIRST_CHARACTER - 2)
+      ? horizontalMetrics(
+          glyph,
+          glyphId + FIRST_CHARACTER - 2,
+          rectangles[glyphId]!,
+        )
       : { advance: SOURCE_SPACE_WIDTH, shift: 0 });
   const glyfParts = sourceGlyphs.map((glyph, glyphId) =>
-    glyph ? trueTypeGlyph(glyph, metrics[glyphId]!.shift) : Buffer.alloc(10));
+    glyph
+      ? trueTypeGlyph(glyph, metrics[glyphId]!.shift, rectangles[glyphId]!)
+      : Buffer.alloc(10));
   const loca: number[] = [0];
   let glyfLength = 0;
   for (const glyph of glyfParts) {
@@ -403,7 +438,7 @@ export function buildGuildWarsTrueType(source: Uint8Array): Buffer {
   }
   const advances = metrics.map(({ advance }) =>
     Math.max(1, Math.round(advance * UNITS_PER_EM / SOURCE_EM)));
-  const maxRectangles = Math.max(0, ...glyphs.map((glyph) => bitmapRectangles(glyph).length));
+  const maxRectangles = Math.max(0, ...rectangles.map((value) => value.length));
   const ascent = Math.round(SOURCE_BASELINE * UNITS_PER_EM / SOURCE_EM);
   const descent = Math.round((SOURCE_BASELINE - SOURCE_EM) * UNITS_PER_EM / SOURCE_EM);
   const lineGap = Math.round((SOURCE_LINE_HEIGHT - SOURCE_EM) * UNITS_PER_EM / SOURCE_EM);

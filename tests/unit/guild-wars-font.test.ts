@@ -5,7 +5,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import type { ChunkStore } from "../../src/main/core/chunk-store.js";
 import { GameFontAssets } from "../../src/main/core/game-font-assets.js";
 import {
   buildGuildWarsTrueType,
@@ -99,7 +98,7 @@ test("a narrow numeral gets balanced proportional spacing", () => {
   assert.ok(advance("1") < advance("2"));
 });
 
-test("a temporary local font refusal can recover without an app restart", async () => {
+test("an unsupported font is refused once for its immutable client generation", async () => {
   let reads = 0;
   const assets = new GameFontAssets({
     store: {
@@ -107,19 +106,31 @@ test("a temporary local font refusal can recover without an app restart", async 
         reads += 1;
         throw new Error("temporarily unavailable");
       },
-    } as unknown as ChunkStore,
+    },
     decoderPath: "/not-reached",
   });
 
   assert.equal(await assets.font(), null);
   assert.equal(await assets.font(), null);
-  assert.equal(reads, 2);
+  assert.equal(reads, 1);
+  assert.equal(assets.refusal(), "read-or-format");
+});
+
+test("a compact oversized strike is refused before outline tracing", () => {
+  // top=0, width value=24 (therefore 25 pixels), height=1, palette mode=1.
+  const oversized = repeatedGlyph([0x80, 0x03, 0x01]);
+  assert.throws(
+    () => buildGuildWarsTrueType(oversized),
+    /does not match the 24px strike/,
+  );
 });
 
 test("the shared UI offers the local Guild Wars font independently of Inter", () => {
   const css = readFileSync(new URL("src/shared/ui/tokens.css", root), "utf8");
-  assert.match(css, /url\("gw:\/\/app\/game-font\.ttf"\)/);
+  assert.match(css, /data-ui-font="guild-wars"/);
   assert.match(css, /--ui-font: "Guild Wars Original"/);
   assert.match(css, /:root\[data-ui-font="inter"\]/);
-  assert.match(css, /unicode-range: U\+0020-007E/);
+  const appearance = readFileSync(new URL("src/renderer/appearance.ts", root), "utf8");
+  assert.match(appearance, /new FontFace\("Guild Wars Original"/);
+  assert.match(appearance, /generation=/);
 });

@@ -11,15 +11,6 @@
  * branch on the selected style.
  */
 
-@font-face {
-  font-family: "Guild Wars Original";
-  src: url("gw://app/game-font.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  unicode-range: U+0020-007E;
-}
-
 :root {
   color-scheme: dark;
 
@@ -99,7 +90,7 @@
   --ui-font-size-sm: 12px;
   --ui-font-size-lg: 17px;
   --ui-line-height: 1.4;
-  --ui-font: "Guild Wars Original", "Palatino Linotype", "Book Antiqua", Palatino,
+  --ui-font: "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
   --ui-font-display: var(--ui-font);
   --ui-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -188,6 +179,13 @@
   --ui-z-status: 9;
   --ui-z-tools: 30;
   --ui-z-toast: 40;
+}
+
+/* The local face becomes active only after the client generation supplied it. */
+:root[data-ui-font="guild-wars"] {
+  --ui-font: "Guild Wars Original", "Palatino Linotype", "Book Antiqua", Palatino,
+    "URW Palladio L", Georgia, serif;
+  --ui-font-display: var(--ui-font);
 }
 
 /* A player can keep either visual style while selecting modern system type. */

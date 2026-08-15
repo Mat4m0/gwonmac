@@ -8,7 +8,11 @@ macOS supplies interaction.
 - Use the reviewed static Reforged landscape as environmental key art. Do not
   load the launcher video in utility windows.
 - Use the existing Reforged logo as the only ornamental brand element.
-- Use the macOS system font for application controls, labels, forms, and status.
+- Keep visual style and typeface independent in in-game GWonMac panels. The
+  locally converted Guild Wars body font is the default; Inter/system type is
+  the modern option, and Palatino is the fail-safe when the game asset is not
+  available. Utility windows such as the Multiple Accounts Hub keep macOS
+  system type.
 - Use one ember tint (`#b84618`) for selection and primary action. Reserve red
   for destructive actions and green for an already-open account.
 - Prefer native hierarchy: system-sized controls, semantic checkboxes, sheets,

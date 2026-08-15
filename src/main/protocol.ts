@@ -122,6 +122,7 @@ let gameFontAssets: {
   readonly store: ChunkStore;
   readonly value: GameFontAssets;
 } | null = null;
+const reportedGameFontRefusals = new WeakSet<GameFontAssets>();
 
 function assetsFor(
   active: NonNullable<ReturnType<ProtocolDeps["getActiveClient"]>>,
@@ -488,7 +489,15 @@ async function handleGwRequest(
       });
     const active = deps.getActiveClient();
     if (!active || request.method !== "GET") return missing();
-    const font = await fontFor(active).font();
+    const assets = fontFor(active);
+    const font = await assets.font();
+    if (!font && !reportedGameFontRefusals.has(assets)) {
+      reportedGameFontRefusals.add(assets);
+      logEvent({
+        k: "protocol.gameFontRefused",
+        reason: assets.refusal() ?? "unsupported",
+      });
+    }
     return font
       ? new Response(compactResponseBody(font), {
           status: 200,

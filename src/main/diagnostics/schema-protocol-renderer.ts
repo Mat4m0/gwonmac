@@ -113,6 +113,11 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     level: "warn",
     fields: { reason: catalogueRefusal },
   },
+  "protocol.gameFontRefused": {
+    subsystem: "protocol",
+    level: "warn",
+    fields: { reason: literal(["unsupported", "read-or-format"] as const) },
+  },
 
   // Managed sockets and IPC rejection.
   "socket.open": {

@@ -28,23 +28,30 @@ const MAX_COMPRESSED_FONT_BYTES = 64 * 1024;
 const MAX_DECODED_FONT_BYTES = 64 * 1024;
 
 export interface GameFontSource {
-  readonly store: ChunkStore;
+  readonly store: Pick<ChunkStore, "readRange">;
   readonly decoderPath: string;
 }
+
+export type GameFontRefusal = "unsupported" | "read-or-format";
 
 export class GameFontAssets {
   private readonly source: GameFontSource;
   private result: Promise<Buffer | null> | null = null;
+  private refusalCode: GameFontRefusal | null = null;
 
   constructor(source: GameFontSource) {
     this.source = source;
   }
 
   async font(): Promise<Buffer | null> {
-    const pending = this.result ??= this.convert().catch(() => null);
-    const value = await pending;
-    if (value === null && this.result === pending) this.result = null;
-    return value;
+    return this.result ??= this.convert().catch(() => {
+      this.refusalCode = "read-or-format";
+      return null;
+    });
+  }
+
+  refusal(): GameFontRefusal | null {
+    return this.refusalCode;
   }
 
   private async convert(): Promise<Buffer | null> {
@@ -69,10 +76,10 @@ export class GameFontAssets {
       files,
     );
     const stream = findStream(files, index, GUILD_WARS_LATIN_FONT_FILE_ID);
-    if (
-      !stream?.compressed
-      || stream.size > MAX_COMPRESSED_FONT_BYTES
-    ) return null;
+    if (!stream?.compressed || stream.size > MAX_COMPRESSED_FONT_BYTES) {
+      this.refusalCode = "unsupported";
+      return null;
+    }
     const compressed = await store.readRange(stream.offset, stream.size);
     const raw = await runGwDatDecoder(this.source.decoderPath, compressed, {
       args: ["--raw"],
