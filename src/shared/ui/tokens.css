@@ -93,6 +93,8 @@
   --ui-font: "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
   --ui-font-display: var(--ui-font);
+  --ui-font-readable: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
   --ui-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Ink and state. */
@@ -135,8 +137,7 @@
   --ui-shadow-raised-soft: 0 2px 5px rgb(0 0 0 / 60%);
   --ui-shadow-selected: 0 1px 3px rgb(0 0 0 / 70%);
   --ui-shadow-row-selected: 0 1px 4px rgb(0 0 0 / 70%);
-  --ui-text-shadow: 1px 1px 0 #000, -1px 1px 0 #000,
-    1px -1px 0 #000, -1px -1px 0 #000, 0 2px 4px rgb(0 0 0 / 90%);
+  --ui-text-shadow: 0 1px 1px #000, 0 2px 3px rgb(0 0 0 / 85%);
   --ui-frame: var(--gw-ring-bone);
   --ui-frame-top: var(--gw-bone-hi);
   --ui-ring-gilt: var(--gw-ring-gilt);
@@ -186,11 +187,14 @@
   --ui-font: "Guild Wars Original", "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
   --ui-font-display: var(--ui-font);
+  /* The local strike has one hand-tuned weight. Chromium's synthetic bold
+   * expands its pixel-shaped outline and makes small labels look blurry. */
+  font-synthesis-weight: none;
 }
 
 /* A player can keep either visual style while selecting modern system type. */
 :root[data-ui-font="inter"] {
-  --ui-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ui-font: var(--ui-font-readable);
   --ui-font-display: var(--ui-font);
 }
 

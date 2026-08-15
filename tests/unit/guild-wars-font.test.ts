@@ -130,6 +130,8 @@ test("the shared UI offers the local Guild Wars font independently of Inter", ()
   assert.match(css, /data-ui-font="guild-wars"/);
   assert.match(css, /--ui-font: "Guild Wars Original"/);
   assert.match(css, /:root\[data-ui-font="inter"\]/);
+  assert.match(css, /font-synthesis-weight: none/);
+  assert.doesNotMatch(css, /-1px 1px 0 #000/);
   const appearance = readFileSync(new URL("src/renderer/appearance.ts", root), "utf8");
   assert.match(appearance, /new FontFace\("Guild Wars Original"/);
   assert.match(appearance, /generation=/);

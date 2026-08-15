@@ -52,6 +52,18 @@ test.describe("data and display settings", () => {
       await expect(root).not.toHaveAttribute("data-ui-font");
       await expect(page.locator('select[name="uiTheme"]')).toHaveCount(0);
       await expect(page.locator('select[name="uiDensity"]')).toHaveCount(0);
+      const settingsTypography = await page.locator("#settings-dialog").evaluate(
+        (dialog) => {
+          const style = globalThis.getComputedStyle(dialog);
+          return {
+            font: style.fontFamily,
+            textShadow: style.textShadow,
+          };
+        },
+      );
+      expect(settingsTypography.font).toContain("ui-sans-serif");
+      expect(settingsTypography.font).not.toContain("Guild Wars Original");
+      expect(settingsTypography.textShadow).toBe("none");
       // Polled, not read once: the save is a round trip through main and the
       // token is written when it returns. The slider's own readout updates on
       // the drag and so proves nothing about the setting having landed.
