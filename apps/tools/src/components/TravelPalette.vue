@@ -9,6 +9,7 @@ import {
 } from "vue";
 import {
   TRAVEL_DISTRICTS,
+  isTravelRequest,
   searchTravelDestinations,
   travelDestination,
   type TravelDestination,
@@ -89,7 +90,7 @@ function requestFor(destination: TravelDestination): TravelRequest {
 }
 
 async function travel(request: TravelRequest): Promise<void> {
-  if (busyMapId.value !== null) return;
+  if (busyMapId.value !== null || !isTravelRequest(request)) return;
   const destination = travelDestination(request.mapId);
   feedback.value = destination === null
     ? "Travelling…"

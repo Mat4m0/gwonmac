@@ -137,6 +137,7 @@ export function isTravelRequest(value: unknown): value is TravelRequest {
     && Number.isSafeInteger(request.mapId)
     && Number(request.mapId) > 0
     && Number(request.mapId) <= 2_000
+    && travelDestination(Number(request.mapId)) !== null
     && TRAVEL_DISTRICTS.some((district) => district.id === request.district)
     && Number.isSafeInteger(request.districtNumber)
     && Number(request.districtNumber) >= 0

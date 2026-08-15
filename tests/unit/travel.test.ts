@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  isTravelRequest,
   isTravelShortcuts,
   searchTravelDestinations,
   travelDestination,
@@ -36,5 +37,10 @@ describe("Travel", () => {
   it("resolves only catalogue map ids", () => {
     assert.equal(travelDestination(81)?.name, "Ascalon City");
     assert.equal(travelDestination(2_000), null);
+    assert.equal(isTravelRequest({
+      mapId: 2_000,
+      district: "international",
+      districtNumber: 0,
+    }), false);
   });
 });

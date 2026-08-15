@@ -473,9 +473,6 @@ export function transformEnhancementWasm(
       dispatchKind: DISPATCH_UI,
     });
   }
-  if (new Set(selected.map((hook) => hook.localIndex)).size !== selected.length) {
-    fail("selected hooks must resolve to distinct functions");
-  }
   const bodyHash = (functionIndex: number): string => {
     const body = bodies[functionIndex - importCount];
     if (!body) fail(`function ${functionIndex} has no body`);
@@ -535,12 +532,6 @@ export function transformEnhancementWasm(
     : [];
   if (new Set(commands.map((entry) => entry.opcode)).size !== commands.length) {
     fail("certified commands must have distinct opcodes");
-  }
-  if (
-    capabilities.commands
-    && new Set(commands.map((entry) => entry.functionIndex)).size !== commands.length
-  ) {
-    fail("certified commands must resolve to distinct functions");
   }
   const professionCommand = capabilities.commands
     ? commands.find((entry) => entry.opcode === 65)
@@ -631,13 +622,6 @@ export function transformEnhancementWasm(
         + `${teamApply.professionTrace.sender.bodySha256}`,
       );
     }
-    if (
-      selected.some((hook) => hook.localIndex === packetSender.localIndex)
-      || commands.some((entry) => entry.functionIndex
-        === teamApply.professionTrace.sender.functionIndex)
-    ) {
-      fail("traced packet sender must be distinct from hooks and commands");
-    }
   }
   const commandDrainBoundary = capabilities.commands || capabilities.storage
     ? resolveHook(
@@ -658,51 +642,45 @@ export function transformEnhancementWasm(
         + `the certified ${gameThread.drain.bodySha256}`,
       );
     }
-    if (
-      selected.some((hook) => hook.localIndex === commandDrainBoundary.localIndex)
-      || commands.some((entry) => entry.functionIndex === gameThread.drain.functionIndex)
-      || packetSender?.localIndex === commandDrainBoundary.localIndex
-      || storageHandler?.localIndex === commandDrainBoundary.localIndex
-      || storageSlashParserHook?.localIndex === commandDrainBoundary.localIndex
-      || travelProducer?.localIndex === commandDrainBoundary.localIndex
-    ) {
-      fail("command drain boundary must be distinct from hooks, commands, and sender");
+  }
+
+  const exclusiveRoles = [
+    ...selected.map((hook) => ({
+      name: `dispatch hook ${hook.dispatchKind}`,
+      functionIndex: hook.localIndex + importCount,
+    })),
+    ...commands.map((entry) => ({
+      name: `command opcode ${entry.opcode}`,
+      functionIndex: entry.functionIndex,
+    })),
+    ...(packetSender ? [{
+      name: "traced packet sender",
+      functionIndex: packetSender.localIndex + importCount,
+    }] : []),
+    ...(commandDrainBoundary ? [{
+      name: "command drain boundary",
+      functionIndex: commandDrainBoundary.localIndex + importCount,
+    }] : []),
+    ...(storageHandler ? [{
+      name: "DataWindow handler",
+      functionIndex: storageHandler.localIndex + importCount,
+    }] : []),
+    ...(storageSlashParserHook ? [{
+      name: "storage slash parser",
+      functionIndex: storageSlashParserHook.localIndex + importCount,
+    }] : []),
+    ...(travelProducer ? [{
+      name: "travel payload producer",
+      functionIndex: travelProducer.localIndex + importCount,
+    }] : []),
+  ];
+  const roleByFunction = new Map<number, string>();
+  for (const role of exclusiveRoles) {
+    const existing = roleByFunction.get(role.functionIndex);
+    if (existing) {
+      fail(`${role.name} must be distinct from ${existing}`);
     }
-  }
-  if (
-    storageHandler
-    && (
-      selected.some((hook) => hook.localIndex === storageHandler.localIndex)
-      || commands.some((entry) => entry.functionIndex
-        === storage.handler.functionIndex)
-      || packetSender?.localIndex === storageHandler.localIndex
-      || storageSlashParserHook?.localIndex === storageHandler.localIndex
-    )
-  ) {
-    fail("DataWindow handler must be distinct from hooks and packet commands");
-  }
-  if (
-    storageSlashParserHook
-    && (
-      selected.some((hook) => hook.localIndex === storageSlashParserHook.localIndex)
-      || commands.some((entry) => entry.functionIndex
-        === storage.slashParser.functionIndex)
-      || packetSender?.localIndex === storageSlashParserHook.localIndex
-    )
-  ) {
-    fail("storage slash parser must be distinct from hooks and packet commands");
-  }
-  if (
-    travelProducer
-    && (
-      commands.some((entry) => entry.functionIndex
-        === storage.travel.producer.functionIndex)
-      || packetSender?.localIndex === travelProducer.localIndex
-      || storageHandler?.localIndex === travelProducer.localIndex
-      || storageSlashParserHook?.localIndex === travelProducer.localIndex
-    )
-  ) {
-    fail("travel payload producer must be distinct from hooks and packet commands");
+    roleByFunction.set(role.functionIndex, role.name);
   }
 
   const table = parseTable(sectionById(sections, 4));

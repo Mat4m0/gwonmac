@@ -5,8 +5,8 @@ import { DEFAULT_TRAVEL_SHORTCUTS, type TravelShortcuts } from "../../../../src/
 import type { TravelHost } from "../travel-host";
 import TravelPalette from "./TravelPalette.vue";
 
-function fixture() {
-  let shortcuts: TravelShortcuts = DEFAULT_TRAVEL_SHORTCUTS;
+function fixture(initial: TravelShortcuts = DEFAULT_TRAVEL_SHORTCUTS) {
+  let shortcuts: TravelShortcuts = initial;
   const travel = vi.fn<TravelHost["travel"]>(async () => undefined);
   const saveShortcuts = vi.fn<TravelHost["saveShortcuts"]>(async (next) => {
     shortcuts = next;
@@ -48,6 +48,18 @@ describe("TravelPalette", () => {
     await wrapper.get('[role="combobox"]').trigger("keydown", { key: "1" });
 
     expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
+    wrapper.unmount();
+  });
+
+  it("refuses a persisted shortcut outside the reviewed catalogue", async () => {
+    const { wrapper, travel } = fixture([
+      { mapId: 2_000, district: "international", districtNumber: 0 },
+    ]);
+    await flushPromises();
+
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "1" });
+
+    expect(travel).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
