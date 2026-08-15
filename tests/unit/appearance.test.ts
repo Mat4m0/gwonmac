@@ -20,7 +20,7 @@ describe("appearance settings", () => {
     });
   });
 
-  it("sets only the optional style marker and removes it for the default", () => {
+  it("sets independent style and font markers and removes their defaults", () => {
     const properties = new Map<string, string>();
     const root = {
       dataset: {} as DOMStringMap,
@@ -31,11 +31,17 @@ describe("appearance settings", () => {
       },
     } as HTMLElement;
 
-    applyAppearance({ ...DEFAULT_SETTINGS, uiStyle: "obsidian" }, root);
+    applyAppearance({
+      ...DEFAULT_SETTINGS,
+      uiStyle: "obsidian",
+      uiFont: "inter",
+    }, root);
     assert.equal(root.dataset.uiStyle, "obsidian");
+    assert.equal(root.dataset.uiFont, "inter");
     assert.equal(properties.get("--ui-panel-opacity"), "0.94");
 
     applyAppearance(DEFAULT_SETTINGS, root);
     assert.equal(root.dataset.uiStyle, undefined);
+    assert.equal(root.dataset.uiFont, undefined);
   });
 });

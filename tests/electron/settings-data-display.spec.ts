@@ -30,7 +30,7 @@ test.describe("data and display settings", () => {
     }
   });
 
-  test("interface style and panel opacity apply live and survive", async () => {
+  test("interface style, font, and panel opacity apply live and survive", async () => {
     const fixture = await launchOffline("gw-settings-appearance-e2e-");
     try {
       const { page } = fixture;
@@ -45,7 +45,11 @@ test.describe("data and display settings", () => {
       await expect(
         page.locator('input[name="uiStyle"][value="guild-wars"]'),
       ).toBeChecked();
+      await expect(
+        page.locator('input[name="uiFont"][value="guild-wars"]'),
+      ).toBeChecked();
       await expect(root).not.toHaveAttribute("data-ui-style");
+      await expect(root).not.toHaveAttribute("data-ui-font");
       await expect(page.locator('select[name="uiTheme"]')).toHaveCount(0);
       await expect(page.locator('select[name="uiDensity"]')).toHaveCount(0);
       // Polled, not read once: the save is a round trip through main and the
@@ -75,6 +79,9 @@ test.describe("data and display settings", () => {
 
       await page.locator('input[name="uiStyle"][value="obsidian"]').click();
       await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(root).not.toHaveAttribute("data-ui-font");
+      await page.locator('label:has(input[name="uiFont"][value="inter"])').click();
+      await expect(root).toHaveAttribute("data-ui-font", "inter");
       await expect(page.locator("#settings-feedback")).toHaveText("Saved.");
       expect(
         await page.locator("#settings-dialog").evaluate((element) =>
@@ -100,6 +107,10 @@ test.describe("data and display settings", () => {
         page.locator('input[name="uiStyle"][value="obsidian"]'),
       ).toBeChecked();
       await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(
+        page.locator('input[name="uiFont"][value="inter"]'),
+      ).toBeChecked();
+      await expect(root).toHaveAttribute("data-ui-font", "inter");
       await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue("65");
       await expect(page.locator('output[name="uiPanelOpacityValue"]')).toHaveText("65%");
     } finally {

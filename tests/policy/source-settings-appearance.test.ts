@@ -22,6 +22,13 @@ test("Settings exposes the two interface styles and no retired variants", async 
   assert.deepEqual(values, ["guild-wars", "obsidian"]);
 });
 
+test("Settings exposes the two independent interface fonts", async () => {
+  const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
+  const values = [...html.matchAll(/<input\b[^>]*\bname=["']uiFont["'][^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
+    .map((match) => match[1]);
+  assert.deepEqual(values, ["guild-wars", "inter"]);
+});
+
 test("panel opacity uses the canonical bounds", async () => {
   const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
   const input = /<input\b[^>]*\bname\s*=\s*["']uiPanelOpacity["'][^>]*>/iu.exec(html);

@@ -83,8 +83,10 @@ the action and restarts. It keeps the small official client files.
 
 ## Display and input
 
-Open **Settings → Display** to select render scale, interface style, and
-panel opacity.
+Open **Settings → Display** to select render scale, interface style, interface
+font, and panel opacity. **Guild Wars Original** is converted locally from your
+installed game. **Inter** uses the modern font when it is installed and the
+closest system sans-serif otherwise.
 
 **Retina — 2×** is the image-quality default. Use 1.5× or 1× to reduce GPU work
 and memory. Settings shows the current backing resolution. The official web

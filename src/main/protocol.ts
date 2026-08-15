@@ -33,6 +33,7 @@ import {
   resolveProxyHost,
 } from "./core/proxy-routes.js";
 import { clientArtifactPath } from "./core/paths.js";
+import { GameFontAssets } from "./core/game-font-assets.js";
 import { SkillAssets } from "./core/skill-catalogue.js";
 import { parseRangeHeader } from "./core/ranges.js";
 import { errorCode } from "../shared/errors.js";
@@ -53,6 +54,7 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
   ".webp": "image/webp",
   ".png": "image/png",
+  ".ttf": "font/ttf",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
 };
@@ -116,6 +118,11 @@ let skillAssets: {
   readonly value: SkillAssets;
 } | null = null;
 
+let gameFontAssets: {
+  readonly store: ChunkStore;
+  readonly value: GameFontAssets;
+} | null = null;
+
 function assetsFor(
   active: NonNullable<ReturnType<ProtocolDeps["getActiveClient"]>>,
 ): SkillAssets {
@@ -132,6 +139,18 @@ function assetsFor(
     cacheRoot: gamePaths().skillAssets,
   });
   skillAssets = { store: active.store, wasmPath: active.wasmPath, value };
+  return value;
+}
+
+function fontFor(
+  active: NonNullable<ReturnType<ProtocolDeps["getActiveClient"]>>,
+): GameFontAssets {
+  if (gameFontAssets?.store === active.store) return gameFontAssets.value;
+  const value = new GameFontAssets({
+    store: active.store,
+    decoderPath: gwDatDecoderPath(),
+  });
+  gameFontAssets = { store: active.store, value };
   return value;
 }
 
@@ -460,6 +479,27 @@ async function handleGwRequest(
   const first = (base.split("/")[0] ?? "").toLowerCase();
 
   if (base === "Gw.snapshot") return handleSnapshot(request, deps);
+
+  if (base === "game-font.ttf") {
+    const missing = () =>
+      new Response("not found", {
+        status: 404,
+        headers: headers({ "Cache-Control": "no-store" }),
+      });
+    const active = deps.getActiveClient();
+    if (!active || request.method !== "GET") return missing();
+    const font = await fontFor(active).font();
+    return font
+      ? new Response(compactResponseBody(font), {
+          status: 200,
+          headers: headers({
+            "Content-Type": "font/ttf",
+            "Content-Length": String(font.byteLength),
+            "Cache-Control": "no-store",
+          }),
+        })
+      : missing();
+  }
 
   if (base === SKILL_CATALOGUE_ROUTE) {
     const empty = () =>

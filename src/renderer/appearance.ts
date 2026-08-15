@@ -28,4 +28,9 @@ export function applyAppearance(
   } else {
     delete root.dataset.uiStyle;
   }
+  if (settings.uiFont === "inter") {
+    root.dataset.uiFont = "inter";
+  } else {
+    delete root.dataset.uiFont;
+  }
 }
