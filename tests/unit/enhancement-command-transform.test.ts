@@ -517,7 +517,7 @@ describe("Enhancement command transform", () => {
         },
         CURSOR_TOOLBOX_COMMANDS,
       ),
-      /must be distinct from hooks, commands, and sender/,
+      /command drain boundary must be distinct from command opcode 65/u,
     );
     assert.throws(
       () => transformEnhancementWasm(
@@ -578,7 +578,7 @@ describe("Enhancement command transform", () => {
         },
         CURSOR_TOOLBOX_COMMANDS,
       ),
-      /traced packet sender must be distinct from hooks and commands/,
+      /traced packet sender must be distinct from dispatch hook 2/u,
     );
   });
 
@@ -601,6 +601,32 @@ describe("Enhancement command transform", () => {
         CURSOR_TOOLBOX_COMMANDS,
       ),
       /storage slash parser body does not match its semantic fingerprint/,
+    );
+  });
+
+  it("refuses a travel producer that aliases a selected dispatch hook", () => {
+    const input = fixture();
+    const build = manifest(input);
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          storage: {
+            ...build.storage!,
+            travel: {
+              ...build.storage!.travel,
+              producer: {
+                ...build.storage!.travel.producer,
+                functionIndex: build.cursorEvent!.functionIndex,
+                bodySha256: build.cursorEvent!.bodySha256,
+              },
+            },
+          },
+        },
+        CURSOR_TARGET_TOOLBOX_COMMANDS,
+      ),
+      /travel payload producer must be distinct from dispatch hook 1/u,
     );
   });
 

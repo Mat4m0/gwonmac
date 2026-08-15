@@ -155,9 +155,10 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...env, 1, 99, 0, 1,
     ...env, 1, 117, 0, 2,
   ]);
-  // Ten defined functions: three hooks, three commands, the distinct recurring
-  // game-thread callback, shared packet sender, DataWindow, and slash parser.
-  const functions = section(3, [10, 0, 1, 2, 0, 2, 3, 3, 2, 0, 4]);
+  // Eleven defined functions: three hooks, three commands, the recurring
+  // game-thread callback, packet sender, DataWindow, slash parser, and Travel
+  // producer. The producer is deliberately distinct from every selected hook.
+  const functions = section(3, [11, 0, 1, 2, 0, 2, 3, 3, 2, 0, 4, 1]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -223,7 +224,7 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
   const dataWindow = [0, 0x20, 0, 0x10, 0, 0x0b];
   const slash = [0, 0x20, 0, 0x10, 0, 0x41, 0, 0x0b];
   const code = section(10, [
-    10,
+    11,
     ...uleb(tick.length), ...tick,
     ...uleb(cursor.length), ...cursor,
     ...uleb(ui.length), ...ui,
@@ -234,6 +235,7 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...uleb(sender.length), ...sender,
     ...uleb(dataWindow.length), ...dataWindow,
     ...uleb(slash.length), ...slash,
+    ...uleb(cursor.length), ...cursor,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
@@ -266,11 +268,11 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
         configureExport: "enhancement_configure_travel",
         messageId: 0x1000_0183,
         producer: {
-          functionIndex: 4,
+          functionIndex: 13,
           params: ["i32", "i32", "i32", "i32", "i32"],
           results: [],
           bodySha256: createHash("sha256")
-            .update(commandBody(bytes, 1))
+            .update(commandBody(bytes, 10))
             .digest("hex"),
         },
       },

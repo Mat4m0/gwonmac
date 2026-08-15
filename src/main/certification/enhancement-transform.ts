@@ -56,7 +56,6 @@ import {
   parseIndexVector,
   parseExports,
   parseTypes,
-  readUleb,
   sectionById,
   sleb,
   splitSections,
