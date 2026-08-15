@@ -205,10 +205,12 @@ separate Tools setting in a positively classified PvE outpost and is cancelled w
 changes.
 
 Travel accepts only four bounded scalar values: map, region, language, and
-district. Search text, aliases, destinations, and numbered shortcuts stay in
-the host-owned Vue interface. At the certified frame drain, the transform writes
-the four words to its installer-owned payload and calls the exact client Travel
-dispatcher with `kTravel`. It cannot dispatch another client UI message.
+district. The exact `/tp` command sets one named, one-shot palette toggle that
+the renderer takes and clears. Search text, aliases, destinations, and numbered
+shortcuts stay in the host-owned Vue interface. At the certified frame drain,
+the transform writes the four words to its installer-owned payload. It then
+calls the exact client Travel dispatcher with `kTravel`. It cannot dispatch
+another client UI message.
 
 Team Apply requires enabled Tools and Apply teams in Guild Wars, an exact commands
 profile, a positively classified PvE outpost, fresh party state, and an explicit
@@ -237,9 +239,10 @@ and a changed slash parser, DataWindow handler, or Travel producer must not
 block Team Apply. For storage, confirm both exact aliases are consumed, a near
 miss still reaches the normal parser, the fixed DataWindow payload runs at the
 certified drain, and `pnpm enhancements:live xunlai-storage` opens the normal
-window in a PvE outpost. For Travel, confirm the producer still writes
-`{ map, region, language, district }` and sends `kTravel`, then perform one
-bounded live trip to an unlocked outpost.
+window in a PvE outpost. For Travel, confirm `/tp` is consumed only while
+Travel is enabled and its one-shot toggle reaches the palette. Confirm the
+producer still writes `{ map, region, language, district }` and sends `kTravel`.
+Then perform one bounded live trip to an unlocked outpost.
 
 The workflow never uploads ArenaNet client bytes. It uploads reports and source
 changes only.

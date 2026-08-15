@@ -7,6 +7,44 @@ import {
 import { startGameInput } from "./input-helpers.js";
 
 test.describe("renderer Travel input", () => {
+  test("opens from the certified one-shot chat request", async () => {
+    const fixture = await launchCachedClient("gw-travel-chat-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(async () => {
+        document.getElementById("loading")?.classList.add("gone");
+        let toggle = 1;
+        const specifier = "./enhancement-travel-installation.js";
+        const { createTravelInstallation }:
+          typeof import("../../src/renderer/enhancement-travel-installation.js") =
+            await import(specifier);
+        const installation = createTravelInstallation({
+          enhancement_travel: () => 1,
+          enhancement_configure_travel: () => 1,
+          enhancement_take_travel_toggle: () => {
+            const current = toggle;
+            toggle = 0;
+            return current;
+          },
+        }, true);
+        if (installation === null) throw new Error("Travel did not install");
+        installation.allocate(() => 128);
+        installation.initialize();
+        installation.mount(document.body);
+        installation.update({
+          enabled: true,
+          playRegion: "pve",
+          state: { status: "ready", mapId: 133, instanceType: 0 },
+        });
+      });
+
+      await expect(page.getByRole("dialog", { name: "Travel" })).toBeVisible();
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("stays open over game interaction and closes from every focus state", async () => {
     const fixture = await launchCachedClient("gw-travel-input-e2e-");
     try {

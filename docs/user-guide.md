@@ -126,8 +126,9 @@ After that restart, these choices update immediately:
 - **Open Xunlai storage** (Beta) allows the Storage button, Command-Shift-C
   shortcut, and the `/chest` and `/xunlai` chat commands in a supported PvE
   outpost.
-- **Quick Travel palette** (Beta) opens with Command-T. Before you search, it
-  shows only your saved quick destinations; press 1–9 from anywhere in Travel
+- **Quick Travel palette** (Beta) opens with Command-T or the `/tp` chat
+  command. Before you search, it shows only your saved quick destinations.
+  Press 1–9 from anywhere in Travel
   to use one. Type a destination or alias such as `la`, `kama`, or `eotn`,
   choose a district, and press Return. Command-1 through Command-9 assigns the
   selected result to that number.

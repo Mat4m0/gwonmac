@@ -42,9 +42,10 @@ import {
   commandEnqueue,
   storageConfigure,
   storageEnqueue,
-  storageSlashParser,
+  localActionSlashParser,
   travelConfigure,
   travelEnqueue,
+  travelToggleTake,
 } from "./enhancement-command-transform.js";
 import {
   concat,
@@ -615,6 +616,7 @@ export function transformEnhancementWasm(
           storage.configureExport,
           storage.travel.enqueueExport,
           storage.travel.configureExport,
+          storage.travel.toggleExport,
         ]
       : []),
   ];
@@ -639,6 +641,7 @@ export function transformEnhancementWasm(
   const storageEnabledGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
   const travelPayloadGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
   const travelEnabledGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
+  const travelToggleGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
   const traceGlobalBase = capabilities.commands
     ? allocateGlobals(PROFESSION_TRACE_WORDS)
     : 0;
@@ -696,6 +699,9 @@ export function transformEnhancementWasm(
     : null;
   const travelConfigureTypeIndex = capabilities.storage
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
+    : null;
+  const travelToggleTypeIndex = capabilities.storage
+    ? appendType({ params: [], results: [0x7f] })
     : null;
 
   const nextFunctionTypes = [...functionTypes];
@@ -800,11 +806,13 @@ export function transformEnhancementWasm(
       );
     }
     if (capabilities.storage) {
-      nextBodies[storageSlashParserHook!.localIndex] = storageSlashParser(
+      nextBodies[storageSlashParserHook!.localIndex] = localActionSlashParser(
         storageSlashParserOriginalIndex!,
         commandPendingGlobalIndex,
         storagePayloadGlobalIndex,
         storageEnabledGlobalIndex,
+        travelEnabledGlobalIndex,
+        travelToggleGlobalIndex,
       );
       addedFunctionExports.push(
         {
@@ -850,6 +858,13 @@ export function transformEnhancementWasm(
               travelPayloadGlobalIndex,
               travelEnabledGlobalIndex,
             ),
+          ),
+        },
+        {
+          name: storage.travel.toggleExport,
+          index: appendFunction(
+            travelToggleTypeIndex!,
+            travelToggleTake(travelToggleGlobalIndex),
           ),
         },
       );
