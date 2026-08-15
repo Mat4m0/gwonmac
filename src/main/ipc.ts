@@ -13,11 +13,16 @@
  * arguments and either forwards one owner-local capability directly or calls
  * the workflow owner; it returns codes rather than inventing prose.
  */
-import { BrowserWindow, clipboard, ipcMain, shell, app } from "electron";
+import { BrowserWindow, clipboard, ipcMain, shell } from "electron";
 import { statfs } from "node:fs/promises";
 import type {
   AppSettings,
   AppSettingsPatch,
+  AccountsSetupRequest,
+  AccountProfileCreateRequest,
+  AccountProfileUpdateRequest,
+  AccountTemplateLibrary,
+  AccountsState,
   AppUpdateState,
   CacheInfo,
   ClientHealthToken,
@@ -33,21 +38,16 @@ import type {
   SteamRefusalReason,
   SteamTokenResult,
   StoredCredentials,
+  TemplateExportEntry,
 } from "../shared/contracts.js";
+import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
 import type {
   RendererFrameBatch,
   RendererMetrics,
-  RendererMilestone,
-  RendererMilestoneFields,
-  WasmAbortReasonKind,
 } from "../shared/diagnostics.js";
 import {
   isRendererFrameBatch,
   isRendererMetrics,
-  RENDERER_MILESTONES,
-  WASM_ABORT_REASON_KINDS,
-  WASM_GROWTH_OUTCOMES,
-  WASM_MEMORY_PROBE_STATUSES,
 } from "../shared/diagnostics.js";
 import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
 import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
@@ -60,12 +60,19 @@ import {
   ValidationError,
 } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
-import {
-  loadBuildLibrary,
-  saveBuildLibrary,
-} from "./core/build-library.js";
 import { parseBuildLibrary } from "../shared/builds/parse-library.js";
-import { isGraphicsDiagnostics, toWireSocketEvent } from "./ipc-values.js";
+import type { BuildLibrary } from "../shared/builds/library.js";
+import {
+  isGraphicsDiagnostics,
+  parseRendererMilestoneArgs,
+  toWireSocketEvent,
+} from "./ipc-values.js";
+import {
+  parseAccountProfileCreate,
+  parseAccountProfileUpdate,
+  parseAccountsSetup,
+  parseProfileIds,
+} from "./accounts-ipc-values.js";
 import { resolveDns } from "./core/dns.js";
 import { exportTemplates, parseExportEntries } from "./template-export.js";
 import {
@@ -93,12 +100,14 @@ import {
   recordClockOffset,
   startDnsResolveSpan,
 } from "./diagnostics.js";
-import { isRendererFingerprint } from "./diagnostics/schema-fields.js";
 import { gamePaths } from "./paths.js";
-import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
+import {
+  isAccountsRendererUrl,
+  isCanonicalRendererUrl,
+} from "./core/renderer-trust.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
-import { getMainWindow } from "./window.js";
+import { windowRegistry, type WindowRegistry } from "./window-registry.js";
 import {
   applySettingsChange,
   confirmSettingsReset,
@@ -108,8 +117,14 @@ import {
 
 export interface IpcContext {
   sockets: SocketManager;
-  credentialsStore: CredentialsStore;
-  steamSessionStore: SteamSessionStore;
+  windows: WindowRegistry;
+  credentialsStoreFor: (win: BrowserWindow) => CredentialsStore;
+  steamSessionStoreFor: (win: BrowserWindow) => SteamSessionStore;
+  getBuildLibrary: (
+    win: BrowserWindow,
+  ) => Promise<{ readonly library: BuildLibrary; readonly recovered: boolean }>;
+  setBuildLibrary: (win: BrowserWindow, library: BuildLibrary) => Promise<BuildLibrary>;
+  gameStorageResetMarkerFor: (win: BrowserWindow) => string;
   getProgress: () => DownloadProgress;
   getChunkStore: () => ChunkStore | null;
   getSettings: () => Promise<AppSettings>;
@@ -132,19 +147,45 @@ export interface IpcContext {
     parent: BrowserWindow,
     record: (event: SteamAcquireEvent) => void,
   ) => Promise<SteamAcquireResult>;
+  getAccountsState: () => AccountsState;
+  setupAccounts: (request: AccountsSetupRequest) => Promise<void>;
+  openAccounts: (profileIds: readonly ProfileId[]) => Promise<void>;
+  createAccount: (request: AccountProfileCreateRequest) => Promise<AccountsState>;
+  updateAccount: (request: AccountProfileUpdateRequest) => Promise<AccountsState>;
+  archiveAccount: (profileId: ProfileId) => Promise<AccountsState>;
+  restoreAccount: (profileId: ProfileId) => Promise<AccountsState>;
+  deleteAccount: (
+    parent: BrowserWindow,
+    profileId: ProfileId,
+  ) => Promise<AccountsState>;
+  useSingleAccountMode: () => Promise<void>;
+  requestQuit: (win: BrowserWindow) => void;
+  loadAccountTemplates: (win: BrowserWindow) => Promise<AccountTemplateLibrary | null>;
+  saveAccountTemplates: (
+    win: BrowserWindow,
+    entries: readonly TemplateExportEntry[],
+  ) => Promise<void>;
 }
 
 type SteamInvokeChannel = "steamToken" | "steamStore" | "steamClear";
 
-function assertSender(event: Electron.IpcMainInvokeEvent): BrowserWindow {
+function assertSender(
+  registry: WindowRegistry,
+  event: Electron.IpcMainInvokeEvent,
+  role: "game" | "hub" | "any",
+): BrowserWindow {
   const win = BrowserWindow.fromWebContents(event.sender);
-  if (!win || win !== getMainWindow()) {
+  const context = registry.contextForWebContents(event.sender.id);
+  if (!win || !context || (role !== "any" && context.role !== role)) {
     throw new AllowlistError("unowned ipc sender");
   }
   if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
     throw new AllowlistError("ipc sender is not the main frame");
   }
-  if (!isCanonicalRendererUrl(event.senderFrame.url)) {
+  const trusted = context.role === "hub"
+    ? isAccountsRendererUrl(event.senderFrame.url)
+    : isCanonicalRendererUrl(event.senderFrame.url);
+  if (!trusted) {
     throw new AllowlistError("invalid ipc origin");
   }
   return win;
@@ -173,6 +214,7 @@ type Run<In, Out> = (win: BrowserWindow, input: In) => Out | Promise<Out>;
 interface ChannelDef<In, Out> {
   readonly parse: Parser<In>;
   readonly run: Run<In, Out>;
+  readonly role: "game" | "hub" | "any";
 }
 
 /**
@@ -185,14 +227,16 @@ interface ChannelDef<In, Out> {
 interface AnyChannelDef {
   readonly parse: Parser<unknown>;
   readonly run: Run<never, unknown>;
+  readonly role: "game" | "hub" | "any";
 }
 
 /** You cannot construct a channel without a parser. That is the point. */
 function channel<In, Out>(
   parse: Parser<In>,
   run: Run<In, Out>,
+  role: "game" | "hub" | "any" = "game",
 ): ChannelDef<In, Out> {
-  return { parse, run };
+  return { parse, run, role };
 }
 
 /** For the channels that carry nothing. Still a parser, still explicit. */
@@ -389,168 +433,12 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   return value;
 });
 
-interface ParsedMilestone {
-  name: RendererMilestone;
-  rendererTimestampUs: number;
-  fields: RendererMilestoneFields | undefined;
-}
-
-/** A byte count as the renderer reports one: a non-negative safe integer. */
-const isByteCount = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-
-const asMilestone: Parser<ParsedMilestone> = (args) => {
-  exact(args, 3);
-  const [name, rendererTimestampUs, fields] = args;
-  if (
-    typeof name !== "string" ||
-    !RENDERER_MILESTONES.includes(name as RendererMilestone) ||
-    typeof rendererTimestampUs !== "number" ||
-    !Number.isFinite(rendererTimestampUs) ||
-    rendererTimestampUs < 0 ||
-    rendererTimestampUs > Number.MAX_SAFE_INTEGER
-  ) {
-    throw new ValidationError("invalid renderer milestone");
-  }
-  const record = fields as Record<string, unknown> | undefined;
-  const recordIsObject =
-    record !== undefined
-    && record !== null
-    && typeof record === "object"
-    && !Array.isArray(record);
-  let milestoneFields: RendererMilestoneFields | undefined;
-  if (name === "build.info") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 2
-      && (typeof record.programId === "string" || typeof record.programId === "number")
-      && (typeof record.buildId === "string" || typeof record.buildId === "number")
-      && [record.programId, record.buildId].every(
-        (value) =>
-          (typeof value === "string" && value.length <= 128) ||
-          (typeof value === "number" && Number.isSafeInteger(value) && value >= 0),
-      );
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      programId: record.programId as string | number,
-      buildId: record.buildId as string | number,
-    };
-  } else if (name === "wasm.abort") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 3
-      && typeof record.reasonKind === "string"
-      && (WASM_ABORT_REASON_KINDS as readonly string[]).includes(record.reasonKind)
-      && isRendererFingerprint(record.fingerprint)
-      && isByteCount(record.heapBytes);
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      reasonKind: record.reasonKind as WasmAbortReasonKind,
-      fingerprint: record.fingerprint as string,
-      heapBytes: record.heapBytes as number,
-    };
-  } else if (name === "wasm.exit") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 2
-      && typeof record.code === "number"
-      && Number.isSafeInteger(record.code)
-      && isByteCount(record.heapBytes);
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      code: record.code as number,
-      heapBytes: record.heapBytes as number,
-    };
-  } else if (name === "wasm.memoryProbe") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 1
-      && typeof record.status === "string"
-      && (WASM_MEMORY_PROBE_STATUSES as readonly string[]).includes(record.status);
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      status: record.status as (typeof WASM_MEMORY_PROBE_STATUSES)[number],
-    };
-  } else if (name === "wasm.growthRequested") {
-    const numericFields = [
-      "requestedBytes", "beforeBytes", "afterBytes", "stackDepth",
-      "frame0Function", "frame0Offset", "frame1Function", "frame1Offset",
-      "frame2Function", "frame2Offset", "frame3Function", "frame3Offset",
-      "generatedTextures", "deletedTextures", "liveTextures",
-      "trackedTextures", "knownTextureBytes", "textureUploadBytes",
-      "unknownTextureAllocations",
-    ] as const;
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === numericFields.length + 3
-      && numericFields.every((field) => isByteCount(record[field]))
-      && (record.stackDepth as number) <= 4
-      && (record.trackedTextures as number) <= 4_096
-      && typeof record.outcome === "string"
-      && (WASM_GROWTH_OUTCOMES as readonly string[]).includes(record.outcome)
-      && isRendererFingerprint(record.stackFingerprint)
-      && typeof record.textureTrackingSaturated === "boolean";
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      requestedBytes: record.requestedBytes as number,
-      beforeBytes: record.beforeBytes as number,
-      afterBytes: record.afterBytes as number,
-      outcome: record.outcome as (typeof WASM_GROWTH_OUTCOMES)[number],
-      stackFingerprint: record.stackFingerprint as string,
-      stackDepth: record.stackDepth as number,
-      frame0Function: record.frame0Function as number,
-      frame0Offset: record.frame0Offset as number,
-      frame1Function: record.frame1Function as number,
-      frame1Offset: record.frame1Offset as number,
-      frame2Function: record.frame2Function as number,
-      frame2Offset: record.frame2Offset as number,
-      frame3Function: record.frame3Function as number,
-      frame3Offset: record.frame3Offset as number,
-      generatedTextures: record.generatedTextures as number,
-      deletedTextures: record.deletedTextures as number,
-      liveTextures: record.liveTextures as number,
-      trackedTextures: record.trackedTextures as number,
-      knownTextureBytes: record.knownTextureBytes as number,
-      textureUploadBytes: record.textureUploadBytes as number,
-      unknownTextureAllocations: record.unknownTextureAllocations as number,
-      textureTrackingSaturated: record.textureTrackingSaturated as boolean,
-    };
-  } else if (name === "enhancement.installed") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 3
-      && typeof record.companionAbi === "number"
-      && Number.isSafeInteger(record.companionAbi)
-      && record.companionAbi >= 0
-      && typeof record.installation === "number"
-      && Number.isSafeInteger(record.installation)
-      && record.installation >= 1
-      && typeof record.capabilityProfile === "string"
-      && record.capabilityProfile.length <= 32;
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = {
-      companionAbi: record.companionAbi as number,
-      installation: record.installation as number,
-      capabilityProfile: record.capabilityProfile as string,
-    };
-  } else if (name === "enhancement.uninstalled") {
-    const valid =
-      recordIsObject
-      && Object.keys(record).length === 1
-      && typeof record.installation === "number"
-      && Number.isSafeInteger(record.installation)
-      && record.installation >= 1;
-    if (!valid) throw new ValidationError("invalid renderer milestone");
-    milestoneFields = { installation: record.installation as number };
-  } else if (fields !== undefined) {
-    throw new ValidationError("invalid renderer milestone");
-  }
-  return {
-    name: name as RendererMilestone,
-    rendererTimestampUs,
-    fields: milestoneFields,
-  };
-};
+const asAccountsSetup = one(parseAccountsSetup);
+const asAccountProfileCreate = one(parseAccountProfileCreate);
+const asAccountProfileUpdate = one(parseAccountProfileUpdate);
+const asProfileId = one(parseProfileId);
+const asProfileIds = one(parseProfileIds);
+const asMilestone = parseRendererMilestoneArgs;
 
 async function chunkStoreInfo(
   store: ChunkStore | null,
@@ -602,7 +490,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
   drainSecrets(): Promise<void>;
 } {
   const paths = gamePaths();
-  const credentials = ctx.credentialsStore;
   const secretOperations = new Set<Promise<unknown>>();
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
@@ -667,17 +554,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
       await ctx.sockets.close(socketId, win.webContents.id);
     }),
 
-    buildLibraryGet: channel(nothing, async () => {
-      let recovered = false;
-      const library = await loadBuildLibrary(paths.buildLibrary, () => {
-        recovered = true;
-      });
-      return { library, recovered };
-    }),
+    buildLibraryGet: channel(nothing, (win) => ctx.getBuildLibrary(win)),
 
-    buildLibrarySet: channel(one(parseBuildLibrary), async (_win, library) => {
-      return saveBuildLibrary(paths.buildLibrary, library);
-    }),
+    buildLibrarySet: channel(one(parseBuildLibrary), (win, library) =>
+      ctx.setBuildLibrary(win, library)),
 
     settingsGet: channel(nothing, async () => {
       try {
@@ -702,9 +582,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
       confirmSettingsReset(win, ctx.resetSettings),
     ),
 
-    credentialsLoad: channel(nothing, async () => {
+    credentialsLoad: channel(nothing, async (win) => {
       try {
-        return await secretOperation(() => credentials.load());
+        return await secretOperation(() => ctx.credentialsStoreFor(win).load());
       } catch (error) {
         logEvent({ k: "credentials.loadFailed", code: errorCode(error) });
         throw error;
@@ -715,9 +595,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
     // is that rule, so the boundary is validated without a second opinion.
     credentialsSave: channel(
       one(parseCredentials),
-      async (_win, value: StoredCredentials) => {
+      async (win, value: StoredCredentials) => {
         try {
-          await secretOperation(() => credentials.save(value));
+          await secretOperation(() => ctx.credentialsStoreFor(win).save(value));
         } catch (error) {
           logEvent({ k: "credentials.saveFailed", code: errorCode(error) });
           throw error;
@@ -725,9 +605,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
       },
     ),
 
-    credentialsClear: channel(nothing, async () => {
+    credentialsClear: channel(nothing, async (win) => {
       try {
-        await secretOperation(() => credentials.clear());
+        await secretOperation(() => ctx.credentialsStoreFor(win).clear());
       } catch (error) {
         logEvent({ k: "credentials.clearFailed", code: errorCode(error) });
         throw error;
@@ -752,7 +632,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     cacheStopDownload: channel(nothing, () => ctx.stopFullDownload()),
 
     gameStorageReset: channel(nothing, (win) =>
-      requestGameStorageReset(win, paths.gameStorageClearRequest),
+      requestGameStorageReset(win, ctx.gameStorageResetMarkerFor(win)),
     ),
 
     diagnosticsGraphics: channel(asGraphics, (_win, value) => {
@@ -798,9 +678,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       if (kind === "gameData") shell.showItemInFolder(paths.game);
     }),
 
-    appRequestQuit: channel(nothing, () => {
-      app.quit();
-    }),
+    appRequestQuit: channel(nothing, (win) => ctx.requestQuit(win)),
 
     clipboardWriteText: channel(asClipboardText, (_win, text) => {
       clipboard.writeText(text);
@@ -841,12 +719,65 @@ export function registerIpcHandlers(ctx: IpcContext): {
       nothing,
       (win) => ctx.restartAndInstallUpdate(win),
     ),
+    accountsGet: channel(
+      nothing,
+      () => ctx.getAccountsState(),
+      "any",
+    ),
+    accountsSetup: channel(
+      asAccountsSetup,
+      (_win, request) => ctx.setupAccounts(request),
+    ),
+    accountsOpen: channel(
+      asProfileIds,
+      (_win, profileIds) => ctx.openAccounts(profileIds),
+      "hub",
+    ),
+    accountsCreate: channel(
+      asAccountProfileCreate,
+      (_win, request) => ctx.createAccount(request),
+      "hub",
+    ),
+    accountsUpdate: channel(
+      asAccountProfileUpdate,
+      (_win, request) => ctx.updateAccount(request),
+      "hub",
+    ),
+    accountsArchive: channel(
+      asProfileId,
+      (_win, profileId) => ctx.archiveAccount(profileId),
+      "hub",
+    ),
+    accountsRestore: channel(
+      asProfileId,
+      (_win, profileId) => ctx.restoreAccount(profileId),
+      "hub",
+    ),
+    accountsDelete: channel(
+      asProfileId,
+      (win, profileId) => ctx.deleteAccount(win, profileId),
+      "hub",
+    ),
+    accountsUseSingle: channel(
+      nothing,
+      () => ctx.useSingleAccountMode(),
+      "any",
+    ),
+    accountsTemplatesLoad: channel(
+      nothing,
+      (win) => ctx.loadAccountTemplates(win),
+    ),
+    accountsTemplatesSave: channel(
+      one(parseExportEntries),
+      (win, entries) => ctx.saveAccountTemplates(win, entries),
+    ),
   } satisfies Record<Exclude<InvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
 
-  registerChannelDefinitions(handlers);
+  registerChannelDefinitions(ctx.windows, handlers);
   const steamSettled = registerSteamIpcHandlers(
     ctx.acquireSteamToken,
-    ctx.steamSessionStore,
+    ctx.steamSessionStoreFor,
+    ctx.windows,
   );
   return {
     async drainSecrets() {
@@ -859,6 +790,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
 }
 
 function registerChannelDefinitions(
+  windows: WindowRegistry,
   handlers: Partial<Record<InvokeChannel, AnyChannelDef>>,
 ): void {
   // One registration, uniform and total: `assertSender` first, then the
@@ -876,7 +808,7 @@ function registerChannelDefinitions(
     const def = definition as ChannelDef<unknown, unknown>;
     const name = key as InvokeChannel;
     ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
-      const win = assertSender(event);
+      const win = assertSender(windows, event, def.role);
       let input: unknown;
       try {
         input = def.parse(args);
@@ -891,9 +823,22 @@ function registerChannelDefinitions(
 
 export function registerSteamIpcHandlers(
   acquireSteamToken: IpcContext["acquireSteamToken"],
-  store: SteamSessionStore,
+  storeOrResolver: SteamSessionStore | ((win: BrowserWindow) => SteamSessionStore),
+  windows?: WindowRegistry,
 ): () => Promise<void> {
-  const steam = new SteamSessionCoordinator(store);
+  const storeFor = typeof storeOrResolver === "function"
+    ? storeOrResolver
+    : () => storeOrResolver;
+  const coordinators = new Map<SteamSessionStore, SteamSessionCoordinator>();
+  const coordinatorFor = (win: BrowserWindow): SteamSessionCoordinator => {
+    const store = storeFor(win);
+    let coordinator = coordinators.get(store);
+    if (!coordinator) {
+      coordinator = new SteamSessionCoordinator(store);
+      coordinators.set(store, coordinator);
+    }
+    return coordinator;
+  };
 
   const runSteamSignIn = async (
     win: BrowserWindow,
@@ -920,6 +865,7 @@ export function registerSteamIpcHandlers(
     // rebuilds its own login screen from a refused credential and a rejection
     // here would only turn "no token" into a launch failure.
     steamToken: channel(asSilentFlag, async (win, silent) => {
+      const steam = coordinatorFor(win);
       if (isQuitting()) throw new ValidationError("application is quitting");
       const resolution = await steam.resolve({
         silent,
@@ -947,14 +893,16 @@ export function registerSteamIpcHandlers(
       } satisfies SteamTokenResult;
     }),
 
-    steamStore: channel(asSteamStoreback, async (_win, { token, expiry }) => {
+    steamStore: channel(asSteamStoreback, async (win, { token, expiry }) => {
       if (isQuitting()) throw new ValidationError("application is quitting");
+      const steam = coordinatorFor(win);
       const outcome = await steam.refresh(token, expiry);
       logEvent({ k: "steam.storeback", outcome });
     }),
 
-    steamClear: channel(nothing, async () => {
+    steamClear: channel(nothing, async (win) => {
       if (isQuitting()) throw new ValidationError("application is quitting");
+      const steam = coordinatorFor(win);
       try {
         await steam.clear();
         logEvent({ k: "steam.tokenCleared" });
@@ -965,8 +913,10 @@ export function registerSteamIpcHandlers(
     }),
   } satisfies Record<SteamInvokeChannel, AnyChannelDef>;
 
-  registerChannelDefinitions(handlers);
-  return () => steam.settled();
+  registerChannelDefinitions(windows ?? windowRegistry, handlers);
+  return async () => {
+    await Promise.all([...coordinators.values()].map((steam) => steam.settled()));
+  };
 }
 
 export function emitSocketEvent(ownerId: number, event: SocketEvent): void {

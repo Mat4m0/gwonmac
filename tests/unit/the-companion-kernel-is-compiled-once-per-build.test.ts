@@ -41,6 +41,8 @@ function rendererCheckout(): string {
     writeFileSync(file, contents);
   };
   write("src/renderer/index.html", "<!doctype html>\n");
+  write("src/renderer/accounts.html", "<!doctype html>\n");
+  write("src/renderer/accounts.css", "css");
   write("src/renderer/loading.js", "export {};\n");
   write("src/renderer/gw-native.d.ts", "export {};\n");
   write("src/renderer/favicon.ico", "ico");
@@ -52,6 +54,7 @@ function rendererCheckout(): string {
   write("src/renderer/images/logo.webp", "webp");
   write("src/renderer/images/hero-poster.jpg", "jpeg");
   write("src/renderer/images/hero-video.webm", "webm");
+  write("apps/website/public/bg-reforged.jpg", "landscape");
   write("src/renderer/.DS_Store", "local metadata");
   write("src/renderer/images/local-note.txt", "untracked");
   // The design system is a package input that does not live under src/renderer:
@@ -98,6 +101,10 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       readFileSync(path.join(root, "build/renderer/images/hero-video.webm"), "utf8"),
       "webm",
     );
+    assert.equal(
+      readFileSync(path.join(root, "build/renderer/images/bg-reforged.jpg"), "utf8"),
+      "landscape",
+    );
     // Not the preload: scripts/generate-preload.ts owns that output, splices
     // the canonical channel constants in and is the only producer of
     // build/preload/preload.cjs.
@@ -116,11 +123,14 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       .map((file) => path.relative(path.join(root, "build/renderer"), file))
       .sort();
     assert.deepEqual(relative, [
+      "accounts.css",
+      "accounts.html",
       "favicon.ico",
       "favicon.png",
       "fonts/COPYING-QUALITYPE",
       "fonts/QTFrizQuad.otf",
       "harness.css",
+      "images/bg-reforged.jpg",
       "images/hero-poster.jpg",
       "images/hero-video.webm",
       "images/logo.webp",

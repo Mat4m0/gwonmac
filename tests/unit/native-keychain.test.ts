@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  SECRET_SLOTS,
+  SINGLE_SECRET_SLOTS,
+  multiSecretSlot,
   type NativeKeychain,
   type SecretSlot,
 } from "../../src/main/core/native-keychain.js";
@@ -26,7 +27,14 @@ class FakeNativeKeychain implements NativeKeychain {
 
 describe("native Keychain boundary", () => {
   it("has exactly the two product-owned slots", () => {
-    assert.deepEqual(SECRET_SLOTS, ["arenaNetCredentials", "steamSession"]);
+    assert.deepEqual(SINGLE_SECRET_SLOTS, ["arenaNetCredentials", "steamSession"]);
+    assert.equal(
+      multiSecretSlot(
+        "2d31e565-9fc8-4dde-9fd4-9d644f8283ae" as never,
+        "arenaNetCredentials",
+      ),
+      "multi.2d31e565-9fc8-4dde-9fd4-9d644f8283ae.arenaNetCredentials",
+    );
   });
 
   it("resolves the one development and one packaged binary path", () => {

@@ -29,6 +29,7 @@ import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
 import {
   defaultWindowState,
+  cascadeWindowState,
   fitWindowStateToDisplays,
   loadWindowState,
   saveWindowState,
@@ -39,8 +40,9 @@ import { logEvent } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
-import { toggleTools } from "./renderer-commands.js";
+import { sendRendererCommand, toggleTools } from "./renderer-commands.js";
 import { installApplicationMenu } from "./window-menu.js";
+import { windowRegistry, type WindowContext } from "./window-registry.js";
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
 // on every launch. Focus-dependent specs leave the flag unset.
@@ -56,22 +58,36 @@ export interface WindowHost {
   getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
-  exportDiagnostics: () => Promise<string>;
+  exportDiagnostics: (win: BrowserWindow) => Promise<string>;
   markPerformanceProblem: () => void;
   startCapture: (level: 1 | 2) => Promise<void>;
   stopCapture: () => Promise<void>;
   reloadGame: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
+  gameWindowClosed?: () => void;
 }
 
 let mainWindow: BrowserWindow | null = null;
-let rendererRecoveryUsed = false;
-let restoredWindowState: WindowState | null = null;
-let lastNormalBounds: WindowBounds | null = null;
-let windowStateTimer: ReturnType<typeof setTimeout> | null = null;
-let windowStateWrite: Promise<void> = Promise.resolve();
-let windowStateReset: Promise<void> = Promise.resolve();
-let windowStateResetDepth = 0;
+const rendererRecoveryUsed = new Set<string>();
+
+/** A deliberate player retry gets one fresh automatic renderer recovery. */
+export function resetRendererRecovery(statePath: string): void {
+  rendererRecoveryUsed.delete(statePath);
+}
+interface WindowStateOwner {
+  readonly path: string;
+  restored: WindowState | null;
+  lastNormalBounds: WindowBounds | null;
+  timer: ReturnType<typeof setTimeout> | null;
+  write: Promise<void>;
+  reset: Promise<void>;
+  resetDepth: number;
+}
+const preparedWindowStates = new Map<string, WindowState | null>();
+const windowStateOwners = new Map<BrowserWindow, WindowStateOwner>();
+const ownedWindowTitles = new WeakMap<BrowserWindow, string>();
+const profileCloses = new WeakSet<BrowserWindow>();
+const PROFILE_CLOSE_DEADLINE_MS = 6_000;
 let downloadPowerBlockerId: number | null = null;
 
 export function updateLongRunningTaskFeedback(
@@ -104,35 +120,48 @@ function primaryWorkArea(): WindowBounds {
   return { ...screen.getPrimaryDisplay().workArea };
 }
 
-export async function prepareWindowState(): Promise<void> {
-  const loaded = await loadWindowState(gamePaths().windowState, () => {
+export async function prepareWindowState(
+  statePath = gamePaths().windowState,
+  newWindowOrdinal?: number,
+): Promise<boolean> {
+  const loaded = await loadWindowState(statePath, () => {
     logEvent({ k: "window.stateCorruptCleared" });
   });
-  restoredWindowState = loaded
+  const restored = loaded
     ? fitWindowStateToDisplays(loaded, workAreas(), primaryWorkArea())
     : null;
-  lastNormalBounds = restoredWindowState?.bounds ?? null;
-  if (restoredWindowState) {
+  const prepared = restored ?? (
+    newWindowOrdinal === undefined
+      ? null
+      : cascadeWindowState(
+          defaultWindowState(primaryWorkArea()),
+          newWindowOrdinal,
+          primaryWorkArea(),
+        )
+  );
+  preparedWindowStates.set(statePath, prepared);
+  if (restored) {
     logEvent({ k: "window.stateRestored",
-      mode: restoredWindowState.mode,
-      width: restoredWindowState.bounds.width,
-      height: restoredWindowState.bounds.height,
+      mode: restored.mode,
+      width: restored.bounds.width,
+      height: restored.bounds.height,
     });
   }
+  return restored !== null;
 }
 
-function currentWindowState(win: BrowserWindow): WindowState {
+function currentWindowState(win: BrowserWindow, owner: WindowStateOwner): WindowState {
   const mode = win.isFullScreen()
     ? "fullscreen"
     : win.isMaximized()
       ? "maximized"
       : "normal";
   if (mode === "normal") {
-    lastNormalBounds = { ...win.getBounds() };
+    owner.lastNormalBounds = { ...win.getBounds() };
   }
   return {
     bounds:
-      lastNormalBounds ??
+      owner.lastNormalBounds ??
       fitWindowStateToDisplays(
         defaultWindowState(primaryWorkArea()),
         workAreas(),
@@ -143,49 +172,56 @@ function currentWindowState(win: BrowserWindow): WindowState {
 }
 
 async function persistWindowState(win: BrowserWindow): Promise<void> {
-  if (win.isDestroyed() || mainWindow !== win) return;
-  const state = currentWindowState(win);
-  restoredWindowState = state;
-  const write = windowStateWrite.then(() =>
-    saveWindowState(gamePaths().windowState, state),
+  const owner = windowStateOwners.get(win);
+  if (win.isDestroyed() || !owner) return;
+  const state = currentWindowState(win, owner);
+  owner.restored = state;
+  const write = owner.write.then(() =>
+    saveWindowState(owner.path, state),
   );
-  windowStateWrite = write.catch(() => undefined);
+  owner.write = write.catch(() => undefined);
   await write;
 }
 
 function scheduleWindowStateSave(win: BrowserWindow): void {
+  const owner = windowStateOwners.get(win);
+  if (!owner) return;
   // Leaving fullscreen/maximized and applying the default bounds emits several
   // intermediate events. Persisting one of those after the explicit reset
   // write can resurrect the old placement.
-  if (windowStateResetDepth > 0) return;
-  if (windowStateTimer) clearTimeout(windowStateTimer);
-  windowStateTimer = setTimeout(() => {
-    windowStateTimer = null;
+  if (owner.resetDepth > 0) return;
+  if (owner.timer) clearTimeout(owner.timer);
+  owner.timer = setTimeout(() => {
+    owner.timer = null;
     void persistWindowState(win).catch(() => {
       logEvent({ k: "window.stateSaveFailed" });
     });
   }, 300);
 }
 
-export async function flushWindowState(): Promise<void> {
-  await windowStateReset;
-  if (windowStateTimer) {
-    clearTimeout(windowStateTimer);
-    windowStateTimer = null;
-  }
-  const win = mainWindow;
+export async function flushWindowState(win = mainWindow): Promise<void> {
   if (!win || win.isDestroyed()) return;
+  const owner = windowStateOwners.get(win);
+  if (!owner) return;
+  await owner.reset;
+  if (owner.timer) {
+    clearTimeout(owner.timer);
+    owner.timer = null;
+  }
   await persistWindowState(win);
-  await windowStateWrite;
+  await owner.write;
 }
 
 export function resetWindowState(win = mainWindow): Promise<void> {
-  const reset = windowStateReset.then(async () => {
-    windowStateResetDepth += 1;
+  if (!win || win.isDestroyed()) return Promise.resolve();
+  const owner = windowStateOwners.get(win);
+  if (!owner) return Promise.resolve();
+  const reset = owner.reset.then(async () => {
+    owner.resetDepth += 1;
     try {
-      if (windowStateTimer) {
-        clearTimeout(windowStateTimer);
-        windowStateTimer = null;
+      if (owner.timer) {
+        clearTimeout(owner.timer);
+        owner.timer = null;
       }
       const requested = defaultWindowState(primaryWorkArea());
       let settled = requested;
@@ -221,27 +257,54 @@ export function resetWindowState(win = mainWindow): Promise<void> {
         win.setBounds(requested.bounds);
         settled = { bounds: { ...win.getBounds() }, mode: "normal" };
       }
-      restoredWindowState = settled;
-      lastNormalBounds = settled.bounds;
-      const write = windowStateWrite.then(() =>
-        saveWindowState(gamePaths().windowState, settled),
+      owner.restored = settled;
+      owner.lastNormalBounds = settled.bounds;
+      const write = owner.write.then(() =>
+        saveWindowState(owner.path, settled),
       );
-      windowStateWrite = write.catch(() => undefined);
+      owner.write = write.catch(() => undefined);
       await write;
       logEvent({ k: "window.stateReset",
         width: settled.bounds.width,
         height: settled.bounds.height,
       });
     } finally {
-      windowStateResetDepth -= 1;
+      owner.resetDepth -= 1;
     }
   });
-  windowStateReset = reset.catch(() => undefined);
+  owner.reset = reset.catch(() => undefined);
   return reset;
 }
 
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
+}
+
+export function setOwnedWindowTitle(win: BrowserWindow, title: string): void {
+  ownedWindowTitles.set(win, title);
+  win.setTitle(title);
+}
+
+/** Flush and destroy exactly one Multi game window without quitting the app. */
+export async function closeProfileWindow(win: BrowserWindow): Promise<void> {
+  if (win.isDestroyed() || profileCloses.has(win)) return;
+  profileCloses.add(win);
+  try {
+    await Promise.race([
+      (async () => {
+        await sendRendererCommand(win, { type: "filesystem.sync" });
+        await flushWindowState(win);
+      })(),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, PROFILE_CLOSE_DEADLINE_MS);
+      }),
+    ]);
+  } catch (error) {
+    logEvent({ k: "window.stateSaveFailed" });
+    console.error("profile close persistence failed", error);
+  } finally {
+    if (!win.isDestroyed()) win.destroy();
+  }
 }
 
 /** The only renderer URL, and it carries no configuration. */
@@ -267,7 +330,22 @@ export function rendererInitArgument(options: {
   return `${RENDERER_INIT_ARGUMENT}${JSON.stringify(init)}`;
 }
 
-export function createMainWindow(host: WindowHost): BrowserWindow {
+export function createMainWindow(
+  host: WindowHost,
+  options: {
+    readonly context?: WindowContext;
+    readonly session?: Electron.Session;
+    readonly title?: string;
+    readonly windowStatePath?: string;
+    readonly showInactive?: boolean;
+    readonly onRendererRecoveryStart?: () => void;
+    readonly onRendererRecovered?: () => void;
+    readonly onRendererFailure?: () => void;
+  } = {},
+): BrowserWindow {
+  const context = options.context ?? { mode: "single", role: "game" };
+  const statePath = options.windowStatePath ?? gamePaths().windowState;
+  const restoredWindowState = preparedWindowStates.get(statePath) ?? null;
   const initialState = restoredWindowState
     ? fitWindowStateToDisplays(
         restoredWindowState,
@@ -280,7 +358,7 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     ...(initialState?.bounds ?? { width: 1280, height: 800 }),
     minWidth: 800,
     minHeight: 600,
-    title: "Guild Wars Reforged",
+    title: options.title ?? "Guild Wars Reforged",
     show: false,
     webPreferences: {
       preload: preloadPath(),
@@ -293,33 +371,52 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
       spellcheck: false,
       allowRunningInsecureContent: false,
       experimentalFeatures: false,
+      ...(options.session ? { session: options.session } : {}),
     },
   });
 
   mainWindow = win;
+  const stateOwner: WindowStateOwner = {
+    path: statePath,
+    restored: initialState,
+    lastNormalBounds: initialState?.bounds ?? null,
+    timer: null,
+    write: Promise.resolve(),
+    reset: Promise.resolve(),
+    resetDepth: 0,
+  };
+  windowStateOwners.set(win, stateOwner);
+  windowRegistry.register(win, context);
+  if (options.title) {
+    ownedWindowTitles.set(win, options.title);
+    win.webContents.on("page-title-updated", (event) => {
+      event.preventDefault();
+      win.setTitle(ownedWindowTitles.get(win) ?? "Guild Wars Reforged");
+    });
+  }
   updateLongRunningTaskFeedback(host.getProgress(), win);
   const rendererId = win.webContents.id;
 
   win.once("ready-to-show", () => {
     if (initialState?.mode === "maximized") win.maximize();
-    if (BACKGROUND_LAUNCH) win.showInactive();
+    if (BACKGROUND_LAUNCH || options.showInactive) win.showInactive();
     else win.show();
     if (initialState?.mode === "fullscreen") win.setFullScreen(true);
   });
 
   const rememberNormalBounds = (): void => {
     if (
-      windowStateResetDepth > 0 ||
+      stateOwner.resetDepth > 0 ||
       win.isFullScreen() ||
       win.isMaximized()
     ) return;
-    lastNormalBounds = { ...win.getBounds() };
+    stateOwner.lastNormalBounds = { ...win.getBounds() };
     scheduleWindowStateSave(win);
   };
   win.on("move", rememberNormalBounds);
   win.on("resize", rememberNormalBounds);
   const persistMode = (): void => {
-    if (windowStateResetDepth > 0) return;
+    if (stateOwner.resetDepth > 0) return;
     void persistWindowState(win).catch(() => {
       logEvent({ k: "window.stateSaveFailed" });
     });
@@ -428,11 +525,12 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
     host.sockets.closeAll(rendererId);
     if (isQuitting()) return;
     if (
-      !rendererRecoveryUsed &&
+      !rendererRecoveryUsed.has(statePath) &&
       details.reason !== "clean-exit" &&
       !win.isDestroyed()
     ) {
-      rendererRecoveryUsed = true;
+      rendererRecoveryUsed.add(statePath);
+      options.onRendererRecoveryStart?.();
       logEvent({ k: "renderer.recoveryScheduled" });
       setTimeout(() => {
         if (isQuitting() || win.isDestroyed()) return;
@@ -446,12 +544,18 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
           })
           .finally(() => {
             if (isQuitting() || win.isDestroyed()) return;
-            createMainWindow(host);
+            // Release the immutable profile ownership before registering its
+            // replacement. Destroying afterward keeps the transition local to
+            // this profile and lets the old closed handler remain idempotent.
+            windowRegistry.unregister(win);
+            createMainWindow(host, options);
             win.destroy();
+            options.onRendererRecovered?.();
             logEvent({ k: "renderer.recovered" });
           });
       }, 500);
     } else if (details.reason !== "clean-exit") {
+      options.onRendererFailure?.();
       dialog.showErrorBox(
         "Guild Wars stopped unexpectedly",
         "Use View → Reload Game to try again. If it repeats, choose Help → Report a Bug.",
@@ -461,20 +565,34 @@ export function createMainWindow(host: WindowHost): BrowserWindow {
 
   win.on("close", (event) => {
     if (isQuitting()) return;
+    if (context.mode === "multi") {
+      event.preventDefault();
+      void closeProfileWindow(win);
+      return;
+    }
     event.preventDefault();
     logEvent({ k: "window.closeRequested" });
     app.quit();
   });
 
   win.on("closed", () => {
+    windowRegistry.unregister(win);
+    windowStateOwners.delete(win);
     if (mainWindow === win) mainWindow = null;
+    if (
+      context.mode === "multi"
+      && context.role === "game"
+      && !windowRegistry.profileWindow(context.profileId)
+    ) host.gameWindowClosed?.();
   });
 
-  installApplicationMenu({
+  const installMenu = () => installApplicationMenu({
     host,
     win,
     resetWindowState: () => resetWindowState(win),
   });
+  win.on("focus", installMenu);
+  installMenu();
   void win.loadURL(RENDERER_URL);
   return win;
 }

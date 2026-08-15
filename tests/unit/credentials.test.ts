@@ -6,6 +6,8 @@ import type {
   SecretSlot,
 } from "../../src/main/core/native-keychain.js";
 import { AppError } from "../../src/shared/errors.js";
+import { parseProfileId } from "../../src/shared/multiple-accounts.js";
+import { multiSecretSlot } from "../../src/main/core/native-keychain.js";
 
 class FakeKeychain implements NativeKeychain {
   readonly values = new Map<SecretSlot, Buffer>();
@@ -41,6 +43,21 @@ describe("credentials", () => {
 
     await store.clear();
     assert.equal(await store.load(), null);
+  });
+
+  it("keeps a Multi profile out of the fixed Single slot", async () => {
+    const keychain = new FakeKeychain();
+    const slot = multiSecretSlot(
+      parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae"),
+      "arenaNetCredentials",
+    );
+    const store = new CredentialsStore(keychain, slot);
+    await store.save({ username: "multi@example.test", password: "secret" });
+    assert.equal(keychain.values.has("arenaNetCredentials"), false);
+    assert.deepEqual(
+      JSON.parse(keychain.values.get(slot)!.toString("utf8")),
+      { username: "multi@example.test", password: "secret" },
+    );
   });
 
   it("maps native failure to the credential vocabulary", async () => {

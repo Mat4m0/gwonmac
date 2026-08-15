@@ -8,6 +8,7 @@ its rules.
 | --- | --- |
 | How does a player use or recover the app? | [User guide](user-guide.md) |
 | Which process owns this work? | [Process model](process-model.md) |
+| How do Single and Multiple Accounts mode isolate player data? | [Multiple Accounts](multiple-accounts.md) |
 | How do ArenaNet client files and game data update? | [Content pipeline](content-pipeline.md) |
 | How does the official client host and certification work? | [WASM host](wasm-host.md) |
 | What can diagnostics record and export? | [Diagnostics](diagnostics.md) |

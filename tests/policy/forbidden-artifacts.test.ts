@@ -100,12 +100,21 @@ test("no private key material is tracked", () => {
   assert.deepEqual(hits, []);
 });
 
-test("only the public client access key is UUID-shaped", () => {
+test("only public identifiers and explicit profile-id fixtures are UUID-shaped", () => {
   const uuid = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
   // One entry, the public client access key. The RFC 6455 WebSocket GUID used
   // to sit beside it; it belonged to the retired Python runtime's relay and
   // matches nothing in the tree, so it is gone.
   const allowed = new Set(["2043FE79-F32D-4FD7-8C27-0D47231C4F03"]);
+  const profileIdFixtures = new Set([
+    "tests/electron/multiple-accounts.spec.ts",
+    "tests/release/preload-behaviour.test.ts",
+    "tests/unit/credentials.test.ts",
+    "tests/unit/multiple-accounts.test.ts",
+    "tests/unit/native-keychain.test.ts",
+    "tests/unit/paths.test.ts",
+    "tests/unit/window-registry.test.ts",
+  ]);
   const hits = [];
   for (const file of tracked) {
     if (file === "tests/policy/forbidden-artifacts.test.ts") continue;
@@ -116,7 +125,10 @@ test("only the public client access key is UUID-shaped", () => {
       continue;
     }
     for (const match of text.matchAll(uuid)) {
-      if (!allowed.has(match[0].toUpperCase())) hits.push(`${file}:${match[0]}`);
+      if (
+        !allowed.has(match[0].toUpperCase())
+        && !profileIdFixtures.has(file)
+      ) hits.push(`${file}:${match[0]}`);
     }
   }
   assert.deepEqual(hits, []);

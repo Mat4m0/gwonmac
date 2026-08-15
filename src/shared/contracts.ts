@@ -24,6 +24,15 @@ import type {
 } from "./diagnostics.js";
 import type { ErrorCode } from "./errors.js";
 import type { BuildLibrary } from "./builds/library.js";
+import type { ProfileId } from "./multiple-accounts.js";
+import type { TemplateExportEntry } from "./template-contracts.js";
+import type {
+  AccountProfileCreateRequest,
+  AccountProfileUpdateRequest,
+  AccountsSetupRequest,
+  AccountsState,
+  AccountTemplateLibrary,
+} from "./accounts-contracts.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -38,6 +47,18 @@ import {
 export { RELEASE_REPO } from "./project-identity.js";
 export { DEFAULT_UPDATE_TRACK, UPDATE_TRACKS };
 export type { UpdateTrack };
+export type { TemplateExportEntry } from "./template-contracts.js";
+export type {
+  AccountLaunchIssue,
+  AccountProfileCreateRequest,
+  AccountProfileRequest,
+  AccountProfileSummary,
+  AccountProfileUpdateRequest,
+  AccountsSetupRequest,
+  AccountsState,
+  AccountTemplateLibrary,
+  MultiProfileRuntimeState,
+} from "./accounts-contracts.js";
 
 export type BuildKind = "jspi";
 
@@ -97,11 +118,6 @@ export const TEMPLATE_CEILINGS = {
  * lands. `contents` is the code alone — the game writes no trailing newline and
  * a file that gains one stops being the same file.
  */
-export interface TemplateExportEntry {
-  path: string;
-  contents: string;
-}
-
 /**
  * How an export ended. A value rather than a rejection for the same reason
  * `FullDownloadOutcome` is one: Electron flattens a rejection to its message,
@@ -640,6 +656,7 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
  */
 export type RendererCommand =
   | { type: "input.reset" }
+  | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
   | {
       type: "settings.open";
@@ -729,6 +746,17 @@ export const IPC = {
   appUpdatesCheck: "gw:appUpdates:check",
   appUpdatesRestartAndInstall: "gw:appUpdates:restartAndInstall",
   appUpdatesState: "gw:appUpdates:state",
+  accountsGet: "gw:accounts:get",
+  accountsSetup: "gw:accounts:setup",
+  accountsOpen: "gw:accounts:open",
+  accountsCreate: "gw:accounts:create",
+  accountsUpdate: "gw:accounts:update",
+  accountsArchive: "gw:accounts:archive",
+  accountsRestore: "gw:accounts:restore",
+  accountsDelete: "gw:accounts:delete",
+  accountsTemplatesLoad: "gw:accounts:templatesLoad",
+  accountsTemplatesSave: "gw:accounts:templatesSave",
+  accountsUseSingle: "gw:accounts:useSingle",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
@@ -905,5 +933,18 @@ export interface GwNativeApi {
     check(): Promise<void>;
     restartAndInstall(): Promise<void>;
     onState(callback: (state: AppUpdateState) => void): () => void;
+  };
+  accounts: {
+    get(): Promise<AccountsState>;
+    setup(value: AccountsSetupRequest): Promise<void>;
+    open(profileIds: readonly ProfileId[]): Promise<void>;
+    create(value: AccountProfileCreateRequest): Promise<AccountsState>;
+    update(value: AccountProfileUpdateRequest): Promise<AccountsState>;
+    archive(profileId: ProfileId): Promise<AccountsState>;
+    restore(profileId: ProfileId): Promise<AccountsState>;
+    delete(profileId: ProfileId): Promise<AccountsState>;
+    loadTemplates(): Promise<AccountTemplateLibrary | null>;
+    saveTemplates(entries: readonly TemplateExportEntry[]): Promise<void>;
+    useSingle(): Promise<void>;
   };
 }

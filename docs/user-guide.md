@@ -25,6 +25,41 @@ the client files, asks how to store game data, and starts Guild Wars. Later
 starts use verified cached data when possible. Login and online play still need
 ArenaNet.
 
+## Single and Multiple Accounts
+
+Single Account mode is the default. It starts Guild Wars directly and keeps
+the login, templates, builds, settings, and window state that you already use.
+
+Open **Settings → Accounts** and select **Enable and Restart…**. Settings only
+switches the mode; it does not create or manage accounts. GWonMac restarts into
+the Account Picker, where **Create First Account** sets up the first account and
+its Shared or Separate libraries. Every later Multiple Accounts start opens the
+Account Picker with nothing preselected. Select one or more accounts and choose
+**Open**. If an account is already running, the action changes to **Show**.
+
+Each account signs in separately and keeps separate Guild Wars preferences,
+screenshots, chat logs, saved login, and window position. Profiles can use the
+shared Multiple Accounts template and build libraries or private libraries.
+
+Creating the first account can copy templates, builds, and teams from Single
+Account mode. This is a one-time copy. The originals remain in Single Account
+mode. Later changes do not synchronize between the two modes. All later account
+creation and management also stays in the Account Picker.
+
+Use Command-, in the Account Picker to open Settings, then choose **Return to
+Single Account…** to change the next launch. Your accounts and saved logins stay
+available if you restore Multiple Accounts from **Settings → Accounts** later. The modes
+share verified game downloads, so creating an account does not download another
+complete copy of Guild Wars.
+
+Use **New Account…** in the Account Picker to add accounts. The row's More menu
+contains **Edit Account…** and **Archive Account**; close its game window before
+changing sharing. Archive keeps all account data and saved login. Hub Settings
+can restore it or permanently delete it after a native confirmation.
+
+Every account window is independently controlled. The app does not broadcast
+keyboard, mouse, or controller input between windows.
+
 A local source build has a temporary identity. It does not share saved-login
 access with the published Release app.
 

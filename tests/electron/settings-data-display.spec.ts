@@ -5,6 +5,31 @@ import { closeOffline, launchOffline } from "./fixtures.mjs";
 import "./settings-test-fixture.mjs";
 
 test.describe("data and display settings", () => {
+  test("shows the Multiple Accounts setup when its tab is selected", async () => {
+    const fixture = await launchOffline("gw-settings-accounts-e2e-");
+    try {
+      const { page } = fixture;
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-accounts").click();
+
+      const pane = page.locator("#settings-pane-accounts");
+      await expect(pane).toBeVisible();
+      await expect(pane.getByRole("heading", { name: "Multiple Accounts" }))
+        .toBeVisible();
+      await expect(page.locator("#accounts-first-name")).toHaveCount(0);
+      await expect(page.getByRole("group", { name: "Build library" }))
+        .toHaveCount(0);
+      await expect(page.getByRole("group", { name: "Build templates" }))
+        .toHaveCount(0);
+      await expect(pane).toContainText("Create and manage every account there");
+      await expect(page.locator("#accounts-enable")).toBeVisible();
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("interface style and panel opacity apply live and survive", async () => {
     const fixture = await launchOffline("gw-settings-appearance-e2e-");
     try {

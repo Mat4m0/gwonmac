@@ -13,7 +13,7 @@
  */
 import type { SteamRefusalReason } from "../../shared/contracts.js";
 import { AppError, errorCode, type ErrorCode } from "../../shared/errors.js";
-import type { NativeKeychain } from "./native-keychain.js";
+import type { NativeKeychain, SecretSlot } from "./native-keychain.js";
 import { KeychainJsonStore, type KeychainSecret } from "./keychain-store.js";
 import { Mutex } from "./mutex.js";
 
@@ -79,8 +79,11 @@ const STEAM_SESSION: KeychainSecret<StoredSteamSession> = {
 
 /** The Steam token's one persistent home. */
 export class SteamSessionStore extends KeychainJsonStore<StoredSteamSession> {
-  constructor(keychain: NativeKeychain) {
-    super("steamSession", keychain, STEAM_SESSION);
+  constructor(
+    keychain: NativeKeychain,
+    slot: SecretSlot = "steamSession",
+  ) {
+    super(slot, keychain, STEAM_SESSION);
   }
 }
 

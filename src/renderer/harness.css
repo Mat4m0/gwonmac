@@ -294,6 +294,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 .settings-panes[data-active="display"] #settings-pane-display,
 .settings-panes[data-active="controls"] #settings-pane-controls,
 .settings-panes[data-active="updates"] #settings-pane-updates,
+.settings-panes[data-active="accounts"] #settings-pane-accounts,
 .settings-panes[data-active="advanced"] #settings-pane-advanced { display: block; }
 
 .sr-only { position:absolute; width:1px; height:1px; margin:-1px; padding:0;

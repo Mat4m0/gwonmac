@@ -934,6 +934,12 @@ function mountGameFilesystem() {
   host.installGameFilesystem({
     module: clientRuntime(),
     log,
+    async restoreTemplates(fs) {
+      const library = await native().accounts.loadTemplates();
+      if (!library) return;
+      const { replaceTemplateProjection } = await import('./template-store.js');
+      await replaceTemplateProjection(fs, library.entries);
+    },
     failed(error) {
       window.gwDiagnostics?.event('filesystem.persistenceFailed', error);
       log(

@@ -43,6 +43,12 @@
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
+  const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
+  const accountsStatus = byId('accounts-setup-status');
+  const accountsModeStatus = byId('accounts-mode-status');
+  const accountsSingleSetup = byId('accounts-single-setup');
+  const accountsMultiActive = byId('accounts-multi-active');
+  const accountsReturnSingle = byId('accounts-return-single') as HTMLButtonElement;
   /**
    * The appearance slider beside the `output` that reads it back.
    *
@@ -577,6 +583,54 @@
     } catch {
       setFeedback('GWonMac settings could not be reset. Nothing changed; try again.', 'error');
     }
+  });
+
+  accountsEnable.addEventListener('click', async () => {
+    if (!window.confirm('Enable Multiple Accounts and restart GWonMac? Your current Single Account data will stay untouched.')) return;
+    accountsEnable.disabled = true;
+    accountsStatus.textContent = 'Creating the separate workspace…';
+    try {
+      const { exportEntries, templateFilesystem } = await import('./template-store.js');
+      const filesystem = templateFilesystem();
+      await window.gwNative.accounts.setup({
+        templateEntries: filesystem ? exportEntries(filesystem) : [],
+      });
+    } catch {
+      accountsEnable.disabled = false;
+      accountsStatus.textContent = 'Multiple Accounts could not be enabled. Nothing changed.';
+    }
+  });
+
+  accountsReturnSingle.addEventListener('click', async () => {
+    if (!window.confirm('Return to Single Account mode? GWonMac will restart. Multiple Accounts and Single Account data will both be preserved.')) return;
+    accountsReturnSingle.disabled = true;
+    accountsModeStatus.textContent = 'Restarting in Single Account mode…';
+    try {
+      await window.gwNative.accounts.useSingle();
+    } catch {
+      accountsReturnSingle.disabled = false;
+      accountsModeStatus.textContent = 'The mode change could not be saved. Nothing changed.';
+    }
+  });
+
+  void window.gwNative.accounts.get().then((state) => {
+    const singleMode = state.mode === 'single';
+    const activeProfiles = state.profiles.filter((profile) => !profile.archived);
+    const existingWorkspace = singleMode && activeProfiles.length > 0;
+    accountsModeStatus.textContent = existingWorkspace
+      ? `Single Account mode is active. Your ${activeProfiles.length} Multiple Accounts ${activeProfiles.length === 1 ? 'account is' : 'accounts are'} ready to restore.`
+      : singleMode
+        ? 'Single Account mode is active.'
+      : 'Multiple Accounts mode is active. Use the Account Picker to open and manage accounts.';
+    accountsSingleSetup.hidden = !singleMode;
+    accountsMultiActive.hidden = singleMode;
+    if (existingWorkspace) {
+      accountsEnable.textContent = 'Restore Multiple Accounts and Restart…';
+    }
+  }).catch(() => {
+    accountsModeStatus.textContent = 'Account mode could not be read.';
+    accountsSingleSetup.hidden = true;
+    accountsMultiActive.hidden = true;
   });
 
   window.addEventListener('resize', updateRenderScaleDimensions);

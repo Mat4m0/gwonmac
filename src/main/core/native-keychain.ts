@@ -2,16 +2,26 @@
  * The interface every persistent secret talks to, and the closed set of slots
  * it may name.
  *
- * `SecretSlot` is a union rather than a string, so a new persistent secret is a
- * deliberate edit here instead of an ad-hoc item appearing in a player's
- * Keychain. `VolatileNativeKeychain` is the implementation for builds with no
+ * `SecretSlot` is a closed grammar rather than an arbitrary string. Single
+ * keeps its legacy names; Multi adds the same two kinds under a validated
+ * profile UUID. `VolatileNativeKeychain` is the implementation for builds with no
  * provisioned signing identity: secrets live in memory and are lost at quit.
  * It is not a fallback an entitled build may drop to, and no file, encrypted
  * blob or mock-Keychain implementation stands beside it as one.
  */
-export const SECRET_SLOTS = ["arenaNetCredentials", "steamSession"] as const;
+import type { ProfileId } from "../../shared/multiple-accounts.js";
 
-export type SecretSlot = (typeof SECRET_SLOTS)[number];
+export const SINGLE_SECRET_SLOTS = ["arenaNetCredentials", "steamSession"] as const;
+export type SingleSecretSlot = (typeof SINGLE_SECRET_SLOTS)[number];
+export type MultiSecretSlot = `multi.${ProfileId}.${SingleSecretSlot}`;
+export type SecretSlot = SingleSecretSlot | MultiSecretSlot;
+
+export function multiSecretSlot(
+  profileId: ProfileId,
+  kind: SingleSecretSlot,
+): MultiSecretSlot {
+  return `multi.${profileId}.${kind}`;
+}
 
 export interface NativeKeychain {
   load(slot: SecretSlot): Promise<Buffer | null>;

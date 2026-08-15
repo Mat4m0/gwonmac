@@ -324,6 +324,46 @@ export async function applyImport(
   });
 }
 
+/** Replace the isolated profile's working templates with a canonical snapshot. */
+export async function replaceTemplateProjection(
+  fs: TemplateFileSystem,
+  entries: readonly TemplateExportEntry[],
+): Promise<void> {
+  const incoming: TemplateCandidate[] = entries.map((entry) => {
+    const segments = entry.path.split('/');
+    const kind: TemplateKind = segments[0] === 'Equipment' ? 'equipment' : 'skills';
+    const file = segments.at(-1) ?? '';
+    const name = file.replace(/\.txt$/i, '');
+    const folder = segments.length === 3 ? (segments[1] ?? null) : null;
+    const candidate = { kind, folder, name, code: entry.contents };
+    if (templatePath(candidate) === null || !isTemplateCode(candidate.code)) {
+      throw new Error('invalid account template projection');
+    }
+    return candidate;
+  });
+  await mutate(fs, () => {
+    for (const directory of Object.values(TEMPLATE_DIRECTORIES)) {
+      for (const item of listing(fs, directory)) {
+        const itemPath = `${directory}/${item}`;
+        if (isDirectory(fs, itemPath)) {
+          for (const child of listing(fs, itemPath)) {
+            const childPath = `${itemPath}/${child}`;
+            if (fs.isFile(fs.stat(childPath).mode)) fs.unlink(childPath);
+          }
+          try { fs.rmdir(itemPath); } catch { /* Keep unmanaged contents. */ }
+        } else if (fs.isFile(fs.stat(itemPath).mode)) {
+          fs.unlink(itemPath);
+        }
+      }
+    }
+    for (const candidate of incoming) {
+      const filePath = templatePath(candidate)!;
+      fs.mkdirTree(filePath.slice(0, filePath.lastIndexOf('/')));
+      fs.writeFile(filePath, candidate.code);
+    }
+  });
+}
+
 /**
  * Templates the game has no way to reach.
  *

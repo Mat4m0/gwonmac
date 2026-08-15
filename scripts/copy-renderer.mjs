@@ -12,6 +12,8 @@ import path from "node:path";
 // editor and OS files part of the build, so two clean checkouts could package
 // different applications. A new asset must be reviewed here.
 const ASSETS = [
+  "accounts.css",
+  "accounts.html",
   "favicon.ico",
   "favicon.png",
   "fonts/COPYING-QUALITYPE",
@@ -33,6 +35,9 @@ const ASSETS = [
 const SHARED_ASSETS = [
   ["src/shared/ui/tokens.css", "ui/tokens.css"],
   ["src/shared/ui/components.css", "ui/components.css"],
+  // The website and Hub use one reviewed static painting. Keep it canonical in
+  // the website package and copy it into the renderer at build time.
+  ["apps/website/public/bg-reforged.jpg", "images/bg-reforged.jpg"],
 ];
 
 const dest = path.resolve("build/renderer");

@@ -237,6 +237,19 @@ const api = {
       ipcRenderer.invoke(IPC.appUpdatesRestartAndInstall),
     onState: (callback) => listen(IPC.appUpdatesState, callback),
   },
+  accounts: {
+    get: () => ipcRenderer.invoke(IPC.accountsGet),
+    setup: (value) => ipcRenderer.invoke(IPC.accountsSetup, value),
+    open: (profileIds) => ipcRenderer.invoke(IPC.accountsOpen, profileIds),
+    create: (value) => ipcRenderer.invoke(IPC.accountsCreate, value),
+    update: (value) => ipcRenderer.invoke(IPC.accountsUpdate, value),
+    archive: (profileId) => ipcRenderer.invoke(IPC.accountsArchive, profileId),
+    restore: (profileId) => ipcRenderer.invoke(IPC.accountsRestore, profileId),
+    delete: (profileId) => ipcRenderer.invoke(IPC.accountsDelete, profileId),
+    loadTemplates: () => ipcRenderer.invoke(IPC.accountsTemplatesLoad),
+    saveTemplates: (entries) => ipcRenderer.invoke(IPC.accountsTemplatesSave, entries),
+    useSingle: () => ipcRenderer.invoke(IPC.accountsUseSingle),
+  },
 };
 for (const namespace of Object.values(api)) Object.freeze(namespace);
 Object.freeze(api);

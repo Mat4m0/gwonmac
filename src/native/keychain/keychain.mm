@@ -16,13 +16,13 @@ namespace {
 
 constexpr char kCredentialsSlot[] = "arenaNetCredentials";
 constexpr char kSteamSlot[] = "steamSession";
+constexpr char kMultiPrefix[] = "multi.";
 NSString *const kCredentialsAccount = @"arena-net-credentials";
 NSString *const kSteamAccount = @"steam-session";
 NSString *const kReleaseBundle = @"io.github.mat4m0.gwonmac";
 NSString *const kPreviewBundle = @"io.github.mat4m0.gwonmac.preview";
 NSString *const kDevelopmentBundle = @"io.github.mat4m0.gwonmac.dev";
 
-enum class Slot { kCredentials, kSteam };
 enum class Operation { kLoad, kSave, kClear };
 enum class Result {
   kSuccess,
@@ -37,7 +37,7 @@ struct Work {
   napi_async_work async_work = nullptr;
   napi_deferred deferred = nullptr;
   Operation operation = Operation::kLoad;
-  Slot slot = Slot::kCredentials;
+  std::string slot;
   Result result = Result::kUnavailable;
   std::vector<uint8_t> input;
   std::vector<uint8_t> output;
@@ -50,8 +50,43 @@ void Zero(std::vector<uint8_t> &bytes) {
   bytes.clear();
 }
 
-NSString *AccountForSlot(Slot slot) {
-  return slot == Slot::kCredentials ? kCredentialsAccount : kSteamAccount;
+bool IsLowerHex(char value) {
+  return (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f');
+}
+
+bool IsUuidV4(const std::string &value) {
+  if (value.size() != 36 || value[8] != '-' || value[13] != '-' ||
+      value[18] != '-' || value[23] != '-' || value[14] != '4' ||
+      (value[19] != '8' && value[19] != '9' && value[19] != 'a' &&
+       value[19] != 'b'))
+    return false;
+  for (size_t i = 0; i < value.size(); ++i) {
+    if (i == 8 || i == 13 || i == 18 || i == 23)
+      continue;
+    if (!IsLowerHex(value[i]))
+      return false;
+  }
+  return true;
+}
+
+NSString *AccountForSlot(const std::string &slot) {
+  if (slot == kCredentialsSlot)
+    return kCredentialsAccount;
+  if (slot == kSteamSlot)
+    return kSteamAccount;
+  const std::string prefix = kMultiPrefix;
+  if (slot.rfind(prefix, 0) != 0)
+    return nil;
+  const size_t separator = slot.find('.', prefix.size());
+  if (separator == std::string::npos)
+    return nil;
+  const std::string profile = slot.substr(prefix.size(), separator - prefix.size());
+  const std::string kind = slot.substr(separator + 1);
+  if (!IsUuidV4(profile) ||
+      (kind != kCredentialsSlot && kind != kSteamSlot))
+    return nil;
+  NSString *base = kind == kCredentialsSlot ? kCredentialsAccount : kSteamAccount;
+  return [NSString stringWithFormat:@"%@.multi.%s", base, profile.c_str()];
 }
 
 NSString *ServiceForHostBundle() {
@@ -72,16 +107,17 @@ NSString *LabelForService(NSString *service) {
   return @"Guild Wars Reforged Dev saved login";
 }
 
-NSMutableDictionary *QueryForSlot(Slot slot) {
+NSMutableDictionary *QueryForSlot(const std::string &slot) {
   NSString *service = ServiceForHostBundle();
-  if (service == nil)
+  NSString *account = AccountForSlot(slot);
+  if (service == nil || account == nil)
     return nil;
   LAContext *context = [[LAContext alloc] init];
   context.interactionNotAllowed = YES;
   return [@{
     (__bridge id)kSecClass : (__bridge id)kSecClassGenericPassword,
     (__bridge id)kSecAttrService : service,
-    (__bridge id)kSecAttrAccount : AccountForSlot(slot),
+    (__bridge id)kSecAttrAccount : account,
     (__bridge id)kSecUseDataProtectionKeychain : @YES,
     (__bridge id)kSecUseAuthenticationContext : context,
   } mutableCopy];
@@ -251,27 +287,23 @@ void Complete(napi_env env, napi_status status, void *data) {
   delete work;
 }
 
-bool ReadSlot(napi_env env, napi_value value, Slot *slot) {
+bool ReadSlot(napi_env env, napi_value value, std::string *slot) {
   size_t length = 0;
   if (napi_get_value_string_utf8(env, value, nullptr, 0, &length) != napi_ok ||
-      length > sizeof(kCredentialsSlot)) {
+      length == 0 || length > 96) {
     return false;
   }
 
-  char text[sizeof(kCredentialsSlot)] = {};
-  if (napi_get_value_string_utf8(env, value, text, sizeof(text), &length) !=
+  std::vector<char> text(length + 1, '\0');
+  if (napi_get_value_string_utf8(env, value, text.data(), text.size(), &length) !=
       napi_ok) {
     return false;
   }
-  if (strcmp(text, kCredentialsSlot) == 0) {
-    *slot = Slot::kCredentials;
-    return true;
-  }
-  if (strcmp(text, kSteamSlot) == 0) {
-    *slot = Slot::kSteam;
-    return true;
-  }
-  return false;
+  const std::string candidate(text.data(), length);
+  if (AccountForSlot(candidate) == nil)
+    return false;
+  *slot = candidate;
+  return true;
 }
 
 napi_value Queue(napi_env env, napi_callback_info info, Operation operation) {

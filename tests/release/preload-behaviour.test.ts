@@ -158,6 +158,7 @@ function call(api: GwNativeApi, dotted: string): Capability {
 }
 
 const PACKET = new Uint8Array([1, 2, 3, 4]);
+const PROFILE_ID = "00000000-0000-4000-8000-000000000001";
 
 /** A request/response capability, with the arguments a caller really passes. */
 interface Invocation {
@@ -179,6 +180,48 @@ const INVOCATIONS: Invocation[] = [
   { path: "settings.get", args: [], channel: IPC.settingsGet },
   { path: "settings.set", args: [{ renderScale: 2 }], channel: IPC.settingsSet },
   { path: "settings.reset", args: [], channel: IPC.settingsReset },
+  { path: "accounts.get", args: [], channel: IPC.accountsGet },
+  {
+    path: "accounts.setup",
+    args: [{ templateEntries: [] }],
+    channel: IPC.accountsSetup,
+  },
+  {
+    path: "accounts.create",
+    args: [{
+      name: "Alt",
+      templates: "private",
+      builds: "private",
+      copySingleBuilds: false,
+      copySingleTemplates: false,
+    }],
+    channel: IPC.accountsCreate,
+  },
+  {
+    path: "accounts.update",
+    args: [{
+      id: PROFILE_ID,
+      name: "Alt",
+      templates: "shared",
+      builds: "private",
+    }],
+    channel: IPC.accountsUpdate,
+  },
+  { path: "accounts.archive", args: [PROFILE_ID], channel: IPC.accountsArchive },
+  { path: "accounts.restore", args: [PROFILE_ID], channel: IPC.accountsRestore },
+  { path: "accounts.delete", args: [PROFILE_ID], channel: IPC.accountsDelete },
+  { path: "accounts.open", args: [[PROFILE_ID]], channel: IPC.accountsOpen },
+  { path: "accounts.useSingle", args: [], channel: IPC.accountsUseSingle },
+  {
+    path: "accounts.loadTemplates",
+    args: [],
+    channel: IPC.accountsTemplatesLoad,
+  },
+  {
+    path: "accounts.saveTemplates",
+    args: [[{ path: "Skills/Alt.txt", contents: "OQCiUyo8AkVwR4KMMGAAAEAA" }]],
+    channel: IPC.accountsTemplatesSave,
+  },
   { path: "buildLibrary.get", args: [], channel: IPC.buildLibraryGet },
   {
     path: "buildLibrary.set",

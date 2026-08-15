@@ -20,7 +20,13 @@ const REQUIRED_DIRECTORIES = [
 ];
 
 type EmscriptenFileSystem = {
-  analyzePath(path: string): { error: number };
+  analyzePath(path: string): { error: number; exists: boolean };
+  readdir(path: string): string[];
+  stat(path: string): { mode: number };
+  isDir(mode: number): boolean;
+  isFile(mode: number): boolean;
+  readFile(path: string, options: { encoding: 'utf8' }): string;
+  writeFile(path: string, data: string): void;
   chdir(path: string): void;
   lookupPath(path: string, options?: unknown): unknown;
   open(path: unknown, ...args: unknown[]): unknown;
@@ -54,10 +60,12 @@ export const installGameFilesystem = ({
   module,
   failed,
   log,
+  restoreTemplates,
 }: {
   module: EmscriptenModule;
   failed(error: unknown): void;
   log(...values: unknown[]): void;
+  restoreTemplates?(fs: EmscriptenFileSystem): Promise<void>;
 }) => {
   module.preRun = () => {
     module.addRunDependency(DEPENDENCY);
@@ -103,6 +111,7 @@ export const installGameFilesystem = ({
             fs.mkdirTree(directory);
           }
           fs.chdir(MOUNT);
+          const persist = () => {
           // Persist the directory invariant before the game can create a
           // template, screenshot, chat log, or diagnostic file beneath it.
           sync(false, (persistError) => {
@@ -144,6 +153,9 @@ export const installGameFilesystem = ({
               ready();
             }
           });
+          };
+          if (restoreTemplates) void restoreTemplates(fs).then(persist).catch(stop);
+          else persist();
         } catch (error) {
           stop(error);
         }

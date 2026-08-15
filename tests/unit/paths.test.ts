@@ -6,8 +6,10 @@ import {
   diagnosticFramesPath,
   documentDirectories,
   gamePaths,
+  multiProfilePaths,
   unpackedPath,
 } from "../../src/main/core/paths.ts";
+import { parseProfileId } from "../../src/shared/multiple-accounts.ts";
 
 // Every value below is a literal on purpose. A refactor may move where a path
 // is *constructed*; it may not change what the path *is*. `game/chunks` holds
@@ -24,6 +26,13 @@ describe("resolved profile paths", () => {
       settings: `${root}/settings.json`,
       buildLibrary: `${root}/build-library.json`,
       windowState: `${root}/window-state.json`,
+      launcherMode: `${root}/launcher-mode.json`,
+      multiRoot: `${root}/multi`,
+      multiWorkspace: `${root}/multi/workspace.json`,
+      multiSingleTemplateImport: `${root}/multi/single-template-import.json`,
+      multiSharedBuildLibrary: `${root}/multi/shared/build-library.json`,
+      multiSharedTemplates: `${root}/multi/shared/templates.json`,
+      multiProfiles: `${root}/multi/profiles`,
       diagnostics: `${root}/diagnostics`,
       game: `${root}/game`,
       artifacts: `${root}/game/artifacts`,
@@ -61,6 +70,18 @@ describe("resolved profile paths", () => {
       // so `SkillAssets.prepare` collects its own orphans instead — the same
       // owner-recovery exemption the hashed derived-WASM entries take.
     ]);
+  });
+
+  it("derives profile paths only beneath the Multi namespace", () => {
+    const id = parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae");
+    assert.deepEqual(multiProfilePaths(gamePaths(root), id), {
+      root: `${root}/multi/profiles/${id}`,
+      buildLibrary: `${root}/multi/profiles/${id}/build-library.json`,
+      templates: `${root}/multi/profiles/${id}/templates.json`,
+      templateSync: `${root}/multi/profiles/${id}/template-sync.json`,
+      windowState: `${root}/multi/profiles/${id}/window-state.json`,
+      gameStorageClearRequest: `${root}/multi/profiles/${id}/clear-game-storage-on-start`,
+    });
   });
 
   it("keeps the downloaded chunk cache exactly where the alpha put it", () => {
