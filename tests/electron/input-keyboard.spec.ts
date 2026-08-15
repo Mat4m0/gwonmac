@@ -65,6 +65,45 @@ test.describe("renderer keyboard input", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("keeps same-window controls inside the game focus lifecycle", async () => {
+    const fixture = await launchCachedClient("gw-internal-focus-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const result = await page.evaluate(() => {
+        const canvas = document.getElementById("canvas");
+        if (!(canvas instanceof HTMLCanvasElement)) {
+          throw new Error("#canvas is missing");
+        }
+        const control = document.createElement("input");
+        control.setAttribute("aria-label", "Renderer control");
+        document.body.append(control);
+        let clientCanvasBlurs = 0;
+        canvas.addEventListener("blur", () => {
+          clientCanvasBlurs += 1;
+        });
+
+        canvas.focus();
+        control.focus();
+        const afterInternalTransfer = clientCanvasBlurs;
+
+        canvas.focus();
+        canvas.dispatchEvent(new FocusEvent("blur", { relatedTarget: null }));
+        const afterWindowBlur = clientCanvasBlurs;
+        control.remove();
+        return { afterInternalTransfer, afterWindowBlur };
+      });
+
+      expect(result).toEqual({
+        afterInternalTransfer: 0,
+        afterWindowBlur: 1,
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("lets the client own Tab focus between login fields", async () => {
     const fixture = await launchCachedClient("gw-tab-focus-e2e-");
     try {

@@ -1112,17 +1112,13 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     log,
   });
 
-  // The desktop text proxy and the same-window Toolbox overlay are part of the
-  // game experience, not a loss of application focus. Keep the client's
-  // canvas-blur callback from muting audio for those internal transfers. Real
-  // window blur still reaches the canvas and releases input.
+  // Every same-document control is part of the game experience, not a loss of
+  // application focus. Keep the client's canvas-blur callback from muting
+  // audio when focus moves into Settings, Tools, Travel, a warning, or a game
+  // text proxy. A real window blur has no related element, so it still reaches
+  // the client and releases input.
   c.addEventListener('blur', (event) => {
-    const target = event.relatedTarget;
-    if (
-      oskInputs.has(target) ||
-      (target instanceof Element
-        && target.closest('#toolbox-foundation, #memory-notice'))
-    ) {
+    if (event.relatedTarget instanceof Element) {
       event.stopImmediatePropagation();
     }
   }, true);

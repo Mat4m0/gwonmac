@@ -65,6 +65,17 @@ test.describe("renderer Travel input", () => {
       const canvas = page.locator("#canvas");
       const palette = page.getByRole("dialog", { name: "Travel" });
       const search = page.getByRole("combobox", { name: "Search destinations" });
+      await page.evaluate(() => {
+        const gameCanvas = document.getElementById("canvas");
+        if (!(gameCanvas instanceof HTMLCanvasElement)) {
+          throw new Error("#canvas is missing");
+        }
+        document.body.dataset.travelCanvasBlurs = "0";
+        gameCanvas.addEventListener("blur", () => {
+          const count = Number(document.body.dataset.travelCanvasBlurs ?? "0");
+          document.body.dataset.travelCanvasBlurs = String(count + 1);
+        });
+      });
 
       await page.evaluate(() => {
         window.dispatchEvent(new CustomEvent("gw:travel-toggle", {
@@ -74,6 +85,10 @@ test.describe("renderer Travel input", () => {
       });
       await expect(palette).toBeVisible();
       await expect.poll(() => isDomActiveElement(search)).toBe(true);
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-travel-canvas-blurs",
+        "0",
+      );
       await expect(search).toHaveAccessibleName("Search destinations");
       await expect(palette.getByRole("listbox")).toHaveCount(0);
       await expect(page.getByText("Start typing to search all outposts."))
