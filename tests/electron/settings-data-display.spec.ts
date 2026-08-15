@@ -436,7 +436,9 @@ test.describe("data and display settings", () => {
         compactGeometry.dialog.bottom,
       );
       expect(compactGeometry.paneWidth[1]).toBe(compactGeometry.paneWidth[0]);
-      expect(compactGeometry.railWidth[1]).toBe(compactGeometry.railWidth[0]);
+      expect(compactGeometry.railWidth[1]!).toBeGreaterThan(
+        compactGeometry.railWidth[0]!,
+      );
 
       const firstCompactTab = page.locator(`#settings-tab-${first}`);
       await firstCompactTab.focus();

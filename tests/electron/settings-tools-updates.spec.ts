@@ -48,7 +48,9 @@ test.describe("tools and update settings", () => {
       });
 
       await toolsRow.locator(".settings-shortcut-change").click();
-      await expect(toolsRow.locator("kbd")).toHaveText("Press shortcut…");
+      await expect(toolsRow.locator("kbd")).toHaveText("Listening…");
+      await expect(toolsRow.locator(".settings-shortcut-message"))
+        .toContainText("Delete clears · Escape cancels");
       await sendInput("B", ["meta"]);
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({
@@ -57,7 +59,7 @@ test.describe("tools and update settings", () => {
       await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "0");
 
       await toolsRow.locator(".settings-shortcut-change").click();
-      await expect(toolsRow.locator("kbd")).toHaveText("Press shortcut…");
+      await expect(toolsRow.locator("kbd")).toHaveText("Listening…");
       await sendInput("K", ["meta", "shift"]);
       await expect.poll(async () => ({
         key: await toolsRow.locator("kbd").textContent(),
@@ -124,6 +126,13 @@ test.describe("tools and update settings", () => {
         }),
       ).toBe("CmdOrCtrl+,");
       await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+      await expect(page.locator("#settings-form")).toHaveAttribute(
+        "aria-busy",
+        "false",
+      );
+      await expect(page.locator("#settings-feedback")).toHaveText(
+        "Changes save automatically.",
+      );
       await expect.poll(() => page.evaluate(() => document.activeElement?.id))
         .toBe("settings-tab-data");
       await page.keyboard.press("Escape");
@@ -345,6 +354,12 @@ test.describe("tools and update settings", () => {
       );
       await page.locator("#settings-tab-controls").click();
       const controls = page.locator("#settings-pane-controls");
+      await expect(page.locator("#settings-tool-features")).toBeHidden();
+      await expect(page.locator("#settings-tools-off")).toBeVisible();
+      await expect(page.locator("#settings-availability")).not.toHaveAttribute(
+        "open",
+        "",
+      );
       await expect(controls).toContainText(
         "Guild Wars cursor",
       );

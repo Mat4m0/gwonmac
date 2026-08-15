@@ -126,10 +126,11 @@ After that restart, these choices update immediately:
 - **Open Xunlai storage** (Beta) allows the Storage button, Command-Shift-C
   shortcut, and the `/chest` and `/xunlai` chat commands in a supported PvE
   outpost.
-- **Quick Travel palette** (Beta) opens with Command-T. Type a destination or
-  alias such as `la`, `kama`, or `eotn`, choose a district, and press Return.
-  With an empty search, press 1–9 to travel through saved quick destinations.
-  Command-1 through Command-9 assigns the selected result to that number.
+- **Quick Travel palette** (Beta) opens with Command-T. Before you search, it
+  shows only your saved quick destinations; press 1–9 from anywhere in Travel
+  to use one. Type a destination or alias such as `la`, `kama`, or `eotn`,
+  choose a district, and press Return. Command-1 through Command-9 assigns the
+  selected result to that number.
 
 Tools and Travel stay open when you click Guild Wars behind them. Press Tab to
 move the keyboard into the topmost GWonMac window. Press Escape to close that

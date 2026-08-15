@@ -27,6 +27,7 @@ const emit = defineEmits<{ close: [] }>();
 
 const palette = ref<HTMLElement | null>(null);
 const input = ref<HTMLInputElement | null>(null);
+const districtNumberInput = ref<HTMLInputElement | null>(null);
 const query = ref("");
 const active = ref(0);
 const district = ref<TravelDistrictId>("international");
@@ -37,7 +38,11 @@ const feedbackLevel = ref<"info" | "success" | "warning" | "danger">("info");
 const busyMapId = ref<number | null>(null);
 let timeout = 0;
 
-const results = computed(() => searchTravelDestinations(query.value));
+const hasQuery = computed(() => query.value.trim().length > 0);
+const results = computed(() => hasQuery.value
+  ? searchTravelDestinations(query.value)
+  : []
+);
 const shortcutRows = computed(() => shortcuts.value
   .map((request, index) => ({
     index,
@@ -51,7 +56,9 @@ const activeDestination = computed(() => results.value[active.value] ?? null);
 const statusText = computed(() =>
   feedback.value
   || props.host.unavailable
-  || "Arrow keys choose · ⌘1–9 saves the selected shortcut"
+  || (hasQuery.value
+    ? "Arrow keys choose · Return travels · ⌘1–9 saves this destination"
+    : "Press 1–9 for Quick Travel")
 );
 const statusLevel = computed(() => {
   if (feedback.value) return feedbackLevel.value;
@@ -73,8 +80,16 @@ watch(() => props.visible, async (visible) => {
 
 watch(() => props.host.state.value, (state) => {
   if (busyMapId.value === null) return;
-  if (state.status === "waiting" && state.reason === "loading") emit("close");
-  else if (state.status === "ready" && state.mapId === busyMapId.value) emit("close");
+  if (
+    (state.status === "waiting" && state.reason === "loading")
+    || (state.status === "ready" && state.mapId === busyMapId.value)
+  ) {
+    window.clearTimeout(timeout);
+    busyMapId.value = null;
+    feedback.value = "Travel started.";
+    feedbackLevel.value = "success";
+    timeout = window.setTimeout(() => emit("close"), 350);
+  }
 });
 
 function requestFor(destination: TravelDestination): TravelRequest {
@@ -99,14 +114,15 @@ async function travel(request: TravelRequest): Promise<void> {
   busyMapId.value = request.mapId;
   try {
     await props.host.travel(request);
+    if (busyMapId.value !== request.mapId) return;
     timeout = window.setTimeout(() => {
       busyMapId.value = null;
       feedback.value = "Travel did not start. Check that this outpost is unlocked, then try again.";
       feedbackLevel.value = "warning";
     }, 3_000);
-  } catch (cause) {
+  } catch {
     busyMapId.value = null;
-    feedback.value = cause instanceof Error ? cause.message : "Travel could not start. Try again.";
+    feedback.value = "Travel could not start. Check Guild Wars, then try again.";
     feedbackLevel.value = "danger";
   }
 }
@@ -114,12 +130,19 @@ async function travel(request: TravelRequest): Promise<void> {
 async function assignShortcut(slot: number): Promise<void> {
   const destination = activeDestination.value;
   if (!destination) return;
+  const previous = shortcuts.value;
   const next = Array.from(shortcuts.value);
   while (next.length <= slot) next.push(null);
   next[slot] = requestFor(destination);
-  shortcuts.value = await props.host.saveShortcuts(next.slice(0, 9));
-  feedback.value = `${destination.name} is now shortcut ${slot + 1}.`;
-  feedbackLevel.value = "success";
+  try {
+    shortcuts.value = await props.host.saveShortcuts(next.slice(0, 9));
+    feedback.value = `${destination.name} is now shortcut ${slot + 1}.`;
+    feedbackLevel.value = "success";
+  } catch {
+    shortcuts.value = previous;
+    feedback.value = "Shortcut could not be saved. Your previous shortcut is still active.";
+    feedbackLevel.value = "danger";
+  }
 }
 
 async function moveActive(direction: 1 | -1): Promise<void> {
@@ -155,16 +178,19 @@ function onKeydown(event: KeyboardEvent): void {
     return;
   }
   if (
-    isSearchInput
-    && /^[1-9]$/u.test(event.key)
-    && query.value === ""
+    /^[1-9]$/u.test(event.key)
+    && query.value.trim() === ""
     && !event.metaKey
     && !event.ctrlKey
+    && event.target !== districtNumberInput.value
   ) {
+    event.preventDefault();
     const shortcut = shortcuts.value[Number(event.key) - 1];
     if (shortcut) {
-      event.preventDefault();
       void travel(shortcut);
+    } else {
+      feedback.value = `Quick Travel ${event.key} is not set.`;
+      feedbackLevel.value = "warning";
     }
   }
 }
@@ -172,10 +198,8 @@ function onKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   void props.host.loadShortcuts()
     .then((loaded) => { shortcuts.value = loaded; })
-    .catch((cause: unknown) => {
-      feedback.value = cause instanceof Error
-        ? cause.message
-        : "Shortcuts could not be loaded. Reopen Travel to try again.";
+    .catch(() => {
+      feedback.value = "Shortcuts could not be loaded. Reopen Travel to try again.";
       feedbackLevel.value = "danger";
     });
 });
@@ -193,17 +217,18 @@ onBeforeUnmount(() => {
     aria-label="Travel"
     @keydown="onKeydown"
   >
-    <label class="ui-input-group travel-search">
+    <div class="ui-input-group travel-search">
       <svg class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true">
         <circle cx="8.5" cy="8.5" r="5.25" />
         <path d="m12.4 12.4 4.1 4.1" />
       </svg>
-      <span class="ui-sr-only">Search destinations</span>
+      <label class="ui-sr-only" for="travel-search-input">Search destinations</label>
       <input
+        id="travel-search-input"
         ref="input"
         v-model="query"
         role="combobox"
-        aria-controls="travel-results"
+        :aria-controls="hasQuery ? 'travel-results' : undefined"
         aria-autocomplete="list"
         aria-haspopup="listbox"
         :aria-activedescendant="activeDestination ? `travel-${activeDestination.mapId}` : undefined"
@@ -218,8 +243,12 @@ onBeforeUnmount(() => {
         data-icon
         aria-label="Close Travel"
         @click="emit('close')"
-      >×</button>
-    </label>
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="m3 3 10 10M13 3 3 13" />
+        </svg>
+      </button>
+    </div>
 
     <div class="travel-options">
       <span class="travel-options-label">District</span>
@@ -234,6 +263,7 @@ onBeforeUnmount(() => {
       <label class="travel-district-number">
         <span class="ui-sr-only">District number</span>
         <input
+          ref="districtNumberInput"
           v-model.number="districtNumber"
           class="ui-input"
           type="number"
@@ -246,10 +276,13 @@ onBeforeUnmount(() => {
       </label>
     </div>
 
-    <div v-if="!query && shortcutRows.length" class="travel-shortcuts" aria-label="Quick Travel">
+    <section
+      v-if="!hasQuery && shortcutRows.length"
+      class="travel-shortcuts"
+      aria-labelledby="travel-shortcuts-title"
+    >
       <header>
-        <strong>Quick Travel</strong>
-        <span>Press 1–9</span>
+        <h2 id="travel-shortcuts-title">Quick Travel</h2>
       </header>
       <button
         v-for="row in shortcutRows"
@@ -263,9 +296,18 @@ onBeforeUnmount(() => {
         <kbd class="ui-kbd">{{ row.index + 1 }}</kbd>
         <span>{{ row.destination.name }}</span>
       </button>
-    </div>
+    </section>
 
-    <div id="travel-results" class="ui-scroll travel-results" role="listbox">
+    <p v-if="!hasQuery" class="travel-search-prompt">
+      Start typing to search all outposts.
+    </p>
+
+    <div
+      v-if="hasQuery"
+      id="travel-results"
+      class="ui-scroll travel-results"
+      role="listbox"
+    >
       <button
         v-for="(destination, index) in results"
         :id="`travel-${destination.mapId}`"
@@ -292,7 +334,6 @@ onBeforeUnmount(() => {
 
     <footer class="travel-footer">
       <span :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</span>
-      <span><kbd class="ui-kbd">1–9</kbd> travels</span>
     </footer>
   </section>
 </template>

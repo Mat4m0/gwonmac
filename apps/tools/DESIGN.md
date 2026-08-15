@@ -56,6 +56,10 @@ density, or behavior.
 - Escape closes the topmost GWonMac surface before Guild Wars receives it.
 - Tab enters the topmost open GWonMac surface and wraps inside its controls.
 - Keep native confirmation dialogs above non-modal Tools and Travel surfaces.
+- Open Travel with Quick Travel destinations only; reveal the full catalogue as
+  the player searches.
+- Keep version availability collapsed in Settings unless something is
+  unavailable.
 - Keep a dragged window inside the viewport.
 - Keep scrolling flex and grid children shrinkable.
 - Use container width to change panel layout.

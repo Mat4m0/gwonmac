@@ -36,6 +36,10 @@ test.describe("renderer Travel input", () => {
       });
       await expect(palette).toBeVisible();
       await expect.poll(() => isDomActiveElement(search)).toBe(true);
+      await expect(search).toHaveAccessibleName("Search destinations");
+      await expect(palette.getByRole("listbox")).toHaveCount(0);
+      await expect(page.getByText("Start typing to search all outposts."))
+        .toBeVisible();
 
       // Native modal work is above non-modal surfaces. The first Escape closes
       // Settings and restores Travel; the palette remains open underneath.

@@ -181,6 +181,10 @@ export function renderClientCompatibility(
   const settingsStatus = requiredElement(root, 'settings-compat-status');
   const settingsDetail = requiredElement(root, 'settings-compat-detail');
   const settingsVersion = requiredElement(root, 'settings-compat-version');
+  const settingsAvailability = requiredElement(
+    root,
+    'settings-availability',
+  ) as HTMLDetailsElement;
   const launcherTitle = requiredElement(root, 'client-compat-title');
   const launcherDetail = requiredElement(root, 'client-compat-detail');
   const launcherVersion = requiredElement(root, 'client-compat-version');
@@ -200,6 +204,7 @@ export function renderClientCompatibility(
   }
 
   const report = compatibilityReport(session.compatibility);
+  settingsAvailability.open = report.degraded;
   for (const feature of Object.keys(session.compatibility.features) as Feature[]) {
     requiredElement(root, `settings-feature-${feature}`).textContent =
       featureStatusLabel(session.compatibility.features[feature]);

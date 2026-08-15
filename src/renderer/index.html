@@ -493,69 +493,75 @@
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
                  aria-labelledby="settings-tab-controls">
           <h3 id="settings-controls-title" class="settings-pane-title">Tools</h3>
-          <p class="settings-pane-intro">Choose the GWonMac features you want. File saving stays on when this Guild Wars version supports it.</p>
+          <p class="settings-pane-intro">Choose which optional GWonMac features are available while you play.</p>
           <label class="settings-check ui-check">
             <input type="checkbox" name="gwonmacTools" aria-describedby="settings-tools-help">
             <span>Enable optional Tools Beta</span>
           </label>
-          <p id="settings-tools-help" class="settings-note">The first Tools enable needs one restart to prepare every certified capability. After that, Tools and individual features turn on or off immediately. Your saved Builds and Teams stay available at login and in PvP.</p>
-          <fieldset>
-            <legend>Optional tools</legend>
-            <label class="settings-check ui-check">
-              <input type="checkbox" name="teamManagement">
-              <span>Apply teams in Guild Wars <small>Beta</small></span>
-            </label>
-            <label class="settings-check ui-check">
-              <input type="checkbox" name="xunlaiStorage">
-              <span>Open Xunlai storage <small>Beta</small></span>
-            </label>
-            <label class="settings-check ui-check">
-              <input type="checkbox" name="travelPalette">
-              <span>Quick Travel palette <small>Beta</small></span>
-            </label>
-            <label class="settings-check ui-check">
-              <input type="checkbox" name="targetReadout">
-              <span>Target distance and range <small>Test</small></span>
-            </label>
-          </fieldset>
-          <fieldset class="settings-shortcuts" aria-describedby="settings-shortcuts-help">
-            <legend>Keyboard shortcuts</legend>
-            <p id="settings-shortcuts-help" class="settings-note">Shortcuts work while the Guild Wars window is active.</p>
-            <div class="settings-shortcut-row" data-shortcut-action="tools.toggle">
-              <span class="settings-shortcut-name">Toggle Tools</span>
-              <kbd class="settings-shortcut-value">—</kbd>
-              <button type="button" class="ui-button settings-shortcut-change">Change</button>
-              <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
-              <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
-            </div>
-            <div class="settings-shortcut-row" data-shortcut-action="storage.open">
-              <span class="settings-shortcut-name">Open Xunlai storage</span>
-              <kbd class="settings-shortcut-value">—</kbd>
-              <button type="button" class="ui-button settings-shortcut-change">Change</button>
-              <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
-              <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
-            </div>
-            <div class="settings-shortcut-row" data-shortcut-action="travel.open">
-              <span class="settings-shortcut-name">Open Travel</span>
-              <kbd class="settings-shortcut-value">—</kbd>
-              <button type="button" class="ui-button settings-shortcut-change">Change</button>
-              <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
-              <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
-            </div>
-            <button type="button" id="settings-shortcuts-restore" class="ui-link">Restore default shortcuts</button>
-          </fieldset>
-          <dl class="settings-feature-status" aria-label="Feature availability">
-            <div><dt>Guild Wars file saving</dt><dd id="settings-feature-gameFileSaving">—</dd></div>
-            <div><dt>Guild Wars cursor</dt><dd id="settings-feature-nativeCursor">—</dd></div>
-            <div><dt>Target distance</dt><dd id="settings-feature-targetObservation">—</dd></div>
-            <div><dt>Live party details</dt><dd id="settings-feature-partyObservation">—</dd></div>
-            <div><dt>Apply team</dt><dd id="settings-feature-teamApply">—</dd></div>
-            <div><dt>Xunlai / Travel integration</dt><dd id="settings-feature-xunlaiStorage">—</dd></div>
-          </dl>
-          <p id="settings-compat-status" class="settings-status"
-             role="status" aria-live="polite"></p>
-          <p id="settings-compat-detail" class="settings-note"></p>
-          <p id="settings-compat-version" class="settings-note"></p>
+          <p id="settings-tools-help" class="settings-note">The first enable needs one restart. After that, changes apply immediately. Your saved Builds and Teams stay available at login and in PvP.</p>
+          <p id="settings-tools-off" class="settings-note">Enable Tools Beta to choose individual tools and keyboard shortcuts.</p>
+          <div id="settings-tools-config">
+            <fieldset id="settings-tool-features" hidden>
+              <legend>Optional tools</legend>
+              <label class="settings-check ui-check">
+                <input type="checkbox" name="teamManagement">
+                <span>Apply teams in Guild Wars <small>Beta</small></span>
+              </label>
+              <label class="settings-check ui-check">
+                <input type="checkbox" name="xunlaiStorage">
+                <span>Open Xunlai storage <small>Beta</small></span>
+              </label>
+              <label class="settings-check ui-check">
+                <input type="checkbox" name="travelPalette">
+                <span>Quick Travel palette <small>Beta</small></span>
+              </label>
+              <label class="settings-check ui-check">
+                <input type="checkbox" name="targetReadout">
+                <span>Target distance and range <small>Test</small></span>
+              </label>
+            </fieldset>
+            <fieldset class="settings-shortcuts" aria-describedby="settings-shortcuts-help">
+              <legend>Keyboard shortcuts</legend>
+              <p id="settings-shortcuts-help" class="settings-note">Shortcuts work while the Guild Wars window is active.</p>
+              <div class="settings-shortcut-row" data-shortcut-action="tools.toggle">
+                <span class="settings-shortcut-name">Toggle Tools</span>
+                <kbd class="settings-shortcut-value">—</kbd>
+                <button type="button" class="ui-button settings-shortcut-change">Change</button>
+                <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+                <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
+              </div>
+              <div class="settings-shortcut-row" data-shortcut-action="storage.open">
+                <span class="settings-shortcut-name">Open Xunlai storage</span>
+                <kbd class="settings-shortcut-value">—</kbd>
+                <button type="button" class="ui-button settings-shortcut-change">Change</button>
+                <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+                <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
+              </div>
+              <div class="settings-shortcut-row" data-shortcut-action="travel.open">
+                <span class="settings-shortcut-name">Open Travel</span>
+                <kbd class="settings-shortcut-value">—</kbd>
+                <button type="button" class="ui-button settings-shortcut-change">Change</button>
+                <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+                <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
+              </div>
+              <button type="button" id="settings-shortcuts-restore" class="ui-link">Restore default shortcuts</button>
+            </fieldset>
+          </div>
+          <details id="settings-availability" class="settings-availability">
+            <summary>Availability for this Guild Wars version</summary>
+            <dl class="settings-feature-status">
+              <div><dt>Guild Wars file saving</dt><dd id="settings-feature-gameFileSaving">—</dd></div>
+              <div><dt>Guild Wars cursor</dt><dd id="settings-feature-nativeCursor">—</dd></div>
+              <div><dt>Target distance</dt><dd id="settings-feature-targetObservation">—</dd></div>
+              <div><dt>Live party details</dt><dd id="settings-feature-partyObservation">—</dd></div>
+              <div><dt>Apply team</dt><dd id="settings-feature-teamApply">—</dd></div>
+              <div><dt>Xunlai / Travel integration</dt><dd id="settings-feature-xunlaiStorage">—</dd></div>
+            </dl>
+            <p id="settings-compat-status" class="settings-status"
+               role="status" aria-live="polite"></p>
+            <p id="settings-compat-detail" class="settings-note"></p>
+            <p id="settings-compat-version" class="settings-note"></p>
+          </details>
         </section>
 
         <section class="settings-pane" id="settings-pane-updates" role="tabpanel"

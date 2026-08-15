@@ -33,12 +33,14 @@ class FakeElement extends EventTarget {
   textContent = "";
   hidden = false;
   disabled = false;
+  open = false;
   dataset: Record<string, string> = {};
   click() { this.dispatchEvent(new Event("click")); }
 }
 
 const IDS = [
   "settings-compat-status", "settings-compat-detail", "settings-compat-version",
+  "settings-availability",
   "client-compat-title", "client-compat-detail", "client-compat-version",
   "client-compat", "client-compat-play",
   "client-compat-check", "client-compat-restart", "client-compat-update",
@@ -236,6 +238,7 @@ describe("client compatibility notice", () => {
     assert.equal(dom.element("settings-compat-status").textContent, report.summary);
     assert.equal(dom.element("client-compat-title").textContent, report.summary);
     assert.equal(dom.element("settings-feature-nativeCursor").textContent, "Unavailable");
+    assert.equal(dom.element("settings-availability").open, true);
   });
 
   it("dismisses the launcher even when acknowledgement cannot persist", async () => {
