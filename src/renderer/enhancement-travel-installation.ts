@@ -1,4 +1,7 @@
-/** Feature-local ownership of Travel exports, memory, policy, palette, and teardown. */
+/**
+ * Feature-local ownership of Travel exports, memory, policy, palette, and
+ * teardown. The shared companion installer only composes this lifecycle.
+ */
 import type { TravelCommand } from "../shared/travel-command.js";
 import type {
   EnhancementTravelConfigure,
