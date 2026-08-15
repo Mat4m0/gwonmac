@@ -42,8 +42,9 @@ Preview is a separate tester application. It cannot use the public updater. A
 tester snapshot does not replace a versioned release check.
 
 The workflow produces a notarized and stapled DMG, an application-update ZIP,
-`RELEASES.json`, `SHA256SUMS.txt`, an SPDX SBOM, and repository-bound
-attestations.
+`RELEASES.json`, `SHA256SUMS.txt`, and an SPDX SBOM. It creates separate
+repository-bound provenance and SBOM attestations for the ZIP and a provenance
+attestation for the DMG.
 
 ## Before you start
 

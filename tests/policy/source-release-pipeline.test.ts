@@ -314,7 +314,11 @@ test("release workflow stages and publishes one tested, attested package version
   assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
   assert.match(releaseBuild, /actions\/upload-artifact@/);
   assert.match(releaseStage, /actions\/download-artifact@/);
-  assert.match(releaseStage, /actions\/attest@/);
+  assert.match(
+    releaseStage,
+    /- name: Attest ZIP provenance\n {8}uses: actions\/attest@[0-9a-f]{40}[^\n]*\n {8}with:\n {10}subject-path: release-assets\/\*\.zip\n\n {6}- name: Attest ZIP SBOM\n {8}uses: actions\/attest@[0-9a-f]{40}[^\n]*\n {8}with:\n {10}subject-path: release-assets\/\*\.zip\n {10}sbom-path: \$\{\{ steps\.release-state\.outputs\.sbom \}\}\n\n {6}- name: Attest DMG provenance\n {8}uses: actions\/attest@[0-9a-f]{40}[^\n]*\n {8}with:\n {10}subject-path: release-assets\/\*\.dmg/,
+  );
+  assert.equal(releaseStage.match(/actions\/attest@/gu)?.length, 3);
   assert.doesNotMatch(releaseStage, /--draft=false/);
   assert.match(releasePublish, /gh release download/);
   assert.doesNotMatch(

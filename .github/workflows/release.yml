@@ -538,7 +538,12 @@ jobs:
             echo "create=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Attest ZIP provenance and SBOM
+      - name: Attest ZIP provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-path: release-assets/*.zip
+
+      - name: Attest ZIP SBOM
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
         with:
           subject-path: release-assets/*.zip
