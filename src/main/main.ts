@@ -33,10 +33,9 @@ import {
   type PrefetchProgress,
   type UpdateTrack,
 } from "../shared/contracts.js";
-import {
-  enhancementCapabilitiesFor,
-  type EnhancementProgram,
-  type EnhancementSelection,
+import type {
+  EnhancementProgram,
+  EnhancementSelection,
 } from "../shared/enhancement-contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
@@ -82,6 +81,7 @@ import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
   enhancementSelectionFor,
+  requestedEnhancementCapabilities,
 } from "./certification/enhancement-policy.js";
 import {
   installGwProtocolHandler,
@@ -546,8 +546,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   const enhancementSelection = enhancementSelectionFor(settings);
   const enhancementProgram = DEVELOPER_ENHANCEMENT_PROGRAM;
-  const enhancementCapabilities = enhancementCapabilitiesFor(
-    enhancementSelection,
+  const enhancementCapabilities = requestedEnhancementCapabilities(
+    settings,
     enhancementProgram,
   );
   if (activeAccountMode === "single") await prepareWindowState();
@@ -877,7 +877,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSettings: () => loadSettings(paths.settings),
     updateSettings: updateAppSettings,
     resetSettings: resetAppSettings,
-    toolsCapableAtLaunch: settings.gwonmacTools,
+    capabilitiesAtLaunch: enhancementCapabilities,
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>
@@ -927,6 +927,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
       extendedMemory: clientRuntime.extendedMemory,
       healthToken: clientRuntime.healthToken,
     }),
+    recordClientFeatureFailure: (features) => {
+      clientRuntime.recordRendererFeatureFailure(features);
+    },
     acquireSteamToken: (parent, record) =>
       acquireSteamToken(STEAM_OAUTH, { parent, record }),
     getAccountsState: accountsState,

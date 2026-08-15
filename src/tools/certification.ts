@@ -23,7 +23,7 @@
  * finding.
  */
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeAtomic } from "../main/core/atomic-file.js";
 import {
@@ -32,9 +32,12 @@ import {
 } from "../main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../main/certification/enhancement-transform.js";
 import {
+  deriveNativeDoubleClickBuild,
+  findNativeDoubleClickBuild,
   NATIVE_DOUBLE_CLICK_BUILDS,
   rewriteWithBuild,
 } from "../main/certification/native-double-click.js";
+import { preparePostTemplateSaveModule } from "../main/certification/template-save-verifier.js";
 import {
   findTemplateSaveBuild,
   rewriteTemplateSaveWasm,
@@ -57,11 +60,16 @@ import {
   inspectTemplateSaveCandidate,
   TEMPLATE_SAVE_TABLE,
 } from "./template-save-recert.js";
+import {
+  createCarryForwardReport,
+  formatCarryForwardMarkdown,
+} from "./carry-forward.js";
 
 const USAGE =
   "usage: certification <command>\n"
   + "  doctor [--profile PATH]              why Enhancement is or is not running here\n"
   + "  recertify [PATH/Gw.jspi.wasm]        draft an Enhancement build entry, with evidence\n"
+  + "  compare INPUT.wasm OUTPUT_DIR        write shared JSON and Markdown patch evidence\n"
   + "  template [PATH/Gw.jspi.wasm] [--emit-ts] [--write] [--expect-certified]\n"
   + "                                       re-derive the template-save build entry\n"
   + "  transform INPUT.wasm OUTPUT.wasm     write the derived Enhancement module\n"
@@ -73,7 +81,7 @@ const USAGE =
  * and reproducing that selection here would be a second place where a
  * capability set decides which output is correct.
  */
-const FOUNDATION_CAPABILITIES = ENHANCEMENT_CAPABILITY_PROFILES.cursorToolbox;
+const FOUNDATION_CAPABILITIES = ENHANCEMENT_CAPABILITY_PROFILES.cursorParty;
 
 function installedClientArtifact(): string {
   return path.join(
@@ -111,6 +119,53 @@ async function recertify(argv: readonly string[]): Promise<void> {
   const report = recertifyEnhancementBytes(official, currentMessageAnchors());
   process.stdout.write(`${JSON.stringify(report)}\n`);
   if (!report.candidateInspected) process.exitCode = 2;
+}
+
+async function compare(argv: readonly string[]): Promise<void> {
+  const [filename, outputDirectory, ...extra] = positionalArguments(argv);
+  if (!filename || !outputDirectory || extra.length > 0) {
+    process.stderr.write(USAGE);
+    process.exitCode = 2;
+    return;
+  }
+  const official = new Uint8Array(await readFile(filename));
+  const templateSave = inspectTemplateSaveCandidate(official);
+  const enhancement = recertifyEnhancementBytes(
+    official,
+    currentMessageAnchors(),
+  );
+  const postTemplate = preparePostTemplateSaveModule(official);
+  const doubleClick = postTemplate
+    && (
+      findNativeDoubleClickBuild(
+        createHash("sha256").update(postTemplate.bytes).digest("hex"),
+      )
+      || deriveNativeDoubleClickBuild(postTemplate.bytes)
+    )
+    ? "exact" as const
+    : "not-located" as const;
+  const report = createCarryForwardReport(
+    templateSave,
+    enhancement,
+    doubleClick,
+  );
+  const directory = path.resolve(outputDirectory);
+  await mkdir(directory, { recursive: true });
+  await Promise.all([
+    writeAtomic(
+      path.join(directory, "carry-forward.json"),
+      `${JSON.stringify(report, null, 2)}\n`,
+    ),
+    writeAtomic(
+      path.join(directory, "carry-forward.md"),
+      formatCarryForwardMarkdown(report),
+    ),
+  ]);
+  process.stdout.write(`${JSON.stringify({
+    json: path.join(directory, "carry-forward.json"),
+    markdown: path.join(directory, "carry-forward.md"),
+    capabilities: report.capabilities,
+  })}\n`);
 }
 
 async function template(argv: readonly string[]): Promise<void> {
@@ -260,9 +315,14 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
       .digest("hex");
   }
   const shipped = NATIVE_DOUBLE_CLICK_BUILDS[0]!.derivations;
-  const matches =
-    JSON.stringify(Object.entries(derivations).sort())
-    === JSON.stringify(Object.entries(shipped).sort());
+  // One structural callback can serve several certified game builds. Compare
+  // only the predecessors produced by this official client; requiring equality
+  // with the whole cumulative table made every later patch look stale merely
+  // because the table also retained the preceding build's derivations.
+  const matches = Object.entries(derivations).every(
+    ([inputSha256, outputSha256]) =>
+      shipped[inputSha256] === outputSha256,
+  );
   process.stdout.write(`${JSON.stringify({
     officialSha256,
     predecessors: predecessors.map(([name]) => name),
@@ -280,6 +340,7 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
 const COMMANDS = Object.freeze({
   doctor,
   recertify,
+  compare,
   template,
   transform,
   "double-click": doubleClick,

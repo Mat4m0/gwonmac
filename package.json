@@ -1,7 +1,7 @@
 {
   "name": "guild-wars",
   "productName": "Guild Wars Reforged",
-  "version": "2026.8.6",
+  "version": "2026.8.7",
   "private": true,
   "packageManager": "pnpm@11.13.1",
   "type": "module",
@@ -37,6 +37,7 @@
     "test:packaged": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-smoke.ts && node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/packaged-enhancement-runtime.ts",
     "test:signed-keychain": "node --import ./scripts/ts-hook.mjs --experimental-strip-types tests/signed-keychain-runtime.ts",
     "test:stable-beta-roundtrip": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/verify-stable-beta-roundtrip.ts",
+    "release:test": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/test-draft-release.ts",
     "verify:signed-app": "node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/verify-signed-app.ts",
     "test:policy": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/policy/*.ts",
     "test:release": "node --import ./scripts/ts-hook.mjs --experimental-strip-types --test --test-timeout=60000 tests/release/*.ts",

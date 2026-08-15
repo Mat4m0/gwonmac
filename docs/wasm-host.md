@@ -103,23 +103,19 @@ official module.
 The costly defect and recertification evidence is in `internal/upstream/`. Read
 that archive before changing the transform.
 
-## Certification states
+## Effective feature status
 
-One owner in `src/main/certification/client-certification.ts` reports one of
-three states:
+Main reports the effective served status for file saving, cursor, target
+observation, party observation, and Apply team. Each optional feature is
+`available`, `off`, or `unavailable`; unavailable features also say whether a
+Guild Wars update or a preparation failure caused the refusal. The renderer
+never reconstructs these answers from settings, hashes, or another feature.
 
-| State | Meaning |
-| --- | --- |
-| `uncertified` | The app uses the official module. Build-specific file repair and live Tools integration are unavailable. |
-| `template-only` | The file-compatibility transform passed. The exact Core and Tools transform did not pass. |
-| `certified` | An exact Core and Tools certificate exists after the file transform. The requested runtime transform can still fail. |
-
-Every consumer reads this result. The launcher, Settings, diagnostics, canary,
-and maintainer command must not recompute it.
-
-The compatibility state and effective activity are separate. If a requested
-runtime transform fails, the state can remain `certified` while
-`enhancementActive` is false. A table entry alone is not runtime success.
+The exact-build entry carries independent optional facts. The runtime selects
+the largest certified subset, removes Apply when party observation is absent,
+and retries from the clean post-template module after a feature-local failure.
+A common hook or final integrity failure disables all optional features while
+preserving proven file saving.
 
 The renderer verifies the instantiated module's exact capability manifest.
 Launch intent is not runtime proof.
@@ -130,13 +126,13 @@ Compiled certification facts and the isolated local file-compatibility verifier
 are the only runtime authorities.
 
 The local verifier can authorize only the bounded file repair that it proves.
-Core and Tools hooks use exact shipped certificates until each hook and address
+Cursor, observation, and Apply hooks use exact shipped facts until each hook and address
 can be recovered from an independent semantic anchor.
 
 There is no remote certificate feed. A CI result, cache file, diagnostics file,
 or GitHub issue cannot grant runtime authority.
 
-New Core or Tools facts require an application release. When those facts are
+New observation or Apply facts require an application release. When those facts are
 missing, the official ArenaNet client remains playable.
 
 ## Required compatibility and optional Tools
@@ -152,8 +148,9 @@ enable therefore requires a restart.
 
 After that restart, these choices update during the session:
 
-- **Team management** controls party observation, the Tools panel, and the
-  fixed Team Apply operations.
+- **Apply teams in Guild Wars** controls only the fixed Team Apply operations.
+  The local Tools panel and saved Build/Team library remain available whenever
+  the master Tools setting is on.
 - **Target distance and range** controls the shipped Test readout and its target
   observation.
 
@@ -196,7 +193,7 @@ function call, shared-memory packet bus, or second game model.
 The commands profile contains only named, certified team operations. It does
 not carry a generic opcode or address.
 
-Team Apply requires enabled Tools and Team management, an exact commands
+Team Apply requires enabled Tools and Apply teams in Guild Wars, an exact commands
 profile, a positively classified PvE outpost, fresh party state, and an explicit
 player action.
 

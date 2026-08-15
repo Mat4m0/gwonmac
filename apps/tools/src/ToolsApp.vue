@@ -394,6 +394,7 @@ onBeforeUnmount(() => {
               v-if="controller.kind.value === 'team'"
               :party="host.party.value"
               :saving="controller.saving.value"
+              :unavailable-reason="host.observationUnavailable"
               @capture="captureCurrentParty"
             />
 

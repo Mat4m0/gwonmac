@@ -10,7 +10,6 @@ import {
   appUpdateStage,
   appVersion,
   boolean,
-  buildCertification,
   captureLevel,
   captureStopReason,
   code,
@@ -51,7 +50,7 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     level: "error",
     fields: {
       action: literal([
-        "toolsEnable",
+        "capabilityEnable",
         "cacheClear",
         "gameStorageReset",
       ] as const),
@@ -565,7 +564,7 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
   "wasm.localVerificationCompleted": {
     subsystem: "wasm",
     level: "info",
-    fields: { certification: buildCertification },
+    fields: none,
   },
   "wasm.localVerificationUnavailable": {
     subsystem: "wasm",

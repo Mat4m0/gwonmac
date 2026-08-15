@@ -20,9 +20,9 @@ describe("native Tools host diagnostics", () => {
       "Team Apply is unavailable.",
     );
 
-    expect(host.publishUnavailable).toMatch(/unavailable for this client build/);
+    expect(host.publishUnavailable).toMatch(/after this game update/);
     await expect(host.publishBuild(demoLibrary.builds[0]!)).rejects.toThrow(
-      "Saving into Guild Wars is unavailable for this client build.",
+      "GWonMac can’t add this build to Guild Wars after this game update.",
     );
   });
 

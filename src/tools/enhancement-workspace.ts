@@ -182,7 +182,7 @@ export async function inspectEnhancementWorkspace(
     // The Enhancement transform consumes the template-save client, so the chain is
     // resolved by the one module that owns it rather than repeated here.
     const certification = certifyClientBuild(sha256);
-    if (certification.state === "certified") {
+    if (certification.enhancementBuild !== null) {
       build = certification.enhancementBuild;
       if (enhancementCapabilitiesRequested(enhancementCapabilities)) {
         transformedCache = await inspectEnhancementCache(

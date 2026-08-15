@@ -15,49 +15,49 @@ import {
 export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
-  toolbox: true,
+  partyObservation: true,
   commands: false,
 });
 export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: true,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
-  toolbox: true,
+  partyObservation: true,
   commands: false,
 });
 export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
-  toolbox: false,
+  partyObservation: false,
   commands: false,
 });
 export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
-  toolbox: true,
+  partyObservation: true,
   commands: true,
 });
 export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
-  toolbox: true,
+  partyObservation: true,
   commands: true,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
@@ -77,9 +77,14 @@ const PLACEHOLDER_OUTPUTS: EnhancementOutputHashes = Object.freeze({
   cursor: "0".repeat(64),
   target: "0".repeat(64),
   cursorTarget: "0".repeat(64),
-  cursorToolbox: "0".repeat(64),
-  cursorToolboxCommands: "0".repeat(64),
-  cursorTargetToolboxCommands: "0".repeat(64),
+  party: "0".repeat(64),
+  cursorParty: "0".repeat(64),
+  targetParty: "0".repeat(64),
+  cursorTargetParty: "0".repeat(64),
+  partyCommands: "0".repeat(64),
+  cursorPartyCommands: "0".repeat(64),
+  targetPartyCommands: "0".repeat(64),
+  cursorTargetPartyCommands: "0".repeat(64),
 });
 
 function uleb(value: number): number[] {
@@ -221,8 +226,9 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookFunction: 3,
     hookParams: ["i32"],
     hookResults: [],
+    hookBodySha256: createHash("sha256").update(commandBody(bytes, 0)).digest("hex"),
     tableSlot: 5,
-    commands: {
+    teamApply: {
       thunkExport: "enhancement_command",
       professionTrace: {
         readerExport: "enhancement_profession_trace",
@@ -279,8 +285,38 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       results: [],
       tableSlot: 1,
       producerFunctions: [4, 4],
+      producerParams: [
+        ["i32", "i32", "i32", "i32", "i32"],
+        ["i32", "i32", "i32", "i32", "i32"],
+      ],
+      producerResults: [[], []],
+      bodySha256: createHash("sha256").update(commandBody(bytes, 1)).digest("hex"),
+      producerBodySha256: [
+        createHash("sha256").update(commandBody(bytes, 1)).digest("hex"),
+        createHash("sha256").update(commandBody(bytes, 1)).digest("hex"),
+      ],
+      tableNeighbourBodySha256: [
+        createHash("sha256").update(commandBody(bytes, 0)).digest("hex"),
+        createHash("sha256").update(commandBody(bytes, 2)).digest("hex"),
+      ],
+      layout: {
+        cursorActiveArt: 16, cursorSoftwareModel: 17, cursorShowCount: 18,
+        cursorColorBuffer: 19, cursorArtHotspot: 0, cursorArtTexture: 12,
+        cursorHandleKey: 8, cursorHandleObject: 0, cursorViewTexture: 8,
+        cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
+      },
     },
-    uiDispatcher: {
+    observationBase: { layout: {
+      contextRoot: 1, agentArray: 2, gameContextSlot: 6,
+      characterContext: 4, mapId: 5, isExplorable: 6,
+      currentMapId: 7, currentInstanceType: 8, playerNumber: 9,
+      agentId: 10, agentPlayerNumber: 14, agentModelType: 15,
+    } },
+    targetObservation: { layout: {
+      manualTargetAgentId: 3, automaticTargetAgentId: 4,
+      agentX: 11, agentY: 12, agentType: 13,
+    } },
+    partyObservation: {
       functionIndex: 5,
       params: ["i32", "i32", "i32"],
       results: [],
@@ -292,17 +328,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       playerChatSites: 3,
       nearbyPlayerMessages: [0x1000_007f, 0x1000_0080],
       nearbyPlayerMessageProducers: [5, 5],
-    },
-    layout: {
-      contextRoot: 1, agentArray: 2, manualTargetAgentId: 3,
-      automaticTargetAgentId: 4, gameContextSlot: 6, characterContext: 4,
-      mapId: 5, isExplorable: 6, currentMapId: 7, currentInstanceType: 8,
-      playerNumber: 9, agentId: 10, agentX: 11, agentY: 12, agentType: 13,
-      agentPlayerNumber: 14, agentModelType: 15,
-      cursorActiveArt: 16, cursorSoftwareModel: 17, cursorShowCount: 18,
-      cursorColorBuffer: 19, cursorArtHotspot: 0, cursorArtTexture: 12,
-      cursorHandleKey: 8, cursorHandleObject: 0, cursorViewTexture: 8,
-      cursorTextureType: 12, cursorTextureWidth: 20, cursorTextureHeight: 24,
+      layout: {
       partyContext: 28, playerParty: 32, partyHeroes: 36,
       heroMemberStride: 24, heroAgentId: 0, heroOwnerPlayerId: 4, heroId: 8,
       // Distinct values rather than zeros: the config ABI is positional, so a
@@ -332,6 +358,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       worldProfessionStates: 76,
       professionStateStride: 77,
       worldCharacterSkills: 80,
+      },
     },
   };
 }

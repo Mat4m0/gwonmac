@@ -319,8 +319,9 @@ test("release workflow stages and publishes one tested, attested package version
   assert.match(releasePublish, /gh release download/);
   assert.doesNotMatch(
     releasePublish,
-    /actions\/checkout|actions\/download-artifact|actions\/attest|pnpm install|pnpm make|pnpm test|gh release create/,
+    /actions\/download-artifact|actions\/attest|pnpm install|pnpm make|pnpm test|gh release create/,
   );
+  assert.match(releasePublish, /actions\/checkout@[0-9a-f]{40}/);
   const signingMaterialRemovedAt = releaseBuild.indexOf(
     "security delete-keychain \"$APPLE_KEYCHAIN\"\n          rm -f",
   );
@@ -396,6 +397,10 @@ test("release workflow stages and publishes one tested, attested package version
     /verify-stable-beta-roundtrip\.ts/,
   );
   assert.match(workflow, /--draft --generate-notes/);
+  assert.match(
+    releaseStage,
+    /name: Prepare machine-owned Verification record[\s\S]*scripts\/release-verification-record\.ts stage/,
+  );
   assert.match(workflow, /--json isDraft --jq '\.isDraft'\)" != "true"/);
   assert.match(
     workflow,
@@ -428,6 +433,10 @@ test("release workflow stages and publishes one tested, attested package version
   );
   assert.match(
     releasePublish,
+    /EXPECTED_WORKFLOW_URL: \$\{\{ needs\.stage-release\.outputs\.workflow-url \}\}/,
+  );
+  assert.match(
+    releasePublish,
     /--json body,isDraft,isPrerelease,targetCommitish[\s\S]*isDraft'[\s\S]*isPrerelease'[\s\S]*targetCommitish'/,
   );
   assert.match(
@@ -436,7 +445,11 @@ test("release workflow stages and publishes one tested, attested package version
   );
   assert.match(
     releasePublish,
-    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*\^## Verification[\s\S]*while IFS= read -r checksum_row[\s\S]*grep -Fq "\$checksum_row"/,
+    /actual_checksums_sha256[\s\S]*EXPECTED_CHECKSUMS_SHA256[\s\S]*body_file="\$RUNNER_TEMP\/release-body\.md"[\s\S]*scripts\/release-verification-record\.ts publish/,
+  );
+  assert.match(
+    releaseBuild,
+    /hdiutil attach[\s\S]*diff -qr[\s\S]*Guild Wars Reforged\.app[\s\S]*hdiutil detach/,
   );
   assert.match(releasePublish, /gh release edit "\$TAG"[\s\S]*--draft=false/);
   assert.match(workflow, /RELEASES\.json/);
@@ -484,10 +497,11 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   );
 
   assert.match(pullRequest, /on:\n {2}pull_request:/);
-  assert.doesNotMatch(pullRequest, /workflow_dispatch:|push:/);
+  assert.match(pullRequest, /workflow_dispatch:[\s\S]*checkout_ref:/);
+  assert.doesNotMatch(pullRequest, /push:/);
   assert.match(
     pullRequest,
-    /gwonmac-pr-\{0\}-\{1\}-\{2\}', github\.event\.pull_request\.number, github\.sha, github\.run_attempt/,
+    /checkout-ref: \$\{\{ inputs\.checkout_ref \|\| github\.event\.pull_request\.head\.sha \}\}/,
   );
   assert.match(pullRequest, /artifact-retention-days: 3/);
   assert.match(pullRequest, /dependency-review: true/);
@@ -651,6 +665,7 @@ test("the root app and website add no runtime package entries and audit exceptio
   assert.deepEqual(
     read("pnpm-workspace.yaml").match(/GHSA-[a-z0-9-]+/gu),
     [
+      "GHSA-jmr9-qjv8-65gv",
       "GHSA-w3rx-r6r6-pgpr",
       "GHSA-5p2g-fcmc-qvqq",
       "GHSA-g7r4-m6w7-qqqr",
@@ -681,7 +696,23 @@ test("release verification tells the player to check, never to disable a check",
   const verification = read("docs/release-verification.md");
   assert.match(verification, /shasum -a 256 -c SHA256SUMS\.txt/);
   assert.match(verification, /gh attestation verify/);
+  assert.match(verification, /pnpm release:test <tag>/);
   assert.doesNotMatch(verification, /xattr|spctl --master-disable/);
+});
+
+test("the maintainer tests a temporary exact draft without replacing Applications", () => {
+  const command = read("scripts/test-draft-release.ts");
+  assert.match(script("release:test"), /scripts\/test-draft-release\.ts/);
+  assert.match(command, /mkdtempSync/);
+  assert.match(command, /verifyCandidate: \(application\) => verifySignedApplication\("release", application\)/);
+  assert.match(command, /dependencies\.run\("open", \["-n", candidate\]\)/);
+  assert.match(command, /gh\(dependencies, \["attestation", "verify", zip\]\)/);
+  assert.match(command, /replaceVerificationRecord/);
+  assert.match(command, /finally \{[\s\S]*rmSync\(temporary, \{ recursive: true \}\)/);
+  assert.match(command, /isPrerelease !== releaseTag\.prerelease/);
+  assert.match(command, /\(beta\|rc\)/);
+  assert.doesNotMatch(command, /alpha\|beta\|rc/);
+  assert.doesNotMatch(command, /renameSync|\/\.release-test-backup|--rollback|sudo|xattr/);
 });
 
 test("the website suite runs on its own path-filtered workflow", () => {
@@ -746,10 +777,7 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
   );
   assert.doesNotMatch(detect, /pnpm|rustup|certification\.js|--download/);
   assert.match(detect, /permissions:\n {6}contents: read\n {6}issues: write/);
-  assert.match(
-    detect,
-    /if: steps\.published\.outputs\.changed == 'false'[\s\S]*gh issue close/,
-  );
+  assert.doesNotMatch(detect, /gh issue close/);
   // A generation with a branch or an open issue is already proposed, and
   // re-deriving it every quarter hour costs a macOS job and buries the
   // fetch-failure heartbeat under a run that fails on the push it repeats.
@@ -790,10 +818,11 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
     derive,
     /elif \[ "\$status" = "certified" \] && \[ "\$template_exit" -eq 1 \]/,
   );
-  // One fetch per derivation: the recorded generation is the one whose bytes
-  // were downloaded and certified, never whatever a later fetch would return.
-  assert.match(derive, /FINGERPRINT: \$\{\{ steps\.official\.outputs\.fingerprint \}\}/);
-  assert.match(derive, /pnpm client:official --record "\$FINGERPRINT"/);
+  // Automation proposes safe file saving, but only a final reviewed commit
+  // advances the recorded generation.
+  assert.doesNotMatch(derive, /client:official --record/);
+  assert.match(derive, /carry-forward\.json/);
+  assert.match(derive, /carry-forward\.md/);
 
   // Evidence only: the sole upload path is the evidence directory, and the
   // downloaded client artifacts live somewhere no upload names.
@@ -805,16 +834,35 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
 
   // Stage one only. It pushes a branch and proposes; a rejected pull request
   // still leaves the branch and an issue naming it.
-  assert.match(publish, /permissions:\n {6}actions: read\n {6}contents: write/);
+  assert.match(publish, /permissions:\n {6}actions: write\n {6}contents: write/);
   assert.doesNotMatch(publish, /pnpm install|pnpm build|pnpm certification/);
   assert.match(publish, /if: always\(\) && needs\.derive\.result != 'skipped'/);
   assert.equal(body.match(/persist-credentials: true/gu)?.length, 1);
   assert.match(publish, /persist-credentials: true/);
   assert.match(
     publish,
-    /test "\$\(tr -d '\\n' < evidence\/SOURCE_COMMIT\.txt\)" = "\$GITHUB_SHA"/,
+    /\[ ! -s evidence\/SOURCE_COMMIT\.txt \][\s\S]*tr -d '\\n' < evidence\/SOURCE_COMMIT\.txt[\s\S]*"\$GITHUB_SHA"/,
   );
   assert.match(publish, /git apply evidence\/tables\.patch/);
+  // A failed macOS job or artifact transfer still leaves the generation with
+  // reportable metadata and an assigned issue. Missing evidence may never turn
+  // into a branch, but it must not prevent the issue step from running.
+  assert.match(
+    publish,
+    /name: Receive the derivation evidence\n {8}continue-on-error: true/,
+  );
+  assert.match(
+    publish,
+    /name: Ensure failure evidence is reportable\n {8}if: always\(\)[\s\S]*collection-failed/,
+  );
+  assert.match(
+    publish,
+    /name: Open the tracking issue\n {8}if: always\(\)/,
+  );
+  assert.match(
+    publish,
+    /FINGERPRINT: \$\{\{ needs\.derive\.outputs\.fingerprint \|\| needs\.detect\.outputs\.fingerprint \}\}[\s\S]*SHORT=unknown/,
+  );
   // The branch and the issue name the generation the deriver certified, not the
   // one the detector saw a job earlier; those differ when ArenaNet republishes.
   assert.match(
@@ -826,12 +874,15 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
     /if gh pr create[\s\S]*?opened=true[\s\S]*?else[\s\S]*?opened=false/,
   );
   assert.match(publish, /continue-on-error: true/);
-  // A pull request opened by the run's own token starts no workflow, so the
-  // proposal has to say how its gate gets run rather than imply it already is.
-  assert.match(publish, /Close and reopen this pull request/);
+  assert.match(publish, /gh workflow run pr-package\.yml --ref "\$BRANCH"/);
+  assert.doesNotMatch(publish, /gh workflow run pr-package\.yml --ref main/);
+  assert.match(publish, /-f checkout_ref="\$head"/);
   assert.match(publish, /auto-derived, PR ready/);
   assert.match(publish, /layout changed, investigation needed/);
-  assert.match(publish, /gh issue create --label client-recertification/);
+  assert.match(
+    publish,
+    /gh issue create --label client-recertification[\s\S]*--assignee mat4m0/,
+  );
 
   // The record the detector compares against is data with no authority: one
   // format version and one digest, and no field a decision could hide in.

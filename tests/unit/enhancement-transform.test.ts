@@ -28,8 +28,15 @@ import {
   NO_CAPABILITIES,
   PARTY_DIRTY_MESSAGES,
   TARGET_ONLY,
-  UNSUPPORTED_ALL_CAPABILITIES,
 } from "../fixtures/enhancement-transform.js";
+
+const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
+  nativeCursor: false,
+  targetObservation: false,
+  partyObservation: true,
+  commands: false,
+});
+
 describe("targeted Enhancement WebAssembly transform", () => {
   it("is deterministic, valid, and exports only the hook contract", () => {
     const input = fixture();
@@ -270,7 +277,12 @@ describe("targeted Enhancement WebAssembly transform", () => {
       () => transformEnhancementWasm(
         input,
         manifest(input),
-        UNSUPPORTED_ALL_CAPABILITIES,
+        {
+          nativeCursor: true,
+          targetObservation: true,
+          partyObservation: false,
+          commands: true,
+        },
       ),
       /capability profile is not certified/,
     );
@@ -281,7 +293,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const build = manifest(input);
     const brokenUi = {
       ...build,
-      uiDispatcher: { ...build.uiDispatcher, functionIndex: 4 },
+      partyObservation: { ...build.partyObservation!, functionIndex: 4 },
     };
 
     const first = transformEnhancementWasm(
@@ -489,39 +501,46 @@ describe("targeted Enhancement WebAssembly transform", () => {
     );
   });
 
-  it("gives Toolbox only the target-core words its hero path reads", () => {
+  it("gives party observation shared agent identity without target reads", () => {
     const input = fixture();
     const build = manifest(input);
+    const partyOnlyBuild = { ...build };
+    delete partyOnlyBuild.cursorEvent;
+    delete partyOnlyBuild.targetObservation;
+    delete partyOnlyBuild.teamApply;
+    partyOnlyBuild.outputSha256 = Object.freeze({
+      party: build.outputSha256.party!,
+    });
     const transformed = transformEnhancementWasm(
       input,
-      build,
-      CURSOR_TOOLBOX,
+      partyOnlyBuild,
+      PARTY_ONLY,
     );
     const module = new WebAssembly.Module(new Uint8Array(transformed));
-    const decoded = decodeEnhancementManifest(module, CURSOR_TOOLBOX);
+    const decoded = decodeEnhancementManifest(module, PARTY_ONLY);
     assert.ok(decoded);
     assert.deepEqual(decoded.configWords.slice(0, 17), [
-      build.layout.contextRoot,
+      partyOnlyBuild.observationBase!.layout.contextRoot,
+      partyOnlyBuild.observationBase!.layout.agentArray,
+      0,
+      0,
+      partyOnlyBuild.observationBase!.layout.gameContextSlot,
+      partyOnlyBuild.observationBase!.layout.characterContext,
+      partyOnlyBuild.observationBase!.layout.mapId,
+      partyOnlyBuild.observationBase!.layout.isExplorable,
+      partyOnlyBuild.observationBase!.layout.currentMapId,
+      partyOnlyBuild.observationBase!.layout.currentInstanceType,
+      partyOnlyBuild.observationBase!.layout.playerNumber,
+      partyOnlyBuild.observationBase!.layout.agentId,
       0,
       0,
       0,
-      build.layout.gameContextSlot,
-      build.layout.characterContext,
-      build.layout.mapId,
-      build.layout.isExplorable,
-      build.layout.currentMapId,
-      build.layout.currentInstanceType,
-      build.layout.playerNumber,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      partyOnlyBuild.observationBase!.layout.agentPlayerNumber,
+      partyOnlyBuild.observationBase!.layout.agentModelType,
     ]);
     assert.deepEqual(
       decoded.configWords.slice(17, 29),
-      enhancementConfigWords(build, CURSOR_TOOLBOX).slice(17, 29),
+      enhancementConfigWords(partyOnlyBuild, PARTY_ONLY).slice(17, 29),
     );
 
     const section = WebAssembly.Module.customSections(
@@ -532,7 +551,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const evidence = JSON.parse(
       new TextDecoder().decode(section),
     ) as { configWords: number[] };
-    evidence.configWords[1] = 1;
+    // A target-only address must remain absent from a party-only profile.
+    evidence.configWords[2] = 1;
     assert.equal(decodeEnhancementManifest(moduleWithManifest(evidence)), null);
   });
 
@@ -541,7 +561,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const build = manifest(input);
     const wrongCursorSlot = {
       ...build,
-      cursorEvent: { ...build.cursorEvent, tableSlot: 0 },
+      cursorEvent: { ...build.cursorEvent!, tableSlot: 0 },
     };
     assert.equal(
       WebAssembly.validate(

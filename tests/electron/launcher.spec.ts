@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   closeOffline,
@@ -217,6 +218,12 @@ test.describe("launcher recovery", () => {
     const fixture = await launchCachedClient("gw-active-client-retry-e2e-");
     try {
       const { app, page } = fixture;
+      const rejectedPath = path.join(
+        fixture.userData,
+        "game",
+        "rejected-client.json",
+      );
+      await writeFile(rejectedPath, "rejected");
       await expect.poll(() => page.evaluate(async () => {
         const [session, progress] = await Promise.all([
           window.gwNative.client.session(),
@@ -244,6 +251,7 @@ test.describe("launcher recovery", () => {
       });
 
       await page.evaluate(() => window.gwNative.client.retry());
+      expect(existsSync(rejectedPath)).toBe(false);
       expect(await app.evaluate(() => ({
         quit: globalThis.__clientRetryRestart.quit,
         relaunch: globalThis.__clientRetryRestart.relaunch,

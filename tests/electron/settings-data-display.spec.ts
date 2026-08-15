@@ -173,7 +173,7 @@ test.describe("data and display settings", () => {
         .toBe(true);
       await page.locator("#settings-tab-controls").click();
       await expect(page.locator("#settings-pane-controls")).toContainText(
-        "Core is on for supported Guild Wars builds",
+        "Guild Wars cursor",
       );
       await expect
         .poll(() => page.evaluate(() => window.gwNative.settings.get()))

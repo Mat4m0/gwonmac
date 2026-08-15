@@ -59,7 +59,7 @@ test.describe("tools and update settings", () => {
         .poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ updateTrack: "beta" });
       await expect(page.locator("#settings-update-status")).toContainText(
-        "can't update itself",
+        "must be updated manually",
       );
       await expect(page.locator("#settings-restart-update")).toBeHidden();
     } finally {
@@ -85,6 +85,7 @@ test.describe("tools and update settings", () => {
           <span id="settings-update-version"></span>
           <span id="settings-update-stage"></span>
           <button id="client-compat-check"></button>
+          <button id="client-compat-restart"></button>
           <button id="client-compat-releases"></button>
           <span id="client-compat-update"></span>
         `;
@@ -233,10 +234,12 @@ test.describe("tools and update settings", () => {
       await page.locator("#settings-tab-controls").click();
       const controls = page.locator("#settings-pane-controls");
       await expect(controls).toContainText(
-        "Core is on for supported Guild Wars builds",
+        "Guild Wars cursor",
       );
-      await expect(controls).toContainText("native cursor");
-      await expect(controls).toContainText("Optional tools stay off in PvP");
+      await expect(controls).toContainText(
+        "Your saved Builds and Teams stay available at login and in PvP",
+      );
+      await expect(controls).toContainText("Apply teams in Guild Wars");
       await expect(page.locator('input[name="nativeCursor"]')).toHaveCount(0);
       await expect(page.locator('input[name="teamManagement"]')).toBeDisabled();
       await expect(page.locator('input[name="targetReadout"]')).toBeDisabled();
@@ -323,6 +326,51 @@ test.describe("tools and update settings", () => {
         electronApp.quit = globalThis.__resetRestart.originalQuit;
         electronApp.relaunch = globalThis.__resetRestart.originalRelaunch;
       });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("features omitted at startup require a restart before they can be enabled", async () => {
+    const fixture = await launchOffline(
+      "gw-tools-capability-restart-e2e-",
+      {},
+      async (userData) => {
+        await writeFile(
+          path.join(userData, "settings.json"),
+          JSON.stringify({
+            gwonmacTools: true,
+            targetReadout: false,
+            teamManagement: false,
+          }),
+          { mode: 0o600 },
+        );
+      },
+    );
+    try {
+      const { app, page } = fixture;
+      await app.evaluate(({ dialog }) => {
+        globalThis.__capabilityRestartMessages = [];
+        dialog.showMessageBox = (async (
+          _win: Electron.BaseWindow,
+          options: Electron.MessageBoxOptions,
+        ) => {
+          globalThis.__capabilityRestartMessages?.push(options.message);
+          return { response: 1, checkboxChecked: false };
+        }) as typeof dialog.showMessageBox;
+      });
+
+      await page.evaluate(async () => {
+        await window.gwNative.settings.set({ targetReadout: true });
+        await window.gwNative.settings.set({ teamManagement: true });
+      });
+      expect(await app.evaluate(() => globalThis.__capabilityRestartMessages))
+        .toEqual([
+          "Restart to enable Target distance?",
+          "Restart to enable Apply team?",
+        ]);
+      await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({ targetReadout: false, teamManagement: false });
     } finally {
       await closeOffline(fixture);
     }

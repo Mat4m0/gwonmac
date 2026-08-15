@@ -399,6 +399,10 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 .settings-danger-sub { margin: var(--ui-space-1) 0 0; color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
 
 .settings-status { margin: 0; color: var(--ui-text-bright); font-size: var(--ui-font-size); font-weight: 600; }
+.settings-feature-status { display:grid; gap:var(--ui-space-2); margin:0; }
+.settings-feature-status > div { display:flex; justify-content:space-between; gap:var(--ui-space-4); }
+.settings-feature-status dt { color:var(--ui-text); }
+.settings-feature-status dd { margin:0; color:var(--ui-text-bright); font-weight:600; text-align:right; }
 #settings-progress {
   height: var(--ui-space-2);
   margin: var(--ui-space-3) 0 0;

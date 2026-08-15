@@ -358,6 +358,88 @@ describe("Companion kernel", () => {
     assert.equal(party.inOutpost, true);
   });
 
+  it("keeps the roster and unrelated facts when one detail table rejects", async () => {
+    const cases = [
+      {
+        name: "profession states",
+        offset: DETAIL.professionStates,
+        verify(party: ReturnType<typeof readyParty>) {
+          assert.equal(party.slots[0]?.professions, null);
+          assert.deepEqual(party.slots[1]?.professions, [1, 2], "HeroInfo fallback");
+          assert.equal(party.slots[1]?.behaviour, 1);
+          assert.deepEqual(party.slots[1]?.skills?.slice(0, 2), [100, 101]);
+          assert.deepEqual(party.slots[1]?.attributes, [[17, 7], [19, 12], [24, 3]]);
+          assert.equal(party.unlockObserved, true);
+        },
+      },
+      {
+        name: "hero info",
+        offset: DETAIL.heroInfo,
+        verify(party: ReturnType<typeof readyParty>) {
+          assert.equal(party.unlockObserved, false);
+          assert.deepEqual(party.slots[0]?.professions, [3, 5]);
+          assert.deepEqual(party.slots[1]?.professions, [1, 2]);
+          assert.equal(party.slots[1]?.behaviour, 1);
+          assert.deepEqual(party.slots[1]?.skills?.slice(0, 2), [100, 101]);
+          assert.deepEqual(party.slots[1]?.attributes, [[17, 7], [19, 12], [24, 3]]);
+        },
+      },
+      {
+        name: "hero flags",
+        offset: DETAIL.heroFlags,
+        verify(party: ReturnType<typeof readyParty>) {
+          assert.equal(party.slots[1]?.behaviour, null);
+          assert.deepEqual(party.slots[1]?.professions, [1, 2]);
+          assert.deepEqual(party.slots[1]?.skills?.slice(0, 2), [100, 101]);
+          assert.deepEqual(party.slots[1]?.attributes, [[17, 7], [19, 12], [24, 3]]);
+          assert.equal(party.unlockObserved, true);
+        },
+      },
+      {
+        name: "skill bars",
+        offset: DETAIL.skillbars,
+        verify(party: ReturnType<typeof readyParty>) {
+          assert.equal(party.slots[1]?.skills, null);
+          assert.equal(party.slots[1]?.disabled, null);
+          assert.deepEqual(party.slots[1]?.professions, [1, 2]);
+          assert.equal(party.slots[1]?.behaviour, 1);
+          assert.deepEqual(party.slots[1]?.attributes, [[17, 7], [19, 12], [24, 3]]);
+          assert.equal(party.unlockObserved, true);
+        },
+      },
+      {
+        name: "attributes",
+        offset: DETAIL.attributes,
+        verify(party: ReturnType<typeof readyParty>) {
+          assert.equal(party.slots[1]?.attributes, null);
+          assert.deepEqual(party.slots[1]?.professions, [1, 2]);
+          assert.equal(party.slots[1]?.behaviour, 1);
+          assert.deepEqual(party.slots[1]?.skills?.slice(0, 2), [100, 101]);
+          assert.equal(party.unlockObserved, true);
+        },
+      },
+    ] as const;
+
+    for (const detail of cases) {
+      const kernel = await createKernel({ partyDetail: true });
+      installGameGraph(kernel.view);
+      installPartyDetailGraph(kernel.view);
+      // Every detail table is a three-word array header. A size above the
+      // certified bound makes that group reject without damaging the roster.
+      kernel.view.setUint32(ADDRESSES.world + detail.offset + 4, 65, true);
+      kernel.view.setUint32(ADDRESSES.world + detail.offset + 8, 65, true);
+      assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+      kernel.tick();
+
+      const party = readyParty(kernel.party());
+      assert.equal(party.rosterObserved, true, `${detail.name}: roster observation`);
+      assert.equal(party.slotCount, 1, `${detail.name}: complete owned roster`);
+      assert.equal(party.slots[0]?.agentId, 7, `${detail.name}: player`);
+      assert.equal(party.slots[1]?.hero, 1, `${detail.name}: hero`);
+      detail.verify(party);
+    }
+  });
+
   it("reads player professions from the canonical party state", async () => {
     const kernel = await createKernel({ partyDetail: true });
     installGameGraph(kernel.view);

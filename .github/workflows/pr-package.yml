@@ -4,18 +4,29 @@ name: PR package
 
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      checkout_ref:
+        description: Exact pull-request head SHA to verify.
+        required: true
+        type: string
+      pr_number:
+        description: Pull-request number used in the artifact name.
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr-package-${{ github.event.pull_request.number }}
+  group: pr-package-${{ github.event.pull_request.number || inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
   verify:
     uses: ./.github/workflows/macos-verify.yml
     with:
-      artifact-name: ${{ format('gwonmac-pr-{0}-{1}-{2}', github.event.pull_request.number, github.sha, github.run_attempt) }}
+      artifact-name: ${{ format('gwonmac-pr-{0}-{1}-{2}', github.event.pull_request.number || inputs.pr_number, inputs.checkout_ref || github.sha, github.run_attempt) }}
+      checkout-ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha }}
       artifact-retention-days: 3
       dependency-review: true

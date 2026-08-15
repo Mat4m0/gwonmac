@@ -1,6 +1,3 @@
-// Executes the chain that decides which of the three certification states a
-// client build is in — including the intermediate one the shipped tables
-// cannot reach yet, which is the state that used to have no name at all.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
@@ -8,11 +5,9 @@ import {
   certifyClientBuild,
   type CertifiedBuildTables,
 } from "../../src/main/certification/client-certification.js";
-import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
-import {
-  type LocalClientVerification,
-} from "../../src/main/certification/local-client-verifier.js";
+import type { LocalClientVerification } from "../../src/main/certification/local-client-verifier.js";
+import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 
 const OFFICIAL = TEMPLATE_SAVE_BUILDS.find(
   (build) => build.outputSha256 === ENHANCEMENT_BUILDS[0]?.sha256,
@@ -33,7 +28,6 @@ function localVerification(
   };
 }
 
-/** The shipped tables with the Enhancement side emptied: state 2, exactly. */
 const withoutEnhancement: CertifiedBuildTables = {
   templateSave: (sha256) =>
     TEMPLATE_SAVE_BUILDS.find((build) => build.sha256 === sha256) ?? null,
@@ -41,70 +35,47 @@ const withoutEnhancement: CertifiedBuildTables = {
 };
 
 describe("client certification", () => {
-  it("certifies the shipped build through both transforms", () => {
-    const certification = certifyClientBuild(OFFICIAL.sha256);
-    assert.equal(certification.state, "certified");
-    assert.equal(
-      certification.state === "certified"
-        ? certification.templateSaveBuild
-        : null,
-      OFFICIAL,
-    );
-    // Keyed by the template-save transform's OUTPUT, not by the official hash.
-    assert.equal(
-      certification.state === "certified"
-        ? certification.enhancementBuild.sha256
-        : null,
-      ENHANCEMENT_BUILDS[0]!.sha256,
-    );
+  it("returns independent exact-build records for the transform chain", () => {
+    assert.deepEqual(certifyClientBuild(OFFICIAL.sha256), {
+      templateSaveBuild: OFFICIAL,
+      enhancementBuild: ENHANCEMENT_BUILDS[0],
+    });
     assert.notEqual(OFFICIAL.sha256, OFFICIAL.outputSha256);
   });
 
-  it("reports an unknown ArenaNet build as uncertified", () => {
-    assert.deepEqual(certifyClientBuild(UNKNOWN), { state: "uncertified" });
+  it("keeps each proof independent", () => {
+    assert.deepEqual(certifyClientBuild(UNKNOWN), {
+      templateSaveBuild: null,
+      enhancementBuild: null,
+    });
+    assert.deepEqual(certifyClientBuild(OFFICIAL.sha256, withoutEnhancement), {
+      templateSaveBuild: OFFICIAL,
+      enhancementBuild: null,
+    });
   });
 
-  it("reports templates certified and Enhancement not as its own state", () => {
-    // The recertification intermediate: saving is fixed first, the cursor
-    // second. Before this module it was two independent gauges and no state.
-    const certification = certifyClientBuild(OFFICIAL.sha256, withoutEnhancement);
-    assert.equal(certification.state, "template-only");
-    assert.equal(
-      certification.state === "template-only"
-        ? certification.templateSaveBuild
-        : null,
-      OFFICIAL,
-    );
-  });
-
-  it("stays uncertified when the Enhancement table certifies an unrelated build", () => {
-    // A Enhancement entry that matches the official hash rather than the
-    // template-save output must not promote anything: the chain is ordered.
-    const certification = certifyClientBuild(UNKNOWN, {
+  it("never accepts an Enhancement record without the preceding file proof", () => {
+    assert.deepEqual(certifyClientBuild(UNKNOWN, {
       templateSave: () => null,
       enhancement: () => ENHANCEMENT_BUILDS[0]!,
+    }), {
+      templateSaveBuild: null,
+      enhancementBuild: null,
     });
-    assert.deepEqual(certification, { state: "uncertified" });
   });
 
-  it("maps a complete local proof into the canonical certified state", () => {
-    const certification = certificationFromLocalVerification(
-      localVerification(true, true),
+  it("maps isolated verifier results without recreating a coarse state", () => {
+    assert.deepEqual(
+      certificationFromLocalVerification(localVerification(true, true)),
+      { templateSaveBuild: OFFICIAL, enhancementBuild: ENHANCEMENT_BUILDS[0] },
     );
-    assert.equal(certification.state, "certified");
-  });
-
-  it("keeps a partial local proof useful without enabling Enhancement", () => {
-    const certification = certificationFromLocalVerification(
-      localVerification(true, false),
+    assert.deepEqual(
+      certificationFromLocalVerification(localVerification(true, false)),
+      { templateSaveBuild: OFFICIAL, enhancementBuild: null },
     );
-    assert.equal(certification.state, "template-only");
-  });
-
-  it("keeps the official module when local verification proves nothing", () => {
     assert.deepEqual(
       certificationFromLocalVerification(localVerification(false, false)),
-      { state: "uncertified" },
+      { templateSaveBuild: null, enhancementBuild: null },
     );
   });
 });

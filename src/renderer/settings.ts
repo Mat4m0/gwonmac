@@ -275,6 +275,10 @@
         exportToDisk: (entries) => window.gwNative.templates.export(entries),
         readClipboard: () => window.gwNative.clipboard.readText(),
       });
+      const fileSaving = currentSession?.compatibility?.features.gameFileSaving;
+      templatePane.setAvailability(
+        fileSaving?.status === 'unavailable' ? fileSaving.reason : null,
+      );
       templatePane.refresh();
     })
     .catch(() => {
@@ -298,16 +302,19 @@
         document,
         action,
         () => window.gwNative.app.openExternal('releases'),
+        () => window.gwNative.client.retry(),
       );
       void action.initialize();
     })
     .catch(() => {
       const updateCheck = byId('settings-check-updates') as HTMLButtonElement;
       const compatibilityCheck = byId('client-compat-check') as HTMLButtonElement;
+      const compatibilityRestart = byId('client-compat-restart') as HTMLButtonElement;
       const launcherCheck = byId('loading-update-check');
       const updateStatus = byId('settings-update-status');
       updateCheck.disabled = true;
       compatibilityCheck.disabled = true;
+      compatibilityRestart.disabled = true;
       launcherCheck.hidden = true;
       updateStatus.textContent = 'Update checking is unavailable in this build.';
       updateStatus.hidden = false;
@@ -323,10 +330,10 @@
    * version nor the client's certification can change without a relaunch, so
    * this asks the main process once and remembers the answer.
    */
-  async function readSession() {
+  async function readSession(force = false) {
     // The version is known from the first launch, the certification only once
     // a client has been activated, so an early answer is not cached as final.
-    if (currentSession?.compatibility) return currentSession;
+    if (!force && currentSession?.compatibility) return currentSession;
     const session = await window.gwNative.client.session();
     currentSession = session;
     const { renderClientCompatibility } =
@@ -334,7 +341,10 @@
     renderClientCompatibility(
       document,
       session,
-      window.gwNative.init.enhancementSelection,
+    );
+    const fileSaving = session.compatibility?.features.gameFileSaving;
+    templatePane?.setAvailability(
+      fileSaving?.status === 'unavailable' ? fileSaving.reason : null,
     );
     if (currentSettings) {
       const setting = await extendedMemorySetting;
@@ -342,6 +352,10 @@
     }
     return session;
   }
+
+  window.addEventListener('gwonmac:client-compatibility-changed', () => {
+    void readSession(true).catch(() => undefined);
+  });
 
   /**
    * The launcher half. It runs after the data-strategy gate and only while
@@ -360,20 +374,21 @@
     if (!compatibility) return;
     const compatibilityNotice =
       await import('./client-compatibility-notice.js');
-    if (!compatibilityNotice.compatibilityReport(
-      compatibility,
-      window.gwNative.init.enhancementSelection,
-    ).degraded) return;
+    const report = compatibilityNotice.compatibilityReport(compatibility);
+    if (!report.degraded) return;
     const settings = await loadSettings().catch(() => null);
-    if (settings?.compatibilityNoticeSeenFor === compatibility.clientSha256) return;
+    if (
+      report.acknowledgePerBuild
+      && settings?.compatibilityNoticeSeenFor === compatibility.clientSha256
+    ) return;
 
     return compatibilityNotice.showCompatibilityNotice(
       document,
-      () => persistSettings({
-        // Acknowledged for this build only: the next ArenaNet update warns
-        // again.
-        compatibilityNoticeSeenFor: compatibility.clientSha256,
-      }),
+      () => report.acknowledgePerBuild
+        ? persistSettings({
+            compatibilityNoticeSeenFor: compatibility.clientSha256,
+          })
+        : Promise.resolve(),
     );
   }
 

@@ -3,7 +3,11 @@ import { computed } from "vue";
 import type { LiveParty } from "../../../../src/shared/builds/live-party";
 import { heroLabel } from "../../../../src/shared/builds/heroes";
 
-const props = defineProps<{ party: LiveParty; saving: boolean }>();
+const props = defineProps<{
+  party: LiveParty;
+  saving: boolean;
+  unavailableReason: string | null;
+}>();
 defineEmits<{ capture: [] }>();
 
 const BEHAVIOUR_LABELS = {
@@ -45,7 +49,7 @@ const canCapture = computed(() =>
 
     <div class="live-party-body">
       <p v-if="party.status === 'unavailable'" class="live-party-note">
-        No party observed. Guild Wars may still be loading.
+        {{ unavailableReason ?? 'No party observed yet. Guild Wars may still be loading.' }}
       </p>
 
       <template v-else>

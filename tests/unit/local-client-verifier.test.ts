@@ -15,15 +15,9 @@ function valid(): LocalClientVerification {
   return {
     officialSha256: TEMPLATE.sha256,
     templateSaveBuild: TEMPLATE,
-    // What deriveEnhancementBuild actually emits: the relocated layout under
-    // the baseline's own buildId, because a locally verified client cannot
-    // prove its build number. The first manifest entry carried the same id as
-    // the baseline until the baseline was corrected to the build its client
-    // self-reports, which is what this spread now makes explicit.
-    enhancementBuild: {
-      ...ENHANCEMENT,
-      buildId: ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1]!.buildId,
-    },
+    // The verifier returns the exact table entry for this exact transformed
+    // input. A different build in the same table must not affect this proof.
+    enhancementBuild: ENHANCEMENT,
     reasons: [],
   };
 }
@@ -45,9 +39,11 @@ describe("local client verification boundary", () => {
       ...valid(),
       enhancementBuild: {
         ...ENHANCEMENT,
-        layout: {
-          ...ENHANCEMENT.layout,
-          currentMapId: ENHANCEMENT.layout.currentMapId + 4,
+        observationBase: {
+          layout: {
+            ...ENHANCEMENT.observationBase!.layout,
+            currentMapId: ENHANCEMENT.observationBase!.layout.currentMapId + 4,
+          },
         },
       },
     }, TEMPLATE.sha256), false);

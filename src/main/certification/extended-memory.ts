@@ -1,5 +1,5 @@
 /**
- * Opt-in 4 GiB research profile for exact ArenaNet build 38797.
+ * Opt-in 4 GiB research profile for exact, reproducible ArenaNet derivatives.
  *
  * This is one paired transform. wasm32 addresses above 2 GiB arrive in
  * JavaScript as negative i32 values, so publishing the larger WASM memory
@@ -29,17 +29,40 @@ export const EXTENDED_MEMORY_PROFILES = [
   "cursor",
   "target",
   "cursorTarget",
-  "cursorToolbox",
-  "cursorToolboxCommands",
-  "cursorTargetToolboxCommands",
+  "party",
+  "cursorParty",
+  "targetParty",
+  "cursorTargetParty",
+  "partyCommands",
+  "cursorPartyCommands",
+  "targetPartyCommands",
+  "cursorTargetPartyCommands",
 ] as const;
 export type ExtendedMemoryProfile = (typeof EXTENDED_MEMORY_PROFILES)[number];
 
 export interface ExtendedMemoryWasmBuild {
-  readonly buildId: 38_797;
+  readonly buildId: 38_797 | 38_833;
   readonly profile: ExtendedMemoryProfile;
   readonly inputSha256: string;
   readonly outputSha256: string;
+}
+
+type ExtendedMemoryRow = readonly [
+  profile: Exclude<ExtendedMemoryProfile, "off">,
+  inputSha256: string,
+  outputSha256: string,
+];
+
+function rows(
+  buildId: ExtendedMemoryWasmBuild["buildId"],
+  entries: readonly ExtendedMemoryRow[],
+): readonly ExtendedMemoryWasmBuild[] {
+  return entries.map(([profile, inputSha256, outputSha256]) => Object.freeze({
+    buildId,
+    profile,
+    inputSha256,
+    outputSha256,
+  }));
 }
 
 /** Every post-double-click variant the current production chain can emit. */
@@ -52,41 +75,24 @@ export const EXTENDED_MEMORY_WASM_BUILDS: readonly ExtendedMemoryWasmBuild[] =
       outputSha256: "862f97fc87267e3b4d342ea01f15834cc60a7be982fd9741cf0ae31b8a18a00b",
     }),
     Object.freeze({
-      buildId: 38_797 as const,
-      profile: "cursor" as const,
-      inputSha256: "61dba74fe55c2ba2d8e0d0bb36447fa9112446ea6ea9bae61b944df3b0726d37",
-      outputSha256: "44d19d9db3b8f917415819e724c0a90e04e310eb54b08787e44d916c449a8f61",
+      buildId: 38_833 as const,
+      profile: "off" as const,
+      inputSha256: "eeeb4b70edbba53d5ee98a50dbba395dd175e8eebdd3e3bf93f8f9fcfa428a7b",
+      outputSha256: "99ac8364243d7755ad0869b6a4b0edc00e8037823d0cea2e560ffc5edeb1bda4",
     }),
-    Object.freeze({
-      buildId: 38_797 as const,
-      profile: "target" as const,
-      inputSha256: "e49ab1306b89188125c18963afbcd93913232cee7f61121b68c3797b27c9bcad",
-      outputSha256: "f7576ac19f9709824a9f504dee4fc952c090e570bf6fe7e134967fdf3975ff50",
-    }),
-    Object.freeze({
-      buildId: 38_797 as const,
-      profile: "cursorTarget" as const,
-      inputSha256: "5bf9250016b46f4a348c94b9e3edf7b180fde7570677ce856c802962435b3023",
-      outputSha256: "b3f6292fc0a0e606b408f5715af02c3c7eeb427e58d9bd01bbba3221cd6f7deb",
-    }),
-    Object.freeze({
-      buildId: 38_797 as const,
-      profile: "cursorToolbox" as const,
-      inputSha256: "e6f1e88d8b4326bd1ea6246bb07443c1661c4d1904d78289be49da00859a6648",
-      outputSha256: "510a369604235779da6d2ea7fa657087544a2d271718f0a048d942abb5a496bd",
-    }),
-    Object.freeze({
-      buildId: 38_797 as const,
-      profile: "cursorToolboxCommands" as const,
-      inputSha256: "d95c9ce5ceb7a010261357f4927a434725e33844215d0fda8b7579ae96758a08",
-      outputSha256: "5ba907eb8182638854fa5b11e0951b78877656393ea97f877fde1b382ac7f5cd",
-    }),
-    Object.freeze({
-      buildId: 38_797 as const,
-      profile: "cursorTargetToolboxCommands" as const,
-      inputSha256: "d2efaa8f460acf0d13cf1c1bfe319bbf94d5fde22d9a96de8a9485630c069c51",
-      outputSha256: "1aac83397e09d3c42a801ba9447da959b62b04d980370c799e8db927cb1cb4cd",
-    }),
+    ...rows(38_833, [
+      ["cursor", "b7da2de2a7effa009426ced28fae56391d93edc5c485778716d96f053eb2a5ea", "f1f4afc16aa631542d672ba2e9610d0d4afd726a291af174d423b1ea93e808f7"],
+      ["target", "9642d8851b76c951a026b61d0d98fae68cd2e00295c27463628b397f146b566c", "97e1db2c1ef50f95064dce5b63583d3a38c4ab7b72ec18c266d59eb7b0fbc121"],
+      ["cursorTarget", "61bafa5de8316ef93a978537e242c3a42f683f200da8d62d8fbb929b26e0a41b", "31542d43d42ebb3b67907a05c068019e7d4fdaf32810ac4059952a00d598719e"],
+      ["party", "39ce1ce2f65f43982db10546e751917f71f8a4d6b1310ddedaabc629682a33aa", "998ee384a0617168a8f1b643bf87353b4ac73aa215a2c1a124e54e994eba44f5"],
+      ["cursorParty", "9657da1863fc3015e6993af0cbde485e9b7b4e8db6303249f9cd3ad8f05af998", "40f24e32137f95a3c0d3502f800133597203a5fdc3b2b0a46b162643aae3c024"],
+      ["targetParty", "4065114367861f6120db45e6d744b92bc62342a296aa725e772ed52b746a0ce4", "f65d7f91c52df146393dfd1c2a2283700d40d0d2887d63557b2ef578b9f7373d"],
+      ["cursorTargetParty", "a133d6cd6c9021d9d64e1ed1539cd7184ffde0ad996ae0e3ea822afb450dc441", "957ee3ab3fb023f0fe9082936c9677f3a2da85e00de514c000de1abc1e266503"],
+      ["partyCommands", "657436348ee445e24eb356ef7b9ca79cfa5153ce47c7d1c69f552d8e5dffa905", "dfe617776ef1e27675d30d30f6d773a278c3848b798e11515fc1d23bd4e0ba04"],
+      ["cursorPartyCommands", "e9375c0e5198b244c563844600d55b0a744c4a0b2e7b2e8e07254498540111ec", "1d4fc3cb6ddbbd6e6b151a86dbf772676393a621cef5d16b55e1b3983d77c788"],
+      ["targetPartyCommands", "7d354444755cb834b0d18122f2d904623faf112e3dcac38174b473d985d560fe", "3f3080f2bd98d1a8854dcebd4939d19889084e43cfa3a5f490096d5e9caaf855"],
+      ["cursorTargetPartyCommands", "5f019448868635a7ca9242d7e490dd427ef9455803d7b9b962fe339b6e7bf445", "21b305962974aa6cdf69dd8180394e29c5ba932e3ff78643b239752cf1e8d3c0"],
+    ]),
   ]);
 
 export const EXTENDED_MEMORY_JS_BUILD = Object.freeze({
@@ -123,10 +129,8 @@ export function findExtendedMemoryWasmBuild(
   ) ?? null;
 }
 
-/** Raise the sole defined memory from 32,768 to 65,535 pages. */
-export function rewriteExtendedMemoryWasm(input: Uint8Array): Uint8Array {
-  const build = findExtendedMemoryWasmBuild(sha256(input));
-  if (!build) fail("uncertified WASM input");
+/** Derive the candidate bytes; callers still need an exact input/output certificate. */
+export function deriveExtendedMemoryWasm(input: Uint8Array): Uint8Array {
   const sections = splitSections(input);
   const memory = sections.find((section) => section.id === 5)
     ?? fail("missing memory section");
@@ -151,6 +155,14 @@ export function rewriteExtendedMemoryWasm(input: Uint8Array): Uint8Array {
       encodeSection(section === memory ? replacement : section)),
   );
   if (!WebAssembly.validate(output)) fail("rewritten module does not validate");
+  return output;
+}
+
+/** Raise the sole defined memory from 32,768 to 65,535 pages. */
+export function rewriteExtendedMemoryWasm(input: Uint8Array): Uint8Array {
+  const build = findExtendedMemoryWasmBuild(sha256(input));
+  if (!build) fail("uncertified WASM input");
+  const output = deriveExtendedMemoryWasm(input);
   if (sha256(output) !== build.outputSha256) fail("derived WASM hash changed");
   return output;
 }

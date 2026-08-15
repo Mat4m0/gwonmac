@@ -275,12 +275,25 @@ export function preflightTeamApply(
 ): TeamApplyPreflight {
   const blockers: TeamApplyRuntimeProblem[] = [];
   const changes: TeamApplyChange[] = [];
-  if (party.status !== "ready") blockers.push({ rule: "party-unavailable" });
-  if (party.playRegion === "pvp") blockers.push({ rule: "pvp" });
+  if (party.status !== "ready") {
+    return { ready: false, blockers: [{ rule: "party-unavailable" }] };
+  }
+  // Permanent policy facts stay authoritative even when the roster projection
+  // is incomplete. A player in PvP or outside an outpost should not be told to
+  // wait for observation that cannot make Apply legal there.
+  if (party.playRegion === "pvp") {
+    return { ready: false, blockers: [{ rule: "pvp" }] };
+  }
+  if (party.inOutpost === false) {
+    return { ready: false, blockers: [{ rule: "not-outpost" }] };
+  }
+  // A rejected roster makes the remaining member and mode facts downstream
+  // unreliable. Report that root observation once rather than multiplying it.
+  if (party.partial) {
+    return { ready: false, blockers: [{ rule: "partial-roster" }] };
+  }
   if (party.playRegion === "unknown") blockers.push({ rule: "region-unknown" });
-  if (party.inOutpost === false) blockers.push({ rule: "not-outpost" });
   if (party.inOutpost === null) blockers.push({ rule: "outpost-unknown" });
-  if (party.partial) blockers.push({ rule: "partial-roster" });
   if (!party.player || party.player.agentId === 0) {
     blockers.push({ rule: "player-unobserved" });
   }
@@ -375,8 +388,8 @@ export function preflightTeamApply(
 export function teamApplyProblemMessage(problem: TeamApplyRuntimeProblem): string {
   switch (problem.rule) {
     case "party-unavailable": return "Waiting for a playable character and party observation.";
-    case "pvp": return "Core only in PvP and guild halls — Team Apply is unavailable.";
-    case "region-unknown": return "Core only until the current region is safely identified.";
+    case "pvp": return "Apply team is unavailable in PvP and guild halls.";
+    case "region-unknown": return "Apply team is unavailable until GWonMac identifies the current region.";
     case "not-outpost": return "Enter a PvE outpost to apply this team.";
     case "outpost-unknown": return "Waiting to confirm that this is a PvE outpost.";
     case "partial-roster": return "Waiting until the complete party roster is observed.";

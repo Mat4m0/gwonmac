@@ -14,13 +14,14 @@ import type {
   AppSettings,
   AppSettingsPatch,
 } from "../shared/contracts.js";
+import type { EnhancementCapabilities } from "../shared/enhancement-contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { logEvent } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
 import { resetGameInput } from "./renderer-commands.js";
 import { resetWindowState } from "./window.js";
 
-type RelaunchAction = "toolsEnable" | "cacheClear" | "gameStorageReset";
+type RelaunchAction = "capabilityEnable" | "cacheClear" | "gameStorageReset";
 
 async function confirmAction(
   win: BrowserWindow,
@@ -73,20 +74,31 @@ function requestRelaunch(win: BrowserWindow, action: RelaunchAction): void {
 export async function applySettingsChange(
   win: BrowserWindow,
   patch: AppSettingsPatch,
-  toolsCapableAtLaunch: boolean,
+  capabilitiesAtLaunch: EnhancementCapabilities,
   read: () => Promise<AppSettings>,
   write: (patch: AppSettingsPatch) => Promise<AppSettings>,
 ): Promise<AppSettings> {
   try {
     const previous = await read();
-    const restartForTools = patch.gwonmacTools === true && !toolsCapableAtLaunch;
+    const enabling = [
+      patch.gwonmacTools === true && !capabilitiesAtLaunch.partyObservation
+        ? "GWonMac Tools"
+        : null,
+      patch.targetReadout === true && !capabilitiesAtLaunch.targetObservation
+        ? "Target distance"
+        : null,
+      patch.teamManagement === true && !capabilitiesAtLaunch.commands
+        ? "Apply team"
+        : null,
+    ].filter((feature): feature is string => feature !== null);
+    const restartForCapability = enabling.length > 0;
     if (
-      restartForTools
+      restartForCapability
       && !(await confirmAction(win, {
         confirmLabel: "Enable and Restart",
-        message: "Enable GWonMac Tools Beta?",
+        message: `Restart to enable ${enabling.join(" and ")}?`,
         detail:
-          "The optional Tools capability is prepared when the app starts, so the first enable needs one restart and closes any game in progress. After that, individual tools can be changed live.",
+          "GWonMac prepares this feature when it starts. Restart now to use the saved change. This closes Guild Wars if it is running.",
       }))
     ) {
       return previous;
@@ -98,7 +110,7 @@ export async function applySettingsChange(
         strategy: saved.dataStrategy ?? "unselected",
       });
     }
-    if (restartForTools) requestRelaunch(win, "toolsEnable");
+    if (restartForCapability) requestRelaunch(win, "capabilityEnable");
     return saved;
   } catch (error) {
     logEvent({ k: "settings.saveFailed", code: errorCode(error) });

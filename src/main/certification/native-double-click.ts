@@ -29,6 +29,8 @@ import {
   encodeSection,
   parseCode,
   parseExports,
+  parseIndexVector,
+  parseTypes,
   readUleb,
   sectionById,
   splitSections,
@@ -68,6 +70,8 @@ export interface NativeDoubleClickBuild {
   readonly callbackTableSlot: number;
   /** Function index that slot resolves to. */
   readonly callbackFunctionIndex: number;
+  readonly callbackParams: readonly "i32"[];
+  readonly callbackResults: readonly "i32"[];
   /** SHA-256 of that function's body, before the rewrite. */
   readonly callbackBodySha256: string;
   /** Byte offset in the body at which the flag store is inserted. */
@@ -83,8 +87,8 @@ export interface NativeDoubleClickBuild {
 }
 
 /**
- * Build 38735, whose official module is
- * `3229678d…`. Every hash below is reproduced by
+ * The retained exact build and the preceding template-save-only build use the
+ * same callback function, body, table slot, and record layout. Every hash below is reproduced by
  * `pnpm certification double-click`, which re-runs the chain from the official
  * bytes; the table is a cache of that derivation, never its authority.
  */
@@ -92,6 +96,8 @@ export const NATIVE_DOUBLE_CLICK_BUILDS: readonly NativeDoubleClickBuild[] = [
   {
     callbackTableSlot: 903,
     callbackFunctionIndex: 2448,
+    callbackParams: ["i32", "i32", "i32"],
+    callbackResults: ["i32"],
     callbackBodySha256:
       "1f6d69d4364a8369aba990defe34f746063a412fb2e6bc0ae9cc1b4b236acf1e",
     flagStoreOffset: 101,
@@ -100,19 +106,31 @@ export const NATIVE_DOUBLE_CLICK_BUILDS: readonly NativeDoubleClickBuild[] = [
       // template-save output, with the Enhancement off
       "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094":
         "e7d86cfcf7b09abbedd3afca758dbf4a3f3c6e1aa4d44e53b31e45e886d7f250",
-      // Enhancement outputs, one per certified capability profile
-      "b0f875b86edb96fbf49d87e6a0063f22737253b7fb1caeb87268bdfa0cd0e6a7":
-        "61dba74fe55c2ba2d8e0d0bb36447fa9112446ea6ea9bae61b944df3b0726d37",
-      "47b39e5a7544a770075c4af7034fe26c375f36233b2c396d38349d3685c7cce9":
-        "e49ab1306b89188125c18963afbcd93913232cee7f61121b68c3797b27c9bcad",
-      "8897cf86bcadd3f03638ddb4f7c937f4e356eee3bc2b08e7d1e325d1262840e3":
-        "5bf9250016b46f4a348c94b9e3edf7b180fde7570677ce856c802962435b3023",
-      "0cd2a26da5000e9ceff55d2ef5efefbfd3596d82d2797c0f7a6d0c04adf35488":
-        "e6f1e88d8b4326bd1ea6246bb07443c1661c4d1904d78289be49da00859a6648",
-      "d5ada77fae0f61a30d2e8a302d30f255513b5034f78201c2fa578db7c898daa5":
-        "d95c9ce5ceb7a010261357f4927a434725e33844215d0fda8b7579ae96758a08",
-      "2bc4bab43a2c5ea5038bc895e04b294bb40a427c9fb9f2dae5c84274facac8a4":
-        "d2efaa8f460acf0d13cf1c1bfe319bbf94d5fde22d9a96de8a9485630c069c51",
+      // Build 38833 template-save output and Enhancement profiles.
+      "7d0ced840d3dc167b823ed0ad6ed411319faf97316345c8e37620e86d86f536e":
+        "eeeb4b70edbba53d5ee98a50dbba395dd175e8eebdd3e3bf93f8f9fcfa428a7b",
+      "7d6f7abd539597d402a130075e208872dd5d2f94543602a4b19039f3cdc8d8a3":
+        "b7da2de2a7effa009426ced28fae56391d93edc5c485778716d96f053eb2a5ea",
+      f0b25e149db917095a1e2f752ef59cb92928775844324decdede2c64561b8fcd:
+        "9642d8851b76c951a026b61d0d98fae68cd2e00295c27463628b397f146b566c",
+      a34ce7d430b730145f31e6a08cc60039a1317b1549f1eed562c458c40afbac89:
+        "61bafa5de8316ef93a978537e242c3a42f683f200da8d62d8fbb929b26e0a41b",
+      "7a2e4da45a3f291da9d803ff2ea4a51ba098f136f80e9920b8571436017a5bf2":
+        "39ce1ce2f65f43982db10546e751917f71f8a4d6b1310ddedaabc629682a33aa",
+      "3e9c925667e37835aa1d9f0e29cf02d63e6fd47e1e1fea3c6ed9e0c63c7ea4f9":
+        "9657da1863fc3015e6993af0cbde485e9b7b4e8db6303249f9cd3ad8f05af998",
+      "0079159fa9ac949d915387b48b8837231a161872844f39b40f9e3b3946dcb9f6":
+        "4065114367861f6120db45e6d744b92bc62342a296aa725e772ed52b746a0ce4",
+      "91795a11bb745876f63ed5649b85789c96a71406052df1bd264c6133c1753f39":
+        "a133d6cd6c9021d9d64e1ed1539cd7184ffde0ad996ae0e3ea822afb450dc441",
+      "7c2c477e1e139252636c854cb82a3c3e07a4dfa4aa4c3a837146666c7fdebc28":
+        "657436348ee445e24eb356ef7b9ca79cfa5153ce47c7d1c69f552d8e5dffa905",
+      a0484cf8bf0e966501b8c434764b1cdcc1b6596a0fd80a9de124838a04e19853:
+        "e9375c0e5198b244c563844600d55b0a744c4a0b2e7b2e8e07254498540111ec",
+      b2bbf79650f543f5b33da93f4837bf51dfab4ba5f4dd1f16aed3a1669aeb6841:
+        "7d354444755cb834b0d18122f2d904623faf112e3dcac38174b473d985d560fe",
+      c68e0e5eff1e2e7615592cd18bd2bcb3833e732d21abbc9574adc013a11d469a:
+        "5f019448868635a7ca9242d7e490dd427ef9455803d7b9b962fe339b6e7bf445",
     },
   },
 ];
@@ -148,6 +166,62 @@ export function nativeDoubleClickOutputSha256(
   return build.derivations[inputSha256] ?? null;
 }
 
+/** Locate an unchanged callback semantically when only the predecessor hash moved. */
+export function deriveNativeDoubleClickBuild(
+  input: Uint8Array,
+  baselines: readonly NativeDoubleClickBuild[] = NATIVE_DOUBLE_CLICK_BUILDS,
+): NativeDoubleClickBuild | null {
+  if (!WebAssembly.validate(input)) return null;
+  try {
+    const sections = splitSections(input);
+    const bodies = parseCode(sectionById(sections, 10));
+    const importCount = countFunctionImports(sectionById(sections, 2));
+    const functionTypes = parseIndexVector(sectionById(sections, 3));
+    const types = parseTypes(sectionById(sections, 1));
+    const slots = tableSlotFunctions(sectionById(sections, 9));
+    const inputSha256 = sha256(input);
+    const matches: NativeDoubleClickBuild[] = [];
+    for (const baseline of baselines) {
+      const candidates = bodies.flatMap((body, localIndex) =>
+        sha256(body) === baseline.callbackBodySha256
+          ? [localIndex + importCount]
+          : [],
+      );
+      if (candidates.length !== 1) continue;
+      const callbackFunctionIndex = candidates[0]!;
+      const callbackSlots = [...slots]
+        .filter(([, functionIndex]) => functionIndex === callbackFunctionIndex)
+        .map(([slot]) => slot);
+      const type = types[functionTypes[callbackFunctionIndex - importCount]!];
+      if (
+        callbackSlots.length !== 1 ||
+        !type ||
+        type.params
+          .map((value) => (value === 0x7f ? "i32" : "other"))
+          .join() !== baseline.callbackParams.join() ||
+        type.results
+          .map((value) => (value === 0x7f ? "i32" : "other"))
+          .join() !== baseline.callbackResults.join()
+      )
+        continue;
+      const candidate: NativeDoubleClickBuild = {
+        ...baseline,
+        callbackTableSlot: callbackSlots[0]!,
+        callbackFunctionIndex,
+        derivations: {},
+      };
+      const output = rewriteWithBuild(input, candidate);
+      matches.push({
+        ...candidate,
+        derivations: Object.freeze({ [inputSha256]: sha256(output) }),
+      });
+    }
+    return matches.length === 1 ? matches[0]! : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Every active table slot mapped to the function it holds. Only slot-zero
  * segments with a constant offset appear in this module; anything else is
@@ -165,7 +239,9 @@ function tableSlotFunctions(body: Uint8Array): Map<number, number> {
     if (body[cursor.offset++] !== 0x0b) fail("malformed element offset");
     const entries = readUleb(body, cursor);
     for (let i = 0; i < entries; i += 1) {
-      slots.set(base + i, readUleb(body, cursor));
+      const slot = base + i;
+      if (slots.has(slot)) fail(`duplicate active table slot ${slot}`);
+      slots.set(slot, readUleb(body, cursor));
     }
   }
   if (cursor.offset !== body.byteLength) fail("malformed element section");

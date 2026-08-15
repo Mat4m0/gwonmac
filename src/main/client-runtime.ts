@@ -26,6 +26,7 @@ import {
   type DownloadActivity,
   type DownloadFailure,
   type ExtendedMemoryRuntimeStatus,
+  type OptionalFeatureStatus,
   type DownloadProgress,
   type FullDownloadOutcome,
   type NoticeCode,
@@ -58,9 +59,12 @@ import { encodedChunkLimit } from "./core/chunk-format.js";
 import { ChunkStore } from "./core/chunk-store.js";
 import { prepareClientModule } from "./certification/client-module.js";
 import {
+  clearRejectedClient,
   confirmClientCandidate,
+  readClientCandidate,
   readRejectedClient,
-  restoreUnconfirmedClient,
+  rejectClientCandidate,
+  restoreInvalidClientCandidate,
 } from "./core/client-compatibility.js";
 import { sha256File } from "./core/derived-wasm.js";
 import type { Manifest } from "./core/manifest.js";
@@ -87,6 +91,7 @@ import {
 import type { GamePaths } from "./paths.js";
 import { verifyClientLocally } from "./certification/local-client-verifier-host.js";
 import { extendedMemoryRuntimeStatus } from "./extended-memory-runtime.js";
+import { supportedEnhancementCapabilities } from "./certification/enhancement-builds.js";
 
 export type { ActiveClient } from "./active-client.js";
 
@@ -97,6 +102,22 @@ export type { ActiveClient } from "./active-client.js";
  */
 function digestOrNull(value: string | null | undefined): Digest | null {
   return typeof value === "string" && isDigest(value) ? value : null;
+}
+
+function optionalFeatureStatus(
+  requested: boolean,
+  effective: boolean,
+  supported: boolean,
+  preparationFailed: boolean,
+): OptionalFeatureStatus {
+  if (!requested) return { status: "off" };
+  if (effective) return { status: "available" };
+  return {
+    status: "unavailable",
+    reason: supported && preparationFailed
+      ? "preparation-failed"
+      : "game-update",
+  };
 }
 
 interface ClientRuntimeOptions {
@@ -135,6 +156,9 @@ export class ClientRuntime {
   private gameUpdateAbort: AbortController | null = null;
   /** Exact candidate identity captured by a renderer before it loads glue. */
   private candidateHealthToken: ClientHealthToken | null = null;
+  private readonly rendererFailedFeatures = new Set<
+    Exclude<keyof ClientCompatibility["features"], "gameFileSaving">
+  >();
   private readonly patchFetch: PatchFetch;
 
   constructor(private readonly options: ClientRuntimeOptions) {
@@ -149,7 +173,36 @@ export class ClientRuntime {
   }
 
   get compatibility(): ClientCompatibility | null {
-    return this.activeSlot.current?.compatibility ?? null;
+    const compatibility = this.activeSlot.current?.compatibility ?? null;
+    if (!compatibility || this.rendererFailedFeatures.size === 0) {
+      return compatibility;
+    }
+    const effectiveStatus = <
+      Feature extends Exclude<keyof ClientCompatibility["features"], "gameFileSaving">,
+    >(feature: Feature): ClientCompatibility["features"][Feature] =>
+      this.rendererFailedFeatures.has(feature)
+        ? { status: "unavailable", reason: "preparation-failed" }
+        : compatibility.features[feature];
+    return Object.freeze({
+      ...compatibility,
+      features: Object.freeze({
+        gameFileSaving: compatibility.features.gameFileSaving,
+        nativeCursor: effectiveStatus("nativeCursor"),
+        targetObservation: effectiveStatus("targetObservation"),
+        partyObservation: effectiveStatus("partyObservation"),
+        teamApply: effectiveStatus("teamApply"),
+      }),
+    });
+  }
+
+  recordRendererFeatureFailure(
+    features: readonly Exclude<keyof ClientCompatibility["features"], "gameFileSaving">[],
+  ): void {
+    for (const feature of features) {
+      if (this.activeSlot.current?.compatibility?.features[feature].status === "available") {
+        this.rendererFailedFeatures.add(feature);
+      }
+    }
   }
 
   get healthToken(): ClientHealthToken | null {
@@ -252,17 +305,20 @@ export class ClientRuntime {
     }
 
     let certification = certifyClientBuild(officialSha256);
-    if (certification.state === "uncertified") {
+    if (
+      certification.templateSaveBuild === null
+      || (
+        certification.enhancementBuild === null
+        && this.options.enhancementCapabilities.nativeCursor
+      )
+    ) {
       const local = await verifyClientLocally({
         officialWasmPath: officialWasm,
         officialSha256,
       });
       if (local) {
         certification = certificationFromLocalVerification(local);
-        logEvent({
-          k: "wasm.localVerificationCompleted",
-          certification: certification.state,
-        });
+        logEvent({ k: "wasm.localVerificationCompleted" });
       } else {
         logEvent({ k: "wasm.localVerificationUnavailable" });
       }
@@ -279,14 +335,52 @@ export class ClientRuntime {
       extendedMemoryCacheRoot: this.options.paths.extendedMemory,
       extendedMemoryEnabled: this.options.extendedMemoryEnabled,
     });
-    const state = prepared.state;
+    const preparationFailed = prepared.failure?.stage === "enhancement";
+    const supported = prepared.enhancementBuild
+      ? supportedEnhancementCapabilities(prepared.enhancementBuild)
+      : {
+          nativeCursor: false,
+          targetObservation: false,
+          partyObservation: false,
+          commands: false,
+        };
+    const requested = prepared.requestedCapabilities;
+    const effective = prepared.effectiveCapabilities;
     const compatibility: ClientCompatibility = {
-      state,
       clientSha256: officialSha256,
-      enhancementActive: prepared.enhancementBuild !== null,
+      features: {
+        gameFileSaving: prepared.gameFileSaving,
+        nativeCursor: optionalFeatureStatus(
+          requested.nativeCursor,
+          effective.nativeCursor,
+          supported.nativeCursor,
+          preparationFailed,
+        ),
+        targetObservation: optionalFeatureStatus(
+          requested.targetObservation,
+          effective.targetObservation,
+          supported.targetObservation,
+          preparationFailed,
+        ),
+        partyObservation: optionalFeatureStatus(
+          requested.partyObservation,
+          effective.partyObservation,
+          supported.partyObservation,
+          preparationFailed,
+        ),
+        teamApply: optionalFeatureStatus(
+          requested.commands,
+          effective.commands,
+          supported.commands,
+          preparationFailed,
+        ),
+      },
     };
-    gauge("client.buildCertification", state);
-    gauge("wasm.templateSaveCompatible", state !== "uncertified");
+    gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");
+    gauge("enhancement.effectiveCursor", effective.nativeCursor);
+    gauge("enhancement.effectiveTargetObservation", effective.targetObservation);
+    gauge("enhancement.effectivePartyObservation", effective.partyObservation);
+    gauge("enhancement.effectiveCommands", effective.commands);
 
     if (prepared.failure?.stage === "template-save") {
       logEvent({ k: "wasm.templateSavePrepareFailed",
@@ -294,7 +388,7 @@ export class ClientRuntime {
       });
     } else {
       logEvent({
-        k: state === "uncertified"
+        k: prepared.gameFileSaving.status === "unavailable"
           ? "wasm.templateSaveUnsupported"
           : "wasm.templateSavePrepared",
       });
@@ -317,7 +411,7 @@ export class ClientRuntime {
       });
     } else if (
       enhancementCapabilitiesRequested(this.options.enhancementCapabilities)
-      && state !== "certified"
+      && !enhancementCapabilitiesRequested(prepared.effectiveCapabilities)
     ) {
       logEvent({ k: "enhancement.uncertifiedClientBlocked" });
     }
@@ -381,6 +475,9 @@ export class ClientRuntime {
       this.recordResidency(store),
     ]);
     const previous = this.activeSlot.current;
+    // Renderer installation failures belong to one served generation. A retry
+    // or game update prepares a fresh session and must get a fresh attempt.
+    this.rendererFailedFeatures.clear();
     const active: ActiveClient = this.activeSlot.publish({
       artifactsDir: this.options.paths.artifacts,
       store,
@@ -443,6 +540,7 @@ export class ClientRuntime {
         "last published client failed integrity verification",
       );
     }
+    const candidate = await readClientCandidate(this.options.paths.artifacts);
     return this.activateStore(
       this.createStore(
         value.size,
@@ -450,6 +548,10 @@ export class ClientRuntime {
         value.chunkHashes,
         value.compressionMode,
       ),
+      candidate.status === "pending" &&
+        candidate.fingerprint === value.clientFingerprint
+        ? candidate.fingerprint
+        : null,
     );
   }
 
@@ -539,16 +641,24 @@ export class ClientRuntime {
     });
     const updateSpan = startClientUpdateSpan();
     try {
-      const rollback = await restoreUnconfirmedClient({
-        artifacts: this.options.paths.artifacts,
-        rejectedPath: this.options.paths.rejectedClient,
-        hostVersion: this.options.hostVersion,
-      });
-      if (rollback) {
-        logEvent({
-          k: "client.candidateRolledBack",
-          fingerprint: digestOrNull(rollback.fingerprint),
+      const installedCandidate = await readClientCandidate(
+        this.options.paths.artifacts,
+      );
+      // A malformed marker cannot identify the candidate it protects. Prefer
+      // the complete verified rollback generation. A valid pending marker is
+      // deliberately preserved: closing the app is not evidence of failure.
+      if (installedCandidate.status === "invalid") {
+        const rollback = await restoreInvalidClientCandidate({
+          artifacts: this.options.paths.artifacts,
+          rejectedPath: this.options.paths.rejectedClient,
+          hostVersion: this.options.hostVersion,
         });
+        if (rollback) {
+          logEvent({
+            k: "client.candidateRolledBack",
+            fingerprint: digestOrNull(rollback.fingerprint),
+          });
+        }
       }
       try {
         const migrated = await migrateLegacyPublishedClientManifest(
@@ -658,7 +768,10 @@ export class ClientRuntime {
     return operation;
   }
 
-  retryClient(relaunch: () => void): Promise<void> {
+  async retryClient(relaunch: () => void): Promise<void> {
+    // Retry is an explicit player decision. Clear only the small rejection
+    // record; verified chunks, the rollback generation and user data remain.
+    await clearRejectedClient(this.options.paths.rejectedClient);
     if (!this.activeSlot.current) return this.requestUpdate();
     this.publishProgress({
       ...INITIAL_PROGRESS,
@@ -670,7 +783,6 @@ export class ClientRuntime {
     } catch (error) {
       this.publishProgress({ phase: "error", errorCode: errorCode(error) });
     }
-    return Promise.resolve();
   }
 
   /**
@@ -791,7 +903,7 @@ export class ClientRuntime {
       new Error("game client update interrupted for renderer recovery"),
     );
     return this.generationLock.run(async () => {
-      const rollback = await restoreUnconfirmedClient({
+      const rollback = await rejectClientCandidate({
         artifacts: this.options.paths.artifacts,
         rejectedPath: this.options.paths.rejectedClient,
         hostVersion: this.options.hostVersion,

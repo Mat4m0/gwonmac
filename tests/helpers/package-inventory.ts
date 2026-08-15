@@ -34,7 +34,7 @@ export const DEVELOPER_PACKAGE_FILES = Object.freeze([
   "/build/tools/certification.js",
   "/build/tools/template-save-recert.js",
   "/build/tools/enhancement-recert.js",
-  "/build/tools/enhancement-structural-evidence.js",
+  "/build/tools/carry-forward.js",
   "/build/tools/enhancement-workspace.js",
   "/scripts/enhancements-live.ts",
   "/scripts/enhancements-live/scenarios.ts",

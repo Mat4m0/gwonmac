@@ -179,6 +179,7 @@ export interface TemplatePorts {
 
 export interface TemplatePane {
   refresh(): void;
+  setAvailability(reason: 'game-update' | 'preparation-failed' | null): void;
 }
 
 /**
@@ -249,6 +250,7 @@ export function bindTemplatePane(
 
   let picked: Picked | null = null;
   let busy = false;
+  let unavailableReason: 'game-update' | 'preparation-failed' | null = null;
 
   const policy = (): CollisionPolicy =>
     root.querySelector<HTMLInputElement>('input[name="templateCollision"]:checked')
@@ -266,6 +268,16 @@ export function bindTemplatePane(
   };
 
   const refresh = () => {
+    if (unavailableReason !== null) {
+      status.textContent = unavailableReason === 'game-update'
+        ? 'Template import and export are unavailable after this Guild Wars update. Your saved templates are unchanged.'
+        : 'Template import and export didn’t start. Your saved templates are unchanged. Restart GWonMac to try again.';
+      actions.hidden = true;
+      help.hidden = true;
+      rescue.hidden = true;
+      closePreview();
+      return;
+    }
     const fs = templateFilesystem();
     if (!fs) {
       status.textContent = NO_MOUNT;
@@ -463,5 +475,11 @@ export function bindTemplatePane(
       });
   });
 
-  return { refresh };
+  return {
+    refresh,
+    setAvailability(reason) {
+      unavailableReason = reason;
+      refresh();
+    },
+  };
 }

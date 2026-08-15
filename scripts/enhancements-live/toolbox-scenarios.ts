@@ -13,6 +13,12 @@ type ToolboxLiveState = {
   heroAvailable: boolean;
   firstHeroId: number;
   panelState: number;
+  partyReady: boolean;
+  rosterObserved: boolean;
+  unlockObserved: boolean;
+  ownedHeroCount: number;
+  completeHeroCount: number;
+  playerDetailsObserved: boolean;
 };
 
 async function readToolboxState(page: Page): Promise<ToolboxLiveState> {
@@ -21,6 +27,16 @@ async function readToolboxState(page: Page): Promise<ToolboxLiveState> {
     const value = typeof raw === "object" && raw !== null
       ? raw as Record<string, unknown>
       : {};
+    const party = typeof value.party === "object" && value.party !== null
+      ? value.party as Record<string, unknown>
+      : {};
+    const slots = Array.isArray(party.slots)
+      ? party.slots.filter((slot): slot is Record<string, unknown> =>
+        typeof slot === "object" && slot !== null)
+      : [];
+    const heroes = slots.filter((slot) =>
+      slot.occupied === true && typeof slot.hero === "number");
+    const player = slots.find((slot) => slot.occupied === true && slot.hero === null);
     return {
       status: String(value.status ?? "missing"),
       playerChatCount: Number(value.playerChatCount) >>> 0,
@@ -46,6 +62,21 @@ async function readToolboxState(page: Page): Promise<ToolboxLiveState> {
       heroAvailable: value.heroAvailable === true,
       firstHeroId: Number(value.firstHeroId) >>> 0,
       panelState: Number(value.panelState) >>> 0,
+      partyReady: party.status === "ready",
+      rosterObserved: party.rosterObserved === true,
+      unlockObserved: party.unlockObserved === true,
+      ownedHeroCount: heroes.length,
+      completeHeroCount: heroes.filter((hero) =>
+        Array.isArray(hero.professions)
+        && Array.isArray(hero.skills)
+        && Array.isArray(hero.attributes)
+        && typeof hero.behaviour === "number"
+      ).length,
+      playerDetailsObserved:
+        player !== undefined
+        && Array.isArray(player.professions)
+        && Array.isArray(player.skills)
+        && Array.isArray(player.attributes),
     };
   });
 }
@@ -174,6 +205,18 @@ export async function runToolboxFoundation({ page }: AutomationContext) {
   }
   if (!afterAge.heroAvailable || afterAge.firstHeroId === 0) {
     throw new Error("no first owned hero is available for the panel proof");
+  }
+  if (
+    !afterAge.partyReady
+    || !afterAge.rosterObserved
+    || !afterAge.unlockObserved
+    || !afterAge.playerDetailsObserved
+    || afterAge.ownedHeroCount !== afterAge.completeHeroCount
+    || afterAge.ownedHeroCount === 0
+  ) {
+    throw new Error(
+      "the full party, professions, skill bars, attributes, behaviour, or hero unlocks were not observed",
+    );
   }
 
   await operatorCheckpoint(

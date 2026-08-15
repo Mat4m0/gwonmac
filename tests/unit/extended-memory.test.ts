@@ -11,6 +11,7 @@ import {
   rewriteExtendedMemoryWasm,
 } from "../../src/main/certification/extended-memory.js";
 import { NATIVE_DOUBLE_CLICK_BUILDS } from "../../src/main/certification/native-double-click.js";
+import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
 import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../src/shared/enhancement-contracts.js";
 import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.js";
 
@@ -25,10 +26,18 @@ describe("certified extended memory transform", () => {
       "off",
       ...Object.keys(ENHANCEMENT_CAPABILITY_PROFILES),
     ].sort();
-    assert.deepEqual(
-      EXTENDED_MEMORY_WASM_BUILDS.map((build) => build.profile).sort(),
-      expectedProfiles,
-    );
+    const builds = new Map<number, typeof EXTENDED_MEMORY_WASM_BUILDS[number][]>();
+    for (const build of EXTENDED_MEMORY_WASM_BUILDS) {
+      const entries = builds.get(build.buildId) ?? [];
+      entries.push(build);
+      builds.set(build.buildId, entries);
+    }
+    for (const [buildId, entries] of builds) {
+      const expected = ENHANCEMENT_BUILDS.some((build) => build.buildId === buildId)
+        ? expectedProfiles
+        : ["off"];
+      assert.deepEqual(entries.map((build) => build.profile).sort(), expected);
+    }
     assert.deepEqual([...EXTENDED_MEMORY_PROFILES].sort(), expectedProfiles);
     const doubleClickOutputs = new Set(
       Object.values(NATIVE_DOUBLE_CLICK_BUILDS[0]!.derivations),
@@ -70,7 +79,7 @@ describe("certified extended memory transform", () => {
         k: "wasm.extendedMemory",
         mode: "active",
         requested: true,
-        profile: "cursorToolbox",
+        profile: "cursorParty",
         capBytes: EXTENDED_MEMORY_MAX_BYTES,
         fallbackReason: "none",
       }),
@@ -81,7 +90,7 @@ describe("certified extended memory transform", () => {
         fields: {
           mode: "active",
           requested: true,
-          profile: "cursorToolbox",
+          profile: "cursorParty",
           capBytes: EXTENDED_MEMORY_MAX_BYTES,
           fallbackReason: "none",
         },

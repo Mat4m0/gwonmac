@@ -98,8 +98,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     ["template-shape-changed"],
   );
 
-  const layout = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1]!.layout;
-  const needle = paddedIndex(layout.agentArray);
+  const observationBase = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1]!
+    .observationBase!;
+  const needle = paddedIndex(observationBase.layout.agentArray);
   const touched = new Set(
     derived.bridges.flatMap((bridge) =>
       bridge.callSites.map((callSite) => callSite.localFunction)),
@@ -121,8 +122,15 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(WebAssembly.validate(new Uint8Array(changedAddressReference)), true);
   const addressDecision = verifyLocalClientBytes(changedAddressReference);
   assert.ok(addressDecision.templateSaveBuild);
-  assert.equal(addressDecision.enhancementBuild, null);
-  assert.deepEqual(addressDecision.reasons, ["enhancement-layout-changed"]);
+  assert.ok(addressDecision.enhancementBuild?.cursorEvent);
+  assert.equal(addressDecision.enhancementBuild.targetObservation, undefined);
+  assert.equal(addressDecision.enhancementBuild.partyObservation, undefined);
+  assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
+  assert.deepEqual(
+    Object.keys(addressDecision.enhancementBuild.outputSha256),
+    ["cursor"],
+  );
+  assert.deepEqual(addressDecision.reasons, []);
 });
 
 test("every certified runtime profile reproduces the real client chain", async () => {

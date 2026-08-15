@@ -19,7 +19,7 @@ import { createBoundedPatchFetch } from "../../src/main/core/patch-transport.ts"
 import {
   confirmClientCandidate,
   readRejectedClient,
-  restoreUnconfirmedClient,
+  rejectClientCandidate,
 } from "../../src/main/core/client-compatibility.ts";
 import type {
   ManifestFileEntry,
@@ -149,21 +149,51 @@ describe("integration: patch updater", () => {
     assert.ok(await stat(`${artifacts}.previous`));
     assert.ok(await stat(join(artifacts, ".candidate.json")));
 
-    // Restart before that frame restores the working client and blocks only
+    // An ordinary restart before the first frame keeps the untested candidate
+    // and its rollback generation. Closing the launcher is not a crash.
+    const pendingAfterRestart = await client2.update();
+    assert.equal(pendingAfterRestart.candidate, false);
+    assert.equal(
+      (await readFile(join(artifacts, "version.json"))).toString(),
+      nextVersion.toString(),
+    );
+    assert.ok(await stat(`${artifacts}.previous`));
+    assert.ok(await stat(join(artifacts, ".candidate.json")));
+
+    // If ArenaNet publishes again before that candidate is exercised, replace
+    // only the pending candidate. The last confirmed generation remains the
+    // rollback target for the newest update.
+    const thirdVersion = Buffer.from('{"build":3}');
+    const thirdVersionHash = md5(thirdVersion);
+    store.set(thirdVersionHash, thirdVersion);
+    versionEntry.size = thirdVersion.length;
+    versionEntry.chunkHashes = [thirdVersionHash];
+    const supersedingCandidate = await client2.update();
+    assert.equal(supersedingCandidate.candidate, true);
+    assert.equal(
+      (await readFile(join(artifacts, "version.json"))).toString(),
+      thirdVersion.toString(),
+    );
+    assert.equal(
+      (await readFile(join(`${artifacts}.previous`, "version.json"))).toString(),
+      ver.toString(),
+    );
+
+    // A proven renderer failure restores the working client and blocks only
     // this exact upstream fingerprint from being retried.
     const rejectedPath = join(root, "rejected-client.json");
     assert.deepEqual(
-      await restoreUnconfirmedClient({
+      await rejectClientCandidate({
         artifacts,
         rejectedPath,
         hostVersion: "1.0.0",
       }),
-      { fingerprint: candidate.fingerprint },
+      { fingerprint: supersedingCandidate.fingerprint },
     );
     assert.equal((await readFile(join(artifacts, "version.json"))).toString(), ver.toString());
     assert.equal(
       await readRejectedClient(rejectedPath, "1.0.0"),
-      candidate.fingerprint,
+      supersedingCandidate.fingerprint,
     );
     let blockedFetches = 0;
     const blocked = await new PatchClient({
@@ -174,19 +204,19 @@ describe("integration: patch updater", () => {
         blockedFetches += 1;
         return fetchFixture(url, init);
       },
-    }).update({ blockedFingerprint: candidate.fingerprint });
+    }).update({ blockedFingerprint: supersedingCandidate.fingerprint });
     assert.equal(blocked.blocked, true);
     assert.equal(blockedFetches, 1);
 
     // A different upstream client gets one fresh attempt and is promoted by
     // the first-frame milestone.
-    const thirdVersion = Buffer.from('{"build":3}');
-    const thirdVersionHash = md5(thirdVersion);
-    store.set(thirdVersionHash, thirdVersion);
-    versionEntry.size = thirdVersion.length;
-    versionEntry.chunkHashes = [thirdVersionHash];
+    const fourthVersion = Buffer.from('{"build":4}');
+    const fourthVersionHash = md5(fourthVersion);
+    store.set(fourthVersionHash, fourthVersion);
+    versionEntry.size = fourthVersion.length;
+    versionEntry.chunkHashes = [fourthVersionHash];
     const freshCandidate = await client2.update({
-      blockedFingerprint: candidate.fingerprint,
+      blockedFingerprint: supersedingCandidate.fingerprint,
     });
     assert.equal(freshCandidate.candidate, true);
     assert.equal(

@@ -13,13 +13,18 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   DOUBLE_CLICK_FLAG_EXPORT,
+  deriveNativeDoubleClickBuild,
   NATIVE_DOUBLE_CLICK_BUILDS,
   rewriteWithBuild,
   type NativeDoubleClickBuild,
 } from "../../src/main/certification/native-double-click.ts";
 import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.ts";
-import { indexOfBytes, parseExports, sectionById, splitSections }
-  from "../../src/main/core/wasm-binary.ts";
+import {
+  indexOfBytes,
+  parseExports,
+  sectionById,
+  splitSections,
+} from "../../src/main/core/wasm-binary.ts";
 
 const sha256 = (bytes: Uint8Array) =>
   createHash("sha256").update(bytes).digest("hex");
@@ -32,7 +37,9 @@ const section = (id: number, body: number[]) => [id, body.length, ...body];
  * export section. The body ends in `local.get 3` so the insertion point has
  * something recognisable behind it.
  */
-function buildModule(): { bytes: Uint8Array; body: Uint8Array } {
+function buildModule(
+  elementBody: number[] = [0x01, 0x00, 0x41, 0x00, 0x0b, 0x01, 0x01],
+): { bytes: Uint8Array; body: Uint8Array } {
   // (func (result i32)) — the callback's own signature is irrelevant here;
   // what matters is that the body is a body and the slot resolves to it.
   const types = section(1, [0x01, 0x60, 0x00, 0x01, 0x7f]);
@@ -48,19 +55,36 @@ function buildModule(): { bytes: Uint8Array; body: Uint8Array } {
   const globals = section(6, [0x01, 0x7f, 0x01, 0x41, 0x00, 0x0b]);
   const exportName = [...new TextEncoder().encode("existing")];
   const exports = section(7, [
-    0x01, exportName.length, ...exportName, 0x00, 0x00,
+    0x01,
+    exportName.length,
+    ...exportName,
+    0x00,
+    0x00,
   ]);
-  const elements = section(9, [0x01, 0x00, 0x41, 0x00, 0x0b, 0x01, 0x01]);
+  const elements = section(9, elementBody);
   // four i32 locals, so local 3 exists; then `i32.const 7`, `drop`,
   // `i32.const 0`, `end`.
   const bodyBytes = [0x01, 0x04, 0x7f, 0x41, 0x07, 0x1a, 0x41, 0x00, 0x0b];
   const code = section(10, [0x01, bodyBytes.length, ...bodyBytes]);
   return {
     bytes: Uint8Array.from([
-      0, 97, 115, 109, 1, 0, 0, 0,
-      ...types, ...imports, ...functions, ...table, ...memory, ...globals,
+      0,
+      97,
+      115,
+      109,
+      1,
+      0,
+      0,
+      0,
+      ...types,
+      ...imports,
+      ...functions,
+      ...table,
+      ...memory,
+      ...globals,
       ...exports,
-      ...elements, ...code,
+      ...elements,
+      ...code,
     ]),
     body: Uint8Array.from(bodyBytes),
   };
@@ -73,6 +97,8 @@ const entryFor = (
   derivations: {},
   callbackTableSlot: 0,
   callbackFunctionIndex: 1,
+  callbackParams: [],
+  callbackResults: ["i32"],
   callbackBodySha256: sha256(body),
   // After the locals declaration and `i32.const 7; drop`, which is where the
   // record store goes in the real callback: before the enqueue and after the
@@ -109,6 +135,17 @@ test("appends one exported mutable global and writes it into the record", () => 
   );
 });
 
+test("locates an unchanged callback without a predecessor hash", () => {
+  const { bytes, body } = buildModule();
+  const baseline = entryFor(body);
+  const located = deriveNativeDoubleClickBuild(bytes, [baseline]);
+  assert.ok(located);
+  assert.equal(located.callbackFunctionIndex, baseline.callbackFunctionIndex);
+  assert.equal(located.callbackTableSlot, baseline.callbackTableSlot);
+  assert.match(located.derivations[sha256(bytes)] ?? "", /^[0-9a-f]{64}$/);
+  assert.equal(deriveNativeDoubleClickBuild(bytes, [baseline, baseline]), null);
+});
+
 test("refuses a callback whose body is not the certified one", () => {
   const { bytes, body } = buildModule();
   const wrong = entryFor(body, {
@@ -130,6 +167,17 @@ test("refuses a table slot that no longer holds the certified function", () => {
   assert.throws(
     () => rewriteWithBuild(bytes, entryFor(body, { callbackTableSlot: 9 })),
     /holds function/,
+  );
+});
+
+test("refuses duplicate active table slots instead of accepting the last mapping", () => {
+  const { bytes, body } = buildModule([
+    0x02, 0x00, 0x41, 0x00, 0x0b, 0x01, 0x01, 0x00, 0x41, 0x00, 0x0b, 0x01,
+    0x01,
+  ]);
+  assert.throws(
+    () => rewriteWithBuild(bytes, entryFor(body)),
+    /duplicate active table slot 0/,
   );
 });
 
@@ -159,19 +207,26 @@ test("the shipped entry describes one build and states its own offsets", () => {
   assert.equal(NATIVE_DOUBLE_CLICK_BUILDS.length, 1);
   for (const build of NATIVE_DOUBLE_CLICK_BUILDS) {
     assert.match(build.callbackBodySha256, /^[0-9a-f]{64}$/);
-    // One predecessor per certified capability profile, plus the one where the
-    // Enhancement is off. A missing entry is a launch that silently keeps the
-    // synthetic taps; a stray one is a module nothing produces.
+    // Every retained exact Enhancement profile must continue through this
+    // stage. Template-only predecessors can also be present when their
+    // callback proof matches this build, even if their memory layout is no
+    // longer certified for Enhancement.
     const pairs = Object.entries(build.derivations);
     const expectedInputs = new Set([
       ...ENHANCEMENT_BUILDS.map((entry) => entry.sha256),
-      ...ENHANCEMENT_BUILDS.flatMap((entry) => Object.values(entry.outputSha256)),
+      ...ENHANCEMENT_BUILDS.flatMap((entry) =>
+        Object.values(entry.outputSha256).filter(
+          (value): value is string => value !== undefined,
+        ),
+      ),
     ]);
-    assert.deepEqual(
-      new Set(pairs.map(([input]) => input)),
-      expectedInputs,
-      "every module the preparation chain can produce needs a derivation",
-    );
+    const inputs = new Set(pairs.map(([input]) => input));
+    for (const input of expectedInputs) {
+      assert.ok(
+        inputs.has(input),
+        "every retained Enhancement output needs a double-click derivation",
+      );
+    }
     for (const [input, output] of pairs) {
       assert.match(input, /^[0-9a-f]{64}$/);
       assert.match(output, /^[0-9a-f]{64}$/);

@@ -270,7 +270,7 @@ function maybeInstallEnhancements(): void {
   // Launch intent is the first gate: an all-off launch must not even import
   // Enhancement code. The served module is the second gate. An uncertified
   // launch has no manifest, while the installer separately checks that a
-  // manifest's exact hook set matches the selected tools or developer program.
+  // manifest's exact hook set matches Main's effective session features.
   const enhancementRequested =
     init.enhancementProgram !== 'none'
     || init.enhancementSelection.nativeCursor
@@ -294,7 +294,6 @@ function maybeInstallEnhancements(): void {
       installEnhancements(
         enhancementInstance,
         enhancementModule,
-        init.enhancementSelection,
         init.enhancementProgram,
       ))
     .then((installation) => {
@@ -302,9 +301,17 @@ function maybeInstallEnhancements(): void {
       // installer returns null for those cases rather than throwing, but the
       // host-owned library remains just as usable as it is on a module with no
       // manifest at all.
-      if (installation === null && init.enhancementSelection.tools) {
+      if (!init.enhancementSelection.tools) return;
+      if (installation === null) {
         installHostOnlyTools();
+        return;
       }
+      void native().client.session().then((session) => {
+        if (
+          session.compatibility?.features.partyObservation.status
+          !== 'available'
+        ) installHostOnlyTools();
+      });
     })
     .catch((error) => {
       log(
@@ -1214,8 +1221,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     ]);
     appSettings = settings;
     templatePublishingAvailable =
-      session.compatibility?.state === 'template-only'
-      || session.compatibility?.state === 'certified';
+      session.compatibility?.features.gameFileSaving.status === 'available';
     applyAppearance(settings);
     clientHealthConfirmation = createClientHealthConfirmation({
       token: session.healthToken,

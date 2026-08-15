@@ -9,7 +9,7 @@ overrides:
   "brace-expansion@": 5.0.9
   fast-uri: 3.1.5
   ip-address: 10.3.1
-  nanoid: 3.3.17
+  nanoid: 3.3.18
   tar: 7.5.21
   tmp: 0.2.7
   "undici@7": 7.29.0
@@ -31,6 +31,10 @@ allowBuilds:
 # repository-owned PNG background and copies the ICNS icon without parsing it.
 auditConfig:
   ignoreGhsas:
+    # Electron Forge reaches extract-zip only through its packaging toolchain.
+    # No patched extract-zip release exists yet; Electron archives come from
+    # the checksum-verified @electron/get path, not from player-controlled data.
+    - GHSA-jmr9-qjv8-65gv
     - GHSA-w3rx-r6r6-pgpr
     - GHSA-5p2g-fcmc-qvqq
     # Electron Forge 7 reaches extract-zip only through Electron Packager's

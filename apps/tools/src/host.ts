@@ -44,8 +44,8 @@ export type PublishedTemplate = Readonly<{
 }>;
 
 const PUBLISH_UNAVAILABLE =
-  "Saving into Guild Wars is unavailable for this client build. "
-  + "Your build remains safe in the local library.";
+  "GWonMac can’t add this build to Guild Wars after this game update. "
+  + "The build is still saved in your library.";
 
 export type LibraryLoad = Readonly<{
   library: BuildLibrary;
@@ -92,6 +92,7 @@ export interface ToolsHost {
    * does not exist yet.
    */
   readonly applyUnavailable: string | null;
+  readonly observationUnavailable: string | null;
   reset?(): Promise<LibraryLoad>;
 }
 
@@ -193,6 +194,7 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
     party: ref(demoParty),
     // The fixture host answers its own apply, so it has nothing to refuse.
     applyUnavailable: null,
+    observationUnavailable: null,
     publishUnavailable: null,
     async loadLibrary() {
       memory = read();
@@ -252,6 +254,7 @@ export function createNativeHost(
   commands: TeamApplyCommands | null,
   applyUnavailable: string | null,
   development = false,
+  observationUnavailable: string | null = null,
 ): ToolsHost {
   const party = ref(unavailableParty());
   // One counter per session, so a result can be tied to the request that asked
@@ -330,6 +333,7 @@ export function createNativeHost(
     skills,
     party,
     applyUnavailable,
+    observationUnavailable,
     publishUnavailable: publishTemplate === null ? PUBLISH_UNAVAILABLE : null,
     async loadLibrary() {
       const [library, skills] = await Promise.all([
