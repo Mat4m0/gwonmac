@@ -34,6 +34,40 @@ export interface GameFontSource {
 
 export type GameFontRefusal = "unsupported" | "read-or-format";
 
+/** Read and decompress only the bounded local strike used by the converter. */
+export async function readGameFontStrike(
+  source: GameFontSource,
+): Promise<Buffer | null> {
+  const { store } = source;
+  const headerBytes = await store.readRange(0, 32);
+  const header = parseArchiveHeader(() => headerBytes);
+  const tableBytes = await store.readRange(header.tableOffset, header.tableSize);
+  const files = readFileTable(
+    (offset, length) => tableBytes.subarray(
+      offset - header.tableOffset,
+      offset - header.tableOffset + length,
+    ),
+    header,
+  );
+  const indexSlot = parseSlot(files.bytes, 2);
+  const indexBytes = await store.readRange(indexSlot.offset, indexSlot.size);
+  const index = fileIdIndex(
+    (offset, length) => indexBytes.subarray(
+      offset - indexSlot.offset,
+      offset - indexSlot.offset + length,
+    ),
+    files,
+  );
+  const stream = findStream(files, index, GUILD_WARS_LATIN_FONT_FILE_ID);
+  if (!stream?.compressed || stream.size > MAX_COMPRESSED_FONT_BYTES) return null;
+  const compressed = await store.readRange(stream.offset, stream.size);
+  return runGwDatDecoder(source.decoderPath, compressed, {
+    args: ["--raw"],
+    maxOutput: MAX_DECODED_FONT_BYTES + 8,
+    parse: (bytes) => decodedArchiveBytes(bytes, MAX_DECODED_FONT_BYTES),
+  });
+}
+
 export class GameFontAssets {
   private readonly source: GameFontSource;
   private result: Promise<Buffer | null> | null = null;
@@ -55,37 +89,11 @@ export class GameFontAssets {
   }
 
   private async convert(): Promise<Buffer | null> {
-    const { store } = this.source;
-    const headerBytes = await store.readRange(0, 32);
-    const header = parseArchiveHeader(() => headerBytes);
-    const tableBytes = await store.readRange(header.tableOffset, header.tableSize);
-    const files = readFileTable(
-      (offset, length) => tableBytes.subarray(
-        offset - header.tableOffset,
-        offset - header.tableOffset + length,
-      ),
-      header,
-    );
-    const indexSlot = parseSlot(files.bytes, 2);
-    const indexBytes = await store.readRange(indexSlot.offset, indexSlot.size);
-    const index = fileIdIndex(
-      (offset, length) => indexBytes.subarray(
-        offset - indexSlot.offset,
-        offset - indexSlot.offset + length,
-      ),
-      files,
-    );
-    const stream = findStream(files, index, GUILD_WARS_LATIN_FONT_FILE_ID);
-    if (!stream?.compressed || stream.size > MAX_COMPRESSED_FONT_BYTES) {
+    const raw = await readGameFontStrike(this.source);
+    if (!raw) {
       this.refusalCode = "unsupported";
       return null;
     }
-    const compressed = await store.readRange(stream.offset, stream.size);
-    const raw = await runGwDatDecoder(this.source.decoderPath, compressed, {
-      args: ["--raw"],
-      maxOutput: MAX_DECODED_FONT_BYTES + 8,
-      parse: (bytes) => decodedArchiveBytes(bytes, MAX_DECODED_FONT_BYTES),
-    });
     return buildGuildWarsTrueType(raw);
   }
 }

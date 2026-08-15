@@ -83,6 +83,23 @@ test("the converted result is a complete checksummed TrueType font", () => {
   assert.ok(font.includes(Buffer.from("Guild Wars Original", "utf16le").swap16()));
 });
 
+test("the measured contour remains the default and calibration inputs are bounded", () => {
+  const strike = repeatedGlyph([0x00, 0x00, 0x00]);
+  const font = buildGuildWarsTrueType(strike);
+  assert.deepEqual(
+    font,
+    buildGuildWarsTrueType(strike, { outlineThreshold: 0xa0 }),
+  );
+  assert.notDeepEqual(
+    font,
+    buildGuildWarsTrueType(strike, { outlineThreshold: 0x80 }),
+  );
+  assert.throws(
+    () => buildGuildWarsTrueType(strike, { outlineThreshold: 0 }),
+    /threshold must be an integer from 1 to 254/,
+  );
+});
+
 test("a narrow numeral gets balanced proportional spacing", () => {
   // Most fixture glyphs fill a nine-pixel cell. `1` occupies only its centre
   // pixel, matching the large empty sides found in the game's real digit cell.
@@ -90,7 +107,11 @@ test("a narrow numeral gets balanced proportional spacing", () => {
   const narrow = packedNibbles([0, 8, 1, 0, 1, 0, 3, 8, 0, 3]);
   const glyphs = Array.from({ length: GLYPH_COUNT }, () => full);
   glyphs[0x31 - 0x21] = narrow;
-  const font = buildGuildWarsTrueType(Uint8Array.from(glyphs.flat()));
+  const font = buildGuildWarsTrueType(Uint8Array.from(glyphs.flat()), {
+    // This synthetic one-pixel stem exists to isolate the spacing rule. The
+    // real calibrated strike has a wider `1`; keep the fixture visible here.
+    outlineThreshold: 0x80,
+  });
   const hmtx = tableOffset(font, "hmtx");
   const glyphId = (character: string) => character.charCodeAt(0) - 0x20 + 1;
   const advance = (character: string) =>

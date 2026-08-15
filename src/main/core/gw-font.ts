@@ -24,17 +24,31 @@ const ALPHA = Uint8Array.of(
 );
 const FIRST_CHARACTER = 0x21;
 const LAST_CHARACTER = 0x7e;
-const SOURCE_EM = 24;
-const SOURCE_BASELINE = 18;
-const SOURCE_LINE_HEIGHT = 25;
-const SOURCE_SPACE_WIDTH = 6;
+export const GUILD_WARS_FONT_METRICS = {
+  em: 24,
+  baseline: 18,
+  lineHeight: 25,
+  spaceWidth: 6,
+} as const;
+const SOURCE_EM = GUILD_WARS_FONT_METRICS.em;
+const SOURCE_BASELINE = GUILD_WARS_FONT_METRICS.baseline;
+const SOURCE_LINE_HEIGHT = GUILD_WARS_FONT_METRICS.lineHeight;
+const SOURCE_SPACE_WIDTH = GUILD_WARS_FONT_METRICS.spaceWidth;
 const MAX_SOURCE_DIMENSION = 24;
 const MAX_SOURCE_PIXELS = 24 * 24 * 94;
 const MAX_RECTANGLES_PER_GLYPH = 512;
 const MAX_TOTAL_RECTANGLES = 16_384;
 const UNITS_PER_EM = 1024;
-const OUTLINE_THRESHOLD = 0x80;
+// Measured by `pnpm font:calibrate` against the original grayscale strike.
+const OUTLINE_THRESHOLD = 0xa0;
 const OUTLINE_SAMPLE_SCALE = 4;
+
+export interface GameFontBuildOptions {
+  /** Alpha crossing traced into the monochrome TrueType outline. */
+  readonly outlineThreshold?: number;
+  /** Sub-pixel grid used while locating that crossing. */
+  readonly outlineSampleScale?: 1 | 2 | 4;
+}
 
 export interface GameGlyph {
   readonly top: number;
@@ -190,9 +204,14 @@ interface HorizontalMetrics {
   readonly shift: number;
 }
 
-function interpolatedAlpha(glyph: GameGlyph, x: number, y: number): number {
-  const sourceX = (x + 0.5) / OUTLINE_SAMPLE_SCALE - 0.5;
-  const sourceY = (y + 0.5) / OUTLINE_SAMPLE_SCALE - 0.5;
+function interpolatedAlpha(
+  glyph: GameGlyph,
+  x: number,
+  y: number,
+  sampleScale: number,
+): number {
+  const sourceX = (x + 0.5) / sampleScale - 0.5;
+  const sourceY = (y + 0.5) / sampleScale - 0.5;
   const left = Math.floor(sourceX);
   const top = Math.floor(sourceY);
   const xBlend = sourceX - left;
@@ -217,31 +236,35 @@ function interpolatedAlpha(glyph: GameGlyph, x: number, y: number): number {
  * soft edge crosses half opacity; tracing the source pixels directly produced
  * the visibly stepped curves the bitmap's alpha levels were meant to hide.
  */
-function bitmapRectangles(glyph: GameGlyph): readonly Rectangle[] {
+function bitmapRectangles(
+  glyph: GameGlyph,
+  threshold: number,
+  sampleScale: number,
+): readonly Rectangle[] {
   const complete: Rectangle[] = [];
   let active = new Map<string, Rectangle>();
-  const width = glyph.width * OUTLINE_SAMPLE_SCALE;
-  const height = glyph.height * OUTLINE_SAMPLE_SCALE;
+  const width = glyph.width * sampleScale;
+  const height = glyph.height * sampleScale;
   for (let y = 0; y < height; y++) {
     const next = new Map<string, Rectangle>();
     for (let x = 0; x < width;) {
-      if (interpolatedAlpha(glyph, x, y) < OUTLINE_THRESHOLD) {
+      if (interpolatedAlpha(glyph, x, y, sampleScale) < threshold) {
         x += 1;
         continue;
       }
       const left = x;
       while (
         x < width
-        && interpolatedAlpha(glyph, x, y) >= OUTLINE_THRESHOLD
+        && interpolatedAlpha(glyph, x, y, sampleScale) >= threshold
       ) x += 1;
       const key = `${left}:${x}`;
       const rectangle = active.get(key) ?? {
-        left: left / OUTLINE_SAMPLE_SCALE,
-        right: x / OUTLINE_SAMPLE_SCALE,
-        top: y / OUTLINE_SAMPLE_SCALE,
-        bottom: y / OUTLINE_SAMPLE_SCALE,
+        left: left / sampleScale,
+        right: x / sampleScale,
+        top: y / sampleScale,
+        bottom: y / sampleScale,
       };
-      rectangle.bottom = (y + 1) / OUTLINE_SAMPLE_SCALE;
+      rectangle.bottom = (y + 1) / sampleScale;
       next.set(key, rectangle);
       active.delete(key);
     }
@@ -407,11 +430,22 @@ function os2Table(advances: readonly number[]): Buffer {
 }
 
 /** Build a standards-compliant TrueType font from the 24px body strike. */
-export function buildGuildWarsTrueType(source: Uint8Array): Buffer {
+export function buildGuildWarsTrueType(
+  source: Uint8Array,
+  options: GameFontBuildOptions = {},
+): Buffer {
+  const threshold = options.outlineThreshold ?? OUTLINE_THRESHOLD;
+  const sampleScale = options.outlineSampleScale ?? OUTLINE_SAMPLE_SCALE;
+  if (!Number.isSafeInteger(threshold) || threshold <= 0 || threshold >= 0xff) {
+    throw new Error("font outline threshold must be an integer from 1 to 254");
+  }
+  if (sampleScale !== 1 && sampleScale !== 2 && sampleScale !== 4) {
+    throw new Error("font outline sample scale must be 1, 2, or 4");
+  }
   const glyphs = decodeGameFontRange(source);
   const sourceGlyphs: readonly (GameGlyph | null)[] = [null, null, ...glyphs];
   const rectangles = sourceGlyphs.map((glyph) =>
-    glyph === null ? [] : bitmapRectangles(glyph));
+    glyph === null ? [] : bitmapRectangles(glyph, threshold, sampleScale));
   if (
     rectangles.reduce((total, value) => total + value.length, 0)
     > MAX_TOTAL_RECTANGLES
