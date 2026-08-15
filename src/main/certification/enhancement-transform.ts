@@ -14,8 +14,6 @@
  * it determines relocated function indices and therefore the resulting bytes,
  * so no capability selection may inherit another's ordering.
  *
- * `inspectEnhancementCandidate` is the read-only half. It reports what a module
- * looks like and certifies nothing.
  */
 import { createHash } from "node:crypto";
 import {
@@ -26,7 +24,6 @@ import {
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
 import {
-  findEnhancementBuild,
   enhancementConfigWords,
   supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
@@ -59,7 +56,6 @@ import {
   parseIndexVector,
   parseExports,
   parseTypes,
-  readSleb,
   readUleb,
   sectionById,
   sleb,
@@ -71,6 +67,11 @@ import {
   type FunctionType,
   type Section,
 } from "../core/wasm-binary.js";
+import {
+  encodeEnhancementTable,
+  enhancementTableSlotFunctions,
+  parseEnhancementTable,
+} from "./enhancement-table.js";
 
 declare const WebAssembly: {
   Module: new (bytes: Uint8Array) => unknown;
@@ -128,52 +129,6 @@ function encodeName(value: string): Uint8Array {
   return concat(uleb(bytes.byteLength), bytes);
 }
 
-function parseTable(bytes: Uint8Array): {
-  flags: number;
-  min: number;
-  max: number | null;
-} {
-  const cursor = { offset: 0 };
-  if (readUleb(bytes, cursor) !== 1) fail("expected exactly one table");
-  if (bytes[cursor.offset++] !== 0x70) fail("expected funcref table");
-  const flags = readUleb(bytes, cursor);
-  const min = readUleb(bytes, cursor);
-  const max = (flags & 1) !== 0 ? readUleb(bytes, cursor) : null;
-  if (cursor.offset !== bytes.byteLength) fail("malformed table section");
-  return { flags, min, max };
-}
-
-function encodeTable(flags: number, min: number, max: number): Uint8Array {
-  return concat(
-    uleb(1),
-    Uint8Array.of(0x70),
-    uleb(flags),
-    uleb(min),
-    uleb(max),
-  );
-}
-
-function tableSlotFunctions(bytes: Uint8Array): Map<number, number> {
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  const slots = new Map<number, number>();
-  for (let segment = 0; segment < count; segment += 1) {
-    const flags = readUleb(bytes, cursor);
-    if (flags !== 0) fail(`unsupported element segment flags ${flags}`);
-    if (bytes[cursor.offset++] !== 0x41) fail("expected element i32.const");
-    const base = readSleb(bytes, cursor);
-    if (bytes[cursor.offset++] !== 0x0b) fail("malformed element offset");
-    const entries = readUleb(bytes, cursor);
-    for (let i = 0; i < entries; i += 1) {
-      const functionIndex = readUleb(bytes, cursor);
-      const slot = base + i;
-      if (slots.has(slot)) fail(`duplicate active table slot ${slot}`);
-      slots.set(slot, functionIndex);
-    }
-  }
-  if (cursor.offset !== bytes.byteLength) fail("malformed element section");
-  return slots;
-}
 
 function dispatcher(
   paramCount: number,
@@ -303,80 +258,6 @@ function encodeTypes(types: readonly FunctionType[]): Uint8Array {
       ),
     ),
   );
-}
-
-export interface EnhancementCandidateReport {
-  sha256: string;
-  validWasm: boolean;
-  certifiedBuildId: number | null;
-  mainLoop: {
-    functionIndex: number;
-    params: string[];
-    results: string[];
-  } | null;
-  table: {
-    min: number;
-    max: number | null;
-    firstEmptySlots: number[];
-  } | null;
-}
-
-export function inspectEnhancementCandidate(
-  input: Uint8Array,
-): EnhancementCandidateReport {
-  const sha256 = createHash("sha256").update(input).digest("hex");
-  if (!WebAssembly.validate(input)) {
-    return {
-      sha256,
-      validWasm: false,
-      certifiedBuildId: null,
-      mainLoop: null,
-      table: null,
-    };
-  }
-  const sections = splitSections(input);
-  const types = parseTypes(sectionById(sections, 1));
-  const importCount = countFunctionImports(sectionById(sections, 2));
-  const functionTypes = parseIndexVector(sectionById(sections, 3));
-  const mainLoopExport = parseExports(sectionById(sections, 7)).find(
-    (entry) => entry.kind === 0 && entry.name === "EmscriptenExeThreadMainLoop",
-  );
-  let mainLoop: EnhancementCandidateReport["mainLoop"] = null;
-  if (mainLoopExport && mainLoopExport.index >= importCount) {
-    const localIndex = mainLoopExport.index - importCount;
-    const typeIndex = functionTypes[localIndex];
-    const type = typeIndex === undefined ? undefined : types[typeIndex];
-    if (type) {
-      mainLoop = {
-        functionIndex: mainLoopExport.index,
-        params: type.params.map(valueTypeName),
-        results: type.results.map(valueTypeName),
-      };
-    }
-  }
-  let table: EnhancementCandidateReport["table"];
-  try {
-    const { min, max } = parseTable(sectionById(sections, 4));
-    const occupied = tableSlotFunctions(sectionById(sections, 9));
-    const firstEmptySlots: number[] = [];
-    for (
-      let slot = 0;
-      slot < min && firstEmptySlots.length < 8;
-      slot += 1
-    ) {
-      if (!occupied.has(slot)) firstEmptySlots.push(slot);
-    }
-    table = { min, max, firstEmptySlots };
-  } catch {
-    table = null;
-  }
-  return {
-    sha256,
-    validWasm: true,
-    certifiedBuildId: findEnhancementBuild(sha256)?.buildId ?? null,
-    mainLoop,
-    table,
-  };
 }
 
 export function transformEnhancementWasm(
@@ -683,7 +564,7 @@ export function transformEnhancementWasm(
     roleByFunction.set(role.functionIndex, role.name);
   }
 
-  const table = parseTable(sectionById(sections, 4));
+  const table = parseEnhancementTable(sectionById(sections, 4));
   if (
     table.flags !== 1 ||
     table.max === null ||
@@ -697,7 +578,7 @@ export function transformEnhancementWasm(
   }
   const nextTableSize = table.min + 1;
   const tableSlots = selectedHooks.cursor || commandDrainBoundary
-    ? tableSlotFunctions(sectionById(sections, 9))
+    ? enhancementTableSlotFunctions(sectionById(sections, 9))
     : null;
   if (selectedHooks.cursor) {
     if (
@@ -1003,7 +884,7 @@ export function transformEnhancementWasm(
     if (section.id === 4) {
       return {
         id: section.id,
-        body: encodeTable(table.flags, nextTableSize, nextTableSize),
+        body: encodeEnhancementTable(table.flags, nextTableSize, nextTableSize),
       };
     }
     if (section.id === 6) return { id: section.id, body: nextGlobals };

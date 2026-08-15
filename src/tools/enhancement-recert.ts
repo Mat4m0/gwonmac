@@ -22,9 +22,9 @@ import {
 } from "../shared/enhancement-contracts.js";
 import {
   inspectEnhancementCandidate,
-  transformEnhancementWasm,
   type EnhancementCandidateReport,
-} from "../main/certification/enhancement-transform.js";
+} from "../main/certification/enhancement-candidate.js";
+import { transformEnhancementWasm } from "../main/certification/enhancement-transform.js";
 import {
   ENHANCEMENT_BUILDS,
   enhancementProfilesForBuild,
