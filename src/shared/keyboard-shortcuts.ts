@@ -6,7 +6,7 @@ export const SHORTCUT_ACTIONS = ["tools.toggle", "storage.open", "travel.open"] 
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number];
 
 export interface ShortcutBinding {
-  /** A lowercase printable letter or digit, interpreted in the active layout. */
+  /** A lowercase physical main-block letter or digit. */
   key: string;
   shift: boolean;
   option: boolean;
@@ -37,7 +37,7 @@ export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   });
 
 export interface ShortcutInput {
-  key: string;
+  code: string;
   meta: boolean;
   control: boolean;
   shift: boolean;
@@ -102,16 +102,23 @@ export function shortcutMatches(
   binding: ShortcutBinding,
   input: ShortcutInput,
 ): boolean {
-  return (input.meta || input.control)
-    && input.key.toLowerCase() === binding.key
+  return input.meta
+    && !input.control
+    && shortcutKey(input.code) === binding.key
     && input.shift === binding.shift
     && input.alt === binding.option;
 }
 
 export function shortcutFromInput(input: ShortcutInput): ShortcutBinding | null {
-  const key = input.key.toLowerCase();
-  if (!(input.meta || input.control) || !/^[a-z0-9]$/u.test(key)) return null;
+  const key = shortcutKey(input.code);
+  if (!input.meta || input.control || key === null) return null;
   return { key, shift: input.shift, option: input.alt };
+}
+
+function shortcutKey(code: string): string | null {
+  if (/^Key[A-Z]$/u.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/u.test(code)) return code.slice(5);
+  return null;
 }
 
 const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
@@ -123,6 +130,12 @@ const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
   })),
   { key: "z", shift: true, option: false },
   { key: "r", shift: false, option: false },
+  // Travel owns Command+1…9 for quick-destination assignment.
+  ..."123456789".split("").map((key) => ({
+    key,
+    shift: false,
+    option: false,
+  })),
 ];
 
 export function shortcutReserved(binding: ShortcutBinding): boolean {
@@ -156,7 +169,7 @@ export function withShortcutOverride(
 export function shortcutAccelerator(binding: ShortcutBinding | null): string | undefined {
   if (!binding) return undefined;
   return [
-    "CmdOrCtrl",
+    "Command",
     binding.option ? "Alt" : null,
     binding.shift ? "Shift" : null,
     binding.key.toUpperCase(),

@@ -10,6 +10,7 @@
 import {
   app,
   autoUpdater,
+  BrowserWindow,
   dialog,
   Notification,
   powerMonitor,
@@ -88,6 +89,7 @@ import {
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
+import { releaseWindowShortcutKey } from './window-shortcuts.js';
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
@@ -98,6 +100,7 @@ import {
 } from "./core/native-keychain.js";
 import { loadNativeHost } from "./native-host.js";
 import { installMacosCommandKeyUps } from "./macos-command-key-ups.js";
+import { recordMainInput } from './input-trace.js';
 import { cleanupLegacySecretFiles } from "./core/legacy-secret-cleanup.js";
 import {
   distributionCapabilities,
@@ -382,7 +385,28 @@ if (primaryInstance) void app.whenReady().then(async () => {
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
   });
-  const stopCommandKeyUps = installMacosCommandKeyUps(nativeHost);
+  const stopCommandKeyUps = installMacosCommandKeyUps(nativeHost, {
+    focusedGameTarget() {
+      const win = BrowserWindow.getFocusedWindow();
+      return win && windowRegistry.contextForWebContents(win.webContents.id)?.role === "game"
+        ? win
+        : null;
+    },
+    release(win, code) {
+      releaseWindowShortcutKey(win, code);
+      recordMainInput(win, {
+        source: 'appkit',
+        kind: 'native-key',
+        phase: 'up',
+        key: code.startsWith('Key') || code.startsWith('Digit')
+          ? 'printable'
+          : 'other',
+        repeat: false,
+        decision: 'normalized-release',
+      });
+      void sendRendererCommand(win, { type: "input.release", code });
+    },
+  });
   app.once("will-quit", () => stopCommandKeyUps());
   const paths = gamePaths();
   try {

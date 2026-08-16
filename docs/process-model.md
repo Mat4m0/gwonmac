@@ -142,14 +142,18 @@ would delay network updates and enabled background audio until the window
 became visible again. The Account Picker keeps normal background throttling.
 
 The renderer owns one input policy in `src/renderer/input.ts`. Mouse and
-trackpad actions go to Guild Wars without a selectable input mode. The host
-releases held keys and buttons when focus changes or native UI consumes a
-release.
+trackpad actions go to Guild Wars without a selectable input mode. A real focus
+or visibility loss releases all held input. Pointer-only interruptions release
+only mouse buttons; they do not stop keyboard movement.
 
 On macOS, AppKit consumes ordinary key-up events while Command remains down.
 The app-local native monitor forwards that physical key position to the focused
 game renderer. The renderer releases only the matching entry from its existing
-held-key map. Releasing Command remains the final cleanup for a missed event.
+held-key map and clears that physical code from renderer-owned suppression.
+Bare Command transitions stay outside Guild Wars, which has no
+Command modifier, so pressing or releasing Command cannot interrupt another
+key that is still physically held. A real focus loss remains the final cleanup
+for interrupted input.
 
 Moving focus from the game canvas into a control in the same renderer does not
 blur Guild Wars. Settings, Tools, Travel, warnings, and game text fields remain
@@ -161,14 +165,36 @@ recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
 
+The game's hidden text proxies own macOS editing while they are active.
+Command-A/C/X/V are claimed before game input and never arrive as bare
+A/C/X/V game keys. Copy and paste use the proxy; select-all and cut become the
+Control chords already owned by Guild Wars' visible editor. Physical Control
+stays available to Guild Wars unchanged. The application menu keeps its Edit
+commands clickable but does not register their AppKit accelerators. Password
+text never crosses the renderer bridge.
+
+The native input host registers `ApplePressAndHoldEnabled = false` as a
+process-only default before the first game window exists. This makes macOS send
+its physical repeat keydowns to hidden text proxies for printable characters,
+Backspace, and Delete. It does not write the player's preferences, create a
+timer, or synthesize repeat cadence; macOS remains the sole repeat clock.
+
 Certified Core supplies native double-click and the Guild Wars cursor. Core is
 required behavior. It is not a saved player preference. If an ArenaNet build
 is not certified, the official client remains playable with the normal macOS
 pointer and without the certified repair.
 
-The input trace is a renderer-only troubleshooting view. It records bounded
-counts and distances. It does not record coordinates. It does not cross IPC or
-write to disk.
+The input harness is a player-visible troubleshooting view with one bounded,
+receipt-ordered renderer-memory timeline. AppKit and main-process decisions
+cross one redacted main-to-renderer event; renderer keyboard, hidden text proxy,
+pointer, wheel, pointer-lock, cleanup, and thresholded gamepad transitions join
+the same timeline. It records no text, clipboard contents, secret-field lengths,
+exact printable keys while a text proxy is active, coordinates, account
+identifiers, or controller identifiers. Pausing changes only recording. Closing
+clears the memory. The trace is not persisted, exported with diagnostics, or
+sent over the network. Copy keeps the newest complete rows that fit the same
+bounded clipboard contract used elsewhere and states how many older rows were
+omitted.
 
 ## Native network boundary
 

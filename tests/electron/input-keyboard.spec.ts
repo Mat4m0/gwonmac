@@ -435,4 +435,109 @@ test.describe("renderer keyboard input", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("does not interrupt a held game key when Command changes", async () => {
+    const fixture = await launchCachedClient("gw-command-transition-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const canvas = document.getElementById("canvas");
+        if (!(canvas instanceof HTMLCanvasElement)) throw new Error("canvas is missing");
+        const testWindow = window as KeyboardInputWindow;
+        testWindow.__gameKeys = [];
+        for (const type of ["keydown", "keyup"] as const) {
+          canvas.addEventListener(type, (event) => {
+            testWindow.__gameKeys.push(`${event.type}:${event.code}`);
+          });
+        }
+        canvas.focus();
+      });
+
+      const cdp = await fixture.app.context().newCDPSession(page);
+      const sendKey = (
+        type: "keyDown" | "keyUp",
+        code: string,
+        key: string,
+        virtualKeyCode: number,
+        modifiers: number,
+      ) => cdp.send("Input.dispatchKeyEvent", {
+        type,
+        key,
+        code,
+        windowsVirtualKeyCode: virtualKeyCode,
+        nativeVirtualKeyCode: virtualKeyCode,
+        modifiers,
+      });
+
+      await sendKey("keyDown", "KeyW", "w", 87, 0);
+      await sendKey("keyDown", "MetaLeft", "Meta", 91, 4);
+      await sendKey("keyUp", "MetaLeft", "Meta", 91, 0);
+      expect(await page.evaluate(() => (
+        window as KeyboardInputWindow
+      ).__gameKeys)).toEqual(["keydown:KeyW"]);
+
+      await sendKey("keyUp", "KeyW", "w", 87, 0);
+      expect(await page.evaluate(() => (
+        window as KeyboardInputWindow
+      ).__gameKeys)).toEqual(["keydown:KeyW", "keyup:KeyW"]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("forgets a surface-claimed key after its Command-held release", async () => {
+    const fixture = await launchCachedClient("gw-command-surface-release-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const canvas = document.getElementById("canvas");
+        if (!(canvas instanceof HTMLCanvasElement)) throw new Error("canvas is missing");
+        const root = document.createElement("div");
+        document.body.append(root);
+        const surface = window.gwSurfaces.register({
+          root,
+          priority: 99,
+          dismiss() {
+            surface.setOpen(false);
+            root.remove();
+          },
+        });
+        surface.setOpen(true);
+        (window as KeyboardInputWindow).__gameKeys = [];
+        for (const type of ["keydown", "keyup"] as const) {
+          canvas.addEventListener(type, (event) => {
+            if (event.code === "Escape") {
+              (window as KeyboardInputWindow).__gameKeys.push(type);
+            }
+          });
+        }
+        canvas.focus();
+      });
+
+      const cdp = await fixture.app.context().newCDPSession(page);
+      const sendEscape = (type: "keyDown" | "keyUp", modifiers: number) =>
+        cdp.send("Input.dispatchKeyEvent", {
+          type,
+          key: "Escape",
+          code: "Escape",
+          windowsVirtualKeyCode: 27,
+          nativeVirtualKeyCode: 27,
+          modifiers,
+        });
+      await sendEscape("keyDown", 4);
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:input-release", { detail: "Escape" }),
+      ));
+      await sendEscape("keyDown", 0);
+      await sendEscape("keyUp", 0);
+
+      expect(await page.evaluate(() => (
+        window as KeyboardInputWindow
+      ).__gameKeys)).toEqual(["keydown", "keyup"]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
 });

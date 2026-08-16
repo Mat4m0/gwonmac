@@ -54,7 +54,11 @@ export const installNativeDoubleClick = ({
     // the client cannot be told about is the report worth having, and the
     // absent row would otherwise look like the press never happened.
     if (doubleClick) {
-      trace?.record({ kind: 'double-click', delivered: global !== null });
+      trace?.record({
+        source: 'renderer',
+        kind: 'double-click',
+        delivered: global !== null,
+      });
     }
   }, true);
   log('native double-click: enabled');

@@ -26,6 +26,7 @@ import type { ErrorCode } from "./errors.js";
 import type { BuildLibrary } from "./builds/library.js";
 import type { ProfileId } from "./multiple-accounts.js";
 import type { TemplateExportEntry } from "./template-contracts.js";
+import type { MainInputTraceEntry } from "./input-trace.js";
 import type {
   AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
@@ -694,7 +695,7 @@ export type RendererCommand =
       checkForUpdates?: boolean;
     }
   | { type: "filesystem.sync" }
-  | { type: "input.trace" }
+  | { type: "input.trace"; enabled: boolean }
   | { type: "diagnostics.toggle" }
   | {
       type: "diagnostics.capture";
@@ -764,6 +765,7 @@ export const IPC = {
   appRequestQuit: "gw:app:requestQuit",
   clipboardWriteText: "gw:clipboard:writeText",
   clipboardReadText: "gw:clipboard:readText",
+  clipboardEdit: "gw:clipboard:edit",
   templatesExport: "gw:templates:export",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
@@ -774,6 +776,7 @@ export const IPC = {
   // window, which `executeJavaScript`'s awaited result used to guarantee.
   rendererCommand: "gw:renderer:command",
   rendererCommandDone: "gw:renderer:commandDone",
+  inputTraceEvent: "gw:inputTrace:event",
   appUpdatesGetState: "gw:appUpdates:getState",
   appUpdatesCheck: "gw:appUpdates:check",
   appUpdatesRestartAndInstall: "gw:appUpdates:restartAndInstall",
@@ -809,6 +812,7 @@ export const EVENT_CHANNELS = [
   "socketEvent",
   "rendererCommand",
   "rendererCommandDone",
+  "inputTraceEvent",
   "appUpdatesState",
 ] as const;
 
@@ -816,6 +820,12 @@ export type EventChannel = (typeof EVENT_CHANNELS)[number];
 
 /** Every channel the renderer `invoke`s, i.e. every channel main must answer. */
 export type InvokeChannel = Exclude<keyof typeof IPC, EventChannel>;
+
+export type TextEditCommand = "selectAll" | "cut" | "paste";
+
+// Far above any text a game field holds, low enough that a renderer gone
+// wrong cannot stuff megabytes into the OS pasteboard.
+export const CLIPBOARD_TEXT_CEILING = 64 * 1024;
 
 export interface GwNativeApi {
   /** Launch-time configuration, available before the first renderer script. */
@@ -833,6 +843,9 @@ export interface GwNativeApi {
      * early or have a rejection disguised as success.
      */
     handle(handler: (command: RendererCommand) => void | Promise<void>): void;
+  };
+  inputTrace: {
+    onEntry(callback: (entry: MainInputTraceEntry) => void): () => void;
   };
   progress: {
     current(): Promise<DownloadProgress>;
@@ -934,6 +947,8 @@ export interface GwNativeApi {
      * never arrives here.
      */
     writeText(text: string): Promise<void>;
+    /** Apply a trusted edit command to the game's active text field. */
+    edit(command: TextEditCommand): Promise<void>;
     /**
      * Read the OS pasteboard so a player can import build codes they copied
      * from a guild page or a forum post.

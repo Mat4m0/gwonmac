@@ -141,11 +141,14 @@ Escape closes the confirmation first.
 range band.
 
 The same pane lists **Keyboard shortcuts**. Choose **Change**, then press a
-Command shortcut to replace the default. Delete clears a shortcut, Escape
+Command shortcut to replace the default. Letter and number shortcuts use their
+physical keyboard positions, so they stay stable when Option or the active
+keyboard layout changes. Control remains available to Guild Wars. Delete clears a shortcut, Escape
 cancels recording, and **Restore default shortcuts** restores Command-B for
 Tools, Command-Shift-C for Xunlai storage, and Command-T for Travel. Shortcuts work only while the
 Guild Wars window is active. GWonMac keeps normal editing and application
-shortcuts such as Command-C and Command-Q reserved.
+shortcuts such as Command-C and Command-Q, plus Travel's Command-1 through
+Command-9 assignments, reserved.
 
 In a supported PvE outpost, turn on **Open Xunlai storage** in
 **Settings → Tools**, then choose **Storage** in the Tools title bar or press
@@ -211,11 +214,12 @@ removes the local token but does not unlink the accounts.
 
 The game proxy does not send or accept browser cookies.
 
-## Copy and paste
+## Chat editing
 
-Press **Command-V** in a Guild Wars text field to paste. **Command-C** copies
-the selected text in the field, or the full field when nothing is selected.
-Password fields are never copied.
+Guild Wars text fields use the standard macOS shortcuts: **Command-A** selects
+all, **Command-C** copies, **Command-X** cuts, and **Command-V** pastes.
+Command-C copies the selected text, or the full field when nothing is selected.
+Password fields can be selected and pasted into, but are never copied or cut.
 
 The official web client cannot copy text that it only displays, such as chat
 history or item names.
@@ -307,8 +311,12 @@ opens its GitHub issue form immediately. GitHub issues are public.
   **Help → Diagnostics → Export Recent Diagnostics…** and attach the ZIP.
 - Use **Record Performance Problem** for stutter. Reproduce it, press
   **Command-Shift-M**, stop the capture, and export it when prompted.
-- Use **Show Input Trace** for click problems. It records bounded counts and
-  distances, not coordinates. Closing it discards the trace.
+- Use **Show Input Trace** for keyboard, text, pointer, shortcut, or gamepad
+  problems. Reproduce the problem, pause the bounded timeline, then copy it
+  into the issue. It omits text, secrets, field lengths, coordinates, account
+  identifiers, and controller identifiers. Closing it discards the trace.
+- Holding a character, Backspace, or Delete in Guild Wars text fields follows
+  the repeat delay and speed configured in macOS Keyboard settings.
 
 The diagnostics ZIP excludes saved login, account request bodies, game traffic,
 chat, and crash dumps. Other text is scanned for known secret and path patterns.

@@ -116,7 +116,17 @@ describe("TravelPalette", () => {
     await flushPromises();
     await wrapper.get('[role="combobox"]').setValue("eotn");
 
-    await wrapper.get(".travel-palette").trigger("keydown", { key: "9", metaKey: true });
+    await wrapper.get(".travel-palette").trigger("keydown", {
+      key: "9",
+      code: "Digit9",
+      ctrlKey: true,
+    });
+    expect(saveShortcuts).not.toHaveBeenCalled();
+    await wrapper.get(".travel-palette").trigger("keydown", {
+      key: "9",
+      code: "Digit9",
+      metaKey: true,
+    });
     await flushPromises();
 
     const saved = saveShortcuts.mock.calls[0]![0];
@@ -133,7 +143,11 @@ describe("TravelPalette", () => {
     saveShortcuts.mockRejectedValueOnce(new Error("private persistence detail"));
     await wrapper.get('[role="combobox"]').setValue("eotn");
 
-    await wrapper.get(".travel-palette").trigger("keydown", { key: "1", metaKey: true });
+    await wrapper.get(".travel-palette").trigger("keydown", {
+      key: "1",
+      code: "Digit1",
+      metaKey: true,
+    });
     await flushPromises();
     expect(wrapper.text()).toContain(
       "Shortcut could not be saved. Your previous shortcut is still active.",

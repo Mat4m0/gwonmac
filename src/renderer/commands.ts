@@ -117,7 +117,7 @@
         });
         break;
       case 'input.trace':
-        dispatch('gw:input-trace');
+        dispatch('gw:input-trace', command.enabled);
         break;
       case 'diagnostics.toggle':
         dispatch('gw:diagnostics-toggle');

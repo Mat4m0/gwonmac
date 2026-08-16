@@ -265,6 +265,15 @@ test("one physical key release crosses preload and is acknowledged", async () =>
   assert.deepEqual(fixture.acknowledgements(), [[1, "completed"]]);
 });
 
+test("input harness state crosses as an explicit value and is acknowledged", async () => {
+  const fixture = harness(ARGV);
+  fixture.deliver(1, { type: "input.trace", enabled: true });
+  await new Promise(setImmediate);
+  assert.deepEqual(fixture.dispatched, ["gw:input-trace"]);
+  assert.deepEqual(fixture.dispatchedDetails, [true]);
+  assert.deepEqual(fixture.acknowledgements(), [[1, "completed"]]);
+});
+
 test("the Tools shortcut is refused when there is no Toolbox to toggle", async () => {
   // The capability is off on an ordinary launch, and an event nobody listens
   // for is indistinguishable from one that worked. The command has to fail so

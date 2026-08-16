@@ -137,6 +137,9 @@ const api = {
       rendererCommandHandler = handler;
     },
   },
+  inputTrace: {
+    onEntry: (callback) => listen(IPC.inputTraceEvent, callback),
+  },
   progress: {
     current: () => ipcRenderer.invoke(IPC.progressCurrent),
     onChange: (callback) => listen(IPC.progressEvent, callback),
@@ -223,6 +226,7 @@ const api = {
   clipboard: {
     writeText: (text) => ipcRenderer.invoke(IPC.clipboardWriteText, text),
     readText: () => ipcRenderer.invoke(IPC.clipboardReadText),
+    edit: (command) => ipcRenderer.invoke(IPC.clipboardEdit, command),
   },
   templates: {
     export: (entries) => ipcRenderer.invoke(IPC.templatesExport, entries),

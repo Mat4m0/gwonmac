@@ -33,6 +33,7 @@ import type {
   FullDownloadOutcome,
   GraphicsDiagnostics,
   InvokeChannel,
+  TextEditCommand,
   RevealKind,
   SocketEvent,
   SteamRefusalReason,
@@ -49,7 +50,11 @@ import {
   isRendererFrameBatch,
   isRendererMetrics,
 } from "../shared/diagnostics.js";
-import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
+import {
+  CLIPBOARD_TEXT_CEILING,
+  EXTERNAL_URLS,
+  IPC,
+} from "../shared/contracts.js";
 import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import {
@@ -118,6 +123,7 @@ import {
   requestCacheClear,
   requestGameStorageReset,
 } from "./settings-actions.js";
+import { editGameText } from './game-text-editing.js';
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -407,10 +413,6 @@ const asRevealKind = one((value: unknown): RevealKind => {
   return value;
 });
 
-// Far above any text a game field holds, low enough that a renderer gone
-// wrong cannot stuff megabytes into the OS pasteboard.
-const CLIPBOARD_TEXT_CEILING = 64 * 1024;
-
 const asClipboardText = one((value: unknown): string => {
   if (
     typeof value !== "string" ||
@@ -418,6 +420,13 @@ const asClipboardText = one((value: unknown): string => {
     value.length > CLIPBOARD_TEXT_CEILING
   ) {
     throw new ValidationError("invalid clipboard text");
+  }
+  return value;
+});
+
+const asTextEditCommand = one((value: unknown): TextEditCommand => {
+  if (value !== "selectAll" && value !== "cut" && value !== "paste") {
+    throw new ValidationError("invalid text edit command");
   }
   return value;
 });
@@ -695,6 +704,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     clipboardWriteText: channel(asClipboardText, (_win, text) => {
       clipboard.writeText(text);
+    }),
+
+    clipboardEdit: channel(asTextEditCommand, (win, command) => {
+      editGameText(win.webContents, command);
     }),
 
     // Truncated rather than refused: a player who copied something large before

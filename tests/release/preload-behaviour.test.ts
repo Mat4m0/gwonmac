@@ -294,6 +294,11 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.clipboardReadText,
   },
   {
+    path: "clipboard.edit",
+    args: ["paste"],
+    channel: IPC.clipboardEdit,
+  },
+  {
     path: "templates.export",
     args: [[{ path: "Skills/Shockaxe.txt", contents: "OQCiUyo8AkVwR4KMMGAAAEAA" }]],
     channel: IPC.templatesExport,
@@ -349,6 +354,11 @@ const SUBSCRIPTIONS: Subscription[] = [
     path: "sockets.onEvent",
     channel: IPC.socketEvent,
     subscribe: (api, listener) => api.sockets.onEvent(listener),
+  },
+  {
+    path: "inputTrace.onEntry",
+    channel: IPC.inputTraceEvent,
+    subscribe: (api, listener) => api.inputTrace.onEntry(listener),
   },
   {
     path: "appUpdates.onState",

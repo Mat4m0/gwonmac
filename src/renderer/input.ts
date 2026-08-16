@@ -44,6 +44,9 @@ const TRACED_MODIFIERS: Readonly<Record<string, 'ctrl' | 'shift' | 'alt'>> = {
   Alt: 'alt',
 };
 
+const isCommandKey = (code: string): boolean =>
+  code === 'MetaLeft' || code === 'MetaRight';
+
 /**
  * The modifiers a press carried, as the trace prints them.
  *
@@ -54,11 +57,12 @@ const TRACED_MODIFIERS: Readonly<Record<string, 'ctrl' | 'shift' | 'alt'>> = {
  * that shows `left +ctrl` on the press and no Control key down before it is
  * therefore a report about the keyboard path, not the mouse one.
  */
-const modifierText = (event: MouseEvent): string =>
-  (event.ctrlKey ? ' +ctrl' : '') +
-  (event.shiftKey ? ' +shift' : '') +
-  (event.altKey ? ' +alt' : '') +
-  (event.metaKey ? ' +cmd' : '');
+const tracedModifiers = (event: MouseEvent) => [
+  ...(event.ctrlKey ? ['ctrl' as const] : []),
+  ...(event.shiftKey ? ['shift' as const] : []),
+  ...(event.altKey ? ['alt' as const] : []),
+  ...(event.metaKey ? ['cmd' as const] : []),
+];
 
 const physicalKey = (code: string, fallback: string): string => {
   if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
@@ -313,12 +317,12 @@ export const installGameInput = ({
     for (const [, input] of inputs) dispatchKeyRelease(input);
   }
 
-  function dispatchButtonRelease(input: HeldButton) {
+  function dispatchButtonRelease(input: HeldButton, buttons: number) {
     input.target?.dispatchEvent(new MouseEvent('mouseup', {
       bubbles: true,
       cancelable: true,
       button: input.button,
-      buttons: 0,
+      buttons,
       clientX: input.clientX,
       clientY: input.clientY,
       screenX: input.screenX,
@@ -334,7 +338,15 @@ export const installGameInput = ({
     const inputs = [...heldButtons.values()];
     heldButtons.clear();
     releasePointer();
-    for (const input of inputs) dispatchButtonRelease(input);
+    for (const input of inputs) dispatchButtonRelease(input, 0);
+  }
+
+  function releaseButton(button: number) {
+    const input = heldButtons.get(button);
+    if (!input) return;
+    heldButtons.delete(button);
+    if (button === 2) releasePointer();
+    dispatchButtonRelease(input, currentButtons());
   }
 
   function releaseAll() {
@@ -422,9 +434,48 @@ export const installGameInput = ({
     }, CHARACTER_ENTER_DELAY_MS);
   };
 
+  const traceOwner = (target: EventTarget | null) => {
+    if (target === canvas) return 'canvas' as const;
+    if (textInputs.has(target)) {
+      return target instanceof HTMLInputElement &&
+        (target.type === 'password' || target.type === 'email')
+        ? 'secret' as const
+        : 'text' as const;
+    }
+    return target instanceof Element && target.closest('[data-gwonmac-surface]')
+      ? 'surface' as const
+      : 'other' as const;
+  };
+
+  const traceKey = (
+    event: KeyboardEvent,
+    phase: 'down' | 'up',
+    decision: 'observed' | 'held' | 'released' | 'suppressed' | 'command',
+  ) => {
+    const owner = traceOwner(event.target);
+    const common = {
+      source: 'renderer' as const, kind: 'key' as const, phase,
+      repeat: event.repeat, trusted: event.isTrusted, decision,
+    };
+    trace?.record(owner === 'canvas'
+      ? { ...common, owner, code: event.code }
+      : { ...common, owner });
+  };
+
   window.addEventListener('keydown', (event) => {
     if (!event.isTrusted) return;
-    if (handleProviderKey(event)) return;
+    // Guild Wars has no Command modifier. Let Chromium and the main-process
+    // shortcut controller keep the combination, but do not let the bare
+    // modifier transition disturb game keys that are already held.
+    if (isCommandKey(event.code)) {
+      traceKey(event, 'down', 'command');
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (handleProviderKey(event)) {
+      traceKey(event, 'down', 'suppressed');
+      return;
+    }
     if (
       event.target === canvas &&
       event.key === 'Enter' &&
@@ -434,6 +485,7 @@ export const installGameInput = ({
       event.preventDefault();
       event.stopImmediatePropagation();
       suppressedKeyUps.add(event.code);
+      traceKey(event, 'down', 'suppressed');
       sendBufferedCharacterEnter(event);
       return;
     }
@@ -446,9 +498,14 @@ export const installGameInput = ({
     }
     const held = heldKeys.get(event.code);
     const key = clientKey(event, event.repeat ? held?.key : undefined);
-    if (event.repeat && held) return;
+    if (event.repeat && held) {
+      traceKey(event, 'down', 'observed');
+      return;
+    }
     const modifier = TRACED_MODIFIERS[key];
-    if (modifier) trace?.record({ kind: 'modifier', key: modifier, down: true });
+    if (modifier) trace?.record({
+      source: 'renderer', kind: 'modifier', key: modifier, down: true,
+    });
     heldKeys.set(event.code, {
       target: event.target,
       key,
@@ -462,10 +519,17 @@ export const installGameInput = ({
       altKey: event.altKey,
       metaKey: event.metaKey,
     });
+    traceKey(event, 'down', 'held');
   }, true);
   window.addEventListener('keyup', (event) => {
     if (!event.isTrusted) return;
+    if (isCommandKey(event.code)) {
+      traceKey(event, 'up', 'command');
+      event.stopImmediatePropagation();
+      return;
+    }
     if (suppressedKeyUps.delete(event.code)) {
+      traceKey(event, 'up', 'suppressed');
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
@@ -473,8 +537,11 @@ export const installGameInput = ({
     const held = heldKeys.get(event.code);
     const key = clientKey(event, held?.key);
     const modifier = TRACED_MODIFIERS[key];
-    if (modifier) trace?.record({ kind: 'modifier', key: modifier, down: false });
+    if (modifier) trace?.record({
+      source: 'renderer', kind: 'modifier', key: modifier, down: false,
+    });
     heldKeys.delete(event.code);
+    traceKey(event, 'up', 'released');
     // A release landing on renderer UI (the Tools palette) never bubbles back
     // to the client's canvas listeners, so a press the canvas received would
     // stay held forever. Replay exactly those releases at the press target;
@@ -482,25 +549,15 @@ export const installGameInput = ({
     if (held && held.target === canvas && event.target !== canvas) {
       dispatchKeyRelease(held);
     }
-    if (event.code === 'MetaLeft' || event.code === 'MetaRight') {
-      releaseKeys((code) =>
-        code !== 'MetaLeft' &&
-        code !== 'MetaRight' &&
-        code !== 'ShiftLeft' &&
-        code !== 'ShiftRight' &&
-        code !== 'ControlLeft' &&
-        code !== 'ControlRight' &&
-        code !== 'AltLeft' &&
-        code !== 'AltRight');
-    }
   }, true);
   window.addEventListener('mousedown', (event) => {
     if (!event.isTrusted) return;
     trace?.record({
+      source: 'renderer',
       kind: 'press',
       button: event.button,
       detail: event.detail,
-      modifiers: modifierText(event),
+      modifiers: tracedModifiers(event),
     });
     heldButtons.set(event.button, {
       target: event.target,
@@ -521,18 +578,23 @@ export const installGameInput = ({
     if (!event.isTrusted) return;
     const held = heldButtons.get(event.button);
     trace?.record({
+      source: 'renderer',
       kind: 'release',
       button: event.button,
-      travelPx: held
-        ? Math.round(Math.hypot(
+      travel: held
+        ? (() => {
+            const pixels = Math.hypot(
           event.clientX - held.originX,
           event.clientY - held.originY,
-        ))
-        : 0,
+            );
+            return pixels < 3 ? 'still' : pixels < 40 ? 'short' : 'far';
+          })()
+        : 'still',
+      buttonsRemaining: heldButtons.size - (held ? 1 : 0),
     });
     heldButtons.delete(event.button);
     if (held && held.target === canvas && event.target !== canvas) {
-      dispatchButtonRelease(held);
+      dispatchButtonRelease(held, currentButtons());
     }
   }, true);
   window.addEventListener('mousemove', (event) => {
@@ -549,20 +611,22 @@ export const installGameInput = ({
     }
   }, true);
 
-  const releaseFor = (cause: 'blur' | 'hidden' | 'command' | 'leave') => () => {
+  const releaseFor = (cause: 'blur' | 'hidden' | 'command' | 'pagehide') => () => {
     // Only the causes are named, not a new reason to release: every one of
     // these already released everything, and the trace exists to say which
     // native interruption ended a drag the player thought they still had.
     if (heldKeys.size || heldButtons.size) {
-      trace?.record({ kind: 'release-all', cause });
+      trace?.record({ source: 'renderer', kind: 'release-all', cause });
     }
+    suppressedKeyUps.clear();
     releaseAll();
   };
   window.addEventListener('blur', releaseFor('blur'));
-  window.addEventListener('pagehide', releaseFor('blur'));
+  window.addEventListener('pagehide', releaseFor('pagehide'));
   window.addEventListener('gw:input-reset', releaseFor('command'));
   window.addEventListener('gw:input-release', (event) => {
     if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
+    suppressedKeyUps.delete(event.detail);
     releaseKeys((code) => code === event.detail);
   });
   document.addEventListener('visibilitychange', () => {
@@ -575,6 +639,16 @@ export const installGameInput = ({
   canvas.addEventListener('wheel', (event) => {
     if (normalizedWheels.has(event)) return;
     if (event.deltaMode !== globalThis.WheelEvent.DOM_DELTA_PIXEL) {
+      trace?.record({
+        source: 'renderer',
+        kind: 'wheel',
+        direction: Math.abs(event.deltaX) > Math.abs(event.deltaY)
+          ? event.deltaX < 0 ? 'left' : 'right'
+          : event.deltaY < 0 ? 'up' : 'down',
+        mode: event.deltaMode === globalThis.WheelEvent.DOM_DELTA_LINE
+          ? 'line'
+          : 'page',
+      });
       resetWheel();
       return;
     }
@@ -594,6 +668,12 @@ export const installGameInput = ({
     wheelRemainder += event.deltaY;
     const steps = Math.max(-3, Math.min(3, Math.trunc(wheelRemainder / 100)));
     if (!steps) return;
+    trace?.record({
+      source: 'renderer',
+      kind: 'wheel',
+      direction: steps < 0 ? 'up' : 'down',
+      mode: 'pixel',
+    });
     wheelRemainder -= steps * 100;
     const normalized = new globalThis.WheelEvent('wheel', {
       bubbles: true,
@@ -681,7 +761,7 @@ export const installGameInput = ({
             '[warn] pointer lock refused:',
             error instanceof Error ? error.message : String(error),
           );
-          releaseButtons();
+          releaseButton(2);
         });
     } catch (error) {
       diagnostics?.event('pointerLock.failed', error);
@@ -689,7 +769,7 @@ export const installGameInput = ({
         '[warn] pointer lock refused:',
         error instanceof Error ? error.message : String(error),
       );
-      releaseButtons();
+      releaseButton(2);
     }
   };
 
@@ -742,21 +822,21 @@ export const installGameInput = ({
     const locked = document.pointerLockElement === canvas;
     if (locked !== lockTraced) {
       lockTraced = locked;
-      trace?.record({ kind: 'pointer-lock', locked });
+      trace?.record({ source: 'renderer', kind: 'pointer-lock', locked });
     }
     canvas.classList.toggle('cursor-hidden', locked);
     if (locked && !pointerWanted) {
       document.exitPointerLock();
     } else if (virtualCursor && !locked) {
-      releaseButtons();
+      releaseButton(2);
     }
   });
   document.addEventListener('pointerlockerror', () => {
     diagnostics?.event('pointerLock.failed');
     log('[warn] pointer lock failed (needs a user gesture and focused document)');
-    releaseButtons();
+    releaseButton(2);
   });
-  document.documentElement.addEventListener('mouseleave', releaseFor('leave'));
+  document.documentElement.addEventListener('mouseleave', releaseButtons);
 
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   canvas.dataset.inputReady = 'true';

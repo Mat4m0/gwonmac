@@ -17,6 +17,11 @@ import type {
   RendererMetrics,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
+import type {
+  InputTrace as SharedInputTrace,
+  InputTraceEntry as SharedInputTraceEntry,
+  InputTraceRecord as SharedInputTraceRecord,
+} from '../shared/input-trace.js';
 
 /**
  * Negative type test, run by every `tsc -p tsconfig.renderer.json`.
@@ -58,43 +63,9 @@ declare global {
     }>): GwonmacSurfaceHandle;
   }
 
-  /**
-   * One thing the input host saw or decided, before the trace stamps it. The
-   * union is closed because a trace whose vocabulary can grow by writing a
-   * string is a trace nobody can summarise: every member here has a fixed row
-   * in the overlay and a fixed line in the copied transcript.
-   *
-   * `travelPx` is a distance, `detail` is Chromium's click-run count, and
-   * neither is a position — no member carries a coordinate, so the transcript
-   * a player pastes into a public issue cannot describe where their window is
-   * or what they clicked.
-   */
-  type InputTraceEntry =
-    | { kind: "press"; button: number; detail: number; modifiers: string }
-    | { kind: "release"; button: number; travelPx: number }
-    | { kind: "modifier"; key: "ctrl" | "shift" | "alt"; down: boolean }
-    /**
-     * A press Chromium counted as an even click of a run. `delivered` is
-     * whether the client could be told: false means the served module carries
-     * no double-click flag, which is what an uncertified build looks like from
-     * here and the first thing to check when double-click does nothing.
-     */
-    | { kind: "double-click"; delivered: boolean }
-    | { kind: "pointer-lock"; locked: boolean }
-    | { kind: "release-all"; cause: "blur" | "hidden" | "command" | "leave" };
-
-  /** An entry with the trace's own timing attached. */
-  type InputTraceRecord = InputTraceEntry & {
-    atMs: number;
-    sinceMs: number | null;
-  };
-
-  interface InputTrace {
-    enabled(): boolean;
-    /** Returns the state it switched to, so a caller can report it. */
-    toggle(): boolean;
-    record(entry: InputTraceEntry): void;
-  }
+  type InputTraceEntry = SharedInputTraceEntry;
+  type InputTraceRecord = SharedInputTraceRecord;
+  type InputTrace = SharedInputTrace;
 
   interface LoadingController {
     set(message: string, fraction: number | null, detail?: string): void;
