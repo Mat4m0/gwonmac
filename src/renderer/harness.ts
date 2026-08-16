@@ -1080,7 +1080,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   host.installTextEditing({
     fields: oskInputs,
     writeText: (text) => native().clipboard.writeText(text),
-    readText: () => native().clipboard.readText(),
     diagnostics: window.gwDiagnostics,
     log,
   });

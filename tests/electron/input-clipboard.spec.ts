@@ -6,7 +6,7 @@ import { startGameInput } from "./input-helpers.js";
 type OskWindow = typeof window & {
   Module: { oskActiveInput?: Element | null };
   __clipboardGameKeys?: string[];
-  __clipboardInputTypes?: string[];
+  __clipboardInputTypes?: Array<{ inputType: string; trusted: boolean }>;
 };
 
 test.describe("renderer text editing", () => {
@@ -36,9 +36,10 @@ test.describe("renderer text editing", () => {
             }, true);
           }
           field.addEventListener("input", (event) => {
-            (window as OskWindow).__clipboardInputTypes?.push(
-              event instanceof InputEvent ? event.inputType : event.type,
-            );
+            (window as OskWindow).__clipboardInputTypes?.push({
+              inputType: event instanceof InputEvent ? event.inputType : event.type,
+              trusted: event.isTrusted,
+            });
           });
           field.value = "alpha beta";
           field.focus();
@@ -111,7 +112,10 @@ test.describe("renderer text editing", () => {
         ).__clipboardGameKeys)).toEqual([]);
         expect(await page.evaluate(() => (
           window as OskWindow
-        ).__clipboardInputTypes)).toEqual(["deleteByCut", "insertFromPaste"]);
+        ).__clipboardInputTypes)).toEqual([
+          { inputType: "deleteByCut", trusted: true },
+          { inputType: "insertFromPaste", trusted: true },
+        ]);
       } finally {
         await app.evaluate(
           ({ clipboard }, text) => clipboard.writeText(text),

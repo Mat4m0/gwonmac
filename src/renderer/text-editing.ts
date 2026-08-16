@@ -14,7 +14,6 @@ type TextEditingOptions = {
   /** The OSK proxy fields; anything else keeps Chromium's ordinary editing. */
   fields: Iterable<unknown>;
   writeText(text: string): Promise<void>;
-  readText(): Promise<string>;
   diagnostics?: GameInputDiagnostics;
   log(...values: unknown[]): void;
 };
@@ -34,31 +33,9 @@ const selection = (field: GameTextField) => ({
   end: field.selectionEnd,
 });
 
-function replaceSelection(
-  field: GameTextField,
-  text: string,
-  inputType: 'deleteByCut' | 'insertFromPaste',
-): void {
-  const { start, end } = selection(field);
-  if (start === null || end === null) {
-    // Number inputs expose no selection API. Replacing their complete value is
-    // the closest truthful native edit and avoids a second browser-only model.
-    field.value = text;
-  } else {
-    field.setRangeText(text, start, end, 'end');
-  }
-  field.dispatchEvent(new InputEvent('input', {
-    bubbles: true,
-    composed: true,
-    data: text || null,
-    inputType,
-  }));
-}
-
 export const installTextEditing = ({
   fields,
   writeText,
-  readText,
   diagnostics,
   log,
 }: TextEditingOptions): void => {
@@ -68,10 +45,10 @@ export const installTextEditing = ({
     if (isGameTextField(field)) sources.add(field);
   }
 
-  const reportClipboardFailure = (operation: 'read' | 'write', error: unknown) => {
-    if (operation === 'write') diagnostics?.event('clipboard.writeFailed', error);
+  const reportClipboardFailure = (error: unknown) => {
+    diagnostics?.event('clipboard.writeFailed', error);
     log(
-      `[warn] clipboard ${operation} refused:`,
+      '[warn] clipboard write refused:',
       error instanceof Error ? error.message : String(error),
     );
   };
@@ -82,18 +59,26 @@ export const installTextEditing = ({
     const active = document.activeElement;
     if (!isGameTextField(active) || !sources.has(active)) return;
 
-    event.preventDefault();
     event.stopImmediatePropagation();
     const code = event.code as EditingKey;
-    if (claimedKeys.has(code) || event.repeat) return;
+    if (claimedKeys.has(code) || event.repeat) {
+      if (code === 'KeyC' || (code === 'KeyX' && !canExportText(active))) {
+        event.preventDefault();
+      }
+      return;
+    }
     claimedKeys.add(code);
 
-    if (code === 'KeyA') {
-      active.select();
+    // A, X, and V must keep Chromium's trusted native default action. The
+    // generated client ignores synthetic input events, most visibly when a
+    // password is pasted at login. Stopping propagation hides the base key
+    // from Guild Wars without cancelling the browser edit.
+    if (code === 'KeyA' || code === 'KeyV') {
       return;
     }
 
     if (code === 'KeyC') {
+      event.preventDefault();
       if (!canExportText(active)) return;
       const { start, end } = selection(active);
       const text = start !== null && end !== null && start !== end
@@ -102,37 +87,14 @@ export const installTextEditing = ({
       if (!text) return;
       void writeText(text).then(
         () => diagnostics?.event('clipboard.copied'),
-        (error: unknown) => reportClipboardFailure('write', error),
+        reportClipboardFailure,
       );
       return;
     }
 
-    if (code === 'KeyX') {
-      if (!canExportText(active)) return;
-      const { start, end } = selection(active);
-      if (start === null || end === null || start === end) return;
-      const original = active.value;
-      const text = original.slice(start, end);
-      void writeText(text).then(
-        () => {
-          diagnostics?.event('clipboard.copied');
-          if (document.activeElement !== active || active.value !== original) return;
-          active.setSelectionRange(start, end);
-          replaceSelection(active, '', 'deleteByCut');
-        },
-        (error: unknown) => reportClipboardFailure('write', error),
-      );
-      return;
-    }
-
-    void readText().then(
-      (text) => {
-        if (document.activeElement === active && sources.has(active)) {
-          replaceSelection(active, text, 'insertFromPaste');
-        }
-      },
-      (error: unknown) => reportClipboardFailure('read', error),
-    );
+    // Chromium already prevents cutting a password, but own the invariant
+    // here so it cannot change with an Electron update.
+    if (!canExportText(active)) event.preventDefault();
   }, true);
 
   window.addEventListener('keyup', (event) => {
