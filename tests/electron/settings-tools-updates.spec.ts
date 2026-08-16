@@ -6,12 +6,12 @@ import { packageVersion } from "./settings-test-fixture.mjs";
 
 test.describe("tools and update settings", () => {
   test("records, replaces, clears, and restores app shortcuts without firing them", async () => {
-    const fixture = await launchOffline("gw-settings-shortcuts-e2e-");
+      const fixture = await launchOffline("gw-settings-shortcuts-e2e-");
     try {
       const { app, page } = fixture;
       const sendInput = (
         keyCode: string,
-        modifiers: Array<"meta" | "shift"> = [],
+        modifiers: Array<"meta" | "control" | "shift" | "alt"> = [],
       ) => app.evaluate(({ BrowserWindow }, input) => {
         const contents = BrowserWindow.getAllWindows()[0]?.webContents;
         contents?.sendInputEvent({
@@ -39,12 +39,20 @@ test.describe("tools and update settings", () => {
 
       await page.evaluate(() => {
         document.body.dataset.shortcutActions = "0";
+        document.body.dataset.shortcutLeaks = "0";
         window.addEventListener("gw:tools-toggle", (event) => {
           event.preventDefault();
           document.body.dataset.shortcutActions = String(
             Number(document.body.dataset.shortcutActions ?? "0") + 1,
           );
         });
+        window.addEventListener("keydown", (event) => {
+          if (event.code === "KeyK") {
+            document.body.dataset.shortcutLeaks = String(
+              Number(document.body.dataset.shortcutLeaks ?? "0") + 1,
+            );
+          }
+        }, true);
       });
 
       await toolsRow.locator(".settings-shortcut-change").click();
@@ -73,8 +81,9 @@ test.describe("tools and update settings", () => {
           },
         });
       await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "0");
+      await expect(page.locator("body")).toHaveAttribute("data-shortcut-leaks", "0");
       expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu()
-        ?.getMenuItemById("toggle-tools")?.accelerator)).toBe("CmdOrCtrl+Shift+K");
+        ?.getMenuItemById("toggle-tools")?.accelerator)).toBe("Command+Shift+K");
 
       await storageRow.locator(".settings-shortcut-change").click();
       await sendInput("K", ["meta", "shift"]);
@@ -100,6 +109,8 @@ test.describe("tools and update settings", () => {
       await expect(toolsRow.locator("kbd")).toHaveText("⌘B");
       await expect(storageRow.locator("kbd")).toHaveText("⌘⇧C");
       await page.locator("#settings-done").click();
+      await sendInput("B", ["control"]);
+      await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "0");
       await sendInput("B", ["meta"]);
       await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "1");
     } finally {

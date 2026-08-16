@@ -141,11 +141,14 @@ Escape closes the confirmation first.
 range band.
 
 The same pane lists **Keyboard shortcuts**. Choose **Change**, then press a
-Command shortcut to replace the default. Delete clears a shortcut, Escape
+Command shortcut to replace the default. Letter and number shortcuts use their
+physical keyboard positions, so they stay stable when Option or the active
+keyboard layout changes. Control remains available to Guild Wars. Delete clears a shortcut, Escape
 cancels recording, and **Restore default shortcuts** restores Command-B for
 Tools, Command-Shift-C for Xunlai storage, and Command-T for Travel. Shortcuts work only while the
 Guild Wars window is active. GWonMac keeps normal editing and application
-shortcuts such as Command-C and Command-Q reserved.
+shortcuts such as Command-C and Command-Q, plus Travel's Command-1 through
+Command-9 assignments, reserved.
 
 In a supported PvE outpost, turn on **Open Xunlai storage** in
 **Settings → Tools**, then choose **Storage** in the Tools title bar or press
