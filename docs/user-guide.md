@@ -214,11 +214,13 @@ removes the local token but does not unlink the accounts.
 
 The game proxy does not send or accept browser cookies.
 
-## Copy and paste
+## Chat editing
 
-Press **Command-V** in a Guild Wars text field to paste. **Command-C** copies
-the selected text in the field, or the full field when nothing is selected.
-Password fields are never copied.
+Guild Wars text fields use the standard macOS shortcuts: **Command-A** selects
+all, **Command-C** copies, **Command-X** cuts, and **Command-V** pastes.
+Command-C copies the selected text, or the full field when nothing is selected.
+Password fields can be selected and pasted into, but are never copied or cut.
+Holding a character, Backspace, or Delete repeats the edit normally.
 
 The official web client cannot copy text that it only displays, such as chat
 history or item names.

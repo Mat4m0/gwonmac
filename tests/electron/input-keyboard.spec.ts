@@ -66,6 +66,74 @@ test.describe("renderer keyboard input", () => {
     }
   });
 
+  test("keeps native character and Backspace repeats in the active game text proxy", async () => {
+    const fixture = await launchCachedClient("gw-text-repeat-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const text = document.getElementById("osk-input-text");
+        const gameModule = window.Module as OskModuleHost | undefined;
+        if (!(text instanceof HTMLInputElement)) throw new Error("text proxy is missing");
+        if (!gameModule) throw new Error("window.Module is not installed");
+        gameModule.oskActiveInput = text;
+        text.value = "seed";
+        text.focus();
+        text.setSelectionRange(text.value.length, text.value.length);
+        (window as typeof window & { __textRepeats?: boolean[] }).__textRepeats = [];
+        text.addEventListener("keydown", (event) => {
+          if (event.code === "KeyL" || event.code === "Backspace") {
+            (window as typeof window & { __textRepeats?: boolean[] })
+              .__textRepeats?.push(event.repeat);
+            // The generated client cancels repeats after owning the first
+            // transition. GWonMac must keep that cancellation from also
+            // cancelling the proxy's native text edit.
+            if (event.repeat) event.preventDefault();
+          }
+        });
+      });
+
+      const session = await page.context().newCDPSession(page);
+      const sendHeldKey = async (
+        input: { code: string; key: string; windowsVirtualKeyCode: number; text?: string },
+      ) => {
+        await session.send("Input.dispatchKeyEvent", { type: "keyDown", ...input });
+        await session.send("Input.dispatchKeyEvent", {
+          type: "keyDown",
+          autoRepeat: true,
+          ...input,
+        });
+        await session.send("Input.dispatchKeyEvent", {
+          type: "keyDown",
+          autoRepeat: true,
+          ...input,
+        });
+        await session.send("Input.dispatchKeyEvent", { type: "keyUp", ...input });
+      };
+      await sendHeldKey({
+        code: "KeyL",
+        key: "l",
+        text: "l",
+        windowsVirtualKeyCode: 76,
+      });
+      await sendHeldKey({
+        code: "Backspace",
+        key: "Backspace",
+        windowsVirtualKeyCode: 8,
+      });
+
+      expect(await page.evaluate(() => ({
+        value: (document.getElementById("osk-input-text") as HTMLInputElement).value,
+        repeats: (window as typeof window & { __textRepeats?: boolean[] }).__textRepeats,
+      }))).toEqual({
+        value: "seed",
+        repeats: [false, false],
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("keeps same-window controls inside the game focus lifecycle", async () => {
     const fixture = await launchCachedClient("gw-internal-focus-e2e-");
     try {
