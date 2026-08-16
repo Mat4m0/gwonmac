@@ -37,6 +37,17 @@ test("Command-held releases use one app-local macOS monitor", () => {
   assert.doesNotMatch(source, /CGEventTap|IOHID|AXIsProcessTrusted/u);
 });
 
+test("the app enables physical key repeat without changing user defaults", () => {
+  assert.match(
+    source,
+    /registerDefaults:@\{ @"ApplePressAndHoldEnabled" : @NO \}/u,
+  );
+  assert.doesNotMatch(
+    source,
+    /set(?:Bool|Object):[\s\S]{0,80}ApplePressAndHoldEnabled/u,
+  );
+});
+
 test("the native boundary owns two fixed Data Protection Keychain items", () => {
   const nativeBundleIds = [
     ...source.matchAll(/NSString \*const k\w+Bundle = @"([^"]+)";/gu),
