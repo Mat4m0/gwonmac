@@ -49,9 +49,10 @@ export function enhancementRuntimePolicy(
     teamManagement: pve && (
       developerTeam || (settings.enabled && settings.teamManagement)
     ),
-    xunlaiStorage: pve && (
-      developerStorage || (settings.enabled && settings.xunlaiStorage)
-    ),
+    // The storage controller owns live access refusal and its user-facing
+    // reason. This value means requested, not currently available.
+    xunlaiStorage:
+      developerStorage || (settings.enabled && settings.xunlaiStorage),
     travelPalette: pve && (
       developerStorage || (settings.enabled && settings.travelPalette === true)
     ),

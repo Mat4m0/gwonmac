@@ -4,12 +4,14 @@ import {
   ENHANCEMENT_TRANSFORM_ABI,
   ENHANCEMENT_CONFIG_WORD_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
+  enhancementConfigWordActive,
   type EnhancementCapabilities,
 } from "../../src/shared/enhancement-contracts.js";
 import {
   enhancementConfigWords,
   ENHANCEMENT_LAYOUT_FIELDS,
 } from "../../src/main/certification/enhancement-builds.js";
+import { ENHANCEMENT_CONFIG_FIELDS } from "../../src/shared/enhancement-config.js";
 import {
   ENHANCEMENT_HOOK_EXPORT,
   ENHANCEMENT_MANIFEST_SECTION,
@@ -27,6 +29,7 @@ import {
   moduleWithManifest,
   NO_CAPABILITIES,
   PARTY_DIRTY_MESSAGES,
+  STORAGE_ONLY,
   TARGET_ONLY,
 } from "../fixtures/enhancement-transform.js";
 
@@ -295,7 +298,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     const build = manifest(input);
     const brokenUi = {
       ...build,
-      partyObservation: { ...build.partyObservation!, functionIndex: 4 },
+      uiDispatcher: { ...build.uiDispatcher!, functionIndex: 4 },
     };
 
     const first = transformEnhancementWasm(
@@ -368,10 +371,11 @@ describe("targeted Enhancement WebAssembly transform", () => {
     ));
     const tickOnly = decodeEnhancementManifest(tickOnlyModule, TARGET_ONLY);
     assert.ok(tickOnly);
-    assert.deepEqual(
-      tickOnly.configWords.slice(17),
-      Array<number>(ENHANCEMENT_CONFIG_WORD_COUNT - 17).fill(0),
-    );
+    tickOnly.configWords.forEach((word, index) => {
+      if (!enhancementConfigWordActive(TARGET_ONLY, index)) {
+        assert.equal(word, 0);
+      }
+    });
 
     const originals: number[][] = [];
     const dispatches: number[][] = [];
@@ -453,6 +457,37 @@ describe("targeted Enhancement WebAssembly transform", () => {
     );
   });
 
+  it("zeroes only Xunlai proof words when Travel has no access certificate", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const certifiedWords = enhancementConfigWords(build, STORAGE_ONLY);
+    assert.ok(certifiedWords.some((word, index) =>
+      ENHANCEMENT_CONFIG_FIELDS[index]?.owner === "observation" && word !== 0
+    ));
+    assert.ok(certifiedWords.some((word, index) =>
+      ENHANCEMENT_CONFIG_FIELDS[index]?.owner === "storage" && word !== 0
+    ));
+    certifiedWords.forEach((word, index) => {
+      if (ENHANCEMENT_CONFIG_FIELDS[index]?.owner === "party") {
+        assert.equal(word, 0);
+      }
+    });
+    const prooflessStorage = { ...build.storage! };
+    delete prooflessStorage.accessProof;
+    const proofless = {
+      ...build,
+      storage: prooflessStorage,
+    };
+    const words = enhancementConfigWords(proofless, STORAGE_ONLY);
+    words.forEach((word, index) => {
+      const field = ENHANCEMENT_CONFIG_FIELDS[index];
+      if (field?.owner === "storage") assert.equal(word, 0);
+    });
+    assert.doesNotThrow(() =>
+      transformEnhancementWasm(input, proofless, STORAGE_ONLY)
+    );
+  });
+
   it("binds the exact party-dirty set to the Toolbox manifest and config", () => {
     const input = fixture();
     const transformed = transformEnhancementWasm(
@@ -503,7 +538,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     );
   });
 
-  it("gives party observation shared agent identity without target reads", () => {
+  it("gives party observation shared agent state without target selection", () => {
     const input = fixture();
     const build = manifest(input);
     const partyOnlyBuild = { ...build };
@@ -534,9 +569,9 @@ describe("targeted Enhancement WebAssembly transform", () => {
       partyOnlyBuild.observationBase!.layout.currentInstanceType,
       partyOnlyBuild.observationBase!.layout.playerNumber,
       partyOnlyBuild.observationBase!.layout.agentId,
-      0,
-      0,
-      0,
+      partyOnlyBuild.observationBase!.layout.agentX,
+      partyOnlyBuild.observationBase!.layout.agentY,
+      partyOnlyBuild.observationBase!.layout.agentType,
       partyOnlyBuild.observationBase!.layout.agentPlayerNumber,
       partyOnlyBuild.observationBase!.layout.agentModelType,
     ]);

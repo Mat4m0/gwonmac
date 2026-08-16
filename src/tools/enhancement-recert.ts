@@ -206,11 +206,12 @@ export function currentMessageAnchors(): PlayerChatMessageAnchors {
     throw new Error("enhancement recertification has no semantic baseline");
   }
   const party = baseline.partyObservation;
-  if (!party) {
+  const dispatcher = baseline.uiDispatcher;
+  if (!party || !dispatcher) {
     throw new Error("enhancement baseline has no party observation evidence");
   }
   return Object.freeze({
-    playerChatMessage: party.playerChatMessage,
+    playerChatMessage: dispatcher.playerChatMessage,
     nearbyPlayerMessages: Object.freeze([
       party.nearbyPlayerMessages[0],
       party.nearbyPlayerMessages[1],

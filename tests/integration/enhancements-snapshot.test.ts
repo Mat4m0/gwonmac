@@ -17,6 +17,7 @@ describe("Companion snapshot ABI", () => {
     assert.equal(state.targetId, 9);
     assert.equal(state.targetKind, "Living");
     assert.equal(state.rangeName, "Adjacent");
+    assert.equal(state.xunlaiAccess, null);
   });
 
   it("rejects torn, incompatible, loading, and absent-target snapshots", () => {
@@ -36,9 +37,26 @@ describe("Companion snapshot ABI", () => {
     assert.equal(noTarget.targetValid, false);
   });
 
+  it("decodes the Xunlai access tri-state and rejects impossible flags", () => {
+    assert.equal(
+      decoded(readCompanionSnapshot(snapshot({ flags: 3 | 0x10 }), 0))
+        .xunlaiAccess,
+      false,
+    );
+    assert.equal(
+      decoded(readCompanionSnapshot(snapshot({ flags: 3 | 0x10 | 0x20 }), 0))
+        .xunlaiAccess,
+      true,
+    );
+    assert.equal(
+      rejected(readCompanionSnapshot(snapshot({ flags: 3 | 0x20 }), 0)),
+      "snapshot",
+    );
+  });
+
   it("rejects unknown flags, invalid identities, bands, and non-finite values", () => {
     assert.equal(
-      rejected(readCompanionSnapshot(snapshot({ flags: 0x10 }), 0)),
+      rejected(readCompanionSnapshot(snapshot({ flags: 0x40 }), 0)),
       "snapshot",
     );
     assert.equal(

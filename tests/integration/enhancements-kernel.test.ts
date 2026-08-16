@@ -12,7 +12,7 @@ import {
   decoded,
   DETAIL,
   FEATURE_NATIVE_CURSOR,
-  FEATURE_TARGET_READOUT,
+  FEATURE_GAME_SNAPSHOT,
   FEATURE_TOOLBOX_FOUNDATION,
   installCursorGraph,
   installGameGraph,
@@ -40,7 +40,7 @@ describe("Companion kernel", () => {
       kernel.init({
         features:
           FEATURE_NATIVE_CURSOR
-          | FEATURE_TARGET_READOUT
+          | FEATURE_GAME_SNAPSHOT
           | FEATURE_TOOLBOX_FOUNDATION,
       }),
       1,
@@ -169,7 +169,7 @@ describe("Companion kernel", () => {
     installCursorGraph(readoutOnly.view);
     paintCursor(readoutOnly.view, 2);
     assert.equal(
-      readoutOnly.init({ features: FEATURE_TARGET_READOUT }),
+      readoutOnly.init({ features: FEATURE_GAME_SNAPSHOT }),
       1,
     );
     assert.equal(readoutOnly.field(CURSOR.magic), 0);
@@ -211,7 +211,7 @@ describe("Companion kernel", () => {
 
     const readoutOnly = await createKernel();
     readoutOnly.config.fill(0, MESSAGE_CONFIG_START);
-    assert.equal(readoutOnly.init({ features: FEATURE_TARGET_READOUT }), 1);
+    assert.equal(readoutOnly.init({ features: FEATURE_GAME_SNAPSHOT }), 1);
 
     const toolbox = await createKernel();
     toolbox.config.fill(0, MESSAGE_CONFIG_START);
@@ -705,7 +705,7 @@ describe("Companion kernel", () => {
     installGameGraph(kernel.view);
     assert.equal(
       kernel.init({
-        features: FEATURE_TARGET_READOUT | FEATURE_TOOLBOX_FOUNDATION,
+        features: FEATURE_GAME_SNAPSHOT | FEATURE_TOOLBOX_FOUNDATION,
       }),
       1,
     );
@@ -870,7 +870,7 @@ describe("Companion kernel", () => {
     paintCursor(kernel.view, 7);
     assert.equal(kernel.init({
       features: FEATURE_NATIVE_CURSOR
-        | FEATURE_TARGET_READOUT
+        | FEATURE_GAME_SNAPSHOT
         | FEATURE_TOOLBOX_FOUNDATION,
     }), 1);
     const before = new Uint8Array(kernel.memory.buffer).slice();
@@ -916,7 +916,7 @@ describe("Companion kernel", () => {
     );
     assert.equal(
       kernel.init({
-        features: FEATURE_TARGET_READOUT,
+        features: FEATURE_GAME_SNAPSHOT,
         snapshotPointer: 0,
         snapshotSize: 0,
       }),
@@ -932,7 +932,7 @@ describe("Companion kernel", () => {
     );
     assert.equal(
       kernel.init({
-        features: FEATURE_TARGET_READOUT,
+        features: FEATURE_GAME_SNAPSHOT,
         cursorPointer: ADDRESSES.cursor,
         cursorSize: COMPANION_CURSOR_BYTES,
       }),

@@ -8,7 +8,11 @@ import {
   createTargetReadout,
   targetReadout,
 } from "../../src/renderer/enhancement-readout.js";
-import { readCompanionSnapshot } from "../../src/renderer/companion-snapshot.js";
+import {
+  COMPANION_SNAPSHOT_ABI,
+  COMPANION_SNAPSHOT_BYTES,
+  readCompanionSnapshot,
+} from "../../src/renderer/companion-snapshot.js";
 
 const MAGIC = 0x42545747;
 const LIVING = 0xdb;
@@ -29,11 +33,11 @@ function bytes(options: {
 } = {}) {
   const flags = options.flags ?? READY | PLAYER | TARGET;
   const target = (flags & TARGET) !== 0;
-  const buffer = new ArrayBuffer(64);
+  const buffer = new ArrayBuffer(COMPANION_SNAPSHOT_BYTES);
   const view = new DataView(buffer);
   view.setUint32(0, MAGIC, true);
-  view.setUint16(4, 2, true);
-  view.setUint16(6, 64, true);
+  view.setUint16(4, COMPANION_SNAPSHOT_ABI, true);
+  view.setUint16(6, COMPANION_SNAPSHOT_BYTES, true);
   view.setUint32(8, options.sequence ?? 2, true);
   view.setUint32(12, flags, true);
   view.setUint32(16, 40, true);

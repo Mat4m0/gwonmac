@@ -163,6 +163,7 @@ declare global {
     }> | null;
     readonly readout: Readonly<{ visible: boolean; line: string }> | null;
     readonly toolbox: ToolboxObservation | null;
+    readonly xunlaiAccess: boolean | null;
   }
 
   interface CompanionObserverRuntime extends CompanionDeveloperRuntime {

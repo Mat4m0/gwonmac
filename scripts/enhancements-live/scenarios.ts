@@ -25,7 +25,32 @@ import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.js";
 import { runToolboxFoundation, runToolboxHeroPanel } from "./toolbox-scenarios.js";
 
 export type LiveTier = "automation" | "observation";
-export type LiveReadiness = "frontend" | "observer" | "toolbox" | "cursor";
+export type LiveReadiness = "frontend" | "observer" | "toolbox" | "cursor" | "storage";
+
+/** Serializable readiness predicate shared by preflight and the final wait. */
+function liveReadinessSatisfied(required: LiveReadiness): boolean {
+  if (required === "frontend") return true;
+  if (required === "observer") {
+    const state = window.gwCompanionState;
+    return state?.status === "ready" && (state.tickCount ?? 0) > 5;
+  }
+  if (required === "toolbox") {
+    const toolbox = window.gwCompanionRuntime?.toolbox;
+    return typeof toolbox === "object"
+      && toolbox !== null
+      && toolbox.status === "ready"
+      && toolbox.heroAvailable === true;
+  }
+  if (required === "storage") {
+    return typeof window.gwCompanionRuntime?.xunlaiAccess === "boolean";
+  }
+  const cursor = window.gwCompanionRuntime?.cursor;
+  return window.gwCompanionRuntime?.status === "installed"
+    && typeof cursor === "object"
+    && cursor !== null
+    && "valid" in cursor
+    && cursor.valid === true;
+}
 
 /**
  * What every scenario gets: one fixed cursor projection read and a clock.
@@ -134,30 +159,7 @@ export async function waitForPlayable(
     { timeout: 60_000, polling: 100 },
   );
   let inputs = 0;
-  const ready = () =>
-    page.evaluate(
-      (required) => {
-        if (required === "frontend") return true;
-        if (required === "observer") {
-          const state = window.gwCompanionState;
-          return state?.status === "ready" && (state.tickCount ?? 0) > 5;
-        }
-        if (required === "toolbox") {
-          const toolbox = window.gwCompanionRuntime?.toolbox;
-          return typeof toolbox === "object"
-            && toolbox !== null
-            && toolbox.status === "ready"
-            && toolbox.heroAvailable === true;
-        }
-        const cursor = window.gwCompanionRuntime?.cursor;
-        return window.gwCompanionRuntime?.status === "installed"
-          && typeof cursor === "object"
-          && cursor !== null
-          && "valid" in cursor
-          && cursor.valid === true;
-      },
-      readiness,
-    );
+  const ready = () => page.evaluate(liveReadinessSatisfied, readiness);
   if (tier === "automation") {
     for (const delay of [3_000, 5_000, 20_000]) {
       if (await ready()) break;
@@ -177,26 +179,7 @@ export async function waitForPlayable(
     }));
   }
   await page.waitForFunction(
-    (required) => {
-      if (required === "frontend") return true;
-      if (required === "observer") {
-        const state = window.gwCompanionState;
-        return state?.status === "ready" && (state.tickCount ?? 0) > 5;
-      }
-      if (required === "toolbox") {
-        const toolbox = window.gwCompanionRuntime?.toolbox;
-        return typeof toolbox === "object"
-          && toolbox !== null
-          && toolbox.status === "ready"
-          && toolbox.heroAvailable === true;
-      }
-      const cursor = window.gwCompanionRuntime?.cursor;
-      return window.gwCompanionRuntime?.status === "installed"
-        && typeof cursor === "object"
-        && cursor !== null
-        && "valid" in cursor
-        && cursor.valid === true;
-    },
+    liveReadinessSatisfied,
     readiness,
     { timeout: 30 * 60_000, polling: 250 },
   );
@@ -583,14 +566,11 @@ async function runXunlaiStorage({ page }: AutomationContext) {
             : null,
       };
     };
-    const button = document.querySelector<HTMLButtonElement>(".window-storage");
     const first = attempt();
     await new Promise((resolve) => setTimeout(resolve, 1_500));
     return {
-      enabled: window.gwToolsSettings().xunlaiStorage,
-      buttonDisabled: button?.disabled ?? null,
-      first,
-      second: attempt(),
+      xunlaiAccess: window.gwCompanionRuntime?.xunlaiAccess ?? null,
+      commandOutcomes: [first, attempt()],
     };
   });
 }
@@ -680,19 +660,22 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
   "xunlai-storage": Object.freeze({
     tier: "automation",
     program: "xunlai-storage",
-    readiness: "toolbox",
+    readiness: "storage",
     run: runXunlaiStorage,
     validate(result: { evidence?: Awaited<ReturnType<typeof runXunlaiStorage>> }) {
       const evidence = result.evidence;
-      if (
-        !evidence?.enabled
-        || evidence.buttonDisabled !== false
-        || !evidence.first.handled
-        || evidence.first.error !== null
-        || !evidence.second.handled
-        || evidence.second.error !== null
-      ) {
-        throw new Error("Xunlai storage did not complete both live game-thread actions");
+      if (!evidence || typeof evidence.xunlaiAccess !== "boolean") {
+        throw new Error("Xunlai storage did not publish a confirmed access result");
+      }
+      const outcomesMatch = evidence.commandOutcomes.every(
+        (outcome) =>
+          outcome.handled
+          && (evidence.xunlaiAccess
+            ? outcome.error === null
+            : outcome.error !== null),
+      );
+      if (!outcomesMatch) {
+        throw new Error("Xunlai command outcome did not match certified access");
       }
     },
   }),

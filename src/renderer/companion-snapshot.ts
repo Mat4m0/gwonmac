@@ -38,9 +38,12 @@ const FLAGS = Object.freeze({
   player: 1 << 1,
   target: 1 << 2,
   loading: 1 << 3,
+  xunlaiObserved: 1 << 4,
+  xunlaiAllowed: 1 << 5,
 });
 const KNOWN_FLAGS =
-  FLAGS.ready | FLAGS.player | FLAGS.target | FLAGS.loading;
+  FLAGS.ready | FLAGS.player | FLAGS.target | FLAGS.loading
+  | FLAGS.xunlaiObserved | FLAGS.xunlaiAllowed;
 
 function validCoordinate(value: number) {
   return Number.isFinite(value) && Math.abs(value) <= 1_000_000;
@@ -110,6 +113,10 @@ export function readCompanionSnapshot(buffer: ArrayBuffer, pointer: number) {
     || firstSequence !== secondSequence
     || (secondSequence & 1) !== 0
     || (flags & ~KNOWN_FLAGS) !== 0
+    || (
+      (flags & FLAGS.xunlaiAllowed) !== 0
+      && (flags & FLAGS.xunlaiObserved) === 0
+    )
   ) {
     return Object.freeze({ status: "waiting", reason: "snapshot" });
   }
@@ -166,12 +173,18 @@ export function readCompanionSnapshot(buffer: ArrayBuffer, pointer: number) {
   return Object.freeze({
     status: "ready",
     ...state,
+    xunlaiAccess: (flags & FLAGS.xunlaiObserved) === 0
+      ? null
+      : (flags & FLAGS.xunlaiAllowed) !== 0,
     instanceName: INSTANCE_NAMES[state.instanceType] ?? "Unknown",
     targetValid,
     targetKind: targetValid ? agentKind(state.agentTypeBits) : "None",
     rangeName: RANGE_NAMES[state.rangeBand] ?? "None",
   });
 }
+
+/** The decoder-owned, discriminated game-state contract used by consumers. */
+export type CompanionSnapshot = ReturnType<typeof readCompanionSnapshot>;
 
 /* The cursor bitmap lives in its own region: the core snapshot is full, and
    4 KB of pixels do not belong in a per-frame read. */
