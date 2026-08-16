@@ -115,14 +115,6 @@ napi_value MonitorCommandKeyUpsCallback(napi_env env, napi_callback_info info) {
     return nullptr;
   }
 
-  // NSTextInputClient asks this process default before it schedules a held
-  // key. Electron otherwise inherits macOS press-and-hold, which waits for an
-  // accent choice and emits no repeat keydowns to the game's hidden proxy.
-  // Registration is process-local and non-persistent: it changes neither the
-  // player's global keyboard preference nor another application.
-  [NSUserDefaults.standardUserDefaults
-      registerDefaults:@{ @"ApplePressAndHoldEnabled" : @NO }];
-
   auto *monitor = new (std::nothrow) CommandKeyUpMonitor();
   if (monitor == nullptr) {
     napi_throw_error(env, nullptr, "input monitor is unavailable");
@@ -543,6 +535,15 @@ napi_value ClearCallback(napi_env env, napi_callback_info info) {
 }
 
 napi_value Init(napi_env env, napi_value exports) {
+  // NSTextInputClient asks this process default before it schedules a held
+  // key. Electron otherwise inherits macOS press-and-hold, which waits for an
+  // accent choice and emits no repeat keydowns to the game's hidden proxy.
+  // Registration is process-local and non-persistent: it changes neither the
+  // player's global keyboard preference nor another application. This policy
+  // belongs to native input initialization, not the Command-release monitor.
+  [NSUserDefaults.standardUserDefaults
+      registerDefaults:@{ @"ApplePressAndHoldEnabled" : @NO }];
+
   napi_property_descriptor properties[] = {
       {"load", nullptr, LoadCallback, nullptr, nullptr, nullptr, napi_default,
        nullptr},

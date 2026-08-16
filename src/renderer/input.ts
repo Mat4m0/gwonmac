@@ -57,11 +57,12 @@ const isCommandKey = (code: string): boolean =>
  * that shows `left +ctrl` on the press and no Control key down before it is
  * therefore a report about the keyboard path, not the mouse one.
  */
-const modifierText = (event: MouseEvent): string =>
-  (event.ctrlKey ? ' +ctrl' : '') +
-  (event.shiftKey ? ' +shift' : '') +
-  (event.altKey ? ' +alt' : '') +
-  (event.metaKey ? ' +cmd' : '');
+const tracedModifiers = (event: MouseEvent) => [
+  ...(event.ctrlKey ? ['ctrl' as const] : []),
+  ...(event.shiftKey ? ['shift' as const] : []),
+  ...(event.altKey ? ['alt' as const] : []),
+  ...(event.metaKey ? ['cmd' as const] : []),
+];
 
 const physicalKey = (code: string, fallback: string): string => {
   if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
@@ -452,16 +453,13 @@ export const installGameInput = ({
     decision: 'observed' | 'held' | 'released' | 'suppressed' | 'command',
   ) => {
     const owner = traceOwner(event.target);
-    trace?.record({
-      source: 'renderer',
-      kind: 'key',
-      phase,
-      owner,
-      ...(owner === 'canvas' ? { code: event.code } : {}),
-      repeat: event.repeat,
-      trusted: event.isTrusted,
-      decision,
-    });
+    const common = {
+      source: 'renderer' as const, kind: 'key' as const, phase,
+      repeat: event.repeat, trusted: event.isTrusted, decision,
+    };
+    trace?.record(owner === 'canvas'
+      ? { ...common, owner, code: event.code }
+      : { ...common, owner });
   };
 
   window.addEventListener('keydown', (event) => {
@@ -559,7 +557,7 @@ export const installGameInput = ({
       kind: 'press',
       button: event.button,
       detail: event.detail,
-      modifiers: modifierText(event),
+      modifiers: tracedModifiers(event),
     });
     heldButtons.set(event.button, {
       target: event.target,

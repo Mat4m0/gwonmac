@@ -27,8 +27,7 @@ export type InputTraceInputType =
   | 'history'
   | 'other'
   | 'none';
-export type InputTraceLengthDelta = 'grow' | 'shrink' | 'same' | 'unknown';
-
+export type InputTraceModifier = 'ctrl' | 'shift' | 'alt' | 'cmd';
 export type InputTraceEntry =
   | {
       source: 'appkit' | 'main';
@@ -42,9 +41,18 @@ export type InputTraceEntry =
       source: 'renderer';
       kind: 'key';
       phase: 'down' | 'up';
-      owner: InputTraceOwner;
-      /** Exact codes are present only while the game canvas owns input. */
-      code?: string;
+      owner: 'canvas';
+      code: string;
+      repeat: boolean;
+      trusted: boolean;
+      decision: 'observed' | 'held' | 'released' | 'suppressed' | 'command';
+    }
+  | {
+      source: 'renderer';
+      kind: 'key';
+      phase: 'down' | 'up';
+      owner: Exclude<InputTraceOwner, 'canvas'>;
+      code?: never;
       repeat: boolean;
       trusted: boolean;
       decision: 'observed' | 'held' | 'released' | 'suppressed' | 'command';
@@ -55,17 +63,14 @@ export type InputTraceEntry =
       owner: 'text' | 'secret';
       phase: InputTraceTextPhase;
       trusted: boolean;
-      repeat: boolean;
       inputType: InputTraceInputType;
-      selectionChanged: boolean;
-      delta: InputTraceLengthDelta;
     }
   | {
       source: 'renderer';
       kind: 'press';
       button: number;
       detail: number;
-      modifiers: string;
+      modifiers: readonly InputTraceModifier[];
     }
   | {
       source: 'renderer';
@@ -100,6 +105,11 @@ export type InputTraceEntry =
       control?: number;
       direction?: -1 | 0 | 1;
     };
+
+export type MainInputTraceEntry = Extract<
+  InputTraceEntry,
+  { source: 'appkit' | 'main' }
+>;
 
 export type InputTraceRecord = InputTraceEntry & {
   sequence: number;

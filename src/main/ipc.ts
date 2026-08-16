@@ -50,7 +50,11 @@ import {
   isRendererFrameBatch,
   isRendererMetrics,
 } from "../shared/diagnostics.js";
-import { EXTERNAL_URLS, IPC } from "../shared/contracts.js";
+import {
+  CLIPBOARD_TEXT_CEILING,
+  EXTERNAL_URLS,
+  IPC,
+} from "../shared/contracts.js";
 import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import {
@@ -119,6 +123,7 @@ import {
   requestCacheClear,
   requestGameStorageReset,
 } from "./settings-actions.js";
+import { editGameText } from './game-text-editing.js';
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -407,10 +412,6 @@ const asRevealKind = one((value: unknown): RevealKind => {
   }
   return value;
 });
-
-// Far above any text a game field holds, low enough that a renderer gone
-// wrong cannot stuff megabytes into the OS pasteboard.
-const CLIPBOARD_TEXT_CEILING = 64 * 1024;
 
 const asClipboardText = one((value: unknown): string => {
   if (
@@ -706,43 +707,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     clipboardEdit: channel(asTextEditCommand, (win, command) => {
-      if (command === "selectAll" || command === "cut") {
-        // The visible editor belongs to Guild Wars; Chromium owns only its
-        // hidden OSK proxy. Deliver the Windows editing chord that the client
-        // already handles instead of editing only Chromium's proxy.
-        const keyCode = command === "selectAll" ? "A" : "X";
-        win.webContents.sendInputEvent({
-          type: "keyDown",
-          keyCode: "Control",
-          modifiers: ["control"],
-        });
-        win.webContents.sendInputEvent({
-          type: "keyDown",
-          keyCode,
-          modifiers: ["control"],
-        });
-        win.webContents.sendInputEvent({
-          type: "keyUp",
-          keyCode,
-          modifiers: ["control"],
-        });
-        win.webContents.sendInputEvent({
-          type: "keyUp",
-          keyCode: "Control",
-        });
-      } else {
-        // ArenaNet's OSK listener forwards InputEvent.data, which Chromium's
-        // native paste does not populate. Keep the secret in main and replay
-        // the trusted typing contract without sending it over IPC.
-        const text = clipboard.readText().slice(0, CLIPBOARD_TEXT_CEILING);
-        // Guild Wars expects the keyboard events around each OSK input event.
-        // `insertText` alone updates Chromium's proxy but not the game field.
-        for (const character of text) {
-          win.webContents.sendInputEvent({ type: "keyDown", keyCode: character });
-          win.webContents.sendInputEvent({ type: "char", keyCode: character });
-          win.webContents.sendInputEvent({ type: "keyUp", keyCode: character });
-        }
-      }
+      editGameText(win.webContents, command);
     }),
 
     // Truncated rather than refused: a player who copied something large before

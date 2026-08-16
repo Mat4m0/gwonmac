@@ -26,7 +26,7 @@ import type { ErrorCode } from "./errors.js";
 import type { BuildLibrary } from "./builds/library.js";
 import type { ProfileId } from "./multiple-accounts.js";
 import type { TemplateExportEntry } from "./template-contracts.js";
-import type { InputTraceEntry } from "./input-trace.js";
+import type { MainInputTraceEntry } from "./input-trace.js";
 import type {
   AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
@@ -823,6 +823,10 @@ export type InvokeChannel = Exclude<keyof typeof IPC, EventChannel>;
 
 export type TextEditCommand = "selectAll" | "cut" | "paste";
 
+// Far above any text a game field holds, low enough that a renderer gone
+// wrong cannot stuff megabytes into the OS pasteboard.
+export const CLIPBOARD_TEXT_CEILING = 64 * 1024;
+
 export interface GwNativeApi {
   /** Launch-time configuration, available before the first renderer script. */
   init: RendererInit;
@@ -841,7 +845,7 @@ export interface GwNativeApi {
     handle(handler: (command: RendererCommand) => void | Promise<void>): void;
   };
   inputTrace: {
-    onEntry(callback: (entry: InputTraceEntry) => void): () => void;
+    onEntry(callback: (entry: MainInputTraceEntry) => void): () => void;
   };
   progress: {
     current(): Promise<DownloadProgress>;
@@ -943,7 +947,7 @@ export interface GwNativeApi {
      * never arrives here.
      */
     writeText(text: string): Promise<void>;
-    /** Apply Chromium's trusted edit command to the currently focused field. */
+    /** Apply a trusted edit command to the game's active text field. */
     edit(command: TextEditCommand): Promise<void>;
     /**
      * Read the OS pasteboard so a player can import build codes they copied

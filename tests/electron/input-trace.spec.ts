@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { IPC } from '../../src/shared/contracts.js';
+import {
+  CLIPBOARD_TEXT_CEILING,
+  IPC,
+} from '../../src/shared/contracts.js';
 import { closeOffline, launchCachedClient } from "./fixtures.mjs";
 import { boxOf, startGameInput } from "./input-helpers.js";
 
@@ -187,18 +190,24 @@ test.describe("input trace", () => {
       expect(await count.textContent()).toBe(beforePause);
       await page.locator('#input-trace [data-role="pause"]').click();
 
-      await app.evaluate(({ BrowserWindow }, value) => {
-        const target = BrowserWindow.getAllWindows()[0]?.webContents;
+      await page.evaluate(() => {
+        const field = document.getElementById('osk-input-password');
+        if (!(field instanceof HTMLInputElement)) throw new Error('password proxy missing');
         for (let index = 0; index < 1_010; index += 1) {
-          target?.send(value.channel, value.entry);
+          field.dispatchEvent(new InputEvent('beforeinput', {
+            bubbles: true,
+            inputType: 'insertCompositionText',
+          }));
         }
-      }, { channel: IPC.inputTraceEvent, entry: mainEntry });
+      });
       await expect(count).toHaveText('1000/1000');
 
       await page.locator('#input-trace [data-role="copy"]').click();
       await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
         .toContain('gwonmac input harness — 1000 events');
       const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
+      expect(copied.length).toBeLessThanOrEqual(CLIPBOARD_TEXT_CEILING);
+      expect(copied).toContain('older events omitted');
       expect(copied).not.toContain(secret);
       expect(copied).not.toMatch(/password|email|coordinate=/iu);
 

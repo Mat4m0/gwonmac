@@ -4,6 +4,7 @@ import type { BrowserWindow } from "electron";
 import {
   captureWindowShortcut,
   installWindowShortcuts,
+  releaseWindowShortcutKey,
   updateWindowShortcuts,
 } from "../../src/main/window-shortcuts.js";
 
@@ -61,6 +62,16 @@ describe("window shortcut input", () => {
       assert.equal(dispatch(keyDown("KeyB", "b", { isAutoRepeat: true })), true);
     }
     assert.deepEqual(actions, ["tools.toggle"]);
+    // Releasing Command first must not leak the base key's repeats or key-up.
+    assert.equal(dispatch({
+      ...keyDown("MetaLeft", "Meta"), type: "keyUp", meta: false,
+    }), false);
+    assert.equal(dispatch(keyDown("KeyB", "b", {
+      meta: false, isAutoRepeat: true,
+    })), true);
+    assert.equal(dispatch({
+      ...keyDown("KeyB", "b"), type: "keyUp", meta: false,
+    }), true);
     assert.equal(dispatch(keyDown("KeyB", "b", {
       meta: false,
       control: true,
@@ -82,6 +93,27 @@ describe("window shortcut input", () => {
       type: "keyUp",
       meta: false,
     });
+    assert.equal(dispatch(keyDown("KeyK", "k", {
+      meta: false,
+      shift: true,
+      isAutoRepeat: true,
+    })), true);
+    assert.equal(dispatch({
+      ...keyDown("KeyK", "k", { shift: true }),
+      type: "keyUp",
+      meta: false,
+    }), true);
     assert.equal(dispatch(keyDown("KeyK", "k", { shift: true })), false);
+
+    const secondCapture = captureWindowShortcut(win);
+    assert.equal(dispatch(keyDown("KeyW", "w")), true);
+    assert.deepEqual(await secondCapture, {
+      status: "captured",
+      binding: { key: "w", shift: false, option: false },
+    });
+    // AppKit consumes this release, so the shortcut controller must receive
+    // the same exact code through the native normalization route.
+    releaseWindowShortcutKey(win, "KeyW");
+    assert.equal(dispatch(keyDown("KeyW", "w", { isAutoRepeat: true })), false);
   });
 });

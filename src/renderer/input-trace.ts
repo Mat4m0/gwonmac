@@ -7,6 +7,7 @@ import type {
   InputTraceEntry,
   InputTraceRecord,
 } from '../shared/input-trace.js';
+import { CLIPBOARD_TEXT_CEILING } from '../shared/contracts.js';
 
 const TRACE_CAPACITY = 1_000;
 const VISIBLE_ROWS = 18;
@@ -63,12 +64,15 @@ const label = (record: InputTraceRecord): { text: string; tone: string } => {
       return {
         tone: 'event',
         text: `${prefix} text ${record.owner} ${record.phase}`
-          + ` trusted=${record.trusted} repeat=${record.repeat}`
-          + ` type=${record.inputType} selection=${record.selectionChanged}`
-          + ` delta=${record.delta}`,
+          + ` trusted=${record.trusted} type=${record.inputType}`,
       };
     case 'press':
-      return { tone: 'event', text: `${prefix} press ${BUTTON_NAMES[record.button] ?? 'other'} run=${record.detail}${record.modifiers}` };
+      return {
+        tone: 'event',
+        text: `${prefix} press ${BUTTON_NAMES[record.button] ?? 'other'}`
+          + ` run=${record.detail}`
+          + record.modifiers.map((modifier) => ` +${modifier}`).join(''),
+      };
     case 'release':
       return { tone: 'event', text: `${prefix} release ${BUTTON_NAMES[record.button] ?? 'other'} travel=${record.travel} remaining=${record.buttonsRemaining}` };
     case 'modifier':
@@ -156,7 +160,7 @@ export function createInputTrace(
   });
   clearButton.addEventListener('click', clear);
   copyButton.addEventListener('click', () => {
-    void writeText(transcript(entries)).then(
+    void writeText(inputTraceTranscript(entries)).then(
       () => { copyButton.textContent = 'Copied'; },
       () => { copyButton.textContent = 'Copy failed'; },
     ).then(() => {
@@ -194,12 +198,30 @@ export function createInputTrace(
   });
 }
 
-function transcript(entries: readonly InputTraceRecord[]): string {
-  return [
+function inputTraceTranscript(
+  entries: readonly InputTraceRecord[],
+): string {
+  const heading = [
     `gwonmac input harness — ${entries.length} events`,
     'privacy: text, clipboard data, field lengths, coordinates, account and device identifiers omitted',
     'columns: sequence  gap  source  event  decision',
+  ];
+  // Reserve enough room for the omission line before collecting the newest
+  // complete rows. The main process enforces the same clipboard ceiling.
+  const omissionReserve = 64;
+  let used = heading.join('\n').length + 2 + omissionReserve;
+  const rows: string[] = [];
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const row = label(entries[index]!).text;
+    if (used + row.length + 1 > CLIPBOARD_TEXT_CEILING) break;
+    rows.unshift(row);
+    used += row.length + 1;
+  }
+  const omitted = entries.length - rows.length;
+  return [
+    ...heading,
+    ...(omitted > 0 ? [`${omitted} older events omitted`] : []),
     '',
-    ...entries.map((record) => label(record).text),
+    ...rows,
   ].join('\n');
 }

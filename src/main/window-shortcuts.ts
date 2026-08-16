@@ -33,26 +33,30 @@ class WindowShortcuts {
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({});
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
-  #capturedCode: string | null = null;
+  #claimedCodes = new Map<string, 'capture' | 'shortcut'>();
 
   constructor(win: BrowserWindow, actions: ShortcutActions) {
     this.#actions = actions;
     win.webContents.on("before-input-event", (event, input) => {
       if (input.type === "keyUp") {
+        const decision = this.#claimedCodes.get(input.code);
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'up',
-          key: tracedKey(input.key), repeat: false, decision: 'forwarded',
+          key: tracedKey(input.key), repeat: false,
+          decision: decision ?? 'forwarded',
         });
-        if (input.key === "Meta" || input.code === this.#capturedCode) {
-          this.#capturedCode = null;
+        if (decision) {
+          this.#claimedCodes.delete(input.code);
+          event.preventDefault();
         }
         return;
       }
       if (input.type !== "keyDown") return;
-      if (input.code === this.#capturedCode) {
+      const claimed = this.#claimedCodes.get(input.code);
+      if (claimed) {
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'down',
-          key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'capture',
+          key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: claimed,
         });
         event.preventDefault();
         return;
@@ -65,7 +69,7 @@ class WindowShortcuts {
           source: 'main', kind: 'native-key', phase: 'down',
           key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'capture',
         });
-        this.#capturedCode = input.code;
+        this.#claimedCodes.set(input.code, 'capture');
         if (input.key === "Escape") {
           this.#finish({ status: "cancelled" });
           return;
@@ -87,6 +91,7 @@ class WindowShortcuts {
             key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'shortcut',
           });
           event.preventDefault();
+          this.#claimedCodes.set(input.code, 'shortcut');
           if (!input.isAutoRepeat) {
             this.#actions.run(action as ShortcutAction);
           }
@@ -109,15 +114,18 @@ class WindowShortcuts {
 
   capture(): Promise<ShortcutCaptureResult> {
     this.cancelCapture();
-    this.#capturedCode = null;
     return new Promise((resolve) => {
       this.#capture = resolve;
     });
   }
 
   cancelCapture(): void {
-    this.#capturedCode = null;
+    this.#claimedCodes.clear();
     this.#finish({ status: "cancelled" });
+  }
+
+  release(code: string): void {
+    this.#claimedCodes.delete(code);
   }
 
   #finish(result: ShortcutCaptureResult): void {
@@ -155,4 +163,12 @@ export function captureWindowShortcut(
 
 export function cancelWindowShortcutCapture(win: BrowserWindow): void {
   controllers.get(win)?.cancelCapture();
+}
+
+/** Forget a release that AppKit consumed before `before-input-event`. */
+export function releaseWindowShortcutKey(
+  win: BrowserWindow,
+  code: string,
+): void {
+  controllers.get(win)?.release(code);
 }
