@@ -28,7 +28,7 @@ import {
 import { isDevBuild } from "./protocol.js";
 import {
   inputTraceEnabled,
-  setInputTraceEnabled,
+  setInputTraceVisibility,
 } from './input-trace.js';
 import type { WindowHost } from "./window.js";
 import {
@@ -273,10 +273,9 @@ export function installApplicationMenu({
             {
               id: "toggle-input-trace",
               label: "Show Input Trace",
-              click: () => {
+              click: async () => {
                 const enabled = !inputTraceEnabled(win);
-                setInputTraceEnabled(win, enabled);
-                void sendRendererCommand(win, { type: "input.trace", enabled });
+                await setInputTraceVisibility(win, enabled, sendRendererCommand);
               },
             },
             {
