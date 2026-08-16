@@ -12,7 +12,6 @@ import type { TextEditCommand } from '../shared/contracts.js';
 import type {
   InputTrace,
   InputTraceInputType,
-  InputTraceLengthDelta,
   InputTraceTextPhase,
 } from '../shared/input-trace.js';
 
@@ -28,9 +27,14 @@ type TextEditingOptions = {
   log(...values: unknown[]): void;
 };
 
-type EditingKey = 'KeyA' | 'KeyC' | 'KeyV' | 'KeyX';
+type EditingCommand = TextEditCommand | 'copy';
 
-const EDITING_KEYS = new Set<EditingKey>(['KeyA', 'KeyC', 'KeyV', 'KeyX']);
+const EDITING_COMMANDS = new Map<string, EditingCommand>([
+  ['a', 'selectAll'],
+  ['c', 'copy'],
+  ['v', 'paste'],
+  ['x', 'cut'],
+]);
 
 const isGameTextField = (value: unknown): value is GameTextField =>
   value instanceof HTMLTextAreaElement || value instanceof HTMLInputElement;
@@ -54,13 +58,6 @@ const inputType = (value: string): InputTraceInputType => {
   return value ? 'other' : 'none';
 };
 
-const lengthDelta = (type: InputTraceInputType): InputTraceLengthDelta => {
-  if (type.startsWith('insert-')) return 'grow';
-  if (type.startsWith('delete-')) return 'shrink';
-  if (type === 'history') return 'unknown';
-  return 'same';
-};
-
 export const installTextEditing = ({
   fields,
   writeText,
@@ -70,7 +67,9 @@ export const installTextEditing = ({
   log,
 }: TextEditingOptions): void => {
   const sources = new Set<GameTextField>();
-  const claimedKeys = new Set<EditingKey>();
+  // Semantic commands follow the active keyboard layout (`event.key`), while
+  // release ownership follows the exact physical key (`event.code`).
+  const claimedKeys = new Set<string>();
   for (const field of fields) {
     if (isGameTextField(field)) sources.add(field);
   }
@@ -90,14 +89,7 @@ export const installTextEditing = ({
         : 'text',
       phase,
       trusted: event.isTrusted,
-      repeat: false,
       inputType: type,
-      // The event itself says a selection changed without exposing either
-      // endpoint (which would reveal a secret field's minimum length).
-      selectionChanged: phase === 'selectionchange',
-      delta: phase === 'input' || phase === 'beforeinput'
-        ? lengthDelta(type)
-        : 'same',
     });
   };
 
@@ -131,14 +123,15 @@ export const installTextEditing = ({
   };
 
   window.addEventListener('keydown', (event) => {
-    if (!event.isTrusted || !EDITING_KEYS.has(event.code as EditingKey)) return;
+    const command = EDITING_COMMANDS.get(event.key.toLowerCase());
+    if (!event.isTrusted || !command) return;
     if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
     const active = document.activeElement;
     if (!isGameTextField(active) || !sources.has(active)) return;
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    const code = event.code as EditingKey;
+    const code = event.code;
     trace?.record({
       source: 'renderer', kind: 'key', phase: 'down',
       owner: active.type === 'password' || active.type === 'email'
@@ -151,18 +144,17 @@ export const installTextEditing = ({
     }
     claimedKeys.add(code);
 
-    if (code === 'KeyA') {
+    if (command === 'selectAll') {
       void edit('selectAll');
       return;
     }
 
-    if (code === 'KeyV') {
+    if (command === 'paste') {
       void edit('paste');
       return;
     }
 
-    if (code === 'KeyC') {
-      event.preventDefault();
+    if (command === 'copy') {
       if (!canExportText(active)) return;
       const { start, end } = selection(active);
       const text = start !== null && end !== null && start !== end
@@ -180,9 +172,8 @@ export const installTextEditing = ({
   }, true);
 
   window.addEventListener('keyup', (event) => {
-    if (!event.isTrusted || !event.metaKey || event.ctrlKey || event.altKey) return;
-    const code = event.code as EditingKey;
-    if (!claimedKeys.delete(code)) return;
+    if (!event.isTrusted || event.ctrlKey || event.altKey) return;
+    if (!claimedKeys.delete(event.code)) return;
     const active = document.activeElement;
     trace?.record({
       source: 'renderer', kind: 'key', phase: 'up',
@@ -201,7 +192,9 @@ export const installTextEditing = ({
   window.addEventListener('pagehide', clearClaimedKeys);
   window.addEventListener('gw:input-reset', clearClaimedKeys);
   window.addEventListener('gw:input-release', (event) => {
-    if (event instanceof CustomEvent) claimedKeys.delete(event.detail as EditingKey);
+    if (event instanceof CustomEvent && typeof event.detail === 'string') {
+      claimedKeys.delete(event.detail);
+    }
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') clearClaimedKeys();

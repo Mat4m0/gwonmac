@@ -22,6 +22,62 @@ type OskWindow = typeof window & {
 };
 
 test.describe("renderer text editing", () => {
+  test("survives releasing Command before the editing key", async () => {
+    const fixture = await launchCachedClient("gw-editing-release-order-");
+    try {
+      const { app, page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const field = document.getElementById("osk-input-text");
+        if (!(field instanceof HTMLInputElement)) throw new Error("text proxy missing");
+        (window as OskWindow).Module.oskActiveInput = field;
+        (window as OskWindow).__clipboardGameKeys = [];
+        window.addEventListener("keydown", (event) => {
+          if (event.ctrlKey && event.key === "a") {
+            (window as OskWindow).__clipboardGameKeys?.push({
+              type: event.type,
+              key: event.key,
+              code: event.code,
+              control: event.ctrlKey,
+              meta: event.metaKey,
+              trusted: event.isTrusted,
+            });
+          }
+        }, true);
+        field.value = "alpha";
+        field.focus();
+      });
+      const cdp = await app.context().newCDPSession(page);
+      const chord = async () => {
+        await cdp.send("Input.dispatchKeyEvent", {
+          type: "keyDown", key: "Meta", code: "MetaLeft",
+          windowsVirtualKeyCode: 91, nativeVirtualKeyCode: 91,
+          modifiers: 4,
+        });
+        await cdp.send("Input.dispatchKeyEvent", {
+          type: "keyDown", key: "a", code: "KeyA",
+          windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65,
+          modifiers: 4,
+        });
+        await cdp.send("Input.dispatchKeyEvent", {
+          type: "keyUp", key: "Meta", code: "MetaLeft",
+          windowsVirtualKeyCode: 91, nativeVirtualKeyCode: 91,
+        });
+        await cdp.send("Input.dispatchKeyEvent", {
+          type: "keyUp", key: "a", code: "KeyA",
+          windowsVirtualKeyCode: 65, nativeVirtualKeyCode: 65,
+        });
+      };
+      await chord();
+      await chord();
+      await expect.poll(() => page.evaluate(() => (
+        window as OskWindow
+      ).__clipboardGameKeys?.length)).toBe(2);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("uses macOS copy, cut, paste, and select-all without leaking game keys", async () => {
     const fixture = await launchCachedClient("gw-clipboard-e2e-");
     try {

@@ -89,6 +89,7 @@ import {
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
+import { releaseWindowShortcutKey } from './window-shortcuts.js';
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
@@ -392,6 +393,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         : null;
     },
     release(win, code) {
+      releaseWindowShortcutKey(win, code);
       recordMainInput(win, {
         source: 'appkit',
         kind: 'native-key',
