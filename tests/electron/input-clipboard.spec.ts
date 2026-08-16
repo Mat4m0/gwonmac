@@ -5,6 +5,7 @@ import { startGameInput } from "./input-helpers.js";
 /** The page-side handle the OSK focus guard honours. */
 type OskWindow = typeof window & {
   Module: { oskActiveInput?: Element | null };
+  __clipboardGameKeys?: string[];
 };
 
 test.describe("renderer clipboard copy", () => {
@@ -24,6 +25,14 @@ test.describe("renderer clipboard copy", () => {
             throw new Error("the text proxy is missing");
           }
           (window as OskWindow).Module.oskActiveInput = field;
+          (window as OskWindow).__clipboardGameKeys = [];
+          for (const type of ["keydown", "keyup"] as const) {
+            window.addEventListener(type, (event) => {
+              if (event.code === "KeyC") {
+                (window as OskWindow).__clipboardGameKeys?.push(type);
+              }
+            }, true);
+          }
           field.value = "gw copy proof";
           field.focus();
           field.setSelectionRange(0, 2);
@@ -67,6 +76,9 @@ test.describe("renderer clipboard copy", () => {
         expect(
           await app.evaluate(({ clipboard }) => clipboard.readText()),
         ).toBe("sentinel");
+        expect(await page.evaluate(() => (
+          window as OskWindow
+        ).__clipboardGameKeys)).toEqual([]);
       } finally {
         await app.evaluate(
           ({ clipboard }, text) => clipboard.writeText(text),

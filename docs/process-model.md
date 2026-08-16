@@ -137,14 +137,15 @@ successful swap on the visible canvas. The client owns canvas size. The host
 supplies the selected render scale and mirrors the requested backing size.
 
 The renderer owns one input policy in `src/renderer/input.ts`. Mouse and
-trackpad actions go to Guild Wars without a selectable input mode. The host
-releases held keys and buttons when focus changes or native UI consumes a
-release.
+trackpad actions go to Guild Wars without a selectable input mode. A real focus
+or visibility loss releases all held input. Pointer-only interruptions release
+only mouse buttons; they do not stop keyboard movement.
 
 On macOS, AppKit consumes ordinary key-up events while Command remains down.
 The app-local native monitor forwards that physical key position to the focused
 game renderer. The renderer releases only the matching entry from its existing
-held-key map. Bare Command transitions stay outside Guild Wars, which has no
+held-key map and clears that physical code from renderer-owned suppression.
+Bare Command transitions stay outside Guild Wars, which has no
 Command modifier, so pressing or releasing Command cannot interrupt another
 key that is still physically held. A real focus loss remains the final cleanup
 for interrupted input.

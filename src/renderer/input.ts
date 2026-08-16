@@ -316,12 +316,12 @@ export const installGameInput = ({
     for (const [, input] of inputs) dispatchKeyRelease(input);
   }
 
-  function dispatchButtonRelease(input: HeldButton) {
+  function dispatchButtonRelease(input: HeldButton, buttons: number) {
     input.target?.dispatchEvent(new MouseEvent('mouseup', {
       bubbles: true,
       cancelable: true,
       button: input.button,
-      buttons: 0,
+      buttons,
       clientX: input.clientX,
       clientY: input.clientY,
       screenX: input.screenX,
@@ -337,7 +337,15 @@ export const installGameInput = ({
     const inputs = [...heldButtons.values()];
     heldButtons.clear();
     releasePointer();
-    for (const input of inputs) dispatchButtonRelease(input);
+    for (const input of inputs) dispatchButtonRelease(input, 0);
+  }
+
+  function releaseButton(button: number) {
+    const input = heldButtons.get(button);
+    if (!input) return;
+    heldButtons.delete(button);
+    if (button === 2) releasePointer();
+    dispatchButtonRelease(input, currentButtons());
   }
 
   function releaseAll() {
@@ -535,7 +543,7 @@ export const installGameInput = ({
     });
     heldButtons.delete(event.button);
     if (held && held.target === canvas && event.target !== canvas) {
-      dispatchButtonRelease(held);
+      dispatchButtonRelease(held, currentButtons());
     }
   }, true);
   window.addEventListener('mousemove', (event) => {
@@ -552,13 +560,14 @@ export const installGameInput = ({
     }
   }, true);
 
-  const releaseFor = (cause: 'blur' | 'hidden' | 'command' | 'leave') => () => {
+  const releaseFor = (cause: 'blur' | 'hidden' | 'command') => () => {
     // Only the causes are named, not a new reason to release: every one of
     // these already released everything, and the trace exists to say which
     // native interruption ended a drag the player thought they still had.
     if (heldKeys.size || heldButtons.size) {
       trace?.record({ kind: 'release-all', cause });
     }
+    suppressedKeyUps.clear();
     releaseAll();
   };
   window.addEventListener('blur', releaseFor('blur'));
@@ -566,6 +575,7 @@ export const installGameInput = ({
   window.addEventListener('gw:input-reset', releaseFor('command'));
   window.addEventListener('gw:input-release', (event) => {
     if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
+    suppressedKeyUps.delete(event.detail);
     releaseKeys((code) => code === event.detail);
   });
   document.addEventListener('visibilitychange', () => {
@@ -684,7 +694,7 @@ export const installGameInput = ({
             '[warn] pointer lock refused:',
             error instanceof Error ? error.message : String(error),
           );
-          releaseButtons();
+          releaseButton(2);
         });
     } catch (error) {
       diagnostics?.event('pointerLock.failed', error);
@@ -692,7 +702,7 @@ export const installGameInput = ({
         '[warn] pointer lock refused:',
         error instanceof Error ? error.message : String(error),
       );
-      releaseButtons();
+      releaseButton(2);
     }
   };
 
@@ -751,15 +761,15 @@ export const installGameInput = ({
     if (locked && !pointerWanted) {
       document.exitPointerLock();
     } else if (virtualCursor && !locked) {
-      releaseButtons();
+      releaseButton(2);
     }
   });
   document.addEventListener('pointerlockerror', () => {
     diagnostics?.event('pointerLock.failed');
     log('[warn] pointer lock failed (needs a user gesture and focused document)');
-    releaseButtons();
+    releaseButton(2);
   });
-  document.documentElement.addEventListener('mouseleave', releaseFor('leave'));
+  document.documentElement.addEventListener('mouseleave', releaseButtons);
 
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   canvas.dataset.inputReady = 'true';

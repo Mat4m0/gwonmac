@@ -81,7 +81,7 @@ declare global {
      */
     | { kind: "double-click"; delivered: boolean }
     | { kind: "pointer-lock"; locked: boolean }
-    | { kind: "release-all"; cause: "blur" | "hidden" | "command" | "leave" };
+    | { kind: "release-all"; cause: "blur" | "hidden" | "command" };
 
   /** An entry with the trace's own timing attached. */
   type InputTraceRecord = InputTraceEntry & {

@@ -375,7 +375,9 @@ test.describe("renderer camera input", () => {
         });
         window.addEventListener("mouseup", (event) => {
           if (!event.isTrusted) {
-            testWindow.__inputReleases.push(`mouse:${event.button}`);
+            testWindow.__inputReleases.push(
+              `mouse:${event.button}:buttons=${event.buttons}`,
+            );
           }
         });
         Object.defineProperty(globalThis.document, "pointerLockElement", {
@@ -388,6 +390,7 @@ test.describe("renderer camera input", () => {
       const box = await boxOf(page.locator("#canvas"));
       await page.keyboard.down("w");
       await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down({ button: "left" });
       await page.mouse.down({ button: "right" });
       await page.evaluate(() => {
         Object.defineProperty(globalThis.document, "pointerLockElement", {
@@ -400,9 +403,10 @@ test.describe("renderer camera input", () => {
       });
       expect(
         await page.evaluate(() => (window as CameraInputWindow).__inputReleases),
-      ).toEqual(["mouse:2"]);
+      ).toEqual(["mouse:2:buttons=1"]);
       await page.keyboard.up("w");
       await page.mouse.up({ button: "right" });
+      await page.mouse.up({ button: "left" });
     } finally {
       await closeOffline(fixture);
     }

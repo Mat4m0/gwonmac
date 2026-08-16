@@ -17,7 +17,10 @@ type ClipboardCopyOptions = {
   log(...values: unknown[]): void;
 };
 
-const isCopyableField = (value: unknown): value is ClipboardField =>
+const isGameTextField = (value: unknown): value is ClipboardField =>
+  value instanceof HTMLTextAreaElement || value instanceof HTMLInputElement;
+
+const isCopyableField = (value: ClipboardField): boolean =>
   value instanceof HTMLTextAreaElement ||
   // The password proxy is excluded the way Chromium excludes password
   // inputs from native copy: secrets do not leave through this path.
@@ -30,8 +33,9 @@ export const installClipboardCopy = ({
   log,
 }: ClipboardCopyOptions): void => {
   const sources = new Set<ClipboardField>();
+  let copyKeyHeld = false;
   for (const field of fields) {
-    if (isCopyableField(field)) sources.add(field);
+    if (isGameTextField(field)) sources.add(field);
   }
 
   window.addEventListener('keydown', (event) => {
@@ -40,7 +44,12 @@ export const installClipboardCopy = ({
       return;
     }
     const active = document.activeElement;
-    if (!isCopyableField(active) || !sources.has(active)) return;
+    if (!isGameTextField(active) || !sources.has(active)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (copyKeyHeld || event.repeat) return;
+    copyKeyHeld = true;
+    if (!isCopyableField(active)) return;
     const { selectionStart, selectionEnd, value } = active;
     // The client tracks its in-field selection internally and does not mirror
     // every change onto the proxy, so a collapsed DOM selection means the
@@ -64,4 +73,22 @@ export const installClipboardCopy = ({
       },
     );
   }, true);
+  window.addEventListener('keyup', (event) => {
+    if (!copyKeyHeld || event.code !== 'KeyC') return;
+    copyKeyHeld = false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+  const clearCopyKey = () => {
+    copyKeyHeld = false;
+  };
+  window.addEventListener('blur', clearCopyKey);
+  window.addEventListener('pagehide', clearCopyKey);
+  window.addEventListener('gw:input-reset', clearCopyKey);
+  window.addEventListener('gw:input-release', (event) => {
+    if (event instanceof CustomEvent && event.detail === 'KeyC') clearCopyKey();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') clearCopyKey();
+  });
 };

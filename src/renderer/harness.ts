@@ -1074,6 +1074,16 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     Object.values(Module.oskInput).filter((input): input is HTMLElement => !!input),
   );
 
+  // Claim the one supported clipboard chord before game input sees it. The
+  // client otherwise treats Cmd+C as its ordinary C binding while the host is
+  // copying from the active text proxy.
+  host.installClipboardCopy({
+    fields: oskInputs,
+    writeText: (text) => native().clipboard.writeText(text),
+    diagnostics: window.gwDiagnostics,
+    log,
+  });
+
   inputHost = host.installGameInput({
     canvas: c,
     textInputs: oskInputs,
@@ -1103,15 +1113,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     trace: inputTrace,
     log,
   });
-  // Stray focus must bounce off, or a field silently swallows keys meant for
-  // the game. On desktop the active field itself stays behind the canvas.
-  host.installClipboardCopy({
-    fields: oskInputs,
-    writeText: (text) => native().clipboard.writeText(text),
-    diagnostics: window.gwDiagnostics,
-    log,
-  });
-
   // Every same-document control is part of the game experience, not a loss of
   // application focus. Keep the client's canvas-blur callback from muting
   // audio when focus moves into Settings, Tools, Travel, a warning, or a game
