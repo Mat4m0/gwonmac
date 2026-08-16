@@ -561,6 +561,10 @@ export const installGameInput = ({
   window.addEventListener('blur', releaseFor('blur'));
   window.addEventListener('pagehide', releaseFor('blur'));
   window.addEventListener('gw:input-reset', releaseFor('command'));
+  window.addEventListener('gw:input-release', (event) => {
+    if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
+    releaseKeys((code) => code === event.detail);
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') releaseFor('hidden')();
   });

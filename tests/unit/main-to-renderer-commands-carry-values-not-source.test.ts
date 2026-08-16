@@ -86,6 +86,7 @@ function harness(argv: string[]) {
 
   // The renderer half: the real router, over the real preload object.
   const dispatched: string[] = [];
+  const dispatchedDetails: unknown[] = [];
   const capture: CaptureCall[] = [];
   let releaseFlush = (): void => {};
   const flushed = new Promise<void>((resolve) => {
@@ -138,6 +139,7 @@ function harness(argv: string[]) {
       defaultPrevented: boolean;
     }) {
       dispatched.push(event.type);
+      dispatchedDetails.push("detail" in event ? event.detail : undefined);
       if (toolboxListening && event.type === "gw:tools-toggle") {
         event.preventDefault();
       }
@@ -166,6 +168,7 @@ function harness(argv: string[]) {
     capture,
     deliver,
     dispatched,
+    dispatchedDetails,
     acknowledgements,
     releaseFlush,
     window,
@@ -251,6 +254,15 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
     [4, "completed"],
     [5, "completed"],
   ]);
+});
+
+test("one physical key release crosses preload and is acknowledged", async () => {
+  const fixture = harness(ARGV);
+  fixture.deliver(1, { type: "input.release", code: "KeyA" });
+  await new Promise(setImmediate);
+  assert.deepEqual(fixture.dispatched, ["gw:input-release"]);
+  assert.deepEqual(fixture.dispatchedDetails, ["KeyA"]);
+  assert.deepEqual(fixture.acknowledgements(), [[1, "completed"]]);
 });
 
 test("the Tools shortcut is refused when there is no Toolbox to toggle", async () => {

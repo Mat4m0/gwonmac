@@ -11,7 +11,7 @@ type PackagerIgnore = NonNullable<ForgeConfig["packagerConfig"]>["ignore"];
 export const PRELOAD_ENTRY = "/build/preload/preload.cjs";
 
 export const REQUIRED_PACKAGE_FILES = Object.freeze([
-  "/build/native/keychain.node",
+  "/build/native/host.node",
   "/build/renderer/companion-kernel.wasm",
   "/build/renderer/enhancements.js",
   "/build/renderer/companion-snapshot.js",

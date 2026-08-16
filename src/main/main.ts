@@ -96,7 +96,8 @@ import {
   VolatileNativeKeychain,
   type NativeKeychain,
 } from "./core/native-keychain.js";
-import { loadNativeKeychain } from "./native-keychain.js";
+import { loadNativeHost } from "./native-host.js";
+import { installMacosCommandKeyUps } from "./macos-command-key-ups.js";
 import { cleanupLegacySecretFiles } from "./core/legacy-secret-cleanup.js";
 import {
   distributionCapabilities,
@@ -376,6 +377,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
       "Mat4m0/gwonmac · App icon artwork © ArenaNet LLC · QT Friz Quad © 1992 QualiType (SIL OFL 1.1) · Not affiliated with ArenaNet or NCSOFT.",
     website: EXTERNAL_URLS.github,
   });
+  const nativeHost = loadNativeHost({
+    packaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+  });
+  const stopCommandKeyUps = installMacosCommandKeyUps(nativeHost);
+  app.once("will-quit", () => stopCommandKeyUps());
   const paths = gamePaths();
   try {
     activeAccountMode = await loadAccountMode(paths.launcherMode);
@@ -500,11 +508,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   );
   if (activeAccountMode === "single") await prepareWindowState();
   const keychain: NativeKeychain = persistentSecrets
-    ? loadNativeKeychain({
-        packaged: true,
-        appPath: app.getAppPath(),
-        resourcesPath: process.resourcesPath,
-      })
+    ? nativeHost
     : new VolatileNativeKeychain();
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
   const profileMatches =

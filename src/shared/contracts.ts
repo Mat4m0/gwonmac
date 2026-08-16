@@ -683,6 +683,7 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
  */
 export type RendererCommand =
   | { type: "input.reset" }
+  | { type: "input.release"; code: string }
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
   | { type: "storage.open" }

@@ -14,7 +14,7 @@ const root = path.resolve(
   "../..",
 );
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
-const source = read("src/native/keychain/keychain.mm");
+const source = read("src/native/host/host.mm");
 
 test("the native boundary uses only ABI-stable Node-API", () => {
   assert.match(source, /#include <node_api\.h>/u);
@@ -25,6 +25,16 @@ test("the native boundary uses only ABI-stable Node-API", () => {
   assert.doesNotMatch(source, /\b(?:v8|uv_|node::)/u);
   assert.match(source, /napi_create_async_work/u);
   assert.match(source, /napi_queue_async_work/u);
+  assert.match(source, /napi_async_init/u);
+  assert.match(source, /napi_make_callback/u);
+});
+
+test("Command-held releases use one app-local macOS monitor", () => {
+  assert.match(source, /#import <AppKit\/AppKit\.h>/u);
+  assert.match(source, /addLocalMonitorForEventsMatchingMask:NSEventMaskKeyUp/u);
+  assert.match(source, /NSEventModifierFlagCommand/u);
+  assert.match(source, /DispatchCommandKeyUp\(monitor, event\.keyCode\) \? nil : event/u);
+  assert.doesNotMatch(source, /CGEventTap|IOHID|AXIsProcessTrusted/u);
 });
 
 test("the native boundary owns two fixed Data Protection Keychain items", () => {
@@ -66,7 +76,7 @@ test("the native boundary owns two fixed Data Protection Keychain items", () => 
 
 test("the canonical build emits one host-only Node-API 8 addon", () => {
   const nativeSteps = BUILD_STEPS.filter(([, args]) =>
-    args.includes("src/native/keychain/keychain.mm"),
+    args.includes("src/native/host/host.mm"),
   );
   assert.equal(nativeSteps.length, 1);
   const [command, args] = nativeSteps[0]!;
@@ -74,7 +84,8 @@ test("the canonical build emits one host-only Node-API 8 addon", () => {
   assert.ok(args.includes("-DNAPI_VERSION=8"));
   assert.ok(args.includes("node_modules/node-api-headers/include"));
   assert.ok(args.includes("-mmacosx-version-min=12.0"));
-  assert.deepEqual(args.slice(-2), ["-o", "build/native/keychain.node"]);
+  assert.ok(args.includes("AppKit"));
+  assert.deepEqual(args.slice(-2), ["-o", "build/native/host.node"]);
   assert.equal(args.filter((arg) => arg === "-arch").length, 1);
   assert.equal(
     JSON.parse(read("package.json")).devDependencies["node-api-headers"],
@@ -91,11 +102,11 @@ test("Forge unpacks only the two executables from ASAR", () => {
   const packageIgnore = read("scripts/package-ignore.ts");
   assert.match(
     forge,
-    /asar: \{ unpack: "\*\*\/build\/native\/\{keychain\.node,gw-dat-decode\}" \}/u,
+    /asar: \{ unpack: "\*\*\/build\/native\/\{host\.node,gw-dat-decode\}" \}/u,
   );
   for (const kept of [
     /p === "\/build\/native"/u,
-    /p === "\/build\/native\/keychain\.node"/u,
+    /p === "\/build\/native\/host\.node"/u,
     /p === "\/build\/native\/gw-dat-decode"/u,
   ]) {
     assert.match(packageIgnore, kept);
