@@ -483,6 +483,7 @@ let applyAppearance:
   typeof import('./appearance.js').applyAppearance = () => {};
 let inputHost: GameInputController | null = null;
 let inputTrace: InputTrace | null = null;
+let gamepadTrace: import('./gamepad-trace.js').GamepadTraceController | null = null;
 window.gwToolsSettings = () => Object.freeze({
   enabled: appSettings?.gwonmacTools ?? false,
   teamManagement: appSettings?.teamManagement ?? true,
@@ -525,6 +526,7 @@ let host: typeof import('./graphics.js') &
   typeof import('./surface-controller.js') &
   typeof import('./native-double-click.js') &
   typeof import('./text-editing.js') &
+  typeof import('./gamepad-trace.js') &
   typeof import('./template-save-compatibility.js') &
   typeof import('./template-filesystem-trace.js');
 
@@ -1052,11 +1054,16 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     document.body,
     (text) => native().clipboard.writeText(text),
   );
+  gamepadTrace = host.installGamepadTrace(inputTrace);
   // Install before game input so a key claimed by the topmost GWonMac surface
   // cannot also reach the official client's window-capture listener.
   window.gwSurfaces = host.installSurfaceController(document);
-  window.addEventListener('gw:input-trace', () => {
-    log(`input trace: ${inputTrace?.toggle() ? 'on' : 'off'}`);
+  native().inputTrace.onEntry((entry) => inputTrace?.record(entry));
+  window.addEventListener('gw:input-trace', (event) => {
+    if (!(event instanceof CustomEvent) || typeof event.detail !== 'boolean') return;
+    inputTrace?.setEnabled(event.detail);
+    gamepadTrace?.setEnabled(event.detail);
+    log(`input trace: ${event.detail ? 'on' : 'off'}`);
   });
 
   // Text entry runs through these, not through keydown on the canvas. The
@@ -1082,6 +1089,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     writeText: (text) => native().clipboard.writeText(text),
     edit: (command) => native().clipboard.edit(command),
     diagnostics: window.gwDiagnostics,
+    trace: inputTrace,
     log,
   });
 
@@ -1167,6 +1175,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       surfaceController,
       nativeDoubleClickModule,
       textEditing,
+      gamepadTraceModule,
       templateSaveCompatibility,
       templateFilesystemTrace,
       clientHealth,
@@ -1185,6 +1194,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       import('./surface-controller.js'),
       import('./native-double-click.js'),
       import('./text-editing.js'),
+      import('./gamepad-trace.js'),
       import('./template-save-compatibility.js'),
       import('./template-filesystem-trace.js'),
       import('./client-health.js'),
@@ -1202,6 +1212,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       ...surfaceController,
       ...nativeDoubleClickModule,
       ...textEditing,
+      ...gamepadTraceModule,
       ...templateSaveCompatibility,
       ...templateFilesystemTrace,
     };

@@ -137,6 +137,9 @@ const api = {
       rendererCommandHandler = handler;
     },
   },
+  inputTrace: {
+    onEntry: (callback) => listen(IPC.inputTraceEvent, callback),
+  },
   progress: {
     current: () => ipcRenderer.invoke(IPC.progressCurrent),
     onChange: (callback) => listen(IPC.progressEvent, callback),

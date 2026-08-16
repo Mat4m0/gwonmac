@@ -26,6 +26,7 @@ import type { ErrorCode } from "./errors.js";
 import type { BuildLibrary } from "./builds/library.js";
 import type { ProfileId } from "./multiple-accounts.js";
 import type { TemplateExportEntry } from "./template-contracts.js";
+import type { InputTraceEntry } from "./input-trace.js";
 import type {
   AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
@@ -694,7 +695,7 @@ export type RendererCommand =
       checkForUpdates?: boolean;
     }
   | { type: "filesystem.sync" }
-  | { type: "input.trace" }
+  | { type: "input.trace"; enabled: boolean }
   | { type: "diagnostics.toggle" }
   | {
       type: "diagnostics.capture";
@@ -775,6 +776,7 @@ export const IPC = {
   // window, which `executeJavaScript`'s awaited result used to guarantee.
   rendererCommand: "gw:renderer:command",
   rendererCommandDone: "gw:renderer:commandDone",
+  inputTraceEvent: "gw:inputTrace:event",
   appUpdatesGetState: "gw:appUpdates:getState",
   appUpdatesCheck: "gw:appUpdates:check",
   appUpdatesRestartAndInstall: "gw:appUpdates:restartAndInstall",
@@ -810,6 +812,7 @@ export const EVENT_CHANNELS = [
   "socketEvent",
   "rendererCommand",
   "rendererCommandDone",
+  "inputTraceEvent",
   "appUpdatesState",
 ] as const;
 
@@ -836,6 +839,9 @@ export interface GwNativeApi {
      * early or have a rejection disguised as success.
      */
     handle(handler: (command: RendererCommand) => void | Promise<void>): void;
+  };
+  inputTrace: {
+    onEntry(callback: (entry: InputTraceEntry) => void): () => void;
   };
   progress: {
     current(): Promise<DownloadProgress>;

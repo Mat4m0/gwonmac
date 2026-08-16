@@ -8,6 +8,12 @@
  * which an edit reaches the client.
  */
 import type { TextEditCommand } from '../shared/contracts.js';
+import type {
+  InputTrace,
+  InputTraceInputType,
+  InputTraceLengthDelta,
+  InputTraceTextPhase,
+} from '../shared/input-trace.js';
 
 type GameTextField = HTMLInputElement | HTMLTextAreaElement;
 
@@ -17,6 +23,7 @@ type TextEditingOptions = {
   writeText(text: string): Promise<void>;
   edit(command: TextEditCommand): Promise<void>;
   diagnostics?: GameInputDiagnostics;
+  trace?: InputTrace;
   log(...values: unknown[]): void;
 };
 
@@ -35,11 +42,30 @@ const selection = (field: GameTextField) => ({
   end: field.selectionEnd,
 });
 
+const inputType = (value: string): InputTraceInputType => {
+  if (value === 'insertText') return 'insert-text';
+  if (value === 'insertFromPaste') return 'insert-paste';
+  if (value.includes('Composition')) return 'insert-composition';
+  if (value === 'deleteContentBackward') return 'delete-backward';
+  if (value === 'deleteContentForward') return 'delete-forward';
+  if (value === 'deleteByCut') return 'delete-cut';
+  if (value === 'historyUndo' || value === 'historyRedo') return 'history';
+  return value ? 'other' : 'none';
+};
+
+const lengthDelta = (type: InputTraceInputType): InputTraceLengthDelta => {
+  if (type.startsWith('insert-')) return 'grow';
+  if (type.startsWith('delete-')) return 'shrink';
+  if (type === 'history') return 'unknown';
+  return 'same';
+};
+
 export const installTextEditing = ({
   fields,
   writeText,
   edit,
   diagnostics,
+  trace,
   log,
 }: TextEditingOptions): void => {
   const sources = new Set<GameTextField>();
@@ -47,6 +73,53 @@ export const installTextEditing = ({
   for (const field of fields) {
     if (isGameTextField(field)) sources.add(field);
   }
+
+  const recordText = (
+    field: GameTextField,
+    phase: InputTraceTextPhase,
+    event: Event,
+  ) => {
+    if (!trace?.enabled()) return;
+    const type = inputType(event instanceof InputEvent ? event.inputType : '');
+    trace.record({
+      source: 'renderer',
+      kind: 'text',
+      owner: field.type === 'password' || field.type === 'email'
+        ? 'secret'
+        : 'text',
+      phase,
+      trusted: event.isTrusted,
+      repeat: false,
+      inputType: type,
+      // The event itself says a selection changed without exposing either
+      // endpoint (which would reveal a secret field's minimum length).
+      selectionChanged: phase === 'selectionchange',
+      delta: phase === 'input' || phase === 'beforeinput'
+        ? lengthDelta(type)
+        : 'same',
+    });
+  };
+
+  for (const field of sources) {
+    field.addEventListener('focus', (event) => recordText(field, 'focus', event));
+    field.addEventListener('blur', (event) => recordText(field, 'blur', event));
+    field.addEventListener('beforeinput', (event) =>
+      recordText(field, 'beforeinput', event));
+    field.addEventListener('input', (event) => recordText(field, 'input', event));
+    for (const phase of [
+      'compositionstart',
+      'compositionupdate',
+      'compositionend',
+    ] as const) {
+      field.addEventListener(phase, (event) => recordText(field, phase, event));
+    }
+  }
+  document.addEventListener('selectionchange', (event) => {
+    const active = document.activeElement;
+    if (isGameTextField(active) && sources.has(active)) {
+      recordText(active, 'selectionchange', event);
+    }
+  });
 
   const reportClipboardFailure = (error: unknown) => {
     diagnostics?.event('clipboard.writeFailed', error);
@@ -65,6 +138,13 @@ export const installTextEditing = ({
     event.preventDefault();
     event.stopImmediatePropagation();
     const code = event.code as EditingKey;
+    trace?.record({
+      source: 'renderer', kind: 'key', phase: 'down',
+      owner: active.type === 'password' || active.type === 'email'
+        ? 'secret'
+        : 'text',
+      repeat: event.repeat, trusted: event.isTrusted, decision: 'command',
+    });
     if (claimedKeys.has(code) || event.repeat) {
       return;
     }
@@ -101,6 +181,15 @@ export const installTextEditing = ({
   window.addEventListener('keyup', (event) => {
     const code = event.code as EditingKey;
     if (!claimedKeys.delete(code)) return;
+    const active = document.activeElement;
+    trace?.record({
+      source: 'renderer', kind: 'key', phase: 'up',
+      owner: isGameTextField(active) &&
+        (active.type === 'password' || active.type === 'email')
+        ? 'secret'
+        : 'text',
+      repeat: event.repeat, trusted: event.isTrusted, decision: 'command',
+    });
     event.preventDefault();
     event.stopImmediatePropagation();
   }, true);

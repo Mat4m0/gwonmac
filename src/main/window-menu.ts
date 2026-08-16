@@ -26,6 +26,10 @@ import {
   toggleTools,
 } from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
+import {
+  inputTraceEnabled,
+  setInputTraceEnabled,
+} from './input-trace.js';
 import type { WindowHost } from "./window.js";
 import {
   resolveShortcuts,
@@ -270,7 +274,9 @@ export function installApplicationMenu({
               id: "toggle-input-trace",
               label: "Show Input Trace",
               click: () => {
-                void sendRendererCommand(win, { type: "input.trace" });
+                const enabled = !inputTraceEnabled(win);
+                setInputTraceEnabled(win, enabled);
+                void sendRendererCommand(win, { type: "input.trace", enabled });
               },
             },
             {

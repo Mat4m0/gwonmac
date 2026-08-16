@@ -356,6 +356,11 @@ const SUBSCRIPTIONS: Subscription[] = [
     subscribe: (api, listener) => api.sockets.onEvent(listener),
   },
   {
+    path: "inputTrace.onEntry",
+    channel: IPC.inputTraceEvent,
+    subscribe: (api, listener) => api.inputTrace.onEntry(listener),
+  },
+  {
     path: "appUpdates.onState",
     channel: IPC.appUpdatesState,
     subscribe: (api, listener) => api.appUpdates.onState(listener),
