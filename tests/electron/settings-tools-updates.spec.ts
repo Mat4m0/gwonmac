@@ -5,6 +5,44 @@ import { closeOffline, launchOffline } from "./fixtures.mjs";
 import { packageVersion } from "./settings-test-fixture.mjs";
 
 test.describe("tools and update settings", () => {
+  test("Command-Shift-C opens storage or its settings, never hero builds", async () => {
+    const fixture = await launchOffline("gw-storage-shortcut-e2e-");
+    try {
+      const { app, page } = fixture;
+      await page.evaluate(() => {
+        document.body.dataset.toolsActions = "0";
+        window.addEventListener("gw:tools-toggle", (event) => {
+          event.preventDefault();
+          document.body.dataset.toolsActions = String(
+            Number(document.body.dataset.toolsActions ?? "0") + 1,
+          );
+        });
+      });
+      await app.evaluate(({ BrowserWindow }) => {
+        const contents = BrowserWindow.getAllWindows()[0]?.webContents;
+        contents?.sendInputEvent({
+          type: "keyDown",
+          keyCode: "C",
+          modifiers: ["meta", "shift"],
+        });
+        contents?.sendInputEvent({
+          type: "keyUp",
+          keyCode: "C",
+          modifiers: ["meta", "shift"],
+        });
+      });
+
+      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+      await expect(page.locator(".settings-panes")).toHaveAttribute(
+        "data-active",
+        "controls",
+      );
+      await expect(page.locator("body")).toHaveAttribute("data-tools-actions", "0");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("records, replaces, clears, and restores app shortcuts without firing them", async () => {
       const fixture = await launchOffline("gw-settings-shortcuts-e2e-");
     try {
