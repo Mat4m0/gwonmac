@@ -44,6 +44,9 @@ const TRACED_MODIFIERS: Readonly<Record<string, 'ctrl' | 'shift' | 'alt'>> = {
   Alt: 'alt',
 };
 
+const isCommandKey = (code: string): boolean =>
+  code === 'MetaLeft' || code === 'MetaRight';
+
 /**
  * The modifiers a press carried, as the trace prints them.
  *
@@ -424,6 +427,13 @@ export const installGameInput = ({
 
   window.addEventListener('keydown', (event) => {
     if (!event.isTrusted) return;
+    // Guild Wars has no Command modifier. Let Chromium and the main-process
+    // shortcut controller keep the combination, but do not let the bare
+    // modifier transition disturb game keys that are already held.
+    if (isCommandKey(event.code)) {
+      event.stopImmediatePropagation();
+      return;
+    }
     if (handleProviderKey(event)) return;
     if (
       event.target === canvas &&
@@ -465,6 +475,10 @@ export const installGameInput = ({
   }, true);
   window.addEventListener('keyup', (event) => {
     if (!event.isTrusted) return;
+    if (isCommandKey(event.code)) {
+      event.stopImmediatePropagation();
+      return;
+    }
     if (suppressedKeyUps.delete(event.code)) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -481,17 +495,6 @@ export const installGameInput = ({
     // presses the UI itself received stay inside its event boundary.
     if (held && held.target === canvas && event.target !== canvas) {
       dispatchKeyRelease(held);
-    }
-    if (event.code === 'MetaLeft' || event.code === 'MetaRight') {
-      releaseKeys((code) =>
-        code !== 'MetaLeft' &&
-        code !== 'MetaRight' &&
-        code !== 'ShiftLeft' &&
-        code !== 'ShiftRight' &&
-        code !== 'ControlLeft' &&
-        code !== 'ControlRight' &&
-        code !== 'AltLeft' &&
-        code !== 'AltRight');
     }
   }, true);
   window.addEventListener('mousedown', (event) => {

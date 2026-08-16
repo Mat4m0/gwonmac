@@ -144,7 +144,10 @@ release.
 On macOS, AppKit consumes ordinary key-up events while Command remains down.
 The app-local native monitor forwards that physical key position to the focused
 game renderer. The renderer releases only the matching entry from its existing
-held-key map. Releasing Command remains the final cleanup for a missed event.
+held-key map. Bare Command transitions stay outside Guild Wars, which has no
+Command modifier, so pressing or releasing Command cannot interrupt another
+key that is still physically held. A real focus loss remains the final cleanup
+for interrupted input.
 
 Moving focus from the game canvas into a control in the same renderer does not
 blur Guild Wars. Settings, Tools, Travel, warnings, and game text fields remain
