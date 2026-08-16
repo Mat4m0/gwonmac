@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { IPC } from '../../src/shared/contracts.js';
 import { closeOffline, launchCachedClient } from "./fixtures.mjs";
 import { boxOf, startGameInput } from "./input-helpers.js";
 
@@ -23,9 +24,12 @@ const expectTrace = (page: import("@playwright/test").Page) =>
   expect.poll(() => traceText(page));
 
 const toggleTrace = (page: import("@playwright/test").Page) =>
-  page.evaluate(() =>
-    window.dispatchEvent(new globalThis.CustomEvent("gw:input-trace")),
-  );
+  page.evaluate(() => {
+    const enabled = globalThis.document.getElementById('input-trace')?.hidden ?? true;
+    window.dispatchEvent(new globalThis.CustomEvent("gw:input-trace", {
+      detail: enabled,
+    }));
+  });
 
 /**
  * Announces a lock state the way the browser does: set the element, then
@@ -135,6 +139,122 @@ test.describe("input trace", () => {
       const rows = await traceText(page);
       expect(rows.match(/pointer lock engaged/gu)?.length ?? 0).toBe(1);
       expect(rows.match(/pointer lock released/gu)?.length ?? 0).toBe(1);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("joins redacted main and text events, pauses, bounds, copies, and clears", async () => {
+    test.setTimeout(60_000);
+    const fixture = await launchCachedClient("gw-input-trace-timeline-");
+    try {
+      const { app, page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        globalThis.document.getElementById('loading')?.classList.add('gone');
+      });
+      await toggleTrace(page);
+
+      const mainEntry = {
+        source: 'main', kind: 'native-key', phase: 'down',
+        key: 'printable', repeat: true, decision: 'forwarded',
+      } as const;
+      await app.evaluate(({ BrowserWindow }, value) => {
+        BrowserWindow.getAllWindows()[0]?.webContents.send(value.channel, value.entry);
+      }, { channel: IPC.inputTraceEvent, entry: mainEntry });
+
+      const secret = 'must-not-appear-in-input-trace';
+      await page.locator('#osk-input-password').evaluate((field, value) => {
+        const input = field as HTMLInputElement;
+        input.focus();
+        input.value = value;
+        input.dispatchEvent(new InputEvent('beforeinput', {
+          bubbles: true, inputType: 'insertText', data: value,
+        }));
+        input.dispatchEvent(new InputEvent('input', {
+          bubbles: true, inputType: 'insertText', data: value,
+        }));
+      }, secret);
+      await expectTrace(page).toContain('main     key down printable repeat');
+      await expectTrace(page).toContain('text secret input');
+
+      const count = page.locator('#input-trace [data-role="count"]');
+      await page.locator('#input-trace [data-role="pause"]').click();
+      await page.evaluate(() => new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      const beforePause = await count.textContent();
+      await page.mouse.click(100, 100);
+      expect(await count.textContent()).toBe(beforePause);
+      await page.locator('#input-trace [data-role="pause"]').click();
+
+      await app.evaluate(({ BrowserWindow }, value) => {
+        const target = BrowserWindow.getAllWindows()[0]?.webContents;
+        for (let index = 0; index < 1_010; index += 1) {
+          target?.send(value.channel, value.entry);
+        }
+      }, { channel: IPC.inputTraceEvent, entry: mainEntry });
+      await expect(count).toHaveText('1000/1000');
+
+      await page.locator('#input-trace [data-role="copy"]').click();
+      await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+        .toContain('gwonmac input harness — 1000 events');
+      const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
+      expect(copied).not.toContain(secret);
+      expect(copied).not.toMatch(/password|email|coordinate=/iu);
+
+      await toggleTrace(page);
+      await expect(page.locator('#input-trace')).toBeHidden();
+      await expectTrace(page).toBe('');
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("records thresholded gamepad transitions without a device identity", async () => {
+    const fixture = await launchCachedClient("gw-input-trace-gamepad-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const state = globalThis as typeof globalThis & { testPads?: Gamepad[] };
+        state.testPads = [{
+          index: 0,
+          id: 'private-controller-name',
+          connected: true,
+          mapping: 'standard',
+          timestamp: 1,
+          vibrationActuator: null,
+          buttons: [{ pressed: false, touched: false, value: 0 }],
+          axes: [0],
+        } as unknown as Gamepad];
+        Object.defineProperty(globalThis.navigator, 'getGamepads', {
+          configurable: true,
+          value: () => state.testPads ?? [],
+        });
+      });
+      await toggleTrace(page);
+      await expectTrace(page).toContain('gamepad connected');
+
+      await page.evaluate(() => {
+        const state = globalThis as typeof globalThis & { testPads?: Gamepad[] };
+        const gamepad = state.testPads?.[0];
+        if (!gamepad) return;
+        state.testPads = [{
+          ...gamepad,
+          timestamp: 2,
+          buttons: [{ pressed: true, touched: true, value: 1 }],
+          axes: [0.8],
+        } as Gamepad];
+      });
+      await expectTrace(page).toContain('gamepad button-down control=0');
+      await expectTrace(page).toContain('gamepad axis control=0 direction=1');
+
+      await page.evaluate(() => {
+        const state = globalThis as typeof globalThis & { testPads?: Gamepad[] };
+        state.testPads = [];
+      });
+      await expectTrace(page).toContain('gamepad disconnected');
+      expect(await traceText(page)).not.toContain('private-controller-name');
     } finally {
       await closeOffline(fixture);
     }

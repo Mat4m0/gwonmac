@@ -173,9 +173,15 @@ required behavior. It is not a saved player preference. If an ArenaNet build
 is not certified, the official client remains playable with the normal macOS
 pointer and without the certified repair.
 
-The input trace is a renderer-only troubleshooting view. It records bounded
-counts and distances. It does not record coordinates. It does not cross IPC or
-write to disk.
+The input harness is a player-visible troubleshooting view with one ordered,
+bounded renderer-memory timeline. AppKit and main-process decisions cross one
+redacted main-to-renderer event; renderer keyboard, hidden text proxy, pointer,
+wheel, pointer-lock, cleanup, and thresholded gamepad transitions join the same
+timeline. It records no text, clipboard contents, secret-field lengths, exact
+printable keys while a text proxy is active, coordinates, account identifiers,
+or controller identifiers. Pausing changes only recording. Closing clears the
+memory. The trace is not persisted, exported with diagnostics, or sent over the
+network.
 
 ## Native network boundary
 

@@ -311,8 +311,10 @@ opens its GitHub issue form immediately. GitHub issues are public.
   **Help → Diagnostics → Export Recent Diagnostics…** and attach the ZIP.
 - Use **Record Performance Problem** for stutter. Reproduce it, press
   **Command-Shift-M**, stop the capture, and export it when prompted.
-- Use **Show Input Trace** for click problems. It records bounded counts and
-  distances, not coordinates. Closing it discards the trace.
+- Use **Show Input Trace** for keyboard, text, pointer, shortcut, or gamepad
+  problems. Reproduce the problem, pause the bounded timeline, then copy it
+  into the issue. It omits text, secrets, field lengths, coordinates, account
+  identifiers, and controller identifiers. Closing it discards the trace.
 
 The diagnostics ZIP excludes saved login, account request bodies, game traffic,
 chat, and crash dumps. Other text is scanned for known secret and path patterns.

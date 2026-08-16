@@ -57,6 +57,7 @@ test.describe("sandbox boundary", () => {
           "dns",
           "gameStorage",
           "init",
+          "inputTrace",
           "progress",
           "settings",
           "shortcuts",

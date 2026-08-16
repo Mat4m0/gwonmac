@@ -99,6 +99,7 @@ import {
 } from "./core/native-keychain.js";
 import { loadNativeHost } from "./native-host.js";
 import { installMacosCommandKeyUps } from "./macos-command-key-ups.js";
+import { recordMainInput } from './input-trace.js';
 import { cleanupLegacySecretFiles } from "./core/legacy-secret-cleanup.js";
 import {
   distributionCapabilities,
@@ -391,6 +392,16 @@ if (primaryInstance) void app.whenReady().then(async () => {
         : null;
     },
     release(win, code) {
+      recordMainInput(win, {
+        source: 'appkit',
+        kind: 'native-key',
+        phase: 'up',
+        key: code.startsWith('Key') || code.startsWith('Digit')
+          ? 'printable'
+          : 'other',
+        repeat: false,
+        decision: 'normalized-release',
+      });
       void sendRendererCommand(win, { type: "input.release", code });
     },
   });
