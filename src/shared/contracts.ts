@@ -764,6 +764,7 @@ export const IPC = {
   appRequestQuit: "gw:app:requestQuit",
   clipboardWriteText: "gw:clipboard:writeText",
   clipboardReadText: "gw:clipboard:readText",
+  clipboardEdit: "gw:clipboard:edit",
   templatesExport: "gw:templates:export",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
@@ -816,6 +817,8 @@ export type EventChannel = (typeof EVENT_CHANNELS)[number];
 
 /** Every channel the renderer `invoke`s, i.e. every channel main must answer. */
 export type InvokeChannel = Exclude<keyof typeof IPC, EventChannel>;
+
+export type TextEditCommand = "selectAll" | "cut" | "paste";
 
 export interface GwNativeApi {
   /** Launch-time configuration, available before the first renderer script. */
@@ -934,6 +937,8 @@ export interface GwNativeApi {
      * never arrives here.
      */
     writeText(text: string): Promise<void>;
+    /** Apply Chromium's trusted edit command to the currently focused field. */
+    edit(command: TextEditCommand): Promise<void>;
     /**
      * Read the OS pasteboard so a player can import build codes they copied
      * from a guild page or a forum post.

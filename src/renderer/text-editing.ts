@@ -7,6 +7,7 @@
  * the game input stream. The proxy's input event remains the single route by
  * which an edit reaches the client.
  */
+import type { TextEditCommand } from '../shared/contracts.js';
 
 type GameTextField = HTMLInputElement | HTMLTextAreaElement;
 
@@ -14,6 +15,7 @@ type TextEditingOptions = {
   /** The OSK proxy fields; anything else keeps Chromium's ordinary editing. */
   fields: Iterable<unknown>;
   writeText(text: string): Promise<void>;
+  edit(command: TextEditCommand): Promise<void>;
   diagnostics?: GameInputDiagnostics;
   log(...values: unknown[]): void;
 };
@@ -36,6 +38,7 @@ const selection = (field: GameTextField) => ({
 export const installTextEditing = ({
   fields,
   writeText,
+  edit,
   diagnostics,
   log,
 }: TextEditingOptions): void => {
@@ -59,21 +62,21 @@ export const installTextEditing = ({
     const active = document.activeElement;
     if (!isGameTextField(active) || !sources.has(active)) return;
 
+    event.preventDefault();
     event.stopImmediatePropagation();
     const code = event.code as EditingKey;
     if (claimedKeys.has(code) || event.repeat) {
-      if (code === 'KeyC' || (code === 'KeyX' && !canExportText(active))) {
-        event.preventDefault();
-      }
       return;
     }
     claimedKeys.add(code);
 
-    // A, X, and V must keep Chromium's trusted native default action. The
-    // generated client ignores synthetic input events, most visibly when a
-    // password is pasted at login. Stopping propagation hides the base key
-    // from Guild Wars without cancelling the browser edit.
-    if (code === 'KeyA' || code === 'KeyV') {
+    if (code === 'KeyA') {
+      void edit('selectAll');
+      return;
+    }
+
+    if (code === 'KeyV') {
+      void edit('paste');
       return;
     }
 
@@ -92,9 +95,7 @@ export const installTextEditing = ({
       return;
     }
 
-    // Chromium already prevents cutting a password, but own the invariant
-    // here so it cannot change with an Electron update.
-    if (!canExportText(active)) event.preventDefault();
+    if (canExportText(active)) void edit('cut');
   }, true);
 
   window.addEventListener('keyup', (event) => {

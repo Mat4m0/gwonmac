@@ -163,9 +163,12 @@ fields still use the active macOS input source.
 The game's hidden text proxies own macOS editing while they are active.
 Command-A/C/X/V are claimed before game input, update the proxy through its
 normal `input` event, and never arrive as bare A/C/X/V game keys. Control stays
-available to Guild Wars. Repeated printable, Backspace, and Delete keydowns
-remain native proxy edits so the generated client's keydown cancellation
-cannot suppress macOS key repeat.
+available to Guild Wars. The application menu keeps its Edit commands clickable
+but does not register their AppKit accelerators. The focused proxy routes trusted
+select, cut, and paste commands through its own renderer window; password text
+never crosses that bridge. Repeated printable, Backspace, and Delete keydowns
+remain native proxy edits so the generated client's keydown cancellation cannot
+suppress macOS key repeat.
 
 Certified Core supplies native double-click and the Guild Wars cursor. Core is
 required behavior. It is not a saved player preference. If an ArenaNet build

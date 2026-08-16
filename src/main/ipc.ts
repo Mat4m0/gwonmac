@@ -33,6 +33,7 @@ import type {
   FullDownloadOutcome,
   GraphicsDiagnostics,
   InvokeChannel,
+  TextEditCommand,
   RevealKind,
   SocketEvent,
   SteamRefusalReason,
@@ -422,6 +423,13 @@ const asClipboardText = one((value: unknown): string => {
   return value;
 });
 
+const asTextEditCommand = one((value: unknown): TextEditCommand => {
+  if (value !== "selectAll" && value !== "cut" && value !== "paste") {
+    throw new ValidationError("invalid text edit command");
+  }
+  return value;
+});
+
 const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   if (
     value !== "github" &&
@@ -695,6 +703,12 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     clipboardWriteText: channel(asClipboardText, (_win, text) => {
       clipboard.writeText(text);
+    }),
+
+    clipboardEdit: channel(asTextEditCommand, (win, command) => {
+      if (command === "selectAll") win.webContents.selectAll();
+      else if (command === "cut") win.webContents.cut();
+      else win.webContents.paste();
     }),
 
     // Truncated rather than refused: a player who copied something large before

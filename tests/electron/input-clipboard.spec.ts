@@ -15,6 +15,18 @@ test.describe("renderer text editing", () => {
     try {
       const { app, page } = fixture;
       await startGameInput(page);
+      expect(await app.evaluate(({ Menu }) => {
+        const edit = Menu.getApplicationMenu()?.items.find((item) => item.label === "Edit");
+        return edit?.submenu?.items.map((item) => ({
+          role: item.role,
+          registerAccelerator: item.registerAccelerator,
+        }));
+      })).toEqual([
+        { role: "cut", registerAccelerator: false },
+        { role: "copy", registerAccelerator: false },
+        { role: "paste", registerAccelerator: false },
+        { role: "selectall", registerAccelerator: false },
+      ]);
       const before = await app.evaluate(({ clipboard }) => clipboard.readText());
       try {
         // The client marks the field it is editing through as the active OSK
