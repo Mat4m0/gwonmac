@@ -33,6 +33,41 @@ test("Single Account remains the invisible default", async () => {
   }
 });
 
+test("a minimized game window keeps its animation loop running", async () => {
+  const fixture = await launchOffline("gw-background-game-loop-e2e-");
+  try {
+    await fixture.page.evaluate(() => {
+      const testWindow = window as typeof window & { __backgroundFrames?: number };
+      testWindow.__backgroundFrames = 0;
+      const frame = () => {
+        testWindow.__backgroundFrames = (testWindow.__backgroundFrames ?? 0) + 1;
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    });
+    const before = await fixture.page.evaluate(() => (
+      window as typeof window & { __backgroundFrames?: number }
+    ).__backgroundFrames ?? 0);
+
+    await fixture.app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.minimize();
+    });
+
+    await expect.poll(() => fixture.page.evaluate(() => (
+      window as typeof window & { __backgroundFrames?: number }
+    ).__backgroundFrames ?? 0)).toBeGreaterThan(before);
+    expect(await fixture.page.evaluate(() => document.visibilityState)).toBe("visible");
+    expect(await fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.webContents.getBackgroundThrottling(),
+    )).toBe(false);
+  } finally {
+    await fixture.app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.restore();
+    }).catch(() => undefined);
+    await closeOffline(fixture);
+  }
+});
+
 test("Hub exposes the focused chooser, account sheets, and Settings management", async () => {
   const fixture = await launchOffline("gw-multi-hub-ui-e2e-", {}, async (userData) => {
     await mkdir(path.join(userData, "multi"), { recursive: true });
