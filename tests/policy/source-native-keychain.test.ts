@@ -46,6 +46,11 @@ test("the app enables physical key repeat without changing user defaults", () =>
     source,
     /set(?:Bool|Object):[\s\S]{0,80}ApplePressAndHoldEnabled/u,
   );
+  const initialization = source.indexOf('napi_value Init');
+  const repeatPolicy = source.indexOf('registerDefaults:@{ @"ApplePressAndHoldEnabled"');
+  const monitor = source.indexOf('napi_value MonitorCommandKeyUpsCallback');
+  assert.ok(initialization >= 0 && repeatPolicy > initialization);
+  assert.ok(repeatPolicy > monitor, 'repeat policy belongs to module initialization');
 });
 
 test("the native boundary owns two fixed Data Protection Keychain items", () => {

@@ -1,15 +1,15 @@
 /**
- * ArenaNet OSK contract probe for physical repeats.
+ * Chromium hidden-proxy contract probe for physical repeats.
  *
- * It models the shipped glue's keyboard copy and input callback independently,
- * then asserts every trusted browser edit instead of only the final value.
+ * It asserts every trusted browser edit instead of only the final value. The
+ * native process policy and a live client check cover the AppKit boundary;
+ * this test does not imitate the closed-source client's forwarding glue.
  */
 import { expect, test } from '@playwright/test';
 import { closeOffline, launchCachedClient } from './fixtures.mjs';
 import { startGameInput } from './input-helpers.js';
 
 type KeyboardObservation = {
-  target: 'proxy' | 'canvas';
   phase: 'keydown' | 'keyup';
   code: string;
   repeat: boolean;
@@ -29,65 +29,28 @@ type RepeatProbe = {
   edits: EditObservation[];
 };
 
-test('physical repeats preserve the complete hidden-proxy OSK contract', async () => {
+test('physical repeats preserve Chromium hidden-proxy editing', async () => {
   const fixture = await launchCachedClient('gw-text-repeat-contract-');
   try {
     const { app, page } = fixture;
     await startGameInput(page);
     await page.evaluate(() => {
       const field = document.getElementById('osk-input-text');
-      const canvas = document.getElementById('canvas');
-      if (!(field instanceof HTMLInputElement) || !(canvas instanceof HTMLCanvasElement)) {
+      if (!(field instanceof HTMLInputElement)) {
         throw new Error('OSK contract fixture is incomplete');
       }
       const host = window as typeof window & { __repeatProbe?: RepeatProbe };
       host.__repeatProbe = { keyboard: [], edits: [] };
-      const observeKeyboard = (target: 'proxy' | 'canvas') =>
-        (event: KeyboardEvent) => {
-          host.__repeatProbe?.keyboard.push({
-            target,
-            phase: event.type as 'keydown' | 'keyup',
-            code: event.code,
-            repeat: event.repeat,
-            trusted: event.isTrusted,
-          });
-        };
-      field.addEventListener('keydown', (event) => {
-        observeKeyboard('proxy')(event);
-        // Exact behavior of the official glue's handleKeyEvent: preserve the
-        // repeat and modifiers in a keyboard copy delivered to the canvas.
-        canvas.dispatchEvent(new KeyboardEvent(event.type, {
-          bubbles: true,
-          cancelable: true,
-          key: event.key,
+      const observeKeyboard = (event: KeyboardEvent) => {
+        host.__repeatProbe?.keyboard.push({
+          phase: event.type as 'keydown' | 'keyup',
           code: event.code,
-          location: event.location,
           repeat: event.repeat,
-          isComposing: event.isComposing,
-          ctrlKey: event.ctrlKey,
-          shiftKey: event.shiftKey,
-          altKey: event.altKey,
-          metaKey: event.metaKey,
-        }));
-      });
-      field.addEventListener('keyup', (event) => {
-        observeKeyboard('proxy')(event);
-        canvas.dispatchEvent(new KeyboardEvent(event.type, {
-          bubbles: true,
-          cancelable: true,
-          key: event.key,
-          code: event.code,
-          location: event.location,
-          repeat: event.repeat,
-          isComposing: event.isComposing,
-          ctrlKey: event.ctrlKey,
-          shiftKey: event.shiftKey,
-          altKey: event.altKey,
-          metaKey: event.metaKey,
-        }));
-      });
-      canvas.addEventListener('keydown', observeKeyboard('canvas'));
-      canvas.addEventListener('keyup', observeKeyboard('canvas'));
+          trusted: event.isTrusted,
+        });
+      };
+      field.addEventListener('keydown', observeKeyboard);
+      field.addEventListener('keyup', observeKeyboard);
       for (const phase of ['beforeinput', 'input'] as const) {
         field.addEventListener(phase, (event) => {
           if (!(event instanceof InputEvent)) return;
@@ -178,13 +141,8 @@ test('physical repeats preserve the complete hidden-proxy OSK contract', async (
     const probe = await page.evaluate(() =>
       (window as typeof window & { __repeatProbe?: RepeatProbe }).__repeatProbe);
     expect(probe).toBeDefined();
-    const proxyKeys = probe!.keyboard.filter(({ target }) => target === 'proxy');
-    const canvasKeys = probe!.keyboard.filter(({ target }) => target === 'canvas');
-    expect(proxyKeys.every(({ trusted }) => trusted)).toBe(true);
-    expect(canvasKeys.every(({ trusted }) => !trusted)).toBe(true);
-    expect(canvasKeys.map(({ phase, code, repeat }) => ({ phase, code, repeat })))
-      .toEqual(proxyKeys.map(({ phase, code, repeat }) => ({ phase, code, repeat })));
-    expect(proxyKeys.filter(({ phase, repeat }) => phase === 'keydown' && repeat))
+    expect(probe!.keyboard.every(({ trusted }) => trusted)).toBe(true);
+    expect(probe!.keyboard.filter(({ phase, repeat }) => phase === 'keydown' && repeat))
       .toHaveLength(12);
 
     expect(probe!.edits.every(({ trusted }) => trusted)).toBe(true);
