@@ -56,6 +56,9 @@
       case 'input.reset':
         dispatch('gw:input-reset');
         break;
+      case 'input.release':
+        dispatch('gw:input-release', command.code);
+        break;
       case 'tools.toggle':
         // Nothing listens unless the Toolbox capability installed, and a player
         // who pressed the shortcut is owed the difference between "opened" and

@@ -74,20 +74,20 @@ assert.deepEqual(
 assertRequiredPackageFiles(actualPackageFiles);
 assertNoDeveloperPackageFiles(actualPackageFiles);
 
-const nativeArchivePath = "/build/native/keychain.node";
+const nativeArchivePath = "/build/native/host.node";
 assert.equal(
   statFile(asarPath, nativeArchivePath.slice(1)).unpacked,
   true,
-  "native Keychain addon must be unpacked from ASAR",
+  "native host addon must be unpacked from ASAR",
 );
 const nativeAddon = path.join(
   resources,
-  "app.asar.unpacked/build/native/keychain.node",
+  "app.asar.unpacked/build/native/host.node",
 );
 assert.equal(
   existsSync(nativeAddon),
   true,
-  "unpacked native Keychain addon is missing",
+  "unpacked native host addon is missing",
 );
 const { stdout: nativeArchitectures } = await execFileAsync("lipo", [
   "-archs",

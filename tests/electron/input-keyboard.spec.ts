@@ -359,4 +359,80 @@ test.describe("renderer keyboard input", () => {
       await closeOffline(fixture);
     }
   });
+
+  test("releases only the Command-held physical key named by macOS", async () => {
+    const fixture = await launchCachedClient("gw-command-key-release-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const canvas = document.getElementById("canvas");
+        if (!(canvas instanceof HTMLCanvasElement)) throw new Error("canvas is missing");
+        const testWindow = window as typeof window & { __releasedKeys?: unknown[] };
+        testWindow.__releasedKeys = [];
+        canvas.addEventListener("keyup", (event) => {
+          testWindow.__releasedKeys?.push({
+            key: event.key,
+            code: event.code,
+            location: event.location,
+            charCode: event.charCode,
+            keyCode: event.keyCode,
+            which: event.which,
+            metaKey: event.metaKey,
+          });
+        });
+        canvas.focus();
+      });
+
+      const cdp = await fixture.app.context().newCDPSession(page);
+      const keyDown = (
+        code: string,
+        key: string,
+        virtualKeyCode: number,
+      ) => cdp.send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key,
+        code,
+        windowsVirtualKeyCode: virtualKeyCode,
+        nativeVirtualKeyCode: virtualKeyCode,
+        modifiers: 4,
+      });
+      await keyDown("KeyW", "w", 87);
+      await keyDown("KeyA", "a", 65);
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:input-release", { detail: "KeyA" }),
+      ));
+      expect(await page.evaluate(() => (
+        window as typeof window & { __releasedKeys?: unknown[] }
+      ).__releasedKeys)).toEqual([{
+        key: "a",
+        code: "KeyA",
+        location: 0,
+        charCode: 0,
+        keyCode: 65,
+        which: 65,
+        metaKey: true,
+      }]);
+
+      await keyDown("KeyD", "d", 68);
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:input-release", { detail: "KeyD" }),
+      ));
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:input-release", { detail: "KeyA" }),
+      ));
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:input-release", { detail: "KeyW" }),
+      ));
+      expect(await page.evaluate(() => (
+        window as typeof window & { __releasedKeys?: unknown[] }
+      ).__releasedKeys)).toEqual([
+        expect.objectContaining({ code: "KeyA" }),
+        expect.objectContaining({ code: "KeyD", key: "d", metaKey: true }),
+        expect.objectContaining({ code: "KeyW", key: "w", metaKey: true }),
+      ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
 });

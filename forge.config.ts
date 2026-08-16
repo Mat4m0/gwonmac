@@ -63,7 +63,7 @@ const config: ForgeConfig = {
     // Both are executable code that cannot run from inside the archive: a
     // `.node` addon cannot be dlopen'd from it, and a helper cannot be spawned
     // from it.
-    asar: { unpack: "**/build/native/{keychain.node,gw-dat-decode}" },
+    asar: { unpack: "**/build/native/{host.node,gw-dat-decode}" },
     name: channelConfig.productName,
     executableName: channelConfig.productName,
     appVersion: macOSVersion.appVersion,

@@ -141,6 +141,11 @@ trackpad actions go to Guild Wars without a selectable input mode. The host
 releases held keys and buttons when focus changes or native UI consumes a
 release.
 
+On macOS, AppKit consumes ordinary key-up events while Command remains down.
+The app-local native monitor forwards that physical key position to the focused
+game renderer. The renderer releases only the matching entry from its existing
+held-key map. Releasing Command remains the final cleanup for a missed event.
+
 Moving focus from the game canvas into a control in the same renderer does not
 blur Guild Wars. Settings, Tools, Travel, warnings, and game text fields remain
 part of the active game window, so they do not mute game audio. A real window

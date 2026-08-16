@@ -14,7 +14,7 @@ export function ignorePackageFile(file: string): boolean {
   if (p === "/build/preload" || p === "/build/preload/preload.cjs") return false;
   if (
     p === "/build/native"
-    || p === "/build/native/keychain.node"
+    || p === "/build/native/host.node"
     || p === "/build/native/gw-dat-decode"
   ) {
     return false;

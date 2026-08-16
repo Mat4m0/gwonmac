@@ -113,7 +113,7 @@ describe("resolved profile paths", () => {
   // keychain path was deliberately shaped to prevent.
   it("resolves an unpacked executable in development and when packaged", () => {
     for (const relative of [
-      "build/native/keychain.node",
+      "build/native/host.node",
       "build/native/gw-dat-decode",
     ]) {
       assert.equal(

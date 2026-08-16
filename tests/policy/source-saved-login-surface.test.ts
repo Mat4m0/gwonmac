@@ -28,7 +28,7 @@ const legacyFilenameOwners = shippedSources().filter((file) =>
   /credentials\.bin|steam-session\.bin/u.test(read(file)),
 );
 const main = read("src/main/main.ts");
-const native = read("src/native/keychain/keychain.mm");
+const native = read("src/native/host/host.mm");
 const legacyCleanup = read("src/main/core/legacy-secret-cleanup.ts");
 
 test("saved login has exactly two Data Protection Keychain items", () => {
@@ -66,7 +66,7 @@ test("only provisioned distribution channels enable persistent secrets", () => {
     /if \(\s*activeAccountMode === "single"\s*&& persistentSecrets\s*&& distribution\.cleanupLegacySecrets\s*\) \{[\s\S]{0,200}cleanupLegacySecretFiles/,
   );
   assert.match(main, /capable: distribution\.automaticUpdates/);
-  assert.match(main, /persistentSecrets\s*\? loadNativeKeychain/);
+  assert.match(main, /persistentSecrets\s*\? nativeHost/);
   assert.match(main, /: new VolatileNativeKeychain\(\)/);
   assert.doesNotMatch(shippedApplication, /use-mock-keychain/);
 });

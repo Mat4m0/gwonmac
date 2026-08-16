@@ -1,7 +1,12 @@
+/**
+ * The one native macOS host boundary. It owns app-local Command key releases
+ * and the fixed Data Protection Keychain operations that JavaScript cannot.
+ */
 #define __STDC_WANT_LIB_EXT1__ 1
 
 #include <node_api.h>
 
+#import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <Security/Security.h>
@@ -13,6 +18,155 @@
 #include <vector>
 
 namespace {
+
+struct CommandKeyUpMonitor {
+  napi_env env = nullptr;
+  napi_ref callback = nullptr;
+  napi_async_context async_context = nullptr;
+  id token = nil;
+  bool active = false;
+};
+
+CommandKeyUpMonitor *gCommandKeyUpMonitor = nullptr;
+
+void StopCommandKeyUps(CommandKeyUpMonitor *monitor) {
+  if (!monitor->active)
+    return;
+  monitor->active = false;
+  if (monitor->token != nil) {
+    [NSEvent removeMonitor:monitor->token];
+    monitor->token = nil;
+  }
+  if (monitor->callback != nullptr) {
+    napi_delete_reference(monitor->env, monitor->callback);
+    monitor->callback = nullptr;
+  }
+  if (monitor->async_context != nullptr) {
+    napi_async_destroy(monitor->env, monitor->async_context);
+    monitor->async_context = nullptr;
+  }
+  if (gCommandKeyUpMonitor == monitor)
+    gCommandKeyUpMonitor = nullptr;
+}
+
+void CleanupCommandKeyUps(void *data) {
+  auto *monitor = static_cast<CommandKeyUpMonitor *>(data);
+  StopCommandKeyUps(monitor);
+  delete monitor;
+}
+
+bool DispatchCommandKeyUp(CommandKeyUpMonitor *monitor, unsigned short keyCode) {
+  napi_handle_scope scope = nullptr;
+  napi_value callback;
+  napi_value receiver;
+  napi_value argument;
+  napi_value result;
+  bool handled = false;
+  const napi_status status =
+      napi_open_handle_scope(monitor->env, &scope) == napi_ok &&
+              napi_get_reference_value(monitor->env, monitor->callback,
+                                       &callback) == napi_ok &&
+              napi_get_global(monitor->env, &receiver) == napi_ok &&
+              napi_create_uint32(monitor->env, keyCode, &argument) == napi_ok &&
+              napi_make_callback(monitor->env, monitor->async_context, receiver,
+                                 callback, 1, &argument, &result) == napi_ok &&
+              napi_get_value_bool(monitor->env, result, &handled) == napi_ok
+          ? napi_ok
+          : napi_generic_failure;
+  if (status != napi_ok) {
+    bool pending = false;
+    if (napi_is_exception_pending(monitor->env, &pending) == napi_ok && pending) {
+      napi_value ignored;
+      napi_get_and_clear_last_exception(monitor->env, &ignored);
+    }
+    handled = false;
+  }
+  if (scope != nullptr)
+    napi_close_handle_scope(monitor->env, scope);
+  return handled;
+}
+
+napi_value StopCommandKeyUpsCallback(napi_env env, napi_callback_info info) {
+  size_t argc = 0;
+  void *data = nullptr;
+  if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, &data) != napi_ok ||
+      argc != 0 || data == nullptr) {
+    napi_throw_type_error(env, nullptr, "invalid input monitor arguments");
+    return nullptr;
+  }
+  StopCommandKeyUps(static_cast<CommandKeyUpMonitor *>(data));
+  napi_value undefined;
+  napi_get_undefined(env, &undefined);
+  return undefined;
+}
+
+napi_value MonitorCommandKeyUpsCallback(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_valuetype type = napi_undefined;
+  if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok ||
+      argc != 1 || napi_typeof(env, argv[0], &type) != napi_ok ||
+      type != napi_function) {
+    napi_throw_type_error(env, nullptr, "input monitor callback is required");
+    return nullptr;
+  }
+  if (![NSThread isMainThread] || gCommandKeyUpMonitor != nullptr) {
+    napi_throw_error(env, nullptr, "input monitor is unavailable");
+    return nullptr;
+  }
+
+  auto *monitor = new (std::nothrow) CommandKeyUpMonitor();
+  if (monitor == nullptr) {
+    napi_throw_error(env, nullptr, "input monitor is unavailable");
+    return nullptr;
+  }
+  monitor->env = env;
+  napi_value resource;
+  napi_value resource_name;
+  if (napi_create_reference(env, argv[0], 1, &monitor->callback) != napi_ok ||
+      napi_create_object(env, &resource) != napi_ok ||
+      napi_create_string_utf8(env, "gwonmac.commandKeyUps", NAPI_AUTO_LENGTH,
+                              &resource_name) != napi_ok ||
+      napi_async_init(env, resource, resource_name, &monitor->async_context) !=
+          napi_ok ||
+      napi_add_env_cleanup_hook(env, CleanupCommandKeyUps, monitor) != napi_ok) {
+    if (monitor->callback != nullptr)
+      napi_delete_reference(env, monitor->callback);
+    if (monitor->async_context != nullptr)
+      napi_async_destroy(env, monitor->async_context);
+    delete monitor;
+    napi_throw_error(env, nullptr, "input monitor is unavailable");
+    return nullptr;
+  }
+
+  monitor->active = true;
+  gCommandKeyUpMonitor = monitor;
+  monitor->token = [NSEvent
+      addLocalMonitorForEventsMatchingMask:NSEventMaskKeyUp
+                                  handler:^NSEvent *(NSEvent *event) {
+    const NSEventModifierFlags modifiers =
+        event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+    if (!monitor->active ||
+        (modifiers & NSEventModifierFlagCommand) == 0) {
+      return event;
+    }
+    return DispatchCommandKeyUp(monitor, event.keyCode) ? nil : event;
+  }];
+  if (monitor->token == nil) {
+    StopCommandKeyUps(monitor);
+    napi_throw_error(env, nullptr, "input monitor is unavailable");
+    return nullptr;
+  }
+
+  napi_value stop;
+  if (napi_create_function(env, "stopCommandKeyUps", NAPI_AUTO_LENGTH,
+                           StopCommandKeyUpsCallback, monitor, &stop) != napi_ok) {
+    StopCommandKeyUps(monitor);
+    napi_throw_error(env, nullptr, "input monitor is unavailable");
+    return nullptr;
+  }
+  return stop;
+}
 
 constexpr char kCredentialsSlot[] = "arenaNetCredentials";
 constexpr char kSteamSlot[] = "steamSession";
@@ -388,11 +542,13 @@ napi_value Init(napi_env env, napi_value exports) {
        nullptr},
       {"clear", nullptr, ClearCallback, nullptr, nullptr, nullptr, napi_default,
        nullptr},
+      {"monitorCommandKeyUps", nullptr, MonitorCommandKeyUpsCallback, nullptr,
+       nullptr, nullptr, napi_default, nullptr},
   };
   if (napi_define_properties(env, exports,
                              sizeof(properties) / sizeof(properties[0]),
                              properties) != napi_ok) {
-    napi_throw_error(env, nullptr, "Keychain module initialization failed");
+    napi_throw_error(env, nullptr, "native host module initialization failed");
     return nullptr;
   }
   return exports;
@@ -400,4 +556,4 @@ napi_value Init(napi_env env, napi_value exports) {
 
 } // namespace
 
-NAPI_MODULE(gwonmac_keychain, Init)
+NAPI_MODULE(gwonmac_host, Init)

@@ -6,7 +6,7 @@ import {
   type NativeKeychain,
   type SecretSlot,
 } from "../../src/main/core/native-keychain.js";
-import { nativeKeychainPath } from "../../src/main/native-keychain.js";
+import { nativeHostPath } from "../../src/main/native-host.js";
 
 class FakeNativeKeychain implements NativeKeychain {
   readonly #items = new Map<SecretSlot, Buffer>();
@@ -39,20 +39,20 @@ describe("native Keychain boundary", () => {
 
   it("resolves the one development and one packaged binary path", () => {
     assert.equal(
-      nativeKeychainPath({
+      nativeHostPath({
         packaged: false,
         appPath: "/checkout",
         resourcesPath: "/ignored",
       }),
-      "/checkout/build/native/keychain.node",
+      "/checkout/build/native/host.node",
     );
     assert.equal(
-      nativeKeychainPath({
+      nativeHostPath({
         packaged: true,
         appPath: "/ignored",
         resourcesPath: "/App/Contents/Resources",
       }),
-      "/App/Contents/Resources/app.asar.unpacked/build/native/keychain.node",
+      "/App/Contents/Resources/app.asar.unpacked/build/native/host.node",
     );
   });
 
