@@ -372,6 +372,10 @@ export function createMainWindow(
     webPreferences: {
       preload: preloadPath(),
       additionalArguments: [rendererInitArgument(host)],
+      // Guild Wars advances its Emscripten main loop on animation frames.
+      // Keep game simulation, network delivery, and enabled background audio
+      // running when macOS fully covers or minimizes this window.
+      backgroundThrottling: false,
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,

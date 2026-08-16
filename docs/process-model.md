@@ -136,6 +136,11 @@ The official client creates WebGL on an `OffscreenCanvas`. The host presents a
 successful swap on the visible canvas. The client owns canvas size. The host
 supplies the selected render scale and mirrors the requested backing size.
 
+Every game window remains scheduled when it is fully covered or minimized.
+Guild Wars uses animation frames for its main loop, so background throttling
+would delay network updates and enabled background audio until the window
+became visible again. The Account Picker keeps normal background throttling.
+
 The renderer owns one input policy in `src/renderer/input.ts`. Mouse and
 trackpad actions go to Guild Wars without a selectable input mode. The host
 releases held keys and buttons when focus changes or native UI consumes a
