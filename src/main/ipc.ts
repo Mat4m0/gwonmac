@@ -706,9 +706,31 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     clipboardEdit: channel(asTextEditCommand, (win, command) => {
-      if (command === "selectAll") win.webContents.selectAll();
-      else if (command === "cut") win.webContents.cut();
-      else {
+      if (command === "selectAll" || command === "cut") {
+        // The visible editor belongs to Guild Wars; Chromium owns only its
+        // hidden OSK proxy. Deliver the Windows editing chord that the client
+        // already handles instead of editing only Chromium's proxy.
+        const keyCode = command === "selectAll" ? "A" : "X";
+        win.webContents.sendInputEvent({
+          type: "keyDown",
+          keyCode: "Control",
+          modifiers: ["control"],
+        });
+        win.webContents.sendInputEvent({
+          type: "keyDown",
+          keyCode,
+          modifiers: ["control"],
+        });
+        win.webContents.sendInputEvent({
+          type: "keyUp",
+          keyCode,
+          modifiers: ["control"],
+        });
+        win.webContents.sendInputEvent({
+          type: "keyUp",
+          keyCode: "Control",
+        });
+      } else {
         // ArenaNet's OSK listener forwards InputEvent.data, which Chromium's
         // native paste does not populate. Keep the secret in main and replay
         // the trusted typing contract without sending it over IPC.

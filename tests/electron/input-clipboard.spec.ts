@@ -5,7 +5,14 @@ import { startGameInput } from "./input-helpers.js";
 /** The page-side handle the OSK focus guard honours. */
 type OskWindow = typeof window & {
   Module: { oskActiveInput?: Element | null };
-  __clipboardGameKeys?: string[];
+  __clipboardGameKeys?: Array<{
+    type: string;
+    key: string;
+    code: string;
+    control: boolean;
+    meta: boolean;
+    trusted: boolean;
+  }>;
   __clipboardInputTypes?: Array<{
     inputType: string;
     trusted: boolean;
@@ -48,10 +55,24 @@ test.describe("renderer text editing", () => {
           (window as OskWindow).__clipboardTypedKeys = [];
           for (const type of ["keydown", "keyup"] as const) {
             window.addEventListener(type, (event) => {
-              if (event.metaKey && ["KeyA", "KeyC", "KeyV", "KeyX"].includes(event.code)) {
-                (window as OskWindow).__clipboardGameKeys?.push(`${type}:${event.code}`);
+              if (
+                (event.metaKey || event.ctrlKey || event.code.startsWith("Control"))
+                && event.target instanceof HTMLInputElement
+              ) {
+                (window as OskWindow).__clipboardGameKeys?.push({
+                  type,
+                  key: event.key,
+                  code: event.code,
+                  control: event.ctrlKey,
+                  meta: event.metaKey,
+                  trusted: event.isTrusted,
+                });
               }
-              if (!event.metaKey && event.target instanceof HTMLInputElement) {
+              if (
+                !event.metaKey && !event.ctrlKey && !event.altKey
+                && !event.code.startsWith("Control")
+                && event.target instanceof HTMLInputElement
+              ) {
                 (window as OskWindow).__clipboardTypedKeys?.push({
                   type,
                   trusted: event.isTrusted,
@@ -98,19 +119,18 @@ test.describe("renderer text editing", () => {
           field.setSelectionRange(6, 10);
         });
         await page.keyboard.press("Meta+x");
-        await expect.poll(() => page.locator("#osk-input-text").inputValue())
-          .toBe("alpha ");
-        await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
-          .toBe("beta");
-
+        // The real client owns selection and cut. Set up the independent paste
+        // case explicitly instead of pretending the hidden proxy is the game.
+        await app.evaluate(({ clipboard }) => clipboard.writeText("beta"));
+        await page.evaluate(() => {
+          const field = document.getElementById("osk-input-text") as HTMLInputElement;
+          field.value = "alpha ";
+          field.setSelectionRange(6, 6);
+        });
         await page.keyboard.press("Meta+v");
         await expect.poll(() => page.locator("#osk-input-text").inputValue())
           .toBe("alpha beta");
         await page.keyboard.press("Meta+a");
-        expect(await page.evaluate(() => {
-          const field = document.getElementById("osk-input-text") as HTMLInputElement;
-          return [field.selectionStart, field.selectionEnd];
-        })).toEqual([0, 10]);
 
         // Secrets do not leave through this path.
         await app.evaluate(({ clipboard }) => clipboard.writeText("sentinel"));
@@ -137,11 +157,43 @@ test.describe("renderer text editing", () => {
         await expect(page.locator("#osk-input-password")).toHaveValue("sentinel");
         expect(await page.evaluate(() => (
           window as OskWindow
-        ).__clipboardGameKeys)).toEqual([]);
+        ).__clipboardGameKeys)).toEqual([
+          {
+            type: "keydown", key: "Control", code: "ControlLeft", control: true,
+            meta: false, trusted: true,
+          },
+          {
+            type: "keydown", key: "x", code: "KeyX", control: true,
+            meta: false, trusted: true,
+          },
+          {
+            type: "keyup", key: "x", code: "KeyX", control: true,
+            meta: false, trusted: true,
+          },
+          {
+            type: "keyup", key: "Control", code: "ControlLeft", control: false,
+            meta: false, trusted: true,
+          },
+          {
+            type: "keydown", key: "Control", code: "ControlLeft", control: true,
+            meta: false, trusted: true,
+          },
+          {
+            type: "keydown", key: "a", code: "KeyA", control: true,
+            meta: false, trusted: true,
+          },
+          {
+            type: "keyup", key: "a", code: "KeyA", control: true,
+            meta: false, trusted: true,
+          },
+          {
+            type: "keyup", key: "Control", code: "ControlLeft", control: false,
+            meta: false, trusted: true,
+          },
+        ]);
         expect(await page.evaluate(() => (
           window as OskWindow
         ).__clipboardInputTypes)).toEqual([
-          { inputType: "deleteByCut", trusted: true, dataLength: 0 },
           ...Array.from({ length: 4 }, () => (
             { inputType: "insertText", trusted: true, dataLength: 1 }
           )),

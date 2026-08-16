@@ -3,9 +3,10 @@
  *
  * The official client understands Windows-style Control chords and also sees
  * Command combinations as their unmodified base keys. Claiming Command editing
- * here gives players one predictable macOS contract and keeps A/C/V/X out of
- * the game input stream. The proxy's input event remains the single route by
- * which an edit reaches the client.
+ * here gives players one predictable macOS contract and keeps the Command
+ * chord itself out of the game input stream. Copy and paste use the proxy;
+ * select-all and cut translate to the Control chords the visible game editor
+ * already owns.
  */
 import type { TextEditCommand } from '../shared/contracts.js';
 import type {
@@ -179,6 +180,7 @@ export const installTextEditing = ({
   }, true);
 
   window.addEventListener('keyup', (event) => {
+    if (!event.isTrusted || !event.metaKey || event.ctrlKey || event.altKey) return;
     const code = event.code as EditingKey;
     if (!claimedKeys.delete(code)) return;
     const active = document.activeElement;

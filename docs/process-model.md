@@ -161,12 +161,12 @@ physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
 
 The game's hidden text proxies own macOS editing while they are active.
-Command-A/C/X/V are claimed before game input, update the proxy through its
-normal `input` event, and never arrive as bare A/C/X/V game keys. Control stays
-available to Guild Wars. The application menu keeps its Edit commands clickable
-but does not register their AppKit accelerators. The focused proxy routes trusted
-select, cut, and paste commands through its own renderer window; password text
-never crosses that bridge.
+Command-A/C/X/V are claimed before game input and never arrive as bare
+A/C/X/V game keys. Copy and paste use the proxy; select-all and cut become the
+Control chords already owned by Guild Wars' visible editor. Physical Control
+stays available to Guild Wars unchanged. The application menu keeps its Edit
+commands clickable but does not register their AppKit accelerators. Password
+text never crosses the renderer bridge.
 
 The native input host registers `ApplePressAndHoldEnabled = false` as a
 process-only default before the first game window exists. This makes macOS send
