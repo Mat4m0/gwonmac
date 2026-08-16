@@ -315,6 +315,8 @@ opens its GitHub issue form immediately. GitHub issues are public.
   problems. Reproduce the problem, pause the bounded timeline, then copy it
   into the issue. It omits text, secrets, field lengths, coordinates, account
   identifiers, and controller identifiers. Closing it discards the trace.
+- Holding a character, Backspace, or Delete in Guild Wars text fields follows
+  the repeat delay and speed configured in macOS Keyboard settings.
 
 The diagnostics ZIP excludes saved login, account request bodies, game traffic,
 chat, and crash dumps. Other text is scanned for known secret and path patterns.

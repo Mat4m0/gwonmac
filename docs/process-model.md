@@ -168,6 +168,12 @@ but does not register their AppKit accelerators. The focused proxy routes truste
 select, cut, and paste commands through its own renderer window; password text
 never crosses that bridge.
 
+The native input host registers `ApplePressAndHoldEnabled = false` as a
+process-only default before the first game window exists. This makes macOS send
+its physical repeat keydowns to hidden text proxies for printable characters,
+Backspace, and Delete. It does not write the player's preferences, create a
+timer, or synthesize repeat cadence; macOS remains the sole repeat clock.
+
 Certified Core supplies native double-click and the Guild Wars cursor. Core is
 required behavior. It is not a saved player preference. If an ArenaNet build
 is not certified, the official client remains playable with the normal macOS
