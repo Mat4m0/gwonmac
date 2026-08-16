@@ -35,6 +35,10 @@ type Manifest = {
   dependencies?: Record<string, string>;
   scripts?: Record<string, string>;
 };
+type VercelConfig = {
+  git?: { deploymentEnabled?: boolean };
+  ignoreCommand?: string;
+};
 const json = (file: string): Manifest => JSON.parse(read(file));
 
 // A script the manifest must actually define: a missing one would otherwise
@@ -722,6 +726,7 @@ test("the maintainer tests a temporary exact draft without replacing Application
 test("the website suite runs on its own path-filtered workflow", () => {
   const workflow = read(".github/workflows/website.yml");
   const website = json("apps/website/package.json");
+  const vercel: VercelConfig = JSON.parse(read("apps/website/vercel.json"));
   assert.match(workflow, /runs-on: ubuntu-latest/);
   assert.match(workflow, /run: pnpm test:website/);
   assert.match(workflow, /paths:[\s\S]*apps\/website\/\*\*/);
@@ -739,6 +744,11 @@ test("the website suite runs on its own path-filtered workflow", () => {
     existsSync(path.join(root, "apps/website/pnpm-lock.yaml")),
     false,
     "the workspace root lockfile is the website's dependency truth",
+  );
+  assert.equal(vercel.git?.deploymentEnabled, true);
+  assert.equal(
+    vercel.ignoreCommand,
+    'if [ -z "$VERCEL_GIT_PREVIOUS_SHA" ]; then exit 1; fi; git diff --quiet "$VERCEL_GIT_PREVIOUS_SHA" HEAD -- . ../../src/shared ../../package.json ../../pnpm-lock.yaml ../../pnpm-workspace.yaml',
   );
 });
 
