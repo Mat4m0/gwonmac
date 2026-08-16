@@ -6,7 +6,12 @@ import { startGameInput } from "./input-helpers.js";
 type OskWindow = typeof window & {
   Module: { oskActiveInput?: Element | null };
   __clipboardGameKeys?: string[];
-  __clipboardInputTypes?: Array<{ inputType: string; trusted: boolean }>;
+  __clipboardInputTypes?: Array<{
+    inputType: string;
+    trusted: boolean;
+    dataLength: number;
+  }>;
+  __clipboardTypedKeys?: Array<{ type: string; trusted: boolean }>;
 };
 
 test.describe("renderer text editing", () => {
@@ -40,19 +45,30 @@ test.describe("renderer text editing", () => {
           (window as OskWindow).Module.oskActiveInput = field;
           (window as OskWindow).__clipboardGameKeys = [];
           (window as OskWindow).__clipboardInputTypes = [];
+          (window as OskWindow).__clipboardTypedKeys = [];
           for (const type of ["keydown", "keyup"] as const) {
             window.addEventListener(type, (event) => {
-              if (["KeyA", "KeyC", "KeyV", "KeyX"].includes(event.code)) {
+              if (event.metaKey && ["KeyA", "KeyC", "KeyV", "KeyX"].includes(event.code)) {
                 (window as OskWindow).__clipboardGameKeys?.push(`${type}:${event.code}`);
+              }
+              if (!event.metaKey && event.target instanceof HTMLInputElement) {
+                (window as OskWindow).__clipboardTypedKeys?.push({
+                  type,
+                  trusted: event.isTrusted,
+                });
               }
             }, true);
           }
-          field.addEventListener("input", (event) => {
+          const recordInput = (event: Event) => {
             (window as OskWindow).__clipboardInputTypes?.push({
               inputType: event instanceof InputEvent ? event.inputType : event.type,
               trusted: event.isTrusted,
+              dataLength: event instanceof InputEvent ? event.data?.length ?? 0 : 0,
             });
-          });
+          };
+          field.addEventListener("input", recordInput);
+          document.getElementById("osk-input-password")
+            ?.addEventListener("input", recordInput);
           field.value = "alpha beta";
           field.focus();
           field.setSelectionRange(0, 5);
@@ -125,9 +141,22 @@ test.describe("renderer text editing", () => {
         expect(await page.evaluate(() => (
           window as OskWindow
         ).__clipboardInputTypes)).toEqual([
-          { inputType: "deleteByCut", trusted: true },
-          { inputType: "insertFromPaste", trusted: true },
+          { inputType: "deleteByCut", trusted: true, dataLength: 0 },
+          ...Array.from({ length: 4 }, () => (
+            { inputType: "insertText", trusted: true, dataLength: 1 }
+          )),
+          ...Array.from({ length: 8 }, () => (
+            { inputType: "insertText", trusted: true, dataLength: 1 }
+          )),
         ]);
+        expect(await page.evaluate(() => (
+          window as OskWindow
+        ).__clipboardTypedKeys)).toEqual(
+          Array.from({ length: 12 }, () => [
+            { type: "keydown", trusted: true },
+            { type: "keyup", trusted: true },
+          ]).flat(),
+        );
       } finally {
         await app.evaluate(
           ({ clipboard }, text) => clipboard.writeText(text),

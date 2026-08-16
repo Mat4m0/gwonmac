@@ -708,7 +708,19 @@ export function registerIpcHandlers(ctx: IpcContext): {
     clipboardEdit: channel(asTextEditCommand, (win, command) => {
       if (command === "selectAll") win.webContents.selectAll();
       else if (command === "cut") win.webContents.cut();
-      else win.webContents.paste();
+      else {
+        // ArenaNet's OSK listener forwards InputEvent.data, which Chromium's
+        // native paste does not populate. Keep the secret in main and replay
+        // the trusted typing contract without sending it over IPC.
+        const text = clipboard.readText().slice(0, CLIPBOARD_TEXT_CEILING);
+        // Guild Wars expects the keyboard events around each OSK input event.
+        // `insertText` alone updates Chromium's proxy but not the game field.
+        for (const character of text) {
+          win.webContents.sendInputEvent({ type: "keyDown", keyCode: character });
+          win.webContents.sendInputEvent({ type: "char", keyCode: character });
+          win.webContents.sendInputEvent({ type: "keyUp", keyCode: character });
+        }
+      }
     }),
 
     // Truncated rather than refused: a player who copied something large before

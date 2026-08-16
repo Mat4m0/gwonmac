@@ -462,21 +462,6 @@ export const installGameInput = ({
     if (event.key === 'Tab' && textInputs.has(event.target)) {
       event.preventDefault();
     }
-    // The generated client cancels repeated keydowns after handling the first
-    // press. In a text proxy that also cancels Chromium's native edit, so held
-    // characters stop repeating and held Backspace deletes only once. Keep
-    // those repeats at the proxy: its resulting `input` event is the client's
-    // canonical text-update route and no synthetic timer is needed.
-    if (
-      event.repeat
-      && textInputs.has(event.target)
-      && !event.metaKey
-      && !event.ctrlKey
-      && (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete')
-    ) {
-      event.stopImmediatePropagation();
-      return;
-    }
     const held = heldKeys.get(event.code);
     const key = clientKey(event, event.repeat ? held?.key : undefined);
     if (event.repeat && held) return;

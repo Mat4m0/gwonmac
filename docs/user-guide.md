@@ -220,7 +220,6 @@ Guild Wars text fields use the standard macOS shortcuts: **Command-A** selects
 all, **Command-C** copies, **Command-X** cuts, and **Command-V** pastes.
 Command-C copies the selected text, or the full field when nothing is selected.
 Password fields can be selected and pasted into, but are never copied or cut.
-Holding a character, Backspace, or Delete repeats the edit normally.
 
 The official web client cannot copy text that it only displays, such as chat
 history or item names.
