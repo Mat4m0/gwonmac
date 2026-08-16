@@ -137,14 +137,18 @@ successful swap on the visible canvas. The client owns canvas size. The host
 supplies the selected render scale and mirrors the requested backing size.
 
 The renderer owns one input policy in `src/renderer/input.ts`. Mouse and
-trackpad actions go to Guild Wars without a selectable input mode. The host
-releases held keys and buttons when focus changes or native UI consumes a
-release.
+trackpad actions go to Guild Wars without a selectable input mode. A real focus
+or visibility loss releases all held input. Pointer-only interruptions release
+only mouse buttons; they do not stop keyboard movement.
 
 On macOS, AppKit consumes ordinary key-up events while Command remains down.
 The app-local native monitor forwards that physical key position to the focused
 game renderer. The renderer releases only the matching entry from its existing
-held-key map. Releasing Command remains the final cleanup for a missed event.
+held-key map and clears that physical code from renderer-owned suppression.
+Bare Command transitions stay outside Guild Wars, which has no
+Command modifier, so pressing or releasing Command cannot interrupt another
+key that is still physically held. A real focus loss remains the final cleanup
+for interrupted input.
 
 Moving focus from the game canvas into a control in the same renderer does not
 blur Guild Wars. Settings, Tools, Travel, warnings, and game text fields remain
@@ -155,6 +159,14 @@ Right-drag uses pointer lock and a virtual cursor. The host bounds drag
 recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
+
+The game's hidden text proxies own macOS editing while they are active.
+Command-A/C/X/V are claimed before game input, update the proxy through its
+normal `input` event, and never arrive as bare A/C/X/V game keys. Control stays
+available to Guild Wars. The application menu keeps its Edit commands clickable
+but does not register their AppKit accelerators. The focused proxy routes trusted
+select, cut, and paste commands through its own renderer window; password text
+never crosses that bridge.
 
 Certified Core supplies native double-click and the Guild Wars cursor. Core is
 required behavior. It is not a saved player preference. If an ArenaNet build

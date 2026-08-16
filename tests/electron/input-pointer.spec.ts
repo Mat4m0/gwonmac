@@ -133,7 +133,7 @@ test.describe("renderer pointer input", () => {
       await closeOffline(fixture);
     }
   });
-  test("releases held input when the pointer leaves the app window", async () => {
+  test("releases only pointer input when the pointer leaves the app window", async () => {
     const fixture = await launchCachedClient("gw-input-window-leave-e2e-");
     try {
       const { page } = fixture;
@@ -168,7 +168,7 @@ test.describe("renderer pointer input", () => {
       });
       expect(
         await page.evaluate(() => (window as PointerInputWindow).__inputReleases),
-      ).toEqual(["key:KeyW", "mouse:0"]);
+      ).toEqual(["mouse:0"]);
       await page.keyboard.up("w");
       await page.mouse.up({ button: "left" });
     } finally {

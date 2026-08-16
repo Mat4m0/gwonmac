@@ -10,6 +10,7 @@
 import {
   app,
   autoUpdater,
+  BrowserWindow,
   dialog,
   Notification,
   powerMonitor,
@@ -382,7 +383,17 @@ if (primaryInstance) void app.whenReady().then(async () => {
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
   });
-  const stopCommandKeyUps = installMacosCommandKeyUps(nativeHost);
+  const stopCommandKeyUps = installMacosCommandKeyUps(nativeHost, {
+    focusedGameTarget() {
+      const win = BrowserWindow.getFocusedWindow();
+      return win && windowRegistry.contextForWebContents(win.webContents.id)?.role === "game"
+        ? win
+        : null;
+    },
+    release(win, code) {
+      void sendRendererCommand(win, { type: "input.release", code });
+    },
+  });
   app.once("will-quit", () => stopCommandKeyUps());
   const paths = gamePaths();
   try {

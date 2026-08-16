@@ -172,9 +172,15 @@ function onKeydown(event: KeyboardEvent): void {
     void travel(requestFor(activeDestination.value));
     return;
   }
-  if (/^[1-9]$/u.test(event.key) && (event.metaKey || event.ctrlKey)) {
+  if (
+    /^Digit[1-9]$/u.test(event.code)
+    && event.metaKey
+    && !event.ctrlKey
+    && !event.altKey
+    && !event.shiftKey
+  ) {
     event.preventDefault();
-    void assignShortcut(Number(event.key) - 1);
+    void assignShortcut(Number(event.code.slice(5)) - 1);
     return;
   }
   if (

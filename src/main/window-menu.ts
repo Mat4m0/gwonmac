@@ -94,10 +94,13 @@ export function installApplicationMenu({
     {
       label: "Edit",
       submenu: [
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" },
+        // AppKit consumes these role accelerators before Electron emits
+        // `before-input-event`. Keep the clickable menu commands, but let the
+        // renderer's active game-text owner receive physical Command chords.
+        { role: "cut", registerAccelerator: false },
+        { role: "copy", registerAccelerator: false },
+        { role: "paste", registerAccelerator: false },
+        { role: "selectAll", registerAccelerator: false },
       ],
     },
     {

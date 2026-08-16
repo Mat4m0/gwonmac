@@ -524,7 +524,7 @@ let host: typeof import('./graphics.js') &
   typeof import('./input-trace.js') &
   typeof import('./surface-controller.js') &
   typeof import('./native-double-click.js') &
-  typeof import('./clipboard-copy.js') &
+  typeof import('./text-editing.js') &
   typeof import('./template-save-compatibility.js') &
   typeof import('./template-filesystem-trace.js');
 
@@ -1074,6 +1074,17 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     Object.values(Module.oskInput).filter((input): input is HTMLElement => !!input),
   );
 
+  // Claim standard macOS editing before game input sees the base keys. The
+  // official client otherwise mixes Windows Control editing with ordinary
+  // A/C/V/X game bindings whenever Command is held.
+  host.installTextEditing({
+    fields: oskInputs,
+    writeText: (text) => native().clipboard.writeText(text),
+    edit: (command) => native().clipboard.edit(command),
+    diagnostics: window.gwDiagnostics,
+    log,
+  });
+
   inputHost = host.installGameInput({
     canvas: c,
     textInputs: oskInputs,
@@ -1103,15 +1114,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     trace: inputTrace,
     log,
   });
-  // Stray focus must bounce off, or a field silently swallows keys meant for
-  // the game. On desktop the active field itself stays behind the canvas.
-  host.installClipboardCopy({
-    fields: oskInputs,
-    writeText: (text) => native().clipboard.writeText(text),
-    diagnostics: window.gwDiagnostics,
-    log,
-  });
-
   // Every same-document control is part of the game experience, not a loss of
   // application focus. Keep the client's canvas-blur callback from muting
   // audio when focus moves into Settings, Tools, Travel, a warning, or a game
@@ -1164,7 +1166,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       inputTraceModule,
       surfaceController,
       nativeDoubleClickModule,
-      clipboardCopy,
+      textEditing,
       templateSaveCompatibility,
       templateFilesystemTrace,
       clientHealth,
@@ -1182,7 +1184,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       import('./input-trace.js'),
       import('./surface-controller.js'),
       import('./native-double-click.js'),
-      import('./clipboard-copy.js'),
+      import('./text-editing.js'),
       import('./template-save-compatibility.js'),
       import('./template-filesystem-trace.js'),
       import('./client-health.js'),
@@ -1199,7 +1201,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       ...inputTraceModule,
       ...surfaceController,
       ...nativeDoubleClickModule,
-      ...clipboardCopy,
+      ...textEditing,
       ...templateSaveCompatibility,
       ...templateFilesystemTrace,
     };

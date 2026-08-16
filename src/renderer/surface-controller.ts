@@ -97,6 +97,18 @@ export function installSurfaceController(
 
   window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("keyup", onKeyUp, true);
+  window.addEventListener("gw:input-release", (event) => {
+    if (event instanceof CustomEvent && typeof event.detail === "string") {
+      suppressedKeyUps.delete(event.detail);
+    }
+  });
+  const clearSuppressedKeyUps = () => suppressedKeyUps.clear();
+  window.addEventListener("blur", clearSuppressedKeyUps);
+  window.addEventListener("pagehide", clearSuppressedKeyUps);
+  window.addEventListener("gw:input-reset", clearSuppressedKeyUps);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") clearSuppressedKeyUps();
+  });
 
   return Object.freeze({
     register(surface: Surface): GwonmacSurfaceHandle {

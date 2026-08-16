@@ -23,15 +23,27 @@ class WindowShortcuts {
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({});
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
+  #capturedCode: string | null = null;
 
   constructor(win: BrowserWindow, actions: ShortcutActions) {
     this.#actions = actions;
     win.webContents.on("before-input-event", (event, input) => {
+      if (input.type === "keyUp") {
+        if (input.key === "Meta" || input.code === this.#capturedCode) {
+          this.#capturedCode = null;
+        }
+        return;
+      }
       if (input.type !== "keyDown") return;
+      if (input.code === this.#capturedCode) {
+        event.preventDefault();
+        return;
+      }
       if (this.#capture) {
         if (["Meta", "Control", "Shift", "Alt"].includes(input.key)) return;
         if (input.key === "Tab") return;
         event.preventDefault();
+        this.#capturedCode = input.code;
         if (input.key === "Escape") {
           this.#finish({ status: "cancelled" });
           return;
@@ -49,7 +61,9 @@ class WindowShortcuts {
       for (const [action, binding] of Object.entries(this.#shortcuts)) {
         if (binding && shortcutMatches(binding, input)) {
           event.preventDefault();
-          this.#actions.run(action as ShortcutAction);
+          if (!input.isAutoRepeat) {
+            this.#actions.run(action as ShortcutAction);
+          }
           return;
         }
       }
@@ -65,12 +79,14 @@ class WindowShortcuts {
 
   capture(): Promise<ShortcutCaptureResult> {
     this.cancelCapture();
+    this.#capturedCode = null;
     return new Promise((resolve) => {
       this.#capture = resolve;
     });
   }
 
   cancelCapture(): void {
+    this.#capturedCode = null;
     this.#finish({ status: "cancelled" });
   }
 
