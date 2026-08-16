@@ -3,21 +3,24 @@
  * them. The focused game window receives one physical-key release through the
  * existing renderer command boundary.
  */
-import { BrowserWindow } from "electron";
 import { physicalCodeForMacKeyCode } from "./core/macos-key-code.js";
 import type { NativeHost } from "./native-host.js";
-import { sendRendererCommand } from "./renderer-commands.js";
-import { windowRegistry } from "./window-registry.js";
 
-export function installMacosCommandKeyUps(nativeHost: NativeHost): () => void {
+export interface MacosCommandKeyUpRouting<T> {
+  focusedGameTarget(): T | null;
+  release(target: T, code: string): void;
+}
+
+export function installMacosCommandKeyUps<T>(
+  nativeHost: Pick<NativeHost, "monitorCommandKeyUps">,
+  routing: MacosCommandKeyUpRouting<T>,
+): () => void {
   return nativeHost.monitorCommandKeyUps((keyCode) => {
     const code = physicalCodeForMacKeyCode(keyCode);
-    const win = BrowserWindow.getFocusedWindow();
-    const context = win
-      ? windowRegistry.contextForWebContents(win.webContents.id)
-      : null;
-    if (!code || !win || context?.role !== "game") return false;
-    void sendRendererCommand(win, { type: "input.release", code });
+    if (!code) return false;
+    const target = routing.focusedGameTarget();
+    if (!target) return false;
+    routing.release(target, code);
     return true;
   });
 }
