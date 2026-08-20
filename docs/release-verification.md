@@ -132,8 +132,13 @@ On the maintainer Mac:
 4. Play for ten minutes and check rendering, input, audio, templates, and saved
    login.
 5. Confirm current Core certification.
-6. If the release claims Tools support, test the claimed Target Distance and
-   Team Management behavior.
+6. Test template save/load and confirm native double-click and the Guild Wars
+   cursor.
+7. If the release claims Tools support, test Target Distance, party and map
+   transitions, Travel, eligible and restricted Xunlai states plus aliases, and
+   one minimal reversible Team Apply operation.
+8. If 4 GB mode is requested, confirm it is effective. Also confirm that a
+   refused pair keeps the game playable in normal 2 GB mode.
 
 A 16 GB Apple Silicon MacBook Pro is sufficient for this owned check. Record the
 actual model, memory, and macOS version. Do not imply that this one device proves

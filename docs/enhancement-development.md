@@ -6,9 +6,9 @@ optional Tools.
 Audience: contributors who change client transforms, companion snapshots,
 read-only observation, Tools presentation, or named game commands.
 
-This document owns the development and recertification procedure. The build
-certificate in `src/main/certification/enhancement-builds.ts` owns build-local
-facts. Tests own exact acceptance thresholds.
+This document owns the feature-development procedure. The local semantic
+verifier owns runtime proof. Exact build records are regression expectations.
+Tests own exact acceptance thresholds.
 
 Read [WASM host and client certification](wasm-host.md) before you change the
 architecture.
@@ -108,8 +108,9 @@ Each region needs these properties:
 - explicit invalid and overflow states;
 - no game pointer in published output.
 
-The official WASM and build certificate remain canonical. Every derived output
-must be rebuildable from them.
+The official WASM remains canonical. Feature certificates and transformed
+outputs are derived from those bytes and the verifier ABI and must be
+rebuildable.
 
 Do not build a speculative global game model. Use a tick snapshot for current
 state. Add an event ring only when a proven user feature cannot be represented
@@ -208,6 +209,10 @@ Start from the exact official artifact that triggered the compatibility notice.
 Do not clear the downloaded game data: the unsupported artifact and the
 retained preceding artifact are the most useful migration evidence.
 
+Read and follow the [ArenaNet compatibility patch-day playbook](arenanet-compatibility.md#patch-day-playbook).
+Routine equivalent rebuilds must pass locally without a source change. Use the
+commands below to investigate a refusal, not to publish a new hash allowlist.
+
 Run the bounded chain in order:
 
 ```bash
@@ -219,19 +224,7 @@ pnpm certification recertify "/absolute/path/Gw.jspi.wasm"
 The tool first selects or derives file compatibility. It then inspects that
 output as the Core and Tools candidate. The transforms are not alternatives.
 
-If the template report derives one unambiguous entry, review it and write it:
-
-```bash
-pnpm certification template "/absolute/path/Gw.jspi.wasm" --write
-```
-
-Then add one complete exact-build Enhancement entry. Do not make a new build
-inherit addresses from the preceding build. Compare the old and new modules
-and record which function bodies, signatures, table slots, data roots and
-message anchors stayed exact. Recompute every capability output; a copied hash
-is not evidence.
-
-Finish the downstream chain only after the Enhancement entry exists:
+Run the downstream chain with exact regression shortcuts disabled:
 
 ```bash
 pnpm certification recertify "/absolute/path/Gw.jspi.wasm"
@@ -239,25 +232,27 @@ pnpm certification double-click "/absolute/path/Gw.jspi.wasm"
 pnpm check
 ```
 
-`recertify` must report `bundleVerified: true`, and `double-click` must prove
-one unique callback, active table slot, signature, insertion point, and valid
-output. A shipped hash-table match is regression evidence, not authority.
+`recertify` must report per-feature ABI/input-hash-bound verdicts, and
+`double-click` must prove one unique callback, active table role, signature,
+insertion point, and valid output. A shipped hash-table match is regression
+evidence, not authority.
 
 Each recovered fact needs an independent semantic anchor. A common movement is
 not enough. Automated candidates are review evidence and cannot create runtime
 authority.
 
-Recertification requires exact identities, signatures, caller semantics,
-original-call preservation, table and allocation invariants, positive and
-negative layout evidence, lifecycle clearing, offline tests, clean teardown,
-and one bounded live semantic check per changed domain.
+Recertification requires semantic identities, signatures, caller relationships,
+original-call preservation, complete address occurrence ledgers, table and
+allocation invariants, positive and negative layout evidence, lifecycle
+clearing, offline tests, clean teardown, and one bounded live semantic check per
+changed domain.
 
 For Xunlai storage, independently recover the player-record array, record
-stride, agent identifier, player number, access flags, and area type from the
-exact supported Guild Wars build. External projects such as GWCA can explain
-semantics, but they are never runtime authority. Record the exact reader and
-command-handler indices, signatures, body hashes, and game-thread drain
-evidence in the new certificate. Do not infer them from the preceding build.
+stride, agent identifier, player number, access flags, and area type. External
+projects such as GWCA can explain semantics, but they are never runtime
+authority. Prove reader and handler roles, signatures, field offsets, and the
+game-thread drain from the current bytes. Do not copy them from a preceding
+build.
 The three player-record readers form one optional, all-or-nothing access proof.
 If that proof cannot be certified, omit it: the generated configuration then
 contains zero access words, Xunlai stays disabled, and the independently
@@ -294,7 +289,7 @@ must remain playable.
 
 A Core or Tools change is done when all applicable statements are true:
 
-- one source owns every new build-local fact;
+- every client-local fact has one typed semantic witness;
 - invalid and loading state cannot publish stale data;
 - disabled behavior stops its observer or command path;
 - no raw pointer, packet, secret, or memory view crosses IPC;
