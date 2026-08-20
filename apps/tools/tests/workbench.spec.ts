@@ -46,12 +46,17 @@ test.beforeEach(async ({ page }) => {
 
 test("offers destination autocomplete and numbered Travel shortcuts", async ({ page }) => {
   await page.goto("/?travel=1");
-  await expect(page.getByRole("dialog", { name: "Travel" })).toBeVisible();
-  await page.getByRole("combobox", { name: "Search destinations" }).fill("kama");
+  const palette = page.getByRole("dialog", { name: "Quick Travel" });
+  await expect(palette).toBeVisible();
+  await expect(palette.locator('label[for="travel-search-input"] > span')).toHaveCount(0);
+  await expect(palette.getByRole("status")).toHaveCount(0);
+  const paletteBox = await palette.boundingBox();
+  expect(paletteBox?.y).toBeGreaterThanOrEqual(95);
+  await page.getByRole("combobox", { name: "Destination or search phrase" }).fill("kama");
   await expect(page.getByRole("option", { name: /Kamadan, Jewel of Istan/ })).toBeVisible();
   await page.keyboard.press("Meta+9");
   await expect(page.getByRole("status")).toContainText("shortcut 9");
-  await page.getByRole("combobox", { name: "Search destinations" }).fill("");
+  await page.getByRole("combobox", { name: "Destination or search phrase" }).fill("");
   await expect(page.getByRole("button", {
     name: /Travel to Kamadan, Jewel of Istan, shortcut 9/,
   })).toBeVisible();
@@ -61,16 +66,21 @@ test("keeps map-only Travel controls and status visible in a short window", asyn
   await page.setViewportSize({ width: 480, height: 560 });
   await page.goto("/?travel=1");
 
-  await expect(page.getByRole("dialog", { name: "Travel" })).toBeVisible();
-  await expect(page.getByRole("status")).toBeInViewport();
-  await expect(page.getByRole("combobox", { name: "Search destinations" })).toBeInViewport();
+  await expect(page.getByRole("dialog", { name: "Quick Travel" })).toBeVisible();
+  await expect(page.locator(".travel-footer")).toBeInViewport();
+  await expect(page.getByRole("combobox", {
+    name: "Destination or search phrase",
+  })).toBeInViewport();
   await expect(page.getByRole("spinbutton", { name: "District number" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
-  const grid = page.locator(".travel-shortcut-grid");
-  await expect(grid.locator(".travel-shortcut-tile")).toHaveCount(9);
+  await expect(page.getByRole("tab", { name: "Customize" })).toBeVisible();
+  const grid = page.locator(".travel-favorite-grid");
+  await expect(grid.locator(".travel-favorite")).toHaveCount(6);
   await expect.poll(() => grid.evaluate((element) =>
     getComputedStyle(element).gridTemplateColumns.split(" ").length
   )).toBe(3);
+
+  await page.getByRole("tab", { name: "Customize" }).click();
+  await expect(page.locator(".travel-customize-shortcuts .travel-favorite")).toHaveCount(9);
 });
 
 test("manages teams and finds builds without Electron or the game", async ({ page }) => {

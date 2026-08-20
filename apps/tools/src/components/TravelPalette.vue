@@ -1,29 +1,46 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import {
-  TRAVEL_DESTINATIONS,
+  TRAVEL_RECENT_LIMITS,
   TRAVEL_SEARCH_QUERY_LIMIT,
   TRAVEL_SHORTCUT_LIMIT,
   highlightTravelDestinationName,
   isTravelRequest,
+  normaliseTravelTerm,
   searchTravelDestinations,
   travelDestination,
   type TravelDestination,
+  type TravelRecentLimit,
   type TravelRequest,
 } from "../../../../src/shared/travel";
 import type { TravelHost } from "../travel-host";
 import { useTravelPreferences } from "../travel-preferences";
+import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
 const props = defineProps<{ host: TravelHost; visible: boolean }>();
 const emit = defineEmits<{ close: [] }>();
-type PaletteMode = Readonly<{ type: "browse" | "synonyms" }>
-  | Readonly<{ type: "assign"; slot: number }>;
+type PaletteMode = "travel" | "customize";
+const COMPACT_FAVORITE_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  "Ascalon City": "Ascalon",
+  "Kaineng Center": "Kaineng",
+  "Eye of the North": "Eye",
+  "Embark Beach": "Embark",
+});
 
 const palette = ref<HTMLElement | null>(null);
 const input = ref<HTMLInputElement | null>(null);
-const synonymDone = ref<HTMLButtonElement | null>(null);
+const travelTab = ref<HTMLButtonElement | null>(null);
+const customizeTab = ref<HTMLButtonElement | null>(null);
 const query = ref("");
 const active = ref(0);
+const mode = ref<PaletteMode>("travel");
+const editingShortcutSlot = ref<number | null>(null);
+const addingPhrase = ref(false);
+const newPhraseTerm = ref("");
+const newPhraseMapId = ref<number | null>(null);
+const phraseError = ref("");
+const feedback = ref("");
+const feedbackLevel = ref<"info" | "success" | "warning" | "danger">("info");
 const travelPreferences = useTravelPreferences(props.host);
 const {
   shortcuts,
@@ -33,21 +50,11 @@ const {
   pending: preferenceWritePending,
   disabled: preferenceControlsDisabled,
 } = travelPreferences;
-const mode = ref<PaletteMode>({ type: "browse" });
-const editingShortcuts = ref(false);
-const synonymTerm = ref("");
-const feedback = ref("");
-const feedbackLevel = ref<"info" | "success" | "warning" | "danger">("info");
 let closeTimer = 0;
 let visibilityLoad = 0;
 
-const hasQuery = computed(() => query.value.trim().length > 0);
-const assignmentSlot = computed(() => mode.value.type === "assign" ? mode.value.slot : null);
-const managingSynonyms = computed(() => mode.value.type === "synonyms");
+const hasQuery = computed(() => normaliseTravelTerm(query.value).length > 0);
 const travelPending = computed(() => props.host.attempt.value.status !== "idle");
-const busyMapId = computed(() =>
-  props.host.attempt.value.status === "idle" ? null : props.host.attempt.value.mapId
-);
 const results = computed(() => hasQuery.value
   ? searchTravelDestinations(query.value, synonyms.value)
   : []
@@ -56,21 +63,53 @@ const shortcutRows = computed(() => Array.from({ length: TRAVEL_SHORTCUT_LIMIT }
   const request = shortcuts.value[index] ?? null;
   return { index, request, destination: request === null ? null : travelDestination(request.mapId) };
 }));
+const assignedShortcuts = computed(() => shortcutRows.value.filter((row) => row.destination !== null));
 const recentRows = computed(() => recentMapIds.value
   .slice(0, recentLimit.value)
   .map((mapId) => travelDestination(mapId))
   .filter((destination): destination is TravelDestination => destination !== null)
 );
+const storedRecentRows = computed(() => recentMapIds.value
+  .map((mapId) => travelDestination(mapId))
+  .filter((destination): destination is TravelDestination => destination !== null)
+);
 const activeDestination = computed(() => results.value[active.value] ?? null);
-const statusText = computed(() => feedback.value || props.host.unavailable || (
-  hasQuery.value ? "Arrow keys choose · Return travels · ⌘1–9 saves" : "Press 1–9 to travel"
-));
+const statusText = computed(() => feedback.value || props.host.unavailable || "");
 const statusLevel = computed(() => feedback.value
   ? feedbackLevel.value
   : props.host.unavailable === null ? undefined : "warning"
 );
+const urgentNoticeVisible = computed(() => statusLevel.value === "warning" || statusLevel.value === "danger");
 
-watch(query, () => { active.value = 0; });
+function setFeedback(message: string, level: typeof feedbackLevel.value): void {
+  feedback.value = message;
+  feedbackLevel.value = level;
+}
+
+function inputValue(event: Event): string {
+  return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : "";
+}
+
+function queryMatchLabel(destination: TravelDestination): string {
+  const normalized = normaliseTravelTerm(query.value);
+  const tokens = normalized.split(" ").filter(Boolean);
+  if (tokens.length === 0) return destination.campaign;
+  return synonyms.value.some((entry) =>
+    entry.mapId === destination.mapId
+    && tokens.every((token) => normaliseTravelTerm(entry.term).includes(token))
+  ) ? "Search phrase" : destination.campaign;
+}
+
+function favoriteLabel(destination: TravelDestination): string {
+  const compact = COMPACT_FAVORITE_LABELS[destination.name];
+  if (compact !== undefined) return compact;
+  return destination.name.split(",", 1)[0] ?? destination.name;
+}
+
+watch(query, () => {
+  active.value = 0;
+  if (hasQuery.value) mode.value = "travel";
+});
 watch(results, (next) => {
   props.host.traceSearch(query.value, next.map((destination) => destination.mapId));
 });
@@ -79,14 +118,15 @@ watch(() => props.visible, async (visible) => {
   const load = ++visibilityLoad;
   query.value = "";
   active.value = 0;
-  mode.value = { type: "browse" };
-  editingShortcuts.value = false;
+  mode.value = "travel";
+  editingShortcutSlot.value = null;
+  addingPhrase.value = false;
   feedback.value = "";
+  phraseError.value = "";
   try {
     if (!await travelPreferences.load() || load !== visibilityLoad) return;
   } catch {
-    feedback.value = "Travel preferences could not be loaded. Reopen Travel to try again.";
-    feedbackLevel.value = "danger";
+    setFeedback("Travel preferences could not be loaded. Reopen Travel to try again.", "danger");
   }
   await nextTick();
   input.value?.focus({ preventScroll: true });
@@ -94,14 +134,35 @@ watch(() => props.visible, async (visible) => {
 
 watch(() => props.host.notice.value, (notice) => {
   if (!notice) return;
-  feedback.value = notice.message;
-  feedbackLevel.value = notice.level;
+  setFeedback(notice.message, notice.level);
 });
 watch(() => props.host.attempt.value.status, (status) => {
   if (status !== "loading") return;
   window.clearTimeout(closeTimer);
   closeTimer = window.setTimeout(() => emit("close"), 350);
 });
+
+async function selectMode(next: PaletteMode, focus: "search" | "tab" = "search"): Promise<void> {
+  query.value = "";
+  active.value = 0;
+  mode.value = next;
+  await nextTick();
+  if (focus === "tab") {
+    (next === "travel" ? travelTab.value : customizeTab.value)?.focus();
+  } else if (next === "travel") {
+    input.value?.focus();
+  }
+}
+
+function onModeKeydown(event: KeyboardEvent): void {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const next: PaletteMode = event.key === "ArrowLeft" || event.key === "Home"
+    ? "travel"
+    : "customize";
+  event.preventDefault();
+  if (next === "customize" && preferenceControlsDisabled.value) return;
+  void selectMode(next, "tab");
+}
 
 async function travel(request: TravelRequest): Promise<void> {
   if (travelPending.value || !isTravelRequest(request)) return;
@@ -113,138 +174,204 @@ async function travel(request: TravelRequest): Promise<void> {
 async function saveShortcut(slot: number, destination: TravelDestination): Promise<void> {
   try {
     if (!await travelPreferences.assignShortcut(slot, destination)) return;
-    mode.value = { type: "browse" };
-    editingShortcuts.value = false;
-    feedback.value = `${destination.name} is now shortcut ${slot + 1}.`;
-    feedbackLevel.value = "success";
+    setFeedback(`${destination.name} is now shortcut ${slot + 1}.`, "success");
   } catch {
-    feedback.value = "Shortcut could not be saved. Your previous shortcut is still active.";
-    feedbackLevel.value = "danger";
+    setFeedback("Shortcut could not be saved. Your previous shortcut is still active.", "danger");
   }
 }
 
 async function removeShortcut(slot: number): Promise<void> {
   try {
     if (!await travelPreferences.removeShortcut(slot)) return;
-    feedback.value = `Shortcut ${slot + 1} removed.`;
-    feedbackLevel.value = "success";
+    setFeedback(`Shortcut ${slot + 1} removed.`, "success");
   } catch {
-    feedback.value = "Shortcut could not be removed. Your previous shortcut is still active.";
-    feedbackLevel.value = "danger";
+    setFeedback("Shortcut could not be removed. Your previous shortcut is still active.", "danger");
   }
 }
 
-async function beginAssignment(slot: number): Promise<void> {
-  if (preferenceControlsDisabled.value) return;
-  mode.value = { type: "assign", slot };
-  query.value = "";
-  feedback.value = `Search for a destination to assign to shortcut ${slot + 1}.`;
-  await nextTick();
-  input.value?.focus();
+async function assignShortcut(slot: number, mapId: number | null): Promise<void> {
+  if (mapId === null) {
+    await removeShortcut(slot);
+    return;
+  }
+  const destination = travelDestination(mapId);
+  if (destination !== null) await saveShortcut(slot, destination);
 }
 
-async function addSynonym(): Promise<void> {
-  const destination = activeDestination.value;
-  if (destination === null) return;
-  const term = synonymTerm.value.trim();
+async function assignEditingShortcut(mapId: number | null): Promise<void> {
+  if (editingShortcutSlot.value !== null) await assignShortcut(editingShortcutSlot.value, mapId);
+}
+
+async function openShortcutManager(slot?: number): Promise<void> {
+  if (preferenceControlsDisabled.value) return;
+  await selectMode("customize");
+  editingShortcutSlot.value = slot ?? null;
+  await nextTick();
+  if (slot !== undefined) {
+    palette.value?.querySelector<HTMLElement>(".travel-shortcut-editor summary")?.focus();
+    setFeedback(`Choose a destination for shortcut ${slot + 1}.`, "info");
+  }
+}
+
+async function beginAddPhrase(): Promise<void> {
+  addingPhrase.value = true;
+  phraseError.value = "";
+  newPhraseTerm.value = "";
+  newPhraseMapId.value = null;
+  await nextTick();
+  palette.value?.querySelector<HTMLInputElement>("#travel-new-phrase")?.focus();
+}
+
+function cancelAddPhrase(): void {
+  addingPhrase.value = false;
+  phraseError.value = "";
+  newPhraseTerm.value = "";
+  newPhraseMapId.value = null;
+}
+
+function phraseOutcomeMessage(outcome: "limit" | "invalid" | "unverified" | "busy"): string {
+  if (outcome === "limit") return "You can save up to 64 search phrases.";
+  if (outcome === "unverified") return "GWonMac did not confirm that phrase was saved. Restart the app, then try again.";
+  if (outcome === "busy") return "Wait for the current preference change, then try again.";
+  return "Use a unique phrase of 1–40 characters that does not name another destination.";
+}
+
+async function addPhrase(): Promise<void> {
+  const destination = newPhraseMapId.value === null ? null : travelDestination(newPhraseMapId.value);
+  if (destination === null) {
+    phraseError.value = "Choose a destination.";
+    return;
+  }
+  const term = newPhraseTerm.value.trim();
   try {
     const outcome = await travelPreferences.addSynonym(term, destination);
-    if (outcome === "limit" || outcome === "invalid") {
-      feedback.value = outcome === "limit"
-        ? "You can save up to 64 synonyms."
-        : "Use a unique term of 1–40 characters that does not name another destination.";
-      feedbackLevel.value = "warning";
+    if (outcome !== "saved") {
+      phraseError.value = phraseOutcomeMessage(outcome);
       return;
     }
-    if (outcome !== "saved") return;
-    synonymTerm.value = "";
-    feedback.value = `“${term}” now finds ${destination.name}.`;
-    feedbackLevel.value = "success";
+    phraseError.value = "";
+    newPhraseTerm.value = "";
+    newPhraseMapId.value = null;
+    addingPhrase.value = false;
+    setFeedback(`“${term}” now finds ${destination.name}. Search was verified.`, "success");
+    query.value = term;
+    mode.value = "travel";
+    await nextTick();
+    input.value?.focus();
   } catch {
-    feedback.value = "Synonym could not be saved. Your previous synonyms are unchanged.";
-    feedbackLevel.value = "danger";
+    phraseError.value = "The search phrase could not be saved. Your previous phrases are unchanged.";
   }
 }
 
-async function removeSynonym(index: number): Promise<void> {
+async function updatePhraseTerm(index: number, event: Event): Promise<void> {
+  const entry = synonyms.value[index];
+  if (entry === undefined) return;
+  const destination = travelDestination(entry.mapId);
+  if (destination === null) return;
+  const control = event.currentTarget instanceof HTMLInputElement ? event.currentTarget : null;
+  try {
+    const term = inputValue(event).trim();
+    const outcome = await travelPreferences.updateSynonym(index, term, destination);
+    if (outcome !== "saved") {
+      if (control !== null) control.value = entry.term;
+      setFeedback(phraseOutcomeMessage(outcome), "warning");
+      return;
+    }
+    setFeedback(`“${term}” was saved and verified.`, "success");
+  } catch {
+    if (control !== null) control.value = entry.term;
+    setFeedback("The search phrase could not be changed. Its previous value is still active.", "danger");
+  }
+}
+
+async function updatePhraseDestination(index: number, mapId: number | null): Promise<void> {
+  const entry = synonyms.value[index];
+  const destination = mapId === null ? null : travelDestination(mapId);
+  if (entry === undefined || destination === null) return;
+  try {
+    const outcome = await travelPreferences.updateSynonym(index, entry.term, destination);
+    if (outcome !== "saved") {
+      setFeedback(phraseOutcomeMessage(outcome), "warning");
+      return;
+    }
+    setFeedback(`“${entry.term}” now finds ${destination.name}.`, "success");
+  } catch {
+    setFeedback("The search phrase could not be changed. Its previous destination is still active.", "danger");
+  }
+}
+
+async function removePhrase(index: number): Promise<void> {
+  const removed = synonyms.value[index];
   try {
     if (!await travelPreferences.removeSynonym(index)) return;
-    feedback.value = "Synonym removed.";
-    feedbackLevel.value = "success";
+    setFeedback(removed === undefined ? "Search phrase removed." : `“${removed.term}” removed.`, "success");
   } catch {
-    feedback.value = "Synonym could not be removed. Your previous synonyms are unchanged.";
-    feedbackLevel.value = "danger";
+    setFeedback("The search phrase could not be removed. Your previous phrases are unchanged.", "danger");
   }
 }
 
-async function openSynonymManager(): Promise<void> {
-  if (preferenceControlsDisabled.value) return;
-  mode.value = { type: "synonyms" };
-  await nextTick();
-  synonymDone.value?.focus();
+async function setRecentLimit(limit: TravelRecentLimit): Promise<void> {
+  try {
+    if (!await travelPreferences.setRecentLimit(limit)) return;
+    setFeedback(limit === 0 ? "Recent trips are off and stored history was cleared." : `Showing the last ${limit} confirmed trips.`, "success");
+  } catch {
+    setFeedback("The Recent setting could not be changed.", "danger");
+  }
 }
 
-async function returnToBrowse(): Promise<void> {
-  mode.value = { type: "browse" };
-  query.value = "";
-  await nextTick();
-  input.value?.focus();
+async function clearRecentTrips(): Promise<void> {
+  try {
+    if (!await travelPreferences.clearRecentTrips()) return;
+    setFeedback("Recent trips cleared. Shortcuts and search phrases are unchanged.", "success");
+  } catch {
+    setFeedback("Recent trips could not be cleared.", "danger");
+  }
 }
 
 async function moveActive(direction: 1 | -1): Promise<void> {
   if (results.value.length === 0) return;
   active.value = (active.value + direction + results.value.length) % results.value.length;
   await nextTick();
-  palette.value?.querySelector<HTMLElement>(`#travel-${activeDestination.value?.mapId}`)
-    ?.scrollIntoView({ block: "nearest" });
+  palette.value?.querySelector<HTMLElement>(`#travel-${activeDestination.value?.mapId}`)?.scrollIntoView({ block: "nearest" });
 }
 
 function onKeydown(event: KeyboardEvent): void {
   if (!props.visible) return;
   if (event.key === "Escape") {
     event.preventDefault();
-    if (managingSynonyms.value || assignmentSlot.value !== null) void returnToBrowse();
-    else if (editingShortcuts.value) editingShortcuts.value = false;
-    else emit("close");
+    if (mode.value === "customize") void selectMode("travel");
+    else if (hasQuery.value) {
+      query.value = "";
+      void nextTick(() => input.value?.focus());
+    } else emit("close");
     return;
   }
-  if (managingSynonyms.value) return;
   if (event.target === input.value && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
     event.preventDefault();
     void moveActive(event.key === "ArrowDown" ? 1 : -1);
     return;
   }
-  if (event.target === input.value && event.key === "Enter" && activeDestination.value) {
-    event.preventDefault();
-    if (assignmentSlot.value === null) void travel({ mapId: activeDestination.value.mapId });
-    else void saveShortcut(assignmentSlot.value, activeDestination.value);
+  if (event.target === input.value && event.key === "Enter") {
+    if (activeDestination.value !== null) {
+      event.preventDefault();
+      void travel({ mapId: activeDestination.value.mapId });
+    } else if (!hasQuery.value && recentRows.value[0] !== undefined) {
+      event.preventDefault();
+      void travel({ mapId: recentRows.value[0].mapId });
+    }
     return;
   }
-  if (
-    /^Digit[1-9]$/u.test(event.code)
-    && event.metaKey
-    && !event.ctrlKey
-    && !event.altKey
-    && !event.shiftKey
-    && activeDestination.value
-  ) {
+  if (/^Digit[1-9]$/u.test(event.code) && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && activeDestination.value) {
     event.preventDefault();
     void saveShortcut(Number(event.code.slice(5)) - 1, activeDestination.value);
     return;
   }
-  if (
-    /^Digit[1-9]$/u.test(event.code)
-    && !hasQuery.value
-    && !event.metaKey
-    && !event.ctrlKey
-    && !event.altKey
-    && !event.shiftKey
-  ) {
+  if (/^Digit[1-9]$/u.test(event.code) && mode.value === "travel" && !hasQuery.value && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
     event.preventDefault();
     const slot = Number(event.code.slice(5)) - 1;
     const shortcut = shortcuts.value[slot];
-    if (shortcut && !editingShortcuts.value) void travel(shortcut);
-    else void beginAssignment(slot);
+    if (shortcut) void travel(shortcut);
+    else void openShortcutManager(slot);
   }
 }
 
@@ -252,94 +379,66 @@ onBeforeUnmount(() => window.clearTimeout(closeTimer));
 </script>
 
 <template>
-  <section ref="palette" v-show="visible" class="ui-frame travel-palette" role="dialog" aria-label="Travel" :aria-busy="preferenceWritePending" @keydown="onKeydown">
-    <div class="ui-input-group travel-search">
+  <section ref="palette" v-show="visible" class="ui-frame travel-palette" role="dialog" aria-label="Quick Travel" :aria-busy="preferenceWritePending" @keydown="onKeydown">
+    <div class="travel-search">
       <svg class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg>
-      <label class="ui-sr-only" for="travel-search-input">Search destinations</label>
-      <input
-        id="travel-search-input"
-        ref="input"
-        v-model="query"
-        role="combobox"
-        :aria-controls="hasQuery ? 'travel-results' : undefined"
-        aria-autocomplete="list"
-        aria-haspopup="listbox"
-        :disabled="managingSynonyms"
-        :aria-activedescendant="activeDestination ? `travel-${activeDestination.mapId}` : undefined"
-        :aria-expanded="results.length > 0"
-        autocomplete="off"
-        spellcheck="false"
-        :maxlength="TRAVEL_SEARCH_QUERY_LIMIT"
-        :placeholder="assignmentSlot === null ? 'Travel to an outpost…' : `Assign shortcut ${assignmentSlot + 1}…`"
-      >
-      <button
-        type="button"
-        class="ui-button travel-close"
-        data-icon
-        aria-label="Close Travel"
-        @click="emit('close')"
-      >
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="m3 3 10 10M13 3 3 13" />
-        </svg>
-      </button>
+      <label for="travel-search-input"><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination or search phrase" :aria-controls="hasQuery ? 'travel-results' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="activeDestination ? `travel-${activeDestination.mapId}` : undefined" :aria-expanded="results.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or phrases…"></label>
+      <button type="button" class="ui-button travel-close" data-icon aria-label="Close Quick Travel" @click="emit('close')"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>
     </div>
 
-    <div v-if="!hasQuery && !managingSynonyms" class="ui-scroll travel-home">
-      <section v-if="recentRows.length" class="travel-recents" aria-labelledby="travel-recents-title">
-        <header><h2 id="travel-recents-title">Recent</h2></header>
-        <button v-for="destination in recentRows" :key="destination.mapId" type="button" class="ui-row" :disabled="travelPending || host.unavailable !== null" @click="travel({ mapId: destination.mapId })">
-          <span>{{ destination.name }}</span><span class="travel-row-hint">Travel</span>
-        </button>
-      </section>
-
-      <section class="travel-shortcuts" aria-labelledby="travel-shortcuts-title">
-        <header>
-          <h2 id="travel-shortcuts-title">Quick Travel</h2>
-          <span class="travel-header-actions">
-            <button type="button" class="ui-button" :disabled="preferenceControlsDisabled" @click="editingShortcuts = !editingShortcuts">{{ editingShortcuts ? "Done" : "Edit" }}</button>
-            <button type="button" class="ui-button" :disabled="preferenceControlsDisabled" @click="openSynonymManager">Synonyms</button>
-          </span>
-        </header>
-        <div class="travel-shortcut-grid">
-          <div v-for="row in shortcutRows" :key="row.index" class="travel-shortcut-tile" :data-empty="row.destination === null">
-            <button type="button" class="travel-shortcut-primary" :disabled="preferenceControlsDisabled || (!editingShortcuts && (travelPending || host.unavailable !== null))" :aria-label="row.destination ? `${editingShortcuts ? 'Replace' : 'Travel to'} ${row.destination.name}, shortcut ${row.index + 1}` : `Assign shortcut ${row.index + 1}`" @click="row.request && !editingShortcuts ? travel(row.request) : beginAssignment(row.index)">
-              <kbd class="ui-kbd">{{ row.index + 1 }}</kbd>
-              <span>{{ row.destination?.name ?? "Set shortcut" }}</span>
-            </button>
-            <button v-if="editingShortcuts && row.destination" type="button" class="travel-shortcut-remove" :disabled="preferenceControlsDisabled" :aria-label="`Remove shortcut ${row.index + 1}`" @click="removeShortcut(row.index)">×</button>
-          </div>
-        </div>
-      </section>
-      <p class="travel-search-prompt">Start typing to search all {{ TRAVEL_DESTINATIONS.length }} direct-travel destinations.</p>
+    <div class="ui-segment travel-mode" data-fill role="tablist" aria-label="Quick Travel mode" @keydown="onModeKeydown">
+      <button id="travel-mode-tab" ref="travelTab" type="button" role="tab" :tabindex="mode === 'travel' ? 0 : -1" :aria-selected="mode === 'travel'" aria-controls="travel-panel" @click="selectMode('travel')">Travel</button>
+      <button id="travel-customize-mode-tab" ref="customizeTab" type="button" role="tab" :tabindex="mode === 'customize' ? 0 : -1" :aria-selected="mode === 'customize'" aria-controls="travel-customize-panel" :disabled="preferenceControlsDisabled" @click="selectMode('customize')">Customize</button>
     </div>
+    <div v-if="urgentNoticeVisible" class="travel-notice" :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</div>
 
-    <section v-else-if="managingSynonyms" class="ui-scroll travel-synonyms" aria-labelledby="travel-synonyms-title">
-      <header><h2 id="travel-synonyms-title">Custom synonyms</h2><button ref="synonymDone" type="button" class="ui-button" @click="returnToBrowse">Done</button></header>
-      <div v-for="(synonym, index) in synonyms" :key="`${synonym.term}-${synonym.mapId}`" class="ui-row">
-        <span><strong>{{ synonym.term }}</strong><small>{{ travelDestination(synonym.mapId)?.name }}</small></span>
-        <button type="button" class="ui-button" :disabled="preferenceControlsDisabled" :aria-label="`Remove synonym ${synonym.term}`" @click="removeSynonym(index)">Remove</button>
+    <section v-if="hasQuery" id="travel-results-panel" class="ui-scroll travel-body" role="region" aria-label="Travel search results">
+      <div v-if="results.length" class="travel-result-heading">{{ results.length === 1 ? 'Best match for' : 'Matches for' }} <strong>{{ query }}</strong></div>
+      <div v-if="results.length" id="travel-results" class="travel-results" role="listbox">
+        <button v-for="(destination, index) in results" :id="`travel-${destination.mapId}`" :key="destination.mapId" type="button" class="travel-result" role="option" :aria-selected="index === active" :disabled="travelPending || host.unavailable !== null" @mouseenter="active = index" @click="active = index; travel({ mapId: destination.mapId })"><span><strong><template v-for="(part, partIndex) in highlightTravelDestinationName(destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ destination.campaign }}</small></span><span class="travel-match">{{ queryMatchLabel(destination) }}</span></button>
       </div>
-      <p v-if="synonyms.length === 0" class="travel-empty">No custom synonyms yet. Search for a destination, then add one below the results.</p>
+      <div v-else class="ui-empty travel-empty"><strong>No destinations for “{{ query }}”</strong><p>Try a destination, campaign, official shortcut, or your own search phrase.</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>
     </section>
 
-    <section v-else class="travel-search-view">
-      <div v-if="results.length" id="travel-results" class="ui-scroll travel-results" role="listbox">
-        <div v-for="(destination, index) in results" :key="destination.mapId" role="presentation" class="ui-row travel-result" :data-active="index === active" @mouseenter="active = index">
-          <button :id="`travel-${destination.mapId}`" type="button" class="travel-row-primary" role="option" :aria-selected="index === active" :disabled="travelPending || host.unavailable !== null" @click="assignmentSlot === null ? travel({ mapId: destination.mapId }) : saveShortcut(assignmentSlot, destination)">
-            <strong><template v-for="(part, partIndex) in highlightTravelDestinationName(destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong>
-            <small>{{ destination.campaign }}</small>
-          </button>
-          <span v-if="busyMapId === destination.mapId" class="travel-progress">Travelling…</span><kbd v-else-if="index === active" class="ui-kbd">return</kbd>
+    <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="tabpanel" aria-labelledby="travel-mode-tab">
+      <section v-if="recentRows.length" class="travel-section travel-recents" aria-labelledby="travel-recents-title">
+        <header class="travel-section-head"><h2 id="travel-recents-title">Recent trips</h2><span>Return travels to the latest</span></header>
+        <div class="travel-recent-list">
+          <button v-for="(destination, index) in recentRows" :key="destination.mapId" type="button" class="travel-recent-row" :data-active="index === 0" :disabled="travelPending || host.unavailable !== null" @click="travel({ mapId: destination.mapId })"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" /></svg><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><kbd v-if="index === 0" class="ui-kbd">return</kbd><span v-else>Travel</span></button>
         </div>
-      </div>
-      <p v-else class="travel-empty">No matching destination. Locked destinations are included, so try another name.</p>
-      <section v-if="activeDestination" class="travel-result-tools" :aria-label="`Actions for ${activeDestination.name}`">
-        <span class="travel-save-group"><span>Save to</span><button v-for="slot in 9" :key="slot" type="button" class="ui-button" :disabled="preferenceControlsDisabled" :aria-label="`Save ${activeDestination.name} to shortcut ${slot}`" @click="saveShortcut(slot - 1, activeDestination)">{{ slot }}</button></span>
-        <span class="travel-synonym-group"><label><span>Synonym</span><input v-model="synonymTerm" class="ui-input" maxlength="40" placeholder="e.g. daily run" @keydown.enter.prevent="addSynonym"></label><button type="button" class="ui-button" :disabled="preferenceControlsDisabled || !synonymTerm.trim()" @click="addSynonym">Add</button><button type="button" class="ui-button" :disabled="preferenceControlsDisabled" @click="openSynonymManager">Manage</button></span>
+      </section>
+      <section class="travel-section travel-favorites" aria-labelledby="travel-favorites-title">
+        <header class="travel-section-head"><h2 id="travel-favorites-title">Favorites</h2><span>Press 1–9</span></header>
+        <div v-if="assignedShortcuts.length" class="travel-favorite-grid">
+          <button v-for="row in assignedShortcuts" :key="row.index" type="button" class="travel-favorite" :title="row.destination?.name" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to ${row.destination?.name}, shortcut ${row.index + 1}`" @click="row.request && travel(row.request)"><b>{{ row.index + 1 }}</b><span>{{ row.destination && favoriteLabel(row.destination) }}</span></button>
+        </div>
+        <div v-else class="ui-empty"><strong>No favorites yet</strong><p>Open Customize to assign destinations to number keys.</p></div>
       </section>
     </section>
 
-    <footer class="travel-footer"><span :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</span></footer>
+    <section v-else id="travel-customize-panel" class="ui-scroll travel-body travel-customize" role="tabpanel" aria-labelledby="travel-customize-mode-tab">
+      <section class="travel-customize-group" aria-labelledby="travel-shortcuts-title">
+        <header class="travel-section-head"><h2 id="travel-shortcuts-title">Number shortcuts</h2><span>Press 1–9</span></header>
+        <div class="travel-customize-shortcuts">
+          <button v-for="row in shortcutRows" :key="row.index" type="button" class="travel-favorite" :title="row.destination?.name" :data-empty="row.destination === null" :aria-pressed="editingShortcutSlot === row.index" :aria-label="row.destination === null ? `Assign shortcut ${row.index + 1}` : `Change shortcut ${row.index + 1}, ${row.destination.name}`" :disabled="preferenceControlsDisabled" @click="editingShortcutSlot = editingShortcutSlot === row.index ? null : row.index"><b>{{ row.index + 1 }}</b><span>{{ row.destination ? favoriteLabel(row.destination) : 'Assign' }}</span></button>
+        </div>
+        <div v-if="editingShortcutSlot !== null" class="travel-shortcut-editor"><span>Shortcut {{ editingShortcutSlot + 1 }}</span><TravelDestinationPicker :model-value="shortcuts[editingShortcutSlot]?.mapId ?? null" :label="`Destination for shortcut ${editingShortcutSlot + 1}`" :disabled="preferenceControlsDisabled" allow-clear @update:model-value="assignEditingShortcut" /></div>
+      </section>
+
+      <section class="travel-customize-group" aria-labelledby="travel-phrases-title">
+        <header class="travel-section-head"><h2 id="travel-phrases-title">Search phrases</h2><button type="button" class="ui-button" :disabled="preferenceControlsDisabled || addingPhrase" @click="beginAddPhrase">+ Add phrase</button></header>
+        <div v-if="synonyms.length" class="travel-phrase-list"><div v-for="(synonym, index) in synonyms" :key="`${synonym.term}-${synonym.mapId}`" class="travel-setting-row travel-phrase-row"><label><span class="ui-sr-only">Search phrase</span><input class="ui-input" maxlength="40" :value="synonym.term" :disabled="preferenceControlsDisabled" @change="updatePhraseTerm(index, $event)"></label><TravelDestinationPicker :model-value="synonym.mapId" :label="`Destination for ${synonym.term}`" :disabled="preferenceControlsDisabled" @update:model-value="updatePhraseDestination(index, $event)" /><button type="button" class="ui-button" :disabled="preferenceControlsDisabled" :aria-label="`Remove search phrase ${synonym.term}`" @click="removePhrase(index)">Remove</button></div></div>
+        <div v-else-if="!addingPhrase" class="travel-phrases-empty">No phrases saved yet.</div>
+        <form v-if="addingPhrase" class="travel-add-phrase" @submit.prevent="addPhrase"><label><span class="ui-sr-only">New search phrase</span><input id="travel-new-phrase" v-model="newPhraseTerm" class="ui-input" maxlength="40" placeholder="Phrase, e.g. daily run" :disabled="preferenceControlsDisabled" :aria-invalid="phraseError ? 'true' : undefined" :aria-describedby="phraseError ? 'travel-phrase-error' : undefined"></label><TravelDestinationPicker v-model="newPhraseMapId" label="Destination for new search phrase" :disabled="preferenceControlsDisabled" /><span class="travel-add-phrase-actions"><button type="button" class="ui-button" :disabled="preferenceControlsDisabled" @click="cancelAddPhrase">Cancel</button><button type="submit" class="ui-button" :disabled="preferenceControlsDisabled || !newPhraseTerm.trim() || newPhraseMapId === null">Save</button></span></form>
+        <p v-if="phraseError" id="travel-phrase-error" class="ui-field-error travel-phrase-error">{{ phraseError }}</p>
+      </section>
+
+      <section class="travel-customize-group travel-recents-setting" aria-labelledby="travel-recent-settings-title">
+        <span><strong id="travel-recent-settings-title">Recent trips</strong><small>{{ storedRecentRows.length }} confirmed destinations stored</small></span>
+        <div class="ui-segment travel-recent-options" role="group" aria-label="Number of recent trips"><button v-for="limit in TRAVEL_RECENT_LIMITS" :key="limit" type="button" :aria-pressed="recentLimit === limit" :disabled="preferenceControlsDisabled" @click="setRecentLimit(limit)">{{ limit === 0 ? 'Off' : limit }}</button></div>
+        <button type="button" class="ui-button travel-clear-recents" :disabled="preferenceControlsDisabled || storedRecentRows.length === 0" @click="clearRecentTrips">Clear</button>
+      </section>
+    </section>
+    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</span><span v-if="mode === 'travel' || hasQuery" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span></footer>
   </section>
 </template>

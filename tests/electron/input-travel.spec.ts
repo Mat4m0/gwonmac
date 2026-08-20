@@ -39,7 +39,7 @@ test.describe("renderer Travel input", () => {
         });
       });
 
-      await expect(page.getByRole("dialog", { name: "Travel" })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Quick Travel" })).toBeVisible();
     } finally {
       await closeOffline(fixture);
     }
@@ -63,8 +63,10 @@ test.describe("renderer Travel input", () => {
       });
 
       const canvas = page.locator("#canvas");
-      const palette = page.getByRole("dialog", { name: "Travel" });
-      const search = page.getByRole("combobox", { name: "Search destinations" });
+      const palette = page.getByRole("dialog", { name: "Quick Travel" });
+      const search = page.getByRole("combobox", {
+        name: "Destination or search phrase",
+      });
       await page.evaluate(() => {
         const gameCanvas = document.getElementById("canvas");
         if (!(gameCanvas instanceof HTMLCanvasElement)) {
@@ -89,11 +91,10 @@ test.describe("renderer Travel input", () => {
         "data-travel-canvas-blurs",
         "0",
       );
-      await expect(search).toHaveAccessibleName("Search destinations");
+      await expect(search).toHaveAccessibleName("Destination or search phrase");
       await expect(palette.getByRole("listbox")).toHaveCount(0);
-      await expect(page.getByText("Start typing to search all 199 direct-travel destinations."))
-        .toBeVisible();
-      await expect(palette.locator(".travel-shortcut-tile")).toHaveCount(9);
+      await expect(palette.getByRole("heading", { name: "Favorites" })).toBeVisible();
+      await expect(palette.locator(".travel-favorite-grid .travel-favorite")).toHaveCount(6);
 
       // Native modal work is above non-modal surfaces. The first Escape closes
       // Settings and restores Travel; the palette remains open underneath.
@@ -125,7 +126,7 @@ test.describe("renderer Travel input", () => {
       await page.keyboard.press("Tab");
       await expect.poll(() => isDomActiveElement(search)).toBe(true);
 
-      await page.getByRole("button", { name: "Close Travel" }).click();
+      await page.getByRole("button", { name: "Close Quick Travel" }).click();
       await expect(palette).toBeHidden();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
     } finally {
