@@ -93,8 +93,9 @@ IDBFS operations. It preserves the original routines for other callers.
 The transform validates each complete changed caller. A change to control flow,
 flags, path handling, or an unrelated call makes the proof refuse.
 
-For an unknown hash, one isolated utility process re-reads and verifies the
-artifact. It writes no profile state.
+For every selected hash, one isolated utility process re-reads and verifies the
+artifact. It writes no profile state. Known hashes take the same structural
+path as unknown hashes.
 
 A crash, timeout, changed file, malformed result, ambiguous match, unexpected
 layout, or transform error means no proof. The app then serves the verified
@@ -105,35 +106,38 @@ that archive before changing the transform.
 
 ## Effective feature status
 
-Main reports the effective served status for file saving, cursor, target
-observation, party observation, and Apply team. Each optional feature is
-`available`, `off`, or `unavailable`; unavailable features also say whether a
-Guild Wars update or a preparation failure caused the refusal. The renderer
-never reconstructs these answers from settings, hashes, or another feature.
+Main reports the effective served status for file saving, native double-click,
+cursor, Target, Party, Team Apply, Travel, Xunlai, aliases, and 4 GB mode. Each
+optional feature is `available`, `off`, or `unavailable`; unavailable features
+also say whether a Guild Wars update or a preparation failure caused the
+refusal. The renderer never reconstructs these answers from settings, hashes,
+or another feature.
 
-The exact-build entry carries independent optional facts. The runtime selects
-the largest certified subset, removes Apply when party observation is absent,
-and retries from the clean post-template module after a feature-local failure.
-A common hook or final integrity failure disables all optional features while
-preserving proven file saving.
+The verifier returns independent feature facts. The runtime selects the largest
+proved subset, removes Team Apply when Party is absent, and removes aliases when
+both Travel and Xunlai are absent. It retries from the clean post-template
+module after a feature-local failure. A common hook or final integrity failure
+disables the dependent features while preserving independent proofs.
 
 The renderer verifies the instantiated module's exact capability manifest.
 Launch intent is not runtime proof.
 
 ## Certification authority
 
-Compiled certification facts and the isolated local file-compatibility verifier
-are the only runtime authorities.
-
-The local verifier can authorize only the bounded file repair that it proves.
-Cursor, observation, and Apply hooks use exact shipped facts until each hook and address
-can be recovered from an independent semantic anchor.
+The isolated local semantic verifier is the sole runtime authority for file
+compatibility, Core, and Tools capabilities. Compiled exact-build facts are
+regression expectations only. Every requested capability is proved from the
+selected official bytes and bound to their hash and the verifier ABI.
 
 There is no remote certificate feed. A CI result, cache file, diagnostics file,
 or GitHub issue cannot grant runtime authority.
 
-New observation or Apply facts require an application release. When those facts are
-missing, the official ArenaNet client remains playable.
+An equivalent ArenaNet rebuild therefore needs no source change or application
+release. A semantic change disables only the affected capability and its
+explicit dependants. The official ArenaNet client remains playable.
+
+[ArenaNet client compatibility](arenanet-compatibility.md) owns the proof rules,
+feature refusal boundaries, retained evidence, and patch-day procedure.
 
 ## Required compatibility and optional Tools
 
@@ -198,12 +202,13 @@ function call, shared-memory packet bus, or second game model.
 
 ## Command boundary
 
-Team Apply and local actions are separate certified capabilities. Xunlai and
-Travel share one local-action profile, bounded game-thread mailbox, and drain
-proof; each still has its own setting and runtime gate. The profile exports only
-the named Xunlai and Travel operations. It does not export the Team Apply
-packet-builder thunk, and Team Apply alone does not export local actions.
-Neither profile carries a generic opcode, packet, dispatcher, or address surface.
+Team Apply, Travel, Xunlai, and chat aliases are separate certified
+capabilities. Travel and Xunlai share a private bounded game-thread mailbox and
+drain implementation, but each has its own proof, setting, manifest status, and
+runtime gate. Chat aliases are effective only when at least one of those local
+actions proves, and parser generation includes only commands backed by proved
+actions. The profile exports no generic opcode, packet, dispatcher, or address
+surface.
 
 The same named storage action backs the Tools button and Command-Shift-C. It
 queues a fixed `{ agent: 0, type: 0, data: 3 }` DataWindow payload, then calls
@@ -214,10 +219,10 @@ in a supported PvE outpost and can access storage. Every snapshot update
 resynchronizes the action, so loading, character, account, and map transitions
 revoke stale access immediately.
 
-The player-record access proof is an optional, all-or-nothing part of the exact
-build certificate. If it is absent, its six configuration words are zero and
-the kernel can publish only `null` for Xunlai. The local-action profile and its
-certified Travel dispatcher remain usable; no party-state fallback is allowed.
+The player-record access proof is an optional, all-or-nothing feature
+certificate. If it is absent, its six configuration words are zero and the
+kernel can publish only `null` for Xunlai. A separately proved Travel dispatcher
+remains usable; no party-state fallback is allowed.
 
 Travel accepts only four bounded scalar values: map, region, language, and
 district. The exact `/tp` command sets one named, one-shot palette toggle that
@@ -227,9 +232,9 @@ the transform writes the four words to its installer-owned payload. It then
 calls the exact client Travel dispatcher with `kTravel`. It cannot dispatch
 another client UI message.
 
-Team Apply requires enabled Tools and Apply teams in Guild Wars, an exact commands
-profile, a positively classified PvE outpost, fresh party state, and an explicit
-player action.
+Team Apply requires enabled Tools and Apply teams in Guild Wars, a proved Team
+Apply capability, a positively classified PvE outpost, fresh party state, and
+an explicit player action.
 
 The runner checks policy before each command and while it confirms results. A
 map transition or policy change stops the operation. A refusal is an explicit
@@ -240,31 +245,13 @@ their named domains.
 
 ## Patch-day flow
 
-The scheduled workflow detects ArenaNet code changes. It ignores normal content
-changes. For a new generation it downloads verified code artifacts, runs the
-file derivation, and produces bounded candidate evidence. It cannot edit
-source, push a branch, open a pull request, or grant runtime authority.
+The scheduled workflow detects ArenaNet code changes, runs the isolated
+per-feature verifier, and retains signed machine-readable evidence. It never
+uploads ArenaNet client bytes and cannot grant runtime authority. Equivalent
+rebuilds require no source PR; a refusal opens a tracking issue naming the exact
+failed invariant.
 
-Automation cannot publish a runtime certificate. The isolated verifier makes
-the runtime decision from the official bytes; a maintainer investigates only
-an invariant it refuses.
-
-The carry-forward report has separate **Apply team** and **local actions**
-rows. A changed Team Apply builder must not block local-action recertification,
-and a changed slash parser, DataWindow handler, or Travel producer must not
-block Team Apply. For storage, independently certify the exact player-record
-array, stride, agent identifier, player number, access flags, and area type.
-Confirm both exact aliases are consumed only after the snapshot proves access,
-a near miss still reaches the normal parser, the fixed DataWindow payload runs
-at the certified drain, and `pnpm enhancements:live xunlai-storage` opens the
-normal window only for an eligible character in a PvE outpost. For Travel,
-confirm `/tp` is consumed only while
-Travel is enabled and its one-shot toggle reaches the palette. Confirm the
-producer still writes `{ map, region, language, district }` and sends `kTravel`.
-Then perform one bounded live trip to an unlocked outpost.
-
-The workflow never uploads ArenaNet client bytes. It uploads reports and source
-changes only.
+Follow the complete [patch-day playbook](arenanet-compatibility.md#patch-day-playbook).
 
 ## Failure and teardown
 

@@ -11,6 +11,7 @@ its rules.
 | How do Single and Multiple Accounts mode isolate player data? | [Multiple Accounts](multiple-accounts.md) |
 | How do ArenaNet client files and game data update? | [Content pipeline](content-pipeline.md) |
 | How does the official client host and certification work? | [WASM host](wasm-host.md) |
+| How do client features remain safe across ArenaNet updates? | [ArenaNet compatibility](arenanet-compatibility.md) |
 | What can diagnostics record and export? | [Diagnostics](diagnostics.md) |
 | How do I change or recertify an Enhancement? | [Enhancement development](enhancement-development.md) |
 | How do application releases, Stable, and Beta work? | [Release verification](release-verification.md) |
