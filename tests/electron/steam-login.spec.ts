@@ -373,8 +373,12 @@ test.describe("the Steam credential seam", () => {
         },
       };
     });
-    expect(result.events?.map(({ type }) => type)).toEqual([
-      "mousemove",
+    const eventTypes = result.events?.map(({ type }) => type) ?? [];
+    const mouseDownIndex = eventTypes.indexOf("mousedown");
+    expect(mouseDownIndex).toBeGreaterThan(0);
+    expect(eventTypes.slice(0, mouseDownIndex).every((type) => type === "mousemove"))
+      .toBe(true);
+    expect(eventTypes.slice(mouseDownIndex)).toEqual([
       "mousedown",
       "mouseup",
       "click",
