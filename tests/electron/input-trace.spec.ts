@@ -182,13 +182,22 @@ test.describe("input trace", () => {
       await expectTrace(page).toContain('text secret input');
 
       const count = page.locator('#input-trace [data-role="count"]');
-      await page.locator('#input-trace [data-role="pause"]').click();
+      // Pause without generating another traced hardware gesture. A real
+      // pointer click is reported by Main over IPC, so its in-flight entries
+      // can repaint the count after the pause handler has already run and
+      // make this assertion depend on delivery timing instead of pause
+      // behavior.
+      await page.locator('#input-trace [data-role="pause"]').evaluate((button) => {
+        (button as HTMLButtonElement).click();
+      });
       await page.evaluate(() => new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       const beforePause = await count.textContent();
       await page.mouse.click(100, 100);
       expect(await count.textContent()).toBe(beforePause);
-      await page.locator('#input-trace [data-role="pause"]').click();
+      await page.locator('#input-trace [data-role="pause"]').evaluate((button) => {
+        (button as HTMLButtonElement).click();
+      });
 
       await page.evaluate(() => {
         const field = document.getElementById('osk-input-password');
