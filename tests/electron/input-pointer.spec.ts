@@ -6,6 +6,7 @@ type PointerInputWindow = typeof window & {
   __inputReleases: string[];
   __edgeMoves: Array<[number, number]>;
   __macInputEvents: string[];
+  __nativeDoubleClickProbe: { flag: number; touches: number };
 };
 
 test.describe("renderer pointer input", () => {
@@ -54,14 +55,13 @@ test.describe("renderer pointer input", () => {
     }
   });
 
-  test("passes every click run and primary drag through without touch input", async () => {
+  test("adds taps only for an uncertified double-click", async () => {
     const fixture = await launchCachedClient("gw-macos-pointer-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
-      // Double-click used to be synthesized through touch. Exercise every
-      // click-run shape before the real click/drag and prove that fallback
-      // remains absent.
+      // Scripted events are untrusted. They cannot originate the fallback,
+      // even when they claim to be the even press in a click run.
       const touches = await page.evaluate(async () => {
         const canvas = globalThis.document.getElementById("canvas");
         if (!canvas) throw new Error("#canvas is missing");
@@ -113,6 +113,13 @@ test.describe("renderer pointer input", () => {
       });
 
       const box = await boxOf(page.locator("#canvas"));
+      await page.mouse.dblclick(box.x + 60, box.y + 60);
+      await expect.poll(async () => page.evaluate(() =>
+        (window as PointerInputWindow).__macInputEvents.filter(
+          (type) => type.startsWith("touch"),
+        ),
+      )).toEqual(["touchstart", "touchend", "touchstart", "touchend"]);
+
       await page.mouse.click(box.x + 100, box.y + 100);
       await page.mouse.move(box.x + 140, box.y + 140);
       await page.mouse.down({ button: "left" });
@@ -126,9 +133,99 @@ test.describe("renderer pointer input", () => {
         "mousedown:0:1",
         "mouseup:0:0",
         "mousedown:0:1",
+        "mouseup:0:0",
+        "touchstart",
+        "touchend",
+        "touchstart",
+        "touchend",
+        "mousedown:0:1",
+        "mouseup:0:0",
+        "mousedown:0:1",
         "mousemove:0:1",
         "mouseup:0:0",
       ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("cancels an unfinished fallback as one atomic gesture", async () => {
+    const fixture = await launchCachedClient("gw-double-click-cancel-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const canvas = globalThis.document.getElementById("canvas");
+        const loading = globalThis.document.getElementById("loading");
+        if (!canvas || !loading) throw new Error("the renderer shell is missing");
+        loading.classList.add("gone");
+        const seen: string[] = [];
+        (window as PointerInputWindow).__macInputEvents = seen;
+        for (const type of ["touchstart", "touchend", "touchcancel"] as const) {
+          canvas.addEventListener(type, () => {
+            seen.push(type);
+            if (type === "touchstart") {
+              window.dispatchEvent(new CustomEvent("gw:input-reset"));
+            }
+          });
+        }
+      });
+      const box = await boxOf(page.locator("#canvas"));
+
+      await page.mouse.dblclick(box.x + 60, box.y + 60);
+      await page.waitForTimeout(200);
+      expect(await page.evaluate(() =>
+        (window as PointerInputWindow).__macInputEvents,
+      )).toEqual(["touchstart", "touchcancel"]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("keeps the certified native flag as the primary path", async () => {
+    const fixture = await launchCachedClient("gw-native-double-click-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      const probe = await page.evaluate(async () => {
+        const { installDoubleClick } = await import(
+          new URL("double-click.js", globalThis.location.href).href
+        ) as typeof import("../../src/renderer/double-click.js");
+        const canvas = globalThis.document.createElement("canvas");
+        canvas.id = "native-double-click-probe";
+        canvas.style.cssText = "position:fixed;inset:20px;width:100px;height:100px;z-index:9999";
+        globalThis.document.body.append(canvas);
+        const testWindow = window as PointerInputWindow;
+        testWindow.__nativeDoubleClickProbe = { flag: 0, touches: 0 };
+        for (const type of ["touchstart", "touchend"] as const) {
+          canvas.addEventListener(type, () => {
+            testWindow.__nativeDoubleClickProbe.touches += 1;
+          });
+        }
+        installDoubleClick({
+          canvas,
+          nativeFlag: () => ({
+            get value() { return testWindow.__nativeDoubleClickProbe.flag; },
+            set value(value: number) {
+              testWindow.__nativeDoubleClickProbe.flag = value;
+            },
+          }),
+          log() {},
+        });
+        return canvas.id;
+      });
+      const box = await boxOf(page.locator(`#${probe}`));
+
+      await page.mouse.dblclick(box.x + 30, box.y + 30);
+      await page.waitForTimeout(200);
+      expect(await page.evaluate(() =>
+        (window as PointerInputWindow).__nativeDoubleClickProbe,
+      )).toEqual({ flag: 1, touches: 0 });
+
+      await page.mouse.click(box.x + 30, box.y + 30);
+      expect(await page.evaluate(() =>
+        (window as PointerInputWindow).__nativeDoubleClickProbe,
+      )).toEqual({ flag: 0, touches: 0 });
     } finally {
       await closeOffline(fixture);
     }

@@ -140,7 +140,10 @@ missing, the official ArenaNet client remains playable.
 Required compatibility has two certification stages. The file-compatibility
 transform restores persistent template operations. Certified Core adds the
 Guild Wars cursor and native double-click. These behaviors have no player
-switch when their proof passes.
+switch when their proof passes. Native double-click is the primary path. If
+its exact-build repair is unavailable, the renderer translates only a trusted
+macOS double-click into the client's existing double-tap path. It leaves every
+mouse event unchanged.
 
 Optional Tools are off by default. The master **Enable optional Tools Beta**
 setting selects a commands-capable derived module on the next start. The first

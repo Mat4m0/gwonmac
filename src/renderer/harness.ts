@@ -524,7 +524,7 @@ let host: typeof import('./graphics.js') &
   typeof import('./input.js') &
   typeof import('./input-trace.js') &
   typeof import('./surface-controller.js') &
-  typeof import('./native-double-click.js') &
+  typeof import('./double-click.js') &
   typeof import('./text-editing.js') &
   typeof import('./gamepad-trace.js') &
   typeof import('./template-save-compatibility.js') &
@@ -1112,8 +1112,9 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   // trace row above the press it belongs to, which read like the flag arrived
   // before the click. The instance is read per press because input installs
   // long before the glue instantiates anything.
-  host.installNativeDoubleClick({
-    flag: () => {
+  host.installDoubleClick({
+    canvas: c,
+    nativeFlag: () => {
       const exported = gameWasmInstance?.exports?.['gwonmac_double_click'];
       return exported && typeof exported === 'object' && 'value' in exported
         ? (exported as { value: number })
@@ -1173,7 +1174,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       input,
       inputTraceModule,
       surfaceController,
-      nativeDoubleClickModule,
+      doubleClickModule,
       textEditing,
       gamepadTraceModule,
       templateSaveCompatibility,
@@ -1192,7 +1193,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       import('./input.js'),
       import('./input-trace.js'),
       import('./surface-controller.js'),
-      import('./native-double-click.js'),
+      import('./double-click.js'),
       import('./text-editing.js'),
       import('./gamepad-trace.js'),
       import('./template-save-compatibility.js'),
@@ -1210,7 +1211,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       ...input,
       ...inputTraceModule,
       ...surfaceController,
-      ...nativeDoubleClickModule,
+      ...doubleClickModule,
       ...textEditing,
       ...gamepadTraceModule,
       ...templateSaveCompatibility,

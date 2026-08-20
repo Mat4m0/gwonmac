@@ -85,7 +85,11 @@ export type InputTraceEntry =
       key: 'ctrl' | 'shift' | 'alt';
       down: boolean;
     }
-  | { source: 'renderer'; kind: 'double-click'; delivered: boolean }
+  | {
+      source: 'renderer';
+      kind: 'double-click';
+      path: 'native' | 'tap-fallback';
+    }
   | { source: 'renderer'; kind: 'pointer-lock'; locked: boolean }
   | {
       source: 'renderer';

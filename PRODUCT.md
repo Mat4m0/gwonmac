@@ -86,9 +86,10 @@ See [Release verification](docs/release-verification.md).
 - No compatibility layer that keeps an obsolete internal design alive.
 
 The app can replay one bounded pointer hit-test after a trusted click if Guild
-Wars produced no cursor event. It cannot originate a click. Team Apply acts
-only after an explicit player command. These actions do not permit autonomous
-play.
+Wars produced no cursor event. It can also translate a trusted macOS
+double-click into the client's bounded double-tap path when the native repair
+is unavailable. It cannot originate a player action. Team Apply acts only
+after an explicit player command. These actions do not permit autonomous play.
 
 ## Evidence standard
 

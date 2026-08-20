@@ -78,9 +78,12 @@ const label = (record: InputTraceRecord): { text: string; tone: string } => {
     case 'modifier':
       return { tone: 'event', text: `${prefix} ${record.key} ${record.down ? 'down' : 'up'}` };
     case 'double-click':
-      return record.delivered
-        ? { tone: 'decision', text: `${prefix} DOUBLE-CLICK flagged` }
-        : { tone: 'refused', text: `${prefix} DOUBLE-CLICK unavailable` };
+      return {
+        tone: 'decision',
+        text: `${prefix} DOUBLE-CLICK ${record.path === 'native'
+          ? 'native'
+          : 'tap fallback'}`,
+      };
     case 'pointer-lock':
       return { tone: 'decision', text: `${prefix} pointer lock ${record.locked ? 'engaged' : 'released'}` };
     case 'wheel':

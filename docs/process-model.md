@@ -182,7 +182,7 @@ timer, or synthesize repeat cadence; macOS remains the sole repeat clock.
 Certified Core supplies native double-click and the Guild Wars cursor. Core is
 required behavior. It is not a saved player preference. If an ArenaNet build
 is not certified, the official client remains playable with the normal macOS
-pointer and without the certified repair.
+pointer and the renderer's trusted double-click tap fallback.
 
 The input harness is a player-visible troubleshooting view with one bounded,
 receipt-ordered renderer-memory timeline. AppKit and main-process decisions

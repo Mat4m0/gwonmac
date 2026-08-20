@@ -70,16 +70,15 @@ test.describe("input trace", () => {
       await page.mouse.move(box.x + 120, box.y + 120);
       await page.mouse.dblclick(box.x + 120, box.y + 120);
 
-      // The offline fixture serves no certified client, so the row states that
-      // the flag had nowhere to go. Either way the row is on the press itself,
-      // which is the property being pinned: nothing is deferred any more.
-      await expectTrace(page).toContain("DOUBLE-CLICK");
-      // The flag row belongs under the press it rode on, not above it. Both
+      // The offline fixture serves no certified client, so the row names the
+      // tap fallback. The decision still belongs to the second press.
+      await expectTrace(page).toContain("DOUBLE-CLICK tap fallback");
+      // The path row belongs under the press it rode on, not above it. Both
       // listeners are window-capture, so registration order decides this and
       // nothing else would catch it flipping back.
       const rows = (await traceText(page)).split("\n");
-      const flagged = rows.findIndex((row) => row.includes("DOUBLE-CLICK"));
-      expect(rows[flagged - 1]).toContain("run=2");
+      const delivered = rows.findIndex((row) => row.includes("DOUBLE-CLICK"));
+      expect(rows[delivered - 1]).toContain("run=2");
       const afterDouble = await traceText(page);
       expect(afterDouble).toContain("run=2");
 
