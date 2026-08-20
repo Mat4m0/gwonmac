@@ -3,7 +3,10 @@
  * It keeps that half of the closed schema reviewable as one bounded table.
  */
 import type { EventSpec } from "./schema-fields.js";
-import { EXTENDED_MEMORY_PROFILES } from "../certification/extended-memory.js";
+import {
+  isExtendedMemoryProfile,
+  type ExtendedMemoryProfile,
+} from "../certification/extended-memory.js";
 import {
   appPhase,
   appUpdateErrorCode,
@@ -27,7 +30,13 @@ import {
   thermalState,
   updateStatus,
   windowMode,
+  type FieldGuard,
 } from "./schema-fields.js";
+
+const extendedMemoryProfile: FieldGuard<"none" | ExtendedMemoryProfile> = (
+  value,
+): value is "none" | ExtendedMemoryProfile =>
+  value === "none" || isExtendedMemoryProfile(value);
 
 export const APP_AND_UPDATE_EVENT_SCHEMA = {
   "app.uncaughtException": {
@@ -597,7 +606,7 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     fields: {
       mode: literal(["disabled", "unavailable", "active"] as const),
       requested: boolean,
-      profile: literal(["none", ...EXTENDED_MEMORY_PROFILES] as const),
+      profile: extendedMemoryProfile,
       capBytes: finiteNumber,
       fallbackReason: literal([
         "none",

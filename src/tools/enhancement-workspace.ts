@@ -7,9 +7,9 @@
  * nothing, downloads nothing and writes nothing, so running it can never be the
  * reason a subsequent launch behaves differently.
  *
- * Certification is asked of `client-certification.ts` rather than re-derived
- * here, so the doctor and the launch cannot disagree about what state a build
- * is in. Argument parsing, printing and the exit code belong to
+ * The same pure structural verifier used by launch decides the client here;
+ * historic exact-hash rows never grant the doctor stronger authority than the
+ * app. Argument parsing, printing and the exit code belong to
  * `certification.ts`; this module owns no command line.
  */
 import { createHash } from "node:crypto";
@@ -20,7 +20,7 @@ import {
   COMMON_ARTIFACTS,
   JSPI_ARTIFACTS,
 } from "../main/core/access-key.js";
-import { certifyClientBuild } from "../main/certification/client-certification.js";
+import { verifyLocalClientBytes } from "../main/certification/local-client-verifier.js";
 import { inspectEnhancementCache } from "../main/certification/client-module.js";
 import { parseSettings } from "../main/core/settings.js";
 import {
@@ -179,11 +179,9 @@ export async function inspectEnhancementWorkspace(
   if (!missing.includes("Gw.jspi.wasm")) {
     const bytes = await readFile(path.join(artifactsPath, "Gw.jspi.wasm"));
     sha256 = createHash("sha256").update(bytes).digest("hex");
-    // The Enhancement transform consumes the template-save client, so the chain is
-    // resolved by the one module that owns it rather than repeated here.
-    const certification = certifyClientBuild(sha256);
-    if (certification.enhancementBuild !== null) {
-      build = certification.enhancementBuild;
+    const verification = verifyLocalClientBytes(bytes, enhancementCapabilities);
+    if (verification.enhancementBuild !== null) {
+      build = verification.enhancementBuild;
       if (enhancementCapabilitiesRequested(enhancementCapabilities)) {
         transformedCache = await inspectEnhancementCache(
           build,

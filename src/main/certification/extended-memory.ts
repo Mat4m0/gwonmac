@@ -11,35 +11,36 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
+  enhancementCapabilitiesForProfile,
   type EnhancementCapabilityProfile,
 } from "../../shared/enhancement-contracts.js";
 import { writeAtomic, writeAtomicJson } from "../core/atomic-file.js";
 import {
   readPublishedClientManifest,
   verifyPublishedClientArtifacts,
+  type PublishedClientManifest,
 } from "../core/published-client.js";
+import { verifyChunkHash } from "../core/chunk-format.js";
 import { clientManifestPath } from "../core/paths.js";
 import {
-  concat,
-  encodeSection,
   readUleb,
-  splitSections,
   uleb,
-  WASM_HEADER,
-  type Section,
 } from "../core/wasm-binary.js";
 
 declare const WebAssembly: { validate(bytes: Uint8Array): boolean };
 
 export const EXTENDED_MEMORY_TRANSFORM_ABI = 2;
+export const EXTENDED_MEMORY_VERIFIER_ABI = 1;
 export const EXTENDED_MEMORY_MAX_PAGES = 65_535;
 export const EXTENDED_MEMORY_MAX_BYTES = EXTENDED_MEMORY_MAX_PAGES * 65_536;
-export const EXTENDED_MEMORY_PROFILES = Object.freeze([
-  "off",
-  ...Object.keys(ENHANCEMENT_CAPABILITY_PROFILES),
-] as ("off" | EnhancementCapabilityProfile)[]);
 export type ExtendedMemoryProfile = "off" | EnhancementCapabilityProfile;
+
+export function isExtendedMemoryProfile(
+  value: unknown,
+): value is ExtendedMemoryProfile {
+  return value === "off"
+    || (typeof value === "string" && enhancementCapabilitiesForProfile(value) !== null);
+}
 
 /** Exact generated-glue semantics, with only relocatable ASM_CONSTS keys erased. */
 export const EXTENDED_MEMORY_JS_PROOF = Object.freeze({
@@ -70,29 +71,46 @@ function replaceExactly(
 
 /** Derive the candidate bytes from the sole exact memory declaration. */
 export function deriveExtendedMemoryWasm(input: Uint8Array): Uint8Array {
-  const sections = splitSections(input);
-  const memory = sections.find((section) => section.id === 5)
-    ?? fail("missing memory section");
-  const cursor = { offset: 0 };
-  const count = readUleb(memory.body, cursor);
-  const flags = readUleb(memory.body, cursor);
-  const initial = readUleb(memory.body, cursor);
-  const maximum = readUleb(memory.body, cursor);
+  if (!WebAssembly.validate(input)) fail("invalid input module");
+  const sections = { offset: 8 };
+  let memoryStart: number | null = null;
+  let memoryEnd: number | null = null;
+  while (sections.offset < input.byteLength) {
+    const id = input[sections.offset++];
+    if (id === undefined) fail("truncated section id");
+    const size = readUleb(input, sections);
+    const start = sections.offset;
+    const end = start + size;
+    if (end > input.byteLength) fail("truncated section body");
+    if (id === 5) {
+      if (memoryStart !== null) fail("multiple memory sections");
+      memoryStart = start;
+      memoryEnd = end;
+    }
+    sections.offset = end;
+  }
+  if (sections.offset !== input.byteLength) fail("invalid section boundary");
+  if (memoryStart === null || memoryEnd === null) fail("missing memory section");
+
+  const cursor = { offset: memoryStart };
+  const count = readUleb(input, cursor);
+  const flags = readUleb(input, cursor);
+  const initial = readUleb(input, cursor);
+  const maximumStart = cursor.offset;
+  const maximum = readUleb(input, cursor);
+  const maximumEnd = cursor.offset;
   if (
     count !== 1 || flags !== 1 || initial !== 4_096 || maximum !== 32_768
-    || cursor.offset !== memory.body.byteLength
+    || cursor.offset !== memoryEnd
   ) {
     fail("memory declaration is not the certified 256 MiB / 2 GiB shape");
   }
-  const replacement: Section = {
-    id: 5,
-    body: concat(uleb(1), uleb(1), uleb(initial), uleb(EXTENDED_MEMORY_MAX_PAGES)),
-  };
-  const output = concat(
-    WASM_HEADER,
-    ...sections.map((section) =>
-      encodeSection(section === memory ? replacement : section)),
-  );
+  const replacement = uleb(EXTENDED_MEMORY_MAX_PAGES);
+  if (replacement.byteLength !== maximumEnd - maximumStart) {
+    fail("memory maximum encoding width changed");
+  }
+  const output = input.slice();
+  output.set(replacement, maximumStart);
   if (!WebAssembly.validate(output)) fail("rewritten module does not validate");
   return output;
 }
@@ -218,6 +236,7 @@ export function rewriteExtendedMemoryJs(input: string): string {
 }
 
 export interface ExtendedMemoryStructuralProof {
+  readonly verifierAbi: number;
   readonly jsInputSha256: string;
   readonly jsOutputSha256: string;
   readonly wasmInputSha256: string;
@@ -230,6 +249,7 @@ export function deriveExtendedMemoryStructuralProof(
   wasmInput: Uint8Array,
 ): ExtendedMemoryStructuralProof {
   return Object.freeze({
+    verifierAbi: EXTENDED_MEMORY_VERIFIER_ABI,
     jsInputSha256: sha256(jsInput),
     jsOutputSha256: sha256(rewriteExtendedMemoryJs(jsInput)),
     wasmInputSha256: sha256(wasmInput),
@@ -244,7 +264,10 @@ export function isExtendedMemoryStructuralProof(
 ): value is ExtendedMemoryStructuralProof {
   if (!value || typeof value !== "object") return false;
   const proof = value as Partial<ExtendedMemoryStructuralProof>;
-  return proof.jsInputSha256 === jsInputSha256
+  return Object.keys(proof).sort().join(",")
+      === "jsInputSha256,jsOutputSha256,verifierAbi,wasmInputSha256,wasmOutputSha256"
+    && proof.verifierAbi === EXTENDED_MEMORY_VERIFIER_ABI
+    && proof.jsInputSha256 === jsInputSha256
     && proof.wasmInputSha256 === wasmInputSha256
     && typeof proof.jsOutputSha256 === "string"
     && /^[0-9a-f]{64}$/.test(proof.jsOutputSha256)
@@ -255,6 +278,7 @@ export function isExtendedMemoryStructuralProof(
 export interface ExtendedMemoryArtifacts {
   readonly jsPath: string;
   readonly wasmPath: string;
+  readonly wasmSha256: string;
   readonly profile: ExtendedMemoryProfile;
 }
 
@@ -280,7 +304,7 @@ interface ExtendedMemoryProof {
 function artifactPaths(
   cacheRoot: string,
   proof: ExtendedMemoryProof,
-): Omit<ExtendedMemoryArtifacts, "profile"> & {
+): Omit<ExtendedMemoryArtifacts, "profile" | "wasmSha256"> & {
   readonly cacheDir: string;
   readonly metadataPath: string;
 } {
@@ -335,7 +359,7 @@ async function usable(
 async function verifiedGenerationFingerprint(
   officialJsPath: string,
   officialWasmPath: string,
-): Promise<string | null> {
+): Promise<PublishedClientManifest | null> {
   const artifactsDir = path.dirname(officialJsPath);
   if (
     path.dirname(officialWasmPath) !== artifactsDir
@@ -348,10 +372,28 @@ async function verifiedGenerationFingerprint(
     );
     return manifest.clientFingerprint
       && await verifyPublishedClientArtifacts(artifactsDir, manifest) === true
-      ? manifest.clientFingerprint
+      ? manifest
       : null;
   } catch {
     return null;
+  }
+}
+
+function matchesManifestJs(
+  input: string,
+  manifest: PublishedClientManifest,
+): boolean {
+  const artifact = manifest.artifacts?.find(({ name }) => name === "Gw.jspi.js");
+  const bytes = new TextEncoder().encode(input);
+  if (!artifact || bytes.byteLength !== artifact.size) return false;
+  try {
+    artifact.chunkHashes.forEach((hash, index) => {
+      const start = index * manifest.chunkSize;
+      verifyChunkHash(hash, bytes.subarray(start, start + manifest.chunkSize));
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -363,27 +405,36 @@ export async function prepareExtendedMemoryArtifacts(
   officialJsPath: string,
   officialWasmPath: string,
   inputWasmPath: string,
+  expectedWasmInputSha256: string,
   profile: ExtendedMemoryProfile,
   cacheRoot: string,
-  verifyUnknown: (options: {
+  verifyLocally: (options: {
     jsPath: string;
     jsInputSha256: string;
     wasmPath: string;
     wasmInputSha256: string;
   }) => Promise<ExtendedMemoryStructuralProof | null> = async () => null,
 ): Promise<ExtendedMemoryArtifacts | null> {
-  const [generationFingerprint, jsInput, wasmInput] = await Promise.all([
+  const [manifest, jsInput, wasmInput] = await Promise.all([
     verifiedGenerationFingerprint(officialJsPath, officialWasmPath),
     readFile(officialJsPath, "utf8"),
     readFile(inputWasmPath),
   ]);
-  if (!generationFingerprint || !EXTENDED_MEMORY_PROFILES.includes(profile)) {
+  if (
+    !manifest?.clientFingerprint
+    || !matchesManifestJs(jsInput, manifest)
+    || !isExtendedMemoryProfile(profile)
+  ) {
     await rm(cacheRoot, { recursive: true, force: true });
     return null;
   }
   const jsInputSha256 = sha256(jsInput);
   const wasmInputSha256 = sha256(wasmInput);
-  const structural = await verifyUnknown({
+  if (wasmInputSha256 !== expectedWasmInputSha256) {
+    await rm(cacheRoot, { recursive: true, force: true });
+    return null;
+  }
+  const structural = await verifyLocally({
     jsPath: officialJsPath,
     jsInputSha256,
     wasmPath: inputWasmPath,
@@ -411,13 +462,18 @@ export async function prepareExtendedMemoryArtifacts(
     || sha256(wasmOutput) !== structural.wasmOutputSha256
   ) fail("production transform disagrees with isolated proof");
   const proof: ExtendedMemoryProof = Object.freeze({
-    generationFingerprint,
+    generationFingerprint: manifest.clientFingerprint,
     ...structural,
     profile,
   });
   const files = artifactPaths(cacheRoot, proof);
   if (await usable(cacheRoot, proof)) {
-    return { jsPath: files.jsPath, wasmPath: files.wasmPath, profile };
+    return {
+      jsPath: files.jsPath,
+      wasmPath: files.wasmPath,
+      wasmSha256: proof.wasmOutputSha256,
+      profile,
+    };
   }
 
   await rm(cacheRoot, { recursive: true, force: true });
@@ -433,5 +489,10 @@ export async function prepareExtendedMemoryArtifacts(
   if (!await usable(cacheRoot, proof)) {
     fail("published artifact pair failed verification");
   }
-  return { jsPath: files.jsPath, wasmPath: files.wasmPath, profile };
+  return {
+    jsPath: files.jsPath,
+    wasmPath: files.wasmPath,
+    wasmSha256: proof.wasmOutputSha256,
+    profile,
+  };
 }

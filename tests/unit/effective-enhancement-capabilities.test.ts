@@ -8,7 +8,7 @@ import type {
   OptionalFeatureStatus,
 } from "../../src/shared/contracts.js";
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
+  enhancementCapabilitiesForProfile,
   type EnhancementCapabilities,
 } from "../../src/shared/enhancement-contracts.js";
 
@@ -41,15 +41,19 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
 
 describe("effective Enhancement capability boundary", () => {
   it("reproduces every served profile from Main's session, independent of request", () => {
-    for (const capabilities of Object.values(ENHANCEMENT_CAPABILITY_PROFILES)) {
+    for (let mask = 1; mask <= 0x7f; mask += 1) {
+      const capabilities = enhancementCapabilitiesForProfile(
+        `features-${mask.toString(16).padStart(2, "0")}`,
+      );
+      if (!capabilities) continue;
       assert.deepEqual(effectiveCapabilities(session(capabilities)), capabilities);
     }
   });
 
   it("does not revive off or unavailable features", () => {
-    const original = session(
-      ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommands,
-    );
+    const capabilities = enhancementCapabilitiesForProfile("features-0f");
+    assert.ok(capabilities);
+    const original = session(capabilities);
     const value: ClientSession = {
       ...original,
       compatibility: {

@@ -104,7 +104,11 @@ async function main(): Promise<void> {
       return;
     }
     const result = verifyLocalClientBytes(bytes, requestedCapabilities);
-    if (!isLocalClientVerification(result, expectedSha256)) {
+    if (!isLocalClientVerification(
+      result,
+      expectedSha256,
+      requestedCapabilities,
+    )) {
       parentPort.postMessage(null);
       process.exitCode = 4;
       return;
@@ -127,5 +131,6 @@ async function main(): Promise<void> {
 }
 
 await main().catch(() => {
+  parentPort?.postMessage(null);
   process.exitCode = 1;
 });

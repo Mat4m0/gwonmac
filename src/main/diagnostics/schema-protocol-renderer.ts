@@ -10,8 +10,7 @@ import {
   WASM_MEMORY_PROBE_STATUSES,
 } from "../../shared/diagnostics.js";
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
-  type EnhancementCapabilityProfile,
+  isEnhancementCapabilityProfile,
 } from "../../shared/enhancement-contracts.js";
 import {
   boolean,
@@ -472,11 +471,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
       clockSynchronized: boolean,
       companionAbi: finiteNumber,
       installation: finiteNumber,
-      capabilityProfile: literal(
-        Object.keys(
-          ENHANCEMENT_CAPABILITY_PROFILES,
-        ) as EnhancementCapabilityProfile[],
-      ),
+      capabilityProfile: isEnhancementCapabilityProfile,
     },
   },
   "enhancement.installFailed": {

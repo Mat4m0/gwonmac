@@ -24,7 +24,13 @@ import {
   deriveNativeDoubleClickBuild,
   rewriteWithBuild,
 } from "../src/main/certification/native-double-click.js";
-import { ENHANCEMENT_CAPABILITY_PROFILES } from "../src/shared/enhancement-contracts.js";
+import {
+  ENHANCEMENT_BUILDS,
+  enhancementProfilesForBuild,
+} from "../src/main/certification/enhancement-builds.js";
+import {
+  enhancementCapabilitiesForProfile,
+} from "../src/shared/enhancement-contracts.js";
 import {
   certificationFromLocalVerification,
 } from "../src/main/certification/client-certification.js";
@@ -74,13 +80,20 @@ function withNativeDoubleClick(input: Uint8Array): Uint8Array {
 
 const predecessors = new Map<string, Uint8Array>();
 predecessors.set("off", withNativeDoubleClick(templateWasm));
-for (const [profile, capabilities] of Object.entries(
-  ENHANCEMENT_CAPABILITY_PROFILES,
-)) {
+const profileBaseline = ENHANCEMENT_BUILDS.at(-1);
+if (!profileBaseline) throw new Error("Enhancement profile fixture is missing");
+for (const profile of enhancementProfilesForBuild(profileBaseline)) {
+  const capabilities = enhancementCapabilitiesForProfile(profile);
+  if (!capabilities) throw new Error(`invalid certified profile ${profile}`);
+  const profileVerification = verifyLocalClientBytes(officialWasm, capabilities);
+  const profileBuild = profileVerification.enhancementBuild;
+  if (!profileBuild) {
+    throw new Error(`semantic verification refused profile ${profile}`);
+  }
   predecessors.set(
     profile,
     withNativeDoubleClick(
-      transformEnhancementWasm(templateWasm, enhancementBuild, capabilities),
+      transformEnhancementWasm(templateWasm, profileBuild, capabilities),
     ),
   );
 }
@@ -96,6 +109,7 @@ try {
     jsPath,
     wasmPath,
     predecessorPath,
+    sha256(predecessor),
     "off",
     cacheRoot,
     verifyExtendedMemory,
@@ -104,6 +118,7 @@ try {
     jsPath,
     wasmPath,
     predecessorPath,
+    sha256(predecessor),
     "off",
     cacheRoot,
     verifyExtendedMemory,
@@ -116,10 +131,18 @@ try {
 
   await writeFile(first.jsPath, "corrupt");
   const repaired = await prepareExtendedMemoryArtifacts(
-    jsPath, wasmPath, predecessorPath, "off", cacheRoot, verifyExtendedMemory,
+    jsPath, wasmPath, predecessorPath, sha256(predecessor), "off", cacheRoot,
+    verifyExtendedMemory,
   );
   if (!repaired || sha256(await readFile(repaired.jsPath)) !== jsOutputSha256) {
     throw new Error("corrupt paired cache was not rebuilt from proof");
+  }
+  const substituted = await prepareExtendedMemoryArtifacts(
+    jsPath, wasmPath, predecessorPath, "0".repeat(64), "off", cacheRoot,
+    verifyExtendedMemory,
+  );
+  if (substituted !== null) {
+    throw new Error("4 GB preparation accepted a predecessor with the wrong chain hash");
   }
 } finally {
   await rm(scratch, { recursive: true, force: true });
@@ -136,7 +159,7 @@ for (const [profile, predecessor] of predecessors) {
   const inputSha256 = sha256(predecessor);
   const outputSha256 = sha256(output);
   if (profile === "off") offOutputSha256 = outputSha256;
-  if (profile === "cursorParty") allocatorModule = output;
+  if (profile !== "off" && allocatorModule === null) allocatorModule = output;
   variants.push({
     profile,
     inputSha256,

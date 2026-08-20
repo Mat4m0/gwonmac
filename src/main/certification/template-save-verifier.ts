@@ -22,23 +22,13 @@
  */
 import { createHash } from "node:crypto";
 import {
-  countFunctionImports,
   functionImportIndex,
   indexOfBytes,
-  paddedIndex,
-  parseCode,
-  parseIndexVector,
-  parseTypes,
   readSleb,
   readUleb,
-  sectionById,
-  splitSections,
-  uleb,
-  valueTypeName,
-  type FunctionType,
 } from "../core/wasm-binary.js";
 import {
-  findTemplateSaveBuild,
+  certifyTemplateSaveRewrite,
   rewriteTemplateSaveWasm,
   TEMPLATE_SAVE_BUILDS,
   type BridgeKind,
@@ -46,6 +36,20 @@ import {
   type KnownTemplateSaveBuild,
   type StubBridge,
 } from "./template-save-compat.js";
+import {
+  canonicalTemplateCallCount as canonicalCallCount,
+  intersectFunctionSets as intersect,
+  onlyFunction as only,
+  templateCallNeedle as callNeedle,
+  TemplateSaveModuleView as ModuleView,
+} from "./template-save-module-view.js";
+import {
+  TEMPLATE_STATIC_ANCHORS,
+  type StaticOperand,
+  type StaticRelocation,
+  type TemplateCallerRole,
+  type TemplateStaticStorage,
+} from "./template-save-static-anchors.js";
 
 const CARRIER_IMPORT_NAME = "__syscall_newfstatat";
 const ASSERT_HOOK_IMPORT_NAME = "emscripten_asm_const_int";
@@ -109,175 +113,11 @@ function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-function signatureText(type: FunctionType): string {
-  const side = (values: number[]) => values.map(valueTypeName).join(",");
-  return `(${side(type.params)})->(${side(type.results)})`;
-}
-
 function sameBytes(body: Uint8Array, expected: ArrayLike<number>): boolean {
   return (
     body.byteLength === expected.length
     && Array.from(expected).every((byte, index) => body[index] === byte)
   );
-}
-
-/**
- * Everything the locators need, read once. Function bodies are indexed by local
- * index; callers are computed by scanning for the padded `call` needle.
- */
-class ModuleView {
-  readonly input: Uint8Array;
-  readonly importSection: Uint8Array;
-  readonly importCount: number;
-  readonly bodies: Uint8Array[];
-  readonly signatures: string[];
-  readonly dataSegments: { base: number; bytes: Uint8Array }[];
-  private readonly callerCache = new Map<number, Set<number>>();
-
-  constructor(input: Uint8Array) {
-    this.input = input;
-    const sections = splitSections(input);
-    this.importSection = sectionById(sections, 2);
-    this.importCount = countFunctionImports(this.importSection);
-    const types = parseTypes(sectionById(sections, 1));
-    this.signatures = parseIndexVector(sectionById(sections, 3)).map(
-      (index) => signatureText(types[index] ?? fail(`unknown type ${index}`)),
-    );
-    this.bodies = parseCode(sectionById(sections, 10));
-    if (this.signatures.length !== this.bodies.length) {
-      fail("function and code sections disagree");
-    }
-    this.dataSegments = parseDataSegments(sections);
-  }
-
-  functionIndex(local: number): number {
-    return this.importCount + local;
-  }
-
-  /** Local indices of every function containing a padded call to `target`. */
-  callers(functionIndex: number): Set<number> {
-    const cached = this.callerCache.get(functionIndex);
-    if (cached) return cached;
-    const needle = callNeedle(functionIndex);
-    const found = new Set<number>();
-    this.bodies.forEach((body, local) => {
-      if (indexOfBytes(body, needle, 0) >= 0) found.add(local);
-    });
-    this.callerCache.set(functionIndex, found);
-    return found;
-  }
-
-  callSites(caller: number, functionIndex: number): number[] {
-    const body = this.bodies[caller] ?? fail(`function ${caller} is out of range`);
-    const needle = callNeedle(functionIndex);
-    const offsets: number[] = [];
-    for (let at = indexOfBytes(body, needle, 0); at >= 0;) {
-      offsets.push(at);
-      at = indexOfBytes(body, needle, at + 1);
-    }
-    return offsets;
-  }
-
-  /** NUL-terminated ASCII at a linear-memory address, or null. */
-  readString(address: number): string | null {
-    for (const segment of this.dataSegments) {
-      const offset = address - segment.base;
-      if (offset < 0 || offset >= segment.bytes.byteLength) continue;
-      let end = offset;
-      while (end < segment.bytes.byteLength && segment.bytes[end] !== 0) end += 1;
-      if (end === segment.bytes.byteLength) return null;
-      return new TextDecoder().decode(segment.bytes.slice(offset, end));
-    }
-    return null;
-  }
-
-  readData(address: number, length: number): Uint8Array | null {
-    for (const segment of this.dataSegments) {
-      const offset = address - segment.base;
-      if (offset < 0 || offset + length > segment.bytes.byteLength) continue;
-      return segment.bytes.slice(offset, offset + length);
-    }
-    return null;
-  }
-
-  dataOccurrenceCount(needle: Uint8Array): number {
-    let count = 0;
-    for (const segment of this.dataSegments) {
-      for (let at = indexOfBytes(segment.bytes, needle, 0); at >= 0;) {
-        count += 1;
-        at = indexOfBytes(segment.bytes, needle, at + 1);
-      }
-    }
-    return count;
-  }
-
-  stringOccurrenceCount(value: string): number {
-    const needle = new TextEncoder().encode(`${value}\0`);
-    let count = 0;
-    for (const segment of this.dataSegments) {
-      for (let at = indexOfBytes(segment.bytes, needle, 0); at >= 0;) {
-        count += 1;
-        at = indexOfBytes(segment.bytes, needle, at + 1);
-      }
-    }
-    return count;
-  }
-}
-
-function parseDataSegments(
-  sections: readonly { id: number; body: Uint8Array }[],
-): { base: number; bytes: Uint8Array }[] {
-  const section = sections.find((entry) => entry.id === 11);
-  if (!section) return [];
-  const bytes = section.body;
-  const cursor = { offset: 0 };
-  const count = readUleb(bytes, cursor);
-  const segments: { base: number; bytes: Uint8Array }[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const flags = readUleb(bytes, cursor);
-    if (flags !== 0) return segments;
-    if (bytes[cursor.offset++] !== 0x41) return segments;
-    const base = readSleb(bytes, cursor);
-    if (bytes[cursor.offset++] !== 0x0b) return segments;
-    const size = readUleb(bytes, cursor);
-    segments.push({ base, bytes: bytes.slice(cursor.offset, cursor.offset + size) });
-    cursor.offset += size;
-  }
-  return segments;
-}
-
-/**
- * A call encoded canonically rather than padded would be invisible to the
- * needle scan, so we would locate fewer callers. The exact-cardinality checks
- * on the scans and sinks catch that, and this heuristic count reports it
- * directly. Three bytes can collide with an immediate, so it warns rather than
- * gates.
- */
-function canonicalCallCount(view: ModuleView, functionIndex: number): number {
-  const canonical = uleb(functionIndex);
-  const needle = new Uint8Array(canonical.byteLength + 1);
-  needle[0] = 0x10;
-  needle.set(canonical, 1);
-  let total = 0;
-  for (const body of view.bodies) {
-    for (let at = indexOfBytes(body, needle, 0); at >= 0;) {
-      total += 1;
-      at = indexOfBytes(body, needle, at + 1);
-    }
-  }
-  return total;
-}
-
-function callNeedle(functionIndex: number): Uint8Array {
-  const padded = paddedIndex(functionIndex);
-  const needle = new Uint8Array(padded.byteLength + 1);
-  needle[0] = 0x10;
-  needle.set(padded, 1);
-  return needle;
-}
-
-function intersect(left: Set<number>, right: Set<number>): number[] {
-  return [...left].filter((value) => right.has(value)).sort((a, b) => a - b);
 }
 
 function located(
@@ -295,18 +135,6 @@ function located(
   };
 }
 
-function only(
-  candidates: readonly number[],
-  what: string,
-  extra = "",
-): number {
-  if (candidates.length === 1) return candidates[0]!;
-  fail(
-    `expected exactly one ${what}, found ${candidates.length}`
-      + ` [${candidates.join(", ")}]${extra ? `. ${extra}` : ""}`,
-  );
-}
-
 interface Located {
   readonly view: ModuleView;
   readonly carrierImport: number;
@@ -320,90 +148,73 @@ interface Located {
   readonly diagnostics: string[];
 }
 
-type TemplateCallerRole =
-  | "delete"
-  | "skill-scan"
-  | "equipment-scan"
-  | "writer"
-  | "directory-sink"
-  | "screenshot-sink";
-
-type StaticRelocation = Readonly<{
-  start: number;
-  end: number;
-  encoding: "i32-const" | "memory-offset";
-  baseline: number;
-  group?: string;
-  immutableString?: string;
-}>;
-
 /** Exhaustive relocation operands in the six template callers. */
 const TEMPLATE_STATIC_RELOCATIONS: Readonly<
   Record<TemplateCallerRole, readonly StaticRelocation[]>
 > = Object.freeze({
   delete: [
-    { start: 21, end: 26, encoding: "memory-offset", baseline: 2674316, group: "delete-state" },
-    { start: 33, end: 38, encoding: "memory-offset", baseline: 2674312, group: "delete-state" },
-    { start: 81, end: 86, encoding: "memory-offset", baseline: 2674304, group: "delete-state" },
-    { start: 116, end: 121, encoding: "memory-offset", baseline: 2674300, group: "delete-state" },
-    { start: 162, end: 167, encoding: "memory-offset", baseline: 2674300, group: "delete-state" },
+    { start: 21, end: 26, encoding: "memory-offset", baseline: 2674316, storage: "delete-state" },
+    { start: 33, end: 38, encoding: "memory-offset", baseline: 2674312, storage: "delete-state" },
+    { start: 81, end: 86, encoding: "memory-offset", baseline: 2674304, storage: "delete-state" },
+    { start: 116, end: 121, encoding: "memory-offset", baseline: 2674300, storage: "delete-state" },
+    { start: 162, end: 167, encoding: "memory-offset", baseline: 2674300, storage: "delete-state" },
   ],
   "skill-scan": [
-    { start: 55, end: 60, encoding: "memory-offset", baseline: 1447524, group: "template-types" },
-    { start: 82, end: 87, encoding: "i32-const", baseline: 1447542, group: "template-types" },
-    { start: 109, end: 114, encoding: "i32-const", baseline: 1447546, group: "template-types" },
-    { start: 402, end: 407, encoding: "i32-const", baseline: 1447548, group: "template-types" },
-    { start: 645, end: 650, encoding: "i32-const", baseline: 1447652, group: "template-types" },
-    { start: 959, end: 964, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
-    { start: 974, end: 979, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
+    { start: 55, end: 60, encoding: "memory-offset", baseline: 1447524, storage: "template-types" },
+    { start: 82, end: 87, encoding: "i32-const", baseline: 1447542, storage: "template-types" },
+    { start: 109, end: 114, encoding: "i32-const", baseline: 1447546, storage: "template-types" },
+    { start: 402, end: 407, encoding: "i32-const", baseline: 1447548, storage: "template-types" },
+    { start: 645, end: 650, encoding: "i32-const", baseline: 1447652, storage: "template-types" },
+    { start: 959, end: 964, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
+    { start: 974, end: 979, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
   ],
   "equipment-scan": [
-    { start: 55, end: 60, encoding: "memory-offset", baseline: 1447524, group: "template-types" },
-    { start: 82, end: 87, encoding: "i32-const", baseline: 1447542, group: "template-types" },
-    { start: 109, end: 114, encoding: "i32-const", baseline: 1447532, group: "template-types" },
-    { start: 423, end: 428, encoding: "i32-const", baseline: 1447548, group: "template-types" },
-    { start: 697, end: 702, encoding: "i32-const", baseline: 1447700, group: "template-types" },
+    { start: 55, end: 60, encoding: "memory-offset", baseline: 1447524, storage: "template-types" },
+    { start: 82, end: 87, encoding: "i32-const", baseline: 1447542, storage: "template-types" },
+    { start: 109, end: 114, encoding: "i32-const", baseline: 1447532, storage: "template-types" },
+    { start: 423, end: 428, encoding: "i32-const", baseline: 1447548, storage: "template-types" },
+    { start: 697, end: 702, encoding: "i32-const", baseline: 1447700, storage: "template-types" },
     { start: 719, end: 724, encoding: "i32-const", baseline: 1238018, immutableString: "No valid case for switch variable 'type'" },
-    { start: 801, end: 806, encoding: "i32-const", baseline: 1447668, group: "template-types" },
-    { start: 1121, end: 1126, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
-    { start: 1131, end: 1136, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
-    { start: 1146, end: 1151, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
-    { start: 1176, end: 1181, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
+    { start: 801, end: 806, encoding: "i32-const", baseline: 1447668, storage: "template-types" },
+    { start: 1121, end: 1126, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
+    { start: 1131, end: 1136, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
+    { start: 1146, end: 1151, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
+    { start: 1176, end: 1181, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
   ],
   writer: [
-    { start: 130, end: 135, encoding: "i32-const", baseline: 1447532, group: "template-types" },
+    { start: 130, end: 135, encoding: "i32-const", baseline: 1447532, storage: "template-types" },
   ],
   "directory-sink": [
-    { start: 55, end: 60, encoding: "memory-offset", baseline: 1520752, group: "directory-types" },
-    { start: 70, end: 75, encoding: "memory-offset", baseline: 1520744, group: "directory-types" },
-    { start: 85, end: 90, encoding: "memory-offset", baseline: 1520736, group: "directory-types" },
-    { start: 162, end: 167, encoding: "i32-const", baseline: 1520756, group: "directory-types" },
-    { start: 643, end: 648, encoding: "i32-const", baseline: 1520776, group: "directory-types" },
+    { start: 55, end: 60, encoding: "memory-offset", baseline: 1520752, storage: "directory-types" },
+    { start: 70, end: 75, encoding: "memory-offset", baseline: 1520744, storage: "directory-types" },
+    { start: 85, end: 90, encoding: "memory-offset", baseline: 1520736, storage: "directory-types" },
+    { start: 162, end: 167, encoding: "i32-const", baseline: 1520756, storage: "directory-types" },
+    { start: 643, end: 648, encoding: "i32-const", baseline: 1520776, storage: "directory-types" },
   ],
   "screenshot-sink": [
-    { start: 27, end: 32, encoding: "memory-offset", baseline: 5943272, group: "screenshot-state" },
-    { start: 41, end: 46, encoding: "memory-offset", baseline: 5943296, group: "screenshot-state" },
-    { start: 65, end: 70, encoding: "memory-offset", baseline: 5943296, group: "screenshot-state" },
-    { start: 99, end: 104, encoding: "i32-const", baseline: 1556320, group: "screenshot-types" },
+    { start: 27, end: 32, encoding: "memory-offset", baseline: 5943272, storage: "screenshot-state" },
+    { start: 41, end: 46, encoding: "memory-offset", baseline: 5943296, storage: "screenshot-state" },
+    { start: 65, end: 70, encoding: "memory-offset", baseline: 5943296, storage: "screenshot-state" },
+    { start: 99, end: 104, encoding: "i32-const", baseline: 1556320, storage: "screenshot-types" },
     { start: 146, end: 151, encoding: "i32-const", baseline: 1244317, immutableString: "PathCreateDirectory() failed: %u\n" },
-    { start: 183, end: 188, encoding: "memory-offset", baseline: 2635884, group: "screenshot-directory" },
-    { start: 282, end: 287, encoding: "i32-const", baseline: 1556336, group: "screenshot-types" },
-    { start: 309, end: 314, encoding: "i32-const", baseline: 1556356, group: "screenshot-types" },
-    { start: 367, end: 372, encoding: "i32-const", baseline: 1556388, group: "screenshot-types" },
+    { start: 183, end: 188, encoding: "memory-offset", baseline: 2635884, storage: "screenshot-directory" },
+    { start: 282, end: 287, encoding: "i32-const", baseline: 1556336, storage: "screenshot-types" },
+    { start: 309, end: 314, encoding: "i32-const", baseline: 1556356, storage: "screenshot-types" },
+    { start: 367, end: 372, encoding: "i32-const", baseline: 1556388, storage: "screenshot-types" },
     { start: 691, end: 696, encoding: "i32-const", baseline: 1241365, immutableString: "No valid case for switch variable '\"\"'" },
-    { start: 730, end: 735, encoding: "i32-const", baseline: 1556408, group: "screenshot-types" },
-    { start: 1013, end: 1018, encoding: "i32-const", baseline: 1556430, group: "screenshot-types" },
-    { start: 1248, end: 1253, encoding: "memory-offset", baseline: 5943276, group: "screenshot-state" },
-    { start: 1262, end: 1267, encoding: "memory-offset", baseline: 5943276, group: "screenshot-state" },
-    { start: 1294, end: 1299, encoding: "memory-offset", baseline: 5943268, group: "screenshot-state" },
-    { start: 1305, end: 1310, encoding: "memory-offset", baseline: 5943296, group: "screenshot-state" },
+    { start: 730, end: 735, encoding: "i32-const", baseline: 1556408, storage: "screenshot-types" },
+    { start: 1013, end: 1018, encoding: "i32-const", baseline: 1556430, storage: "screenshot-types" },
+    { start: 1248, end: 1253, encoding: "memory-offset", baseline: 5943276, storage: "screenshot-state" },
+    { start: 1262, end: 1267, encoding: "memory-offset", baseline: 5943276, storage: "screenshot-state" },
+    { start: 1294, end: 1299, encoding: "memory-offset", baseline: 5943268, storage: "screenshot-state" },
+    { start: 1305, end: 1310, encoding: "memory-offset", baseline: 5943296, storage: "screenshot-state" },
     { start: 1329, end: 1334, encoding: "i32-const", baseline: 1241365, immutableString: "No valid case for switch variable '\"\"'" },
-    { start: 1373, end: 1378, encoding: "memory-offset", baseline: 5943292, group: "screenshot-state" },
-    { start: 1390, end: 1395, encoding: "memory-offset", baseline: 5943280, group: "screenshot-state" },
-    { start: 1407, end: 1412, encoding: "memory-offset", baseline: 5943284, group: "screenshot-state" },
-    { start: 1428, end: 1433, encoding: "memory-offset", baseline: 5943288, group: "screenshot-state" },
-    { start: 1449, end: 1454, encoding: "memory-offset", baseline: 5943288, group: "screenshot-state" },
-    { start: 1473, end: 1478, encoding: "memory-offset", baseline: 5943272, group: "screenshot-state" },
+    { start: 1373, end: 1378, encoding: "memory-offset", baseline: 5943292, storage: "screenshot-state" },
+    { start: 1390, end: 1395, encoding: "memory-offset", baseline: 5943280, storage: "screenshot-state" },
+    { start: 1407, end: 1412, encoding: "memory-offset", baseline: 5943284, storage: "screenshot-state" },
+    { start: 1428, end: 1433, encoding: "memory-offset", baseline: 5943288, storage: "screenshot-state" },
+    { start: 1449, end: 1454, encoding: "memory-offset", baseline: 5943288, storage: "screenshot-state" },
+    { start: 1473, end: 1478, encoding: "memory-offset", baseline: 5943272, storage: "screenshot-state" },
   ],
 });
 
@@ -721,28 +532,12 @@ function draft(found: Located): KnownTemplateSaveBuild {
   };
 }
 
-/**
- * Fill in `outputSha256` by running the production transform and reading the
- * hash back out of its own mismatch error, so the entry has round-tripped
- * through the shipping code path rather than a parallel one.
- */
+/** Bind a proved draft to the exact validated production-transform bytes. */
 function certify(
   input: Uint8Array,
   entry: KnownTemplateSaveBuild,
 ): KnownTemplateSaveBuild {
-  try {
-    rewriteTemplateSaveWasm(input, { ...entry, outputSha256: "0".repeat(64) });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    const found = /unexpected output ([0-9a-f]{64})/.exec(message);
-    if (found) {
-      const certified = { ...entry, outputSha256: found[1]! };
-      rewriteTemplateSaveWasm(input, certified);
-      return certified;
-    }
-    throw error;
-  }
-  fail("the transform accepted a placeholder output hash");
+  return certifyTemplateSaveRewrite(input, entry).build;
 }
 
 /** Derive a build entry, with `outputSha256` still to be certified. */
@@ -781,7 +576,7 @@ function templateCallerRoles(found: Located): Map<number, TemplateCallerRole> {
 
 function relocationValue(
   body: Uint8Array,
-  relocation: StaticRelocation,
+  relocation: StaticOperand,
 ): number {
   if (relocation.encoding === "i32-const") {
     if (body[relocation.start - 1] !== 0x41) {
@@ -813,12 +608,38 @@ function relocationValue(
   fail(`static relocation at ${relocation.start} is not a memory offset`);
 }
 
+function staticAnchorAddress(
+  found: Located,
+  storage: TemplateStaticStorage,
+  addresses: Map<TemplateStaticStorage, number>,
+): number {
+  const cached = addresses.get(storage);
+  if (cached !== undefined) return cached;
+
+  const anchor = TEMPLATE_STATIC_ANCHORS[storage];
+  let address: number;
+  if (anchor.kind === "initialized-data") {
+    const matches = found.view.dataAddresses(anchor.bytes);
+    if (matches.length !== 1) {
+      fail(`initialized static anchor ${storage} changed or is ambiguous`);
+    }
+    address = matches[0]!;
+  } else {
+    address = found.view.zeroInitializedBase;
+    if (address >= found.view.initialMemoryBytes) {
+      fail("zero-initialized static storage is outside initial memory");
+    }
+  }
+  addresses.set(storage, address);
+  return address;
+}
+
 function normalizeStaticRelocations(
   found: Located,
   role: TemplateCallerRole,
   source: Uint8Array,
   normalized: Uint8Array,
-  deltas: Map<string, number>,
+  anchorAddresses: Map<TemplateStaticStorage, number>,
 ): void {
   const relocations = TEMPLATE_STATIC_RELOCATIONS[role];
   if (relocations.some((relocation) => relocation.end > source.byteLength)) {
@@ -837,14 +658,23 @@ function normalizeStaticRelocations(
         fail(`immutable ${role} reference ${index} changed or is ambiguous`);
       }
     } else {
-      const group = relocation.group
-        ?? fail(`mutable ${role} reference ${index} has no occurrence ledger`);
-      const delta = value - relocation.baseline;
-      const previous = deltas.get(group);
-      if (previous !== undefined && previous !== delta) {
-        fail(`mutable static group ${group} moved inconsistently`);
+      const anchor = TEMPLATE_STATIC_ANCHORS[relocation.storage];
+      const anchorAddress = staticAnchorAddress(
+        found,
+        relocation.storage,
+        anchorAddresses,
+      );
+      const expected = anchorAddress + relocation.baseline - anchor.baseline;
+      if (value !== expected) {
+        fail(`static ${relocation.storage} reference ${index} is not anchored`);
       }
-      deltas.set(group, delta);
+      if (
+        anchor.kind === "initialized-data"
+          ? !found.view.containsInitializedData(value)
+          : value < anchorAddress || value >= found.view.initialMemoryBytes
+      ) {
+        fail(`static ${relocation.storage} reference ${index} is out of bounds`);
+      }
     }
     normalized.fill(0, relocation.start, relocation.end);
     normalized[relocation.start] = index + 1;
@@ -859,7 +689,7 @@ const FILE_OPEN_VTABLE_PREFIX = Uint8Array.of(
 function normalizedFileExistsBody(found: Located): string {
   const source = found.view.bodies[found.targets.fileExists.localFunction]
     ?? fail("file-exists body is missing");
-  const relocation: StaticRelocation = {
+  const relocation: StaticOperand = {
     start: 295,
     end: 300,
     encoding: "i32-const",
@@ -907,7 +737,7 @@ function semanticFingerprint(
   }
 
   const callerRoles = templateCallerRoles(found);
-  const deltas = new Map<string, number>();
+  const anchorAddresses = new Map<TemplateStaticStorage, number>();
 
   const callers = [...touched].map(([local, roles]) => {
     const source = found.view.bodies[local]
@@ -915,7 +745,13 @@ function semanticFingerprint(
     const normalized = source.slice();
     const role = callerRoles.get(local)
       ?? fail(`semantic caller ${local} has no feature role`);
-    normalizeStaticRelocations(found, role, source, normalized, deltas);
+    normalizeStaticRelocations(
+      found,
+      role,
+      source,
+      normalized,
+      anchorAddresses,
+    );
     for (const bridge of entry.bridges) {
       const expected = callNeedle(
         found.view.functionIndex(bridge.stubFunction),
@@ -948,8 +784,9 @@ function semanticFingerprint(
   })));
 }
 
-export function analyzeTemplateSaveCandidate(
+function analyzeTemplateSaveCandidateInternal(
   input: Uint8Array,
+  certifyOutput: boolean,
 ): TemplateSaveAnalysis {
   const hash = sha256(input);
   const empty: TemplateSaveAnalysis = {
@@ -976,7 +813,8 @@ export function analyzeTemplateSaveCandidate(
 
   try {
     const found = locate(view);
-    const entry = certify(input, draft(found));
+    const entryDraft = draft(found);
+    const entry = certifyOutput ? certify(input, entryDraft) : entryDraft;
     const callSites: Partial<Record<BridgeKind, readonly CallSite[]>> = {};
     let padded = 0;
     for (const bridge of entry.bridges) {
@@ -1033,6 +871,12 @@ export function analyzeTemplateSaveCandidate(
   }
 }
 
+export function analyzeTemplateSaveCandidate(
+  input: Uint8Array,
+): TemplateSaveAnalysis {
+  return analyzeTemplateSaveCandidateInternal(input, true);
+}
+
 /**
  * The current measured build is the source of truth for local semantic
  * inheritance. This value is generated from its normalized touched callers,
@@ -1045,10 +889,9 @@ export const TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT =
  * Return a transform record only when the locator and the complete relevant
  * caller bodies prove the same behavior as the current shipped baseline.
  */
-export function deriveEquivalentTemplateSaveBuild(
-  input: Uint8Array,
+function equivalentTemplateSaveBuild(
+  analysis: TemplateSaveAnalysis,
 ): KnownTemplateSaveBuild | null {
-  const analysis = analyzeTemplateSaveCandidate(input);
   const entry = analysis.entry;
   const baseline = TEMPLATE_SAVE_BUILDS[TEMPLATE_SAVE_BUILDS.length - 1];
   if (
@@ -1086,6 +929,12 @@ export function deriveEquivalentTemplateSaveBuild(
   return entry;
 }
 
+export function deriveEquivalentTemplateSaveBuild(
+  input: Uint8Array,
+): KnownTemplateSaveBuild | null {
+  return equivalentTemplateSaveBuild(analyzeTemplateSaveCandidate(input));
+}
+
 export type TemplateSaveResolution = "certified" | "structurally-derived";
 
 export interface PostTemplateSaveModule {
@@ -1101,24 +950,29 @@ interface TemplateSaveResolvers {
   ) => KnownTemplateSaveBuild | null;
 }
 
-const TEMPLATE_SAVE_RESOLVERS: TemplateSaveResolvers = Object.freeze({
-  certified: findTemplateSaveBuild,
-  structurallyDerived: deriveEquivalentTemplateSaveBuild,
-});
+function deriveEquivalentPostTemplateSaveModule(
+  input: Uint8Array,
+): PostTemplateSaveModule | null {
+  const analysis = analyzeTemplateSaveCandidateInternal(input, false);
+  const draftBuild = equivalentTemplateSaveBuild(analysis);
+  if (!draftBuild) return null;
+  const certified = certifyTemplateSaveRewrite(input, draftBuild);
+  return {
+    resolution: "structurally-derived",
+    build: certified.build,
+    bytes: certified.bytes,
+  };
+}
 
-/**
- * Produce the exact module on which every later transform is layered.
- *
- * A checked-in build and a locally shape-verified build differ only in how
- * their transform record is selected. Both must pass through the same
- * template-save rewrite; returning `null` is the fail-closed answer when
- * neither proof can select a record. The injectable resolvers make those two
- * otherwise mutually exclusive branches executable with small CI fixtures.
- */
+/** Produce the exact module on which every later transform is layered.
+ * Production always derives and certifies one semantic rewrite transaction.
+ * Injectable resolvers exist only to keep legacy-table fixture branches
+ * executable without granting those tables runtime authority. */
 export function preparePostTemplateSaveModule(
   input: Uint8Array,
-  resolvers: TemplateSaveResolvers = TEMPLATE_SAVE_RESOLVERS,
+  resolvers?: TemplateSaveResolvers,
 ): PostTemplateSaveModule | null {
+  if (!resolvers) return deriveEquivalentPostTemplateSaveModule(input);
   const certified = resolvers.certified(sha256(input));
   const build = certified ?? resolvers.structurallyDerived(input);
   if (!build) return null;

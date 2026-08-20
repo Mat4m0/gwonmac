@@ -309,8 +309,7 @@ function flagStore(globalIndex: number, frameOffset: number): Uint8Array {
  * qualification and accepts the same unique callback/table proof.
  */
 export function rewriteNativeDoubleClickWasm(input: Uint8Array): Uint8Array {
-  const build = findNativeDoubleClickBuild(sha256(input))
-    ?? deriveNativeDoubleClickBuild(input);
+  const build = deriveNativeDoubleClickBuild(input);
   if (!build) fail("module does not prove the native double-click callback");
   return rewriteWithBuild(input, build);
 }

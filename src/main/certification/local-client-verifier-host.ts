@@ -62,7 +62,9 @@ function runVerifierProcess(
     const timeout = setTimeout(() => finish(null), VERIFIER_TIMEOUT_MS);
     child.once("message", (value: unknown) => {
       finish(
-        isLocalClientVerification(value, officialSha256) ? value : null,
+        isLocalClientVerification(value, officialSha256, requestedCapabilities)
+          ? value
+          : null,
       );
     });
     child.once("exit", () => finish(null));
@@ -141,7 +143,7 @@ function runExtendedMemoryVerifierProcess(options: {
 
 /**
  * Runs the expensive parsers outside the main and renderer processes for every
- * unknown exact hash. A crash, timeout or malformed reply is simply "no proof";
+ * prepared input. A crash, timeout or malformed reply is simply "no proof";
  * callers keep the untouched official module.
  */
 export async function verifyClientLocally(options: {

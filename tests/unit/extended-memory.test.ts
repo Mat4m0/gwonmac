@@ -5,18 +5,14 @@ import {
   EXTENDED_MEMORY_JS_PROOF,
   EXTENDED_MEMORY_MAX_BYTES,
   EXTENDED_MEMORY_MAX_PAGES,
-  EXTENDED_MEMORY_PROFILES,
+  isExtendedMemoryProfile,
   normalizeExtendedMemoryJsForProof,
   rewriteExtendedMemoryJs,
   rewriteExtendedMemoryWasm,
 } from "../../src/main/certification/extended-memory.js";
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
-} from "../../src/shared/enhancement-contracts.js";
-import {
   concat,
   encodeSection,
-  splitSections,
   uleb,
   WASM_HEADER,
 } from "../../src/main/core/wasm-binary.js";
@@ -39,11 +35,14 @@ describe("certified extended memory transform", () => {
     assert.equal(EXTENDED_MEMORY_MAX_BYTES, 4_294_901_760);
   });
 
-  it("covers every valid runtime feature profile without a hash cross-product", () => {
-    assert.deepEqual(
-      [...EXTENDED_MEMORY_PROFILES].sort(),
-      ["off", ...Object.keys(ENHANCEMENT_CAPABILITY_PROFILES)].sort(),
-    );
+  it("accepts only canonical valid runtime feature profiles", () => {
+    assert.equal(isExtendedMemoryProfile("off"), true);
+    assert.equal(isExtendedMemoryProfile("features-01"), true);
+    assert.equal(isExtendedMemoryProfile("features-7f"), true);
+    assert.equal(isExtendedMemoryProfile("features-00"), false);
+    assert.equal(isExtendedMemoryProfile("features-08"), false);
+    assert.equal(isExtendedMemoryProfile("features-80"), false);
+    assert.equal(isExtendedMemoryProfile("cursorParty"), false);
   });
 
   it("normalizes only all 59 ASM_CONSTS keys", () => {
@@ -80,17 +79,14 @@ describe("certified extended memory transform", () => {
     const input = memoryModule();
     const output = deriveExtendedMemoryWasm(input);
     assert.equal(WebAssembly.validate(Uint8Array.from(output)), true);
-    const before = splitSections(input);
-    const after = splitSections(output);
-    assert.equal(after.length, before.length);
-    assert.deepEqual(
-      after.filter((section) => section.id !== 5),
-      before.filter((section) => section.id !== 5),
+    assert.equal(output.byteLength, input.byteLength);
+    const changed = Array.from(input.keys()).filter(
+      (index) => input[index] !== output[index],
     );
-    assert.notDeepEqual(
-      after.find((section) => section.id === 5),
-      before.find((section) => section.id === 5),
-    );
+    assert.equal(changed.length, 3);
+    assert.deepEqual(changed, [changed[0]!, changed[0]! + 1, changed[0]! + 2]);
+    assert.deepEqual(changed.map((index) => input[index]), [0x80, 0x80, 0x02]);
+    assert.deepEqual(changed.map((index) => output[index]), [0xff, 0xff, 0x03]);
   });
 
   it("records the effective mode and cap with a closed profile", () => {
@@ -99,7 +95,7 @@ describe("certified extended memory transform", () => {
         k: "wasm.extendedMemory",
         mode: "active",
         requested: true,
-        profile: "cursorParty",
+        profile: "features-05",
         capBytes: EXTENDED_MEMORY_MAX_BYTES,
         fallbackReason: "none",
       }),
@@ -110,7 +106,7 @@ describe("certified extended memory transform", () => {
         fields: {
           mode: "active",
           requested: true,
-          profile: "cursorParty",
+          profile: "features-05",
           capBytes: EXTENDED_MEMORY_MAX_BYTES,
           fallbackReason: "none",
         },
