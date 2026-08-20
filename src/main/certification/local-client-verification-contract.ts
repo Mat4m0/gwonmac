@@ -87,6 +87,7 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "local.ui-dispatcher",
     "local.game-thread-safe-point",
     "travel.message-producer-anchor",
+    "travel.current-context-resolver",
   ] as const),
   xunlaiAction: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,

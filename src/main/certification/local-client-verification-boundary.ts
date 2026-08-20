@@ -355,6 +355,17 @@ function isAutomaticSemanticBuild(
       && build.travelAction.producer.bodySha256 === travel.producer.bodySha256
       && sameJson(build.travelAction.producer.params, travel.producer.params)
       && sameJson(build.travelAction.producer.results, travel.producer.results)
+      && isIndex(build.travelAction.contextResolver.functionIndex)
+      && build.travelAction.contextResolver.bodySha256
+        === travel.contextResolver.bodySha256
+      && sameJson(
+        build.travelAction.contextResolver.params,
+        travel.contextResolver.params,
+      )
+      && sameJson(
+        build.travelAction.contextResolver.results,
+        travel.contextResolver.results,
+      )
     );
     const readers = build.xunlaiAction?.accessProof?.readers;
     const baselineReaders = xunlai?.accessProof?.readers;

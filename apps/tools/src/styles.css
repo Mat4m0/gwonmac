@@ -77,24 +77,6 @@
   stroke-width: 1.75;
 }
 
-.travel-options {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  flex: none;
-  border-bottom: 1px solid var(--ui-line-soft);
-  background: color-mix(in srgb, var(--ui-panel-fill) 82%, black);
-}
-.travel-options-label { color: var(--ui-text-muted); }
-.travel-district-region { min-width: 0; }
-.travel-options select { min-width: 156px; }
-.travel-district-number { min-width: 0; }
-.travel-district-number input {
-  width: 64px;
-  font-variant-numeric: tabular-nums;
-}
-
 .travel-shortcuts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

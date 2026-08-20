@@ -40,7 +40,10 @@ import type {
 } from "./keyboard-shortcuts.js";
 import {
   DEFAULT_TRAVEL_SHORTCUTS,
+  type TravelRecentLimit,
+  type TravelRecentMapIds,
   type TravelShortcuts,
+  type TravelSynonyms,
 } from "./travel.js";
 import type {
   EnhancementProgram,
@@ -341,6 +344,12 @@ export interface AppSettings {
   travelPalette: boolean;
   /** Ordered destinations for the palette's direct 1–9 shortcuts. */
   travelShortcuts: TravelShortcuts;
+  /** Ordered player-defined search terms for reviewed Travel destinations. */
+  travelSynonyms: TravelSynonyms;
+  /** Number of confirmed recent destinations shown; zero disables and clears history. */
+  travelRecentLimit: TravelRecentLimit;
+  /** Deduplicated confirmed destinations, newest first and bounded to ten. */
+  travelRecentMapIds: TravelRecentMapIds;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
   /** Player changes to the three app-owned shortcuts; missing entries use defaults. */
@@ -395,6 +404,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   xunlaiStorage: false,
   travelPalette: false,
   travelShortcuts: DEFAULT_TRAVEL_SHORTCUTS,
+  travelSynonyms: Object.freeze([]),
+  travelRecentLimit: 5,
+  travelRecentMapIds: Object.freeze([]),
   targetReadout: false,
   shortcutOverrides: {},
   extendedMemoryEnabled: false,

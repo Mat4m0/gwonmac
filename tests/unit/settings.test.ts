@@ -27,6 +27,9 @@ describe("settings", () => {
       xunlaiStorage: false,
       travelPalette: false,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
+      travelSynonyms: [],
+      travelRecentLimit: 5,
+      travelRecentMapIds: [],
       targetReadout: false,
       shortcutOverrides: {},
       extendedMemoryEnabled: false,
@@ -71,6 +74,9 @@ describe("settings", () => {
       xunlaiStorage: false,
       travelPalette: false,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
+      travelSynonyms: [],
+      travelRecentLimit: 5,
+      travelRecentMapIds: [],
       targetReadout: false,
       shortcutOverrides: {},
       extendedMemoryEnabled: false,
@@ -180,6 +186,31 @@ describe("settings", () => {
     }), AppError);
   });
 
+  it("validates Travel preferences and makes Off clear recent history", () => {
+    assert.deepEqual(parseSettingsPatch({
+      travelSynonyms: [{ term: "home", mapId: 55 }],
+      travelRecentLimit: 3,
+      travelRecentMapIds: [55, 81],
+    }), {
+      travelSynonyms: [{ term: "home", mapId: 55 }],
+      travelRecentLimit: 3,
+      travelRecentMapIds: [55, 81],
+    });
+    assert.deepEqual(parseSettingsPatch({ travelRecentLimit: 0 }), {
+      travelRecentLimit: 0,
+      travelRecentMapIds: [],
+    });
+    assert.deepEqual(parseSettings({
+      travelRecentLimit: 0,
+      travelRecentMapIds: [55, 81],
+    }).travelRecentMapIds, []);
+    assert.throws(() => parseSettingsPatch({ travelRecentLimit: 4 }), AppError);
+    assert.throws(() => parseSettingsPatch({ travelRecentMapIds: [55, 55] }), AppError);
+    assert.throws(() => parseSettingsPatch({
+      travelSynonyms: [{ term: "kamadan", mapId: 55 }],
+    }), AppError);
+  });
+
   it("takes the acknowledged client build only as a client hash", () => {
     const hash = "b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483";
     assert.equal(
@@ -276,7 +307,10 @@ describe("settings", () => {
       "targetReadout",
       "teamManagement",
       "travelPalette",
+      "travelRecentLimit",
+      "travelRecentMapIds",
       "travelShortcuts",
+      "travelSynonyms",
       "uiFont",
       "uiPanelOpacity",
       "uiStyle",
@@ -320,6 +354,9 @@ describe("settings", () => {
       xunlaiStorage: false,
       travelPalette: false,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
+      travelSynonyms: [],
+      travelRecentLimit: 5,
+      travelRecentMapIds: [],
       targetReadout: false,
       shortcutOverrides: {},
       extendedMemoryEnabled: false,
@@ -349,6 +386,33 @@ describe("settings", () => {
     });
     assert.equal("touchMode" in rewritten, false);
     assert.deepEqual(await loadSettings(path), loaded);
+  });
+
+  it("rewrites released district shortcuts once without losing other settings", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
+    const path = join(dir, "settings.json");
+    await writeFile(path, JSON.stringify({
+      renderScale: 1.5,
+      travelShortcuts: [
+        { mapId: 55, district: "europe-english", districtNumber: 2 },
+        null,
+        { mapId: 449, district: "international", districtNumber: 0 },
+      ],
+    }));
+
+    const loaded = await loadSettings(path);
+    assert.equal(loaded.renderScale, 1.5);
+    assert.deepEqual(loaded.travelShortcuts, [
+      { mapId: 55 }, null, { mapId: 449 }, null, null, null, null, null, null,
+    ]);
+    const rewritten = JSON.parse(await readFile(path, "utf8"));
+    assert.equal(rewritten.formatVersion, 1);
+    assert.deepEqual(rewritten.travelShortcuts, loaded.travelShortcuts);
+    assert.throws(() => parseSettingsPatch({
+      travelShortcuts: [
+        { mapId: 55, district: "europe-english", districtNumber: 2 },
+      ],
+    }), AppError, "only file reads own the one-time legacy conversion");
   });
 
   it("keeps the three newest corrupt backups and drops the rest", async () => {

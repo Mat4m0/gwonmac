@@ -131,8 +131,9 @@ After that restart, these choices update immediately:
   command. Before you search, it shows only your saved quick destinations.
   Press 1–9 from anywhere in Travel
   to use one. Type a destination or alias such as `la`, `kama`, or `eotn`,
-  choose a district, and press Return. Command-1 through Command-9 assigns the
-  selected result to that number.
+  and press Return. Travel keeps the current Guild Wars region and language and
+  uses district Any. Command-1 through Command-9 assigns the selected result to
+  that number.
 
 Tools and Travel stay open when you click Guild Wars behind them. Press Tab to
 move the keyboard into the topmost GWonMac window. Press Escape to close that

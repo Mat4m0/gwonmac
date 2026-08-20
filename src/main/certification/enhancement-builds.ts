@@ -8,20 +8,17 @@ import {
 } from "./enhancement-build-model.js";
 export * from "./enhancement-build-model.js";
 
-// Canonical signed facts for the one retained exact-build certificate. Older
-// client generations keep file-saving and structural cursor recovery, but are
-// not advertised here when their full output chain cannot be reproduced.
-
-// Canonical support manifest. Every value is verified against the exact input
-// hash before a derived module is selected.
+// Retained regression facts for one reviewed generation. Runtime certification
+// never grants a capability from this input hash or its historic output hashes;
+// the isolated semantic verifier re-derives every requested fact first.
 //
 // The input is the template-save client, not the raw official module: that
 // transform is the floor every launch lands on, and the Enhancement transform is
 // layered on top so opting in never costs template save/load. It only appends
 // functions and reserves one new terminal table entry, so the main-loop index,
 // original table size and every data address below are certified separately for
-// each exact template-save output. Unknown
-// Enhancement builds remain off until another complete exact entry is added.
+// each template-save output. The semantic roles use these reviewed facts as
+// evidence or regression expectations, not as a launch allowlist.
 export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
   Object.freeze([
     Object.freeze({
@@ -255,6 +252,15 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           results: Object.freeze([] as const),
           bodySha256:
             "47c2f33dc98226fbb1596d60b2dfe76a9a19f645e94330a0582a6dc50d5be595",
+        }),
+        // Regression expectation only. Runtime authority re-derives this unique
+        // current-district role and all of its call/content relationships.
+        contextResolver: Object.freeze({
+          functionIndex: 11650,
+          params: Object.freeze(["i32", "i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "309615106e62d04390ca11f88b28d15e04494d9e850c0f5ebff8548f098ba062",
         }),
       }),
       chatAliases: Object.freeze({

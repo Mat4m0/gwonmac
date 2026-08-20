@@ -46,6 +46,8 @@ import {
 import { rewriteExtendedMemoryWasm } from "../../src/main/certification/extended-memory.js";
 import {
   mutableSpans,
+  decodeFunctions,
+  parseActiveTableRelations,
   parseModule,
   semanticRole,
   signatureMatches,
@@ -393,6 +395,22 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     }
   }
 
+  const changedTravelContext = rewriteCode(bytes, (bodies) => {
+    bodies[11650 - derived.importCount]![14]
+      = bodies[11650 - derived.importCount]![14]! ^ 1;
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(changedTravelContext)), true);
+  const changedTravelContextDecision = verifyLocalClientBytes(changedTravelContext);
+  const changedTravelContextCapabilities = capabilitiesOf(changedTravelContextDecision)!;
+  assert.equal(changedTravelContextCapabilities.travelAction, false);
+  assert.equal(changedTravelContextCapabilities.xunlaiAction, true);
+  assert.equal(changedTravelContextCapabilities.chatAliases, true);
+  const changedTravelContextVerdict = changedTravelContextDecision.featureVerdicts?.travelAction;
+  assert.equal(changedTravelContextVerdict?.status, "changed");
+  if (changedTravelContextVerdict?.status === "changed") {
+    assert.equal(changedTravelContextVerdict.invariant, "travel.current-context-resolver");
+  }
+
   const changedDrain = rewriteCode(bytes, (bodies) => {
     const body = bodies[6661 - derived.importCount]!;
     body[330] = body[330]! ^ 1;
@@ -485,6 +503,33 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(reindexedCapabilities.partyObservation, true);
   assert.equal(reindexedCapabilities.teamApply, true);
 
+  // Function 1083 has the same signature but no direct caller or active table
+  // slot in both retained generations, so relocating this role cannot disturb
+  // an unrelated feature merely by taking over the destination.
+  const travelContextDestination = 1083;
+  assert.deepEqual(
+    signatureEvidence(parsed, travelContextDestination),
+    signatureEvidence(parsed, 11650),
+  );
+  assert.equal(
+    decodeFunctions(parsed, []).some(({ calls }) => calls.has(travelContextDestination)),
+    false,
+  );
+  assert.equal(
+    parseActiveTableRelations(parsed.elementSection).has(travelContextDestination),
+    false,
+  );
+  const reindexedTravelContext = rewriteCode(bytes, (bodies) => {
+    swapDefinedFunctions(bodies, derived.importCount, 11650, travelContextDestination);
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(reindexedTravelContext)), true);
+  const reindexedTravelContextCapabilities = capabilitiesOf(
+    verifyLocalClientBytes(reindexedTravelContext),
+  )!;
+  assert.equal(reindexedTravelContextCapabilities.travelAction, true);
+  assert.equal(reindexedTravelContextCapabilities.xunlaiAction, true);
+  assert.equal(reindexedTravelContextCapabilities.chatAliases, true);
+
   const protectedPartyCallees = new Set([
     228, 322, 334, 6842, 9582,
   ]);
@@ -551,6 +596,29 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(ambiguousTravelRefusal.travelAction, false);
   assert.equal(ambiguousTravelRefusal.xunlaiAction, true);
   assert.equal(ambiguousTravelRefusal.chatAliases, true);
+
+  const ambiguousTravelContext = rewriteCode(bytes, (bodies) => {
+    bodies[travelContextDestination - derived.importCount]
+      = bodies[11650 - derived.importCount]!.slice();
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(ambiguousTravelContext)), true);
+  const ambiguousTravelContextDecision = verifyLocalClientBytes(ambiguousTravelContext);
+  assert.deepEqual(
+    inspectLocalActionRoleCandidates(ambiguousTravelContext)?.travelContext,
+    { status: "ambiguous", candidateCount: 2 },
+  );
+  const ambiguousTravelContextVerdict
+    = ambiguousTravelContextDecision.featureVerdicts?.travelAction;
+  assert.equal(ambiguousTravelContextVerdict?.status, "ambiguous");
+  if (ambiguousTravelContextVerdict?.status === "ambiguous") {
+    assert.equal(
+      ambiguousTravelContextVerdict.invariant,
+      "travel.current-context-resolver",
+    );
+    assert.equal(ambiguousTravelContextVerdict.candidates, 2);
+  }
+  assert.equal(capabilitiesOf(ambiguousTravelContextDecision)?.travelAction, false);
+  assert.equal(capabilitiesOf(ambiguousTravelContextDecision)?.xunlaiAction, true);
 
   const ambiguousDispatcher = rewriteCode(bytes, (bodies) => {
     bodies[6840 - derived.importCount] = bodies[6842 - derived.importCount]!.slice();

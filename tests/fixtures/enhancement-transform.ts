@@ -330,6 +330,14 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
           .update(commandBody(bytes, 10))
           .digest("hex"),
       },
+      contextResolver: {
+        functionIndex: 5,
+        params: ["i32", "i32", "i32"],
+        results: [],
+        bodySha256: createHash("sha256")
+          .update(commandBody(bytes, 2))
+          .digest("hex"),
+      },
     },
     chatAliases: {
       parser: {

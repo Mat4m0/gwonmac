@@ -29,6 +29,7 @@ import {
 } from "../src/shared/builds/library.ts";
 import {
   DATA_STRATEGIES,
+  DEFAULT_SETTINGS,
   LAST_UPDATE_CHECK_AT_MAX,
   RENDER_SCALES,
   UI_PANEL_OPACITY_MAX,
@@ -164,7 +165,10 @@ const candidateSettingsDomains = Array.from(
       teamManagement: cycle(booleanValues, index + 1),
       xunlaiStorage: cycle(booleanValues, index),
       travelPalette: cycle(booleanValues, index + 1),
-      travelShortcuts: [],
+      travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
+      travelSynonyms: DEFAULT_SETTINGS.travelSynonyms,
+      travelRecentLimit: DEFAULT_SETTINGS.travelRecentLimit,
+      travelRecentMapIds: DEFAULT_SETTINGS.travelRecentMapIds,
       targetReadout: cycle(booleanValues, index),
       shortcutOverrides: {},
       extendedMemoryEnabled: cycle(booleanValues, index + 1),

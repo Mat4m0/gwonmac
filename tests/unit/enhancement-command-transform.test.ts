@@ -178,21 +178,28 @@ describe("Enhancement command transform", () => {
     });
 
     const dispatches: number[][] = [];
+    const runtime: { memory?: WebAssembly.Memory } = {};
     const instance = new WebAssembly.Instance(module, {
       env: {
         t: () => {},
         c: () => {},
-        u: (...args: number[]) => { dispatches.push(args); },
+        u: (...args: number[]) => {
+          if (args[0] === 81) {
+            new Int32Array(runtime.memory!.buffer)[args[1]! / 4] = -2;
+            new Int32Array(runtime.memory!.buffer)[args[2]! / 4] = 0;
+          } else dispatches.push(args);
+        },
         tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
       },
     });
+    runtime.memory = instance.exports.memory as WebAssembly.Memory;
     const configure = instance.exports[build.travelAction!.configureExport] as
       (payload: number, enabled: number) => number;
     const enqueue = instance.exports[build.travelAction!.enqueueExport] as
-      (mapId: number, region: number, language: number, district: number) => number;
+      (mapId: number) => number;
     const frame = instance.exports.frame as (value: number, context: number) => void;
     assert.equal(configure(128, 1), 1);
-    assert.equal(enqueue(81, -2, 0, 0), 1);
+    assert.equal(enqueue(81), 1);
     frame(70, 700);
     assert.deepEqual(dispatches, [[build.travelAction!.messageId, 128, 0]]);
   });
@@ -286,50 +293,58 @@ describe("Enhancement command transform", () => {
     const build = manifest(input);
     const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_STORAGE);
     const dispatches: number[][] = [];
+    const runtime: { memory?: WebAssembly.Memory } = {};
     const instance = new WebAssembly.Instance(
       new WebAssembly.Module(new Uint8Array(output)),
       {
         env: {
           t: () => {},
           c: () => {},
-          u: (message: number, pointer: number, value: number) => {
-            dispatches.push([message, pointer, value]);
+          u: (first: number, second: number, third: number) => {
+            if (first === 81) {
+              new Int32Array(runtime.memory!.buffer)[second / 4] = -2;
+              new Int32Array(runtime.memory!.buffer)[third / 4] = 0;
+            } else if (first === 55) {
+              // Leave the two sentinels untouched to model an unresolved map context.
+            } else {
+              dispatches.push([first, second, third]);
+            }
           },
           tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
         },
       },
     );
     const memory = instance.exports.memory as WebAssembly.Memory;
+    runtime.memory = memory;
     const frame = instance.exports.frame as (value: number, context: number) => void;
     const enqueue = instance.exports[build.travelAction!.enqueueExport] as
-      (mapId: number, region: number, language: number, district: number) => number;
+      (mapId: number) => number;
     const configure = instance.exports[build.travelAction!.configureExport] as
       (payload: number, enabled: number) => number;
     const payload = 128;
 
-    assert.equal(enqueue(81, -2, 0, 0), 0, "Travel refuses before installation");
+    assert.equal(enqueue(81), 0, "Travel refuses before installation");
     assert.equal(configure(payload, 1), 1);
-    assert.equal(enqueue(81, -2, 0, 0), 1);
-    assert.equal(enqueue(55, 2, 0, 1), 0, "a queued trip owns the action mailbox");
+    assert.equal(enqueue(81), 1);
+    assert.equal(enqueue(55), 0, "a queued trip owns the action mailbox");
     assert.deepEqual(dispatches, [], "enqueue never calls client code re-entrantly");
     frame(70, 700);
     assert.deepEqual([...new Int32Array(memory.buffer, payload, 4)], [81, -2, 0, 0]);
     assert.deepEqual(dispatches, [[build.travelAction!.messageId, payload, 0]]);
 
-    for (const request of [
-      [0, -2, 0, 0],
-      [2_001, -2, 0, 0],
-      [81, -3, 0, 0],
-      [81, 5, 0, 0],
-      [81, -2, -1, 0],
-      [81, -2, 18, 0],
-      [81, -2, 0, -1],
-      [81, -2, 0, 256],
-    ] as const) {
+    assert.equal(enqueue(55), 1);
+    frame(80, 800);
+    assert.deepEqual(
+      dispatches,
+      [[build.travelAction!.messageId, payload, 0]],
+      "an unresolved live district context must fail closed without dispatching",
+    );
+
+    for (const mapId of [0, 2_001, 266, 307] as const) {
       assert.equal(
-        enqueue(request[0], request[1], request[2], request[3]),
+        enqueue(mapId),
         0,
-        `refuses ${request.join(",")}`,
+        `refuses unreviewed map ${mapId}`,
       );
     }
     assert.deepEqual(dispatches, [[build.travelAction!.messageId, payload, 0]]);

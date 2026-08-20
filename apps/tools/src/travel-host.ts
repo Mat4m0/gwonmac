@@ -7,6 +7,7 @@ import { ref, type Ref } from "vue";
 import type { GwNativeApi } from "../../../src/shared/contracts";
 import type { TravelCommand } from "../../../src/shared/travel-command";
 import {
+  copyTravelShortcuts,
   DEFAULT_TRAVEL_SHORTCUTS,
   TRAVEL_DESTINATIONS,
   type TravelRequest,
@@ -51,8 +52,6 @@ export function createNativeTravelHost(
         if (development) {
           console.debug(`[tools:dev] travel.queued ${JSON.stringify({
             mapId: request.mapId,
-            district: request.district,
-            districtNumber: request.districtNumber,
           })}`);
         }
       } catch (error) {
@@ -90,9 +89,7 @@ export function createDemoTravelHost(): TravelHost {
       return shortcuts;
     },
     async saveShortcuts(next) {
-      shortcuts = Object.freeze(next.map((entry) =>
-        entry === null ? null : Object.freeze({ ...entry })
-      ));
+      shortcuts = Object.freeze(copyTravelShortcuts(next));
       return shortcuts;
     },
     async travel(request) {

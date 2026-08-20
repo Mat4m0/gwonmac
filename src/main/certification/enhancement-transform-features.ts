@@ -21,6 +21,9 @@ import {
   travelToggleTake,
 } from "./enhancement-command-transform.js";
 import type { EnhancementTransformResolution } from "./enhancement-transform.js";
+import { TRAVEL_DESTINATIONS } from "../../shared/travel.js";
+
+const REVIEWED_TRAVEL_MAP_IDS = TRAVEL_DESTINATIONS.map(({ mapId }) => mapId);
 
 function fail(message: string): never {
   throw new Error(`enhancement transform: ${message}`);
@@ -155,8 +158,10 @@ export function applyFeatureContributions(
       capabilities.travelAction
         ? {
             dispatcherFunctionIndex: uiOriginalIndex ?? uiDispatcher.functionIndex,
+            contextResolverFunctionIndex: travelAction.contextResolver.functionIndex,
             messageId: travelAction.messageId,
             payloadGlobalIndex: globalIndices.travelPayload,
+            reviewedMapIds: REVIEWED_TRAVEL_MAP_IDS,
           }
         : null,
     ),
@@ -247,6 +252,7 @@ export function applyFeatureContributions(
             globalIndices.commandArgumentBase,
             globalIndices.travelPayload,
             globalIndices.travelEnabled,
+            REVIEWED_TRAVEL_MAP_IDS,
           ),
         ),
       },

@@ -99,8 +99,9 @@ character names, account data, chat, packet bytes, or Travel search text.
 - Travel emits `travel.search` with query length, token count, catalogue size,
   result count, and bounded result map IDs. It never includes the query itself.
   `travel.queued` or `travel.refused` then identifies the named command result.
-  A zero search result is a host-catalogue gap, not a refused ArenaNet command;
-  the current catalogue is intentionally static and is not yet exhaustive.
+  Search covers the reviewed 199-destination direct-travel catalogue. A zero
+  result means the query did not match that catalogue; passage-scroll locations
+  such as Urgoz's Warren and The Deep intentionally use their original UI.
 
 For a report, reproduce one operation at a time and copy the lines from its
 first request through its final success, refusal, or timeout. Also record the
