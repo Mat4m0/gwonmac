@@ -5,6 +5,7 @@ import {
   PROFESSION_COMMAND_TRACE_BYTES,
 } from "../../src/renderer/profession-command-trace.js";
 import type { ToolboxObservation } from "../../src/shared/builds/live-party.js";
+import { PROFESSION_TRACE_SCHEMA } from "../../src/shared/profession-command-trace.js";
 
 const professionSnapshot = (
   count: number,
@@ -14,7 +15,7 @@ const professionSnapshot = (
   drainCount = 0,
   drainOpcode = 0,
 ): number[] => [
-  1,
+  PROFESSION_TRACE_SCHEMA,
   count, origin, target, profession,
   0, 0, 0, 0,
   count, origin, 999, 2, 555, 10, 22, 0, 1, 12,
@@ -65,7 +66,7 @@ test("the command trace publishes exact profession and skill payloads", () => {
     snapshot = professionSnapshot(2, 1, 77, 4);
     trace.poll(state);
     snapshot = [
-      1,
+      PROFESSION_TRACE_SCHEMA,
       2, 1, 77, 4,
       1, 0, 77, 8,
       3, 0, 999, 2, 555, 10, 22, 0, 1, 44,
