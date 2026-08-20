@@ -160,10 +160,16 @@ export async function toggleTools(win: BrowserWindow): Promise<void> {
  * Command-Shift-C had been misrouted to the hero-build shortcut.
  */
 export async function openStorage(win: BrowserWindow): Promise<void> {
+  // Command-Shift-C can lose its physical modifier releases in AppKit after
+  // Chromium has already forwarded Shift to the game. Clear the renderer's
+  // held-key ledger before either the native Xunlai UI or the fallback dialog
+  // opens, so Guild Wars cannot keep a synthetic Shift pressed for the rest of
+  // the session. The Tools button takes the same harmless reset-free domain
+  // action directly because it carries no held keyboard chord.
+  await resetGameInput(win);
   if (await sendRendererCommand(win, { type: "storage.open" }) === "completed") {
     return;
   }
-  await resetGameInput(win);
   await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
 }
 
