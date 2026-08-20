@@ -153,10 +153,37 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.deepEqual(Object.keys(addressDecision.enhancementBuild.outputSha256), ["cursor"]);
   assert.deepEqual(addressDecision.reasons, []);
 
+  const targetMutations = [
+    { local: 7327 - derived.importCount, offset: 132, label: "target occurrence ledger" },
+    { local: 5109 - derived.importCount, offset: 39, label: "map field offset" },
+    { local: 17524 - derived.importCount, offset: 36, label: "area table stride" },
+  ] as const;
+  for (const mutation of targetMutations) {
+    const changedTargetProof = rewriteCode(bytes, (bodies) => {
+      const body = bodies[mutation.local]!;
+      body[mutation.offset] = body[mutation.offset]! ^ 1;
+    });
+    assert.equal(
+      WebAssembly.validate(new Uint8Array(changedTargetProof)),
+      true,
+      mutation.label,
+    );
+    const refusal = verifyLocalClientBytes(changedTargetProof);
+    assert.ok(refusal.templateSaveBuild, mutation.label);
+    assert.ok(refusal.enhancementBuild?.cursorEvent, mutation.label);
+    assert.equal(refusal.enhancementBuild.targetObservation, undefined, mutation.label);
+    assert.deepEqual(
+      Object.keys(refusal.enhancementBuild.outputSha256),
+      ["cursor"],
+      mutation.label,
+    );
+    assert.deepEqual(refusal.reasons, [], mutation.label);
+  }
+
   const cursorMutations = [
-    { local: 446 - derived.importCount, offset: 10, label: "main-loop control flow" },
-    { local: 2828 - derived.importCount, offset: 68, label: "one producer static" },
-    { local: 6234 - derived.importCount, offset: 45, label: "cursor art offset" },
+    { local: 446 - derived.importCount, offset: 10, label: "main-loop control flow", shared: true },
+    { local: 2828 - derived.importCount, offset: 68, label: "one producer static", shared: false },
+    { local: 6234 - derived.importCount, offset: 45, label: "cursor art offset", shared: false },
   ] as const;
   for (const mutation of cursorMutations) {
     const changedCursorProof = rewriteCode(bytes, (bodies) => {
@@ -170,8 +197,19 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     );
     const refusal = verifyLocalClientBytes(changedCursorProof);
     assert.ok(refusal.templateSaveBuild, mutation.label);
-    assert.equal(refusal.enhancementBuild, null, mutation.label);
-    assert.deepEqual(refusal.reasons, ["enhancement-layout-changed"], mutation.label);
+    if (mutation.shared) {
+      assert.equal(refusal.enhancementBuild, null, mutation.label);
+      assert.deepEqual(refusal.reasons, ["enhancement-layout-changed"], mutation.label);
+    } else {
+      assert.ok(refusal.enhancementBuild?.targetObservation, mutation.label);
+      assert.equal(refusal.enhancementBuild.cursorEvent, undefined, mutation.label);
+      assert.deepEqual(
+        Object.keys(refusal.enhancementBuild.outputSha256),
+        ["target"],
+        mutation.label,
+      );
+      assert.deepEqual(refusal.reasons, [], mutation.label);
+    }
   }
 });
 

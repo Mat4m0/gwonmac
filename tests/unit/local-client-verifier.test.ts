@@ -56,6 +56,40 @@ function automaticCursor(): LocalClientVerification {
   };
 }
 
+function automaticTarget(): LocalClientVerification {
+  const observation = ENHANCEMENT.observationBase!.layout;
+  const target = ENHANCEMENT.targetObservation!.layout;
+  const delta = -112;
+  return {
+    ...valid(),
+    enhancementBuild: {
+      sha256: ENHANCEMENT.sha256,
+      outputSha256: { target: "5".repeat(64) },
+      programId: ENHANCEMENT.programId,
+      buildId: ENHANCEMENT.buildId + 1,
+      hookFunction: ENHANCEMENT.hookFunction + 1,
+      hookParams: ENHANCEMENT.hookParams,
+      hookResults: ENHANCEMENT.hookResults,
+      hookBodySha256: "6".repeat(64),
+      tableSlot: ENHANCEMENT.tableSlot,
+      observationBase: {
+        layout: {
+          ...observation,
+          contextRoot: observation.contextRoot + delta,
+          agentArray: observation.agentArray + delta,
+          areaInfo: observation.areaInfo + delta,
+        },
+      },
+      targetObservation: {
+        layout: {
+          manualTargetAgentId: target.manualTargetAgentId + delta,
+          automaticTargetAgentId: target.automaticTargetAgentId + delta,
+        },
+      },
+    },
+  };
+}
+
 describe("local client verification boundary", () => {
   it("accepts the verifier's complete baseline proof", () => {
     assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256), true);
@@ -106,6 +140,24 @@ describe("local client verification boundary", () => {
             ...derived.enhancementBuild!.cursorEvent!.layout,
             cursorShowCount:
               derived.enhancementBuild!.cursorEvent!.layout.cursorShowCount + 4,
+          },
+        },
+      },
+    }, TEMPLATE.sha256), false);
+  });
+
+  it("accepts a field-complete Target proof and rejects one bad relocation", () => {
+    const derived = automaticTarget();
+    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification({
+      ...derived,
+      enhancementBuild: {
+        ...derived.enhancementBuild!,
+        targetObservation: {
+          layout: {
+            ...derived.enhancementBuild!.targetObservation!.layout,
+            manualTargetAgentId:
+              derived.enhancementBuild!.targetObservation!.layout.manualTargetAgentId + 4,
           },
         },
       },

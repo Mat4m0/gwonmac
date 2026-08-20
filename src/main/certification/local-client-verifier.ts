@@ -9,8 +9,9 @@
  *
  * The two answers are not symmetric and must not be merged. Template save is
  * shape-verifiable, so a client whose affected call sites still match is
- * accepted by proof. Of the optional features, only the cursor has a strict
- * structural locator; memory observation and commands remain exact-build only.
+ * accepted by proof. Cursor and read-only Target Distance each have a strict,
+ * independent structural locator; party observation and actions remain
+ * exact-build only.
  *
  * `isLocalClientVerification` re-validates every field of a result that crossed
  * the process boundary. Profile state is never consulted.
@@ -23,7 +24,10 @@ import {
   enhancementProfilesForBuild,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
-import { locateAutomaticCursor } from "./enhancement-structural-evidence.js";
+import {
+  locateAutomaticCursor,
+  locateAutomaticTarget,
+} from "./enhancement-structural-evidence.js";
 import { inspectEnhancementCandidate } from "./enhancement-candidate.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
@@ -77,8 +81,8 @@ function deriveEnhancementBuild(
 ): KnownEnhancementBuild | null {
   const report = inspectEnhancementCandidate(templateOutput);
   if (!report.validWasm) return null;
-  // A common address delta is not proof of memory layouts or commands. Those
-  // remain exact-build only; the isolated cursor proof below owns only cursor.
+  // A common address delta alone proves nothing. The isolated feature locators
+  // below own their complete cursor and Target evidence independently.
   const build = findEnhancementBuild(report.sha256);
   if (build) {
     const profile = enhancementProfilesForBuild(build)[0];
@@ -86,41 +90,60 @@ function deriveEnhancementBuild(
     transformEnhancementWasm(templateOutput, build, ENHANCEMENT_CAPABILITY_PROFILES[profile]);
     return build;
   }
-  const located = locateAutomaticCursor(templateOutput, ENHANCEMENT_BUILDS);
-  if (!located || !report.table || report.table.max === null) return null;
-  const cursor = located.baseline.cursorEvent!;
+  const locatedCursor = locateAutomaticCursor(templateOutput, ENHANCEMENT_BUILDS);
+  const locatedTarget = locateAutomaticTarget(templateOutput, ENHANCEMENT_BUILDS);
+  if ((!locatedCursor && !locatedTarget) || !report.table || report.table.max === null) {
+    return null;
+  }
+  const baseline = locatedCursor?.baseline ?? locatedTarget!.baseline;
+  const cursor = locatedCursor?.baseline.cursorEvent;
+  if (locatedCursor && !cursor) return null;
   const provisional: KnownEnhancementBuild = Object.freeze({
     sha256: report.sha256,
     outputSha256: Object.freeze({}),
-    programId: located.baseline.programId,
+    programId: baseline.programId,
     buildId: Number.parseInt(sha256(official).slice(0, 8), 16) || 1,
-    hookFunction: located.hookFunction,
+    hookFunction: (locatedCursor ?? locatedTarget)!.hookFunction,
     hookParams: Object.freeze(["i32"] as const),
     hookResults: Object.freeze([] as const),
-    hookBodySha256: located.hookBodySha256,
+    hookBodySha256: (locatedCursor ?? locatedTarget)!.hookBodySha256,
     tableSlot: report.table.min,
-    cursorEvent: Object.freeze({
-      functionIndex: located.cursorFunction,
-      params: cursor.params,
-      results: cursor.results,
-      tableSlot: located.cursorTableSlot,
-      producerFunctions: located.producerFunctions,
-      producerParams: cursor.producerParams,
-      producerResults: cursor.producerResults,
-      bodySha256: cursor.bodySha256,
-      producerBodySha256: located.producerBodySha256,
-      tableNeighbourBodySha256: cursor.tableNeighbourBodySha256,
-      layout: located.layout,
-    }),
+    ...(locatedCursor && cursor ? {
+      cursorEvent: Object.freeze({
+        functionIndex: locatedCursor.cursorFunction,
+        params: cursor.params,
+        results: cursor.results,
+        tableSlot: locatedCursor.cursorTableSlot,
+        producerFunctions: locatedCursor.producerFunctions,
+        producerParams: cursor.producerParams,
+        producerResults: cursor.producerResults,
+        bodySha256: cursor.bodySha256,
+        producerBodySha256: locatedCursor.producerBodySha256,
+        tableNeighbourBodySha256: cursor.tableNeighbourBodySha256,
+        layout: locatedCursor.layout,
+      }),
+    } : {}),
+    ...(locatedTarget ? {
+      observationBase: Object.freeze({ layout: locatedTarget.observationLayout }),
+      targetObservation: Object.freeze({ layout: locatedTarget.targetLayout }),
+    } : {}),
   });
-  const output = transformEnhancementWasm(
-    templateOutput,
-    provisional,
-    ENHANCEMENT_CAPABILITY_PROFILES.cursor,
-  );
+  const profiles = [
+    ...(locatedCursor ? ["cursor" as const] : []),
+    ...(locatedTarget ? ["target" as const] : []),
+    ...(locatedCursor && locatedTarget ? ["cursorTarget" as const] : []),
+  ];
+  const outputSha256 = Object.fromEntries(profiles.map((profile) => [
+    profile,
+    sha256(transformEnhancementWasm(
+      templateOutput,
+      provisional,
+      ENHANCEMENT_CAPABILITY_PROFILES[profile],
+    )),
+  ]));
   return Object.freeze({
     ...provisional,
-    outputSha256: Object.freeze({ cursor: sha256(output) }),
+    outputSha256: Object.freeze(outputSha256),
   });
 }
 
@@ -254,7 +277,7 @@ function isExactEnhancementBuild(
   return exact !== null && sameJson(value, exact);
 }
 
-function isAutomaticCursorBuild(
+function isAutomaticSemanticBuild(
   value: unknown,
   inputSha256: string,
 ): value is KnownEnhancementBuild {
@@ -262,29 +285,45 @@ function isAutomaticCursorBuild(
   const build = value as Partial<KnownEnhancementBuild>;
   if (
     build.sha256 !== inputSha256
-    || !isDigest(build.outputSha256?.cursor)
-    || Object.keys(build.outputSha256 ?? {}).join(",") !== "cursor"
-    || build.targetObservation !== undefined
+    || !build.outputSha256
     || build.partyObservation !== undefined
     || build.teamApply !== undefined
-    || build.observationBase !== undefined
+    || build.travelAction !== undefined
+    || build.xunlaiAction !== undefined
+    || build.chatAliases !== undefined
+    || build.gameThread !== undefined
+    || build.uiDispatcher !== undefined
     || !isIndex(build.programId)
     || !isIndex(build.buildId)
     || !isIndex(build.hookFunction)
     || !isIndex(build.tableSlot)
     || !isDigest(build.hookBodySha256)
-    || !build.cursorEvent
-    || !isIndex(build.cursorEvent.functionIndex)
-    || !isIndex(build.cursorEvent.tableSlot)
-    || build.cursorEvent.producerFunctions.length !== 2
-    || !build.cursorEvent.producerFunctions.every(isIndex)
-    || build.cursorEvent.producerBodySha256.length !== 2
-    || !build.cursorEvent.producerBodySha256.every(isDigest)
-    || !Object.values(build.cursorEvent.layout).every(isIndex)
+  ) return false;
+  const hasCursor = build.cursorEvent !== undefined;
+  const hasTarget = build.targetObservation !== undefined
+    && build.observationBase !== undefined;
+  if (!hasCursor && !hasTarget) return false;
+  const expectedProfiles = [
+    ...(hasCursor ? ["cursor"] : []),
+    ...(hasTarget ? ["target"] : []),
+    ...(hasCursor && hasTarget ? ["cursorTarget"] : []),
+  ];
+  if (
+    Object.keys(build.outputSha256).join(",") !== expectedProfiles.join(",")
+    || !Object.values(build.outputSha256).every(isDigest)
   ) return false;
   return ENHANCEMENT_BUILDS.some((baseline) => {
     const cursor = baseline.cursorEvent;
-    return cursor !== undefined
+    const cursorMatches = !hasCursor || (
+      cursor !== undefined
+      && build.cursorEvent !== undefined
+      && isIndex(build.cursorEvent.functionIndex)
+      && isIndex(build.cursorEvent.tableSlot)
+      && build.cursorEvent.producerFunctions.length === 2
+      && build.cursorEvent.producerFunctions.every(isIndex)
+      && build.cursorEvent.producerBodySha256.length === 2
+      && build.cursorEvent.producerBodySha256.every(isDigest)
+      && Object.values(build.cursorEvent.layout).every(isIndex)
       && Object.keys(build.cursorEvent!.layout).sort().join()
         === Object.keys(cursor.layout).sort().join()
       && sameJson(build.hookParams, baseline.hookParams)
@@ -306,7 +345,37 @@ function isAutomaticCursorBuild(
       && build.cursorEvent.layout.cursorViewTexture === cursor.layout.cursorViewTexture
       && build.cursorEvent.layout.cursorTextureType === cursor.layout.cursorTextureType
       && build.cursorEvent.layout.cursorTextureWidth === cursor.layout.cursorTextureWidth
-      && build.cursorEvent.layout.cursorTextureHeight === cursor.layout.cursorTextureHeight;
+      && build.cursorEvent.layout.cursorTextureHeight === cursor.layout.cursorTextureHeight
+    );
+    const observation = baseline.observationBase?.layout;
+    const target = baseline.targetObservation?.layout;
+    const candidateObservation = build.observationBase?.layout;
+    const candidateTarget = build.targetObservation?.layout;
+    const targetMatches = !hasTarget || (
+      observation !== undefined
+      && target !== undefined
+      && candidateObservation !== undefined
+      && candidateTarget !== undefined
+      && Object.keys(candidateObservation).sort().join()
+        === Object.keys(observation).sort().join()
+      && Object.keys(candidateTarget).sort().join()
+        === Object.keys(target).sort().join()
+      && Object.values(candidateObservation).every(isIndex)
+      && Object.values(candidateTarget).every(isIndex)
+      && candidateTarget.manualTargetAgentId
+        === candidateTarget.automaticTargetAgentId + 4
+      && [
+        candidateObservation.contextRoot - observation.contextRoot,
+        candidateObservation.agentArray - observation.agentArray,
+        candidateObservation.areaInfo - observation.areaInfo,
+        candidateTarget.manualTargetAgentId - target.manualTargetAgentId,
+        candidateTarget.automaticTargetAgentId - target.automaticTargetAgentId,
+      ].every((delta, _index, deltas) => delta === deltas[0])
+      && Object.entries(observation).every(([key, expected]) =>
+        key === "contextRoot" || key === "agentArray" || key === "areaInfo"
+          || candidateObservation[key as keyof typeof candidateObservation] === expected)
+    );
+    return cursorMatches && targetMatches;
   });
 }
 
@@ -354,7 +423,7 @@ export function isLocalClientVerification(
         result.enhancementBuild,
         result.templateSaveBuild.outputSha256,
       )
-      || isAutomaticCursorBuild(
+      || isAutomaticSemanticBuild(
         result.enhancementBuild,
         result.templateSaveBuild.outputSha256,
       )
