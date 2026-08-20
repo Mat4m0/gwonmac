@@ -16,12 +16,15 @@ import {
   localActionSlashParser,
   storageConfigure,
   storageEnqueue,
+} from "./enhancement-command-transform.js";
+import {
   travelConfigure,
+  travelDrain,
   travelEnqueue,
   travelToggleTake,
-} from "./enhancement-command-transform.js";
+} from "./enhancement-travel-command-transform.js";
 import type { EnhancementTransformResolution } from "./enhancement-transform.js";
-import { TRAVEL_DESTINATIONS } from "../../shared/travel.js";
+import { TRAVEL_DESTINATIONS } from "../../shared/travel-destinations.js";
 
 const REVIEWED_TRAVEL_MAP_IDS = TRAVEL_DESTINATIONS.map(({ mapId }) => mapId);
 
@@ -156,13 +159,17 @@ export function applyFeatureContributions(
           }
         : null,
       capabilities.travelAction
-        ? {
+        ? travelDrain(
+            globalIndices.commandPending,
+            globalIndices.commandArgumentBase,
+            {
             dispatcherFunctionIndex: uiOriginalIndex ?? uiDispatcher.functionIndex,
             contextResolverFunctionIndex: travelAction.contextResolver.functionIndex,
             messageId: travelAction.messageId,
             payloadGlobalIndex: globalIndices.travelPayload,
             reviewedMapIds: REVIEWED_TRAVEL_MAP_IDS,
-          }
+            },
+          )
         : null,
     ),
   );
