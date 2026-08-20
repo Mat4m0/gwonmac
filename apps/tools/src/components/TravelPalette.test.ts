@@ -12,15 +12,17 @@ function fixture(initial: TravelShortcuts = DEFAULT_TRAVEL_SHORTCUTS) {
     shortcuts = next;
     return shortcuts;
   });
+  const traceSearch = vi.fn<TravelHost["traceSearch"]>();
   const host: TravelHost = {
     state: ref({ status: "ready", mapId: 55 }),
     unavailable: null,
     async loadShortcuts() { return shortcuts; },
     saveShortcuts,
     travel,
+    traceSearch,
   };
   const wrapper = mount(TravelPalette, { props: { host, visible: true } });
-  return { wrapper, travel, saveShortcuts };
+  return { wrapper, travel, saveShortcuts, traceSearch };
 }
 
 describe("TravelPalette", () => {
@@ -29,7 +31,7 @@ describe("TravelPalette", () => {
     await flushPromises();
 
     expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
-    expect(wrapper.text()).toContain("Start typing to search all outposts");
+    expect(wrapper.text()).toContain("Start typing to search available destinations");
     expect(wrapper.get('label[for="travel-search-input"]').text())
       .toBe("Search destinations");
     expect(wrapper.get('[aria-label="Close Travel"]').element.closest("label"))
@@ -51,6 +53,17 @@ describe("TravelPalette", () => {
       district: "international",
       districtNumber: 0,
     });
+    wrapper.unmount();
+  });
+
+  it("reports bounded search evidence when the catalogue has no match", async () => {
+    const { wrapper, traceSearch } = fixture();
+    await flushPromises();
+
+    await wrapper.get('[role="combobox"]').setValue("Ruins");
+
+    expect(traceSearch).toHaveBeenLastCalledWith("Ruins", []);
+    expect(wrapper.text()).toContain("No matching destination");
     wrapper.unmount();
   });
 

@@ -7,7 +7,7 @@
  */
 import { concat, sleb, uleb } from "../core/wasm-binary.js";
 
-export const PROFESSION_TRACE_WORDS = 30;
+export const PROFESSION_TRACE_WORDS = 32;
 
 export type ProfessionTraceGlobals = Readonly<{
   origin: number;
@@ -30,6 +30,8 @@ export type ProfessionTraceGlobals = Readonly<{
   senderFlagAfter: number;
   senderSize: number;
   senderPayload: number;
+  drainCount: number;
+  drainOpcode: number;
 }>;
 
 /** Records both raw arguments before preserving the exact profession builder. */
@@ -183,6 +185,8 @@ export function professionTraceReader(globals: ProfessionTraceGlobals): Uint8Arr
     globals.senderFlagAfter,
     globals.senderSize,
     ...Array.from({ length: 11 }, (_, index) => globals.senderPayload + index),
+    globals.drainCount,
+    globals.drainOpcode,
   ] as const;
   return concat(
     uleb(0),

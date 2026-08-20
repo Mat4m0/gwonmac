@@ -9,7 +9,7 @@
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 
-const TRACE_WORDS = 30;
+const TRACE_WORDS = 32;
 export const PROFESSION_COMMAND_TRACE_BYTES =
   TRACE_WORDS * Uint32Array.BYTES_PER_ELEMENT;
 
@@ -25,6 +25,7 @@ export function createProfessionCommandTrace(
   let lastProfessionBuilderCount = 0;
   let lastSkillBuilderCount = 0;
   let lastSenderCount = 0;
+  let lastDrainCount = 0;
   let disposed = false;
 
   Reflect.set(window, "gwProfessionCommandTrace", Object.freeze({
@@ -63,22 +64,28 @@ export function createProfessionCommandTrace(
         0,
         Math.min(11, Math.floor(senderSize / 4)),
       );
+      const drainCount = words[30]!;
+      const drainOpcode = words[31]!;
       const professionChanged = professionBuilderCount !== lastProfessionBuilderCount;
       const skillChanged = skillBuilderCount !== lastSkillBuilderCount;
       const senderChanged = senderCount !== lastSenderCount;
+      const drainChanged = drainCount !== lastDrainCount;
       if (
         schema !== 1
-        || (!professionChanged && !skillChanged && !senderChanged)
+        || (!professionChanged && !skillChanged && !senderChanged && !drainChanged)
       ) return;
       lastProfessionBuilderCount = professionBuilderCount;
       lastSkillBuilderCount = skillBuilderCount;
       lastSenderCount = senderCount;
+      lastDrainCount = drainCount;
       const observedTarget = skillChanged
         ? skillBuilderTarget
         : professionChanged
           ? professionBuilderTarget
-          : (senderPayload[1] ?? 0);
-      const target = state.party?.slots?.find(
+          : senderChanged
+            ? (senderPayload[1] ?? 0)
+            : null;
+      const target = observedTarget === null ? undefined : state.party?.slots?.find(
         (slot) => slot.occupied && slot.agentId === observedTarget,
       );
       const entry = Object.freeze({
@@ -87,7 +94,9 @@ export function createProfessionCommandTrace(
           professionBuilder: professionChanged,
           skillBuilder: skillChanged,
           sender: senderChanged,
+          drain: drainChanged,
         }),
+        drain: Object.freeze({ count: drainCount, opcode: drainOpcode }),
         professionBuilder: Object.freeze({
           count: professionBuilderCount,
           origin: professionBuilderOrigin === 1 ? "gwonmac" : "native",

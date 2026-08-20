@@ -66,6 +66,9 @@ const statusLevel = computed(() => {
 });
 
 watch(query, () => { active.value = 0; });
+watch(results, (next) => {
+  props.host.traceSearch(query.value, next.map((destination) => destination.mapId));
+});
 
 watch(() => props.visible, async (visible) => {
   if (!visible) return;
@@ -305,7 +308,7 @@ onBeforeUnmount(() => {
     </section>
 
     <p v-if="!hasQuery" class="travel-search-prompt">
-      Start typing to search all outposts.
+      Start typing to search available destinations.
     </p>
 
     <div

@@ -106,3 +106,44 @@ test("storage fails closed without a confirmed character access proof", () => {
     });
   }
 });
+
+test("storage development traces identify the live refusal without account data", () => {
+  const previousWindow = globalThis.window;
+  const previousDebug = console.debug;
+  const messages: string[] = [];
+  const eventTarget = new EventTarget();
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: eventTarget,
+  });
+  console.debug = (message?: unknown) => { messages.push(String(message)); };
+  try {
+    const controller = createStorageController(
+      () => 1,
+      () => 1,
+      512,
+      true,
+    );
+    controller.update({
+      enabled: true,
+      state: { status: "ready", xunlaiAccess: false },
+    });
+    eventTarget.dispatchEvent(new CustomEvent("gw:storage-open", {
+      cancelable: true,
+      detail: {},
+    }));
+    assert.ok(messages.some((message) =>
+      message.includes("storage.refused")
+      && message.includes('"state":"ready"')
+      && message.includes('"access":false')
+      && message.includes("cannot access Xunlai storage")
+    ));
+    controller.dispose();
+  } finally {
+    console.debug = previousDebug;
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: previousWindow,
+    });
+  }
+});

@@ -74,6 +74,32 @@ pnpm enhancements:visual -- map
 The fixture is developer-only. It must not become packaged navigation or a
 second production UI.
 
+## Live Tools feedback loop
+
+Use an unpackaged development launch when a named action behaves differently
+in the real client. Open the renderer console and keep only lines beginning
+with `[tools:dev]`. These events are bounded scalar evidence; they do not log
+character names, account data, chat, packet bytes, or Travel search text.
+
+- Xunlai emits `storage.availability`, `storage.configured`, and then either
+  `storage.queued` or `storage.refused`. A refusal includes the policy state and
+  the tri-state access result that caused the Controls fallback.
+- Team Apply first emits `command` when the renderer queues an opcode. The
+  `team command trace` then reports `drain.count` and `drain.opcode` when the
+  certified game-thread boundary consumes it. Builder and sender counters show
+  the next boundary reached. This separates queue, drain, builder, sender, and
+  observer-confirmation failures.
+- Travel emits `travel.search` with query length, token count, catalogue size,
+  result count, and bounded result map IDs. It never includes the query itself.
+  `travel.queued` or `travel.refused` then identifies the named command result.
+  A zero search result is a host-catalogue gap, not a refused ArenaNet command;
+  the current catalogue is intentionally static and is not yet exhaustive.
+
+For a report, reproduce one operation at a time and copy the lines from its
+first request through its final success, refusal, or timeout. Also record the
+visible map/outpost and whether the character should have Xunlai access. Do not
+paste the complete console or account/login screens.
+
 ## Add or change a feature
 
 For each field, observer, widget, or command:

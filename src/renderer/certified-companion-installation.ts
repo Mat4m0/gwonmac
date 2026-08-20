@@ -188,7 +188,7 @@ export async function installCertifiedCompanion(
     : null;
   const storageInstallation: StorageInstallation | null = capabilities.xunlaiAction
     ? (await import("./enhancement-storage-installation.js"))
-        .createStorageInstallation(exports, true)
+        .createStorageInstallation(exports, true, window.gwNative.init.development)
     : null;
   const travelInstallation: TravelInstallation | null = capabilities.travelAction
     ? (await import("./enhancement-travel-installation.js"))

@@ -751,6 +751,8 @@ function assembleEnhancementTransform(
         senderFlagAfter: traceGlobalBase + 17,
         senderSize: traceGlobalBase + 18,
         senderPayload: traceGlobalBase + 19,
+        drainCount: traceGlobalBase + 30,
+        drainOpcode: traceGlobalBase + 31,
       }
     : null;
 

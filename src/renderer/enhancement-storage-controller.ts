@@ -57,6 +57,7 @@ export function createStorageController(
   open: EnhancementStorageOpen,
   configure: EnhancementStorageConfigure,
   payloadPointer: number,
+  development = false,
 ): StorageController {
   let active = true;
   let availability: StorageAvailability = {
@@ -65,19 +66,40 @@ export function createStorageController(
   };
   let configuredEnabled: boolean | null = null;
   const unavailable = () => unavailableReason(active, availability);
+  const trace = (event: string, fields: Readonly<Record<string, unknown>>) => {
+    if (!development) return;
+    console.debug(`[tools:dev] storage.${event} ${JSON.stringify(fields)}`);
+  };
   const command = createStorageCommand(open, unavailable);
   const sync = () => {
     const enabled = unavailable() === null;
     if (enabled === configuredEnabled) return;
-    configure(payloadPointer, enabled ? 1 : 0);
+    const result = configure(payloadPointer, enabled ? 1 : 0);
     configuredEnabled = enabled;
+    trace("configured", {
+      enabled,
+      accepted: result === 1,
+      state: availability.state?.status ?? "missing",
+      access: availability.state?.status === "ready"
+        ? availability.state.xunlaiAccess
+        : "unknown",
+    });
   };
   const onCommand = (event: Event) => {
     if (!(event instanceof CustomEvent)) return;
     event.preventDefault();
     try {
       command.open();
+      trace("queued", { accepted: true });
     } catch (error) {
+      trace("refused", {
+        reason: error instanceof Error ? error.message : "unknown storage error",
+        enabled: availability.enabled,
+        state: availability.state?.status ?? "missing",
+        access: availability.state?.status === "ready"
+          ? availability.state.xunlaiAccess
+          : "unknown",
+      });
       if (event.detail !== null && typeof event.detail === "object") {
         (event.detail as { error?: unknown }).error = error;
       }
@@ -90,6 +112,11 @@ export function createStorageController(
     command,
     update(next: StorageAvailability) {
       availability = next;
+      trace("availability", {
+        enabled: next.enabled,
+        state: next.state?.status ?? "missing",
+        access: next.state?.status === "ready" ? next.state.xunlaiAccess : "unknown",
+      });
       sync();
     },
     dispose() {
