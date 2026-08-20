@@ -13,6 +13,7 @@
  */
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
+  enhancementCapabilityProfile,
   enhancementCapabilitiesForProfile,
   enhancementCapabilitiesRequested,
   intersectEnhancementCapabilities,
@@ -51,6 +52,7 @@ import {
   EXTENDED_MEMORY_MAX_BYTES,
   prepareExtendedMemoryArtifacts,
   type ExtendedMemoryProfile,
+  type ExtendedMemoryStructuralProof,
 } from "./extended-memory.js";
 
 /**
@@ -315,6 +317,12 @@ export async function prepareClientModule(
     wasmPath: string;
     inputSha256: string;
   }) => Promise<NativeDoubleClickBuild | null> = async () => null,
+  verifyUnknownExtendedMemory: (options: {
+    jsPath: string;
+    jsInputSha256: string;
+    wasmPath: string;
+    wasmInputSha256: string;
+  }) => Promise<ExtendedMemoryStructuralProof | null> = async () => null,
 ): Promise<PreparedClientModule> {
   const prepared = await withNativeDoubleClick(
     await prepareCertifiedChain(options),
@@ -331,8 +339,11 @@ export async function prepareClientModule(
   try {
     const extended = await prepareExtendedMemoryArtifacts(
       options.officialJsPath,
+      options.officialWasmPath,
       prepared.wasmPath,
+      enhancementCapabilityProfile(prepared.effectiveCapabilities) ?? "off",
       options.extendedMemoryCacheRoot,
+      verifyUnknownExtendedMemory,
     );
     return extended
       ? {

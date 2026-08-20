@@ -92,6 +92,7 @@ import {
 import type { GamePaths } from "./paths.js";
 import {
   verifyClientLocally,
+  verifyExtendedMemoryLocally,
   verifyNativeDoubleClickLocally,
 } from "./certification/local-client-verifier-host.js";
 import { extendedMemoryRuntimeStatus } from "./extended-memory-runtime.js";
@@ -339,7 +340,7 @@ export class ClientRuntime {
       nativeDoubleClickCacheRoot: this.options.paths.nativeDoubleClick,
       extendedMemoryCacheRoot: this.options.paths.extendedMemory,
       extendedMemoryEnabled: this.options.extendedMemoryEnabled,
-    }, verifyNativeDoubleClickLocally);
+    }, verifyNativeDoubleClickLocally, verifyExtendedMemoryLocally);
     const preparationFailed = prepared.failure?.stage === "enhancement";
     const supported = prepared.enhancementBuild
       ? supportedEnhancementCapabilities(prepared.enhancementBuild)

@@ -1,21 +1,37 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  EXTENDED_MEMORY_JS_BUILD,
+  deriveExtendedMemoryWasm,
+  EXTENDED_MEMORY_JS_PROOF,
   EXTENDED_MEMORY_MAX_BYTES,
   EXTENDED_MEMORY_MAX_PAGES,
   EXTENDED_MEMORY_PROFILES,
-  EXTENDED_MEMORY_WASM_BUILDS,
-  findExtendedMemoryWasmBuild,
+  normalizeExtendedMemoryJsForProof,
   rewriteExtendedMemoryJs,
   rewriteExtendedMemoryWasm,
 } from "../../src/main/certification/extended-memory.js";
-import { NATIVE_DOUBLE_CLICK_BUILDS } from "../../src/main/certification/native-double-click.js";
 import {
-  ENHANCEMENT_BUILDS,
-  enhancementProfilesForBuild,
-} from "../../src/main/certification/enhancement-builds.js";
+  ENHANCEMENT_CAPABILITY_PROFILES,
+} from "../../src/shared/enhancement-contracts.js";
+import {
+  concat,
+  encodeSection,
+  splitSections,
+  uleb,
+  WASM_HEADER,
+} from "../../src/main/core/wasm-binary.js";
 import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.js";
+
+function memoryModule(initial = 4_096, maximum = 32_768): Uint8Array {
+  return concat(
+    WASM_HEADER,
+    encodeSection({
+      id: 5,
+      body: concat(uleb(1), uleb(1), uleb(initial), uleb(maximum)),
+    }),
+    encodeSection({ id: 7, body: uleb(0) }),
+  );
+}
 
 describe("certified extended memory transform", () => {
   it("stops one page short of 4 GiB", () => {
@@ -23,56 +39,58 @@ describe("certified extended memory transform", () => {
     assert.equal(EXTENDED_MEMORY_MAX_BYTES, 4_294_901_760);
   });
 
-  it("certifies every post-double-click variant the production chain emits", () => {
-    const expectedProfiles = [
-      "off",
-      ...enhancementProfilesForBuild(ENHANCEMENT_BUILDS[0]!),
-    ].sort();
-    const builds = new Map<number, typeof EXTENDED_MEMORY_WASM_BUILDS[number][]>();
-    for (const build of EXTENDED_MEMORY_WASM_BUILDS) {
-      const entries = builds.get(build.buildId) ?? [];
-      entries.push(build);
-      builds.set(build.buildId, entries);
-    }
-    for (const [buildId, entries] of builds) {
-      const expected = ENHANCEMENT_BUILDS.some((build) => build.buildId === buildId)
-        ? expectedProfiles
-        : ["off"];
-      assert.deepEqual(entries.map((build) => build.profile).sort(), expected);
-    }
-    assert.deepEqual([...EXTENDED_MEMORY_PROFILES].sort(), expectedProfiles);
-    const doubleClickOutputs = new Set(
-      Object.values(NATIVE_DOUBLE_CLICK_BUILDS[0]!.derivations),
-    );
+  it("covers every valid runtime feature profile without a hash cross-product", () => {
     assert.deepEqual(
-      new Set(EXTENDED_MEMORY_WASM_BUILDS.map((build) => build.inputSha256)),
-      doubleClickOutputs,
+      [...EXTENDED_MEMORY_PROFILES].sort(),
+      ["off", ...Object.keys(ENHANCEMENT_CAPABILITY_PROFILES)].sort(),
     );
   });
 
-  it("pins unique exact inputs and outputs", () => {
-    const hashes = [
-      EXTENDED_MEMORY_JS_BUILD.inputSha256,
-      EXTENDED_MEMORY_JS_BUILD.outputSha256,
-      ...EXTENDED_MEMORY_WASM_BUILDS.flatMap((build) => [
-        build.inputSha256,
-        build.outputSha256,
-      ]),
-    ];
-    assert.equal(new Set(hashes).size, hashes.length);
-    for (const hash of hashes) assert.match(hash, /^[0-9a-f]{64}$/);
+  it("normalizes only all 59 ASM_CONSTS keys", () => {
+    const entries = Array.from({ length: 59 }, (_, index) =>
+      `  ${1000 + index}: () => ${index},  `).join("\r\n");
+    const first = `prefix\r\nvar ASM_CONSTS = {\r\n${entries}\r\n};\r\nfunction __asyncjs__tail`;
+    const relocated = first.replace(/^ {2}\d+: /gm, (entry) =>
+      entry.replace(/\d+/, (value) => String(Number(value) + 5000)));
+    assert.equal(
+      normalizeExtendedMemoryJsForProof(first),
+      normalizeExtendedMemoryJsForProof(relocated),
+    );
+    assert.equal(
+      normalizeExtendedMemoryJsForProof(first.replace("() => 12", "() => 13"))
+        === normalizeExtendedMemoryJsForProof(first),
+      false,
+    );
+    assert.match(EXTENDED_MEMORY_JS_PROOF.normalizedSha256, /^[0-9a-f]{64}$/);
   });
 
-  it("refuses unknown JavaScript and WASM before rewriting either", () => {
+  it("refuses changed JavaScript semantics and a changed memory shape", () => {
     assert.throws(
       () => rewriteExtendedMemoryJs("var getHeapMax = () => 2147483648;"),
-      /uncertified JavaScript input/,
+      /JavaScript glue semantics changed/,
     );
     assert.throws(
       () => rewriteExtendedMemoryWasm(Uint8Array.of(0, 97, 115, 109)),
-      /uncertified WASM input/,
+      /memory declaration|unexpected end|invalid/i,
     );
-    assert.equal(findExtendedMemoryWasmBuild("0".repeat(64)), null);
+    assert.throws(() => rewriteExtendedMemoryWasm(memoryModule(4_096, 32_767)));
+  });
+
+  it("changes only the sole memory maximum and validates the result", () => {
+    const input = memoryModule();
+    const output = deriveExtendedMemoryWasm(input);
+    assert.equal(WebAssembly.validate(Uint8Array.from(output)), true);
+    const before = splitSections(input);
+    const after = splitSections(output);
+    assert.equal(after.length, before.length);
+    assert.deepEqual(
+      after.filter((section) => section.id !== 5),
+      before.filter((section) => section.id !== 5),
+    );
+    assert.notDeepEqual(
+      after.find((section) => section.id === 5),
+      before.find((section) => section.id === 5),
+    );
   });
 
   it("records the effective mode and cap with a closed profile", () => {

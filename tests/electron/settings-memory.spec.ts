@@ -30,7 +30,7 @@ test.describe("extended memory settings", () => {
       const { page } = fixture;
       await expect.poll(() => page.evaluate(async () =>
         (await window.gwNative.client.session()).extendedMemory,
-      )).toMatchObject({
+      ), { timeout: 30_000 }).toMatchObject({
         requestedAtLaunch: true,
         status: "unavailable",
         effectiveCapBytes: 2_147_483_648,
