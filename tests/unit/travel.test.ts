@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   TRAVEL_DESTINATIONS,
+  TRAVEL_SEARCH_QUERY_LIMIT,
   isTravelRequest,
   isTravelShortcuts,
   searchTravelDestinations,
@@ -48,6 +49,15 @@ describe("Travel", () => {
     assert.equal(searchTravelDestinations("ac")[0]?.name, "Ascalon City");
     assert.equal(searchTravelDestinations("kama")[0]?.name, "Kamadan, Jewel of Istan");
     assert.equal(searchTravelDestinations("central transfer")[0]?.mapId, 652);
+  });
+
+  it("bounds search work before normalization or scoring", () => {
+    assert.deepEqual(
+      searchTravelDestinations("a".repeat(TRAVEL_SEARCH_QUERY_LIMIT + 1)),
+      [],
+    );
+    assert.equal(searchTravelDestinations("gate", 1).length, 1);
+    assert.equal(searchTravelDestinations("gate", 100).length <= 12, true);
   });
 
   it("keeps the numbered shortcut list bounded and typed", () => {

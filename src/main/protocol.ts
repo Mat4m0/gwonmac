@@ -75,6 +75,7 @@ const RENDERER_SHARED_MODULES = new Set([
   "keyboard-shortcuts.js",
   "profession-command-trace.js",
   "travel.js",
+  "travel-destinations.js",
   "project-identity.js",
   "proxy-routes.js",
   "release.js",

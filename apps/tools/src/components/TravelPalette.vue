@@ -9,6 +9,7 @@ import {
 } from "vue";
 import {
   TRAVEL_DISTRICTS,
+  TRAVEL_SEARCH_QUERY_LIMIT,
   isTravelRequest,
   searchTravelDestinations,
   travelDestination,
@@ -244,6 +245,7 @@ onBeforeUnmount(() => {
         :aria-expanded="results.length > 0"
         autocomplete="off"
         spellcheck="false"
+        :maxlength="TRAVEL_SEARCH_QUERY_LIMIT"
         placeholder="Travel to an outpost…"
       >
       <button
