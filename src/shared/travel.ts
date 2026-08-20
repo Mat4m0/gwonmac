@@ -54,16 +54,19 @@ export const TRAVEL_DISTRICTS: readonly TravelDistrict[] = Object.freeze([
   { id: "asia-japanese", label: "Asia Japanese", aliases: ["aj", "jp"], region: 4, language: 0 },
 ]);
 
-export type TravelRequest = Readonly<{
+/** Runtime action: live region/language are resolved on the game thread. */
+export type TravelRequest = Readonly<{ mapId: number }>;
+
+/** Released on-disk shortcut shape kept readable by Stable rollbacks. */
+export type StoredTravelShortcut = Readonly<{
   mapId: number;
   district: TravelDistrictId;
   districtNumber: number;
 }>;
 
-/** Fixed shortcut positions in the released, Stable-compatible disk shape. */
-export type TravelShortcuts = readonly (TravelRequest | null)[];
+export type StoredTravelShortcuts = readonly (StoredTravelShortcut | null)[];
 
-export const DEFAULT_TRAVEL_SHORTCUTS: TravelShortcuts = Object.freeze([
+export const DEFAULT_STORED_TRAVEL_SHORTCUTS: StoredTravelShortcuts = Object.freeze([
   { mapId: 81, district: "international", districtNumber: 0 },
   { mapId: 55, district: "international", districtNumber: 0 },
   { mapId: 449, district: "international", districtNumber: 0 },
@@ -72,24 +75,91 @@ export const DEFAULT_TRAVEL_SHORTCUTS: TravelShortcuts = Object.freeze([
   { mapId: 857, district: "international", districtNumber: 0 },
 ]);
 
+export type TravelShortcut = TravelRequest | null;
+export type TravelShortcuts = readonly [
+  TravelShortcut, TravelShortcut, TravelShortcut,
+  TravelShortcut, TravelShortcut, TravelShortcut,
+  TravelShortcut, TravelShortcut, TravelShortcut,
+];
+
+export const EMPTY_TRAVEL_SHORTCUTS: TravelShortcuts = Object.freeze([
+  null, null, null, null, null, null, null, null, null,
+]);
+
+export const DEFAULT_TRAVEL_SHORTCUTS: TravelShortcuts = Object.freeze([
+  { mapId: 81 }, { mapId: 55 }, { mapId: 449 },
+  { mapId: 194 }, { mapId: 642 }, { mapId: 857 },
+  null, null, null,
+]);
+
 export function isTravelRequest(value: unknown): value is TravelRequest {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Record<string, unknown>;
-  return Object.keys(request).every((key) =>
-    key === "mapId" || key === "district" || key === "districtNumber"
-  )
+  return Object.keys(request).length === 1
+    && Object.hasOwn(request, "mapId")
     && Number.isSafeInteger(request.mapId)
-    && travelDestination(Number(request.mapId)) !== null
-    && TRAVEL_DISTRICTS.some((district) => district.id === request.district)
-    && Number.isSafeInteger(request.districtNumber)
-    && Number(request.districtNumber) >= 0
-    && Number(request.districtNumber) <= 255;
+    && travelDestination(Number(request.mapId)) !== null;
 }
 
 export function isTravelShortcuts(value: unknown): value is TravelShortcuts {
   return Array.isArray(value)
-    && value.length <= TRAVEL_SHORTCUT_LIMIT
+    && value.length === TRAVEL_SHORTCUT_LIMIT
     && value.every((shortcut) => shortcut === null || isTravelRequest(shortcut));
+}
+
+export function isStoredTravelShortcuts(value: unknown): value is StoredTravelShortcuts {
+  return Array.isArray(value)
+    && value.length <= TRAVEL_SHORTCUT_LIMIT
+    && value.every((entry) => {
+      if (entry === null) return true;
+      if (typeof entry !== "object" || Array.isArray(entry)) return false;
+      const shortcut = entry as Record<string, unknown>;
+      return Object.keys(shortcut).length === 3
+        && Number.isSafeInteger(shortcut.mapId)
+        && travelDestination(Number(shortcut.mapId)) !== null
+        && TRAVEL_DISTRICTS.some(({ id }) => id === shortcut.district)
+        && Number.isSafeInteger(shortcut.districtNumber)
+        && Number(shortcut.districtNumber) >= 0
+        && Number(shortcut.districtNumber) <= 255;
+    });
+}
+
+export function travelShortcutsFromStored(stored: StoredTravelShortcuts): TravelShortcuts {
+  return Object.freeze(Array.from({ length: TRAVEL_SHORTCUT_LIMIT }, (_, index) => {
+    const shortcut = stored[index];
+    return shortcut ? Object.freeze({ mapId: shortcut.mapId }) : null;
+  })) as TravelShortcuts;
+}
+
+/** Preserves released district fields when a slot keeps the same map. */
+export function storeTravelShortcuts(
+  shortcuts: TravelShortcuts,
+  previous: StoredTravelShortcuts,
+): StoredTravelShortcuts {
+  return Object.freeze(shortcuts.map((shortcut, index) => {
+    if (shortcut === null) return null;
+    const existing = previous[index];
+    return existing?.mapId === shortcut.mapId
+      ? Object.freeze({ ...existing })
+      : Object.freeze({
+          mapId: shortcut.mapId,
+          district: "international" as const,
+          districtNumber: 0,
+        });
+  }));
+}
+
+export function replaceTravelShortcut(
+  shortcuts: TravelShortcuts,
+  slot: number,
+  replacement: TravelShortcut,
+): TravelShortcuts {
+  if (!Number.isInteger(slot) || slot < 0 || slot >= TRAVEL_SHORTCUT_LIMIT) {
+    throw new RangeError(`Travel shortcut slot ${slot} is outside 0–8`);
+  }
+  const next: [...TravelShortcuts] = [...shortcuts];
+  next[slot] = replacement;
+  return next;
 }
 
 export function travelDistrict(id: TravelDistrictId): TravelDistrict {

@@ -4,10 +4,13 @@ import { describe, it } from "node:test";
 import {
   TRAVEL_DESTINATIONS,
   TRAVEL_SEARCH_QUERY_LIMIT,
+  isStoredTravelShortcuts,
   isTravelRequest,
   isTravelShortcuts,
   searchTravelDestinations,
+  storeTravelShortcuts,
   travelDestination,
+  travelShortcutsFromStored,
 } from "../../src/shared/travel.js";
 
 describe("Travel", () => {
@@ -61,22 +64,33 @@ describe("Travel", () => {
   });
 
   it("keeps the numbered shortcut list bounded and typed", () => {
-    assert.equal(isTravelShortcuts([
-      { mapId: 81, district: "international", districtNumber: 0 },
-    ]), true);
+    const slots = [
+      { mapId: 81 }, null, { mapId: 642 }, null, null, null, null, null, null,
+    ];
+    assert.equal(isTravelShortcuts(slots), true);
     assert.equal(isTravelShortcuts(Array.from({ length: 10 }, () => ({
       mapId: 81,
-      district: "international",
-      districtNumber: 0,
     }))), false);
-    assert.equal(isTravelShortcuts([
-      { mapId: 81, district: "unknown", districtNumber: 0 },
-    ]), false);
-    assert.equal(isTravelShortcuts([
-      { mapId: 81, district: "international", districtNumber: 0 },
+    assert.equal(isTravelShortcuts([{ mapId: 81 }]), false);
+    assert.equal(isTravelShortcuts(slots.map((entry, index) =>
+      index === 0 && entry ? { ...entry, district: "international" } : entry
+    )), false);
+  });
+
+  it("keeps Stable-readable shortcut fields on disk while runtime stays map-only", () => {
+    const stored = [
+      { mapId: 55, district: "europe-english" as const, districtNumber: 2 },
       null,
-      { mapId: 642, district: "international", districtNumber: 0 },
-    ]), true);
+    ];
+    assert.equal(isStoredTravelShortcuts(stored), true);
+    const runtime = travelShortcutsFromStored(stored);
+    assert.deepEqual(runtime, [
+      { mapId: 55 }, null, null, null, null, null, null, null, null,
+    ]);
+    assert.deepEqual(storeTravelShortcuts(runtime, stored), [
+      { mapId: 55, district: "europe-english", districtNumber: 2 },
+      null, null, null, null, null, null, null, null,
+    ]);
   });
 
   it("resolves only catalogue map ids", () => {
@@ -84,8 +98,6 @@ describe("Travel", () => {
     assert.equal(travelDestination(2_000), null);
     assert.equal(isTravelRequest({
       mapId: 2_000,
-      district: "international",
-      districtNumber: 0,
     }), false);
   });
 });

@@ -9,6 +9,7 @@ import {
 } from "vue";
 import {
   EMPTY_TRAVEL_SHORTCUTS,
+  TRAVEL_SEARCH_QUERY_LIMIT,
   isTravelRequest,
   replaceTravelShortcut,
   searchTravelDestinations,
@@ -232,6 +233,7 @@ onBeforeUnmount(() => {
         :aria-expanded="results.length > 0"
         autocomplete="off"
         spellcheck="false"
+        :maxlength="TRAVEL_SEARCH_QUERY_LIMIT"
         placeholder="Travel to an outpost…"
       >
       <button

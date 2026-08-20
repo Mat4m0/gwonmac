@@ -1,4 +1,7 @@
-/** Travel-owned WebAssembly command builders and game-thread drain branch. */
+/**
+ * Owns Travel WebAssembly command builders.
+ * Emits the matching game-thread drain branch.
+ */
 import { concat, sleb, uleb } from "../core/wasm-binary.js";
 import { configureLocalAction } from "./enhancement-command-transform.js";
 

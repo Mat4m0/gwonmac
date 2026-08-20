@@ -7,9 +7,10 @@ import { ref, type Ref } from "vue";
 import type { GwNativeApi } from "../../../src/shared/contracts";
 import type { TravelCommand } from "../../../src/shared/travel-command";
 import {
-  copyTravelShortcuts,
   DEFAULT_TRAVEL_SHORTCUTS,
   TRAVEL_DESTINATIONS,
+  storeTravelShortcuts,
+  travelShortcutsFromStored,
   type TravelRequest,
   type TravelShortcuts,
 } from "../../../src/shared/travel";
@@ -41,10 +42,14 @@ export function createNativeTravelHost(
       return command.unavailable();
     },
     async loadShortcuts() {
-      return (await api.settings.get()).travelShortcuts;
+      return travelShortcutsFromStored((await api.settings.get()).travelShortcuts);
     },
     async saveShortcuts(shortcuts) {
-      return (await api.settings.set({ travelShortcuts: shortcuts })).travelShortcuts;
+      const current = await api.settings.get();
+      const saved = await api.settings.set({
+        travelShortcuts: storeTravelShortcuts(shortcuts, current.travelShortcuts),
+      });
+      return travelShortcutsFromStored(saved.travelShortcuts);
     },
     async travel(request) {
       try {
@@ -89,7 +94,7 @@ export function createDemoTravelHost(): TravelHost {
       return shortcuts;
     },
     async saveShortcuts(next) {
-      shortcuts = Object.freeze(copyTravelShortcuts(next));
+      shortcuts = Object.freeze([...next]);
       return shortcuts;
     },
     async travel(request) {

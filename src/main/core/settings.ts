@@ -32,16 +32,7 @@ import {
 import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
 import { isShortcutOverrides } from "../../shared/keyboard-shortcuts.js";
-import {
-  TRAVEL_SHORTCUT_LIMIT,
-  copyTravelShortcuts,
-  isTravelRecentLimit,
-  isTravelRecentMapIds,
-  isTravelRequest,
-  isTravelShortcuts,
-  isTravelSynonyms,
-  type TravelShortcuts,
-} from "../../shared/travel.js";
+import { isStoredTravelShortcuts } from "../../shared/travel.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALE_VALUES = new Set<AppSettings["renderScale"]>(RENDER_SCALES);
@@ -49,11 +40,6 @@ const DATA_STRATEGY_VALUES = new Set<AppSettings["dataStrategy"]>(DATA_STRATEGIE
 const UI_STYLE_VALUES = new Set<AppSettings["uiStyle"]>(UI_STYLES);
 const UI_FONT_VALUES = new Set<AppSettings["uiFont"]>(UI_FONTS);
 const UPDATE_TRACK_VALUES = new Set<AppSettings["updateTrack"]>(UPDATE_TRACKS);
-const LEGACY_TRAVEL_DISTRICTS = new Set([
-  "international", "america", "europe-english", "europe-french",
-  "europe-german", "europe-italian", "europe-spanish", "europe-polish",
-  "europe-russian", "asia-korean", "asia-chinese", "asia-japanese",
-]);
 
 /**
  * A whole number inside a closed range.
@@ -93,27 +79,6 @@ function asBool(v: unknown, field: string): boolean {
   return v;
 }
 
-function canonicalTravelShortcuts(value: unknown, acceptLegacy: boolean): TravelShortcuts | null {
-  if (isTravelShortcuts(value)) return copyTravelShortcuts(value);
-  if (!acceptLegacy || !Array.isArray(value) || value.length > TRAVEL_SHORTCUT_LIMIT) return null;
-  const migrated = value.map((entry): { mapId: number } | null => {
-    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return null;
-    const legacy = entry as Record<string, unknown>;
-    if (
-      Object.keys(legacy).length !== 3
-      || !LEGACY_TRAVEL_DISTRICTS.has(String(legacy.district))
-      || !Number.isSafeInteger(legacy.districtNumber)
-      || Number(legacy.districtNumber) < 0
-      || Number(legacy.districtNumber) > 255
-    ) return null;
-    const canonical = { mapId: legacy.mapId };
-    return isTravelRequest(canonical) ? canonical : null;
-  });
-  if (migrated.some((entry, index) => entry === null && value[index] !== null)) return null;
-  while (migrated.length < TRAVEL_SHORTCUT_LIMIT) migrated.push(null);
-  return isTravelShortcuts(migrated) ? copyTravelShortcuts(migrated) : null;
-}
-
 /**
  * Reject unknown types; ignore unknown fields; fill missing from defaults.
  *
@@ -123,7 +88,7 @@ function canonicalTravelShortcuts(value: unknown, acceptLegacy: boolean): Travel
  * this build does not know is refused rather than reinterpreted; `loadSettings`
  * then moves it aside intact instead of trusting a shape it cannot read.
  */
-function parseSettingsValue(raw: unknown, acceptLegacyTravel: boolean): AppSettings {
+export function parseSettings(raw: unknown): AppSettings {
   if (raw === null || raw === undefined || typeof raw !== "object" || Array.isArray(raw)) {
     throw new AppError("bad_settings", "settings must be an object");
   }
@@ -169,29 +134,12 @@ function parseSettingsValue(raw: unknown, acceptLegacyTravel: boolean): AppSetti
     out.shortcutOverrides = { ...src.shortcutOverrides };
   }
   if ("travelShortcuts" in src) {
-    const shortcuts = canonicalTravelShortcuts(src.travelShortcuts, acceptLegacyTravel);
-    if (shortcuts === null) {
+    if (!isStoredTravelShortcuts(src.travelShortcuts)) {
       throw new AppError("bad_settings", "settings.travelShortcuts has invalid destinations");
     }
-    out.travelShortcuts = shortcuts;
-  }
-  if ("travelSynonyms" in src) {
-    if (!isTravelSynonyms(src.travelSynonyms)) {
-      throw new AppError("bad_settings", "settings.travelSynonyms has invalid entries");
-    }
-    out.travelSynonyms = src.travelSynonyms.map((synonym) => ({ ...synonym }));
-  }
-  if ("travelRecentLimit" in src) {
-    if (!isTravelRecentLimit(src.travelRecentLimit)) {
-      throw new AppError("bad_settings", "settings.travelRecentLimit must be 0, 3, 5, or 10");
-    }
-    out.travelRecentLimit = src.travelRecentLimit;
-  }
-  if ("travelRecentMapIds" in src) {
-    if (!isTravelRecentMapIds(src.travelRecentMapIds)) {
-      throw new AppError("bad_settings", "settings.travelRecentMapIds has invalid destinations");
-    }
-    out.travelRecentMapIds = [...src.travelRecentMapIds];
+    out.travelShortcuts = src.travelShortcuts.map((shortcut) =>
+      shortcut === null ? null : { ...shortcut }
+    );
   }
   for (const setting of [
     "gwonmacTools",
@@ -254,13 +202,7 @@ function parseSettingsValue(raw: unknown, acceptLegacyTravel: boolean): AppSetti
     }
     out.compatibilityNoticeSeenFor = seen;
   }
-  if (out.travelRecentLimit === 0) out.travelRecentMapIds = [];
   return out;
-}
-
-/** Reads released district-bearing shortcuts and returns the current canonical shape. */
-export function parseSettings(raw: unknown): AppSettings {
-  return parseSettingsValue(raw, true);
 }
 
 export function parseSettingsPatch(raw: unknown): AppSettingsPatch {
@@ -275,14 +217,13 @@ export function parseSettingsPatch(raw: unknown): AppSettingsPatch {
       `settings patch has unknown field ${JSON.stringify(unknownKey)}`,
     );
   }
-  const parsed = parseSettingsValue(src, false);
+  const parsed = parseSettings(src);
   const patch: AppSettingsPatch = {};
   for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof AppSettings)[]) {
     if (Object.hasOwn(src, key)) {
       Object.assign(patch, { [key]: parsed[key] });
     }
   }
-  if (patch.travelRecentLimit === 0) patch.travelRecentMapIds = [];
   return patch;
 }
 
@@ -304,19 +245,11 @@ export async function loadSettings(
   } catch {
     return recoverCorruptSettings(path, onRecovered);
   }
-  let parsed: AppSettings;
   try {
-    parsed = parseSettings(raw);
+    return parseSettings(raw);
   } catch {
     return recoverCorruptSettings(path, onRecovered);
   }
-  const source = raw as Record<string, unknown>;
-  const needsTravelMigration = "travelShortcuts" in source
-    && !isTravelShortcuts(source.travelShortcuts);
-  if (needsTravelMigration) {
-    await writeAtomicJson(path, { formatVersion: SETTINGS_FORMAT, ...parsed });
-  }
-  return parsed;
 }
 
 async function recoverCorruptSettings(
@@ -366,7 +299,7 @@ async function pruneCorruptBackups(settingsPath: string): Promise<void> {
 }
 
 export async function saveSettings(path: string, value: AppSettings): Promise<AppSettings> {
-  const cleaned = parseSettingsValue(value, false);
+  const cleaned = parseSettings(value);
   await writeAtomicJson(path, { formatVersion: SETTINGS_FORMAT, ...cleaned });
   return cleaned;
 }
