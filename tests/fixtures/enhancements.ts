@@ -330,6 +330,9 @@ export const DETAIL_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("heroLevel"
 export const POLICY_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("areaInfo");
 export const PLAYER_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldProfessionStates");
 export const XUNLAI_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldPlayers");
+export const PLAYER_RECORD_INDEX = 42;
+export const PLAYER_RECORD_ADDRESS =
+  ADDRESSES.playerRecordBuffer + PLAYER_RECORD_INDEX * DETAIL.playerStride;
 export const CONFIG_WORDS = ENHANCEMENT_CONFIG_WORD_COUNT;
 export const CONFIG_BYTES = CONFIG_WORDS * 4;
 export const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
@@ -584,21 +587,21 @@ export function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
   view.setUint32(ADDRESSES.game + DETAIL.worldContext, ADDRESSES.world, true);
   view.setUint32(ADDRESSES.world + DETAIL.players, ADDRESSES.playerRecordBuffer, true);
-  view.setUint32(ADDRESSES.world + DETAIL.players + 4, 1, true);
-  view.setUint32(ADDRESSES.world + DETAIL.players + 8, 1, true);
+  view.setUint32(ADDRESSES.world + DETAIL.players + 4, 64, true);
+  view.setUint32(ADDRESSES.world + DETAIL.players + 8, PLAYER_RECORD_INDEX + 1, true);
   view.setUint32(
-    ADDRESSES.playerRecordBuffer + DETAIL.playerAgentId,
+    PLAYER_RECORD_ADDRESS + DETAIL.playerAgentId,
     7,
     true,
   );
   view.setUint32(
-    ADDRESSES.playerRecordBuffer + DETAIL.playerAccessFlags,
+    PLAYER_RECORD_ADDRESS + DETAIL.playerAccessFlags,
     0,
     true,
   );
   view.setUint32(
-    ADDRESSES.playerRecordBuffer + DETAIL.playerNumber,
-    42,
+    PLAYER_RECORD_ADDRESS + DETAIL.playerNumber,
+    PLAYER_RECORD_INDEX,
     true,
   );
   view.setUint32(ADDRESSES.partyContext + 0x54, ADDRESSES.partyInfo, true);

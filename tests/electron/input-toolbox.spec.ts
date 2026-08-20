@@ -359,7 +359,7 @@ test.describe("renderer Tools input", () => {
   test("mounts the shipped embedded Tools window and persists one library change", async () => {
     const fixture = await launchCachedClient("gw-toolbox-embedded-e2e-");
     try {
-      const { page } = fixture;
+      const { app, page } = fixture;
       await startGameInput(page);
       await page.evaluate(async () => {
         globalThis.document.getElementById("loading")?.classList.add("gone");
@@ -373,9 +373,62 @@ test.describe("renderer Tools input", () => {
             typeof import("../../src/renderer/tools-host.js")
           >,
         ]);
+        const canvas = document.getElementById("canvas");
+        if (!(canvas instanceof HTMLCanvasElement)) {
+          throw new Error("#canvas is missing");
+        }
+        document.body.dataset.storageOpens = "0";
+        document.body.dataset.canvasPressesAfterStorage = "0";
+        document.body.dataset.storageInputResets = "0";
+        document.body.dataset.storageOrder = "";
+        document.body.dataset.storageShiftDowns = "0";
+        document.body.dataset.storageShiftUps = "0";
+        const appendStorageOrder = (value: string) => {
+          document.body.dataset.storageOrder = [
+            ...(document.body.dataset.storageOrder?.split(",").filter(Boolean) ?? []),
+            value,
+          ].join(",");
+        };
+        const openStorage = () => {
+          document.body.dataset.storageOpens = String(
+            Number(document.body.dataset.storageOpens ?? "0") + 1,
+          );
+          appendStorageOrder("storage");
+        };
+        window.addEventListener("gw:input-reset", () => {
+          document.body.dataset.storageInputResets = String(
+            Number(document.body.dataset.storageInputResets ?? "0") + 1,
+          );
+          appendStorageOrder("reset");
+        });
+        window.addEventListener("gw:storage-open", (event) => {
+          event.preventDefault();
+          openStorage();
+        });
+        canvas.addEventListener("keydown", (event) => {
+          if (event.key !== "Shift") return;
+          document.body.dataset.storageShiftDowns = String(
+            Number(document.body.dataset.storageShiftDowns ?? "0") + 1,
+          );
+        });
+        canvas.addEventListener("keyup", (event) => {
+          if (event.key !== "Shift") return;
+          document.body.dataset.storageShiftUps = String(
+            Number(document.body.dataset.storageShiftUps ?? "0") + 1,
+          );
+        });
+        window.addEventListener("mousedown", (event) => {
+          if (event.target !== canvas) return;
+          document.body.dataset.canvasPressesAfterStorage = String(
+            Number(document.body.dataset.canvasPressesAfterStorage ?? "0") + 1,
+          );
+        });
         foundation.createToolboxFoundation(document.body, {
           mountTool: (host, onVisibilityChange) =>
-            toolsHost.mountToolsInto(host, onVisibilityChange, null, null, true),
+            toolsHost.mountToolsInto(host, onVisibilityChange, null, {
+              open: openStorage,
+              unavailable: () => null,
+            }, true),
         });
       });
 
@@ -445,6 +498,74 @@ test.describe("renderer Tools input", () => {
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
+
+      // The real Xunlai route closes Tools after it queues the named command.
+      // Hiding the panel must also surrender every pixel to the game: the next
+      // world press reaches the canvas instead of an invisible Tools surface.
+      await page.keyboard.press("Control+Shift+Space");
+      await expect(panel).toBeVisible();
+      await page.getByRole("button", { name: "Open Xunlai Storage" }).click();
+      await expect(page.locator("body")).toHaveAttribute("data-storage-opens", "1");
+      await expect(root).toHaveAttribute("data-open", "false");
+      await expect(panel).toBeHidden();
+      const canvasBox = await canvas.boundingBox();
+      if (!canvasBox) throw new Error("The game canvas has no bounds");
+      await page.mouse.click(canvasBox.x + canvasBox.width - 80, canvasBox.y + 120);
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-canvas-presses-after-storage",
+        "1",
+      );
+      await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
+
+      // The successful Command-Shift-C route must release Shift before it
+      // opens native storage. macOS can consume the physical release while
+      // Command is held; without this reset Guild Wars keeps Shift pressed and
+      // then refuses ordinary click-to-walk and NPC interaction.
+      await page.evaluate(() => {
+        document.body.dataset.storageOpens = "0";
+        document.body.dataset.storageInputResets = "0";
+        document.body.dataset.storageOrder = "";
+        document.body.dataset.storageShiftDowns = "0";
+        document.body.dataset.storageShiftUps = "0";
+        document.getElementById("canvas")?.focus();
+      });
+      await app.evaluate(({ BrowserWindow }) => {
+        const contents = BrowserWindow.getAllWindows()[0]?.webContents;
+        contents?.sendInputEvent({
+          type: "keyDown",
+          keyCode: "Shift",
+          modifiers: ["shift"],
+        });
+        contents?.sendInputEvent({
+          type: "keyDown",
+          keyCode: "C",
+          modifiers: ["meta", "shift"],
+        });
+        contents?.sendInputEvent({
+          type: "keyUp",
+          keyCode: "C",
+          modifiers: ["meta", "shift"],
+        });
+        // Deliberately omit Shift-up. This is the AppKit loss the production
+        // reset must contain rather than relying on a later physical event.
+      });
+      await expect(page.locator("body")).toHaveAttribute("data-storage-opens", "1");
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-storage-input-resets",
+        "1",
+      );
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-storage-order",
+        "reset,storage",
+      );
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-storage-shift-downs",
+        "1",
+      );
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-storage-shift-ups",
+        "1",
+      );
     } finally {
       await closeOffline(fixture);
     }

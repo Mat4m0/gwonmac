@@ -8,10 +8,15 @@
  * Nothing is persisted or diagnosed.
  */
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
+import {
+  PROFESSION_TRACE_PAYLOAD_WORDS,
+  PROFESSION_TRACE_SCHEMA,
+  PROFESSION_TRACE_WORD,
+  PROFESSION_TRACE_WORDS,
+} from "../shared/profession-command-trace.js";
 
-const TRACE_WORDS = 30;
 export const PROFESSION_COMMAND_TRACE_BYTES =
-  TRACE_WORDS * Uint32Array.BYTES_PER_ELEMENT;
+  PROFESSION_TRACE_WORDS * Uint32Array.BYTES_PER_ELEMENT;
 
 export type ProfessionCommandTraceReader = (pointer: number) => number;
 
@@ -25,10 +30,11 @@ export function createProfessionCommandTrace(
   let lastProfessionBuilderCount = 0;
   let lastSkillBuilderCount = 0;
   let lastSenderCount = 0;
+  let lastDrainCount = 0;
   let disposed = false;
 
   Reflect.set(window, "gwProfessionCommandTrace", Object.freeze({
-    schema: 1,
+    schema: PROFESSION_TRACE_SCHEMA,
     entries: Object.freeze([]),
   }));
 
@@ -36,49 +42,60 @@ export function createProfessionCommandTrace(
     poll(state: ToolboxObservation) {
       if (disposed) return;
       const written = read(pointer);
-      if (written !== TRACE_WORDS) {
+      if (written !== PROFESSION_TRACE_WORDS) {
         throw new Error(`team command trace wrote ${written} words`);
       }
-      const words = new Uint32Array(memory.buffer, pointer, TRACE_WORDS);
-      const schema = words[0]!;
-      const professionBuilderCount = words[1]!;
-      const professionBuilderOrigin = words[2]!;
-      const professionBuilderTarget = words[3]!;
-      const builderProfession = words[4]!;
-      const skillBuilderCount = words[5]!;
-      const skillBuilderOrigin = words[6]!;
-      const skillBuilderTarget = words[7]!;
-      const skillBuilderSkillCount = words[8]!;
-      const senderCount = words[9]!;
-      const senderOrigin = words[10]!;
-      const senderConnection = words[11]!;
-      const senderState = words[12]!;
-      const senderTransport = words[13]!;
-      const senderCursorBefore = words[14]!;
-      const senderCursorAfter = words[15]!;
-      const senderFlagBefore = words[16]!;
-      const senderFlagAfter = words[17]!;
-      const senderSize = words[18]!;
-      const senderPayload = [...words.slice(19, 30)].slice(
+      const words = new Uint32Array(memory.buffer, pointer, PROFESSION_TRACE_WORDS);
+      const at = (name: keyof typeof PROFESSION_TRACE_WORD) =>
+        words[PROFESSION_TRACE_WORD[name]]!;
+      const schema = at("schema");
+      const professionBuilderCount = at("builderCount");
+      const professionBuilderOrigin = at("builderOrigin");
+      const professionBuilderTarget = at("builderTarget");
+      const builderProfession = at("builderProfession");
+      const skillBuilderCount = at("skillBuilderCount");
+      const skillBuilderOrigin = at("skillBuilderOrigin");
+      const skillBuilderTarget = at("skillBuilderTarget");
+      const skillBuilderSkillCount = at("skillBuilderSkillCount");
+      const senderCount = at("senderCount");
+      const senderOrigin = at("senderOrigin");
+      const senderConnection = at("senderConnection");
+      const senderState = at("senderState");
+      const senderTransport = at("senderTransport");
+      const senderCursorBefore = at("senderCursorBefore");
+      const senderCursorAfter = at("senderCursorAfter");
+      const senderFlagBefore = at("senderFlagBefore");
+      const senderFlagAfter = at("senderFlagAfter");
+      const senderSize = at("senderSize");
+      const senderPayload = [...words.slice(
+        PROFESSION_TRACE_WORD.senderPayload,
+        PROFESSION_TRACE_WORD.senderPayload + PROFESSION_TRACE_PAYLOAD_WORDS,
+      )].slice(
         0,
-        Math.min(11, Math.floor(senderSize / 4)),
+        Math.min(PROFESSION_TRACE_PAYLOAD_WORDS, Math.floor(senderSize / 4)),
       );
+      const drainCount = at("drainCount");
+      const drainOpcode = at("drainOpcode");
       const professionChanged = professionBuilderCount !== lastProfessionBuilderCount;
       const skillChanged = skillBuilderCount !== lastSkillBuilderCount;
       const senderChanged = senderCount !== lastSenderCount;
+      const drainChanged = drainCount !== lastDrainCount;
       if (
-        schema !== 1
-        || (!professionChanged && !skillChanged && !senderChanged)
+        schema !== PROFESSION_TRACE_SCHEMA
+        || (!professionChanged && !skillChanged && !senderChanged && !drainChanged)
       ) return;
       lastProfessionBuilderCount = professionBuilderCount;
       lastSkillBuilderCount = skillBuilderCount;
       lastSenderCount = senderCount;
+      lastDrainCount = drainCount;
       const observedTarget = skillChanged
         ? skillBuilderTarget
         : professionChanged
           ? professionBuilderTarget
-          : (senderPayload[1] ?? 0);
-      const target = state.party?.slots?.find(
+          : senderChanged
+            ? (senderPayload[1] ?? 0)
+            : null;
+      const target = observedTarget === null ? undefined : state.party?.slots?.find(
         (slot) => slot.occupied && slot.agentId === observedTarget,
       );
       const entry = Object.freeze({
@@ -87,7 +104,9 @@ export function createProfessionCommandTrace(
           professionBuilder: professionChanged,
           skillBuilder: skillChanged,
           sender: senderChanged,
+          drain: drainChanged,
         }),
+        drain: Object.freeze({ count: drainCount, opcode: drainOpcode }),
         professionBuilder: Object.freeze({
           count: professionBuilderCount,
           origin: professionBuilderOrigin === 1 ? "gwonmac" : "native",
@@ -124,7 +143,7 @@ export function createProfessionCommandTrace(
       entries.push(entry);
       if (entries.length > 24) entries.shift();
       Reflect.set(window, "gwProfessionCommandTrace", Object.freeze({
-        schema: 1,
+        schema: PROFESSION_TRACE_SCHEMA,
         entries: Object.freeze([...entries]),
       }));
       console.info(`[tools:dev] team command trace ${JSON.stringify(entry)}`);

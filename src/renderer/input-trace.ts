@@ -69,12 +69,12 @@ const label = (record: InputTraceRecord): { text: string; tone: string } => {
     case 'press':
       return {
         tone: 'event',
-        text: `${prefix} press ${BUTTON_NAMES[record.button] ?? 'other'}`
+        text: `${prefix} press ${BUTTON_NAMES[record.button] ?? 'other'} ${record.owner}`
           + ` run=${record.detail}`
           + record.modifiers.map((modifier) => ` +${modifier}`).join(''),
       };
     case 'release':
-      return { tone: 'event', text: `${prefix} release ${BUTTON_NAMES[record.button] ?? 'other'} travel=${record.travel} remaining=${record.buttonsRemaining}` };
+      return { tone: 'event', text: `${prefix} release ${BUTTON_NAMES[record.button] ?? 'other'} ${record.owner} travel=${record.travel} remaining=${record.buttonsRemaining}` };
     case 'modifier':
       return { tone: 'event', text: `${prefix} ${record.key} ${record.down ? 'down' : 'up'}` };
     case 'double-click':

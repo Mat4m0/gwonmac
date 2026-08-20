@@ -6,8 +6,15 @@
  * copying their bounded scalar evidence into caller-owned globals.
  */
 import { concat, sleb, uleb } from "../core/wasm-binary.js";
+import {
+  PROFESSION_TRACE_PAYLOAD_WORDS,
+  PROFESSION_TRACE_SCHEMA,
+  PROFESSION_TRACE_WORD,
+  PROFESSION_TRACE_WORDS,
+  type ProfessionTraceScalar,
+} from "../../shared/profession-command-trace.js";
 
-export const PROFESSION_TRACE_WORDS = 30;
+export { PROFESSION_TRACE_WORDS } from "../../shared/profession-command-trace.js";
 
 export type ProfessionTraceGlobals = Readonly<{
   origin: number;
@@ -30,7 +37,37 @@ export type ProfessionTraceGlobals = Readonly<{
   senderFlagAfter: number;
   senderSize: number;
   senderPayload: number;
+  drainCount: number;
+  drainOpcode: number;
 }>;
+
+/** Derives every trace global from the shared word layout and one allocated base. */
+export function professionTraceGlobals(base: number): ProfessionTraceGlobals {
+  return Object.freeze({
+    origin: base + PROFESSION_TRACE_WORD.schema,
+    builderCount: base + PROFESSION_TRACE_WORD.builderCount,
+    builderOrigin: base + PROFESSION_TRACE_WORD.builderOrigin,
+    builderTarget: base + PROFESSION_TRACE_WORD.builderTarget,
+    builderProfession: base + PROFESSION_TRACE_WORD.builderProfession,
+    skillBuilderCount: base + PROFESSION_TRACE_WORD.skillBuilderCount,
+    skillBuilderOrigin: base + PROFESSION_TRACE_WORD.skillBuilderOrigin,
+    skillBuilderTarget: base + PROFESSION_TRACE_WORD.skillBuilderTarget,
+    skillBuilderSkillCount: base + PROFESSION_TRACE_WORD.skillBuilderSkillCount,
+    senderCount: base + PROFESSION_TRACE_WORD.senderCount,
+    senderOrigin: base + PROFESSION_TRACE_WORD.senderOrigin,
+    senderConnection: base + PROFESSION_TRACE_WORD.senderConnection,
+    senderState: base + PROFESSION_TRACE_WORD.senderState,
+    senderTransport: base + PROFESSION_TRACE_WORD.senderTransport,
+    senderCursorBefore: base + PROFESSION_TRACE_WORD.senderCursorBefore,
+    senderCursorAfter: base + PROFESSION_TRACE_WORD.senderCursorAfter,
+    senderFlagBefore: base + PROFESSION_TRACE_WORD.senderFlagBefore,
+    senderFlagAfter: base + PROFESSION_TRACE_WORD.senderFlagAfter,
+    senderSize: base + PROFESSION_TRACE_WORD.senderSize,
+    senderPayload: base + PROFESSION_TRACE_WORD.senderPayload,
+    drainCount: base + PROFESSION_TRACE_WORD.drainCount,
+    drainOpcode: base + PROFESSION_TRACE_WORD.drainOpcode,
+  });
+}
 
 /** Records both raw arguments before preserving the exact profession builder. */
 export function tracedProfessionBuilder(
@@ -110,7 +147,7 @@ export function tracedPacketSender(
     Uint8Array.of(0x24), uleb(globals.senderFlagBefore),
     Uint8Array.of(0x20), uleb(1),
     Uint8Array.of(0x24), uleb(globals.senderSize),
-    ...Array.from({ length: 11 }, (_, index) => concat(
+    ...Array.from({ length: PROFESSION_TRACE_PAYLOAD_WORDS }, (_, index) => concat(
       index < words ? load(index * 4) : concat(Uint8Array.of(0x41), sleb(0)),
       Uint8Array.of(0x24), uleb(globals.senderPayload + index),
     )),
@@ -162,35 +199,26 @@ export function tracedPacketSender(
 
 /** Writes one consistent trace snapshot into caller-owned scratch memory. */
 export function professionTraceReader(globals: ProfessionTraceGlobals): Uint8Array {
-  const fields = [
-    null,
-    globals.builderCount,
-    globals.builderOrigin,
-    globals.builderTarget,
-    globals.builderProfession,
-    globals.skillBuilderCount,
-    globals.skillBuilderOrigin,
-    globals.skillBuilderTarget,
-    globals.skillBuilderSkillCount,
-    globals.senderCount,
-    globals.senderOrigin,
-    globals.senderConnection,
-    globals.senderState,
-    globals.senderTransport,
-    globals.senderCursorBefore,
-    globals.senderCursorAfter,
-    globals.senderFlagBefore,
-    globals.senderFlagAfter,
-    globals.senderSize,
-    ...Array.from({ length: 11 }, (_, index) => globals.senderPayload + index),
-  ] as const;
+  const fields = Array<number | null>(PROFESSION_TRACE_WORDS).fill(null);
+  for (const [name, offset] of Object.entries(PROFESSION_TRACE_WORD)) {
+    if (name === "schema" || name === "senderPayload") continue;
+    fields[offset] = globals[name as ProfessionTraceScalar];
+  }
+  for (let index = 0; index < PROFESSION_TRACE_PAYLOAD_WORDS; index += 1) {
+    fields[PROFESSION_TRACE_WORD.senderPayload + index] = globals.senderPayload + index;
+  }
+  if (fields.some((globalIndex, index) =>
+    index !== PROFESSION_TRACE_WORD.schema && globalIndex === null
+  )) {
+    throw new Error("profession trace layout is incomplete");
+  }
   return concat(
     uleb(0),
     ...fields.map((globalIndex, index) => concat(
       Uint8Array.of(0x20), uleb(0),
-      globalIndex === null
-        ? concat(Uint8Array.of(0x41), sleb(1))
-        : concat(Uint8Array.of(0x23), uleb(globalIndex)),
+      index === PROFESSION_TRACE_WORD.schema
+        ? concat(Uint8Array.of(0x41), sleb(PROFESSION_TRACE_SCHEMA))
+        : concat(Uint8Array.of(0x23), uleb(globalIndex!)),
       Uint8Array.of(0x36), uleb(2), uleb(index * 4),
     )),
     Uint8Array.of(0x41), sleb(PROFESSION_TRACE_WORDS),

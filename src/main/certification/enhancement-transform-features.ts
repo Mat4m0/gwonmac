@@ -139,7 +139,13 @@ export function applyFeatureContributions(
       commands,
       globalIndices.commandPending,
       globalIndices.commandArgumentBase,
-      traceGlobals?.origin ?? null,
+      traceGlobals === null
+        ? null
+        : {
+            origin: traceGlobals.origin,
+            drainCount: traceGlobals.drainCount,
+            drainOpcode: traceGlobals.drainOpcode,
+          },
       capabilities.xunlaiAction
         ? {
             functionIndex: xunlaiAction.handler.functionIndex,

@@ -57,6 +57,7 @@ export function createStorageController(
   open: EnhancementStorageOpen,
   configure: EnhancementStorageConfigure,
   payloadPointer: number,
+  development = false,
 ): StorageController {
   let active = true;
   let availability: StorageAvailability = {
@@ -64,20 +65,53 @@ export function createStorageController(
     state: null,
   };
   let configuredEnabled: boolean | null = null;
+  let availabilityTraceKey: string | null = null;
+  let request = 0;
+  let previousRequestAt: number | null = null;
   const unavailable = () => unavailableReason(active, availability);
+  const trace = (event: string, fields: Readonly<Record<string, unknown>>) => {
+    if (!development) return;
+    console.debug(`[tools:dev] storage.${event} ${JSON.stringify(fields)}`);
+  };
   const command = createStorageCommand(open, unavailable);
   const sync = () => {
     const enabled = unavailable() === null;
     if (enabled === configuredEnabled) return;
-    configure(payloadPointer, enabled ? 1 : 0);
+    const result = configure(payloadPointer, enabled ? 1 : 0);
     configuredEnabled = enabled;
+    trace("configured", {
+      enabled,
+      accepted: result === 1,
+      state: availability.state?.status ?? "missing",
+      access: availability.state?.status === "ready"
+        ? availability.state.xunlaiAccess
+        : "unknown",
+    });
   };
   const onCommand = (event: Event) => {
     if (!(event instanceof CustomEvent)) return;
     event.preventDefault();
+    const requestedAt = performance.now();
+    const fields = {
+      request: ++request,
+      sincePreviousMs: previousRequestAt === null
+        ? null
+        : Math.round(requestedAt - previousRequestAt),
+      state: availability.state?.status ?? "missing",
+      access: availability.state?.status === "ready"
+        ? availability.state.xunlaiAccess
+        : "unknown",
+    } as const;
+    previousRequestAt = requestedAt;
     try {
       command.open();
+      trace("queued", { ...fields, accepted: true });
     } catch (error) {
+      trace("refused", {
+        ...fields,
+        reason: error instanceof Error ? error.message : "unknown storage error",
+        enabled: availability.enabled,
+      });
       if (event.detail !== null && typeof event.detail === "object") {
         (event.detail as { error?: unknown }).error = error;
       }
@@ -90,6 +124,16 @@ export function createStorageController(
     command,
     update(next: StorageAvailability) {
       availability = next;
+      const fields = {
+        enabled: next.enabled,
+        state: next.state?.status ?? "missing",
+        access: next.state?.status === "ready" ? next.state.xunlaiAccess : "unknown",
+      } as const;
+      const traceKey = JSON.stringify(fields);
+      if (traceKey !== availabilityTraceKey) {
+        availabilityTraceKey = traceKey;
+        trace("availability", fields);
+      }
       sync();
     },
     dispose() {

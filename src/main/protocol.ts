@@ -73,6 +73,7 @@ const RENDERER_SHARED_MODULES = new Set([
   "enhancement-config.js",
   "enhancement-contracts.js",
   "keyboard-shortcuts.js",
+  "profession-command-trace.js",
   "travel.js",
   "project-identity.js",
   "proxy-routes.js",

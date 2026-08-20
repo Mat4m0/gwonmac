@@ -38,12 +38,13 @@ export function mountTravelPalette(
   target: HTMLElement,
   options: {
     command: TravelCommand;
+    development: boolean;
     initiallyVisible?: boolean;
     onVisibilityChange?: (visible: boolean) => void;
   },
 ) {
   return mountTravel(target, {
     ...options,
-    host: createNativeTravelHost(window.gwNative, options.command),
+    host: createNativeTravelHost(window.gwNative, options.command, options.development),
   });
 }

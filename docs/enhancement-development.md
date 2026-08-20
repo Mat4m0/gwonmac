@@ -74,6 +74,52 @@ pnpm enhancements:visual -- map
 The fixture is developer-only. It must not become packaged navigation or a
 second production UI.
 
+## Live Tools feedback loop
+
+Use an unpackaged development launch when a named action behaves differently
+in the real client. Open the renderer console and keep only lines beginning
+with `[tools:dev]`. These events are bounded scalar evidence; they do not log
+character names, account data, chat, packet bytes, or Travel search text.
+
+- Xunlai emits `storage.availability`, `storage.configured`, and then either
+  `storage.queued` or `storage.refused`. A refusal includes the policy state and
+  the tri-state access result that caused the Controls fallback. The certified
+  player-record readers index their array by the live login/player number;
+  record zero is not a valid shortcut for a real character. Each request also
+  has a session-local sequence and elapsed time since the preceding request, so
+  an accidental double-open is visible without logging an account identifier.
+- Team Apply first emits `command` when the renderer queues an opcode. The
+  `team command trace` then reports `drain.count` and `drain.opcode` when the
+  certified game-thread boundary consumes it. Builder and sender counters show
+  the next boundary reached. This separates queue, drain, builder, sender, and
+  observer-confirmation failures.
+  Ordinary live publications have been observed just beyond one second, so
+  their confirmation window is two seconds. Profession and skill transitions
+  retain their feature-specific stability and retry windows.
+- Travel emits `travel.search` with query length, token count, catalogue size,
+  result count, and bounded result map IDs. It never includes the query itself.
+  `travel.queued` or `travel.refused` then identifies the named command result.
+  A zero search result is a host-catalogue gap, not a refused ArenaNet command;
+  the current catalogue is intentionally static and is not yet exhaustive.
+
+For a report, reproduce one operation at a time and copy the lines from its
+first request through its final success, refusal, or timeout. Also record the
+visible map/outpost and whether the character should have Xunlai access. Do not
+paste the complete console or account/login screens.
+
+For an input or Xunlai interaction failure, also open
+**Help → Diagnostics → Show Input Trace**. Clear it, then open Xunlai once,
+close the native storage window with Escape, click empty ground, hold both
+mouse buttons briefly, and interact with one merchant. Pause and copy the
+trace. Pointer rows name only `canvas`, `surface`, `text`, `secret`, or `other`.
+`canvas` proves the event reached Guild Wars; it does not prove the client
+accepted the world action. This distinction separates a hidden GWonMac surface
+from a stuck native game UI state without copying coordinates or UI text.
+For a keyboard shortcut, every `modifier down` must have either a matching
+`modifier up` or an `input released (command)` row before the named action.
+Command-Shift-C deliberately resets held game input before it opens Xunlai,
+because macOS can consume a physical modifier release while Command is held.
+
 ## Add or change a feature
 
 For each field, observer, widget, or command:
@@ -260,14 +306,25 @@ certified Travel action remains available. Never substitute party state or a
 guessed offset.
 
 Run `pnpm enhancements:live xunlai-storage` from a supported PvE outpost. The
-scenario records only the tri-state access result and two outcomes from the
-same named action used by the button and shortcut. Also enter `/chest`,
+scenario records only the tri-state access result and two complete action
+cycles from the same named action used by the button and shortcut. Each cycle
+opens storage, closes it with Escape, and proves that bounded two-button
+movement changes the certified player position. A queued command is not a
+semantic success. Also enter `/chest`,
 `/xunlai`, and one near miss such as `/storage`; the first two must be consumed
 locally only after access is confirmed and the near miss must remain a normal
 Guild Wars command. Check one eligible character and the known restricted
 character, then switch accounts or characters without restarting and confirm
 that access is revoked and restored. A one-gold deposit and withdrawal requires
 explicit confirmation from the person operating the client.
+
+STOP if closing storage does not immediately restore click-to-walk, two-button
+movement, and merchant interaction. The DataWindow handler consumes two account
+pane flags in addition to the character/outpost access proof. Do not infer
+those flags from access, hard-code a different payload, or call the action safe
+because the mailbox drained. A release claim needs independent proof of those
+flags and the native storage open/close lifecycle, plus the recovery cycle
+above on accounts with and without each pane.
 
 Party certification must prove the complete owned roster, player and hero
 professions, hero unlocks, behaviour, skill bars, and attributes. Proving only

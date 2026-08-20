@@ -321,7 +321,9 @@ opens its GitHub issue form immediately. GitHub issues are public.
 - Use **Show Input Trace** for keyboard, text, pointer, shortcut, or gamepad
   problems. Reproduce the problem, pause the bounded timeline, then copy it
   into the issue. It omits text, secrets, field lengths, coordinates, account
-  identifiers, and controller identifiers. Closing it discards the trace.
+  identifiers, and controller identifiers. Pointer rows say only whether the
+  click belonged to the game canvas, a GWonMac surface, a text or secret field,
+  or another element. Closing it discards the trace.
 - Holding a character, Backspace, or Delete in Guild Wars text fields follows
   the repeat delay and speed configured in macOS Keyboard settings.
 

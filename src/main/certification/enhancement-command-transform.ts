@@ -246,7 +246,11 @@ export function commandDrain(
   entries: readonly CommandEntry[],
   pendingGlobalIndex: number,
   argumentGlobalBase: number,
-  traceOriginGlobalIndex: number | null,
+  trace: Readonly<{
+    origin: number;
+    drainCount: number;
+    drainOpcode: number;
+  }> | null,
   storage: Readonly<{ functionIndex: number; payloadGlobalIndex: number }> | null,
   travel: Readonly<{
     dispatcherFunctionIndex: number;
@@ -289,20 +293,25 @@ export function commandDrain(
       Uint8Array.of(0x46, 0x04, 0x40),
       Uint8Array.of(0x41), sleb(0),
       Uint8Array.of(0x24), uleb(pendingGlobalIndex),
-      ...(traceOriginGlobalIndex === null
+      ...(trace === null
         ? []
         : [concat(
+            Uint8Array.of(0x23), uleb(trace.drainCount),
             Uint8Array.of(0x41), sleb(1),
-            Uint8Array.of(0x24), uleb(traceOriginGlobalIndex),
+            Uint8Array.of(0x6a, 0x24), uleb(trace.drainCount),
+            Uint8Array.of(0x41), sleb(entry.opcode),
+            Uint8Array.of(0x24), uleb(trace.drainOpcode),
+            Uint8Array.of(0x41), sleb(1),
+            Uint8Array.of(0x24), uleb(trace.origin),
           )]),
       ...entry.params.map((_, index) =>
         concat(Uint8Array.of(0x23), uleb(argumentGlobalBase + index))),
       Uint8Array.of(0x10), uleb(entry.functionIndex),
-      ...(traceOriginGlobalIndex === null
+      ...(trace === null
         ? []
         : [concat(
             Uint8Array.of(0x41), sleb(0),
-            Uint8Array.of(0x24), uleb(traceOriginGlobalIndex),
+            Uint8Array.of(0x24), uleb(trace.origin),
           )]),
       Uint8Array.of(0x0f, 0x0b),
     )),

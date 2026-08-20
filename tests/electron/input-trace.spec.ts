@@ -82,6 +82,20 @@ test.describe("input trace", () => {
       expect(rows[flagged - 1]).toContain("run=2");
       const afterDouble = await traceText(page);
       expect(afterDouble).toContain("run=2");
+      expect(afterDouble).toContain("press left canvas");
+
+      // A privacy-safe owner category is enough to diagnose an invisible
+      // overlay without copying selectors, labels, or coordinates.
+      await page.evaluate(() => {
+        const surface = document.createElement("button");
+        surface.type = "button";
+        surface.dataset.gwonmacSurface = "";
+        surface.dataset.testid = "trace-surface";
+        surface.style.cssText = "position:fixed;left:20px;top:20px;width:40px;height:40px";
+        document.body.append(surface);
+      });
+      await page.locator('[data-testid="trace-surface"]').click();
+      await expectTrace(page).toContain("press left surface");
 
       // The flag rides on the press itself, so a three-click run flags the
       // second press and the fourth, exactly as Windows raises its own

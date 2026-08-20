@@ -20,6 +20,7 @@ type TravelBundle = Readonly<{
     target: HTMLElement,
     options: {
       command: TravelCommand;
+      development: boolean;
       initiallyVisible?: boolean;
       onVisibilityChange?: (visible: boolean) => void;
     },
@@ -75,6 +76,7 @@ export function createTravelPalette(
         if (disposed) return;
         app = bundle.mountTravelPalette(host, {
           command,
+          development: window.gwNative.init.development,
           initiallyVisible: open,
           onVisibilityChange: (visible) => setOpen(visible),
         });

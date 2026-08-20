@@ -29,6 +29,7 @@ export interface StorageInstallation {
 export function createStorageInstallation(
   exports: WebAssembly.Exports,
   enabled: boolean,
+  development = false,
 ): StorageInstallation | null {
   if (!enabled) return null;
   const open = typeof exports.enhancement_open_storage === "function"
@@ -55,7 +56,7 @@ export function createStorageInstallation(
       configure(payloadPointer, 0);
     },
     mount() {
-      controller = createStorageController(open, configure, payloadPointer);
+      controller = createStorageController(open, configure, payloadPointer, development);
     },
     update(availability) {
       controller?.update(availability);

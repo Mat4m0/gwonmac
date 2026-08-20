@@ -14,6 +14,10 @@ import {
   intersectEnhancementCapabilities,
 } from "../../src/shared/enhancement-contracts.js";
 import {
+  PROFESSION_TRACE_SCHEMA,
+  PROFESSION_TRACE_WORDS,
+} from "../../src/shared/profession-command-trace.js";
+import {
   commandBody,
   CURSOR_ONLY,
   CURSOR_TARGET,
@@ -512,29 +516,31 @@ describe("Enhancement command transform", () => {
     const readTrace = instance.exports[build.teamApply!.professionTrace.readerExport] as
       (pointer: number) => number;
     const trace = () => {
-      assert.equal(readTrace(64), 30);
-      return [...new Uint32Array(wasmMemory.buffer, 64, 30)];
+      assert.equal(readTrace(64), PROFESSION_TRACE_WORDS);
+      return [...new Uint32Array(wasmMemory.buffer, 64, PROFESSION_TRACE_WORDS)];
     };
 
     new Uint32Array(wasmMemory.buffer, 0, 2).set([31, 38]);
     nativeSender(999, 8, 0);
     assert.deepEqual(trace(), [
-      1,
+      PROFESSION_TRACE_SCHEMA,
       0, 0, 0, 0,
       0, 0, 0, 0,
       1, 0, 999, 0, 0, 0, 0, 0, 0, 8,
       31, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0,
     ]);
 
     nativeProfession(77, 2);
     assert.deepEqual(packets, [[999, 8, 0], [999, 12, 0]]);
     assert.deepEqual([...new Uint32Array(wasmMemory.buffer, 0, 3)], [65, 77, 2]);
     assert.deepEqual(trace(), [
-      1,
+      PROFESSION_TRACE_SCHEMA,
       1, 0, 77, 2,
       0, 0, 0, 0,
       2, 0, 999, 0, 0, 0, 0, 0, 0, 12,
       65, 77, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0,
     ]);
 
     assert.equal(enqueue(65, 88, 3, 0, 0), 1);
@@ -546,22 +552,24 @@ describe("Enhancement command transform", () => {
     ]);
     assert.deepEqual([...new Uint32Array(wasmMemory.buffer, 0, 3)], [65, 88, 3]);
     assert.deepEqual(trace(), [
-      1,
+      PROFESSION_TRACE_SCHEMA,
       2, 1, 88, 3,
       0, 0, 0, 0,
       3, 1, 999, 0, 0, 0, 0, 0, 0, 12,
       65, 88, 3, 0, 0, 0, 0, 0, 0, 0, 0,
+      1, 65,
     ]);
 
     const skillWords = new Uint32Array(wasmMemory.buffer, 256, 8);
     skillWords.set([1, 2, 3, 4, 5, 6, 446, 8]);
     nativeSkill(77, 8, 256);
     assert.deepEqual(trace(), [
-      1,
+      PROFESSION_TRACE_SCHEMA,
       2, 1, 88, 3,
       1, 0, 77, 8,
       4, 0, 999, 0, 0, 0, 0, 0, 0, 44,
       93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
+      1, 65,
     ]);
     assert.equal(enqueue(93, 77, 8, 256, 0), 1);
     frame(3, 4);
@@ -569,11 +577,12 @@ describe("Enhancement command transform", () => {
       93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
     ]);
     assert.deepEqual(trace(), [
-      1,
+      PROFESSION_TRACE_SCHEMA,
       2, 1, 88, 3,
       2, 1, 77, 8,
       5, 1, 999, 0, 0, 0, 0, 0, 0, 44,
       93, 77, 8, 1, 2, 3, 4, 5, 6, 446, 8,
+      2, 93,
     ]);
   });
 

@@ -549,32 +549,38 @@ const noEvidence = async () => null;
 const acceptEvidence = () => {};
 
 async function runXunlaiStorage({ page }: AutomationContext) {
-  return page.evaluate(async () => {
-    const attempt = () => {
-      const detail: { error?: unknown } = {};
-      const event = new CustomEvent("gw:storage-open", {
-        cancelable: true,
-        detail,
-      });
-      window.dispatchEvent(event);
-      return {
-        handled: event.defaultPrevented,
-        error: detail.error instanceof Error
-          ? detail.error.message
-          : detail.error
-            ? String(detail.error)
-            : null,
-      };
-    };
-    const first = attempt();
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
+  const xunlaiAccess = await page.evaluate(
+    () => window.gwCompanionRuntime?.xunlaiAccess ?? null,
+  );
+  const attempt = () => page.evaluate(() => {
+    const detail: { error?: unknown } = {};
+    const event = new CustomEvent("gw:storage-open", {
+      cancelable: true,
+      detail,
+    });
+    window.dispatchEvent(event);
     return {
-      xunlaiAccess: window.gwCompanionRuntime?.xunlaiAccess ?? null,
-      commandOutcomes: [first, attempt()],
+      handled: event.defaultPrevented,
+      error: detail.error instanceof Error
+        ? detail.error.message
+        : detail.error
+          ? String(detail.error)
+          : null,
     };
   });
+  const commandOutcomes: Awaited<ReturnType<typeof attempt>>[] = [];
+  const recoveries: Awaited<ReturnType<typeof runMovement>>[] = [];
+  for (let cycle = 0; cycle < 2; cycle += 1) {
+    commandOutcomes.push(await attempt());
+    if (xunlaiAccess !== true) continue;
+    await page.waitForTimeout(750);
+    await page.locator("#canvas").focus();
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(250);
+    recoveries.push(await runMovement({ page }));
+  }
+  return { xunlaiAccess, commandOutcomes, recoveries };
 }
-
 
 export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
   // Reaching a playable character is itself a keypress, so the scenarios that
@@ -676,6 +682,16 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       );
       if (!outcomesMatch) {
         throw new Error("Xunlai command outcome did not match certified access");
+      }
+      if (
+        evidence.xunlaiAccess
+          ? evidence.recoveries.length !== 2
+            || evidence.recoveries.some((recovery) => !(recovery.distance > 5))
+          : evidence.recoveries.length !== 0
+      ) {
+        throw new Error(
+          "Xunlai storage did not surrender world interaction after closing",
+        );
       }
     },
   }),

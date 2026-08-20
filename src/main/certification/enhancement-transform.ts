@@ -31,6 +31,7 @@ import {
 import { applyFeatureContributions } from "./enhancement-transform-features.js";
 import {
   PROFESSION_TRACE_WORDS,
+  professionTraceGlobals,
   type ProfessionTraceGlobals,
 } from "./enhancement-command-trace-transform.js";
 import {
@@ -730,28 +731,7 @@ function assembleEnhancementTransform(
     ? allocateGlobals(PROFESSION_TRACE_WORDS)
     : 0;
   const traceGlobals: ProfessionTraceGlobals | null = capabilities.teamApply
-    ? {
-        origin: traceGlobalBase,
-        builderCount: traceGlobalBase + 1,
-        builderOrigin: traceGlobalBase + 2,
-        builderTarget: traceGlobalBase + 3,
-        builderProfession: traceGlobalBase + 4,
-        skillBuilderCount: traceGlobalBase + 5,
-        skillBuilderOrigin: traceGlobalBase + 6,
-        skillBuilderTarget: traceGlobalBase + 7,
-        skillBuilderSkillCount: traceGlobalBase + 8,
-        senderCount: traceGlobalBase + 9,
-        senderOrigin: traceGlobalBase + 10,
-        senderConnection: traceGlobalBase + 11,
-        senderState: traceGlobalBase + 12,
-        senderTransport: traceGlobalBase + 13,
-        senderCursorBefore: traceGlobalBase + 14,
-        senderCursorAfter: traceGlobalBase + 15,
-        senderFlagBefore: traceGlobalBase + 16,
-        senderFlagAfter: traceGlobalBase + 17,
-        senderSize: traceGlobalBase + 18,
-        senderPayload: traceGlobalBase + 19,
-      }
+    ? professionTraceGlobals(traceGlobalBase)
     : null;
 
   const nextTypes = [...types];
