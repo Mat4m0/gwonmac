@@ -396,13 +396,19 @@ range was `0x15a318..0x15a397`, outside every certified layout root. The
 recomputed outputs for all seven capability profiles, native double-click and
 extended memory were pinned rather than copied from build 38,797.
 
-The general review report still describes the cursor callback as unavailable:
-its broad heuristic looks for direct calls, while this callback is reached
-through the active table. Automatic cursor recovery therefore uses a separate,
-narrow proof. It requires one exported main-loop body, one callback with its
-exact signature and active table neighbourhood, and the two measured producer
-body fingerprints. Both certified builds must agree on all semantic anchors.
-Changing or duplicating any anchor rejects recovery. That original result
-authorized only the cursor. Target Distance now has a separate proof for its
-selector, bounded context and agent readers, and immutable area table. Party
-observation and actions remain exact-build-only until their own proof layers.
+The broad historic report could not locate the cursor callback because it is
+reached through the active table instead of a direct call. The shipped verifier
+now proves cursor ownership from the exported main loop, callback signature,
+active table neighbourhood, both producers, and a complete relocation ledger.
+Target Distance has a separate proof for its selector, bounded context and
+agent readers, and immutable area table.
+
+Travel, Xunlai, and chat aliases are also independent proofs. Travel requires
+the exact four-field producer, Travel message, dispatcher calls, and the
+game-thread drain. Xunlai requires three access readers, all player and area
+layout words, its fixed DataWindow handler, dispatcher, and the same proved
+drain. Chat aliases require both bounded parser comparisons, their handled
+messages, and the original dispatcher relationship; they do not inherit action
+authority from the drain. A changed or duplicated anchor disables only its
+owning capability. Party observation and Team Apply remain unavailable to an
+unknown build until their complete proof layer is present.

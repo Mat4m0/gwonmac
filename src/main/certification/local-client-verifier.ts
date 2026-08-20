@@ -17,15 +17,21 @@
  * the process boundary. Profile state is never consulted.
  */
 import { createHash } from "node:crypto";
-import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../shared/enhancement-contracts.js";
+import {
+  enhancementCapabilityProfile,
+  enhancementCapabilitiesForProfile,
+  type EnhancementCapabilities,
+} from "../../shared/enhancement-contracts.js";
 import {
   ENHANCEMENT_BUILDS,
   findEnhancementBuild,
   enhancementProfilesForBuild,
+  supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import {
   locateAutomaticCursor,
+  locateAutomaticLocalActions,
   locateAutomaticTarget,
 } from "./enhancement-structural-evidence.js";
 import { inspectEnhancementCandidate } from "./enhancement-candidate.js";
@@ -82,20 +88,28 @@ function deriveEnhancementBuild(
   const report = inspectEnhancementCandidate(templateOutput);
   if (!report.validWasm) return null;
   // A common address delta alone proves nothing. The isolated feature locators
-  // below own their complete cursor and Target evidence independently.
+  // below own their complete cursor, Target, and local-action evidence independently.
   const build = findEnhancementBuild(report.sha256);
   if (build) {
     const profile = enhancementProfilesForBuild(build)[0];
     if (!profile) return null;
-    transformEnhancementWasm(templateOutput, build, ENHANCEMENT_CAPABILITY_PROFILES[profile]);
+    const capabilities = enhancementCapabilitiesForProfile(profile);
+    if (!capabilities) return null;
+    transformEnhancementWasm(templateOutput, build, capabilities);
     return build;
   }
   const locatedCursor = locateAutomaticCursor(templateOutput, ENHANCEMENT_BUILDS);
   const locatedTarget = locateAutomaticTarget(templateOutput, ENHANCEMENT_BUILDS);
-  if ((!locatedCursor && !locatedTarget) || !report.table || report.table.max === null) {
+  const locatedLocal = locateAutomaticLocalActions(templateOutput, ENHANCEMENT_BUILDS);
+  if (
+    (!locatedCursor && !locatedTarget && !locatedLocal)
+    || !report.table || report.table.max === null
+  ) {
     return null;
   }
-  const baseline = locatedCursor?.baseline ?? locatedTarget!.baseline;
+  const baseline = locatedCursor?.baseline
+    ?? locatedTarget?.baseline
+    ?? locatedLocal!.baseline;
   const cursor = locatedCursor?.baseline.cursorEvent;
   if (locatedCursor && !cursor) return null;
   const provisional: KnownEnhancementBuild = Object.freeze({
@@ -103,10 +117,10 @@ function deriveEnhancementBuild(
     outputSha256: Object.freeze({}),
     programId: baseline.programId,
     buildId: Number.parseInt(sha256(official).slice(0, 8), 16) || 1,
-    hookFunction: (locatedCursor ?? locatedTarget)!.hookFunction,
+    hookFunction: (locatedCursor ?? locatedTarget ?? locatedLocal)!.hookFunction,
     hookParams: Object.freeze(["i32"] as const),
     hookResults: Object.freeze([] as const),
-    hookBodySha256: (locatedCursor ?? locatedTarget)!.hookBodySha256,
+    hookBodySha256: (locatedCursor ?? locatedTarget ?? locatedLocal)!.hookBodySha256,
     tableSlot: report.table.min,
     ...(locatedCursor && cursor ? {
       cursorEvent: Object.freeze({
@@ -123,24 +137,59 @@ function deriveEnhancementBuild(
         layout: locatedCursor.layout,
       }),
     } : {}),
+    ...(locatedTarget || locatedLocal?.observationLayout ? {
+      observationBase: Object.freeze({
+        layout: locatedTarget?.observationLayout ?? locatedLocal!.observationLayout!,
+      }),
+    } : {}),
     ...(locatedTarget ? {
-      observationBase: Object.freeze({ layout: locatedTarget.observationLayout }),
       targetObservation: Object.freeze({ layout: locatedTarget.targetLayout }),
     } : {}),
+    ...(locatedLocal?.uiDispatcher ? { uiDispatcher: locatedLocal.uiDispatcher } : {}),
+    ...(locatedLocal?.gameThread ? { gameThread: locatedLocal.gameThread } : {}),
+    ...(locatedLocal?.travelAction ? { travelAction: locatedLocal.travelAction } : {}),
+    ...(locatedLocal?.xunlaiAction ? { xunlaiAction: locatedLocal.xunlaiAction } : {}),
+    ...(locatedLocal?.chatAliases ? { chatAliases: locatedLocal.chatAliases } : {}),
   });
-  const profiles = [
-    ...(locatedCursor ? ["cursor" as const] : []),
-    ...(locatedTarget ? ["target" as const] : []),
-    ...(locatedCursor && locatedTarget ? ["cursorTarget" as const] : []),
-  ];
-  const outputSha256 = Object.fromEntries(profiles.map((profile) => [
-    profile,
+  const none = (): EnhancementCapabilities => ({
+    nativeCursor: false, targetObservation: false, partyObservation: false,
+    teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false,
+  });
+  const maximum: EnhancementCapabilities = Object.freeze({
+    nativeCursor: locatedCursor !== null,
+    targetObservation: locatedTarget !== null,
+    partyObservation: false,
+    teamApply: false,
+    travelAction: locatedLocal?.travelAction !== null && locatedLocal?.travelAction !== undefined,
+    xunlaiAction: locatedLocal?.xunlaiAction !== null && locatedLocal?.xunlaiAction !== undefined,
+    chatAliases: locatedLocal?.chatAliases !== null && locatedLocal?.chatAliases !== undefined,
+  });
+  const featureSets = (["nativeCursor", "targetObservation"] as const)
+    .filter((feature) => maximum[feature])
+    .map((feature) => Object.freeze({ ...none(), [feature]: true }));
+  const localBundle = Object.freeze({
+    ...none(),
+    travelAction: maximum.travelAction,
+    xunlaiAction: maximum.xunlaiAction,
+    chatAliases: maximum.chatAliases,
+  });
+  const capabilitySets = [...featureSets, localBundle, maximum].filter(
+    (capabilities, index, values) =>
+      Object.values(capabilities).some(Boolean)
+      && values.findIndex((candidate) => sameJson(candidate, capabilities)) === index,
+  );
+  const outputSha256 = Object.fromEntries(capabilitySets.map((capabilities) => {
+    const profile = enhancementCapabilityProfile(capabilities);
+    if (profile === null) throw new Error("automatic capability profile is invalid");
+    return [
+      profile,
     sha256(transformEnhancementWasm(
       templateOutput,
       provisional,
-      ENHANCEMENT_CAPABILITY_PROFILES[profile],
+        capabilities,
     )),
-  ]));
+    ];
+  }));
   return Object.freeze({
     ...provisional,
     outputSha256: Object.freeze(outputSha256),
@@ -288,11 +337,6 @@ function isAutomaticSemanticBuild(
     || !build.outputSha256
     || build.partyObservation !== undefined
     || build.teamApply !== undefined
-    || build.travelAction !== undefined
-    || build.xunlaiAction !== undefined
-    || build.chatAliases !== undefined
-    || build.gameThread !== undefined
-    || build.uiDispatcher !== undefined
     || !isIndex(build.programId)
     || !isIndex(build.buildId)
     || !isIndex(build.hookFunction)
@@ -300,18 +344,28 @@ function isAutomaticSemanticBuild(
     || !isDigest(build.hookBodySha256)
   ) return false;
   const hasCursor = build.cursorEvent !== undefined;
-  const hasTarget = build.targetObservation !== undefined
-    && build.observationBase !== undefined;
-  if (!hasCursor && !hasTarget) return false;
-  const expectedProfiles = [
-    ...(hasCursor ? ["cursor"] : []),
-    ...(hasTarget ? ["target"] : []),
-    ...(hasCursor && hasTarget ? ["cursorTarget"] : []),
-  ];
+  const hasObservation = build.observationBase !== undefined;
+  const hasTarget = build.targetObservation !== undefined;
+  const hasTravel = build.travelAction !== undefined;
+  const hasXunlai = build.xunlaiAction !== undefined;
+  const hasAliases = build.chatAliases !== undefined;
+  if (!hasCursor && !hasTarget && !hasTravel && !hasXunlai && !hasAliases) return false;
   if (
-    Object.keys(build.outputSha256).join(",") !== expectedProfiles.join(",")
+    Object.keys(build.outputSha256).length === 0
     || !Object.values(build.outputSha256).every(isDigest)
+    || (hasTarget && !hasObservation)
+    || (hasXunlai && !hasObservation)
+    || ((hasTravel || hasXunlai) && build.gameThread === undefined)
+    || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
   ) return false;
+  const supported = supportedEnhancementCapabilities(build as KnownEnhancementBuild);
+  if (!Object.keys(build.outputSha256).every((profile) => {
+    const capabilities = enhancementCapabilitiesForProfile(profile);
+    return capabilities !== null
+      && (Object.keys(capabilities) as (keyof EnhancementCapabilities)[]).every(
+        (feature) => !capabilities[feature] || supported[feature],
+      );
+  })) return false;
   return ENHANCEMENT_BUILDS.some((baseline) => {
     const cursor = baseline.cursorEvent;
     const cursorMatches = !hasCursor || (
@@ -351,31 +405,111 @@ function isAutomaticSemanticBuild(
     const target = baseline.targetObservation?.layout;
     const candidateObservation = build.observationBase?.layout;
     const candidateTarget = build.targetObservation?.layout;
-    const targetMatches = !hasTarget || (
+    const observationMatches = !hasObservation || (
       observation !== undefined
-      && target !== undefined
       && candidateObservation !== undefined
-      && candidateTarget !== undefined
       && Object.keys(candidateObservation).sort().join()
         === Object.keys(observation).sort().join()
-      && Object.keys(candidateTarget).sort().join()
-        === Object.keys(target).sort().join()
       && Object.values(candidateObservation).every(isIndex)
-      && Object.values(candidateTarget).every(isIndex)
-      && candidateTarget.manualTargetAgentId
-        === candidateTarget.automaticTargetAgentId + 4
       && [
         candidateObservation.contextRoot - observation.contextRoot,
         candidateObservation.agentArray - observation.agentArray,
         candidateObservation.areaInfo - observation.areaInfo,
-        candidateTarget.manualTargetAgentId - target.manualTargetAgentId,
-        candidateTarget.automaticTargetAgentId - target.automaticTargetAgentId,
       ].every((delta, _index, deltas) => delta === deltas[0])
       && Object.entries(observation).every(([key, expected]) =>
         key === "contextRoot" || key === "agentArray" || key === "areaInfo"
           || candidateObservation[key as keyof typeof candidateObservation] === expected)
     );
-    return cursorMatches && targetMatches;
+    const targetMatches = !hasTarget || (
+      observationMatches
+      && target !== undefined
+      && candidateTarget !== undefined
+      && candidateObservation !== undefined
+      && Object.keys(candidateTarget).sort().join()
+        === Object.keys(target).sort().join()
+      && Object.values(candidateTarget).every(isIndex)
+      && candidateTarget.manualTargetAgentId
+        === candidateTarget.automaticTargetAgentId + 4
+      && [
+        candidateTarget.manualTargetAgentId - target.manualTargetAgentId,
+        candidateTarget.automaticTargetAgentId - target.automaticTargetAgentId,
+        candidateObservation.contextRoot - observation!.contextRoot,
+      ].every((delta, _index, deltas) => delta === deltas[0])
+    );
+    const ui = baseline.uiDispatcher;
+    const gameThread = baseline.gameThread;
+    const travel = baseline.travelAction;
+    const xunlai = baseline.xunlaiAction;
+    const aliases = baseline.chatAliases;
+    const uiMatches = build.uiDispatcher === undefined || (
+      ui !== undefined
+      && isIndex(build.uiDispatcher.functionIndex)
+      && build.uiDispatcher.bodySha256 === ui.bodySha256
+      && sameJson(build.uiDispatcher.params, ui.params)
+      && sameJson(build.uiDispatcher.results, ui.results)
+      && build.uiDispatcher.playerChatMessage === ui.playerChatMessage
+      && build.uiDispatcher.hideHeroPanelMessage === ui.hideHeroPanelMessage
+      && build.uiDispatcher.showHeroPanelMessage === ui.showHeroPanelMessage
+    );
+    const gameThreadMatches = build.gameThread === undefined || (
+      gameThread !== undefined
+      && isIndex(build.gameThread.drain.functionIndex)
+      && isIndex(build.gameThread.drain.tableSlot)
+      && isDigest(build.gameThread.drain.bodySha256)
+      && sameJson(build.gameThread.drain.params, gameThread.drain.params)
+      && sameJson(build.gameThread.drain.results, gameThread.drain.results)
+    );
+    const travelMatches = !hasTravel || (
+      travel !== undefined
+      && build.travelAction !== undefined
+      && build.travelAction.enqueueExport === travel.enqueueExport
+      && build.travelAction.configureExport === travel.configureExport
+      && build.travelAction.toggleExport === travel.toggleExport
+      && build.travelAction.messageId === travel.messageId
+      && isIndex(build.travelAction.producer.functionIndex)
+      && build.travelAction.producer.bodySha256 === travel.producer.bodySha256
+      && sameJson(build.travelAction.producer.params, travel.producer.params)
+      && sameJson(build.travelAction.producer.results, travel.producer.results)
+    );
+    const readers = build.xunlaiAction?.accessProof?.readers;
+    const baselineReaders = xunlai?.accessProof?.readers;
+    const xunlaiLayout = build.xunlaiAction?.accessProof?.layout;
+    const baselineXunlaiLayout = xunlai?.accessProof?.layout;
+    const xunlaiMatches = !hasXunlai || (
+      xunlai !== undefined
+      && build.xunlaiAction !== undefined
+      && readers !== undefined
+      && baselineReaders !== undefined
+      && xunlaiLayout !== undefined
+      && baselineXunlaiLayout !== undefined
+      && build.xunlaiAction.openExport === xunlai.openExport
+      && build.xunlaiAction.configureExport === xunlai.configureExport
+      && Object.keys(readers).sort().join() === Object.keys(baselineReaders).sort().join()
+      && Object.entries(readers).every(([name, reader]) => {
+        const expected = baselineReaders[name as keyof typeof baselineReaders];
+        return expected !== undefined
+          && isIndex(reader.functionIndex)
+          && isDigest(reader.bodySha256)
+          && sameJson(reader.params, expected.params)
+          && sameJson(reader.results, expected.results);
+      })
+      && sameJson(xunlaiLayout, baselineXunlaiLayout)
+      && isIndex(build.xunlaiAction.handler.functionIndex)
+      && build.xunlaiAction.handler.bodySha256 === xunlai.handler.bodySha256
+      && sameJson(build.xunlaiAction.handler.params, xunlai.handler.params)
+      && sameJson(build.xunlaiAction.handler.results, xunlai.handler.results)
+    );
+    const aliasesMatches = !hasAliases || (
+      aliases !== undefined
+      && build.chatAliases !== undefined
+      && isIndex(build.chatAliases.parser.functionIndex)
+      && isDigest(build.chatAliases.parser.bodySha256)
+      && sameJson(build.chatAliases.parser.params, aliases.parser.params)
+      && sameJson(build.chatAliases.parser.results, aliases.parser.results)
+    );
+    return cursorMatches && observationMatches && targetMatches
+      && uiMatches && gameThreadMatches && travelMatches
+      && xunlaiMatches && aliasesMatches;
   });
 }
 

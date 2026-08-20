@@ -14,6 +14,7 @@ import { after, describe, it } from "node:test";
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
   ENHANCEMENT_TRANSFORM_ABI,
+  enhancementCapabilitiesForProfile,
   type EnhancementCapabilityProfile,
   type EnhancementCapabilities,
 } from "../../src/shared/enhancement-contracts.js";
@@ -461,7 +462,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     derived[profile] = sha256(transformEnhancementWasm(
       input,
       draft,
-      ENHANCEMENT_CAPABILITY_PROFILES[profile],
+      enhancementCapabilitiesForProfile(profile)!,
     ));
   }
   return {

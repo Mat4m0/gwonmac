@@ -3,7 +3,7 @@
  * Certificate structure and validation live in enhancement-build-model.
  */
 import {
-  hasCompleteEnhancementProfileHashes,
+  hasValidEnhancementProfileHashes,
   type KnownEnhancementBuild,
 } from "./enhancement-build-model.js";
 export * from "./enhancement-build-model.js";
@@ -474,7 +474,7 @@ export function findEnhancementBuild(
   return (
     ENHANCEMENT_BUILDS.find(
       (build) =>
-        build.sha256 === sha256 && hasCompleteEnhancementProfileHashes(build),
+        build.sha256 === sha256 && hasValidEnhancementProfileHashes(build),
     ) ?? null
   );
 }

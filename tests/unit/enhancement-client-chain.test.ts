@@ -8,7 +8,7 @@ import {
   enhancementOutputSha256,
   enhancementProfilesForBuild,
   ENHANCEMENT_BUILDS,
-  hasCompleteEnhancementProfileHashes,
+  hasValidEnhancementProfileHashes,
   supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
 } from "../../src/main/certification/enhancement-builds.js";
@@ -25,46 +25,14 @@ const NO_CAPABILITIES = Object.freeze({
 });
 describe("Enhancement client chain", () => {
   it("source-pins every executable capability profile", () => {
-    // Adding a profile costs an
-    // `outputSha256` entry and a review; this list is where that becomes
-    // unavoidable rather than incidental.
-    assert.deepEqual(Object.keys(ENHANCEMENT_CAPABILITY_PROFILES), [
-      "cursor",
-      "target",
-      "cursorTarget",
-      "party",
-      "cursorParty",
-      "targetParty",
-      "cursorTargetParty",
-      "partyCommands",
-      "cursorPartyCommands",
-      "targetPartyCommands",
-      "cursorTargetPartyCommands",
-      "storage",
-      "partyStorage",
-      "cursorPartyStorage",
-      "targetPartyStorage",
-      "cursorTargetPartyStorage",
-      "partyCommandsStorage",
-      "cursorPartyCommandsStorage",
-      "targetPartyCommandsStorage",
-      "cursorTargetPartyCommandsStorage",
-    ]);
-    assert.deepEqual(
-      Object.entries(ENHANCEMENT_CAPABILITY_PROFILES)
-        .filter(([, capabilities]) => capabilities.teamApply)
-        .map(([profile]) => profile),
-      [
-        "partyCommands",
-        "cursorPartyCommands",
-        "targetPartyCommands",
-        "cursorTargetPartyCommands",
-        "partyCommandsStorage",
-        "cursorPartyCommandsStorage",
-        "targetPartyCommandsStorage",
-        "cursorTargetPartyCommandsStorage",
-      ],
-    );
+    const profiles = Object.entries(ENHANCEMENT_CAPABILITY_PROFILES);
+    // Seven independent booleans have 127 non-empty combinations. The only
+    // invalid 32 are Team Apply without its required Party observation.
+    assert.equal(profiles.length, 95);
+    assert.equal(new Set(profiles.map(([, value]) => JSON.stringify(value))).size, 95);
+    const teamProfiles = profiles.filter(([, capabilities]) => capabilities.teamApply);
+    assert.equal(teamProfiles.length, 32);
+    assert.ok(teamProfiles.every(([, capabilities]) => capabilities.partyObservation));
     for (const [profile, capabilities] of Object.entries(
       ENHANCEMENT_CAPABILITY_PROFILES,
     )) {
@@ -114,7 +82,7 @@ describe("Enhancement client chain", () => {
 
   it("requires all and only the hashes implied by optional capability facts", () => {
     const full = ENHANCEMENT_BUILDS[0]!;
-    assert.equal(hasCompleteEnhancementProfileHashes(full), true);
+    assert.equal(hasValidEnhancementProfileHashes(full), true);
 
     const cursorOnly: KnownEnhancementBuild = {
       ...full,
@@ -128,7 +96,7 @@ describe("Enhancement client chain", () => {
     delete cursorOnly.travelAction;
     delete cursorOnly.chatAliases;
     assert.deepEqual(enhancementProfilesForBuild(cursorOnly), ["cursor"]);
-    assert.equal(hasCompleteEnhancementProfileHashes(cursorOnly), true);
+    assert.equal(hasValidEnhancementProfileHashes(cursorOnly), true);
 
     const partyOnly: KnownEnhancementBuild = {
       ...full,
@@ -142,12 +110,12 @@ describe("Enhancement client chain", () => {
     delete partyOnly.travelAction;
     delete partyOnly.chatAliases;
     assert.deepEqual(enhancementProfilesForBuild(partyOnly), ["party"]);
-    assert.equal(hasCompleteEnhancementProfileHashes(partyOnly), true);
+    assert.equal(hasValidEnhancementProfileHashes(partyOnly), true);
 
     const missingObservationBase = { ...partyOnly };
     delete missingObservationBase.observationBase;
     assert.equal(
-      hasCompleteEnhancementProfileHashes(missingObservationBase),
+      hasValidEnhancementProfileHashes(missingObservationBase),
       false,
       "party facts require their shared observation base",
     );
@@ -155,7 +123,7 @@ describe("Enhancement client chain", () => {
     const missingPartyDispatcher = { ...partyOnly };
     delete missingPartyDispatcher.uiDispatcher;
     assert.equal(
-      hasCompleteEnhancementProfileHashes(missingPartyDispatcher),
+      hasValidEnhancementProfileHashes(missingPartyDispatcher),
       false,
       "party facts require their shared UI dispatcher",
     );
@@ -178,7 +146,7 @@ describe("Enhancement client chain", () => {
       xunlaiAction: prooflessXunlai,
     };
     assert.equal(
-      hasCompleteEnhancementProfileHashes(storageWithoutAccessProof),
+      hasValidEnhancementProfileHashes(storageWithoutAccessProof),
       false,
       "a legacy bundled output cannot claim the missing Xunlai proof",
     );
@@ -209,13 +177,13 @@ describe("Enhancement client chain", () => {
       },
     };
     assert.equal(
-      hasCompleteEnhancementProfileHashes(storageWithDuplicateReaders),
+      hasValidEnhancementProfileHashes(storageWithDuplicateReaders),
       false,
       "storage requires three independent player-record readers",
     );
 
     assert.equal(
-      hasCompleteEnhancementProfileHashes({
+      hasValidEnhancementProfileHashes({
         ...cursorOnly,
         outputSha256: Object.freeze({}),
       }),
@@ -223,7 +191,7 @@ describe("Enhancement client chain", () => {
       "a supported profile cannot omit its output hash",
     );
     assert.equal(
-      hasCompleteEnhancementProfileHashes({
+      hasValidEnhancementProfileHashes({
         ...cursorOnly,
         outputSha256: Object.freeze({
           cursor: full.outputSha256.cursor!,
@@ -234,7 +202,7 @@ describe("Enhancement client chain", () => {
       "an unsupported profile cannot retain an output hash",
     );
     assert.equal(
-      hasCompleteEnhancementProfileHashes({
+      hasValidEnhancementProfileHashes({
         ...cursorOnly,
         outputSha256: Object.freeze({ cursor: "not-a-digest" }),
       }),
@@ -244,7 +212,7 @@ describe("Enhancement client chain", () => {
     const commonOnly = { ...cursorOnly };
     delete commonOnly.cursorEvent;
     assert.equal(
-      hasCompleteEnhancementProfileHashes({
+      hasValidEnhancementProfileHashes({
         ...commonOnly,
         outputSha256: Object.freeze({}),
       }),

@@ -11,8 +11,10 @@ import {
   rewriteExtendedMemoryWasm,
 } from "../../src/main/certification/extended-memory.js";
 import { NATIVE_DOUBLE_CLICK_BUILDS } from "../../src/main/certification/native-double-click.js";
-import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
-import { ENHANCEMENT_CAPABILITY_PROFILES } from "../../src/shared/enhancement-contracts.js";
+import {
+  ENHANCEMENT_BUILDS,
+  enhancementProfilesForBuild,
+} from "../../src/main/certification/enhancement-builds.js";
 import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.js";
 
 describe("certified extended memory transform", () => {
@@ -24,7 +26,7 @@ describe("certified extended memory transform", () => {
   it("certifies every post-double-click variant the production chain emits", () => {
     const expectedProfiles = [
       "off",
-      ...Object.keys(ENHANCEMENT_CAPABILITY_PROFILES),
+      ...enhancementProfilesForBuild(ENHANCEMENT_BUILDS[0]!),
     ].sort();
     const builds = new Map<number, typeof EXTENDED_MEMORY_WASM_BUILDS[number][]>();
     for (const build of EXTENDED_MEMORY_WASM_BUILDS) {
