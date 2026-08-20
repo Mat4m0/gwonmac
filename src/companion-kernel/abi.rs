@@ -15,18 +15,24 @@ use core::mem::size_of;
 pub(crate) const SNAPSHOT_BYTES: u32 = size_of::<Snapshot>() as u32;
 pub(crate) const CONFIG_BYTES: u32 = size_of::<Layout>() as u32;
 pub(crate) const MAGIC: u32 = 0x4254_5747;
-pub(crate) const ABI_AND_SIZE: u32 = (SNAPSHOT_BYTES << 16) | 2;
+pub(crate) const ABI_AND_SIZE: u32 = (SNAPSHOT_BYTES << 16) | 3;
 
 pub(crate) const FLAG_READY: u32 = 1 << 0;
 pub(crate) const FLAG_PLAYER_VALID: u32 = 1 << 1;
 pub(crate) const FLAG_TARGET_VALID: u32 = 1 << 2;
 pub(crate) const FLAG_LOADING: u32 = 1 << 3;
+/// The player-record and map walk completed without a contradiction.
+pub(crate) const FLAG_XUNLAI_ACCESS_OBSERVED: u32 = 1 << 4;
+/// Storage access is positively allowed. Meaningful only with the observed bit.
+pub(crate) const FLAG_XUNLAI_ACCESS_ALLOWED: u32 = 1 << 5;
 
 pub(crate) const FEATURE_NATIVE_CURSOR: u32 = 1 << 0;
-pub(crate) const FEATURE_TARGET_READOUT: u32 = 1 << 1;
+pub(crate) const FEATURE_GAME_SNAPSHOT: u32 = 1 << 1;
 pub(crate) const FEATURE_TOOLBOX_FOUNDATION: u32 = 1 << 2;
+pub(crate) const FEATURE_TARGET_OBSERVATION: u32 = 1 << 3;
 pub(crate) const KNOWN_FEATURES: u32 =
-    FEATURE_NATIVE_CURSOR | FEATURE_TARGET_READOUT | FEATURE_TOOLBOX_FOUNDATION;
+    FEATURE_NATIVE_CURSOR | FEATURE_GAME_SNAPSHOT | FEATURE_TOOLBOX_FOUNDATION
+        | FEATURE_TARGET_OBSERVATION;
 
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
 pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
@@ -221,6 +227,13 @@ pub(crate) struct Layout {
     pub(crate) world_profession_states: u32,
     pub(crate) profession_state_stride: u32,
     pub(crate) world_character_skills: u32,
+    // Appended build-certified facts used only by the Xunlai access proof.
+    pub(crate) world_players: u32,
+    pub(crate) player_record_stride: u32,
+    pub(crate) player_record_agent_id: u32,
+    pub(crate) player_record_access_flags: u32,
+    pub(crate) player_record_number: u32,
+    pub(crate) area_info_type: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -306,6 +319,12 @@ impl Layout {
         world_profession_states: 0,
         profession_state_stride: 0,
         world_character_skills: 0,
+        world_players: 0,
+        player_record_stride: 0,
+        player_record_agent_id: 0,
+        player_record_access_flags: 0,
+        player_record_number: 0,
+        area_info_type: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -429,7 +448,7 @@ pub(crate) struct PartySnapshot {
     pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 360] = [(); size_of::<Layout>()];
+const _: [(); 384] = [(); size_of::<Layout>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
 const _: [(); 1560] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];

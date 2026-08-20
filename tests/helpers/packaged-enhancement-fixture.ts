@@ -182,6 +182,7 @@ export const DEVELOPER_RUNTIME_KEYS = Object.freeze([
   "status",
   "toolbox",
   "wasmMemoryBytes",
+  "xunlaiAccess",
 ]);
 export const PRODUCT_RUNTIME_KEYS = Object.freeze([
   ...DEVELOPER_RUNTIME_KEYS,
@@ -255,15 +256,15 @@ export function installableManifestModule(
         existingTableSlot: ENHANCEMENT_BUILD.cursorEvent!.tableSlot,
       } : null,
       ui: hooks.ui ? {
-        functionIndex: ENHANCEMENT_BUILD.partyObservation!.functionIndex,
-        params: ENHANCEMENT_BUILD.partyObservation!.params,
-        results: ENHANCEMENT_BUILD.partyObservation!.results,
+        functionIndex: ENHANCEMENT_BUILD.uiDispatcher!.functionIndex,
+        params: ENHANCEMENT_BUILD.uiDispatcher!.params,
+        results: ENHANCEMENT_BUILD.uiDispatcher!.results,
       } : null,
     },
     messages: hooks.ui ? {
-      playerChat: ENHANCEMENT_BUILD.partyObservation!.playerChatMessage,
-      hideHeroPanel: ENHANCEMENT_BUILD.partyObservation!.hideHeroPanelMessage,
-      showHeroPanel: ENHANCEMENT_BUILD.partyObservation!.showHeroPanelMessage,
+      playerChat: ENHANCEMENT_BUILD.uiDispatcher!.playerChatMessage,
+      hideHeroPanel: ENHANCEMENT_BUILD.uiDispatcher!.hideHeroPanelMessage,
+      showHeroPanel: ENHANCEMENT_BUILD.uiDispatcher!.showHeroPanelMessage,
       partyDirty: ENHANCEMENT_BUILD.partyObservation!.partyDirtyMessages,
     } : null,
     configWords: enhancementConfigWords(ENHANCEMENT_BUILD, capabilities),

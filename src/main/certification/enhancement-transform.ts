@@ -177,6 +177,7 @@ function buildManifestSection(
   const selectedHooks = enhancementHooksFor(capabilities);
   const cursorEvent = build.cursorEvent;
   const partyObservation = build.partyObservation;
+  const uiDispatcher = build.uiDispatcher;
   const configWords = enhancementConfigWords(build, capabilities);
   const json = new TextEncoder().encode(
     JSON.stringify({
@@ -203,17 +204,17 @@ function buildManifestSection(
           : null,
         ui: selectedHooks.ui
           ? {
-              functionIndex: partyObservation!.functionIndex,
-              params: partyObservation!.params,
-              results: partyObservation!.results,
+              functionIndex: uiDispatcher!.functionIndex,
+              params: uiDispatcher!.params,
+              results: uiDispatcher!.results,
             }
           : null,
       },
       messages: selectedHooks.ui
           ? {
-            playerChat: partyObservation!.playerChatMessage,
-            hideHeroPanel: partyObservation!.hideHeroPanelMessage,
-            showHeroPanel: partyObservation!.showHeroPanelMessage,
+            playerChat: uiDispatcher!.playerChatMessage,
+            hideHeroPanel: uiDispatcher!.hideHeroPanelMessage,
+            showHeroPanel: uiDispatcher!.showHeroPanelMessage,
             partyDirty: partyObservation!.partyDirtyMessages,
           }
         : null,
@@ -284,7 +285,7 @@ export function transformEnhancementWasm(
     fail("capability facts are not certified for this build");
   }
   const cursorEvent = build.cursorEvent!;
-  const partyObservation = build.partyObservation!;
+  const uiDispatcher = build.uiDispatcher!;
   const gameThread = build.gameThread!;
   const teamApply = build.teamApply!;
   const storage = build.storage!;
@@ -343,14 +344,17 @@ export function transformEnhancementWasm(
       dispatchKind: DISPATCH_CURSOR,
     });
   }
+  const uiDispatcherHook = selectedHooks.ui || capabilities.storage
+    ? resolveHook(
+        "UI dispatcher",
+        uiDispatcher.functionIndex,
+        uiDispatcher.params,
+        uiDispatcher.results,
+      )
+    : null;
   if (selectedHooks.ui) {
     selected.push({
-      ...resolveHook(
-        "UI dispatcher",
-        partyObservation.functionIndex,
-        partyObservation.params,
-        partyObservation.results,
-      ),
+      ...uiDispatcherHook!,
       dispatchKind: DISPATCH_UI,
     });
   }
@@ -361,6 +365,12 @@ export function transformEnhancementWasm(
   };
   if (bodyHash(build.hookFunction) !== build.hookBodySha256) {
     fail("tick body does not match its semantic fingerprint");
+  }
+  if (
+    uiDispatcherHook
+    && bodyHash(uiDispatcher.functionIndex) !== uiDispatcher.bodySha256
+  ) {
+    fail("UI dispatcher body does not match its semantic fingerprint");
   }
   if (selectedHooks.cursor) {
     if (bodyHash(cursorEvent.functionIndex) !== cursorEvent.bodySha256) {
@@ -452,6 +462,19 @@ export function transformEnhancementWasm(
       !== storage.handler.bodySha256
   ) {
     fail("DataWindow handler body does not match its semantic fingerprint");
+  }
+  if (capabilities.storage && storage.accessProof) {
+    for (const [fact, reader] of Object.entries(storage.accessProof.readers)) {
+      resolveHook(
+        `${fact} reader`,
+        reader.functionIndex,
+        reader.params,
+        reader.results,
+      );
+      if (bodyHash(reader.functionIndex) !== reader.bodySha256) {
+        fail(`${fact} reader body does not match its semantic fingerprint`);
+      }
+    }
   }
   const storageSlashParserHook = capabilities.storage
     ? resolveHook(
@@ -553,6 +576,10 @@ export function transformEnhancementWasm(
     ...(travelProducer ? [{
       name: "travel payload producer",
       functionIndex: travelProducer.localIndex + importCount,
+    }] : []),
+    ...(capabilities.storage && !selectedHooks.ui ? [{
+      name: "Travel UI dispatcher",
+      functionIndex: uiDispatcherHook!.localIndex + importCount,
     }] : []),
   ];
   const roleByFunction = new Map<number, string>();
@@ -763,7 +790,8 @@ export function transformEnhancementWasm(
           : null,
         capabilities.storage
           ? {
-              dispatcherFunctionIndex: uiOriginalIndex!,
+              dispatcherFunctionIndex:
+                uiOriginalIndex ?? uiDispatcher.functionIndex,
               messageId: storage.travel.messageId,
               payloadGlobalIndex: travelPayloadGlobalIndex,
             }

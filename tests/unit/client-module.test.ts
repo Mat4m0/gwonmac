@@ -227,6 +227,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       cursorPartyCommandsStorage: "0".repeat(64),
       targetPartyCommandsStorage: "0".repeat(64),
       cursorTargetPartyCommandsStorage: "0".repeat(64),
+      storage: "0".repeat(64),
     }),
     programId: 1,
     buildId: 1,
@@ -240,6 +241,9 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       characterContext: 4, mapId: 5, isExplorable: 6,
       currentMapId: 7, currentInstanceType: 8, playerNumber: 9,
       agentId: 10, agentPlayerNumber: 14, agentModelType: 15,
+      agentX: 11, agentY: 12, agentType: 13,
+      worldContext: 46, areaInfo: 72, areaInfoCount: 73,
+      areaInfoStride: 74, areaInfoFlags: 75,
     } },
     storage: {
         openExport: "enhancement_open_storage",
@@ -341,15 +345,17 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     },
     targetObservation: { layout: {
       manualTargetAgentId: 3, automaticTargetAgentId: 4,
-      agentX: 11, agentY: 12, agentType: 13,
     } },
-    partyObservation: {
+    uiDispatcher: {
       functionIndex: 5,
       params: ["i32", "i32", "i32"],
       results: [],
+      bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[4]!),
       playerChatMessage: 0x1000_0082,
       hideHeroPanelMessage: 0x1000_01a3,
       showHeroPanelMessage: 0x1000_01a4,
+    },
+    partyObservation: {
       partyDirtyMessages: [
         0x1000_0038,
         0x1000_0039,
@@ -380,7 +386,6 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       partyFlag: 45,
       accountContext: 78,
       accountUnlockedSkills: 79,
-      worldContext: 46,
       worldHeroFlags: 47,
       heroFlagStride: 48,
       flagHeroId: 49,
@@ -408,10 +413,6 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       attributeEntryStride: 69,
       attributeEntryId: 70,
       attributeEntryRank: 71,
-      areaInfo: 72,
-      areaInfoCount: 73,
-      areaInfoStride: 74,
-      areaInfoFlags: 75,
       worldProfessionStates: 76,
       professionStateStride: 77,
       worldCharacterSkills: 80,

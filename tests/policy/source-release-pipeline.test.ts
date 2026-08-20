@@ -491,6 +491,14 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   assert.match(verification, /run: pnpm verify:runtime/);
   assert.match(
     verification,
+    /base-ref: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.repository\.default_branch \}\}/,
+  );
+  assert.match(
+    verification,
+    /head-ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| inputs\.checkout-ref \|\| github\.sha \}\}/,
+  );
+  assert.match(
+    verification,
     /if: inputs\.artifact-name != ''\n {8}run: pnpm package:built && pnpm test:packaged/,
   );
   assert.match(verification, /codesign --verify --deep --strict/);

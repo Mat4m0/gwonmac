@@ -1,17 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStorageController } from "../../src/renderer/enhancement-storage-controller.js";
-import type { ToolboxObservation } from "../../src/shared/builds/live-party.js";
+import {
+  createStorageController,
+  type StorageGameState,
+} from "../../src/renderer/enhancement-storage-controller.js";
 
-const readyObservation: ToolboxObservation = {
+const accessible = {
   status: "ready",
-  party: {
-    status: "ready",
-    playRegion: "pve",
-    inOutpost: true,
-    slots: [],
-  },
-};
+  xunlaiAccess: true,
+} satisfies StorageGameState;
 
 test("the storage controller owns policy, events, deduplication, and teardown", () => {
   const previousWindow = globalThis.window;
@@ -35,13 +32,11 @@ test("the storage controller owns policy, events, deduplication, and teardown", 
 
     controller.update({
       enabled: true,
-      playRegion: "pve",
-      observation: readyObservation,
+      state: accessible,
     });
     controller.update({
       enabled: true,
-      playRegion: "pve",
-      observation: readyObservation,
+      state: accessible,
     });
     assert.deepEqual(configurations, [[256, 0], [256, 1]]);
 
@@ -52,8 +47,7 @@ test("the storage controller owns policy, events, deduplication, and teardown", 
 
     controller.update({
       enabled: false,
-      playRegion: "pve",
-      observation: readyObservation,
+      state: accessible,
     });
     const refusedDetail: { error?: Error } = {};
     const refused = new CustomEvent("gw:storage-open", {
@@ -69,6 +63,42 @@ test("the storage controller owns policy, events, deduplication, and teardown", 
     const afterDispose = new CustomEvent("gw:storage-open", { cancelable: true, detail: {} });
     eventTarget.dispatchEvent(afterDispose);
     assert.equal(afterDispose.defaultPrevented, false);
+  } finally {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: previousWindow,
+    });
+  }
+});
+
+test("storage fails closed without a confirmed character access proof", () => {
+  const previousWindow = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: new EventTarget(),
+  });
+  try {
+    const configurations: number[][] = [];
+    const controller = createStorageController(
+      () => 1,
+      (pointer, enabled) => { configurations.push([pointer, enabled]); return 1; },
+      512,
+    );
+    for (const state of [
+      null,
+      { status: "waiting" as const },
+      { status: "ready" as const, xunlaiAccess: null },
+      { status: "ready" as const, xunlaiAccess: false },
+    ]) controller.update({ enabled: true, state });
+    assert.deepEqual(configurations, [[512, 0]]);
+
+    controller.update({ enabled: true, state: accessible });
+    controller.update({
+      enabled: true,
+      state: { ...accessible, xunlaiAccess: false },
+    });
+    assert.deepEqual(configurations, [[512, 0], [512, 1], [512, 0]]);
+    controller.dispose();
   } finally {
     Object.defineProperty(globalThis, "window", {
       configurable: true,

@@ -185,6 +185,14 @@ torn reads. Snapshots contain scalar values and no pointers. No per-frame memory
 view crosses preload or IPC. Domain modules own decoding and presentation;
 `certified-companion-installation.ts` owns only installation and teardown.
 
+The snapshot publishes Xunlai access as a tri-state value. `true` means the
+snapshot confirmed PvE, a non-guild-hall outpost, the current player's matching
+record, and a clear access-denied flag. `false` means a fresh observation
+confirmed an ineligible region, map, or player record. `null` means the proof is
+missing, loading, contradictory, or stale. The storage gate uses this game
+snapshot directly. A storage-only profile allocates no party observer or party
+buffers, so a missing or broken roster cannot enable or disable storage.
+
 Do not add a generic hook registry, plugin loader, raw memory API, arbitrary
 function call, shared-memory packet bus, or second game model.
 
@@ -201,8 +209,15 @@ The same named storage action backs the Tools button and Command-Shift-C. It
 queues a fixed `{ agent: 0, type: 0, data: 3 }` DataWindow payload, then calls
 the certified client DataWindow handler at the existing game-thread drain. It
 does not send that payload to ArenaNet. The action is enabled only with its
-separate Tools setting in a positively classified PvE outpost and is cancelled when that policy
-changes.
+separate Tools setting and a fresh snapshot that proves the current player is
+in a supported PvE outpost and can access storage. Every snapshot update
+resynchronizes the action, so loading, character, account, and map transitions
+revoke stale access immediately.
+
+The player-record access proof is an optional, all-or-nothing part of the exact
+build certificate. If it is absent, its six configuration words are zero and
+the kernel can publish only `null` for Xunlai. The local-action profile and its
+certified Travel dispatcher remain usable; no party-state fallback is allowed.
 
 Travel accepts only four bounded scalar values: map, region, language, and
 district. The exact `/tp` command sets one named, one-shot palette toggle that
@@ -236,10 +251,13 @@ exact facts in an application release.
 The carry-forward report has separate **Apply team** and **local actions**
 rows. A changed Team Apply builder must not block local-action recertification,
 and a changed slash parser, DataWindow handler, or Travel producer must not
-block Team Apply. For storage, confirm both exact aliases are consumed, a near
-miss still reaches the normal parser, the fixed DataWindow payload runs at the
-certified drain, and `pnpm enhancements:live xunlai-storage` opens the normal
-window in a PvE outpost. For Travel, confirm `/tp` is consumed only while
+block Team Apply. For storage, independently certify the exact player-record
+array, stride, agent identifier, player number, access flags, and area type.
+Confirm both exact aliases are consumed only after the snapshot proves access,
+a near miss still reaches the normal parser, the fixed DataWindow payload runs
+at the certified drain, and `pnpm enhancements:live xunlai-storage` opens the
+normal window only for an eligible character in a PvE outpost. For Travel,
+confirm `/tp` is consumed only while
 Travel is enabled and its one-shot toggle reaches the palette. Confirm the
 producer still writes `{ map, region, language, district }` and sends `kTravel`.
 Then perform one bounded live trip to an unlocked outpost.

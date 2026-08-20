@@ -30,10 +30,11 @@ import {
 } from "./packaged-enhancement-fixture.ts";
 
 async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
-  return page.evaluate(async ({ bytes, tableSize, capabilities }: {
+  return page.evaluate(async ({ bytes, tableSize, capabilities, snapshotAbi }: {
     bytes: number[];
     tableSize: number;
     capabilities: typeof TARGET_ONLY;
+    snapshotAbi: number;
   }) => {
     const memory = new WebAssembly.Memory({ initial: 256 });
     const table = new WebAssembly.Table({
@@ -95,7 +96,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
       const view = new DataView(memory.buffer, snapshotPointer, 64);
       view.setUint32(8, sequence - 1, true);
       view.setUint32(0, 0x4254_5747, true);
-      view.setUint16(4, 2, true);
+      view.setUint16(4, snapshotAbi, true);
       view.setUint16(6, 64, true);
       view.setUint32(12, target ? 7 : 3, true);
       view.setUint32(16, sequence, true);
@@ -135,6 +136,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
     bytes: [...moduleBytes],
     tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     capabilities: TARGET_ONLY,
+    snapshotAbi: COMPANION_ABI.snapshot.abi,
   });
 }
 
@@ -651,6 +653,7 @@ export async function assertToolboxFoundationLifecycle() {
         targetCount: document.querySelectorAll("#enhancement-target").length,
         toolbox: runtime.toolbox,
         toolboxCount: document.querySelectorAll("#toolbox-foundation").length,
+        xunlaiAccess: runtime.xunlaiAccess,
       };
 
       dispatchEvent(new Event("pagehide"));
@@ -678,8 +681,8 @@ export async function assertToolboxFoundationLifecycle() {
         ...ENHANCEMENT_BUILD.targetObservation!.layout,
       },
       messages: {
-        playerChat: ENHANCEMENT_BUILD.partyObservation!.playerChatMessage,
-        showHeroPanel: ENHANCEMENT_BUILD.partyObservation!.showHeroPanelMessage,
+        playerChat: ENHANCEMENT_BUILD.uiDispatcher!.playerChatMessage,
+        showHeroPanel: ENHANCEMENT_BUILD.uiDispatcher!.showHeroPanelMessage,
       },
       tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     });
@@ -729,7 +732,7 @@ export async function assertToolboxFoundationLifecycle() {
     ]);
     assert.deepEqual(
       result.before.storageConfigurations.at(-1),
-      [storagePointer, 1],
+      [storagePointer, 0],
     );
     assert.deepEqual(result.before.travelConfigurations.at(-1), [travelPointer, 1]);
     assert.equal(result.before.companionStatePublished, false);
@@ -744,6 +747,7 @@ export async function assertToolboxFoundationLifecycle() {
     assert.equal(result.before.snapshot.status, "ready");
     assert.equal(result.before.snapshot.mapId, 133);
     assert.equal(result.before.snapshot.playRegion, "pve");
+    assert.equal(result.before.xunlaiAccess, null);
     assert.deepEqual(scalar, {
       buildId: ENHANCEMENT_BUILD.buildId,
       companionAbi: COMPANION_ABI.kernel,

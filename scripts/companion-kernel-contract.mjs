@@ -35,7 +35,7 @@ export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  // Memory footprint 2017 bytes (0xe1 0x0f as LEB128). Documented moves:
+  // Memory footprint 2041 bytes (0xf9 0x0f as LEB128). Documented moves:
   //   309 ->  310  the Toolbox observer gained PARTY_OBSERVED, the byte that
   //                separates "you have no heroes" from "nobody read the party";
   //   310 ->  410  Layout grew by the 25 party-detail address words, at 4 bytes
@@ -63,10 +63,12 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   //   1437 -> 2017 two bounded 70-word skill-unlock bitsets (+560), three
   //                certified layout words (+12), and their observation state
   //                (+8) distinguish account unlocks from character learning.
+  //   2017 -> 2041 six exact-build Xunlai player-record layout words let the
+  //                core snapshot prove access without consulting the party.
   // This constant exists so a kernel whose footprint moves cannot ship without
   // someone saying why. One page is still the ceiling, and this remains far
   // under it.
-  0x01, 0x05, 0xe1, 0x0f, 0x02, 0x00, 0x00,
+  0x01, 0x05, 0xf9, 0x0f, 0x02, 0x00, 0x00,
 ]);
 
 const WASM_PAGE_BYTES = 65_536;

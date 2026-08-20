@@ -44,7 +44,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
   });
 });
 
-test("unknown and PvP regions fail closed for every optional command surface", () => {
+test("runtime-gated commands fail closed while storage keeps its refusal reason", () => {
   const on = Object.freeze({
     enabled: true,
     targetReadout: true,
@@ -55,7 +55,7 @@ test("unknown and PvP regions fail closed for every optional command surface", (
   for (const region of ["unknown", "pvp"] as const) {
     assert.equal(enhancementRuntimePolicy("toolbox-commands", on, region).teamManagement, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).teamManagement, false);
-    assert.equal(enhancementRuntimePolicy("none", on, region).xunlaiStorage, false);
+    assert.equal(enhancementRuntimePolicy("none", on, region).xunlaiStorage, true);
     assert.equal(enhancementRuntimePolicy("none", on, region).travelPalette, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).targetReadout, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).tools, true);

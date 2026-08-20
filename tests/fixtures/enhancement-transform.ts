@@ -40,6 +40,13 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   commands: false,
   storage: false,
 });
+export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
+  nativeCursor: false,
+  targetObservation: false,
+  partyObservation: false,
+  commands: false,
+  storage: true,
+});
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
@@ -100,6 +107,7 @@ const PLACEHOLDER_OUTPUTS: EnhancementOutputHashes = Object.freeze({
   cursorPartyCommands: "0".repeat(64),
   targetPartyCommands: "0".repeat(64),
   cursorTargetPartyCommands: "0".repeat(64),
+  storage: "0".repeat(64),
   partyStorage: "0".repeat(64),
   cursorPartyStorage: "0".repeat(64),
   targetPartyStorage: "0".repeat(64),
@@ -141,12 +149,13 @@ export function moduleWithManifest(value: unknown): WebAssembly.Module {
 // otherwise.
 export function fixture(hookParamType = 0x7f): Uint8Array {
   const type = section(1, [
-    5,
+    6,
     0x60, 1, hookParamType, 0,
     0x60, 5, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0,
     0x60, 3, 0x7f, 0x7f, 0x7f, 0,
     0x60, 2, 0x7f, 0x7f, 0,
     0x60, 2, 0x7f, 0x7f, 1, 0x7f,
+    0x60, 1, 0x7f, 1, 0x7f,
   ]);
   const env = [3, 101, 110, 118];
   const imports = section(2, [
@@ -155,10 +164,10 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...env, 1, 99, 0, 1,
     ...env, 1, 117, 0, 2,
   ]);
-  // Eleven defined functions: three hooks, three commands, the recurring
+  // Fourteen defined functions: three hooks, three commands, the recurring
   // game-thread callback, packet sender, DataWindow, slash parser, and Travel
-  // producer. The producer is deliberately distinct from every selected hook.
-  const functions = section(3, [11, 0, 1, 2, 0, 2, 3, 3, 2, 0, 4, 1]);
+  // producer, plus three exact-signature Xunlai fact readers.
+  const functions = section(3, [14, 0, 1, 2, 0, 2, 3, 3, 2, 0, 4, 1, 5, 5, 5]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -223,8 +232,9 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
   ];
   const dataWindow = [0, 0x20, 0, 0x10, 0, 0x0b];
   const slash = [0, 0x20, 0, 0x10, 0, 0x41, 0, 0x0b];
+  const reader = [0, 0x20, 0, 0x0b];
   const code = section(10, [
-    11,
+    14,
     ...uleb(tick.length), ...tick,
     ...uleb(cursor.length), ...cursor,
     ...uleb(ui.length), ...ui,
@@ -236,6 +246,9 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...uleb(dataWindow.length), ...dataWindow,
     ...uleb(slash.length), ...slash,
     ...uleb(cursor.length), ...cursor,
+    ...uleb(reader.length), ...reader,
+    ...uleb(reader.length), ...reader,
+    ...uleb(reader.length), ...reader,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
@@ -263,6 +276,18 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     storage: {
       openExport: "enhancement_open_storage",
       configureExport: "enhancement_configure_storage",
+      accessProof: {
+        layout: {
+          worldPlayers: 0x80c, playerRecordStride: 0x50,
+          playerRecordAgentId: 0, playerRecordAccessFlags: 0x34,
+          playerRecordNumber: 0x38, areaInfoType: 8,
+        },
+        readers: {
+          "agent-id": { functionIndex: 14, params: ["i32"], results: ["i32"], bodySha256: createHash("sha256").update(commandBody(bytes, 11)).digest("hex") },
+          "access-flags": { functionIndex: 15, params: ["i32"], results: ["i32"], bodySha256: createHash("sha256").update(commandBody(bytes, 12)).digest("hex") },
+          "player-number": { functionIndex: 16, params: ["i32"], results: ["i32"], bodySha256: createHash("sha256").update(commandBody(bytes, 13)).digest("hex") },
+        },
+      },
       travel: {
         enqueueExport: "enhancement_travel",
         configureExport: "enhancement_configure_travel",
@@ -378,19 +403,24 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       contextRoot: 1, agentArray: 2, gameContextSlot: 6,
       characterContext: 4, mapId: 5, isExplorable: 6,
       currentMapId: 7, currentInstanceType: 8, playerNumber: 9,
-      agentId: 10, agentPlayerNumber: 14, agentModelType: 15,
+      agentId: 10, agentX: 11, agentY: 12, agentType: 13,
+      agentPlayerNumber: 14, agentModelType: 15,
+      worldContext: 46,
+      areaInfo: 72, areaInfoCount: 73, areaInfoStride: 74, areaInfoFlags: 75,
     } },
     targetObservation: { layout: {
       manualTargetAgentId: 3, automaticTargetAgentId: 4,
-      agentX: 11, agentY: 12, agentType: 13,
     } },
-    partyObservation: {
+    uiDispatcher: {
       functionIndex: 5,
       params: ["i32", "i32", "i32"],
       results: [],
+      bodySha256: createHash("sha256").update(commandBody(bytes, 2)).digest("hex"),
       playerChatMessage: 0x1000_0082,
       hideHeroPanelMessage: 0x1000_01a3,
       showHeroPanelMessage: 0x1000_01a4,
+    },
+    partyObservation: {
       partyDirtyMessages: PARTY_DIRTY_MESSAGES,
       playerChatProducer: 5,
       playerChatSites: 3,
@@ -404,7 +434,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       heroLevel: 42,
       partyPlayers: 43, partyHenchmen: 44, partyFlag: 45,
       accountContext: 78, accountUnlockedSkills: 79,
-      worldContext: 46, worldHeroFlags: 47, heroFlagStride: 48,
+      worldHeroFlags: 47, heroFlagStride: 48,
       flagHeroId: 49, flagAgentId: 50, flagBehavior: 51,
       worldHeroInfo: 52, heroInfoStride: 53, infoHeroId: 54,
       infoAgentId: 40, infoLevel: 41,
@@ -419,10 +449,6 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       attributeEntryStride: 69,
       attributeEntryId: 70,
       attributeEntryRank: 71,
-      areaInfo: 72,
-      areaInfoCount: 73,
-      areaInfoStride: 74,
-      areaInfoFlags: 75,
       worldProfessionStates: 76,
       professionStateStride: 77,
       worldCharacterSkills: 80,

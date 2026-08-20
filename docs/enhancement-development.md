@@ -25,7 +25,8 @@ current optional features are:
   range band.
 - **Xunlai storage**: open the normal storage UI from the Tools title bar,
   Command-Shift-C, `/chest`, or `/xunlai` in a certified PvE outpost. It has a
-  separate Settings opt-in.
+  separate Settings opt-in and requires a live snapshot that proves the current
+  character can access storage. It does not depend on party observation.
 - **Quick Travel palette**: Command-T or `/tp` opens host-owned destination
   autocomplete and 1–9 shortcuts. A named, bounded Travel action reaches the
   certified client dispatcher only from the game-thread drain. It has a separate
@@ -253,13 +254,27 @@ original-call preservation, table and allocation invariants, positive and
 negative layout evidence, lifecycle clearing, offline tests, clean teardown,
 and one bounded live semantic check per changed domain.
 
-For Xunlai storage, run `pnpm enhancements:live xunlai-storage` from a supported
-PvE outpost. The scenario exercises the same named action as the Tools button
-and keyboard shortcut twice. Also enter `/chest`, `/xunlai`, and one near miss
-such as `/storage`; the first two must be consumed locally and the near miss
-must remain a normal Guild Wars command. Record the slash-parser and DataWindow
-handler indices, signatures, body hashes, and game-thread drain evidence in the
-new certificate. Do not infer them from the preceding build.
+For Xunlai storage, independently recover the player-record array, record
+stride, agent identifier, player number, access flags, and area type from the
+exact supported Guild Wars build. External projects such as GWCA can explain
+semantics, but they are never runtime authority. Record the exact reader and
+command-handler indices, signatures, body hashes, and game-thread drain
+evidence in the new certificate. Do not infer them from the preceding build.
+The three player-record readers form one optional, all-or-nothing access proof.
+If that proof cannot be certified, omit it: the generated configuration then
+contains zero access words, Xunlai stays disabled, and the independently
+certified Travel action remains available. Never substitute party state or a
+guessed offset.
+
+Run `pnpm enhancements:live xunlai-storage` from a supported PvE outpost. The
+scenario records only the tri-state access result and two outcomes from the
+same named action used by the button and shortcut. Also enter `/chest`,
+`/xunlai`, and one near miss such as `/storage`; the first two must be consumed
+locally only after access is confirmed and the near miss must remain a normal
+Guild Wars command. Check one eligible character and the known restricted
+character, then switch accounts or characters without restarting and confirm
+that access is revoked and restored. A one-gold deposit and withdrawal requires
+explicit confirmation from the person operating the client.
 
 Party certification must prove the complete owned roster, player and hero
 professions, hero unlocks, behaviour, skill bars, and attributes. Proving only

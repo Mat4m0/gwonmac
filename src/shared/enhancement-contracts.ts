@@ -107,6 +107,13 @@ export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
     commands: true,
     storage: false,
   }),
+  storage: Object.freeze({
+    nativeCursor: false,
+    targetObservation: false,
+    partyObservation: false,
+    commands: false,
+    storage: true,
+  }),
   partyStorage: Object.freeze({
     nativeCursor: false,
     targetObservation: false,
@@ -202,7 +209,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 33;
+export const ENHANCEMENT_TRANSFORM_ABI = 34;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
@@ -213,13 +220,16 @@ export function enhancementConfigWordActive(
   }
   const owner = ENHANCEMENT_CONFIG_FIELDS[index]?.owner;
   if (owner === "target") {
-    return capabilities.targetObservation || capabilities.storage;
+    return capabilities.targetObservation;
   }
   if (owner === "observation") {
-    return capabilities.targetObservation || capabilities.partyObservation;
+    return capabilities.targetObservation
+      || capabilities.partyObservation
+      || capabilities.storage;
   }
   if (owner === "cursor") return capabilities.nativeCursor;
-  return owner === "party" && capabilities.partyObservation;
+  if (owner === "party") return capabilities.partyObservation;
+  return owner === "storage" && capabilities.storage;
 }
 
 export type EnhancementHooks = Readonly<{
@@ -243,7 +253,7 @@ export function enhancementCapabilitiesFor(
     case "target-observer": return ENHANCEMENT_CAPABILITY_PROFILES.target;
     case "toolbox-foundation": return ENHANCEMENT_CAPABILITY_PROFILES.party;
     case "toolbox-commands": return ENHANCEMENT_CAPABILITY_PROFILES.partyCommandsStorage;
-    case "xunlai-storage": return ENHANCEMENT_CAPABILITY_PROFILES.partyStorage;
+    case "xunlai-storage": return ENHANCEMENT_CAPABILITY_PROFILES.storage;
   }
 }
 
@@ -267,12 +277,11 @@ export function enhancementCapabilitiesRequested(
     || capabilities.storage;
 }
 
-/** Both live actions consume map/party policy, so neither can stand alone. */
+/** Team Apply alone requires the party observer; local actions do not. */
 export function validEnhancementCapabilities(
   capabilities: EnhancementCapabilities,
 ): boolean {
-  return (!capabilities.commands && !capabilities.storage)
-    || capabilities.partyObservation;
+  return !capabilities.commands || capabilities.partyObservation;
 }
 
 /** The exact requested subset that one build's optional certificate groups support. */
@@ -287,6 +296,6 @@ export function intersectEnhancementCapabilities(
       requested.targetObservation && supported.targetObservation,
     partyObservation,
     commands: requested.commands && supported.commands && partyObservation,
-    storage: requested.storage && supported.storage && partyObservation,
+    storage: requested.storage && supported.storage,
   });
 }

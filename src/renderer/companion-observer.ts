@@ -13,6 +13,7 @@
  */
 import {
   type CompanionPartyState,
+  type CompanionSnapshot,
   type CompanionToolboxState,
   readChangedCompanionParty,
   readChangedCompanionToolbox,
@@ -33,7 +34,7 @@ type SnapshotObserverTarget = {
 };
 
 type StateConsumer = {
-  update(state: CompanionState): void;
+  update(state: CompanionSnapshot): void;
 };
 
 /**

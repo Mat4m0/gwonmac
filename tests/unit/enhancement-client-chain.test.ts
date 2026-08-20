@@ -9,6 +9,7 @@ import {
   enhancementProfilesForBuild,
   ENHANCEMENT_BUILDS,
   hasCompleteEnhancementProfileHashes,
+  supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
 } from "../../src/main/certification/enhancement-builds.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
@@ -37,6 +38,7 @@ describe("Enhancement client chain", () => {
       "cursorPartyCommands",
       "targetPartyCommands",
       "cursorTargetPartyCommands",
+      "storage",
       "partyStorage",
       "cursorPartyStorage",
       "targetPartyStorage",
@@ -142,12 +144,54 @@ describe("Enhancement client chain", () => {
       "party facts require their shared observation base",
     );
 
+    const missingPartyDispatcher = { ...partyOnly };
+    delete missingPartyDispatcher.uiDispatcher;
+    assert.equal(
+      hasCompleteEnhancementProfileHashes(missingPartyDispatcher),
+      false,
+      "party facts require their shared UI dispatcher",
+    );
+
     const storageWithoutTarget = { ...full };
     delete storageWithoutTarget.targetObservation;
     assert.equal(
-      hasCompleteEnhancementProfileHashes(storageWithoutTarget),
+      supportedEnhancementCapabilities(storageWithoutTarget).storage,
+      true,
+      "storage and Travel do not require target observation",
+    );
+
+    const prooflessStorage = { ...full.storage! };
+    delete prooflessStorage.accessProof;
+    const storageWithoutAccessProof: KnownEnhancementBuild = {
+      ...full,
+      storage: prooflessStorage,
+    };
+    assert.equal(
+      hasCompleteEnhancementProfileHashes(storageWithoutAccessProof),
+      true,
+      "Travel remains certified when Xunlai access proof is absent",
+    );
+    const storageWithDuplicateReaders: KnownEnhancementBuild = {
+      ...full,
+      storage: {
+        ...full.storage!,
+        accessProof: {
+          ...full.storage!.accessProof!,
+          readers: {
+            ...full.storage!.accessProof!.readers,
+            "access-flags": {
+              ...full.storage!.accessProof!.readers["access-flags"],
+              functionIndex:
+                full.storage!.accessProof!.readers["agent-id"].functionIndex,
+            },
+          },
+        },
+      },
+    };
+    assert.equal(
+      hasCompleteEnhancementProfileHashes(storageWithDuplicateReaders),
       false,
-      "storage facts require the target layout used by travel",
+      "storage requires three independent player-record readers",
     );
 
     assert.equal(

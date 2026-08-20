@@ -1,9 +1,10 @@
 /**
  * Lifecycle owner for storage availability, policy synchronization, and disposal.
- * The installer forwards settings and observations here instead of duplicating state.
+ * The installer forwards settings and the certified game snapshot here instead
+ * of duplicating state.
  */
-import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { StorageCommand } from "../shared/storage-command.js";
+import type { CompanionSnapshot } from "./companion-snapshot.js";
 import {
   createStorageCommand,
   initializeStorageDataWindow,
@@ -14,12 +15,19 @@ import {
 
 export { initializeStorageDataWindow, STORAGE_DATA_WINDOW_BYTES };
 
-type PlayRegion = "pve" | "pvp" | "unknown";
+type ReadyStorageGameState = Pick<
+  Extract<CompanionSnapshot, { status: "ready" }>,
+  "status" | "xunlaiAccess"
+>;
+type PendingStorageGameState = Pick<
+  Exclude<CompanionSnapshot, { status: "ready" }>,
+  "status"
+>;
+export type StorageGameState = ReadyStorageGameState | PendingStorageGameState;
 
 export interface StorageAvailability {
   readonly enabled: boolean;
-  readonly playRegion: PlayRegion;
-  readonly observation: ToolboxObservation | null;
+  readonly state: StorageGameState | null;
 }
 
 export interface StorageController {
@@ -34,13 +42,12 @@ function unavailableReason(
 ): string | null {
   if (!active) return "Enhancement installation is no longer active";
   if (!availability.enabled) return "Xunlai storage is turned off in Settings";
-  if (availability.playRegion !== "pve") return "Storage is available in PvE outposts";
-  const observed = availability.observation;
-  if (observed?.status !== "ready" || observed.party?.status !== "ready") {
-    return "Storage is waiting for the current party";
+  const state = availability.state;
+  if (state?.status !== "ready" || typeof state.xunlaiAccess !== "boolean") {
+    return "Storage is waiting to confirm access for this character";
   }
-  if (observed.party.playRegion !== "pve" || observed.party.inOutpost !== true) {
-    return "Storage is available in PvE outposts";
+  if (state.xunlaiAccess !== true) {
+    return "This character cannot access Xunlai storage here";
   }
   return null;
 }
@@ -54,8 +61,7 @@ export function createStorageController(
   let active = true;
   let availability: StorageAvailability = {
     enabled: false,
-    playRegion: "unknown",
-    observation: null,
+    state: null,
   };
   let configuredEnabled: boolean | null = null;
   const unavailable = () => unavailableReason(active, availability);
