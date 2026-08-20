@@ -1,10 +1,21 @@
 /**
- * The host-owned Travel vocabulary: destinations, districts, shortcuts, and
- * deterministic autocomplete. The game receives only the resulting four
- * scalar words; it never receives search text or a generic UI command.
+ * Composes the public Travel domain surface.
+ * Keeps requests, released shortcuts, catalogue, and search discoverable.
  */
+import {
+  TRAVEL_DESTINATIONS,
+  travelDestination,
+  type TravelDestination,
+} from "./travel-destinations.js";
+
+export {
+  TRAVEL_DESTINATIONS,
+  travelDestination,
+  type TravelDestination,
+} from "./travel-destinations.js";
 
 export const TRAVEL_SHORTCUT_LIMIT = 9;
+export const TRAVEL_SEARCH_QUERY_LIMIT = 80;
 
 export type TravelDistrictId =
   | "international"
@@ -43,80 +54,13 @@ export const TRAVEL_DISTRICTS: readonly TravelDistrict[] = Object.freeze([
   { id: "asia-japanese", label: "Asia Japanese", aliases: ["aj", "jp"], region: 4, language: 0 },
 ]);
 
-export type TravelDestination = Readonly<{
-  mapId: number;
-  name: string;
-  campaign: "Prophecies" | "Factions" | "Nightfall" | "Eye of the North" | "Battle Isles";
-  aliases: readonly string[];
-}>;
-
-const destination = (
-  mapId: number,
-  name: string,
-  campaign: TravelDestination["campaign"],
-  aliases: readonly string[] = [],
-): TravelDestination => Object.freeze({ mapId, name, campaign, aliases: Object.freeze(aliases) });
-
-/**
- * A deliberately focused catalogue of useful hubs and competitive outposts.
- * It is static so autocomplete stays available before the game is observed;
- * adding a destination is a reviewed product choice, not a runtime memory walk.
- */
-export const TRAVEL_DESTINATIONS: readonly TravelDestination[] = Object.freeze([
-  destination(81, "Ascalon City", "Prophecies", ["ac", "ascalon"]),
-  destination(55, "Lion's Arch", "Prophecies", ["la", "lions arch"]),
-  destination(20, "Droknar's Forge", "Prophecies", ["droks", "droknars"]),
-  destination(138, "Temple of the Ages", "Prophecies", ["toa"]),
-  destination(82, "Tomb of the Primeval Kings", "Prophecies", ["topk", "tomb"]),
-  destination(57, "Bergen Hot Springs", "Prophecies", ["bergen"]),
-  destination(109, "The Amnoon Oasis", "Prophecies", ["amnoon"]),
-  destination(38, "Augury Rock", "Prophecies", ["augury"]),
-  destination(133, "Beacon's Perch", "Prophecies", ["beacons"]),
-  destination(134, "Yak's Bend", "Prophecies", ["yaks"]),
-  destination(156, "The Granite Citadel", "Prophecies", ["granite"]),
-  destination(157, "Marhan's Grotto", "Prophecies", ["marhans"]),
-  destination(206, "Deldrimor War Camp", "Prophecies", ["deldrimor"]),
-  destination(194, "Kaineng Center", "Factions", ["kc", "kaineng"]),
-  destination(242, "Shing Jea Monastery", "Factions", ["shing jea", "sjm"]),
-  destination(77, "House zu Heltzer", "Factions", ["hzh"]),
-  destination(193, "Cavalon", "Factions"),
-  destination(283, "Maatu Keep", "Factions", ["maatu"]),
-  destination(303, "The Marketplace", "Factions", ["marketplace"]),
-  destination(291, "Vizunah Square — Local Quarter", "Factions", ["vizunah local", "vs local"]),
-  destination(292, "Vizunah Square — Foreign Quarter", "Factions", ["vizunah foreign", "vs foreign"]),
-  destination(293, "Fort Aspenwood — Luxon", "Factions", ["fa luxon"]),
-  destination(294, "Fort Aspenwood — Kurzick", "Factions", ["fa kurzick", "fa"]),
-  destination(295, "The Jade Quarry — Luxon", "Factions", ["jq luxon"]),
-  destination(296, "The Jade Quarry — Kurzick", "Factions", ["jq kurzick", "jq"]),
-  destination(449, "Kamadan, Jewel of Istan", "Nightfall", ["kama", "kamadan"]),
-  destination(387, "Sunspear Sanctuary", "Nightfall", ["sunspear"]),
-  destination(393, "Chantry of Secrets", "Nightfall", ["chantry"]),
-  destination(493, "Consulate Docks", "Nightfall", ["consulate"]),
-  destination(474, "Domain of Anguish", "Nightfall", ["doa", "goa", "tdp"]),
-  destination(642, "Eye of the North", "Eye of the North", ["eotn"]),
-  destination(640, "Rata Sum", "Eye of the North", ["rata"]),
-  destination(624, "Vlox's Falls", "Eye of the North", ["vlox"]),
-  destination(638, "Gadd's Encampment", "Eye of the North", ["gadds"]),
-  destination(639, "Umbral Grotto", "Eye of the North", ["umbral"]),
-  destination(643, "Sifhalla", "Eye of the North"),
-  destination(644, "Gunnar's Hold", "Eye of the North", ["gunnars"]),
-  destination(645, "Olafstead", "Eye of the North"),
-  destination(648, "Doomlore Shrine", "Eye of the North", ["doomlore"]),
-  destination(650, "Longeye's Ledge", "Eye of the North", ["longeyes"]),
-  destination(652, "Central Transfer Chamber", "Eye of the North", ["ctc"]),
-  destination(857, "Embark Beach", "Battle Isles", ["embark"]),
-  destination(248, "Great Temple of Balthazar", "Battle Isles", ["gtob"]),
-  destination(188, "Random Arenas", "Battle Isles", ["ra"]),
-  destination(330, "Heroes' Ascent", "Battle Isles", ["ha"]),
-]);
-
 export type TravelRequest = Readonly<{
   mapId: number;
   district: TravelDistrictId;
   districtNumber: number;
 }>;
 
-/** Fixed shortcut positions; null preserves an intentionally empty number key. */
+/** Fixed shortcut positions in the released, Stable-compatible disk shape. */
 export type TravelShortcuts = readonly (TravelRequest | null)[];
 
 export const DEFAULT_TRAVEL_SHORTCUTS: TravelShortcuts = Object.freeze([
@@ -135,8 +79,6 @@ export function isTravelRequest(value: unknown): value is TravelRequest {
     key === "mapId" || key === "district" || key === "districtNumber"
   )
     && Number.isSafeInteger(request.mapId)
-    && Number(request.mapId) > 0
-    && Number(request.mapId) <= 2_000
     && travelDestination(Number(request.mapId)) !== null
     && TRAVEL_DISTRICTS.some((district) => district.id === request.district)
     && Number.isSafeInteger(request.districtNumber)
@@ -154,11 +96,7 @@ export function travelDistrict(id: TravelDistrictId): TravelDistrict {
   return TRAVEL_DISTRICTS.find((district) => district.id === id)!;
 }
 
-export function travelDestination(mapId: number): TravelDestination | null {
-  return TRAVEL_DESTINATIONS.find((candidate) => candidate.mapId === mapId) ?? null;
-}
-
-function normalise(value: string): string {
+export function normaliseTravelTerm(value: string): string {
   return value.toLocaleLowerCase("en").normalize("NFKD")
     .replace(/[\u0300-\u036f]/gu, "")
     .replace(/[^a-z0-9]+/gu, " ")
@@ -166,30 +104,31 @@ function normalise(value: string): string {
 }
 
 function score(destination: TravelDestination, query: string): number {
-  const name = normalise(destination.name);
-  const aliases = destination.aliases.map(normalise);
+  const name = normaliseTravelTerm(destination.name);
+  const aliases = destination.aliases.map(normaliseTravelTerm);
   if (aliases.includes(query)) return 0;
   if (name === query) return 1;
   if (name.startsWith(query)) return 2;
   if (name.split(" ").some((word) => word.startsWith(query))) return 3;
   const terms = query.split(" ");
-  if (terms.every((term) => name.includes(term) || aliases.some((alias) => alias.includes(term)))) {
-    return 4;
-  }
-  return Number.POSITIVE_INFINITY;
+  return terms.every((term) =>
+    name.includes(term) || aliases.some((alias) => alias.includes(term))
+  ) ? 4 : Number.POSITIVE_INFINITY;
 }
 
-/** Stable, bounded autocomplete: exact aliases first, then names and token matches. */
+/** Stable autocomplete with bounded input and output work. */
 export function searchTravelDestinations(
   query: string,
   limit = 8,
 ): readonly TravelDestination[] {
-  const normalised = normalise(query);
-  if (!normalised) return TRAVEL_DESTINATIONS.slice(0, limit);
+  if (query.length > TRAVEL_SEARCH_QUERY_LIMIT) return [];
+  const normalised = normaliseTravelTerm(query);
+  const boundedLimit = Math.max(0, Math.min(12, limit));
+  if (!normalised) return TRAVEL_DESTINATIONS.slice(0, boundedLimit);
   return TRAVEL_DESTINATIONS
     .map((candidate, index) => ({ candidate, index, score: score(candidate, normalised) }))
     .filter((entry) => Number.isFinite(entry.score))
     .sort((left, right) => left.score - right.score || left.index - right.index)
-    .slice(0, limit)
+    .slice(0, boundedLimit)
     .map((entry) => entry.candidate);
 }
