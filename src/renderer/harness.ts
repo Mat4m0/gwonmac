@@ -109,6 +109,7 @@ type GwGameModule = {
 
   // Published by the generated glue, so absent until it has run.
   HEAPU8?: Uint8Array;
+  gwonmacHeapCapBytes?: number;
   SDL2?: { audioContext?: AudioContext };
   audioContext?: AudioContext;
   oskIsActive?: boolean;
@@ -372,8 +373,9 @@ function requestHeapCap() {
       { createHeapPressureWatch },
       { bindMemoryWarning },
     ]) => {
-      heapCapBytes = WASM_HEAP_CAP_BYTES;
-      heapWatch = createHeapPressureWatch({ capBytes: WASM_HEAP_CAP_BYTES });
+      const capBytes = Module.gwonmacHeapCapBytes ?? WASM_HEAP_CAP_BYTES;
+      heapCapBytes = capBytes;
+      heapWatch = createHeapPressureWatch({ capBytes });
       heapWarning = bindMemoryWarning(
         document,
         reloadClientSafely,

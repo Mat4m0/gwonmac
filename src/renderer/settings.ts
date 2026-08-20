@@ -36,6 +36,9 @@
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
   ) as HTMLInputElement;
+  const extendedMemoryEnabled = form.elements.namedItem(
+    'extendedMemoryEnabled',
+  ) as HTMLInputElement;
   const autoCheckUpdates = form.elements.namedItem(
     'autoCheckUpdates',
   ) as HTMLInputElement;
@@ -421,6 +424,8 @@
     return operation;
   }
 
+  const extendedMemorySetting = import('./extended-memory-setting.js')
+    .then((module) => module.bindExtendedMemorySetting(document));
   const dataStrategy = import('./settings-data-strategy.js')
     .then((module) => module.bindSettingsDataStrategy(document, {
       loadSettings,
@@ -515,6 +520,10 @@
     templatePane?.setAvailability(
       fileSaving?.status === 'unavailable' ? fileSaving.reason : null,
     );
+    if (currentSettings) {
+      const setting = await extendedMemorySetting;
+      setting.render(currentSettings.extendedMemoryEnabled, session.extendedMemory);
+    }
     return session;
   }
 
@@ -586,6 +595,10 @@
         return control instanceof globalThis.HTMLInputElement
           ? { showDiagnostics: control.checked }
           : null;
+      case 'extendedMemoryEnabled':
+        return control instanceof globalThis.HTMLInputElement
+          ? { extendedMemoryEnabled: control.checked }
+          : null;
       case 'gwonmacTools':
       case 'teamManagement':
       case 'xunlaiStorage':
@@ -625,6 +638,7 @@
     }
     showAppearanceValues(settings);
     showDiagnostics.checked = settings.showDiagnostics;
+    extendedMemoryEnabled.checked = settings.extendedMemoryEnabled;
     gwonmacTools.checked = settings.gwonmacTools;
     teamManagement.checked = settings.teamManagement;
     xunlaiStorage.checked = settings.xunlaiStorage;
@@ -639,6 +653,9 @@
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     updateTrack.value = settings.updateTrack;
+    void extendedMemorySetting.then((setting) => {
+      setting.render(settings.extendedMemoryEnabled, currentSession?.extendedMemory ?? null);
+    });
     void dataStrategy.then((controller) => controller.renderSettings(settings));
     updateRenderScaleDimensions();
   }
@@ -726,6 +743,10 @@
           && saved.gwonmacTools !== patch.gwonmacTools
         ) {
           setFeedback('Optional Tools were not changed. Your current setup is still active.', 'warning');
+          return;
+        }
+        if (patch.extendedMemoryEnabled !== undefined) {
+          setFeedback('Saved. Restart GWonMac to apply the memory limit.', 'success', 4500);
           return;
         }
         setFeedback('Saved.', 'success', 2200);

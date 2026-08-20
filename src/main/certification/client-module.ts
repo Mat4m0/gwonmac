@@ -47,6 +47,11 @@ import {
   rewriteNativeDoubleClickWasm,
 } from "./native-double-click.js";
 import { readFile } from "node:fs/promises";
+import {
+  EXTENDED_MEMORY_MAX_BYTES,
+  prepareExtendedMemoryArtifacts,
+  type ExtendedMemoryProfile,
+} from "./extended-memory.js";
 
 /**
  * The exact records matched while certifying the official client hash. The
@@ -128,8 +133,26 @@ function enhancementCandidates(
       || Number(left.commands) - Number(right.commands));
 }
 
+export type ExtendedMemoryMode =
+  | { readonly status: "disabled" }
+  | {
+      readonly status: "active";
+      readonly profile: ExtendedMemoryProfile;
+      readonly effectiveCapBytes: typeof EXTENDED_MEMORY_MAX_BYTES;
+    }
+  | {
+      readonly status: "unavailable";
+      readonly reason: "unsupported-client";
+    }
+  | {
+      readonly status: "unavailable";
+      readonly reason: "preparation-failed";
+      readonly error: unknown;
+    };
+
 export interface PreparedClientModule extends PreparedWasmClientModule {
   readonly jsPath: string;
+  readonly extendedMemory: ExtendedMemoryMode;
 }
 
 export interface PrepareClientModuleOptions {
@@ -141,6 +164,8 @@ export interface PrepareClientModuleOptions {
   readonly compatibilityCacheRoot: string;
   readonly enhancementCacheRoot: string;
   readonly nativeDoubleClickCacheRoot: string;
+  readonly extendedMemoryCacheRoot: string;
+  readonly extendedMemoryEnabled: boolean;
 }
 
 function templateSaveCache(
@@ -270,13 +295,53 @@ async function withNativeDoubleClick(
 export async function prepareClientModule(
   options: PrepareClientModuleOptions,
 ): Promise<PreparedClientModule> {
-  return {
-    ...await withNativeDoubleClick(
-      await prepareCertifiedChain(options),
-      options.nativeDoubleClickCacheRoot,
-    ),
-    jsPath: options.officialJsPath,
-  };
+  const prepared = await withNativeDoubleClick(
+    await prepareCertifiedChain(options),
+    options.nativeDoubleClickCacheRoot,
+  );
+  if (!options.extendedMemoryEnabled) {
+    return {
+      ...prepared,
+      jsPath: options.officialJsPath,
+      extendedMemory: { status: "disabled" },
+    };
+  }
+  try {
+    const extended = await prepareExtendedMemoryArtifacts(
+      options.officialJsPath,
+      prepared.wasmPath,
+      options.extendedMemoryCacheRoot,
+    );
+    return extended
+      ? {
+          ...prepared,
+          jsPath: extended.jsPath,
+          wasmPath: extended.wasmPath,
+          extendedMemory: {
+            status: "active",
+            profile: extended.profile,
+            effectiveCapBytes: EXTENDED_MEMORY_MAX_BYTES,
+          },
+        }
+      : {
+          ...prepared,
+          jsPath: options.officialJsPath,
+          extendedMemory: {
+            status: "unavailable",
+            reason: "unsupported-client",
+          },
+        };
+  } catch (error) {
+    return {
+      ...prepared,
+      jsPath: options.officialJsPath,
+      extendedMemory: {
+        status: "unavailable",
+        reason: "preparation-failed",
+        error,
+      },
+    };
+  }
 }
 
 /**

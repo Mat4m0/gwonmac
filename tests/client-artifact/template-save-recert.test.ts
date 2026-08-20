@@ -37,6 +37,7 @@ import {
 } from "../../src/main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../../src/main/certification/enhancement-transform.js";
 import { rewriteNativeDoubleClickWasm } from "../../src/main/certification/native-double-click.js";
+import { rewriteExtendedMemoryWasm } from "../../src/main/certification/extended-memory.js";
 import {
   findTemplateSaveBuild,
   rewriteTemplateSaveWasm,
@@ -145,11 +146,11 @@ test("every certified runtime profile reproduces the real client chain", async (
   const enhancementBuild = findEnhancementBuild(sha256(template));
   assert.ok(enhancementBuild, "the template output must be Enhancement certified");
 
-  // The off profile and every optional capability profile feed the same
-  // downstream exact-hash transform. Reproducing the complete chain here is
+  // The off profile and every optional capability profile feed the same two
+  // downstream exact-hash transforms. Reproducing the complete chain here is
   // what catches an ABI/config edit whose source tests pass but whose authored
   // certificate hashes were not regenerated.
-  rewriteNativeDoubleClickWasm(template);
+  rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(template));
   for (const capabilities of Object.values(ENHANCEMENT_CAPABILITY_PROFILES)) {
     const enhanced = transformEnhancementWasm(
       template,
@@ -160,6 +161,6 @@ test("every certified runtime profile reproduces the real client chain", async (
       sha256(enhanced),
       enhancementOutputSha256(enhancementBuild, capabilities),
     );
-    rewriteNativeDoubleClickWasm(enhanced);
+    rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(enhanced));
   }
 });
