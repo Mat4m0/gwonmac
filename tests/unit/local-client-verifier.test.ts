@@ -22,6 +22,40 @@ function valid(): LocalClientVerification {
   };
 }
 
+function automaticCursor(): LocalClientVerification {
+  const cursor = ENHANCEMENT.cursorEvent!;
+  return {
+    ...valid(),
+    enhancementBuild: {
+      sha256: ENHANCEMENT.sha256,
+      outputSha256: { cursor: "1".repeat(64) },
+      programId: ENHANCEMENT.programId,
+      buildId: ENHANCEMENT.buildId + 1,
+      hookFunction: ENHANCEMENT.hookFunction + 1,
+      hookParams: ENHANCEMENT.hookParams,
+      hookResults: ENHANCEMENT.hookResults,
+      hookBodySha256: "2".repeat(64),
+      tableSlot: ENHANCEMENT.tableSlot,
+      cursorEvent: {
+        ...cursor,
+        functionIndex: cursor.functionIndex + 1,
+        producerFunctions: [
+          cursor.producerFunctions[0] + 1,
+          cursor.producerFunctions[1] + 1,
+        ],
+        producerBodySha256: ["3".repeat(64), "4".repeat(64)],
+        layout: {
+          ...cursor.layout,
+          cursorActiveArt: cursor.layout.cursorActiveArt - 112,
+          cursorSoftwareModel: cursor.layout.cursorSoftwareModel - 112,
+          cursorShowCount: cursor.layout.cursorShowCount - 112,
+          cursorColorBuffer: cursor.layout.cursorColorBuffer - 112,
+        },
+      },
+    },
+  };
+}
+
 describe("local client verification boundary", () => {
   it("accepts the verifier's complete baseline proof", () => {
     assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256), true);
@@ -55,6 +89,25 @@ describe("local client verification boundary", () => {
       enhancementBuild: {
         ...ENHANCEMENT,
         hookFunction: ENHANCEMENT.hookFunction + 1,
+      },
+    }, TEMPLATE.sha256), false);
+  });
+
+  it("accepts a structurally derived cursor proof and rejects malformed layouts", () => {
+    const derived = automaticCursor();
+    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification({
+      ...derived,
+      enhancementBuild: {
+        ...derived.enhancementBuild!,
+        cursorEvent: {
+          ...derived.enhancementBuild!.cursorEvent!,
+          layout: {
+            ...derived.enhancementBuild!.cursorEvent!.layout,
+            cursorShowCount:
+              derived.enhancementBuild!.cursorEvent!.layout.cursorShowCount + 4,
+          },
+        },
       },
     }, TEMPLATE.sha256), false);
   });
