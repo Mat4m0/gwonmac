@@ -96,6 +96,43 @@ test("refuses an unknown native callback inside the isolated process", async () 
   }
 });
 
+test("refuses changed 4 GB glue inside the isolated process", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gw-extended-memory-verifier-"));
+  const jsPath = path.join(root, "Gw.jspi.js");
+  const wasmPath = path.join(root, "Gw.jspi.wasm");
+  const js = "var getHeapMax = () => 2147483648;";
+  const wasm = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0);
+  const digest = (value: Uint8Array | string) =>
+    createHash("sha256").update(value).digest("hex");
+  await Promise.all([writeFile(jsPath, js), writeFile(wasmPath, wasm)]);
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        entry[1] !== undefined && entry[0] !== "ELECTRON_RUN_AS_NODE",
+    ),
+  );
+  const application = await electron.launch({
+    cwd: path.resolve("."),
+    args: [
+      fixture,
+      "extended-memory",
+      jsPath,
+      digest(js),
+      wasmPath,
+      digest(wasm),
+    ],
+    executablePath: electronPath,
+    env,
+  });
+  try {
+    await expect.poll(() => completed(application), { timeout: 10_000 }).toBe(true);
+    expect(await outcome(application)).toBeNull();
+  } finally {
+    await application.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function completed(application: ElectronApplication): Promise<boolean> {
   return application.evaluate(
     () => Boolean(

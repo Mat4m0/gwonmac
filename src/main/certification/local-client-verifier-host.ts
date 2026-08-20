@@ -2,8 +2,8 @@
  * Runs the local client proof and owns everything the proof itself may not:
  * the bounded child process and its timeout.
  *
- * The child gets the proof mode, module path, and hash it must match, and
- * nothing else.
+ * The child gets the proof mode plus only the artifact paths and hashes that
+ * proof needs.
  * A result is accepted only if it arrives from this launch's process and
  * survives `isLocalClientVerification` against that same hash. Profile state is
  * never certification authority, so every unknown exact hash runs the proof.
@@ -25,6 +25,10 @@ import {
   enhancementCapabilityProfile,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
+import {
+  isExtendedMemoryStructuralProof,
+  type ExtendedMemoryStructuralProof,
+} from "./extended-memory.js";
 
 const VERIFIER_TIMEOUT_MS = 5_000;
 
@@ -94,6 +98,47 @@ function runNativeDoubleClickVerifierProcess(
   });
 }
 
+function runExtendedMemoryVerifierProcess(options: {
+  jsPath: string;
+  jsInputSha256: string;
+  wasmPath: string;
+  wasmInputSha256: string;
+}): Promise<ExtendedMemoryStructuralProof | null> {
+  return new Promise((resolve) => {
+    const entry = fileURLToPath(
+      new URL("./local-client-verifier-process.js", import.meta.url),
+    );
+    const child = utilityProcess.fork(
+      entry,
+      [
+        "extended-memory",
+        options.jsPath,
+        options.jsInputSha256,
+        options.wasmPath,
+        options.wasmInputSha256,
+      ],
+      { serviceName: "Guild Wars extended-memory verifier" },
+    );
+    let settled = false;
+    const finish = (value: ExtendedMemoryStructuralProof | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      child.kill();
+      resolve(value);
+    };
+    const timeout = setTimeout(() => finish(null), VERIFIER_TIMEOUT_MS);
+    child.once("message", (value: unknown) => finish(
+      isExtendedMemoryStructuralProof(
+        value,
+        options.jsInputSha256,
+        options.wasmInputSha256,
+      ) ? value : null,
+    ));
+    child.once("exit", () => finish(null));
+  });
+}
+
 /**
  * Runs the expensive parsers outside the main and renderer processes for every
  * unknown exact hash. A crash, timeout or malformed reply is simply "no proof";
@@ -120,4 +165,14 @@ export async function verifyNativeDoubleClickLocally(options: {
     options.wasmPath,
     options.inputSha256,
   ).catch(() => null);
+}
+
+/** Qualifies the manifest-bound 4 GB pair without parsing it in Main. */
+export async function verifyExtendedMemoryLocally(options: {
+  jsPath: string;
+  jsInputSha256: string;
+  wasmPath: string;
+  wasmInputSha256: string;
+}): Promise<ExtendedMemoryStructuralProof | null> {
+  return runExtendedMemoryVerifierProcess(options).catch(() => null);
 }

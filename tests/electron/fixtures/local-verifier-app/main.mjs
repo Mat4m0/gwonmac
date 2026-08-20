@@ -7,9 +7,19 @@ const hostUrl = new URL(
   "../../../../build/main/certification/local-client-verifier-host.js",
   import.meta.url,
 );
-const { verifyClientLocally, verifyNativeDoubleClickLocally } = await import(hostUrl.href);
+const {
+  verifyClientLocally,
+  verifyExtendedMemoryLocally,
+  verifyNativeDoubleClickLocally,
+} = await import(hostUrl.href);
 
-const [mode, officialWasmPath, officialSha256] = process.argv.slice(-3);
+const extendedArgs = process.argv.slice(-5);
+const compactArgs = process.argv.slice(-3);
+const mode = extendedArgs[0] === "extended-memory"
+  ? extendedArgs[0]
+  : compactArgs[0];
+const officialWasmPath = compactArgs[1];
+const officialSha256 = compactArgs[2];
 if (!mode || !officialWasmPath || !officialSha256) {
   throw new Error("local verifier fixture requires wasm and hash");
 }
@@ -21,7 +31,14 @@ const state = /** @type {{
 state.localVerifierCompleted = false;
 state.localVerifierOutcome = null;
 void app.whenReady().then(async () => {
-  state.localVerifierOutcome = mode === "native-double-click"
+  state.localVerifierOutcome = mode === "extended-memory"
+    ? await verifyExtendedMemoryLocally({
+        jsPath: extendedArgs[1],
+        jsInputSha256: extendedArgs[2],
+        wasmPath: extendedArgs[3],
+        wasmInputSha256: extendedArgs[4],
+      })
+    : mode === "native-double-click"
     ? await verifyNativeDoubleClickLocally({
         wasmPath: officialWasmPath,
         inputSha256: officialSha256,

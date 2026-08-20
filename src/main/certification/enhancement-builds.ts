@@ -40,45 +40,45 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         cursor:
-          "ff933198b990083b7318bf93e09e7edf052aa2fc4aba1b0a544238a80bfdf8fa",
+          "e1122d8128c482bb70dd86ded6ca28d49256999899a2d492971f6e0173b4e758",
         target:
-          "094d504377bfb90efb2a1cc4a29cbf129fc3113d1b1900d53b786dd9d0392ea5",
+          "e954703ee701260194dc677c10ae9dc7f0229ac4734beabdc7b34464f1591e36",
         cursorTarget:
-          "90d18263253dce61edc09b00f1c935ac2f12a0705ce9f4e5d8ff8b21f180e249",
+          "2b6bfa11cbfc19a6dfb2f24de2fc9568d6ee3fcbd8e95c18fee576532e1aff1d",
         party:
-          "7c31b9222d6e0cb4f169b297b9260e42ab2e342ae61577cfcaeac85fa00d0f50",
+          "3710b2721f9758aad0c7158d86804f62818c7c5215ea0777c29ef2e2c6e9ee39",
         cursorParty:
-          "2b031e5c3f583a0d040eae1a082d60ef98dc566814c89673f59b371fdeda7af6",
+          "5540ea16565a2ed586a5e5556b58194b4f586337694c3f2c66bb63b01aec08f1",
         targetParty:
-          "7ab9daa70ecbac8c837a1406529ae23fbbc74649b71fce42cbe17f3278e168f3",
+          "e60119e58bdeb87109dfc715935eeb2fbe33a3906173d05f74678f7cdcebe32a",
         cursorTargetParty:
-          "483013e5a7160f403bb14a8feb8837b9ed1ae30e0d480f3be09e1590d5dd6efa",
+          "4e880853ea9f37cebb923b008b30b6e5bd2da657c8976b5129dd39698f91f397",
         partyCommands:
-          "b254187358d7e86e8476fbfc799d3900c06e12de079892d4e8f9f9162af6e92f",
+          "ec8431fe028151439b8e09e8fe171facb01ab28842f9f0175c1739f26f8b185c",
         cursorPartyCommands:
-          "58a913958ffc36375ad9c82c5d658269287b93ee965688b5fe7325c7dcfc8b5e",
+          "28ec655aa68bc3fb5df4337be1421893715f4b7379bde8955b23a64ed922e6e6",
         targetPartyCommands:
-          "98acd48ed441c3a6dcf0b2201f10baf757527051b245659b621e57c90a5b6374",
+          "fc2a879e1cb2ec6020f72a96136442b7cdbedbf3891767a31ac8298cad79c98a",
         cursorTargetPartyCommands:
-          "bfe923af52a66b9d579ff6157d52d579327c30ff8c9cab9a0d56cd37d743f77f",
+          "52d1cca841a68be0179aeceab1f749c8873f51e7c056dfed354d2ededbdf306d",
         storage:
-          "596eb73ce9d087891d6f28706091b53e8958a806ece24d1accd67015a774dbb1",
+          "2e29d4af024f6e05bc017b6cdc2363b071e9fee9c6548be78623bc9f046a59b3",
         partyStorage:
-          "b7d480740e68739cf829807c302955e1408fc08c22bf0677d33887c25d68fec8",
+          "ed8eedf6d75878c77c99aca898d72931d9ff7e2f5d566d56e15fccc0bf03052c",
         cursorPartyStorage:
-          "603af439da0bf2e32fd4dc86d62df17488ecfb916ab3e262e4a82fe14d7bab13",
+          "d83360909ff5a1d30f204189be9e01c615f471714c500a1af3dc9f20b5d5a91d",
         targetPartyStorage:
-          "75156a5ee8bf36153bf79b846ce6dbd8b23de9daf3f59caba6f34a80b8334a88",
+          "bcc5ecb2ff83fcda0fc406b735328e34c3a9d72d16a0ed168ca8190e35b86c3a",
         cursorTargetPartyStorage:
-          "9fbd0650ffed617637fc9dec52dc08c38de0c5bd21e05716260325c0e23f96e9",
+          "829845f4c8aba0fd747ee8f2b9223a3da5c2769d73e2689c06943096339e3fe7",
         partyCommandsStorage:
-          "fd04467165fbd80f2f8ef089f9453068f8242f8d30e459168a329b133b7d59fc",
+          "37bb6d011d76c4070b39f980bdfaeeaac640a0ab33b63dcdf99c91eeaf364f82",
         cursorPartyCommandsStorage:
-          "6c0d21e7fb5cd574187289ab28d6e2fd53ec5509d49c13e6170aa859f720d3a2",
+          "b5d8dc42e540a8fc0c39b3c22e2fecd7da213b0904108f8fa5bca72981cc006f",
         targetPartyCommandsStorage:
-          "33594cef21497fbdcc38455e4eafbf7bc37a1cb154a31890d92a0441cc3e1195",
+          "1871c89305a5cdc14d83d6e0337c194549707c71599cd1543869bd2c7d50bf44",
         cursorTargetPartyCommandsStorage:
-          "e9344c0c274eae0a0d652d212aa029f0a9866446c99f9df48215506c9c594ea2",
+          "5ec27d6b0ecdf928ff74113fcee052bcbc1b185e098c9d422528bb06e59e9511",
       }),
       programId: 1,
       // Function #477 returns 38,833 as a single i32 constant. The same function

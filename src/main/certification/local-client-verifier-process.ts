@@ -25,6 +25,10 @@ import {
   enhancementCapabilitiesForProfile,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
+import {
+  deriveExtendedMemoryStructuralProof,
+  isExtendedMemoryStructuralProof,
+} from "./extended-memory.js";
 
 interface ParentPort {
   postMessage(value: unknown): void;
@@ -35,11 +39,42 @@ const parentPort = (
 ).parentPort;
 
 async function main(): Promise<void> {
-  const [mode, wasmPath, expectedSha256, requestedProfile] = process.argv.slice(2);
-  if (!parentPort || !mode || !wasmPath || !expectedSha256) {
+  const [mode, firstPath, firstSha256, secondPath, secondSha256] =
+    process.argv.slice(2);
+  if (!parentPort || !mode || !firstPath || !firstSha256) {
     process.exitCode = 2;
     return;
   }
+
+  if (mode === "extended-memory") {
+    if (!secondPath || !secondSha256) {
+      process.exitCode = 2;
+      return;
+    }
+    const [jsInput, wasmInput] = await Promise.all([
+      readFile(firstPath, "utf8"),
+      readFile(secondPath),
+    ]);
+    const actualJsSha256 = createHash("sha256").update(jsInput).digest("hex");
+    const actualWasmSha256 = createHash("sha256").update(wasmInput).digest("hex");
+    if (actualJsSha256 !== firstSha256 || actualWasmSha256 !== secondSha256) {
+      parentPort.postMessage(null);
+      process.exitCode = 3;
+      return;
+    }
+    const result = deriveExtendedMemoryStructuralProof(jsInput, wasmInput);
+    if (!isExtendedMemoryStructuralProof(result, firstSha256, secondSha256)) {
+      parentPort.postMessage(null);
+      process.exitCode = 4;
+      return;
+    }
+    parentPort.postMessage(result);
+    return;
+  }
+
+  const wasmPath = firstPath;
+  const expectedSha256 = firstSha256;
+  const requestedProfile = secondPath;
 
   const bytes = await readFile(wasmPath);
   const actualSha256 = createHash("sha256").update(bytes).digest("hex");
