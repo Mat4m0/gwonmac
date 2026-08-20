@@ -128,12 +128,16 @@ After that restart, these choices update immediately:
   shortcut, and the `/chest` and `/xunlai` chat commands in a supported PvE
   outpost, after the current character's storage access is confirmed.
 - **Quick Travel palette** (Beta) opens with Command-T or the `/tp` chat
-  command. Before you search, it shows only your saved quick destinations.
-  Press 1–9 from anywhere in Travel
-  to use one. Type a destination or alias such as `la`, `kama`, or `eotn`,
-  and press Return. Travel keeps the current Guild Wars region and language and
-  uses district Any. Command-1 through Command-9 assigns the selected result to
-  that number.
+  command. It shows your most recent completed trips and a customizable 3×3
+  Quick Travel grid. Press 1–9 to use a saved destination, choose **Edit** to
+  replace or remove one, or press Command-1 through Command-9 while a search
+  result is selected. Type any of the 199 reviewed direct-travel destinations,
+  an official alias such as `la`, `kama`, or `eotn`, or your own custom synonym,
+  then press Return. Locked destinations remain visible; Guild Wars decides
+  whether the current character can travel there. Travel keeps the current
+  Guild Wars region and language and uses district Any. In Settings, choose
+  Off, 3, 5, or 10 recent destinations. Off clears the history and stops
+  recording; **Clear Recent** clears it without changing the selected count.
 
 Tools and Travel stay open when you click Guild Wars behind them. Press Tab to
 move the keyboard into the topmost GWonMac window. Press Escape to close that

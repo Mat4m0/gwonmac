@@ -43,6 +43,10 @@ import {
   type StoredTravelShortcuts,
 } from "./travel.js";
 import type {
+  TravelPreferencesDocument,
+  TravelPreferencesPatch,
+} from "./travel-preferences.js";
+import type {
   EnhancementProgram,
   EnhancementSelection,
 } from "./enhancement-contracts.js";
@@ -742,6 +746,9 @@ export const IPC = {
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
   settingsReset: "gw:settings:reset",
+  travelPreferencesGet: "gw:travelPreferences:get",
+  travelPreferencesSet: "gw:travelPreferences:set",
+  travelPreferencesRecord: "gw:travelPreferences:record",
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   buildLibraryGet: "gw:buildLibrary:get",
@@ -872,6 +879,11 @@ export interface GwNativeApi {
     get(): Promise<AppSettings>;
     set(value: AppSettingsPatch): Promise<AppSettings>;
     reset(): Promise<AppSettings | null>;
+  };
+  travelPreferences: {
+    get(): Promise<TravelPreferencesDocument>;
+    set(value: TravelPreferencesPatch): Promise<TravelPreferencesDocument>;
+    recordConfirmed(mapId: number): Promise<TravelPreferencesDocument>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;

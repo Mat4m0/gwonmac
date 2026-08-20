@@ -52,6 +52,8 @@ describe("Travel", () => {
     assert.equal(searchTravelDestinations("ac")[0]?.name, "Ascalon City");
     assert.equal(searchTravelDestinations("kama")[0]?.name, "Kamadan, Jewel of Istan");
     assert.equal(searchTravelDestinations("central transfer")[0]?.mapId, 652);
+    assert.equal(searchTravelDestinations("kamadna")[0]?.mapId, 449);
+    assert.equal(searchTravelDestinations("nightfall").length > 0, true);
   });
 
   it("bounds search work before normalization or scoring", () => {

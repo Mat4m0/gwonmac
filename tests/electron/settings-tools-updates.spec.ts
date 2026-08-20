@@ -5,6 +5,60 @@ import { closeOffline, launchOffline } from "./fixtures.mjs";
 import { packageVersion } from "./settings-test-fixture.mjs";
 
 test.describe("tools and update settings", () => {
+  test("configures and clears confirmed Travel recents", async () => {
+    const fixture = await launchOffline(
+      "gw-settings-travel-recents-e2e-",
+      {},
+      async (userData) => {
+        await writeFile(
+          path.join(userData, "settings.json"),
+          JSON.stringify({
+            gwonmacTools: true,
+            travelPalette: true,
+          }),
+          { mode: 0o600 },
+        );
+        await writeFile(
+          path.join(userData, "travel-preferences.json"),
+          JSON.stringify({
+            formatVersion: 1,
+            synonyms: [],
+            recentLimit: 5,
+            recentMapIds: [55, 449, 194],
+          }),
+          { mode: 0o600 },
+        );
+      },
+    );
+    try {
+      const { app, page } = fixture;
+      await app.evaluate(({ Menu }) => {
+        Menu.getApplicationMenu()
+          ?.items[0]?.submenu?.items.find((item) => item.label === "Settings…")
+          ?.click();
+      });
+      await page.locator("#settings-tab-controls").click();
+
+      const limit = page.locator('select[name="travelRecentLimit"]');
+      const clear = page.getByRole("button", { name: "Clear Recent" });
+      await expect(limit).toHaveValue("5");
+      await expect(limit.locator("option")).toHaveCount(4);
+      await expect(clear).toBeEnabled();
+      await limit.selectOption("3");
+      await expect.poll(() => page.evaluate(() => window.gwNative.travelPreferences.get()))
+        .toMatchObject({ recentLimit: 3, recentMapIds: [55, 449, 194] });
+
+      await clear.click();
+      await expect.poll(() => page.evaluate(() => window.gwNative.travelPreferences.get()))
+        .toMatchObject({ recentLimit: 3, recentMapIds: [] });
+      await expect(clear).toBeDisabled();
+      await expect(page.locator("#settings-feedback"))
+        .toHaveText("Recent destinations cleared.");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("Command-Shift-C opens storage or its settings, never hero builds", async () => {
     const fixture = await launchOffline("gw-storage-shortcut-e2e-");
     try {

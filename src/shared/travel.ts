@@ -1,11 +1,9 @@
 /**
  * Composes the public Travel domain surface.
- * Keeps requests, released shortcuts, catalogue, and search discoverable.
+ * Keeps requests, released shortcuts, preferences, and search discoverable.
  */
 import {
-  TRAVEL_DESTINATIONS,
   travelDestination,
-  type TravelDestination,
 } from "./travel-destinations.js";
 
 export {
@@ -15,7 +13,8 @@ export {
 } from "./travel-destinations.js";
 
 export const TRAVEL_SHORTCUT_LIMIT = 9;
-export const TRAVEL_SEARCH_QUERY_LIMIT = 80;
+export * from "./travel-preferences.js";
+export * from "./travel-search.js";
 
 export type TravelDistrictId =
   | "international"
@@ -164,41 +163,4 @@ export function replaceTravelShortcut(
 
 export function travelDistrict(id: TravelDistrictId): TravelDistrict {
   return TRAVEL_DISTRICTS.find((district) => district.id === id)!;
-}
-
-export function normaliseTravelTerm(value: string): string {
-  return value.toLocaleLowerCase("en").normalize("NFKD")
-    .replace(/[\u0300-\u036f]/gu, "")
-    .replace(/[^a-z0-9]+/gu, " ")
-    .trim();
-}
-
-function score(destination: TravelDestination, query: string): number {
-  const name = normaliseTravelTerm(destination.name);
-  const aliases = destination.aliases.map(normaliseTravelTerm);
-  if (aliases.includes(query)) return 0;
-  if (name === query) return 1;
-  if (name.startsWith(query)) return 2;
-  if (name.split(" ").some((word) => word.startsWith(query))) return 3;
-  const terms = query.split(" ");
-  return terms.every((term) =>
-    name.includes(term) || aliases.some((alias) => alias.includes(term))
-  ) ? 4 : Number.POSITIVE_INFINITY;
-}
-
-/** Stable autocomplete with bounded input and output work. */
-export function searchTravelDestinations(
-  query: string,
-  limit = 8,
-): readonly TravelDestination[] {
-  if (query.length > TRAVEL_SEARCH_QUERY_LIMIT) return [];
-  const normalised = normaliseTravelTerm(query);
-  const boundedLimit = Math.max(0, Math.min(12, limit));
-  if (!normalised) return TRAVEL_DESTINATIONS.slice(0, boundedLimit);
-  return TRAVEL_DESTINATIONS
-    .map((candidate, index) => ({ candidate, index, score: score(candidate, normalised) }))
-    .filter((entry) => Number.isFinite(entry.score))
-    .sort((left, right) => left.score - right.score || left.index - right.index)
-    .slice(0, boundedLimit)
-    .map((entry) => entry.candidate);
 }

@@ -235,6 +235,21 @@ exact client Travel dispatcher with `kTravel`. An unknown map, unresolved live
 context, or changed helper stops only Travel without dispatching another client
 UI message.
 
+The Tools host owns one Travel attempt: `idle`, `queued`, or `loading`. A
+three-second start deadline and a separate thirty-second arrival deadline both
+return it to `idle`; disconnect, corrupt snapshot, and other non-loading states
+also end a loading attempt. Only an exact ready map after an observed loading
+transition records Recent. The Vue component renders this state but does not
+interpret the game protocol or own its timers.
+
+Shortcut slots remain in `settings.json` using the district-bearing shape the
+published Stable understands. The current runtime projects those records to
+map IDs and ignores their old district values. Synonyms and confirmed recents
+live in `travel-preferences.json`, a Travel-owned atomic document that older
+Stable builds neither parse nor rewrite. Main serializes Clear Recent and
+arrival recording under one lock, so an older read cannot resurrect cleared
+history.
+
 Team Apply requires enabled Tools and Apply teams in Guild Wars, a proved Team
 Apply capability, a positively classified PvE outpost, fresh party state, and
 an explicit player action.

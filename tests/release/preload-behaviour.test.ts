@@ -180,6 +180,21 @@ const INVOCATIONS: Invocation[] = [
   { path: "settings.get", args: [], channel: IPC.settingsGet },
   { path: "settings.set", args: [{ renderScale: 2 }], channel: IPC.settingsSet },
   { path: "settings.reset", args: [], channel: IPC.settingsReset },
+  {
+    path: "travelPreferences.get",
+    args: [],
+    channel: IPC.travelPreferencesGet,
+  },
+  {
+    path: "travelPreferences.set",
+    args: [{ recentLimit: 3 }],
+    channel: IPC.travelPreferencesSet,
+  },
+  {
+    path: "travelPreferences.recordConfirmed",
+    args: [55],
+    channel: IPC.travelPreferencesRecord,
+  },
   { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {
     path: "accounts.setup",

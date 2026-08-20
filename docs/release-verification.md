@@ -199,6 +199,13 @@ values.
 This proof prevents a hidden compatibility store. A public candidate cannot be
 the first release that introduces a durable settings key that it writes.
 
+A feature-owned document is allowed only when the published Stable never reads,
+rewrites, or deletes that path. Travel uses this rule for
+`travel-preferences.json`; `settings.json` keeps the released shortcut shape so
+a manual Stable return remains safe. The round-trip matrix includes empty,
+default, and nine-slot district-bearing shortcut values. It does not pretend an
+older Stable can preserve keys added to `settings.json` by a candidate.
+
 When Electron, Chromium, Keychain identity, or the persistence contract changes,
 also run the affected real boundary. For example, save and reload a real Guild
 Wars template through production IDBFS.

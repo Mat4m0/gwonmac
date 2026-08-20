@@ -125,6 +125,14 @@ Team Apply depends on complete fresh Party proof. Travel and Xunlai do not
 depend on Party. Host-owned authoring, accounts, settings, updater behavior, and
 other non-memory features remain available regardless of client verdicts.
 
+Raw function-body digests bind a derived transform to the candidate bytes; they
+are not compared with a historic digest at the process boundary. The isolated
+verifier must first prove the signature, normalized role, call relationships,
+and field witnesses. The boundary then checks the derived digest shape and the
+typed evidence, while production rechecks that exact digest against the
+candidate function before rewriting it. This distinction permits routine
+function-index and static-data relocation without weakening input binding.
+
 ## Patch-day playbook
 
 The scheduled recertification workflow detects a changed ArenaNet code

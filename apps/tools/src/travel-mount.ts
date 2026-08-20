@@ -39,16 +39,11 @@ export function mountTravelPalette(
     hide: () => setVisible(false),
     toggle: () => setVisible(!visible.value),
     update(state) {
-      options.host.state.value = state.status === "ready"
-        ? {
-            status: "ready",
-            ...(typeof state.mapId === "number" ? { mapId: state.mapId } : {}),
-          }
-        : {
-            status: "waiting",
-            ...(typeof state.reason === "string" ? { reason: state.reason } : {}),
-          };
+      options.host.updateGameState(state);
     },
-    dispose: () => app.unmount(),
+    dispose: () => {
+      options.host.dispose();
+      app.unmount();
+    },
   });
 }
