@@ -47,6 +47,7 @@ import type {
 } from "./enhancement-team-commands.js";
 import type { StorageInstallation } from "./enhancement-storage-installation.js";
 import type { TravelInstallation } from "./enhancement-travel-installation.js";
+import { travelGameState } from "../shared/travel-command.js";
 import {
   COMPANION_ABI as COMPANION_DESCRIPTOR,
 } from "../shared/companion-abi.js";
@@ -662,7 +663,7 @@ export async function installCertifiedCompanion(
       travelInstallation?.update({
         enabled: policy().travelPalette,
         playRegion: playRegion(),
-        state: companionState,
+        state: travelGameState(companionState),
       });
     };
     storageInstallation?.mount();

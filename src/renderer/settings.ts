@@ -9,6 +9,8 @@
 (function () {
   type AppSettings = import('../shared/contracts.js').AppSettings;
   type AppSettingsPatch = import('../shared/contracts.js').AppSettingsPatch;
+  type TravelPreferencesDocument =
+    import('../shared/travel-preferences.js').TravelPreferencesDocument;
   type ClientSession = import('../shared/contracts.js').ClientSession;
   type RendererMilestone =
     import('../shared/diagnostics.js').RendererMilestone;
@@ -47,6 +49,12 @@
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
   const travelPalette = form.elements.namedItem('travelPalette') as HTMLInputElement;
+  const travelRecentLimit = form.elements.namedItem(
+    'travelRecentLimit',
+  ) as HTMLSelectElement;
+  const travelRecentsClear = byId(
+    'settings-travel-recents-clear',
+  ) as HTMLButtonElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
   const toolFeatures = byId('settings-tool-features');
   const toolsOff = byId('settings-tools-off');
@@ -76,6 +84,7 @@
   let currentSession: ClientSession | null = null;
 
   let currentSettings: AppSettings | null = null;
+  let currentTravelPreferences: TravelPreferencesDocument | null = null;
   let settingsLoad: Promise<AppSettings> | null = null;
   let settingsWrite: Promise<unknown> = Promise.resolve();
   type FeedbackTone = 'neutral' | 'progress' | 'success' | 'warning' | 'error';
@@ -628,7 +637,10 @@
     }
   }
 
-  function fillForm(settings: AppSettings) {
+  function fillForm(
+    settings: AppSettings,
+    travelPreferences = currentTravelPreferences,
+  ) {
     renderScale.value = String(settings.renderScale);
     uiStyle.value = settings.uiStyle;
     uiFont.value = settings.uiFont;
@@ -643,6 +655,7 @@
     teamManagement.checked = settings.teamManagement;
     xunlaiStorage.checked = settings.xunlaiStorage;
     travelPalette.checked = settings.travelPalette;
+    travelRecentLimit.value = String(travelPreferences?.recentLimit ?? 5);
     targetReadout.checked = settings.targetReadout;
     void renderShortcuts(settings);
     toolFeatures.hidden = !settings.gwonmacTools;
@@ -650,6 +663,9 @@
     teamManagement.disabled = !settings.gwonmacTools;
     xunlaiStorage.disabled = !settings.gwonmacTools;
     travelPalette.disabled = !settings.gwonmacTools;
+    travelRecentLimit.disabled = !settings.gwonmacTools;
+    travelRecentsClear.disabled =
+      !settings.gwonmacTools || (travelPreferences?.recentMapIds.length ?? 0) === 0;
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     updateTrack.value = settings.updateTrack;
@@ -682,7 +698,10 @@
     settingsCache.textContent = 'Checking downloaded game data…';
     try {
       await settingsWrite;
-      currentSettings = await window.gwNative.settings.get();
+      [currentSettings, currentTravelPreferences] = await Promise.all([
+        window.gwNative.settings.get(),
+        window.gwNative.travelPreferences.get(),
+      ]);
       fillForm(currentSettings);
       // "Last checked 4 minutes ago" goes stale while a window sits open.
       // The client build's status is the answer to "why is my cursor plain?",
@@ -733,6 +752,22 @@
       void dataStrategy.then((controller) => controller.saveSelectedStrategy());
       return;
     }
+    if (control.name === 'travelRecentLimit') {
+      const value = Number(control.value);
+      if (value !== 0 && value !== 3 && value !== 5 && value !== 10) return;
+      setFeedback('Saving…', 'progress');
+      void window.gwNative.travelPreferences.set({ recentLimit: value })
+        .then((saved) => {
+          currentTravelPreferences = saved;
+          if (currentSettings) fillForm(currentSettings, saved);
+          setFeedback('Saved.', 'success', 2200);
+        })
+        .catch(() => {
+          if (currentSettings) fillForm(currentSettings);
+          setFeedback('Settings could not be saved. Your previous setting is still active; try again.', 'error');
+        });
+      return;
+    }
     const patch = patchForControl(control);
     if (!patch) return;
     setFeedback('Saving…', 'progress');
@@ -757,6 +792,22 @@
           window.gwApplySettings?.(currentSettings);
         }
         setFeedback('Settings could not be saved. Your previous setting is still active; try again.', 'error');
+      });
+  });
+
+  travelRecentsClear.addEventListener('click', () => {
+    if (travelRecentsClear.disabled) return;
+    setFeedback('Clearing Recent…', 'progress');
+    travelRecentsClear.disabled = true;
+    void window.gwNative.travelPreferences.set({ recentMapIds: [] })
+      .then((saved) => {
+        currentTravelPreferences = saved;
+        if (currentSettings) fillForm(currentSettings, saved);
+        setFeedback('Recent destinations cleared.', 'success', 2200);
+      })
+      .catch(() => {
+        if (currentSettings) fillForm(currentSettings);
+        setFeedback('Recent destinations could not be cleared. Nothing changed; try again.', 'error');
       });
   });
 

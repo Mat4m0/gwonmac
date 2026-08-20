@@ -35,7 +35,7 @@ test.describe("renderer Travel input", () => {
         installation.update({
           enabled: true,
           playRegion: "pve",
-          state: { status: "ready", mapId: 133, instanceType: 0 },
+          state: { status: "ready", mapId: 133 },
         });
       });
 
@@ -91,8 +91,9 @@ test.describe("renderer Travel input", () => {
       );
       await expect(search).toHaveAccessibleName("Search destinations");
       await expect(palette.getByRole("listbox")).toHaveCount(0);
-      await expect(page.getByText("Start typing to search available destinations."))
+      await expect(page.getByText("Start typing to search all 199 direct-travel destinations."))
         .toBeVisible();
+      await expect(palette.locator(".travel-shortcut-tile")).toHaveCount(9);
 
       // Native modal work is above non-modal surfaces. The first Escape closes
       // Settings and restores Travel; the palette remains open underneath.

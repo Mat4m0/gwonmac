@@ -39,6 +39,12 @@ import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { Mutex } from "./core/mutex.js";
 import { loadSettings, saveSettings } from "./core/settings.js";
+import {
+  loadTravelPreferences,
+  recordConfirmedTravel,
+  updateTravelPreferences,
+} from "./core/travel-preferences.js";
+import type { TravelPreferencesPatch } from "../shared/travel-preferences.js";
 import { SocketManager } from "./core/sockets.js";
 import {
   count,
@@ -166,6 +172,7 @@ const HOST_VERSION = (() => {
 
 /** Every settings write is a read-modify-write of one file. */
 const settingsLock = new Mutex();
+const travelPreferencesLock = new Mutex();
 let appUpdaterController: AppUpdater | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
@@ -204,6 +211,24 @@ function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
 function resetAppSettings(): Promise<AppSettings> {
   return settingsLock.run(() =>
     saveSettings(gamePaths().settings, { ...DEFAULT_SETTINGS }),
+  );
+}
+
+function getTravelPreferences() {
+  return travelPreferencesLock.run(() =>
+    loadTravelPreferences(gamePaths().travelPreferences)
+  );
+}
+
+function setTravelPreferences(patch: TravelPreferencesPatch) {
+  return travelPreferencesLock.run(() =>
+    updateTravelPreferences(gamePaths().travelPreferences, patch)
+  );
+}
+
+function recordTravelConfirmation(mapId: number) {
+  return travelPreferencesLock.run(() =>
+    recordConfirmedTravel(gamePaths().travelPreferences, mapId)
   );
 }
 
@@ -638,6 +663,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSettings: () => loadSettings(paths.settings),
     updateSettings: updateAppSettings,
     resetSettings: resetAppSettings,
+    getTravelPreferences,
+    setTravelPreferences,
+    recordTravelConfirmation,
     toolsEnabledAtLaunch: settings.gwonmacTools,
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),

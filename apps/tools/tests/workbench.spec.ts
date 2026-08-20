@@ -52,7 +52,9 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   await page.keyboard.press("Meta+9");
   await expect(page.getByRole("status")).toContainText("shortcut 9");
   await page.getByRole("combobox", { name: "Search destinations" }).fill("");
-  await expect(page.getByRole("button", { name: /9 Kamadan, Jewel of Istan/ })).toBeVisible();
+  await expect(page.getByRole("button", {
+    name: /Travel to Kamadan, Jewel of Istan, shortcut 9/,
+  })).toBeVisible();
 });
 
 test("keeps map-only Travel controls and status visible in a short window", async ({ page }) => {
@@ -63,6 +65,12 @@ test("keeps map-only Travel controls and status visible in a short window", asyn
   await expect(page.getByRole("status")).toBeInViewport();
   await expect(page.getByRole("combobox", { name: "Search destinations" })).toBeInViewport();
   await expect(page.getByRole("spinbutton", { name: "District number" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
+  const grid = page.locator(".travel-shortcut-grid");
+  await expect(grid.locator(".travel-shortcut-tile")).toHaveCount(9);
+  await expect.poll(() => grid.evaluate((element) =>
+    getComputedStyle(element).gridTemplateColumns.split(" ").length
+  )).toBe(3);
 });
 
 test("manages teams and finds builds without Electron or the game", async ({ page }) => {

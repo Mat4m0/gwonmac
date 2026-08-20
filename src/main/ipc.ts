@@ -42,6 +42,12 @@ import type {
   TemplateExportEntry,
 } from "../shared/contracts.js";
 import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
+import {
+  parseTravelPreferencesPatch,
+  type TravelPreferencesDocument,
+  type TravelPreferencesPatch,
+} from "../shared/travel-preferences.js";
+import { travelDestination } from "../shared/travel-destinations.js";
 import type {
   RendererFrameBatch,
   RendererMetrics,
@@ -140,6 +146,9 @@ export interface IpcContext {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
+  getTravelPreferences: () => Promise<TravelPreferencesDocument>;
+  setTravelPreferences: (patch: TravelPreferencesPatch) => Promise<TravelPreferencesDocument>;
+  recordTravelConfirmation: (mapId: number) => Promise<TravelPreferencesDocument>;
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
@@ -325,6 +334,13 @@ const asFiniteNumber = (what: string) =>
     }
     return value;
   });
+
+const asTravelMapId = one((value: unknown): number => {
+  if (!Number.isSafeInteger(value) || travelDestination(Number(value)) === null) {
+    throw new ValidationError("invalid Travel destination");
+  }
+  return Number(value);
+});
 
 const asSocketPayload: Parser<{ socketId: number; bytes: Uint8Array }> = (args) => {
   exact(args, 2);
@@ -598,6 +614,12 @@ export function registerIpcHandlers(ctx: IpcContext): {
       if (saved) updateWindowShortcuts(win, saved.shortcutOverrides);
       return saved;
     }),
+
+    travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),
+    travelPreferencesSet: channel(one(parseTravelPreferencesPatch), (_win, patch) =>
+      ctx.setTravelPreferences(patch)),
+    travelPreferencesRecord: channel(asTravelMapId, (_win, mapId) =>
+      ctx.recordTravelConfirmation(mapId)),
 
     shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
     shortcutCaptureCancel: channel(nothing, (win) => {

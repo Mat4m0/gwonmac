@@ -288,6 +288,13 @@ Each recovered fact needs an independent semantic anchor. A common movement is
 not enough. Automated candidates are review evidence and cannot create runtime
 authority.
 
+Do not make the IPC boundary compare a candidate-derived raw body digest with a
+preceding generation. Call immediates and data operands legitimately change
+when ArenaNet relinks an equivalent client. The locator proves their typed
+relationships; the boundary accepts the resulting digest as an input-bound
+fact; the production transform verifies that digest against the same candidate
+bytes. Add a positive coherent-relocation fixture as well as refusal mutations.
+
 Recertification requires semantic identities, signatures, caller relationships,
 original-call preservation, complete address occurrence ledgers, table and
 allocation invariants, positive and negative layout evidence, lifecycle
