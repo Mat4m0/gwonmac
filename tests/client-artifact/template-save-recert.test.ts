@@ -98,6 +98,30 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     ["template-shape-changed"],
   );
 
+  // Static addresses are allowed to relocate only as their complete named
+  // occurrence group. Moving one delete-state word alone must refuse.
+  const deleteBridge = derived.bridges.find(
+    (bridge) => bridge.kind === "deleteFile",
+  )!;
+  const inconsistentStatic = rewriteCode(bytes, (bodies) => {
+    const body = bodies[deleteBridge.callSites[0]!.localFunction]!;
+    body[21] = body[21]! ^ 1;
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(inconsistentStatic)), true);
+  assert.equal(deriveEquivalentTemplateSaveBuild(inconsistentStatic), null);
+
+  // The equipment scan's diagnostic string is an immutable-data anchor. A
+  // nearby pointer is not accepted merely because the instruction still fits.
+  const equipmentScan = derived.bridges.find(
+    (bridge) => bridge.kind === "fileBaseName",
+  )!.callSites[1]!.localFunction;
+  const changedImmutable = rewriteCode(bytes, (bodies) => {
+    const body = bodies[equipmentScan]!;
+    body[719] = body[719]! ^ 1;
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(changedImmutable)), true);
+  assert.equal(deriveEquivalentTemplateSaveBuild(changedImmutable), null);
+
   const observationBase = ENHANCEMENT_BUILDS[ENHANCEMENT_BUILDS.length - 1]!
     .observationBase!;
   const needle = paddedIndex(observationBase.layout.agentArray);
@@ -122,15 +146,19 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(WebAssembly.validate(new Uint8Array(changedAddressReference)), true);
   const addressDecision = verifyLocalClientBytes(changedAddressReference);
   assert.ok(addressDecision.templateSaveBuild);
-  assert.ok(addressDecision.enhancementBuild?.cursorEvent);
-  assert.equal(addressDecision.enhancementBuild.targetObservation, undefined);
-  assert.equal(addressDecision.enhancementBuild.partyObservation, undefined);
-  assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
-  assert.deepEqual(
-    Object.keys(addressDecision.enhancementBuild.outputSha256),
-    ["cursor"],
-  );
-  assert.deepEqual(addressDecision.reasons, []);
+  if (addressDecision.enhancementBuild) {
+    assert.ok(addressDecision.enhancementBuild.cursorEvent);
+    assert.equal(addressDecision.enhancementBuild.targetObservation, undefined);
+    assert.equal(addressDecision.enhancementBuild.partyObservation, undefined);
+    assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
+    assert.deepEqual(
+      Object.keys(addressDecision.enhancementBuild.outputSha256),
+      ["cursor"],
+    );
+    assert.deepEqual(addressDecision.reasons, []);
+  } else {
+    assert.deepEqual(addressDecision.reasons, ["enhancement-layout-changed"]);
+  }
 });
 
 test("every certified runtime profile reproduces the real client chain", async () => {

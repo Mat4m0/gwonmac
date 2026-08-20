@@ -114,10 +114,10 @@ function signatureText(type: FunctionType): string {
   return `(${side(type.params)})->(${side(type.results)})`;
 }
 
-function sameBytes(body: Uint8Array, expected: readonly number[]): boolean {
+function sameBytes(body: Uint8Array, expected: ArrayLike<number>): boolean {
   return (
     body.byteLength === expected.length
-    && expected.every((byte, index) => body[index] === byte)
+    && Array.from(expected).every((byte, index) => body[index] === byte)
   );
 }
 
@@ -189,6 +189,38 @@ class ModuleView {
       return new TextDecoder().decode(segment.bytes.slice(offset, end));
     }
     return null;
+  }
+
+  readData(address: number, length: number): Uint8Array | null {
+    for (const segment of this.dataSegments) {
+      const offset = address - segment.base;
+      if (offset < 0 || offset + length > segment.bytes.byteLength) continue;
+      return segment.bytes.slice(offset, offset + length);
+    }
+    return null;
+  }
+
+  dataOccurrenceCount(needle: Uint8Array): number {
+    let count = 0;
+    for (const segment of this.dataSegments) {
+      for (let at = indexOfBytes(segment.bytes, needle, 0); at >= 0;) {
+        count += 1;
+        at = indexOfBytes(segment.bytes, needle, at + 1);
+      }
+    }
+    return count;
+  }
+
+  stringOccurrenceCount(value: string): number {
+    const needle = new TextEncoder().encode(`${value}\0`);
+    let count = 0;
+    for (const segment of this.dataSegments) {
+      for (let at = indexOfBytes(segment.bytes, needle, 0); at >= 0;) {
+        count += 1;
+        at = indexOfBytes(segment.bytes, needle, at + 1);
+      }
+    }
+    return count;
   }
 }
 
@@ -287,6 +319,93 @@ interface Located {
   readonly deleteAssertion: { message: string; file: string; line: number };
   readonly diagnostics: string[];
 }
+
+type TemplateCallerRole =
+  | "delete"
+  | "skill-scan"
+  | "equipment-scan"
+  | "writer"
+  | "directory-sink"
+  | "screenshot-sink";
+
+type StaticRelocation = Readonly<{
+  start: number;
+  end: number;
+  encoding: "i32-const" | "memory-offset";
+  baseline: number;
+  group?: string;
+  immutableString?: string;
+}>;
+
+/** Exhaustive relocation operands in the six template callers. */
+const TEMPLATE_STATIC_RELOCATIONS: Readonly<
+  Record<TemplateCallerRole, readonly StaticRelocation[]>
+> = Object.freeze({
+  delete: [
+    { start: 21, end: 26, encoding: "memory-offset", baseline: 2674316, group: "delete-state" },
+    { start: 33, end: 38, encoding: "memory-offset", baseline: 2674312, group: "delete-state" },
+    { start: 81, end: 86, encoding: "memory-offset", baseline: 2674304, group: "delete-state" },
+    { start: 116, end: 121, encoding: "memory-offset", baseline: 2674300, group: "delete-state" },
+    { start: 162, end: 167, encoding: "memory-offset", baseline: 2674300, group: "delete-state" },
+  ],
+  "skill-scan": [
+    { start: 55, end: 60, encoding: "memory-offset", baseline: 1447524, group: "template-types" },
+    { start: 82, end: 87, encoding: "i32-const", baseline: 1447542, group: "template-types" },
+    { start: 109, end: 114, encoding: "i32-const", baseline: 1447546, group: "template-types" },
+    { start: 402, end: 407, encoding: "i32-const", baseline: 1447548, group: "template-types" },
+    { start: 645, end: 650, encoding: "i32-const", baseline: 1447652, group: "template-types" },
+    { start: 959, end: 964, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
+    { start: 974, end: 979, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
+  ],
+  "equipment-scan": [
+    { start: 55, end: 60, encoding: "memory-offset", baseline: 1447524, group: "template-types" },
+    { start: 82, end: 87, encoding: "i32-const", baseline: 1447542, group: "template-types" },
+    { start: 109, end: 114, encoding: "i32-const", baseline: 1447532, group: "template-types" },
+    { start: 423, end: 428, encoding: "i32-const", baseline: 1447548, group: "template-types" },
+    { start: 697, end: 702, encoding: "i32-const", baseline: 1447700, group: "template-types" },
+    { start: 719, end: 724, encoding: "i32-const", baseline: 1238018, immutableString: "No valid case for switch variable 'type'" },
+    { start: 801, end: 806, encoding: "i32-const", baseline: 1447668, group: "template-types" },
+    { start: 1121, end: 1126, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
+    { start: 1131, end: 1136, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
+    { start: 1146, end: 1151, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
+    { start: 1176, end: 1181, encoding: "memory-offset", baseline: 1250688, group: "template-hash" },
+  ],
+  writer: [
+    { start: 130, end: 135, encoding: "i32-const", baseline: 1447532, group: "template-types" },
+  ],
+  "directory-sink": [
+    { start: 55, end: 60, encoding: "memory-offset", baseline: 1520752, group: "directory-types" },
+    { start: 70, end: 75, encoding: "memory-offset", baseline: 1520744, group: "directory-types" },
+    { start: 85, end: 90, encoding: "memory-offset", baseline: 1520736, group: "directory-types" },
+    { start: 162, end: 167, encoding: "i32-const", baseline: 1520756, group: "directory-types" },
+    { start: 643, end: 648, encoding: "i32-const", baseline: 1520776, group: "directory-types" },
+  ],
+  "screenshot-sink": [
+    { start: 27, end: 32, encoding: "memory-offset", baseline: 5943272, group: "screenshot-state" },
+    { start: 41, end: 46, encoding: "memory-offset", baseline: 5943296, group: "screenshot-state" },
+    { start: 65, end: 70, encoding: "memory-offset", baseline: 5943296, group: "screenshot-state" },
+    { start: 99, end: 104, encoding: "i32-const", baseline: 1556320, group: "screenshot-types" },
+    { start: 146, end: 151, encoding: "i32-const", baseline: 1244317, immutableString: "PathCreateDirectory() failed: %u\n" },
+    { start: 183, end: 188, encoding: "memory-offset", baseline: 2635884, group: "screenshot-directory" },
+    { start: 282, end: 287, encoding: "i32-const", baseline: 1556336, group: "screenshot-types" },
+    { start: 309, end: 314, encoding: "i32-const", baseline: 1556356, group: "screenshot-types" },
+    { start: 367, end: 372, encoding: "i32-const", baseline: 1556388, group: "screenshot-types" },
+    { start: 691, end: 696, encoding: "i32-const", baseline: 1241365, immutableString: "No valid case for switch variable '\"\"'" },
+    { start: 730, end: 735, encoding: "i32-const", baseline: 1556408, group: "screenshot-types" },
+    { start: 1013, end: 1018, encoding: "i32-const", baseline: 1556430, group: "screenshot-types" },
+    { start: 1248, end: 1253, encoding: "memory-offset", baseline: 5943276, group: "screenshot-state" },
+    { start: 1262, end: 1267, encoding: "memory-offset", baseline: 5943276, group: "screenshot-state" },
+    { start: 1294, end: 1299, encoding: "memory-offset", baseline: 5943268, group: "screenshot-state" },
+    { start: 1305, end: 1310, encoding: "memory-offset", baseline: 5943296, group: "screenshot-state" },
+    { start: 1329, end: 1334, encoding: "i32-const", baseline: 1241365, immutableString: "No valid case for switch variable '\"\"'" },
+    { start: 1373, end: 1378, encoding: "memory-offset", baseline: 5943292, group: "screenshot-state" },
+    { start: 1390, end: 1395, encoding: "memory-offset", baseline: 5943280, group: "screenshot-state" },
+    { start: 1407, end: 1412, encoding: "memory-offset", baseline: 5943284, group: "screenshot-state" },
+    { start: 1428, end: 1433, encoding: "memory-offset", baseline: 5943288, group: "screenshot-state" },
+    { start: 1449, end: 1454, encoding: "memory-offset", baseline: 5943288, group: "screenshot-state" },
+    { start: 1473, end: 1478, encoding: "memory-offset", baseline: 5943272, group: "screenshot-state" },
+  ],
+});
 
 /**
  * The `not-applicable` signal: no function returns `i32.const 2` from a
@@ -643,6 +762,125 @@ function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function templateCallerRoles(found: Located): Map<number, TemplateCallerRole> {
+  const deleted = [...found.view.callers(
+    found.view.functionIndex(found.targets.deleteFile.localFunction),
+  )];
+  if (deleted.length !== 1) fail("delete caller role is ambiguous");
+  const roles = new Map<number, TemplateCallerRole>([
+    [deleted[0]!, "delete"],
+    [found.scans[0]!, "skill-scan"],
+    [found.scans[1]!, "equipment-scan"],
+    [found.writeFunction, "writer"],
+    [found.sinks[0]!, "directory-sink"],
+    [found.sinks[1]!, "screenshot-sink"],
+  ]);
+  if (roles.size !== 6) fail("template caller roles overlap");
+  return roles;
+}
+
+function relocationValue(
+  body: Uint8Array,
+  relocation: StaticRelocation,
+): number {
+  if (relocation.encoding === "i32-const") {
+    if (body[relocation.start - 1] !== 0x41) {
+      fail(`static relocation at ${relocation.start} is not i32.const`);
+    }
+    const cursor = { offset: relocation.start };
+    const value = readSleb(body, cursor);
+    if (cursor.offset !== relocation.end) {
+      fail(`static relocation at ${relocation.start} changed width`);
+    }
+    return value;
+  }
+  for (
+    let opcodeAt = Math.max(0, relocation.start - 6);
+    opcodeAt < relocation.start;
+    opcodeAt += 1
+  ) {
+    if (body[opcodeAt]! < 0x28 || body[opcodeAt]! > 0x3e) continue;
+    const cursor = { offset: opcodeAt + 1 };
+    try {
+      readUleb(body, cursor);
+      if (cursor.offset !== relocation.start) continue;
+      const value = readUleb(body, cursor);
+      if (cursor.offset === relocation.end) return value;
+    } catch {
+      // Another byte happened to look like a memory opcode; keep searching.
+    }
+  }
+  fail(`static relocation at ${relocation.start} is not a memory offset`);
+}
+
+function normalizeStaticRelocations(
+  found: Located,
+  role: TemplateCallerRole,
+  source: Uint8Array,
+  normalized: Uint8Array,
+  deltas: Map<string, number>,
+): void {
+  const relocations = TEMPLATE_STATIC_RELOCATIONS[role];
+  if (relocations.some((relocation) => relocation.end > source.byteLength)) {
+    // Small synthetic locator fixtures do not model the production static
+    // ledger. Their fingerprint remains useful test evidence but can never
+    // equal the shipped production baseline.
+    return;
+  }
+  relocations.forEach((relocation, index) => {
+    const value = relocationValue(source, relocation);
+    if (relocation.immutableString !== undefined) {
+      if (
+        found.view.readString(value) !== relocation.immutableString
+        || found.view.stringOccurrenceCount(relocation.immutableString) !== 1
+      ) {
+        fail(`immutable ${role} reference ${index} changed or is ambiguous`);
+      }
+    } else {
+      const group = relocation.group
+        ?? fail(`mutable ${role} reference ${index} has no occurrence ledger`);
+      const delta = value - relocation.baseline;
+      const previous = deltas.get(group);
+      if (previous !== undefined && previous !== delta) {
+        fail(`mutable static group ${group} moved inconsistently`);
+      }
+      deltas.set(group, delta);
+    }
+    normalized.fill(0, relocation.start, relocation.end);
+    normalized[relocation.start] = index + 1;
+  });
+}
+
+const FILE_OPEN_VTABLE_PREFIX = Uint8Array.of(
+  0x5a, 0, 0, 0, 0x5b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0x5c, 0, 0, 0, 0x5d, 0, 0, 0, 0x5e, 0, 0, 0, 0x5f, 0, 0, 0,
+);
+
+function normalizedFileExistsBody(found: Located): string {
+  const source = found.view.bodies[found.targets.fileExists.localFunction]
+    ?? fail("file-exists body is missing");
+  const relocation: StaticRelocation = {
+    start: 295,
+    end: 300,
+    encoding: "i32-const",
+    baseline: 1255092,
+  };
+  if (source.byteLength < relocation.end) return sha256(source);
+  const pointer = relocationValue(source, relocation);
+  const content = found.view.readData(pointer, FILE_OPEN_VTABLE_PREFIX.byteLength);
+  if (
+    !content
+    || !sameBytes(content, FILE_OPEN_VTABLE_PREFIX)
+    || found.view.dataOccurrenceCount(FILE_OPEN_VTABLE_PREFIX) !== 1
+  ) {
+    fail("File::Open immutable vtable reference changed or is ambiguous");
+  }
+  const normalized = source.slice();
+  normalized.fill(0, relocation.start, relocation.end);
+  normalized[relocation.start] = 1;
+  return sha256(normalized);
+}
+
 /**
  * Identity of the complete bodies whose calls the transform will repoint.
  *
@@ -668,10 +906,16 @@ function semanticFingerprint(
     }
   }
 
+  const callerRoles = templateCallerRoles(found);
+  const deltas = new Map<string, number>();
+
   const callers = [...touched].map(([local, roles]) => {
     const source = found.view.bodies[local]
       ?? fail(`semantic caller ${local} is out of range`);
     const normalized = source.slice();
+    const role = callerRoles.get(local)
+      ?? fail(`semantic caller ${local} has no feature role`);
+    normalizeStaticRelocations(found, role, source, normalized, deltas);
     for (const bridge of entry.bridges) {
       const expected = callNeedle(
         found.view.functionIndex(bridge.stubFunction),
@@ -692,17 +936,15 @@ function semanticFingerprint(
       }
     }
     return {
+      role,
       roles: [...roles].sort(),
       bodySha256: sha256(normalized),
     };
-  }).sort((left, right) =>
-    JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  }).sort((left, right) => left.role.localeCompare(right.role));
 
   return sha256(new TextEncoder().encode(JSON.stringify({
     callers,
-    fileExistsBodySha256: sha256(
-      found.view.bodies[found.targets.fileExists.localFunction]!,
-    ),
+    fileExistsBodySha256: normalizedFileExistsBody(found),
   })));
 }
 
@@ -797,7 +1039,7 @@ export function analyzeTemplateSaveCandidate(
  * not from the whole client, so an unrelated ArenaNet rebuild can still pass.
  */
 export const TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT =
-  "607abe51ec1bef208373970b49208005bb51d115cabe0cce16615a778b521e07";
+  "82664898e240ff2119cb43d454ba567ce20195887ca28d1c6f4b1805304a0b38";
 
 /**
  * Return a transform record only when the locator and the complete relevant

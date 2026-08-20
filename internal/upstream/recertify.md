@@ -61,8 +61,9 @@ Read the template report status first:
 The template command uses the same production locator as the launcher. It
 derives candidates from body shape, signatures, and caller intersections. The
 runtime verifier also compares complete affected caller bodies while
-normalizing only the selected call-index operands. Matching offsets alone are
-not enough.
+normalizing only selected call-index operands, a complete feature-local static
+occurrence ledger, and immutable pointers whose uniquely referenced content
+matches. Matching offsets or a common address delta alone are not enough.
 
 The Enhancement report is review evidence only. `candidate`, `ambiguous`, and
 `unavailable` cannot create runtime authority. CI never writes its findings
