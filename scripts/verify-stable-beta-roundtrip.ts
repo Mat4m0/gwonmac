@@ -167,7 +167,6 @@ const candidateSettingsDomains = Array.from(
       travelShortcuts: [],
       targetReadout: cycle(booleanValues, index),
       shortcutOverrides: {},
-      extendedMemoryEnabled: cycle(booleanValues, index + 1),
       showDiagnostics: cycle(booleanValues, index),
       dataStrategy: cycle(DATA_STRATEGIES, index),
       autoCheckUpdates: false,

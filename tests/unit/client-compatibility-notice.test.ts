@@ -224,7 +224,7 @@ describe("client compatibility notice", () => {
   it("renders one report into launcher and Settings", () => {
     const dom = compatibilityDom();
     const before: ClientSession = {
-      appVersion: "2026.7.0", compatibility: null, extendedMemory: null, healthToken: null,
+      appVersion: "2026.7.0", compatibility: null, healthToken: null,
     };
     assert.equal(renderClientCompatibility(dom.root, before), null);
     assert.equal(dom.element("settings-compat-status").hidden, true);

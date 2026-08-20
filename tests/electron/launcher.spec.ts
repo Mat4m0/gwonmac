@@ -205,7 +205,6 @@ test.describe("launcher recovery", () => {
       });
       expect(result.session).toMatchObject({
         compatibility: null,
-        extendedMemory: null,
         healthToken: null,
       });
       expect(result.refusal).toContain("no active client snapshot is available");

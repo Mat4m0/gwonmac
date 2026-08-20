@@ -23,9 +23,6 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         xunlaiStorage: { status: "off" },
       },
     },
-    extendedMemory: supported
-      ? { requestedAtLaunch: false, status: "standard", effectiveCapBytes: 2_147_483_648, fallbackReason: null }
-      : { requestedAtLaunch: true, status: "active", effectiveCapBytes: 4_294_967_296, fallbackReason: null },
   };
 }
 
@@ -37,11 +34,9 @@ describe("atomic active client publication", () => {
     assert.equal(slot.current, candidate);
     assert.equal(slot.current?.wasmPath, "/candidate/derived.wasm");
     assert.equal(slot.current?.compatibility?.features.nativeCursor.status, "unavailable");
-    assert.equal(slot.current?.extendedMemory.status, "active");
 
     const rollback = slot.publish(generation("/previous/official.wasm", 10));
     assert.notEqual(rollback.generation, previous.generation);
     assert.equal(slot.current?.compatibility?.features.nativeCursor.status, "available");
-    assert.equal(slot.current?.extendedMemory.status, "standard");
   });
 });

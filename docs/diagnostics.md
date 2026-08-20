@@ -170,9 +170,9 @@ A failed growth request at the compiled limit proves that the official client
 requested more memory than that module permits. It does not identify which
 client subsystem retained the earlier allocations.
 
-Function indices apply only to the exact captured module. The 4 GB option
-records requested and effective state. An unavailable certified profile falls
-back to the ordinary module with a closed reason.
+Function indices apply only to the exact captured module. Older archives may
+contain the withdrawn 4 GB profile's requested and effective state; current
+versions decode that legacy evidence but never emit or activate the profile.
 
 ## Performance measurement rule
 

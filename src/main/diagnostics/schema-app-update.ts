@@ -3,7 +3,6 @@
  * It keeps that half of the closed schema reviewable as one bounded table.
  */
 import type { EventSpec } from "./schema-fields.js";
-import { EXTENDED_MEMORY_PROFILES } from "../certification/extended-memory.js";
 import {
   appPhase,
   appUpdateErrorCode,
@@ -361,6 +360,14 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     level: "error",
     fields: none,
   },
+  "memoryProfile.retirementFailed": {
+    subsystem: "app",
+    level: "warn",
+    fields: {
+      target: literal(["settings", "cache"] as const),
+      code,
+    },
+  },
   "settings.loadFailed": {
     subsystem: "settings",
     level: "error",
@@ -592,12 +599,21 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     fields: { code },
   },
   "wasm.extendedMemory": {
+    // Legacy archive compatibility only. The executable profile was withdrawn
+    // and production no longer emits either extended-memory event.
     subsystem: "wasm",
     level: "info",
     fields: {
       mode: literal(["disabled", "unavailable", "active"] as const),
       requested: boolean,
-      profile: literal(["none", ...EXTENDED_MEMORY_PROFILES] as const),
+      profile: literal([
+        "none",
+        "off",
+        "cursor",
+        "target",
+        "cursorTarget",
+        "cursorToolbox",
+      ] as const),
       capBytes: finiteNumber,
       fallbackReason: literal([
         "none",

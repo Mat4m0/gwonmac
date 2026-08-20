@@ -29,7 +29,6 @@ describe("settings", () => {
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
-      extendedMemoryEnabled: false,
       showDiagnostics: false,
       dataStrategy: null,
       // On by default since the 2026-07 UX revision, and declared as a
@@ -73,7 +72,6 @@ describe("settings", () => {
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
-      extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
@@ -217,9 +215,10 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ targetReadout: true }), {
       targetReadout: true,
     });
-    assert.deepEqual(parseSettingsPatch({ extendedMemoryEnabled: true }), {
-      extendedMemoryEnabled: true,
-    });
+    assert.throws(
+      () => parseSettingsPatch({ extendedMemoryEnabled: true }),
+      AppError,
+    );
     assert.deepEqual(parseSettingsPatch({ uiStyle: "obsidian" }), {
       uiStyle: "obsidian",
     });
@@ -266,7 +265,6 @@ describe("settings", () => {
       "autoCheckUpdates",
       "compatibilityNoticeSeenFor",
       "dataStrategy",
-      "extendedMemoryEnabled",
       "formatVersion",
       "gwonmacTools",
       "lastUpdateCheckAt",
@@ -322,7 +320,6 @@ describe("settings", () => {
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
-      extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately
