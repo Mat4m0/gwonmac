@@ -291,6 +291,10 @@ test("a new client build can be re-certified without hand-derivation", async () 
   // The regression mode recertify.md makes step 0: prove the tool reproduces
   // today's certified entry before pointing it at a new build.
   assert.match(cli, /--expect-certified/);
+  assert.match(cli, /const features = result\.featureVerdicts/);
+  assert.match(cli, /invariant: verdict\.invariant/);
+  assert.match(cli, /candidates: verdict\.candidates/);
+  assert.doesNotMatch(cli, /\n\s+featureVerdicts,\n/);
   assert.match(recert, /compareToCertified/);
   assert.match(recert, /formatBuildEntry/);
   assert.doesNotMatch(locator, /formatBuildEntry|compareToCertified/);
@@ -346,8 +350,78 @@ test("only strict feature locators may turn structural evidence into launch auth
     path.join(root, "src/main/certification/local-client-verifier.ts"),
     "utf8",
   );
+  const certification = await readFile(
+    path.join(root, "src/main/certification/client-certification.ts"),
+    "utf8",
+  );
+  const runtime = await readFile(
+    path.join(root, "src/main/client-runtime.ts"),
+    "utf8",
+  );
+  const templateVerifier = await readFile(
+    path.join(root, "src/main/certification/template-save-verifier.ts"),
+    "utf8",
+  );
   assert.match(verifier, /locateAutomaticCursor/);
   assert.match(verifier, /locateAutomaticTarget/);
+  assert.match(verifier, /preparePostTemplateSaveModule\(official\)/);
+  assert.doesNotMatch(verifier, /certified:|structurallyDerived:/);
+  assert.doesNotMatch(verifier, /findEnhancementBuild/);
+  assert.doesNotMatch(certification, /findTemplateSaveBuild|findEnhancementBuild/);
+  assert.doesNotMatch(
+    certification,
+    /certifyClientBuild|shouldVerifyClientLocally/,
+  );
+  assert.match(runtime, /const local = await verifyClientLocally\(/);
+  assert.match(
+    runtime,
+    /templateSaveBuild: null,\s+enhancementBuild: null,/,
+  );
+  assert.doesNotMatch(
+    runtime,
+    /certifyClientBuild|shouldVerifyClientLocally/,
+  );
+  assert.match(
+    templateVerifier,
+    /if \(!resolvers\) return deriveEquivalentPostTemplateSaveModule\(input\)/,
+  );
+});
+
+test("native double-click and 4 GB use bounded local proof as sole runtime authority", async () => {
+  const clientModule = await readFile(
+    path.join(root, "src/main/certification/client-module.ts"),
+    "utf8",
+  );
+  const native = await readFile(
+    path.join(root, "src/main/certification/native-double-click.ts"),
+    "utf8",
+  );
+  const extended = await readFile(
+    path.join(root, "src/main/certification/extended-memory.ts"),
+    "utf8",
+  );
+  const host = await readFile(
+    path.join(root, "src/main/certification/local-client-verifier-host.ts"),
+    "utf8",
+  );
+  const runtime = await readFile(
+    path.join(root, "src/main/client-runtime.ts"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(clientModule, /findNativeDoubleClickBuild/);
+  assert.match(clientModule, /const build = await verifyLocally\(/);
+  assert.match(native, /const build = deriveNativeDoubleClickBuild\(input\)/);
+  assert.doesNotMatch(
+    native,
+    /const build = findNativeDoubleClickBuild\([^;]+\)\s*\?\?/,
+  );
+  assert.match(extended, /const structural = await verifyLocally\(/);
+  assert.match(host, /const VERIFIER_TIMEOUT_MS = 5_000/);
+  assert.match(
+    runtime,
+    /prepareClientModule\([\s\S]+verifyNativeDoubleClickLocally, verifyExtendedMemoryLocally\)/,
+  );
 });
 
 test("the WASM section codec has exactly one home", async () => {
@@ -367,7 +441,7 @@ test("the WASM section codec has exactly one home", async () => {
   // those transforms without parsing a second time, so it deliberately has no
   // codec dependency of its own.
   const sharers: ReadonlyArray<readonly [file: string, specifier: string]> = [
-    ["src/main/certification/enhancement-structural-evidence.ts", '../core/wasm-binary.js'],
+    ["src/main/certification/enhancement-wasm-proof-context.ts", '../core/wasm-binary.js'],
     ["src/main/certification/enhancement-transform.ts", '../core/wasm-binary.js'],
     ["src/main/certification/template-save-compat.ts", '../core/wasm-binary.js'],
     ["src/main/certification/template-save-verifier.ts", '../core/wasm-binary.js'],

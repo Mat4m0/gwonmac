@@ -13,7 +13,11 @@ import {
   inspectTemplateSaveCandidate,
   TEMPLATE_SAVE_TABLE,
 } from "../../src/tools/template-save-recert.js";
-import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
+import {
+  certifyTemplateSaveRewrite,
+  rewriteTemplateSaveWasm,
+  TEMPLATE_SAVE_BUILDS,
+} from "../../src/main/certification/template-save-compat.js";
 import {
   preparePostTemplateSaveModule,
 } from "../../src/main/certification/template-save-verifier.js";
@@ -372,6 +376,34 @@ describe("template-save re-certification", () => {
     assert.deepEqual(compareToCertified(entry), [
       `no certified entry for ${entry.sha256}`,
     ]);
+  });
+
+  it("binds one production rewrite to its derived build and exact bytes", () => {
+    const { bytes } = build();
+    const transaction = certifyTemplateSaveRewrite(
+      bytes,
+      draftTemplateSaveBuild(bytes),
+    );
+
+    assert.deepEqual(
+      transaction.bytes,
+      rewriteTemplateSaveWasm(bytes, transaction.build),
+    );
+    assert.equal(
+      createHash("sha256").update(transaction.bytes).digest("hex"),
+      transaction.build.outputSha256,
+    );
+    assert.throws(
+      () => certifyTemplateSaveRewrite(bytes, transaction.build),
+      /certification requires a draft/,
+    );
+    assert.throws(
+      () => rewriteTemplateSaveWasm(bytes, {
+        ...transaction.build,
+        outputSha256: "0".repeat(64),
+      }),
+      /unexpected output/,
+    );
   });
 
   it("feeds certified and structurally-derived builds through identical rewrites", () => {

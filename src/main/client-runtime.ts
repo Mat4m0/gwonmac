@@ -14,10 +14,10 @@
  * rename the same trees, and two of them interleaving at an await lets one
  * rename away a tree the other is still reading.
  *
- * Certification is consumed, not re-derived: the runtime asks once which state
- * a build is in and carries that one answer through preparation. Compiled facts
- * answer known builds; the isolated verifier may derive an exact structural
- * answer for an unknown one. A build neither path certifies is served untouched.
+ * Certification is consumed, not re-derived: every launch starts without
+ * transform authority, then the isolated verifier may supply one structural
+ * answer carried through preparation. A build it cannot prove is served
+ * untouched, including builds present in historic regression tables.
  */
 import { net } from "electron";
 import {
@@ -42,8 +42,6 @@ import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
 import {
   certificationFromLocalVerification,
-  certifyClientBuild,
-  shouldVerifyClientLocally,
 } from "./certification/client-certification.js";
 import {
   PATCH_REQUEST_HEADERS,
@@ -58,7 +56,10 @@ import {
 import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
 import { encodedChunkLimit } from "./core/chunk-format.js";
 import { ChunkStore } from "./core/chunk-store.js";
-import { prepareClientModule } from "./certification/client-module.js";
+import {
+  prepareClientModule,
+  type ClientCertification,
+} from "./certification/client-module.js";
 import {
   clearRejectedClient,
   confirmClientCandidate,
@@ -312,22 +313,20 @@ export class ClientRuntime {
       };
     }
 
-    let certification = certifyClientBuild(officialSha256);
-    if (shouldVerifyClientLocally(
-      certification,
-      this.options.enhancementCapabilities,
-    )) {
-      const local = await verifyClientLocally({
-        officialWasmPath: officialWasm,
-        officialSha256,
-        requestedCapabilities: this.options.enhancementCapabilities,
-      });
-      if (local) {
-        certification = certificationFromLocalVerification(local);
-        logEvent({ k: "wasm.localVerificationCompleted" });
-      } else {
-        logEvent({ k: "wasm.localVerificationUnavailable" });
-      }
+    let certification: ClientCertification = {
+      templateSaveBuild: null,
+      enhancementBuild: null,
+    };
+    const local = await verifyClientLocally({
+      officialWasmPath: officialWasm,
+      officialSha256,
+      requestedCapabilities: this.options.enhancementCapabilities,
+    });
+    if (local) {
+      certification = certificationFromLocalVerification(local);
+      logEvent({ k: "wasm.localVerificationCompleted" });
+    } else {
+      logEvent({ k: "wasm.localVerificationUnavailable" });
     }
     const prepared = await prepareClientModule({
       officialWasmPath: officialWasm,

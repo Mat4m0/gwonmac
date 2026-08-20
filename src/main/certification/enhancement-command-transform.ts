@@ -145,6 +145,8 @@ export function localActionSlashParser(
   enabledGlobalIndex: number,
   travelEnabledGlobalIndex: number,
   travelToggleGlobalIndex: number,
+  travelAliases: boolean,
+  xunlaiAliases: boolean,
 ): Uint8Array {
   const original = () => concat(
     Uint8Array.of(0x20), uleb(0),
@@ -153,31 +155,35 @@ export function localActionSlashParser(
   );
   return concat(
     uleb(0),
-    // Travel has its own setting and does not borrow the storage mailbox or
-    // payload. The renderer takes this bounded signal.
-    Uint8Array.of(0x02, 0x40),
-    exactSlashCommand(1, "/tp"),
-    Uint8Array.of(0x45, 0x0d), uleb(0),
-    Uint8Array.of(0x23), uleb(travelEnabledGlobalIndex),
-    Uint8Array.of(0x45, 0x0d), uleb(0),
-    Uint8Array.of(0x41), sleb(1),
-    Uint8Array.of(0x24), uleb(travelToggleGlobalIndex),
-    Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x0f, 0x0b),
-    Uint8Array.of(0x23), uleb(enabledGlobalIndex), Uint8Array.of(0x45, 0x04, 0x40),
-    original(), Uint8Array.of(0x0f, 0x0b),
-    Uint8Array.of(0x23), uleb(payloadGlobalIndex), Uint8Array.of(0x45, 0x04, 0x40),
-    original(), Uint8Array.of(0x0f, 0x0b),
-    exactSlashCommand(1, "/chest"),
-    exactSlashCommand(1, "/xunlai"),
-    Uint8Array.of(0x72, 0x45, 0x04, 0x40),
-    original(), Uint8Array.of(0x0f, 0x0b),
-    // A recognized local command stays consumed while the bounded mailbox is
-    // busy; falling through would incorrectly show Guild Wars' Unknown command.
-    Uint8Array.of(0x23), uleb(pendingGlobalIndex), Uint8Array.of(0x04, 0x40),
-    Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x0f, 0x0b),
-    Uint8Array.of(0x41), sleb(STORAGE_COMMAND),
-    Uint8Array.of(0x24), uleb(pendingGlobalIndex),
-    Uint8Array.of(0x41), sleb(1),
+    ...(travelAliases ? [concat(
+      // Travel has its own setting and does not borrow the storage mailbox or
+      // payload. The renderer takes this bounded signal.
+      Uint8Array.of(0x02, 0x40),
+      exactSlashCommand(1, "/tp"),
+      Uint8Array.of(0x45, 0x0d), uleb(0),
+      Uint8Array.of(0x23), uleb(travelEnabledGlobalIndex),
+      Uint8Array.of(0x45, 0x0d), uleb(0),
+      Uint8Array.of(0x41), sleb(1),
+      Uint8Array.of(0x24), uleb(travelToggleGlobalIndex),
+      Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x0f, 0x0b),
+    )] : []),
+    ...(xunlaiAliases ? [concat(
+      Uint8Array.of(0x23), uleb(enabledGlobalIndex), Uint8Array.of(0x45, 0x04, 0x40),
+      original(), Uint8Array.of(0x0f, 0x0b),
+      Uint8Array.of(0x23), uleb(payloadGlobalIndex), Uint8Array.of(0x45, 0x04, 0x40),
+      original(), Uint8Array.of(0x0f, 0x0b),
+      exactSlashCommand(1, "/chest"),
+      exactSlashCommand(1, "/xunlai"),
+      Uint8Array.of(0x72, 0x45, 0x04, 0x40),
+      original(), Uint8Array.of(0x0f, 0x0b),
+      // A recognized local command stays consumed while the bounded mailbox is
+      // busy; falling through would incorrectly show Guild Wars' Unknown command.
+      Uint8Array.of(0x23), uleb(pendingGlobalIndex), Uint8Array.of(0x04, 0x40),
+      Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x0f, 0x0b),
+      Uint8Array.of(0x41), sleb(STORAGE_COMMAND),
+      Uint8Array.of(0x24), uleb(pendingGlobalIndex),
+      Uint8Array.of(0x41), sleb(1),
+    )] : [original()]),
     Uint8Array.of(0x0b),
   );
 }

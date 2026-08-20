@@ -37,6 +37,7 @@ import { PatchClient } from "../src/main/core/patch-client.js";
 import { clientArtifactPath } from "../src/main/core/paths.js";
 import { createBoundedPatchFetch } from "../src/main/core/patch-transport.js";
 import { isDigest, type Digest } from "../src/shared/digest.js";
+import { SEMANTIC_VERIFIER_ABI } from "../src/main/certification/semantic-proof.js";
 
 export const RECORD = "certificates/certified-client.json";
 
@@ -190,12 +191,14 @@ export async function main(argv: readonly string[]): Promise<void> {
     recorded,
     changed: fingerprint !== recorded,
     wasm: wasm || null,
+    verifierAbi: SEMANTIC_VERIFIER_ABI,
   })}\n`);
   await publishStepOutputs({
     changed: String(fingerprint !== recorded),
     fingerprint,
     recorded,
     wasm,
+    verifier_abi: String(SEMANTIC_VERIFIER_ABI),
   });
 }
 

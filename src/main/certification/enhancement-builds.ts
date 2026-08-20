@@ -39,45 +39,45 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // `transformEnhancementWasm` against the real derived module whenever
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
-        cursor:
+        "features-01":
           "e1122d8128c482bb70dd86ded6ca28d49256999899a2d492971f6e0173b4e758",
-        target:
+        "features-02":
           "e954703ee701260194dc677c10ae9dc7f0229ac4734beabdc7b34464f1591e36",
-        cursorTarget:
+        "features-03":
           "2b6bfa11cbfc19a6dfb2f24de2fc9568d6ee3fcbd8e95c18fee576532e1aff1d",
-        party:
+        "features-04":
           "3710b2721f9758aad0c7158d86804f62818c7c5215ea0777c29ef2e2c6e9ee39",
-        cursorParty:
+        "features-05":
           "5540ea16565a2ed586a5e5556b58194b4f586337694c3f2c66bb63b01aec08f1",
-        targetParty:
+        "features-06":
           "e60119e58bdeb87109dfc715935eeb2fbe33a3906173d05f74678f7cdcebe32a",
-        cursorTargetParty:
+        "features-07":
           "4e880853ea9f37cebb923b008b30b6e5bd2da657c8976b5129dd39698f91f397",
-        partyCommands:
+        "features-0c":
           "ec8431fe028151439b8e09e8fe171facb01ab28842f9f0175c1739f26f8b185c",
-        cursorPartyCommands:
+        "features-0d":
           "28ec655aa68bc3fb5df4337be1421893715f4b7379bde8955b23a64ed922e6e6",
-        targetPartyCommands:
+        "features-0e":
           "fc2a879e1cb2ec6020f72a96136442b7cdbedbf3891767a31ac8298cad79c98a",
-        cursorTargetPartyCommands:
+        "features-0f":
           "52d1cca841a68be0179aeceab1f749c8873f51e7c056dfed354d2ededbdf306d",
-        storage:
+        "features-70":
           "2e29d4af024f6e05bc017b6cdc2363b071e9fee9c6548be78623bc9f046a59b3",
-        partyStorage:
+        "features-74":
           "ed8eedf6d75878c77c99aca898d72931d9ff7e2f5d566d56e15fccc0bf03052c",
-        cursorPartyStorage:
+        "features-75":
           "d83360909ff5a1d30f204189be9e01c615f471714c500a1af3dc9f20b5d5a91d",
-        targetPartyStorage:
+        "features-76":
           "bcc5ecb2ff83fcda0fc406b735328e34c3a9d72d16a0ed168ca8190e35b86c3a",
-        cursorTargetPartyStorage:
+        "features-77":
           "829845f4c8aba0fd747ee8f2b9223a3da5c2769d73e2689c06943096339e3fe7",
-        partyCommandsStorage:
+        "features-7c":
           "37bb6d011d76c4070b39f980bdfaeeaac640a0ab33b63dcdf99c91eeaf364f82",
-        cursorPartyCommandsStorage:
+        "features-7d":
           "b5d8dc42e540a8fc0c39b3c22e2fecd7da213b0904108f8fa5bca72981cc006f",
-        targetPartyCommandsStorage:
+        "features-7e":
           "1871c89305a5cdc14d83d6e0337c194549707c71599cd1543869bd2c7d50bf44",
-        cursorTargetPartyCommandsStorage:
+        "features-7f":
           "5ec27d6b0ecdf928ff74113fcee052bcbc1b185e098c9d422528bb06e59e9511",
       }),
       programId: 1,

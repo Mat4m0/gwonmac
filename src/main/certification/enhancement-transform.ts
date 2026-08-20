@@ -28,25 +28,11 @@ import {
   supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
+import { applyFeatureContributions } from "./enhancement-transform-features.js";
 import {
   PROFESSION_TRACE_WORDS,
-  professionTraceReader,
-  tracedPacketSender,
-  tracedProfessionBuilder,
-  tracedSkillBuilder,
   type ProfessionTraceGlobals,
 } from "./enhancement-command-trace-transform.js";
-import {
-  commandBoundary,
-  commandDrain,
-  commandEnqueue,
-  storageConfigure,
-  storageEnqueue,
-  localActionSlashParser,
-  travelConfigure,
-  travelEnqueue,
-  travelToggleTake,
-} from "./enhancement-command-transform.js";
 import {
   concat,
   countFunctionImports,
@@ -267,11 +253,11 @@ function encodeTypes(types: readonly FunctionType[]): Uint8Array {
   );
 }
 
-export function transformEnhancementWasm(
+function resolveEnhancementTransform(
   input: Uint8Array,
   build: KnownEnhancementBuild,
   requestedCapabilities: EnhancementCapabilities,
-): Uint8Array {
+) {
   const capabilities = exactCapabilities(requestedCapabilities)
     ?? fail("capability selection is invalid");
   if (
@@ -645,6 +631,60 @@ export function transformEnhancementWasm(
     );
   }
 
+  return {
+    capabilities,
+    selectedHooks,
+    sections,
+    types,
+    importCount,
+    functionTypes,
+    bodies,
+    selected,
+    cursorEvent,
+    uiDispatcher,
+    gameThread,
+    teamApply,
+    xunlaiAction,
+    travelAction,
+    chatAliases,
+    commands,
+    professionBuilder,
+    skillBuilder,
+    storageHandler,
+    storageSlashParserHook,
+    packetSender,
+    commandDrainBoundary,
+    table,
+    nextTableSize,
+    hasActionQueue,
+  };
+}
+
+export type EnhancementTransformResolution = ReturnType<
+  typeof resolveEnhancementTransform
+>;
+
+function assembleEnhancementTransform(
+  build: KnownEnhancementBuild,
+  resolution: EnhancementTransformResolution,
+): Uint8Array {
+  const {
+    capabilities,
+    selectedHooks,
+    sections,
+    types,
+    importCount,
+    functionTypes,
+    bodies,
+    selected,
+    teamApply,
+    xunlaiAction,
+    travelAction,
+    table,
+    nextTableSize,
+    hasActionQueue,
+  } = resolution;
+
   const globals = vectorPayload(sectionById(sections, 6));
   const exports = vectorPayload(sectionById(sections, 7));
   const existingExports = parseExports(sectionById(sections, 7));
@@ -772,155 +812,32 @@ export function transformEnhancementWasm(
   });
 
   const addedFunctionExports: Array<Readonly<{ name: string; index: number }>> = [];
-  if (commandDrainBoundary) {
-    const commandBoundaryOriginalIndex = appendFunction(
-      commandDrainBoundary.typeIndex,
-      bodies[commandDrainBoundary.localIndex]!,
-    );
-    const professionOriginalIndex = professionBuilder
-      ? appendFunction(professionBuilder.typeIndex, bodies[professionBuilder.localIndex]!)
-      : null;
-    const skillOriginalIndex = skillBuilder
-      ? appendFunction(skillBuilder.typeIndex, bodies[skillBuilder.localIndex]!)
-      : null;
-    const senderOriginalIndex = packetSender
-      ? appendFunction(packetSender.typeIndex, bodies[packetSender.localIndex]!)
-      : null;
-    const storageSlashParserOriginalIndex = storageSlashParserHook
-      ? appendFunction(
-          storageSlashParserHook.typeIndex,
-          bodies[storageSlashParserHook.localIndex]!,
-        )
-      : null;
-    const commandDrainFunctionIndex = appendFunction(
-      commandDrainTypeIndex!,
-      commandDrain(
-        commands,
-        commandPendingGlobalIndex,
-        commandArgumentGlobalBase,
-        traceGlobals?.origin ?? null,
-        capabilities.xunlaiAction
-          ? {
-              functionIndex: xunlaiAction.handler.functionIndex,
-              payloadGlobalIndex: storagePayloadGlobalIndex,
-            }
-          : null,
-        capabilities.travelAction
-          ? {
-              dispatcherFunctionIndex:
-                uiOriginalIndex ?? uiDispatcher.functionIndex,
-              messageId: travelAction.messageId,
-              payloadGlobalIndex: travelPayloadGlobalIndex,
-            }
-          : null,
-      ),
-    );
-    nextBodies[commandDrainBoundary.localIndex] = commandBoundary(
-      commandDrainBoundary.type.params.length,
-      commandBoundaryOriginalIndex,
-      commandDrainFunctionIndex,
-    );
-    if (capabilities.teamApply) {
-      nextBodies[professionBuilder!.localIndex] = tracedProfessionBuilder(
-        professionOriginalIndex!,
-        traceGlobals!,
-      );
-      nextBodies[skillBuilder!.localIndex] = tracedSkillBuilder(
-        skillOriginalIndex!,
-        traceGlobals!,
-      );
-      nextBodies[packetSender!.localIndex] = tracedPacketSender(
-        senderOriginalIndex!,
-        traceGlobals!,
-      );
-      addedFunctionExports.push(
-        {
-          name: teamApply.thunkExport,
-          index: appendFunction(
-            commandTypeIndex!,
-            commandEnqueue(commands, commandPendingGlobalIndex, commandArgumentGlobalBase),
-          ),
-        },
-        {
-          name: teamApply.professionTrace.readerExport,
-          index: appendFunction(
-            professionTraceReaderTypeIndex!,
-            professionTraceReader(traceGlobals!),
-          ),
-        },
-      );
-    }
-    if (capabilities.chatAliases) {
-      nextBodies[storageSlashParserHook!.localIndex] = localActionSlashParser(
-        storageSlashParserOriginalIndex!,
-        commandPendingGlobalIndex,
-        storagePayloadGlobalIndex,
-        storageEnabledGlobalIndex,
-        travelEnabledGlobalIndex,
-        travelToggleGlobalIndex,
-      );
-    }
-    if (capabilities.xunlaiAction) {
-      addedFunctionExports.push(
-        {
-          name: xunlaiAction.openExport,
-          index: appendFunction(
-            storageOpenTypeIndex!,
-            storageEnqueue(
-              commandPendingGlobalIndex,
-              storagePayloadGlobalIndex,
-              storageEnabledGlobalIndex,
-            ),
-          ),
-        },
-        {
-          name: xunlaiAction.configureExport,
-          index: appendFunction(
-            storageConfigureTypeIndex!,
-            storageConfigure(
-              commandPendingGlobalIndex,
-              storagePayloadGlobalIndex,
-              storageEnabledGlobalIndex,
-            ),
-          ),
-        },
-      );
-    }
-    if (capabilities.travelAction) {
-      addedFunctionExports.push(
-        {
-          name: travelAction.enqueueExport,
-          index: appendFunction(
-            travelEnqueueTypeIndex!,
-            travelEnqueue(
-              commandPendingGlobalIndex,
-              commandArgumentGlobalBase,
-              travelPayloadGlobalIndex,
-              travelEnabledGlobalIndex,
-            ),
-          ),
-        },
-        {
-          name: travelAction.configureExport,
-          index: appendFunction(
-            travelConfigureTypeIndex!,
-            travelConfigure(
-              commandPendingGlobalIndex,
-              travelPayloadGlobalIndex,
-              travelEnabledGlobalIndex,
-            ),
-          ),
-        },
-        {
-          name: travelAction.toggleExport,
-          index: appendFunction(
-            travelToggleTypeIndex!,
-            travelToggleTake(travelToggleGlobalIndex),
-          ),
-        },
-      );
-    }
-  }
+  applyFeatureContributions(resolution, {
+    nextBodies,
+    appendFunction,
+    addedFunctionExports,
+    typeIndices: {
+      command: commandTypeIndex,
+      commandDrain: commandDrainTypeIndex,
+      professionTraceReader: professionTraceReaderTypeIndex,
+      storageOpen: storageOpenTypeIndex,
+      storageConfigure: storageConfigureTypeIndex,
+      travelEnqueue: travelEnqueueTypeIndex,
+      travelConfigure: travelConfigureTypeIndex,
+      travelToggle: travelToggleTypeIndex,
+    },
+    globalIndices: {
+      commandPending: commandPendingGlobalIndex,
+      commandArgumentBase: commandArgumentGlobalBase,
+      storagePayload: storagePayloadGlobalIndex,
+      storageEnabled: storageEnabledGlobalIndex,
+      travelPayload: travelPayloadGlobalIndex,
+      travelEnabled: travelEnabledGlobalIndex,
+      travelToggle: travelToggleGlobalIndex,
+    },
+    traceGlobals,
+    uiOriginalIndex,
+  });
   const addedGlobalCount = nextGlobalIndex - globals.count;
   const nextGlobals = concat(
     uleb(globals.count + addedGlobalCount),
@@ -971,4 +888,15 @@ export function transformEnhancementWasm(
     fail("rewritten module failed validation");
   }
   return output;
+}
+
+export function transformEnhancementWasm(
+  input: Uint8Array,
+  build: KnownEnhancementBuild,
+  requestedCapabilities: EnhancementCapabilities,
+): Uint8Array {
+  return assembleEnhancementTransform(
+    build,
+    resolveEnhancementTransform(input, build, requestedCapabilities),
+  );
 }

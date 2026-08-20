@@ -28,7 +28,9 @@ import path from "node:path";
 import { writeAtomic } from "../main/core/atomic-file.js";
 import {
   enhancementOutputSha256,
+  enhancementProfilesForBuild,
   findEnhancementBuild,
+  supportedEnhancementCapabilities,
 } from "../main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../main/certification/enhancement-transform.js";
 import {
@@ -39,12 +41,18 @@ import {
 } from "../main/certification/native-double-click.js";
 import { preparePostTemplateSaveModule } from "../main/certification/template-save-verifier.js";
 import {
+  isLocalClientVerification,
+  LOCAL_CLIENT_FEATURES,
+  verifyLocalClientBytes,
+} from "../main/certification/local-client-verifier.js";
+import {
   findTemplateSaveBuild,
   rewriteTemplateSaveWasm,
 } from "../main/certification/template-save-compat.js";
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
+  ENHANCEMENT_CAPABILITY_PRESETS,
   ENHANCEMENT_TRANSFORM_ABI,
+  enhancementCapabilitiesForProfile,
 } from "../shared/enhancement-contracts.js";
 import {
   currentMessageAnchors,
@@ -69,6 +77,7 @@ const USAGE =
   "usage: certification <command>\n"
   + "  doctor [--profile PATH]              why Enhancement is or is not running here\n"
   + "  recertify [PATH/Gw.jspi.wasm]        draft an Enhancement build entry, with evidence\n"
+  + "  verify [PATH/Gw.jspi.wasm]           run the exact runtime feature verifier\n"
   + "  compare INPUT.wasm OUTPUT_DIR        write shared JSON and Markdown patch evidence\n"
   + "  template [PATH/Gw.jspi.wasm] [--emit-ts] [--write] [--expect-certified]\n"
   + "                                       re-derive the template-save build entry\n"
@@ -81,7 +90,7 @@ const USAGE =
  * and reproducing that selection here would be a second place where a
  * capability set decides which output is correct.
  */
-const FOUNDATION_CAPABILITIES = ENHANCEMENT_CAPABILITY_PROFILES.cursorParty;
+const FOUNDATION_CAPABILITIES = ENHANCEMENT_CAPABILITY_PRESETS.cursorParty;
 
 function installedClientArtifact(): string {
   return path.join(
@@ -119,6 +128,54 @@ async function recertify(argv: readonly string[]): Promise<void> {
   const report = recertifyEnhancementBytes(official, currentMessageAnchors());
   process.stdout.write(`${JSON.stringify(report)}\n`);
   if (!report.candidateInspected) process.exitCode = 2;
+}
+
+async function verify(argv: readonly string[]): Promise<void> {
+  const positional = positionalArguments(argv);
+  if (positional.length > 1) {
+    process.stderr.write(USAGE);
+    process.exitCode = 2;
+    return;
+  }
+  const official = new Uint8Array(
+    await readFile(positional[0] ?? installedClientArtifact()),
+  );
+  const result = verifyLocalClientBytes(official);
+  if (!isLocalClientVerification(result, result.officialSha256)) {
+    throw new Error("runtime feature verifier produced an invalid boundary result");
+  }
+  const capabilities = result.enhancementBuild
+    ? supportedEnhancementCapabilities(result.enhancementBuild)
+    : null;
+  const features = result.featureVerdicts === null
+    ? null
+    : Object.fromEntries(LOCAL_CLIENT_FEATURES.map((feature) => {
+        const verdict = result.featureVerdicts[feature];
+        return [feature, verdict.status === "ambiguous"
+          ? {
+              status: verdict.status,
+              invariant: verdict.invariant,
+              candidates: verdict.candidates,
+            }
+          : verdict.status === "changed"
+            ? { status: verdict.status, invariant: verdict.invariant }
+            : { status: verdict.status }];
+      }));
+  process.stdout.write(`${JSON.stringify({
+    officialSha256: result.officialSha256,
+    templateSaving: result.templateSaveBuild !== null,
+    verifierAbi: result.verifierAbi,
+    features,
+    capabilities,
+    reasons: result.reasons,
+  })}\n`);
+  if (
+    result.templateSaveBuild === null
+    || features === null
+    || Object.values(features).some(({ status }) => status !== "proved")
+  ) {
+    process.exitCode = 1;
+  }
 }
 
 async function compare(argv: readonly string[]): Promise<void> {
@@ -296,14 +353,12 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
     createHash("sha256").update(templateSave).digest("hex"),
   );
   if (enhancementBuild) {
-    for (const [profile, capabilities] of Object.entries(
-      ENHANCEMENT_CAPABILITY_PROFILES,
-    )) {
+    for (const profile of enhancementProfilesForBuild(enhancementBuild)) {
+      const capabilities = enhancementCapabilitiesForProfile(profile);
+      if (!capabilities) throw new Error(`invalid certified profile ${profile}`);
       predecessors.push([
         profile,
-        transformEnhancementWasm(templateSave, enhancementBuild, {
-          ...capabilities,
-        }),
+        transformEnhancementWasm(templateSave, enhancementBuild, capabilities),
       ]);
     }
   }
@@ -340,6 +395,7 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
 const COMMANDS = Object.freeze({
   doctor,
   recertify,
+  verify,
   compare,
   template,
   transform,

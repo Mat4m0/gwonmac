@@ -13,7 +13,6 @@
  * the two must be edited together or not at all.
  */
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
   enhancementCapabilitiesForProfile,
   enhancementCapabilityProfile,
   enhancementConfigWordActive,
@@ -297,13 +296,9 @@ export function enhancementProfilesForBuild(
   build: KnownEnhancementBuild,
 ): EnhancementCapabilityProfile[] {
   const supported = supportedEnhancementCapabilities(build);
-  return (
-    Object.keys(
-      ENHANCEMENT_CAPABILITY_PROFILES,
-    ) as EnhancementCapabilityProfile[]
-  ).filter((profile) => {
+  return Object.entries(build.outputSha256).flatMap(([profile, digest]) => {
     const value = enhancementCapabilitiesForProfile(profile);
-    if (!value) return false;
+    if (!value) return [];
     return (
       (!value.nativeCursor || supported.nativeCursor) &&
       (!value.targetObservation || supported.targetObservation) &&
@@ -312,9 +307,9 @@ export function enhancementProfilesForBuild(
       (!value.travelAction || supported.travelAction) &&
       (!value.xunlaiAction || supported.xunlaiAction) &&
       (!value.chatAliases || supported.chatAliases)
-      && typeof build.outputSha256[profile] === "string"
-    );
-  });
+      && typeof digest === "string"
+    ) ? [profile as EnhancementCapabilityProfile] : [];
+  }).sort();
 }
 
 /**
@@ -371,16 +366,14 @@ export function hasValidEnhancementProfileHashes(
   const actual = Object.entries(build.outputSha256);
   if (actual.length === 0) return false;
   const supported = supportedEnhancementCapabilities(build);
-  return (
-    actual.every(
-      ([profile, digest]) =>
-        Object.hasOwn(ENHANCEMENT_CAPABILITY_PROFILES, profile)
-        && typeof digest === "string"
-        && /^[0-9a-f]{64}$/.test(digest)
-        && Object.entries(enhancementCapabilitiesForProfile(profile) ?? {}).every(
-          ([feature, enabled]) => !enabled
-            || supported[feature as keyof EnhancementCapabilities],
-        ),
-    )
-  );
+  return actual.every(([profile, digest]) => {
+    const capabilities = enhancementCapabilitiesForProfile(profile);
+    return typeof digest === "string"
+      && /^[0-9a-f]{64}$/.test(digest)
+      && capabilities !== null
+      && Object.entries(capabilities).every(
+        ([feature, enabled]) => !enabled
+          || supported[feature as keyof EnhancementCapabilities],
+      );
+  });
 }

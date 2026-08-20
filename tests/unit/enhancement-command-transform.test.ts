@@ -11,6 +11,9 @@ import {
   splitSections,
 } from "../../src/main/core/wasm-binary.js";
 import {
+  intersectEnhancementCapabilities,
+} from "../../src/shared/enhancement-contracts.js";
+import {
   commandBody,
   CURSOR_ONLY,
   CURSOR_TARGET,
@@ -188,6 +191,51 @@ describe("Enhancement command transform", () => {
     assert.equal(enqueue(81, -2, 0, 0), 1);
     frame(70, 700);
     assert.deepEqual(dispatches, [[build.travelAction!.messageId, 128, 0]]);
+  });
+
+  it("never advertises aliases without an effective named action", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const aliasesOnly = {
+      nativeCursor: false,
+      targetObservation: false,
+      partyObservation: false,
+      teamApply: false,
+      travelAction: false,
+      xunlaiAction: false,
+      chatAliases: true,
+    } as const;
+    assert.equal(
+      intersectEnhancementCapabilities(aliasesOnly, aliasesOnly).chatAliases,
+      false,
+    );
+    assert.throws(
+      () => transformEnhancementWasm(input, build, aliasesOnly),
+      /capability profile is not certified/,
+    );
+
+    for (const action of ["travelAction", "xunlaiAction"] as const) {
+      const capabilities = { ...aliasesOnly, [action]: true };
+      const effective = intersectEnhancementCapabilities(capabilities, capabilities);
+      assert.equal(effective.chatAliases, true, action);
+      const output = transformEnhancementWasm(input, build, effective);
+      const exports = parseExports(sectionById(splitSections(output), 7));
+      assert.equal(
+        exports.some((entry) => entry.name === build.teamApply!.thunkExport),
+        false,
+        action,
+      );
+      assert.equal(
+        exports.some((entry) => entry.name === build.travelAction!.enqueueExport),
+        action === "travelAction",
+        action,
+      );
+      assert.equal(
+        exports.some((entry) => entry.name === build.xunlaiAction!.openExport),
+        action === "xunlaiAction",
+        action,
+      );
+    }
   });
 
   it("queues the named storage action and drains DataWindow on the game thread", () => {

@@ -14,7 +14,7 @@ import {
   type AppSettings,
 } from "../../shared/contracts.js";
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
+  ENHANCEMENT_CAPABILITY_PRESETS,
   ENHANCEMENT_PROGRAMS,
   enhancementCapabilitiesFor,
   type EnhancementCapabilities,
@@ -54,6 +54,6 @@ export function requestedEnhancementCapabilities(
   if (program !== "none") {
     return enhancementCapabilitiesFor(enhancementSelectionFor(settings), program);
   }
-  if (!settings.gwonmacTools) return ENHANCEMENT_CAPABILITY_PROFILES.cursor;
-  return ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommandsStorage;
+  if (!settings.gwonmacTools) return ENHANCEMENT_CAPABILITY_PRESETS.cursor;
+  return ENHANCEMENT_CAPABILITY_PRESETS.all;
 }

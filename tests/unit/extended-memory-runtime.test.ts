@@ -19,7 +19,7 @@ describe("extended memory runtime result", () => {
   it("reports the certified active profile and cap", () => {
     assert.deepEqual(extendedMemoryRuntimeStatus({
       status: "active",
-      profile: "cursorPartyCommands",
+      profile: "features-0d",
       effectiveCapBytes: EXTENDED_MEMORY_MAX_BYTES,
     }), {
       requestedAtLaunch: true,

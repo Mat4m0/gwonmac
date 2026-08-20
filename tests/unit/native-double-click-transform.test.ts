@@ -38,7 +38,8 @@ const section = (id: number, body: number[]) => [id, body.length, ...body];
  * something recognisable behind it.
  */
 function buildModule(
-  elementBody: number[] = [0x01, 0x00, 0x41, 0x00, 0x0b, 0x01, 0x01],
+  elementBody?: number[],
+  bodyCount = 1,
 ): { bytes: Uint8Array; body: Uint8Array } {
   // (func (result i32)) — the callback's own signature is irrelevant here;
   // what matters is that the body is a body and the slot resolves to it.
@@ -46,8 +47,8 @@ function buildModule(
   // One function import, so the defined function is index 1 and the transform
   // has to subtract the import count the way it does against the real client.
   const imports = section(2, [0x01, 0x01, 0x65, 0x01, 0x66, 0x00, 0x00]);
-  const functions = section(3, [0x01, 0x00]);
-  const table = section(4, [0x01, 0x70, 0x00, 0x01]);
+  const functions = section(3, [bodyCount, ...Array(bodyCount).fill(0x00)]);
+  const table = section(4, [0x01, 0x70, 0x00, bodyCount]);
   // The inserted instruction stores to linear memory and reads local 3, so a
   // module without both would fail validation for reasons the transform is not
   // responsible for.
@@ -61,11 +62,25 @@ function buildModule(
     0x00,
     0x00,
   ]);
-  const elements = section(9, elementBody);
+  const elements = section(9, elementBody ?? [
+    0x01,
+    0x00,
+    0x41,
+    0x00,
+    0x0b,
+    bodyCount,
+    ...Array.from({ length: bodyCount }, (_, index) => index + 1),
+  ]);
   // four i32 locals, so local 3 exists; then `i32.const 7`, `drop`,
   // `i32.const 0`, `end`.
   const bodyBytes = [0x01, 0x04, 0x7f, 0x41, 0x07, 0x1a, 0x41, 0x00, 0x0b];
-  const code = section(10, [0x01, bodyBytes.length, ...bodyBytes]);
+  const code = section(10, [
+    bodyCount,
+    ...Array.from(
+      { length: bodyCount },
+      () => [bodyBytes.length, ...bodyBytes],
+    ).flat(),
+  ]);
   return {
     bytes: Uint8Array.from([
       0,
@@ -150,6 +165,20 @@ test("locates an unchanged callback without a predecessor hash", () => {
   assert.equal(deriveNativeDoubleClickBuild(bytes, [baseline, baseline]), null);
 });
 
+test("refuses malformed input and ambiguous callback candidates", () => {
+  assert.equal(
+    deriveNativeDoubleClickBuild(Uint8Array.of(0, 97, 115, 109)),
+    null,
+  );
+
+  const { bytes, body } = buildModule(undefined, 2);
+  assert.equal(
+    deriveNativeDoubleClickBuild(bytes, [entryFor(body)]),
+    null,
+    "two identical callback bodies must not select the first table slot",
+  );
+});
+
 test("rejects malformed or over-broad isolated verifier records", () => {
   const { bytes, body } = buildModule();
   const inputSha256 = sha256(bytes);
@@ -172,6 +201,14 @@ test("rejects malformed or over-broad isolated verifier records", () => {
     ...located,
     derivations: { [inputSha256]: "not-a-digest" },
   }, inputSha256, [baseline]), false);
+
+  const shipped = NATIVE_DOUBLE_CLICK_BUILDS[0]!;
+  const exactInputSha256 = Object.keys(shipped.derivations)[0]!;
+  assert.equal(
+    isDerivedNativeDoubleClickBuild(shipped, exactInputSha256),
+    false,
+    "an authored exact row is regression evidence, not an IPC proof",
+  );
 });
 
 test("refuses a callback whose body is not the certified one", () => {

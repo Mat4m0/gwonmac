@@ -10,7 +10,7 @@
 // is the posture that matters: it is the only one in which the packaged half of
 // the gate decides anything, so `ENHANCEMENT_AUTOMATION_ENABLED === false` below is
 // a statement about `!app.isPackaged` rather than about an unset variable, and
-// every other answer in this file comes from the tool registry alone.
+// every other answer in this file comes from the closed product presets alone.
 //
 // The gate across *all four* postures is executed by
 // `tests/release/packaged-enhancement-surface.test.ts`, which re-evaluates the
@@ -24,9 +24,10 @@ import {
 } from "../../src/shared/contracts.ts";
 import {
   ENHANCEMENTS,
-  ENHANCEMENT_CAPABILITY_PROFILES,
+  ENHANCEMENT_CAPABILITY_PRESETS,
   enhancementCapabilityProfile,
   enhancementCapabilitiesFor,
+  enhancementCapabilitiesForProfile,
   enhancementCapabilitiesRequested,
   enhancementHooksFor,
 } from "../../src/shared/enhancement-contracts.ts";
@@ -88,9 +89,10 @@ test("one capability plan derives hooks without losing feature identity", () => 
     { nativeCursor: true, tools: false },
     "none",
   );
-  // No user selection reaches cursorTarget any more; it stays certified
+  // No user selection reaches cursor + target any more; it stays certified
   // developer-side vocabulary with the same hook plan as cursor-only.
-  const cursorTarget = ENHANCEMENT_CAPABILITY_PROFILES.cursorTarget;
+  const cursorTarget = enhancementCapabilitiesForProfile("features-03");
+  assert.ok(cursorTarget);
   assert.notDeepEqual(cursorOnly, cursorTarget);
   assert.deepEqual(enhancementHooksFor(cursorOnly), {
     tick: true,
@@ -136,23 +138,25 @@ test("one capability plan derives hooks without losing feature identity", () => 
 
 test("launch intent resolves to the canonical frozen capability profiles", () => {
   const cases = [
-    [{ nativeCursor: true, tools: false }, "none", "cursor"],
-    [{ nativeCursor: true, tools: true }, "none", "cursorTargetPartyCommandsStorage"],
-    [{ nativeCursor: false, tools: false }, "cursor-observer", "cursor"],
-    [{ nativeCursor: true, tools: false }, "target-observer", "target"],
-    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "party"],
-    [{ nativeCursor: false, tools: false }, "xunlai-storage", "storage"],
+    [{ nativeCursor: true, tools: false }, "none", "features-01"],
+    [{ nativeCursor: true, tools: true }, "none", "features-7f"],
+    [{ nativeCursor: false, tools: false }, "cursor-observer", "features-01"],
+    [{ nativeCursor: true, tools: false }, "target-observer", "features-02"],
+    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "features-04"],
+    [{ nativeCursor: false, tools: false }, "xunlai-storage", "features-70"],
   ] as const;
   for (const [selection, program, profile] of cases) {
     const resolved = enhancementCapabilitiesFor(selection, program);
-    assert.equal(resolved, ENHANCEMENT_CAPABILITY_PROFILES[profile]);
+    assert.deepEqual(resolved, enhancementCapabilitiesForProfile(profile));
     assert.equal(enhancementCapabilityProfile(resolved), profile);
     assert.equal(Object.isFrozen(resolved), true);
   }
-  // cursorTarget keeps its identity even though no launch path selects it.
+  // Cursor + target keeps its identity even though no launch path selects it.
+  const cursorTarget = enhancementCapabilitiesForProfile("features-03");
+  assert.ok(cursorTarget);
   assert.equal(
-    enhancementCapabilityProfile(ENHANCEMENT_CAPABILITY_PROFILES.cursorTarget),
-    "cursorTarget",
+    enhancementCapabilityProfile(cursorTarget),
+    "features-03",
   );
   assert.equal(
     enhancementCapabilityProfile(enhancementCapabilitiesFor(
@@ -173,7 +177,7 @@ test("Tools prepares every certified capability independent of child toggles", (
       ...DEFAULT_SETTINGS,
       ...settings,
       gwonmacTools: true,
-    }, "none"), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetPartyCommandsStorage);
+    }, "none"), ENHANCEMENT_CAPABILITY_PRESETS.all);
   }
 });
 
@@ -200,5 +204,5 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
         chatAliases: unavailable,
       },
     },
-  }), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetParty);
+  }), enhancementCapabilitiesForProfile("features-07"));
 });

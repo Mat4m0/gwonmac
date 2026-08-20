@@ -800,10 +800,13 @@ test("client recertification reports evidence but cannot grant authority", () =>
   assert.doesNotMatch(detect, /pnpm|rustup|certification\.js|--download/);
   assert.match(detect, /permissions:\n {6}contents: read\n {6}issues: write/);
   assert.doesNotMatch(detect, /gh issue close/);
-  // One open tracking issue deduplicates expensive derivation. Source branches
-  // are deliberately irrelevant because this workflow cannot create one.
+  // An open refusal or a closed proved-evidence issue deduplicates expensive
+  // derivation. Source branches are deliberately irrelevant.
   assert.match(detect, /changed: \$\{\{ steps\.unreported\.outputs\.changed \}\}/);
   assert.match(detect, /gh issue list --state open --label client-recertification[\s\S]*?changed=false/);
+  assert.match(detect, /gh issue list --state all --label client-recertification-proved[\s\S]*?changed=false/);
+  assert.match(detect, /VERIFIER_ABI: \$\{\{ steps\.published\.outputs\.verifier_abi \}\}/);
+  assert.match(detect, /--search "\$short v\$VERIFIER_ABI in:title"/);
   assert.doesNotMatch(detect, /git\/ref\/heads|client-recertification\/\$short/);
 
   // Derivation is macOS, on change only, and installs the pinned toolchain
@@ -815,21 +818,29 @@ test("client recertification reports evidence but cannot grant authority", () =>
     derive.indexOf("run: rustup toolchain install") < derive.indexOf("run: pnpm build"),
     "the kernel is compiled on the runner's own toolchain",
   );
-  assert.match(derive, /permissions:\n {6}contents: read/);
+  assert.match(
+    derive,
+    /permissions:\n {6}attestations: write\n {6}contents: read\n {6}id-token: write/,
+  );
   assert.doesNotMatch(derive, /contents: write|issues: write|pull-requests: write/);
   assert.match(derive, /pnpm client:official --download "\$RUNNER_TEMP\/official"/);
   assert.match(derive, /certification\.js template "\$WASM" --emit-ts/);
   assert.match(derive, /certification\.js recertify "\$WASM"/);
+  assert.match(derive, /certification\.js verify "\$WASM"/);
   assert.doesNotMatch(derive, /--write|test:client-artifact|tables\.patch|SOURCE_COMMIT/);
-  // Enhancement may only be called inspected when its own strict preparation
-  // path accepted the same original bytes. A broad template status is not
-  // enough to publish a positive report.
-  assert.match(derive, /inspected="\$\(jq -er '\.candidateInspected'/);
-  assert.match(derive, /if \[ "\$inspected" = "true" \]/);
+  // Only the production runtime verifier can publish a positive report, and
+  // every protected feature must carry its own proved verdict.
+  assert.match(derive, /runtime-verdicts\.json/);
+  assert.match(derive, /\.features \| to_entries \| all\(\.value\.status == "proved"\)/);
+  assert.match(derive, /\{templateSaving, verifierAbi, features, reasons\}/);
+  assert.match(derive, /runtime semantic verifier proved every protected feature/);
   assert.doesNotMatch(derive, /status="\$\(jq|template_exit/);
   assert.doesNotMatch(derive, /client:official --record|git diff|git apply/);
   assert.match(derive, /carry-forward\.json/);
   assert.match(derive, /carry-forward\.md/);
+  assert.match(derive, /uses: actions\/attest@[0-9a-f]{40} # v4\.2\.2/);
+  assert.match(derive, /subject-digest: sha256:\$\{\{ steps\.derive\.outputs\.build \}\}/);
+  assert.match(derive, /predicate-path: \$\{\{ runner\.temp \}\}\/evidence\/runtime-verdicts\.json/);
 
   // Evidence only: the sole upload path is the evidence directory, and the
   // downloaded client artifacts live somewhere no upload names.
@@ -862,8 +873,15 @@ test("client recertification reports evidence but cannot grant authority", () =>
   );
   assert.match(
     publish,
-    /name: Open the tracking issue\n {8}if: always\(\)/,
+    /name: Open the tracking issue\n {8}if: always\(\) && needs\.derive\.outputs\.outcome != 'ready'/,
   );
+  assert.match(
+    publish,
+    /name: Record a proved generation\n {8}if: needs\.derive\.result == 'success' && needs\.derive\.outputs\.outcome == 'ready'/,
+  );
+  assert.match(publish, /gh issue close "\$issue" --reason completed/);
+  assert.match(publish, /semantic proof passed/);
+  assert.match(publish, /v\$VERIFIER_ABI: invariant refused/);
   assert.match(
     publish,
     /FINGERPRINT: \$\{\{ needs\.derive\.outputs\.fingerprint \|\| needs\.detect\.outputs\.fingerprint \}\}[\s\S]*short=unknown/,
@@ -875,12 +893,11 @@ test("client recertification reports evidence but cannot grant authority", () =>
     /FINGERPRINT: \$\{\{ needs\.derive\.outputs\.fingerprint \|\| needs\.detect\.outputs\.fingerprint \}\}/,
   );
   assert.match(publish, /continue-on-error: true/);
-  assert.match(publish, /semantic verification report/);
   assert.match(publish, /invariant refused, investigation needed/);
   assert.match(publish, /source branch: none; this workflow cannot grant capabilities/);
   // Backticks in issue Markdown are passed as single-quoted data, never shell
   // substitutions. This preserves the evidence names in generated issues.
-  assert.match(publish, /printf '%s\\n' '- semantic report: `enhancement\.json`/);
+  assert.match(publish, /printf '%s\\n' '- semantic verdicts: `runtime-verdicts\.json`/);
   assert.match(publish, /printf '%s\\n' '`internal\/upstream\/recertify\.md`/);
   assert.match(
     publish,
