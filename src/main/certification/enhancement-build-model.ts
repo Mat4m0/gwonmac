@@ -24,6 +24,7 @@ import {
   type EnhancementCursorLayout,
   type EnhancementObservationBaseLayout,
   type EnhancementPartyLayout,
+  type EnhancementStorageLayout,
   type EnhancementTargetLayout,
 } from "../../shared/enhancement-config.js";
 export {
@@ -105,17 +106,26 @@ export function enhancementConfigWords(
           ? build.targetObservation?.layout[field.key]
           : field.owner === "cursor"
             ? build.cursorEvent?.layout[field.key]
-            : build.partyObservation?.layout[field.key];
+            : field.owner === "party"
+              ? build.partyObservation?.layout[field.key]
+              : build.storage?.accessProof?.layout[field.key];
+      if (field.owner === "storage" && build.storage?.accessProof === undefined) {
+        return 0;
+      }
       if (typeof value !== "number") {
         throw new Error(`${field.owner} configuration is not certified`);
       }
       return value;
     }
-    const party = build.partyObservation;
-    if (!party) {
-      throw new Error("party observation configuration is not certified");
+    if (field.source === "dispatcher") {
+      const dispatcher = build.uiDispatcher;
+      if (!dispatcher) {
+        throw new Error("UI dispatcher configuration is not certified");
+      }
+      return dispatcher[field.key];
     }
-    if (field.source === "dispatcher") return party[field.key];
+    const party = build.partyObservation;
+    if (!party) throw new Error("party observation configuration is not certified");
     return party.partyDirtyMessages[field.index] ?? 0;
   });
 }
@@ -132,6 +142,16 @@ export interface KnownEnhancementBuild {
   tableSlot: number;
   /** Memory facts shared by target and party observation. */
   observationBase?: Readonly<{ layout: EnhancementObservationBaseLayout }>;
+  /** Exact UI dispatcher shared by party observation and local Travel. */
+  uiDispatcher?: Readonly<{
+    functionIndex: number;
+    params: readonly ["i32", "i32", "i32"];
+    results: readonly [];
+    bodySha256: string;
+    playerChatMessage: number;
+    hideHeroPanelMessage: number;
+    showHeroPanelMessage: number;
+  }>;
   cursorEvent?: Readonly<{
     functionIndex: number;
     params: readonly ["i32", "i32", "i32", "i32", "i32"];
@@ -197,6 +217,19 @@ export interface KnownEnhancementBuild {
   storage?: Readonly<{
     openExport: string;
     configureExport: string;
+    /** Optional proof. Its absence disables only Xunlai, not Travel. */
+    accessProof?: Readonly<{
+      layout: EnhancementStorageLayout;
+      readers: Readonly<Record<
+        "agent-id" | "access-flags" | "player-number",
+        Readonly<{
+          functionIndex: number;
+          params: readonly ["i32"];
+          results: readonly ["i32"];
+          bodySha256: string;
+        }>
+      >>;
+    }>;
     travel: Readonly<{
       enqueueExport: string;
       configureExport: string;
@@ -223,14 +256,8 @@ export interface KnownEnhancementBuild {
       bodySha256: string;
     }>;
   }>;
-  /** Exact UI-dispatch and party-observation authority. */
+  /** Exact party-observation authority beyond the shared UI dispatcher. */
   partyObservation?: Readonly<{
-    functionIndex: number;
-    params: readonly ["i32", "i32", "i32"];
-    results: readonly [];
-    playerChatMessage: number;
-    hideHeroPanelMessage: number;
-    showHeroPanelMessage: number;
     partyDirtyMessages: EnhancementPartyDirtyMessages;
     playerChatProducer: number;
     playerChatSites: 3;
@@ -245,7 +272,9 @@ export function supportedEnhancementCapabilities(
 ): EnhancementCapabilities {
   const observationBase = build.observationBase !== undefined;
   const targetObservation = observationBase && build.targetObservation !== undefined;
-  const partyObservation = observationBase && build.partyObservation !== undefined;
+  const partyObservation = observationBase
+    && build.uiDispatcher !== undefined
+    && build.partyObservation !== undefined;
   const gameThread = build.gameThread !== undefined;
   return Object.freeze({
     nativeCursor: build.cursorEvent !== undefined,
@@ -253,8 +282,8 @@ export function supportedEnhancementCapabilities(
     partyObservation,
     commands: partyObservation && gameThread && build.teamApply !== undefined,
     storage:
-      targetObservation
-      && partyObservation
+      observationBase
+      && build.uiDispatcher !== undefined
       && gameThread
       && build.storage !== undefined,
   });
@@ -289,15 +318,24 @@ export function enhancementProfilesForBuild(
 export function hasCompleteEnhancementProfileHashes(
   build: KnownEnhancementBuild,
 ): boolean {
+  const storageReaders = build.storage?.accessProof?.readers;
+  const storageAccessReaderIndices = storageReaders === undefined
+    ? null
+    : new Set(Object.values(storageReaders).map(({ functionIndex }) => functionIndex));
   const hasObservation = build.targetObservation !== undefined
-    || build.partyObservation !== undefined;
+    || build.partyObservation !== undefined
+    || build.storage !== undefined;
   if (hasObservation && build.observationBase === undefined) {
+    return false;
+  }
+  if (build.partyObservation !== undefined && build.uiDispatcher === undefined) {
     return false;
   }
   if (
     build.teamApply !== undefined
     && (
       build.observationBase === undefined
+      || build.uiDispatcher === undefined
       || build.partyObservation === undefined
       || build.gameThread === undefined
     )
@@ -308,9 +346,9 @@ export function hasCompleteEnhancementProfileHashes(
     build.storage !== undefined
     && (
       build.observationBase === undefined
-      || build.targetObservation === undefined
-      || build.partyObservation === undefined
+      || build.uiDispatcher === undefined
       || build.gameThread === undefined
+      || (storageReaders !== undefined && storageAccessReaderIndices?.size !== 3)
     )
   ) {
     return false;

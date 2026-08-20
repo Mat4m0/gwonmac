@@ -125,7 +125,7 @@ After that restart, these choices update immediately:
   outpost. The saved Build and Team library does not depend on this switch.
 - **Open Xunlai storage** (Beta) allows the Storage button, Command-Shift-C
   shortcut, and the `/chest` and `/xunlai` chat commands in a supported PvE
-  outpost.
+  outpost, after the current character's storage access is confirmed.
 - **Quick Travel palette** (Beta) opens with Command-T or the `/tp` chat
   command. Before you search, it shows only your saved quick destinations.
   Press 1–9 from anywhere in Travel
@@ -157,6 +157,12 @@ the normal Xunlai window locally. It does not
 interact with an NPC, unlock storage, or change an
 item. Deposits, withdrawals, and gold changes still use the normal game and
 server rules.
+
+GWonMac waits for a fresh access result after loading, switching characters,
+or switching accounts. If the current character cannot access storage, the
+button and shortcut explain that storage is unavailable. The slash commands
+remain with Guild Wars while access is unconfirmed or refused. Party roster
+observation does not control storage, and `/tp` remains independent.
 
 Live observation, storage opening, Travel, and Apply stop in PvP, guild halls,
 transitions, and unknown regions. The saved Build and Team library stays

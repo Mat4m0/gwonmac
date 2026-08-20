@@ -207,6 +207,84 @@ unsafe fn classify_play_region(layout: Layout, map_id: u32) -> u32 {
     }
 }
 
+/**
+ * Proves whether the current character may open Xunlai storage.
+ *
+ * `None` means the live record could not be certified. `Some(false)` is a
+ * complete observation whose map, instance, or player flag denies access.
+ */
+unsafe fn observe_xunlai_access(
+    layout: Layout,
+    game: u32,
+    map_id: u32,
+    instance_type: u32,
+    play_region: u32,
+    player_number: u32,
+    player_agent_id: u32,
+) -> Option<bool> {
+    if game == 0
+        || player_agent_id == 0
+        || layout.world_context == 0
+        || layout.world_players == 0
+        || layout.area_info == 0
+        || layout.area_info_count == 0
+        || layout.area_info_stride < 20
+        || layout.player_record_stride < 60
+        || layout.player_record_stride > 256
+        || layout.player_record_agent_id + 4 > layout.player_record_stride
+        || layout.player_record_access_flags + 4 > layout.player_record_stride
+        || layout.player_record_number + 4 > layout.player_record_stride
+        || layout.area_info_type + 4 > layout.area_info_stride
+        || map_id >= layout.area_info_count
+    {
+        return None;
+    }
+
+    let world_required = checked_add(layout.world_players, 12)?;
+    let world = offset(game, layout.world_context)
+        .and_then(|at| unsafe { pointer(at, world_required) })?;
+    let players = offset(world, layout.world_players)?;
+    if !contains(players, 12) {
+        return None;
+    }
+    let buffer = unsafe { read_u32(players) }?;
+    let capacity = offset(players, 4).and_then(|at| unsafe { read_u32(at) })?;
+    let size = offset(players, 8).and_then(|at| unsafe { read_u32(at) })?;
+    if size == 0 || size > capacity || capacity > 2_048 || buffer == 0 || buffer & 3 != 0 {
+        return None;
+    }
+    let bytes = checked_mul(capacity, layout.player_record_stride)?;
+    if !contains(buffer, bytes) {
+        return None;
+    }
+    let player = indexed(buffer, 0, layout.player_record_stride)?;
+    let agent_id = offset(player, layout.player_record_agent_id)
+        .and_then(|at| unsafe { read_u32(at) })?;
+    let access_flags = offset(player, layout.player_record_access_flags)
+        .and_then(|at| unsafe { read_u32(at) })?;
+    let record_number = offset(player, layout.player_record_number)
+        .and_then(|at| unsafe { read_u32(at) })?;
+    if agent_id != player_agent_id || record_number != player_number {
+        return None;
+    }
+
+    let area = indexed(layout.area_info, map_id, layout.area_info_stride)?;
+    let area_type = offset(area, layout.area_info_type)
+        .and_then(|at| unsafe { read_u32(at) })?;
+    if area_type > 27 {
+        return None;
+    }
+    if play_region == PLAY_REGION_UNKNOWN {
+        return None;
+    }
+    Some(
+        play_region == PLAY_REGION_PVE
+            && instance_type == 0
+            && area_type != 7
+            && access_flags & 0x2 == 0,
+    )
+}
+
 unsafe fn read_agent(layout: Layout, agent_buffer: u32, size: u32, id: u32) -> Option<AgentState> {
     if id == 0 || id >= size {
         return None;
@@ -316,7 +394,7 @@ pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
 
 unsafe fn collect(layout: Layout, observe_target: bool) -> State {
     let mut state = State::empty();
-    let (map_id, instance_type, player_number, play_region) = match unsafe { resolve_game(layout) }
+    let (game, map_id, instance_type, player_number, play_region) = match unsafe { resolve_game(layout) }
     {
         GameState::Unavailable => return state,
         GameState::Loading => {
@@ -324,12 +402,12 @@ unsafe fn collect(layout: Layout, observe_target: bool) -> State {
             return state;
         }
         GameState::Ready {
+            game,
             map_id,
             instance_type,
             player_number,
             play_region,
-            ..
-        } => (map_id, instance_type, player_number, play_region),
+        } => (game, map_id, instance_type, player_number, play_region),
     };
 
     if !contains(layout.agent_array, 16) {
@@ -387,6 +465,22 @@ unsafe fn collect(layout: Layout, observe_target: bool) -> State {
         state.instance_type = instance_type;
         state.play_region = play_region;
         state.player = player;
+        if let Some(allowed) = unsafe {
+            observe_xunlai_access(
+                layout,
+                game,
+                map_id,
+                instance_type,
+                play_region,
+                player_number,
+                player.id,
+            )
+        } {
+            state.flags |= FLAG_XUNLAI_ACCESS_OBSERVED;
+            if allowed {
+                state.flags |= FLAG_XUNLAI_ACCESS_ALLOWED;
+            }
+        }
         break;
     }
     if state.flags & FLAG_PLAYER_VALID == 0 {
@@ -531,7 +625,7 @@ pub(crate) unsafe fn collect_first_owned_hero(
 unsafe fn publish(state: State) {
     let next = unsafe { SEQUENCE }.wrapping_add(2) & !1;
     // SAFETY: every successful `companion_init` assigns `SNAPSHOT_PTR`, and it
-    // is null unless that init carried `FEATURE_TARGET_READOUT`. When the flag
+    // is null unless that init carried `FEATURE_GAME_SNAPSHOT`. When the flag
     // was set, `valid_region` proved a non-null, four-byte-aligned
     // `SNAPSHOT_BYTES` region inside linear memory. What makes the store sound
     // is that every caller of `publish` is gated on that same flag from that
@@ -578,11 +672,13 @@ pub unsafe extern "C" fn companion_init(
 ) -> u32 {
     if features == 0
         || features & !KNOWN_FEATURES != 0
+        || features & FEATURE_TARGET_OBSERVATION != 0
+            && features & FEATURE_GAME_SNAPSHOT == 0
         || config_size != CONFIG_BYTES
         || config_ptr & 3 != 0
         || !contains(config_ptr, config_size)
         || !valid_region(
-            features & FEATURE_TARGET_READOUT != 0,
+            features & FEATURE_GAME_SNAPSHOT != 0,
             snapshot_ptr,
             snapshot_size,
             SNAPSHOT_BYTES,
@@ -634,7 +730,7 @@ pub unsafe extern "C" fn companion_init(
         INITIALIZED = true;
         TICK_COUNT = 0;
         SEQUENCE = 0;
-        if features & FEATURE_TARGET_READOUT != 0 {
+        if features & FEATURE_GAME_SNAPSHOT != 0 {
             publish(State::empty());
         }
         if features & FEATURE_NATIVE_CURSOR != 0 {
@@ -659,12 +755,12 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
             let active = unsafe { ACTIVE_FEATURES };
             let layout = unsafe { LAYOUT };
             unsafe { TICK_COUNT = TICK_COUNT.wrapping_add(1) };
-            let state = if features & FEATURE_TARGET_READOUT != 0 {
-                unsafe { collect(layout, active & FEATURE_TARGET_READOUT != 0) }
+            let state = if features & FEATURE_GAME_SNAPSHOT != 0 {
+                unsafe { collect(layout, active & FEATURE_TARGET_OBSERVATION != 0) }
             } else {
                 State::empty()
             };
-            if features & FEATURE_TARGET_READOUT != 0 {
+            if features & FEATURE_GAME_SNAPSHOT != 0 {
                 unsafe { publish(state) };
             }
             if active & FEATURE_TOOLBOX_FOUNDATION != 0 {
@@ -720,7 +816,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    13
+    14
 }
 
 #[no_mangle]

@@ -40,43 +40,45 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         cursor:
-          "9ef763994577dd1a78fa7c8931d2fe6e75104790867450c2b1ed345601e7b120",
+          "8c156901f7fa5a7d1ee23b6b2f2b53ce6c511dc358974e694db208e965f5d151",
         target:
-          "7ce7fc87062fe351cf3d9830320deb8b647e7261cca207c42fd9efbbbec18bf2",
+          "96786cba1fac260f0924e3b1880dd65452c552c4e79b4e5e8a72e835d4cca0c8",
         cursorTarget:
-          "9392729dff7ad62e7dc2f52ab297b3f835d9707fe7edeb60b261398b45b2ea42",
+          "d4d2406669ef5be751843112cf7547fa640c8444bae95a23e0eaba3a2d9c1517",
         party:
-          "895f66aee9292aa9c96ace648d7063e75ff20e25e45d340d4b15e78041056906",
+          "b528291df4bd96541a8128fdd7de88b5712413fc192e6e051f71ac47459e221f",
         cursorParty:
-          "9c545793e5aba877be575eeb5197e1d2f9b9007303eed1c503b7a93aee580fd4",
+          "b7dc1e345bbe85a91b5423b4fc609ab37abbe2d15a387f29cfc7fbc7534c9fec",
         targetParty:
-          "a743f0fd9318fd6d9008d8dc1619d0f51a974198641676aa4df6c369c669835e",
+          "0e4da3a2a31b6c84b12ada9f5f0ec87abdcb9c239349fa38d46aa472ecbf74df",
         cursorTargetParty:
-          "2c10a054ccf24902f00f835862362abd3f8ecd0fe2f5c7822533c70cc299ab57",
+          "4b5f4601b3ddfe363b9fc49a8130df417b28dc7ddcc75b0cc83a6dca3d21458d",
         partyCommands:
-          "9e1f20e817c11cb0793539574ccc0a9babc6570744bbbfb8c5503ae317ba5e21",
+          "97213e19d336ccecd26a25d20291d4ee03fdd3102f4a58a56ce4e0ea2e0353b7",
         cursorPartyCommands:
-          "5ca5c2206dfbe154b3eaa363a965ea0a796c436b14650751575b9ac1b38c2b27",
+          "aca4e4ff310162036a9dccab2d9d4180f4699930ca3e9337de8529ff391d245c",
         targetPartyCommands:
-          "9d767bba917640b0d0a4665078b972a5a3d2e9c70fd16a126c6177100f093863",
+          "80d86e2af5c5f1160610ae17482e6385ff3990e97fbfbd798e7396be810b4e84",
         cursorTargetPartyCommands:
-          "212226bb0ddf7a63d6371f9c95d60add0795abc1da67b07249c7c5d98f92d0b0",
+          "00f8385b8343231e1f61bdac7a7ada1c48946d114f812e8c0927454eea72100c",
+        storage:
+          "04a0532fd2d5e6f3ecbbc050afaf47370a7f6b479431b471bf76d738a2e06e8a",
         partyStorage:
-          "79d90acc181ea0fdc0b512da693a4174840beff757f852a79ccd695de3d68373",
+          "43fa20fadf5b466976505696b80d95653c9b26f661ddf86959eb1cfbca6a9693",
         cursorPartyStorage:
-          "405242a2c0f2cc4b623fb9fafbb5663754afd0746a5f0730853266e517f5d6cc",
+          "db8dec116c17306853f5075926b657ee1d46d9ad04ae6cd1fc683638e89b7e9f",
         targetPartyStorage:
-          "dd74d05643a78d6f8abac0194e32adfa020705a9b37774224eac9581b5b1fad6",
+          "92fbaba14a4986ad46cd5f412eccbc51d26bd41241bb6d6eb736df6d88216df3",
         cursorTargetPartyStorage:
-          "05797d5a6e83957cbc472f79458b3b4f19b753c1ebde54a90da7ae8b8298fdc5",
+          "e58f556348af308a9e13b011588baf57a2eacb1213e0d25fbda8a12eb6aaf7d6",
         partyCommandsStorage:
-          "4eb4a194ae0799a15206bb5b11320d6f8cc0a8f211067b3835db67263dd517ef",
+          "36ea50a64185d69da0f5e5de02d1e20a8fefcc0402cf19be22522de5ce795974",
         cursorPartyCommandsStorage:
-          "df9a6fd5b43952ea1eed8ef8b9961f93aa617d751103234009a0931503fed37a",
+          "b98fb10c37deda13b06b79b19efa9130ae70aca62c7df3da75b463bc62af2f4b",
         targetPartyCommandsStorage:
-          "aef4f6b79e21adce6985e18bc7aed36569126989a985059737d089eccca79c45",
+          "cc07d6c49c6a8079679114806231ecf2d015e41b7dab1242dacd8b7687bf8869",
         cursorTargetPartyCommandsStorage:
-          "edc1793dca6d6cd204c6b559971c09a1f9f6b107af91803cbdeaf6b342f65d7c",
+          "58f0ce10fd231263e560e2496e07b6e152241c41e3ac0b6d04e7f13ca44ee924",
       }),
       programId: 1,
       // Function #477 returns 38,833 as a single i32 constant. The same function
@@ -104,8 +106,19 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           currentInstanceType: 0x23c,
           playerNumber: 0x2ac,
           agentId: 0x2c,
+          agentX: 0x74,
+          agentY: 0x78,
+          agentType: 0x9c,
           agentPlayerNumber: 0xf4,
           agentModelType: 0xf6,
+          worldContext: 0x2c,
+          // Exact-build initialised `AreaInfo[mapId]`. Cross-checked against
+          // GWToolbox++'s flags: Lion's Arch (55) is PvE, Random Arenas (188)
+          // carries the PvP bit, and Isle of Wurms (529) the guild-hall bit.
+          areaInfo: 0x1cc630,
+          areaInfoCount: 883,
+          areaInfoStride: 0x7c,
+          areaInfoFlags: 0x10,
         }),
       }),
       cursorEvent: Object.freeze({
@@ -161,14 +174,57 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         layout: Object.freeze({
           manualTargetAgentId: 0x5a394c,
           automaticTargetAgentId: 0x5a3948,
-          agentX: 0x74,
-          agentY: 0x78,
-          agentType: 0x9c,
         }),
+      }),
+      uiDispatcher: Object.freeze({
+        functionIndex: 6842,
+        params: Object.freeze(["i32", "i32", "i32"] as const),
+        results: Object.freeze([] as const),
+        bodySha256:
+          "ba41a2237bc91373cdee67ad8cfff700b80a2e351b7e980f37d68690307de4c0",
+        playerChatMessage: 0x1000_0082,
+        hideHeroPanelMessage: 0x1000_01a3,
+        showHeroPanelMessage: 0x1000_01a4,
       }),
       storage: Object.freeze({
         openExport: "enhancement_open_storage",
         configureExport: "enhancement_configure_storage",
+        // Exact build-38,833 player access facts. The client readers below
+        // independently prove WorldContext::players at +0x80c, Array size at
+        // +8, 0x50-byte records, and the three fields used by the kernel.
+        accessProof: Object.freeze({
+          layout: Object.freeze({
+            worldPlayers: 0x80c,
+            playerRecordStride: 0x50,
+            playerRecordAgentId: 0x00,
+            playerRecordAccessFlags: 0x34,
+            playerRecordNumber: 0x38,
+            areaInfoType: 0x08,
+          }),
+          readers: Object.freeze({
+            "agent-id": Object.freeze({
+              functionIndex: 8939,
+              params: Object.freeze(["i32"] as const),
+              results: Object.freeze(["i32"] as const),
+              bodySha256:
+                "2a4f5c421482aed52cffc3f58575622a7302492aea86012019b8b683de46cba4",
+            }),
+            "access-flags": Object.freeze({
+              functionIndex: 9196,
+              params: Object.freeze(["i32"] as const),
+              results: Object.freeze(["i32"] as const),
+              bodySha256:
+                "620dd5c413423a797119e43a102ae7b2cbe3a633ca41f607bf6a2d7988d1412f",
+            }),
+            "player-number": Object.freeze({
+              functionIndex: 9205,
+              params: Object.freeze(["i32"] as const),
+              results: Object.freeze(["i32"] as const),
+              bodySha256:
+                "b98af3eb50f4c2aa1bc09f0a88712e32a2a14fe0d013126e1e4c0e842008e01f",
+            }),
+          }),
+        }),
         travel: Object.freeze({
           enqueueExport: "enhancement_travel",
           configureExport: "enhancement_configure_travel",
@@ -312,12 +368,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         ] as const),
       }),
       partyObservation: Object.freeze({
-        functionIndex: 6842,
-        params: Object.freeze(["i32", "i32", "i32"] as const),
-        results: Object.freeze([] as const),
-        playerChatMessage: 0x1000_0082,
-        hideHeroPanelMessage: 0x1000_01a3,
-        showHeroPanelMessage: 0x1000_01a4,
         // This is the smallest domain-complete dirty set: two hero-readiness
         // notifications, four distinct map-context lifecycle boundaries, and
         // the four party membership mutations that can replace playerParty or
@@ -366,7 +416,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           // skill id, account-wide and therefore usable by heroes.
           accountContext: 0x28,
           accountUnlockedSkills: 0x124,
-          worldContext: 0x2c,
           // Its hero ids *and* agent ids matched the party array exactly.
           worldHeroFlags: 0x584,
           heroFlagStride: 0x24,
@@ -411,13 +460,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           // `level_base`. `level` at 0x08 adds runes, and a stored build holds the
           // invested rank — Devona reads Strength 7 there and 8 with her rune.
           attributeEntryRank: 0x04,
-          // Exact-build initialised `AreaInfo[mapId]`. Cross-checked against
-          // GWToolbox++'s flags: Lion's Arch (55) is PvE, Random Arenas (188)
-          // carries the PvP bit, and Isle of Wurms (529) the guild-hall bit.
-          areaInfo: 0x1cc630,
-          areaInfoCount: 883,
-          areaInfoStride: 0x7c,
-          areaInfoFlags: 0x10,
           worldProfessionStates: 0x6bc,
           professionStateStride: 0x14,
           worldCharacterSkills: 0x710,

@@ -7,7 +7,11 @@
 // kernel would never publish is still rejected.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readCompanionSnapshot } from "../../src/renderer/companion-snapshot.js";
+import {
+  COMPANION_SNAPSHOT_ABI,
+  COMPANION_SNAPSHOT_BYTES,
+  readCompanionSnapshot,
+} from "../../src/renderer/companion-snapshot.js";
 
 const MAGIC = 0x42545747;
 const LIVING = 0xdb;
@@ -16,11 +20,11 @@ const GADGET = 0x200;
 
 /** A ready snapshot with a selected target, minus the fields under test. */
 function snapshot(agentTypeBits: number): ArrayBuffer {
-  const buffer = new ArrayBuffer(64);
+  const buffer = new ArrayBuffer(COMPANION_SNAPSHOT_BYTES);
   const view = new DataView(buffer);
   view.setUint32(0, MAGIC, true);
-  view.setUint16(4, 2, true);
-  view.setUint16(6, 64, true);
+  view.setUint16(4, COMPANION_SNAPSHOT_ABI, true);
+  view.setUint16(6, COMPANION_SNAPSHOT_BYTES, true);
   view.setUint32(8, 2, true);
   view.setUint32(12, 7, true);
   view.setUint32(16, 40, true);

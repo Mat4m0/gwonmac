@@ -30,6 +30,7 @@ import {
   COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
   COMPANION_PARTY_BYTES,
+  type CompanionSnapshot,
 } from "./companion-snapshot.js";
 import {
   observeCompanion,
@@ -46,7 +47,6 @@ import type {
 } from "./enhancement-team-commands.js";
 import type { StorageInstallation } from "./enhancement-storage-installation.js";
 import type { TravelInstallation } from "./enhancement-travel-installation.js";
-import type { TravelGameState } from "../shared/travel-command.js";
 import {
   COMPANION_ABI as COMPANION_DESCRIPTOR,
 } from "../shared/companion-abi.js";
@@ -67,8 +67,9 @@ import {
 } from "./profession-command-trace.js";
 
 const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
-const ENHANCEMENT_FEATURE_TARGET_READOUT = 1 << 1;
+const ENHANCEMENT_FEATURE_GAME_SNAPSHOT = 1 << 1;
 const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
+const ENHANCEMENT_FEATURE_TARGET_OBSERVATION = 1 << 3;
 const COMPANION_ABI = COMPANION_DESCRIPTOR.kernel;
 const COMPANION_RUNTIME_BYTES = 65_536;
 /**
@@ -135,8 +136,9 @@ export async function installCertifiedCompanion(
   const publishObserverState = program === "target-observer";
   const featureFlags =
     (capabilities.nativeCursor ? ENHANCEMENT_FEATURE_NATIVE_CURSOR : 0)
-    | (observeState ? ENHANCEMENT_FEATURE_TARGET_READOUT : 0)
-    | (foundation ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0);
+    | (observeState ? ENHANCEMENT_FEATURE_GAME_SNAPSHOT : 0)
+    | (foundation ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0)
+    | (capabilities.targetObservation ? ENHANCEMENT_FEATURE_TARGET_OBSERVATION : 0);
   if (featureFlags === 0) return null;
 
   const manifest = decodeEnhancementManifest(module, capabilities);
@@ -606,22 +608,19 @@ export async function installCertifiedCompanion(
       readout = null;
     };
 
-    // The command module owns values and reviewed opcodes; the installer owns
-    // the live permission gate and hands it the freshest observed party.
+    // Command modules own values and reviewed opcodes; the installer owns the
+    // live permission gates and supplies fresh game and party observations.
     let toolboxObservation: ToolboxObservation | null = null;
-    let companionState: TravelGameState | null = null;
+    let companionState: CompanionSnapshot | null = null;
     const teamEnabled = () => policy().teamManagement;
-    const stateObserverEnabled = () => targetEnabled() || capabilities.storage;
     const syncActiveObservers = () => {
       const active =
         (capabilities.nativeCursor ? ENHANCEMENT_FEATURE_NATIVE_CURSOR : 0)
-        // Local actions need the current map and instance even when the
-        // visible target-distance readout is off.
-        | (stateObserverEnabled() ? ENHANCEMENT_FEATURE_TARGET_READOUT : 0)
         // Keep the bounded policy observer alive even while optional UI and
         // commands are denied. It is the only way an unknown region can later
         // prove that it became PvE without restarting.
-        | (foundation ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0);
+        | (foundation ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0)
+        | (targetEnabled() ? ENHANCEMENT_FEATURE_TARGET_OBSERVATION : 0);
       kernelDispatch(3, active, 0, 0, 0, 0);
     };
     const commands = commandEnqueue === null ? null : teamCommands!.createTeamApplyCommands({
@@ -656,8 +655,7 @@ export async function installCertifiedCompanion(
     const syncStoragePolicy = () => {
       storageInstallation?.update({
         enabled: policy().xunlaiStorage,
-        playRegion: playRegion(),
-        observation: toolboxObservation,
+        state: companionState,
       });
     };
     const syncTravelPolicy = () => {
@@ -771,6 +769,14 @@ export async function installCertifiedCompanion(
       get toolbox() {
         return toolbox?.state ?? null;
       },
+      // One certified tri-state for the Xunlai live scenario. No player,
+      // account, pointer, or raw record leaves the snapshot decoder.
+      get xunlaiAccess() {
+        return companionState?.status === "ready"
+          && typeof companionState.xunlaiAccess === "boolean"
+          ? companionState.xunlaiAccess
+          : null;
+      },
     };
     // The observer program is the one explicit harness capability. Toolbox
     // publishes projections only: it cannot read arbitrary game addresses or
@@ -815,10 +821,9 @@ export async function installCertifiedCompanion(
               tracePolicy("region");
               setTargetEnabled();
               syncActiveObservers();
-              syncStoragePolicy();
-              syncTravelPolicy();
             }
             readout?.update(state);
+            syncStoragePolicy();
             syncTravelPolicy();
           } }
         : null,
@@ -841,7 +846,6 @@ export async function installCertifiedCompanion(
               setTargetEnabled();
               syncActiveObservers();
             }
-            syncStoragePolicy();
             syncTravelPolicy();
             toolbox?.update(state);
           } }

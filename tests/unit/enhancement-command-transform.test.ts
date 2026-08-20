@@ -20,6 +20,7 @@ import {
   CURSOR_TOOLBOX_STORAGE,
   fixture,
   manifest,
+  STORAGE_ONLY,
   TARGET_ONLY,
 } from "../fixtures/enhancement-transform.js";
 
@@ -114,6 +115,37 @@ describe("Enhancement command transform", () => {
         "a read-only profile must not accept a command-capable manifest",
       );
     }
+  });
+
+  it("derives local actions without installing the party dispatcher hook", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const output = transformEnhancementWasm(input, build, STORAGE_ONLY);
+    const module = new WebAssembly.Module(new Uint8Array(output));
+    assert.deepEqual(decodeEnhancementManifest(module, STORAGE_ONLY)?.hooks, {
+      tick: true,
+      cursor: false,
+      ui: false,
+    });
+
+    const dispatches: number[][] = [];
+    const instance = new WebAssembly.Instance(module, {
+      env: {
+        t: () => {},
+        c: () => {},
+        u: (...args: number[]) => { dispatches.push(args); },
+        tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
+      },
+    });
+    const configure = instance.exports[build.storage!.travel.configureExport] as
+      (payload: number, enabled: number) => number;
+    const enqueue = instance.exports[build.storage!.travel.enqueueExport] as
+      (mapId: number, region: number, language: number, district: number) => number;
+    const frame = instance.exports.frame as (value: number, context: number) => void;
+    assert.equal(configure(128, 1), 1);
+    assert.equal(enqueue(81, -2, 0, 0), 1);
+    frame(70, 700);
+    assert.deepEqual(dispatches, [[build.storage!.travel.messageId, 128, 0]]);
   });
 
   it("queues the named storage action and drains DataWindow on the game thread", () => {
@@ -622,6 +654,34 @@ describe("Enhancement command transform", () => {
         CURSOR_TOOLBOX_COMMANDS,
       ),
       /storage slash parser body does not match its semantic fingerprint/,
+    );
+  });
+
+  it("refuses an uncertified Xunlai access reader", () => {
+    const input = fixture();
+    const build = manifest(input);
+    assert.throws(
+      () => transformEnhancementWasm(
+        input,
+        {
+          ...build,
+          storage: {
+            ...build.storage!,
+            accessProof: {
+              ...build.storage!.accessProof!,
+              readers: {
+                ...build.storage!.accessProof!.readers,
+                "access-flags": {
+                  ...build.storage!.accessProof!.readers["access-flags"],
+                  bodySha256: "0".repeat(64),
+                },
+              },
+            },
+          },
+        },
+        CURSOR_TOOLBOX_COMMANDS,
+      ),
+      /access-flags reader body does not match its semantic fingerprint/,
     );
   });
 

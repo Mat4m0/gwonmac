@@ -7,6 +7,8 @@ import {
   readCompanionSnapshot,
   readCompanionToolbox,
   sameCompanionToolboxState,
+  COMPANION_SNAPSHOT_ABI,
+  COMPANION_SNAPSHOT_BYTES,
   COMPANION_CURSOR_ABI,
   COMPANION_CURSOR_BYTES,
   COMPANION_TOOLBOX_BYTES,
@@ -88,9 +90,12 @@ export function readyToolbox(read: ToolboxRead) {
 
 export const MAGIC = 0x42545747;
 export const FEATURE_NATIVE_CURSOR = 1 << 0;
-export const FEATURE_TARGET_READOUT = 1 << 1;
+export const FEATURE_GAME_SNAPSHOT = 1 << 1;
 export const FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
-export const ALL_FEATURES = FEATURE_NATIVE_CURSOR | FEATURE_TARGET_READOUT;
+export const FEATURE_TARGET_OBSERVATION = 1 << 3;
+export const ALL_FEATURES = FEATURE_NATIVE_CURSOR
+  | FEATURE_GAME_SNAPSHOT
+  | FEATURE_TARGET_OBSERVATION;
 
 export interface SnapshotOverrides {
   sequence?: number;
@@ -111,11 +116,11 @@ export interface SnapshotOverrides {
 }
 
 export function snapshot(overrides: SnapshotOverrides = {}) {
-  const buffer = new ArrayBuffer(64);
+  const buffer = new ArrayBuffer(COMPANION_SNAPSHOT_BYTES);
   const view = new DataView(buffer);
   view.setUint32(0, MAGIC, true);
-  view.setUint16(4, 2, true);
-  view.setUint16(6, 64, true);
+  view.setUint16(4, COMPANION_SNAPSHOT_ABI, true);
+  view.setUint16(6, COMPANION_SNAPSHOT_BYTES, true);
   view.setUint32(8, overrides.sequence ?? 2, true);
   const flags = overrides.flags ?? 7;
   const hasPlayer = (flags & 2) !== 0;
@@ -266,6 +271,7 @@ export const ADDRESSES = Object.freeze({
   professionStateBuffer: 0x1_2800,
   skillbarBuffer: 0x1_3000,
   attributeBuffer: 0x1_4000,
+  playerRecordBuffer: 0x1_5000,
   areaInfo: 0x20_0000,
   companionRuntime: 0x30_0000,
 });
@@ -296,6 +302,9 @@ export const DETAIL = Object.freeze({
   attributeEntryStride: 0x14, attributeEntryId: 0x00, attributeEntryRank: 0x04,
   professionStates: 0x6bc, professionStateStride: 0x14,
   characterSkills: 0x710,
+  players: 0x80c, playerStride: 0x50,
+  playerAgentId: 0x00, playerAccessFlags: 0x34, playerNumber: 0x38,
+  areaInfoType: 0x08,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,
@@ -320,6 +329,7 @@ export const PARTY_DIRTY_MESSAGES = Object.freeze([
 export const DETAIL_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("heroLevel");
 export const POLICY_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("areaInfo");
 export const PLAYER_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldProfessionStates");
+export const XUNLAI_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldPlayers");
 export const CONFIG_WORDS = ENHANCEMENT_CONFIG_WORD_COUNT;
 export const CONFIG_BYTES = CONFIG_WORDS * 4;
 export const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
@@ -455,6 +465,10 @@ export async function createKernel(
     [DETAIL.professionStates, DETAIL.professionStateStride, DETAIL.characterSkills],
     PLAYER_CONFIG_START,
   );
+  config.set([
+    DETAIL.players, DETAIL.playerStride, DETAIL.playerAgentId,
+    DETAIL.playerAccessFlags, DETAIL.playerNumber, DETAIL.areaInfoType,
+  ], XUNLAI_CONFIG_START);
   // Placed at the boundary rather than appended to the literal above. Written
   // as one flat list, the messages sat directly after the party chain — and
   // when the layout grew they silently stayed there, a full detail block short of
@@ -472,11 +486,11 @@ export async function createKernel(
       const features = overrides.features ?? ALL_FEATURES;
       return exports.init(
         overrides.snapshotPointer
-          ?? ((features & FEATURE_TARGET_READOUT) !== 0
+          ?? ((features & FEATURE_GAME_SNAPSHOT) !== 0
             ? ADDRESSES.snapshot
             : 0),
         overrides.snapshotSize
-          ?? ((features & FEATURE_TARGET_READOUT) !== 0 ? 64 : 0),
+          ?? ((features & FEATURE_GAME_SNAPSHOT) !== 0 ? 64 : 0),
         overrides.configPointer ?? ADDRESSES.config,
         overrides.configSize ?? CONFIG_BYTES,
         overrides.cursorPointer
@@ -564,6 +578,25 @@ export function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.manualTargetId, 9, true);
   view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
   view.setUint32(ADDRESSES.game + DETAIL.accountContext, ADDRESSES.account, true);
+  view.setUint32(ADDRESSES.game + DETAIL.worldContext, ADDRESSES.world, true);
+  view.setUint32(ADDRESSES.world + DETAIL.players, ADDRESSES.playerRecordBuffer, true);
+  view.setUint32(ADDRESSES.world + DETAIL.players + 4, 1, true);
+  view.setUint32(ADDRESSES.world + DETAIL.players + 8, 1, true);
+  view.setUint32(
+    ADDRESSES.playerRecordBuffer + DETAIL.playerAgentId,
+    7,
+    true,
+  );
+  view.setUint32(
+    ADDRESSES.playerRecordBuffer + DETAIL.playerAccessFlags,
+    0,
+    true,
+  );
+  view.setUint32(
+    ADDRESSES.playerRecordBuffer + DETAIL.playerNumber,
+    42,
+    true,
+  );
   view.setUint32(ADDRESSES.partyContext + 0x54, ADDRESSES.partyInfo, true);
   view.setUint32(ADDRESSES.partyInfo + 0x24, ADDRESSES.heroBuffer, true);
   view.setUint32(ADDRESSES.partyInfo + 0x28, 2, true);

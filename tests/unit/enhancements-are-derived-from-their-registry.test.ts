@@ -129,7 +129,7 @@ test("one capability plan derives hooks without losing feature identity", () => 
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "xunlai-storage"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: false, storage: true },
+      { nativeCursor: false, targetObservation: false, partyObservation: false, commands: false, storage: true },
     );
   }
 });
@@ -141,7 +141,7 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
     [{ nativeCursor: false, tools: false }, "cursor-observer", "cursor"],
     [{ nativeCursor: true, tools: false }, "target-observer", "target"],
     [{ nativeCursor: false, tools: false }, "toolbox-foundation", "party"],
-    [{ nativeCursor: false, tools: false }, "xunlai-storage", "partyStorage"],
+    [{ nativeCursor: false, tools: false }, "xunlai-storage", "storage"],
   ] as const;
   for (const [selection, program, profile] of cases) {
     const resolved = enhancementCapabilitiesFor(selection, program);
