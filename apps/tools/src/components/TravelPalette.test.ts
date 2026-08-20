@@ -60,9 +60,9 @@ describe("TravelPalette", () => {
     const { wrapper, traceSearch } = fixture();
     await flushPromises();
 
-    await wrapper.get('[role="combobox"]').setValue("Ruins");
+    await wrapper.get('[role="combobox"]').setValue("zzzz-no-such-outpost");
 
-    expect(traceSearch).toHaveBeenLastCalledWith("Ruins", []);
+    expect(traceSearch).toHaveBeenLastCalledWith("zzzz-no-such-outpost", []);
     expect(wrapper.text()).toContain("No matching destination");
     wrapper.unmount();
   });
