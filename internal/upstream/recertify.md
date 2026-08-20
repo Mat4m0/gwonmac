@@ -8,9 +8,9 @@
 ## Safe result
 
 An unknown client must remain playable as the untouched official module.
-Template repair can continue only when the isolated verifier proves the full
-affected caller semantics. Enhancement facts require a new exact-build
-certificate. A shared address or function-index delta is not proof.
+Template repair and Enhancement features can continue only when the isolated
+verifier proves their complete feature-local semantics. A CI report, exact
+hash row, shared address, or function-index delta is not proof.
 
 Main publishes the effective status of each feature to both diagnostics and
 player-facing code. Do not reconstruct a second whole-build state:
@@ -53,8 +53,8 @@ Read the template report status first:
 
 | Status | Action |
 | --- | --- |
-| `certified` or matching `derived` | No table change is needed. |
-| `derived` | Review the evidence and proposed entry. Do not treat formatting as proof. |
+| `certified` or matching `derived` | The runtime predicate accepted this input. No table change is needed. |
+| `derived` | Review the evidence. Do not treat formatting or a generated row as proof. |
 | `not-applicable` | Test whether ArenaNet fixed the defect. Prefer deletion. |
 | `failed` | Use the manual procedure below. Do not weaken the locator to force a result. |
 
@@ -65,8 +65,8 @@ normalizing only the selected call-index operands. Matching offsets alone are
 not enough.
 
 The Enhancement report is review evidence only. `candidate`, `ambiguous`, and
-`unavailable` cannot create runtime authority. A maintainer must re-measure
-every required hook, address, structure field, and message ID.
+`unavailable` cannot create runtime authority. CI never writes its findings
+into launch-authority tables.
 
 ## Manual template recovery
 

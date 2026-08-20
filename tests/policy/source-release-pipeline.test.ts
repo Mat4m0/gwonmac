@@ -760,7 +760,7 @@ test("the website suite runs on its own path-filtered workflow", () => {
   );
 });
 
-test("the patch detector is cheap, secretless, and only ever proposes", () => {
+test("client recertification reports evidence but cannot grant authority", () => {
   const workflow = read(".github/workflows/client-recertification.yml");
   // Blanked rather than dropped, so a reported offset is the one an editor
   // shows. A job's prose sits above its key and would otherwise be scanned as
@@ -800,15 +800,11 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
   assert.doesNotMatch(detect, /pnpm|rustup|certification\.js|--download/);
   assert.match(detect, /permissions:\n {6}contents: read\n {6}issues: write/);
   assert.doesNotMatch(detect, /gh issue close/);
-  // A generation with a branch or an open issue is already proposed, and
-  // re-deriving it every quarter hour costs a macOS job and buries the
-  // fetch-failure heartbeat under a run that fails on the push it repeats.
-  assert.match(detect, /changed: \$\{\{ steps\.unproposed\.outputs\.changed \}\}/);
-  assert.match(
-    detect,
-    /gh api "repos\/\$GITHUB_REPOSITORY\/git\/ref\/heads\/client-recertification\/\$short"/,
-  );
+  // One open tracking issue deduplicates expensive derivation. Source branches
+  // are deliberately irrelevant because this workflow cannot create one.
+  assert.match(detect, /changed: \$\{\{ steps\.unreported\.outputs\.changed \}\}/);
   assert.match(detect, /gh issue list --state open --label client-recertification[\s\S]*?changed=false/);
+  assert.doesNotMatch(detect, /git\/ref\/heads|client-recertification\/\$short/);
 
   // Derivation is macOS, on change only, and installs the pinned toolchain
   // before the compiler runs. tests/policy/toolchain-floors.test.ts scans every
@@ -822,27 +818,16 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
   assert.match(derive, /permissions:\n {6}contents: read/);
   assert.doesNotMatch(derive, /contents: write|issues: write|pull-requests: write/);
   assert.match(derive, /pnpm client:official --download "\$RUNNER_TEMP\/official"/);
-  assert.match(derive, /certification\.js template "\$WASM" --emit-ts --write/);
+  assert.match(derive, /certification\.js template "\$WASM" --emit-ts/);
   assert.match(derive, /certification\.js recertify "\$WASM"/);
-  assert.match(
-    derive,
-    /name: Verify the recorded client artifact[\s\S]*GW_CLIENT_WASM: \$\{\{ steps\.official\.outputs\.wasm \}\}[\s\S]*pnpm test:client-artifact/,
-  );
-  // The report is printed before `--write` edits the table, so the exit code is
-  // the only thing that separates a written entry from one that threw on the
-  // way to disk. Dropping it lets the branch claim a certificate it lacks.
-  assert.match(derive, /template_exit=\$\?/);
-  assert.match(
-    derive,
-    /if \[ "\$status" = "derived" \] && \[ "\$template_exit" -eq 0 \]/,
-  );
-  assert.match(
-    derive,
-    /elif \[ "\$status" = "certified" \] && \[ "\$template_exit" -eq 1 \]/,
-  );
-  // Automation proposes safe file saving, but only a final reviewed commit
-  // advances the recorded generation.
-  assert.doesNotMatch(derive, /client:official --record/);
+  assert.doesNotMatch(derive, /--write|test:client-artifact|tables\.patch|SOURCE_COMMIT/);
+  // Enhancement may only be called inspected when its own strict preparation
+  // path accepted the same original bytes. A broad template status is not
+  // enough to publish a positive report.
+  assert.match(derive, /inspected="\$\(jq -er '\.candidateInspected'/);
+  assert.match(derive, /if \[ "\$inspected" = "true" \]/);
+  assert.doesNotMatch(derive, /status="\$\(jq|template_exit/);
+  assert.doesNotMatch(derive, /client:official --record|git diff|git apply/);
   assert.match(derive, /carry-forward\.json/);
   assert.match(derive, /carry-forward\.md/);
 
@@ -854,28 +839,26 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
   assert.deepEqual(uploaded, ["${{ runner.temp }}/evidence"]);
   assert.doesNotMatch(derive, /path:[^\n]*(?:Gw\.|official)/);
 
-  // Stage one only. It pushes a branch and proposes; a rejected pull request
-  // still leaves the branch and an issue naming it.
-  assert.match(publish, /permissions:\n {6}actions: write\n {6}contents: write/);
+  // Reporting can write issues only. It has no checkout credentials, source
+  // write permission, branch command, pull-request command, or workflow token.
+  assert.match(publish, /permissions:\n {6}contents: read\n {6}issues: write/);
   assert.doesNotMatch(publish, /pnpm install|pnpm build|pnpm certification/);
   assert.match(publish, /if: always\(\) && needs\.derive\.result != 'skipped'/);
-  assert.equal(body.match(/persist-credentials: true/gu)?.length, 1);
-  assert.match(publish, /persist-credentials: true/);
-  assert.match(
-    publish,
-    /\[ ! -s evidence\/SOURCE_COMMIT\.txt \][\s\S]*tr -d '\\n' < evidence\/SOURCE_COMMIT\.txt[\s\S]*"\$GITHUB_SHA"/,
+  assert.doesNotMatch(workflow, /persist-credentials: true/);
+  assert.doesNotMatch(
+    workflow,
+    /contents: write|pull-requests: write|actions: write|git push|git apply|gh pr create|gh workflow run/,
   );
-  assert.match(publish, /git apply evidence\/tables\.patch/);
   // A failed macOS job or artifact transfer still leaves the generation with
   // reportable metadata and an assigned issue. Missing evidence may never turn
   // into a branch, but it must not prevent the issue step from running.
   assert.match(
     publish,
-    /name: Receive the derivation evidence\n {8}continue-on-error: true/,
+    /name: Receive the verification evidence\n {8}continue-on-error: true/,
   );
   assert.match(
     publish,
-    /name: Ensure failure evidence is reportable\n {8}if: always\(\)[\s\S]*collection-failed/,
+    /name: Ensure failure evidence is reportable\n {8}if: always\(\)[\s\S]*Evidence collection did not complete/,
   );
   assert.match(
     publish,
@@ -883,7 +866,7 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
   );
   assert.match(
     publish,
-    /FINGERPRINT: \$\{\{ needs\.derive\.outputs\.fingerprint \|\| needs\.detect\.outputs\.fingerprint \}\}[\s\S]*SHORT=unknown/,
+    /FINGERPRINT: \$\{\{ needs\.derive\.outputs\.fingerprint \|\| needs\.detect\.outputs\.fingerprint \}\}[\s\S]*short=unknown/,
   );
   // The branch and the issue name the generation the deriver certified, not the
   // one the detector saw a job earlier; those differ when ArenaNet republishes.
@@ -891,16 +874,14 @@ test("the patch detector is cheap, secretless, and only ever proposes", () => {
     publish,
     /FINGERPRINT: \$\{\{ needs\.derive\.outputs\.fingerprint \|\| needs\.detect\.outputs\.fingerprint \}\}/,
   );
-  assert.match(
-    publish,
-    /if gh pr create[\s\S]*?opened=true[\s\S]*?else[\s\S]*?opened=false/,
-  );
   assert.match(publish, /continue-on-error: true/);
-  assert.match(publish, /gh workflow run pr-package\.yml --ref "\$BRANCH"/);
-  assert.doesNotMatch(publish, /gh workflow run pr-package\.yml --ref main/);
-  assert.match(publish, /-f checkout_ref="\$head"/);
-  assert.match(publish, /auto-derived, PR ready/);
-  assert.match(publish, /layout changed, investigation needed/);
+  assert.match(publish, /semantic verification report/);
+  assert.match(publish, /invariant refused, investigation needed/);
+  assert.match(publish, /source branch: none; this workflow cannot grant capabilities/);
+  // Backticks in issue Markdown are passed as single-quoted data, never shell
+  // substitutions. This preserves the evidence names in generated issues.
+  assert.match(publish, /printf '%s\\n' '- semantic report: `enhancement\.json`/);
+  assert.match(publish, /printf '%s\\n' '`internal\/upstream\/recertify\.md`/);
   assert.match(
     publish,
     /gh issue create --label client-recertification[\s\S]*--assignee mat4m0/,

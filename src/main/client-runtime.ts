@@ -43,6 +43,7 @@ import { INITIAL_PROGRESS } from "../shared/progress.js";
 import {
   certificationFromLocalVerification,
   certifyClientBuild,
+  shouldVerifyClientLocally,
 } from "./certification/client-certification.js";
 import {
   PATCH_REQUEST_HEADERS,
@@ -306,13 +307,10 @@ export class ClientRuntime {
     }
 
     let certification = certifyClientBuild(officialSha256);
-    if (
-      certification.templateSaveBuild === null
-      || (
-        certification.enhancementBuild === null
-        && this.options.enhancementCapabilities.nativeCursor
-      )
-    ) {
+    if (shouldVerifyClientLocally(
+      certification,
+      this.options.enhancementCapabilities,
+    )) {
       const local = await verifyClientLocally({
         officialWasmPath: officialWasm,
         officialSha256,

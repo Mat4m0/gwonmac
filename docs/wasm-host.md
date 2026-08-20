@@ -242,11 +242,12 @@ their named domains.
 
 The scheduled workflow detects ArenaNet code changes. It ignores normal content
 changes. For a new generation it downloads verified code artifacts, runs the
-file derivation, produces bounded candidate evidence, and opens a proposal.
+file derivation, and produces bounded candidate evidence. It cannot edit
+source, push a branch, open a pull request, or grant runtime authority.
 
-Automation cannot publish a runtime certificate. A maintainer reviews the
-evidence, runs offline proof and the minimum live semantic checks, and ships new
-exact facts in an application release.
+Automation cannot publish a runtime certificate. The isolated verifier makes
+the runtime decision from the official bytes; a maintainer investigates only
+an invariant it refuses.
 
 The carry-forward report has separate **Apply team** and **local actions**
 rows. A changed Team Apply builder must not block local-action recertification,

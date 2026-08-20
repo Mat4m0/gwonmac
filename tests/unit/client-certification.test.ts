@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   certificationFromLocalVerification,
   certifyClientBuild,
+  shouldVerifyClientLocally,
   type CertifiedBuildTables,
 } from "../../src/main/certification/client-certification.js";
 import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
@@ -13,6 +14,13 @@ const OFFICIAL = TEMPLATE_SAVE_BUILDS.find(
   (build) => build.outputSha256 === ENHANCEMENT_BUILDS[0]?.sha256,
 )!;
 const UNKNOWN = "0".repeat(64);
+const NO_CAPABILITIES = Object.freeze({
+  nativeCursor: false,
+  targetObservation: false,
+  partyObservation: false,
+  commands: false,
+  storage: false,
+});
 
 function localVerification(
   template: boolean,
@@ -76,6 +84,31 @@ describe("client certification", () => {
     assert.deepEqual(
       certificationFromLocalVerification(localVerification(false, false)),
       { templateSaveBuild: null, enhancementBuild: null },
+    );
+  });
+
+  it("runs local proof for every requested missing capability", () => {
+    const templateOnly = certifyClientBuild(OFFICIAL.sha256, withoutEnhancement);
+    for (const capability of [
+      "nativeCursor",
+      "targetObservation",
+      "partyObservation",
+      "commands",
+      "storage",
+    ] as const) {
+      assert.equal(shouldVerifyClientLocally(templateOnly, {
+        ...NO_CAPABILITIES,
+        [capability]: true,
+      }), true, capability);
+    }
+    assert.equal(
+      shouldVerifyClientLocally(templateOnly, NO_CAPABILITIES),
+      false,
+    );
+    assert.equal(
+      shouldVerifyClientLocally(certifyClientBuild(UNKNOWN), NO_CAPABILITIES),
+      true,
+      "template saving still needs local proof when Tools are off",
     );
   });
 });
