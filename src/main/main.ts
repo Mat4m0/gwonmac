@@ -544,15 +544,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
         "The settings file was corrupt. Defaults were restored and a diagnostic copy was preserved.",
     });
   });
-  if (retiredMemory.wasEnabled) {
-    await dialog.showMessageBox({
-      type: "warning",
-      buttons: ["Continue"],
-      message: "Experimental 4 GB memory limit removed",
-      detail:
-        "We found that the experimental mode can cause severe graphical corruption during long sessions. GWonMac has restored the standard 2 GB limit. The memory warning and Reload Guild Wars recovery remain available.",
-    });
-  }
   const enhancementSelection = enhancementSelectionFor(settings);
   const enhancementProgram = DEVELOPER_ENHANCEMENT_PROGRAM;
   const enhancementCapabilities = requestedEnhancementCapabilities(
@@ -835,6 +826,15 @@ if (primaryInstance) void app.whenReady().then(async () => {
   } else {
     logEvent({ k: "app.unexpectedUserData" });
     setProgress({ phase: "error", errorCode: "wrong_profile" });
+  }
+  if (retiredMemory.wasEnabled) {
+    await dialog.showMessageBox(win, {
+      type: "warning",
+      buttons: ["Continue"],
+      message: "Experimental 4 GB memory limit removed",
+      detail:
+        "We found that the experimental mode can cause severe graphical corruption during long sessions. GWonMac has restored the standard 2 GB limit. The memory warning and Reload Guild Wars recovery remain available.",
+    });
   }
 
   app.on("activate", () => {

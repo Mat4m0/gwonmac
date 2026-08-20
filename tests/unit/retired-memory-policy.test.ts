@@ -48,4 +48,13 @@ describe("withdrawn memory-profile policy", () => {
     }
     assert.deepEqual(violations, []);
   });
+
+  it("tells affected players why their unsafe opt-in was removed", async () => {
+    const main = await readFile(path.join(ROOT, "src/main/main.ts"), "utf8");
+    assert.match(main, /message: "Experimental 4 GB memory limit removed"/);
+    assert.match(
+      main,
+      /GWonMac has restored the standard 2 GB limit\. The memory warning and Reload Guild Wars recovery remain available\./,
+    );
+  });
 });

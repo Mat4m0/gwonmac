@@ -80,7 +80,6 @@
     "tests/**/*.ts",
     "tests/**/*.mts",
     "tests/**/*.mjs",
-    "tests/**/*.cjs",
     // Phase 5 converted the tooling scripts, so `.ts` is named here for the
     // same reason the test extensions are: `enhancements-visual.ts` is imported by
     // nothing, and a script enrolled only by whoever happens to import it is a
