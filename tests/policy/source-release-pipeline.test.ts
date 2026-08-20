@@ -37,7 +37,7 @@ type Manifest = {
   scripts?: Record<string, string>;
 };
 type VercelConfig = {
-  git?: { deploymentEnabled?: boolean };
+  git?: { deploymentEnabled?: boolean | Record<string, boolean> };
   ignoreCommand?: string;
 };
 const json = (file: string): Manifest => JSON.parse(read(file));
@@ -754,7 +754,15 @@ test("the website suite runs on its own path-filtered workflow", () => {
     false,
     "the workspace root lockfile is the website's dependency truth",
   );
-  assert.equal(vercel.git?.deploymentEnabled, true);
+  assert.deepEqual(
+    vercel.git?.deploymentEnabled,
+    {
+      "*": false,
+      main: true,
+      "preview/*": true,
+    },
+    "only main and deliberately named preview branches may spend a Vercel build",
+  );
   assert.equal(
     vercel.ignoreCommand,
     '[ -n "$VERCEL_GIT_PREVIOUS_SHA" ] || exit 1; git cat-file -e "$VERCEL_GIT_PREVIOUS_SHA" 2>/dev/null || exit 1; git diff --quiet "$VERCEL_GIT_PREVIOUS_SHA" HEAD -- . ../../src/shared ../../package.json ../../pnpm-lock.yaml ../../pnpm-workspace.yaml',
