@@ -248,6 +248,8 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(drainRefusal.travelAction, false);
   assert.equal(drainRefusal.xunlaiAction, false);
   assert.equal(drainRefusal.chatAliases, true);
+  assert.equal(drainRefusal.partyObservation, true);
+  assert.equal(drainRefusal.teamApply, false);
 
   const changedDispatcher = rewriteCode(bytes, (bodies) => {
     const body = bodies[6842 - derived.importCount]!;
@@ -260,6 +262,34 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(dispatcherRefusal.travelAction, false);
   assert.equal(dispatcherRefusal.xunlaiAction, false);
   assert.equal(dispatcherRefusal.chatAliases, false);
+  assert.equal(dispatcherRefusal.partyObservation, false);
+  assert.equal(dispatcherRefusal.teamApply, false);
+
+  const changedPartyField = rewriteCode(bytes, (bodies) => {
+    const body = bodies[8787 - derived.importCount]!;
+    body[35] = body[35]! ^ 1;
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(changedPartyField)), true);
+  const partyRefusal = capabilitiesOf(verifyLocalClientBytes(changedPartyField))!;
+  assert.equal(partyRefusal.nativeCursor, true);
+  assert.equal(partyRefusal.targetObservation, true);
+  assert.equal(partyRefusal.partyObservation, false);
+  assert.equal(partyRefusal.teamApply, false);
+  assert.equal(partyRefusal.travelAction, true);
+  assert.equal(partyRefusal.xunlaiAction, true);
+  assert.equal(partyRefusal.chatAliases, true);
+
+  const changedTeamOpcode = rewriteCode(bytes, (bodies) => {
+    const body = bodies[6887 - derived.importCount]!;
+    body[30] = body[30]! ^ 1;
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(changedTeamOpcode)), true);
+  const teamRefusal = capabilitiesOf(verifyLocalClientBytes(changedTeamOpcode))!;
+  assert.equal(teamRefusal.partyObservation, true);
+  assert.equal(teamRefusal.teamApply, false);
+  assert.equal(teamRefusal.travelAction, true);
+  assert.equal(teamRefusal.xunlaiAction, true);
+  assert.equal(teamRefusal.chatAliases, true);
 });
 
 test("every certified runtime profile reproduces the real client chain", async () => {

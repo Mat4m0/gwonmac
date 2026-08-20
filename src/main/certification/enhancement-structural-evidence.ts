@@ -35,6 +35,7 @@ import {
 import type {
   EnhancementCursorLayout,
   EnhancementObservationBaseLayout,
+  EnhancementPartyLayout,
   EnhancementTargetLayout,
 } from "../../shared/enhancement-config.js";
 
@@ -169,6 +170,8 @@ export interface AutomaticLocalActionsLocation {
   readonly travelAction: KnownEnhancementBuild["travelAction"] | null;
   readonly xunlaiAction: KnownEnhancementBuild["xunlaiAction"] | null;
   readonly chatAliases: KnownEnhancementBuild["chatAliases"] | null;
+  readonly partyObservation: KnownEnhancementBuild["partyObservation"] | null;
+  readonly teamApply: KnownEnhancementBuild["teamApply"] | null;
 }
 
 const MAX_INPUT_BYTES = 64 * 1024 * 1024;
@@ -204,6 +207,7 @@ interface ModuleShape {
   readonly functionTypeIndices: number[];
   readonly functionImportCount: number;
   readonly bodies: Uint8Array[];
+  readonly bodySha256: (string | undefined)[];
   readonly exports: WasmExport[];
   readonly elementSection: Uint8Array | null;
   readonly dataSegments: readonly Readonly<{
@@ -437,6 +441,7 @@ function parseModule(input: Uint8Array): ModuleShape {
     functionTypeIndices,
     functionImportCount: importedTypeIndices.length,
     bodies,
+    bodySha256: new Array<string | undefined>(bodies.length),
     exports: parseExports(optionalSection(sections, 7)),
     elementSection: optionalSection(sections, 9),
     dataSegments: parseStaticData(optionalSection(sections, 11)),
@@ -515,9 +520,14 @@ function functionHasSignature(
 }
 
 function functionBodySha256(module: ModuleShape, functionIndex: number): string {
-  const body = module.bodies[functionIndex - module.functionImportCount];
+  const localIndex = functionIndex - module.functionImportCount;
+  const body = module.bodies[localIndex];
   if (!body) throw new EvidenceError("module-shape-unsupported");
-  return createHash("sha256").update(body).digest("hex");
+  const cached = module.bodySha256[localIndex];
+  if (cached) return cached;
+  const digest = createHash("sha256").update(body).digest("hex");
+  module.bodySha256[localIndex] = digest;
+  return digest;
 }
 
 function tickEvidence(module: ModuleShape): TickEvidenceReport {
@@ -570,12 +580,11 @@ function readInstructionUnsigned(bytes: Uint8Array, cursor: Offset): number {
 
 function decodeFunctions(
   module: ModuleShape,
-  messageAnchors: PlayerChatMessageAnchors,
+  messageAnchors: PlayerChatMessageAnchors | readonly number[],
 ): DecodedFunction[] {
-  const trackedMessages = new Set<number>([
-    messageAnchors.playerChatMessage,
-    ...messageAnchors.nearbyPlayerMessages,
-  ]);
+  const trackedMessages = new Set<number>("playerChatMessage" in messageAnchors
+    ? [messageAnchors.playerChatMessage, ...messageAnchors.nearbyPlayerMessages]
+    : messageAnchors);
   let instructionCount = 0;
   const decoded: DecodedFunction[] = [];
   for (let localIndex = 0; localIndex < module.bodies.length; localIndex += 1) {
@@ -1400,6 +1409,123 @@ const LOCAL_ACTION_HASHES = Object.freeze({
   xunlaiAssertion: "df83cbe4386b6f8641568f5d2b6444c941f6d448a7efffd9f4737e343b0972d2",
 });
 
+const PARTY_WORLD_LIFECYCLE_ROLE = semanticRole(
+  3_279,
+  "878f00dc4ea68f51e5a79f507e37b0a5df3c32b561ca6d35c966a888d0cd022b",
+  Object.freeze([
+    { start: 1_342, end: 1_347, role: "world.assert-a", addressClass: "immutable-data" },
+    { start: 1_395, end: 1_400, role: "world.assert-b", addressClass: "immutable-data" },
+  ]),
+  ["i32"],
+  ["i32"],
+);
+
+const PARTY_PLAYER_PARTY_ROLE = semanticRole(
+  338,
+  "bb32ba98f1f72dc96a720d9b81c2513b6ff6ab59e7d14c63a125274a6f0b2ce4",
+  Object.freeze([
+    { start: 241, end: 246, role: "party.membership-assertion", addressClass: "immutable-data" },
+  ]),
+  ["i32", "i32", "i32", "i32"],
+  [],
+);
+
+const PARTY_SKILLBAR_UPDATE_ROLE = semanticRole(
+  468,
+  "c5076fb582377edf6be0a51464ecae499039e7523bc4473b035ba8054381053e",
+  Object.freeze([
+    { start: 45, end: 50, role: "skillbar.assertion", addressClass: "immutable-data" },
+  ]),
+  [],
+  [],
+);
+
+const TEAM_SENDER_ROLE = semanticRole(
+  4_425,
+  "1dbcd6d20afed3f8edc323c4ddaa323e24809c439041a069f1eace6d127cc73f",
+  Object.freeze([
+    { start: 115, end: 120, role: "sender.assert-bytes", addressClass: "immutable-data" },
+    { start: 3_526, end: 3_531, role: "sender.assert-string-length", addressClass: "immutable-data" },
+    { start: 4_198, end: 4_203, role: "sender.assert-struct-count", addressClass: "immutable-data" },
+    { start: 4_390, end: 4_395, role: "sender.assert-switch", addressClass: "immutable-data" },
+  ]),
+  ["i32", "i32", "i32"],
+  [],
+);
+
+const PARTY_EXACT_ROLES = Object.freeze({
+  partyInfoLifecycle: { bodySha256: "02c381bb2f7b2a7edea00c8de3d72838189ba696f9ce2b0177d7425d45267cb2", params: ["i32"], results: ["i32"] },
+  partyFlagWriter: { bodySha256: "00c8389a18427716101fe4df4176a5b87f3752776e93fe06105610e0d45a363e", params: ["i32", "i32"], results: [] },
+  accountUnlockWriter: { bodySha256: "1f8e8bf7fe1ca37a0f266812bc3e1bff28c14104aeb38d009a340851e8f5c582", params: ["i32"], results: [] },
+  heroFlagWriter: { bodySha256: "070a5db14e06aeec2fa812e6c82d5f17964585ea277381485f2b1707d54ceef1", params: ["i32", "i32", "i32"], results: [] },
+  attributesWriter: { bodySha256: "2db063ee4b22d5eb7a5376313fdacc32377153dc3981b5dfe852729a17369c23", params: ["i32", "i32", "i32"], results: [] },
+  professionAgent: { bodySha256: "ff540acea56ffbc5947288f9d461495e1970006fba7799ffd9d2b1dae1d06b93", params: ["i32", "i32"], results: ["i32"] },
+  professionPrimary: { bodySha256: "5b3490ae4c66dad083b8cbea456d2e47d41ff794e9c03aa15acdf2b6523915ec", params: ["i32", "i32"], results: ["i32"] },
+  professionSecondary: { bodySha256: "92fe2aa71777d546d797a4f7850cb59b1693f3b2937021dd5cebc85933403e07", params: ["i32", "i32"], results: ["i32"] },
+  professionUnlocked: { bodySha256: "7a1b17e51097a6599a036629fdcc630afa0850bacb0f2998d0ad8107d39ec9b5", params: ["i32", "i32"], results: ["i32"] },
+  skillbarReader: { bodySha256: "7b8b5c65a126fae2edfa517a4706244a0d2352c628fde208d049ecf82dfa4e72", params: ["i32", "i32", "i32"], results: ["i32"] },
+  skillSlotReader: { bodySha256: "ee41be1f4dcaf8e5822fc024e41cbbad74cf293cdafb2b89a8691aeb680e68b5", params: ["i32", "i32", "i32"], results: ["i32"] },
+  characterUnlockReader: { bodySha256: "0b6f7cf85a4b4f8c34b1cfadc63857a043a1b7fd710ba94c8db3a409d6bd092b", params: ["i32", "i32"], results: [] },
+} as const);
+
+const PARTY_DIRTY_ROLES = Object.freeze([
+  semanticRole(622, "07d8d87f5575c572d3f53fcff464cd07fba710f1a01e451d94a414f28b55ba26", Object.freeze([
+    { start: 580, end: 585, role: "party.ui", addressClass: "function-index" },
+  ]), ["i32", "i32", "i32", "i32", "i32"], []),
+  semanticRole(683, "4276027f9ac9dada4d236934c4a7170f22004934fdba19376e620e0aa14f6654", Object.freeze([
+    { start: 665, end: 670, role: "party.ui", addressClass: "function-index" },
+  ]), Array.from({ length: 15 }, () => "i32"), []),
+  semanticRole(127, "509bab21ca8be2a1f6287793e50f88825bb1d9f4432d3b29e3a394b117a72d3a", Object.freeze([
+    { start: 88, end: 93, role: "map.lifecycle-static", addressClass: "mutable-static" },
+    { start: 119, end: 124, role: "party.ui", addressClass: "function-index" },
+  ]), ["i32", "i32"], ["i32"]),
+  semanticRole(262, "157e15c62319c9bdff7b46e8b0ce504c52af0b6eee0faddd1b1d94eb90f2df7b", Object.freeze([
+    { start: 120, end: 125, role: "party.ui", addressClass: "function-index" },
+  ]), ["i32", "i32", "i32", "f32", "i32", "i32"], []),
+  semanticRole(186, "6f06eff3b66948891fe3e291a62709706f41b2a47dfb20c00054655f917ed187", Object.freeze([
+    { start: 169, end: 174, role: "party.ui", addressClass: "function-index" },
+  ]), ["i32", "i32"], []),
+  semanticRole(288, "3891f1163ce484f0244b5e16308b3a8d08eb95dbebf143fe2681af6112099468", Object.freeze([
+    { start: 109, end: 114, role: "party.ui", addressClass: "function-index" },
+  ]), Array.from({ length: 9 }, () => "i32"), []),
+  semanticRole(305, "4b39d0c5b6cd8be2bdbf8d6289b06f0206074ef0fa24e772cb4d34f2b774bb7f", Object.freeze([
+    { start: 279, end: 284, role: "party.ui", addressClass: "function-index" },
+  ]), Array.from({ length: 8 }, () => "i32"), []),
+  semanticRole(459, "a24e6314fed15093fce5c54faefe9ed8936e243b2a06e96c2401214b254b9125", Object.freeze([
+    { start: 408, end: 413, role: "party.ui", addressClass: "function-index" },
+  ]), Array.from({ length: 4 }, () => "i32"), []),
+  semanticRole(279, "ff174e8924bfb8ccdec3614b64ec884f499348d0430c137019295d451860b35e", Object.freeze([
+    { start: 238, end: 243, role: "party.ui", addressClass: "function-index" },
+  ]), Array.from({ length: 3 }, () => "i32"), []),
+  semanticRole(256, "c6c049152fba5d01560c74f2bc4ffac8a9133671f7d9ee8fc1e5d0c09b4e2b8b", Object.freeze([
+    { start: 238, end: 243, role: "party.ui", addressClass: "function-index" },
+  ]), Array.from({ length: 3 }, () => "i32"), []),
+] as const);
+
+const PARTY_IMMUTABLE_HASHES = Object.freeze({
+  playerPartyAssertion: "11e293befd3a98a58c54d320146aab4746f2456cfe5fefd40eca2c48d28366bb",
+  skillbarAssertion: "f450663f1e90de4ae2e581b6dc777b81f6c9e019bff3e5d2e60665099862e3f0",
+  worldAssertionA: "435ae0e5b5663ba229fe0a312a2f3d83b4896302f9517b56d88f996ba7ea896d",
+  worldAssertionB: "f7d0c7a8263c7a799862d8a513123d901e4f1cc30bc1d86da870bf5f2ec5aad6",
+});
+
+const TEAM_SENDER_IMMUTABLE_HASHES = Object.freeze([
+  "1627a8bdcb297de40efb0cab4028bd069275d993bfe52cf1ea517e738427af4f",
+  "52cfe327ad6c66540cb88272f04b99f45fcc9c0d3a2f6d2cc1d43d0d6d57ba75",
+  "3be8fd491431691c04b545a9c691266e90592a747c964587f21f408067fda424",
+  "3a27ab5c8418fcef888b2aff7a1dfd56fc9de2aa53789b29f4f0c4debe2c3dc4",
+] as const);
+
+const TEAM_BUILDER_ROLES = Object.freeze([
+  { opcode: 31, length: 65, fingerprint: "008cb3c8aa865ef17bf262bde0eeb10d29cd4f19a89a9ed22132a811835a39c6", opcodeAt: 30, constructorAt: 35, senderAt: 48 },
+  { opcode: 30, length: 65, fingerprint: "f7f2072bfcde3b833ff1c388e9e1190936fde208e69e8363b732ea3944ce4f7b", opcodeAt: 30, constructorAt: 35, senderAt: 48 },
+  { opcode: 21, length: 72, fingerprint: "91693fa5820bda13bf3b39eede0b8b9fb36d7f82a8a5c23e086505f0510a3cb2", opcodeAt: 37, constructorAt: 42, senderAt: 55 },
+  { opcode: 93, length: 218, fingerprint: "b5406c64785a6e2559a238e271085d119d34fc45c36a2a4dd404ec2f09a67625", opcodeAt: 30, constructorAt: 188, senderAt: 201 },
+  { opcode: 65, length: 73, fingerprint: "66d6960cf4f889c97977b4f8ae79461e0f7034b22c24af50bc19ac9ea4803226", opcodeAt: 37, constructorAt: 43, senderAt: 56 },
+  { opcode: 16, length: 289, fingerprint: "711990b1affb366ad198616fd59fa6802e0ff1644070b2fa46d844556d5be8f7", opcodeAt: 31, constructorAt: 260, senderAt: 271 },
+  { opcode: 155, length: 66, fingerprint: "b2ec78d3eaa13c6a4ec8265dd5bfbbc7611d17a61e8361b37849522f43dc38d2", opcodeAt: 30, constructorAt: 36, senderAt: 49 },
+] as const);
+
 function functionBody(module: ModuleShape, functionIndex: number): Uint8Array {
   const body = module.bodies[functionIndex - module.functionImportCount];
   if (!body) throw new EvidenceError("module-shape-unsupported");
@@ -1478,6 +1604,11 @@ function unsignedOperand(body: Uint8Array, start: number): number {
   return readUnsigned(body, cursor);
 }
 
+function signedOperand(body: Uint8Array, start: number): number {
+  const cursor = { value: start };
+  return readSigned(body, cursor, 5);
+}
+
 function paddedOperand(value: number): Uint8Array {
   const bytes = new Uint8Array(5);
   let remaining = value >>> 0;
@@ -1528,6 +1659,15 @@ function staticCStringHash(module: ModuleShape, address: number): string | null 
       .digest("hex");
   }
   return null;
+}
+
+function staticBytesHash(
+  module: ModuleShape,
+  address: number,
+  length: number,
+): string | null {
+  const bytes = staticBytes(module, address, length);
+  return bytes ? createHash("sha256").update(bytes).digest("hex") : null;
 }
 
 function valuesForRole(body: Uint8Array, role: CursorRole): Map<string, number[]> {
@@ -1870,6 +2010,294 @@ function deriveXunlaiAccess(
       results: [] as const,
       bodySha256: functionBodySha256(module, handlerFunction),
     }),
+  });
+}
+
+function exactPartyFunction(
+  module: ModuleShape,
+  role: (typeof PARTY_EXACT_ROLES)[keyof typeof PARTY_EXACT_ROLES],
+): number | null {
+  return uniqueExactFunction(module, role.bodySha256, role.params, role.results);
+}
+
+function exactStaticBytesHash(
+  module: ModuleShape,
+  values: Map<string, number[]>,
+  role: string,
+  length: number,
+  expected: string,
+): boolean {
+  return staticBytesHash(module, soleValue(values, role), length) === expected;
+}
+
+function derivePartyObservation(
+  module: ModuleShape,
+  baseline: KnownEnhancementBuild,
+  observation: EnhancementObservationBaseLayout,
+  uiDispatcher: NonNullable<KnownEnhancementBuild["uiDispatcher"]>,
+  uiEvidence: NonNullable<PlayerChatUiEvidenceReport["candidate"]>,
+): KnownEnhancementBuild["partyObservation"] | null {
+  const expected = baseline.partyObservation;
+  const baselineObservation = baseline.observationBase?.layout;
+  if (!expected || !baselineObservation) return null;
+
+  const partyInfoFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.partyInfoLifecycle);
+  const partyFlagFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.partyFlagWriter);
+  const accountFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.accountUnlockWriter);
+  const flagFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.heroFlagWriter);
+  const attributesFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.attributesWriter);
+  const professionFunctions = [
+    exactPartyFunction(module, PARTY_EXACT_ROLES.professionAgent),
+    exactPartyFunction(module, PARTY_EXACT_ROLES.professionPrimary),
+    exactPartyFunction(module, PARTY_EXACT_ROLES.professionSecondary),
+    exactPartyFunction(module, PARTY_EXACT_ROLES.professionUnlocked),
+  ];
+  const skillbarReaderFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.skillbarReader);
+  const skillSlotReaderFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.skillSlotReader);
+  const characterUnlockFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.characterUnlockReader);
+  const worldFunction = uniqueRoleFunction(module, PARTY_WORLD_LIFECYCLE_ROLE);
+  const playerPartyFunction = uniqueRoleFunction(module, PARTY_PLAYER_PARTY_ROLE);
+  const skillbarUpdateFunction = uniqueRoleFunction(module, PARTY_SKILLBAR_UPDATE_ROLE);
+  const dirtyFunctions = PARTY_DIRTY_ROLES.map((role) => uniqueRoleFunction(module, role));
+  const infoFunction = dirtyFunctions[1] ?? null;
+  const mapLoadedFunction = dirtyFunctions[2] ?? null;
+  if (
+    partyInfoFunction === null || partyFlagFunction === null || accountFunction === null
+    || flagFunction === null || infoFunction === null || attributesFunction === null
+    || professionFunctions.some((value) => value === null)
+    || skillbarReaderFunction === null || skillSlotReaderFunction === null
+    || characterUnlockFunction === null || worldFunction === null
+    || playerPartyFunction === null || skillbarUpdateFunction === null
+    || mapLoadedFunction === null || dirtyFunctions.some((value) => value === null)
+  ) return null;
+
+  const worldBody = functionBody(module, worldFunction);
+  const playerPartyBody = functionBody(module, playerPartyFunction);
+  const skillbarUpdateBody = functionBody(module, skillbarUpdateFunction);
+  const mapLoadedBody = functionBody(module, mapLoadedFunction);
+  const worldValues = valuesForRole(worldBody, PARTY_WORLD_LIFECYCLE_ROLE);
+  const playerPartyValues = valuesForRole(playerPartyBody, PARTY_PLAYER_PARTY_ROLE);
+  const skillbarValues = valuesForRole(skillbarUpdateBody, PARTY_SKILLBAR_UPDATE_ROLE);
+  const mapValues = valuesForRole(mapLoadedBody, PARTY_DIRTY_ROLES[2]);
+  if (
+    staticCStringHash(module, soleValue(playerPartyValues, "party.membership-assertion"))
+      !== PARTY_IMMUTABLE_HASHES.playerPartyAssertion
+    || staticCStringHash(module, soleValue(skillbarValues, "skillbar.assertion"))
+      !== PARTY_IMMUTABLE_HASHES.skillbarAssertion
+    || !exactStaticBytesHash(module, worldValues, "world.assert-a", 12, PARTY_IMMUTABLE_HASHES.worldAssertionA)
+    || !exactStaticBytesHash(module, worldValues, "world.assert-b", 12, PARTY_IMMUTABLE_HASHES.worldAssertionB)
+    || commonRelocationDelta([
+      [soleValue(mapValues, "map.lifecycle-static"), 1_447_112],
+      [observation.contextRoot, baselineObservation.contextRoot],
+    ]) === null
+  ) return null;
+
+  const dirtyMessages = [...expected.partyDirtyMessages];
+  const decoded = decodeFunctions(module, dirtyMessages);
+  for (let index = 0; index < dirtyMessages.length; index += 1) {
+    const roleValues = valuesForRole(
+      functionBody(module, dirtyFunctions[index]!),
+      PARTY_DIRTY_ROLES[index]!,
+    );
+    if (soleValue(roleValues, "party.ui") !== uiDispatcher.functionIndex) return null;
+    const relation = messageRelations(decoded, uiDispatcher.functionIndex, dirtyMessages[index]!)
+      .filter((candidate) => candidate.producerFunctionIndex === dirtyFunctions[index]);
+    if (relation.length !== 1 || relation[0]!.messageSites !== 1) return null;
+  }
+
+  const heroAddBody = functionBody(module, dirtyFunctions[6]!);
+  const partyInfoBody = functionBody(module, partyInfoFunction);
+  const partyFlagBody = functionBody(module, partyFlagFunction);
+  const accountBody = functionBody(module, accountFunction);
+  const flagBody = functionBody(module, flagFunction);
+  const infoBody = functionBody(module, infoFunction);
+  const attributesBody = functionBody(module, attributesFunction);
+  const professionBodies = professionFunctions.map((value) => functionBody(module, value!));
+  const skillbarReaderBody = functionBody(module, skillbarReaderFunction);
+  const skillSlotReaderBody = functionBody(module, skillSlotReaderFunction);
+  const characterUnlockBody = functionBody(module, characterUnlockFunction);
+
+  const heroMemberStride = signedOperand(heroAddBody, 142);
+  const skillbarSkills = unsignedOperand(skillbarUpdateBody, 352);
+  const slotTotalOffset = unsignedOperand(skillSlotReaderBody, 144);
+  const professionStateStride = unsignedOperand(professionBodies[0]!, 18);
+  const layout: EnhancementPartyLayout = {
+    partyContext: unsignedOperand(heroAddBody, 30),
+    playerParty: unsignedOperand(playerPartyBody, 56),
+    partyHeroes: unsignedOperand(heroAddBody, 111),
+    heroMemberStride,
+    heroAgentId: heroMemberStride + signedOperand(heroAddBody, 188),
+    heroOwnerPlayerId: heroMemberStride + signedOperand(heroAddBody, 200),
+    heroId: heroMemberStride + signedOperand(heroAddBody, 178),
+    heroLevel: heroMemberStride + signedOperand(heroAddBody, 148),
+    partyPlayers: unsignedOperand(partyInfoBody, 277),
+    partyHenchmen: unsignedOperand(partyInfoBody, 242),
+    partyFlag: unsignedOperand(partyFlagBody, 7),
+    accountContextSlot: unsignedOperand(accountBody, 4),
+    accountUnlockedSkills: unsignedOperand(accountBody, 12),
+    worldHeroFlags: unsignedOperand(worldBody, 1_991),
+    heroFlagStride: unsignedOperand(flagBody, 18),
+    flagHeroId: 0,
+    flagAgentId: unsignedOperand(flagBody, 63),
+    flagBehavior: unsignedOperand(flagBody, 131),
+    worldHeroInfo: unsignedOperand(worldBody, 1_953),
+    heroInfoStride: unsignedOperand(infoBody, 35),
+    infoHeroId: unsignedOperand(infoBody, 475),
+    infoAgentId: unsignedOperand(infoBody, 468),
+    infoLevel: unsignedOperand(infoBody, 461),
+    infoPrimary: unsignedOperand(infoBody, 454),
+    infoSecondary: unsignedOperand(infoBody, 447),
+    infoAppearanceBitmap: unsignedOperand(infoBody, 412),
+    worldSkillbars: unsignedOperand(worldBody, 983),
+    skillbarStride: unsignedOperand(skillbarUpdateBody, 236),
+    skillbarAgentId: unsignedOperand(skillbarReaderBody, 126),
+    skillbarSkills,
+    skillSlotStride: unsignedOperand(skillSlotReaderBody, 137),
+    skillSlotId: slotTotalOffset - skillbarSkills,
+    skillbarDisabled: unsignedOperand(skillbarReaderBody, 136),
+    worldAttributes: unsignedOperand(worldBody, 2_826),
+    attributeStride: unsignedOperand(attributesBody, 35),
+    attributeAgentId: 0,
+    attributeEntries: unsignedOperand(attributesBody, 198),
+    attributeEntryStride: unsignedOperand(attributesBody, 181),
+    attributeEntryId: 0,
+    attributeEntryRank: 4,
+    worldProfessionStates: unsignedOperand(worldBody, 1_213),
+    professionStateStride,
+    worldCharacterSkills: unsignedOperand(worldBody, 925),
+  };
+  if (
+    unsignedOperand(playerPartyBody, 318) !== layout.playerParty
+    || unsignedOperand(heroAddBody, 135) !== layout.partyHeroes
+    || unsignedOperand(flagBody, 103) !== layout.heroFlagStride
+    || unsignedOperand(flagBody, 119) !== layout.flagAgentId
+    || [1, 2, 3].some((index) => unsignedOperand(professionBodies[index]!, 18) !== professionStateStride)
+    || unsignedOperand(skillbarUpdateBody, 269) !== layout.skillbarStride
+    || unsignedOperand(skillbarUpdateBody, 323) !== layout.skillbarStride
+    || unsignedOperand(skillbarReaderBody, 18) !== layout.skillbarStride
+    || unsignedOperand(skillSlotReaderBody, 18) !== layout.skillbarStride
+    || unsignedOperand(characterUnlockBody, 70) !== layout.worldCharacterSkills
+    || unsignedOperand(skillbarUpdateBody, 223) !== layout.worldSkillbars
+  ) return null;
+
+  const verified = verifyLayout(layout, {
+    partyContext: { sourceRole: "PartyAddHero", expression: "GameContext PartyContext load", occurrences: [30, 213] },
+    playerParty: { sourceRole: "party membership writer", expression: "matched load/store with shared party updater", occurrences: [56, 318] },
+    partyHeroes: { sourceRole: "PartyAddHero+PartyInfo lifecycle", expression: "hero array field", occurrences: [111, 135, 207] },
+    heroMemberStride: { sourceRole: "PartyAddHero", expression: "hero row multiplier", occurrences: [142] },
+    heroAgentId: { sourceRole: "PartyAddHero", expression: "row end minus 24", occurrences: [188] },
+    heroOwnerPlayerId: { sourceRole: "PartyAddHero", expression: "row end minus 20", occurrences: [200] },
+    heroId: { sourceRole: "PartyAddHero", expression: "row end minus 16", occurrences: [178] },
+    heroLevel: { sourceRole: "PartyAddHero", expression: "row end minus 4", occurrences: [148] },
+    partyPlayers: { sourceRole: "PartyInfo lifecycle", expression: "player array clear", occurrences: [277] },
+    partyHenchmen: { sourceRole: "PartyInfo lifecycle", expression: "henchman array clear", occurrences: [242] },
+    partyFlag: { sourceRole: "party flag writer", expression: "field store followed by party updater", occurrences: [7] },
+    accountContextSlot: { sourceRole: "account unlock writer", expression: "registered AccountContext slot", occurrences: [4] },
+    accountUnlockedSkills: { sourceRole: "account unlock writer", expression: "AccountContext array field", occurrences: [12] },
+    worldHeroFlags: { sourceRole: "WorldContext lifecycle", expression: "array clear field", occurrences: [1_991] },
+    heroFlagStride: { sourceRole: "hero flag writer", expression: "binary-search row stride", occurrences: [18, 103] },
+    flagHeroId: { sourceRole: "hero flag writer", expression: "first row key", occurrences: [0] },
+    flagAgentId: { sourceRole: "hero flag writer", expression: "binary-search agent key", occurrences: [63, 119] },
+    flagBehavior: { sourceRole: "hero flag writer", expression: "behavior store", occurrences: [131] },
+    worldHeroInfo: { sourceRole: "WorldContext lifecycle", expression: "array clear field", occurrences: [1_953] },
+    heroInfoStride: { sourceRole: "HeroDataAdded", expression: "hero-info row multiplier", occurrences: [35] },
+    infoHeroId: { sourceRole: "HeroDataAdded", expression: "hero id store", occurrences: [475] },
+    infoAgentId: { sourceRole: "HeroDataAdded", expression: "agent id store", occurrences: [468] },
+    infoLevel: { sourceRole: "HeroDataAdded", expression: "level store", occurrences: [461] },
+    infoPrimary: { sourceRole: "HeroDataAdded", expression: "primary profession store", occurrences: [454] },
+    infoSecondary: { sourceRole: "HeroDataAdded", expression: "secondary profession store", occurrences: [447] },
+    infoAppearanceBitmap: { sourceRole: "HeroDataAdded", expression: "appearance bitmap store", occurrences: [412] },
+    worldSkillbars: { sourceRole: "WorldContext lifecycle+skillbar update", expression: "array field", occurrences: [983, 223] },
+    skillbarStride: { sourceRole: "skillbar update+readers", expression: "row multiplier", occurrences: [236, 269, 323, 18] },
+    skillbarAgentId: { sourceRole: "skillbar reader", expression: "first row key", occurrences: [126] },
+    skillbarSkills: { sourceRole: "skillbar update", expression: "first repeated slot field", occurrences: [352] },
+    skillSlotStride: { sourceRole: "skill slot reader", expression: "slot index multiplier", occurrences: [137] },
+    skillSlotId: { sourceRole: "skillbar update+slot reader", expression: "total id offset minus slot base", occurrences: [144, 352] },
+    skillbarDisabled: { sourceRole: "skillbar reader", expression: "disabled field load", occurrences: [136] },
+    worldAttributes: { sourceRole: "WorldContext lifecycle", expression: "array clear field", occurrences: [2_826] },
+    attributeStride: { sourceRole: "attribute writer", expression: "row multiplier", occurrences: [35, 68, 124] },
+    attributeAgentId: { sourceRole: "attribute writer", expression: "first row key", occurrences: [0] },
+    attributeEntries: { sourceRole: "attribute writer", expression: "entry table base", occurrences: [198] },
+    attributeEntryStride: { sourceRole: "attribute writer", expression: "entry index multiplier", occurrences: [181] },
+    attributeEntryId: { sourceRole: "attribute writer", expression: "first entry field", occurrences: [0] },
+    attributeEntryRank: { sourceRole: "attribute writer", expression: "rank field following id", occurrences: [4] },
+    worldProfessionStates: { sourceRole: "WorldContext lifecycle", expression: "array clear field", occurrences: [1_213] },
+    professionStateStride: { sourceRole: "four profession readers", expression: "binary-search row stride", occurrences: [18, 18, 18, 18] },
+    worldCharacterSkills: { sourceRole: "WorldContext lifecycle+unlock reader", expression: "bitset array field", occurrences: [925, 70] },
+  }).layout;
+  return Object.freeze({
+    ...expected,
+    partyDirtyMessages: Object.freeze(dirtyMessages) as typeof expected.partyDirtyMessages,
+    playerChatProducer: uiEvidence.playerChatProducerFunctionIndex,
+    nearbyPlayerMessageProducers: Object.freeze([
+      uiEvidence.nearby7fProducerFunctionIndices[0]!,
+      uiEvidence.nearby80ProducerFunctionIndices[0]!,
+    ] as const),
+    layout: verified,
+  });
+}
+
+function deriveTeamApply(
+  module: ModuleShape,
+  baseline: KnownEnhancementBuild,
+): KnownEnhancementBuild["teamApply"] | null {
+  const expected = baseline.teamApply;
+  if (!expected || expected.entries.length !== TEAM_BUILDER_ROLES.length) return null;
+  const senderFunction = uniqueRoleFunction(module, TEAM_SENDER_ROLE);
+  if (senderFunction === null) return null;
+  const senderBody = functionBody(module, senderFunction);
+  const senderValues = valuesForRole(senderBody, TEAM_SENDER_ROLE);
+  const senderRoles = [
+    "sender.assert-bytes", "sender.assert-string-length",
+    "sender.assert-struct-count", "sender.assert-switch",
+  ];
+  if (senderRoles.some((role, index) =>
+    staticCStringHash(module, soleValue(senderValues, role))
+      !== TEAM_SENDER_IMMUTABLE_HASHES[index])) return null;
+
+  let constructorFunction: number | null = null;
+  const entries = TEAM_BUILDER_ROLES.map((role, index) => {
+    const expectedEntry = expected.entries[index]!;
+    const semantic = semanticRole(
+      role.length,
+      role.fingerprint,
+      Object.freeze([
+        { start: role.constructorAt, end: role.constructorAt + 5, role: "packet.constructor", addressClass: "function-index" },
+        { start: role.senderAt, end: role.senderAt + 5, role: "packet.sender", addressClass: "function-index" },
+      ]),
+      expectedEntry.params,
+      expectedEntry.results,
+    );
+    const functionIndex = uniqueRoleFunction(module, semantic);
+    if (functionIndex === null) return null;
+    const body = functionBody(module, functionIndex);
+    const values = valuesForRole(body, semantic);
+    const constructor = soleValue(values, "packet.constructor");
+    if (constructorFunction !== null && constructorFunction !== constructor) return null;
+    constructorFunction = constructor;
+    if (
+      soleValue(values, "packet.sender") !== senderFunction
+      || unsignedOperand(body, role.opcodeAt) !== role.opcode
+      || role.opcode !== expectedEntry.opcode
+    ) return null;
+    return Object.freeze({
+      ...expectedEntry,
+      functionIndex,
+      bodySha256: functionBodySha256(module, functionIndex),
+    });
+  });
+  if (constructorFunction === null || entries.some((entry) => entry === null)) return null;
+  return Object.freeze({
+    ...expected,
+    professionTrace: Object.freeze({
+      ...expected.professionTrace,
+      sender: Object.freeze({
+        ...expected.professionTrace.sender,
+        functionIndex: senderFunction,
+        bodySha256: functionBodySha256(module, senderFunction),
+      }),
+    }),
+    entries: Object.freeze(entries) as typeof expected.entries,
   });
 }
 
@@ -2228,17 +2656,27 @@ export function locateAutomaticLocalActions(
             }),
           })
         : null;
-      if (!travelAction && !xunlaiAction && !chatAliases) continue;
+      const partyObservation = uiDispatcher && observationLayout && uiEvidence
+        ? isolatedProof(() => derivePartyObservation(
+            module, baseline, observationLayout, uiDispatcher, uiEvidence,
+          ))
+        : null;
+      const teamApply = partyObservation && gameThread
+        ? isolatedProof(() => deriveTeamApply(module, baseline))
+        : null;
+      if (!travelAction && !xunlaiAction && !chatAliases && !partyObservation) continue;
       locations.push(Object.freeze({
         baseline,
         hookFunction: tick.functionIndex,
         hookBodySha256: tick.bodySha256,
-        observationLayout: xunlaiAction ? observationLayout : null,
+        observationLayout: xunlaiAction || partyObservation ? observationLayout : null,
         uiDispatcher,
-        gameThread: travelAction || xunlaiAction ? gameThread : null,
+        gameThread: travelAction || xunlaiAction || teamApply ? gameThread : null,
         travelAction,
         xunlaiAction,
         chatAliases,
+        partyObservation,
+        teamApply,
       }));
     }
     if (locations.length === 0) return null;
@@ -2250,6 +2688,8 @@ export function locateAutomaticLocalActions(
       travelAction: value.travelAction,
       xunlaiAction: value.xunlaiAction,
       chatAliases: value.chatAliases,
+      partyObservation: value.partyObservation,
+      teamApply: value.teamApply,
     });
     return locations.every((match) => identity(match) === identity(locations[0]!))
       ? locations[0]!

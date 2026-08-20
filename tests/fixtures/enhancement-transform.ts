@@ -455,7 +455,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       // fixture padded with zeros would let a mis-ordered field pass.
       heroLevel: 42,
       partyPlayers: 43, partyHenchmen: 44, partyFlag: 45,
-      accountContext: 78, accountUnlockedSkills: 79,
+      accountContextSlot: 78, accountUnlockedSkills: 79,
       worldHeroFlags: 47, heroFlagStride: 48,
       flagHeroId: 49, flagAgentId: 50, flagBehavior: 51,
       worldHeroInfo: 52, heroInfoStride: 53, infoHeroId: 54,

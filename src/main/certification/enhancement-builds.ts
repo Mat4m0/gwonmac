@@ -46,39 +46,39 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         cursorTarget:
           "90d18263253dce61edc09b00f1c935ac2f12a0705ce9f4e5d8ff8b21f180e249",
         party:
-          "b680d690206fca0006af95a13528c5a732cfed7ddfced34aa539027fd2ce933e",
+          "7c31b9222d6e0cb4f169b297b9260e42ab2e342ae61577cfcaeac85fa00d0f50",
         cursorParty:
-          "cd53eb12fb586283a1702b2b0f2c458a21b580049302adff32012fea38323f0d",
+          "2b031e5c3f583a0d040eae1a082d60ef98dc566814c89673f59b371fdeda7af6",
         targetParty:
-          "95ec0955ac10b1a4512ff6516ec209b8d1aa514cf1aedf9e50d573b543d103aa",
+          "7ab9daa70ecbac8c837a1406529ae23fbbc74649b71fce42cbe17f3278e168f3",
         cursorTargetParty:
-          "6a4fde6f84ea0c80fdabc1d6321433451277e66dda84af321b8c1c1644566f0a",
+          "483013e5a7160f403bb14a8feb8837b9ed1ae30e0d480f3be09e1590d5dd6efa",
         partyCommands:
-          "135fcba260909006d90fb91b070cd189eaddf3e4aafee6f5b9382f9757f29fe1",
+          "b254187358d7e86e8476fbfc799d3900c06e12de079892d4e8f9f9162af6e92f",
         cursorPartyCommands:
-          "9cdafd9b1aa862b0375c0f8770299a636fe192092bc752f2b64ea1c61cb30105",
+          "58a913958ffc36375ad9c82c5d658269287b93ee965688b5fe7325c7dcfc8b5e",
         targetPartyCommands:
-          "16c170b2366b56b82ce11ee6a3ea90e784abcddc4fb50cb6e632dab28e775a27",
+          "98acd48ed441c3a6dcf0b2201f10baf757527051b245659b621e57c90a5b6374",
         cursorTargetPartyCommands:
-          "cb0a06886885552b9c58c4161d5304ca3f6ba9f49c186ba9087fa479bf446f33",
+          "bfe923af52a66b9d579ff6157d52d579327c30ff8c9cab9a0d56cd37d743f77f",
         storage:
           "596eb73ce9d087891d6f28706091b53e8958a806ece24d1accd67015a774dbb1",
         partyStorage:
-          "3e67a53794661071d6c162cc227ec0585294f3d5d9423948d33ac6724aeb9f7e",
+          "b7d480740e68739cf829807c302955e1408fc08c22bf0677d33887c25d68fec8",
         cursorPartyStorage:
-          "7d6defca157712ece078256d67fc62ad93b759e044ea0e7a78f8e4163fec6952",
+          "603af439da0bf2e32fd4dc86d62df17488ecfb916ab3e262e4a82fe14d7bab13",
         targetPartyStorage:
-          "98a510e8a202ffcf54e961ce616fb76f8cd663f10bcb2dcea431702cc03ad2c7",
+          "75156a5ee8bf36153bf79b846ce6dbd8b23de9daf3f59caba6f34a80b8334a88",
         cursorTargetPartyStorage:
-          "84330b6f5340a5d683977888cb9c6cc81bef0964aaeaec7da80d0ebd0165bce8",
+          "9fbd0650ffed617637fc9dec52dc08c38de0c5bd21e05716260325c0e23f96e9",
         partyCommandsStorage:
-          "0b7a69c7d8787f9dc7c1b337e7c1cdfa9a76a71bae3c720988324947f5f991c5",
+          "fd04467165fbd80f2f8ef089f9453068f8242f8d30e459168a329b133b7d59fc",
         cursorPartyCommandsStorage:
-          "740d8f6222a40db2deb94f5c81b42d82693c6282f59dfdca0fac680ac79a2c9f",
+          "6c0d21e7fb5cd574187289ab28d6e2fd53ec5509d49c13e6170aa859f720d3a2",
         targetPartyCommandsStorage:
-          "233e4100a6f131b768258217d688354cf2e46db36c6106941bc3fb2ae84ced9a",
+          "33594cef21497fbdcc38455e4eafbf7bc37a1cb154a31890d92a0441cc3e1195",
         cursorTargetPartyCommandsStorage:
-          "6be8ce224d7d6ca0a47cbc13fcd319590896786ccbcc709588493df1c84a169a",
+          "e9344c0c274eae0a0d652d212aa029f0a9866446c99f9df48215506c9c594ea2",
       }),
       programId: 1,
       // Function #477 returns 38,833 as a single i32 constant. The same function
@@ -414,7 +414,9 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           // GameContext::account and AccountContext::unlocked_account_skills.
           // GWCA exposes this exact array through GetIsSkillUnlocked: one bit per
           // skill id, account-wide and therefore usable by heroes.
-          accountContext: 0x28,
+          // AccountContext is independently registered in context slot 10.
+          // Using that slot avoids trusting a copied GameContext pointer offset.
+          accountContextSlot: 10,
           accountUnlockedSkills: 0x124,
           // Its hero ids *and* agent ids matched the party array exactly.
           worldHeroFlags: 0x584,

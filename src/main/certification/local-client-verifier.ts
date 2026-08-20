@@ -10,8 +10,8 @@
  * The two answers are not symmetric and must not be merged. Template save is
  * shape-verifiable, so a client whose affected call sites still match is
  * accepted by proof. Cursor and read-only Target Distance each have a strict,
- * independent structural locator; party observation and actions remain
- * exact-build only.
+ * independent structural locator; Party and Team Apply join that path only
+ * after their complete field and packet ledgers prove independently.
  *
  * `isLocalClientVerification` re-validates every field of a result that crossed
  * the process boundary. Profile state is never consulted.
@@ -20,6 +20,7 @@ import { createHash } from "node:crypto";
 import {
   enhancementCapabilityProfile,
   enhancementCapabilitiesForProfile,
+  enhancementCapabilitiesRequested,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
 import {
@@ -84,6 +85,7 @@ function sameJson(left: unknown, right: unknown): boolean {
 function deriveEnhancementBuild(
   official: Uint8Array,
   templateOutput: Uint8Array,
+  requestedCapabilities: EnhancementCapabilities,
 ): KnownEnhancementBuild | null {
   const report = inspectEnhancementCandidate(templateOutput);
   if (!report.validWasm) return null;
@@ -150,46 +152,43 @@ function deriveEnhancementBuild(
     ...(locatedLocal?.travelAction ? { travelAction: locatedLocal.travelAction } : {}),
     ...(locatedLocal?.xunlaiAction ? { xunlaiAction: locatedLocal.xunlaiAction } : {}),
     ...(locatedLocal?.chatAliases ? { chatAliases: locatedLocal.chatAliases } : {}),
-  });
-  const none = (): EnhancementCapabilities => ({
-    nativeCursor: false, targetObservation: false, partyObservation: false,
-    teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false,
+    ...(locatedLocal?.partyObservation ? {
+      partyObservation: locatedLocal.partyObservation,
+    } : {}),
+    ...(locatedLocal?.teamApply ? { teamApply: locatedLocal.teamApply } : {}),
   });
   const maximum: EnhancementCapabilities = Object.freeze({
     nativeCursor: locatedCursor !== null,
     targetObservation: locatedTarget !== null,
-    partyObservation: false,
-    teamApply: false,
+    partyObservation: locatedLocal?.partyObservation !== null
+      && locatedLocal?.partyObservation !== undefined,
+    teamApply: locatedLocal?.teamApply !== null
+      && locatedLocal?.teamApply !== undefined,
     travelAction: locatedLocal?.travelAction !== null && locatedLocal?.travelAction !== undefined,
     xunlaiAction: locatedLocal?.xunlaiAction !== null && locatedLocal?.xunlaiAction !== undefined,
     chatAliases: locatedLocal?.chatAliases !== null && locatedLocal?.chatAliases !== undefined,
   });
-  const featureSets = (["nativeCursor", "targetObservation"] as const)
-    .filter((feature) => maximum[feature])
-    .map((feature) => Object.freeze({ ...none(), [feature]: true }));
-  const localBundle = Object.freeze({
-    ...none(),
-    travelAction: maximum.travelAction,
-    xunlaiAction: maximum.xunlaiAction,
-    chatAliases: maximum.chatAliases,
+  const effective: EnhancementCapabilities = Object.freeze({
+    nativeCursor: requestedCapabilities.nativeCursor && maximum.nativeCursor,
+    targetObservation:
+      requestedCapabilities.targetObservation && maximum.targetObservation,
+    partyObservation:
+      requestedCapabilities.partyObservation && maximum.partyObservation,
+    teamApply: requestedCapabilities.teamApply
+      && maximum.teamApply && maximum.partyObservation,
+    travelAction: requestedCapabilities.travelAction && maximum.travelAction,
+    xunlaiAction: requestedCapabilities.xunlaiAction && maximum.xunlaiAction,
+    chatAliases: requestedCapabilities.chatAliases && maximum.chatAliases,
   });
-  const capabilitySets = [...featureSets, localBundle, maximum].filter(
-    (capabilities, index, values) =>
-      Object.values(capabilities).some(Boolean)
-      && values.findIndex((candidate) => sameJson(candidate, capabilities)) === index,
-  );
-  const outputSha256 = Object.fromEntries(capabilitySets.map((capabilities) => {
-    const profile = enhancementCapabilityProfile(capabilities);
-    if (profile === null) throw new Error("automatic capability profile is invalid");
-    return [
-      profile,
-    sha256(transformEnhancementWasm(
+  const profile = enhancementCapabilityProfile(effective);
+  if (profile === null || !enhancementCapabilitiesRequested(effective)) return null;
+  const outputSha256 = Object.freeze({
+    [profile]: sha256(transformEnhancementWasm(
       templateOutput,
       provisional,
-        capabilities,
+      effective,
     )),
-    ];
-  }));
+  });
   return Object.freeze({
     ...provisional,
     outputSha256: Object.freeze(outputSha256),
@@ -202,6 +201,15 @@ function deriveEnhancementBuild(
  */
 export function verifyLocalClientBytes(
   official: Uint8Array,
+  requestedCapabilities: EnhancementCapabilities = Object.freeze({
+    nativeCursor: true,
+    targetObservation: true,
+    partyObservation: true,
+    teamApply: true,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
+  }),
 ): LocalClientVerification {
   const officialSha256 = sha256(official);
   const reasons: LocalVerificationReason[] = [];
@@ -240,7 +248,11 @@ export function verifyLocalClientBytes(
 
   let enhancementBuild: KnownEnhancementBuild | null = null;
   try {
-    enhancementBuild = deriveEnhancementBuild(official, templateOutput);
+    enhancementBuild = deriveEnhancementBuild(
+      official,
+      templateOutput,
+      requestedCapabilities,
+    );
     if (!enhancementBuild) reasons.push("enhancement-layout-changed");
   } catch {
     reasons.push("enhancement-transform-failed");
@@ -335,8 +347,6 @@ function isAutomaticSemanticBuild(
   if (
     build.sha256 !== inputSha256
     || !build.outputSha256
-    || build.partyObservation !== undefined
-    || build.teamApply !== undefined
     || !isIndex(build.programId)
     || !isIndex(build.buildId)
     || !isIndex(build.hookFunction)
@@ -349,12 +359,17 @@ function isAutomaticSemanticBuild(
   const hasTravel = build.travelAction !== undefined;
   const hasXunlai = build.xunlaiAction !== undefined;
   const hasAliases = build.chatAliases !== undefined;
-  if (!hasCursor && !hasTarget && !hasTravel && !hasXunlai && !hasAliases) return false;
+  const hasParty = build.partyObservation !== undefined;
+  const hasTeam = build.teamApply !== undefined;
+  if (!hasCursor && !hasTarget && !hasTravel && !hasXunlai && !hasAliases
+    && !hasParty && !hasTeam) return false;
   if (
     Object.keys(build.outputSha256).length === 0
     || !Object.values(build.outputSha256).every(isDigest)
     || (hasTarget && !hasObservation)
     || (hasXunlai && !hasObservation)
+    || (hasParty && (!hasObservation || build.uiDispatcher === undefined))
+    || (hasTeam && (!hasParty || build.gameThread === undefined))
     || ((hasTravel || hasXunlai) && build.gameThread === undefined)
     || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
   ) return false;
@@ -441,6 +456,8 @@ function isAutomaticSemanticBuild(
     const travel = baseline.travelAction;
     const xunlai = baseline.xunlaiAction;
     const aliases = baseline.chatAliases;
+    const party = baseline.partyObservation;
+    const team = baseline.teamApply;
     const uiMatches = build.uiDispatcher === undefined || (
       ui !== undefined
       && isIndex(build.uiDispatcher.functionIndex)
@@ -507,9 +524,47 @@ function isAutomaticSemanticBuild(
       && sameJson(build.chatAliases.parser.params, aliases.parser.params)
       && sameJson(build.chatAliases.parser.results, aliases.parser.results)
     );
+    const partyMatches = !hasParty || (
+      party !== undefined
+      && build.partyObservation !== undefined
+      && build.partyObservation.playerChatSites === 3
+      && isIndex(build.partyObservation.playerChatProducer)
+      && build.partyObservation.nearbyPlayerMessageProducers.length === 2
+      && build.partyObservation.nearbyPlayerMessageProducers.every(isIndex)
+      && sameJson(build.partyObservation.partyDirtyMessages, party.partyDirtyMessages)
+      && sameJson(build.partyObservation.nearbyPlayerMessages, party.nearbyPlayerMessages)
+      && sameJson(build.partyObservation.layout, party.layout)
+    );
+    const teamMatches = !hasTeam || (
+      team !== undefined
+      && build.teamApply !== undefined
+      && build.teamApply.thunkExport === team.thunkExport
+      && build.teamApply.professionTrace.readerExport === team.professionTrace.readerExport
+      && isIndex(build.teamApply.professionTrace.sender.functionIndex)
+      && isDigest(build.teamApply.professionTrace.sender.bodySha256)
+      && sameJson(
+        build.teamApply.professionTrace.sender.params,
+        team.professionTrace.sender.params,
+      )
+      && sameJson(
+        build.teamApply.professionTrace.sender.results,
+        team.professionTrace.sender.results,
+      )
+      && build.teamApply.entries.length === team.entries.length
+      && build.teamApply.entries.every((entry, index) => {
+        const expected = team.entries[index];
+        return expected !== undefined
+          && entry.opcode === expected.opcode
+          && entry.label === expected.label
+          && isIndex(entry.functionIndex)
+          && isDigest(entry.bodySha256)
+          && sameJson(entry.params, expected.params)
+          && sameJson(entry.results, expected.results);
+      })
+    );
     return cursorMatches && observationMatches && targetMatches
       && uiMatches && gameThreadMatches && travelMatches
-      && xunlaiMatches && aliasesMatches;
+      && xunlaiMatches && aliasesMatches && partyMatches && teamMatches;
   });
 }
 

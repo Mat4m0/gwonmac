@@ -43,7 +43,7 @@ export interface EnhancementLayout {
   partyPlayers: number;
   partyHenchmen: number;
   partyFlag: number;
-  accountContext: number;
+  accountContextSlot: number;
   accountUnlockedSkills: number;
   worldContext: number;
   worldHeroFlags: number;
@@ -155,7 +155,7 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...observation("agentX", "agentY", "agentType"),
   ...observation("agentPlayerNumber", "agentModelType"),
   ...cursor("cursorActiveArt", "cursorSoftwareModel", "cursorShowCount", "cursorColorBuffer", "cursorArtHotspot", "cursorArtTexture", "cursorHandleKey", "cursorHandleObject", "cursorViewTexture", "cursorTextureType", "cursorTextureWidth", "cursorTextureHeight"),
-  ...party("partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "accountContext", "accountUnlockedSkills"),
+  ...party("partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "accountContextSlot", "accountUnlockedSkills"),
   ...observation("worldContext"),
   ...party("worldHeroFlags", "heroFlagStride", "flagHeroId", "flagAgentId", "flagBehavior", "worldHeroInfo", "heroInfoStride", "infoHeroId", "infoAgentId", "infoLevel", "infoPrimary", "infoSecondary", "infoAppearanceBitmap", "worldSkillbars", "skillbarStride", "skillbarAgentId", "skillbarSkills", "skillSlotStride", "skillSlotId", "skillbarDisabled", "worldAttributes", "attributeStride", "attributeAgentId", "attributeEntries", "attributeEntryStride", "attributeEntryId", "attributeEntryRank"),
   ...observation("areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags"),

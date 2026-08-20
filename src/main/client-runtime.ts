@@ -319,6 +319,7 @@ export class ClientRuntime {
       const local = await verifyClientLocally({
         officialWasmPath: officialWasm,
         officialSha256,
+        requestedCapabilities: this.options.enhancementCapabilities,
       });
       if (local) {
         certification = certificationFromLocalVerification(local);

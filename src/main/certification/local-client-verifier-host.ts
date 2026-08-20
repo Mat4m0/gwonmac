@@ -21,12 +21,17 @@ import {
   isDerivedNativeDoubleClickBuild,
   type NativeDoubleClickBuild,
 } from "./native-double-click.js";
+import {
+  enhancementCapabilityProfile,
+  type EnhancementCapabilities,
+} from "../../shared/enhancement-contracts.js";
 
 const VERIFIER_TIMEOUT_MS = 5_000;
 
 function runVerifierProcess(
   officialWasmPath: string,
   officialSha256: string,
+  requestedCapabilities: EnhancementCapabilities,
 ): Promise<LocalClientVerification | null> {
   return new Promise((resolve) => {
     const entry = fileURLToPath(
@@ -34,7 +39,12 @@ function runVerifierProcess(
     );
     const child = utilityProcess.fork(
       entry,
-      ["client", officialWasmPath, officialSha256],
+      [
+        "client",
+        officialWasmPath,
+        officialSha256,
+        enhancementCapabilityProfile(requestedCapabilities) ?? "none",
+      ],
       { serviceName: "Guild Wars client compatibility verifier" },
     );
     let settled = false;
@@ -92,10 +102,12 @@ function runNativeDoubleClickVerifierProcess(
 export async function verifyClientLocally(options: {
   officialWasmPath: string;
   officialSha256: string;
+  requestedCapabilities: EnhancementCapabilities;
 }): Promise<LocalClientVerification | null> {
   return runVerifierProcess(
     options.officialWasmPath,
     options.officialSha256,
+    options.requestedCapabilities,
   ).catch(() => null);
 }
 

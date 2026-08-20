@@ -26,7 +26,19 @@ void app.whenReady().then(async () => {
         wasmPath: officialWasmPath,
         inputSha256: officialSha256,
       })
-    : await verifyClientLocally({ officialWasmPath, officialSha256 });
+    : await verifyClientLocally({
+        officialWasmPath,
+        officialSha256,
+        requestedCapabilities: {
+          nativeCursor: true,
+          targetObservation: true,
+          partyObservation: true,
+          teamApply: true,
+          travelAction: true,
+          xunlaiAction: true,
+          chatAliases: true,
+        },
+      });
   state.localVerifierCompleted = true;
   const window = new BrowserWindow({ show: false });
   await window.loadURL("data:text/html,local-verifier-complete");
