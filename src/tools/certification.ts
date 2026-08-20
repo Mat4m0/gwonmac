@@ -8,10 +8,10 @@
  * separate commands this replaced cannot drift apart in how they locate the
  * installed client or spell a failure.
  *
- * `template --write` is the one subcommand that changes a tracked file. It
- * adds a derived entry to the authoring table so a patch-day branch is opened
- * by the same derivation a developer would run by hand, and it refuses every
- * case but a new structurally derived build — including one already certified.
+ * `template --write` is the one subcommand that changes a tracked file. It is
+ * a manual developer tool; automation must never call it or treat its output
+ * as launch authority. It refuses every case but a new structurally derived
+ * build — including one already certified.
  * It never touches `ENHANCEMENT_BUILDS`: those layout words are client-memory
  * addresses no structural anchor re-derives, so nothing may add them without a
  * person measuring them.

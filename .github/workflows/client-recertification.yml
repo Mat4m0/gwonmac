@@ -1,18 +1,11 @@
-# ArenaNet ships client builds on no schedule this project can see, and every
-# certified index belongs to one exact build. The weekly canary proves the build
-# we know still runs; this notices a build we do not know, derives what can be
-# derived from it, and leaves a person a branch and an issue to finish.
-#
-# It carries no secret of any kind. The only credential it uses is the run's own
-# GITHUB_TOKEN, and the strongest thing it can do with that is propose a pull
-# request that the ordinary verification gate then has to pass.
+# ArenaNet ships client builds on no schedule this project can see. This
+# workflow records verifier evidence for a new generation. It cannot grant a
+# capability, edit a certificate, push a branch, or open a pull request: the
+# isolated runtime verifier is the sole launch authority.
 name: ArenaNet client recertification
 
 on:
   schedule:
-    # A quarter hour is the resolution, not a deadline: scheduler jitter and a
-    # skipped tick are both acceptable, because the certified tables and the
-    # local structural proof already decide correctly without this workflow.
     - cron: "*/15 * * * *"
   workflow_dispatch:
 
@@ -24,10 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # One manifest fetch. No install, no build, no client bytes: the unchanged
-  # path is the one that runs ninety-six times a day, and it has to cost
-  # seconds. A scheduled run that cannot reach the patch service fails, and that
-  # visible failure is this workflow's heartbeat.
+  # The frequent unchanged path reads one manifest and installs nothing.
   detect:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -35,7 +25,7 @@ jobs:
       contents: read
       issues: write
     outputs:
-      changed: ${{ steps.unproposed.outputs.changed }}
+      changed: ${{ steps.unreported.outputs.changed }}
       fingerprint: ${{ steps.published.outputs.fingerprint }}
       recorded: ${{ steps.published.outputs.recorded }}
     steps:
@@ -45,20 +35,11 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24"
-      # Node runs the detector directly, and no package manager is installed at
-      # all: `pnpm <script>` resolves this repository's dependency tree before
-      # the script starts, which is a thousand packages and an Electron binary
-      # for a script whose whole import graph is Node builtins. That install is
-      # the difference between a second and a minute, ninety-six times a day.
       - name: Read the published client generation
         id: published
         run: node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/official-client.ts
-      # A generation already proposed is not news. Without this, every quarter
-      # hour of the human latency the proposal expects — close, reopen, review,
-      # merge — re-runs a forty-five minute macOS derivation and files another
-      # tracking issue, and the red runs bury the fetch-failure heartbeat.
-      - name: Skip a generation that is already proposed
-        id: unproposed
+      - name: Skip a generation that already has a tracking issue
+        id: unreported
         env:
           CHANGED: ${{ steps.published.outputs.changed }}
           FINGERPRINT: ${{ steps.published.outputs.fingerprint }}
@@ -69,27 +50,14 @@ jobs:
             exit 0
           fi
           short="${FINGERPRINT:0:12}"
-          proposed=""
-          # The branch is asked for by ref rather than by name search: this
-          # endpoint takes a slash-bearing ref, and a 404 is the only answer
-          # that means "nobody has proposed this generation".
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/client-recertification/$short" \
-            > /dev/null 2>&1; then
-            proposed="branch client-recertification/$short"
-          elif [ -n "$(gh issue list --state open --label client-recertification \
+          if [ -n "$(gh issue list --state open --label client-recertification \
             --search "$short in:title" --json number --jq '.[].number')" ]; then
-            proposed="an open tracking issue"
-          fi
-          if [ -n "$proposed" ]; then
-            echo "Generation $short is already proposed by $proposed."
+            echo "Generation $short already has an open tracking issue."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-  # On change only, and on macOS because this is where the application is built
-  # and certified. It downloads the JSPI code artifacts — never Gw.snapshot —
-  # verifies every byte against the manifest chunk hash that named it, and runs
-  # the same certification command line a developer runs by hand.
+
   derive:
     needs: detect
     if: needs.detect.outputs.changed == 'true'
@@ -101,12 +69,8 @@ jobs:
       outcome: ${{ steps.derive.outputs.outcome }}
       summary: ${{ steps.derive.outputs.summary }}
       build: ${{ steps.derive.outputs.build }}
-      # The generation whose bytes this job actually downloaded and certified,
-      # which is what the branch, the record and the issue must all name.
       fingerprint: ${{ steps.official.outputs.fingerprint }}
     steps:
-      # The runner context does not exist in a job-level env, so the evidence
-      # directory is named here, where the shell's own RUNNER_TEMP does.
       - name: Name the evidence directory
         run: echo "EVIDENCE=$RUNNER_TEMP/evidence" >> "$GITHUB_ENV"
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -117,83 +81,52 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
-      # The runner image's default toolchain is not this repository's. Installs
-      # the one rust-toolchain.toml names, with no version repeated here.
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
-      # `pnpm certification` is this build plus the command line below. They are
-      # split here so the kernel is compiled once for two invocations, and so
-      # build progress never lands in the machine-readable report.
       - run: pnpm build
       - name: Download the published client code artifacts
         id: official
         run: pnpm client:official --download "$RUNNER_TEMP/official"
 
-      # The path comes from the download rather than being spelled again here:
-      # a second spelling is a second thing to keep in step with where the
-      # artifacts actually land.
-      - name: Derive what the published build certifies
+      # Both commands inspect the same original bytes. Neither writes source.
+      # `recertify` composes template preparation and Enhancement analysis in
+      # one process, so an Enhancement verdict cannot outlive a refused
+      # template predicate or a newly generated exact table row.
+      - name: Verify what the published build proves
         id: derive
         env:
           WASM: ${{ steps.official.outputs.wasm }}
         run: |
           mkdir -p "$EVIDENCE"
-          # Both reports are findings, so a refusal is an answer rather than the
-          # end of the run; the status inside the report decides the outcome.
           set +e
-          node build/tools/certification.js template "$WASM" --emit-ts --write \
+          node build/tools/certification.js template "$WASM" --emit-ts \
             > "$EVIDENCE/template-save.json" 2> "$EVIDENCE/template-save.txt"
-          template_exit=$?
           node build/tools/certification.js recertify "$WASM" \
             > "$EVIDENCE/enhancement.json" 2> "$EVIDENCE/enhancement.txt"
           set -e
-          status="$(jq -r '.status' "$EVIDENCE/template-save.json")"
-          # The report is printed before `--write` edits the authoring table, so
-          # the status alone cannot tell a derivation that landed from one that
-          # threw on the way to disk and would leave the branch claiming an
-          # entry it does not carry. Only the pair decides: a derived entry
-          # written exits 0, and an already-certified build is the refusal to
-          # write anything, which exits 1.
-          if [ "$status" = "derived" ] && [ "$template_exit" -eq 0 ]; then
+          build="$(jq -er '.sha256' "$EVIDENCE/template-save.json")"
+          inspected="$(jq -er '.candidateInspected' "$EVIDENCE/enhancement.json")"
+          if [ "$inspected" = "true" ]; then
             outcome=ready
-            summary="template-save certificate auto-derived for a new build"
-          elif [ "$status" = "certified" ] && [ "$template_exit" -eq 1 ]; then
-            outcome=ready
-            summary="the WASM is already certified; only the published generation moved"
+            summary="the runtime semantic verifier inspected the prepared client"
           else
             outcome=investigation
-            summary="the template-save layout could not be re-derived"
+            summary="$(jq -r '.bundleFailure // "the runtime semantic verifier refused the client"' \
+              "$EVIDENCE/enhancement.json")"
           fi
           {
             echo "outcome=$outcome"
             echo "summary=$summary"
-            echo "build=$(jq -r '.sha256' "$EVIDENCE/template-save.json")"
+            echo "build=$build"
           } >> "$GITHUB_OUTPUT"
 
-      # Run in a new process after `--write`: importing the edited table and
-      # reproducing the record from the original bytes proves the serialized
-      # certificate, not only the in-memory derivation that produced it.
-      - name: Verify the recorded client artifact
-        if: steps.derive.outputs.outcome == 'ready'
-        env:
-          GW_CLIENT_WASM: ${{ steps.official.outputs.wasm }}
-        run: pnpm test:client-artifact 2>&1 | tee "$EVIDENCE/client-artifact.txt"
-
-      # Scoped by path, so the branch can only ever carry the authoring table
-      # and the recorded generation. Nothing else this job wrote can travel.
-      - name: Collect the authoring change
+      - name: Collect semantic comparison evidence
         if: always()
         env:
           WASM: ${{ steps.official.outputs.wasm }}
         run: |
           mkdir -p "$EVIDENCE"
-          echo "$GITHUB_SHA" > "$EVIDENCE/SOURCE_COMMIT.txt"
-          git diff -- src/main/certification/template-save-compat.ts \
-            > "$EVIDENCE/tables.patch"
-          # The same comparison engine and report format are used by operators
-          # locally. It writes carry-forward.json and carry-forward.md; CI does
-          # not maintain its own classification rules.
           if [ -n "$WASM" ] && [ -f "$WASM" ] \
             && [ -f build/tools/certification.js ]; then
             node build/tools/certification.js compare "$WASM" "$EVIDENCE" || true
@@ -208,10 +141,10 @@ jobs:
               > "$EVIDENCE/carry-forward.json"
           fi
 
-      # Evidence only. The client artifacts stay in the runner's temporary
-      # directory and are never an upload path: this project does not
-      # redistribute ArenaNet's binaries.
-      - name: Publish the derivation evidence
+      # Official client artifacts remain in the runner temporary directory and
+      # are never uploaded. Only machine-readable and human-readable evidence
+      # is retained.
+      - name: Publish the verification evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -220,38 +153,25 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-  # Stage one of publication: a branch and a proposal. Nothing here signs,
-  # releases, or merges, and the branch is worth nothing until the pull
-  # request's own `pnpm verify` gate passes on it.
+  # Reporting has no source-writing permission. A tracking issue records a
+  # refused invariant for investigation; it is never launch authority.
   publish:
     needs: [detect, derive]
     if: always() && needs.derive.result != 'skipped'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      actions: write
-      contents: write
+      contents: read
       issues: write
-      pull-requests: write
     env:
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      # The one checkout in this repository that keeps its credentials: this job
-      # exists to push a branch. It builds nothing, installs nothing, and runs
-      # no code out of the artifact it downloads.
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: true
-      - name: Receive the derivation evidence
+      - name: Receive the verification evidence
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: client-recertification-${{ github.run_id }}-${{ github.run_attempt }}
           path: evidence
-
-      # A failed or cancelled macOS runner may have no artifact to download. The
-      # tracking issue is still the owner for this generation, so give it a
-      # useful, closed failure record instead of letting a missing `cat` skip it.
       - name: Ensure failure evidence is reportable
         if: always()
         run: |
@@ -261,202 +181,42 @@ jobs:
               'Evidence collection did not complete. Review the failed workflow steps.' \
               > evidence/carry-forward.md
           fi
-          if [ ! -s evidence/carry-forward.json ]; then
-            printf '%s\n' '{"status":"collection-failed"}' \
-              > evidence/carry-forward.json
-          fi
-
-      - name: Push the recertification branch
-        id: branch
-        env:
-          # The generation the deriver downloaded, so the branch name, the
-          # recorded digest and the issue title are one value rather than three
-          # fetches of a service that may republish between them. It falls back
-          # to what the detector saw only when derivation never got that far,
-          # and an outcome of `ready` is proof that it did.
-          FINGERPRINT: ${{ needs.derive.outputs.fingerprint || needs.detect.outputs.fingerprint }}
-          OUTCOME: ${{ needs.derive.outputs.outcome }}
-        run: |
-          if ! [[ "$FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]; then
-            echo "Invalid client generation: $FINGERPRINT" >&2
-            echo "branch=" >> "$GITHUB_OUTPUT"
-            echo "short=unknown" >> "$GITHUB_OUTPUT"
-            echo "pushed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          {
-            echo "branch=client-recertification/${FINGERPRINT:0:12}"
-            echo "short=${FINGERPRINT:0:12}"
-          } >> "$GITHUB_OUTPUT"
-          # Missing evidence is an investigation outcome, not a reason to lose
-          # the issue that will coordinate it. Only an exact source match may
-          # become a branch.
-          if [ ! -s evidence/SOURCE_COMMIT.txt ] \
-            || [ "$(tr -d '\n' < evidence/SOURCE_COMMIT.txt)" != "$GITHUB_SHA" ]; then
-            echo "pushed=false" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-          if [ "$OUTCOME" != "ready" ] || [ ! -s evidence/tables.patch ]; then
-            echo "pushed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "client-recertification/${FINGERPRINT:0:12}"
-          git apply evidence/tables.patch
-          git commit --all --message \
-            "Certify the ArenaNet client generation ${FINGERPRINT:0:12}"
-          git push --force-with-lease origin "client-recertification/${FINGERPRINT:0:12}"
-          echo "pushed=true" >> "$GITHUB_OUTPUT"
-
-      - name: Propose the change
-        id: proposal
-        if: steps.branch.outputs.pushed == 'true'
-        # Repository policy may forbid an automated pull request. The branch is
-        # pushed either way and the issue below names it, so the work is never
-        # lost to a setting this workflow cannot read.
-        continue-on-error: true
-        env:
-          BRANCH: ${{ steps.branch.outputs.branch }}
-          BUILD: ${{ needs.derive.outputs.build }}
-          FINGERPRINT: ${{ needs.derive.outputs.fingerprint || needs.detect.outputs.fingerprint }}
-          GH_TOKEN: ${{ github.token }}
-          SHORT: ${{ steps.branch.outputs.short }}
-          SUMMARY: ${{ needs.derive.outputs.summary }}
-        run: |
-          pm=pnpm
-          {
-            echo "Derived automatically from the client ArenaNet is publishing now."
-            echo
-            echo "- published WASM: \`$BUILD\`"
-            echo "- derivation: $SUMMARY"
-            echo "- evidence: $RUN_URL"
-            echo "- comparison: `carry-forward.md` and `carry-forward.json` in that run artifact"
-            echo
-            cat evidence/carry-forward.md
-            echo
-            echo "## Operator commands"
-            echo
-            echo '```sh'
-            echo "$pm certification recertify <path-to-Gw.jspi.wasm>"
-            echo "$pm certification double-click <path-to-Gw.jspi.wasm>"
-            echo "$pm memory:qualify:4gb <path-to-Gw.jspi.js> <path-to-Gw.jspi.wasm>"
-            echo "$pm verify"
-            echo '```'
-            echo
-            echo "## Live checks"
-            echo
-            echo "- [ ] Cursor input"
-            echo "- [ ] Target distance"
-            echo "- [ ] Party changes and map transition"
-            echo "- [ ] Apply team in a safe test location"
-            echo "- [ ] Record any intentionally unavailable capability and why"
-            echo
-            echo "## Release"
-            echo
-            echo "- [ ] Final reviewed commit records the generation"
-            echo "- [ ] Required macOS verification passed for the exact head SHA"
-            echo "- [ ] Signed Stable release published"
-            echo "- [ ] Start, certification, merge, and release timestamps recorded below"
-            echo
-            echo "Started: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            echo
-            echo "Nothing here is certified until this pull request's verification"
-            echo "gate passes. The Enhancement table is deliberately untouched: its"
-            echo "layout words are client-memory addresses no structural anchor"
-            echo "re-derives, so a person measures them or they do not ship."
-            echo "Follow the patch-day chain in `docs/enhancement-development.md`;"
-            echo "the downstream double-click and memory tables are certified only"
-            echo "after the complete exact-build Enhancement entry is reviewed."
-          } > proposal.md
-          if gh pr create --base main --head "$BRANCH" \
-            --title "Certify the ArenaNet client generation $SHORT" \
-            --body-file proposal.md; then
-            echo "opened=true" >> "$GITHUB_OUTPUT"
-            number="$(gh pr view "$BRANCH" --json number --jq .number)"
-            head="$(gh api "repos/$GITHUB_REPOSITORY/commits/$BRANCH" --jq .sha)"
-            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$BRANCH" --jq .sha)" = "$head"
-            gh workflow run pr-package.yml --ref "$BRANCH" \
-              -f checkout_ref="$head" -f pr_number="$number"
-          else
-            echo "opened=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Open the tracking issue
         if: always()
         env:
-          BRANCH: ${{ steps.branch.outputs.branch }}
           BUILD: ${{ needs.derive.outputs.build }}
+          DERIVE_RESULT: ${{ needs.derive.result }}
+          FINGERPRINT: ${{ needs.derive.outputs.fingerprint || needs.detect.outputs.fingerprint }}
           GH_TOKEN: ${{ github.token }}
           OUTCOME: ${{ needs.derive.outputs.outcome }}
-          DERIVE_RESULT: ${{ needs.derive.result }}
-          PROPOSED: ${{ steps.proposal.outputs.opened }}
-          PUSHED: ${{ steps.branch.outputs.pushed }}
-          SHORT: ${{ steps.branch.outputs.short }}
           SUMMARY: ${{ needs.derive.outputs.summary }}
         run: |
-          pm=pnpm
-          if [ -z "$SHORT" ]; then
-            if [[ "$FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]; then
-              SHORT="${FINGERPRINT:0:12}"
-            else
-              SHORT=unknown
-            fi
+          if [[ "$FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]; then
+            short="${FINGERPRINT:0:12}"
+          else
+            short=unknown
           fi
           if [ -z "$SUMMARY" ]; then
             SUMMARY="evidence collection ended with status $DERIVE_RESULT"
           fi
           gh label create client-recertification --force --color 1d76db \
-            --description "An ArenaNet client build this repository has not certified"
+            --description "An ArenaNet client build requiring semantic verification"
           if [ "$OUTCOME" = "ready" ]; then
-            title="ArenaNet client $SHORT: auto-derived, PR ready"
+            title="ArenaNet client $short: semantic verification report"
           else
-            title="ArenaNet client $SHORT: layout changed, investigation needed"
+            title="ArenaNet client $short: invariant refused, investigation needed"
           fi
           {
-            echo "Published client generation \`$SHORT\`, WASM \`$BUILD\`."
-            echo
-            echo "- outcome: $SUMMARY"
-            if [ "$PUSHED" = "true" ]; then
-              echo "- branch: \`$BRANCH\`"
-            else
-              echo "- branch: none pushed"
-            fi
-            if [ "$PROPOSED" = "true" ]; then
-              echo "- pull request: opened"
-            else
-              echo "- pull request: not opened; review the branch directly"
-            fi
-            echo "- evidence: $RUN_URL"
-            echo "- Tools review evidence: `enhancement.json` in that run artifact"
+            printf 'Published client generation `%s`, WASM `%s`.\n\n' "$short" "$BUILD"
+            printf '%s\n' "- outcome: $SUMMARY"
+            printf '%s\n' '- source branch: none; this workflow cannot grant capabilities'
+            printf '%s\n' "- evidence: $RUN_URL"
+            printf '%s\n' '- semantic report: `enhancement.json` in that run artifact'
             echo
             cat evidence/carry-forward.md
             echo
-            echo "## Operator commands"
-            echo
-            echo '```sh'
-            echo "$pm certification recertify <path-to-Gw.jspi.wasm>"
-            echo "$pm certification double-click <path-to-Gw.jspi.wasm>"
-            echo "$pm memory:qualify:4gb <path-to-Gw.jspi.js> <path-to-Gw.jspi.wasm>"
-            echo "$pm verify"
-            echo '```'
-            echo
-            echo "## Live and release checks"
-            echo
-            echo "- [ ] Cursor input"
-            echo "- [ ] Target distance"
-            echo "- [ ] Party changes and map transition"
-            echo "- [ ] Apply team in a safe test location"
-            echo "- [ ] Record any intentionally unavailable capability and why"
-            echo "- [ ] Final reviewed commit records the generation"
-            echo "- [ ] Exact-head macOS verification passed"
-            echo "- [ ] Signed Stable release published"
-            echo
-            echo "Started: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            echo
-            echo "\`internal/upstream/recertify.md\` owns the investigation when the"
-            echo "structural proof refuses. Keep this issue open until every intended"
-            echo "capability is restored, or record why one remains unavailable."
+            printf '%s\n' '`internal/upstream/recertify.md` owns any investigation.'
+            printf '%s\n' 'Keep the official client playable and restore only the feature whose invariant failed.'
           } > tracking.md
           gh issue create --label client-recertification \
             --assignee mat4m0 --title "$title" --body-file tracking.md

@@ -284,14 +284,12 @@ only its own facts and must never erase the verified roster or another valid
 detail group.
 
 The scheduled recertification workflow already detects a new ArenaNet
-generation, downloads and verifies its code artifacts, derives the template
-entry, and publishes `enhancement.json` as review evidence. It deliberately
-does not write Enhancement memory addresses or command facts. Those values can
-affect a running game and still need a human review plus bounded live evidence.
-Automation should shorten that review; it must not turn a matching index into
-runtime authority.
+generation, downloads and verifies its code artifacts, and publishes
+`enhancement.json` as review evidence. It does not write source, push a branch,
+or open a pull request. The isolated runtime verifier remains the sole launch
+authority; a CI report or exact table row cannot turn a refused feature on.
 
-When evidence is incomplete, add no certificate. The verified official client
+When evidence is incomplete, grant no capability. The verified official client
 must remain playable.
 
 ## Done criteria

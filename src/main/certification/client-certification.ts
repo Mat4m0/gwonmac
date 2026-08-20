@@ -21,6 +21,10 @@ import {
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import type { LocalClientVerification } from "./local-client-verifier.js";
+import {
+  enhancementCapabilitiesRequested,
+  type EnhancementCapabilities,
+} from "../../shared/enhancement-contracts.js";
 
 export type { ClientCertification } from "./client-module.js";
 
@@ -64,4 +68,16 @@ export function certificationFromLocalVerification(
     templateSaveBuild: verification.templateSaveBuild,
     enhancementBuild: verification.enhancementBuild,
   };
+}
+
+/** Unknown proof is derived only when its result can affect this launch. */
+export function shouldVerifyClientLocally(
+  certification: ClientCertification,
+  capabilities: EnhancementCapabilities,
+): boolean {
+  return certification.templateSaveBuild === null
+    || (
+      certification.enhancementBuild === null
+      && enhancementCapabilitiesRequested(capabilities)
+    );
 }

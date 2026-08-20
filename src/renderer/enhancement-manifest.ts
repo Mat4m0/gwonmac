@@ -93,7 +93,8 @@ function sameCapabilities(
   return left.nativeCursor === right.nativeCursor
     && left.targetObservation === right.targetObservation
     && left.partyObservation === right.partyObservation
-    && left.commands === right.commands;
+    && left.commands === right.commands
+    && left.storage === right.storage;
 }
 
 export function decodeEnhancementManifest(

@@ -114,7 +114,38 @@ describe("Enhancement command transform", () => {
         null,
         "a read-only profile must not accept a command-capable manifest",
       );
+      assert.equal(
+        decodeEnhancementManifest(module, {
+          ...capabilities,
+          storage: false,
+        }),
+        null,
+        "a profile without local actions must not accept their manifest",
+      );
     }
+
+    const storageModule = new WebAssembly.Module(new Uint8Array(
+      transformEnhancementWasm(input, build, STORAGE_ONLY),
+    ));
+    assert.equal(
+      decodeEnhancementManifest(storageModule, {
+        ...STORAGE_ONLY,
+        storage: false,
+      }),
+      null,
+      "manifest comparison must reject unexpected storage authority",
+    );
+    const cursorModule = new WebAssembly.Module(new Uint8Array(
+      transformEnhancementWasm(input, build, CURSOR_ONLY),
+    ));
+    assert.equal(
+      decodeEnhancementManifest(cursorModule, {
+        ...CURSOR_ONLY,
+        storage: true,
+      }),
+      null,
+      "manifest comparison must reject missing storage authority",
+    );
   });
 
   it("derives local actions without installing the party dispatcher hook", () => {
