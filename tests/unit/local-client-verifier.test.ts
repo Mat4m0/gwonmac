@@ -90,6 +90,44 @@ function automaticTarget(): LocalClientVerification {
   };
 }
 
+function automaticLocalActions(): LocalClientVerification {
+  const target = automaticTarget();
+  const xunlai = ENHANCEMENT.xunlaiAction!;
+  const readers = xunlai.accessProof!.readers;
+  return {
+    ...target,
+    enhancementBuild: {
+      ...target.enhancementBuild!,
+      outputSha256: { storage: "7".repeat(64) },
+      uiDispatcher: ENHANCEMENT.uiDispatcher!,
+      gameThread: {
+        drain: {
+          ...ENHANCEMENT.gameThread!.drain,
+          bodySha256: "8".repeat(64),
+        },
+      },
+      travelAction: ENHANCEMENT.travelAction!,
+      xunlaiAction: {
+        ...xunlai,
+        accessProof: {
+          ...xunlai.accessProof!,
+          readers: {
+            "agent-id": { ...readers["agent-id"], bodySha256: "9".repeat(64) },
+            "access-flags": { ...readers["access-flags"], bodySha256: "9".repeat(64) },
+            "player-number": readers["player-number"],
+          },
+        },
+      },
+      chatAliases: {
+        parser: {
+          ...ENHANCEMENT.chatAliases!.parser,
+          bodySha256: "a".repeat(64),
+        },
+      },
+    },
+  };
+}
+
 describe("local client verification boundary", () => {
   it("accepts the verifier's complete baseline proof", () => {
     assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256), true);
@@ -158,6 +196,27 @@ describe("local client verification boundary", () => {
             ...derived.enhancementBuild!.targetObservation!.layout,
             manualTargetAgentId:
               derived.enhancementBuild!.targetObservation!.layout.manualTargetAgentId + 4,
+          },
+        },
+      },
+    }, TEMPLATE.sha256), false);
+  });
+
+  it("accepts independent local-action proofs and rejects one bad Xunlai field", () => {
+    const derived = automaticLocalActions();
+    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification({
+      ...derived,
+      enhancementBuild: {
+        ...derived.enhancementBuild!,
+        xunlaiAction: {
+          ...derived.enhancementBuild!.xunlaiAction!,
+          accessProof: {
+            ...derived.enhancementBuild!.xunlaiAction!.accessProof!,
+            layout: {
+              ...derived.enhancementBuild!.xunlaiAction!.accessProof!.layout,
+              playerRecordAccessFlags: 0x38,
+            },
           },
         },
       },

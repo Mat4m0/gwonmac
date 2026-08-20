@@ -17,7 +17,7 @@
  */
 import { createHash } from "node:crypto";
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
+  enhancementCapabilitiesForProfile,
   type EnhancementCapabilityProfile,
 } from "../shared/enhancement-contracts.js";
 import {
@@ -161,7 +161,8 @@ function finishPostTemplateEnhancementReport(
     try {
       const derived: Partial<Record<EnhancementCapabilityProfile, string>> = {};
       for (const profile of enhancementProfilesForBuild(certified)) {
-        const capabilities = ENHANCEMENT_CAPABILITY_PROFILES[profile];
+        const capabilities = enhancementCapabilitiesForProfile(profile);
+        if (!capabilities) throw new Error(`unknown capability profile ${profile}`);
         const output = transformEnhancementWasm(
           postTemplate,
           certified,
@@ -173,7 +174,7 @@ function finishPostTemplateEnhancementReport(
       for (const profile of enhancementProfilesForBuild(certified)) {
         const expected = enhancementOutputSha256(
           certified,
-          ENHANCEMENT_CAPABILITY_PROFILES[profile],
+          enhancementCapabilitiesForProfile(profile)!,
         );
         if (expected === null || derivedOutputSha256[profile] !== expected) {
           throw new Error(

@@ -6,7 +6,7 @@
  * The input hash is checked against the build entry before a byte is read, and
  * every hook's function signature is re-verified against the certified one, so
  * a table entry that has gone stale fails loudly instead of producing a module
- * that traps at runtime. Capability selection is exact — five fields, no
+ * that traps at runtime. Capability selection is exact — seven fields, no
  * extra keys, and a profile that has no certified output hash is refused rather
  * than derived.
  *

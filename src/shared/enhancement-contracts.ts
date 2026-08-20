@@ -33,7 +33,7 @@ export type EnhancementCapabilities = Readonly<{
   chatAliases: boolean;
 }>;
 
-export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
+const LEGACY_CAPABILITY_PROFILES = Object.freeze({
   cursor: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
@@ -216,8 +216,57 @@ export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
   }),
 } as const satisfies Readonly<Record<string, EnhancementCapabilities>>);
 
+const CAPABILITY_FIELDS = Object.freeze([
+  "nativeCursor",
+  "targetObservation",
+  "partyObservation",
+  "teamApply",
+  "travelAction",
+  "xunlaiAction",
+  "chatAliases",
+] as const satisfies readonly (keyof EnhancementCapabilities)[]);
+
+function sameCapabilities(
+  left: EnhancementCapabilities,
+  right: EnhancementCapabilities,
+): boolean {
+  return CAPABILITY_FIELDS.every((field) => left[field] === right[field]);
+}
+
+const generatedProfiles = Object.fromEntries(
+  Array.from({ length: 1 << CAPABILITY_FIELDS.length }, (_, mask) => {
+    const capabilities = Object.freeze(Object.fromEntries(
+      CAPABILITY_FIELDS.map((field, index) => [field, (mask & (1 << index)) !== 0]),
+    )) as EnhancementCapabilities;
+    return [mask, capabilities] as const;
+  })
+    .filter(([mask, capabilities]) =>
+      mask !== 0
+      && validEnhancementCapabilities(capabilities)
+      && !Object.values(LEGACY_CAPABILITY_PROFILES).some(
+        (legacy) => sameCapabilities(legacy, capabilities),
+      ))
+    .map(([mask, capabilities]) => [`features-${mask.toString(16).padStart(2, "0")}`, capabilities]),
+);
+
+/** Every valid feature subset has one deterministic transform identity. */
 export type EnhancementCapabilityProfile =
-  keyof typeof ENHANCEMENT_CAPABILITY_PROFILES;
+  | keyof typeof LEGACY_CAPABILITY_PROFILES
+  | `features-${string}`;
+
+export const ENHANCEMENT_CAPABILITY_PROFILES: typeof LEGACY_CAPABILITY_PROFILES
+  & Readonly<Record<EnhancementCapabilityProfile, EnhancementCapabilities>> = Object.freeze({
+  ...LEGACY_CAPABILITY_PROFILES,
+  ...generatedProfiles,
+});
+
+export function enhancementCapabilitiesForProfile(
+  profile: string,
+): EnhancementCapabilities | null {
+  return (ENHANCEMENT_CAPABILITY_PROFILES as Readonly<
+    Record<string, EnhancementCapabilities | undefined>
+  >)[profile] ?? null;
+}
 
 const NONE: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -234,16 +283,9 @@ export function enhancementCapabilityProfile(
 ): EnhancementCapabilityProfile | null {
   for (const profile of Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
     EnhancementCapabilityProfile[]) {
-    const candidate = ENHANCEMENT_CAPABILITY_PROFILES[profile];
-    if (
-      candidate.nativeCursor === capabilities.nativeCursor
-      && candidate.targetObservation === capabilities.targetObservation
-      && candidate.partyObservation === capabilities.partyObservation
-      && candidate.teamApply === capabilities.teamApply
-      && candidate.travelAction === capabilities.travelAction
-      && candidate.xunlaiAction === capabilities.xunlaiAction
-      && candidate.chatAliases === capabilities.chatAliases
-    ) return profile;
+    const candidate = enhancementCapabilitiesForProfile(profile);
+    if (!candidate) continue;
+    if (sameCapabilities(candidate, capabilities)) return profile;
   }
   return null;
 }

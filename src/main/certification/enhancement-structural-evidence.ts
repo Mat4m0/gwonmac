@@ -159,6 +159,18 @@ export interface AutomaticTargetLocation {
   readonly targetLayout: EnhancementTargetLayout;
 }
 
+export interface AutomaticLocalActionsLocation {
+  readonly baseline: KnownEnhancementBuild;
+  readonly hookFunction: number;
+  readonly hookBodySha256: string;
+  readonly observationLayout: EnhancementObservationBaseLayout | null;
+  readonly uiDispatcher: KnownEnhancementBuild["uiDispatcher"] | null;
+  readonly gameThread: KnownEnhancementBuild["gameThread"] | null;
+  readonly travelAction: KnownEnhancementBuild["travelAction"] | null;
+  readonly xunlaiAction: KnownEnhancementBuild["xunlaiAction"] | null;
+  readonly chatAliases: KnownEnhancementBuild["chatAliases"] | null;
+}
+
 const MAX_INPUT_BYTES = 64 * 1024 * 1024;
 const MAX_TYPES = 100_000;
 const MAX_FUNCTIONS = 100_000;
@@ -1315,6 +1327,79 @@ const TARGET_IMMUTABLE_HASHES = Object.freeze({
   areaTable: "3a4564fe4b92b8e2a4e048000ccd924d1f1ee68d15e24a63dd6e05a9683a88bc",
 });
 
+const GAME_THREAD_DRAIN_ROLE = semanticRole(
+  764,
+  "aa1694915623017676dffcba6b54ef5570b4029e9c9258f8b8e00480e5d37c99",
+  Object.freeze([
+    ...mutableSpans([
+      [29, 34, "frame.clock"], [80, 85, "frame.clock"],
+      [108, 113, "frame.previous"], [136, 141, "frame.previous"],
+      [153, 158, "frame.ready"], [166, 171, "frame.clock"],
+      [175, 180, "frame.elapsed"], [183, 188, "frame.elapsed"],
+      [199, 204, "frame.elapsed"], [220, 225, "frame.elapsed"],
+      [232, 237, "frame.clock"], [365, 370, "frame.flag"],
+      [396, 401, "frame.guard"], [432, 437, "frame.guard"],
+      [442, 447, "frame.flag"], [469, 474, "frame.state"],
+      [483, 488, "frame.counter"], [495, 500, "frame.counter"],
+      [516, 521, "frame.buffer.end"], [536, 541, "frame.buffer.payload"],
+      [560, 565, "frame.buffer.start"], [569, 574, "frame.state"],
+      [589, 594, "frame.pending"], [623, 628, "frame.pending"],
+      [641, 646, "frame.state"], [651, 656, "frame.buffer.start"],
+      [675, 680, "frame.pending"], [685, 690, "frame.buffer.start"],
+      [706, 711, "frame.flag"],
+    ]),
+    { start: 253, end: 258, role: "frame.assertion", addressClass: "immutable-data" },
+  ]),
+  ["i32", "i32"],
+  [],
+);
+
+const CHAT_ALIASES_ROLE = semanticRole(
+  380,
+  "c35aa3256d466c5fd5d704d5b069b0faed1d7884c62158b38b3ba0aecf307545",
+  mutableSpans([
+    [50, 55, "aliases.flag"], [63, 68, "aliases.state"],
+    [74, 79, "aliases.cursor"], [85, 90, "aliases.end"],
+    [96, 101, "aliases.enabled"], [102, 107, "aliases.state"],
+    [110, 115, "aliases.buffer"], [148, 153, "aliases.flag"],
+    [195, 200, "aliases.compare"], [248, 253, "aliases.state"],
+  ]),
+  ["i32", "i32"],
+  ["i32"],
+);
+
+const XUNLAI_AGENT_READER_ROLE = semanticRole(
+  418,
+  "fde5f7f940fb4ab5b55f85290897f47f341056b983514a6b0e03bb6f149aff8d",
+  Object.freeze([
+    { start: 17, end: 22, role: "xunlai.assertion", addressClass: "immutable-data" },
+    { start: 29, end: 31, role: "xunlai.source-line", addressClass: "immutable-data" },
+  ]),
+  ["i32"],
+  ["i32"],
+);
+
+const XUNLAI_ACCESS_READER_ROLE = semanticRole(
+  85,
+  "ea782429f5a29731780e4c962909963b7a00b01f59b5122ec0c9ae292905ba09",
+  Object.freeze([
+    { start: 17, end: 22, role: "xunlai.assertion", addressClass: "immutable-data" },
+    { start: 29, end: 31, role: "xunlai.source-line", addressClass: "immutable-data" },
+  ]),
+  ["i32"],
+  ["i32"],
+);
+
+const LOCAL_ACTION_HASHES = Object.freeze({
+  uiDispatcher: "ba41a2237bc91373cdee67ad8cfff700b80a2e351b7e980f37d68690307de4c0",
+  travelProducer: "47c2f33dc98226fbb1596d60b2dfe76a9a19f645e94330a0582a6dc50d5be595",
+  xunlaiHandler: "0a46adca4dd597f9430c23457f6ce6ff7ccdfbdaf4a77b449a8158e2c595189a",
+  xunlaiPlayerReader: "b98af3eb50f4c2aa1bc09f0a88712e32a2a14fe0d013126e1e4c0e842008e01f",
+  areaTypeReader: "9786e68238b6a2559646f8e0594b3d4ee808003f11ec775a475e337e7dd9aa90",
+  frameAssertion: "1db4beca1a3d246ce3f4df09cfdd2a3e60c5cef5564d0361474f7f9cb3c95026",
+  xunlaiAssertion: "df83cbe4386b6f8641568f5d2b6444c941f6d448a7efffd9f4737e343b0972d2",
+});
+
 function functionBody(module: ModuleShape, functionIndex: number): Uint8Array {
   const body = module.bodies[functionIndex - module.functionImportCount];
   if (!body) throw new EvidenceError("module-shape-unsupported");
@@ -1379,10 +1464,10 @@ function uniqueExactFunction(
   return matches.length === 1 ? matches[0]! : null;
 }
 
-function paddedU32(body: Uint8Array, start: number): number {
+function encodedU32(body: Uint8Array, start: number, end: number): number {
   const cursor = { value: start };
   const value = readUnsigned(body, cursor);
-  if (cursor.value !== start + 5) {
+  if (cursor.value !== end) {
     throw new EvidenceError("module-shape-unsupported");
   }
   return value;
@@ -1449,7 +1534,7 @@ function valuesForRole(body: Uint8Array, role: CursorRole): Map<string, number[]
   const values = new Map<string, number[]>();
   for (const span of role.spans) {
     const group = values.get(span.role) ?? [];
-    group.push(paddedU32(body, span.start));
+    group.push(encodedU32(body, span.start, span.end));
     values.set(span.role, group);
   }
   return values;
@@ -1477,38 +1562,25 @@ function exactTargetFunction(
   return uniqueExactFunction(module, role.bodySha256, role.params, role.results);
 }
 
-function deriveTargetLayouts(
+function deriveObservationLayout(
   module: ModuleShape,
-): Readonly<{
-  observation: EnhancementObservationBaseLayout;
-  target: EnhancementTargetLayout;
-}> | null {
+): EnhancementObservationBaseLayout | null {
   const contextFunction = uniqueRoleFunction(module, TARGET_CONTEXT_ROOT_ROLE);
-  const selectorFunction = uniqueRoleFunction(module, TARGET_SELECTOR_ROLE);
-  const resetFunction = uniqueRoleFunction(module, TARGET_RESET_ROLE);
-  const callerFunction = uniqueRoleFunction(module, TARGET_CALLER_ROLE);
   const agentAccessorFunction = uniqueRoleFunction(module, AGENT_ARRAY_ACCESSOR_ROLE);
   const areaLookupFunction = uniqueRoleFunction(module, AREA_LOOKUP_ROLE);
   const exact = Object.fromEntries(Object.entries(EXACT_TARGET_ROLES).map(
     ([name, role]) => [name, exactTargetFunction(module, role)],
   )) as Record<keyof typeof EXACT_TARGET_ROLES, number | null>;
   if (
-    contextFunction === null || selectorFunction === null
-    || resetFunction === null || callerFunction === null
-    || agentAccessorFunction === null
+    contextFunction === null || agentAccessorFunction === null
     || areaLookupFunction === null
     || Object.values(exact).some((value) => value === null)
   ) return null;
 
   const context = valuesForRole(functionBody(module, contextFunction), TARGET_CONTEXT_ROOT_ROLE);
-  const selector = valuesForRole(functionBody(module, selectorFunction), TARGET_SELECTOR_ROLE);
-  const reset = valuesForRole(functionBody(module, resetFunction), TARGET_RESET_ROLE);
-  const caller = valuesForRole(functionBody(module, callerFunction), TARGET_CALLER_ROLE);
   const accessor = valuesForRole(functionBody(module, agentAccessorFunction), AGENT_ARRAY_ACCESSOR_ROLE);
   const area = valuesForRole(functionBody(module, areaLookupFunction), AREA_LOOKUP_ROLE);
   const contextRoot = soleValue(context, "context.root");
-  const manualTargetAgentId = soleValue(selector, "target.manual");
-  const automaticTargetAgentId = soleValue(selector, "target.automatic");
   const agentArray = soleValue(accessor, "agent-array.base");
   const agentArraySize = soleValue(accessor, "agent-array.size");
   const lifecycleMatches = roleFunctions(module, AGENT_ARRAY_LIFECYCLE_ROLE).filter(
@@ -1523,41 +1595,19 @@ function deriveTargetLayouts(
   if (lifecycleMatches.length !== 1) return null;
   const areaInfo = soleValue(area, "area.table");
   if (
-    manualTargetAgentId !== soleValue(reset, "target.manual")
-    || manualTargetAgentId !== soleValue(caller, "target.manual")
-    || automaticTargetAgentId !== soleValue(reset, "target.automatic")
-    || automaticTargetAgentId !== soleValue(caller, "target.automatic")
-    || manualTargetAgentId !== automaticTargetAgentId + 4
-    || agentArraySize !== agentArray + 8
+    agentArraySize !== agentArray + 8
     || codeOperandOccurrences(module, contextRoot) !== 6
     || codeOperandOccurrences(module, agentArray) !== 41
     || codeOperandOccurrences(module, agentArraySize) !== 41
-    || codeOperandOccurrences(module, manualTargetAgentId) !== 16
-    || codeOperandOccurrences(module, automaticTargetAgentId) !== 18
     || codeOperandOccurrences(module, areaInfo) !== 1
     || commonRelocationDelta([
-      [contextRoot, 0x5a0ee0], [manualTargetAgentId, 0x5a394c],
-      [automaticTargetAgentId, 0x5a3948], [agentArray, 0x5a4e58],
+      [contextRoot, 0x5a0ee0], [agentArray, 0x5a4e58],
       [agentArraySize, 0x5a4e60], [areaInfo, 0x1cc630],
     ]) === null
   ) return null;
 
-  const selectorImmutable = valuesForRole(
-    functionBody(module, selectorFunction), TARGET_SELECTOR_ROLE,
-  );
-  const resetImmutable = valuesForRole(
-    functionBody(module, resetFunction), TARGET_RESET_ROLE,
-  );
   if (
-    staticCStringHash(module, soleValue(selectorImmutable, "target.assert-manual"))
-      !== TARGET_IMMUTABLE_HASHES.manualAssertion
-    || staticCStringHash(module, soleValue(selectorImmutable, "target.assert-automatic"))
-      !== TARGET_IMMUTABLE_HASHES.automaticAssertion
-    || staticCStringHash(module, soleValue(resetImmutable, "target.reset-name-a"))
-      !== TARGET_IMMUTABLE_HASHES.resetNameA
-    || staticCStringHash(module, soleValue(resetImmutable, "target.reset-name-b"))
-      !== TARGET_IMMUTABLE_HASHES.resetNameB
-    || staticCStringHash(module, soleValue(area, "area.assert-name"))
+    staticCStringHash(module, soleValue(area, "area.assert-name"))
       !== TARGET_IMMUTABLE_HASHES.areaAssertion
   ) return null;
 
@@ -1602,7 +1652,7 @@ function deriveTargetLayouts(
       !== TARGET_IMMUTABLE_HASHES.areaTable
   ) return null;
 
-  const verifiedObservation = verifyLayout(observation, {
+  return verifyLayout(observation, {
     contextRoot: { sourceRole: "context-root-writer", expression: "relocated static store", occurrences: [11] },
     agentArray: { sourceRole: "agent-array lifecycle+accessor", expression: "base static", occurrences: [9, 34, 27] },
     gameContextSlot: { sourceRole: "context-root-writer", expression: "context registration slot", occurrences: [17] },
@@ -1624,11 +1674,203 @@ function deriveTargetLayouts(
     areaInfoStride: { sourceRole: "area lookup", expression: "index multiplier", occurrences: [36] },
     areaInfoFlags: { sourceRole: "area flags reader", expression: "post-lookup load", occurrences: [21] },
   }).layout;
+}
+
+function deriveTargetLayout(
+  module: ModuleShape,
+  observation: EnhancementObservationBaseLayout,
+): EnhancementTargetLayout | null {
+  const selectorFunction = uniqueRoleFunction(module, TARGET_SELECTOR_ROLE);
+  const resetFunction = uniqueRoleFunction(module, TARGET_RESET_ROLE);
+  const callerFunction = uniqueRoleFunction(module, TARGET_CALLER_ROLE);
+  if (
+    selectorFunction === null || resetFunction === null || callerFunction === null
+  ) return null;
+  const selector = valuesForRole(functionBody(module, selectorFunction), TARGET_SELECTOR_ROLE);
+  const reset = valuesForRole(functionBody(module, resetFunction), TARGET_RESET_ROLE);
+  const caller = valuesForRole(functionBody(module, callerFunction), TARGET_CALLER_ROLE);
+  const manualTargetAgentId = soleValue(selector, "target.manual");
+  const automaticTargetAgentId = soleValue(selector, "target.automatic");
+  if (
+    manualTargetAgentId !== soleValue(reset, "target.manual")
+    || manualTargetAgentId !== soleValue(caller, "target.manual")
+    || automaticTargetAgentId !== soleValue(reset, "target.automatic")
+    || automaticTargetAgentId !== soleValue(caller, "target.automatic")
+    || manualTargetAgentId !== automaticTargetAgentId + 4
+    || codeOperandOccurrences(module, manualTargetAgentId) !== 16
+    || codeOperandOccurrences(module, automaticTargetAgentId) !== 18
+    || commonRelocationDelta([
+      [observation.contextRoot, 0x5a0ee0],
+      [manualTargetAgentId, 0x5a394c],
+      [automaticTargetAgentId, 0x5a3948],
+    ]) === null
+  ) return null;
+  const selectorImmutable = valuesForRole(
+    functionBody(module, selectorFunction), TARGET_SELECTOR_ROLE,
+  );
+  const resetImmutable = valuesForRole(
+    functionBody(module, resetFunction), TARGET_RESET_ROLE,
+  );
+  if (
+    staticCStringHash(module, soleValue(selectorImmutable, "target.assert-manual"))
+      !== TARGET_IMMUTABLE_HASHES.manualAssertion
+    || staticCStringHash(module, soleValue(selectorImmutable, "target.assert-automatic"))
+      !== TARGET_IMMUTABLE_HASHES.automaticAssertion
+    || staticCStringHash(module, soleValue(resetImmutable, "target.reset-name-a"))
+      !== TARGET_IMMUTABLE_HASHES.resetNameA
+    || staticCStringHash(module, soleValue(resetImmutable, "target.reset-name-b"))
+      !== TARGET_IMMUTABLE_HASHES.resetNameB
+  ) return null;
   const target = verifyLayout({ manualTargetAgentId, automaticTargetAgentId }, {
     manualTargetAgentId: { sourceRole: "target selector+reset+caller", expression: "manual target static", occurrences: [132, 312, 636, 7, 23, 40, 60] },
     automaticTargetAgentId: { sourceRole: "target selector+reset+caller", expression: "automatic target static", occurrences: [147, 332, 647, 18, 9, 76, 93] },
   }).layout;
-  return Object.freeze({ observation: verifiedObservation, target });
+  return target;
+}
+
+function callsAt(
+  body: Uint8Array,
+  operands: readonly number[],
+  target: number,
+): boolean {
+  return operands.every((offset) => unsignedOperand(body, offset) === target);
+}
+
+function isolatedProof<Value>(proof: () => Value | null): Value | null {
+  try {
+    return proof();
+  } catch {
+    return null;
+  }
+}
+
+function deriveGameThread(
+  module: ModuleShape,
+  baseline: KnownEnhancementBuild,
+): KnownEnhancementBuild["gameThread"] | null {
+  const functionIndex = uniqueRoleFunction(module, GAME_THREAD_DRAIN_ROLE);
+  const expected = baseline.gameThread?.drain;
+  if (functionIndex === null || !expected) return null;
+  const body = functionBody(module, functionIndex);
+  const values = valuesForRole(body, GAME_THREAD_DRAIN_ROLE);
+  const delta = commonRelocationDelta([
+    [soleValue(values, "frame.clock"), 0x5a2248],
+    [soleValue(values, "frame.previous"), 0x5a2244],
+    [soleValue(values, "frame.ready"), 0x5a21ec],
+    [soleValue(values, "frame.elapsed"), 0x5a2250],
+    [soleValue(values, "frame.flag"), 0x5a21f0],
+    [soleValue(values, "frame.guard"), 0x5a2254],
+    [soleValue(values, "frame.state"), 0x5a223c],
+    [soleValue(values, "frame.counter"), 0x5a2258],
+    [soleValue(values, "frame.buffer.end"), 0x15ac30],
+    [soleValue(values, "frame.buffer.payload"), 0x15ac20],
+    [soleValue(values, "frame.buffer.start"), 0x15ac10],
+    [soleValue(values, "frame.pending"), 0x5a2240],
+  ]);
+  const slots = parseActiveTableRelations(module.elementSection).get(functionIndex) ?? [];
+  if (
+    delta === null
+    || staticCStringHash(module, soleValue(values, "frame.assertion"))
+      !== LOCAL_ACTION_HASHES.frameAssertion
+    || slots.length !== 1
+  ) return null;
+  return Object.freeze({
+    drain: Object.freeze({
+      functionIndex,
+      params: expected.params,
+      results: expected.results,
+      tableSlot: slots[0]!,
+      bodySha256: functionBodySha256(module, functionIndex),
+    }),
+  });
+}
+
+function deriveXunlaiAccess(
+  module: ModuleShape,
+  baseline: KnownEnhancementBuild,
+  observation: EnhancementObservationBaseLayout,
+  handlerFunction: number,
+): KnownEnhancementBuild["xunlaiAction"] | null {
+  const expected = baseline.xunlaiAction;
+  if (!expected) return null;
+  const agentFunction = uniqueRoleFunction(module, XUNLAI_AGENT_READER_ROLE);
+  const accessFunction = uniqueRoleFunction(module, XUNLAI_ACCESS_READER_ROLE);
+  const playerFunction = uniqueExactFunction(
+    module, LOCAL_ACTION_HASHES.xunlaiPlayerReader, ["i32"], ["i32"],
+  );
+  const areaTypeFunction = uniqueExactFunction(
+    module, LOCAL_ACTION_HASHES.areaTypeReader, ["i32"], ["i32"],
+  );
+  if (
+    agentFunction === null || accessFunction === null
+    || playerFunction === null || areaTypeFunction === null
+  ) return null;
+  const agentBody = functionBody(module, agentFunction);
+  const accessBody = functionBody(module, accessFunction);
+  const playerBody = functionBody(module, playerFunction);
+  const agentValues = valuesForRole(agentBody, XUNLAI_AGENT_READER_ROLE);
+  const accessValues = valuesForRole(accessBody, XUNLAI_ACCESS_READER_ROLE);
+  const agentLine = soleValue(agentValues, "xunlai.source-line");
+  const accessLine = soleValue(accessValues, "xunlai.source-line");
+  if (
+    staticCStringHash(module, soleValue(agentValues, "xunlai.assertion"))
+      !== LOCAL_ACTION_HASHES.xunlaiAssertion
+    || staticCStringHash(module, soleValue(accessValues, "xunlai.assertion"))
+      !== LOCAL_ACTION_HASHES.xunlaiAssertion
+    || agentLine - 4_822 !== accessLine - 4_850
+  ) return null;
+  const worldPlayers = unsignedOperand(agentBody, 49);
+  const playerRecordStride = unsignedOperand(agentBody, 146);
+  const layout = verifyLayout({
+    worldPlayers,
+    playerRecordStride,
+    playerRecordAgentId: unsignedOperand(agentBody, 416),
+    playerRecordAccessFlags: unsignedOperand(accessBody, 78),
+    playerRecordNumber: unsignedOperand(playerBody, 123),
+    areaInfoType: unsignedOperand(functionBody(module, areaTypeFunction), 54),
+  }, {
+    worldPlayers: { sourceRole: "three player-record readers", expression: "WorldContext array field", occurrences: [49, 67, 108] },
+    playerRecordStride: { sourceRole: "three player-record readers", expression: "record index multiplier", occurrences: [146, 72, 69, 118] },
+    playerRecordAgentId: { sourceRole: "agent-id reader", expression: "record field load", occurrences: [416] },
+    playerRecordAccessFlags: { sourceRole: "access-flags reader", expression: "record field load", occurrences: [78] },
+    playerRecordNumber: { sourceRole: "player-number reader", expression: "record field address", occurrences: [123] },
+    areaInfoType: { sourceRole: "area type reader", expression: "post-lookup field load", occurrences: [54] },
+  }).layout;
+  if (
+    unsignedOperand(accessBody, 67) !== worldPlayers
+    || unsignedOperand(playerBody, 108) !== worldPlayers
+    || unsignedOperand(accessBody, 72) !== playerRecordStride
+    || unsignedOperand(playerBody, 69) !== playerRecordStride
+    || unsignedOperand(playerBody, 118) !== playerRecordStride
+    || layout.areaInfoType >= observation.areaInfoStride
+  ) return null;
+  return Object.freeze({
+    openExport: expected.openExport,
+    configureExport: expected.configureExport,
+    accessProof: Object.freeze({
+      layout,
+      readers: Object.freeze({
+        "agent-id": Object.freeze({
+          functionIndex: agentFunction, params: ["i32"] as const,
+          results: ["i32"] as const, bodySha256: functionBodySha256(module, agentFunction),
+        }),
+        "access-flags": Object.freeze({
+          functionIndex: accessFunction, params: ["i32"] as const,
+          results: ["i32"] as const, bodySha256: functionBodySha256(module, accessFunction),
+        }),
+        "player-number": Object.freeze({
+          functionIndex: playerFunction, params: ["i32"] as const,
+          results: ["i32"] as const, bodySha256: functionBodySha256(module, playerFunction),
+        }),
+      }),
+    }),
+    handler: Object.freeze({
+      functionIndex: handlerFunction,
+      params: ["i32"] as const,
+      results: [] as const,
+      bodySha256: functionBodySha256(module, handlerFunction),
+    }),
+  });
 }
 
 
@@ -1863,8 +2105,10 @@ export function locateAutomaticTarget(
     if (!tick) return null;
     const tickBody = functionBody(module, tick.functionIndex);
     if (!bodyMatchesRole(tickBody, CURSOR_TICK_ROLE)) return null;
-    const layouts = deriveTargetLayouts(module);
-    if (!layouts) return null;
+    const observationLayout = deriveObservationLayout(module);
+    if (!observationLayout) return null;
+    const targetLayout = deriveTargetLayout(module, observationLayout);
+    if (!targetLayout) return null;
     const matches = baselines.flatMap((baseline): AutomaticTargetLocation[] =>
       baseline.observationBase && baseline.targetObservation
       && signatureMatches(module, tick.functionIndex, baseline.hookParams, baseline.hookResults)
@@ -1872,8 +2116,8 @@ export function locateAutomaticTarget(
             baseline,
             hookFunction: tick.functionIndex,
             hookBodySha256: tick.bodySha256,
-            observationLayout: layouts.observation,
-            targetLayout: layouts.target,
+            observationLayout,
+            targetLayout,
           }]
         : []);
     if (matches.length === 0) return null;
@@ -1884,6 +2128,131 @@ export function locateAutomaticTarget(
     });
     return matches.every((match) => identity(match) === identity(matches[0]!))
       ? matches[0]!
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Strict, independent authority for the three local action surfaces. */
+export function locateAutomaticLocalActions(
+  input: Uint8Array,
+  baselines: readonly KnownEnhancementBuild[],
+): AutomaticLocalActionsLocation | null {
+  if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
+  try {
+    const module = parseModule(input);
+    const tick = tickEvidence(module).candidate;
+    if (!tick || !bodyMatchesRole(functionBody(module, tick.functionIndex), CURSOR_TICK_ROLE)) {
+      return null;
+    }
+    const locations: AutomaticLocalActionsLocation[] = [];
+    for (const baseline of baselines) {
+      const expectedUi = baseline.uiDispatcher;
+      const party = baseline.partyObservation;
+      if (!expectedUi || !party) continue;
+      const decoded = decodeFunctions(module, {
+        playerChatMessage: expectedUi.playerChatMessage,
+        nearbyPlayerMessages: party.nearbyPlayerMessages,
+      });
+      const uiEvidence = playerChatUiEvidence(module, decoded, {
+        playerChatMessage: expectedUi.playerChatMessage,
+        nearbyPlayerMessages: party.nearbyPlayerMessages,
+      }).candidate;
+      const uiFunction = uiEvidence?.dispatcherFunctionIndex ?? null;
+      const uiDispatcher = uiFunction !== null
+        && functionBodySha256(module, uiFunction) === LOCAL_ACTION_HASHES.uiDispatcher
+        ? Object.freeze({
+            ...expectedUi,
+            functionIndex: uiFunction,
+            bodySha256: functionBodySha256(module, uiFunction),
+          })
+        : null;
+      const gameThread = isolatedProof(() => deriveGameThread(module, baseline));
+
+      const travelExpected = baseline.travelAction;
+      const travelFunction = travelExpected
+        ? uniqueExactFunction(
+            module, LOCAL_ACTION_HASHES.travelProducer,
+            travelExpected.producer.params, travelExpected.producer.results,
+          )
+        : null;
+      const travelBody = travelFunction === null ? null : functionBody(module, travelFunction);
+      const travelAction = uiDispatcher && gameThread && travelExpected && travelBody
+        && unsignedOperand(travelBody, 169) === travelExpected.messageId
+        && callsAt(travelBody, [132, 179], uiDispatcher.functionIndex)
+        ? Object.freeze({
+            ...travelExpected,
+            producer: Object.freeze({
+              ...travelExpected.producer,
+              functionIndex: travelFunction!,
+              bodySha256: functionBodySha256(module, travelFunction!),
+            }),
+          })
+        : null;
+
+      const handlerExpected = baseline.xunlaiAction?.handler;
+      const handlerFunction = handlerExpected
+        ? uniqueExactFunction(
+            module, LOCAL_ACTION_HASHES.xunlaiHandler,
+            handlerExpected.params, handlerExpected.results,
+          )
+        : null;
+      const handlerBody = handlerFunction === null ? null : functionBody(module, handlerFunction);
+      const observationLayout = isolatedProof(() => deriveObservationLayout(module));
+      const xunlaiAction = uiDispatcher && gameThread && observationLayout
+        && handlerBody
+        && [85, 117, 159, 181, 200, 219].every(
+          (offset, index) => unsignedOperand(handlerBody, offset) === 0x1000_0040 + index,
+        )
+        && callsAt(handlerBody, [98, 130, 172, 191, 210, 229], uiDispatcher.functionIndex)
+        ? isolatedProof(() => deriveXunlaiAccess(
+            module, baseline, observationLayout, handlerFunction!,
+          ))
+        : null;
+
+      const aliasesExpected = baseline.chatAliases;
+      const aliasFunction = aliasesExpected
+        ? uniqueRoleFunction(module, CHAT_ALIASES_ROLE)
+        : null;
+      const aliasBody = aliasFunction === null ? null : functionBody(module, aliasFunction);
+      const chatAliases = uiDispatcher && aliasesExpected && aliasBody
+        && unsignedOperand(aliasBody, 316) === 0x1000_019d
+        && unsignedOperand(aliasBody, 335) === 0x1000_019e
+        && callsAt(aliasBody, [326, 345], uiDispatcher.functionIndex)
+        ? Object.freeze({
+            parser: Object.freeze({
+              ...aliasesExpected.parser,
+              functionIndex: aliasFunction!,
+              bodySha256: functionBodySha256(module, aliasFunction!),
+            }),
+          })
+        : null;
+      if (!travelAction && !xunlaiAction && !chatAliases) continue;
+      locations.push(Object.freeze({
+        baseline,
+        hookFunction: tick.functionIndex,
+        hookBodySha256: tick.bodySha256,
+        observationLayout: xunlaiAction ? observationLayout : null,
+        uiDispatcher,
+        gameThread: travelAction || xunlaiAction ? gameThread : null,
+        travelAction,
+        xunlaiAction,
+        chatAliases,
+      }));
+    }
+    if (locations.length === 0) return null;
+    const identity = (value: AutomaticLocalActionsLocation) => JSON.stringify({
+      hookFunction: value.hookFunction,
+      observationLayout: value.observationLayout,
+      uiDispatcher: value.uiDispatcher,
+      gameThread: value.gameThread,
+      travelAction: value.travelAction,
+      xunlaiAction: value.xunlaiAction,
+      chatAliases: value.chatAliases,
+    });
+    return locations.every((match) => identity(match) === identity(locations[0]!))
+      ? locations[0]!
       : null;
   } catch {
     return null;

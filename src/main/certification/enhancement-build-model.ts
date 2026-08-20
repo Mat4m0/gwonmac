@@ -14,6 +14,7 @@
  */
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
+  enhancementCapabilitiesForProfile,
   enhancementCapabilityProfile,
   enhancementConfigWordActive,
   type EnhancementCapabilityProfile,
@@ -40,7 +41,7 @@ export function enhancementOutputSha256(
   build: KnownEnhancementBuild,
   capabilities: EnhancementCapabilities,
 ): string | null {
-  if (!hasCompleteEnhancementProfileHashes(build)) return null;
+  if (!hasValidEnhancementProfileHashes(build)) return null;
   const profile = enhancementCapabilityProfile(capabilities);
   if (profile === null) return null;
   const output = build.outputSha256?.[profile];
@@ -288,7 +289,7 @@ export function supportedEnhancementCapabilities(
     teamApply: partyObservation && gameThread && build.teamApply !== undefined,
     travelAction,
     xunlaiAction,
-    chatAliases: gameThread && build.chatAliases !== undefined,
+    chatAliases: build.uiDispatcher !== undefined && build.chatAliases !== undefined,
   });
 }
 
@@ -301,7 +302,8 @@ export function enhancementProfilesForBuild(
       ENHANCEMENT_CAPABILITY_PROFILES,
     ) as EnhancementCapabilityProfile[]
   ).filter((profile) => {
-    const value = ENHANCEMENT_CAPABILITY_PROFILES[profile];
+    const value = enhancementCapabilitiesForProfile(profile);
+    if (!value) return false;
     return (
       (!value.nativeCursor || supported.nativeCursor) &&
       (!value.targetObservation || supported.targetObservation) &&
@@ -310,17 +312,17 @@ export function enhancementProfilesForBuild(
       (!value.travelAction || supported.travelAction) &&
       (!value.xunlaiAction || supported.xunlaiAction) &&
       (!value.chatAliases || supported.chatAliases)
+      && typeof build.outputSha256[profile] === "string"
     );
   });
 }
 
 /**
- * A certificate carries one hash for every profile its optional fact groups
- * authorize, and no hash for a profile those groups do not authorize. This is
- * the authoring boundary that keeps a stale or copied hash from granting a
- * capability whose facts are absent.
+ * A certificate may carry only the profile outputs it actually derived. Every
+ * stored profile must be supported by its feature-local facts; omitted profile
+ * combinations are a safe loss of availability, never implicit authority.
  */
-export function hasCompleteEnhancementProfileHashes(
+export function hasValidEnhancementProfileHashes(
   build: KnownEnhancementBuild,
 ): boolean {
   const storageReaders = build.xunlaiAction?.accessProof?.readers;
@@ -364,19 +366,21 @@ export function hasCompleteEnhancementProfileHashes(
   ) return false;
   if (
     build.chatAliases !== undefined
-    && build.gameThread === undefined
+    && build.uiDispatcher === undefined
   ) return false;
-  const expected = enhancementProfilesForBuild(build);
-  if (expected.length === 0) return false;
-  const expectedSet = new Set<string>(expected);
   const actual = Object.entries(build.outputSha256);
+  if (actual.length === 0) return false;
+  const supported = supportedEnhancementCapabilities(build);
   return (
-    actual.length === expected.length &&
     actual.every(
       ([profile, digest]) =>
-        expectedSet.has(profile) &&
-        typeof digest === "string" &&
-        /^[0-9a-f]{64}$/.test(digest),
+        Object.hasOwn(ENHANCEMENT_CAPABILITY_PROFILES, profile)
+        && typeof digest === "string"
+        && /^[0-9a-f]{64}$/.test(digest)
+        && Object.entries(enhancementCapabilitiesForProfile(profile) ?? {}).every(
+          ([feature, enabled]) => !enabled
+            || supported[feature as keyof EnhancementCapabilities],
+        ),
     )
   );
 }

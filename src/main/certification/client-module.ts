@@ -13,6 +13,7 @@
  */
 import {
   ENHANCEMENT_CAPABILITY_PROFILES,
+  enhancementCapabilitiesForProfile,
   enhancementCapabilitiesRequested,
   intersectEnhancementCapabilities,
   ENHANCEMENT_TRANSFORM_ABI,
@@ -129,7 +130,10 @@ function enhancementCandidates(
   );
   return (Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
     EnhancementCapabilityProfile[])
-    .map((profile) => ENHANCEMENT_CAPABILITY_PROFILES[profile])
+    .flatMap((profile) => {
+      const capabilities = enhancementCapabilitiesForProfile(profile);
+      return capabilities ? [capabilities] : [];
+    })
     .filter((candidate) =>
       isSubset(candidate, maximum)
       && enhancementOutputSha256(build, candidate) !== null)
@@ -199,6 +203,10 @@ function enhancementCache(
     nativeCursor: capabilities.nativeCursor,
     targetObservation: capabilities.targetObservation,
     partyObservation: capabilities.partyObservation,
+    teamApply: capabilities.teamApply,
+    travelAction: capabilities.travelAction,
+    xunlaiAction: capabilities.xunlaiAction,
+    chatAliases: capabilities.chatAliases,
   };
   return {
     inputSha256: build.sha256,
