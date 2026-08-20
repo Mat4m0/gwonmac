@@ -287,7 +287,7 @@ export const ADDRESSES = Object.freeze({
 export const DETAIL = Object.freeze({
   heroLevel: 0x14,
   partyPlayers: 0x04, partyHenchmen: 0x14, partyFlag: 0x14,
-  accountContext: 0x28, accountUnlockedSkills: 0x124,
+  accountContextSlot: 10, accountUnlockedSkills: 0x124,
   worldContext: 0x2c,
   heroFlags: 0x584, flagStride: 0x24,
   flagHeroId: 0x00, flagAgentId: 0x04, flagBehavior: 0x0c,
@@ -444,7 +444,7 @@ export async function createKernel(
   if (partyDetail) {
     config.set([
       DETAIL.heroLevel, DETAIL.partyPlayers, DETAIL.partyHenchmen, DETAIL.partyFlag,
-      DETAIL.accountContext, DETAIL.accountUnlockedSkills,
+      DETAIL.accountContextSlot, DETAIL.accountUnlockedSkills,
       DETAIL.worldContext,
       DETAIL.heroFlags, DETAIL.flagStride,
       DETAIL.flagHeroId, DETAIL.flagAgentId, DETAIL.flagBehavior,
@@ -546,6 +546,11 @@ export async function createKernel(
 export function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.contextRoot, ADDRESSES.contexts, true);
   view.setUint32(ADDRESSES.contexts + 24, ADDRESSES.game, true);
+  view.setUint32(
+    ADDRESSES.contexts + DETAIL.accountContextSlot * 4,
+    ADDRESSES.account,
+    true,
+  );
   view.setUint32(ADDRESSES.game + 0x44, ADDRESSES.character, true);
   view.setUint32(ADDRESSES.character + 0x198, 133, true);
   view.setUint32(ADDRESSES.character + 0x19c, 0, true);
@@ -577,7 +582,6 @@ export function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.target + 0x9c, 0xdb, true);
   view.setUint32(ADDRESSES.manualTargetId, 9, true);
   view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
-  view.setUint32(ADDRESSES.game + DETAIL.accountContext, ADDRESSES.account, true);
   view.setUint32(ADDRESSES.game + DETAIL.worldContext, ADDRESSES.world, true);
   view.setUint32(ADDRESSES.world + DETAIL.players, ADDRESSES.playerRecordBuffer, true);
   view.setUint32(ADDRESSES.world + DETAIL.players + 4, 1, true);

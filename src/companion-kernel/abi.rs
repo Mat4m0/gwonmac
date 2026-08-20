@@ -183,7 +183,7 @@ pub(crate) struct Layout {
     pub(crate) party_henchmen: u32,
     pub(crate) party_flag: u32,
     // GameContext -> AccountContext -> account-wide unlocked-skill bitset.
-    pub(crate) account_context: u32,
+    pub(crate) account_context_slot: u32,
     pub(crate) account_unlocked_skills: u32,
     // GameContext -> WorldContext, and the three arrays hanging off it that
     // describe heroes rather than party membership.
@@ -282,7 +282,7 @@ impl Layout {
         party_players: 0,
         party_henchmen: 0,
         party_flag: 0,
-        account_context: 0,
+        account_context_slot: 0,
         account_unlocked_skills: 0,
         world_context: 0,
         world_hero_flags: 0,

@@ -128,6 +128,43 @@ function automaticLocalActions(): LocalClientVerification {
   };
 }
 
+function automaticPartyTeam(): LocalClientVerification {
+  const localActions = automaticLocalActions();
+  const party = ENHANCEMENT.partyObservation!;
+  const team = ENHANCEMENT.teamApply!;
+  return {
+    ...localActions,
+    enhancementBuild: {
+      ...localActions.enhancementBuild!,
+      outputSha256: { partyCommands: "b".repeat(64) },
+      partyObservation: {
+        ...party,
+        playerChatProducer: party.playerChatProducer + 1,
+        nearbyPlayerMessageProducers: [
+          party.nearbyPlayerMessageProducers[0] + 1,
+          party.nearbyPlayerMessageProducers[1] + 1,
+        ],
+      },
+      teamApply: {
+        ...team,
+        professionTrace: {
+          ...team.professionTrace,
+          sender: {
+            ...team.professionTrace.sender,
+            functionIndex: team.professionTrace.sender.functionIndex + 1,
+            bodySha256: "c".repeat(64),
+          },
+        },
+        entries: team.entries.map((entry) => ({
+          ...entry,
+          functionIndex: entry.functionIndex + 1,
+          bodySha256: "d".repeat(64),
+        })),
+      },
+    },
+  };
+}
+
 describe("local client verification boundary", () => {
   it("accepts the verifier's complete baseline proof", () => {
     assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256), true);
@@ -155,12 +192,20 @@ describe("local client verification boundary", () => {
     }, TEMPLATE.sha256), false);
   });
 
-  it("rejects any certificate other than the exact shipped build", () => {
-    assert.equal(isLocalClientVerification({
+  it("accepts a relocated hook but rejects an incompatible signature", () => {
+    const relocated = {
       ...valid(),
       enhancementBuild: {
         ...ENHANCEMENT,
         hookFunction: ENHANCEMENT.hookFunction + 1,
+      },
+    };
+    assert.equal(isLocalClientVerification(relocated, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification({
+      ...relocated,
+      enhancementBuild: {
+        ...relocated.enhancementBuild,
+        hookParams: ["i64"],
       },
     }, TEMPLATE.sha256), false);
   });
@@ -218,6 +263,39 @@ describe("local client verification boundary", () => {
               playerRecordAccessFlags: 0x38,
             },
           },
+        },
+      },
+    }, TEMPLATE.sha256), false);
+  });
+
+  it("accepts complete Party and Team proofs and rejects each independently", () => {
+    const derived = automaticPartyTeam();
+    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification({
+      ...derived,
+      enhancementBuild: {
+        ...derived.enhancementBuild!,
+        partyObservation: {
+          ...derived.enhancementBuild!.partyObservation!,
+          layout: {
+            ...derived.enhancementBuild!.partyObservation!.layout,
+            heroInfoStride:
+              derived.enhancementBuild!.partyObservation!.layout.heroInfoStride + 4,
+          },
+        },
+      },
+    }, TEMPLATE.sha256), false);
+    assert.equal(isLocalClientVerification({
+      ...derived,
+      enhancementBuild: {
+        ...derived.enhancementBuild!,
+        teamApply: {
+          ...derived.enhancementBuild!.teamApply!,
+          entries: derived.enhancementBuild!.teamApply!.entries.map(
+            (entry, index) => index === 0
+              ? { ...entry, opcode: entry.opcode + 1 }
+              : entry,
+          ),
         },
       },
     }, TEMPLATE.sha256), false);

@@ -421,7 +421,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       partyPlayers: 43,
       partyHenchmen: 44,
       partyFlag: 45,
-      accountContext: 78,
+      accountContextSlot: 78,
       accountUnlockedSkills: 79,
       worldHeroFlags: 47,
       heroFlagStride: 48,

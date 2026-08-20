@@ -458,8 +458,9 @@ unsafe fn collect(
     // while WorldContext carries what this character has learned. They are
     // independent observations: losing one pointer must not erase the other or
     // make an otherwise valid party unreadable.
-    if layout.account_context != 0 && layout.account_unlocked_skills != 0 {
-        let observed = offset(game, layout.account_context)
+    if layout.account_context_slot != 0 && layout.account_unlocked_skills != 0 {
+        let observed = unsafe { pointer(layout.context_root, 28) }
+            .and_then(|contexts| indexed(contexts, layout.account_context_slot, 4))
             .and_then(|at| unsafe { pointer(at, 4) })
             .and_then(|account| offset(account, layout.account_unlocked_skills))
             .and_then(|at| unsafe { read_skill_unlocks(at) });

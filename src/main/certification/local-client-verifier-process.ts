@@ -21,6 +21,10 @@ import {
   deriveNativeDoubleClickBuild,
   isDerivedNativeDoubleClickBuild,
 } from "./native-double-click.js";
+import {
+  enhancementCapabilitiesForProfile,
+  type EnhancementCapabilities,
+} from "../../shared/enhancement-contracts.js";
 
 interface ParentPort {
   postMessage(value: unknown): void;
@@ -31,7 +35,7 @@ const parentPort = (
 ).parentPort;
 
 async function main(): Promise<void> {
-  const [mode, wasmPath, expectedSha256] = process.argv.slice(2);
+  const [mode, wasmPath, expectedSha256, requestedProfile] = process.argv.slice(2);
   if (!parentPort || !mode || !wasmPath || !expectedSha256) {
     process.exitCode = 2;
     return;
@@ -46,7 +50,25 @@ async function main(): Promise<void> {
   }
 
   if (mode === "client") {
-    const result = verifyLocalClientBytes(bytes);
+    const requestedCapabilities: EnhancementCapabilities | null = requestedProfile === "none"
+      ? Object.freeze({
+          nativeCursor: false,
+          targetObservation: false,
+          partyObservation: false,
+          teamApply: false,
+          travelAction: false,
+          xunlaiAction: false,
+          chatAliases: false,
+        })
+      : requestedProfile
+        ? enhancementCapabilitiesForProfile(requestedProfile)
+        : null;
+    if (!requestedCapabilities) {
+      parentPort.postMessage(null);
+      process.exitCode = 2;
+      return;
+    }
+    const result = verifyLocalClientBytes(bytes, requestedCapabilities);
     if (!isLocalClientVerification(result, expectedSha256)) {
       parentPort.postMessage(null);
       process.exitCode = 4;
