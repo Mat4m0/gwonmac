@@ -101,17 +101,21 @@ function exactCapabilities(value: unknown): EnhancementCapabilities | null {
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
   if (
-    keys.length !== 5
+    keys.length !== 7
     || !Object.hasOwn(record, "nativeCursor")
     || !Object.hasOwn(record, "targetObservation")
     || !Object.hasOwn(record, "partyObservation")
-    || !Object.hasOwn(record, "commands")
-    || !Object.hasOwn(record, "storage")
+    || !Object.hasOwn(record, "teamApply")
+    || !Object.hasOwn(record, "travelAction")
+    || !Object.hasOwn(record, "xunlaiAction")
+    || !Object.hasOwn(record, "chatAliases")
     || typeof record.nativeCursor !== "boolean"
     || typeof record.targetObservation !== "boolean"
     || typeof record.partyObservation !== "boolean"
-    || typeof record.commands !== "boolean"
-    || typeof record.storage !== "boolean"
+    || typeof record.teamApply !== "boolean"
+    || typeof record.travelAction !== "boolean"
+    || typeof record.xunlaiAction !== "boolean"
+    || typeof record.chatAliases !== "boolean"
   ) {
     return null;
   }
@@ -119,8 +123,10 @@ function exactCapabilities(value: unknown): EnhancementCapabilities | null {
     nativeCursor: record.nativeCursor,
     targetObservation: record.targetObservation,
     partyObservation: record.partyObservation,
-    commands: record.commands,
-    storage: record.storage,
+    teamApply: record.teamApply,
+    travelAction: record.travelAction,
+    xunlaiAction: record.xunlaiAction,
+    chatAliases: record.chatAliases,
   });
 }
 
@@ -279,8 +285,10 @@ export function transformEnhancementWasm(
     (capabilities.nativeCursor && !supported.nativeCursor)
     || (capabilities.targetObservation && !supported.targetObservation)
     || (capabilities.partyObservation && !supported.partyObservation)
-    || (capabilities.commands && !supported.commands)
-    || (capabilities.storage && !supported.storage)
+    || (capabilities.teamApply && !supported.teamApply)
+    || (capabilities.travelAction && !supported.travelAction)
+    || (capabilities.xunlaiAction && !supported.xunlaiAction)
+    || (capabilities.chatAliases && !supported.chatAliases)
   ) {
     fail("capability facts are not certified for this build");
   }
@@ -288,7 +296,15 @@ export function transformEnhancementWasm(
   const uiDispatcher = build.uiDispatcher!;
   const gameThread = build.gameThread!;
   const teamApply = build.teamApply!;
-  const storage = build.storage!;
+  const xunlaiAction = build.xunlaiAction!;
+  const xunlaiAccessProof = capabilities.xunlaiAction
+    ? xunlaiAction.accessProof ?? fail("Xunlai access proof is not certified")
+    : null;
+  const travelAction = build.travelAction!;
+  const chatAliases = build.chatAliases!;
+  const hasActionQueue = capabilities.teamApply
+    || capabilities.travelAction
+    || capabilities.xunlaiAction;
   const selectedHooks = enhancementHooksFor(capabilities);
   const hash = createHash("sha256").update(input).digest("hex");
   if (hash !== build.sha256) fail(`input hash ${hash} is unsupported`);
@@ -344,7 +360,7 @@ export function transformEnhancementWasm(
       dispatchKind: DISPATCH_CURSOR,
     });
   }
-  const uiDispatcherHook = selectedHooks.ui || capabilities.storage
+  const uiDispatcherHook = selectedHooks.ui || capabilities.travelAction
     ? resolveHook(
         "UI dispatcher",
         uiDispatcher.functionIndex,
@@ -395,7 +411,7 @@ export function transformEnhancementWasm(
   // what actually pins the function. An index that has drifted -- the failure
   // this whole surface was reshaped around -- lands on a different body and is
   // refused here rather than dispatched to.
-  const commands = capabilities.commands
+  const commands = capabilities.teamApply
     ? teamApply.entries.map((entry) => {
         const localIndex = entry.functionIndex - importCount;
         if (localIndex < 0 || localIndex >= bodies.length) {
@@ -424,11 +440,11 @@ export function transformEnhancementWasm(
   if (new Set(commands.map((entry) => entry.opcode)).size !== commands.length) {
     fail("certified commands must have distinct opcodes");
   }
-  const professionCommand = capabilities.commands
+  const professionCommand = capabilities.teamApply
     ? commands.find((entry) => entry.opcode === 65)
       ?? fail("commands capability has no certified profession command")
     : null;
-  const skillCommand = capabilities.commands
+  const skillCommand = capabilities.teamApply
     ? commands.find((entry) => entry.opcode === 93)
       ?? fail("commands capability has no certified skill-bar command")
     : null;
@@ -448,23 +464,23 @@ export function transformEnhancementWasm(
         skillCommand.results,
       )
     : null;
-  const storageHandler = capabilities.storage
+  const storageHandler = capabilities.xunlaiAction
     ? resolveHook(
         "DataWindow handler",
-        storage.handler.functionIndex,
-        storage.handler.params,
-        storage.handler.results,
+        xunlaiAction.handler.functionIndex,
+        xunlaiAction.handler.params,
+        xunlaiAction.handler.results,
       )
     : null;
   if (
     storageHandler
-    && bodyHash(storage.handler.functionIndex)
-      !== storage.handler.bodySha256
+    && bodyHash(xunlaiAction.handler.functionIndex)
+      !== xunlaiAction.handler.bodySha256
   ) {
     fail("DataWindow handler body does not match its semantic fingerprint");
   }
-  if (capabilities.storage && storage.accessProof) {
-    for (const [fact, reader] of Object.entries(storage.accessProof.readers)) {
+  if (capabilities.xunlaiAction) {
+    for (const [fact, reader] of Object.entries(xunlaiAccessProof!.readers)) {
       resolveHook(
         `${fact} reader`,
         reader.functionIndex,
@@ -476,37 +492,37 @@ export function transformEnhancementWasm(
       }
     }
   }
-  const storageSlashParserHook = capabilities.storage
+  const storageSlashParserHook = capabilities.chatAliases
     ? resolveHook(
         "storage slash parser",
-        storage.slashParser.functionIndex,
-        storage.slashParser.params,
-        storage.slashParser.results,
+        chatAliases.parser.functionIndex,
+        chatAliases.parser.params,
+        chatAliases.parser.results,
       )
     : null;
   if (
     storageSlashParserHook
-    && bodyHash(storage.slashParser.functionIndex)
-      !== storage.slashParser.bodySha256
+    && bodyHash(chatAliases.parser.functionIndex)
+      !== chatAliases.parser.bodySha256
   ) {
     fail("storage slash parser body does not match its semantic fingerprint");
   }
-  const travelProducer = capabilities.storage
+  const travelProducer = capabilities.travelAction
     ? resolveHook(
         "travel payload producer",
-        storage.travel.producer.functionIndex,
-        storage.travel.producer.params,
-        storage.travel.producer.results,
+        travelAction.producer.functionIndex,
+        travelAction.producer.params,
+        travelAction.producer.results,
       )
     : null;
   if (
     travelProducer
-    && bodyHash(storage.travel.producer.functionIndex)
-      !== storage.travel.producer.bodySha256
+    && bodyHash(travelAction.producer.functionIndex)
+      !== travelAction.producer.bodySha256
   ) {
     fail("travel payload producer body does not match its semantic fingerprint");
   }
-  const packetSender = capabilities.commands
+  const packetSender = capabilities.teamApply
     ? resolveHook(
         "traced packet sender",
         teamApply.professionTrace.sender.functionIndex,
@@ -527,7 +543,7 @@ export function transformEnhancementWasm(
       );
     }
   }
-  const commandDrainBoundary = capabilities.commands || capabilities.storage
+  const commandDrainBoundary = hasActionQueue
     ? resolveHook(
         "command drain boundary",
         gameThread.drain.functionIndex,
@@ -577,7 +593,7 @@ export function transformEnhancementWasm(
       name: "travel payload producer",
       functionIndex: travelProducer.localIndex + importCount,
     }] : []),
-    ...(capabilities.storage && !selectedHooks.ui ? [{
+    ...(capabilities.travelAction && !selectedHooks.ui ? [{
       name: "Travel UI dispatcher",
       functionIndex: uiDispatcherHook!.localIndex + importCount,
     }] : []),
@@ -634,16 +650,18 @@ export function transformEnhancementWasm(
   const existingExports = parseExports(sectionById(sections, 7));
   const addedExportNames = [
     ENHANCEMENT_HOOK_EXPORT,
-    ...(capabilities.commands
+    ...(capabilities.teamApply
       ? [teamApply.thunkExport, teamApply.professionTrace.readerExport]
       : []),
-    ...(capabilities.storage
+    ...(capabilities.xunlaiAction || capabilities.travelAction
       ? [
-          storage.openExport,
-          storage.configureExport,
-          storage.travel.enqueueExport,
-          storage.travel.configureExport,
-          storage.travel.toggleExport,
+          ...(capabilities.xunlaiAction
+            ? [xunlaiAction.openExport, xunlaiAction.configureExport]
+            : []),
+          ...(capabilities.travelAction
+            ? [travelAction.enqueueExport, travelAction.configureExport,
+                travelAction.toggleExport]
+            : []),
         ]
       : []),
   ];
@@ -658,21 +676,20 @@ export function transformEnhancementWasm(
     nextGlobalIndex += count;
     return first;
   };
-  const hasActions = capabilities.commands || capabilities.storage;
   const hookGlobalIndex = allocateGlobals(1);
-  const commandPendingGlobalIndex = hasActions ? allocateGlobals(1) : 0;
-  const commandArgumentGlobalBase = hasActions
+  const commandPendingGlobalIndex = hasActionQueue ? allocateGlobals(1) : 0;
+  const commandArgumentGlobalBase = hasActionQueue
     ? allocateGlobals(COMMAND_ARGS)
     : 0;
-  const storagePayloadGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
-  const storageEnabledGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
-  const travelPayloadGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
-  const travelEnabledGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
-  const travelToggleGlobalIndex = capabilities.storage ? allocateGlobals(1) : 0;
-  const traceGlobalBase = capabilities.commands
+  const storagePayloadGlobalIndex = capabilities.xunlaiAction ? allocateGlobals(1) : 0;
+  const storageEnabledGlobalIndex = capabilities.xunlaiAction ? allocateGlobals(1) : 0;
+  const travelPayloadGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
+  const travelEnabledGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
+  const travelToggleGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
+  const traceGlobalBase = capabilities.teamApply
     ? allocateGlobals(PROFESSION_TRACE_WORDS)
     : 0;
-  const traceGlobals: ProfessionTraceGlobals | null = capabilities.commands
+  const traceGlobals: ProfessionTraceGlobals | null = capabilities.teamApply
     ? {
         origin: traceGlobalBase,
         builderCount: traceGlobalBase + 1,
@@ -706,28 +723,28 @@ export function transformEnhancementWasm(
     params: Array<number>(DISPATCH_PARAMS).fill(0x7f),
     results: [],
   });
-  const commandTypeIndex = capabilities.commands
+  const commandTypeIndex = capabilities.teamApply
     ? appendType({ params: Array<number>(COMMAND_PARAMS).fill(0x7f), results: [0x7f] })
     : null;
-  const commandDrainTypeIndex = hasActions
+  const commandDrainTypeIndex = hasActionQueue
     ? appendType({ params: [], results: [] })
     : null;
-  const professionTraceReaderTypeIndex = capabilities.commands
+  const professionTraceReaderTypeIndex = capabilities.teamApply
     ? appendType({ params: [0x7f], results: [0x7f] })
     : null;
-  const storageOpenTypeIndex = capabilities.storage
+  const storageOpenTypeIndex = capabilities.xunlaiAction
     ? appendType({ params: [], results: [0x7f] })
     : null;
-  const storageConfigureTypeIndex = capabilities.storage
+  const storageConfigureTypeIndex = capabilities.xunlaiAction
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
     : null;
-  const travelEnqueueTypeIndex = capabilities.storage
+  const travelEnqueueTypeIndex = capabilities.travelAction
     ? appendType({ params: Array<number>(COMMAND_ARGS).fill(0x7f), results: [0x7f] })
     : null;
-  const travelConfigureTypeIndex = capabilities.storage
+  const travelConfigureTypeIndex = capabilities.travelAction
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
     : null;
-  const travelToggleTypeIndex = capabilities.storage
+  const travelToggleTypeIndex = capabilities.travelAction
     ? appendType({ params: [], results: [0x7f] })
     : null;
 
@@ -782,17 +799,17 @@ export function transformEnhancementWasm(
         commandPendingGlobalIndex,
         commandArgumentGlobalBase,
         traceGlobals?.origin ?? null,
-        capabilities.storage
+        capabilities.xunlaiAction
           ? {
-              functionIndex: storage.handler.functionIndex,
+              functionIndex: xunlaiAction.handler.functionIndex,
               payloadGlobalIndex: storagePayloadGlobalIndex,
             }
           : null,
-        capabilities.storage
+        capabilities.travelAction
           ? {
               dispatcherFunctionIndex:
                 uiOriginalIndex ?? uiDispatcher.functionIndex,
-              messageId: storage.travel.messageId,
+              messageId: travelAction.messageId,
               payloadGlobalIndex: travelPayloadGlobalIndex,
             }
           : null,
@@ -803,7 +820,7 @@ export function transformEnhancementWasm(
       commandBoundaryOriginalIndex,
       commandDrainFunctionIndex,
     );
-    if (capabilities.commands) {
+    if (capabilities.teamApply) {
       nextBodies[professionBuilder!.localIndex] = tracedProfessionBuilder(
         professionOriginalIndex!,
         traceGlobals!,
@@ -833,7 +850,7 @@ export function transformEnhancementWasm(
         },
       );
     }
-    if (capabilities.storage) {
+    if (capabilities.chatAliases) {
       nextBodies[storageSlashParserHook!.localIndex] = localActionSlashParser(
         storageSlashParserOriginalIndex!,
         commandPendingGlobalIndex,
@@ -842,9 +859,11 @@ export function transformEnhancementWasm(
         travelEnabledGlobalIndex,
         travelToggleGlobalIndex,
       );
+    }
+    if (capabilities.xunlaiAction) {
       addedFunctionExports.push(
         {
-          name: storage.openExport,
+          name: xunlaiAction.openExport,
           index: appendFunction(
             storageOpenTypeIndex!,
             storageEnqueue(
@@ -855,7 +874,7 @@ export function transformEnhancementWasm(
           ),
         },
         {
-          name: storage.configureExport,
+          name: xunlaiAction.configureExport,
           index: appendFunction(
             storageConfigureTypeIndex!,
             storageConfigure(
@@ -865,8 +884,12 @@ export function transformEnhancementWasm(
             ),
           ),
         },
+      );
+    }
+    if (capabilities.travelAction) {
+      addedFunctionExports.push(
         {
-          name: storage.travel.enqueueExport,
+          name: travelAction.enqueueExport,
           index: appendFunction(
             travelEnqueueTypeIndex!,
             travelEnqueue(
@@ -878,7 +901,7 @@ export function transformEnhancementWasm(
           ),
         },
         {
-          name: storage.travel.configureExport,
+          name: travelAction.configureExport,
           index: appendFunction(
             travelConfigureTypeIndex!,
             travelConfigure(
@@ -889,7 +912,7 @@ export function transformEnhancementWasm(
           ),
         },
         {
-          name: storage.travel.toggleExport,
+          name: travelAction.toggleExport,
           index: appendFunction(
             travelToggleTypeIndex!,
             travelToggleTake(travelToggleGlobalIndex),

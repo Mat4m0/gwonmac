@@ -108,8 +108,8 @@ export function enhancementConfigWords(
             ? build.cursorEvent?.layout[field.key]
             : field.owner === "party"
               ? build.partyObservation?.layout[field.key]
-              : build.storage?.accessProof?.layout[field.key];
-      if (field.owner === "storage" && build.storage?.accessProof === undefined) {
+              : build.xunlaiAction?.accessProof?.layout[field.key];
+      if (field.owner === "storage" && build.xunlaiAction === undefined) {
         return 0;
       }
       if (typeof value !== "number") {
@@ -214,10 +214,9 @@ export interface KnownEnhancementBuild {
     }>;
   }>;
   /** Exact local Xunlai UI authority, independent from Team Apply packets. */
-  storage?: Readonly<{
+  xunlaiAction?: Readonly<{
     openExport: string;
     configureExport: string;
-    /** Optional proof. Its absence disables only Xunlai, not Travel. */
     accessProof?: Readonly<{
       layout: EnhancementStorageLayout;
       readers: Readonly<Record<
@@ -230,29 +229,31 @@ export interface KnownEnhancementBuild {
         }>
       >>;
     }>;
-    travel: Readonly<{
-      enqueueExport: string;
-      configureExport: string;
-      toggleExport: string;
-      messageId: number;
-      /** Exact producer that constructs {map, region, language, district}. */
-      producer: Readonly<{
-        functionIndex: number;
-        params: readonly ["i32", "i32", "i32", "i32", "i32"];
-        results: readonly [];
-        bodySha256: string;
-      }>;
-    }>;
-    slashParser: Readonly<{
-      functionIndex: number;
-      params: readonly ["i32", "i32"];
-      results: readonly ["i32"];
-      bodySha256: string;
-    }>;
     handler: Readonly<{
       functionIndex: number;
       params: readonly ["i32"];
       results: readonly [];
+      bodySha256: string;
+    }>;
+  }>;
+  travelAction?: Readonly<{
+    enqueueExport: string;
+    configureExport: string;
+    toggleExport: string;
+    messageId: number;
+    /** Exact producer that constructs {map, region, language, district}. */
+    producer: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32", "i32", "i32", "i32"];
+      results: readonly [];
+      bodySha256: string;
+    }>;
+  }>;
+  chatAliases?: Readonly<{
+    parser: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly ["i32"];
       bodySha256: string;
     }>;
   }>;
@@ -276,16 +277,18 @@ export function supportedEnhancementCapabilities(
     && build.uiDispatcher !== undefined
     && build.partyObservation !== undefined;
   const gameThread = build.gameThread !== undefined;
+  const travelAction = build.uiDispatcher !== undefined
+    && gameThread && build.travelAction !== undefined;
+  const xunlaiAction = observationBase && build.uiDispatcher !== undefined
+    && gameThread && build.xunlaiAction?.accessProof !== undefined;
   return Object.freeze({
     nativeCursor: build.cursorEvent !== undefined,
     targetObservation,
     partyObservation,
-    commands: partyObservation && gameThread && build.teamApply !== undefined,
-    storage:
-      observationBase
-      && build.uiDispatcher !== undefined
-      && gameThread
-      && build.storage !== undefined,
+    teamApply: partyObservation && gameThread && build.teamApply !== undefined,
+    travelAction,
+    xunlaiAction,
+    chatAliases: gameThread && build.chatAliases !== undefined,
   });
 }
 
@@ -303,8 +306,10 @@ export function enhancementProfilesForBuild(
       (!value.nativeCursor || supported.nativeCursor) &&
       (!value.targetObservation || supported.targetObservation) &&
       (!value.partyObservation || supported.partyObservation) &&
-      (!value.commands || supported.commands) &&
-      (!value.storage || supported.storage)
+      (!value.teamApply || supported.teamApply) &&
+      (!value.travelAction || supported.travelAction) &&
+      (!value.xunlaiAction || supported.xunlaiAction) &&
+      (!value.chatAliases || supported.chatAliases)
     );
   });
 }
@@ -318,13 +323,13 @@ export function enhancementProfilesForBuild(
 export function hasCompleteEnhancementProfileHashes(
   build: KnownEnhancementBuild,
 ): boolean {
-  const storageReaders = build.storage?.accessProof?.readers;
+  const storageReaders = build.xunlaiAction?.accessProof?.readers;
   const storageAccessReaderIndices = storageReaders === undefined
     ? null
     : new Set(Object.values(storageReaders).map(({ functionIndex }) => functionIndex));
   const hasObservation = build.targetObservation !== undefined
     || build.partyObservation !== undefined
-    || build.storage !== undefined;
+    || build.xunlaiAction !== undefined;
   if (hasObservation && build.observationBase === undefined) {
     return false;
   }
@@ -343,16 +348,24 @@ export function hasCompleteEnhancementProfileHashes(
     return false;
   }
   if (
-    build.storage !== undefined
+    build.xunlaiAction !== undefined
     && (
       build.observationBase === undefined
       || build.uiDispatcher === undefined
       || build.gameThread === undefined
-      || (storageReaders !== undefined && storageAccessReaderIndices?.size !== 3)
+      || storageAccessReaderIndices?.size !== 3
     )
   ) {
     return false;
   }
+  if (
+    build.travelAction !== undefined
+    && (build.uiDispatcher === undefined || build.gameThread === undefined)
+  ) return false;
+  if (
+    build.chatAliases !== undefined
+    && build.gameThread === undefined
+  ) return false;
   const expected = enhancementProfilesForBuild(build);
   if (expected.length === 0) return false;
   const expectedSet = new Set<string>(expected);

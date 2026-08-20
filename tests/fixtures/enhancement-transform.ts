@@ -16,71 +16,91 @@ export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.free
   nativeCursor: true,
   targetObservation: true,
   partyObservation: true,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: false,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   partyObservation: false,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: true,
   partyObservation: false,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: false,
-  commands: false,
-  storage: true,
+  teamApply: false,
+  travelAction: true,
+  xunlaiAction: true,
+  chatAliases: true,
 });
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: true,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: false,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: true,
-  commands: true,
-  storage: true,
+  teamApply: true,
+  travelAction: true,
+  xunlaiAction: true,
+  chatAliases: true,
 });
 export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   partyObservation: true,
-  commands: true,
-  storage: true,
+  teamApply: true,
+  travelAction: true,
+  xunlaiAction: true,
+  chatAliases: true,
 });
 export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: true,
-  commands: false,
-  storage: true,
+  teamApply: false,
+  travelAction: true,
+  xunlaiAction: true,
+  chatAliases: true,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,
@@ -273,7 +293,7 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
     hookResults: [],
     hookBodySha256: createHash("sha256").update(commandBody(bytes, 0)).digest("hex"),
     tableSlot: 5,
-    storage: {
+    xunlaiAction: {
       openExport: "enhancement_open_storage",
       configureExport: "enhancement_configure_storage",
       accessProof: {
@@ -288,34 +308,36 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
           "player-number": { functionIndex: 16, params: ["i32"], results: ["i32"], bodySha256: createHash("sha256").update(commandBody(bytes, 13)).digest("hex") },
         },
       },
-      travel: {
-        enqueueExport: "enhancement_travel",
-        configureExport: "enhancement_configure_travel",
-        toggleExport: "enhancement_take_travel_toggle",
-        messageId: 0x1000_0183,
-        producer: {
-          functionIndex: 13,
-          params: ["i32", "i32", "i32", "i32", "i32"],
-          results: [],
-          bodySha256: createHash("sha256")
-            .update(commandBody(bytes, 10))
-            .digest("hex"),
-        },
-      },
-      slashParser: {
-          functionIndex: 12,
-          params: ["i32", "i32"],
-          results: ["i32"],
-          bodySha256: createHash("sha256")
-            .update(commandBody(bytes, 9))
-            .digest("hex"),
-      },
       handler: {
           functionIndex: 11,
           params: ["i32"],
           results: [],
           bodySha256: createHash("sha256")
             .update(commandBody(bytes, 8))
+            .digest("hex"),
+      },
+    },
+    travelAction: {
+      enqueueExport: "enhancement_travel",
+      configureExport: "enhancement_configure_travel",
+      toggleExport: "enhancement_take_travel_toggle",
+      messageId: 0x1000_0183,
+      producer: {
+        functionIndex: 13,
+        params: ["i32", "i32", "i32", "i32", "i32"],
+        results: [],
+        bodySha256: createHash("sha256")
+          .update(commandBody(bytes, 10))
+          .digest("hex"),
+      },
+    },
+    chatAliases: {
+      parser: {
+          functionIndex: 12,
+          params: ["i32", "i32"],
+          results: ["i32"],
+          bodySha256: createHash("sha256")
+            .update(commandBody(bytes, 9))
             .digest("hex"),
       },
     },

@@ -228,7 +228,9 @@ test.describe("client compatibility", () => {
               targetObservation: { status: "off" },
               partyObservation: { status: "off" },
               teamApply: { status: "off" },
-              xunlaiStorage: { status: "off" },
+              travelAction: { status: "off" },
+              xunlaiAction: { status: "off" },
+              chatAliases: { status: "off" },
             },
           },
         );

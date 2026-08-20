@@ -29,8 +29,10 @@ export async function installEnhancements(
     capabilities.nativeCursor ? "nativeCursor" as const : null,
     capabilities.targetObservation ? "targetObservation" as const : null,
     capabilities.partyObservation ? "partyObservation" as const : null,
-    capabilities.commands ? "teamApply" as const : null,
-    capabilities.storage ? "xunlaiStorage" as const : null,
+    capabilities.teamApply ? "teamApply" as const : null,
+    capabilities.travelAction ? "travelAction" as const : null,
+    capabilities.xunlaiAction ? "xunlaiAction" as const : null,
+    capabilities.chatAliases ? "chatAliases" as const : null,
   ].filter((feature): feature is NonNullable<typeof feature> => feature !== null);
   try {
     const installation = await installCertifiedCompanion(

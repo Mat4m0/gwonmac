@@ -129,29 +129,37 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: true,
   partyObservation: false,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: true,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: true,
   partyObservation: true,
-  commands: true,
-  storage: true,
+  teamApply: true,
+  travelAction: true,
+  xunlaiAction: true,
+  chatAliases: true,
 });
 export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   targetObservation: false,
   partyObservation: true,
-  commands: true,
-  storage: true,
+  teamApply: true,
+  travelAction: true,
+  xunlaiAction: true,
+  chatAliases: true,
 });
 export const CONFIG_BYTES =
   ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT;

@@ -93,8 +93,10 @@ function sameCapabilities(
   return left.nativeCursor === right.nativeCursor
     && left.targetObservation === right.targetObservation
     && left.partyObservation === right.partyObservation
-    && left.commands === right.commands
-    && left.storage === right.storage;
+    && left.teamApply === right.teamApply
+    && left.travelAction === right.travelAction
+    && left.xunlaiAction === right.xunlaiAction
+    && left.chatAliases === right.chatAliases;
 }
 
 export function decodeEnhancementManifest(
@@ -122,8 +124,10 @@ export function decodeEnhancementManifest(
       "nativeCursor",
       "targetObservation",
       "partyObservation",
-      "commands",
-      "storage",
+      "teamApply",
+      "travelAction",
+      "xunlaiAction",
+      "chatAliases",
     ]);
     const hooks = exactRecord(value.hooks, ["tick", "cursor", "ui"]);
     if (
@@ -132,8 +136,10 @@ export function decodeEnhancementManifest(
       || typeof capabilityRecord.nativeCursor !== "boolean"
       || typeof capabilityRecord.targetObservation !== "boolean"
       || typeof capabilityRecord.partyObservation !== "boolean"
-      || typeof capabilityRecord.commands !== "boolean"
-      || typeof capabilityRecord.storage !== "boolean"
+      || typeof capabilityRecord.teamApply !== "boolean"
+      || typeof capabilityRecord.travelAction !== "boolean"
+      || typeof capabilityRecord.xunlaiAction !== "boolean"
+      || typeof capabilityRecord.chatAliases !== "boolean"
     ) {
       return null;
     }
@@ -142,8 +148,10 @@ export function decodeEnhancementManifest(
       nativeCursor: capabilityRecord.nativeCursor,
       targetObservation: capabilityRecord.targetObservation,
       partyObservation: capabilityRecord.partyObservation,
-      commands: capabilityRecord.commands,
-      storage: capabilityRecord.storage,
+      teamApply: capabilityRecord.teamApply,
+      travelAction: capabilityRecord.travelAction,
+      xunlaiAction: capabilityRecord.xunlaiAction,
+      chatAliases: capabilityRecord.chatAliases,
     });
     const selectedHooks: EnhancementHooks = Object.freeze({
       tick: hooks.tick !== null,

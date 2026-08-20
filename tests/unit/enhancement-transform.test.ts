@@ -10,6 +10,7 @@ import {
 import {
   enhancementConfigWords,
   ENHANCEMENT_LAYOUT_FIELDS,
+  supportedEnhancementCapabilities,
 } from "../../src/main/certification/enhancement-builds.js";
 import { ENHANCEMENT_CONFIG_FIELDS } from "../../src/shared/enhancement-config.js";
 import {
@@ -37,8 +38,10 @@ const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: true,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 
 describe("targeted Enhancement WebAssembly transform", () => {
@@ -285,8 +288,10 @@ describe("targeted Enhancement WebAssembly transform", () => {
           nativeCursor: true,
           targetObservation: true,
           partyObservation: false,
-          commands: true,
-          storage: false,
+          teamApply: true,
+          travelAction: false,
+          xunlaiAction: false,
+          chatAliases: false,
         },
       ),
       /capability profile is not certified/,
@@ -472,19 +477,27 @@ describe("targeted Enhancement WebAssembly transform", () => {
         assert.equal(word, 0);
       }
     });
-    const prooflessStorage = { ...build.storage! };
-    delete prooflessStorage.accessProof;
+    const prooflessStorage = {
+      openExport: build.xunlaiAction!.openExport,
+      configureExport: build.xunlaiAction!.configureExport,
+      handler: build.xunlaiAction!.handler,
+    };
     const proofless = {
       ...build,
-      storage: prooflessStorage,
+      xunlaiAction: prooflessStorage,
     };
-    const words = enhancementConfigWords(proofless, STORAGE_ONLY);
+    const travelWithoutXunlai = {
+      ...STORAGE_ONLY,
+      xunlaiAction: false,
+    };
+    const words = enhancementConfigWords(proofless, travelWithoutXunlai);
     words.forEach((word, index) => {
       const field = ENHANCEMENT_CONFIG_FIELDS[index];
       if (field?.owner === "storage") assert.equal(word, 0);
     });
-    assert.doesNotThrow(() =>
-      transformEnhancementWasm(input, proofless, STORAGE_ONLY)
+    assert.equal(
+      supportedEnhancementCapabilities(proofless).travelAction,
+      true,
     );
   });
 

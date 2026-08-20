@@ -24,9 +24,13 @@ export type EnhancementCapabilities = Readonly<{
   targetObservation: boolean;
   partyObservation: boolean;
   /** Team Apply packet authority. */
-  commands: boolean;
-  /** Named Xunlai and Travel authority on one local-action queue. */
-  storage: boolean;
+  teamApply: boolean;
+  /** Travel message authority. */
+  travelAction: boolean;
+  /** Xunlai DataWindow authority. */
+  xunlaiAction: boolean;
+  /** Optional parser aliases; buttons and shortcuts remain independent. */
+  chatAliases: boolean;
 }>;
 
 export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
@@ -34,141 +38,181 @@ export const ENHANCEMENT_CAPABILITY_PROFILES = Object.freeze({
     nativeCursor: true,
     targetObservation: false,
     partyObservation: false,
-    commands: false,
-    storage: false,
+    teamApply: false,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   target: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
     partyObservation: false,
-    commands: false,
-    storage: false,
+    teamApply: false,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   cursorTarget: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
     partyObservation: false,
-    commands: false,
-    storage: false,
+    teamApply: false,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   party: Object.freeze({
     nativeCursor: false,
     targetObservation: false,
     partyObservation: true,
-    commands: false,
-    storage: false,
+    teamApply: false,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   cursorParty: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
     partyObservation: true,
-    commands: false,
-    storage: false,
+    teamApply: false,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   targetParty: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
     partyObservation: true,
-    commands: false,
-    storage: false,
+    teamApply: false,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   cursorTargetParty: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
     partyObservation: true,
-    commands: false,
-    storage: false,
+    teamApply: false,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   partyCommands: Object.freeze({
     nativeCursor: false,
     targetObservation: false,
     partyObservation: true,
-    commands: true,
-    storage: false,
+    teamApply: true,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   cursorPartyCommands: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
     partyObservation: true,
-    commands: true,
-    storage: false,
+    teamApply: true,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   targetPartyCommands: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
     partyObservation: true,
-    commands: true,
-    storage: false,
+    teamApply: true,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   cursorTargetPartyCommands: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
     partyObservation: true,
-    commands: true,
-    storage: false,
+    teamApply: true,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
   }),
   storage: Object.freeze({
     nativeCursor: false,
     targetObservation: false,
     partyObservation: false,
-    commands: false,
-    storage: true,
+    teamApply: false,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
   }),
   partyStorage: Object.freeze({
     nativeCursor: false,
     targetObservation: false,
     partyObservation: true,
-    commands: false,
-    storage: true,
+    teamApply: false,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
   }),
   cursorPartyStorage: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
     partyObservation: true,
-    commands: false,
-    storage: true,
+    teamApply: false,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
   }),
   targetPartyStorage: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
     partyObservation: true,
-    commands: false,
-    storage: true,
+    teamApply: false,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
   }),
   cursorTargetPartyStorage: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
     partyObservation: true,
-    commands: false,
-    storage: true,
+    teamApply: false,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
   }),
   partyCommandsStorage: Object.freeze({
     nativeCursor: false,
     targetObservation: false,
     partyObservation: true,
-    commands: true,
-    storage: true,
+    teamApply: true,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
   }),
   cursorPartyCommandsStorage: Object.freeze({
     nativeCursor: true,
     targetObservation: false,
     partyObservation: true,
-    commands: true,
-    storage: true,
+    teamApply: true,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
   }),
   targetPartyCommandsStorage: Object.freeze({
     nativeCursor: false,
     targetObservation: true,
     partyObservation: true,
-    commands: true,
-    storage: true,
+    teamApply: true,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
   }),
   cursorTargetPartyCommandsStorage: Object.freeze({
     nativeCursor: true,
     targetObservation: true,
     partyObservation: true,
-    commands: true,
-    storage: true,
+    teamApply: true,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
   }),
 } as const satisfies Readonly<Record<string, EnhancementCapabilities>>);
 
@@ -179,8 +223,10 @@ const NONE: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: false,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 
 export function enhancementCapabilityProfile(
@@ -193,8 +239,10 @@ export function enhancementCapabilityProfile(
       candidate.nativeCursor === capabilities.nativeCursor
       && candidate.targetObservation === capabilities.targetObservation
       && candidate.partyObservation === capabilities.partyObservation
-      && candidate.commands === capabilities.commands
-      && candidate.storage === capabilities.storage
+      && candidate.teamApply === capabilities.teamApply
+      && candidate.travelAction === capabilities.travelAction
+      && candidate.xunlaiAction === capabilities.xunlaiAction
+      && candidate.chatAliases === capabilities.chatAliases
     ) return profile;
   }
   return null;
@@ -209,7 +257,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 34;
+export const ENHANCEMENT_TRANSFORM_ABI = 35;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
@@ -225,11 +273,11 @@ export function enhancementConfigWordActive(
   if (owner === "observation") {
     return capabilities.targetObservation
       || capabilities.partyObservation
-      || capabilities.storage;
+      || capabilities.xunlaiAction;
   }
   if (owner === "cursor") return capabilities.nativeCursor;
   if (owner === "party") return capabilities.partyObservation;
-  return owner === "storage" && capabilities.storage;
+  return owner === "storage" && capabilities.xunlaiAction;
 }
 
 export type EnhancementHooks = Readonly<{
@@ -273,15 +321,17 @@ export function enhancementCapabilitiesRequested(
   return capabilities.nativeCursor
     || capabilities.targetObservation
     || capabilities.partyObservation
-    || capabilities.commands
-    || capabilities.storage;
+    || capabilities.teamApply
+    || capabilities.travelAction
+    || capabilities.xunlaiAction
+    || capabilities.chatAliases;
 }
 
 /** Team Apply alone requires the party observer; local actions do not. */
 export function validEnhancementCapabilities(
   capabilities: EnhancementCapabilities,
 ): boolean {
-  return !capabilities.commands || capabilities.partyObservation;
+  return !capabilities.teamApply || capabilities.partyObservation;
 }
 
 /** The exact requested subset that one build's optional certificate groups support. */
@@ -295,7 +345,9 @@ export function intersectEnhancementCapabilities(
     targetObservation:
       requested.targetObservation && supported.targetObservation,
     partyObservation,
-    commands: requested.commands && supported.commands && partyObservation,
-    storage: requested.storage && supported.storage,
+    teamApply: requested.teamApply && supported.teamApply && partyObservation,
+    travelAction: requested.travelAction && supported.travelAction,
+    xunlaiAction: requested.xunlaiAction && supported.xunlaiAction,
+    chatAliases: requested.chatAliases && supported.chatAliases,
   });
 }

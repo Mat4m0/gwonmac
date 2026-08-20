@@ -304,20 +304,21 @@ function flagStore(globalIndex: number, frameOffset: number): Uint8Array {
 }
 
 /**
- * Rewrites one certified module. Returns the derived bytes; throws with the
- * reason on any input the entry above does not exactly describe.
+ * Rewrites one semantically certified module. Production obtains unknown-build
+ * evidence in the isolated verifier; this synchronous helper is used by local
+ * qualification and accepts the same unique callback/table proof.
  */
 export function rewriteNativeDoubleClickWasm(input: Uint8Array): Uint8Array {
-  const build = findNativeDoubleClickBuild(sha256(input));
-  if (!build) fail("module hash is not a certified build");
+  const build = findNativeDoubleClickBuild(sha256(input))
+    ?? deriveNativeDoubleClickBuild(input);
+  if (!build) fail("module does not prove the native double-click callback");
   return rewriteWithBuild(input, build);
 }
 
 /**
  * The rewrite itself, against an entry supplied rather than looked up. The
- * production caller above resolves the entry by module hash; this is separated
- * so the guards can be executed against modules the shipped table does not
- * name, which is every module a test can build.
+ * production caller supplies the isolated verifier's record; this is separated
+ * so production performs and checks the transform again before publication.
  */
 export function rewriteWithBuild(
   input: Uint8Array,

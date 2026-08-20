@@ -50,11 +50,16 @@ describe("Enhancement command transform", () => {
         "a read profile must carry no way to reach a packet builder at all",
       );
       assert.equal(
-        exports.some((entry) => entry.name === build.storage!.openExport),
+        exports.some((entry) => entry.name === build.xunlaiAction!.openExport),
         false,
       );
     }
-    const commandsOnly = { ...CURSOR_TOOLBOX_COMMANDS, storage: false };
+    const commandsOnly = {
+      ...CURSOR_TOOLBOX_COMMANDS,
+      travelAction: false,
+      xunlaiAction: false,
+      chatAliases: false,
+    };
     const commandsOutput = transformEnhancementWasm(input, build, commandsOnly);
     const commandsExports = parseExports(sectionById(splitSections(commandsOutput), 7));
     assert.equal(
@@ -62,7 +67,7 @@ describe("Enhancement command transform", () => {
       true,
     );
     assert.equal(
-      commandsExports.some((entry) => entry.name === build.storage!.openExport),
+      commandsExports.some((entry) => entry.name === build.xunlaiAction!.openExport),
       false,
       "Team Apply must not compile or export the storage action",
     );
@@ -75,15 +80,15 @@ describe("Enhancement command transform", () => {
       "storage must not compile or export the packet-builder thunk",
     );
     assert.equal(
-      storageExports.some((entry) => entry.name === build.storage!.openExport),
+      storageExports.some((entry) => entry.name === build.xunlaiAction!.openExport),
       true,
     );
     assert.equal(
-      storageExports.some((entry) => entry.name === build.storage!.travel.enqueueExport),
+      storageExports.some((entry) => entry.name === build.travelAction!.enqueueExport),
       true,
     );
     assert.equal(
-      storageExports.some((entry) => entry.name === build.storage!.travel.toggleExport),
+      storageExports.some((entry) => entry.name === build.travelAction!.toggleExport),
       true,
     );
 
@@ -95,12 +100,12 @@ describe("Enhancement command transform", () => {
         1,
       );
       assert.equal(
-        exports.filter((entry) => entry.name === build.storage!.openExport).length,
+        exports.filter((entry) => entry.name === build.xunlaiAction!.openExport).length,
         1,
       );
       assert.equal(
         exports.filter(
-          (entry) => entry.name === build.storage!.configureExport,
+          (entry) => entry.name === build.xunlaiAction!.configureExport,
         ).length,
         1,
       );
@@ -109,7 +114,7 @@ describe("Enhancement command transform", () => {
       assert.equal(
         decodeEnhancementManifest(module, {
           ...capabilities,
-          commands: false,
+          teamApply: false,
         }),
         null,
         "a read-only profile must not accept a command-capable manifest",
@@ -117,7 +122,9 @@ describe("Enhancement command transform", () => {
       assert.equal(
         decodeEnhancementManifest(module, {
           ...capabilities,
-          storage: false,
+          travelAction: false,
+          xunlaiAction: false,
+          chatAliases: false,
         }),
         null,
         "a profile without local actions must not accept their manifest",
@@ -130,7 +137,9 @@ describe("Enhancement command transform", () => {
     assert.equal(
       decodeEnhancementManifest(storageModule, {
         ...STORAGE_ONLY,
-        storage: false,
+        travelAction: false,
+        xunlaiAction: false,
+        chatAliases: false,
       }),
       null,
       "manifest comparison must reject unexpected storage authority",
@@ -141,7 +150,9 @@ describe("Enhancement command transform", () => {
     assert.equal(
       decodeEnhancementManifest(cursorModule, {
         ...CURSOR_ONLY,
-        storage: true,
+        travelAction: true,
+        xunlaiAction: true,
+        chatAliases: true,
       }),
       null,
       "manifest comparison must reject missing storage authority",
@@ -168,15 +179,15 @@ describe("Enhancement command transform", () => {
         tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
       },
     });
-    const configure = instance.exports[build.storage!.travel.configureExport] as
+    const configure = instance.exports[build.travelAction!.configureExport] as
       (payload: number, enabled: number) => number;
-    const enqueue = instance.exports[build.storage!.travel.enqueueExport] as
+    const enqueue = instance.exports[build.travelAction!.enqueueExport] as
       (mapId: number, region: number, language: number, district: number) => number;
     const frame = instance.exports.frame as (value: number, context: number) => void;
     assert.equal(configure(128, 1), 1);
     assert.equal(enqueue(81, -2, 0, 0), 1);
     frame(70, 700);
-    assert.deepEqual(dispatches, [[build.storage!.travel.messageId, 128, 0]]);
+    assert.deepEqual(dispatches, [[build.travelAction!.messageId, 128, 0]]);
   });
 
   it("queues the named storage action and drains DataWindow on the game thread", () => {
@@ -198,8 +209,8 @@ describe("Enhancement command transform", () => {
     const memory = instance.exports.memory as WebAssembly.Memory;
     const words = new Uint32Array(memory.buffer);
     const frame = instance.exports.frame as (value: number, context: number) => void;
-    const open = instance.exports[build.storage!.openExport] as () => number;
-    const configure = instance.exports[build.storage!.configureExport] as
+    const open = instance.exports[build.xunlaiAction!.openExport] as () => number;
+    const configure = instance.exports[build.xunlaiAction!.configureExport] as
       (payload: number, enabled: number) => number;
     const payload = 64;
     words.set([0, 0, 3], payload / 4);
@@ -238,9 +249,9 @@ describe("Enhancement command transform", () => {
     );
     const memory = instance.exports.memory as WebAssembly.Memory;
     const frame = instance.exports.frame as (value: number, context: number) => void;
-    const enqueue = instance.exports[build.storage!.travel.enqueueExport] as
+    const enqueue = instance.exports[build.travelAction!.enqueueExport] as
       (mapId: number, region: number, language: number, district: number) => number;
-    const configure = instance.exports[build.storage!.travel.configureExport] as
+    const configure = instance.exports[build.travelAction!.configureExport] as
       (payload: number, enabled: number) => number;
     const payload = 128;
 
@@ -251,7 +262,7 @@ describe("Enhancement command transform", () => {
     assert.deepEqual(dispatches, [], "enqueue never calls client code re-entrantly");
     frame(70, 700);
     assert.deepEqual([...new Int32Array(memory.buffer, payload, 4)], [81, -2, 0, 0]);
-    assert.deepEqual(dispatches, [[build.storage!.travel.messageId, payload, 0]]);
+    assert.deepEqual(dispatches, [[build.travelAction!.messageId, payload, 0]]);
 
     for (const request of [
       [0, -2, 0, 0],
@@ -269,7 +280,7 @@ describe("Enhancement command transform", () => {
         `refuses ${request.join(",")}`,
       );
     }
-    assert.deepEqual(dispatches, [[build.storage!.travel.messageId, payload, 0]]);
+    assert.deepEqual(dispatches, [[build.travelAction!.messageId, payload, 0]]);
   });
 
   it("consumes /tp and the two exact storage commands at their named boundaries", () => {
@@ -294,11 +305,11 @@ describe("Enhancement command transform", () => {
     const frame = instance.exports.frame as (value: number, context: number) => void;
     const command = instance.exports[build.teamApply!.thunkExport] as
       (opcode: number, a0: number, a1: number, a2: number, a3: number) => number;
-    const configure = instance.exports[build.storage!.configureExport] as
+    const configure = instance.exports[build.xunlaiAction!.configureExport] as
       (payload: number, enabled: number) => number;
-    const configureTravel = instance.exports[build.storage!.travel.configureExport] as
+    const configureTravel = instance.exports[build.travelAction!.configureExport] as
       (payload: number, enabled: number) => number;
-    const takeTravelToggle = instance.exports[build.storage!.travel.toggleExport] as
+    const takeTravelToggle = instance.exports[build.travelAction!.toggleExport] as
       () => number;
     const payload = 64;
     const message = 256;
@@ -674,10 +685,9 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          storage: {
-            ...build.storage!,
-            slashParser: {
-              ...build.storage!.slashParser,
+          chatAliases: {
+            parser: {
+              ...build.chatAliases!.parser,
               bodySha256: "0".repeat(64),
             },
           },
@@ -696,14 +706,14 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          storage: {
-            ...build.storage!,
+          xunlaiAction: {
+            ...build.xunlaiAction!,
             accessProof: {
-              ...build.storage!.accessProof!,
+              ...build.xunlaiAction!.accessProof!,
               readers: {
-                ...build.storage!.accessProof!.readers,
+                ...build.xunlaiAction!.accessProof!.readers,
                 "access-flags": {
-                  ...build.storage!.accessProof!.readers["access-flags"],
+                  ...build.xunlaiAction!.accessProof!.readers["access-flags"],
                   bodySha256: "0".repeat(64),
                 },
               },
@@ -724,16 +734,13 @@ describe("Enhancement command transform", () => {
         input,
         {
           ...build,
-          storage: {
-            ...build.storage!,
-            travel: {
-              ...build.storage!.travel,
+          travelAction: {
+              ...build.travelAction!,
               producer: {
-                ...build.storage!.travel.producer,
+                ...build.travelAction!.producer,
                 functionIndex: build.cursorEvent!.functionIndex,
                 bodySha256: build.cursorEvent!.bodySha256,
               },
-            },
           },
         },
         CURSOR_TARGET_TOOLBOX_COMMANDS,
