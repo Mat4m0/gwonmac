@@ -65,6 +65,7 @@ export function createStorageController(
     state: null,
   };
   let configuredEnabled: boolean | null = null;
+  let availabilityTraceKey: string | null = null;
   const unavailable = () => unavailableReason(active, availability);
   const trace = (event: string, fields: Readonly<Record<string, unknown>>) => {
     if (!development) return;
@@ -112,11 +113,16 @@ export function createStorageController(
     command,
     update(next: StorageAvailability) {
       availability = next;
-      trace("availability", {
+      const fields = {
         enabled: next.enabled,
         state: next.state?.status ?? "missing",
         access: next.state?.status === "ready" ? next.state.xunlaiAccess : "unknown",
-      });
+      } as const;
+      const traceKey = JSON.stringify(fields);
+      if (traceKey !== availabilityTraceKey) {
+        availabilityTraceKey = traceKey;
+        trace("availability", fields);
+      }
       sync();
     },
     dispose() {

@@ -7,6 +7,7 @@ import {
   DETAIL,
   FEATURE_GAME_SNAPSHOT,
   installGameGraph,
+  PLAYER_RECORD_ADDRESS,
   readCompanionSnapshot,
   XUNLAI_CONFIG_START,
 } from "../fixtures/enhancements.ts";
@@ -27,7 +28,7 @@ describe("Companion Xunlai access kernel", () => {
     assert.equal(storageOnly.targetId, 0);
 
     kernel.view.setUint32(
-      ADDRESSES.playerRecordBuffer + DETAIL.playerAccessFlags,
+      PLAYER_RECORD_ADDRESS + DETAIL.playerAccessFlags,
       0x2,
       true,
     );
@@ -39,7 +40,7 @@ describe("Companion Xunlai access kernel", () => {
     );
 
     kernel.view.setUint32(
-      ADDRESSES.playerRecordBuffer + DETAIL.playerAccessFlags,
+      PLAYER_RECORD_ADDRESS + DETAIL.playerAccessFlags,
       0,
       true,
     );
@@ -92,7 +93,7 @@ describe("Companion Xunlai access kernel", () => {
     assert.equal(access(), true);
 
     kernel.view.setUint32(
-      ADDRESSES.playerRecordBuffer + DETAIL.playerAgentId,
+      PLAYER_RECORD_ADDRESS + DETAIL.playerAgentId,
       9,
       true,
     );
@@ -100,12 +101,12 @@ describe("Companion Xunlai access kernel", () => {
     assert.equal(access(), null);
 
     kernel.view.setUint32(
-      ADDRESSES.playerRecordBuffer + DETAIL.playerAgentId,
+      PLAYER_RECORD_ADDRESS + DETAIL.playerAgentId,
       7,
       true,
     );
     kernel.view.setUint32(
-      ADDRESSES.playerRecordBuffer + DETAIL.playerNumber,
+      PLAYER_RECORD_ADDRESS + DETAIL.playerNumber,
       43,
       true,
     );
@@ -113,7 +114,7 @@ describe("Companion Xunlai access kernel", () => {
     assert.equal(access(), null);
 
     kernel.view.setUint32(
-      ADDRESSES.playerRecordBuffer + DETAIL.playerNumber,
+      PLAYER_RECORD_ADDRESS + DETAIL.playerNumber,
       42,
       true,
     );
@@ -121,9 +122,9 @@ describe("Companion Xunlai access kernel", () => {
     kernel.tick();
     assert.equal(access(), null);
 
-    kernel.view.setUint32(ADDRESSES.world + DETAIL.players + 4, 1, true);
+    kernel.view.setUint32(ADDRESSES.world + DETAIL.players + 4, 64, true);
     kernel.view.setUint32(
-      ADDRESSES.playerRecordBuffer + DETAIL.playerAccessFlags,
+      PLAYER_RECORD_ADDRESS + DETAIL.playerAccessFlags,
       0x2,
       true,
     );

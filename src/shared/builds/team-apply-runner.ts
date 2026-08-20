@@ -91,8 +91,8 @@ export type TeamApplyEvent = Readonly<{
   elapsedMs: number;
 }>;
 
-/** Matches GWToolbox++'s per-hero budget; a roster change is a server round trip. */
-const CONFIRM_MS = 1_000;
+/** Live QA observed ordinary roster publications just beyond one second. */
+const CONFIRM_MS = 2_000;
 /** Live profession changes can arrive well after the command was accepted. */
 const PROFESSION_CONFIRM_MS = 15_000;
 /** A published profession leads the client state rebuilt from that profession. */

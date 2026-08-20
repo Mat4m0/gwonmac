@@ -250,14 +250,23 @@ unsafe fn observe_xunlai_access(
     let buffer = unsafe { read_u32(players) }?;
     let capacity = offset(players, 4).and_then(|at| unsafe { read_u32(at) })?;
     let size = offset(players, 8).and_then(|at| unsafe { read_u32(at) })?;
-    if size == 0 || size > capacity || capacity > 2_048 || buffer == 0 || buffer & 3 != 0 {
+    if size == 0
+        || size > capacity
+        || player_number >= size
+        || capacity > 2_048
+        || buffer == 0
+        || buffer & 3 != 0
+    {
         return None;
     }
     let bytes = checked_mul(capacity, layout.player_record_stride)?;
     if !contains(buffer, bytes) {
         return None;
     }
-    let player = indexed(buffer, 0, layout.player_record_stride)?;
+    // The official readers take the login/player number as the array index.
+    // Record zero is only correct for the first synthetic fixture, not for a
+    // live account whose player number is ordinarily non-zero.
+    let player = indexed(buffer, player_number, layout.player_record_stride)?;
     let agent_id = offset(player, layout.player_record_agent_id)
         .and_then(|at| unsafe { read_u32(at) })?;
     let access_flags = offset(player, layout.player_record_access_flags)

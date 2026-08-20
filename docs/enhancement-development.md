@@ -83,12 +83,17 @@ character names, account data, chat, packet bytes, or Travel search text.
 
 - Xunlai emits `storage.availability`, `storage.configured`, and then either
   `storage.queued` or `storage.refused`. A refusal includes the policy state and
-  the tri-state access result that caused the Controls fallback.
+  the tri-state access result that caused the Controls fallback. The certified
+  player-record readers index their array by the live login/player number;
+  record zero is not a valid shortcut for a real character.
 - Team Apply first emits `command` when the renderer queues an opcode. The
   `team command trace` then reports `drain.count` and `drain.opcode` when the
   certified game-thread boundary consumes it. Builder and sender counters show
   the next boundary reached. This separates queue, drain, builder, sender, and
   observer-confirmation failures.
+  Ordinary live publications have been observed just beyond one second, so
+  their confirmation window is two seconds. Profession and skill transitions
+  retain their feature-specific stability and retry windows.
 - Travel emits `travel.search` with query length, token count, catalogue size,
   result count, and bounded result map IDs. It never includes the query itself.
   `travel.queued` or `travel.refused` then identifies the named command result.

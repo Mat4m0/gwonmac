@@ -128,6 +128,10 @@ test("storage development traces identify the live refusal without account data"
       enabled: true,
       state: { status: "ready", xunlaiAccess: false },
     });
+    controller.update({
+      enabled: true,
+      state: { status: "ready", xunlaiAccess: false },
+    });
     eventTarget.dispatchEvent(new CustomEvent("gw:storage-open", {
       cancelable: true,
       detail: {},
@@ -138,6 +142,10 @@ test("storage development traces identify the live refusal without account data"
       && message.includes('"access":false')
       && message.includes("cannot access Xunlai storage")
     ));
+    assert.equal(
+      messages.filter((message) => message.includes("storage.availability")).length,
+      1,
+    );
     controller.dispose();
   } finally {
     console.debug = previousDebug;

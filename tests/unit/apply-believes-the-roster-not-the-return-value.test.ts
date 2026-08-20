@@ -338,6 +338,32 @@ test("attributes the game never applies are a refusal too", async () => {
   assert.deepEqual(game.sent.at(-1), "attributes:11:17=7,19=12");
 });
 
+test("an ordinary attribute publication just after one second is not a false refusal", async () => {
+  const initial = {
+    hero: 6, agentId: 11, behaviour: 1, skills: [1, 2, 3, 4, 5, 6, 7, 8],
+    professions: [1, 2] as const, attributes: [],
+  };
+  const changed = {
+    ...initial,
+    attributes: [[17, 7], [19, 12]] as readonly (readonly number[])[],
+  };
+  const game = harness([initial]);
+  const sleep = game.environment.confirmationTime!.sleep;
+  game.environment.confirmationTime!.sleep = async (milliseconds) => {
+    await sleep(milliseconds);
+    if (game.environment.confirmationTime!.now() >= 1_250) game.set([changed]);
+  };
+
+  const result = await runTeamApply(
+    plan([member({ hero: heroId(6), build: build(), behaviour: "guard" })]),
+    game.environment,
+    1,
+  );
+
+  assert.equal(result.completedChanges, 1);
+  assert.deepEqual(game.sent, ["attributes:11:17=7,19=12"]);
+});
+
 test("an empty attribute plan clears the player's invested ranks", async () => {
   const game = harness([]);
   game.setPlayer({
