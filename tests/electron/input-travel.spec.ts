@@ -91,7 +91,7 @@ test.describe("renderer Travel input", () => {
       );
       await expect(search).toHaveAccessibleName("Search destinations");
       await expect(palette.getByRole("listbox")).toHaveCount(0);
-      await expect(page.getByText("Start typing to search all outposts."))
+      await expect(page.getByText("Start typing to search available destinations."))
         .toBeVisible();
 
       // Native modal work is above non-modal surfaces. The first Escape closes
