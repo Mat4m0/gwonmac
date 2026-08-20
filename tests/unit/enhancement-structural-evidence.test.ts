@@ -520,6 +520,7 @@ describe("review-only Enhancement structural evidence", () => {
     const tick = evidence.tick.candidate!;
     const baseline = Object.freeze({
       ...shipped,
+      sha256: createHash("sha256").update(input.bytes).digest("hex"),
       hookBodySha256: tick.bodySha256,
       cursorEvent: Object.freeze({
         ...shippedCursor,
@@ -537,9 +538,12 @@ describe("review-only Enhancement structural evidence", () => {
     assert.deepEqual(locateAutomaticCursor(input.bytes, [baseline]), {
       baseline,
       hookFunction: input.tick,
+      hookBodySha256: tick.bodySha256,
       cursorFunction: input.cursor,
       cursorTableSlot: 2,
       producerFunctions: input.cursorProducers,
+      producerBodySha256: cursor.producerBodySha256,
+      layout: shippedCursor.layout,
     });
   });
 
@@ -555,6 +559,7 @@ describe("review-only Enhancement structural evidence", () => {
       .digest("hex");
     const baseline = {
       ...shipped,
+      sha256: createHash("sha256").update(input.bytes).digest("hex"),
       hookBodySha256: tick.bodySha256,
       cursorEvent: {
         ...shippedCursor,

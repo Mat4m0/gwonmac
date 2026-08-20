@@ -146,18 +146,32 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(WebAssembly.validate(new Uint8Array(changedAddressReference)), true);
   const addressDecision = verifyLocalClientBytes(changedAddressReference);
   assert.ok(addressDecision.templateSaveBuild);
-  if (addressDecision.enhancementBuild) {
-    assert.ok(addressDecision.enhancementBuild.cursorEvent);
-    assert.equal(addressDecision.enhancementBuild.targetObservation, undefined);
-    assert.equal(addressDecision.enhancementBuild.partyObservation, undefined);
-    assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
-    assert.deepEqual(
-      Object.keys(addressDecision.enhancementBuild.outputSha256),
-      ["cursor"],
+  assert.ok(addressDecision.enhancementBuild?.cursorEvent);
+  assert.equal(addressDecision.enhancementBuild.targetObservation, undefined);
+  assert.equal(addressDecision.enhancementBuild.partyObservation, undefined);
+  assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
+  assert.deepEqual(Object.keys(addressDecision.enhancementBuild.outputSha256), ["cursor"]);
+  assert.deepEqual(addressDecision.reasons, []);
+
+  const cursorMutations = [
+    { local: 446 - derived.importCount, offset: 10, label: "main-loop control flow" },
+    { local: 2828 - derived.importCount, offset: 68, label: "one producer static" },
+    { local: 6234 - derived.importCount, offset: 45, label: "cursor art offset" },
+  ] as const;
+  for (const mutation of cursorMutations) {
+    const changedCursorProof = rewriteCode(bytes, (bodies) => {
+      const body = bodies[mutation.local]!;
+      body[mutation.offset] = body[mutation.offset]! ^ 1;
+    });
+    assert.equal(
+      WebAssembly.validate(new Uint8Array(changedCursorProof)),
+      true,
+      mutation.label,
     );
-    assert.deepEqual(addressDecision.reasons, []);
-  } else {
-    assert.deepEqual(addressDecision.reasons, ["enhancement-layout-changed"]);
+    const refusal = verifyLocalClientBytes(changedCursorProof);
+    assert.ok(refusal.templateSaveBuild, mutation.label);
+    assert.equal(refusal.enhancementBuild, null, mutation.label);
+    assert.deepEqual(refusal.reasons, ["enhancement-layout-changed"], mutation.label);
   }
 });
 

@@ -97,7 +97,7 @@ function deriveEnhancementBuild(
     hookFunction: located.hookFunction,
     hookParams: Object.freeze(["i32"] as const),
     hookResults: Object.freeze([] as const),
-    hookBodySha256: located.baseline.hookBodySha256,
+    hookBodySha256: located.hookBodySha256,
     tableSlot: report.table.min,
     cursorEvent: Object.freeze({
       functionIndex: located.cursorFunction,
@@ -108,9 +108,9 @@ function deriveEnhancementBuild(
       producerParams: cursor.producerParams,
       producerResults: cursor.producerResults,
       bodySha256: cursor.bodySha256,
-      producerBodySha256: cursor.producerBodySha256,
+      producerBodySha256: located.producerBodySha256,
       tableNeighbourBodySha256: cursor.tableNeighbourBodySha256,
-      layout: cursor.layout,
+      layout: located.layout,
     }),
   });
   const output = transformEnhancementWasm(
@@ -272,26 +272,41 @@ function isAutomaticCursorBuild(
     || !isIndex(build.buildId)
     || !isIndex(build.hookFunction)
     || !isIndex(build.tableSlot)
+    || !isDigest(build.hookBodySha256)
     || !build.cursorEvent
     || !isIndex(build.cursorEvent.functionIndex)
     || !isIndex(build.cursorEvent.tableSlot)
     || build.cursorEvent.producerFunctions.length !== 2
     || !build.cursorEvent.producerFunctions.every(isIndex)
+    || build.cursorEvent.producerBodySha256.length !== 2
+    || !build.cursorEvent.producerBodySha256.every(isDigest)
+    || !Object.values(build.cursorEvent.layout).every(isIndex)
   ) return false;
   return ENHANCEMENT_BUILDS.some((baseline) => {
     const cursor = baseline.cursorEvent;
     return cursor !== undefined
-      && build.hookBodySha256 === baseline.hookBodySha256
+      && Object.keys(build.cursorEvent!.layout).sort().join()
+        === Object.keys(cursor.layout).sort().join()
       && sameJson(build.hookParams, baseline.hookParams)
       && sameJson(build.hookResults, baseline.hookResults)
       && sameJson(build.cursorEvent?.params, cursor.params)
       && sameJson(build.cursorEvent?.results, cursor.results)
       && build.cursorEvent?.bodySha256 === cursor.bodySha256
-      && sameJson(build.cursorEvent?.producerBodySha256, cursor.producerBodySha256)
       && sameJson(build.cursorEvent?.producerParams, cursor.producerParams)
       && sameJson(build.cursorEvent?.producerResults, cursor.producerResults)
       && sameJson(build.cursorEvent?.tableNeighbourBodySha256, cursor.tableNeighbourBodySha256)
-      && sameJson(build.cursorEvent?.layout, cursor.layout);
+      && build.cursorEvent.layout.cursorSoftwareModel
+        === build.cursorEvent.layout.cursorActiveArt + 4
+      && build.cursorEvent.layout.cursorShowCount
+        === build.cursorEvent.layout.cursorActiveArt + 8
+      && build.cursorEvent.layout.cursorArtHotspot === cursor.layout.cursorArtHotspot
+      && build.cursorEvent.layout.cursorArtTexture === cursor.layout.cursorArtTexture
+      && build.cursorEvent.layout.cursorHandleKey === cursor.layout.cursorHandleKey
+      && build.cursorEvent.layout.cursorHandleObject === cursor.layout.cursorHandleObject
+      && build.cursorEvent.layout.cursorViewTexture === cursor.layout.cursorViewTexture
+      && build.cursorEvent.layout.cursorTextureType === cursor.layout.cursorTextureType
+      && build.cursorEvent.layout.cursorTextureWidth === cursor.layout.cursorTextureWidth
+      && build.cursorEvent.layout.cursorTextureHeight === cursor.layout.cursorTextureHeight;
   });
 }
 
