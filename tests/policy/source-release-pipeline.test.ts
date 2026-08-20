@@ -13,6 +13,7 @@
 // a real window in tests/electron/sandbox.spec.ts), and the three assertions
 // that still need the compiled build (tests/release/).
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -756,7 +757,36 @@ test("the website suite runs on its own path-filtered workflow", () => {
   assert.equal(vercel.git?.deploymentEnabled, true);
   assert.equal(
     vercel.ignoreCommand,
-    'if [ -z "$VERCEL_GIT_PREVIOUS_SHA" ]; then exit 1; fi; git diff --quiet "$VERCEL_GIT_PREVIOUS_SHA" HEAD -- . ../../src/shared ../../package.json ../../pnpm-lock.yaml ../../pnpm-workspace.yaml',
+    '[ -n "$VERCEL_GIT_PREVIOUS_SHA" ] || exit 1; git cat-file -e "$VERCEL_GIT_PREVIOUS_SHA" 2>/dev/null || exit 1; git diff --quiet "$VERCEL_GIT_PREVIOUS_SHA" HEAD -- . ../../src/shared ../../package.json ../../pnpm-lock.yaml ../../pnpm-workspace.yaml',
+  );
+  assert.ok(
+    vercel.ignoreCommand.length <= 256,
+    "the root Vercel ignoreCommand schema caps commands at 256 characters",
+  );
+  const head = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  assert.equal(head.status, 0);
+  const runIgnore = (previousSha: string): number | null => spawnSync(
+    "sh",
+    ["-c", vercel.ignoreCommand ?? "exit 2"],
+    {
+      cwd: path.join(root, "apps/website"),
+      env: { ...process.env, VERCEL_GIT_PREVIOUS_SHA: previousSha },
+      stdio: "ignore",
+    },
+  ).status;
+  assert.equal(runIgnore(""), 1, "a first deployment must build");
+  assert.equal(
+    runIgnore("0000000000000000000000000000000000000000"),
+    1,
+    "a rebased-away previous commit must build instead of failing",
+  );
+  assert.equal(
+    runIgnore(head.stdout.trim()),
+    0,
+    "an unchanged website may skip its build",
   );
 });
 
