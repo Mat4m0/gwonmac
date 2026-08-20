@@ -12,7 +12,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
   ENHANCEMENT_TRANSFORM_ABI,
   enhancementCapabilitiesForProfile,
   type EnhancementCapabilityProfile,
@@ -226,30 +225,18 @@ function certifyTemplate(input: Uint8Array): KnownTemplateSaveBuild {
 }
 
 function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
+  const fixtureProfiles = Object.freeze([
+    "features-01", "features-02", "features-03", "features-04",
+    "features-05", "features-06", "features-07", "features-0c",
+    "features-0d", "features-0e", "features-0f", "features-70",
+    "features-74", "features-75", "features-76", "features-77",
+    "features-7c", "features-7d", "features-7e", "features-7f",
+  ] satisfies readonly EnhancementCapabilityProfile[]);
   const draft: KnownEnhancementBuild = {
     sha256: sha256(input),
-    outputSha256: Object.freeze({
-      cursor: "0".repeat(64),
-      target: "0".repeat(64),
-      cursorTarget: "0".repeat(64),
-      party: "0".repeat(64),
-      cursorParty: "0".repeat(64),
-      targetParty: "0".repeat(64),
-      cursorTargetParty: "0".repeat(64),
-      partyCommands: "0".repeat(64),
-      cursorPartyCommands: "0".repeat(64),
-      targetPartyCommands: "0".repeat(64),
-      cursorTargetPartyCommands: "0".repeat(64),
-      partyStorage: "0".repeat(64),
-      cursorPartyStorage: "0".repeat(64),
-      targetPartyStorage: "0".repeat(64),
-      cursorTargetPartyStorage: "0".repeat(64),
-      partyCommandsStorage: "0".repeat(64),
-      cursorPartyCommandsStorage: "0".repeat(64),
-      targetPartyCommandsStorage: "0".repeat(64),
-      cursorTargetPartyCommandsStorage: "0".repeat(64),
-      storage: "0".repeat(64),
-    }),
+    outputSha256: Object.freeze(Object.fromEntries(
+      fixtureProfiles.map((profile) => [profile, "0".repeat(64)]),
+    )),
     programId: 1,
     buildId: 1,
     hookFunction: 3,
@@ -457,8 +444,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     },
   };
   const derived = {} as Record<EnhancementCapabilityProfile, string>;
-  for (const profile of Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
-    EnhancementCapabilityProfile[]) {
+  for (const profile of fixtureProfiles) {
     derived[profile] = sha256(transformEnhancementWasm(
       input,
       draft,
@@ -545,6 +531,7 @@ describe("client module preparation", () => {
     assert.equal(prepared.enhancementBuild, value.enhancementBuild);
     assert.equal(prepared.failure, null);
     assert.notEqual(prepared.wasmPath, value.officialWasmPath);
+    assert.equal(prepared.wasmSha256, sha256(await readFile(prepared.wasmPath)));
     assert.equal(
       await inspectEnhancementCache(
         value.enhancementBuild,
@@ -648,6 +635,29 @@ describe("client module preparation", () => {
     ));
   });
 
+  it("requires local native proof and keeps the preceding module untouched on refusal", async () => {
+    const value = await fixture();
+    let verifierCalls = 0;
+    const prepared = await prepareClientModule(
+      options(
+        value,
+        { templateSaveBuild: value.templateSaveBuild, enhancementBuild: null },
+        CURSOR_TOOLBOX,
+      ),
+      async ({ wasmPath, inputSha256 }) => {
+        verifierCalls += 1;
+        assert.equal(sha256(await readFile(wasmPath)), inputSha256);
+        return null;
+      },
+    );
+
+    assert.equal(verifierCalls, 1);
+    assert.equal(prepared.nativeDoubleClick, false);
+    assert.equal(prepared.wasmSha256, value.templateSaveBuild.outputSha256);
+    assert.deepEqual(prepared.failure, null);
+    await assertMissing(value.nativeDoubleClickCacheRoot);
+  });
+
   it("serves official bytes and drops both caches when uncertified", async () => {
     const value = await fixture();
     await Promise.all([
@@ -661,6 +671,7 @@ describe("client module preparation", () => {
 
     assert.deepEqual(prepared, {
       wasmPath: value.officialWasmPath,
+      wasmSha256: value.officialSha256,
       jsPath: value.officialJsPath,
       extendedMemory: { status: "disabled" },
       gameFileSaving: { status: "unavailable", reason: "game-update" },
@@ -891,7 +902,7 @@ describe("client module preparation", () => {
     assert.equal(rebuilt.failure, null);
     assert.equal(
       sha256(await readFile(rebuilt.wasmPath)),
-      value.enhancementBuild.outputSha256.cursorParty,
+      value.enhancementBuild.outputSha256["features-05"],
     );
   });
 
@@ -902,7 +913,7 @@ describe("client module preparation", () => {
       ...value.enhancementBuild,
       outputSha256: {
         ...complete,
-        cursorParty: "0".repeat(64),
+        "features-05": "0".repeat(64),
       } satisfies EnhancementOutputHashes,
     };
 
@@ -923,7 +934,7 @@ describe("client module preparation", () => {
     assert.deepEqual(prepared.effectiveCapabilities, CURSOR_ONLY);
     assert.equal(
       sha256(await readFile(prepared.wasmPath)),
-      complete.cursor,
+      complete["features-01"],
     );
   });
 

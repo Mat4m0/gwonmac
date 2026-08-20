@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  enhancementCapabilitiesForProfile,
   enhancementCapabilityProfile,
-  ENHANCEMENT_CAPABILITY_PROFILES,
+  type EnhancementCapabilities,
+  type EnhancementCapabilityProfile,
 } from "../../src/shared/enhancement-contracts.js";
 import {
   enhancementOutputSha256,
@@ -25,25 +27,32 @@ const NO_CAPABILITIES = Object.freeze({
 });
 describe("Enhancement client chain", () => {
   it("source-pins every executable capability profile", () => {
-    const profiles = Object.entries(ENHANCEMENT_CAPABILITY_PROFILES);
-    // Seven independent booleans have 127 non-empty combinations. The only
-    // invalid 32 are Team Apply without its required Party observation.
-    assert.equal(profiles.length, 95);
-    assert.equal(new Set(profiles.map(([, value]) => JSON.stringify(value))).size, 95);
+    // Seven booleans have 127 non-empty combinations. Team Apply requires
+    // Party observation, and chat aliases require Travel or Xunlai to give
+    // them an action they can truthfully expose.
+    const profiles = Array.from({ length: 127 }, (_, index) => {
+      const profile = `features-${(index + 1).toString(16).padStart(2, "0")}` as
+        EnhancementCapabilityProfile;
+      const capabilities = enhancementCapabilitiesForProfile(profile);
+      return capabilities
+        ? [[profile, capabilities] as const satisfies readonly [
+            EnhancementCapabilityProfile,
+            EnhancementCapabilities,
+          ]]
+        : [];
+    }).flat();
+    assert.equal(profiles.length, 83);
+    assert.equal(new Set(profiles.map(([, value]) => JSON.stringify(value))).size, 83);
     const teamProfiles = profiles.filter(([, capabilities]) => capabilities.teamApply);
-    assert.equal(teamProfiles.length, 32);
+    assert.equal(teamProfiles.length, 28);
     assert.ok(teamProfiles.every(([, capabilities]) => capabilities.partyObservation));
-    for (const [profile, capabilities] of Object.entries(
-      ENHANCEMENT_CAPABILITY_PROFILES,
-    )) {
+    for (const [profile, capabilities] of profiles) {
       assert.equal(enhancementCapabilityProfile(capabilities), profile);
       for (const build of ENHANCEMENT_BUILDS) {
         const output = enhancementOutputSha256(build, capabilities);
         assert.equal(
           output !== null,
-          enhancementProfilesForBuild(build).includes(
-            profile as keyof typeof ENHANCEMENT_CAPABILITY_PROFILES,
-          ),
+          enhancementProfilesForBuild(build).includes(profile),
         );
         if (output !== null) assert.match(output, /^[0-9a-f]{64}$/);
       }
@@ -86,7 +95,9 @@ describe("Enhancement client chain", () => {
 
     const cursorOnly: KnownEnhancementBuild = {
       ...full,
-      outputSha256: Object.freeze({ cursor: full.outputSha256.cursor! }),
+      outputSha256: Object.freeze({
+        "features-01": full.outputSha256["features-01"]!,
+      }),
     };
     delete cursorOnly.targetObservation;
     delete cursorOnly.partyObservation;
@@ -95,12 +106,14 @@ describe("Enhancement client chain", () => {
     delete cursorOnly.xunlaiAction;
     delete cursorOnly.travelAction;
     delete cursorOnly.chatAliases;
-    assert.deepEqual(enhancementProfilesForBuild(cursorOnly), ["cursor"]);
+    assert.deepEqual(enhancementProfilesForBuild(cursorOnly), ["features-01"]);
     assert.equal(hasValidEnhancementProfileHashes(cursorOnly), true);
 
     const partyOnly: KnownEnhancementBuild = {
       ...full,
-      outputSha256: Object.freeze({ party: full.outputSha256.party! }),
+      outputSha256: Object.freeze({
+        "features-04": full.outputSha256["features-04"]!,
+      }),
     };
     delete partyOnly.cursorEvent;
     delete partyOnly.targetObservation;
@@ -109,7 +122,7 @@ describe("Enhancement client chain", () => {
     delete partyOnly.xunlaiAction;
     delete partyOnly.travelAction;
     delete partyOnly.chatAliases;
-    assert.deepEqual(enhancementProfilesForBuild(partyOnly), ["party"]);
+    assert.deepEqual(enhancementProfilesForBuild(partyOnly), ["features-04"]);
     assert.equal(hasValidEnhancementProfileHashes(partyOnly), true);
 
     const missingObservationBase = { ...partyOnly };
@@ -194,8 +207,8 @@ describe("Enhancement client chain", () => {
       hasValidEnhancementProfileHashes({
         ...cursorOnly,
         outputSha256: Object.freeze({
-          cursor: full.outputSha256.cursor!,
-          target: full.outputSha256.target!,
+          "features-01": full.outputSha256["features-01"]!,
+          "features-02": full.outputSha256["features-02"]!,
         }),
       }),
       false,
@@ -204,7 +217,7 @@ describe("Enhancement client chain", () => {
     assert.equal(
       hasValidEnhancementProfileHashes({
         ...cursorOnly,
-        outputSha256: Object.freeze({ cursor: "not-a-digest" }),
+        outputSha256: Object.freeze({ "features-01": "not-a-digest" }),
       }),
       false,
       "every implied profile hash must be a digest",

@@ -10,8 +10,7 @@ import {
   type GraphicsDiagnostics,
 } from "../../shared/contracts.js";
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
-  type EnhancementCapabilityProfile,
+  isEnhancementCapabilityProfile,
 } from "../../shared/enhancement-contracts.js";
 import {
   RENDERER_HISTOGRAMS,
@@ -352,14 +351,14 @@ export function recordRendererMilestone(
     // IPC validated the shape; membership in the closed profile vocabulary is
     // this recorder's gate. An unknown profile is dropped, not recorded.
     const profile = fields.capabilityProfile;
-    if (!Object.hasOwn(ENHANCEMENT_CAPABILITY_PROFILES, profile)) return;
+    if (!isEnhancementCapabilityProfile(profile)) return;
     recordEvent(
       {
         k: "enhancement.installed",
         clockSynchronized: rendererClockSynchronized,
         companionAbi: fields.companionAbi,
         installation: fields.installation,
-        capabilityProfile: profile as EnhancementCapabilityProfile,
+        capabilityProfile: profile,
       },
       { timestampUs },
     );

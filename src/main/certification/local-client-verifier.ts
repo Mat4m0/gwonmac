@@ -19,60 +19,71 @@
 import { createHash } from "node:crypto";
 import {
   enhancementCapabilityProfile,
-  enhancementCapabilitiesForProfile,
   enhancementCapabilitiesRequested,
+  intersectEnhancementCapabilities,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
 import {
   ENHANCEMENT_BUILDS,
-  findEnhancementBuild,
-  enhancementProfilesForBuild,
-  supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import {
+  inspectEnhancementStructuralEvidence,
+  inspectTargetRoleCandidates,
   locateAutomaticCursor,
   locateAutomaticLocalActions,
   locateAutomaticTarget,
+  type AutomaticCursorLocation,
+  type AutomaticLocalActionsLocation,
+  type AutomaticTargetLocation,
+  type EnhancementStructuralEvidenceReport,
 } from "./enhancement-structural-evidence.js";
 import { inspectEnhancementCandidate } from "./enhancement-candidate.js";
+import {
+  inspectLocalActionRoleCandidates,
+  type LocalActionRoleDiagnostics,
+} from "./enhancement-local-actions-proof.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
-  BRIDGE_KINDS,
-  TEMPLATE_SAVE_BUILDS,
-  type BridgeKind,
-  type KnownTemplateSaveBuild,
-} from "./template-save-compat.js";
+  enhancementProofContext,
+  type EnhancementProofContext,
+} from "./enhancement-wasm-proof-context.js";
 import {
   preparePostTemplateSaveModule,
   type PostTemplateSaveModule,
 } from "./template-save-verifier.js";
+import {
+  ALL_LOCAL_ENHANCEMENT_CAPABILITIES,
+  localFeatureVerdictsForBuild,
+  type EnhancementVerificationReason,
+  type LocalClientFeature,
+  type LocalClientVerification,
+  type LocalFeatureFailure,
+  type LocalFeatureFailures,
+  type LocalFeatureInvariant,
+} from "./local-client-verification-contract.js";
+import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
+
+export { isLocalClientVerification } from "./local-client-verification-boundary.js";
+export {
+  LOCAL_CLIENT_FEATURES,
+  LOCAL_FEATURE_INVARIANTS,
+  LOCAL_VERIFICATION_REASONS,
+  localFeatureVerdictsForBuild,
+  type LocalClientFeature,
+  type LocalClientVerification,
+  type LocalFeatureCertificateMap,
+  type LocalFeatureFailure,
+  type LocalFeatureFailures,
+  type LocalFeatureInvariant,
+  type LocalFeatureVerdict,
+  type LocalFeatureVerdicts,
+  type LocalVerificationReason,
+} from "./local-client-verification-contract.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
-
-/**
- * Declared as a list rather than a union so the boundary check below and the
- * diagnostics schema can both execute it. A union nobody can enumerate gets
- * restated wherever it has to be checked, and the restatements drift.
- */
-export const LOCAL_VERIFICATION_REASONS = [
-  "invalid-wasm",
-  "template-shape-changed",
-  "template-transform-failed",
-  "enhancement-layout-changed",
-  "enhancement-transform-failed",
-] as const;
-
-export type LocalVerificationReason = (typeof LOCAL_VERIFICATION_REASONS)[number];
-
-export interface LocalClientVerification {
-  readonly officialSha256: string;
-  readonly templateSaveBuild: KnownTemplateSaveBuild | null;
-  readonly enhancementBuild: KnownEnhancementBuild | null;
-  readonly reasons: readonly LocalVerificationReason[];
-}
 
 function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -82,49 +93,530 @@ function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+type EnhancementDerivation = Readonly<{
+  build: KnownEnhancementBuild | null;
+  failures?: LocalFeatureFailures;
+}>;
+
+function changedFeature<Feature extends LocalClientFeature>(
+  _feature: Feature,
+  invariant: LocalFeatureInvariant<Feature>,
+): LocalFeatureFailure<Feature> {
+  return Object.freeze({ status: "changed", invariant });
+}
+
+function ambiguousFeature<Feature extends LocalClientFeature>(
+  _feature: Feature,
+  invariant: LocalFeatureInvariant<Feature>,
+  candidates: number,
+): LocalFeatureFailure<Feature> {
+  return Object.freeze({ status: "ambiguous", invariant, candidates });
+}
+
+function ambiguousRoleFailure<Feature extends LocalClientFeature>(
+  feature: Feature,
+  invariant: LocalFeatureInvariant<Feature>,
+  diagnostic: LocalActionRoleDiagnostics[keyof LocalActionRoleDiagnostics]
+    | undefined,
+): LocalFeatureFailure<Feature> | null {
+  return diagnostic?.status === "ambiguous"
+    ? ambiguousFeature(feature, invariant, diagnostic.candidateCount)
+    : null;
+}
+
+function failuresForRequested(
+  requested: EnhancementCapabilities,
+  invariant:
+    | "module.wasm-validation"
+    | "module.binary-shape"
+    | "enhancement.transform",
+): LocalFeatureFailures {
+  return Object.freeze({
+    ...(requested.nativeCursor
+      ? { nativeCursor: changedFeature("nativeCursor", invariant) }
+      : {}),
+    ...(requested.targetObservation
+      ? { targetObservation: changedFeature("targetObservation", invariant) }
+      : {}),
+    ...(requested.partyObservation
+      ? { partyObservation: changedFeature("partyObservation", invariant) }
+      : {}),
+    ...(requested.teamApply
+      ? { teamApply: changedFeature("teamApply", invariant) }
+      : {}),
+    ...(requested.travelAction
+      ? { travelAction: changedFeature("travelAction", invariant) }
+      : {}),
+    ...(requested.xunlaiAction
+      ? { xunlaiAction: changedFeature("xunlaiAction", invariant) }
+      : {}),
+    ...(requested.chatAliases
+      ? { chatAliases: changedFeature("chatAliases", invariant) }
+      : {}),
+  });
+}
+
+function messageAnchors(): Parameters<typeof inspectEnhancementStructuralEvidence>[1] | null {
+  const baseline = ENHANCEMENT_BUILDS.at(-1);
+  const dispatcher = baseline?.uiDispatcher;
+  const party = baseline?.partyObservation;
+  return dispatcher && party
+    ? Object.freeze({
+        playerChatMessage: dispatcher.playerChatMessage,
+        nearbyPlayerMessages: Object.freeze([
+          party.nearbyPlayerMessages[0],
+          party.nearbyPlayerMessages[1],
+        ] as const),
+      })
+    : null;
+}
+
+function structuralEvidence(
+  input: Uint8Array,
+  context: EnhancementProofContext,
+): EnhancementStructuralEvidenceReport | null {
+  const anchors = messageAnchors();
+  if (!anchors) return null;
+  try {
+    return inspectEnhancementStructuralEvidence(input, anchors, context);
+  } catch {
+    return null;
+  }
+}
+
+function sharedEvidenceFailure<Feature extends LocalClientFeature>(
+  feature: Feature,
+  evidence: EnhancementStructuralEvidenceReport | null,
+): LocalFeatureFailure<Feature> | null {
+  const failure = evidence?.failures[0];
+  if (failure === "input-too-large") {
+    return changedFeature(feature, "module.input-size");
+  }
+  if (failure === "invalid-wasm") {
+    return changedFeature(feature, "module.wasm-validation");
+  }
+  if (failure === "module-shape-unsupported") {
+    return changedFeature(feature, "module.binary-shape");
+  }
+  if (failure === "instruction-set-unsupported") {
+    return changedFeature(feature, "module.instruction-set");
+  }
+  if (failure === "analysis-limit-exceeded") {
+    return changedFeature(feature, "module.analysis-budget");
+  }
+  if (evidence?.tick.status === "ambiguous") {
+    const candidates = evidence.tick.considered.filter(
+      ({ signature }) =>
+        signature?.params.length === 1
+        && signature.results.length === 0,
+    ).length;
+    return ambiguousFeature(
+      feature,
+      "hook.main-loop-export",
+      Math.max(2, candidates),
+    );
+  }
+  if (evidence?.tick.status === "unavailable") {
+    const invariant = evidence.tick.exportCount === 1
+      ? "hook.main-loop-signature"
+      : "hook.main-loop-export";
+    return changedFeature(feature, invariant);
+  }
+  return null;
+}
+
+function cursorFailure(
+  evidence: EnhancementStructuralEvidenceReport | null,
+): LocalFeatureFailure<"nativeCursor"> {
+  const shared = sharedEvidenceFailure("nativeCursor", evidence);
+  if (shared) return shared;
+  if (evidence?.failures.includes("active-table-unsupported")) {
+    return changedFeature("nativeCursor", "cursor.active-table-relation");
+  }
+  if (evidence?.cursor.status === "ambiguous") {
+    const ownerCandidates = evidence.cursor.considered.filter(
+      (candidate) =>
+        candidate.directProducers.length === 2
+        && candidate.directCallSites === 2
+        && candidate.activeTableSlots.length === 1,
+    );
+    if (ownerCandidates.length > 1) {
+      return ambiguousFeature(
+        "nativeCursor",
+        "cursor.event-owner",
+        ownerCandidates.length,
+      );
+    }
+    const relationCandidates = evidence.cursor.considered
+      .filter(
+        (candidate) =>
+          candidate.directProducers.length === 2
+          && candidate.directCallSites === 2,
+      )
+      .reduce((sum, candidate) => sum + candidate.activeTableSlots.length, 0);
+    return ambiguousFeature(
+      "nativeCursor",
+      "cursor.active-table-relation",
+      Math.max(2, relationCandidates),
+    );
+  }
+  return evidence?.cursor.status === "unavailable"
+    ? changedFeature("nativeCursor", "cursor.event-owner")
+    : changedFeature("nativeCursor", "cursor.event-family-layout-anchors");
+}
+
+function playerChatUiCandidates(
+  evidence: EnhancementStructuralEvidenceReport,
+): number {
+  return evidence.playerChatUi.considered.filter(
+    (candidate) =>
+      candidate.signatureMatches
+      && candidate.playerChat.filter(
+        (relation) => relation.messageSites === 3 && relation.directCallSites === 3,
+      ).length === 1
+      && candidate.nearby7f.length > 0
+      && candidate.nearby80.length > 0,
+  ).length;
+}
+
+function uiFailure<Feature extends "partyObservation" | "teamApply">(
+  feature: Feature,
+  evidence: EnhancementStructuralEvidenceReport | null,
+): LocalFeatureFailure<Feature> | null {
+  const shared = sharedEvidenceFailure(feature, evidence);
+  if (shared) return shared;
+  if (evidence?.playerChatUi.status === "ambiguous") {
+    return ambiguousFeature(
+      feature,
+      "party.ui-dispatcher",
+      Math.max(2, playerChatUiCandidates(evidence)),
+    );
+  }
+  return evidence?.playerChatUi.status === "unavailable"
+    ? changedFeature(feature, "party.ui-dispatcher")
+    : null;
+}
+
+function diagnoseFeatureFailures(
+  input: Uint8Array,
+  requested: EnhancementCapabilities,
+  locatedCursor: AutomaticCursorLocation | null,
+  locatedTarget: AutomaticTargetLocation | null,
+  locatedLocal: AutomaticLocalActionsLocation | null,
+  context: EnhancementProofContext,
+): LocalFeatureFailures {
+  const needsLocalEvidence = (requested.partyObservation
+      && !locatedLocal?.partyObservation)
+    || (requested.teamApply && !locatedLocal?.teamApply)
+    || (requested.travelAction && !locatedLocal?.travelAction)
+    || (requested.xunlaiAction && !locatedLocal?.xunlaiAction)
+    || (requested.chatAliases && !locatedLocal?.chatAliases);
+  const needsEvidence = (requested.nativeCursor && !locatedCursor)
+    || (requested.targetObservation && !locatedTarget)
+    || needsLocalEvidence;
+  const evidence = needsEvidence ? structuralEvidence(input, context) : null;
+  const roles = needsLocalEvidence
+    ? inspectLocalActionRoleCandidates(input, ENHANCEMENT_BUILDS, context)
+    : null;
+  const targetRoles = requested.targetObservation && !locatedTarget
+    ? inspectTargetRoleCandidates(input, context)
+    : null;
+  const targetShared = sharedEvidenceFailure("targetObservation", evidence);
+  const partyUi = uiFailure("partyObservation", evidence);
+  const teamUi = uiFailure("teamApply", evidence);
+  const travelShared = sharedEvidenceFailure("travelAction", evidence);
+  const xunlaiShared = sharedEvidenceFailure("xunlaiAction", evidence);
+  const aliasesShared = sharedEvidenceFailure("chatAliases", evidence);
+  return Object.freeze({
+    ...(requested.nativeCursor && !locatedCursor
+      ? { nativeCursor: cursorFailure(evidence) }
+      : {}),
+    ...(requested.targetObservation && !locatedTarget
+      ? {
+          targetObservation: targetShared
+            ?? ambiguousRoleFailure(
+              "targetObservation",
+              "target.observation-selection-anchors",
+              targetRoles ?? undefined,
+            )
+            ?? changedFeature(
+              "targetObservation",
+              "target.observation-selection-anchors",
+            ),
+        }
+      : {}),
+    ...(requested.partyObservation && !locatedLocal?.partyObservation
+      ? {
+          partyObservation: partyUi
+            ?? ambiguousRoleFailure(
+              "partyObservation",
+              "party.ui-dispatcher",
+              roles?.uiDispatcher,
+            )
+            ?? ambiguousRoleFailure(
+              "partyObservation",
+              "party.observation-anchors",
+              roles?.partyObservation,
+            )
+            ?? changedFeature("partyObservation", "party.observation-anchors"),
+        }
+      : {}),
+    ...(requested.teamApply && !locatedLocal?.teamApply
+      ? {
+          teamApply: teamUi
+            ?? ambiguousRoleFailure(
+              "teamApply",
+              "party.ui-dispatcher",
+              roles?.uiDispatcher,
+            )
+            ?? ambiguousRoleFailure(
+              "teamApply",
+              "team.party-observation-prerequisite",
+              roles?.partyObservation,
+            )
+            ?? ambiguousRoleFailure(
+              "teamApply",
+              "local.game-thread-safe-point",
+              roles?.gameThread,
+            )
+            ?? ambiguousRoleFailure(
+              "teamApply",
+              "team.packet-builder-anchors",
+              roles?.teamApply,
+            )
+            ?? (locatedLocal?.partyObservation
+              ? changedFeature("teamApply", "team.packet-builder-anchors")
+              : changedFeature(
+                  "teamApply",
+                  "team.party-observation-prerequisite",
+                )),
+        }
+      : {}),
+    ...(requested.travelAction && !locatedLocal?.travelAction
+      ? {
+          travelAction: travelShared
+            ?? ambiguousRoleFailure(
+              "travelAction",
+              "local.ui-dispatcher",
+              roles?.uiDispatcher,
+            )
+            ?? ambiguousRoleFailure(
+              "travelAction",
+              "local.game-thread-safe-point",
+              roles?.gameThread,
+            )
+            ?? ambiguousRoleFailure(
+              "travelAction",
+              "travel.message-producer-anchor",
+              roles?.travelAction,
+            )
+            ?? (!locatedLocal?.uiDispatcher && locatedLocal !== null
+              ? changedFeature("travelAction", "local.ui-dispatcher")
+              : !locatedLocal?.gameThread && locatedLocal !== null
+                ? changedFeature(
+                    "travelAction",
+                    "local.game-thread-safe-point",
+                  )
+                : changedFeature(
+                    "travelAction",
+                    "travel.message-producer-anchor",
+                  )),
+        }
+      : {}),
+    ...(requested.xunlaiAction && !locatedLocal?.xunlaiAction
+      ? {
+          xunlaiAction: xunlaiShared
+            ?? ambiguousRoleFailure(
+              "xunlaiAction",
+              "local.ui-dispatcher",
+              roles?.uiDispatcher,
+            )
+            ?? ambiguousRoleFailure(
+              "xunlaiAction",
+              "local.game-thread-safe-point",
+              roles?.gameThread,
+            )
+            ?? ambiguousRoleFailure(
+              "xunlaiAction",
+              "xunlai.data-window-anchors",
+              roles?.xunlaiAction,
+            )
+            ?? (!locatedLocal?.uiDispatcher && locatedLocal !== null
+              ? changedFeature("xunlaiAction", "local.ui-dispatcher")
+              : !locatedLocal?.gameThread && locatedLocal !== null
+                ? changedFeature(
+                    "xunlaiAction",
+                    "local.game-thread-safe-point",
+                  )
+                : changedFeature(
+                    "xunlaiAction",
+                    "xunlai.data-window-anchors",
+                  )),
+        }
+      : {}),
+    ...(requested.chatAliases && !locatedLocal?.chatAliases
+      ? {
+          chatAliases: aliasesShared
+            ?? ambiguousRoleFailure(
+              "chatAliases",
+              "local.ui-dispatcher",
+              roles?.uiDispatcher,
+            )
+            ?? ambiguousRoleFailure(
+              "chatAliases",
+              "chat.alias-parser-anchor",
+              roles?.chatAliases,
+            )
+            ?? (!locatedLocal?.uiDispatcher && locatedLocal !== null
+              ? changedFeature("chatAliases", "local.ui-dispatcher")
+              : changedFeature("chatAliases", "chat.alias-parser-anchor")),
+        }
+      : {}),
+  });
+}
+
 function deriveEnhancementBuild(
   official: Uint8Array,
   templateOutput: Uint8Array,
   requestedCapabilities: EnhancementCapabilities,
-): KnownEnhancementBuild | null {
+): EnhancementDerivation {
   const report = inspectEnhancementCandidate(templateOutput);
-  if (!report.validWasm) return null;
+  if (!report.validWasm) {
+    return Object.freeze({
+      build: null,
+      failures: failuresForRequested(
+        requestedCapabilities,
+        "module.wasm-validation",
+      ),
+    });
+  }
   // A common address delta alone proves nothing. The isolated feature locators
   // below own their complete cursor, Target, and local-action evidence independently.
-  const build = findEnhancementBuild(report.sha256);
-  if (build) {
-    const profile = enhancementProfilesForBuild(build)[0];
-    if (!profile) return null;
-    const capabilities = enhancementCapabilitiesForProfile(profile);
-    if (!capabilities) return null;
-    transformEnhancementWasm(templateOutput, build, capabilities);
-    return build;
+  const context = enhancementProofContext(templateOutput);
+  if (!context) {
+    return Object.freeze({
+      build: null,
+      failures: failuresForRequested(
+        requestedCapabilities,
+        "module.binary-shape",
+      ),
+    });
   }
-  const locatedCursor = locateAutomaticCursor(templateOutput, ENHANCEMENT_BUILDS);
-  const locatedTarget = locateAutomaticTarget(templateOutput, ENHANCEMENT_BUILDS);
-  const locatedLocal = locateAutomaticLocalActions(templateOutput, ENHANCEMENT_BUILDS);
-  if (
-    (!locatedCursor && !locatedTarget && !locatedLocal)
-    || !report.table || report.table.max === null
-  ) {
-    return null;
-  }
-  const baseline = locatedCursor?.baseline
-    ?? locatedTarget?.baseline
-    ?? locatedLocal!.baseline;
+  const locatedCursor = requestedCapabilities.nativeCursor
+    ? locateAutomaticCursor(templateOutput, ENHANCEMENT_BUILDS, context)
+    : null;
+  const locatedTarget = requestedCapabilities.targetObservation
+    ? locateAutomaticTarget(templateOutput, ENHANCEMENT_BUILDS, context)
+    : null;
+  const wantsLocal = requestedCapabilities.partyObservation
+    || requestedCapabilities.teamApply
+    || requestedCapabilities.travelAction
+    || requestedCapabilities.xunlaiAction
+    || requestedCapabilities.chatAliases;
+  const locatedLocal = wantsLocal
+    ? locateAutomaticLocalActions(
+        templateOutput,
+        ENHANCEMENT_BUILDS,
+        context,
+        locatedTarget?.observationLayout,
+      )
+    : null;
   const cursor = locatedCursor?.baseline.cursorEvent;
-  if (locatedCursor && !cursor) return null;
+  const includeCursor = locatedCursor !== null && cursor !== undefined;
+  const includeTarget = locatedTarget !== null;
+  const includeParty = requestedCapabilities.partyObservation
+    && locatedLocal?.observationLayout != null
+    && locatedLocal.uiDispatcher != null
+    && locatedLocal.partyObservation != null;
+  const includeTeam = requestedCapabilities.teamApply
+    && includeParty
+    && locatedLocal?.gameThread != null
+    && locatedLocal.teamApply != null;
+  const includeTravel = requestedCapabilities.travelAction
+    && locatedLocal?.uiDispatcher != null
+    && locatedLocal.gameThread != null
+    && locatedLocal.travelAction != null;
+  const includeXunlai = requestedCapabilities.xunlaiAction
+    && locatedLocal?.observationLayout != null
+    && locatedLocal.uiDispatcher != null
+    && locatedLocal.gameThread != null
+    && locatedLocal.xunlaiAction?.accessProof != null;
+  const includeAliases = requestedCapabilities.chatAliases
+    && locatedLocal?.uiDispatcher != null
+    && locatedLocal.chatAliases != null;
+  const failures = diagnoseFeatureFailures(
+    templateOutput,
+    requestedCapabilities,
+    locatedCursor,
+    locatedTarget,
+    locatedLocal,
+    context,
+  );
+  const localContributes = includeParty || includeTeam || includeTravel
+    || includeXunlai || includeAliases;
+  const source = includeCursor
+    ? locatedCursor
+    : includeTarget
+      ? locatedTarget
+      : localContributes
+        ? locatedLocal
+        : null;
+  if (source === null || !report.table || report.table.max === null) {
+    return Object.freeze({ build: null, failures });
+  }
+  if (
+    includeTarget
+    && (includeParty || includeXunlai)
+    && !sameJson(locatedTarget.observationLayout, locatedLocal?.observationLayout)
+  ) {
+    return Object.freeze({
+      build: null,
+      failures: Object.freeze({
+        ...failures,
+        ...(requestedCapabilities.targetObservation
+          ? {
+              targetObservation: changedFeature(
+                "targetObservation",
+                "target.shared-observation-layout",
+              ),
+            }
+          : {}),
+        ...(requestedCapabilities.partyObservation
+          ? {
+              partyObservation: changedFeature(
+                "partyObservation",
+                "party.observation-anchors",
+              ),
+            }
+          : {}),
+        ...(requestedCapabilities.xunlaiAction
+          ? {
+              xunlaiAction: changedFeature(
+                "xunlaiAction",
+                "xunlai.data-window-anchors",
+              ),
+            }
+          : {}),
+      }),
+    });
+  }
+  const baseline = source.baseline;
+  const observationLayout = includeTarget
+    ? locatedTarget.observationLayout
+    : includeParty || includeXunlai
+      ? locatedLocal!.observationLayout!
+      : null;
   const provisional: KnownEnhancementBuild = Object.freeze({
     sha256: report.sha256,
     outputSha256: Object.freeze({}),
     programId: baseline.programId,
     buildId: Number.parseInt(sha256(official).slice(0, 8), 16) || 1,
-    hookFunction: (locatedCursor ?? locatedTarget ?? locatedLocal)!.hookFunction,
+    hookFunction: source.hookFunction,
     hookParams: Object.freeze(["i32"] as const),
     hookResults: Object.freeze([] as const),
-    hookBodySha256: (locatedCursor ?? locatedTarget ?? locatedLocal)!.hookBodySha256,
+    hookBodySha256: source.hookBodySha256,
     tableSlot: report.table.min,
-    ...(locatedCursor && cursor ? {
+    ...(includeCursor ? {
       cursorEvent: Object.freeze({
         functionIndex: locatedCursor.cursorFunction,
         params: cursor.params,
@@ -139,49 +631,38 @@ function deriveEnhancementBuild(
         layout: locatedCursor.layout,
       }),
     } : {}),
-    ...(locatedTarget || locatedLocal?.observationLayout ? {
-      observationBase: Object.freeze({
-        layout: locatedTarget?.observationLayout ?? locatedLocal!.observationLayout!,
-      }),
+    ...(observationLayout ? {
+      observationBase: Object.freeze({ layout: observationLayout }),
     } : {}),
-    ...(locatedTarget ? {
+    ...(includeTarget ? {
       targetObservation: Object.freeze({ layout: locatedTarget.targetLayout }),
     } : {}),
-    ...(locatedLocal?.uiDispatcher ? { uiDispatcher: locatedLocal.uiDispatcher } : {}),
-    ...(locatedLocal?.gameThread ? { gameThread: locatedLocal.gameThread } : {}),
-    ...(locatedLocal?.travelAction ? { travelAction: locatedLocal.travelAction } : {}),
-    ...(locatedLocal?.xunlaiAction ? { xunlaiAction: locatedLocal.xunlaiAction } : {}),
-    ...(locatedLocal?.chatAliases ? { chatAliases: locatedLocal.chatAliases } : {}),
-    ...(locatedLocal?.partyObservation ? {
+    ...(localContributes ? { uiDispatcher: locatedLocal!.uiDispatcher! } : {}),
+    ...(includeTeam || includeTravel || includeXunlai
+      ? { gameThread: locatedLocal!.gameThread! }
+      : {}),
+    ...(includeTravel ? { travelAction: locatedLocal!.travelAction! } : {}),
+    ...(includeXunlai ? { xunlaiAction: locatedLocal!.xunlaiAction! } : {}),
+    ...(includeAliases ? { chatAliases: locatedLocal!.chatAliases! } : {}),
+    ...(includeParty ? {
       partyObservation: locatedLocal.partyObservation,
     } : {}),
-    ...(locatedLocal?.teamApply ? { teamApply: locatedLocal.teamApply } : {}),
+    ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
   });
   const maximum: EnhancementCapabilities = Object.freeze({
-    nativeCursor: locatedCursor !== null,
-    targetObservation: locatedTarget !== null,
-    partyObservation: locatedLocal?.partyObservation !== null
-      && locatedLocal?.partyObservation !== undefined,
-    teamApply: locatedLocal?.teamApply !== null
-      && locatedLocal?.teamApply !== undefined,
-    travelAction: locatedLocal?.travelAction !== null && locatedLocal?.travelAction !== undefined,
-    xunlaiAction: locatedLocal?.xunlaiAction !== null && locatedLocal?.xunlaiAction !== undefined,
-    chatAliases: locatedLocal?.chatAliases !== null && locatedLocal?.chatAliases !== undefined,
+    nativeCursor: includeCursor,
+    targetObservation: includeTarget,
+    partyObservation: includeParty,
+    teamApply: includeTeam,
+    travelAction: includeTravel,
+    xunlaiAction: includeXunlai,
+    chatAliases: includeAliases,
   });
-  const effective: EnhancementCapabilities = Object.freeze({
-    nativeCursor: requestedCapabilities.nativeCursor && maximum.nativeCursor,
-    targetObservation:
-      requestedCapabilities.targetObservation && maximum.targetObservation,
-    partyObservation:
-      requestedCapabilities.partyObservation && maximum.partyObservation,
-    teamApply: requestedCapabilities.teamApply
-      && maximum.teamApply && maximum.partyObservation,
-    travelAction: requestedCapabilities.travelAction && maximum.travelAction,
-    xunlaiAction: requestedCapabilities.xunlaiAction && maximum.xunlaiAction,
-    chatAliases: requestedCapabilities.chatAliases && maximum.chatAliases,
-  });
+  const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);
-  if (profile === null || !enhancementCapabilitiesRequested(effective)) return null;
+  if (profile === null || !enhancementCapabilitiesRequested(effective)) {
+    return Object.freeze({ build: null, failures });
+  }
   const outputSha256 = Object.freeze({
     [profile]: sha256(transformEnhancementWasm(
       templateOutput,
@@ -190,8 +671,11 @@ function deriveEnhancementBuild(
     )),
   });
   return Object.freeze({
-    ...provisional,
-    outputSha256: Object.freeze(outputSha256),
+    build: Object.freeze({
+      ...provisional,
+      outputSha256: Object.freeze(outputSha256),
+    }),
+    failures,
   });
 }
 
@@ -201,24 +685,20 @@ function deriveEnhancementBuild(
  */
 export function verifyLocalClientBytes(
   official: Uint8Array,
-  requestedCapabilities: EnhancementCapabilities = Object.freeze({
-    nativeCursor: true,
-    targetObservation: true,
-    partyObservation: true,
-    teamApply: true,
-    travelAction: true,
-    xunlaiAction: true,
-    chatAliases: true,
-  }),
+  requestedCapabilities: EnhancementCapabilities = ALL_LOCAL_ENHANCEMENT_CAPABILITIES,
 ): LocalClientVerification {
   const officialSha256 = sha256(official);
-  const reasons: LocalVerificationReason[] = [];
-  const base = { officialSha256 };
+  const base = Object.freeze({
+    officialSha256,
+    verifierAbi: SEMANTIC_VERIFIER_ABI,
+  });
   if (!WebAssembly.validate(official)) {
     return {
       ...base,
+      status: "template-refused",
       templateSaveBuild: null,
       enhancementBuild: null,
+      featureVerdicts: null,
       reasons: ["invalid-wasm"],
     };
   }
@@ -229,392 +709,81 @@ export function verifyLocalClientBytes(
   } catch {
     return {
       ...base,
+      status: "template-refused",
       templateSaveBuild: null,
       enhancementBuild: null,
+      featureVerdicts: null,
       reasons: ["template-transform-failed"],
     };
   }
   if (!postTemplate) {
     return {
       ...base,
+      status: "template-refused",
       templateSaveBuild: null,
       enhancementBuild: null,
+      featureVerdicts: null,
       reasons: ["template-shape-changed"],
     };
   }
 
   const templateSaveBuild = postTemplate.build;
   const templateOutput = postTemplate.bytes;
+  if (!enhancementCapabilitiesRequested(requestedCapabilities)) {
+    return {
+      ...base,
+      status: "template-proved",
+      templateSaveBuild,
+      enhancementBuild: null,
+      featureVerdicts: localFeatureVerdictsForBuild(
+        templateSaveBuild.outputSha256,
+        requestedCapabilities,
+        null,
+      ),
+      reasons: [],
+    };
+  }
 
-  let enhancementBuild: KnownEnhancementBuild | null = null;
+  let derivation: EnhancementDerivation = Object.freeze({
+    build: null,
+    failures: failuresForRequested(
+      requestedCapabilities,
+      "enhancement.transform",
+    ),
+  });
+  let refusal: EnhancementVerificationReason = "enhancement-layout-changed";
   try {
-    enhancementBuild = deriveEnhancementBuild(
+    derivation = deriveEnhancementBuild(
       official,
       templateOutput,
       requestedCapabilities,
     );
-    if (!enhancementBuild) reasons.push("enhancement-layout-changed");
   } catch {
-    reasons.push("enhancement-transform-failed");
+    refusal = "enhancement-transform-failed";
+  }
+  const enhancementBuild = derivation.build;
+  const featureVerdicts = localFeatureVerdictsForBuild(
+    templateSaveBuild.outputSha256,
+    requestedCapabilities,
+    enhancementBuild,
+    derivation.failures,
+  );
+  if (enhancementBuild === null) {
+    return {
+      ...base,
+      status: "enhancement-refused",
+      templateSaveBuild,
+      enhancementBuild: null,
+      featureVerdicts,
+      reasons: [refusal],
+    };
   }
   return {
     ...base,
+    status: "proved",
     templateSaveBuild,
     enhancementBuild,
-    reasons,
+    featureVerdicts,
+    reasons: [],
   };
-}
-
-function isDigest(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
-}
-
-function isIndex(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0;
-}
-
-function isTemplateSaveBuild(
-  value: unknown,
-  officialSha256: string,
-): value is KnownTemplateSaveBuild {
-  if (!value || typeof value !== "object") return false;
-  const build = value as Partial<KnownTemplateSaveBuild>;
-  if (
-    build.sha256 !== officialSha256
-    || !isDigest(build.outputSha256)
-    || !isIndex(build.importCount)
-    || !isIndex(build.carrierImport)
-    || !Array.isArray(build.bridges)
-    || build.bridges.length
-      !== TEMPLATE_SAVE_BUILDS[TEMPLATE_SAVE_BUILDS.length - 1]?.bridges.length
-  ) {
-    return false;
-  }
-  const kinds = new Set<BridgeKind>();
-  for (const bridge of build.bridges) {
-    if (
-      !bridge
-      || !BRIDGE_KINDS.includes(bridge.kind)
-      || kinds.has(bridge.kind)
-      || !isIndex(bridge.stubFunction)
-      || !Array.isArray(bridge.callSites)
-      || bridge.callSites.length === 0
-      || !bridge.callSites.every(
-        (site: unknown) => {
-          if (!site || typeof site !== "object") return false;
-          const callSite = site as {
-            localFunction?: unknown;
-            bodyOffset?: unknown;
-          };
-          return isIndex(callSite.localFunction) && isIndex(callSite.bodyOffset);
-        },
-      )
-      || (
-        bridge.stubBody !== undefined
-        && (
-          !Array.isArray(bridge.stubBody)
-          || !bridge.stubBody.every(
-            (byte: unknown) =>
-              typeof byte === "number"
-              && Number.isInteger(byte)
-              && byte >= 0
-              && byte <= 0xff,
-          )
-        )
-      )
-    ) {
-      return false;
-    }
-    kinds.add(bridge.kind);
-  }
-  return kinds.size === BRIDGE_KINDS.length;
-}
-
-function isExactEnhancementBuild(
-  value: unknown,
-  inputSha256: string,
-): value is KnownEnhancementBuild {
-  const exact = findEnhancementBuild(inputSha256);
-  return exact !== null && sameJson(value, exact);
-}
-
-function isAutomaticSemanticBuild(
-  value: unknown,
-  inputSha256: string,
-): value is KnownEnhancementBuild {
-  if (!value || typeof value !== "object") return false;
-  const build = value as Partial<KnownEnhancementBuild>;
-  if (
-    build.sha256 !== inputSha256
-    || !build.outputSha256
-    || !isIndex(build.programId)
-    || !isIndex(build.buildId)
-    || !isIndex(build.hookFunction)
-    || !isIndex(build.tableSlot)
-    || !isDigest(build.hookBodySha256)
-  ) return false;
-  const hasCursor = build.cursorEvent !== undefined;
-  const hasObservation = build.observationBase !== undefined;
-  const hasTarget = build.targetObservation !== undefined;
-  const hasTravel = build.travelAction !== undefined;
-  const hasXunlai = build.xunlaiAction !== undefined;
-  const hasAliases = build.chatAliases !== undefined;
-  const hasParty = build.partyObservation !== undefined;
-  const hasTeam = build.teamApply !== undefined;
-  if (!hasCursor && !hasTarget && !hasTravel && !hasXunlai && !hasAliases
-    && !hasParty && !hasTeam) return false;
-  if (
-    Object.keys(build.outputSha256).length === 0
-    || !Object.values(build.outputSha256).every(isDigest)
-    || (hasTarget && !hasObservation)
-    || (hasXunlai && !hasObservation)
-    || (hasParty && (!hasObservation || build.uiDispatcher === undefined))
-    || (hasTeam && (!hasParty || build.gameThread === undefined))
-    || ((hasTravel || hasXunlai) && build.gameThread === undefined)
-    || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
-  ) return false;
-  const supported = supportedEnhancementCapabilities(build as KnownEnhancementBuild);
-  if (!Object.keys(build.outputSha256).every((profile) => {
-    const capabilities = enhancementCapabilitiesForProfile(profile);
-    return capabilities !== null
-      && (Object.keys(capabilities) as (keyof EnhancementCapabilities)[]).every(
-        (feature) => !capabilities[feature] || supported[feature],
-      );
-  })) return false;
-  return ENHANCEMENT_BUILDS.some((baseline) => {
-    const cursor = baseline.cursorEvent;
-    const cursorMatches = !hasCursor || (
-      cursor !== undefined
-      && build.cursorEvent !== undefined
-      && isIndex(build.cursorEvent.functionIndex)
-      && isIndex(build.cursorEvent.tableSlot)
-      && build.cursorEvent.producerFunctions.length === 2
-      && build.cursorEvent.producerFunctions.every(isIndex)
-      && build.cursorEvent.producerBodySha256.length === 2
-      && build.cursorEvent.producerBodySha256.every(isDigest)
-      && Object.values(build.cursorEvent.layout).every(isIndex)
-      && Object.keys(build.cursorEvent!.layout).sort().join()
-        === Object.keys(cursor.layout).sort().join()
-      && sameJson(build.hookParams, baseline.hookParams)
-      && sameJson(build.hookResults, baseline.hookResults)
-      && sameJson(build.cursorEvent?.params, cursor.params)
-      && sameJson(build.cursorEvent?.results, cursor.results)
-      && build.cursorEvent?.bodySha256 === cursor.bodySha256
-      && sameJson(build.cursorEvent?.producerParams, cursor.producerParams)
-      && sameJson(build.cursorEvent?.producerResults, cursor.producerResults)
-      && sameJson(build.cursorEvent?.tableNeighbourBodySha256, cursor.tableNeighbourBodySha256)
-      && build.cursorEvent.layout.cursorSoftwareModel
-        === build.cursorEvent.layout.cursorActiveArt + 4
-      && build.cursorEvent.layout.cursorShowCount
-        === build.cursorEvent.layout.cursorActiveArt + 8
-      && build.cursorEvent.layout.cursorArtHotspot === cursor.layout.cursorArtHotspot
-      && build.cursorEvent.layout.cursorArtTexture === cursor.layout.cursorArtTexture
-      && build.cursorEvent.layout.cursorHandleKey === cursor.layout.cursorHandleKey
-      && build.cursorEvent.layout.cursorHandleObject === cursor.layout.cursorHandleObject
-      && build.cursorEvent.layout.cursorViewTexture === cursor.layout.cursorViewTexture
-      && build.cursorEvent.layout.cursorTextureType === cursor.layout.cursorTextureType
-      && build.cursorEvent.layout.cursorTextureWidth === cursor.layout.cursorTextureWidth
-      && build.cursorEvent.layout.cursorTextureHeight === cursor.layout.cursorTextureHeight
-    );
-    const observation = baseline.observationBase?.layout;
-    const target = baseline.targetObservation?.layout;
-    const candidateObservation = build.observationBase?.layout;
-    const candidateTarget = build.targetObservation?.layout;
-    const observationMatches = !hasObservation || (
-      observation !== undefined
-      && candidateObservation !== undefined
-      && Object.keys(candidateObservation).sort().join()
-        === Object.keys(observation).sort().join()
-      && Object.values(candidateObservation).every(isIndex)
-      && [
-        candidateObservation.contextRoot - observation.contextRoot,
-        candidateObservation.agentArray - observation.agentArray,
-        candidateObservation.areaInfo - observation.areaInfo,
-      ].every((delta, _index, deltas) => delta === deltas[0])
-      && Object.entries(observation).every(([key, expected]) =>
-        key === "contextRoot" || key === "agentArray" || key === "areaInfo"
-          || candidateObservation[key as keyof typeof candidateObservation] === expected)
-    );
-    const targetMatches = !hasTarget || (
-      observationMatches
-      && target !== undefined
-      && candidateTarget !== undefined
-      && candidateObservation !== undefined
-      && Object.keys(candidateTarget).sort().join()
-        === Object.keys(target).sort().join()
-      && Object.values(candidateTarget).every(isIndex)
-      && candidateTarget.manualTargetAgentId
-        === candidateTarget.automaticTargetAgentId + 4
-      && [
-        candidateTarget.manualTargetAgentId - target.manualTargetAgentId,
-        candidateTarget.automaticTargetAgentId - target.automaticTargetAgentId,
-        candidateObservation.contextRoot - observation!.contextRoot,
-      ].every((delta, _index, deltas) => delta === deltas[0])
-    );
-    const ui = baseline.uiDispatcher;
-    const gameThread = baseline.gameThread;
-    const travel = baseline.travelAction;
-    const xunlai = baseline.xunlaiAction;
-    const aliases = baseline.chatAliases;
-    const party = baseline.partyObservation;
-    const team = baseline.teamApply;
-    const uiMatches = build.uiDispatcher === undefined || (
-      ui !== undefined
-      && isIndex(build.uiDispatcher.functionIndex)
-      && build.uiDispatcher.bodySha256 === ui.bodySha256
-      && sameJson(build.uiDispatcher.params, ui.params)
-      && sameJson(build.uiDispatcher.results, ui.results)
-      && build.uiDispatcher.playerChatMessage === ui.playerChatMessage
-      && build.uiDispatcher.hideHeroPanelMessage === ui.hideHeroPanelMessage
-      && build.uiDispatcher.showHeroPanelMessage === ui.showHeroPanelMessage
-    );
-    const gameThreadMatches = build.gameThread === undefined || (
-      gameThread !== undefined
-      && isIndex(build.gameThread.drain.functionIndex)
-      && isIndex(build.gameThread.drain.tableSlot)
-      && isDigest(build.gameThread.drain.bodySha256)
-      && sameJson(build.gameThread.drain.params, gameThread.drain.params)
-      && sameJson(build.gameThread.drain.results, gameThread.drain.results)
-    );
-    const travelMatches = !hasTravel || (
-      travel !== undefined
-      && build.travelAction !== undefined
-      && build.travelAction.enqueueExport === travel.enqueueExport
-      && build.travelAction.configureExport === travel.configureExport
-      && build.travelAction.toggleExport === travel.toggleExport
-      && build.travelAction.messageId === travel.messageId
-      && isIndex(build.travelAction.producer.functionIndex)
-      && build.travelAction.producer.bodySha256 === travel.producer.bodySha256
-      && sameJson(build.travelAction.producer.params, travel.producer.params)
-      && sameJson(build.travelAction.producer.results, travel.producer.results)
-    );
-    const readers = build.xunlaiAction?.accessProof?.readers;
-    const baselineReaders = xunlai?.accessProof?.readers;
-    const xunlaiLayout = build.xunlaiAction?.accessProof?.layout;
-    const baselineXunlaiLayout = xunlai?.accessProof?.layout;
-    const xunlaiMatches = !hasXunlai || (
-      xunlai !== undefined
-      && build.xunlaiAction !== undefined
-      && readers !== undefined
-      && baselineReaders !== undefined
-      && xunlaiLayout !== undefined
-      && baselineXunlaiLayout !== undefined
-      && build.xunlaiAction.openExport === xunlai.openExport
-      && build.xunlaiAction.configureExport === xunlai.configureExport
-      && Object.keys(readers).sort().join() === Object.keys(baselineReaders).sort().join()
-      && Object.entries(readers).every(([name, reader]) => {
-        const expected = baselineReaders[name as keyof typeof baselineReaders];
-        return expected !== undefined
-          && isIndex(reader.functionIndex)
-          && isDigest(reader.bodySha256)
-          && sameJson(reader.params, expected.params)
-          && sameJson(reader.results, expected.results);
-      })
-      && sameJson(xunlaiLayout, baselineXunlaiLayout)
-      && isIndex(build.xunlaiAction.handler.functionIndex)
-      && build.xunlaiAction.handler.bodySha256 === xunlai.handler.bodySha256
-      && sameJson(build.xunlaiAction.handler.params, xunlai.handler.params)
-      && sameJson(build.xunlaiAction.handler.results, xunlai.handler.results)
-    );
-    const aliasesMatches = !hasAliases || (
-      aliases !== undefined
-      && build.chatAliases !== undefined
-      && isIndex(build.chatAliases.parser.functionIndex)
-      && isDigest(build.chatAliases.parser.bodySha256)
-      && sameJson(build.chatAliases.parser.params, aliases.parser.params)
-      && sameJson(build.chatAliases.parser.results, aliases.parser.results)
-    );
-    const partyMatches = !hasParty || (
-      party !== undefined
-      && build.partyObservation !== undefined
-      && build.partyObservation.playerChatSites === 3
-      && isIndex(build.partyObservation.playerChatProducer)
-      && build.partyObservation.nearbyPlayerMessageProducers.length === 2
-      && build.partyObservation.nearbyPlayerMessageProducers.every(isIndex)
-      && sameJson(build.partyObservation.partyDirtyMessages, party.partyDirtyMessages)
-      && sameJson(build.partyObservation.nearbyPlayerMessages, party.nearbyPlayerMessages)
-      && sameJson(build.partyObservation.layout, party.layout)
-    );
-    const teamMatches = !hasTeam || (
-      team !== undefined
-      && build.teamApply !== undefined
-      && build.teamApply.thunkExport === team.thunkExport
-      && build.teamApply.professionTrace.readerExport === team.professionTrace.readerExport
-      && isIndex(build.teamApply.professionTrace.sender.functionIndex)
-      && isDigest(build.teamApply.professionTrace.sender.bodySha256)
-      && sameJson(
-        build.teamApply.professionTrace.sender.params,
-        team.professionTrace.sender.params,
-      )
-      && sameJson(
-        build.teamApply.professionTrace.sender.results,
-        team.professionTrace.sender.results,
-      )
-      && build.teamApply.entries.length === team.entries.length
-      && build.teamApply.entries.every((entry, index) => {
-        const expected = team.entries[index];
-        return expected !== undefined
-          && entry.opcode === expected.opcode
-          && entry.label === expected.label
-          && isIndex(entry.functionIndex)
-          && isDigest(entry.bodySha256)
-          && sameJson(entry.params, expected.params)
-          && sameJson(entry.results, expected.results);
-      })
-    );
-    return cursorMatches && observationMatches && targetMatches
-      && uiMatches && gameThreadMatches && travelMatches
-      && xunlaiMatches && aliasesMatches && partyMatches && teamMatches;
-  });
-}
-
-/**
- * Boundary check for utility-process messages. Production transforms still
- * re-check every body/callsite before use.
- */
-export function isLocalClientVerification(
-  value: unknown,
-  officialSha256: string,
-): value is LocalClientVerification {
-  if (!value || typeof value !== "object") return false;
-  const result = value as Partial<LocalClientVerification>;
-  if (
-    result.officialSha256 !== officialSha256
-    || !isDigest(result.officialSha256)
-    || !Array.isArray(result.reasons)
-    || !result.reasons.every((reason): reason is LocalVerificationReason =>
-      typeof reason === "string"
-      && (LOCAL_VERIFICATION_REASONS as readonly string[]).includes(reason)
-    )
-  ) {
-    return false;
-  }
-  if (result.templateSaveBuild === null) {
-    return result.enhancementBuild === null
-      && result.reasons.some((reason) =>
-        reason === "invalid-wasm"
-        || reason === "template-shape-changed"
-        || reason === "template-transform-failed"
-      );
-  }
-  if (!isTemplateSaveBuild(result.templateSaveBuild, officialSha256)) {
-    return false;
-  }
-  if (result.enhancementBuild === null) {
-    return result.reasons.some((reason) =>
-      reason === "enhancement-layout-changed"
-      || reason === "enhancement-transform-failed"
-    );
-  }
-  return result.reasons.length === 0
-    && (
-      isExactEnhancementBuild(
-        result.enhancementBuild,
-        result.templateSaveBuild.outputSha256,
-      )
-      || isAutomaticSemanticBuild(
-        result.enhancementBuild,
-        result.templateSaveBuild.outputSha256,
-      )
-    );
 }

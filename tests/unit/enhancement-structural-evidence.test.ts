@@ -511,7 +511,7 @@ describe("review-only Enhancement structural evidence", () => {
     assert.deepEqual(duplicate.cursor.considered[0]?.activeTableSlots, [1, 2]);
   });
 
-  it("authorizes exactly one fingerprinted cursor location", () => {
+  it("does not let an exact input hash replace cursor field witnesses", () => {
     const input = fixture({ automaticCursor: true });
     const evidence = inspectEvidence(input.bytes);
     const shipped = ENHANCEMENT_BUILDS[0]!;
@@ -535,16 +535,7 @@ describe("review-only Enhancement structural evidence", () => {
       }),
     });
 
-    assert.deepEqual(locateAutomaticCursor(input.bytes, [baseline]), {
-      baseline,
-      hookFunction: input.tick,
-      hookBodySha256: tick.bodySha256,
-      cursorFunction: input.cursor,
-      cursorTableSlot: 2,
-      producerFunctions: input.cursorProducers,
-      producerBodySha256: cursor.producerBodySha256,
-      layout: shippedCursor.layout,
-    });
+    assert.equal(locateAutomaticCursor(input.bytes, [baseline]), null);
   });
 
   it("rejects every changed cursor anchor and duplicate candidate", () => {

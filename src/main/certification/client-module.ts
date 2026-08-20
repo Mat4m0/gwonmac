@@ -12,13 +12,11 @@
  * it downstream.
  */
 import {
-  ENHANCEMENT_CAPABILITY_PROFILES,
   enhancementCapabilityProfile,
   enhancementCapabilitiesForProfile,
   enhancementCapabilitiesRequested,
   intersectEnhancementCapabilities,
   ENHANCEMENT_TRANSFORM_ABI,
-  type EnhancementCapabilityProfile,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
 import type { RequiredFeatureStatus } from "../../shared/contracts.js";
@@ -37,12 +35,12 @@ import {
 } from "./template-save-compat.js";
 import {
   enhancementOutputSha256,
+  enhancementProfilesForBuild,
   supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
-  findNativeDoubleClickBuild,
   nativeDoubleClickOutputSha256,
   NATIVE_DOUBLE_CLICK_TRANSFORM_ABI,
   rewriteWithBuild,
@@ -75,6 +73,8 @@ export interface ClientModulePreparationFailure {
 
 interface PreparedWasmClientModule {
   readonly wasmPath: string;
+  /** Authoritative output hash of the last certified stage, never re-derived from the cache. */
+  readonly wasmSha256: string;
   readonly gameFileSaving: RequiredFeatureStatus;
   readonly enhancementBuild: KnownEnhancementBuild | null;
   readonly requestedCapabilities: EnhancementCapabilities;
@@ -130,8 +130,7 @@ function enhancementCandidates(
     requested,
     supportedEnhancementCapabilities(build),
   );
-  return (Object.keys(ENHANCEMENT_CAPABILITY_PROFILES) as
-    EnhancementCapabilityProfile[])
+  return enhancementProfilesForBuild(build)
     .flatMap((profile) => {
       const capabilities = enhancementCapabilitiesForProfile(profile);
       return capabilities ? [capabilities] : [];
@@ -269,18 +268,20 @@ async function discardEnhancementCache(
 async function withNativeDoubleClick(
   prepared: PreparedWasmClientModule,
   cacheRoot: string,
-  verifyUnknown: (options: {
+  verifyLocally: (options: {
     wasmPath: string;
     inputSha256: string;
   }) => Promise<NativeDoubleClickBuild | null>,
 ): Promise<PreparedWasmClientModule> {
   try {
     const inputSha256 = await sha256File(prepared.wasmPath);
-    const build = findNativeDoubleClickBuild(inputSha256)
-      ?? await verifyUnknown({
-        wasmPath: prepared.wasmPath,
-        inputSha256,
-      });
+    if (inputSha256 !== prepared.wasmSha256) {
+      throw new Error("prepared client cache no longer matches its certified hash");
+    }
+    const build = await verifyLocally({
+      wasmPath: prepared.wasmPath,
+      inputSha256,
+    });
     const expectedOutputSha256 = build
       ? nativeDoubleClickOutputSha256(build, inputSha256)
       : null;
@@ -301,6 +302,7 @@ async function withNativeDoubleClick(
         },
         (base) => rewriteWithBuild(base, build),
       ),
+      wasmSha256: expectedOutputSha256,
       nativeDoubleClick: true,
     };
   } catch (error) {
@@ -313,11 +315,11 @@ async function withNativeDoubleClick(
 
 export async function prepareClientModule(
   options: PrepareClientModuleOptions,
-  verifyUnknownNativeDoubleClick: (options: {
+  verifyNativeDoubleClick: (options: {
     wasmPath: string;
     inputSha256: string;
   }) => Promise<NativeDoubleClickBuild | null> = async () => null,
-  verifyUnknownExtendedMemory: (options: {
+  verifyExtendedMemory: (options: {
     jsPath: string;
     jsInputSha256: string;
     wasmPath: string;
@@ -327,7 +329,7 @@ export async function prepareClientModule(
   const prepared = await withNativeDoubleClick(
     await prepareCertifiedChain(options),
     options.nativeDoubleClickCacheRoot,
-    verifyUnknownNativeDoubleClick,
+    verifyNativeDoubleClick,
   );
   if (!options.extendedMemoryEnabled) {
     return {
@@ -341,15 +343,17 @@ export async function prepareClientModule(
       options.officialJsPath,
       options.officialWasmPath,
       prepared.wasmPath,
+      prepared.wasmSha256,
       enhancementCapabilityProfile(prepared.effectiveCapabilities) ?? "off",
       options.extendedMemoryCacheRoot,
-      verifyUnknownExtendedMemory,
+      verifyExtendedMemory,
     );
     return extended
       ? {
           ...prepared,
           jsPath: extended.jsPath,
           wasmPath: extended.wasmPath,
+          wasmSha256: extended.wasmSha256,
           extendedMemory: {
             status: "active",
             profile: extended.profile,
@@ -402,6 +406,7 @@ async function prepareCertifiedChain(
   if (templateSaveBuild === null) {
     return {
       wasmPath: officialWasmPath,
+      wasmSha256: officialSha256,
       gameFileSaving: { status: "unavailable", reason: "game-update" },
       enhancementBuild: null,
       requestedCapabilities,
@@ -418,6 +423,7 @@ async function prepareCertifiedChain(
     await discardUnsupportedCaches(compatibilityCacheRoot, enhancementCacheRoot);
     return {
       wasmPath: officialWasmPath,
+      wasmSha256: officialSha256,
       gameFileSaving: { status: "unavailable", reason: "preparation-failed" },
       enhancementBuild: null,
       requestedCapabilities,
@@ -443,6 +449,7 @@ async function prepareCertifiedChain(
     await discardDerivedWasm(enhancementCacheRoot).catch(() => undefined);
     return {
       wasmPath: officialWasmPath,
+      wasmSha256: officialSha256,
       gameFileSaving: { status: "unavailable", reason: "preparation-failed" },
       enhancementBuild: null,
       requestedCapabilities,
@@ -456,6 +463,7 @@ async function prepareCertifiedChain(
   if (enhancementBuild === null) {
     return {
       wasmPath: templateSaveWasm,
+      wasmSha256: templateSaveBuild.outputSha256,
       gameFileSaving: { status: "available" },
       enhancementBuild: null,
       requestedCapabilities,
@@ -469,6 +477,7 @@ async function prepareCertifiedChain(
     await discardDerivedWasm(enhancementCacheRoot).catch(() => undefined);
     return {
       wasmPath: templateSaveWasm,
+      wasmSha256: templateSaveBuild.outputSha256,
       gameFileSaving: { status: "available" },
       enhancementBuild: null,
       requestedCapabilities,
@@ -484,6 +493,7 @@ async function prepareCertifiedChain(
   if (!enhancementCapabilitiesRequested(enhancementCapabilities)) {
     return {
       wasmPath: templateSaveWasm,
+      wasmSha256: templateSaveBuild.outputSha256,
       gameFileSaving: { status: "available" },
       enhancementBuild: null,
       requestedCapabilities,
@@ -499,12 +509,14 @@ async function prepareCertifiedChain(
     enhancementCapabilities,
   )) {
     try {
+      const cache = enhancementCache(enhancementBuild, candidate, enhancementCacheRoot);
       return {
         wasmPath: await prepareDerivedWasm(
           templateSaveWasm,
-          enhancementCache(enhancementBuild, candidate, enhancementCacheRoot),
+          cache,
           (base) => transformEnhancementWasm(base, enhancementBuild, candidate),
         ),
+        wasmSha256: cache.expectedOutputSha256,
         gameFileSaving: { status: "available" },
         enhancementBuild,
         requestedCapabilities,
@@ -520,6 +532,7 @@ async function prepareCertifiedChain(
   }
   return {
     wasmPath: templateSaveWasm,
+    wasmSha256: templateSaveBuild.outputSha256,
     gameFileSaving: { status: "available" },
     enhancementBuild,
     requestedCapabilities,

@@ -1,34 +1,96 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
+import {
+  ENHANCEMENT_BUILDS,
+  type KnownEnhancementBuild,
+} from "../../src/main/certification/enhancement-builds.js";
 import {
   isLocalClientVerification,
+  localFeatureVerdictsForBuild,
   type LocalClientVerification,
 } from "../../src/main/certification/local-client-verifier.js";
+import { SEMANTIC_VERIFIER_ABI } from "../../src/main/certification/semantic-proof.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
+import type { EnhancementCapabilities } from "../../src/shared/enhancement-contracts.js";
 
 const ENHANCEMENT = ENHANCEMENT_BUILDS[0]!;
 const TEMPLATE = TEMPLATE_SAVE_BUILDS.find(
   (build) => build.outputSha256 === ENHANCEMENT.sha256,
 )!;
-function valid(): LocalClientVerification {
+const NONE: EnhancementCapabilities = Object.freeze({
+  nativeCursor: false,
+  targetObservation: false,
+  partyObservation: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
+});
+const ALL: EnhancementCapabilities = Object.freeze({
+  ...NONE,
+  nativeCursor: true,
+  targetObservation: true,
+  partyObservation: true,
+  teamApply: true,
+  travelAction: true,
+  xunlaiAction: true,
+  chatAliases: true,
+});
+const CURSOR: EnhancementCapabilities = Object.freeze({
+  ...NONE,
+  nativeCursor: true,
+});
+const TARGET: EnhancementCapabilities = Object.freeze({
+  ...NONE,
+  targetObservation: true,
+});
+const STORAGE: EnhancementCapabilities = Object.freeze({
+  ...NONE,
+  travelAction: true,
+  xunlaiAction: true,
+  chatAliases: true,
+});
+const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
+  ...NONE,
+  partyObservation: true,
+  teamApply: true,
+});
+type ProvedVerification = Extract<LocalClientVerification, { status: "proved" }>;
+
+function verificationFor(
+  enhancementBuild: KnownEnhancementBuild,
+  requested: EnhancementCapabilities,
+): ProvedVerification {
   return {
+    status: "proved",
     officialSha256: TEMPLATE.sha256,
+    verifierAbi: SEMANTIC_VERIFIER_ABI,
     templateSaveBuild: TEMPLATE,
-    // The verifier returns the exact table entry for this exact transformed
-    // input. A different build in the same table must not affect this proof.
-    enhancementBuild: ENHANCEMENT,
+    enhancementBuild,
+    featureVerdicts: localFeatureVerdictsForBuild(
+      TEMPLATE.outputSha256,
+      requested,
+      enhancementBuild,
+    ),
     reasons: [],
   };
 }
 
-function automaticCursor(): LocalClientVerification {
+function valid(): ProvedVerification {
+  return verificationFor({
+    ...ENHANCEMENT,
+    outputSha256: {
+      "features-7f": ENHANCEMENT.outputSha256["features-7f"]!,
+    },
+  }, ALL);
+}
+
+function automaticCursor(): ProvedVerification {
   const cursor = ENHANCEMENT.cursorEvent!;
-  return {
-    ...valid(),
-    enhancementBuild: {
+  return verificationFor(
+    {
       sha256: ENHANCEMENT.sha256,
-      outputSha256: { cursor: "1".repeat(64) },
+      outputSha256: { "features-01": "1".repeat(64) },
       programId: ENHANCEMENT.programId,
       buildId: ENHANCEMENT.buildId + 1,
       hookFunction: ENHANCEMENT.hookFunction + 1,
@@ -53,18 +115,18 @@ function automaticCursor(): LocalClientVerification {
         },
       },
     },
-  };
+    CURSOR,
+  );
 }
 
-function automaticTarget(): LocalClientVerification {
+function automaticTarget(): ProvedVerification {
   const observation = ENHANCEMENT.observationBase!.layout;
   const target = ENHANCEMENT.targetObservation!.layout;
   const delta = -112;
-  return {
-    ...valid(),
-    enhancementBuild: {
+  return verificationFor(
+    {
       sha256: ENHANCEMENT.sha256,
-      outputSha256: { target: "5".repeat(64) },
+      outputSha256: { "features-02": "5".repeat(64) },
       programId: ENHANCEMENT.programId,
       buildId: ENHANCEMENT.buildId + 1,
       hookFunction: ENHANCEMENT.hookFunction + 1,
@@ -87,18 +149,18 @@ function automaticTarget(): LocalClientVerification {
         },
       },
     },
-  };
+    TARGET,
+  );
 }
 
-function automaticLocalActions(): LocalClientVerification {
+function automaticLocalActions(): ProvedVerification {
   const target = automaticTarget();
   const xunlai = ENHANCEMENT.xunlaiAction!;
   const readers = xunlai.accessProof!.readers;
-  return {
-    ...target,
-    enhancementBuild: {
+  return verificationFor(
+    {
       ...target.enhancementBuild!,
-      outputSha256: { storage: "7".repeat(64) },
+      outputSha256: { "features-70": "7".repeat(64) },
       uiDispatcher: ENHANCEMENT.uiDispatcher!,
       gameThread: {
         drain: {
@@ -125,18 +187,18 @@ function automaticLocalActions(): LocalClientVerification {
         },
       },
     },
-  };
+    STORAGE,
+  );
 }
 
-function automaticPartyTeam(): LocalClientVerification {
+function automaticPartyTeam(): ProvedVerification {
   const localActions = automaticLocalActions();
   const party = ENHANCEMENT.partyObservation!;
   const team = ENHANCEMENT.teamApply!;
-  return {
-    ...localActions,
-    enhancementBuild: {
+  return verificationFor(
+    {
       ...localActions.enhancementBuild!,
-      outputSha256: { partyCommands: "b".repeat(64) },
+      outputSha256: { "features-0c": "b".repeat(64) },
       partyObservation: {
         ...party,
         playerChatProducer: party.playerChatProducer + 1,
@@ -162,12 +224,23 @@ function automaticPartyTeam(): LocalClientVerification {
         })),
       },
     },
-  };
+    PARTY_TEAM,
+  );
 }
 
 describe("local client verification boundary", () => {
   it("accepts the verifier's complete baseline proof", () => {
     assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256), true);
+  });
+
+  it("rejects an exact authored row that did not cross semantic proof", () => {
+    assert.equal(
+      isLocalClientVerification(
+        verificationFor(ENHANCEMENT, ALL),
+        TEMPLATE.sha256,
+      ),
+      false,
+    );
   });
 
   it("rejects a proof for any other official client", () => {
@@ -193,13 +266,14 @@ describe("local client verification boundary", () => {
   });
 
   it("accepts a relocated hook but rejects an incompatible signature", () => {
-    const relocated = {
-      ...valid(),
-      enhancementBuild: {
+    const relocated = verificationFor(
+      {
         ...ENHANCEMENT,
+        outputSha256: { "features-7f": ENHANCEMENT.outputSha256["features-7f"]! },
         hookFunction: ENHANCEMENT.hookFunction + 1,
       },
-    };
+      ALL,
+    );
     assert.equal(isLocalClientVerification(relocated, TEMPLATE.sha256), true);
     assert.equal(isLocalClientVerification({
       ...relocated,
@@ -212,7 +286,7 @@ describe("local client verification boundary", () => {
 
   it("accepts a structurally derived cursor proof and rejects malformed layouts", () => {
     const derived = automaticCursor();
-    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256, CURSOR), true);
     assert.equal(isLocalClientVerification({
       ...derived,
       enhancementBuild: {
@@ -226,12 +300,12 @@ describe("local client verification boundary", () => {
           },
         },
       },
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, CURSOR), false);
   });
 
   it("accepts a field-complete Target proof and rejects one bad relocation", () => {
     const derived = automaticTarget();
-    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256, TARGET), true);
     assert.equal(isLocalClientVerification({
       ...derived,
       enhancementBuild: {
@@ -244,12 +318,12 @@ describe("local client verification boundary", () => {
           },
         },
       },
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, TARGET), false);
   });
 
   it("accepts independent local-action proofs and rejects one bad Xunlai field", () => {
     const derived = automaticLocalActions();
-    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256, STORAGE), true);
     assert.equal(isLocalClientVerification({
       ...derived,
       enhancementBuild: {
@@ -265,12 +339,12 @@ describe("local client verification boundary", () => {
           },
         },
       },
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, STORAGE), false);
   });
 
   it("accepts complete Party and Team proofs and rejects each independently", () => {
     const derived = automaticPartyTeam();
-    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256, PARTY_TEAM), true);
     assert.equal(isLocalClientVerification({
       ...derived,
       enhancementBuild: {
@@ -284,7 +358,7 @@ describe("local client verification boundary", () => {
           },
         },
       },
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, PARTY_TEAM), false);
     assert.equal(isLocalClientVerification({
       ...derived,
       enhancementBuild: {
@@ -298,13 +372,21 @@ describe("local client verification boundary", () => {
           ),
         },
       },
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, PARTY_TEAM), false);
   });
 
   it("accepts a template-only proof and requires no enhancement behind failure", () => {
     const templateOnly: LocalClientVerification = {
-      ...valid(),
+      status: "enhancement-refused",
+      officialSha256: TEMPLATE.sha256,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
+      templateSaveBuild: TEMPLATE,
       enhancementBuild: null,
+      featureVerdicts: localFeatureVerdictsForBuild(
+        TEMPLATE.outputSha256,
+        ALL,
+        null,
+      ),
       reasons: ["enhancement-layout-changed"],
     };
     assert.equal(
@@ -316,5 +398,135 @@ describe("local client verification boundary", () => {
       templateSaveBuild: null,
       enhancementBuild: ENHANCEMENT,
     }, TEMPLATE.sha256), false);
+  });
+
+  it("represents an unrequested enhancement as a proved template, not a refusal", () => {
+    const templateOnly: LocalClientVerification = {
+      status: "template-proved",
+      officialSha256: TEMPLATE.sha256,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
+      templateSaveBuild: TEMPLATE,
+      enhancementBuild: null,
+      featureVerdicts: localFeatureVerdictsForBuild(
+        TEMPLATE.outputSha256,
+        NONE,
+        null,
+      ),
+      reasons: [],
+    };
+    assert.equal(
+      isLocalClientVerification(templateOnly, TEMPLATE.sha256, NONE),
+      true,
+    );
+    assert.equal(isLocalClientVerification(templateOnly, TEMPLATE.sha256), false);
+  });
+
+  it("rejects a stale verifier ABI at either boundary", () => {
+    const proof = valid();
+    assert.equal(isLocalClientVerification({
+      ...proof,
+      verifierAbi: SEMANTIC_VERIFIER_ABI + 1,
+    }, TEMPLATE.sha256), false);
+    assert.equal(isLocalClientVerification({
+      ...proof,
+      featureVerdicts: {
+        ...proof.featureVerdicts,
+        nativeCursor: {
+          ...proof.featureVerdicts.nativeCursor,
+          verifierAbi: SEMANTIC_VERIFIER_ABI + 1,
+        },
+      },
+    }, TEMPLATE.sha256), false);
+  });
+
+  it("binds each verdict to the post-template hash and requested feature", () => {
+    const cursor = automaticCursor();
+    assert.equal(cursor.featureVerdicts.nativeCursor.status, "proved");
+    assert.equal(cursor.featureVerdicts.targetObservation.status, "not-requested");
+    assert.equal(cursor.featureVerdicts.travelAction.status, "not-requested");
+    assert.equal(isLocalClientVerification({
+      ...cursor,
+      featureVerdicts: {
+        ...cursor.featureVerdicts,
+        targetObservation: {
+          status: "changed",
+          inputSha256: TEMPLATE.outputSha256,
+          verifierAbi: SEMANTIC_VERIFIER_ABI,
+          invariant: "targetObservation-structure-changed",
+        },
+      },
+    }, TEMPLATE.sha256, CURSOR), false);
+    assert.equal(isLocalClientVerification({
+      ...cursor,
+      featureVerdicts: {
+        ...cursor.featureVerdicts,
+        nativeCursor: {
+          ...cursor.featureVerdicts.nativeCursor,
+          inputSha256: "0".repeat(64),
+        },
+      },
+    }, TEMPLATE.sha256, CURSOR), false);
+  });
+
+  it("carries anchor-specific changed and ambiguous evidence across IPC", () => {
+    const featureVerdicts = localFeatureVerdictsForBuild(
+      TEMPLATE.outputSha256,
+      ALL,
+      null,
+      {
+        nativeCursor: {
+          status: "ambiguous",
+          invariant: "cursor.event-owner",
+          candidates: 2,
+        },
+        travelAction: {
+          status: "changed",
+          invariant: "local.game-thread-safe-point",
+        },
+      },
+    );
+    const refusal: LocalClientVerification = {
+      status: "enhancement-refused",
+      officialSha256: TEMPLATE.sha256,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
+      templateSaveBuild: TEMPLATE,
+      enhancementBuild: null,
+      featureVerdicts,
+      reasons: ["enhancement-layout-changed"],
+    };
+    assert.deepEqual(featureVerdicts.nativeCursor, {
+      status: "ambiguous",
+      invariant: "cursor.event-owner",
+      candidates: 2,
+      inputSha256: TEMPLATE.outputSha256,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
+    });
+    assert.deepEqual(featureVerdicts.travelAction, {
+      status: "changed",
+      invariant: "local.game-thread-safe-point",
+      inputSha256: TEMPLATE.outputSha256,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
+    });
+    const received: unknown = JSON.parse(JSON.stringify(refusal));
+    assert.equal(isLocalClientVerification(received, TEMPLATE.sha256), true);
+
+    const invalidCandidates = structuredClone(refusal) as unknown as {
+      featureVerdicts: { nativeCursor: { candidates: number } };
+    };
+    invalidCandidates.featureVerdicts.nativeCursor.candidates = 1;
+    assert.equal(
+      isLocalClientVerification(invalidCandidates, TEMPLATE.sha256),
+      false,
+    );
+
+    const invalidInvariant = structuredClone(refusal) as unknown as {
+      featureVerdicts: { nativeCursor: { invariant: string } };
+    };
+    invalidInvariant.featureVerdicts.nativeCursor.invariant =
+      "nativeCursor-structure-changed";
+    assert.equal(
+      isLocalClientVerification(invalidInvariant, TEMPLATE.sha256),
+      false,
+    );
   });
 });

@@ -74,7 +74,7 @@ describe("export detector", () => {
         clockSynchronized: true,
         companionAbi: 6,
         installation: 1,
-        capabilityProfile: "cursor",
+        capabilityProfile: "features-01",
       },
       { k: "enhancement.installFailed", clockSynchronized: false },
       { k: "enhancement.uninstalled", clockSynchronized: true, installation: 1 },

@@ -28,6 +28,7 @@ jobs:
       changed: ${{ steps.unreported.outputs.changed }}
       fingerprint: ${{ steps.published.outputs.fingerprint }}
       recorded: ${{ steps.published.outputs.recorded }}
+      verifier_abi: ${{ steps.published.outputs.verifier_abi }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -38,12 +39,13 @@ jobs:
       - name: Read the published client generation
         id: published
         run: node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/official-client.ts
-      - name: Skip a generation that already has a tracking issue
+      - name: Skip a generation that already has durable evidence
         id: unreported
         env:
           CHANGED: ${{ steps.published.outputs.changed }}
           FINGERPRINT: ${{ steps.published.outputs.fingerprint }}
           GH_TOKEN: ${{ github.token }}
+          VERIFIER_ABI: ${{ steps.published.outputs.verifier_abi }}
         run: |
           if [ "$CHANGED" != "true" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -51,8 +53,12 @@ jobs:
           fi
           short="${FINGERPRINT:0:12}"
           if [ -n "$(gh issue list --state open --label client-recertification \
-            --search "$short in:title" --json number --jq '.[].number')" ]; then
+            --search "$short v$VERIFIER_ABI in:title" --json number --jq '.[].number')" ]; then
             echo "Generation $short already has an open tracking issue."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$(gh issue list --state all --label client-recertification-proved \
+            --search "$short v$VERIFIER_ABI in:title" --json number --jq '.[].number')" ]; then
+            echo "Generation $short already has a signed successful report."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -64,7 +70,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     permissions:
+      attestations: write
       contents: read
+      id-token: write
     outputs:
       outcome: ${{ steps.derive.outputs.outcome }}
       summary: ${{ steps.derive.outputs.summary }}
@@ -104,16 +112,19 @@ jobs:
             > "$EVIDENCE/template-save.json" 2> "$EVIDENCE/template-save.txt"
           node build/tools/certification.js recertify "$WASM" \
             > "$EVIDENCE/enhancement.json" 2> "$EVIDENCE/enhancement.txt"
+          node build/tools/certification.js verify "$WASM" \
+            > "$EVIDENCE/runtime-verdicts.json" 2> "$EVIDENCE/runtime-verdicts.txt"
           set -e
           build="$(jq -er '.sha256' "$EVIDENCE/template-save.json")"
-          inspected="$(jq -er '.candidateInspected' "$EVIDENCE/enhancement.json")"
-          if [ "$inspected" = "true" ]; then
+          if jq -e '.templateSaving and (.features != null) and (.features | to_entries | all(.value.status == "proved"))' \
+            "$EVIDENCE/runtime-verdicts.json" >/dev/null; then
             outcome=ready
-            summary="the runtime semantic verifier inspected the prepared client"
+            summary="the runtime semantic verifier proved every protected feature"
           else
             outcome=investigation
-            summary="$(jq -r '.bundleFailure // "the runtime semantic verifier refused the client"' \
-              "$EVIDENCE/enhancement.json")"
+            summary="$(jq -cr '{templateSaving, verifierAbi, features, reasons}' \
+              "$EVIDENCE/runtime-verdicts.json" 2>/dev/null \
+              || printf '%s' 'the runtime semantic verifier refused the client')"
           fi
           {
             echo "outcome=$outcome"
@@ -153,6 +164,18 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      # The artifact is convenient for review but expires. This custom
+      # attestation binds the machine-readable verdicts to the exact official
+      # WASM digest and remains queryable through GitHub's attestations API.
+      - name: Sign the runtime semantic report
+        if: always() && steps.derive.outputs.build != ''
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: Gw.jspi.wasm
+          subject-digest: sha256:${{ steps.derive.outputs.build }}
+          predicate-type: https://gwonmac.com/attestations/client-verification/v1
+          predicate-path: ${{ runner.temp }}/evidence/runtime-verdicts.json
+
   # Reporting has no source-writing permission. A tracking issue records a
   # refused invariant for investigation; it is never launch authority.
   publish:
@@ -181,15 +204,40 @@ jobs:
               'Evidence collection did not complete. Review the failed workflow steps.' \
               > evidence/carry-forward.md
           fi
+      - name: Record a proved generation
+        if: needs.derive.result == 'success' && needs.derive.outputs.outcome == 'ready'
+        env:
+          BUILD: ${{ needs.derive.outputs.build }}
+          FINGERPRINT: ${{ needs.derive.outputs.fingerprint }}
+          GH_TOKEN: ${{ github.token }}
+          VERIFIER_ABI: ${{ needs.detect.outputs.verifier_abi }}
+        run: |
+          short="${FINGERPRINT:0:12}"
+          gh label create client-recertification-proved --force --color 0e8a16 \
+            --description "An ArenaNet client generation proved by the runtime verifier"
+          {
+            printf 'Published client generation `%s`, WASM `%s`.\n\n' "$short" "$BUILD"
+            printf '%s\n' '- outcome: every protected feature proved independently'
+            printf '%s\n' '- authority: evidence only; the shipped runtime verifier remains sole launch authority'
+            printf '%s\n' "- signed report: $RUN_URL"
+            echo
+            printf '%s\n' '```json'
+            jq -c . evidence/runtime-verdicts.json
+            printf '%s\n' '```'
+          } > proved.md
+          issue="$(gh issue create --label client-recertification-proved \
+            --title "ArenaNet client $short v$VERIFIER_ABI: semantic proof passed" \
+            --body-file proved.md)"
+          gh issue close "$issue" --reason completed
       - name: Open the tracking issue
-        if: always()
+        if: always() && needs.derive.outputs.outcome != 'ready'
         env:
           BUILD: ${{ needs.derive.outputs.build }}
           DERIVE_RESULT: ${{ needs.derive.result }}
           FINGERPRINT: ${{ needs.derive.outputs.fingerprint || needs.detect.outputs.fingerprint }}
           GH_TOKEN: ${{ github.token }}
-          OUTCOME: ${{ needs.derive.outputs.outcome }}
           SUMMARY: ${{ needs.derive.outputs.summary }}
+          VERIFIER_ABI: ${{ needs.detect.outputs.verifier_abi }}
         run: |
           if [[ "$FINGERPRINT" =~ ^[0-9a-f]{64}$ ]]; then
             short="${FINGERPRINT:0:12}"
@@ -201,17 +249,13 @@ jobs:
           fi
           gh label create client-recertification --force --color 1d76db \
             --description "An ArenaNet client build requiring semantic verification"
-          if [ "$OUTCOME" = "ready" ]; then
-            title="ArenaNet client $short: semantic verification report"
-          else
-            title="ArenaNet client $short: invariant refused, investigation needed"
-          fi
+          title="ArenaNet client $short v$VERIFIER_ABI: invariant refused, investigation needed"
           {
             printf 'Published client generation `%s`, WASM `%s`.\n\n' "$short" "$BUILD"
             printf '%s\n' "- outcome: $SUMMARY"
             printf '%s\n' '- source branch: none; this workflow cannot grant capabilities'
             printf '%s\n' "- evidence: $RUN_URL"
-            printf '%s\n' '- semantic report: `enhancement.json` in that run artifact'
+            printf '%s\n' '- semantic verdicts: `runtime-verdicts.json` in that run artifact'
             echo
             cat evidence/carry-forward.md
             echo

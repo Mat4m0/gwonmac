@@ -559,7 +559,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     delete partyOnlyBuild.targetObservation;
     delete partyOnlyBuild.teamApply;
     partyOnlyBuild.outputSha256 = Object.freeze({
-      party: build.outputSha256.party!,
+      "features-04": build.outputSha256["features-04"]!,
     });
     const transformed = transformEnhancementWasm(
       input,

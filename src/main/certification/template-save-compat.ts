@@ -462,10 +462,10 @@ export function findTemplateSaveBuild(
   );
 }
 
-export function rewriteTemplateSaveWasm(
+function transformTemplateSaveWasm(
   input: Uint8Array,
   build: KnownTemplateSaveBuild,
-): Uint8Array {
+): Readonly<{ bytes: Uint8Array; sha256: string }> {
   const inputHash = sha256(input);
   if (inputHash !== build.sha256) {
     throw new Error(`template-save transform: unsupported input ${inputHash}`);
@@ -535,9 +535,40 @@ export function rewriteTemplateSaveWasm(
   });
   const output = concat(WASM_HEADER, ...rewritten.map(encodeSection));
 
-  const outputHash = sha256(output);
-  if (outputHash !== build.outputSha256) {
-    throw new Error(`template-save transform: unexpected output ${outputHash}`);
+  return { bytes: output, sha256: sha256(output) };
+}
+
+/**
+ * Bind one structurally and semantically derived draft to the exact bytes made
+ * by the production transform. This does not grant authority: callers must
+ * first prove the draft, and the empty output hash prevents checked-in records
+ * from using this derivation-only path.
+ */
+export function certifyTemplateSaveRewrite(
+  input: Uint8Array,
+  draft: KnownTemplateSaveBuild,
+): Readonly<{ build: KnownTemplateSaveBuild; bytes: Uint8Array }> {
+  if (draft.outputSha256 !== "") {
+    throw new Error("template-save transform: certification requires a draft");
+  }
+  const transformed = transformTemplateSaveWasm(input, draft);
+  if (!WebAssembly.validate(transformed.bytes)) {
+    throw new Error("template-save transform: rewritten module is invalid");
+  }
+  return {
+    build: { ...draft, outputSha256: transformed.sha256 },
+    bytes: transformed.bytes,
+  };
+}
+
+export function rewriteTemplateSaveWasm(
+  input: Uint8Array,
+  build: KnownTemplateSaveBuild,
+): Uint8Array {
+  const transformed = transformTemplateSaveWasm(input, build);
+  const output = transformed.bytes;
+  if (transformed.sha256 !== build.outputSha256) {
+    throw new Error(`template-save transform: unexpected output ${transformed.sha256}`);
   }
   if (!WebAssembly.validate(output)) {
     throw new Error("template-save transform: rewritten module is invalid");

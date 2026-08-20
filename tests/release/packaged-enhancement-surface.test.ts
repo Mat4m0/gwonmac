@@ -65,6 +65,13 @@ test("every relative ESM dependency reachable from a shipped entry point is pack
   // These are deliberately transitive rather than entry-point imports. They
   // prove the walk reached both the main and renderer dependency graphs.
   assert.ok(closure.has("/build/main/certification/enhancement-builds.js"));
+  assert.ok(closure.has("/build/main/certification/local-client-verifier-host.js"));
+  assert.ok(closure.has("/build/main/certification/native-double-click.js"));
+  assert.ok(closure.has("/build/main/certification/extended-memory.js"));
+  assert.ok(
+    packaged.has("/build/main/certification/local-client-verifier-process.js"),
+    "the packaged utility verifier entry must ship beside its host",
+  );
   assert.ok(closure.has("/build/renderer/enhancement-readout.js"));
 });
 
