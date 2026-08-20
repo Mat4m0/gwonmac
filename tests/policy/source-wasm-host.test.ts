@@ -326,7 +326,7 @@ test("Enhancement re-certification inspects only post-template bytes", async () 
   );
 });
 
-test("only the strict cursor locator may turn structural evidence into launch authority", async () => {
+test("only strict feature locators may turn structural evidence into launch authority", async () => {
   const analyzer = await readFile(
     path.join(root, "src/main/certification/enhancement-structural-evidence.ts"),
     "utf8",
@@ -347,6 +347,7 @@ test("only the strict cursor locator may turn structural evidence into launch au
     "utf8",
   );
   assert.match(verifier, /locateAutomaticCursor/);
+  assert.match(verifier, /locateAutomaticTarget/);
 });
 
 test("the WASM section codec has exactly one home", async () => {

@@ -402,6 +402,7 @@ through the active table. Automatic cursor recovery therefore uses a separate,
 narrow proof. It requires one exported main-loop body, one callback with its
 exact signature and active table neighbourhood, and the two measured producer
 body fingerprints. Both certified builds must agree on all semantic anchors.
-Changing or duplicating any anchor rejects recovery. The result authorizes only
-the cursor; memory observation and commands remain exact-build-only and still
-require bounded live review before release.
+Changing or duplicating any anchor rejects recovery. That original result
+authorized only the cursor. Target Distance now has a separate proof for its
+selector, bounded context and agent readers, and immutable area table. Party
+observation and actions remain exact-build-only until their own proof layers.
