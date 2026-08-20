@@ -111,7 +111,8 @@ Open **Settings → Tools**.
 GWonMac checks each certified game-integration feature after a Guild Wars
 update. File saving, the Guild Wars cursor, local actions, and Apply team can
 remain available or turn off independently.
-Native double-click uses a safe tap fallback when its repair is unavailable.
+Native double-click is unavailable when its native callback proof refuses. The
+app never substitutes touch events.
 The cursor has no player switch. The app does not ship or download cursor
 artwork.
 
@@ -284,7 +285,7 @@ The official client remains playable. Saved builds and teams remain available.
 File saving, the Guild Wars cursor, storage opening, and Apply team have scoped
 support checks. One unavailable command does not turn off the other command,
 the official client, saved builds, or host-owned templates. The macOS pointer
-and tap-based double-click fallback remain available.
+remains available; the app does not synthesize a double-click.
 
 Use **Check for updates** to look for a newer GWonMac release.
 

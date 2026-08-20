@@ -37,6 +37,11 @@ import {
   transformEnhancementWasm,
 } from "../../src/main/certification/enhancement-transform.js";
 import {
+  DOUBLE_CLICK_FLAG_EXPORT,
+  rewriteWithBuild,
+  type NativeDoubleClickBuild,
+} from "../../src/main/certification/native-double-click.js";
+import {
   parseCode,
   sectionById,
   splitSections,
@@ -149,7 +154,9 @@ function officialFixture(): Uint8Array {
     ...paddedCall(1),
     0x0b,
   ];
-  const loop = [0, 0x0b];
+  // Two parameters plus two locals make local 3 valid for the native
+  // double-click store used by the preparation-path test below.
+  const loop = [1, 2, 0x7f, 0x0b];
   const slashParser = [0, 0x41, 0, 0x0b];
   const code = section(10, [
     12,
@@ -285,8 +292,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
         params: ["i32", "i32"],
         results: [],
         tableSlot: 4,
-        bodySha256:
-          "f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2",
+        bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[5]!),
       },
     },
     teamApply: {
@@ -572,6 +578,45 @@ describe("client module preparation", () => {
     await assertMissing(value.enhancementCacheRoot);
   });
 
+  it("uses an isolated derived native record through the complete cache path", async () => {
+    const value = await fixture();
+    let verifierCalls = 0;
+    const prepared = await prepareClientModule(
+      options(
+        value,
+        { templateSaveBuild: value.templateSaveBuild, enhancementBuild: null },
+        CURSOR_TOOLBOX,
+      ),
+      async ({ wasmPath, inputSha256 }) => {
+        verifierCalls += 1;
+        const input = new Uint8Array(await readFile(wasmPath));
+        assert.equal(sha256(input), inputSha256);
+        const body = parseCode(sectionById(splitSections(input), 10))[5]!;
+        const draft: NativeDoubleClickBuild = {
+          callbackTableSlot: 4,
+          callbackFunctionIndex: 6,
+          callbackParams: ["i32", "i32"],
+          callbackResults: [],
+          callbackBodySha256: sha256(body),
+          flagStoreOffset: 3,
+          flagStoreFrameOffset: 24,
+          derivations: {},
+        };
+        return {
+          ...draft,
+          derivations: { [inputSha256]: sha256(rewriteWithBuild(input, draft)) },
+        };
+      },
+    );
+
+    assert.equal(verifierCalls, 1);
+    assert.equal(prepared.nativeDoubleClick, true);
+    const output = await readFile(prepared.wasmPath);
+    assert.ok(WebAssembly.Module.exports(new WebAssembly.Module(output)).some(
+      (entry) => entry.name === DOUBLE_CLICK_FLAG_EXPORT,
+    ));
+  });
+
   it("serves official bytes and drops both caches when uncertified", async () => {
     const value = await fixture();
     await Promise.all([
@@ -591,9 +636,8 @@ describe("client module preparation", () => {
       enhancementBuild: null,
       requestedCapabilities: CURSOR_TOOLBOX,
       effectiveCapabilities: NO_CAPABILITIES,
-      // An unrecognised client is served exactly as downloaded, so it also
-      // never receives the double-click transform: the renderer keeps
-      // synthesising taps rather than being handed a module nothing certified.
+      // An unrecognised client is served exactly as downloaded, so it receives
+      // neither the double-click transform nor substitute touch input.
       nativeDoubleClick: false,
       failure: null,
     });

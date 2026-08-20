@@ -7,9 +7,9 @@
  * launch nothing. The host owns the timeout; this process holds no state and
  * writes no files.
  *
- * Every refusal is its own exit code, and no message is posted unless the
- * result also passes the boundary check, so the parent never has to interpret a
- * partial answer.
+ * Every refusal is its own exit code and posts `null` before returning. That
+ * closes the parent's wait immediately; the parent still validates every
+ * non-null result and owns the timeout for a crash or a hung parser.
  */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -17,6 +17,10 @@ import {
   isLocalClientVerification,
   verifyLocalClientBytes,
 } from "./local-client-verifier.js";
+import {
+  deriveNativeDoubleClickBuild,
+  isDerivedNativeDoubleClickBuild,
+} from "./native-double-click.js";
 
 interface ParentPort {
   postMessage(value: unknown): void;
@@ -27,8 +31,8 @@ const parentPort = (
 ).parentPort;
 
 async function main(): Promise<void> {
-  const [wasmPath, expectedSha256] = process.argv.slice(2);
-  if (!parentPort || !wasmPath || !expectedSha256) {
+  const [mode, wasmPath, expectedSha256] = process.argv.slice(2);
+  if (!parentPort || !mode || !wasmPath || !expectedSha256) {
     process.exitCode = 2;
     return;
   }
@@ -36,16 +40,33 @@ async function main(): Promise<void> {
   const bytes = await readFile(wasmPath);
   const actualSha256 = createHash("sha256").update(bytes).digest("hex");
   if (actualSha256 !== expectedSha256) {
+    parentPort.postMessage(null);
     process.exitCode = 3;
     return;
   }
 
-  const result = verifyLocalClientBytes(bytes);
-  if (!isLocalClientVerification(result, expectedSha256)) {
-    process.exitCode = 4;
+  if (mode === "client") {
+    const result = verifyLocalClientBytes(bytes);
+    if (!isLocalClientVerification(result, expectedSha256)) {
+      parentPort.postMessage(null);
+      process.exitCode = 4;
+      return;
+    }
+    parentPort.postMessage(result);
     return;
   }
-  parentPort.postMessage(result);
+  if (mode === "native-double-click") {
+    const result = deriveNativeDoubleClickBuild(bytes);
+    if (!isDerivedNativeDoubleClickBuild(result, expectedSha256)) {
+      parentPort.postMessage(null);
+      process.exitCode = 4;
+      return;
+    }
+    parentPort.postMessage(result);
+    return;
+  }
+  parentPort.postMessage(null);
+  process.exitCode = 2;
 }
 
 await main().catch(() => {

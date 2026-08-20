@@ -14,6 +14,7 @@ import test from "node:test";
 import {
   DOUBLE_CLICK_FLAG_EXPORT,
   deriveNativeDoubleClickBuild,
+  isDerivedNativeDoubleClickBuild,
   NATIVE_DOUBLE_CLICK_BUILDS,
   rewriteWithBuild,
   type NativeDoubleClickBuild,
@@ -143,7 +144,35 @@ test("locates an unchanged callback without a predecessor hash", () => {
   assert.equal(located.callbackFunctionIndex, baseline.callbackFunctionIndex);
   assert.equal(located.callbackTableSlot, baseline.callbackTableSlot);
   assert.match(located.derivations[sha256(bytes)] ?? "", /^[0-9a-f]{64}$/);
+  assert.equal(
+    isDerivedNativeDoubleClickBuild(located, sha256(bytes), [baseline]),
+    true,
+  );
   assert.equal(deriveNativeDoubleClickBuild(bytes, [baseline, baseline]), null);
+});
+
+test("rejects malformed or over-broad isolated verifier records", () => {
+  const { bytes, body } = buildModule();
+  const inputSha256 = sha256(bytes);
+  const baseline = entryFor(body);
+  const located = deriveNativeDoubleClickBuild(bytes, [baseline]);
+  assert.ok(located);
+  assert.equal(isDerivedNativeDoubleClickBuild(located, inputSha256, [baseline]), true);
+  assert.equal(isDerivedNativeDoubleClickBuild({
+    ...located,
+    flagStoreFrameOffset: located.flagStoreFrameOffset + 4,
+  }, inputSha256, [baseline]), false);
+  assert.equal(isDerivedNativeDoubleClickBuild({
+    ...located,
+    derivations: {
+      ...located.derivations,
+      ["0".repeat(64)]: "1".repeat(64),
+    },
+  }, inputSha256, [baseline]), false);
+  assert.equal(isDerivedNativeDoubleClickBuild({
+    ...located,
+    derivations: { [inputSha256]: "not-a-digest" },
+  }, inputSha256, [baseline]), false);
 });
 
 test("refuses a callback whose body is not the certified one", () => {
@@ -155,6 +184,14 @@ test("refuses a callback whose body is not the certified one", () => {
     () => rewriteWithBuild(bytes, wrong),
     /not the certified body/,
     "a body that changed by any byte must not be edited",
+  );
+});
+
+test("rechecks the isolated record's callback signature during production", () => {
+  const { bytes, body } = buildModule();
+  assert.throws(
+    () => rewriteWithBuild(bytes, entryFor(body, { callbackParams: ["i32"] })),
+    /certified signature/,
   );
 });
 

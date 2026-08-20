@@ -22,7 +22,7 @@ named in the file that contains them.
 | File | Purpose | Current conclusion |
 | --- | --- | --- |
 | [upstream-defects.md](upstream-defects.md) | Self-contained ArenaNet report | Eight measured template, cursor, and subdirectory defects exist in the examined builds. |
-| [mouse-double-click.md](mouse-double-click.md) | Self-contained ArenaNet report and local evidence | The client has a complete mouse double-click channel, but its Emscripten input path never feeds the flag. gwonmac uses an exact-build transform. |
+| [mouse-double-click.md](mouse-double-click.md) | Self-contained ArenaNet report and local evidence | The client has a complete mouse double-click channel, but its Emscripten input path never feeds the flag. gwonmac proves and patches the native callback structurally. |
 | [upstream-keyboard-labels.md](upstream-keyboard-labels.md) | Self-contained ArenaNet report and local investigation | Printable key labels render one character too high. Input remains correct. No local transform is justified. |
 | [client-internals.md](client-internals.md) | Exact-build reference | Template layouts, call sites, and costly Enhancement foundation measurements. |
 | [host-bridge.md](host-bridge.md) | Implemented workaround record | The template transform and renderer bridge fail closed and keep the official module canonical. |
