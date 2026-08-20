@@ -351,6 +351,35 @@ describe("settings", () => {
     assert.deepEqual(await loadSettings(path), loaded);
   });
 
+  it("preserves released district shortcuts for Stable rollback compatibility", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
+    const path = join(dir, "settings.json");
+    await writeFile(path, JSON.stringify({
+      renderScale: 1.5,
+      travelShortcuts: [
+        { mapId: 55, district: "europe-english", districtNumber: 2 },
+        null,
+        { mapId: 449, district: "international", districtNumber: 0 },
+      ],
+    }));
+
+    const loaded = await loadSettings(path);
+    assert.equal(loaded.renderScale, 1.5);
+    assert.deepEqual(loaded.travelShortcuts, [
+      { mapId: 55, district: "europe-english", districtNumber: 2 },
+      null,
+      { mapId: 449, district: "international", districtNumber: 0 },
+    ]);
+    assert.deepEqual(JSON.parse(await readFile(path, "utf8")).travelShortcuts, [
+      { mapId: 55, district: "europe-english", districtNumber: 2 },
+      null,
+      { mapId: 449, district: "international", districtNumber: 0 },
+    ]);
+    assert.deepEqual(parseSettingsPatch({ travelShortcuts: loaded.travelShortcuts }), {
+      travelShortcuts: loaded.travelShortcuts,
+    });
+  });
+
   it("keeps the three newest corrupt backups and drops the rest", async () => {
     const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
     const path = join(dir, "settings.json");

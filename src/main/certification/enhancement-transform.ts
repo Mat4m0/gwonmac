@@ -509,6 +509,21 @@ function resolveEnhancementTransform(
   ) {
     fail("travel payload producer body does not match its semantic fingerprint");
   }
+  const travelContextResolver = capabilities.travelAction
+    ? resolveHook(
+        "travel context resolver",
+        travelAction.contextResolver.functionIndex,
+        travelAction.contextResolver.params,
+        travelAction.contextResolver.results,
+      )
+    : null;
+  if (
+    travelContextResolver
+    && bodyHash(travelAction.contextResolver.functionIndex)
+      !== travelAction.contextResolver.bodySha256
+  ) {
+    fail("travel context resolver body does not match its semantic fingerprint");
+  }
   const packetSender = capabilities.teamApply
     ? resolveHook(
         "traced packet sender",
@@ -759,7 +774,7 @@ function assembleEnhancementTransform(
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
     : null;
   const travelEnqueueTypeIndex = capabilities.travelAction
-    ? appendType({ params: Array<number>(COMMAND_ARGS).fill(0x7f), results: [0x7f] })
+    ? appendType({ params: [0x7f], results: [0x7f] })
     : null;
   const travelConfigureTypeIndex = capabilities.travelAction
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })

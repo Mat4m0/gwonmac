@@ -410,6 +410,11 @@ function diagnoseFeatureFailures(
               "travel.message-producer-anchor",
               roles?.travelAction,
             )
+            ?? ambiguousRoleFailure(
+              "travelAction",
+              "travel.current-context-resolver",
+              roles?.travelContext,
+            )
             ?? (!locatedLocal?.uiDispatcher && locatedLocal !== null
               ? changedFeature("travelAction", "local.ui-dispatcher")
               : !locatedLocal?.gameThread && locatedLocal !== null
@@ -417,10 +422,15 @@ function diagnoseFeatureFailures(
                     "travelAction",
                     "local.game-thread-safe-point",
                   )
-                : changedFeature(
-                    "travelAction",
-                    "travel.message-producer-anchor",
-                  )),
+                : roles?.travelAction.status !== "candidate"
+                  ? changedFeature(
+                      "travelAction",
+                      "travel.message-producer-anchor",
+                    )
+                  : changedFeature(
+                      "travelAction",
+                      "travel.current-context-resolver",
+                    )),
         }
       : {}),
     ...(requested.xunlaiAction && !locatedLocal?.xunlaiAction

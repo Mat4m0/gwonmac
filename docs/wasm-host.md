@@ -224,13 +224,16 @@ certificate. If it is absent, its six configuration words are zero and the
 kernel can publish only `null` for Xunlai. A separately proved Travel dispatcher
 remains usable; no party-state fallback is allowed.
 
-Travel accepts only four bounded scalar values: map, region, language, and
-district. The exact `/tp` command sets one named, one-shot palette toggle that
-the renderer takes and clears. Search text, aliases, destinations, and numbered
-shortcuts stay in the host-owned Vue interface. At the certified frame drain,
-the transform writes the four words to its installer-owned payload. It then
-calls the exact client Travel dispatcher with `kTravel`. It cannot dispatch
-another client UI message.
+Travel accepts only one reviewed map ID from the renderer. The exact `/tp`
+command sets one named, one-shot palette toggle that the renderer takes and
+clears. Search text, aliases, destinations, recents, and numbered shortcuts stay
+in the host-owned Vue interface. At the certified frame drain, the transform
+rechecks the reviewed map list, invokes the independently proved client helper
+that resolves the player's current region and language, validates those values,
+and writes the four-word Travel payload with district Any. It then calls the
+exact client Travel dispatcher with `kTravel`. An unknown map, unresolved live
+context, or changed helper stops only Travel without dispatching another client
+UI message.
 
 Team Apply requires enabled Tools and Apply teams in Guild Wars, a proved Team
 Apply capability, a positively classified PvE outpost, fresh party state, and

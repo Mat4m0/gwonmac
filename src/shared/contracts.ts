@@ -39,8 +39,8 @@ import type {
   ShortcutOverrides,
 } from "./keyboard-shortcuts.js";
 import {
-  DEFAULT_TRAVEL_SHORTCUTS,
-  type TravelShortcuts,
+  DEFAULT_STORED_TRAVEL_SHORTCUTS,
+  type StoredTravelShortcuts,
 } from "./travel.js";
 import type {
   EnhancementProgram,
@@ -340,7 +340,7 @@ export interface AppSettings {
   /** Allow the focused Travel palette and its explicit map command. */
   travelPalette: boolean;
   /** Ordered destinations for the palette's direct 1–9 shortcuts. */
-  travelShortcuts: TravelShortcuts;
+  travelShortcuts: StoredTravelShortcuts;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
   /** Player changes to the three app-owned shortcuts; missing entries use defaults. */
@@ -394,7 +394,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   teamManagement: true,
   xunlaiStorage: false,
   travelPalette: false,
-  travelShortcuts: DEFAULT_TRAVEL_SHORTCUTS,
+  travelShortcuts: DEFAULT_STORED_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
   extendedMemoryEnabled: false,

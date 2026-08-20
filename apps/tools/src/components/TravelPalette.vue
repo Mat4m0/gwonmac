@@ -8,13 +8,13 @@ import {
   watch,
 } from "vue";
 import {
-  TRAVEL_DISTRICTS,
+  EMPTY_TRAVEL_SHORTCUTS,
   TRAVEL_SEARCH_QUERY_LIMIT,
   isTravelRequest,
+  replaceTravelShortcut,
   searchTravelDestinations,
   travelDestination,
   type TravelDestination,
-  type TravelDistrictId,
   type TravelRequest,
   type TravelShortcuts,
 } from "../../../../src/shared/travel";
@@ -28,12 +28,9 @@ const emit = defineEmits<{ close: [] }>();
 
 const palette = ref<HTMLElement | null>(null);
 const input = ref<HTMLInputElement | null>(null);
-const districtNumberInput = ref<HTMLInputElement | null>(null);
 const query = ref("");
 const active = ref(0);
-const district = ref<TravelDistrictId>("international");
-const districtNumber = ref<number | "">("");
-const shortcuts = ref<TravelShortcuts>([]);
+const shortcuts = ref<TravelShortcuts>(EMPTY_TRAVEL_SHORTCUTS);
 const feedback = ref("");
 const feedbackLevel = ref<"info" | "success" | "warning" | "danger">("info");
 const busyMapId = ref<number | null>(null);
@@ -97,15 +94,7 @@ watch(() => props.host.state.value, (state) => {
 });
 
 function requestFor(destination: TravelDestination): TravelRequest {
-  const requestedDistrict = typeof districtNumber.value === "number"
-    && Number.isSafeInteger(districtNumber.value)
-    ? districtNumber.value
-    : 0;
-  return {
-    mapId: destination.mapId,
-    district: district.value,
-    districtNumber: Math.max(0, Math.min(255, requestedDistrict)),
-  };
+  return { mapId: destination.mapId };
 }
 
 async function travel(request: TravelRequest): Promise<void> {
@@ -135,11 +124,9 @@ async function assignShortcut(slot: number): Promise<void> {
   const destination = activeDestination.value;
   if (!destination) return;
   const previous = shortcuts.value;
-  const next = Array.from(shortcuts.value);
-  while (next.length <= slot) next.push(null);
-  next[slot] = requestFor(destination);
+  const next = replaceTravelShortcut(shortcuts.value, slot, requestFor(destination));
   try {
-    shortcuts.value = await props.host.saveShortcuts(next.slice(0, 9));
+    shortcuts.value = await props.host.saveShortcuts(next);
     feedback.value = `${destination.name} is now shortcut ${slot + 1}.`;
     feedbackLevel.value = "success";
   } catch {
@@ -192,7 +179,8 @@ function onKeydown(event: KeyboardEvent): void {
     && query.value.trim() === ""
     && !event.metaKey
     && !event.ctrlKey
-    && event.target !== districtNumberInput.value
+    && !event.altKey
+    && !event.shiftKey
   ) {
     event.preventDefault();
     const shortcut = shortcuts.value[Number(event.key) - 1];
@@ -259,32 +247,6 @@ onBeforeUnmount(() => {
           <path d="m3 3 10 10M13 3 3 13" />
         </svg>
       </button>
-    </div>
-
-    <div class="travel-options">
-      <span class="travel-options-label">District</span>
-      <label class="travel-district-region">
-        <span class="ui-sr-only">District region</span>
-        <select v-model="district" class="ui-select">
-          <option v-for="value in TRAVEL_DISTRICTS" :key="value.id" :value="value.id">
-            {{ value.label }}
-          </option>
-        </select>
-      </label>
-      <label class="travel-district-number">
-        <span class="ui-sr-only">District number</span>
-        <input
-          ref="districtNumberInput"
-          v-model.number="districtNumber"
-          class="ui-input"
-          type="number"
-          min="1"
-          max="255"
-          inputmode="numeric"
-          placeholder="Any"
-          title="Leave blank for any district"
-        >
-      </label>
     </div>
 
     <section

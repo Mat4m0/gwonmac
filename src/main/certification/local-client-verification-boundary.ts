@@ -267,7 +267,7 @@ function isAutomaticSemanticBuild(
       && sameJson(build.hookResults, baseline.hookResults)
       && sameJson(build.cursorEvent?.params, cursor.params)
       && sameJson(build.cursorEvent?.results, cursor.results)
-      && build.cursorEvent?.bodySha256 === cursor.bodySha256
+      && isDigest(build.cursorEvent.bodySha256)
       && sameJson(build.cursorEvent?.producerParams, cursor.producerParams)
       && sameJson(build.cursorEvent?.producerResults, cursor.producerResults)
       && sameJson(build.cursorEvent?.tableNeighbourBodySha256, cursor.tableNeighbourBodySha256)
@@ -329,7 +329,7 @@ function isAutomaticSemanticBuild(
     const uiMatches = build.uiDispatcher === undefined || (
       ui !== undefined
       && isIndex(build.uiDispatcher.functionIndex)
-      && build.uiDispatcher.bodySha256 === ui.bodySha256
+      && isDigest(build.uiDispatcher.bodySha256)
       && sameJson(build.uiDispatcher.params, ui.params)
       && sameJson(build.uiDispatcher.results, ui.results)
       && build.uiDispatcher.playerChatMessage === ui.playerChatMessage
@@ -352,9 +352,19 @@ function isAutomaticSemanticBuild(
       && build.travelAction.toggleExport === travel.toggleExport
       && build.travelAction.messageId === travel.messageId
       && isIndex(build.travelAction.producer.functionIndex)
-      && build.travelAction.producer.bodySha256 === travel.producer.bodySha256
+      && isDigest(build.travelAction.producer.bodySha256)
       && sameJson(build.travelAction.producer.params, travel.producer.params)
       && sameJson(build.travelAction.producer.results, travel.producer.results)
+      && isIndex(build.travelAction.contextResolver.functionIndex)
+      && isDigest(build.travelAction.contextResolver.bodySha256)
+      && sameJson(
+        build.travelAction.contextResolver.params,
+        travel.contextResolver.params,
+      )
+      && sameJson(
+        build.travelAction.contextResolver.results,
+        travel.contextResolver.results,
+      )
     );
     const readers = build.xunlaiAction?.accessProof?.readers;
     const baselineReaders = xunlai?.accessProof?.readers;
@@ -380,7 +390,7 @@ function isAutomaticSemanticBuild(
       })
       && sameJson(xunlaiLayout, baselineXunlaiLayout)
       && isIndex(build.xunlaiAction.handler.functionIndex)
-      && build.xunlaiAction.handler.bodySha256 === xunlai.handler.bodySha256
+      && isDigest(build.xunlaiAction.handler.bodySha256)
       && sameJson(build.xunlaiAction.handler.params, xunlai.handler.params)
       && sameJson(build.xunlaiAction.handler.results, xunlai.handler.results)
     );

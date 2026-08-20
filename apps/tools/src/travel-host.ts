@@ -9,6 +9,8 @@ import type { TravelCommand } from "../../../src/shared/travel-command";
 import {
   DEFAULT_TRAVEL_SHORTCUTS,
   TRAVEL_DESTINATIONS,
+  storeTravelShortcuts,
+  travelShortcutsFromStored,
   type TravelRequest,
   type TravelShortcuts,
 } from "../../../src/shared/travel";
@@ -40,10 +42,14 @@ export function createNativeTravelHost(
       return command.unavailable();
     },
     async loadShortcuts() {
-      return (await api.settings.get()).travelShortcuts;
+      return travelShortcutsFromStored((await api.settings.get()).travelShortcuts);
     },
     async saveShortcuts(shortcuts) {
-      return (await api.settings.set({ travelShortcuts: shortcuts })).travelShortcuts;
+      const current = await api.settings.get();
+      const saved = await api.settings.set({
+        travelShortcuts: storeTravelShortcuts(shortcuts, current.travelShortcuts),
+      });
+      return travelShortcutsFromStored(saved.travelShortcuts);
     },
     async travel(request) {
       try {
@@ -51,8 +57,6 @@ export function createNativeTravelHost(
         if (development) {
           console.debug(`[tools:dev] travel.queued ${JSON.stringify({
             mapId: request.mapId,
-            district: request.district,
-            districtNumber: request.districtNumber,
           })}`);
         }
       } catch (error) {
@@ -90,9 +94,7 @@ export function createDemoTravelHost(): TravelHost {
       return shortcuts;
     },
     async saveShortcuts(next) {
-      shortcuts = Object.freeze(next.map((entry) =>
-        entry === null ? null : Object.freeze({ ...entry })
-      ));
+      shortcuts = Object.freeze([...next]);
       return shortcuts;
     },
     async travel(request) {

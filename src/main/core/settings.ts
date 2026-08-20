@@ -32,7 +32,7 @@ import {
 import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
 import { isShortcutOverrides } from "../../shared/keyboard-shortcuts.js";
-import { isTravelShortcuts } from "../../shared/travel.js";
+import { isStoredTravelShortcuts } from "../../shared/travel.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
 const RENDER_SCALE_VALUES = new Set<AppSettings["renderScale"]>(RENDER_SCALES);
@@ -134,7 +134,7 @@ export function parseSettings(raw: unknown): AppSettings {
     out.shortcutOverrides = { ...src.shortcutOverrides };
   }
   if ("travelShortcuts" in src) {
-    if (!isTravelShortcuts(src.travelShortcuts)) {
+    if (!isStoredTravelShortcuts(src.travelShortcuts)) {
       throw new AppError("bad_settings", "settings.travelShortcuts has invalid destinations");
     }
     out.travelShortcuts = src.travelShortcuts.map((shortcut) =>

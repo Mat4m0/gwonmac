@@ -57,6 +57,7 @@ export interface LocalActionRoleDiagnostics {
   readonly gameThread: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
   readonly uiDispatcher: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
   readonly travelAction: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
+  readonly travelContext: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
   readonly xunlaiAction: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
   readonly chatAliases: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
   readonly partyObservation: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
@@ -158,6 +159,36 @@ const TRAVEL_PRODUCER_ROLE = semanticRole(
   [],
 );
 
+const TRAVEL_CONTEXT_RESOLVER_ROLE = semanticRole(
+  333,
+  "626a6724cd6caad005c7ec900258ff529e4f350e298dd62a32e8217e0ac15657",
+  Object.freeze([
+    { start: 14, end: 19, role: "context.mission", addressClass: "immutable-data" },
+    { start: 20, end: 25, role: "context.assertion-file", addressClass: "immutable-data" },
+    { start: 29, end: 34, role: "context.assertion", addressClass: "function-index" },
+    { start: 42, end: 47, role: "context.territory", addressClass: "immutable-data" },
+    { start: 48, end: 53, role: "context.assertion-file", addressClass: "immutable-data" },
+    { start: 57, end: 62, role: "context.assertion", addressClass: "function-index" },
+    { start: 70, end: 75, role: "context.language", addressClass: "immutable-data" },
+    { start: 76, end: 81, role: "context.assertion-file", addressClass: "immutable-data" },
+    { start: 85, end: 90, role: "context.assertion", addressClass: "function-index" },
+    { start: 96, end: 101, role: "context.reader-a", addressClass: "function-index" },
+    { start: 109, end: 114, role: "context.reader-a", addressClass: "function-index" },
+    { start: 136, end: 141, role: "context.reader-b", addressClass: "function-index" },
+    { start: 158, end: 163, role: "context.reader-c", addressClass: "function-index" },
+    { start: 195, end: 200, role: "context.resolver", addressClass: "function-index" },
+    { start: 207, end: 212, role: "context.region-reader", addressClass: "function-index" },
+    { start: 236, end: 241, role: "context.resolver", addressClass: "function-index" },
+    { start: 262, end: 267, role: "context.resolver", addressClass: "function-index" },
+    { start: 276, end: 281, role: "context.map-check", addressClass: "function-index" },
+    { start: 290, end: 295, role: "context.reader-c", addressClass: "function-index" },
+    { start: 298, end: 303, role: "context.language-reader", addressClass: "function-index" },
+    { start: 323, end: 328, role: "context.resolver", addressClass: "function-index" },
+  ]),
+  ["i32", "i32", "i32"],
+  [],
+);
+
 const XUNLAI_HANDLER_ROLE = semanticRole(
   247,
   "5f5e99bed43e89cdb3ac384bf51d5c61c1616fa16c29ba985c0cc4bfa6b0ea15",
@@ -232,6 +263,7 @@ export function inspectLocalActionRoleCandidates(
       gameThread: candidateDiagnostic(module, GAME_THREAD_DRAIN_ROLE),
       uiDispatcher: candidateDiagnostic(module, UI_DISPATCHER_ROLE),
       travelAction: candidateDiagnostic(module, TRAVEL_PRODUCER_ROLE),
+      travelContext: candidateDiagnostic(module, TRAVEL_CONTEXT_RESOLVER_ROLE),
       xunlaiAction: candidateDiagnostic(module, XUNLAI_HANDLER_ROLE),
       chatAliases: candidateDiagnostic(module, CHAT_ALIASES_ROLE),
       partyObservation: aggregateCandidateDiagnostics(
@@ -439,6 +471,76 @@ function deriveXunlaiAccess(
   });
 }
 
+const TRAVEL_CONTEXT_CONTENT = Object.freeze({
+  mission: "dfae82ea0978bc50205237929d4ece2c7a22b64232b50c1f78bca624f8122069",
+  assertionFile: "990259813aee6a5fc56b2c2af745a07251e6ccc9e711128e56c4bbb527378d33",
+  territory: "fccfbe045f143c572b41acebac157ded3123ee4d863ee92ebea36221e83b42a0",
+  language: "38cee1370de5776c9a9aa325f29afaced033b74ba16b11d20401d727bb8930c9",
+});
+
+function uniqueCString(
+  module: ModuleShape,
+  address: number,
+  length: number,
+  hash: string,
+): boolean {
+  const bytes = staticBytes(module, address, length);
+  return bytes !== null
+    && staticCStringHash(module, address) === hash
+    && staticBytesOccurrenceCount(module, bytes) === 1;
+}
+
+function deriveTravelContextResolver(
+  module: ModuleShape,
+): NonNullable<NonNullable<KnownEnhancementBuild["travelAction"]>["contextResolver"]> | null {
+  const functionIndex = uniqueRoleFunction(module, TRAVEL_CONTEXT_RESOLVER_ROLE);
+  if (functionIndex === null) return null;
+  const body = functionBody(module, functionIndex);
+  const values = valuesForRole(body, TRAVEL_CONTEXT_RESOLVER_ROLE);
+  const assertion = soleValue(values, "context.assertion");
+  const readerA = soleValue(values, "context.reader-a");
+  const readerB = soleValue(values, "context.reader-b");
+  const readerC = soleValue(values, "context.reader-c");
+  const resolver = soleValue(values, "context.resolver");
+  const regionReader = soleValue(values, "context.region-reader");
+  const mapCheck = soleValue(values, "context.map-check");
+  const languageReader = soleValue(values, "context.language-reader");
+  const callees = [
+    assertion, readerA, readerB, readerC, resolver, regionReader, mapCheck, languageReader,
+  ];
+  if (
+    callees.some((value) => value === null)
+    || new Set(callees).size !== callees.length
+    || !signatureMatches(module, assertion!, ["i32", "i32", "i32"], [])
+    || !signatureMatches(module, readerA!, ["i32"], ["i32"])
+    || !signatureMatches(module, readerB!, [], ["i32"])
+    || !signatureMatches(module, readerC!, [], ["i32"])
+    || !signatureMatches(module, resolver!, ["i32", "i32"], ["i32"])
+    || !signatureMatches(module, regionReader!, [], ["i32"])
+    || !signatureMatches(module, mapCheck!, ["i32"], ["i32"])
+    || !signatureMatches(module, languageReader!, ["i32", "i32"], ["i32"])
+    || !uniqueCString(
+      module, soleValue(values, "context.mission"), 20, TRAVEL_CONTEXT_CONTENT.mission,
+    )
+    || !uniqueCString(
+      module, soleValue(values, "context.assertion-file"), 28,
+      TRAVEL_CONTEXT_CONTENT.assertionFile,
+    )
+    || !uniqueCString(
+      module, soleValue(values, "context.territory"), 19, TRAVEL_CONTEXT_CONTENT.territory,
+    )
+    || !uniqueCString(
+      module, soleValue(values, "context.language"), 18, TRAVEL_CONTEXT_CONTENT.language,
+    )
+  ) return null;
+  return Object.freeze({
+    functionIndex,
+    params: ["i32", "i32", "i32"] as const,
+    results: [] as const,
+    bodySha256: functionBodySha256(module, functionIndex),
+  });
+}
+
 
 export function locateAutomaticLocalActions(
   input: Uint8Array,
@@ -513,6 +615,9 @@ export function locateAutomaticLocalActions(
       const travelPostcheck = travelValues
         ? soleValue(travelValues, "travel.postcheck")
         : null;
+      const travelContextResolver = travelExpected
+        ? deriveTravelContextResolver(module)
+        : null;
       const travelAction = uiDispatcher && gameThread && travelExpected && travelBody
         && unsignedOperand(travelBody, 169) === travelExpected.messageId
         && travelValues !== null
@@ -534,6 +639,7 @@ export function locateAutomaticLocalActions(
         && signatureMatches(module, travelAssertion, ["i32", "i32", "i32"], [])
         && signatureMatches(module, travelPrecheck, [], ["i32"])
         && signatureMatches(module, travelPostcheck, ["i32", "i32", "f32"], [])
+        && travelContextResolver !== null
         ? Object.freeze({
             ...travelExpected,
             producer: Object.freeze({
@@ -541,6 +647,7 @@ export function locateAutomaticLocalActions(
               functionIndex: travelFunction!,
               bodySha256: functionBodySha256(module, travelFunction!),
             }),
+            contextResolver: travelContextResolver,
           })
         : null;
 

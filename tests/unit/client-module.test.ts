@@ -293,6 +293,14 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
           parseCode(sectionById(splitSections(input), 10))[11]!,
         ),
       },
+      contextResolver: {
+        functionIndex: 5,
+        params: ["i32", "i32", "i32"],
+        results: [],
+        bodySha256: sha256(
+          parseCode(sectionById(splitSections(input), 10))[4]!,
+        ),
+      },
     },
     chatAliases: {
       parser: {

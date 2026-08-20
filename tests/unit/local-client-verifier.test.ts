@@ -100,6 +100,7 @@ function automaticCursor(): ProvedVerification {
       tableSlot: ENHANCEMENT.tableSlot,
       cursorEvent: {
         ...cursor,
+        bodySha256: "5".repeat(64),
         functionIndex: cursor.functionIndex + 1,
         producerFunctions: [
           cursor.producerFunctions[0] + 1,
@@ -161,16 +162,30 @@ function automaticLocalActions(): ProvedVerification {
     {
       ...target.enhancementBuild!,
       outputSha256: { "features-70": "7".repeat(64) },
-      uiDispatcher: ENHANCEMENT.uiDispatcher!,
+      uiDispatcher: {
+        ...ENHANCEMENT.uiDispatcher!,
+        bodySha256: "e".repeat(64),
+      },
       gameThread: {
         drain: {
           ...ENHANCEMENT.gameThread!.drain,
           bodySha256: "8".repeat(64),
         },
       },
-      travelAction: ENHANCEMENT.travelAction!,
+      travelAction: {
+        ...ENHANCEMENT.travelAction!,
+        producer: {
+          ...ENHANCEMENT.travelAction!.producer,
+          bodySha256: "f".repeat(64),
+        },
+        contextResolver: {
+          ...ENHANCEMENT.travelAction!.contextResolver,
+          bodySha256: "1".repeat(64),
+        },
+      },
       xunlaiAction: {
         ...xunlai,
+        handler: { ...xunlai.handler, bodySha256: "2".repeat(64) },
         accessProof: {
           ...xunlai.accessProof!,
           readers: {

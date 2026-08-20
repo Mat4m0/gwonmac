@@ -50,8 +50,6 @@ describe("TravelPalette", () => {
 
     expect(travel).toHaveBeenCalledWith({
       mapId: 449,
-      district: "international",
-      districtNumber: 0,
     });
     wrapper.unmount();
   });
@@ -77,53 +75,6 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("keeps Quick Travel numbers active after using the district selector", async () => {
-    const { wrapper, travel } = fixture();
-    await flushPromises();
-
-    await wrapper.get(".travel-district-region select").trigger("keydown", { key: "1" });
-
-    expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
-    wrapper.unmount();
-  });
-
-  it("refuses a persisted shortcut outside the reviewed catalogue", async () => {
-    const { wrapper, travel } = fixture([
-      { mapId: 2_000, district: "international", districtNumber: 0 },
-    ]);
-    await flushPromises();
-
-    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "1" });
-
-    expect(travel).not.toHaveBeenCalled();
-    wrapper.unmount();
-  });
-
-  it("does not treat district input as a Quick Travel shortcut", async () => {
-    const { wrapper, travel } = fixture();
-    await flushPromises();
-
-    const districtNumber = wrapper.get(".travel-district-number input");
-    await districtNumber.setValue("1");
-    await districtNumber.trigger("keydown", { key: "1" });
-
-    expect(travel).not.toHaveBeenCalled();
-    expect((districtNumber.element as HTMLInputElement).value).toBe("1");
-    wrapper.unmount();
-  });
-
-  it("leaves arrow keys to the district controls", async () => {
-    const { wrapper } = fixture();
-    await flushPromises();
-    await wrapper.get('[role="combobox"]').setValue("la");
-
-    const region = wrapper.get(".travel-district-region select");
-    await region.trigger("keydown", { key: "ArrowDown" });
-
-    expect(wrapper.get('[role="option"]').attributes("aria-selected")).toBe("true");
-    wrapper.unmount();
-  });
-
   it("assigns any Cmd+1–9 slot without producing sparse settings", async () => {
     const { wrapper, saveShortcuts } = fixture();
     await flushPromises();
@@ -145,7 +96,7 @@ describe("TravelPalette", () => {
     const saved = saveShortcuts.mock.calls[0]![0];
     expect(saved).toHaveLength(9);
     expect(saved.slice(6, 8)).toEqual([null, null]);
-    expect(saved[8]).toEqual({ mapId: 642, district: "international", districtNumber: 0 });
+    expect(saved[8]).toEqual({ mapId: 642 });
     expect(wrapper.text()).toContain("Eye of the North is now shortcut 9");
     wrapper.unmount();
   });

@@ -45,6 +45,10 @@ import {
   parseReleaseVersion,
 } from "../src/shared/release.ts";
 import {
+  DEFAULT_STORED_TRAVEL_SHORTCUTS,
+  type StoredTravelShortcuts,
+} from "../src/shared/travel.ts";
+import {
   closePackagedApp,
   launchPackagedApp,
   type RunningPackagedApp,
@@ -141,6 +145,21 @@ const booleanValues = [false, true] as const;
 const opacityValues = [UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX] as const;
 const updateCheckValues = [null, 0, LAST_UPDATE_CHECK_AT_MAX] as const;
 const compatibilityValues = [null, "a".repeat(64)] as const;
+const travelShortcutValues: readonly StoredTravelShortcuts[] = [
+  DEFAULT_STORED_TRAVEL_SHORTCUTS,
+  [],
+  [
+    { mapId: 55, district: "europe-english", districtNumber: 2 },
+    null,
+    { mapId: 449, district: "international", districtNumber: 0 },
+    { mapId: 642, district: "asia-japanese", districtNumber: 1 },
+    null,
+    { mapId: 81, district: "america", districtNumber: 7 },
+    null,
+    null,
+    { mapId: 857, district: "international", districtNumber: 0 },
+  ],
+] as const;
 const domainCaseCount = Math.max(
   RENDER_SCALES.length,
   UI_STYLES.length,
@@ -151,6 +170,7 @@ const domainCaseCount = Math.max(
   UPDATE_TRACKS.length,
   updateCheckValues.length,
   compatibilityValues.length,
+  travelShortcutValues.length,
 );
 const candidateSettingsDomains = Array.from(
   { length: domainCaseCount },
@@ -164,7 +184,7 @@ const candidateSettingsDomains = Array.from(
       teamManagement: cycle(booleanValues, index + 1),
       xunlaiStorage: cycle(booleanValues, index),
       travelPalette: cycle(booleanValues, index + 1),
-      travelShortcuts: [],
+      travelShortcuts: cycle(travelShortcutValues, index),
       targetReadout: cycle(booleanValues, index),
       shortcutOverrides: {},
       extendedMemoryEnabled: cycle(booleanValues, index + 1),

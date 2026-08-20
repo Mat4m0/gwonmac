@@ -111,7 +111,7 @@ unwitnessed field must fail TypeScript compilation or boundary validation.
 | Guild Wars cursor | Unique loop/callback/table/neighbour graph, both producers, and independently derived globals, buffer, and layout | Use the normal macOS pointer |
 | Target Distance | Complete observation base, target-field ledger, precedence, and bounded finite snapshot behavior | Disable Target Distance only |
 | Party capture | Complete roster, ownership, profession, unlock, flag, skill, attribute, dirty-message, and transition lifecycle | Disable party observation and dependent Team Apply |
-| Travel | Exact four-field producer, Travel message role, dispatcher, bounded mailbox/drain, and transition confirmation | Disable Travel; aliases may retain only independently available Xunlai commands |
+| Travel | Exact four-field producer, unique current-region resolver with complete call/content witnesses, Travel message role, dispatcher, reviewed-map allowlist, bounded mailbox/drain, and transition confirmation | Disable Travel; aliases may retain only independently available Xunlai commands |
 | Xunlai | Three readers, player/area layouts, fixed DataWindow action, handler, bounded drain, and fresh tri-state lifecycle | Disable Xunlai; aliases may retain only independently available Travel commands |
 | Chat aliases | Exact parser relation, bounded comparisons, handled result, original-parser preservation, and at least one proved local action | Rewrite only aliases for proved actions; otherwise preserve the original parser |
 | Team Apply | Seven named builders, exact opcodes/payloads, sender, bounded drain, fresh complete Party proof, and runtime confirmations | Disable Team Apply only; Builds and Teams remain editable |

@@ -248,6 +248,13 @@ export interface KnownEnhancementBuild {
       results: readonly [];
       bodySha256: string;
     }>;
+    /** Live region/language resolver used by the client's current-district path. */
+    contextResolver: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32", "i32"];
+      results: readonly [];
+      bodySha256: string;
+    }>;
   }>;
   chatAliases?: Readonly<{
     parser: Readonly<{
