@@ -7,7 +7,10 @@
  *
  * The slot records what is current and decides nothing about readiness.
  */
-import type { ClientCompatibility } from "../shared/contracts.js";
+import type {
+  ClientCompatibility,
+  ExtendedMemoryRuntimeStatus,
+} from "../shared/contracts.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 
 export interface ActiveClient {
@@ -17,6 +20,7 @@ export interface ActiveClient {
   readonly wasmPath: string;
   readonly jsPath: string;
   readonly compatibility: ClientCompatibility | null;
+  readonly extendedMemory: ExtendedMemoryRuntimeStatus;
 }
 
 export type ClientGeneration = Omit<ActiveClient, "generation">;

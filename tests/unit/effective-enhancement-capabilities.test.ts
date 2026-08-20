@@ -32,6 +32,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
   return {
     appVersion: "test",
     compatibility,
+    extendedMemory: null,
     healthToken: null,
   };
 }
@@ -75,6 +76,7 @@ describe("effective Enhancement capability boundary", () => {
     assert.equal(effectiveCapabilities({
       appVersion: "test",
       compatibility: null,
+      extendedMemory: null,
       healthToken: null,
     }), null);
   });

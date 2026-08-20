@@ -1,7 +1,6 @@
 # Long-session WebAssembly memory exhaustion
 
-> **Status: cause confirmed; upstream growth cause unresolved; 4 GB host
-> mitigation withdrawn.** This is a
+> **Status: cause confirmed; upstream growth cause unresolved.** This is a
 > historical investigation record. Current diagnostics behavior is defined by
 > [Diagnostics](../../docs/diagnostics.md).
 
@@ -14,13 +13,6 @@ an ArenaNet assertion aborts the client.
 Increasing `MAXIMUM_MEMORY` to 4 GB would buy about 2.5 times the usable memory
 on the measured client. It would not fix the continuing growth. The evidence
 does not distinguish a leak, fragmentation, or retained content.
-
-GWonMac briefly shipped an exact-build post-build 4 GB transform. It was
-withdrawn after two users reported severe graphical corruption after 30–45
-minutes with the option enabled. That is strong evidence that the transform is
-not safe to ship, although it does not prove the exact corrupt pointer path. A
-compiler-supported ArenaNet rebuild or a source-level cache-lifecycle fix is
-still required.
 
 gwonmac records heap growth and warns before likely exhaustion. It does not show
 a minutes-remaining estimate to players because real workloads made that number

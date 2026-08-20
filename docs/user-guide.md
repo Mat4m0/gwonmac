@@ -232,10 +232,12 @@ history or item names.
 
 ## Extended memory
 
-Guild Wars uses ArenaNet's standard 2 GB WebAssembly memory limit. A previously
-released experimental 4 GB option was withdrawn after reports of severe
-graphical corruption during long sessions. Existing opt-ins are removed when
-GWonMac next starts.
+**Advanced → Experimental 4 GB memory limit** requests the verified 4 GB mode
+for the next start. Restart `gwonmac` after changing it.
+
+If the current Guild Wars version does not support 4 GB mode, the app uses the
+ordinary 2 GB mode. The larger limit can delay a memory-related crash. It
+cannot stop memory that continues to grow.
 
 When the app warns about memory, choose **Reload Guild Wars**. Guild Wars
 normally reconnects. Reload in an outpost when you want the lowest gameplay

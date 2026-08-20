@@ -213,12 +213,13 @@ describe("renderer failure messages", () => {
       }
       assert.match(notice.explanation, /2 GB/);
     }
+    assert.match(memoryWarningCopy("low", 4_294_901_760).explanation, /4 GB/);
   });
 
   it("states measured recovery without overpromising", () => {
-    const explanation = memoryWarningCopy("critical", 2_147_483_648).explanation;
+    const explanation = memoryWarningCopy("critical", 4_294_901_760).explanation;
     assert.match(explanation, /puts you back where you were/);
-    assert.match(explanation, /continued memory growth/);
+    assert.match(explanation, /cannot stop continued memory growth/);
     assert.doesNotMatch(explanation, /\b(guarantee\w*|never lose|always works?)\b/i);
   });
 });

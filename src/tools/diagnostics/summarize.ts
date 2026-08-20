@@ -180,13 +180,9 @@ if (!input) {
     const heapCapBytes = Number(summary.latest["wasm.heapCapBytes"])
       || WASM_HEAP_CAP_BYTES;
     console.log(`  wasm heap peak   ${((Number(summary.latest["renderer.peakWasmHeapBytes"]) || 0) / 1048576).toFixed(0)} MiB of ${(heapCapBytes / 1048576).toFixed(0)} MiB`);
-    const legacyMemoryMode = summary.latest["wasm.extendedMemoryMode"];
-    if (legacyMemoryMode) {
-      const label = legacyMemoryMode === "active"
-        ? "withdrawn 4 GB profile (legacy capture)"
-        : `${String(legacyMemoryMode)} (legacy capture)`;
-      console.log(`  memory mode      ${label}`);
-    }
+    console.log(
+      `  memory mode      ${String(summary.latest["wasm.extendedMemoryMode"] ?? "disabled")}`,
+    );
     console.log(`  GPU RSS peak     ${((Number(summary.latest["process.gpu.peakRssBytes"]) || 0) / 1048576).toFixed(0)} MB`);
     const memoryProbe = summary.latest["wasm.memoryProbe.status"];
     if (memoryProbe) console.log(`  memory probe     ${String(memoryProbe)}`);

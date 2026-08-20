@@ -456,6 +456,7 @@ async function fixture() {
     compatibilityCacheRoot: join(root, "compatibility"),
     enhancementCacheRoot: join(root, "enhancement"),
     nativeDoubleClickCacheRoot: join(root, "double-click"),
+    extendedMemoryCacheRoot: join(root, "extended-memory"),
   };
 }
 
@@ -475,6 +476,8 @@ function options(
     compatibilityCacheRoot: value.compatibilityCacheRoot,
     enhancementCacheRoot: value.enhancementCacheRoot,
     nativeDoubleClickCacheRoot: value.nativeDoubleClickCacheRoot,
+    extendedMemoryCacheRoot: value.extendedMemoryCacheRoot,
+    extendedMemoryEnabled: false,
   };
 }
 
@@ -583,6 +586,7 @@ describe("client module preparation", () => {
     assert.deepEqual(prepared, {
       wasmPath: value.officialWasmPath,
       jsPath: value.officialJsPath,
+      extendedMemory: { status: "disabled" },
       gameFileSaving: { status: "unavailable", reason: "game-update" },
       enhancementBuild: null,
       requestedCapabilities: CURSOR_TOOLBOX,
@@ -618,6 +622,47 @@ describe("client module preparation", () => {
     });
     assert.equal(prepared.nativeDoubleClick, false);
     assert.equal(prepared.failure?.stage, "native-double-click");
+  });
+
+  it("falls back to the ordinary module when a requested 4 GB pair is unknown", async () => {
+    const value = await fixture();
+    const request = options(
+      value,
+      { templateSaveBuild: null, enhancementBuild: null },
+      CURSOR_TOOLBOX,
+    );
+    request.extendedMemoryEnabled = true;
+
+    const prepared = await prepareClientModule(request);
+
+    assert.deepEqual(prepared.extendedMemory, {
+      status: "unavailable",
+      reason: "unsupported-client",
+    });
+    assert.equal(prepared.jsPath, value.officialJsPath);
+    assert.equal(prepared.wasmPath, value.officialWasmPath);
+    assert.equal(prepared.failure, null);
+  });
+
+  it("keeps an earlier transform failure separate from 4 GB preparation failure", async () => {
+    const value = await fixture();
+    const request = options(value, {
+      templateSaveBuild: {
+        ...value.templateSaveBuild,
+        sha256: "0".repeat(64),
+      },
+      enhancementBuild: null,
+    }, CURSOR_TOOLBOX);
+    request.extendedMemoryEnabled = true;
+    request.officialJsPath = join(value.root, "missing.js");
+
+    const prepared = await prepareClientModule(request);
+
+    assert.equal(prepared.failure?.stage, "template-save");
+    assert.equal(prepared.extendedMemory.status, "unavailable");
+    if (prepared.extendedMemory.status !== "unavailable") return;
+    assert.equal(prepared.extendedMemory.reason, "preparation-failed");
+    assert.ok("error" in prepared.extendedMemory);
   });
 
   it("drops the Enhancement cache when the certified tool is disabled", async () => {

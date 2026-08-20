@@ -186,6 +186,7 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
   assert.deepEqual(effectiveCapabilities({
     appVersion: "test",
     healthToken: null,
+    extendedMemory: null,
     compatibility: {
       clientSha256: "a".repeat(64),
       features: {

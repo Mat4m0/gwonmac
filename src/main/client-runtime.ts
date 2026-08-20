@@ -25,6 +25,7 @@ import {
   type ClientHealthToken,
   type DownloadActivity,
   type DownloadFailure,
+  type ExtendedMemoryRuntimeStatus,
   type OptionalFeatureStatus,
   type DownloadProgress,
   type FullDownloadOutcome,
@@ -89,6 +90,7 @@ import {
 } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
 import { verifyClientLocally } from "./certification/local-client-verifier-host.js";
+import { extendedMemoryRuntimeStatus } from "./extended-memory-runtime.js";
 import { supportedEnhancementCapabilities } from "./certification/enhancement-builds.js";
 
 export type { ActiveClient } from "./active-client.js";
@@ -123,6 +125,7 @@ interface ClientRuntimeOptions {
   hostVersion: string;
   cachedOnly: boolean;
   enhancementCapabilities: EnhancementCapabilities;
+  extendedMemoryEnabled: boolean;
   onProgress: (progress: DownloadProgress) => void;
   onPrefetch: (progress: PrefetchProgress) => void;
 }
@@ -207,6 +210,10 @@ export class ClientRuntime {
     return this.candidateHealthToken;
   }
 
+  get extendedMemory(): ExtendedMemoryRuntimeStatus | null {
+    return this.activeSlot.current?.extendedMemory ?? null;
+  }
+
   get progress(): DownloadProgress {
     return this.progressValue;
   }
@@ -269,6 +276,7 @@ export class ClientRuntime {
     wasmPath: string;
     jsPath: string;
     compatibility: ClientCompatibility | null;
+    extendedMemory: ExtendedMemoryRuntimeStatus;
   }> {
     const officialWasm = clientArtifactPath(
       this.options.paths.artifacts,
@@ -284,10 +292,16 @@ export class ClientRuntime {
       logEvent({ k: "wasm.clientHashUnavailable",
         code: errorCode(error),
       });
+      const extendedMemory = extendedMemoryRuntimeStatus(
+        this.options.extendedMemoryEnabled
+          ? { status: "unavailable", reason: "unsupported-client" }
+          : { status: "disabled" },
+      );
       return {
         wasmPath: officialWasm,
         jsPath: clientArtifactPath(this.options.paths.artifacts, "Gw.jspi.js"),
         compatibility: null,
+        extendedMemory,
       };
     }
 
@@ -319,6 +333,8 @@ export class ClientRuntime {
       compatibilityCacheRoot: this.options.paths.compatibility,
       enhancementCacheRoot: this.options.paths.enhancements,
       nativeDoubleClickCacheRoot: this.options.paths.nativeDoubleClick,
+      extendedMemoryCacheRoot: this.options.paths.extendedMemory,
+      extendedMemoryEnabled: this.options.extendedMemoryEnabled,
     });
     const preparationFailed = prepared.failure?.stage === "enhancement";
     const supported = prepared.enhancementBuild
@@ -409,10 +425,35 @@ export class ClientRuntime {
       logEvent({ k: "enhancement.uncertifiedClientBlocked" });
     }
     gauge("enhancement.supportedBuild", prepared.enhancementBuild !== null);
+    const extendedMemory = extendedMemoryRuntimeStatus(prepared.extendedMemory);
+    const extendedCap = extendedMemory.effectiveCapBytes;
+    const fallbackReason = extendedMemory.fallbackReason;
+    gauge("wasm.extendedMemoryMode", prepared.extendedMemory.status);
+    gauge("wasm.heapCapBytes", extendedCap);
+    logEvent({
+      k: "wasm.extendedMemory",
+      mode: prepared.extendedMemory.status,
+      requested: this.options.extendedMemoryEnabled,
+      profile: prepared.extendedMemory.status === "active"
+        ? prepared.extendedMemory.profile
+        : "none",
+      capBytes: extendedCap,
+      fallbackReason: fallbackReason ?? "none",
+    });
+    if (
+      prepared.extendedMemory.status === "unavailable"
+      && prepared.extendedMemory.reason === "preparation-failed"
+    ) {
+      logEvent({
+        k: "wasm.extendedMemoryPrepareFailed",
+        code: errorCode(prepared.extendedMemory.error),
+      });
+    }
     return {
       wasmPath: prepared.wasmPath,
       jsPath: prepared.jsPath,
       compatibility,
+      extendedMemory,
     };
   }
 
@@ -452,6 +493,7 @@ export class ClientRuntime {
       wasmPath: enhancement.wasmPath,
       jsPath: enhancement.jsPath,
       compatibility: enhancement.compatibility,
+      extendedMemory: enhancement.extendedMemory,
     });
     this.candidateHealthToken = candidateFingerprint
       ? Object.freeze({
