@@ -29,7 +29,9 @@ const FEATURE_NAMES: Readonly<Record<Feature, string>> = Object.freeze({
   targetObservation: 'target distance',
   partyObservation: 'live party details',
   teamApply: 'Apply team',
-  xunlaiStorage: 'Xunlai / Travel integration',
+  travelAction: 'Travel',
+  xunlaiAction: 'Xunlai storage',
+  chatAliases: 'chat aliases',
 });
 
 function unavailableFeatures(compatibility: ClientCompatibility): Feature[] {

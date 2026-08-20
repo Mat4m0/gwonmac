@@ -40,45 +40,45 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         cursor:
-          "8c156901f7fa5a7d1ee23b6b2f2b53ce6c511dc358974e694db208e965f5d151",
+          "ff933198b990083b7318bf93e09e7edf052aa2fc4aba1b0a544238a80bfdf8fa",
         target:
-          "96786cba1fac260f0924e3b1880dd65452c552c4e79b4e5e8a72e835d4cca0c8",
+          "094d504377bfb90efb2a1cc4a29cbf129fc3113d1b1900d53b786dd9d0392ea5",
         cursorTarget:
-          "d4d2406669ef5be751843112cf7547fa640c8444bae95a23e0eaba3a2d9c1517",
+          "90d18263253dce61edc09b00f1c935ac2f12a0705ce9f4e5d8ff8b21f180e249",
         party:
-          "b528291df4bd96541a8128fdd7de88b5712413fc192e6e051f71ac47459e221f",
+          "b680d690206fca0006af95a13528c5a732cfed7ddfced34aa539027fd2ce933e",
         cursorParty:
-          "b7dc1e345bbe85a91b5423b4fc609ab37abbe2d15a387f29cfc7fbc7534c9fec",
+          "cd53eb12fb586283a1702b2b0f2c458a21b580049302adff32012fea38323f0d",
         targetParty:
-          "0e4da3a2a31b6c84b12ada9f5f0ec87abdcb9c239349fa38d46aa472ecbf74df",
+          "95ec0955ac10b1a4512ff6516ec209b8d1aa514cf1aedf9e50d573b543d103aa",
         cursorTargetParty:
-          "4b5f4601b3ddfe363b9fc49a8130df417b28dc7ddcc75b0cc83a6dca3d21458d",
+          "6a4fde6f84ea0c80fdabc1d6321433451277e66dda84af321b8c1c1644566f0a",
         partyCommands:
-          "97213e19d336ccecd26a25d20291d4ee03fdd3102f4a58a56ce4e0ea2e0353b7",
+          "135fcba260909006d90fb91b070cd189eaddf3e4aafee6f5b9382f9757f29fe1",
         cursorPartyCommands:
-          "aca4e4ff310162036a9dccab2d9d4180f4699930ca3e9337de8529ff391d245c",
+          "9cdafd9b1aa862b0375c0f8770299a636fe192092bc752f2b64ea1c61cb30105",
         targetPartyCommands:
-          "80d86e2af5c5f1160610ae17482e6385ff3990e97fbfbd798e7396be810b4e84",
+          "16c170b2366b56b82ce11ee6a3ea90e784abcddc4fb50cb6e632dab28e775a27",
         cursorTargetPartyCommands:
-          "00f8385b8343231e1f61bdac7a7ada1c48946d114f812e8c0927454eea72100c",
+          "cb0a06886885552b9c58c4161d5304ca3f6ba9f49c186ba9087fa479bf446f33",
         storage:
-          "04a0532fd2d5e6f3ecbbc050afaf47370a7f6b479431b471bf76d738a2e06e8a",
+          "596eb73ce9d087891d6f28706091b53e8958a806ece24d1accd67015a774dbb1",
         partyStorage:
-          "43fa20fadf5b466976505696b80d95653c9b26f661ddf86959eb1cfbca6a9693",
+          "3e67a53794661071d6c162cc227ec0585294f3d5d9423948d33ac6724aeb9f7e",
         cursorPartyStorage:
-          "db8dec116c17306853f5075926b657ee1d46d9ad04ae6cd1fc683638e89b7e9f",
+          "7d6defca157712ece078256d67fc62ad93b759e044ea0e7a78f8e4163fec6952",
         targetPartyStorage:
-          "92fbaba14a4986ad46cd5f412eccbc51d26bd41241bb6d6eb736df6d88216df3",
+          "98a510e8a202ffcf54e961ce616fb76f8cd663f10bcb2dcea431702cc03ad2c7",
         cursorTargetPartyStorage:
-          "e58f556348af308a9e13b011588baf57a2eacb1213e0d25fbda8a12eb6aaf7d6",
+          "84330b6f5340a5d683977888cb9c6cc81bef0964aaeaec7da80d0ebd0165bce8",
         partyCommandsStorage:
-          "36ea50a64185d69da0f5e5de02d1e20a8fefcc0402cf19be22522de5ce795974",
+          "0b7a69c7d8787f9dc7c1b337e7c1cdfa9a76a71bae3c720988324947f5f991c5",
         cursorPartyCommandsStorage:
-          "b98fb10c37deda13b06b79b19efa9130ae70aca62c7df3da75b463bc62af2f4b",
+          "740d8f6222a40db2deb94f5c81b42d82693c6282f59dfdca0fac680ac79a2c9f",
         targetPartyCommandsStorage:
-          "cc07d6c49c6a8079679114806231ecf2d015e41b7dab1242dacd8b7687bf8869",
+          "233e4100a6f131b768258217d688354cf2e46db36c6106941bc3fb2ae84ced9a",
         cursorTargetPartyCommandsStorage:
-          "58f0ce10fd231263e560e2496e07b6e152241c41e3ac0b6d04e7f13ca44ee924",
+          "6be8ce224d7d6ca0a47cbc13fcd319590896786ccbcc709588493df1c84a169a",
       }),
       programId: 1,
       // Function #477 returns 38,833 as a single i32 constant. The same function
@@ -186,7 +186,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         hideHeroPanelMessage: 0x1000_01a3,
         showHeroPanelMessage: 0x1000_01a4,
       }),
-      storage: Object.freeze({
+      xunlaiAction: Object.freeze({
         openExport: "enhancement_open_storage",
         configureExport: "enhancement_configure_storage",
         // Exact build-38,833 player access facts. The client readers below
@@ -225,35 +225,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
             }),
           }),
         }),
-        travel: Object.freeze({
-          enqueueExport: "enhancement_travel",
-          configureExport: "enhancement_configure_travel",
-          toggleExport: "enhancement_take_travel_toggle",
-          // Current GWCA names this kTravel (0x10000183). ChCliMap #16199
-          // writes its four scalar arguments to {map, region, language,
-          // district} and sends this message through the certified dispatcher.
-          messageId: 0x1000_0183,
-          producer: Object.freeze({
-            functionIndex: 16199,
-            params: Object.freeze([
-              "i32", "i32", "i32", "i32", "i32",
-            ] as const),
-            results: Object.freeze([] as const),
-            bodySha256:
-              "47c2f33dc98226fbb1596d60b2dfe76a9a19f645e94330a0582a6dc50d5be595",
-          }),
-        }),
-        // Chat command parser #13703 receives the complete UTF-16 line and
-        // returns one when a slash command was handled. It is the first of
-        // the two parsers called by chat submit #13714, before the normal
-        // path reports an unknown command.
-        slashParser: Object.freeze({
-          functionIndex: 13703,
-          params: Object.freeze(["i32", "i32"] as const),
-          results: Object.freeze(["i32"] as const),
-          bodySha256:
-            "156c4345c79e43c20b136fa37581d80a62fcf73cf290cabe308ac259387517df",
-        }),
         // ChCliStoc #8978 is the DataWindow handler. Its seven-way branch
         // reads `type` at +4; branch zero reads `agent` at +0 and the two
         // storage unlock bits from `data` at +8, then emits
@@ -266,6 +237,35 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           results: Object.freeze([] as const),
           bodySha256:
             "0a46adca4dd597f9430c23457f6ce6ff7ccdfbdaf4a77b449a8158e2c595189a",
+        }),
+      }),
+      travelAction: Object.freeze({
+        enqueueExport: "enhancement_travel",
+        configureExport: "enhancement_configure_travel",
+        toggleExport: "enhancement_take_travel_toggle",
+        // Current GWCA names this kTravel (0x10000183). ChCliMap #16199
+        // writes its four scalar arguments to {map, region, language,
+        // district} and sends this message through the certified dispatcher.
+        messageId: 0x1000_0183,
+        producer: Object.freeze({
+          functionIndex: 16199,
+          params: Object.freeze([
+            "i32", "i32", "i32", "i32", "i32",
+          ] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "47c2f33dc98226fbb1596d60b2dfe76a9a19f645e94330a0582a6dc50d5be595",
+        }),
+      }),
+      chatAliases: Object.freeze({
+        // Parser #13703 receives the complete UTF-16 line and returns one
+        // only when an alias was handled; normal chat remains the fallback.
+        parser: Object.freeze({
+          functionIndex: 13703,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256:
+            "156c4345c79e43c20b136fa37581d80a62fcf73cf290cabe308ac259387517df",
         }),
       }),
       gameThread: Object.freeze({

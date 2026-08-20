@@ -110,26 +110,26 @@ test("one capability plan derives hooks without losing feature identity", () => 
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
-      { nativeCursor: true, targetObservation: false, partyObservation: false, commands: false, storage: false },
+      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "target-observer"),
-      { nativeCursor: false, targetObservation: true, partyObservation: false, commands: false, storage: false },
+      { nativeCursor: false, targetObservation: true, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-foundation"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: false, storage: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false },
     );
     // The read foundation and the write program differ by exactly this bit,
     // and no saved setting reaches the second: choosing the panel can never
     // carry the ability to send a packet in with it.
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-commands"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, commands: true, storage: true },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true, chatAliases: true },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "xunlai-storage"),
-      { nativeCursor: false, targetObservation: false, partyObservation: false, commands: false, storage: true },
+      { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true },
     );
   }
 });
@@ -195,7 +195,9 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
         targetObservation: available,
         partyObservation: available,
         teamApply: unavailable,
-        xunlaiStorage: unavailable,
+        travelAction: unavailable,
+        xunlaiAction: unavailable,
+        chatAliases: unavailable,
       },
     },
   }), ENHANCEMENT_CAPABILITY_PROFILES.cursorTargetParty);

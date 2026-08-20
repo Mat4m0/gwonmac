@@ -566,7 +566,9 @@ export interface ClientCompatibility {
     targetObservation: OptionalFeatureStatus;
     partyObservation: OptionalFeatureStatus;
     teamApply: OptionalFeatureStatus;
-    xunlaiStorage: OptionalFeatureStatus;
+    travelAction: OptionalFeatureStatus;
+    xunlaiAction: OptionalFeatureStatus;
+    chatAliases: OptionalFeatureStatus;
   }>;
 }
 
@@ -575,7 +577,9 @@ export const ENHANCEMENT_RUNTIME_FEATURES = [
   "targetObservation",
   "partyObservation",
   "teamApply",
-  "xunlaiStorage",
+  "travelAction",
+  "xunlaiAction",
+  "chatAliases",
 ] as const;
 export type EnhancementRuntimeFeature =
   (typeof ENHANCEMENT_RUNTIME_FEATURES)[number];

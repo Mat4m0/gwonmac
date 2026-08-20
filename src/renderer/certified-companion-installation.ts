@@ -132,7 +132,7 @@ export async function installCertifiedCompanion(
   // launches always receive `none`; developer observers request their scalar
   // projection explicitly without implicitly mounting the Toolbox overlay.
   const foundation = capabilities.partyObservation;
-  const observeState = capabilities.targetObservation || capabilities.storage;
+  const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const publishObserverState = program === "target-observer";
   const featureFlags =
     (capabilities.nativeCursor ? ENHANCEMENT_FEATURE_NATIVE_CURSOR : 0)
@@ -165,32 +165,32 @@ export async function installCertifiedCompanion(
   // the transform emits it only there. A profile without it has no call to a
   // packet builder anywhere in its bytes, so this is a real absence rather
   // than a disabled feature.
-  const commandEnqueue = capabilities.commands
+  const commandEnqueue = capabilities.teamApply
     ? (typeof exports.enhancement_command === "function"
         ? exports.enhancement_command as EnhancementCommandEnqueue
         : null)
     : null;
-  const professionTraceReader = capabilities.commands
+  const professionTraceReader = capabilities.teamApply
     ? (typeof exports?.enhancement_profession_trace === "function"
         ? exports.enhancement_profession_trace as ProfessionCommandTraceReader
         : null)
     : null;
-  if (capabilities.commands && commandEnqueue === null) {
+  if (capabilities.teamApply && commandEnqueue === null) {
     throw new Error("the commands profile derived a module with no command queue");
   }
-  if (capabilities.commands && professionTraceReader === null) {
+  if (capabilities.teamApply && professionTraceReader === null) {
     throw new Error("the commands profile derived a module with no profession trace");
   }
   // Keep the command implementation out of Core-only sessions altogether.
   // The derived module and its JavaScript boundary arrive as one capability.
-  const teamCommands = capabilities.commands
+  const teamCommands = capabilities.teamApply
     ? await import("./enhancement-team-commands.js")
     : null;
-  const storageInstallation: StorageInstallation | null = capabilities.storage
+  const storageInstallation: StorageInstallation | null = capabilities.xunlaiAction
     ? (await import("./enhancement-storage-installation.js"))
         .createStorageInstallation(exports, true)
     : null;
-  const travelInstallation: TravelInstallation | null = capabilities.storage
+  const travelInstallation: TravelInstallation | null = capabilities.travelAction
     ? (await import("./enhancement-travel-installation.js"))
         .createTravelInstallation(exports, true)
     : null;
@@ -297,7 +297,7 @@ export async function installCertifiedCompanion(
       toolboxPointer = Number(exports.malloc(COMPANION_TOOLBOX_BYTES));
       partyPointer = Number(exports.malloc(COMPANION_PARTY_BYTES));
     }
-    if (capabilities.commands) {
+    if (capabilities.teamApply) {
       payloadPointer = Number(
         exports.malloc(teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES),
       );
@@ -316,11 +316,11 @@ export async function installCertifiedCompanion(
       || (capabilities.nativeCursor && !cursorPointer)
       || (foundation && !toolboxPointer)
       || (foundation && !partyPointer)
-      || (capabilities.commands && !payloadPointer)
+      || (capabilities.teamApply && !payloadPointer)
       || (storageInstallation !== null && !storageInstallation.region().pointer)
       || (travelInstallation !== null && !travelInstallation.region().pointer)
       || (
-        capabilities.commands
+        capabilities.teamApply
         && window.gwNative.init.development
         && !professionTracePointer
       )
@@ -347,7 +347,7 @@ export async function installCertifiedCompanion(
             { name: "party", pointer: partyPointer, size: COMPANION_PARTY_BYTES, align: 4 },
           ]
         : []),
-      ...(capabilities.commands
+      ...(capabilities.teamApply
         ? [
             {
               name: "command payload",

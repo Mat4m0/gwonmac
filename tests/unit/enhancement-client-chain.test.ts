@@ -18,8 +18,10 @@ const NO_CAPABILITIES = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: false,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 describe("Enhancement client chain", () => {
   it("source-pins every executable capability profile", () => {
@@ -50,7 +52,7 @@ describe("Enhancement client chain", () => {
     ]);
     assert.deepEqual(
       Object.entries(ENHANCEMENT_CAPABILITY_PROFILES)
-        .filter(([, capabilities]) => capabilities.commands)
+        .filter(([, capabilities]) => capabilities.teamApply)
         .map(([profile]) => profile),
       [
         "partyCommands",
@@ -85,8 +87,10 @@ describe("Enhancement client chain", () => {
         nativeCursor: false,
         targetObservation: false,
         partyObservation: false,
-        commands: true,
-        storage: false,
+        teamApply: true,
+        travelAction: false,
+        xunlaiAction: false,
+        chatAliases: false,
       },
     ]) {
       assert.equal(enhancementCapabilityProfile(unsupported), null);
@@ -120,7 +124,9 @@ describe("Enhancement client chain", () => {
     delete cursorOnly.partyObservation;
     delete cursorOnly.teamApply;
     delete cursorOnly.gameThread;
-    delete cursorOnly.storage;
+    delete cursorOnly.xunlaiAction;
+    delete cursorOnly.travelAction;
+    delete cursorOnly.chatAliases;
     assert.deepEqual(enhancementProfilesForBuild(cursorOnly), ["cursor"]);
     assert.equal(hasCompleteEnhancementProfileHashes(cursorOnly), true);
 
@@ -132,7 +138,9 @@ describe("Enhancement client chain", () => {
     delete partyOnly.targetObservation;
     delete partyOnly.teamApply;
     delete partyOnly.gameThread;
-    delete partyOnly.storage;
+    delete partyOnly.xunlaiAction;
+    delete partyOnly.travelAction;
+    delete partyOnly.chatAliases;
     assert.deepEqual(enhancementProfilesForBuild(partyOnly), ["party"]);
     assert.equal(hasCompleteEnhancementProfileHashes(partyOnly), true);
 
@@ -155,34 +163,46 @@ describe("Enhancement client chain", () => {
     const storageWithoutTarget = { ...full };
     delete storageWithoutTarget.targetObservation;
     assert.equal(
-      supportedEnhancementCapabilities(storageWithoutTarget).storage,
+      supportedEnhancementCapabilities(storageWithoutTarget).xunlaiAction,
       true,
       "storage and Travel do not require target observation",
     );
 
-    const prooflessStorage = { ...full.storage! };
-    delete prooflessStorage.accessProof;
+    const prooflessXunlai = {
+      openExport: full.xunlaiAction!.openExport,
+      configureExport: full.xunlaiAction!.configureExport,
+      handler: full.xunlaiAction!.handler,
+    };
     const storageWithoutAccessProof: KnownEnhancementBuild = {
       ...full,
-      storage: prooflessStorage,
+      xunlaiAction: prooflessXunlai,
     };
     assert.equal(
       hasCompleteEnhancementProfileHashes(storageWithoutAccessProof),
+      false,
+      "a legacy bundled output cannot claim the missing Xunlai proof",
+    );
+    assert.equal(
+      supportedEnhancementCapabilities(storageWithoutAccessProof).travelAction,
       true,
-      "Travel remains certified when Xunlai access proof is absent",
+      "Travel authority remains independent from Xunlai access proof",
+    );
+    assert.equal(
+      supportedEnhancementCapabilities(storageWithoutAccessProof).xunlaiAction,
+      false,
     );
     const storageWithDuplicateReaders: KnownEnhancementBuild = {
       ...full,
-      storage: {
-        ...full.storage!,
+      xunlaiAction: {
+        ...full.xunlaiAction!,
         accessProof: {
-          ...full.storage!.accessProof!,
+          ...full.xunlaiAction!.accessProof!,
           readers: {
-            ...full.storage!.accessProof!.readers,
+            ...full.xunlaiAction!.accessProof!.readers,
             "access-flags": {
-              ...full.storage!.accessProof!.readers["access-flags"],
+              ...full.xunlaiAction!.accessProof!.readers["access-flags"],
               functionIndex:
-                full.storage!.accessProof!.readers["agent-id"].functionIndex,
+                full.xunlaiAction!.accessProof!.readers["agent-id"].functionIndex,
             },
           },
         },

@@ -25,8 +25,10 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       nativeCursor: selected(capabilities.nativeCursor),
       targetObservation: selected(capabilities.targetObservation),
       partyObservation: selected(capabilities.partyObservation),
-      teamApply: selected(capabilities.commands),
-      xunlaiStorage: selected(capabilities.storage),
+      teamApply: selected(capabilities.teamApply),
+      travelAction: selected(capabilities.travelAction),
+      xunlaiAction: selected(capabilities.xunlaiAction),
+      chatAliases: selected(capabilities.chatAliases),
     },
   };
   return {
@@ -58,7 +60,9 @@ describe("effective Enhancement capability boundary", () => {
           targetObservation: { status: "unavailable", reason: "game-update" },
           partyObservation: off,
           teamApply: off,
-          xunlaiStorage: off,
+          travelAction: off,
+          xunlaiAction: off,
+          chatAliases: off,
         },
       },
     };
@@ -67,8 +71,10 @@ describe("effective Enhancement capability boundary", () => {
       nativeCursor: false,
       targetObservation: false,
       partyObservation: false,
-      commands: false,
-      storage: false,
+      teamApply: false,
+      travelAction: false,
+      xunlaiAction: false,
+      chatAliases: false,
     });
   });
 

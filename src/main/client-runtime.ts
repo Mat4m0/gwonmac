@@ -195,7 +195,9 @@ export class ClientRuntime {
         targetObservation: effectiveStatus("targetObservation"),
         partyObservation: effectiveStatus("partyObservation"),
         teamApply: effectiveStatus("teamApply"),
-        xunlaiStorage: effectiveStatus("xunlaiStorage"),
+        travelAction: effectiveStatus("travelAction"),
+        xunlaiAction: effectiveStatus("xunlaiAction"),
+        chatAliases: effectiveStatus("chatAliases"),
       }),
     });
   }
@@ -344,8 +346,10 @@ export class ClientRuntime {
           nativeCursor: false,
           targetObservation: false,
           partyObservation: false,
-          commands: false,
-          storage: false,
+          teamApply: false,
+          travelAction: false,
+          xunlaiAction: false,
+          chatAliases: false,
         };
     const requested = prepared.requestedCapabilities;
     const effective = prepared.effectiveCapabilities;
@@ -372,15 +376,27 @@ export class ClientRuntime {
           preparationFailed,
         ),
         teamApply: optionalFeatureStatus(
-          requested.commands,
-          effective.commands,
-          supported.commands,
+          requested.teamApply,
+          effective.teamApply,
+          supported.teamApply,
           preparationFailed,
         ),
-        xunlaiStorage: optionalFeatureStatus(
-          requested.storage,
-          effective.storage,
-          supported.storage,
+        travelAction: optionalFeatureStatus(
+          requested.travelAction,
+          effective.travelAction,
+          supported.travelAction,
+          preparationFailed,
+        ),
+        xunlaiAction: optionalFeatureStatus(
+          requested.xunlaiAction,
+          effective.xunlaiAction,
+          supported.xunlaiAction,
+          preparationFailed,
+        ),
+        chatAliases: optionalFeatureStatus(
+          requested.chatAliases,
+          effective.chatAliases,
+          supported.chatAliases,
           preparationFailed,
         ),
       },
@@ -389,8 +405,10 @@ export class ClientRuntime {
     gauge("enhancement.effectiveCursor", effective.nativeCursor);
     gauge("enhancement.effectiveTargetObservation", effective.targetObservation);
     gauge("enhancement.effectivePartyObservation", effective.partyObservation);
-    gauge("enhancement.effectiveCommands", effective.commands);
-    gauge("enhancement.effectiveStorage", effective.storage);
+    gauge("enhancement.effectiveTeamApply", effective.teamApply);
+    gauge("enhancement.effectiveTravelAction", effective.travelAction);
+    gauge("enhancement.effectiveXunlaiAction", effective.xunlaiAction);
+    gauge("enhancement.effectiveChatAliases", effective.chatAliases);
 
     if (prepared.failure?.stage === "template-save") {
       logEvent({ k: "wasm.templateSavePrepareFailed",

@@ -19,7 +19,6 @@ import {
   rewriteWithBuild,
   type NativeDoubleClickBuild,
 } from "../../src/main/certification/native-double-click.ts";
-import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.ts";
 import {
   indexOfBytes,
   parseExports,
@@ -240,30 +239,15 @@ test("refuses a module that already carries the flag export", () => {
   );
 });
 
-test("the shipped entry describes one build and states its own offsets", () => {
+test("the shipped baseline states its own offsets and keeps valid historic fixtures", () => {
   assert.equal(NATIVE_DOUBLE_CLICK_BUILDS.length, 1);
   for (const build of NATIVE_DOUBLE_CLICK_BUILDS) {
     assert.match(build.callbackBodySha256, /^[0-9a-f]{64}$/);
-    // Every retained exact Enhancement profile must continue through this
-    // stage. Template-only predecessors can also be present when their
-    // callback proof matches this build, even if their memory layout is no
-    // longer certified for Enhancement.
+    // Historic exact pairs remain regression fixtures. New upstream or local
+    // transform outputs are admitted by the unique callback/table proof and
+    // do not require another hash entry.
     const pairs = Object.entries(build.derivations);
-    const expectedInputs = new Set([
-      ...ENHANCEMENT_BUILDS.map((entry) => entry.sha256),
-      ...ENHANCEMENT_BUILDS.flatMap((entry) =>
-        Object.values(entry.outputSha256).filter(
-          (value): value is string => value !== undefined,
-        ),
-      ),
-    ]);
-    const inputs = new Set(pairs.map(([input]) => input));
-    for (const input of expectedInputs) {
-      assert.ok(
-        inputs.has(input),
-        "every retained Enhancement output needs a double-click derivation",
-      );
-    }
+    assert.ok(pairs.length > 0);
     for (const [input, output] of pairs) {
       assert.match(input, /^[0-9a-f]{64}$/);
       assert.match(output, /^[0-9a-f]{64}$/);

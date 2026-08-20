@@ -89,16 +89,20 @@ const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: false,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 
 function capabilityCount(capabilities: EnhancementCapabilities): number {
   return Number(capabilities.nativeCursor)
     + Number(capabilities.targetObservation)
     + Number(capabilities.partyObservation)
-    + Number(capabilities.commands)
-    + Number(capabilities.storage);
+    + Number(capabilities.teamApply)
+    + Number(capabilities.travelAction)
+    + Number(capabilities.xunlaiAction)
+    + Number(capabilities.chatAliases);
 }
 
 function isSubset(
@@ -108,8 +112,10 @@ function isSubset(
   return (!candidate.nativeCursor || maximum.nativeCursor)
     && (!candidate.targetObservation || maximum.targetObservation)
     && (!candidate.partyObservation || maximum.partyObservation)
-    && (!candidate.commands || maximum.commands)
-    && (!candidate.storage || maximum.storage);
+    && (!candidate.teamApply || maximum.teamApply)
+    && (!candidate.travelAction || maximum.travelAction)
+    && (!candidate.xunlaiAction || maximum.xunlaiAction)
+    && (!candidate.chatAliases || maximum.chatAliases);
 }
 
 /** Largest safe profiles first; read-only observations win ties over commands. */
@@ -129,7 +135,7 @@ function enhancementCandidates(
       && enhancementOutputSha256(build, candidate) !== null)
     .sort((left, right) =>
       capabilityCount(right) - capabilityCount(left)
-      || Number(left.commands) - Number(right.commands));
+      || Number(left.teamApply) - Number(right.teamApply));
 }
 
 export type ExtendedMemoryMode =

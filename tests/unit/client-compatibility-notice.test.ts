@@ -23,7 +23,9 @@ function compatibility(
       targetObservation: off,
       partyObservation: off,
       teamApply: off,
-      xunlaiStorage: off,
+      travelAction: off,
+      xunlaiAction: off,
+      chatAliases: off,
       ...overrides,
     },
   };
@@ -47,7 +49,8 @@ const IDS = [
   "settings-feature-gameFileSaving", "settings-feature-nativeCursor",
   "settings-feature-targetObservation", "settings-feature-partyObservation",
   "settings-feature-teamApply",
-  "settings-feature-xunlaiStorage",
+  "settings-feature-travelAction", "settings-feature-xunlaiAction",
+  "settings-feature-chatAliases",
 ] as const;
 
 function compatibilityDom() {
@@ -178,15 +181,19 @@ describe("client compatibility notice", () => {
         for (const targetObservation of optional) {
           for (const partyObservation of optional) {
             for (const teamApply of optional) {
-              for (const xunlaiStorage of optional) {
-                const features = {
-                  gameFileSaving,
-                  nativeCursor,
-                  targetObservation,
-                  partyObservation,
-                  teamApply,
-                  xunlaiStorage,
-                } satisfies ClientCompatibility["features"];
+              for (const travelAction of optional) {
+                for (const xunlaiAction of optional) {
+                  for (const chatAliases of optional) {
+                    const features = {
+                      gameFileSaving,
+                      nativeCursor,
+                      targetObservation,
+                      partyObservation,
+                      teamApply,
+                      travelAction,
+                      xunlaiAction,
+                      chatAliases,
+                    } satisfies ClientCompatibility["features"];
                 const report = compatibilityReport({
                   clientSha256: "b".repeat(64),
                   features,
@@ -212,7 +219,9 @@ describe("client compatibility notice", () => {
               assert.doesNotMatch(
                 [report.summary, ...report.details].join(" "),
                 /\b(Core|Enhancement|certificate|module)\b|command generation|stat|timing|reinstall|cache clearing/i,
-                );
+              );
+                  }
+                }
               }
             }
           }

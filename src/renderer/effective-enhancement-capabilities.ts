@@ -14,7 +14,9 @@ export function effectiveCapabilities(
     nativeCursor: features.nativeCursor.status === "available",
     targetObservation: features.targetObservation.status === "available",
     partyObservation: features.partyObservation.status === "available",
-    commands: features.teamApply.status === "available",
-    storage: features.xunlaiStorage.status === "available",
+    teamApply: features.teamApply.status === "available",
+    travelAction: features.travelAction.status === "available",
+    xunlaiAction: features.xunlaiAction.status === "available",
+    chatAliases: features.chatAliases.status === "available",
   });
 }

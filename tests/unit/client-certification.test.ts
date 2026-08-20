@@ -18,8 +18,10 @@ const NO_CAPABILITIES = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: false,
-  commands: false,
-  storage: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
 });
 
 function localVerification(
@@ -93,8 +95,10 @@ describe("client certification", () => {
       "nativeCursor",
       "targetObservation",
       "partyObservation",
-      "commands",
-      "storage",
+      "teamApply",
+      "travelAction",
+      "xunlaiAction",
+      "chatAliases",
     ] as const) {
       assert.equal(shouldVerifyClientLocally(templateOnly, {
         ...NO_CAPABILITIES,
