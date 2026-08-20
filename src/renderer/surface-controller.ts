@@ -114,6 +114,10 @@ export function installSurfaceController(
     register(surface: Surface): GwonmacSurfaceHandle {
       const id = Symbol("surface");
       let open = false;
+      // Input diagnostics report only this coarse ownership category. The
+      // marker carries no UI text or selector, and lets a player distinguish
+      // "Guild Wars received the click" from "a GWonMac surface owned it".
+      surface.root.dataset.gwonmacSurface = "";
       return Object.freeze({
         setOpen(next: boolean) {
           if (next === open) return;
@@ -124,6 +128,7 @@ export function installSurfaceController(
         dispose() {
           open = false;
           surfaces.delete(id);
+          delete surface.root.dataset.gwonmacSurface;
         },
       });
     },

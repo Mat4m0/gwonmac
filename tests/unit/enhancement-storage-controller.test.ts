@@ -138,6 +138,8 @@ test("storage development traces identify the live refusal without account data"
     }));
     assert.ok(messages.some((message) =>
       message.includes("storage.refused")
+      && message.includes('"request":1')
+      && message.includes('"sincePreviousMs":null')
       && message.includes('"state":"ready"')
       && message.includes('"access":false')
       && message.includes("cannot access Xunlai storage")

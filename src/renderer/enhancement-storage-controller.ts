@@ -66,6 +66,8 @@ export function createStorageController(
   };
   let configuredEnabled: boolean | null = null;
   let availabilityTraceKey: string | null = null;
+  let request = 0;
+  let previousRequestAt: number | null = null;
   const unavailable = () => unavailableReason(active, availability);
   const trace = (event: string, fields: Readonly<Record<string, unknown>>) => {
     if (!development) return;
@@ -89,17 +91,26 @@ export function createStorageController(
   const onCommand = (event: Event) => {
     if (!(event instanceof CustomEvent)) return;
     event.preventDefault();
+    const requestedAt = performance.now();
+    const fields = {
+      request: ++request,
+      sincePreviousMs: previousRequestAt === null
+        ? null
+        : Math.round(requestedAt - previousRequestAt),
+      state: availability.state?.status ?? "missing",
+      access: availability.state?.status === "ready"
+        ? availability.state.xunlaiAccess
+        : "unknown",
+    } as const;
+    previousRequestAt = requestedAt;
     try {
       command.open();
-      trace("queued", { accepted: true });
+      trace("queued", { ...fields, accepted: true });
     } catch (error) {
       trace("refused", {
+        ...fields,
         reason: error instanceof Error ? error.message : "unknown storage error",
         enabled: availability.enabled,
-        state: availability.state?.status ?? "missing",
-        access: availability.state?.status === "ready"
-          ? availability.state.xunlaiAccess
-          : "unknown",
       });
       if (event.detail !== null && typeof event.detail === "object") {
         (event.detail as { error?: unknown }).error = error;

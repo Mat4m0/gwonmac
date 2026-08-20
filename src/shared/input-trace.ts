@@ -68,6 +68,7 @@ export type InputTraceEntry =
   | {
       source: 'renderer';
       kind: 'press';
+      owner: InputTraceOwner;
       button: number;
       detail: number;
       modifiers: readonly InputTraceModifier[];
@@ -75,6 +76,7 @@ export type InputTraceEntry =
   | {
       source: 'renderer';
       kind: 'release';
+      owner: InputTraceOwner;
       button: number;
       travel: 'still' | 'short' | 'far';
       buttonsRemaining: number;

@@ -555,6 +555,7 @@ export const installGameInput = ({
     trace?.record({
       source: 'renderer',
       kind: 'press',
+      owner: traceOwner(event.target),
       button: event.button,
       detail: event.detail,
       modifiers: tracedModifiers(event),
@@ -580,6 +581,7 @@ export const installGameInput = ({
     trace?.record({
       source: 'renderer',
       kind: 'release',
+      owner: traceOwner(event.target),
       button: event.button,
       travel: held
         ? (() => {
