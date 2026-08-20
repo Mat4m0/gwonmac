@@ -50,8 +50,7 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   await expect(palette).toBeVisible();
   await expect(palette.locator('label[for="travel-search-input"] > span')).toHaveCount(0);
   await expect(palette.getByRole("status")).toHaveCount(0);
-  const paletteBox = await palette.boundingBox();
-  expect(paletteBox?.y).toBeGreaterThanOrEqual(95);
+  await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(95);
   await page.getByRole("combobox", { name: "Destination or search phrase" }).fill("kama");
   await expect(page.getByRole("option", { name: /Kamadan, Jewel of Istan/ })).toBeVisible();
   await page.keyboard.press("Meta+9");
