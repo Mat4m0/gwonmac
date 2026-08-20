@@ -7,10 +7,10 @@ const hostUrl = new URL(
   "../../../../build/main/certification/local-client-verifier-host.js",
   import.meta.url,
 );
-const { verifyClientLocally } = await import(hostUrl.href);
+const { verifyClientLocally, verifyNativeDoubleClickLocally } = await import(hostUrl.href);
 
-const [officialWasmPath, officialSha256] = process.argv.slice(-2);
-if (!officialWasmPath || !officialSha256) {
+const [mode, officialWasmPath, officialSha256] = process.argv.slice(-3);
+if (!mode || !officialWasmPath || !officialSha256) {
   throw new Error("local verifier fixture requires wasm and hash");
 }
 
@@ -21,10 +21,12 @@ const state = /** @type {{
 state.localVerifierCompleted = false;
 state.localVerifierOutcome = null;
 void app.whenReady().then(async () => {
-  state.localVerifierOutcome = await verifyClientLocally({
-    officialWasmPath,
-    officialSha256,
-  });
+  state.localVerifierOutcome = mode === "native-double-click"
+    ? await verifyNativeDoubleClickLocally({
+        wasmPath: officialWasmPath,
+        inputSha256: officialSha256,
+      })
+    : await verifyClientLocally({ officialWasmPath, officialSha256 });
   state.localVerifierCompleted = true;
   const window = new BrowserWindow({ show: false });
   await window.loadURL("data:text/html,local-verifier-complete");

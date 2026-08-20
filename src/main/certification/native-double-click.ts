@@ -165,6 +165,45 @@ export function nativeDoubleClickOutputSha256(
   return build.derivations[inputSha256] ?? null;
 }
 
+function sameStrings(left: unknown, right: readonly string[]): boolean {
+  return Array.isArray(left)
+    && left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
+/** Validate a relocated record that crossed the isolated-process boundary. */
+export function isDerivedNativeDoubleClickBuild(
+  value: unknown,
+  inputSha256: string,
+  baselines: readonly NativeDoubleClickBuild[] = NATIVE_DOUBLE_CLICK_BUILDS,
+): value is NativeDoubleClickBuild {
+  if (!value || typeof value !== "object") return false;
+  const build = value as Partial<NativeDoubleClickBuild>;
+  if (
+    !Number.isSafeInteger(build.callbackTableSlot)
+    || (build.callbackTableSlot as number) < 0
+    || !Number.isSafeInteger(build.callbackFunctionIndex)
+    || (build.callbackFunctionIndex as number) < 0
+    || !Number.isSafeInteger(build.flagStoreOffset)
+    || (build.flagStoreOffset as number) < 0
+    || !Number.isSafeInteger(build.flagStoreFrameOffset)
+    || (build.flagStoreFrameOffset as number) < 0
+    || typeof build.callbackBodySha256 !== "string"
+    || !/^[0-9a-f]{64}$/.test(build.callbackBodySha256)
+    || !build.derivations
+    || typeof build.derivations !== "object"
+    || Object.keys(build.derivations).length !== 1
+    || !/^[0-9a-f]{64}$/.test(build.derivations[inputSha256] ?? "")
+  ) return false;
+  return baselines.some((baseline) =>
+    build.callbackBodySha256 === baseline.callbackBodySha256
+    && build.flagStoreOffset === baseline.flagStoreOffset
+    && build.flagStoreFrameOffset === baseline.flagStoreFrameOffset
+    && sameStrings(build.callbackParams, baseline.callbackParams)
+    && sameStrings(build.callbackResults, baseline.callbackResults)
+  );
+}
+
 /** Locate an unchanged callback semantically when only the predecessor hash moved. */
 export function deriveNativeDoubleClickBuild(
   input: Uint8Array,
@@ -299,6 +338,15 @@ export function rewriteWithBuild(
   const localIndex = build.callbackFunctionIndex - importCount;
   const body = bodies[localIndex];
   if (!body) fail(`function ${build.callbackFunctionIndex} has no body`);
+  const functionTypes = parseIndexVector(sectionById(sections, 3));
+  const type = parseTypes(sectionById(sections, 1))[functionTypes[localIndex]!];
+  if (
+    !type
+    || type.params.some((value) => value !== 0x7f)
+    || type.results.some((value) => value !== 0x7f)
+    || !sameStrings(type.params.map(() => "i32"), build.callbackParams)
+    || !sameStrings(type.results.map(() => "i32"), build.callbackResults)
+  ) fail("the mousedown callback does not have the certified signature");
   if (sha256(body) !== build.callbackBodySha256) {
     fail("the mousedown callback is not the certified body");
   }

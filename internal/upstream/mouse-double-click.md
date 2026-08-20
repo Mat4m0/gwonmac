@@ -265,5 +265,6 @@ player's own macOS double-click preferences. The synthetic tap pair is deleted
 rather than kept beside it, and an Electron spec refuses any touch event so it
 cannot return as a fallback.
 
-`pnpm certification double-click` re-derives the whole table from the official
-bytes and exits non-zero when it disagrees with what is checked in.
+`pnpm certification double-click` re-runs the same structural proof from the
+official bytes. Unknown parsing stays in the bounded utility process;
+production repeats the record-driven transform and checks the exact output.

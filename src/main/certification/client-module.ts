@@ -40,13 +40,12 @@ import {
 } from "./enhancement-builds.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
-  deriveNativeDoubleClickBuild,
   findNativeDoubleClickBuild,
   nativeDoubleClickOutputSha256,
   NATIVE_DOUBLE_CLICK_TRANSFORM_ABI,
-  rewriteNativeDoubleClickWasm,
+  rewriteWithBuild,
+  type NativeDoubleClickBuild,
 } from "./native-double-click.js";
-import { readFile } from "node:fs/promises";
 import {
   EXTENDED_MEMORY_MAX_BYTES,
   prepareExtendedMemoryArtifacts,
@@ -248,20 +247,24 @@ async function discardEnhancementCache(
  * The last stage, applied to whatever the chain above settled on.
  *
  * It is deliberately not part of the certification *state*: a module it cannot
- * derive is served exactly as the previous stage produced it, and the renderer
- * falls back to synthesising taps. So an unrecognised predecessor costs the
- * player the double-click repair's latency, never the client.
+ * derive is served exactly as the previous stage produced it. The official
+ * client remains playable, but no synthetic input path is substituted.
  */
 async function withNativeDoubleClick(
   prepared: PreparedWasmClientModule,
   cacheRoot: string,
+  verifyUnknown: (options: {
+    wasmPath: string;
+    inputSha256: string;
+  }) => Promise<NativeDoubleClickBuild | null>,
 ): Promise<PreparedWasmClientModule> {
   try {
     const inputSha256 = await sha256File(prepared.wasmPath);
     const build = findNativeDoubleClickBuild(inputSha256)
-      ?? deriveNativeDoubleClickBuild(
-        new Uint8Array(await readFile(prepared.wasmPath)),
-      );
+      ?? await verifyUnknown({
+        wasmPath: prepared.wasmPath,
+        inputSha256,
+      });
     const expectedOutputSha256 = build
       ? nativeDoubleClickOutputSha256(build, inputSha256)
       : null;
@@ -280,7 +283,7 @@ async function withNativeDoubleClick(
           buildFingerprint: buildFingerprint(build),
           expectedOutputSha256,
         },
-        (base) => rewriteNativeDoubleClickWasm(base),
+        (base) => rewriteWithBuild(base, build),
       ),
       nativeDoubleClick: true,
     };
@@ -294,10 +297,15 @@ async function withNativeDoubleClick(
 
 export async function prepareClientModule(
   options: PrepareClientModuleOptions,
+  verifyUnknownNativeDoubleClick: (options: {
+    wasmPath: string;
+    inputSha256: string;
+  }) => Promise<NativeDoubleClickBuild | null> = async () => null,
 ): Promise<PreparedClientModule> {
   const prepared = await withNativeDoubleClick(
     await prepareCertifiedChain(options),
     options.nativeDoubleClickCacheRoot,
+    verifyUnknownNativeDoubleClick,
   );
   if (!options.extendedMemoryEnabled) {
     return {

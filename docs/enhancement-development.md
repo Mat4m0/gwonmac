@@ -239,11 +239,9 @@ pnpm certification double-click "/absolute/path/Gw.jspi.wasm"
 pnpm check
 ```
 
-`recertify` must report `bundleVerified: true`, `double-click` must report
-`matchesShippedTable: true`, and `doctor` must name the new build before a live
-run. Native double-click and extended-memory tables are cumulative: add every
-profile emitted by the capability registry without removing the preceding
-build.
+`recertify` must report `bundleVerified: true`, and `double-click` must prove
+one unique callback, active table slot, signature, insertion point, and valid
+output. A shipped hash-table match is regression evidence, not authority.
 
 Each recovered fact needs an independent semantic anchor. A common movement is
 not enough. Automated candidates are review evidence and cannot create runtime
