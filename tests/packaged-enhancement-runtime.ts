@@ -4,6 +4,7 @@ import {
   assertPackagedOffSession,
 } from "./helpers/packaged-enhancement-fixture.ts";
 import {
+  assertCleanupSafetyGates,
   assertRollbackAfterTablePublication,
   assertTargetReadoutLifecycle,
   assertToolboxFoundationLifecycle,
@@ -13,6 +14,7 @@ await assertPackagedOffSession();
 await assertPackagedHostOnlyToolsSession();
 await assertPackagedHostOnlyToolsAfterSoftRefusal();
 await assertTargetReadoutLifecycle();
+await assertCleanupSafetyGates();
 await assertToolboxFoundationLifecycle();
 await assertRollbackAfterTablePublication();
 console.log(

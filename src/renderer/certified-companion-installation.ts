@@ -235,50 +235,122 @@ export async function installCertifiedCompanion(
   let installedRuntime: object | null = null;
   let cleaned = false;
   let telemetryInstalled = false;
-  const cleanup = () => {
-    if (cleaned) return;
+  const cleanup = (): readonly Error[] => {
+    if (cleaned) return [];
+    // Disabling dispatch is the safety barrier. If it fails, releasing memory
+    // or callback-owned state could leave the live game calling freed data.
+    try {
+      hookSlot.value = 0;
+    } catch (cause) {
+      return [new Error("Companion cleanup could not disable dispatch", { cause })];
+    }
     cleaned = true;
-    // Disable dispatch before releasing any callback-owned state.
-    hookSlot.value = 0;
-    if (
-      installedCursorState !== null
-      && window.gwCursorState === installedCursorState
-    ) {
-      delete window.gwCursorState;
+    const failures: Error[] = [];
+    const attempt = (stage: string, release: () => void): boolean => {
+      try {
+        release();
+        return true;
+      } catch (cause) {
+        failures.push(new Error(`Companion cleanup failed during ${stage}`, { cause }));
+        return false;
+      }
+    };
+    const cursorStateWithdrawn = attempt("cursor state withdrawal", () => {
+      if (
+        installedCursorState !== null
+        && window.gwCursorState === installedCursorState
+      ) {
+        delete window.gwCursorState;
+      }
+    });
+    const observerStopped = attempt("observer disposal", stopObserver);
+    if (observerStopped) {
+      attempt("cursor refresh disposal", disposeCursorRefresh);
+      attempt("cursor disposal", disposeCursor);
+      attempt("target readout disposal", disposeReadout);
+      attempt("Toolbox disposal", disposeToolbox);
     }
-    stopObserver();
-    disposeCursorRefresh();
-    disposeCursor();
-    disposeReadout();
-    disposeToolbox();
-    disposeToolSettings();
-    professionTrace?.dispose();
-    if (
-      installedCallback !== null
-      && table.get(manifest.tableSlot) === installedCallback
-    ) {
-      table.set(manifest.tableSlot, null);
+    attempt("Tools settings listener disposal", disposeToolSettings);
+    if (observerStopped) {
+      attempt("profession trace disposal", () => professionTrace?.dispose());
     }
-    if (toolboxPointer) free(toolboxPointer);
-    if (partyPointer) free(partyPointer);
-    if (payloadPointer) free(payloadPointer);
-    storageInstallation?.dispose(free);
-    travelInstallation?.dispose(free);
-    if (professionTracePointer) free(professionTracePointer);
-    if (cursorPointer) free(cursorPointer);
-    if (configPointer) free(configPointer);
-    if (snapshotPointer) free(snapshotPointer);
-    if (runtimeAllocation) free(runtimeAllocation);
-    if (window.gwCompanionRuntime === installedRuntime) {
-      window.gwCompanionRuntime = null;
+    const callbackWithdrawn = attempt("callback withdrawal", () => {
+      if (
+        installedCallback !== null
+        && table.get(manifest.tableSlot) === installedCallback
+      ) {
+        table.set(manifest.tableSlot, null);
+      }
+    });
+    if (callbackWithdrawn) {
+      if (observerStopped) {
+        attempt("Toolbox allocation release", () => {
+          if (toolboxPointer) free(toolboxPointer);
+        });
+        attempt("party allocation release", () => {
+          if (partyPointer) free(partyPointer);
+        });
+      }
+      attempt("command payload release", () => {
+        if (payloadPointer) free(payloadPointer);
+      });
+      attempt("storage disposal", () => storageInstallation?.dispose(free));
+      attempt("Travel disposal", () => travelInstallation?.dispose(free));
+      if (observerStopped) {
+        attempt("profession trace allocation release", () => {
+          if (professionTracePointer) free(professionTracePointer);
+        });
+        attempt("cursor allocation release", () => {
+          if (cursorPointer) free(cursorPointer);
+        });
+      }
+      attempt("configuration allocation release", () => {
+        if (configPointer) free(configPointer);
+      });
+      if (observerStopped) {
+        attempt("snapshot allocation release", () => {
+          if (snapshotPointer) free(snapshotPointer);
+        });
+      }
+      attempt("runtime allocation release", () => {
+        if (runtimeAllocation) free(runtimeAllocation);
+      });
     }
+    const runtimeWithdrawn = attempt("runtime withdrawal", () => {
+      if (window.gwCompanionRuntime === installedRuntime) {
+        window.gwCompanionRuntime = null;
+      }
+    });
     // Only a completed installation records a withdrawal; a rollback after a
     // failed install records enhancement.installFailed instead.
-    if (telemetryInstalled) {
+    if (
+      telemetryInstalled
+      && observerStopped
+      && cursorStateWithdrawn
+      && callbackWithdrawn
+      && runtimeWithdrawn
+      && failures.length === 0
+    ) {
       telemetryInstalled = false;
-      recordMilestone("enhancement.uninstalled", {
-        installation: companionInstallations,
+      attempt("uninstall telemetry", () => {
+        recordMilestone("enhancement.uninstalled", {
+          installation: companionInstallations,
+        });
       });
+    }
+    return failures;
+  };
+  const cleanupAfterPageHide = () => {
+    const failures = cleanup();
+    if (failures.length > 0) {
+      try {
+        console.error(
+          "companion cleanup failed",
+          new AggregateError(failures, "Companion cleanup was incomplete"),
+        );
+      } catch {
+        // A hostile console must not turn page teardown into another failure.
+      }
     }
   };
   try {
@@ -875,7 +947,7 @@ export async function installCertifiedCompanion(
     // library to remain available before a live game region is known.
     syncToolboxAvailability();
 
-    window.addEventListener("pagehide", cleanup, { once: true });
+    window.addEventListener("pagehide", cleanupAfterPageHide, { once: true });
     console.info(
       `[enhancement] installed for client build ${manifest.buildId}; ` +
       `companion ABI ${COMPANION_ABI} ${kernelSha256.slice(0, 12)}`,
@@ -891,13 +963,34 @@ export async function installCertifiedCompanion(
     }
     return runtime;
   } catch (error) {
-    cleanup();
-    recordMilestone("enhancement.installFailed");
+    const cleanupFailures = [...cleanup()];
+    try {
+      recordMilestone("enhancement.installFailed");
+    } catch (cause) {
+      cleanupFailures.push(new Error(
+        "Companion installation failure telemetry could not be recorded",
+        { cause },
+      ));
+    }
     if (publishObserverState) {
-      window.gwCompanionState = Object.freeze({
-        status: "error",
-        reason: error instanceof Error ? error.message : String(error),
-      });
+      try {
+        window.gwCompanionState = Object.freeze({
+          status: "error",
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      } catch (cause) {
+        cleanupFailures.push(new Error(
+          "Companion installation failure state could not be published",
+          { cause },
+        ));
+      }
+    }
+    if (cleanupFailures.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupFailures],
+        error instanceof Error ? error.message : String(error),
+        { cause: error },
+      );
     }
     throw error;
   }
