@@ -578,10 +578,13 @@ export function createMainWindow(
       }, 500);
     } else if (details.reason !== "clean-exit") {
       options.onRendererFailure?.();
-      dialog.showErrorBox(
-        "Guild Wars stopped unexpectedly",
-        "Use View → Reload Game to try again. If it repeats, choose Help → Report a Bug.",
-      );
+      void dialog.showMessageBox(win, {
+        type: "error",
+        buttons: ["OK"],
+        message: "Guild Wars stopped unexpectedly",
+        detail:
+          "Use View → Reload Game to try again. If it repeats, choose Help → Report a Bug.",
+      }).catch(() => undefined);
     }
   });
 
