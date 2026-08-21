@@ -98,6 +98,17 @@ If you changed `apps/website`, also run:
 pnpm test:website
 ```
 
+Automatic Vercel Preview deployments are disabled for ordinary branches. A
+repository collaborator can request one for the current pull-request head by
+commenting `/vercel` on a same-repository pull request. Comment again after a
+new commit to update the Preview. The Vercel link appears in the PR checks, and
+the derived `preview/pr-<number>` branch is removed when the PR closes.
+
+For a branch that should receive a Preview after every push, name it
+`preview/<topic>` before opening the pull request. Fork pull requests are not
+deployed because Preview environment values must not be exposed to untrusted
+code.
+
 Do not run live ArenaNet tests unless the invariant requires them. Live tests
 must be deliberate, bounded, and named in the pull request.
 

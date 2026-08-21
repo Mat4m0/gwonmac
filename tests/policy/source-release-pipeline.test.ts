@@ -757,7 +757,7 @@ test("the website suite runs on its own path-filtered workflow", () => {
   assert.deepEqual(
     vercel.git?.deploymentEnabled,
     {
-      "*": false,
+      "**": false,
       main: true,
       "preview/*": true,
     },
@@ -796,6 +796,28 @@ test("the website suite runs on its own path-filtered workflow", () => {
     0,
     "an unchanged website may skip its build",
   );
+});
+
+test("Vercel Previews are explicit, exact-head, and collaborator-only", () => {
+  const workflow = read(".github/workflows/vercel-preview.yml");
+  assert.match(workflow, /issue_comment:\n {4}types: \[created\]/);
+  assert.match(workflow, /pull_request:\n {4}types: \[closed\]/);
+  assert.match(
+    workflow,
+    /permissions:\n {2}contents: write\n {2}issues: write\n {2}pull-requests: read/,
+  );
+  assert.match(workflow, /github\.event\.comment\.body == '\/vercel'/);
+  assert.match(workflow, /"OWNER", "MEMBER", "COLLABORATOR"/);
+  assert.match(workflow, /pullRequest\.head\.repo\?\.full_name !== `\$\{owner\}\/\$\{repo\}`/);
+  assert.match(workflow, /const headSha = pullRequest\.head\.sha/);
+  assert.match(workflow, /const ref = `heads\/preview\/pr-\$\{issueNumber\}`/);
+  assert.match(workflow, /github\.rest\.git\.(?:createRef|updateRef)/);
+  assert.match(workflow, /github\.rest\.git\.deleteRef/);
+  assert.match(
+    workflow,
+    /actions\/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd/,
+  );
+  assert.doesNotMatch(workflow, /pull_request_target|actions\/checkout|VERCEL_TOKEN/);
 });
 
 test("client recertification reports evidence but cannot grant authority", () => {

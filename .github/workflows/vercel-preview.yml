@@ -1,0 +1,117 @@
+# Automatic branch previews are intentionally disabled to control Vercel cost.
+# A trusted maintainer can request one exact preview by commenting `/vercel` on
+# a same-repository pull request. The derived branch is only a Git ref: the PR
+# commit remains the single source of code, and Vercel's Git integration builds
+# it through the reviewed preview/* allowlist in apps/website/vercel.json.
+name: Vercel preview
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: vercel-preview-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  request:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      github.event.comment.body == '/vercel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Request the exact PR head
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const trustedAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+            const association = context.payload.comment.author_association;
+            const issueNumber = context.payload.issue.number;
+            const { owner, repo } = context.repo;
+
+            if (!trustedAssociations.has(association)) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: "Only repository collaborators can request a Vercel Preview.",
+              });
+              return;
+            }
+
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: issueNumber,
+            });
+            if (pullRequest.state !== "open") {
+              core.setFailed("The pull request is no longer open.");
+              return;
+            }
+            if (pullRequest.head.repo?.full_name !== `${owner}/${repo}`) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: "Vercel Previews are limited to branches in this repository. Fork pull requests are not deployed.",
+              });
+              return;
+            }
+
+            const headSha = pullRequest.head.sha;
+            const shortSha = headSha.slice(0, 8);
+            const ref = `heads/preview/pr-${issueNumber}`;
+            let changed = true;
+            try {
+              const { data: current } = await github.rest.git.getRef({ owner, repo, ref });
+              if (current.object.sha === headSha) {
+                changed = false;
+              } else {
+                await github.rest.git.updateRef({ owner, repo, ref, sha: headSha, force: true });
+              }
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/${ref}`,
+                sha: headSha,
+              });
+            }
+
+            const checksUrl = `https://github.com/${owner}/${repo}/pull/${issueNumber}/checks`;
+            const message = changed
+              ? `Vercel Preview requested for \`${shortSha}\`. The deployment link will appear in the [PR checks](${checksUrl}).`
+              : `A Vercel Preview was already requested for \`${shortSha}\`. See the [PR checks](${checksUrl}).`;
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              body: message,
+            });
+
+  cleanup:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Remove the derived Preview branch
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const ref = `heads/preview/pr-${context.payload.pull_request.number}`;
+            try {
+              await github.rest.git.deleteRef({ owner, repo, ref });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
