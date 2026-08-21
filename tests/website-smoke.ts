@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
-import { EXTERNAL_URLS } from "../src/shared/contracts.ts";
+import { RELEASE_REPO } from "../src/shared/project-identity.ts";
 import {
   RELEASES_FALLBACK_URL,
   selectLatestRelease,
@@ -19,6 +19,7 @@ const ARM64_DMG = {
   browser_download_url:
     "https://github.com/Mat4m0/gwonmac/releases/download/v0.0.3/Guild-Wars-Reforged-0.0.3-macOS-arm64.dmg",
 };
+const RELEASES_URL = `https://github.com/${RELEASE_REPO}/releases`;
 const CHECKSUMS = {
   name: "SHA256SUMS.txt",
   browser_download_url:
@@ -353,7 +354,7 @@ try {
   const installHtml = await install.text();
   assert.match(
     installHtml,
-    new RegExp(`href="${EXTERNAL_URLS.releases}/latest"`),
+    new RegExp(`href="${RELEASES_URL}/latest"`),
   );
   // The guide's direct download link goes through /download, which redirects
   // to the newest DMG (or the releases page when none is eligible) — always
@@ -365,7 +366,7 @@ try {
   assert.equal(download.status, 302);
   assert.match(
     download.headers.get("location") ?? "",
-    new RegExp(`^${EXTERNAL_URLS.releases}/`),
+    new RegExp(`^${RELEASES_URL}/`),
   );
   const betaDownload = await globalThis.fetch(
     `http://${host}:${port}/download?channel=beta`,
@@ -374,7 +375,7 @@ try {
   assert.equal(betaDownload.status, 302);
   assert.match(
     betaDownload.headers.get("location") ?? "",
-    new RegExp(`^${EXTERNAL_URLS.releases}/`),
+    new RegExp(`^${RELEASES_URL}/`),
   );
   // The alias the layer's locale-prefixed links land on.
   const germanDownload = await globalThis.fetch(`http://${host}:${port}/de/download`, {
@@ -388,11 +389,11 @@ try {
   const latest = await load("/api/latest");
   assert.equal(latest.status, 200);
   const answer = (await latest.json()) as { url: string };
-  assert.match(answer.url, new RegExp(`^${EXTERNAL_URLS.releases}/`));
+  assert.match(answer.url, new RegExp(`^${RELEASES_URL}/`));
   const betaLatest = await load("/api/latest?channel=beta");
   assert.equal(betaLatest.status, 200);
   const betaAnswer = (await betaLatest.json()) as { url: string };
-  assert.match(betaAnswer.url, new RegExp(`^${EXTERNAL_URLS.releases}/`));
+  assert.match(betaAnswer.url, new RegExp(`^${RELEASES_URL}/`));
 } finally {
   await stopChildProcess(server);
 }

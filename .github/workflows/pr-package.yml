@@ -1,13 +1,16 @@
-# A reviewer gets the packaged application and not only a green tick; three days
-# is long enough to run it and short enough that unmerged builds do not pile up.
-name: PR package
+# One always-present required gate routes only proved non-runtime changes away
+# from macOS. Unknown, mixed, malformed, and manually selected changes fail
+# closed into the complete runtime and packaged-app verification path.
+name: Application verification
 
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       checkout_ref:
-        description: Exact pull-request head SHA to verify.
+        description: Exact commit SHA to verify and package.
         required: true
         type: string
       pr_number:
@@ -19,14 +22,162 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr-package-${{ github.event.pull_request.number || inputs.pr_number }}
-  cancel-in-progress: true
+  group: application-verification-${{ github.event.pull_request.number || inputs.pr_number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  verify:
+  impact:
+    runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.classify.outputs.runtime }}
+      website: ${{ steps.classify.outputs.website }}
+    steps:
+      - name: Validate a manual request
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          CHECKOUT_REF: ${{ inputs.checkout_ref }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          test "$WORKFLOW_REF" = "refs/heads/main"
+          if ! [[ "$CHECKOUT_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid checkout SHA: $CHECKOUT_REF" >&2
+            exit 1
+          fi
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - name: Classify application impact
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+            echo "website=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid head SHA: $HEAD_SHA" >&2
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Invalid base SHA: $BASE_SHA" >&2
+              exit 1
+            fi
+            range="$BASE_SHA...$HEAD_SHA"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            if ! [[ "$BEFORE_SHA" =~ ^[0-9a-f]{40}$ ]] || \
+              [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+              echo "Invalid previous SHA: $BEFORE_SHA" >&2
+              exit 1
+            fi
+            range="$BEFORE_SHA..$HEAD_SHA"
+          else
+            echo "Unsupported event: $EVENT_NAME" >&2
+            exit 1
+          fi
+
+          classification="$(git diff --name-only --no-renames -z "$range" -- | \
+            node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/ci-impact.ts)"
+          if ! printf '%s\n' "$classification" | grep -Eq '^runtime=(true|false)$' || \
+            ! printf '%s\n' "$classification" | grep -Eq '^website=(true|false)$' || \
+            [ "$(printf '%s\n' "$classification" | wc -l | tr -d ' ')" != "2" ]; then
+            echo "Invalid impact result: $classification" >&2
+            exit 1
+          fi
+          printf '%s\n' "$classification" >> "$GITHUB_OUTPUT"
+
+  fast:
+    needs: impact
+    if: needs.impact.result == 'success' && needs.impact.outputs.runtime == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+
+  website:
+    needs: impact
+    if: needs.impact.result == 'success' && needs.impact.outputs.website == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:website
+
+  runtime:
+    needs: impact
+    if: needs.impact.result == 'success' && needs.impact.outputs.runtime == 'true'
     uses: ./.github/workflows/macos-verify.yml
     with:
-      artifact-name: ${{ format('gwonmac-pr-{0}-{1}-{2}', github.event.pull_request.number || inputs.pr_number, inputs.checkout_ref || github.sha, github.run_attempt) }}
-      checkout-ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha }}
+      artifact-name: ${{ github.event_name == 'workflow_dispatch' && format('gwonmac-pr-{0}-{1}-{2}', inputs.pr_number, inputs.checkout_ref, github.run_attempt) || '' }}
+      checkout-ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
       artifact-retention-days: 3
-      dependency-review: true
+      packaged-smoke: true
+      dependency-review: ${{ github.event_name == 'pull_request' }}
+      package-intent: developer-build
+
+  verify:
+    name: verify / verify
+    if: always()
+    needs: [impact, fast, runtime, website]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the selected verification path
+        env:
+          FAST_RESULT: ${{ needs.fast.result }}
+          IMPACT_RESULT: ${{ needs.impact.result }}
+          RUNTIME_IMPACT: ${{ needs.impact.outputs.runtime }}
+          RUNTIME_RESULT: ${{ needs.runtime.result }}
+          WEBSITE_IMPACT: ${{ needs.impact.outputs.website }}
+          WEBSITE_RESULT: ${{ needs.website.result }}
+        run: |
+          test "$IMPACT_RESULT" = "success"
+          if [ "$RUNTIME_IMPACT" = "false" ]; then
+            test "$FAST_RESULT" = "success"
+            test "$RUNTIME_RESULT" = "skipped"
+          elif [ "$RUNTIME_IMPACT" = "true" ]; then
+            test "$FAST_RESULT" = "skipped"
+            test "$RUNTIME_RESULT" = "success"
+          else
+            echo "Invalid impact result: $RUNTIME_IMPACT" >&2
+            exit 1
+          fi
+          if [ "$WEBSITE_IMPACT" = "true" ]; then
+            test "$WEBSITE_RESULT" = "success"
+          elif [ "$WEBSITE_IMPACT" = "false" ]; then
+            test "$WEBSITE_RESULT" = "skipped"
+          else
+            echo "Invalid website impact result: $WEBSITE_IMPACT" >&2
+            exit 1
+          fi
