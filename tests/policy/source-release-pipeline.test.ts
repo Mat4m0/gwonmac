@@ -913,6 +913,8 @@ test("client recertification reports evidence but cannot grant authority", () =>
   // Reporting can write issues only. It has no checkout credentials, source
   // write permission, branch command, pull-request command, or workflow token.
   assert.match(publish, /permissions:\n {6}contents: read\n {6}issues: write/);
+  assert.match(publish, /GH_REPO: \$\{\{ github\.repository \}\}/);
+  assert.doesNotMatch(publish, /actions\/checkout/);
   assert.doesNotMatch(publish, /pnpm install|pnpm build|pnpm certification/);
   assert.match(publish, /if: always\(\) && needs\.derive\.result != 'skipped'/);
   assert.doesNotMatch(workflow, /persist-credentials: true/);
