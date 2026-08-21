@@ -3,8 +3,10 @@
  * parts: the recorder under `./diagnostics/`, the capture session, the OS
  * samplers, the renderer's reports, and the export.
  *
- * The rest of the main process imports diagnostics from here and nowhere else,
- * so which module owns a given piece of state stays an internal question.
+ * Main-process features import diagnostics from here. The low-level renderer
+ * command transport imports the recorder leaf directly because capture uses
+ * that transport; routing its log back through this facade would close a
+ * diagnostics → capture → renderer-commands → diagnostics runtime cycle.
  */
 import type { DiagnosticSummary } from "../shared/diagnostics.js";
 import {
