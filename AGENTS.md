@@ -161,10 +161,10 @@ Run the narrowest relevant proof while you work. Then run the repository gate
 before you finish.
 
 ```bash
-pnpm check
+pnpm run check
 ```
 
-`pnpm check` runs type checks, lint, Markdown links, unit tests, policy tests,
+`pnpm run check` runs type checks, lint, Markdown links, unit tests, policy tests,
 and Tools unit tests. It does not build or open a window.
 
 Run the complete local application gate before a pull request:
