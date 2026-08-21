@@ -16,6 +16,7 @@
  *
  */
 import { createHash } from "node:crypto";
+import { COMPANION_DISPATCH_KINDS } from "../../shared/companion-abi.js";
 import {
   enhancementCapabilityProfile,
   enhancementHooksFor,
@@ -73,9 +74,6 @@ const DISPATCH_PARAMS = 6;
  *  command; the widest builder we have takes four scalars. */
 const COMMAND_PARAMS = 5;
 const COMMAND_ARGS = COMMAND_PARAMS - 1;
-const DISPATCH_TICK = 0;
-const DISPATCH_CURSOR = 1;
-const DISPATCH_UI = 2;
 
 function fail(message: string): never {
   throw new Error(`enhancement transform: ${message}`);
@@ -333,7 +331,7 @@ function resolveEnhancementTransform(
         build.hookParams,
         build.hookResults,
       ),
-      dispatchKind: DISPATCH_TICK,
+      dispatchKind: COMPANION_DISPATCH_KINDS.tick,
     });
   }
   if (selectedHooks.cursor) {
@@ -344,7 +342,7 @@ function resolveEnhancementTransform(
         cursorEvent.params,
         cursorEvent.results,
       ),
-      dispatchKind: DISPATCH_CURSOR,
+      dispatchKind: COMPANION_DISPATCH_KINDS.cursor,
     });
   }
   const uiDispatcherHook = selectedHooks.ui || capabilities.travelAction
@@ -358,7 +356,7 @@ function resolveEnhancementTransform(
   if (selectedHooks.ui) {
     selected.push({
       ...uiDispatcherHook!,
-      dispatchKind: DISPATCH_UI,
+      dispatchKind: COMPANION_DISPATCH_KINDS.ui,
     });
   }
   const bodyHash = (functionIndex: number): string => {
@@ -793,8 +791,10 @@ function assembleEnhancementTransform(
   };
   const selectedOriginalIndices = selected.map((hook) =>
     appendFunction(hook.typeIndex, bodies[hook.localIndex]!));
+  const uiHookIndex = selected.findIndex((hook) =>
+    hook.dispatchKind === COMPANION_DISPATCH_KINDS.ui);
   const uiOriginalIndex = selectedHooks.ui
-    ? selectedOriginalIndices[selected.findIndex((hook) => hook.dispatchKind === DISPATCH_UI)]!
+    ? selectedOriginalIndices[uiHookIndex]!
     : null;
   selected.forEach((hook, index) => {
     nextBodies[hook.localIndex] = dispatcher(

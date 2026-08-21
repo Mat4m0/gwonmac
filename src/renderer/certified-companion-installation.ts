@@ -50,6 +50,8 @@ import type { TravelInstallation } from "./enhancement-travel-installation.js";
 import { travelGameState } from "../shared/travel-command.js";
 import {
   COMPANION_ABI as COMPANION_DESCRIPTOR,
+  COMPANION_DISPATCH_KINDS,
+  COMPANION_FEATURE_BITS,
 } from "../shared/companion-abi.js";
 import {
   COMPANION_KERNEL_EXPORTS,
@@ -67,10 +69,6 @@ import {
   type ProfessionCommandTraceReader,
 } from "./profession-command-trace.js";
 
-const ENHANCEMENT_FEATURE_NATIVE_CURSOR = 1 << 0;
-const ENHANCEMENT_FEATURE_GAME_SNAPSHOT = 1 << 1;
-const ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
-const ENHANCEMENT_FEATURE_TARGET_OBSERVATION = 1 << 3;
 const COMPANION_ABI = COMPANION_DESCRIPTOR.kernel;
 const COMPANION_RUNTIME_BYTES = 65_536;
 /**
@@ -136,10 +134,10 @@ export async function installCertifiedCompanion(
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const publishObserverState = program === "target-observer";
   const featureFlags =
-    (capabilities.nativeCursor ? ENHANCEMENT_FEATURE_NATIVE_CURSOR : 0)
-    | (observeState ? ENHANCEMENT_FEATURE_GAME_SNAPSHOT : 0)
-    | (foundation ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0)
-    | (capabilities.targetObservation ? ENHANCEMENT_FEATURE_TARGET_OBSERVATION : 0);
+    (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
+    | (observeState ? COMPANION_FEATURE_BITS.gameSnapshot : 0)
+    | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
+    | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0);
   if (featureFlags === 0) return null;
 
   const manifest = decodeEnhancementManifest(module, capabilities);
@@ -616,13 +614,20 @@ export async function installCertifiedCompanion(
     const teamEnabled = () => policy().teamManagement;
     const syncActiveObservers = () => {
       const active =
-        (capabilities.nativeCursor ? ENHANCEMENT_FEATURE_NATIVE_CURSOR : 0)
+        (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
         // Keep the bounded policy observer alive even while optional UI and
         // commands are denied. It is the only way an unknown region can later
         // prove that it became PvE without restarting.
-        | (foundation ? ENHANCEMENT_FEATURE_TOOLBOX_FOUNDATION : 0)
-        | (targetEnabled() ? ENHANCEMENT_FEATURE_TARGET_OBSERVATION : 0);
-      kernelDispatch(3, active, 0, 0, 0, 0);
+        | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
+        | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0);
+      kernelDispatch(
+        COMPANION_DISPATCH_KINDS.activeFeatures,
+        active,
+        0,
+        0,
+        0,
+        0,
+      );
     };
     const commands = commandEnqueue === null ? null : teamCommands!.createTeamApplyCommands({
       memory,
