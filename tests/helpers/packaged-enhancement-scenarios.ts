@@ -29,7 +29,11 @@ import {
   TOOLBOX_SNAPSHOT_POINTER,
 } from "./packaged-enhancement-fixture.ts";
 
-async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
+async function installTargetReadout(
+  page: Page,
+  moduleBytes: Uint8Array,
+  capabilities = TARGET_ONLY,
+) {
   return page.evaluate(async ({ bytes, tableSize, capabilities, snapshotAbi }: {
     bytes: number[];
     tableSize: number;
@@ -135,7 +139,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
   }, {
     bytes: [...moduleBytes],
     tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
-    capabilities: TARGET_ONLY,
+    capabilities,
     snapshotAbi: COMPANION_ABI.snapshot.abi,
   });
 }
@@ -342,16 +346,37 @@ export async function assertTargetReadoutLifecycle() {
 }
 
 export async function assertCleanupSafetyGates() {
-  for (const gate of ["observer", "callback"] as const) {
+  for (const gate of ["observer", "callback", "hook"] as const) {
     const fixture = await launchPackaged(`gw-packaged-cleanup-${gate}-`, {});
     try {
+      const pageErrors: string[] = [];
+      fixture.page.on("pageerror", (error) => pageErrors.push(error.message));
       await fixture.page.waitForFunction(() => {
         const { Module } = globalThis as PageGlobals;
         return typeof Module?.socket?.connect === "function";
       });
+      if (gate === "hook") {
+        await fixture.page.evaluate(async () => {
+          const surfaceSpecifier = "./surface-controller.js";
+          const { installSurfaceController }:
+            typeof import("../../src/renderer/surface-controller.ts") =
+              await import(surfaceSpecifier);
+          window.gwSurfaces = installSurfaceController(document);
+          window.gwToolsSettings = () => Object.freeze({
+            enabled: true,
+            teamManagement: true,
+            xunlaiStorage: true,
+            travelPalette: true,
+            targetReadout: false,
+          });
+        });
+      }
       await installTargetReadout(
         fixture.page,
-        installableManifestModule(TARGET_ONLY),
+        installableManifestModule(
+          gate === "hook" ? TOOLBOX_PROGRAM_CAPABILITIES : TARGET_ONLY,
+        ),
+        gate === "hook" ? TOOLBOX_PROGRAM_CAPABILITIES : TARGET_ONLY,
       );
       const result = await fixture.page.evaluate((failureGate) => {
         const probe = (globalThis as ReadoutPageGlobals).__targetReadoutFixture;
@@ -369,7 +394,29 @@ export async function assertCleanupSafetyGates() {
           consoleError(message, detail);
         };
         const cancelFrame = globalThis.cancelAnimationFrame;
-        if (failureGate === "observer") {
+        if (failureGate === "hook") {
+          const globalValue = Object.getOwnPropertyDescriptor(
+            WebAssembly.Global.prototype,
+            "value",
+          );
+          if (
+            typeof globalValue?.get !== "function"
+            || typeof globalValue.set !== "function"
+          ) {
+            throw new Error("WebAssembly.Global.value is not instrumentable");
+          }
+          Object.defineProperty(probe.hookSlot, "value", {
+            configurable: true,
+            enumerable: true,
+            get: () => globalValue.get?.call(probe.hookSlot),
+            set: (value: number) => {
+              if (value === 0) {
+                throw new Error("intentional hook disable failure");
+              }
+              globalValue.set?.call(probe.hookSlot, value);
+            },
+          });
+        } else if (failureGate === "observer") {
           globalThis.cancelAnimationFrame = () => {
             throw new Error("intentional observer stop failure");
           };
@@ -389,34 +436,56 @@ export async function assertCleanupSafetyGates() {
           console.error = consoleError;
         }
         return {
+          cursorStatePublished: typeof window.gwCursorState === "function",
           freed: probe.freed,
           hook: probe.hookSlot.value,
           readoutCount: document.querySelectorAll("#enhancement-target").length,
           reports,
-          runtime: window.gwCompanionRuntime,
+          runtimeStatus: window.gwCompanionRuntime?.status ?? null,
+          runtimeRetained: window.gwCompanionRuntime === probe.runtime,
           tableEmpty: probe.table.get(probe.table.length - 1) === null,
+          toolboxCount: document.querySelectorAll("#toolbox-foundation").length,
         };
       }, gate);
 
       if (gate === "observer") {
         assert.deepEqual(result, {
+          cursorStatePublished: false,
           freed: [0x11_050, 0x1000],
           hook: 0,
           readoutCount: 1,
           reports: [["Companion cleanup failed during observer disposal"]],
-          runtime: null,
+          runtimeStatus: null,
+          runtimeRetained: false,
           tableEmpty: true,
+          toolboxCount: 0,
         });
-      } else {
+      } else if (gate === "callback") {
         assert.deepEqual(result, {
+          cursorStatePublished: false,
           freed: [],
           hook: 0,
           readoutCount: 0,
           reports: [["Companion cleanup failed during callback withdrawal"]],
-          runtime: null,
+          runtimeStatus: null,
+          runtimeRetained: false,
           tableEmpty: false,
+          toolboxCount: 0,
+        });
+      } else {
+        assert.deepEqual(result, {
+          cursorStatePublished: true,
+          freed: [],
+          hook: ENHANCEMENT_BUILD.tableSlot + 1,
+          readoutCount: 0,
+          reports: [["Companion cleanup could not disable dispatch"]],
+          runtimeStatus: "installed",
+          runtimeRetained: true,
+          tableEmpty: false,
+          toolboxCount: 1,
         });
       }
+      assert.deepEqual(pageErrors, [], `${gate} cleanup escaped pagehide`);
     } finally {
       await closePackaged(fixture);
     }
