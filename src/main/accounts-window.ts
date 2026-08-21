@@ -13,7 +13,6 @@ import { sendRendererCommand } from "./renderer-commands.js";
 import { windowRegistry } from "./window-registry.js";
 
 const HUB_URL = "gw://app/accounts.html";
-let hubWindow: BrowserWindow | null = null;
 let protocolInstalled = false;
 
 function installAccountsMenu(): void {
@@ -29,7 +28,7 @@ function installAccountsMenu(): void {
               label: "Settings…",
               accelerator: "CommandOrControl+,",
               click: () => {
-                void sendRendererCommand(getAccountsWindow(), {
+                void sendRendererCommand(windowRegistry.hubWindow(), {
                   type: "accounts.settings.open",
                 });
               },
@@ -55,12 +54,8 @@ function installAccountsMenu(): void {
   ]));
 }
 
-export function getAccountsWindow(): BrowserWindow | null {
-  return hubWindow && !hubWindow.isDestroyed() ? hubWindow : null;
-}
-
 export function revealAccountsWindow(): boolean {
-  const win = getAccountsWindow();
+  const win = windowRegistry.hubWindow();
   if (!win) return false;
   if (win.isMinimized()) win.restore();
   win.show();
@@ -69,7 +64,7 @@ export function revealAccountsWindow(): boolean {
 }
 
 export function createAccountsWindow(deps: ProtocolDeps): BrowserWindow {
-  const existing = getAccountsWindow();
+  const existing = windowRegistry.hubWindow();
   if (existing) {
     revealAccountsWindow();
     return existing;
@@ -103,7 +98,6 @@ export function createAccountsWindow(deps: ProtocolDeps): BrowserWindow {
       experimentalFeatures: false,
     },
   });
-  hubWindow = win;
   windowRegistry.register(win, { mode: "multi", role: "hub" });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event, url) => {
@@ -121,7 +115,6 @@ export function createAccountsWindow(deps: ProtocolDeps): BrowserWindow {
   });
   win.on("closed", () => {
     windowRegistry.unregister(win);
-    if (hubWindow === win) hubWindow = null;
   });
   void win.loadURL(HUB_URL);
   return win;

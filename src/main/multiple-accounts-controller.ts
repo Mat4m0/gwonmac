@@ -18,10 +18,7 @@ import type {
   MultiWorkspace,
   ProfileId,
 } from "../shared/multiple-accounts.js";
-import {
-  getAccountsWindow,
-  revealAccountsWindow,
-} from "./accounts-window.js";
+import { revealAccountsWindow } from "./accounts-window.js";
 import type { ClientRuntime } from "./client-runtime.js";
 import {
   AccountTemplateSessions,
@@ -223,7 +220,7 @@ export class MultipleAccountsController {
       revealAccountsWindow();
       throw firstFailure;
     }
-    const hub = getAccountsWindow();
+    const hub = windowRegistry.hubWindow();
     if (hub && !hub.isDestroyed()) hub.hide();
     if (firstSelectedWindow && !firstSelectedWindow.isDestroyed()) {
       if (firstSelectedWindow.isMinimized()) firstSelectedWindow.restore();
@@ -479,10 +476,10 @@ export class MultipleAccountsController {
         windowStatePath: profilePaths.windowState,
         showInactive: true,
         onRendererRecoveryStart: () => {
-          hubWasVisibleBeforeRecovery = getAccountsWindow()?.isVisible() ?? false;
+          hubWasVisibleBeforeRecovery = windowRegistry.hubWindow()?.isVisible() ?? false;
         },
         onRendererRecovered: () => {
-          if (!hubWasVisibleBeforeRecovery) getAccountsWindow()?.hide();
+          if (!hubWasVisibleBeforeRecovery) windowRegistry.hubWindow()?.hide();
         },
         onRendererFailure: () => {
           this.profileRuntime.set(profileId, "failed", launchIssueForStage("crashed"));

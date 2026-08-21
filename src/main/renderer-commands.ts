@@ -8,14 +8,13 @@
  * directions cannot drift into different ideas of what the renderer is. Only
  * the renderer a command was sent to may complete it.
  */
-import { BrowserWindow, ipcMain } from "electron";
+import { ipcMain, type BrowserWindow } from "electron";
 import {
   IPC,
   type RendererCommand,
   type RendererCommandCompletion,
   type RendererCommandOutcome,
 } from "../shared/contracts.js";
-import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { logEvent } from "./diagnostics/recorder.js";
 
 interface Pending {
@@ -39,17 +38,6 @@ ipcMain.on(IPC.rendererCommandDone, (event, id: unknown, outcome: unknown) => {
   if (!entry || entry.webContentsId !== event.sender.id) return;
   entry.settle(outcome as RendererCommandCompletion);
 });
-
-export function canonicalRendererWindow(): BrowserWindow | null {
-  return (
-    BrowserWindow.getAllWindows().find(
-      (win) =>
-        !win.isDestroyed()
-        && !win.webContents.isDestroyed()
-        && isCanonicalRendererUrl(win.webContents.getURL()),
-    ) ?? null
-  );
-}
 
 /**
  * Resolves with the renderer's truthful completion, failure when the page that

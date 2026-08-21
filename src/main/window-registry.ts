@@ -17,24 +17,37 @@ export type WindowContext =
 interface RegisteredWindow {
   readonly webContents: { readonly id: number };
   isDestroyed(): boolean;
+  isFocused(): boolean;
 }
 
-interface Entry {
-  readonly win: RegisteredWindow;
+interface Entry<Window extends RegisteredWindow> {
+  readonly win: Window;
   readonly context: WindowContext;
 }
 
-export class WindowRegistry {
-  readonly #byWebContents = new Map<number, Entry>();
-  readonly #profileWindows = new Map<ProfileId, RegisteredWindow>();
-  readonly #webContentsIds = new WeakMap<RegisteredWindow, number>();
+export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
+  readonly #byWebContents = new Map<number, Entry<Window>>();
+  readonly #profileWindows = new Map<ProfileId, Window>();
+  readonly #webContentsIds = new WeakMap<Window, number>();
+  #singleGameWindow: Window | null = null;
+  #hubWindow: Window | null = null;
 
-  register(win: RegisteredWindow, context: WindowContext): void {
+  register(win: Window, context: WindowContext): void {
     const id = win.webContents.id;
     if (this.#byWebContents.has(id)) {
       throw new AppError("validation", "window is already registered");
     }
-    if (context.mode === "multi" && context.role === "game") {
+    if (context.mode === "single") {
+      if (this.#singleGameWindow && !this.#singleGameWindow.isDestroyed()) {
+        throw new AppError("validation", "Single Account already has a game window");
+      }
+      this.#singleGameWindow = win;
+    } else if (context.role === "hub") {
+      if (this.#hubWindow && !this.#hubWindow.isDestroyed()) {
+        throw new AppError("validation", "Multiple Accounts already has a Hub window");
+      }
+      this.#hubWindow = win;
+    } else {
       const existing = this.#profileWindows.get(context.profileId);
       if (existing && !existing.isDestroyed()) {
         throw new AppError("validation", "profile already has a game window");
@@ -45,14 +58,18 @@ export class WindowRegistry {
     this.#byWebContents.set(id, { win, context });
   }
 
-  unregister(win: RegisteredWindow): void {
+  unregister(win: Window): void {
     const id = this.#webContentsIds.get(win);
     if (id === undefined) return;
     const entry = this.#byWebContents.get(id);
     if (!entry || entry.win !== win) return;
     this.#byWebContents.delete(id);
     this.#webContentsIds.delete(win);
-    if (entry.context.mode === "multi" && entry.context.role === "game") {
+    if (entry.context.mode === "single") {
+      if (this.#singleGameWindow === win) this.#singleGameWindow = null;
+    } else if (entry.context.role === "hub") {
+      if (this.#hubWindow === win) this.#hubWindow = null;
+    } else {
       if (this.#profileWindows.get(entry.context.profileId) === win) {
         this.#profileWindows.delete(entry.context.profileId);
       }
@@ -64,25 +81,52 @@ export class WindowRegistry {
     return entry && !entry.win.isDestroyed() ? entry.context : null;
   }
 
-  profileWindow(profileId: ProfileId): BrowserWindow | null {
+  windowForWebContents(id: number): Window | null {
+    const entry = this.#byWebContents.get(id);
+    return entry && !entry.win.isDestroyed() ? entry.win : null;
+  }
+
+  singleGameWindow(): Window | null {
+    return this.#singleGameWindow && !this.#singleGameWindow.isDestroyed()
+      ? this.#singleGameWindow
+      : null;
+  }
+
+  hubWindow(): Window | null {
+    return this.#hubWindow && !this.#hubWindow.isDestroyed()
+      ? this.#hubWindow
+      : null;
+  }
+
+  profileWindow(profileId: ProfileId): Window | null {
     const win = this.#profileWindows.get(profileId);
-    return win && !win.isDestroyed() ? win as BrowserWindow : null;
+    return win && !win.isDestroyed() ? win : null;
   }
 
   windows(
     predicate: (context: WindowContext) => boolean = () => true,
-  ): BrowserWindow[] {
-    const result: BrowserWindow[] = [];
+  ): Window[] {
+    const result: Window[] = [];
     for (const { win, context } of this.#byWebContents.values()) {
-      if (!win.isDestroyed() && predicate(context)) result.push(win as BrowserWindow);
+      if (!win.isDestroyed() && predicate(context)) result.push(win);
     }
     return result;
   }
 
-  gameWindows(): BrowserWindow[] {
+  gameWindows(): Window[] {
     return this.windows((context) => context.role === "game");
+  }
+
+  focusedGameWindow(): Window | null {
+    return this.gameWindows().find((win) => win.isFocused()) ?? null;
+  }
+
+  focusedOrSoleGameWindow(): Window | null {
+    const games = this.gameWindows();
+    return games.find((win) => win.isFocused())
+      ?? (games.length === 1 ? games[0] ?? null : null);
   }
 }
 
 /** The process has one native-window authority. */
-export const windowRegistry = new WindowRegistry();
+export const windowRegistry = new WindowRegistry<BrowserWindow>();

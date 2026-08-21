@@ -153,9 +153,10 @@ and does not clear player files or saved login.
 
 ## Security and privacy
 
-The window registry derives profile authority from the trusted sender. A
-renderer cannot choose a profile ID, native path, Electron partition, Keychain
-item, or socket owner.
+The window registry owns every live Hub and game window. It derives profile
+authority from the trusted sender and resolves socket delivery to that exact
+registered window. A renderer cannot choose a profile ID, native path,
+Electron partition, Keychain item, or socket owner.
 
 The Account Picker cannot access game sockets, saved login, player files, or
 build writes. Diagnostics use ephemeral window identifiers. They do not record

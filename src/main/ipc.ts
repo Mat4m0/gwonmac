@@ -13,7 +13,7 @@
  * arguments and either forwards one owner-local capability directly or calls
  * the workflow owner; it returns codes rather than inventing prose.
  */
-import { BrowserWindow, clipboard, ipcMain, shell } from "electron";
+import { clipboard, ipcMain, shell, type BrowserWindow } from "electron";
 import { statfs } from "node:fs/promises";
 import type {
   AppSettings,
@@ -194,7 +194,7 @@ function assertSender(
   event: Electron.IpcMainInvokeEvent,
   role: "game" | "hub" | "any",
 ): BrowserWindow {
-  const win = BrowserWindow.fromWebContents(event.sender);
+  const win = registry.windowForWebContents(event.sender.id);
   const context = registry.contextForWebContents(event.sender.id);
   if (!win || !context || (role !== "any" && context.role !== role)) {
     throw new AllowlistError("unowned ipc sender");
@@ -969,10 +969,6 @@ export function registerSteamIpcHandlers(
 }
 
 export function emitSocketEvent(ownerId: number, event: SocketEvent): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
-    if (win.webContents.id === ownerId) {
-      sendIfLive(win, IPC.socketEvent, toWireSocketEvent(event));
-    }
-  }
+  const win = windowRegistry.windowForWebContents(ownerId);
+  if (win) sendIfLive(win, IPC.socketEvent, toWireSocketEvent(event));
 }

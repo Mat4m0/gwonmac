@@ -63,6 +63,11 @@ Both modes use the same verified client generation, chunk store, derived
 client artifacts, and application updater. These stores contain rebuildable
 client infrastructure. They do not contain player account state.
 
+The main-process window registry owns the Single game window, the Multiple
+Accounts Hub, and every profile game window. Native code resolves a renderer
+only through this registry. It does not infer ownership from Electron's global
+window list or from the current focus.
+
 [Multiple Accounts](multiple-accounts.md) owns the complete data and transition
 contract.
 

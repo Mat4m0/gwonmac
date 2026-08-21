@@ -14,10 +14,8 @@ import { contentTracing } from "electron";
 import type { RendererCommand } from "../../shared/contracts.js";
 import { errorCode } from "../../shared/errors.js";
 import { gamePaths } from "../paths.js";
-import {
-  canonicalRendererWindow,
-  sendRendererCommand,
-} from "../renderer-commands.js";
+import { sendRendererCommand } from "../renderer-commands.js";
+import { windowRegistry } from "../window-registry.js";
 import type { CaptureMetadata } from "./flight-recorder.js";
 import { logEvent, recorder } from "./recorder.js";
 import { resetEventLoopWindow } from "./samplers.js";
@@ -49,13 +47,17 @@ export function completedTracePath(): string {
 
 /**
  * The renderer half of a capture. `level` crosses as a number inside a typed
- * event rather than spliced into a string of JavaScript, and the target window
- * is chosen by the same trust test the inbound direction uses.
+ * event rather than spliced into a string of JavaScript. The focused registered
+ * game receives it; a sole background game is unambiguous, while multiple
+ * unfocused games are refused.
  */
 const rendererCaptureCommand = (
   command: Extract<RendererCommand, { type: "diagnostics.capture" }>,
 ): Promise<void> =>
-  sendRendererCommand(canonicalRendererWindow(), command).then((outcome) => {
+  sendRendererCommand(
+    windowRegistry.focusedOrSoleGameWindow(),
+    command,
+  ).then((outcome) => {
     if (outcome !== "completed") {
       logEvent({
         k: "renderer.commandIncomplete",
