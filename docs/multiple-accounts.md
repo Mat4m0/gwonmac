@@ -80,9 +80,11 @@ clean close or reload. It does not mutate another running renderer's filesystem.
 
 Template reconciliation preserves both contents when two different templates
 use the same normalized path. A deletion cannot silently discard a concurrent
-edit. The canonical library and each profile checkpoint use revisions, so a
-projection can be rebuilt. Private template libraries use the same snapshot
-format but never reconcile with another profile.
+edit. The canonical library is the only durable shared commit. Each live game
+window keeps its reconciliation baseline in memory and rebuilds it from the
+canonical library on load or reload; there is no second checkpoint file that
+can partially commit. Private template libraries use the same revisioned
+snapshot format but never reconcile with another profile.
 
 ## Lifecycle and recovery
 
