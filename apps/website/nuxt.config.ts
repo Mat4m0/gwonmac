@@ -7,13 +7,16 @@ export default defineNuxtConfig({
   hooks: {
     "modules:before"() {
       const nuxt = useNuxt();
-      const collections: Array<{ prefix?: string }> =
-        nuxt.options.icon.customCollections ?? [];
+      const icon = nuxt.options.icon;
+      if (!icon) throw new Error("Ginko Docs must enable Nuxt Icon");
+      const collections = icon.customCollections ?? [];
       // Ginko 0.2.3 snapshots a pruned Lucide collection before it discovers
       // consumer icons. Replace that collection before Nuxt installs modules.
-      nuxt.options.icon.customCollections = [
+      icon.customCollections = [
         lucideCollection,
-        ...collections.filter((collection) => collection.prefix !== "lucide"),
+        ...collections.filter(
+          (collection: { prefix?: string }) => collection.prefix !== "lucide",
+        ),
       ];
     },
   },
