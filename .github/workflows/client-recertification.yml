@@ -187,6 +187,7 @@ jobs:
       contents: read
       issues: write
     env:
+      GH_REPO: ${{ github.repository }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Receive the verification evidence
