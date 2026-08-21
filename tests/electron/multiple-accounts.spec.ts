@@ -435,23 +435,46 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       contents: "OQCiUyo8AkVwR4KMMGAAAEAC",
     }]))).rejects.toThrow(/reload before saving again/);
 
-    await Promise.all(games.map((game) => game.evaluate(() => {
+    const ownedGames = await Promise.all(games.map(async (game) => ({
+      game,
+      credentials: await game.evaluate(() => window.gwNative.credentials.load()),
+    })));
+    const altGame = ownedGames.find(({ credentials }) =>
+      credentials?.username === "second@example.test")?.game;
+    const nonTargetGame = ownedGames.find(({ credentials }) =>
+      credentials?.username === "first@example.test")?.game;
+    if (!altGame || !nonTargetGame) throw new Error("profile pages not found");
+    await Promise.all(ownedGames.map(({ game }) => game.evaluate(() => {
       (window as typeof window & { __reloadProof?: boolean }).__reloadProof = true;
     })));
+    await fixture.app.evaluate(({ app, BrowserWindow }) => {
+      const alt = BrowserWindow.getAllWindows().find((win) =>
+        win.getTitle() === "Guild Wars Reforged — Alt");
+      if (!alt) throw new Error("Alt window is unavailable");
+      alt.show();
+      app.focus({ steal: true });
+      alt.focus();
+    });
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getFocusedWindow()?.getTitle(),
+    )).toBe("Guild Wars Reforged — Alt");
+    const reloaded = altGame.waitForEvent("framenavigated", {
+      predicate: (frame) => frame === altGame.mainFrame(),
+    });
     await fixture.app.evaluate(({ Menu }) => {
       const item = Menu.getApplicationMenu()?.getMenuItemById("reload-game");
       if (!item?.click) throw new Error("Reload Game menu item is unavailable");
       item.click(item, undefined, {} as Electron.KeyboardEvent);
     });
-    const reloadMarkers = () => Promise.all(games.map((game) => game.evaluate(() =>
+    await reloaded;
+    await altGame.waitForLoadState("domcontentloaded");
+    expect(await altGame.evaluate(() =>
       (window as typeof window & { __reloadProof?: boolean }).__reloadProof,
-    )));
-    await expect.poll(async () =>
-      (await reloadMarkers()).filter((marker) => marker === undefined).length,
-    ).toBe(1);
-    const reloadedIndex = (await reloadMarkers()).findIndex((marker) => marker === undefined);
-    const reloadedGame = games[reloadedIndex];
-    if (!reloadedGame) throw new Error("Reload Game did not identify its owning window");
+    )).toBeUndefined();
+    expect(await nonTargetGame.evaluate(() =>
+      (window as typeof window & { __reloadProof?: boolean }).__reloadProof,
+    )).toBe(true);
+    const reloadedGame = altGame;
     await reloadedGame.evaluate(() => window.gwNative.accounts.loadTemplates());
     await reloadedGame.evaluate(() => window.gwNative.accounts.saveTemplates([
       {
