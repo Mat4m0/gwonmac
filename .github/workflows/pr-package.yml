@@ -91,7 +91,7 @@ jobs:
           fi
 
           classification="$(git diff --name-only --no-renames -z "$range" -- | \
-            node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/ci-impact.ts)"
+            node --import ./scripts/ts-hook.mjs scripts/ci-impact.ts)"
           if ! printf '%s\n' "$classification" | grep -Eq '^runtime=(true|false)$' || \
             ! printf '%s\n' "$classification" | grep -Eq '^website=(true|false)$' || \
             [ "$(printf '%s\n' "$classification" | wc -l | tr -d ' ')" != "2" ]; then

@@ -170,16 +170,13 @@ export const BUILD_STEPS = [
   // Reads src/shared/contracts.ts and src/preload/preload.body.cjs and writes
   // build/preload/preload.cjs, which nothing else here produces — so its
   // position is free. It is TypeScript, so it is spawned the one way this
-  // repository runs a TypeScript file from Node — the same flags
-  // package.json's script entries use. `--experimental-strip-types` is
-  // redundant from Node 22.18 and stays because the floor checked above is
-  // lower, where it is not.
+  // repository runs a TypeScript file from Node — the same custom hook
+  // package.json's script entries use.
   [
     process.execPath,
     [
       "--import",
       "./scripts/ts-hook.mjs",
-      "--experimental-strip-types",
       "scripts/generate-preload.ts",
     ],
   ],
