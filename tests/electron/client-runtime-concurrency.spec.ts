@@ -8,10 +8,109 @@ import {
 } from "./fixtures.mjs";
 
 const clientRuntimeModule = path.join(root, "build/main/client-runtime.js");
+const chunkStoreModule = path.join(root, "build/main/core/chunk-store.js");
 const patchClientModule = path.join(root, "build/main/core/patch-client.js");
 const pathsModule = path.join(root, "build/main/core/paths.js");
 
 test.describe("client generation coordination", () => {
+  test("owns snapshot metadata and cache capacity policy", async () => {
+    const fixture = await launchOffline("gw-runtime-cache-policy-e2e-");
+    try {
+      const result = await fixture.app.evaluate(
+        async (_electron, modules) => {
+          const fs = process.getBuiltinModule("node:fs/promises");
+          const { createRequire } = process.getBuiltinModule("node:module");
+          const os = process.getBuiltinModule("node:os");
+          const path = process.getBuiltinModule("node:path");
+          const require = createRequire(path.join(process.cwd(), "package.json"));
+          const { ClientRuntime } = require(modules.clientRuntime);
+          const { FREE_MARGIN } = require(modules.chunkStore);
+          const { gamePaths } = require(modules.paths);
+          const root = await fs.mkdtemp(
+            path.join(os.tmpdir(), "gw-runtime-cache-policy-"),
+          );
+          const paths = gamePaths(root);
+          await fs.mkdir(paths.chunks, { recursive: true });
+          const size = 10 ** 15;
+          const runtime = new ClientRuntime({
+            paths,
+            hostVersion: "test",
+            cachedOnly: true,
+            extendedMemoryEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              partyObservation: false,
+            },
+            onProgress: () => undefined,
+            onPrefetch: () => undefined,
+          });
+          runtime.activeSlot.publish({
+            artifactsDir: paths.artifacts,
+            store: {
+              chunksDir: paths.chunks,
+              size,
+              chunkSize: 400,
+              hashes: ["first", "second", "third"],
+              residentIndices: async () => [0, 2],
+              residentBits: async () => Uint8Array.of(0b101),
+              chunkByteLength: (index: number) => index === 2 ? 200 : 400,
+              stop: () => undefined,
+              saveTouched: async () => undefined,
+            },
+            wasmPath: "/active/Gw.jspi.wasm",
+            jsPath: "/active/Gw.jspi.js",
+            compatibility: null,
+            extendedMemory: {
+              requestedAtLaunch: false,
+              status: "standard",
+              effectiveCapBytes: 2_147_483_648,
+              fallbackReason: null,
+            },
+          });
+          const [metadata, info] = await Promise.all([
+            runtime.snapshotMetadata(),
+            runtime.cacheInfo(),
+          ]);
+          await runtime.shutdown();
+          await fs.rm(root, { recursive: true, force: true });
+          return {
+            metadata: {
+              ...metadata,
+              residentBits: [...metadata.residentBits],
+            },
+            info,
+            expectedShortfall: Math.max(
+              0,
+              size - 600 + FREE_MARGIN - info.freeBytes,
+            ),
+          };
+        },
+        {
+          clientRuntime: clientRuntimeModule,
+          chunkStore: chunkStoreModule,
+          paths: pathsModule,
+        },
+      );
+      expect(result.metadata).toEqual({
+        size: 10 ** 15,
+        chunkSize: 400,
+        chunkHashes: ["first", "second", "third"],
+        residentBits: [0b101],
+      });
+      expect(result.info).toMatchObject({
+        bytes: 600,
+        chunks: 2,
+        totalBytes: 10 ** 15,
+        totalChunks: 3,
+      });
+      expect(result.info.freeBytes).toBeGreaterThanOrEqual(0);
+      expect(result.info.fullDownloadShortfall).toBe(result.expectedShortfall);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("serves no client artifact before an active generation publishes", async () => {
     const fixture = await launchOffline("gw-runtime-no-active-artifacts-e2e-");
     try {
