@@ -6,7 +6,9 @@ import { isDeepStrictEqual } from "node:util";
 import {
   enhancementCapabilityProfile,
   enhancementCapabilitiesForProfile,
+  enhancementCapabilitiesCover,
   enhancementCapabilitiesRequested,
+  ENHANCEMENT_CAPABILITY_PRESETS,
   intersectEnhancementCapabilities,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
@@ -16,7 +18,6 @@ import {
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import {
-  ALL_LOCAL_ENHANCEMENT_CAPABILITIES,
   LOCAL_FEATURE_INVARIANTS,
   LOCAL_VERIFICATION_REASONS,
   localFeatureVerdictsForBuild,
@@ -242,9 +243,7 @@ function isAutomaticSemanticBuild(
   if (!Object.keys(build.outputSha256).every((profile) => {
     const capabilities = enhancementCapabilitiesForProfile(profile);
     return capabilities !== null
-      && (Object.keys(capabilities) as (keyof EnhancementCapabilities)[]).every(
-        (feature) => !capabilities[feature] || supported[feature],
-      );
+      && enhancementCapabilitiesCover(supported, capabilities);
   })) return false;
   return ENHANCEMENT_BUILDS.some((baseline) => {
     const coreMatches = build.programId === baseline.programId
@@ -450,7 +449,7 @@ function isAutomaticSemanticBuild(
 export function isLocalClientVerification(
   value: unknown,
   officialSha256: string,
-  requestedCapabilities: EnhancementCapabilities = ALL_LOCAL_ENHANCEMENT_CAPABILITIES,
+  requestedCapabilities: EnhancementCapabilities = ENHANCEMENT_CAPABILITY_PRESETS.all,
 ): value is LocalClientVerification {
   if (!value || typeof value !== "object") return false;
   const result = value as Partial<LocalClientVerification>;

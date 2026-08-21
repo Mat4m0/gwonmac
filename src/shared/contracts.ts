@@ -23,6 +23,10 @@ import type {
   RendererMetrics,
 } from "./diagnostics.js";
 import type { ErrorCode } from "./errors.js";
+import {
+  ENHANCEMENT_CAPABILITY_FIELDS,
+  type EnhancementCapability,
+} from "./enhancement-contracts.js";
 import type { BuildLibrary } from "./builds/library.js";
 import type { ProfileId } from "./multiple-accounts.js";
 import type { TemplateExportEntry } from "./template-contracts.js";
@@ -590,17 +594,8 @@ export interface ClientCompatibility {
   }>;
 }
 
-export const ENHANCEMENT_RUNTIME_FEATURES = [
-  "nativeCursor",
-  "targetObservation",
-  "partyObservation",
-  "teamApply",
-  "travelAction",
-  "xunlaiAction",
-  "chatAliases",
-] as const;
-export type EnhancementRuntimeFeature =
-  (typeof ENHANCEMENT_RUNTIME_FEATURES)[number];
+export const ENHANCEMENT_RUNTIME_FEATURES = ENHANCEMENT_CAPABILITY_FIELDS;
+export type EnhancementRuntimeFeature = EnhancementCapability;
 
 /**
  * The memory module selected for this running client. Saved intent is kept

@@ -18,6 +18,8 @@ import {
   ENHANCEMENT_TRANSFORM_ABI,
   enhancementConfigWordActive,
   enhancementHooksFor,
+  parseEnhancementCapabilities,
+  sameEnhancementCapabilities,
   type EnhancementCapabilities,
   type EnhancementHooks,
 } from "../shared/enhancement-contracts.js";
@@ -86,19 +88,6 @@ function sameHooks(left: EnhancementHooks, right: EnhancementHooks): boolean {
     && left.ui === right.ui;
 }
 
-function sameCapabilities(
-  left: EnhancementCapabilities,
-  right: EnhancementCapabilities,
-): boolean {
-  return left.nativeCursor === right.nativeCursor
-    && left.targetObservation === right.targetObservation
-    && left.partyObservation === right.partyObservation
-    && left.teamApply === right.teamApply
-    && left.travelAction === right.travelAction
-    && left.xunlaiAction === right.xunlaiAction
-    && left.chatAliases === right.chatAliases;
-}
-
 export function decodeEnhancementManifest(
   module: WebAssembly.Module,
   expectedCapabilities?: EnhancementCapabilities,
@@ -120,39 +109,15 @@ export function decodeEnhancementManifest(
       ],
     );
     if (value === null) return null;
-    const capabilityRecord = exactRecord(value.capabilities, [
-      "nativeCursor",
-      "targetObservation",
-      "partyObservation",
-      "teamApply",
-      "travelAction",
-      "xunlaiAction",
-      "chatAliases",
-    ]);
+    const capabilities = parseEnhancementCapabilities(value.capabilities);
     const hooks = exactRecord(value.hooks, ["tick", "cursor", "ui"]);
     if (
-      capabilityRecord === null
+      capabilities === null
       || hooks === null
-      || typeof capabilityRecord.nativeCursor !== "boolean"
-      || typeof capabilityRecord.targetObservation !== "boolean"
-      || typeof capabilityRecord.partyObservation !== "boolean"
-      || typeof capabilityRecord.teamApply !== "boolean"
-      || typeof capabilityRecord.travelAction !== "boolean"
-      || typeof capabilityRecord.xunlaiAction !== "boolean"
-      || typeof capabilityRecord.chatAliases !== "boolean"
     ) {
       return null;
     }
 
-    const capabilities: EnhancementCapabilities = Object.freeze({
-      nativeCursor: capabilityRecord.nativeCursor,
-      targetObservation: capabilityRecord.targetObservation,
-      partyObservation: capabilityRecord.partyObservation,
-      teamApply: capabilityRecord.teamApply,
-      travelAction: capabilityRecord.travelAction,
-      xunlaiAction: capabilityRecord.xunlaiAction,
-      chatAliases: capabilityRecord.chatAliases,
-    });
     const selectedHooks: EnhancementHooks = Object.freeze({
       tick: hooks.tick !== null,
       cursor: hooks.cursor !== null,
@@ -220,7 +185,7 @@ export function decodeEnhancementManifest(
           )
         ))
       || (expectedCapabilities !== undefined
-        && !sameCapabilities(capabilities, expectedCapabilities))
+        && !sameEnhancementCapabilities(capabilities, expectedCapabilities))
     ) {
       return null;
     }

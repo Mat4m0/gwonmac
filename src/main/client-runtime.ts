@@ -35,6 +35,7 @@ import {
 import {
   enhancementCapabilitiesRequested,
   ENHANCEMENT_TRANSFORM_ABI,
+  NO_ENHANCEMENT_CAPABILITIES,
   type EnhancementCapabilities,
 } from "../shared/enhancement-contracts.js";
 import { isDigest, type Digest } from "../shared/digest.js";
@@ -343,15 +344,7 @@ export class ClientRuntime {
     const preparationFailed = prepared.failure?.stage === "enhancement";
     const supported = prepared.enhancementBuild
       ? supportedEnhancementCapabilities(prepared.enhancementBuild)
-      : {
-          nativeCursor: false,
-          targetObservation: false,
-          partyObservation: false,
-          teamApply: false,
-          travelAction: false,
-          xunlaiAction: false,
-          chatAliases: false,
-        };
+      : NO_ENHANCEMENT_CAPABILITIES;
     const requested = prepared.requestedCapabilities;
     const effective = prepared.effectiveCapabilities;
     const compatibility: ClientCompatibility = {

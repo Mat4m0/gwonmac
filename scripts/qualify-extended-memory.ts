@@ -30,6 +30,7 @@ import {
 } from "../src/main/certification/enhancement-builds.js";
 import {
   enhancementCapabilitiesForProfile,
+  NO_ENHANCEMENT_CAPABILITIES,
 } from "../src/shared/enhancement-contracts.js";
 import {
   certificationFromLocalVerification,
@@ -180,15 +181,7 @@ try {
     officialWasmPath,
     officialSha256,
     certification: certificationFromLocalVerification(verification),
-    enhancementCapabilities: {
-      nativeCursor: false,
-      targetObservation: false,
-      partyObservation: false,
-      teamApply: false,
-      travelAction: false,
-      xunlaiAction: false,
-      chatAliases: false,
-    },
+    enhancementCapabilities: NO_ENHANCEMENT_CAPABILITIES,
     compatibilityCacheRoot: join(selectionScratch, "compatibility"),
     enhancementCacheRoot: join(selectionScratch, "enhancements"),
     nativeDoubleClickCacheRoot: join(selectionScratch, "double-click"),
