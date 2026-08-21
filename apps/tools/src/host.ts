@@ -10,15 +10,10 @@ import {
   type SkillUnlockObservation,
 } from "../../../src/shared/builds/live-party";
 import {
-  ATTRIBUTES,
-  PROFESSIONS,
-} from "../../../src/shared/builds/heroes";
-import {
-  LIBRARY_VERSION,
   skillId,
-  type Attribute,
-  type Profession,
 } from "../../../src/shared/builds/library";
+import { parseBuildLibrary } from "../../../src/shared/builds/parse-library";
+import { parseSkillCatalogue } from "../../../src/shared/skill-catalogue";
 import type {
   TeamApplyPlan,
   TeamApplyResult,
@@ -174,14 +169,7 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
     const saved = storage.getItem(STORAGE_KEY);
     if (!saved) return cloneLibrary(memory);
     try {
-      const value = JSON.parse(saved) as BuildLibrary;
-      if (
-        value.version === LIBRARY_VERSION
-        && Array.isArray(value.builds)
-        && Array.isArray(value.teams)
-      ) {
-        return cloneLibrary(value);
-      }
+      return cloneLibrary(parseBuildLibrary(JSON.parse(saved) as unknown));
     } catch {
       storage.removeItem(STORAGE_KEY);
     }
@@ -270,12 +258,6 @@ export function createNativeHost(
   let commandId = 0;
   let activeApply: AbortController | null = null;
   const skills = createSkillCatalogue([]);
-  const profession = new Set<Profession>(
-    Object.keys(PROFESSIONS) as Profession[],
-  );
-  const attribute = new Set<Attribute>(
-    Object.keys(ATTRIBUTES) as Attribute[],
-  );
   // Failures here are reported, never swallowed. A silently empty catalogue is
   // indistinguishable from a rendering bug, which is exactly how a missing
   // protocol route once cost an afternoon.
@@ -287,52 +269,15 @@ export function createNativeHost(
         + "may still be downloading; the console records why.",
       );
     }
-    const raw: unknown = await response.json();
-    if (!Array.isArray(raw)) {
-      throw new Error("The skill catalogue was not a list of skills.");
-    }
-    const parsed: SkillPresentation[] = [];
-    for (const value of raw) {
-      if (value === null || typeof value !== "object") continue;
-      const record = value as Record<string, unknown>;
-      if (
-        !Number.isSafeInteger(record.id)
-        || typeof record.name !== "string"
-        || typeof record.elite !== "boolean"
-        || !["pve", "player-only-pve", "pvp", "not-equippable"].includes(String(record.availability))
-        || typeof record.hasIcon !== "boolean"
-        || (record.description !== null && typeof record.description !== "string")
-        || ![
-          "energyCost", "adrenalineCost", "healthCost", "overcast",
-          "activationSeconds", "aftercastSeconds", "rechargeSeconds",
-        ].every((field) => typeof record[field] === "number" && Number.isFinite(record[field]))
-        || (record.profession !== null && !profession.has(record.profession as Profession))
-        || (record.attribute !== null && !attribute.has(record.attribute as Attribute))
-      ) {
-        continue;
-      }
-      const id = skillId(record.id as number);
-      parsed.push({
-        id,
-        name: record.name,
-        profession: record.profession as Profession | null,
-        attribute: record.attribute as Attribute | null,
-        elite: record.elite,
-        availability: record.availability as SkillPresentation["availability"],
-        energyCost: record.energyCost as number,
-        adrenalineCost: record.adrenalineCost as number,
-        healthCost: record.healthCost as number,
-        overcast: record.overcast as number,
-        activationSeconds: record.activationSeconds as number,
-        aftercastSeconds: record.aftercastSeconds as number,
-        rechargeSeconds: record.rechargeSeconds as number,
-        description: record.description as string | null,
-        iconUrl: record.hasIcon ? `gw://app/${SKILL_ICON_ROUTE(id)}` : null,
+    const parsed: SkillPresentation[] = parseSkillCatalogue(await response.json())
+      .map(({ hasIcon, ...record }) => {
+        const id = skillId(record.id);
+        return {
+          ...record,
+          id,
+          iconUrl: hasIcon ? `gw://app/${SKILL_ICON_ROUTE(id)}` : null,
+        };
       });
-    }
-    if (parsed.length === 0) {
-      throw new Error("The skill catalogue arrived empty.");
-    }
     skills.replace(parsed);
     devTrace(development, "skills.loaded", { count: parsed.length });
   };

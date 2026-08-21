@@ -4,7 +4,27 @@ import type { TeamApplyPlan } from "../../../src/shared/builds/team-apply";
 import { liveParty } from "../../../src/shared/builds/live-party";
 import type { TeamApplyCommands } from "../../../src/shared/builds/team-apply-runner";
 import { demoLibrary, demoParty } from "./fixtures";
-import { createNativeHost } from "./host";
+import { createDemoHost, createNativeHost } from "./host";
+
+const DEMO_LIBRARY_KEY = "gwonmac.tools.demo.library.v2";
+
+describe("demo Tools host persistence", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("rejects a partially shaped library through the canonical parser", async () => {
+    window.localStorage.setItem(DEMO_LIBRARY_KEY, JSON.stringify({
+      version: demoLibrary.version,
+      builds: [{}],
+      teams: [],
+      tags: [],
+    }));
+
+    const loaded = await createDemoHost(window.localStorage).loadLibrary();
+
+    expect(loaded.library).toEqual(demoLibrary);
+    expect(window.localStorage.getItem(DEMO_LIBRARY_KEY)).toBeNull();
+  });
+});
 
 describe("native Tools host diagnostics", () => {
   afterEach(() => {

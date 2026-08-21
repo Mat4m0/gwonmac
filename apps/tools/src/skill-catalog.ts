@@ -1,24 +1,11 @@
 import type {
-  Attribute,
-  Profession,
   SkillId,
 } from "../../../src/shared/builds/library";
+import type { SkillCatalogueRecord } from "../../../src/shared/skill-catalogue";
 
-export interface SkillPresentation {
+export interface SkillPresentation
+  extends Omit<SkillCatalogueRecord, "id" | "hasIcon"> {
   readonly id: SkillId;
-  readonly name: string;
-  readonly profession: Profession | null;
-  readonly attribute: Attribute | null;
-  readonly elite: boolean;
-  readonly availability: "pve" | "player-only-pve" | "pvp" | "not-equippable";
-  readonly energyCost: number;
-  readonly adrenalineCost: number;
-  readonly healthCost: number;
-  readonly overcast: number;
-  readonly activationSeconds: number;
-  readonly aftercastSeconds: number;
-  readonly rechargeSeconds: number;
-  readonly description: string | null;
   readonly iconUrl: string | null;
 }
 
