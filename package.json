@@ -47,7 +47,6 @@
     "enhancements:visual": "pnpm build && node --import ./scripts/ts-hook.mjs scripts/enhancements-visual.ts",
     "font:calibrate": "pnpm build && node --import ./scripts/ts-hook.mjs scripts/calibrate-game-font.ts",
     "enhancements:kernel:verify": "pnpm build && node scripts/verify-companion-kernel.mjs",
-    "snapshot:prune": "node --import ./scripts/ts-hook.mjs scripts/snapshot-retention.ts",
     "test:website": "pnpm --filter gw-website certify && node --import ./scripts/ts-hook.mjs tests/website-smoke.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm test:unit && pnpm test:policy && pnpm tools:test",
     "test": "pnpm verify:runtime",

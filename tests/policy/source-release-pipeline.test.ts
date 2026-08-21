@@ -570,7 +570,6 @@ test("developer builds are exact, ad-hoc, bounded, and isolated from releases", 
   const release = read(".github/workflows/release.yml");
   const verification = read(".github/workflows/macos-verify.yml");
   const manual = read(".github/workflows/tester-build.yml");
-  const retention = read("scripts/snapshot-retention.ts");
   const feedback = read(".github/ISSUE_TEMPLATE/preview-feedback.yml");
   const developerFeedback = read(
     ".github/ISSUE_TEMPLATE/developer-build-feedback.yml",
@@ -663,20 +662,6 @@ test("developer builds are exact, ad-hoc, bounded, and isolated from releases", 
     /environment:|secrets:|APPLE_|notarytool|stapler|sign-preview|publish-snapshot|gh release|attestations: write|contents: write|id-token: write/,
   );
   assert.doesNotMatch(verification, /secrets\.|APPLE_DEVELOPER_ID_P12/);
-
-  // Historical public snapshots remain untouched. Their explicit maintenance
-  // command can delete only the old snapshot namespace and never a v* release.
-  assert.match(
-    retention,
-    /\/\^snapshot-\[1-9\]\[0-9\]\*-\[0-9a-f\]\{7,40\}\$\//,
-  );
-  assert.match(retention, /const MAX_SNAPSHOTS = 3/);
-  assert.match(retention, /const MAX_AGE_MS = 14 \* 24 \* 60 \* 60 \* 1_000/);
-  assert.ok(
-    retention.indexOf("repos/${repository}/releases/${release.id}") <
-      retention.indexOf("repos/${repository}/git/refs/tags/${release.tagName}"),
-  );
-  assert.match(retention, /const apply = args\.includes\("--apply"\)/);
 
   for (const id of [
     "snapshot",
