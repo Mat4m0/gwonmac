@@ -4,7 +4,7 @@
  * and destructive cleanup out of the application composition root.
  */
 import { app, dialog, session, type BrowserWindow } from "electron";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import type {
   AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
@@ -28,10 +28,12 @@ import {
   reconcileAccountTemplates,
   saveAccountTemplateLibrary,
 } from "./core/account-template-library.js";
-import { saveBuildLibrary } from "./core/build-library.js";
+import {
+  AmbiguousAccountCreationError,
+  createAccountProfile,
+} from "./core/account-profile-creation.js";
 import { CredentialsStore } from "./core/credentials.js";
 import {
-  addMultiProfile,
   archiveMultiProfile,
   beginArchivedProfileDeletion,
   createMultiWorkspace,
@@ -55,7 +57,6 @@ import {
   installGwProtocolHandlerForSession,
   type ProtocolDeps,
 } from "./protocol.js";
-import { parseBuildLibrary } from "../shared/builds/parse-library.js";
 import { applyPendingSessionStorageReset } from "./settings-actions.js";
 import {
   closeProfileWindow,
@@ -248,31 +249,17 @@ export class MultipleAccountsController {
       const workspace = this.activeWorkspace();
       const { paths } = this.options;
       const firstAccount = workspace.profiles.length === 0;
-      if (!firstAccount && (request.copySingleBuilds || request.copySingleTemplates)) {
-        throw new Error("Single Account data can be copied only into the first account");
+      let next: MultiWorkspace;
+      try {
+        next = await createAccountProfile(workspace, request, paths);
+      } catch (error) {
+        if (error instanceof AmbiguousAccountCreationError) {
+          // No later mutation may publish the stale in-memory workspace over a
+          // profile whose final workspace rename may already have succeeded.
+          this.workspace = null;
+        }
+        throw error;
       }
-      const next = addMultiProfile(workspace, request);
-      const profile = next.profiles.at(-1)!;
-      const profilePaths = multiProfilePaths(paths, profile.id);
-      await mkdir(profilePaths.root, { recursive: true });
-      if (firstAccount && request.copySingleBuilds) {
-        await this.importBuildLibraryIfPresent(
-          paths.buildLibrary,
-          profile.builds === "shared"
-            ? paths.multiSharedBuildLibrary
-            : profilePaths.buildLibrary,
-        );
-      }
-      if (firstAccount && request.copySingleTemplates) {
-        const source = await loadAccountTemplateLibrary(paths.multiSingleTemplateImport);
-        await saveAccountTemplateLibrary(
-          profile.templates === "shared"
-            ? paths.multiSharedTemplates
-            : profilePaths.templates,
-          { revision: 1, entries: source.entries },
-        );
-      }
-      await saveMultiWorkspace(paths.multiWorkspace, next);
       this.workspace = next;
       if (firstAccount) {
         await rm(paths.multiSingleTemplateImport, { force: true }).catch(() => undefined);
@@ -540,21 +527,6 @@ export class MultipleAccountsController {
     await saveAccountMode(this.options.paths.launcherMode, mode);
     app.relaunch();
     app.quit();
-  }
-
-  private async importBuildLibraryIfPresent(
-    source: string,
-    destination: string,
-  ): Promise<void> {
-    let bytes: string;
-    try {
-      bytes = await readFile(source, "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-      throw error;
-    }
-    const library = parseBuildLibrary(JSON.parse(bytes) as unknown);
-    await saveBuildLibrary(destination, library);
   }
 
   private async cleanupProfile(profileId: ProfileId): Promise<void> {

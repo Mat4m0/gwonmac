@@ -15,7 +15,7 @@ import type {
 } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
 import { parseTemplateEntries } from "../../shared/template-entries.js";
-import { writeAtomicJson } from "./atomic-file.js";
+import { writeAtomicJson, writeAtomicJsonExclusive } from "./atomic-file.js";
 
 const DOCUMENT_MODE = 0o600;
 
@@ -57,6 +57,17 @@ export async function saveAccountTemplateLibrary(
   const entries = parseTemplateEntries(library.entries);
   const value = { formatVersion: 1, revision: library.revision, entries };
   await writeAtomicJson(filePath, value, DOCUMENT_MODE);
+  return { revision: value.revision, entries: value.entries };
+}
+
+/** First-account import: publish a complete snapshot without replacing recovery data. */
+export async function saveAccountTemplateLibraryExclusive(
+  filePath: string,
+  library: AccountTemplateLibrary,
+): Promise<AccountTemplateLibrary> {
+  const entries = parseTemplateEntries(library.entries);
+  const value = { formatVersion: 1, revision: library.revision, entries };
+  await writeAtomicJsonExclusive(filePath, value, DOCUMENT_MODE);
   return { revision: value.revision, entries: value.entries };
 }
 
