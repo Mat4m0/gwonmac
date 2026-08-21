@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Mutex } from "../../src/main/core/mutex.js";
@@ -12,6 +12,29 @@ import {
 import { parseTravelPreferences } from "../../src/shared/travel-preferences.js";
 
 describe("Travel preferences", () => {
+  it("preserves corrupt bytes before returning defaults and reports the backup", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-travel-preferences-"));
+    const path = join(dir, "travel-preferences.json");
+    await writeFile(path, "{not travel json");
+    let recovered = "";
+
+    const loaded = await loadTravelPreferences(path, (backupPath) => {
+      recovered = backupPath;
+    });
+
+    assert.deepEqual(loaded, {
+      formatVersion: 1,
+      synonyms: [],
+      recentLimit: 5,
+      recentMapIds: [],
+    });
+    assert.match(
+      recovered,
+      /travel-preferences\.json\.corrupt-\d+-[0-9a-f-]{36}$/u,
+    );
+    assert.equal(await readFile(recovered, "utf8"), "{not travel json");
+  });
+
   it("stores the Travel-only document without adding Stable-owned settings keys", async () => {
     const dir = await mkdtemp(join(tmpdir(), "gw-travel-preferences-"));
     const path = join(dir, "travel-preferences.json");

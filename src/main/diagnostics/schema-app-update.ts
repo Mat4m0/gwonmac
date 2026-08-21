@@ -370,6 +370,11 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     level: "error",
     fields: none,
   },
+  "travelPreferences.corruptRecovered": {
+    subsystem: "settings",
+    level: "error",
+    fields: none,
+  },
   "settings.loadFailed": {
     subsystem: "settings",
     level: "error",

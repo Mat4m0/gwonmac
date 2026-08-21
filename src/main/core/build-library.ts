@@ -34,18 +34,17 @@
  * and `onRecovered` fires — the caller is expected to tell somebody, not to
  * treat the empty result as normal.
  */
-import { readdir, readFile, rename, unlink } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { readFile } from "node:fs/promises";
 import type { BuildId, BuildLibrary } from "../../shared/builds/library.js";
 import {
   EMPTY_LIBRARY,
   parseBuildLibrary,
 } from "../../shared/builds/parse-library.js";
 import { writeAtomicJson, writeAtomicJsonExclusive } from "./atomic-file.js";
+import { quarantineCorruptDocument } from "./corrupt-document.js";
 
 /** Owner-only: a build library is a player's own work, not shared state. */
 const LIBRARY_MODE = 0o600;
-const CORRUPT_BACKUPS_KEPT = 3;
 
 export async function loadBuildLibrary(
   path: string,
@@ -81,38 +80,9 @@ async function recoverCorruptLibrary(
   path: string,
   onRecovered: ((backupPath: string) => void | Promise<void>) | undefined,
 ): Promise<BuildLibrary> {
-  const backupPath = `${path}.corrupt-${Date.now()}`;
-  try {
-    await rename(path, backupPath);
-  } catch (e) {
-    const err = e as NodeJS.ErrnoException;
-    if (err.code !== "ENOENT") throw e;
-    return EMPTY_LIBRARY;
-  }
-  await pruneCorruptBackups(path);
-  await onRecovered?.(backupPath);
+  const backupPath = await quarantineCorruptDocument(path);
+  if (backupPath) await onRecovered?.(backupPath);
   return EMPTY_LIBRARY;
-}
-
-/** Keep the three newest backups, as `settings.ts` does, and for the same reason. */
-async function pruneCorruptBackups(libraryPath: string): Promise<void> {
-  const directory = dirname(libraryPath);
-  const prefix = `${basename(libraryPath)}.corrupt-`;
-  let names: string[];
-  try {
-    names = await readdir(directory);
-  } catch {
-    return;
-  }
-  const stale = names
-    .filter((name) => name.startsWith(prefix))
-    .map((name) => ({ name, at: Number(name.slice(prefix.length)) }))
-    .filter(({ at }) => Number.isSafeInteger(at))
-    .sort((left, right) => right.at - left.at)
-    .slice(CORRUPT_BACKUPS_KEPT);
-  await Promise.all(
-    stale.map(({ name }) => unlink(join(directory, name)).catch(() => undefined)),
-  );
 }
 
 /**

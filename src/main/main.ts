@@ -160,7 +160,10 @@ const HOST_VERSION = (() => {
   return app.getVersion();
 })();
 
-const preferences = new PreferencesCoordinator(() => gamePaths());
+const preferences = new PreferencesCoordinator(
+  () => gamePaths(),
+  () => logEvent({ k: "travelPreferences.corruptRecovered" }),
+);
 let appUpdaterController: AppUpdater | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
