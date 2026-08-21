@@ -34,6 +34,7 @@ type Manifest = {
   repository?: { url?: string };
   bugs?: { url?: string };
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
 };
 type VercelConfig = {
@@ -711,8 +712,21 @@ test("developer builds are exact, ad-hoc, bounded, and isolated from releases", 
 });
 
 test("the root app and website add no runtime package entries and audit exceptions stay explicit", () => {
-  assert.equal(json("package.json").dependencies, undefined);
+  const rootPackage = json("package.json");
+  assert.equal(rootPackage.dependencies, undefined);
+  assert.equal(
+    rootPackage.devDependencies?.["@electron-forge/shared-types"],
+    "^7.11.2",
+  );
   assert.equal(json("apps/website/package.json").dependencies, undefined);
+  assert.match(
+    read("pnpm-workspace.yaml"),
+    /publicHoistPattern:\n {2}- "@intlify\/core"\n {2}- "@intlify\/core-base"\n {2}- "@intlify\/message-compiler"\n {2}- "@intlify\/shared"\n {2}- "@intlify\/utils"\n {2}- "vue-i18n"/u,
+  );
+  assert.doesNotMatch(
+    read("pnpm-workspace.yaml"),
+    /publicHoistPattern:\s*\n\s*-\s*["']?\*["']?/u,
+  );
   assert.deepEqual(
     read("pnpm-workspace.yaml").match(/GHSA-[a-z0-9-]+/gu),
     [
