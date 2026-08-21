@@ -65,10 +65,22 @@ export function createStorageInstallation(
       return controller?.command ?? null;
     },
     dispose(free) {
-      controller?.dispose();
+      const failures: unknown[] = [];
+      try {
+        controller?.dispose();
+      } catch (error) {
+        failures.push(error);
+      }
       controller = null;
-      if (payloadPointer !== 0) free(payloadPointer);
+      try {
+        if (payloadPointer !== 0) free(payloadPointer);
+      } catch (error) {
+        failures.push(error);
+      }
       payloadPointer = 0;
+      if (failures.length > 0) {
+        throw new AggregateError(failures, "Storage cleanup was incomplete");
+      }
     },
   };
 }
