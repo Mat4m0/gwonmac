@@ -231,6 +231,7 @@ export async function installCertifiedCompanion(
   let disposeCursorRefresh = () => {};
   let professionTrace: ReturnType<typeof createProfessionCommandTrace> | null = null;
   let installedCallback: CallableFunction | null = null;
+  let installedCursorState: NonNullable<typeof window.gwCursorState> | null = null;
   let installedRuntime: object | null = null;
   let cleaned = false;
   let telemetryInstalled = false;
@@ -239,6 +240,12 @@ export async function installCertifiedCompanion(
     cleaned = true;
     // Disable dispatch before releasing any callback-owned state.
     hookSlot.value = 0;
+    if (
+      installedCursorState !== null
+      && window.gwCursorState === installedCursorState
+    ) {
+      delete window.gwCursorState;
+    }
     stopObserver();
     disposeCursorRefresh();
     disposeCursor();
@@ -555,7 +562,8 @@ export async function installCertifiedCompanion(
       // pan (measured 2026-08-03: mouse-look hides the client cursor within a
       // tick of the right press; a map pan never does). Bounded presentation
       // state only — no pixels, no pointers.
-      window.gwCursorState = () => cursor?.state ?? null;
+      installedCursorState = () => cursor?.state ?? null;
+      window.gwCursorState = installedCursorState;
     }
     let optionalSettings = window.gwToolsSettings();
     let snapshotPlayRegion: RuntimePlayRegion | null = observeState
