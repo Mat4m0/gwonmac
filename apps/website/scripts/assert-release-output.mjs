@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 const output = join(import.meta.dirname, "..", ".output", "public");
@@ -25,6 +25,31 @@ const requiredFiles = [
 ];
 
 await Promise.all(requiredFiles.map((file) => access(join(output, file))));
+
+const missingIcons = new Set();
+const renderedIcons = new Set();
+for (const entry of await readdir(output, { recursive: true, withFileTypes: true })) {
+  if (!entry.isFile() || !entry.name.endsWith(".html")) continue;
+  const html = await readFile(join(entry.parentPath, entry.name), "utf8");
+  for (const match of html.matchAll(
+    /class="[^"]*\bi-([a-z0-9-]+:[a-z0-9-]+)\b[^"]*"/g,
+  )) {
+    const name = match[1];
+    renderedIcons.add(name);
+    const selector = `.i-${name.replace(":", "\\:")}`;
+    if (!html.includes(selector)) missingIcons.add(name);
+  }
+}
+
+if (renderedIcons.size === 0) {
+  throw new Error("No rendered icon classes were found in the generated website");
+}
+
+if (missingIcons.size > 0) {
+  throw new Error(
+    `Rendered icons missing their generated CSS: ${[...missingIcons].sort().join(", ")}`,
+  );
+}
 
 const english = await readFile(join(output, "__sitemap__/en-US.xml"), "utf8");
 const german = await readFile(join(output, "__sitemap__/de-DE.xml"), "utf8");
