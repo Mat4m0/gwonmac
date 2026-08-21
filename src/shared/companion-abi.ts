@@ -10,3 +10,17 @@ export const COMPANION_ABI = Object.freeze({
   toolbox: Object.freeze({ abi: 4, bytes: 64 }),
   party: Object.freeze({ abi: 7, bytes: 1_560 }),
 });
+
+export const COMPANION_FEATURE_BITS = Object.freeze({
+  nativeCursor: 1 << 0,
+  gameSnapshot: 1 << 1,
+  toolboxFoundation: 1 << 2,
+  targetObservation: 1 << 3,
+});
+
+export const COMPANION_DISPATCH_KINDS = Object.freeze({
+  tick: 0,
+  cursor: 1,
+  ui: 2,
+  activeFeatures: 3,
+});
