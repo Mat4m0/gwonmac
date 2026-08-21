@@ -229,7 +229,8 @@ export interface CacheInfo {
    * How many more bytes must be freed before the full download could start,
    * or 0 when it fits (or cannot be judged). Computed in the main process
    * beside the preflight's own margin, because the renderer cannot import
-   * that constant at runtime and a second copy of it would drift.
+   * that constant at runtime and a second copy of it would drift. ClientRuntime
+   * owns both the active cache and this advisory projection.
    */
   fullDownloadShortfall: number;
 }

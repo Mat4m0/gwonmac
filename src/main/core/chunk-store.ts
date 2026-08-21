@@ -32,7 +32,7 @@ import { packResidentBits } from "./snapshot.js";
 
 /**
  * The full download must fit with this much left over. Exported so the
- * advisory `CacheInfo` readout in ipc.ts computes its shortfall against the
+ * advisory `ClientRuntime.cacheInfo()` readout computes its shortfall against the
  * same number this preflight enforces.
  */
 export const FREE_MARGIN = 512 * 1024 * 1024;

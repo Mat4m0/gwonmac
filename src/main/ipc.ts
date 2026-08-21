@@ -14,7 +14,6 @@
  * the workflow owner; it returns codes rather than inventing prose.
  */
 import { clipboard, ipcMain, shell, type BrowserWindow } from "electron";
-import { statfs } from "node:fs/promises";
 import type {
   AppSettings,
   AppSettingsPatch,
@@ -37,6 +36,7 @@ import type {
   RevealKind,
   SocketEvent,
   SettingsResetOutcome,
+  SnapshotMetadata,
   SteamTokenResult,
   StoredCredentials,
   TemplateExportEntry,
@@ -66,7 +66,6 @@ import { isDigest } from "../shared/digest.js";
 import {
   AllowlistError,
   errorCode,
-  NotReadyError,
   ValidationError,
 } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
@@ -98,7 +97,6 @@ import type {
 } from "./steam-acquire.js";
 import { parseRendererSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
-import { FREE_MARGIN, type ChunkStore } from "./core/chunk-store.js";
 import {
   count,
   diagnosticSummary,
@@ -143,7 +141,8 @@ export interface IpcContext {
   setBuildLibrary: (win: BrowserWindow, library: BuildLibrary) => Promise<BuildLibrary>;
   gameStorageResetMarkerFor: (win: BrowserWindow) => string;
   getProgress: () => DownloadProgress;
-  getChunkStore: () => ChunkStore | null;
+  getSnapshotMetadata: () => Promise<SnapshotMetadata>;
+  getCacheInfo: () => Promise<CacheInfo>;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<SettingsResetOutcome>;
@@ -470,52 +469,6 @@ const asProfileId = one(parseProfileId);
 const asProfileIds = one(parseProfileIds);
 const asMilestone = parseRendererMilestoneArgs;
 
-async function chunkStoreInfo(
-  store: ChunkStore | null,
-  volumeDir: string,
-): Promise<CacheInfo> {
-  // Advisory only — the download preflight re-measures and enforces. An
-  // unreadable volume therefore answers "could not be measured" rather than
-  // blocking the Full Game card on a measurement error.
-  let freeBytes = -1;
-  try {
-    const fsStat = await statfs(store?.chunksDir ?? volumeDir);
-    freeBytes = Number(fsStat.bavail) * Number(fsStat.bsize);
-  } catch {
-    // Keep the "could not be measured" answer.
-  }
-  if (!store) {
-    return {
-      bytes: 0,
-      chunks: 0,
-      totalBytes: 0,
-      totalChunks: 0,
-      freeBytes,
-      fullDownloadShortfall: 0,
-    };
-  }
-  const resident = await store.residentIndices();
-  const bytes = resident.reduce(
-    (total, index) => total + store.chunkByteLength(index),
-    0,
-  );
-  // Remaining bytes rather than the preflight's hash-deduplicated need: close
-  // enough for a card, and always the pessimistic side of the two.
-  const remaining = Math.max(0, store.size - bytes);
-  const fullDownloadShortfall =
-    remaining > 0 && freeBytes >= 0
-      ? Math.max(0, remaining + FREE_MARGIN - freeBytes)
-      : 0;
-  return {
-    bytes,
-    chunks: resident.length,
-    totalBytes: store.size,
-    totalChunks: store.hashes.length,
-    freeBytes,
-    fullDownloadShortfall,
-  };
-}
-
 export function registerIpcHandlers(ctx: IpcContext): {
   drainSecrets(): Promise<void>;
 } {
@@ -543,19 +496,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
   const handlers = {
     progressCurrent: channel(nothing, () => ctx.getProgress()),
 
-    snapshotMetadata: channel(nothing, async () => {
-      const store = ctx.getChunkStore();
-      if (!store) {
-        throw new NotReadyError("no active client snapshot is available");
-      }
-      const bits = await store.residentBits();
-      return {
-        size: store.size,
-        chunkSize: store.chunkSize,
-        chunkHashes: store.hashes,
-        residentBits: bits,
-      };
-    }),
+    snapshotMetadata: channel(nothing, () => ctx.getSnapshotMetadata()),
 
     dnsResolve: channel(asString("dns name"), async (_win, name) => {
       const lookup = startDnsResolveSpan();
@@ -661,7 +602,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     cacheInfo: channel(nothing, async () => {
       try {
-        return await chunkStoreInfo(ctx.getChunkStore(), paths.userData);
+        return await ctx.getCacheInfo();
       } catch (error) {
         logEvent({ k: "cache.infoFailed", code: errorCode(error) });
         throw error;

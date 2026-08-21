@@ -20,7 +20,9 @@
  * untouched, including builds present in historic regression tables.
  */
 import { net } from "electron";
+import { statfs } from "node:fs/promises";
 import {
+  type CacheInfo,
   type ClientCompatibility,
   type ClientHealthToken,
   type ClientSession,
@@ -32,6 +34,7 @@ import {
   type FullDownloadOutcome,
   type NoticeCode,
   type PrefetchProgress,
+  type SnapshotMetadata,
 } from "../shared/contracts.js";
 import {
   enhancementCapabilitiesRequested,
@@ -57,7 +60,7 @@ import {
 } from "./active-client.js";
 import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
 import { encodedChunkLimit } from "./core/chunk-format.js";
-import { ChunkStore } from "./core/chunk-store.js";
+import { ChunkStore, FREE_MARGIN } from "./core/chunk-store.js";
 import {
   prepareClientModule,
   type ClientCertification,
@@ -248,6 +251,62 @@ export class ClientRuntime {
 
   get isDownloading(): boolean {
     return this.fullDownload !== null;
+  }
+
+  async snapshotMetadata(): Promise<SnapshotMetadata> {
+    const store = this.activeSlot.current?.store;
+    if (!store) {
+      throw new NotReadyError("no active client snapshot is available");
+    }
+    return {
+      size: store.size,
+      chunkSize: store.chunkSize,
+      chunkHashes: store.hashes,
+      residentBits: await store.residentBits(),
+    };
+  }
+
+  async cacheInfo(): Promise<CacheInfo> {
+    const store = this.activeSlot.current?.store ?? null;
+    // Advisory only — the download preflight re-measures and enforces. An
+    // unreadable volume therefore answers "could not be measured" rather than
+    // blocking the Full Game card on a measurement error.
+    let freeBytes = -1;
+    try {
+      const fsStat = await statfs(store?.chunksDir ?? this.options.paths.userData);
+      freeBytes = Number(fsStat.bavail) * Number(fsStat.bsize);
+    } catch {
+      // Keep the "could not be measured" answer.
+    }
+    if (!store) {
+      return {
+        bytes: 0,
+        chunks: 0,
+        totalBytes: 0,
+        totalChunks: 0,
+        freeBytes,
+        fullDownloadShortfall: 0,
+      };
+    }
+    const resident = await store.residentIndices();
+    const bytes = resident.reduce(
+      (total, index) => total + store.chunkByteLength(index),
+      0,
+    );
+    // Remaining bytes rather than the preflight's hash-deduplicated need: close
+    // enough for a card, and always the pessimistic side of the two.
+    const remaining = Math.max(0, store.size - bytes);
+    const fullDownloadShortfall = remaining > 0 && freeBytes >= 0
+      ? Math.max(0, remaining + FREE_MARGIN - freeBytes)
+      : 0;
+    return {
+      bytes,
+      chunks: resident.length,
+      totalBytes: store.size,
+      totalChunks: store.hashes.length,
+      freeBytes,
+      fullDownloadShortfall,
+    };
   }
 
   private commitProgress(next: DownloadProgress): void {
