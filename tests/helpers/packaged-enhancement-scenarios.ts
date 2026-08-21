@@ -627,6 +627,7 @@ export async function assertToolboxFoundationLifecycle() {
       const before = {
         allocations,
         companionStatePublished: window.gwCompanionState !== undefined,
+        cursorStatePublished: typeof window.gwCursorState === "function",
         cursor: runtime.cursor,
         cursorStyle:
           canvas instanceof HTMLCanvasElement ? canvas.style.cursor : null,
@@ -658,6 +659,7 @@ export async function assertToolboxFoundationLifecycle() {
 
       dispatchEvent(new Event("pagehide"));
       const after = {
+        cursorStatePublished: typeof window.gwCursorState === "function",
         cursorStyle:
           canvas instanceof HTMLCanvasElement ? canvas.style.cursor : null,
         freed,
@@ -736,6 +738,7 @@ export async function assertToolboxFoundationLifecycle() {
     );
     assert.deepEqual(result.before.travelConfigurations.at(-1), [travelPointer, 1]);
     assert.equal(result.before.companionStatePublished, false);
+    assert.equal(result.before.cursorStatePublished, true);
     assert.equal(result.before.globalRuntimeIsRuntime, false);
     assert.equal(result.before.hook, ENHANCEMENT_BUILD.tableSlot + 1);
     assert.match(result.before.kernelSha256, /^[0-9a-f]{64}$/u);
@@ -820,6 +823,7 @@ export async function assertToolboxFoundationLifecycle() {
     assert.deepEqual(result.after.storageConfigurations.at(-1), [0, 0]);
     assert.deepEqual(result.after.travelConfigurations.at(-1), [0, 0]);
     assert.equal(result.after.hook, 0);
+    assert.equal(result.after.cursorStatePublished, false);
     assert.equal(result.after.runtime, undefined);
     assert.equal(result.after.tableEmpty, true);
     assert.equal(result.after.targetCount, 0);
@@ -919,6 +923,8 @@ export async function assertRollbackAfterTablePublication() {
         setTable(index, value);
       }) as typeof table.set;
       const requestFrame = globalThis.requestAnimationFrame;
+      const replacementCursorState = () => null;
+      let installedCursorStatePublished = false;
       let rejected = false;
       try {
         globalThis.dispatchEvent(new Event("pagehide"));
@@ -930,6 +936,8 @@ export async function assertRollbackAfterTablePublication() {
           targetReadout: false,
         });
         globalThis.requestAnimationFrame = () => {
+          installedCursorStatePublished = typeof window.gwCursorState === "function";
+          window.gwCursorState = replacementCursorState;
           throw new Error("intentional post-table failure");
         };
         await installCertifiedCompanion(
@@ -955,7 +963,10 @@ export async function assertRollbackAfterTablePublication() {
         allocations,
         freed,
         hook: hookSlot.value,
+        installedCursorStatePublished,
         rejected,
+        replacementCursorStatePreserved:
+          window.gwCursorState === replacementCursorState,
         runtime: window.gwCompanionRuntime,
         readoutCount: globalThis.document.querySelectorAll(
           "#enhancement-target",
@@ -968,16 +979,15 @@ export async function assertRollbackAfterTablePublication() {
         ).length,
       };
     }, {
-      bytes: [...installableManifestModule({
-        ...TOOLBOX_PROGRAM_CAPABILITIES,
-        nativeCursor: false,
-      })],
-      capabilities: { ...TOOLBOX_PROGRAM_CAPABILITIES, nativeCursor: false },
+      bytes: [...installableManifestModule(TOOLBOX_PROGRAM_CAPABILITIES)],
+      capabilities: TOOLBOX_PROGRAM_CAPABILITIES,
       tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     });
     const rollbackConfigPointer = 0x11_010;
-    const rollbackToolboxPointer =
+    const rollbackCursorPointer =
       (rollbackConfigPointer + CONFIG_BYTES + 7) & ~7;
+    const rollbackToolboxPointer =
+      (rollbackCursorPointer + COMPANION_CURSOR_BYTES + 7) & ~7;
     const rollbackPartyPointer =
       rollbackToolboxPointer + COMPANION_TOOLBOX_BYTES;
     assert.deepEqual(result, {
@@ -987,17 +997,21 @@ export async function assertRollbackAfterTablePublication() {
           pointer: rollbackConfigPointer,
           size: CONFIG_BYTES,
         },
+        { pointer: rollbackCursorPointer, size: COMPANION_CURSOR_BYTES },
         { pointer: rollbackToolboxPointer, size: COMPANION_TOOLBOX_BYTES },
         { pointer: rollbackPartyPointer, size: COMPANION_PARTY_BYTES },
       ],
       freed: [
         rollbackToolboxPointer,
         rollbackPartyPointer,
+        rollbackCursorPointer,
         rollbackConfigPointer,
         0x1000,
       ],
       hook: 0,
+      installedCursorStatePublished: true,
       rejected: true,
+      replacementCursorStatePreserved: true,
       runtime: undefined,
       readoutCount: 0,
       replaced: true,
