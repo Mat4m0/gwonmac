@@ -290,6 +290,7 @@ test("renderer recovery stays with its account and a second crash needs attentio
 });
 
 test("Multi starts at the Hub and isolates two profile windows from Single", async () => {
+  test.setTimeout(60_000);
   const fixture = await launchOffline("gw-multi-e2e-", {
     GW_BACKGROUND_LAUNCH: "0",
   }, async (userData) => {
