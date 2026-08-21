@@ -30,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       runtime: ${{ steps.classify.outputs.runtime }}
+      website: ${{ steps.classify.outputs.website }}
     steps:
       - name: Validate a manual request
         if: github.event_name == 'workflow_dispatch'
@@ -62,6 +63,7 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "runtime=true" >> "$GITHUB_OUTPUT"
+            echo "website=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -88,13 +90,15 @@ jobs:
             exit 1
           fi
 
-          runtime="$(git diff --name-only --no-renames -z "$range" -- | \
+          classification="$(git diff --name-only --no-renames -z "$range" -- | \
             node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/ci-impact.ts)"
-          if [ "$runtime" != "true" ] && [ "$runtime" != "false" ]; then
-            echo "Invalid impact result: $runtime" >&2
+          if ! printf '%s\n' "$classification" | grep -Eq '^runtime=(true|false)$' || \
+            ! printf '%s\n' "$classification" | grep -Eq '^website=(true|false)$' || \
+            [ "$(printf '%s\n' "$classification" | wc -l | tr -d ' ')" != "2" ]; then
+            echo "Invalid impact result: $classification" >&2
             exit 1
           fi
-          echo "runtime=$runtime" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$classification" >> "$GITHUB_OUTPUT"
 
   fast:
     needs: impact
@@ -111,7 +115,25 @@ jobs:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - run: pnpm run check
+
+  website:
+    needs: impact
+    if: needs.impact.result == 'success' && needs.impact.outputs.website == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:website
 
   runtime:
     needs: impact
@@ -128,7 +150,7 @@ jobs:
   verify:
     name: verify / verify
     if: always()
-    needs: [impact, fast, runtime]
+    needs: [impact, fast, runtime, website]
     runs-on: ubuntu-latest
     steps:
       - name: Require the selected verification path
@@ -137,6 +159,8 @@ jobs:
           IMPACT_RESULT: ${{ needs.impact.result }}
           RUNTIME_IMPACT: ${{ needs.impact.outputs.runtime }}
           RUNTIME_RESULT: ${{ needs.runtime.result }}
+          WEBSITE_IMPACT: ${{ needs.impact.outputs.website }}
+          WEBSITE_RESULT: ${{ needs.website.result }}
         run: |
           test "$IMPACT_RESULT" = "success"
           if [ "$RUNTIME_IMPACT" = "false" ]; then
@@ -147,5 +171,13 @@ jobs:
             test "$RUNTIME_RESULT" = "success"
           else
             echo "Invalid impact result: $RUNTIME_IMPACT" >&2
+            exit 1
+          fi
+          if [ "$WEBSITE_IMPACT" = "true" ]; then
+            test "$WEBSITE_RESULT" = "success"
+          elif [ "$WEBSITE_IMPACT" = "false" ]; then
+            test "$WEBSITE_RESULT" = "skipped"
+          else
+            echo "Invalid website impact result: $WEBSITE_IMPACT" >&2
             exit 1
           fi

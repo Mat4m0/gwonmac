@@ -485,10 +485,11 @@ test("application verification routes conservatively through one required result
   assert.match(workflow, /\^\[0-9a-f\]\{40\}\$/);
   assert.match(workflow, /if \[ "\$EVENT_NAME" = "workflow_dispatch" \]/);
   assert.match(workflow, /echo "runtime=true" >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /echo "website=false" >> "\$GITHUB_OUTPUT"/);
 
   assert.match(
     workflow,
-    /fast:[\s\S]*needs\.impact\.outputs\.runtime == 'false'[\s\S]*run: pnpm check/,
+    /fast:[\s\S]*needs\.impact\.outputs\.runtime == 'false'[\s\S]*run: pnpm run check/,
   );
   assert.doesNotMatch(
     workflow.match(/fast:[\s\S]*?\n {2}runtime:/u)?.[0] ?? "",
@@ -510,17 +511,34 @@ test("application verification routes conservatively through one required result
   );
   assert.match(workflow, /artifact-retention-days: 3/);
 
+  assert.match(
+    workflow,
+    /website:[\s\S]*needs\.impact\.outputs\.website == 'true'[\s\S]*run: pnpm test:website/,
+  );
+  assert.match(workflow, /website:[\s\S]*timeout-minutes: 20/);
+
   assert.match(workflow, /verify:\n {4}name: verify \/ verify/);
-  assert.match(workflow, /if: always\(\)\n {4}needs: \[impact, fast, runtime\]/);
+  assert.match(
+    workflow,
+    /if: always\(\)\n {4}needs: \[impact, fast, runtime, website\]/,
+  );
   assert.match(workflow, /test "\$IMPACT_RESULT" = "success"/);
   assert.match(workflow, /test "\$FAST_RESULT" = "success"/);
   assert.match(workflow, /test "\$RUNTIME_RESULT" = "success"/);
+  assert.match(workflow, /test "\$WEBSITE_RESULT" = "success"/);
+  assert.match(workflow, /test "\$WEBSITE_RESULT" = "skipped"/);
 
   assert.match(classifier, /paths\.length === 0/);
   assert.match(classifier, /!isWellFormedRepositoryPath\(path\)/);
   assert.match(classifier, /!isFastOnlyPath\(path\)/);
   assert.match(classifier, /apps\/website\//);
   assert.match(classifier, /WEBSITE_MANIFESTS/);
+  assert.match(classifier, /src\/shared\/release\.ts/);
+  assert.match(classifier, /src\/shared\/project-identity\.ts/);
+  assert.match(classifier, /requiresWebsiteVerification/);
+  assert.match(classifier, /tests\/helpers\/child-process\.ts/);
+  assert.match(classifier, /scripts\/ts-hook\.mjs/);
+  assert.match(classifier, /scripts\/ts-resolve\.mjs/);
 });
 
 test("developer builds are exact, ad-hoc, bounded, and isolated from releases", () => {
@@ -724,21 +742,23 @@ test("the maintainer tests a temporary exact draft without replacing Application
   assert.doesNotMatch(command, /renameSync|\/\.release-test-backup|--rollback|sudo|xattr/);
 });
 
-test("the website suite runs on its own path-filtered workflow", () => {
-  const workflow = read(".github/workflows/website.yml");
+test("the required application gate owns website certification", () => {
+  const workflow = read(".github/workflows/pr-package.yml");
   const website = json("apps/website/package.json");
   const vercel: VercelConfig = JSON.parse(read("apps/website/vercel.json"));
-  assert.match(workflow, /runs-on: ubuntu-latest/);
-  assert.match(workflow, /run: pnpm test:website/);
-  assert.match(workflow, /paths:[\s\S]*apps\/website\/\*\*/);
-  assert.equal(workflow.match(/- "src\/shared\/\*\*"/gu)?.length, 2);
-  assert.equal(workflow.match(/- "package\.json"/gu)?.length, 2);
+  assert.equal(existsSync(path.join(root, ".github/workflows/website.yml")), false);
+  assert.match(
+    workflow,
+    /website:[\s\S]*needs\.impact\.outputs\.website == 'true'[\s\S]*run: pnpm test:website/,
+  );
+  assert.match(workflow, /website:[\s\S]*timeout-minutes: 20/);
+  assert.match(workflow, /needs: \[impact, fast, runtime, website\]/);
+  assert.match(workflow, /test "\$WEBSITE_RESULT" = "success"/);
   assert.match(workflow, /permissions:\n {2}contents: read/);
   assert.doesNotMatch(
     workflow,
     /contents: write|id-token: write|issues: write/,
   );
-  assert.doesNotMatch(script("verify"), /test:website/);
   assert.match(script("test:website"), /gw-website certify/);
   assert.match(website.scripts?.certify ?? "", /assert-release-output\.mjs/);
   assert.equal(

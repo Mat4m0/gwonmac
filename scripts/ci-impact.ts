@@ -6,12 +6,27 @@ const EXACT_FAST_PATHS = new Set([
   ".github/PULL_REQUEST_TEMPLATE.md",
   ".github/dependabot.yml",
   ".github/workflows/vercel-preview.yml",
-  ".github/workflows/website.yml",
   "AGENTS.md",
   "CONTRIBUTING.md",
   "PRODUCT.md",
   "README.md",
   "SECURITY.md",
+  "tests/website-smoke.ts",
+]);
+
+const EXACT_WEBSITE_PATHS = new Set([
+  ".github/workflows/pr-package.yml",
+  ".npmrc",
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "scripts/ci-impact.ts",
+  "scripts/ts-hook.mjs",
+  "scripts/ts-resolve.mjs",
+  "src/shared/project-identity.ts",
+  "src/shared/release.ts",
+  "tests/unit/ci-impact.test.ts",
+  "tests/helpers/child-process.ts",
   "tests/website-smoke.ts",
 ]);
 
@@ -56,7 +71,20 @@ export function requiresRuntimeVerification(paths: readonly string[]): boolean {
   );
 }
 
+/** True when the changed paths can affect the separately built website. */
+export function requiresWebsiteVerification(paths: readonly string[]): boolean {
+  return paths.some(
+    (path) =>
+      !isWellFormedRepositoryPath(path)
+      || EXACT_WEBSITE_PATHS.has(path)
+      || path.startsWith("apps/website/"),
+  );
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const paths = readFileSync(0, "utf8").split("\0").filter(Boolean);
-  process.stdout.write(String(requiresRuntimeVerification(paths)));
+  process.stdout.write(
+    `runtime=${requiresRuntimeVerification(paths)}\n`
+    + `website=${requiresWebsiteVerification(paths)}\n`,
+  );
 }

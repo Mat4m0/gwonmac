@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { requiresRuntimeVerification } from "../../scripts/ci-impact.ts";
+import {
+  requiresRuntimeVerification,
+  requiresWebsiteVerification,
+} from "../../scripts/ci-impact.ts";
 
 test("proved documentation and website-only changes use the fast gate", () => {
   const fastPaths = [
@@ -9,7 +12,6 @@ test("proved documentation and website-only changes use the fast gate", () => {
     ".github/ISSUE_TEMPLATE/bug.yml",
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/dependabot.yml",
-    ".github/workflows/website.yml",
     ".github/workflows/vercel-preview.yml",
     "apps/website/app.vue",
     "apps/website/server/api/releases/latest.get.ts",
@@ -20,6 +22,40 @@ test("proved documentation and website-only changes use the fast gate", () => {
     assert.equal(requiresRuntimeVerification([path]), false, path);
   }
   assert.equal(requiresRuntimeVerification(fastPaths), false);
+});
+
+test("website certification follows only its real inputs", () => {
+  const websitePaths = [
+    "apps/website/app.vue",
+    "apps/website/server/api/releases/latest.get.ts",
+    "tests/website-smoke.ts",
+    "src/shared/release.ts",
+    "src/shared/project-identity.ts",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    ".npmrc",
+    ".github/workflows/pr-package.yml",
+    "scripts/ci-impact.ts",
+    "scripts/ts-hook.mjs",
+    "scripts/ts-resolve.mjs",
+    "tests/helpers/child-process.ts",
+    "tests/unit/ci-impact.test.ts",
+  ];
+  for (const path of websitePaths) {
+    assert.equal(requiresWebsiteVerification([path]), true, path);
+  }
+  for (const path of [
+    "README.md",
+    "docs/user-guide.md",
+    "src/main/main.ts",
+    "src/shared/contracts.ts",
+    ".github/workflows/release.yml",
+  ]) {
+    assert.equal(requiresWebsiteVerification([path]), false, path);
+  }
+  assert.equal(requiresWebsiteVerification([]), false);
+  assert.equal(requiresWebsiteVerification(["/absolute.md"]), true);
 });
 
 test("runtime, packaging, dependency, and unknown changes use the full gate", () => {
