@@ -338,7 +338,7 @@ export async function assertTargetReadoutLifecycle() {
       await fixture.page.evaluate(async () =>
         (await fetch("shared/diagnostics.js")).status),
       404,
-      "the renderer protocol exposed an unapproved shared module",
+      "the renderer build published an unreferenced shared module",
     );
   } finally {
     await closePackaged(fixture);

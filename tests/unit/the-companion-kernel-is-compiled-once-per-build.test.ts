@@ -2,8 +2,8 @@
 // to completion without rustc, copies assets and no code, and emits no kernel;
 // the canonical build step list holds exactly one rustc invocation, and orders
 // the producers that write into build/renderer so none erases another.
-// The last block covers the other shared directory: the two compiler projects
-// both emit build/shared, so the step list has to say which of them wins.
+// Rollup is the only renderer runtime producer; the main compiler is the only
+// producer of build/shared.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -111,7 +111,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
     assert.equal(existsSync(path.join(root, "build/preload")), false);
   });
 
-  it("copies no code, because tsc emits build/renderer's JavaScript", () => {
+  it("copies no code, because Rollup emits build/renderer's JavaScript", () => {
     const code = filesUnder(path.join(root, "build")).filter(
       (file) => file.endsWith(".js") || file.endsWith(".ts"),
     );
@@ -185,16 +185,6 @@ function stepPosition(needle: string): number {
  * Where the main program is compiled. It is the `tsc` step that names no
  * project file, so it is found by what it lacks rather than by an index.
  */
-function mainCompilerPosition(): number {
-  const found = BUILD_STEPS.map((step, index) => ({ step, index })).filter(
-    ({ step }) =>
-      stepArgs(step).includes("node_modules/typescript/bin/tsc")
-      && !stepArgs(step).includes("tsconfig.renderer.json"),
-  );
-  assert.equal(found.length, 1, "the main program is not compiled by exactly one step");
-  return found[0]!.index;
-}
-
 describe("scripts/build.mjs is the one caller of rustc", () => {
   const rustc = BUILD_STEPS.filter(([command]) => command === "rustc");
 
@@ -229,7 +219,7 @@ describe("scripts/build.mjs is the one caller of rustc", () => {
 
 describe("scripts/build.mjs orders the producers of build/renderer", () => {
   const assets = stepPosition("scripts/copy-renderer.mjs");
-  const renderer = stepPosition("tsconfig.renderer.json");
+  const renderer = stepPosition("scripts/build-renderer.mjs");
   const kernel = BUILD_STEPS.findIndex(([command]) => command === "rustc");
   const sealer = stepPosition("scripts/seal-companion-kernel.mjs");
 
@@ -272,30 +262,22 @@ function projectOptions(file: string): ts.CompilerOptions {
   return parsed.options;
 }
 
-describe("scripts/build.mjs orders the two producers of build/shared", () => {
+describe("renderer typechecking does not emit runtime files", () => {
   const main = projectOptions("tsconfig.json");
   const renderer = projectOptions("tsconfig.renderer.json");
 
-  it("has two compiler projects emitting to the same tree", () => {
-    // Not a preference, a fact this ordering depends on: the renderer's
-    // type-only imports of src/shared make those sources emittable, so it needs
-    // `rootDir: "src"` and lands its copy of build/shared beside the main
-    // program's. If a later change removes the overlap — a project reference is
-    // the only way — this fails, and the ordering below stops being load-bearing.
-    assert.equal(renderer.rootDir, main.rootDir);
-    assert.equal(renderer.outDir, main.outDir);
+  it("leaves build/shared to the main compiler", () => {
+    assert.equal(renderer.noEmit, true);
+    assert.equal(renderer.outDir, undefined);
+    assert.equal(main.noEmit, undefined);
+    assert.equal(main.outDir, path.join(repoRoot, "build"));
   });
 
-  it("compiles the renderer first, so the sourcemapped emit is the one that survives", () => {
-    // Reversed, the renderer's unmapped copy overwrites the main program's and
-    // build/shared/*.js loses its sourceMappingURL while the .js.map files stay
-    // on disk, referenced by nothing. That failure is silent: the build
-    // succeeds, the app runs, and main-process stack traces stop resolving.
-    const renderer = stepPosition("tsconfig.renderer.json");
-    const mainCompiler = mainCompilerPosition();
-    assert.ok(
-      renderer < mainCompiler,
-      `renderer compiled at ${renderer}, main program at ${mainCompiler}`,
+  it("has one explicit renderer runtime producer", () => {
+    assert.equal(stepPosition("scripts/build-renderer.mjs") >= 0, true);
+    assert.equal(
+      BUILD_STEPS.some((step) => stepArgs(step).includes("tsconfig.renderer.json")),
+      false,
     );
   });
 });

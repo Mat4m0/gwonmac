@@ -31,7 +31,7 @@ const preloadSource: string = generatePreload({
 // The router is a classic script — index.html loads it with a `<script>` tag
 // and it exports nothing — so the only way to drive it is to run its text. It
 // is TypeScript, so the text is transpiled here under the same target
-// and module the renderer project emits with. Reading src/ and transpiling is
+// and module the renderer build uses. Reading src/ and transpiling is
 // what keeps this test buildless; reading build/renderer would make it depend
 // on a build the unit suite does not run.
 const routerSource = ts.transpileModule(

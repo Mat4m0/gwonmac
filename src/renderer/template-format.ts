@@ -12,8 +12,8 @@
  * reject codes from a template version that has not shipped yet.
  */
 
-// A runtime import, not a type-only one: src/main/protocol.ts serves
-// build/shared/contracts.js at gw://app/shared/contracts.js for exactly this.
+// A runtime import, not a type-only one: Rollup includes the canonical contract
+// in the renderer's runtime closure.
 import { TEMPLATE_CEILINGS } from '../shared/contracts.js';
 
 /** Which of the game's two template directories a code belongs in. */
