@@ -43,10 +43,10 @@ import type {
 } from "../shared/contracts.js";
 import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
 import {
-  parseTravelPreferencesPatch,
-  type TravelPreferencesDocument,
-  type TravelPreferencesPatch,
-} from "../shared/travel-preferences.js";
+  parseTravelUserPreferencesUpdate,
+  type TravelUserPreferences,
+  type TravelUserPreferencesUpdate,
+} from "../shared/travel.js";
 import { travelDestination } from "../shared/travel-destinations.js";
 import type {
   RendererFrameBatch,
@@ -146,9 +146,9 @@ export interface IpcContext {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   resetSettings: () => Promise<AppSettings>;
-  getTravelPreferences: () => Promise<TravelPreferencesDocument>;
-  setTravelPreferences: (patch: TravelPreferencesPatch) => Promise<TravelPreferencesDocument>;
-  recordTravelConfirmation: (mapId: number) => Promise<TravelPreferencesDocument>;
+  getTravelPreferences: () => Promise<TravelUserPreferences>;
+  setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
+  recordTravelConfirmation: (mapId: number) => Promise<TravelUserPreferences>;
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
@@ -616,8 +616,8 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),
-    travelPreferencesSet: channel(one(parseTravelPreferencesPatch), (_win, patch) =>
-      ctx.setTravelPreferences(patch)),
+    travelPreferencesSet: channel(one(parseTravelUserPreferencesUpdate), (_win, update) =>
+      ctx.setTravelPreferences(update)),
     travelPreferencesRecord: channel(asTravelMapId, (_win, mapId) =>
       ctx.recordTravelConfirmation(mapId)),
 

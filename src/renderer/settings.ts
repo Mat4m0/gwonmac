@@ -9,8 +9,8 @@
 (function () {
   type AppSettings = import('../shared/contracts.js').AppSettings;
   type AppSettingsPatch = import('../shared/contracts.js').AppSettingsPatch;
-  type TravelPreferencesDocument =
-    import('../shared/travel-preferences.js').TravelPreferencesDocument;
+  type TravelUserPreferences =
+    import('../shared/travel.js').TravelUserPreferences;
   type ClientSession = import('../shared/contracts.js').ClientSession;
   type RendererMilestone =
     import('../shared/diagnostics.js').RendererMilestone;
@@ -84,7 +84,7 @@
   let currentSession: ClientSession | null = null;
 
   let currentSettings: AppSettings | null = null;
-  let currentTravelPreferences: TravelPreferencesDocument | null = null;
+  let currentTravelPreferences: TravelUserPreferences | null = null;
   let settingsLoad: Promise<AppSettings> | null = null;
   let settingsWrite: Promise<unknown> = Promise.resolve();
   type FeedbackTone = 'neutral' | 'progress' | 'success' | 'warning' | 'error';
@@ -754,17 +754,20 @@
     }
     if (control.name === 'travelRecentLimit') {
       const value = Number(control.value);
-      if (value !== 0 && value !== 3 && value !== 5 && value !== 10) return;
+      const expected = currentTravelPreferences;
+      if (expected === null || (value !== 0 && value !== 3 && value !== 5 && value !== 10)) return;
       setFeedback('Saving…', 'progress');
-      void window.gwNative.travelPreferences.set({ recentLimit: value })
+      void window.gwNative.travelPreferences.set({ expected, patch: { recentLimit: value } })
         .then((saved) => {
           currentTravelPreferences = saved;
           if (currentSettings) fillForm(currentSettings, saved);
           setFeedback('Saved.', 'success', 2200);
         })
-        .catch(() => {
-          if (currentSettings) fillForm(currentSettings);
-          setFeedback('Settings could not be saved. Your previous setting is still active; try again.', 'error');
+        .catch(async () => {
+          currentTravelPreferences = await window.gwNative.travelPreferences.get()
+            .catch(() => currentTravelPreferences);
+          if (currentSettings) fillForm(currentSettings, currentTravelPreferences);
+          setFeedback('Settings could not confirm which Recent limit is active. Review the current value, then try again.', 'error');
         });
       return;
     }
@@ -796,18 +799,21 @@
   });
 
   travelRecentsClear.addEventListener('click', () => {
-    if (travelRecentsClear.disabled) return;
+    const expected = currentTravelPreferences;
+    if (travelRecentsClear.disabled || expected === null) return;
     setFeedback('Clearing Recent…', 'progress');
     travelRecentsClear.disabled = true;
-    void window.gwNative.travelPreferences.set({ recentMapIds: [] })
+    void window.gwNative.travelPreferences.set({ expected, patch: { recentMapIds: [] } })
       .then((saved) => {
         currentTravelPreferences = saved;
         if (currentSettings) fillForm(currentSettings, saved);
         setFeedback('Recent destinations cleared.', 'success', 2200);
       })
-      .catch(() => {
-        if (currentSettings) fillForm(currentSettings);
-        setFeedback('Recent destinations could not be cleared. Nothing changed; try again.', 'error');
+      .catch(async () => {
+        currentTravelPreferences = await window.gwNative.travelPreferences.get()
+          .catch(() => currentTravelPreferences);
+        if (currentSettings) fillForm(currentSettings, currentTravelPreferences);
+        setFeedback('GWonMac could not confirm whether Recent was cleared. Review the current list, then try again.', 'error');
       });
   });
 

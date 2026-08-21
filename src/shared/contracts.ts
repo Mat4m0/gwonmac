@@ -41,11 +41,9 @@ import type {
 import {
   DEFAULT_STORED_TRAVEL_SHORTCUTS,
   type StoredTravelShortcuts,
+  type TravelUserPreferences,
+  type TravelUserPreferencesUpdate,
 } from "./travel.js";
-import type {
-  TravelPreferencesDocument,
-  TravelPreferencesPatch,
-} from "./travel-preferences.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -881,9 +879,9 @@ export interface GwNativeApi {
     reset(): Promise<AppSettings | null>;
   };
   travelPreferences: {
-    get(): Promise<TravelPreferencesDocument>;
-    set(value: TravelPreferencesPatch): Promise<TravelPreferencesDocument>;
-    recordConfirmed(mapId: number): Promise<TravelPreferencesDocument>;
+    get(): Promise<TravelUserPreferences>;
+    set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
+    recordConfirmed(mapId: number): Promise<TravelUserPreferences>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;

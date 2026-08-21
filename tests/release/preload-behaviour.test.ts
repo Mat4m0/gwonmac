@@ -187,7 +187,15 @@ const INVOCATIONS: Invocation[] = [
   },
   {
     path: "travelPreferences.set",
-    args: [{ recentLimit: 3 }],
+    args: [{
+      expected: {
+        shortcuts: [null, null, null, null, null, null, null, null, null],
+        synonyms: [],
+        recentLimit: 5,
+        recentMapIds: [],
+      },
+      patch: { recentLimit: 3 },
+    }],
     channel: IPC.travelPreferencesSet,
   },
   {
