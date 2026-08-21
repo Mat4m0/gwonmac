@@ -186,6 +186,12 @@ export function readCompanionSnapshot(buffer: ArrayBuffer, pointer: number) {
 /** The decoder-owned, discriminated game-state contract used by consumers. */
 export type CompanionSnapshot = ReturnType<typeof readCompanionSnapshot>;
 
+/** The exact state an observer may publish outside the installer. */
+export type PublishedCompanionState =
+  | CompanionSnapshot
+  | Readonly<{ status: "unsupported" }>
+  | Readonly<{ status: "error"; reason: string }>;
+
 /* The cursor bitmap lives in its own region: the core snapshot is full, and
    4 KB of pixels do not belong in a per-frame read. */
 export const COMPANION_CURSOR_ABI = COMPANION_ABI.cursor.abi;

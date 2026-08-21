@@ -14,6 +14,7 @@ export function projectLiveResult(
 ) {
   return page.evaluate(async ({ ticks, elapsedMs, scenario: name }) => {
     const state = window.gwCompanionState;
+    const ready = state?.status === "ready" ? state : null;
     const runtime = window.gwCompanionRuntime;
     const diagnostics = await window.gwNative.diagnostics.current();
     const settings = await window.gwNative.settings.get();
@@ -36,24 +37,24 @@ export function projectLiveResult(
       companionAbi: numeric(runtime?.companionAbi),
       kernelSha256:
         typeof runtime?.kernelSha256 === "string" ? runtime.kernelSha256 : null,
-      hookCount: numeric(state?.tickCount),
+      hookCount: numeric(ready?.tickCount),
       hookHertz: Number(((ticks * 1_000) / elapsedMs).toFixed(2)),
-      sequence: numeric(state?.sequence),
-      map: state?.status === "ready"
+      sequence: numeric(ready?.sequence),
+      map: ready
         ? {
-            id: state.mapId,
-            instance: state.instanceName,
-            player: { id: state.playerId, x: state.playerX, y: state.playerY },
+            id: ready.mapId,
+            instance: ready.instanceName,
+            player: { id: ready.playerId, x: ready.playerX, y: ready.playerY },
           }
         : null,
-      target: state?.targetValid
+      target: ready?.targetValid
         ? {
-            id: state.targetId,
-            type: state.targetKind,
-            x: state.targetX,
-            y: state.targetY,
-            distance: state.distance,
-            range: state.rangeName,
+            id: ready.targetId,
+            type: ready.targetKind,
+            x: ready.targetX,
+            y: ready.targetY,
+            distance: ready.distance,
+            range: ready.rangeName,
           }
         : null,
       renderUs: Number(numeric(runtime?.lastRenderUs).toFixed(2)),

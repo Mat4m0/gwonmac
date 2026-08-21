@@ -7,6 +7,13 @@ import {
 } from "../../src/renderer/client-compatibility-notice.js";
 import type { ClientCompatibility, ClientSession } from "../../src/shared/contracts.js";
 
+const STANDARD_MEMORY = Object.freeze({
+  requestedAtLaunch: false,
+  status: "standard",
+  effectiveCapBytes: 2_147_483_648,
+  fallbackReason: null,
+} as const);
+
 const available = { status: "available" } as const;
 const off = { status: "off" } as const;
 const unavailable = (reason: "game-update" | "preparation-failed") =>
@@ -240,6 +247,7 @@ describe("client compatibility notice", () => {
 
     const session: ClientSession = {
       ...before,
+      extendedMemory: STANDARD_MEMORY,
       compatibility: compatibility({ nativeCursor: unavailable("game-update") }),
     };
     const report = renderClientCompatibility(dom.root, session);

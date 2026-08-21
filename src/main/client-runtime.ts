@@ -23,6 +23,7 @@ import { net } from "electron";
 import {
   type ClientCompatibility,
   type ClientHealthToken,
+  type ClientSession,
   type DownloadActivity,
   type DownloadFailure,
   type ExtendedMemoryRuntimeStatus,
@@ -221,6 +222,24 @@ export class ClientRuntime {
 
   get extendedMemory(): ExtendedMemoryRuntimeStatus | null {
     return this.activeSlot.current?.extendedMemory ?? null;
+  }
+
+  session(appVersion: string): ClientSession {
+    const active = this.activeSlot.current;
+    if (!active) {
+      return {
+        appVersion,
+        compatibility: null,
+        extendedMemory: null,
+        healthToken: null,
+      };
+    }
+    return {
+      appVersion,
+      compatibility: this.compatibility,
+      extendedMemory: active.extendedMemory,
+      healthToken: this.candidateHealthToken,
+    };
   }
 
   get progress(): DownloadProgress {

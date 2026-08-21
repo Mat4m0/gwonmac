@@ -181,17 +181,21 @@ try {
     );
   }
 
-  const before = await page.evaluate(() => ({
-    tickCount: window.gwCompanionState?.tickCount ?? null,
-    at: performance.now(),
-  }));
+  const before = await page.evaluate(() => {
+    const state = window.gwCompanionState;
+    return {
+      tickCount: state?.status === "ready" ? state.tickCount : null,
+      at: performance.now(),
+    };
+  });
   await page.waitForTimeout(2_000);
   const cadence = await page.evaluate((start) => {
     // The Enhancement can be gone by the second read — a reload, or a client that
     // tore the hook down — and reading through it unguarded made that a page
     // TypeError that said nothing. No tick count means no ticks measured, the
     // same answer the first read already gives for the same state.
-    const tickCount = window.gwCompanionState?.tickCount ?? null;
+    const state = window.gwCompanionState;
+    const tickCount = state?.status === "ready" ? state.tickCount : null;
     return {
       ticks: start.tickCount === null || tickCount === null
         ? 0

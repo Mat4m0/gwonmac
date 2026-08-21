@@ -71,6 +71,7 @@ test.describe("client generation coordination", () => {
             },
             onPrefetch: () => undefined,
           });
+          const preparingSession = runtime.session("test-app");
           let refusal: string | null = null;
           try {
             runtime.publishProgress({
@@ -84,7 +85,7 @@ test.describe("client generation coordination", () => {
               ? String(error.code)
               : null;
           }
-          runtime.activeSlot.publish({
+          const active = runtime.activeSlot.publish({
             artifactsDir: paths.artifacts,
             store: {
               stop: () => undefined,
@@ -100,6 +101,11 @@ test.describe("client generation coordination", () => {
               fallbackReason: null,
             },
           });
+          runtime.candidateHealthToken = Object.freeze({
+            generation: active.generation,
+            fingerprint: "f".repeat(64),
+          });
+          const activeSession = runtime.session("test-app");
           runtime.publishProgress({
             phase: "ready",
             received: 0,
@@ -108,13 +114,33 @@ test.describe("client generation coordination", () => {
           });
           await runtime.shutdown();
           await fs.rm(root, { recursive: true, force: true });
-          return { refusal, readyObservations };
+          return { refusal, readyObservations, preparingSession, activeSession };
         },
         { clientRuntime: clientRuntimeModule, paths: pathsModule },
       );
       expect(result).toEqual({
         refusal: "not_ready",
         readyObservations: [true],
+        preparingSession: {
+          appVersion: "test-app",
+          compatibility: null,
+          extendedMemory: null,
+          healthToken: null,
+        },
+        activeSession: {
+          appVersion: "test-app",
+          compatibility: null,
+          extendedMemory: {
+            requestedAtLaunch: false,
+            status: "standard",
+            effectiveCapBytes: 2_147_483_648,
+            fallbackReason: null,
+          },
+          healthToken: {
+            generation: 1,
+            fingerprint: "f".repeat(64),
+          },
+        },
       });
     } finally {
       await closeOffline(fixture);
@@ -655,6 +681,7 @@ test.describe("client generation coordination", () => {
             preparedExtendedMemory: prepared.extendedMemory,
             activeCompatibility: runtime.compatibility,
             activeExtendedMemory: runtime.extendedMemory,
+            session: runtime.session("test-app"),
           };
           await runtime.shutdown();
           await fs.rm(root, { recursive: true, force: true });
@@ -675,6 +702,17 @@ test.describe("client generation coordination", () => {
       expect(result.activeExtendedMemory).toMatchObject({
         status: "active",
         effectiveCapBytes: 4_294_967_296,
+      });
+      expect(result.session).toMatchObject({
+        appVersion: "test-app",
+        compatibility: {
+          clientSha256: "a".repeat(64),
+        },
+        extendedMemory: {
+          status: "active",
+          effectiveCapBytes: 4_294_967_296,
+        },
+        healthToken: null,
       });
     } finally {
       await closeOffline(fixture);

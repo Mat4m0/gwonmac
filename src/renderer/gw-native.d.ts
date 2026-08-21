@@ -17,6 +17,7 @@ import type {
   RendererMetrics,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
+import type { PublishedCompanionState } from "./companion-snapshot.js";
 import type {
   InputTrace as SharedInputTrace,
   InputTraceEntry as SharedInputTraceEntry,
@@ -130,14 +131,6 @@ declare global {
     flush(): Promise<void>;
   }
 
-  interface CompanionState {
-    status?: string;
-    reason?: string;
-    instanceType?: number;
-    tickCount?: number;
-    [key: string]: unknown;
-  }
-
   interface CompanionDeveloperRuntime {
     readonly status: "installed";
     readonly buildId: number;
@@ -221,7 +214,7 @@ declare global {
       buildId: number;
     }>;
     gwCompanionRuntime?: CompanionDeveloperRuntime | CompanionObserverRuntime | null;
-    gwCompanionState?: CompanionState;
+    gwCompanionState?: PublishedCompanionState;
     /** The cursor's bounded presentation state; present once the nativeCursor enhancement installs. */
     gwCursorState?(): Readonly<{
       generation: number;
