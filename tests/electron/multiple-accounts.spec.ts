@@ -5,6 +5,8 @@ import path from "node:path";
 import type { ProfileId } from "../../src/shared/multiple-accounts.js";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 
+type MemoryWarningModule = typeof import("../../src/renderer/memory-warning.js");
+
 declare global {
   var __multiModeRestart: {
     quit: boolean;
@@ -12,6 +14,7 @@ declare global {
     originalQuit: Electron.App["quit"];
     originalRelaunch: Electron.App["relaunch"];
   };
+  var __runtimeDialogParent: string | null | undefined;
 }
 
 const FIRST = "00000000-0000-4000-8000-000000000001";
@@ -252,7 +255,15 @@ test("renderer recovery stays with its account and a second crash needs attentio
       [FIRST, SECOND] as const,
     );
     const firstRenderer = await fixture.app.evaluate(({ BrowserWindow, dialog }) => {
-      dialog.showErrorBox = () => undefined;
+      Object.defineProperty(dialog, "showMessageBox", {
+        configurable: true,
+        value: async (first: unknown) => {
+          globalThis.__runtimeDialogParent = first instanceof BrowserWindow
+            ? first.getTitle()
+            : null;
+          return { response: 0, checkboxChecked: false };
+        },
+      });
       const win = BrowserWindow.getAllWindows().find((candidate) => candidate.getTitle().endsWith("Primary"));
       if (!win) throw new Error("Primary window not found");
       const id = win.webContents.id;
@@ -277,6 +288,8 @@ test("renderer recovery stays with its account and a second crash needs attentio
     await expect.poll(() => fixture.page.evaluate(() =>
       window.gwNative.accounts.get().then((state) => state.profiles.find((profile) => profile.name === "Primary")),
     )).toMatchObject({ state: "failed", launchIssue: "renderer-crash" });
+    await expect.poll(() => fixture.app.evaluate(() => globalThis.__runtimeDialogParent))
+      .toBe("Guild Wars Reforged — Primary");
     expect(await fixture.app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().find((win) => win.getTitle().endsWith("Accounts"))?.isVisible(),
     )).toBe(true);
@@ -445,6 +458,24 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     const nonTargetGame = ownedGames.find(({ credentials }) =>
       credentials?.username === "first@example.test")?.game;
     if (!altGame || !nonTargetGame) throw new Error("profile pages not found");
+
+    await altGame.evaluate(async () => {
+      const moduleUrl: string = "gw://app/memory-warning.js";
+      const { bindMemoryWarning } = await import(moduleUrl) as MemoryWarningModule;
+      const presenter = bindMemoryWarning(document, () => undefined, window.gwSurfaces);
+      if (!presenter) throw new Error("memory warning is unavailable");
+      presenter.present("critical", 2_147_483_648);
+    });
+    await expect(altGame.locator("#memory-notice")).toBeVisible();
+    await expect(altGame.locator("#memory-notice-label"))
+      .toHaveText("Guild Wars is almost out of memory.");
+    await expect(nonTargetGame.locator("#memory-notice")).toBeHidden();
+    await altGame.locator("#memory-notice-later").evaluate((button) => {
+      (button as HTMLButtonElement).click();
+    });
+    await expect(altGame.locator("#memory-notice")).toBeHidden();
+    await expect(nonTargetGame.locator("#memory-notice")).toBeHidden();
+
     await Promise.all(ownedGames.map(({ game }) => game.evaluate(() => {
       (window as typeof window & { __reloadProof?: boolean }).__reloadProof = true;
     })));

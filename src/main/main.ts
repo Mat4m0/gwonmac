@@ -782,7 +782,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         detail: "Export it now while the capture context is fresh.",
       });
       if (response === 0) {
-        await exportDiagnosticsReport(() =>
+        await exportDiagnosticsReport(win, () =>
           exportDiagnosticsForWindow(win, () => preferences.getSettings())
         );
       }

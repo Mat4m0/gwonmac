@@ -228,7 +228,7 @@ export function installApplicationMenu({
               label: "Export Recent Diagnostics…",
               click: async () => {
                 await resetGameInput(win);
-                await exportDiagnosticsReport(() => host.exportDiagnostics(win));
+                await exportDiagnosticsReport(win, () => host.exportDiagnostics(win));
               },
             },
             { type: "separator" },
@@ -238,10 +238,12 @@ export function installApplicationMenu({
               click: async () => {
                 await resetGameInput(win);
                 void host.startCapture(1).catch((error) => {
-                  dialog.showErrorBox(
-                    "Capture could not start",
-                    error instanceof Error ? error.message : String(error),
-                  );
+                  void dialog.showMessageBox(win, {
+                    type: "error",
+                    buttons: ["OK"],
+                    message: "Capture could not start",
+                    detail: error instanceof Error ? error.message : String(error),
+                  }).catch(() => undefined);
                 });
               },
             },
@@ -260,10 +262,12 @@ export function installApplicationMenu({
               click: async () => {
                 await resetGameInput(win);
                 void host.startCapture(2).catch((error) => {
-                  dialog.showErrorBox(
-                    "Trace could not start",
-                    error instanceof Error ? error.message : String(error),
-                  );
+                  void dialog.showMessageBox(win, {
+                    type: "error",
+                    buttons: ["OK"],
+                    message: "Trace could not start",
+                    detail: error instanceof Error ? error.message : String(error),
+                  }).catch(() => undefined);
                 });
               },
             },

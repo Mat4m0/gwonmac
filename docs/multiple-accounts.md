@@ -158,6 +158,10 @@ authority from the trusted sender and resolves socket delivery to that exact
 registered window. A renderer cannot choose a profile ID, native path,
 Electron partition, Keychain item, or socket owner.
 
+Warnings, native dialogs, renderer commands, input state, and diagnostics stay
+with the game window that initiated them. Application updates and shared game
+downloads remain application-wide and report progress to every game window.
+
 The Account Picker cannot access game sockets, saved login, player files, or
 build writes. Diagnostics use ephemeral window identifiers. They do not record
 profile names, stable profile IDs, account identifiers, credentials, template

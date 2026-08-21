@@ -50,6 +50,14 @@ test("production resolves native windows only through the window registry", () =
   );
 });
 
+test("runtime error dialogs keep their owning game window", () => {
+  assert.doesNotMatch(read("src/main/window.ts"), /dialog\.showErrorBox\(/u);
+  assert.doesNotMatch(read("src/main/window-menu.ts"), /dialog\.showErrorBox\(/u);
+  assert.doesNotMatch(read("src/main/diagnostics-export.ts"), /dialog\.showErrorBox\(/u);
+  assert.match(read("src/main/window.ts"), /dialog\.showMessageBox\(win,/u);
+  assert.match(read("src/main/diagnostics-export.ts"), /dialog\.showMessageBox\(win,/u);
+});
+
 test("the proxy still answers only fetches", () => {
   // `isProxyFetchDestination` is executed over every destination Chromium can
   // set in tests/unit/proxy-routes.test.ts. The complete accepted path, cookie
