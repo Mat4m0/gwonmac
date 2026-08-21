@@ -14,8 +14,7 @@
  * because a silently ignored key is indistinguishable to the renderer from a
  * setting that did not stick.
  */
-import { readdir, readFile, rename, unlink } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { readFile } from "node:fs/promises";
 import {
   DATA_STRATEGIES,
   DEFAULT_SETTINGS,
@@ -35,6 +34,7 @@ import { AppError } from "../../shared/errors.js";
 import { isShortcutOverrides } from "../../shared/keyboard-shortcuts.js";
 import { isStoredTravelShortcuts } from "../../shared/travel.js";
 import { writeAtomicJson } from "./atomic-file.js";
+import { quarantineCorruptDocument } from "./corrupt-document.js";
 
 const RENDER_SCALE_VALUES = new Set<AppSettings["renderScale"]>(RENDER_SCALES);
 const DATA_STRATEGY_VALUES = new Set<AppSettings["dataStrategy"]>(DATA_STRATEGIES);
@@ -71,7 +71,6 @@ function asBoundedInteger(
 }
 const SETTINGS_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
 const SETTINGS_FORMAT = 1;
-const CORRUPT_BACKUPS_KEPT = 3;
 
 function asBool(v: unknown, field: string): boolean {
   if (typeof v !== "boolean") {
@@ -274,46 +273,9 @@ async function recoverCorruptSettings(
   path: string,
   onRecovered: ((backupPath: string) => void | Promise<void>) | undefined,
 ): Promise<AppSettings> {
-  const backupPath = `${path}.corrupt-${Date.now()}`;
-  try {
-    await rename(path, backupPath);
-  } catch (e) {
-    const err = e as NodeJS.ErrnoException;
-    if (err.code !== "ENOENT") throw e;
-    return { ...DEFAULT_SETTINGS };
-  }
-  await pruneCorruptBackups(path);
-  await onRecovered?.(backupPath);
+  const backupPath = await quarantineCorruptDocument(path);
+  if (backupPath) await onRecovered?.(backupPath);
   return { ...DEFAULT_SETTINGS };
-}
-
-/**
- * Keep the three newest `settings.json.corrupt-<epoch>` files and drop the
- * rest. A backup exists so a player can get a lost setting back; nothing reads
- * the fourth-oldest one, and they accumulated for the life of the profile.
- * The epoch is in the name, so ordering needs no stat, and only names this
- * module writes are ever removed.
- */
-async function pruneCorruptBackups(settingsPath: string): Promise<void> {
-  const directory = dirname(settingsPath);
-  const prefix = `${basename(settingsPath)}.corrupt-`;
-  let names: string[];
-  try {
-    names = await readdir(directory);
-  } catch {
-    return;
-  }
-  const stale = names
-    .filter((name) => name.startsWith(prefix))
-    .map((name) => ({ name, at: Number(name.slice(prefix.length)) }))
-    .filter(({ at }) => Number.isSafeInteger(at))
-    .sort((left, right) => right.at - left.at)
-    .slice(CORRUPT_BACKUPS_KEPT);
-  await Promise.all(
-    stale.map(({ name }) =>
-      unlink(join(directory, name)).catch(() => undefined),
-    ),
-  );
 }
 
 export async function saveSettings(path: string, value: AppSettings): Promise<AppSettings> {

@@ -81,9 +81,16 @@ async function saveSettingsAndReconcile(
 export class PreferencesCoordinator {
   readonly #lock = new Mutex();
   readonly #paths: () => PreferencesPaths;
+  readonly #onTravelRecovered:
+    | ((backupPath: string) => void | Promise<void>)
+    | undefined;
 
-  constructor(paths: () => PreferencesPaths) {
+  constructor(
+    paths: () => PreferencesPaths,
+    onTravelRecovered?: (backupPath: string) => void | Promise<void>,
+  ) {
     this.#paths = paths;
+    this.#onTravelRecovered = onTravelRecovered;
   }
 
   getSettings(): Promise<AppSettings> {
@@ -107,7 +114,10 @@ export class PreferencesCoordinator {
       );
       let currentTravel: TravelPreferencesDocument;
       try {
-        currentTravel = await loadTravelPreferences(paths.travelPreferences);
+        currentTravel = await loadTravelPreferences(
+          paths.travelPreferences,
+          this.#onTravelRecovered,
+        );
       } catch {
         return Object.freeze({
           status: "partial",
@@ -125,15 +135,22 @@ export class PreferencesCoordinator {
       }
       let travel: TravelPreferencesDocument;
       try {
-        travel = await updateTravelPreferences(paths.travelPreferences, {
-          synonyms: DEFAULT_TRAVEL_PREFERENCES.synonyms,
-          recentLimit: DEFAULT_TRAVEL_PREFERENCES.recentLimit,
-          recentMapIds: DEFAULT_TRAVEL_PREFERENCES.recentMapIds,
-        });
+        travel = await updateTravelPreferences(
+          paths.travelPreferences,
+          {
+            synonyms: DEFAULT_TRAVEL_PREFERENCES.synonyms,
+            recentLimit: DEFAULT_TRAVEL_PREFERENCES.recentLimit,
+            recentMapIds: DEFAULT_TRAVEL_PREFERENCES.recentMapIds,
+          },
+          this.#onTravelRecovered,
+        );
       } catch (error) {
         if (error instanceof AtomicPublicationUnconfirmedError) {
           try {
-            travel = await loadTravelPreferences(paths.travelPreferences);
+            travel = await loadTravelPreferences(
+              paths.travelPreferences,
+              this.#onTravelRecovered,
+            );
           } catch {
             return Object.freeze({
               status: "partial",
@@ -172,7 +189,10 @@ export class PreferencesCoordinator {
       const paths = this.#paths();
       return composeTravelPreferences(
         await loadSettings(paths.settings),
-        await loadTravelPreferences(paths.travelPreferences),
+        await loadTravelPreferences(
+          paths.travelPreferences,
+          this.#onTravelRecovered,
+        ),
       );
     });
   }
@@ -183,7 +203,10 @@ export class PreferencesCoordinator {
     return this.#lock.run(async () => {
       const paths = this.#paths();
       const settings = await loadSettings(paths.settings);
-      const travel = await loadTravelPreferences(paths.travelPreferences);
+      const travel = await loadTravelPreferences(
+        paths.travelPreferences,
+        this.#onTravelRecovered,
+      );
       const current = composeTravelPreferences(settings, travel);
       if (!sameTravelUserPreferences(current, update.expected)) {
         throw new AppError(
@@ -202,7 +225,11 @@ export class PreferencesCoordinator {
           });
           return composeTravelPreferences(saved, travel);
         }
-        const saved = await updateTravelPreferences(paths.travelPreferences, update.patch);
+        const saved = await updateTravelPreferences(
+          paths.travelPreferences,
+          update.patch,
+          this.#onTravelRecovered,
+        );
         return composeTravelPreferences(settings, saved);
       } catch (error) {
         if (error instanceof AtomicPublicationUnconfirmedError) {
@@ -220,7 +247,11 @@ export class PreferencesCoordinator {
       try {
         return composeTravelPreferences(
           settings,
-          await recordConfirmedTravel(paths.travelPreferences, mapId),
+          await recordConfirmedTravel(
+            paths.travelPreferences,
+            mapId,
+            this.#onTravelRecovered,
+          ),
         );
       } catch (error) {
         if (error instanceof AtomicPublicationUnconfirmedError) {

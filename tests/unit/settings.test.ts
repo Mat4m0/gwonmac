@@ -254,7 +254,7 @@ describe("settings", () => {
     });
     assert.deepEqual(corrupt, DEFAULT_SETTINGS);
     assert.equal(corrupt.renderScale, 2);
-    assert.match(backup, /settings\.json\.corrupt-\d+$/);
+    assert.match(backup, /settings\.json\.corrupt-\d+-[0-9a-f-]{36}$/u);
     assert.equal(await readFile(backup, "utf8"), "{not json");
     assert.deepEqual(await readdir(dir), [backup.split("/").at(-1)]);
   });
