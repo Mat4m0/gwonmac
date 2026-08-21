@@ -469,6 +469,30 @@ test("release workflow stages and publishes one tested, attested package version
   );
 });
 
+test("the Stable rollback proof establishes its write generation before saving", () => {
+  const roundTrip = read("scripts/verify-stable-beta-roundtrip.ts");
+  const stableCreation = roundTrip.indexOf(
+    'console.log("stable/beta compatibility: latest Stable creates canonical state")',
+  );
+  const baselineRead = roundTrip.indexOf(
+    "await readCanonical(running.page)",
+    stableCreation,
+  );
+  const firstLibraryWrite = roundTrip.indexOf(
+    "window.gwNative.buildLibrary.set(library)",
+    stableCreation,
+  );
+
+  assert.ok(stableCreation >= 0);
+  assert.ok(baselineRead > stableCreation);
+  assert.ok(firstLibraryWrite > baselineRead);
+  assert.match(roundTrip, /saveWindowState\(windowStatePath/);
+  assert.doesNotMatch(
+    roundTrip,
+    /Browser\.getWindowForTarget|Browser\.setWindowBounds/,
+  );
+});
+
 test("application verification routes conservatively through one required result", () => {
   const workflow = read(".github/workflows/pr-package.yml");
   const classifier = read("scripts/ci-impact.ts");
