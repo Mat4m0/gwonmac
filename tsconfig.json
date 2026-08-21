@@ -28,8 +28,8 @@
     "types": ["node"]
   },
   "include": ["src"],
-  // src/renderer is tsconfig.renderer.json's program, not this one: it compiles
-  // for Chromium with the DOM libs and emits into build/renderer. The overlap
+  // src/renderer is tsconfig.renderer.json's program, not this one: it checks
+  // for Chromium with the DOM libs while Rollup emits build/renderer. The overlap
   // was invisible while the renderer was JavaScript, because this project sets
   // no `allowJs` and so could not read it; the first renderer `.ts` made it a
   // second compilation of the same files under a lib that has no `Document`.

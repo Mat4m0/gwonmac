@@ -10,7 +10,9 @@ export function ignorePackageFile(file: string): boolean {
     return p.endsWith(".map") || p.endsWith(".d.ts") || p.endsWith(".d.ts.map");
   }
   if (p === "/build/renderer") return false;
-  if (p.startsWith("/build/renderer/")) return p.endsWith(".d.ts");
+  if (p.startsWith("/build/renderer/")) {
+    return p.endsWith(".map") || p.endsWith(".d.ts");
+  }
   if (p === "/build/preload" || p === "/build/preload/preload.cjs") return false;
   if (
     p === "/build/native"
