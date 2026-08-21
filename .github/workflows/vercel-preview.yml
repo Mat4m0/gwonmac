@@ -113,5 +113,7 @@ jobs:
             try {
               await github.rest.git.deleteRef({ owner, repo, ref });
             } catch (error) {
-              if (error.status !== 404) throw error;
+              // GitHub currently reports a missing ref as 422 from DELETE,
+              // while GET reports 404. Either means cleanup is complete.
+              if (![404, 422].includes(error.status)) throw error;
             }
