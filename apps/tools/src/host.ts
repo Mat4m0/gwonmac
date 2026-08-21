@@ -19,6 +19,10 @@ import type {
   TeamApplyResult,
 } from "../../../src/shared/builds/team-apply";
 import type { StorageCommand } from "../../../src/shared/storage-command";
+import type {
+  PublishedTemplate,
+  PublishableTemplate,
+} from "../../../src/shared/tools-bundle-contracts";
 import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import {
   runTeamApply,
@@ -33,11 +37,6 @@ import {
   type SkillCatalogue,
   type SkillPresentation,
 } from "./skill-catalog";
-
-export type PublishedTemplate = Readonly<{
-  fileName: string;
-  location: string;
-}>;
 
 const PUBLISH_UNAVAILABLE =
   "GWonMac can’t add this build to Guild Wars after this game update. "
@@ -234,8 +233,6 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
  * this bundle and is deliberately not on the protocol's shared-module
  * allowlist, so the encoding happens here and the host receives a string.
  */
-export type PublishableTemplate = Readonly<{ name: string; code: string }>;
-
 export function createNativeHost(
   api: GwNativeApi,
   publishTemplate:
