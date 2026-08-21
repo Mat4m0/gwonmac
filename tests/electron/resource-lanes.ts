@@ -10,7 +10,6 @@ export const backgroundSafeElectronSpecs = [
   "build-templates.spec.ts",
   "client-runtime-concurrency.spec.ts",
   "enhancement-cursor.spec.ts",
-  "enhancement-runtime.spec.ts",
   "input-keyboard.spec.ts",
   "input-pointer.spec.ts",
   "input-text-repeat.spec.ts",
