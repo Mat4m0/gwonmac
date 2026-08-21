@@ -8,13 +8,24 @@
 // that admits what they are, rather than deleted — a call site nothing checks
 // is exactly how a guard gets dropped in a refactor and noticed in an incident.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
+
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const target = path.join(directory, entry.name);
+    return entry.isDirectory()
+      ? sourceFiles(target)
+      : entry.isFile() && entry.name.endsWith(".ts")
+        ? [target]
+        : [];
+  });
+}
 
 test("IPC still refuses a sender that is not the main frame at the canonical URL", () => {
   // Not reachable from a test: `frame-src 'none'` means the renderer cannot
@@ -25,6 +36,18 @@ test("IPC still refuses a sender that is not the main frame at the canonical URL
   const ipc = read("src/main/ipc.ts");
   assert.match(ipc, /event\.senderFrame !== event\.sender\.mainFrame/u);
   assert.match(ipc, /isCanonicalRendererUrl\(event\.senderFrame\.url\)/u);
+});
+
+test("production resolves native windows only through the window registry", () => {
+  const sources = sourceFiles(path.join(root, "src/main"));
+  for (const file of sources) {
+    const source = readFileSync(file, "utf8");
+    assert.doesNotMatch(source, /BrowserWindow\.(?:getAllWindows|getFocusedWindow|fromWebContents)\(/u, file);
+  }
+  assert.match(
+    read("src/main/ipc.ts"),
+    /registry\.windowForWebContents\(event\.sender\.id\)/u,
+  );
 });
 
 test("the proxy still answers only fetches", () => {

@@ -10,7 +10,6 @@
 import {
   app,
   autoUpdater,
-  BrowserWindow,
   dialog,
   Notification,
   powerMonitor,
@@ -80,7 +79,6 @@ import {
 import {
   createMainWindow,
   flushWindowState,
-  getMainWindow,
   prepareWindowState,
   RENDERER_URL,
   type WindowHost,
@@ -171,8 +169,8 @@ const INJECT_STARTUP_FAILURE =
 
 function revealMainWindow(): void {
   if (activeAccountMode === "multi" && revealAccountsWindow()) return;
-  const win = getMainWindow();
-  if (!win || win.isDestroyed()) {
+  const win = windowRegistry.singleGameWindow();
+  if (!win) {
     secondInstanceRequested = true;
     return;
   }
@@ -373,10 +371,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   const stopCommandKeyUps = installMacosCommandKeyUps(nativeHost, {
     focusedGameTarget() {
-      const win = BrowserWindow.getFocusedWindow();
-      return win && windowRegistry.contextForWebContents(win.webContents.id)?.role === "game"
-        ? win
-        : null;
+      return windowRegistry.focusedGameWindow();
     },
     release(win, code) {
       releaseWindowShortcutKey(win, code);
@@ -698,7 +693,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   onAppQuit(async () => {
     if (activeAccountMode === "single") {
-      const win = getMainWindow();
+      const win = windowRegistry.singleGameWindow();
       if (win && !win.isDestroyed()) {
         const outcome = await sendRendererCommand(win, {
           type: "filesystem.sync",
@@ -708,7 +703,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         }
       }
       await ipcCleanup.drainSecrets();
-      await flushWindowState();
+      if (win) await flushWindowState(win);
     } else {
       const gameWindows = windowRegistry.gameWindows();
       await Promise.all(gameWindows.map(async (win) => {
@@ -724,7 +719,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       await Promise.all(gameWindows.map((win) => flushWindowState(win)));
     }
     sockets.closeAll();
-    updateLongRunningTaskFeedback(INITIAL_PROGRESS);
+    updateLongRunningTaskFeedback(INITIAL_PROGRESS, null);
     await clientRuntime.shutdown();
     if (activeAccountMode === "single") await clearBrowserCookies("quit");
     await stopDiagnostics();
@@ -732,7 +727,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   const win = activeAccountMode === "multi"
     ? createAccountsWindow(protocolDeps)
-    : createMainWindow(host);
+    : createMainWindow(host, { context: { mode: "single", role: "game" } });
   if (settings.autoCheckUpdates) {
     void checkForAppUpdates(settings.updateTrack);
   }
@@ -804,8 +799,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
   app.on("activate", () => {
     if (activeAccountMode === "multi") {
       if (!revealAccountsWindow()) createAccountsWindow(protocolDeps);
-    } else if (!getMainWindow()) {
-      createMainWindow(host);
+    } else if (!windowRegistry.singleGameWindow()) {
+      createMainWindow(host, { context: { mode: "single", role: "game" } });
     }
   });
   app.on("child-process-gone", (_event, details) => {

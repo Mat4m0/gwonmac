@@ -76,7 +76,6 @@ export interface WindowHost {
   gameWindowClosed?: () => void;
 }
 
-let mainWindow: BrowserWindow | null = null;
 const rendererRecoveryUsed = new Set<string>();
 
 /** A deliberate player retry gets one fresh automatic renderer recovery. */
@@ -101,7 +100,7 @@ let downloadPowerBlockerId: number | null = null;
 
 export function updateLongRunningTaskFeedback(
   value: DownloadProgress,
-  win = mainWindow,
+  win: BrowserWindow | null,
 ): boolean {
   const feedback = longRunningTaskFeedback(value);
   if (feedback.preventAppSuspension && downloadPowerBlockerId === null) {
@@ -208,7 +207,7 @@ function scheduleWindowStateSave(win: BrowserWindow): void {
   }, 300);
 }
 
-export async function flushWindowState(win = mainWindow): Promise<void> {
+export async function flushWindowState(win: BrowserWindow): Promise<void> {
   if (!win || win.isDestroyed()) return;
   const owner = windowStateOwners.get(win);
   if (!owner) return;
@@ -221,7 +220,7 @@ export async function flushWindowState(win = mainWindow): Promise<void> {
   await owner.write;
 }
 
-export function resetWindowState(win = mainWindow): Promise<void> {
+export function resetWindowState(win: BrowserWindow): Promise<void> {
   if (!win || win.isDestroyed()) return Promise.resolve();
   const owner = windowStateOwners.get(win);
   if (!owner) return Promise.resolve();
@@ -285,10 +284,6 @@ export function resetWindowState(win = mainWindow): Promise<void> {
   return reset;
 }
 
-export function getMainWindow(): BrowserWindow | null {
-  return mainWindow;
-}
-
 export function setOwnedWindowTitle(win: BrowserWindow, title: string): void {
   ownedWindowTitles.set(win, title);
   win.setTitle(title);
@@ -342,7 +337,7 @@ export function rendererInitArgument(options: {
 export function createMainWindow(
   host: WindowHost,
   options: {
-    readonly context?: WindowContext;
+    readonly context: WindowContext;
     readonly session?: Electron.Session;
     readonly title?: string;
     readonly windowStatePath?: string;
@@ -350,9 +345,9 @@ export function createMainWindow(
     readonly onRendererRecoveryStart?: () => void;
     readonly onRendererRecovered?: () => void;
     readonly onRendererFailure?: () => void;
-  } = {},
+  },
 ): BrowserWindow {
-  const context = options.context ?? { mode: "single", role: "game" };
+  const context = options.context;
   const statePath = options.windowStatePath ?? gamePaths().windowState;
   const restoredWindowState = preparedWindowStates.get(statePath) ?? null;
   const initialState = restoredWindowState
@@ -388,7 +383,6 @@ export function createMainWindow(
     },
   });
 
-  mainWindow = win;
   const stateOwner: WindowStateOwner = {
     path: statePath,
     restored: initialState,
@@ -606,7 +600,6 @@ export function createMainWindow(
   win.on("closed", () => {
     windowRegistry.unregister(win);
     windowStateOwners.delete(win);
-    if (mainWindow === win) mainWindow = null;
     if (
       context.mode === "multi"
       && context.role === "game"
