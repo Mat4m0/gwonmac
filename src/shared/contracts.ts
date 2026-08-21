@@ -41,11 +41,9 @@ import type {
 import {
   DEFAULT_STORED_TRAVEL_SHORTCUTS,
   type StoredTravelShortcuts,
+  type TravelUserPreferences,
+  type TravelUserPreferencesUpdate,
 } from "./travel.js";
-import type {
-  TravelPreferencesDocument,
-  TravelPreferencesPatch,
-} from "./travel-preferences.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -388,6 +386,9 @@ export interface AppSettings {
 }
 
 export type AppSettingsPatch = Partial<AppSettings>;
+/** Settings fields the sandboxed renderer may write through generic IPC. */
+export type RendererSettingsPatch = Omit<AppSettingsPatch, "travelShortcuts">
+  & Readonly<{ travelShortcuts?: never }>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
@@ -877,13 +878,13 @@ export interface GwNativeApi {
   };
   settings: {
     get(): Promise<AppSettings>;
-    set(value: AppSettingsPatch): Promise<AppSettings>;
+    set(value: RendererSettingsPatch): Promise<AppSettings>;
     reset(): Promise<AppSettings | null>;
   };
   travelPreferences: {
-    get(): Promise<TravelPreferencesDocument>;
-    set(value: TravelPreferencesPatch): Promise<TravelPreferencesDocument>;
-    recordConfirmed(mapId: number): Promise<TravelPreferencesDocument>;
+    get(): Promise<TravelUserPreferences>;
+    set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
+    recordConfirmed(mapId: number): Promise<TravelUserPreferences>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;

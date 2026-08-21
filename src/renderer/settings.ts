@@ -8,9 +8,9 @@
 
 (function () {
   type AppSettings = import('../shared/contracts.js').AppSettings;
-  type AppSettingsPatch = import('../shared/contracts.js').AppSettingsPatch;
-  type TravelPreferencesDocument =
-    import('../shared/travel-preferences.js').TravelPreferencesDocument;
+  type RendererSettingsPatch = import('../shared/contracts.js').RendererSettingsPatch;
+  type TravelUserPreferences =
+    import('../shared/travel.js').TravelUserPreferences;
   type ClientSession = import('../shared/contracts.js').ClientSession;
   type RendererMilestone =
     import('../shared/diagnostics.js').RendererMilestone;
@@ -84,7 +84,7 @@
   let currentSession: ClientSession | null = null;
 
   let currentSettings: AppSettings | null = null;
-  let currentTravelPreferences: TravelPreferencesDocument | null = null;
+  let currentTravelPreferences: TravelUserPreferences | null = null;
   let settingsLoad: Promise<AppSettings> | null = null;
   let settingsWrite: Promise<unknown> = Promise.resolve();
   type FeedbackTone = 'neutral' | 'progress' | 'success' | 'warning' | 'error';
@@ -421,7 +421,7 @@
   }
 
   // Serialize writes so a slower earlier write cannot replace newer intent.
-  function persistSettings(patch: AppSettingsPatch) {
+  function persistSettings(patch: RendererSettingsPatch) {
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
@@ -431,6 +431,23 @@
     });
     settingsWrite = operation.catch(() => undefined);
     return operation;
+  }
+
+  async function recoverSettingsAfterFailedWrite(message: string): Promise<void> {
+    currentSettings = await window.gwNative.settings.get().catch(() => null);
+    if (currentSettings) {
+      fillForm(currentSettings);
+      window.gwApplySettings?.(currentSettings);
+    } else {
+      form.setAttribute('aria-busy', 'true');
+      settingsPanes.inert = true;
+    }
+    setFeedback(
+      currentSettings
+        ? message
+        : 'GWonMac could not confirm the active settings. Close and reopen Settings before retrying.',
+      'error',
+    );
   }
 
   const extendedMemorySetting = import('./extended-memory-setting.js')
@@ -577,7 +594,7 @@
 
   function patchForControl(
     control: HTMLInputElement | HTMLSelectElement,
-  ): AppSettingsPatch | null {
+  ): RendererSettingsPatch | null {
     switch (control.name) {
       case 'renderScale': {
         const value = Number(control.value);
@@ -754,17 +771,20 @@
     }
     if (control.name === 'travelRecentLimit') {
       const value = Number(control.value);
-      if (value !== 0 && value !== 3 && value !== 5 && value !== 10) return;
+      const expected = currentTravelPreferences;
+      if (expected === null || (value !== 0 && value !== 3 && value !== 5 && value !== 10)) return;
       setFeedback('Saving…', 'progress');
-      void window.gwNative.travelPreferences.set({ recentLimit: value })
+      void window.gwNative.travelPreferences.set({ expected, patch: { recentLimit: value } })
         .then((saved) => {
           currentTravelPreferences = saved;
           if (currentSettings) fillForm(currentSettings, saved);
           setFeedback('Saved.', 'success', 2200);
         })
-        .catch(() => {
-          if (currentSettings) fillForm(currentSettings);
-          setFeedback('Settings could not be saved. Your previous setting is still active; try again.', 'error');
+        .catch(async () => {
+          currentTravelPreferences = await window.gwNative.travelPreferences.get()
+            .catch(() => currentTravelPreferences);
+          if (currentSettings) fillForm(currentSettings, currentTravelPreferences);
+          setFeedback('Settings could not confirm which Recent limit is active. Review the current value, then try again.', 'error');
         });
       return;
     }
@@ -786,28 +806,27 @@
         }
         setFeedback('Saved.', 'success', 2200);
       })
-      .catch(() => {
-        if (currentSettings) {
-          fillForm(currentSettings);
-          window.gwApplySettings?.(currentSettings);
-        }
-        setFeedback('Settings could not be saved. Your previous setting is still active; try again.', 'error');
-      });
+      .catch(() => recoverSettingsAfterFailedWrite(
+        'Close and reopen Settings to confirm which value is active before retrying.',
+      ));
   });
 
   travelRecentsClear.addEventListener('click', () => {
-    if (travelRecentsClear.disabled) return;
+    const expected = currentTravelPreferences;
+    if (travelRecentsClear.disabled || expected === null) return;
     setFeedback('Clearing Recent…', 'progress');
     travelRecentsClear.disabled = true;
-    void window.gwNative.travelPreferences.set({ recentMapIds: [] })
+    void window.gwNative.travelPreferences.set({ expected, patch: { recentMapIds: [] } })
       .then((saved) => {
         currentTravelPreferences = saved;
         if (currentSettings) fillForm(currentSettings, saved);
         setFeedback('Recent destinations cleared.', 'success', 2200);
       })
-      .catch(() => {
-        if (currentSettings) fillForm(currentSettings);
-        setFeedback('Recent destinations could not be cleared. Nothing changed; try again.', 'error');
+      .catch(async () => {
+        currentTravelPreferences = await window.gwNative.travelPreferences.get()
+          .catch(() => currentTravelPreferences);
+        if (currentSettings) fillForm(currentSettings, currentTravelPreferences);
+        setFeedback('GWonMac could not confirm whether Recent was cleared. Review the current list, then try again.', 'error');
       });
   });
 
@@ -830,7 +849,13 @@
       const reset = await window.gwNative.settings.reset();
       if (!reset) return;
       currentSettings = reset;
-      fillForm(reset);
+      currentTravelPreferences = await window.gwNative.travelPreferences.get()
+        .catch(() => null);
+      fillForm(reset, currentTravelPreferences);
+      if (currentTravelPreferences === null) {
+        travelRecentLimit.disabled = true;
+        travelRecentsClear.disabled = true;
+      }
       window.gwApplySettings?.(reset);
       setFeedback(
         'GWonMac settings were reset. Choose a download mode next launch.',
@@ -838,7 +863,11 @@
         4500,
       );
     } catch {
-      setFeedback('GWonMac settings could not be reset. Nothing changed; try again.', 'error');
+      currentSettings = null;
+      currentTravelPreferences = null;
+      form.setAttribute('aria-busy', 'true');
+      settingsPanes.inert = true;
+      setFeedback('GWonMac could not confirm whether settings were reset. Close and reopen Settings to review the active values.', 'error');
     }
   });
 

@@ -21,6 +21,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import type {
   GwNativeApi,
+  RendererSettingsPatch,
   RendererCommand,
   RendererInit,
 } from "../../src/shared/contracts.ts";
@@ -159,6 +160,7 @@ function call(api: GwNativeApi, dotted: string): Capability {
 
 const PACKET = new Uint8Array([1, 2, 3, 4]);
 const PROFILE_ID = "00000000-0000-4000-8000-000000000001";
+const RENDERER_SETTINGS_PATCH = { renderScale: 2 } satisfies RendererSettingsPatch;
 
 /** A request/response capability, with the arguments a caller really passes. */
 interface Invocation {
@@ -178,7 +180,7 @@ const INVOCATIONS: Invocation[] = [
   { path: "sockets.send", args: [7, PACKET], channel: IPC.socketSend },
   { path: "sockets.close", args: [7], channel: IPC.socketClose },
   { path: "settings.get", args: [], channel: IPC.settingsGet },
-  { path: "settings.set", args: [{ renderScale: 2 }], channel: IPC.settingsSet },
+  { path: "settings.set", args: [RENDERER_SETTINGS_PATCH], channel: IPC.settingsSet },
   { path: "settings.reset", args: [], channel: IPC.settingsReset },
   {
     path: "travelPreferences.get",
@@ -187,7 +189,15 @@ const INVOCATIONS: Invocation[] = [
   },
   {
     path: "travelPreferences.set",
-    args: [{ recentLimit: 3 }],
+    args: [{
+      expected: {
+        shortcuts: [null, null, null, null, null, null, null, null, null],
+        synonyms: [],
+        recentLimit: 5,
+        recentMapIds: [],
+      },
+      patch: { recentLimit: 3 },
+    }],
     channel: IPC.travelPreferencesSet,
   },
   {

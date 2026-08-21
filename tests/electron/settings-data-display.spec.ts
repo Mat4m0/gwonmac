@@ -473,7 +473,7 @@ test.describe("data and display settings", () => {
       // click must not wait for the transient checked state to persist.
       await page.locator('input[name="uiStyle"][value="obsidian"]').click();
       await expect(page.locator("#settings-feedback")).toHaveText(
-        "Settings could not be saved. Your previous setting is still active; try again.",
+        "Close and reopen Settings to confirm which value is active before retrying.",
       );
       await expect(page.locator("#settings-feedback")).toHaveAttribute(
         "data-tone",

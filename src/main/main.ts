@@ -21,10 +21,7 @@ import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
-  DEFAULT_SETTINGS,
   IPC,
-  type AppSettings,
-  type AppSettingsPatch,
   type DownloadProgress,
   type PrefetchProgress,
   type UpdateTrack,
@@ -37,14 +34,8 @@ import { errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
-import { Mutex } from "./core/mutex.js";
-import { loadSettings, saveSettings } from "./core/settings.js";
-import {
-  loadTravelPreferences,
-  recordConfirmedTravel,
-  updateTravelPreferences,
-} from "./core/travel-preferences.js";
-import type { TravelPreferencesPatch } from "../shared/travel-preferences.js";
+import { loadSettings } from "./core/settings.js";
+import { PreferencesCoordinator } from "./core/preferences-coordinator.js";
 import { SocketManager } from "./core/sockets.js";
 import {
   count,
@@ -170,9 +161,7 @@ const HOST_VERSION = (() => {
   return app.getVersion();
 })();
 
-/** Every settings write is a read-modify-write of one file. */
-const settingsLock = new Mutex();
-const travelPreferencesLock = new Mutex();
+const preferences = new PreferencesCoordinator(() => gamePaths());
 let appUpdaterController: AppUpdater | null = null;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
@@ -196,40 +185,8 @@ function revealMainWindow(): void {
 
 /** The one application-update action; AppUpdater owns every outcome. */
 async function checkForAppUpdates(track?: UpdateTrack): Promise<void> {
-  const selected = track ?? (await loadSettings(gamePaths().settings)).updateTrack;
+  const selected = track ?? (await preferences.getSettings()).updateTrack;
   await appUpdaterController?.check(selected);
-}
-
-function updateAppSettings(patch: AppSettingsPatch): Promise<AppSettings> {
-  return settingsLock.run(async () => {
-    const settingsPath = gamePaths().settings;
-    const current = await loadSettings(settingsPath);
-    return saveSettings(settingsPath, { ...current, ...patch });
-  });
-}
-
-function resetAppSettings(): Promise<AppSettings> {
-  return settingsLock.run(() =>
-    saveSettings(gamePaths().settings, { ...DEFAULT_SETTINGS }),
-  );
-}
-
-function getTravelPreferences() {
-  return travelPreferencesLock.run(() =>
-    loadTravelPreferences(gamePaths().travelPreferences)
-  );
-}
-
-function setTravelPreferences(patch: TravelPreferencesPatch) {
-  return travelPreferencesLock.run(() =>
-    updateTravelPreferences(gamePaths().travelPreferences, patch)
-  );
-}
-
-function recordTravelConfirmation(mapId: number) {
-  return travelPreferencesLock.run(() =>
-    recordConfirmedTravel(gamePaths().travelPreferences, mapId)
-  );
 }
 
 function buildSocketManager(): SocketManager {
@@ -367,9 +324,10 @@ function buildWindowHost(
     enhancementSelection,
     enhancementProgram,
     getProgress: () => clientRuntime.progress,
-    getSettings: () => loadSettings(gamePaths().settings),
-    updateSettings: updateAppSettings,
-    exportDiagnostics: (win) => exportDiagnosticsForWindow(win),
+    getSettings: () => preferences.getSettings(),
+    updateSettings: (patch) => preferences.updateSettings(patch),
+    exportDiagnostics: (win) =>
+      exportDiagnosticsForWindow(win, () => preferences.getSettings()),
     markPerformanceProblem,
     startCapture: startDiagnosticCapture,
     stopCapture: stopDiagnosticCapture,
@@ -584,7 +542,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       quitAndInstall: () => autoUpdater.quitAndInstall(),
     },
     rememberCheckedAt: async (lastUpdateCheckAt) => {
-      await updateAppSettings({ lastUpdateCheckAt });
+      await preferences.updateSettings({ lastUpdateCheckAt });
     },
     recordFailure: (stage, reason) => {
       logEvent({ k: "appUpdate.requestFailed", stage, reason });
@@ -660,12 +618,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
     gameStorageResetMarkerFor: (win) => accounts.gameStorageResetMarkerFor(win),
     getProgress: () => clientRuntime.progress,
     getChunkStore: () => clientRuntime.active?.store ?? null,
-    getSettings: () => loadSettings(paths.settings),
-    updateSettings: updateAppSettings,
-    resetSettings: resetAppSettings,
-    getTravelPreferences,
-    setTravelPreferences,
-    recordTravelConfirmation,
+    getSettings: () => preferences.getSettings(),
+    updateSettings: (patch) => preferences.updateSettings(patch),
+    resetSettings: () => preferences.resetSettings(),
+    getTravelPreferences: () => preferences.getTravelPreferences(),
+    setTravelPreferences: (update) => preferences.updateTravelPreferences(update),
+    recordTravelConfirmation: (mapId) => preferences.recordTravelConfirmation(mapId),
     toolsEnabledAtLaunch: settings.gwonmacTools,
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
@@ -781,7 +739,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   // so a due tick during a download or a ready update is a no-op.
   const periodicCheckTick = setInterval(() => {
     void (async () => {
-      const current = await loadSettings(paths.settings);
+      const current = await preferences.getSettings();
       if (!periodicCheckDue({
         capable: distribution.automaticUpdates,
         autoCheckUpdates: current.autoCheckUpdates,
@@ -826,7 +784,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
         detail: "Export it now while the capture context is fresh.",
       });
       if (response === 0) {
-        await exportDiagnosticsReport(() => exportDiagnosticsForWindow(win));
+        await exportDiagnosticsReport(() =>
+          exportDiagnosticsForWindow(win, () => preferences.getSettings())
+        );
       }
     });
   }
