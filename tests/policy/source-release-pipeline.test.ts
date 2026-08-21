@@ -853,11 +853,11 @@ test("client recertification reports evidence but cannot grant authority", () =>
   assert.doesNotMatch(workflow, /secrets\./);
   assert.match(workflow, /GH_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(workflow, /^permissions:\n {2}contents: read$/mu);
-  assert.match(workflow, /schedule:[\s\S]*cron: "\*\/15 \* \* \* \*"/);
+  assert.match(workflow, /schedule:[\s\S]*cron: "17 \* \* \* \*"/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /group: arenanet-client-recertification/);
 
-  // The unchanged path runs ninety-six times a day. It reads one manifest:
+  // The unchanged path runs hourly. It reads one manifest:
   // no packages, no compiler, no client bytes, and nothing out of the
   // certification command line, which builds the companion kernel first.
   assert.match(detect, /runs-on: ubuntu-latest/);
@@ -897,10 +897,30 @@ test("client recertification reports evidence but cannot grant authority", () =>
   );
   assert.doesNotMatch(derive, /contents: write|issues: write|pull-requests: write/);
   assert.match(derive, /pnpm client:official --download "\$RUNNER_TEMP\/official"/);
+  // The existing real-client suite has this one explicit execution owner. It
+  // receives the exact path emitted by the downloader, runs only in the
+  // changed-generation job, and can veto a proved report without becoming
+  // launch authority itself.
+  assert.equal(
+    [...derive.matchAll(/pnpm test:client-artifact/g)].length,
+    1,
+    "the changed-generation job must qualify the artifact exactly once",
+  );
+  assert.match(
+    derive,
+    /name: Qualify the exact published client artifact[\s\S]*continue-on-error: true[\s\S]*GW_CLIENT_WASM: \$\{\{ steps\.official\.outputs\.wasm \}\}/,
+  );
+  assert.match(derive, /QUALIFICATION_OUTCOME: \$\{\{ steps\.qualification\.outcome \}\}/);
+  assert.match(
+    derive,
+    /if \[ "\$QUALIFICATION_OUTCOME" != "success" \]; then[\s\S]*outcome=investigation[\s\S]*real-client qualification suite refused/,
+  );
+  assert.match(derive, /client-artifact\.json/);
+  assert.match(derive, /client-artifact\.txt/);
   assert.match(derive, /certification\.js template "\$WASM" --emit-ts/);
   assert.match(derive, /certification\.js recertify "\$WASM"/);
   assert.match(derive, /certification\.js verify "\$WASM"/);
-  assert.doesNotMatch(derive, /--write|test:client-artifact|tables\.patch|SOURCE_COMMIT/);
+  assert.doesNotMatch(derive, /--write|tables\.patch|SOURCE_COMMIT/);
   // Only the production runtime verifier can publish a positive report, and
   // every protected feature must carry its own proved verdict.
   assert.match(derive, /runtime-verdicts\.json/);
@@ -956,6 +976,8 @@ test("client recertification reports evidence but cannot grant authority", () =>
   );
   assert.match(publish, /gh issue close "\$issue" --reason completed/);
   assert.match(publish, /semantic proof passed/);
+  assert.match(publish, /exact-artifact qualification passed/);
+  assert.match(publish, /exact-artifact qualification: `client-artifact\.json` and `client-artifact\.txt`/);
   assert.match(publish, /v\$VERIFIER_ABI: invariant refused/);
   assert.match(
     publish,
