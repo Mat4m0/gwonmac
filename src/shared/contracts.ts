@@ -390,6 +390,19 @@ export type AppSettingsPatch = Partial<AppSettings>;
 export type RendererSettingsPatch = Omit<AppSettingsPatch, "travelShortcuts">
   & Readonly<{ travelShortcuts?: never }>;
 
+export type SettingsResetOutcome =
+  | Readonly<{
+      status: "complete";
+      settings: AppSettings;
+      travelPreferences: TravelUserPreferences;
+    }>
+  | Readonly<{
+      status: "partial";
+      settings: AppSettings;
+      travelPreferences: TravelUserPreferences | null;
+      pending: "travel";
+    }>;
+
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
   uiStyle: "guild-wars",
@@ -879,7 +892,7 @@ export interface GwNativeApi {
   settings: {
     get(): Promise<AppSettings>;
     set(value: RendererSettingsPatch): Promise<AppSettings>;
-    reset(): Promise<AppSettings | null>;
+    reset(): Promise<SettingsResetOutcome | null>;
   };
   travelPreferences: {
     get(): Promise<TravelUserPreferences>;

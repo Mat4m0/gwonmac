@@ -310,9 +310,11 @@ Use **Reset Saved Files…** only when the Guild Wars filesystem cannot open. It
 removes game preferences, templates, screenshots, and chat logs. It keeps game
 data, `gwonmac` settings, and saved login.
 
-Use **Reset GWonMac settings…** for launcher defaults. Use **View → Reset Window
-Size and Position** for an off-screen window. These actions do not clear saved
-login.
+Use **Reset GWonMac settings…** for launcher defaults. It also clears Travel
+shortcuts, search phrases, and Recent history. If Travel preferences cannot be
+reset after the other settings, the app keeps the completed settings reset and
+asks you to run the same reset again. Use **View → Reset Window Size and
+Position** for an off-screen window. These actions do not clear saved login.
 
 ## Bugs and feature requests
 
