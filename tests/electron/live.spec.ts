@@ -313,11 +313,7 @@ test.describe("live client", () => {
 
       const applyScale = (renderScale: AppSettings["renderScale"]) =>
         page.evaluate(async (scale) => {
-          const current = await window.gwNative.settings.get();
-          const saved = await window.gwNative.settings.set({
-            ...current,
-            renderScale: scale,
-          });
+          const saved = await window.gwNative.settings.set({ renderScale: scale });
           const apply = window.gwApplySettings;
           if (!apply) throw new Error("the renderer published no gwApplySettings");
           apply(saved);

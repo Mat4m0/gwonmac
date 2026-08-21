@@ -22,7 +22,6 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { app, dialog, type BrowserWindow } from "electron";
 import type { AppSettings } from "../../shared/contracts.js";
-import { loadSettings } from "../core/settings.js";
 import { gamePaths } from "../paths.js";
 import {
   activeCaptureLevel,
@@ -262,7 +261,10 @@ export async function exportDiagnosticsZip(
   }
 }
 
-export async function exportDiagnosticsForWindow(win: BrowserWindow): Promise<string> {
+export async function exportDiagnosticsForWindow(
+  win: BrowserWindow,
+  readSettings: () => Promise<AppSettings>,
+): Promise<string> {
   // The report has always been a PKZIP archive; `.zip` is the name that lets
   // GitHub accept it as an attachment without a Finder round-trip.
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
@@ -274,6 +276,6 @@ export async function exportDiagnosticsForWindow(win: BrowserWindow): Promise<st
   return exportDiagnosticsZip(filePath, {
     appVersion: app.getVersion(),
     electronVersions: runtimeVersions(),
-    settings: await loadSettings(gamePaths().settings),
+    settings: await readSettings(),
   });
 }

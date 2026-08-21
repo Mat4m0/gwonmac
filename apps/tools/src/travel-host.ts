@@ -1,7 +1,7 @@
 /**
  * Host boundary for Quick Travel. The Vue palette owns presentation; this
- * module owns serialized settings writes, confirmed recents, and one named
- * game command.
+ * module owns confirmed recents and one named game command. Main owns every
+ * durable preference write and stale-window refusal.
  */
 import { ref, type Ref } from "vue";
 import type { GwNativeApi } from "../../../src/shared/contracts";
@@ -14,13 +14,9 @@ import {
   TRAVEL_DESTINATIONS,
   travelDestination,
   recordRecentTravel,
-  storeTravelShortcuts,
-  travelShortcutsFromStored,
-  type TravelRecentLimit,
-  type TravelRecentMapIds,
   type TravelRequest,
-  type TravelShortcuts,
-  type TravelSynonyms,
+  type TravelUserPreferences,
+  type TravelUserPreferencesPatch,
 } from "../../../src/shared/travel";
 
 export type TravelAttempt =
@@ -31,19 +27,8 @@ export type TravelNotice = Readonly<{
   level: "info" | "success" | "warning" | "danger";
 }>;
 
-export type TravelPreferences = Readonly<{
-  shortcuts: TravelShortcuts;
-  synonyms: TravelSynonyms;
-  recentLimit: TravelRecentLimit;
-  recentMapIds: TravelRecentMapIds;
-}>;
-
-export type TravelPreferencePatch = Readonly<{
-  shortcuts?: TravelShortcuts;
-  synonyms?: TravelSynonyms;
-  recentLimit?: TravelRecentLimit;
-  recentMapIds?: TravelRecentMapIds;
-}>;
+export type TravelPreferences = TravelUserPreferences;
+export type TravelPreferencePatch = TravelUserPreferencesPatch;
 
 export interface TravelHost {
   readonly state: Ref<TravelGameState>;
@@ -57,18 +42,6 @@ export interface TravelHost {
   updateGameState(state: TravelGameState): void;
   dispose(): void;
   traceSearch(query: string, resultMapIds: readonly number[]): void;
-}
-
-function preferences(
-  settings: Awaited<ReturnType<GwNativeApi["settings"]["get"]>>,
-  travel: Awaited<ReturnType<GwNativeApi["travelPreferences"]["get"]>>,
-): TravelPreferences {
-  return Object.freeze({
-    shortcuts: travelShortcutsFromStored(settings.travelShortcuts),
-    synonyms: travel.synonyms,
-    recentLimit: travel.recentLimit,
-    recentMapIds: travel.recentMapIds,
-  });
 }
 
 export function createNativeTravelHost(
@@ -85,17 +58,15 @@ export function createNativeTravelHost(
     attemptTimer = 0;
     attempt.value = { status: "idle" };
   };
-  let writes: Promise<unknown> = Promise.resolve();
-  const serialize = <Value>(operation: () => Promise<Value>): Promise<Value> => {
-    const pending = writes.then(operation);
-    writes = pending.catch(() => undefined);
-    return pending;
+  let currentPreferences: TravelPreferences | null = null;
+  const remember = (next: TravelPreferences): TravelPreferences => {
+    currentPreferences = next;
+    return next;
   };
-  const recordConfirmedTravel = (mapId: number): Promise<TravelPreferences> =>
-    serialize(async () => preferences(
-      await api.settings.get(),
-      await api.travelPreferences.recordConfirmed(mapId),
-    ));
+  const loadPreferences = async (): Promise<TravelPreferences> =>
+    remember(await api.travelPreferences.get());
+  const recordConfirmedTravel = async (mapId: number): Promise<TravelPreferences> =>
+    remember(await api.travelPreferences.recordConfirmed(mapId));
   return {
     state,
     attempt,
@@ -103,35 +74,10 @@ export function createNativeTravelHost(
     get unavailable() {
       return command.unavailable();
     },
-    async loadPreferences() {
-      await writes;
-      const [settings, travel] = await Promise.all([
-        api.settings.get(),
-        api.travelPreferences.get(),
-      ]);
-      return preferences(settings, travel);
-    },
-    savePreferences(patch) {
-      return serialize(async () => {
-        const currentSettings = await api.settings.get();
-        const nextSettings = patch.shortcuts === undefined
-          ? currentSettings
-          : await api.settings.set({
-              travelShortcuts: storeTravelShortcuts(
-                patch.shortcuts,
-                currentSettings.travelShortcuts,
-              ),
-            });
-        const travelPatch = {
-          ...(patch.synonyms === undefined ? {} : { synonyms: patch.synonyms }),
-          ...(patch.recentLimit === undefined ? {} : { recentLimit: patch.recentLimit }),
-          ...(patch.recentMapIds === undefined ? {} : { recentMapIds: patch.recentMapIds }),
-        };
-        const nextTravel = Object.keys(travelPatch).length === 0
-          ? await api.travelPreferences.get()
-          : await api.travelPreferences.set(travelPatch);
-        return preferences(nextSettings, nextTravel);
-      });
+    loadPreferences,
+    async savePreferences(patch) {
+      const expected = currentPreferences ?? await loadPreferences();
+      return remember(await api.travelPreferences.set({ expected, patch }));
     },
     recordConfirmedTravel,
     async travel(request) {
@@ -200,7 +146,7 @@ export function createNativeTravelHost(
       if (next.mapId !== current.mapId) return;
       void recordConfirmedTravel(current.mapId).catch(() => {
         notice.value = {
-          message: "Travel succeeded, but Recent could not be updated.",
+          message: "Travel succeeded, but gwonmac could not confirm whether Recent was updated.",
           level: "warning",
         };
       });

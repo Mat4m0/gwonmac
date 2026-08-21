@@ -13,6 +13,7 @@ import { rm, stat, writeFile } from "node:fs/promises";
 import type {
   AppSettings,
   AppSettingsPatch,
+  RendererSettingsPatch,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { logEvent } from "./diagnostics.js";
@@ -72,7 +73,7 @@ function requestRelaunch(win: BrowserWindow, action: RelaunchAction): void {
 
 export async function applySettingsChange(
   win: BrowserWindow,
-  patch: AppSettingsPatch,
+  patch: RendererSettingsPatch,
   toolsEnabledAtLaunch: boolean,
   read: () => Promise<AppSettings>,
   write: (patch: AppSettingsPatch) => Promise<AppSettings>,

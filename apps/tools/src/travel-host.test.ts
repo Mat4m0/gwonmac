@@ -1,44 +1,53 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  DEFAULT_SETTINGS,
-  type AppSettings,
   type GwNativeApi,
 } from "../../../src/shared/contracts";
 import {
-  DEFAULT_TRAVEL_PREFERENCES,
-  applyTravelPreferencesPatch,
   recordRecentTravel,
-  type TravelPreferencesDocument,
 } from "../../../src/shared/travel-preferences";
 import type { TravelCommand } from "../../../src/shared/travel-command";
 import { DEFAULT_TRAVEL_SHORTCUTS, replaceTravelShortcut } from "../../../src/shared/travel";
-import { createNativeTravelHost } from "./travel-host";
+import {
+  createNativeTravelHost,
+  type TravelHost,
+  type TravelPreferences,
+} from "./travel-host";
 
-function fixture(recentLimit: 0 | 3 | 5 | 10 = 5) {
-  let settings: AppSettings = DEFAULT_SETTINGS;
-  let travel: TravelPreferencesDocument = Object.freeze({
-    ...DEFAULT_TRAVEL_PREFERENCES,
+function fixture(recentLimit: 0 | 3 | 5 | 10 = 5, refuseRecord = false) {
+  let travel: TravelPreferences = Object.freeze({
+    shortcuts: DEFAULT_TRAVEL_SHORTCUTS,
+    synonyms: Object.freeze([]),
     recentLimit,
     recentMapIds: recentLimit === 0 ? Object.freeze([]) : Object.freeze([55]),
   });
-  const setSettings = vi.fn(async (patch: Partial<AppSettings>) => {
-    settings = { ...settings, ...patch };
-    return settings;
-  });
-  const setTravel = vi.fn(async (patch: Parameters<typeof applyTravelPreferencesPatch>[1]) => {
-    travel = applyTravelPreferencesPatch(travel, patch);
+  const save = (patch: Parameters<TravelHost["savePreferences"]>[0]) => {
+    const nextLimit = patch.recentLimit ?? travel.recentLimit;
+    travel = Object.freeze({
+      shortcuts: patch.shortcuts ?? travel.shortcuts,
+      synonyms: patch.synonyms ?? travel.synonyms,
+      recentLimit: nextLimit,
+      recentMapIds: nextLimit === 0
+        ? Object.freeze([])
+        : patch.recentMapIds ?? travel.recentMapIds,
+    });
     return travel;
+  };
+  const setTravel = vi.fn(async ({ expected, patch }: Parameters<
+    GwNativeApi["travelPreferences"]["set"]
+  >[0]) => {
+    expect(expected).toEqual(travel);
+    return save(patch);
   });
   const recordConfirmed = vi.fn(async (mapId: number) => {
+    if (refuseRecord) throw new Error("injected unconfirmed Recent write");
     if (travel.recentLimit !== 0) {
-      travel = applyTravelPreferencesPatch(travel, {
+      travel = save({
         recentMapIds: recordRecentTravel(travel.recentMapIds, mapId),
       });
     }
     return travel;
   });
   const api = {
-    settings: { async get() { return settings; }, set: setSettings },
     travelPreferences: {
       async get() { return travel; },
       set: setTravel,
@@ -46,24 +55,21 @@ function fixture(recentLimit: 0 | 3 | 5 | 10 = 5) {
     },
   } as unknown as GwNativeApi;
   const command: TravelCommand = { travel: vi.fn(), unavailable: () => null };
-  return { host: createNativeTravelHost(api, command), setSettings, recordConfirmed };
+  return { host: createNativeTravelHost(api, command), setTravel, recordConfirmed };
 }
 
 afterEach(() => vi.useRealTimers());
 
 describe("native Travel host", () => {
-  it("keeps shortcut storage Stable-readable and delegates recents to one atomic call", async () => {
-    const { host, setSettings, recordConfirmed } = fixture();
+  it("delegates shortcut and Recent mutations to Main", async () => {
+    const { host, setTravel, recordConfirmed } = fixture();
+    await host.loadPreferences();
     const edited = replaceTravelShortcut(DEFAULT_TRAVEL_SHORTCUTS, 8, { mapId: 642 });
 
     await host.savePreferences({ shortcuts: edited });
     await host.recordConfirmedTravel(449);
 
-    expect(setSettings.mock.calls[0]?.[0].travelShortcuts?.[8]).toEqual({
-      mapId: 642,
-      district: "international",
-      districtNumber: 0,
-    });
+    expect(setTravel.mock.calls[0]?.[0].patch.shortcuts?.[8]).toEqual({ mapId: 642 });
     expect(recordConfirmed).toHaveBeenCalledExactlyOnceWith(449);
   });
 
@@ -87,6 +93,18 @@ describe("native Travel host", () => {
 
     expect(host.attempt.value).toEqual({ status: "idle" });
     expect(recordConfirmed).toHaveBeenCalledExactlyOnceWith(449);
+  });
+
+  it("does not claim Recent stayed unchanged when Main cannot confirm it", async () => {
+    vi.useFakeTimers();
+    const { host } = fixture(5, true);
+
+    await host.travel({ mapId: 449 });
+    host.updateGameState({ status: "waiting", reason: "loading" });
+    host.updateGameState({ status: "ready", mapId: 449 });
+    await vi.runAllTimersAsync();
+
+    expect(host.notice.value?.message).toContain("could not confirm whether Recent was updated");
   });
 
   it("always releases a loading attempt after interruption or its arrival deadline", async () => {

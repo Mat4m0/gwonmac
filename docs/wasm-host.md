@@ -250,6 +250,13 @@ Stable builds neither parse nor rewrite. Main serializes Clear Recent and
 arrival recording under one lock, so an older read cannot resurrect cleared
 history.
 
+Main exposes one composed Travel preference snapshot to every renderer. A save
+includes the snapshot the renderer edited. Main refuses the save if another
+window changed either durable owner first. One accepted save can change
+shortcut slots or the Travel-owned document, never both. Main also serializes
+ordinary `settings.json` writes with Travel writes, so a settings change cannot
+replace a concurrent shortcut change.
+
 Team Apply requires enabled Tools and Apply teams in Guild Wars, a proved Team
 Apply capability, a positively classified PvE outpost, fresh party state, and
 an explicit player action.
