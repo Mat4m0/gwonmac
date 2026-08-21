@@ -1,7 +1,22 @@
+import { icons as lucideCollection } from "@iconify-json/lucide";
+import { useNuxt } from "nuxt/kit";
 import site from "./site.json" with { type: "json" };
 
 export default defineNuxtConfig({
   extends: ["@lupinum/ginko-docs"],
+  hooks: {
+    "modules:before"() {
+      const nuxt = useNuxt();
+      const collections: Array<{ prefix?: string }> =
+        nuxt.options.icon.customCollections ?? [];
+      // Ginko 0.2.3 snapshots a pruned Lucide collection before it discovers
+      // consumer icons. Replace that collection before Nuxt installs modules.
+      nuxt.options.icon.customCollections = [
+        lucideCollection,
+        ...collections.filter((collection) => collection.prefix !== "lucide"),
+      ];
+    },
+  },
   site: { url: site.url },
   app: {
     head: {
