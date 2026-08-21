@@ -6,6 +6,7 @@ export default defineConfig({
   globalSetup: "./global-setup.ts",
   timeout: 30_000,
   workers: 1,
+  ...(process.env.CI ? { maxFailures: 1 } : {}),
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   failOnFlakyTests: !!process.env.CI,
