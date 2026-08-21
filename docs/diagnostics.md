@@ -231,7 +231,7 @@ Use the fastest level that executes the invariant.
 | Current ArenaNet client playability and certified Core behavior | Opt-in live canary | Release canary with a real account |
 | Performance improvement | Repeated clean Level 1 comparison | Level 2 attribution before the change |
 
-Do not put signed, live-account, or production-updater checks in `pnpm check`.
+Do not put signed, live-account, or production-updater checks in `pnpm run check`.
 They are release or patch-day gates because local fixtures cannot prove those
 external boundaries.
 

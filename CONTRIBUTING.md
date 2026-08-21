@@ -80,10 +80,10 @@ Start with the smallest relevant proof:
 | Website behavior | Run `pnpm test:website`. |
 | Markdown | Run `pnpm check:links`. |
 
-Use `pnpm check` while you work:
+Use `pnpm run check` while you work:
 
 ```bash
-pnpm check
+pnpm run check
 ```
 
 Run the complete local gate before you open the pull request:
