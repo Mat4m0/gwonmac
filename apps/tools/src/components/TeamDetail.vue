@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { HEROES_IN_PANEL_ORDER, PROFESSIONS, heroLabel } from "../../../../src/shared/builds/heroes";
+import { HEROES_IN_PANEL_ORDER } from "../../../../src/shared/builds/heroes";
 import {
   buildById,
   buildId,
@@ -10,17 +10,14 @@ import {
   type TeamSlot,
 } from "../../../../src/shared/builds/library";
 import type { LibraryController } from "../use-library";
-import {
-  preflightTeamApply,
-  resolveTeamApplyPlan,
-  teamApplyProblemMessage,
-  type TeamApplyProblem,
-  type TeamApplyRuntimeProblem,
-} from "../../../../src/shared/builds/team-apply";
 import { teamMemberLabel, type Team } from "../model";
 import SkillBar from "./SkillBar.vue";
 import TagEditor from "./TagEditor.vue";
 import { useTeamRoster } from "../use-team-roster";
+import {
+  useTeamApplyAssessment,
+  type TeamApplyIssue,
+} from "../use-team-apply-assessment";
 
 const props = defineProps<{
   team: Team;
@@ -159,241 +156,15 @@ const currentApplyStatus = computed(() =>
     ? props.controller.applyStatus.value
     : null,
 );
-interface ApplyIssue {
-  readonly id: string;
-  readonly message: string;
-  readonly guidance: string | null;
-  readonly slots: readonly number[];
-  readonly control: "build" | "hero" | "behaviour" | null;
-}
-
-const issueSummary = (issues: readonly ApplyIssue[]) => issues.length === 1
-  ? issues[0]!.message
-  : `${issues.length} issues need attention before applying.`;
-
-const storedProblemSlots = (problem: TeamApplyProblem): readonly number[] => {
-  if (problem.rule === "player-slot") return [0];
-  if ("slot" in problem) {
-    if (problem.rule !== "duplicate-hero") return [problem.slot];
-    const hero = props.team.slots[problem.slot]?.hero;
-    const first = props.team.slots.findIndex((slot) => slot.hero === hero);
-    return first >= 0 && first !== problem.slot ? [first, problem.slot] : [problem.slot];
-  }
-  return [];
-};
-
-const storedProblemMessage = (problem: TeamApplyProblem): string => {
-  switch (problem.rule) {
-    case "player-slot": return "The player slot contains hero-only settings.";
-    case "missing-hero": return `Choose a hero for slot ${problem.slot + 1}.`;
-    case "missing-behaviour": return `Choose a behavior for slot ${problem.slot + 1}.`;
-    case "unknown-hero": return `Slot ${problem.slot + 1} names an unknown hero.`;
-    case "duplicate-hero": return `The same hero is assigned more than once.`;
-    case "party-gap": return "Move configured heroes above empty party slots.";
-    case "invalid-build": return `Slot ${problem.slot + 1} has an invalid build.`;
-  }
-};
-
-const runtimeProblemSlots = (problem: TeamApplyRuntimeProblem): readonly number[] => {
-  if (!("hero" in problem)) return [];
-  if (problem.hero === null) return [0];
-  const slot = props.team.slots.findIndex((candidate) => candidate.hero === problem.hero);
-  return slot < 0 ? [] : [slot];
-};
-
-const runtimeProblemGuidance = (problem: TeamApplyRuntimeProblem): string | null => {
-  switch (problem.rule) {
-    case "party-unavailable": return "Enter the game on a character and wait for party observation.";
-    case "pvp": return "Travel to a PvE outpost. Your saved builds and teams remain available.";
-    case "region-unknown": return "Wait for the region check, or travel to a PvE outpost.";
-    case "not-outpost": return "Travel to any PvE outpost before applying.";
-    case "outpost-unknown": return "Wait for the outpost check to finish.";
-    case "partial-roster": return "Wait until every party member is visible to GWonMac.";
-    case "mode-unobserved": return "Wait for Normal or Hard Mode to be observed.";
-    case "player-unobserved": return "Wait for your character to finish loading.";
-    case "professions-unobserved": return "Wait for profession observation, then try again.";
-    case "primary-mismatch": return "Choose a build with the observed primary profession.";
-    case "hero-locked": return "Choose an unlocked hero or unlock this hero in Guild Wars.";
-    case "hero-availability-unknown": return "Add this hero in the Guild Wars party window first.";
-    case "skill-locked": return "Choose an unlocked skill, or unlock it in Guild Wars before applying.";
-  }
-};
-
-const runtimeProblemMessage = (problem: TeamApplyRuntimeProblem): string => {
-  if (problem.rule !== "skill-locked") return teamApplyProblemMessage(problem);
-  const owner = problem.hero === null
-    ? "Your assigned build"
-    : `${heroLabel(problem.hero)}'s assigned build`;
-  const names = problem.skills.map((skill) => props.controller.skills.get(skill).name);
-  return `${owner} uses ${names.join(", ")}, which ${names.length === 1 ? "is" : "are"} not unlocked.`;
-};
-
-const storedProblemGuidance = (problem: TeamApplyProblem): string | null => {
-  switch (problem.rule) {
-    case "player-slot": return "Clear the hero-only settings from the player slot.";
-    case "missing-hero": return "Choose a hero or clear the build from this slot.";
-    case "missing-behaviour": return "Choose Fight, Guard, or Avoid.";
-    case "unknown-hero": return "Replace the unknown hero in this slot.";
-    case "duplicate-hero": return "Choose a different hero for one of these slots.";
-    case "party-gap": return "Move this hero above the first empty hero slot.";
-    case "invalid-build": return "Open the build to repair it, or choose another build.";
-  }
-};
-
-const storedProblemControl = (
-  problem: TeamApplyProblem,
-): ApplyIssue["control"] => {
-  switch (problem.rule) {
-    case "missing-hero":
-    case "unknown-hero":
-    case "duplicate-hero":
-    case "party-gap": return "hero";
-    case "missing-behaviour": return "behaviour";
-    case "player-slot":
-    case "invalid-build": return "build";
-  }
-};
-
-const runtimeProblemControl = (
-  problem: TeamApplyRuntimeProblem,
-): ApplyIssue["control"] => {
-  switch (problem.rule) {
-    case "primary-mismatch":
-    case "professions-unobserved": return "build";
-    case "hero-locked":
-    case "hero-availability-unknown": return "hero";
-    default: return null;
-  }
-};
-
-const applyAssessment = computed(() => {
-  const issues: ApplyIssue[] = [];
-  if (props.controller.applyUnavailable) {
-    issues.push({
-      id: "command-gateway",
-      message: props.controller.applyUnavailable,
-      guidance: null,
-      slots: [],
-      control: null,
-    });
-  }
-  const library = props.controller.library.value;
-  if (!library) {
-    issues.push({
-      id: "library-loading",
-      message: "The build library is still loading.",
-      guidance: "Wait for loading to finish before applying.",
-      slots: [],
-      control: null,
-    });
-    return { blocked: true, issues, message: "Waiting for the build library.", changes: [] };
-  }
-  const resolution = resolveTeamApplyPlan(props.team, library, props.controller.validate);
-  if (!resolution.valid) {
-    resolution.problems.forEach((problem, index) => issues.push({
-      id: `stored-${problem.rule}-${"slot" in problem ? problem.slot : index}`,
-      message: storedProblemMessage(problem),
-      guidance: storedProblemGuidance(problem),
-      slots: storedProblemSlots(problem),
-      control: storedProblemControl(problem),
-    }));
-    return {
-      blocked: true,
-      issues,
-      message: issueSummary(issues),
-      changes: [],
-    };
-  }
-  const result = preflightTeamApply(resolution.plan, props.controller.party.value);
-  if (!result.ready) {
-    result.blockers.forEach((problem, index) => issues.push({
-      id: `runtime-${problem.rule}-${"hero" in problem ? problem.hero ?? "player" : index}`,
-      message: runtimeProblemMessage(problem),
-      guidance: runtimeProblemGuidance(problem),
-      slots: runtimeProblemSlots(problem),
-      control: runtimeProblemControl(problem),
-    }));
-  }
-  if (configured.value === 0) {
-    issues.push({
-      id: "empty-team",
-      message: "This team has no configured builds or heroes.",
-      guidance: "Add a player build or at least one hero before applying.",
-      slots: [],
-      control: null,
-    });
-  }
-  if (issues.length > 0) {
-    return {
-      blocked: true,
-      issues,
-      message: issueSummary(issues),
-      changes: [],
-    };
-  }
-  if (!result.ready) throw new Error("Apply assessment lost its blockers.");
-  const changes: string[] = [];
-  const count = (kind: typeof result.changes[number]["kind"]) =>
-    result.changes.filter((change) => change.kind === kind).length;
-  if (count("mode")) changes.push(`set ${props.team.mode === "hard" ? "Hard" : "Normal"} Mode`);
-  const removing = count("remove-hero");
-  const adding = count("add-hero");
-  const rebuilding = count("rebuild-roster");
-  const builds = count("player-build") + count("hero-build");
-  const behaviours = count("behaviour");
-  if (removing) changes.push(`remove ${removing} ${removing === 1 ? "hero" : "heroes"}`);
-  if (adding) changes.push(`add ${adding} ${adding === 1 ? "hero" : "heroes"}`);
-  if (rebuilding) changes.push("rebuild heroes in this order");
-  if (builds) changes.push(`update ${builds} ${builds === 1 ? "build" : "builds"}`);
-  if (behaviours) changes.push(`update ${behaviours} ${behaviours === 1 ? "behavior" : "behaviors"}`);
-  return {
-    blocked: false,
-    issues,
-    changes: result.changes,
-    message: changes.length
-      ? `Preview: ${changes.join(" · ")}.`
-      : "Team already matches the party in Guild Wars.",
-  };
-});
-
-const issuesForSlot = (index: number) =>
-  applyAssessment.value.issues.filter((issue) => issue.slots.includes(index));
-
-const reciprocalSwap = computed(() => {
-  const library = props.controller.library.value;
-  if (!library) return null;
-  const mismatches = applyAssessment.value.issues.flatMap((issue) => {
-    if (!issue.id.startsWith("runtime-primary-mismatch-") || issue.slots.length !== 1) return [];
-    const slot = issue.slots[0]!;
-    const buildReference = props.team.slots[slot]?.build;
-    const build = buildReference === null || buildReference === undefined
-      ? null
-      : buildById(library, buildReference);
-    return build ? [{ slot, build, buildReference }] : [];
-  });
-  for (const left of mismatches) {
-    for (const right of mismatches) {
-      if (left.slot >= right.slot) continue;
-      const leftObserved = left.slot === 0
-        ? props.controller.party.value.player?.professions?.[0]
-        : props.controller.party.value.heroes.find(
-            (hero) => hero.hero === props.team.slots[left.slot]?.hero,
-          )?.professions?.[0];
-      const rightObserved = right.slot === 0
-        ? props.controller.party.value.player?.professions?.[0]
-        : props.controller.party.value.heroes.find(
-            (hero) => hero.hero === props.team.slots[right.slot]?.hero,
-          )?.professions?.[0];
-      if (
-        leftObserved === right.build.professions[0]
-        && rightObserved === left.build.professions[0]
-      ) {
-        return { left: left.slot, right: right.slot };
-      }
-    }
-  }
-  return null;
-});
+const {
+  assessment: applyAssessment,
+  assignmentValid,
+  buildOptionGroups,
+  hasPartyGap,
+  issuesForSlot,
+  noChanges: noApplyChanges,
+  reciprocalSwap,
+} = useTeamApplyAssessment(() => props.team, props.controller);
 
 const swapReciprocalBuilds = async () => {
   const pair = reciprocalSwap.value;
@@ -414,83 +185,11 @@ const swapReciprocalBuilds = async () => {
   );
 };
 
-const focusIssue = (issue: ApplyIssue) => {
+const focusIssue = (issue: TeamApplyIssue) => {
   const slot = issue.slots[0];
   if (slot === undefined || issue.control === null) return;
   document.getElementById(`team-${issue.control}-${slot}`)?.focus();
 };
-
-const assignmentValid = (slot: TeamSlot, index: number): boolean => {
-  if (slot.build === null || !props.controller.library.value) return true;
-  const build = buildById(props.controller.library.value, slot.build);
-  return build
-    ? props.controller.validate(build, index === 0 ? "player" : "hero").valid
-    : false;
-};
-
-const observedPrimary = (index: number) => {
-  if (index === 0) return props.controller.party.value.player?.professions?.[0] ?? null;
-  const hero = props.team.slots[index]?.hero;
-  if (hero === null || hero === undefined) return null;
-  return props.controller.party.value.heroes.find((candidate) => candidate.hero === hero)
-    ?.professions?.[0]
-    ?? props.controller.party.value.accountHeroes?.get(hero)?.professions?.[0]
-    ?? null;
-};
-
-interface BuildOption {
-  readonly build: NonNullable<ReturnType<typeof buildById>>;
-  readonly disabled: boolean;
-  readonly reason: string | null;
-}
-
-interface BuildOptionGroup {
-  readonly label: string;
-  readonly options: readonly BuildOption[];
-}
-
-const buildOptionGroups = (index: number): BuildOptionGroup[] => {
-  const builds = props.controller.library.value?.builds ?? [];
-  const primary = observedPrimary(index);
-  const context = index === 0 ? "player" : "hero";
-  const options = builds.map((build): BuildOption & { category: string } => {
-    const valid = props.controller.validate(build, context).valid;
-    const primaryMismatch = primary !== null && build.professions[0] !== primary;
-    if (!valid) {
-      return {
-        build,
-        category: "unavailable",
-        disabled: true,
-        reason: index === 0 ? "build needs repair" : "not valid for heroes",
-      };
-    }
-    if (primaryMismatch && index > 0) {
-      return {
-        build,
-        category: "unavailable",
-        disabled: true,
-        reason: `requires ${PROFESSIONS[primary].name} primary`,
-      };
-    }
-    if (primaryMismatch) {
-      return { build, category: "other-player", disabled: false, reason: null };
-    }
-    return { build, category: "compatible", disabled: false, reason: null };
-  });
-  const groups = [
-    { label: primary === null ? "Available builds" : "Compatible builds", category: "compatible" },
-    { label: "Other player professions", category: "other-player" },
-    { label: "Cannot be used here", category: "unavailable" },
-  ];
-  return groups.flatMap(({ label, category }) => {
-    const matching = options.filter((option) => option.category === category);
-    return matching.length > 0 ? [{ label, options: matching }] : [];
-  });
-};
-
-const hasPartyGap = computed(() =>
-  applyAssessment.value.issues.some((issue) => issue.id.startsWith("stored-party-gap-")),
-);
 
 const sharedBuildCount = computed(() => {
   const ids = new Set(props.team.slots.flatMap((slot) => slot.build === null ? [] : [slot.build]));
@@ -498,10 +197,6 @@ const sharedBuildCount = computed(() => {
     props.controller.usage(id).some((team) => team.id !== props.team.id)
   ).length;
 });
-
-const noApplyChanges = computed(() =>
-  !applyAssessment.value.blocked && applyAssessment.value.changes.length === 0
-);
 
 const rename = async () => {
   if (!name.value.trim() || name.value.trim() === props.team.name) return;
