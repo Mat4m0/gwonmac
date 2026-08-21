@@ -2,8 +2,9 @@
  * Coordinates the certified companion installation for one renderer.
  * Verification, allocation, observation, and cleanup stay in the private installer.
  */
-import type {
-  EnhancementProgram,
+import {
+  ENHANCEMENT_CAPABILITY_FIELDS,
+  type EnhancementProgram,
 } from "../shared/enhancement-contracts.js";
 import type { EnhancementRuntimeFeature } from "../shared/contracts.js";
 import { installCertifiedCompanion } from "./certified-companion-installation.js";
@@ -25,15 +26,9 @@ export async function installEnhancements(
 ) {
   const capabilities = effectiveCapabilities(await window.gwNative.client.session());
   if (capabilities === null) return null;
-  const features = [
-    capabilities.nativeCursor ? "nativeCursor" as const : null,
-    capabilities.targetObservation ? "targetObservation" as const : null,
-    capabilities.partyObservation ? "partyObservation" as const : null,
-    capabilities.teamApply ? "teamApply" as const : null,
-    capabilities.travelAction ? "travelAction" as const : null,
-    capabilities.xunlaiAction ? "xunlaiAction" as const : null,
-    capabilities.chatAliases ? "chatAliases" as const : null,
-  ].filter((feature): feature is NonNullable<typeof feature> => feature !== null);
+  const features = ENHANCEMENT_CAPABILITY_FIELDS.filter(
+    (feature) => capabilities[feature],
+  );
   try {
     const installation = await installCertifiedCompanion(
       instance,

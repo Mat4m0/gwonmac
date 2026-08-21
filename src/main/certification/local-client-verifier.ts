@@ -20,6 +20,7 @@ import { createHash } from "node:crypto";
 import {
   enhancementCapabilityProfile,
   enhancementCapabilitiesRequested,
+  ENHANCEMENT_CAPABILITY_PRESETS,
   intersectEnhancementCapabilities,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
@@ -53,7 +54,6 @@ import {
   type PostTemplateSaveModule,
 } from "./template-save-verifier.js";
 import {
-  ALL_LOCAL_ENHANCEMENT_CAPABILITIES,
   localFeatureVerdictsForBuild,
   type EnhancementVerificationReason,
   type LocalClientFeature,
@@ -66,7 +66,6 @@ import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
 
 export { isLocalClientVerification } from "./local-client-verification-boundary.js";
 export {
-  LOCAL_CLIENT_FEATURES,
   LOCAL_FEATURE_INVARIANTS,
   LOCAL_VERIFICATION_REASONS,
   localFeatureVerdictsForBuild,
@@ -695,7 +694,7 @@ function deriveEnhancementBuild(
  */
 export function verifyLocalClientBytes(
   official: Uint8Array,
-  requestedCapabilities: EnhancementCapabilities = ALL_LOCAL_ENHANCEMENT_CAPABILITIES,
+  requestedCapabilities: EnhancementCapabilities = ENHANCEMENT_CAPABILITY_PRESETS.all,
 ): LocalClientVerification {
   const officialSha256 = sha256(official);
   const base = Object.freeze({

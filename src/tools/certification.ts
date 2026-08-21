@@ -42,7 +42,6 @@ import {
 import { preparePostTemplateSaveModule } from "../main/certification/template-save-verifier.js";
 import {
   isLocalClientVerification,
-  LOCAL_CLIENT_FEATURES,
   verifyLocalClientBytes,
 } from "../main/certification/local-client-verifier.js";
 import {
@@ -51,6 +50,7 @@ import {
 } from "../main/certification/template-save-compat.js";
 import {
   ENHANCEMENT_CAPABILITY_PRESETS,
+  ENHANCEMENT_CAPABILITY_FIELDS,
   ENHANCEMENT_TRANSFORM_ABI,
   enhancementCapabilitiesForProfile,
 } from "../shared/enhancement-contracts.js";
@@ -149,7 +149,7 @@ async function verify(argv: readonly string[]): Promise<void> {
     : null;
   const features = result.featureVerdicts === null
     ? null
-    : Object.fromEntries(LOCAL_CLIENT_FEATURES.map((feature) => {
+    : Object.fromEntries(ENHANCEMENT_CAPABILITY_FIELDS.map((feature) => {
         const verdict = result.featureVerdicts[feature];
         return [feature, verdict.status === "ambiguous"
           ? {
