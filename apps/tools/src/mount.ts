@@ -5,24 +5,9 @@ import {
   type ToolboxObservation,
 } from "../../../src/shared/builds/live-party";
 import type { ToolsHost } from "./host";
+import type { ToolsAppHandle } from "../../../src/shared/tools-bundle-contracts";
 import { devTrace } from "./dev-trace";
 import "./styles.css";
-
-export type ToolsAppHandle = Readonly<{
-  show(): void;
-  hide(): void;
-  toggle(): void;
-  requestClose(): void;
-  /**
-   * The companion's latest projection of the running game, from the overlay.
-   *
-   * The raw observation crosses the boundary and is read into the domain here,
-   * because this bundle is where the domain lives. The renderer side stays a
-   * courier that never learns what a hero is.
-   */
-  update(observation: ToolboxObservation): void;
-  dispose(): void;
-}>;
 
 export function mountToolsApp(
   target: HTMLElement,
