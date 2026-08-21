@@ -6,7 +6,7 @@ name: ArenaNet client recertification
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -97,6 +97,32 @@ jobs:
         id: official
         run: pnpm client:official --download "$RUNNER_TEMP/official"
 
+      # This adversarial suite mutates the exact downloaded WASM to prove the
+      # structural checks still reject plausible near-misses. It is an
+      # additional fail-closed qualification gate, not launch authority: only
+      # the production runtime verifier below can prove a protected feature.
+      - name: Qualify the exact published client artifact
+        id: qualification
+        continue-on-error: true
+        env:
+          GW_CLIENT_WASM: ${{ steps.official.outputs.wasm }}
+        run: |
+          mkdir -p "$EVIDENCE"
+          set +e
+          pnpm test:client-artifact > "$EVIDENCE/client-artifact.txt" 2>&1
+          qualification_exit=$?
+          set -e
+          if [ "$qualification_exit" -eq 0 ]; then
+            qualification_status=proved
+          else
+            qualification_status=refused
+          fi
+          jq -n --arg status "$qualification_status" \
+            --argjson exitCode "$qualification_exit" \
+            '{status: $status, exitCode: $exitCode}' \
+            > "$EVIDENCE/client-artifact.json"
+          exit "$qualification_exit"
+
       # Both commands inspect the same original bytes. Neither writes source.
       # `recertify` composes template preparation and Enhancement analysis in
       # one process, so an Enhancement verdict cannot outlive a refused
@@ -104,6 +130,7 @@ jobs:
       - name: Verify what the published build proves
         id: derive
         env:
+          QUALIFICATION_OUTCOME: ${{ steps.qualification.outcome }}
           WASM: ${{ steps.official.outputs.wasm }}
         run: |
           mkdir -p "$EVIDENCE"
@@ -116,10 +143,13 @@ jobs:
             > "$EVIDENCE/runtime-verdicts.json" 2> "$EVIDENCE/runtime-verdicts.txt"
           set -e
           build="$(jq -er '.sha256' "$EVIDENCE/template-save.json")"
-          if jq -e '.templateSaving and (.features != null) and (.features | to_entries | all(.value.status == "proved"))' \
+          if [ "$QUALIFICATION_OUTCOME" != "success" ]; then
+            outcome=investigation
+            summary="the real-client qualification suite refused the exact downloaded artifact"
+          elif jq -e '.templateSaving and (.features != null) and (.features | to_entries | all(.value.status == "proved"))' \
             "$EVIDENCE/runtime-verdicts.json" >/dev/null; then
             outcome=ready
-            summary="the runtime semantic verifier proved every protected feature"
+            summary="the runtime semantic verifier proved every protected feature and exact-artifact qualification passed"
           else
             outcome=investigation
             summary="$(jq -cr '{templateSaving, verifierAbi, features, reasons}' \
@@ -218,8 +248,9 @@ jobs:
             --description "An ArenaNet client generation proved by the runtime verifier"
           {
             printf 'Published client generation `%s`, WASM `%s`.\n\n' "$short" "$BUILD"
-            printf '%s\n' '- outcome: every protected feature proved independently'
+            printf '%s\n' '- outcome: every protected feature proved independently and exact-artifact qualification passed'
             printf '%s\n' '- authority: evidence only; the shipped runtime verifier remains sole launch authority'
+            printf '%s\n' '- qualification evidence: `client-artifact.json` and `client-artifact.txt` in that run artifact'
             printf '%s\n' "- signed report: $RUN_URL"
             echo
             printf '%s\n' '```json'
@@ -256,6 +287,7 @@ jobs:
             printf '%s\n' "- outcome: $SUMMARY"
             printf '%s\n' '- source branch: none; this workflow cannot grant capabilities'
             printf '%s\n' "- evidence: $RUN_URL"
+            printf '%s\n' '- exact-artifact qualification: `client-artifact.json` and `client-artifact.txt` in that run artifact'
             printf '%s\n' '- semantic verdicts: `runtime-verdicts.json` in that run artifact'
             echo
             cat evidence/carry-forward.md
