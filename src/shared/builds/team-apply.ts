@@ -14,13 +14,14 @@
  * here rather than sentences: the renderer writes the sentence, this decides
  * the fact.
  */
-import { HERO_BY_ID, heroLabel } from "./heroes.js";
+import { HERO_BY_ID } from "./heroes.js";
 import {
   buildById,
   type Build,
   type BuildLibrary,
   type HeroBehaviour,
   type HeroId,
+  type Profession,
   type SkillId,
   type Team,
   type TeamMode,
@@ -70,8 +71,8 @@ export type TeamApplyRuntimeProblem =
   | {
       readonly rule: "primary-mismatch";
       readonly hero: HeroId | null;
-      readonly observed: string;
-      readonly wanted: string;
+      readonly observed: Profession;
+      readonly wanted: Profession;
     }
   | { readonly rule: "hero-locked"; readonly hero: HeroId }
   | { readonly rule: "hero-availability-unknown"; readonly hero: HeroId }
@@ -383,33 +384,4 @@ export function preflightTeamApply(
   return first
     ? { ready: false, blockers: [first, ...rest] }
     : { ready: true, changes: Object.freeze(changes) };
-}
-
-export function teamApplyProblemMessage(problem: TeamApplyRuntimeProblem): string {
-  switch (problem.rule) {
-    case "party-unavailable": return "Waiting for a playable character and party observation.";
-    case "pvp": return "Apply team is unavailable in PvP and guild halls.";
-    case "region-unknown": return "Apply team is unavailable until GWonMac identifies the current region.";
-    case "not-outpost": return "Enter a PvE outpost to apply this team.";
-    case "outpost-unknown": return "Waiting to confirm that this is a PvE outpost.";
-    case "partial-roster": return "Waiting until the complete party roster is observed.";
-    case "mode-unobserved": return "Waiting for the current Normal or Hard Mode observation.";
-    case "player-unobserved": return "Your own character has not been observed yet.";
-    case "professions-unobserved": return problem.hero === null
-      ? "Your professions have not been observed yet."
-      : `${heroLabel(problem.hero)}'s professions have not been observed yet.`;
-    case "primary-mismatch": return `${problem.hero === null ? "Your" : `${heroLabel(problem.hero)}'s`} `
-      + `assigned build is for ${problem.wanted}, but the observed primary is ${problem.observed}.`;
-    case "hero-locked": return `${heroLabel(problem.hero)} is not unlocked on this account.`;
-    case "hero-availability-unknown": return `${heroLabel(problem.hero)} could not be verified on this account. Add the hero manually first.`;
-    case "skill-locked": {
-      const owner = problem.hero === null
-        ? "Your assigned build"
-        : `${heroLabel(problem.hero)}'s assigned build`;
-      const skills = problem.skills.length === 1
-        ? `skill ${problem.skills[0]}`
-        : `skills ${problem.skills.join(", ")}`;
-      return `${owner} uses ${skills}, which ${problem.skills.length === 1 ? "is" : "are"} not unlocked.`;
-    }
-  }
 }

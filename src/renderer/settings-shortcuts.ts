@@ -26,6 +26,7 @@ export function bindShortcutSettings(options: Readonly<{
   restore: HTMLElement;
   settings: () => AppSettings | null;
   persist: (overrides: AppSettings['shortcutOverrides']) => Promise<unknown>;
+  recoverAfterPersistFailure: (message: string) => Promise<void>;
   feedback: (message: string, tone: FeedbackTone, resetAfter?: number) => void;
 }>): ShortcutSettingsBinder {
   let recording: ShortcutAction | null = null;
@@ -76,10 +77,11 @@ export function bindShortcutSettings(options: Readonly<{
       await options.persist(overrides);
       options.feedback('Shortcut saved.', 'success', 2200);
     } catch {
-      options.feedback(
-        'The shortcut could not be saved. Your previous shortcuts are still active; try again.',
-        'error',
+      await options.recoverAfterPersistFailure(
+        'Review the active shortcuts before trying again.',
       );
+      const current = options.settings();
+      if (current) await render(current);
     }
   }
 

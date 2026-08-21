@@ -287,6 +287,7 @@
       restore: byId('settings-shortcuts-restore'),
       settings: () => currentSettings,
       persist: (shortcutOverrides) => persistSettings({ shortcutOverrides }),
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
       feedback: setFeedback,
     }));
   const travelPreferenceSettings = import('./settings-travel-preferences.js')
@@ -322,6 +323,12 @@
       milestone: launcherMilestone,
       dialogOpen: () => dialog.open,
     }));
+
+  window.gwNative.settings.onChange((settings) => {
+    currentSettings = settings;
+    fillForm(settings);
+    window.gwApplySettings?.(settings);
+  });
 
   function requestUpdateCheck() {
     void updateAction?.check();
@@ -674,11 +681,6 @@
       currentSettings = outcome.settings;
       currentTravelPreferences = outcome.travelPreferences;
       fillForm(outcome.settings, outcome.travelPreferences);
-      if (outcome.travelPreferences === null) {
-        travelRecentLimit.selectedIndex = -1;
-        travelRecentLimit.disabled = true;
-        travelRecentsClear.disabled = true;
-      }
       window.gwApplySettings?.(outcome.settings);
       if (outcome.status === 'partial') {
         setFeedback(

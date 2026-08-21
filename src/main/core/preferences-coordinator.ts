@@ -56,9 +56,12 @@ function unconfirmedTravelWrite(cause: unknown): Error {
 async function saveSettingsAndReconcile(
   path: string,
   intended: AppSettings,
+  publish: (settings: AppSettings) => void,
 ): Promise<AppSettings> {
   try {
-    return await saveSettings(path, intended);
+    const saved = await saveSettings(path, intended);
+    publish(saved);
+    return saved;
   } catch (error) {
     if (!(error instanceof AtomicPublicationUnconfirmedError)) throw error;
     let active: AppSettings;
@@ -70,6 +73,7 @@ async function saveSettingsAndReconcile(
         { cause: reloadError },
       );
     }
+    publish(active);
     if (isDeepStrictEqual(active, intended)) return active;
     throw new Error(
       "Settings were published, but gwonmac found different active values; review them before retrying.",
@@ -84,13 +88,16 @@ export class PreferencesCoordinator {
   readonly #onTravelRecovered:
     | ((backupPath: string) => void | Promise<void>)
     | undefined;
+  readonly #publishSettings: (settings: AppSettings) => void;
 
   constructor(
     paths: () => PreferencesPaths,
     onTravelRecovered?: (backupPath: string) => void | Promise<void>,
+    publishSettings: (settings: AppSettings) => void = () => undefined,
   ) {
     this.#paths = paths;
     this.#onTravelRecovered = onTravelRecovered;
+    this.#publishSettings = publishSettings;
   }
 
   getSettings(): Promise<AppSettings> {
@@ -101,7 +108,11 @@ export class PreferencesCoordinator {
     return this.#lock.run(async () => {
       const path = this.#paths().settings;
       const current = await loadSettings(path);
-      return saveSettingsAndReconcile(path, { ...current, ...patch });
+      return saveSettingsAndReconcile(
+        path,
+        { ...current, ...patch },
+        this.#publishSettings,
+      );
     });
   }
 
@@ -111,6 +122,7 @@ export class PreferencesCoordinator {
       const settings = await saveSettingsAndReconcile(
         paths.settings,
         { ...DEFAULT_SETTINGS },
+        this.#publishSettings,
       );
       let currentTravel: TravelPreferencesDocument;
       try {
@@ -222,7 +234,7 @@ export class PreferencesCoordinator {
               update.patch.shortcuts,
               settings.travelShortcuts,
             ),
-          });
+          }, this.#publishSettings);
           return composeTravelPreferences(saved, travel);
         }
         const saved = await updateTravelPreferences(

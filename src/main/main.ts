@@ -10,6 +10,7 @@
 import {
   app,
   autoUpdater,
+  type BrowserWindow,
   dialog,
   Notification,
   powerMonitor,
@@ -21,6 +22,7 @@ import path from "node:path";
 import {
   EXTERNAL_URLS,
   IPC,
+  type AppSettings,
   type DownloadProgress,
   type PrefetchProgress,
   type UpdateTrack,
@@ -33,6 +35,7 @@ import { errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
+import { RendererClientSessions } from "./renderer-client-sessions.js";
 import { loadSettings } from "./core/settings.js";
 import { PreferencesCoordinator } from "./core/preferences-coordinator.js";
 import { SocketManager } from "./core/sockets.js";
@@ -85,7 +88,10 @@ import {
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
-import { releaseWindowShortcutKey } from './window-shortcuts.js';
+import {
+  releaseWindowShortcutKey,
+  updateWindowShortcuts,
+} from './window-shortcuts.js';
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
@@ -163,8 +169,11 @@ const HOST_VERSION = (() => {
 const preferences = new PreferencesCoordinator(
   () => gamePaths(),
   () => logEvent({ k: "travelPreferences.corruptRecovered" }),
+  publishSettings,
 );
 let appUpdaterController: AppUpdater | null = null;
+const rendererClientSessions = new RendererClientSessions<BrowserWindow>();
+const SINGLE_DIAGNOSTIC_OWNER_ID = 1;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
 let activeAccountMode: AccountMode = "single";
@@ -194,24 +203,46 @@ async function checkForAppUpdates(track?: UpdateTrack): Promise<void> {
 function buildSocketManager(): SocketManager {
   return new SocketManager(
     (ownerId, event) => {
+      const diagnosticOwnerId =
+        windowRegistry.diagnosticOwnerForWebContents(ownerId);
       if (event.type === "open") {
-        logEvent({ k: "socket.open", socketId: event.socketId, port: event.port });
+        if (diagnosticOwnerId !== null) logEvent(
+          { k: "socket.open", socketId: event.socketId, port: event.port },
+          diagnosticOwnerId,
+        );
       } else if (event.type === "close") {
-        logEvent({
+        if (diagnosticOwnerId !== null) logEvent({
           k: "socket.close",
           socketId: event.socketId,
           reason: event.reason,
-        });
+        }, diagnosticOwnerId);
       } else if (event.type === "error") {
-        logEvent({
+        if (diagnosticOwnerId !== null) logEvent({
           k: "socket.error",
           socketId: event.socketId,
           code: event.code,
-        });
+        }, diagnosticOwnerId);
       }
       emitSocketEvent(ownerId, event);
     },
-    { count, observe, gauge, peakGauge },
+    {
+      count: (name, delta, ownerId) => {
+        const diagnosticOwnerId = ownerId === undefined
+          ? null
+          : windowRegistry.diagnosticOwnerForWebContents(ownerId);
+        if (diagnosticOwnerId !== null) count(name, delta, diagnosticOwnerId);
+      },
+      observe: (name, durationUs, ownerId) => {
+        const diagnosticOwnerId = ownerId === undefined
+          ? null
+          : windowRegistry.diagnosticOwnerForWebContents(ownerId);
+        if (diagnosticOwnerId !== null) {
+          observe(name, durationUs, diagnosticOwnerId);
+        }
+      },
+      gauge,
+      peakGauge,
+    },
     // An unpackaged Electron test may replace the production destination
     // validator with one that admits exactly its loopback fixture. Production
     // still uses the public-ArenaNet allowlist and grants no such exception.
@@ -250,6 +281,14 @@ function sendToRenderer(channel: string, value: unknown): void {
       // Renderer teardown can race a native progress callback.
     }
   }
+}
+
+/** Publish the one durable Settings snapshot to every live game projection. */
+function publishSettings(settings: AppSettings): void {
+  for (const win of windowRegistry.gameWindows()) {
+    updateWindowShortcuts(win, settings.shortcutOverrides);
+  }
+  sendToRenderer(IPC.settingsEvent, settings);
 }
 
 function packagedDistributionChannel(): DistributionChannel | null {
@@ -584,6 +623,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   const protocolDeps = {
     getActiveClient: () => clientRuntime.active,
+    diagnosticOwnerId: () => SINGLE_DIAGNOSTIC_OWNER_ID,
   };
   if (activeAccountMode === "single") {
     installGwProtocolHandler(protocolDeps);
@@ -671,9 +711,24 @@ if (primaryInstance) void app.whenReady().then(async () => {
       updateRestartInFlight = operation;
       return operation;
     },
-    getClientSession: () => clientRuntime.session(HOST_VERSION),
-    recordClientFeatureFailure: (features) => {
-      clientRuntime.recordRendererFeatureFailure(features);
+    getClientSession: (win) => rendererClientSessions.session(
+      {
+        owner: win,
+        documentId: win.webContents.mainFrame.routingId,
+        generation: clientRuntime.active?.generation ?? 0,
+      },
+      clientRuntime.session(HOST_VERSION),
+    ),
+    recordClientFeatureFailure: (win, features) => {
+      rendererClientSessions.recordFailures(
+        {
+          owner: win,
+          documentId: win.webContents.mainFrame.routingId,
+          generation: clientRuntime.active?.generation ?? 0,
+        },
+        clientRuntime.session(HOST_VERSION),
+        features,
+      );
     },
     acquireSteamToken: (parent, record) =>
       acquireSteamToken(STEAM_OAUTH, { parent, record }),
@@ -727,7 +782,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   const win = activeAccountMode === "multi"
     ? createAccountsWindow(protocolDeps)
-    : createMainWindow(host, { context: { mode: "single", role: "game" } });
+    : createMainWindow(host, {
+        context: { mode: "single", role: "game" },
+        diagnosticOwnerId: SINGLE_DIAGNOSTIC_OWNER_ID,
+      });
   if (settings.autoCheckUpdates) {
     void checkForAppUpdates(settings.updateTrack);
   }
@@ -802,7 +860,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
     if (activeAccountMode === "multi") {
       if (!revealAccountsWindow()) createAccountsWindow(protocolDeps);
     } else if (!windowRegistry.singleGameWindow()) {
-      createMainWindow(host, { context: { mode: "single", role: "game" } });
+      createMainWindow(host, {
+        context: { mode: "single", role: "game" },
+        diagnosticOwnerId: SINGLE_DIAGNOSTIC_OWNER_ID,
+      });
     }
   });
   app.on("child-process-gone", (_event, details) => {

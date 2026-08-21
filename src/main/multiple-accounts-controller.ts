@@ -49,6 +49,7 @@ import {
   ProfileRuntimeStore,
 } from "./core/profile-runtime.js";
 import { SteamSessionStore } from "./core/steam-session.js";
+import { forgetRendererDiagnosticsOwner } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
 import {
   installGwProtocolHandlerForSession,
@@ -77,16 +78,34 @@ export interface MultipleAccountsControllerOptions {
 
 export class MultipleAccountsController {
   private readonly accountsLock = new Mutex();
+  private readonly launchLock = new Mutex();
   private readonly templatesLock = new Mutex();
   private readonly templateSessions = new AccountTemplateSessions<BrowserWindow>();
   private readonly credentialsStores = new Map<string, CredentialsStore>();
   private readonly steamSessionStores = new Map<string, SteamSessionStore>();
   private readonly profileProtocolSessions = new Set<ProfileId>();
+  private readonly diagnosticOwnerIds = new Map<ProfileId, number>();
   private readonly profileRuntime = new ProfileRuntimeStore();
+  private nextDiagnosticOwnerId = 2;
   private workspace: MultiWorkspace | null;
 
   constructor(private readonly options: MultipleAccountsControllerOptions) {
     this.workspace = options.workspace;
+  }
+
+  private diagnosticOwnerFor(profileId: ProfileId): number {
+    const existing = this.diagnosticOwnerIds.get(profileId);
+    if (existing !== undefined) return existing;
+    const created = this.nextDiagnosticOwnerId++;
+    this.diagnosticOwnerIds.set(profileId, created);
+    return created;
+  }
+
+  private forgetDiagnosticOwner(profileId: ProfileId): void {
+    const ownerId = this.diagnosticOwnerIds.get(profileId);
+    if (ownerId !== undefined) forgetRendererDiagnosticsOwner(ownerId);
+    this.diagnosticOwnerIds.delete(profileId);
+    this.profileProtocolSessions.delete(profileId);
   }
 
   credentialsStoreFor(win: BrowserWindow): CredentialsStore {
@@ -174,10 +193,15 @@ export class MultipleAccountsController {
       const next = removeArchivedMultiProfile(this.workspace!, profileId);
       await saveMultiWorkspace(this.options.paths.multiWorkspace, next);
       this.workspace = next;
+      this.forgetDiagnosticOwner(profileId);
     }
   }
 
-  async open(profileIds: readonly ProfileId[]): Promise<void> {
+  open(profileIds: readonly ProfileId[]): Promise<void> {
+    return this.launchLock.run(() => this.openBatch(profileIds));
+  }
+
+  private async openBatch(profileIds: readonly ProfileId[]): Promise<void> {
     for (const profileId of profileIds) this.profileFor(profileId);
     this.profileRuntime.queue(
       profileIds,
@@ -220,8 +244,6 @@ export class MultipleAccountsController {
       revealAccountsWindow();
       throw firstFailure;
     }
-    const hub = windowRegistry.hubWindow();
-    if (hub && !hub.isDestroyed()) hub.hide();
     if (firstSelectedWindow && !firstSelectedWindow.isDestroyed()) {
       if (firstSelectedWindow.isMinimized()) firstSelectedWindow.restore();
       const focused = new Promise<void>((resolve) => {
@@ -240,6 +262,8 @@ export class MultipleAccountsController {
       firstSelectedWindow.focus();
       await focused;
     }
+    const hub = windowRegistry.hubWindow();
+    if (hub && !hub.isDestroyed()) hub.hide();
   }
 
   create(request: AccountProfileCreateRequest): Promise<AccountsState> {
@@ -334,6 +358,7 @@ export class MultipleAccountsController {
       const next = removeArchivedMultiProfile(pending, profileId);
       await saveMultiWorkspace(this.options.paths.multiWorkspace, next);
       this.workspace = next;
+      this.forgetDiagnosticOwner(profileId);
       return this.state();
     });
   }
@@ -451,7 +476,11 @@ export class MultipleAccountsController {
         cache: false,
       });
       if (!this.profileProtocolSessions.has(profileId)) {
-        installGwProtocolHandlerForSession(owner, this.options.protocol);
+        const diagnosticOwnerId = this.diagnosticOwnerFor(profileId);
+        installGwProtocolHandlerForSession(owner, {
+          ...this.options.protocol,
+          diagnosticOwnerId: () => diagnosticOwnerId,
+        });
         this.profileProtocolSessions.add(profileId);
       }
       await Promise.all([
@@ -471,6 +500,7 @@ export class MultipleAccountsController {
       let hubWasVisibleBeforeRecovery = false;
       const win = createMainWindow(this.options.windowHost, {
         context: { mode: "multi", role: "game", profileId },
+        diagnosticOwnerId: this.diagnosticOwnerFor(profileId),
         session: owner,
         title: `Guild Wars Reforged — ${profile.name}`,
         windowStatePath: profilePaths.windowState,

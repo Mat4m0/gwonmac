@@ -37,6 +37,78 @@ const clickMenu = (app: ElectronApplication, id: string) =>
   }, id);
 
 test.describe("diagnostics", () => {
+  test("waits for a starting capture before opening export", async () => {
+    const fixture = await launchOffline("gw-capture-export-start-race-e2e-");
+    try {
+      const result = await fixture.app.evaluate(
+        async ({ BrowserWindow, dialog }, modulePath) => {
+          const load = process
+            .getBuiltinModule("node:module")
+            .createRequire(modulePath);
+          const diagnostics = load(modulePath);
+          const recorderModule = load(
+            modulePath.replace(/diagnostics\.js$/u, "diagnostics/recorder.js"),
+          );
+          const owner = BrowserWindow.getAllWindows()[0];
+          if (!owner) throw new Error("diagnostics owner is unavailable");
+
+          const originalBegin = recorderModule.recorder.beginCapture.bind(
+            recorderModule.recorder,
+          );
+          const originalShowSaveDialog = dialog.showSaveDialog;
+          let releaseStart: () => void = () => undefined;
+          let enteredStart: () => void = () => undefined;
+          const startEntered = new Promise<void>((resolve) => {
+            enteredStart = resolve;
+          });
+          const startReleased = new Promise<void>((resolve) => {
+            releaseStart = resolve;
+          });
+          let saveDialogCalls = 0;
+          recorderModule.recorder.beginCapture = async (ownerId: number) => {
+            await originalBegin(ownerId);
+            enteredStart();
+            await startReleased;
+          };
+          dialog.showSaveDialog = async () => {
+            saveDialogCalls += 1;
+            return { canceled: true, filePath: "" };
+          };
+
+          try {
+            const starting = diagnostics.startDiagnosticCapture(owner, 1);
+            await startEntered;
+            const exporting = diagnostics.exportDiagnosticsForWindow(
+              owner,
+              async () => ({}),
+            );
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            const callsBeforeStartSettled = saveDialogCalls;
+            releaseStart();
+            await Promise.all([starting, exporting]);
+            return {
+              callsBeforeStartSettled,
+              saveDialogCalls,
+              captureLevel: diagnostics.diagnosticSummary().captureLevel,
+            };
+          } finally {
+            recorderModule.recorder.beginCapture = originalBegin;
+            dialog.showSaveDialog = originalShowSaveDialog;
+          }
+        },
+        path.join(root, "build/main/diagnostics.js"),
+      );
+
+      expect(result).toEqual({
+        callsBeforeStartSettled: 0,
+        saveDialogCalls: 1,
+        captureLevel: 0,
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("serializes capture lifecycle and exposes an unmistakable marker", async () => {
     const fixture = await launchOffline("gw-capture-e2e-");
     try {

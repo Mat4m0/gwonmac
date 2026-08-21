@@ -28,21 +28,22 @@ export interface EventDetail {
 export function recordEvent(
   event: DiagnosticEvent,
   detail: EventDetail = {},
+  ownerId?: number,
 ): void {
-  recorder.record(event, detail);
+  recorder.record(event, detail, ownerId);
 }
 
 /** The only public event-recording API. */
-export function logEvent(event: DiagnosticEvent): void {
-  recordEvent(event);
+export function logEvent(event: DiagnosticEvent, ownerId?: number): void {
+  recordEvent(event, {}, ownerId);
 }
 
-export function count(name: string, delta = 1): void {
-  recorder.count(name, delta);
+export function count(name: string, delta = 1, ownerId?: number): void {
+  recorder.count(name, delta, ownerId);
 }
 
-export function observe(name: string, durationUs: number): void {
-  recorder.observe(name, durationUs);
+export function observe(name: string, durationUs: number, ownerId?: number): void {
+  recorder.observe(name, durationUs, ownerId);
 }
 
 export function gauge(

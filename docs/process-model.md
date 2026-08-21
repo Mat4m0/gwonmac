@@ -89,6 +89,11 @@ before an active client exists.
 directories. Update, candidate confirmation, and crash recovery must not move
 the same directories at the same time.
 
+The active generation's compatibility result is immutable and shared. A
+renderer installation failure is a document-local overlay keyed by its window,
+document routing ID, and client generation. Reload or a new generation removes
+that overlay without changing another renderer's session.
+
 The `gw://app` protocol reads one `ActiveClient` for each request. A response
 must not combine artifacts, chunks, or compatibility facts from different
 generations.

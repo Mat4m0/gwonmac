@@ -120,7 +120,6 @@ import { windowRegistry, type WindowRegistry } from "./window-registry.js";
 import {
   cancelWindowShortcutCapture,
   captureWindowShortcut,
-  updateWindowShortcuts,
 } from "./window-shortcuts.js";
 import {
   applySettingsChange,
@@ -158,8 +157,9 @@ export interface IpcContext {
   getAppUpdateState: () => AppUpdateState;
   checkAppUpdates: () => Promise<void>;
   restartAndInstallUpdate: (win: BrowserWindow) => Promise<void>;
-  getClientSession: () => ClientSession;
+  getClientSession: (win: BrowserWindow) => ClientSession;
   recordClientFeatureFailure: (
+    win: BrowserWindow,
     features: readonly EnhancementRuntimeFeature[],
   ) => void;
   acquireSteamToken: (
@@ -473,6 +473,13 @@ export function registerIpcHandlers(ctx: IpcContext): {
   drainSecrets(): Promise<void>;
 } {
   const paths = gamePaths();
+  const diagnosticOwner = (win: BrowserWindow): number => {
+    const ownerId = ctx.windows.diagnosticOwnerForWindow(win);
+    if (ownerId === null) {
+      throw new ValidationError("game window has no diagnostics owner");
+    }
+    return ownerId;
+  };
   const secretOperations = new Set<Promise<unknown>>();
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
@@ -498,8 +505,8 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     snapshotMetadata: channel(nothing, () => ctx.getSnapshotMetadata()),
 
-    dnsResolve: channel(asString("dns name"), async (_win, name) => {
-      const lookup = startDnsResolveSpan();
+    dnsResolve: channel(asString("dns name"), async (win, name) => {
+      const lookup = startDnsResolveSpan(diagnosticOwner(win));
       try {
         const address = await resolveDns(name);
         lookup.end({ status: "ok", code: null });
@@ -515,9 +522,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     socketSend: channel(asSocketPayload, async (win, { socketId, bytes }) => {
-      count("socket.ipcReceiveCalls");
-      count("socket.ipcPayloadBytes", bytes.byteLength);
-      count("socket.ipcBackingBytes", bytes.buffer.byteLength);
+      const ownerId = diagnosticOwner(win);
+      count("socket.ipcReceiveCalls", 1, ownerId);
+      count("socket.ipcPayloadBytes", bytes.byteLength, ownerId);
+      count("socket.ipcBackingBytes", bytes.buffer.byteLength, ownerId);
       await ctx.sockets.send(socketId, bytes, win.webContents.id);
     }),
 
@@ -547,13 +555,11 @@ export function registerIpcHandlers(ctx: IpcContext): {
         ctx.getSettings,
         ctx.updateSettings,
       );
-      updateWindowShortcuts(win, saved.shortcutOverrides);
       return saved;
     }),
 
     settingsReset: channel(nothing, async (win) => {
       const outcome = await confirmSettingsReset(win, ctx.resetSettings);
-      if (outcome) updateWindowShortcuts(win, outcome.settings.shortcutOverrides);
       return outcome;
     }),
 
@@ -621,8 +627,8 @@ export function registerIpcHandlers(ctx: IpcContext): {
       requestGameStorageReset(win, ctx.gameStorageResetMarkerFor(win)),
     ),
 
-    diagnosticsGraphics: channel(asGraphics, (_win, value) => {
-      recordGraphics(value);
+    diagnosticsGraphics: channel(asGraphics, (win, value) => {
+      recordGraphics(diagnosticOwner(win), value);
     }),
 
     diagnosticsClockSync: channel(
@@ -633,26 +639,38 @@ export function registerIpcHandlers(ctx: IpcContext): {
       },
     ),
 
-    diagnosticsClockResult: channel(asClockResult, (_win, { offsetUs, rttUs }) => {
-      recordClockOffset(offsetUs, rttUs);
+    diagnosticsClockResult: channel(
+      asClockResult,
+      (win, { offsetUs, rttUs }) => {
+        recordClockOffset(diagnosticOwner(win), offsetUs, rttUs);
+      },
+    ),
+
+    diagnosticsRendererMetrics: channel(asRendererMetrics, (win, value) => {
+      recordRendererMetrics(diagnosticOwner(win), value);
     }),
 
-    diagnosticsRendererMetrics: channel(asRendererMetrics, (_win, value) => {
-      recordRendererMetrics(value);
-    }),
-
-    diagnosticsRendererFrames: channel(asRendererFrames, async (_win, value) => {
-      await recordRendererFrames(value);
+    diagnosticsRendererFrames: channel(asRendererFrames, async (win, value) => {
+      await recordRendererFrames(
+        win.webContents.id,
+        diagnosticOwner(win),
+        value,
+      );
     }),
 
     diagnosticsRendererMilestone: channel(
       asMilestone,
-      (_win, { name, rendererTimestampUs, fields }) => {
-        recordRendererMilestone(name, rendererTimestampUs, fields);
+      (win, { name, rendererTimestampUs, fields }) => {
+        recordRendererMilestone(
+          diagnosticOwner(win),
+          name,
+          rendererTimestampUs,
+          fields,
+        );
       },
     ),
 
-    diagnosticsCurrent: channel(nothing, () => diagnosticSummary()),
+    diagnosticsCurrent: channel(nothing, (win) => diagnosticSummary(win)),
 
     appOpenExternal: channel(asExternalLinkKind, async (_win, kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);
@@ -697,10 +715,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
       ctx.confirmClientHealthy(token),
     ),
 
-    clientSession: channel(nothing, () => ctx.getClientSession()),
+    clientSession: channel(nothing, (win) => ctx.getClientSession(win)),
 
-    clientFeatureFailure: channel(asEnhancementRuntimeFeatures, (_win, features) =>
-      ctx.recordClientFeatureFailure(features),
+    clientFeatureFailure: channel(asEnhancementRuntimeFeatures, (win, features) =>
+      ctx.recordClientFeatureFailure(win, features),
     ),
 
     appUpdatesGetState: channel(nothing, () => ctx.getAppUpdateState()),

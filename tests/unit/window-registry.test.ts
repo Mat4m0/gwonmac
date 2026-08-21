@@ -29,6 +29,22 @@ describe("window registry", () => {
     assert.equal(registry.contextForWebContents(8), null);
   });
 
+  it("retains one process-local account owner across renderer replacement", () => {
+    const registry = new WindowRegistry<ReturnType<typeof fake>>();
+    const profileId = parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae");
+    const first = fake(7);
+    registry.register(first, { mode: "multi", role: "game", profileId }, 42);
+    assert.equal(registry.diagnosticOwnerForWebContents(7), 42);
+    registry.unregister(first);
+    const replacement = fake(8);
+    registry.register(
+      replacement,
+      { mode: "multi", role: "game", profileId },
+      42,
+    );
+    assert.equal(registry.diagnosticOwnerForWindow(replacement), 42);
+  });
+
   it("enforces one live game window for a profile", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
     const profileId = parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae");

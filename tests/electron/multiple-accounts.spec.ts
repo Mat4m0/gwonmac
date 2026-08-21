@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ProfileId } from "../../src/shared/multiple-accounts.js";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import { closeOffline, launchOffline, root } from "./fixtures.mjs";
 
 type MemoryWarningModule = typeof import("../../src/renderer/memory-warning.js");
 
@@ -15,10 +15,153 @@ declare global {
     originalRelaunch: Electron.App["relaunch"];
   };
   var __runtimeDialogParent: string | null | undefined;
+  var __forcedCandidateHealthToken: object | null;
+  var __healthTokenDescriptor: PropertyDescriptor | undefined;
+  interface Window {
+    __concurrentAccountOpen?: Promise<void>;
+  }
 }
 
 const FIRST = "00000000-0000-4000-8000-000000000001";
 const SECOND = "00000000-0000-4000-8000-000000000002";
+
+test("serializes concurrent account selections behind one client canary", async () => {
+  const fixture = await launchOffline("gw-multi-concurrent-open-e2e-", {}, async (userData) => {
+    await mkdir(path.join(userData, "multi"), { recursive: true });
+    await writeFile(
+      path.join(userData, "launcher-mode.json"),
+      JSON.stringify({ formatVersion: 1, mode: "multi" }),
+    );
+    await writeFile(path.join(userData, "multi", "workspace.json"), JSON.stringify({
+      formatVersion: 1,
+      deletingProfileIds: [],
+      profiles: [
+        { id: FIRST, name: "Primary", archived: false, templates: "shared", builds: "shared" },
+        { id: SECOND, name: "Alt", archived: false, templates: "shared", builds: "shared" },
+      ],
+    }));
+  });
+  try {
+    await fixture.app.evaluate((_electron, modulePath) => {
+      const load = process
+        .getBuiltinModule("node:module")
+        .createRequire(modulePath);
+      const { ClientRuntime } = load(modulePath);
+      globalThis.__healthTokenDescriptor = Object.getOwnPropertyDescriptor(
+        ClientRuntime.prototype,
+        "healthToken",
+      );
+      globalThis.__forcedCandidateHealthToken = {
+        generation: 999,
+        fingerprint: "a".repeat(64),
+      };
+      Object.defineProperty(ClientRuntime.prototype, "healthToken", {
+        configurable: true,
+        get: () => globalThis.__forcedCandidateHealthToken,
+      });
+    }, path.join(root, "build/main/client-runtime.js"));
+
+    await fixture.page.evaluate(([first, second]) => {
+      window.__concurrentAccountOpen = Promise.all([
+        window.gwNative.accounts.open([first as ProfileId]),
+        window.gwNative.accounts.open([second as ProfileId]),
+      ]).then(() => undefined);
+    }, [FIRST, SECOND] as const);
+
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().filter((win) =>
+        !win.getTitle().endsWith("Accounts"),
+      ).length,
+    )).toBe(1);
+    await fixture.page.waitForTimeout(500);
+    expect(await fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().filter((win) =>
+        !win.getTitle().endsWith("Accounts"),
+      ).length,
+    )).toBe(1);
+
+    await fixture.app.evaluate(() => {
+      globalThis.__forcedCandidateHealthToken = null;
+    });
+    await fixture.page.evaluate(() => window.__concurrentAccountOpen);
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().filter((win) =>
+        !win.getTitle().endsWith("Accounts"),
+      ).length,
+    )).toBe(2);
+  } finally {
+    await fixture.app.evaluate((_electron, modulePath) => {
+      const descriptor = globalThis.__healthTokenDescriptor;
+      if (!descriptor) return;
+      const load = process
+        .getBuiltinModule("node:module")
+        .createRequire(modulePath);
+      const { ClientRuntime } = load(modulePath);
+      Object.defineProperty(ClientRuntime.prototype, "healthToken", descriptor);
+      globalThis.__forcedCandidateHealthToken = null;
+      globalThis.__healthTokenDescriptor = undefined;
+    }, path.join(root, "build/main/client-runtime.js")).catch(() => undefined);
+    await closeOffline(fixture);
+  }
+});
+
+test("publishes global Settings changes to every open account", async () => {
+  const fixture = await launchOffline("gw-multi-settings-broadcast-e2e-", {}, async (userData) => {
+    await mkdir(path.join(userData, "multi"), { recursive: true });
+    await writeFile(
+      path.join(userData, "launcher-mode.json"),
+      JSON.stringify({ formatVersion: 1, mode: "multi" }),
+    );
+    await writeFile(path.join(userData, "multi", "workspace.json"), JSON.stringify({
+      formatVersion: 1,
+      deletingProfileIds: [],
+      profiles: [
+        { id: FIRST, name: "Primary", archived: false, templates: "shared", builds: "shared" },
+        { id: SECOND, name: "Alt", archived: false, templates: "shared", builds: "shared" },
+      ],
+    }));
+  });
+  try {
+    await fixture.page.evaluate(
+      ([first, second]) => window.gwNative.accounts.open(
+        [first, second] as ProfileId[],
+      ),
+      [FIRST, SECOND] as const,
+    );
+    await expect.poll(() => fixture.app.windows().filter(
+      (page) => page !== fixture.page,
+    ).length).toBe(2);
+    const games = fixture.app.windows().filter((page) => page !== fixture.page);
+    const primary = games.find((page) => page.url() === "gw://app/") ?? games[0];
+    const alt = games.find((page) => page !== primary);
+    if (!primary || !alt) throw new Error("both account renderers are required");
+    await Promise.all([
+      primary.waitForLoadState("domcontentloaded"),
+      alt.waitForLoadState("domcontentloaded"),
+    ]);
+
+    await alt.evaluate(() => window.gwNative.settings.set({
+      uiStyle: "obsidian",
+      targetReadout: true,
+      shortcutOverrides: {
+        "tools.toggle": { key: "k", shift: false, option: false },
+      },
+    }));
+
+    await expect.poll(() => primary.evaluate(async () => ({
+      style: document.documentElement.dataset.uiStyle,
+      targetReadout: window.gwToolsSettings().targetReadout,
+      shortcut: (await window.gwNative.settings.get())
+        .shortcutOverrides["tools.toggle"]?.key,
+    }))).toEqual({
+      style: "obsidian",
+      targetReadout: true,
+      shortcut: "k",
+    });
+  } finally {
+    await closeOffline(fixture);
+  }
+});
 
 test("Single Account remains the invisible default", async () => {
   const fixture = await launchOffline("gw-single-default-e2e-");
@@ -279,6 +422,36 @@ test("renderer recovery stays with its account and a second crash needs attentio
     expect(await fixture.app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().find((win) => win.getTitle().endsWith("Accounts"))?.isVisible(),
     )).toBe(false);
+    const recoveryEvidence = await fixture.app.evaluate(
+      async ({ BrowserWindow }, modulePath) => {
+        const load = process.getBuiltinModule("node:module").createRequire(modulePath);
+        const { recorder } = load(
+          modulePath.replace(/diagnostics\.js$/u, "diagnostics/recorder.js"),
+        );
+        const { windowRegistry } = load(
+          modulePath.replace(/diagnostics\.js$/u, "window-registry.js"),
+        );
+        const namesFor = async (suffix: string) => {
+          const win = BrowserWindow.getAllWindows().find((candidate) =>
+            candidate.getTitle().endsWith(suffix));
+          if (!win) throw new Error(`${suffix} window not found`);
+          const ownerId = windowRegistry.diagnosticOwnerForWindow(win);
+          if (ownerId === null) throw new Error(`${suffix} owner not found`);
+          const text = (await recorder.exportedEvents(ownerId)).text;
+          return text.split("\n").filter(Boolean).map((line: string) =>
+            (JSON.parse(line) as { name: string }).name);
+        };
+        return {
+          primary: await namesFor("Primary"),
+          alt: await namesFor("Alt"),
+        };
+      },
+      path.join(root, "build/main/diagnostics.js"),
+    );
+    expect(recoveryEvidence.primary).toContain("renderer.processGone");
+    expect(recoveryEvidence.primary).toContain("renderer.recovered");
+    expect(recoveryEvidence.alt).not.toContain("renderer.processGone");
+    expect(recoveryEvidence.alt).not.toContain("renderer.recovered");
 
     await fixture.app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows().find((candidate) => candidate.getTitle().endsWith("Primary"));
@@ -347,7 +520,23 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     await expect(fixture.page.getByRole("button", { name: "Open Primary" })).toBeVisible();
     await fixture.page.getByRole("checkbox", { name: "Select Alt" }).check();
     await expect(fixture.page.getByRole("button", { name: "Open 2 Accounts" })).toBeVisible();
+    const firstFocusedGame = fixture.app.evaluate(({ app }) =>
+      new Promise<string | undefined>((resolve) => {
+        const timeout = setTimeout(() => {
+          app.removeListener("browser-window-focus", focused);
+          resolve(undefined);
+        }, 10_000);
+        const focused = (_event: Electron.Event, win: Electron.BrowserWindow) => {
+          if (win.getTitle() === "Guild Wars Reforged — Accounts") return;
+          clearTimeout(timeout);
+          app.removeListener("browser-window-focus", focused);
+          resolve(win.getTitle());
+        };
+        app.on("browser-window-focus", focused);
+      }),
+    );
     await fixture.page.getByRole("button", { name: "Open 2 Accounts" }).click();
+    expect(await firstFocusedGame).toBe("Guild Wars Reforged — Primary");
     await expect.poll(() => fixture.app.windows().length).toBe(3);
     const games = fixture.app.windows().filter((page) => page !== fixture.page);
     await Promise.all(games.map((page) => page.waitForLoadState("domcontentloaded")));
@@ -364,25 +553,14 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     const readPresentation = () => fixture.app.evaluate(({ BrowserWindow }) => {
       const windows = BrowserWindow.getAllWindows();
       return {
-        focused: BrowserWindow.getFocusedWindow()?.getTitle(),
         hubVisible: windows.find((win) => win.getTitle() === "Guild Wars Reforged — Accounts")?.isVisible(),
         bounds: Object.fromEntries(windows
           .filter((win) => win.getTitle() !== "Guild Wars Reforged — Accounts")
           .map((win) => [win.getTitle(), win.getBounds()])),
       };
     });
-    await expect.poll(async () => {
-      const presentation = await readPresentation();
-      return {
-        focused: presentation.focused,
-        hubVisible: presentation.hubVisible,
-      };
-    }).toEqual({
-      focused: "Guild Wars Reforged — Primary",
-      hubVisible: false,
-    });
+    await expect.poll(async () => (await readPresentation()).hubVisible).toBe(false);
     const presentation = await readPresentation();
-    expect(presentation.focused).toBe("Guild Wars Reforged — Primary");
     expect(presentation.hubVisible).toBe(false);
     const primaryBounds = presentation.bounds["Guild Wars Reforged — Primary"]!;
     const altBounds = presentation.bounds["Guild Wars Reforged — Alt"]!;
@@ -476,24 +654,36 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     await expect(altGame.locator("#memory-notice")).toBeHidden();
     await expect(nonTargetGame.locator("#memory-notice")).toBeHidden();
 
-    const focusGame = async (title: string) => {
-      await fixture.app.evaluate(({ app, BrowserWindow }, targetTitle) => {
+    const clickMenuForGame = (
+      title: string,
+      id: string,
+    ) => fixture.app.evaluate(async ({ app, BrowserWindow, Menu }, request) => {
         const win = BrowserWindow.getAllWindows().find((candidate) =>
-          candidate.getTitle() === targetTitle);
-        if (!win) throw new Error(`${targetTitle} is unavailable`);
+          candidate.getTitle() === request.title);
+        if (!win) throw new Error(`${request.title} is unavailable`);
+        const focused = new Promise<void>((resolve, reject) => {
+          if (win.isFocused()) {
+            resolve();
+            return;
+          }
+          const timeout = setTimeout(() => {
+            win.removeListener("focus", onFocus);
+            reject(new Error(`${request.title} did not receive focus`));
+          }, 5_000);
+          const onFocus = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          win.once("focus", onFocus);
+        });
         win.show();
         app.focus({ steal: true });
         win.focus();
-      }, title);
-      await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getFocusedWindow()?.getTitle(),
-      )).toBe(title);
-    };
-    const clickMenu = (id: string) => fixture.app.evaluate(({ Menu }, itemId) => {
-      const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
-      if (!item?.click) throw new Error(`${itemId} menu item is unavailable`);
+        await focused;
+      const item = Menu.getApplicationMenu()?.getMenuItemById(request.id);
+      if (!item?.click) throw new Error(`${request.id} menu item is unavailable`);
       item.click(item, undefined, {} as Electron.KeyboardEvent);
-    }, id);
+    }, { title, id });
 
     await fixture.app.evaluate(({ BrowserWindow, dialog }) => {
       Object.defineProperty(dialog, "showMessageBox", {
@@ -507,24 +697,21 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       });
       globalThis.__runtimeDialogParent = null;
     });
-    await focusGame("Guild Wars Reforged — Alt");
-    await clickMenu("start-performance-capture");
+    await clickMenuForGame("Guild Wars Reforged — Alt", "start-performance-capture");
     await expect(altGame.locator("#capture-status")).toBeVisible();
     await expect(nonTargetGame.locator("#capture-status")).toBeHidden();
 
-    await focusGame("Guild Wars Reforged — Primary");
-    await clickMenu("mark-performance-problem");
-    await clickMenu("stop-capture");
+    await clickMenuForGame("Guild Wars Reforged — Primary", "mark-performance-problem");
+    await clickMenuForGame("Guild Wars Reforged — Primary", "stop-capture");
     await expect(altGame.locator("#capture-status")).toBeVisible();
     await expect(altGame.locator("#capture-marker")).toBeHidden();
     await expect(nonTargetGame.locator("#capture-status")).toBeHidden();
     expect(await fixture.app.evaluate(() => globalThis.__runtimeDialogParent))
       .toBeNull();
 
-    await focusGame("Guild Wars Reforged — Alt");
-    await clickMenu("mark-performance-problem");
+    await clickMenuForGame("Guild Wars Reforged — Alt", "mark-performance-problem");
     await expect(altGame.locator("#capture-marker")).toBeVisible();
-    await clickMenu("stop-capture");
+    await clickMenuForGame("Guild Wars Reforged — Alt", "stop-capture");
     await expect(altGame.locator("#capture-status")).toBeHidden();
     await expect(nonTargetGame.locator("#capture-status")).toBeHidden();
     await expect.poll(() => fixture.app.evaluate(() =>
@@ -534,25 +721,10 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     await Promise.all(ownedGames.map(({ game }) => game.evaluate(() => {
       (window as typeof window & { __reloadProof?: boolean }).__reloadProof = true;
     })));
-    await fixture.app.evaluate(({ app, BrowserWindow }) => {
-      const alt = BrowserWindow.getAllWindows().find((win) =>
-        win.getTitle() === "Guild Wars Reforged — Alt");
-      if (!alt) throw new Error("Alt window is unavailable");
-      alt.show();
-      app.focus({ steal: true });
-      alt.focus();
-    });
-    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getFocusedWindow()?.getTitle(),
-    )).toBe("Guild Wars Reforged — Alt");
     const reloaded = altGame.waitForEvent("framenavigated", {
       predicate: (frame) => frame === altGame.mainFrame(),
     });
-    await fixture.app.evaluate(({ Menu }) => {
-      const item = Menu.getApplicationMenu()?.getMenuItemById("reload-game");
-      if (!item?.click) throw new Error("Reload Game menu item is unavailable");
-      item.click(item, undefined, {} as Electron.KeyboardEvent);
-    });
+    await clickMenuForGame("Guild Wars Reforged — Alt", "reload-game");
     await reloaded;
     await altGame.waitForLoadState("domcontentloaded");
     expect(await altGame.evaluate(() =>
@@ -615,8 +787,7 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     const altPage = identifiedGames.find(({ credentials }) =>
       credentials?.username === "second@example.test")?.game;
     if (!primaryPage || !altPage) throw new Error("profile pages not found");
-    await focusGame("Guild Wars Reforged — Primary");
-    await clickMenu("start-performance-capture");
+    await clickMenuForGame("Guild Wars Reforged — Primary", "start-performance-capture");
     await expect(primaryPage.locator("#capture-status")).toBeVisible();
     await expect(altPage.locator("#capture-status")).toBeHidden();
     await fixture.app.evaluate(() => {

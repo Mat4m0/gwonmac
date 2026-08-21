@@ -765,6 +765,7 @@ export const IPC = {
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
   settingsReset: "gw:settings:reset",
+  settingsEvent: "gw:settings:event",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
   travelPreferencesRecord: "gw:travelPreferences:record",
@@ -840,6 +841,7 @@ export const EVENT_CHANNELS = [
   "progressEvent",
   "prefetchEvent",
   "socketEvent",
+  "settingsEvent",
   "rendererCommand",
   "rendererCommandDone",
   "inputTraceEvent",
@@ -898,6 +900,7 @@ export interface GwNativeApi {
     get(): Promise<AppSettings>;
     set(value: RendererSettingsPatch): Promise<AppSettings>;
     reset(): Promise<SettingsResetOutcome | null>;
+    onChange(callback: (settings: AppSettings) => void): () => void;
   };
   travelPreferences: {
     get(): Promise<TravelUserPreferences>;
