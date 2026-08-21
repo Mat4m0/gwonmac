@@ -846,22 +846,31 @@
   settingsReset.addEventListener('click', async () => {
     setFeedback();
     try {
-      const reset = await window.gwNative.settings.reset();
-      if (!reset) return;
-      currentSettings = reset;
-      currentTravelPreferences = await window.gwNative.travelPreferences.get()
-        .catch(() => null);
-      fillForm(reset, currentTravelPreferences);
-      if (currentTravelPreferences === null) {
+      const outcome = await window.gwNative.settings.reset();
+      if (!outcome) return;
+      currentSettings = outcome.settings;
+      currentTravelPreferences = outcome.travelPreferences;
+      fillForm(outcome.settings, outcome.travelPreferences);
+      if (outcome.travelPreferences === null) {
+        travelRecentLimit.selectedIndex = -1;
         travelRecentLimit.disabled = true;
         travelRecentsClear.disabled = true;
       }
-      window.gwApplySettings?.(reset);
-      setFeedback(
-        'GWonMac settings were reset. Choose a download mode next launch.',
-        'success',
-        4500,
-      );
+      window.gwApplySettings?.(outcome.settings);
+      if (outcome.status === 'partial') {
+        setFeedback(
+          outcome.travelPreferences === null
+            ? 'GWonMac settings were reset, but Travel preferences could not be confirmed. Close and reopen Settings before retrying.'
+            : 'GWonMac settings were reset, but Travel preferences could not be reset. Choose Reset GWonMac settings again to finish.',
+          'warning',
+        );
+      } else {
+        setFeedback(
+          'GWonMac settings and Travel preferences were reset. Choose a download mode next launch.',
+          'success',
+          4500,
+        );
+      }
     } catch {
       currentSettings = null;
       currentTravelPreferences = null;

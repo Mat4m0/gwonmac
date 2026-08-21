@@ -3,13 +3,19 @@
  * One lock prevents two windows from losing a read-modify-write across the
  * Stable-owned settings file and the Travel-owned preference document.
  */
-import type { AppSettings, AppSettingsPatch } from "../../shared/contracts.js";
+import type {
+  AppSettings,
+  AppSettingsPatch,
+  SettingsResetOutcome,
+} from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
 import { isDeepStrictEqual } from "node:util";
 import {
+  DEFAULT_TRAVEL_PREFERENCES,
   sameTravelUserPreferences,
   storeTravelShortcuts,
   travelShortcutsFromStored,
+  type TravelPreferencesDocument,
   type TravelUserPreferences,
   type TravelUserPreferencesUpdate,
 } from "../../shared/travel.js";
@@ -92,10 +98,73 @@ export class PreferencesCoordinator {
     });
   }
 
-  resetSettings(): Promise<AppSettings> {
-    return this.#lock.run(() =>
-      saveSettingsAndReconcile(this.#paths().settings, { ...DEFAULT_SETTINGS })
-    );
+  resetSettings(): Promise<SettingsResetOutcome> {
+    return this.#lock.run(async () => {
+      const paths = this.#paths();
+      const settings = await saveSettingsAndReconcile(
+        paths.settings,
+        { ...DEFAULT_SETTINGS },
+      );
+      let currentTravel: TravelPreferencesDocument;
+      try {
+        currentTravel = await loadTravelPreferences(paths.travelPreferences);
+      } catch {
+        return Object.freeze({
+          status: "partial",
+          settings,
+          travelPreferences: null,
+          pending: "travel",
+        });
+      }
+      if (isDeepStrictEqual(currentTravel, DEFAULT_TRAVEL_PREFERENCES)) {
+        return Object.freeze({
+          status: "complete",
+          settings,
+          travelPreferences: composeTravelPreferences(settings, currentTravel),
+        });
+      }
+      let travel: TravelPreferencesDocument;
+      try {
+        travel = await updateTravelPreferences(paths.travelPreferences, {
+          synonyms: DEFAULT_TRAVEL_PREFERENCES.synonyms,
+          recentLimit: DEFAULT_TRAVEL_PREFERENCES.recentLimit,
+          recentMapIds: DEFAULT_TRAVEL_PREFERENCES.recentMapIds,
+        });
+      } catch (error) {
+        if (error instanceof AtomicPublicationUnconfirmedError) {
+          try {
+            travel = await loadTravelPreferences(paths.travelPreferences);
+          } catch {
+            return Object.freeze({
+              status: "partial",
+              settings,
+              travelPreferences: null,
+              pending: "travel",
+            });
+          }
+          if (isDeepStrictEqual(travel, DEFAULT_TRAVEL_PREFERENCES)) {
+            return Object.freeze({
+              status: "complete",
+              settings,
+              travelPreferences: composeTravelPreferences(settings, travel),
+            });
+          }
+        } else {
+          travel = currentTravel;
+        }
+        return Object.freeze({
+          status: "partial",
+          settings,
+          travelPreferences: composeTravelPreferences(settings, travel),
+          pending: "travel",
+        });
+      }
+      return Object.freeze({
+        status: "complete",
+        settings,
+        travelPreferences: composeTravelPreferences(settings, travel),
+      });
+    });
   }
 
   getTravelPreferences(): Promise<TravelUserPreferences> {

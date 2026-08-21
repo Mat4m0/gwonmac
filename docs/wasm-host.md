@@ -257,6 +257,13 @@ shortcut slots or the Travel-owned document, never both. Main also serializes
 ordinary `settings.json` writes with Travel writes, so a settings change cannot
 replace a concurrent shortcut change.
 
+The confirmed settings reset uses the same Main owner and lock. It resets
+`settings.json` first, including shortcut slots, then resets the Travel-owned
+document. A definite settings failure stops before the Travel write. A later
+Travel failure returns a partial result and keeps the completed settings reset;
+running the reset again safely finishes it. Window-position cleanup is a
+separate best-effort action and cannot change that result.
+
 Team Apply requires enabled Tools and Apply teams in Guild Wars, a proved Team
 Apply capability, a positively classified PvE outpost, fresh party state, and
 an explicit player action.
