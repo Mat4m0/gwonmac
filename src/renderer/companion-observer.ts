@@ -15,6 +15,7 @@ import {
   type CompanionPartyState,
   type CompanionSnapshot,
   type CompanionToolboxState,
+  type PublishedCompanionState,
   readChangedCompanionParty,
   readChangedCompanionToolbox,
   readCompanionSnapshot,
@@ -52,12 +53,12 @@ type ToolboxConsumer = {
   }): void;
 };
 
-export function recordCompanionLifecycle(state: CompanionState) {
+export function recordCompanionLifecycle(state: PublishedCompanionState) {
   if (state.status === "ready") {
     window.gwAutomation?.set(
       state.instanceType === 1 ? "game.explorable" : "game.outpost",
     );
-  } else if (state.reason === "loading") {
+  } else if ("reason" in state && state.reason === "loading") {
     window.gwAutomation?.set("game.loading");
   } else if (state.status === "unsupported") {
     window.gwAutomation?.set("enhancement.unsupported");
@@ -79,7 +80,7 @@ export function observeCompanion(
   let toolboxSequence: number | null = null;
   let previousParty: CompanionPartyState | null = null;
   let partySequence: number | null = null;
-  let publishedState: CompanionState | null = null;
+  let publishedState: PublishedCompanionState | null = null;
   const observe = () => {
     if (observeState) {
       const started = performance.now();

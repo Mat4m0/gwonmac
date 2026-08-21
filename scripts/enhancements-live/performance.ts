@@ -76,7 +76,8 @@ async function setCapture(
  */
 function readTickCount(page: Page): Promise<number> {
   return page.evaluate(() => {
-    const ticks = window.gwCompanionState?.tickCount;
+    const state = window.gwCompanionState;
+    const ticks = state?.status === "ready" ? state.tickCount : undefined;
     if (typeof ticks !== "number") {
       throw new Error("Enhancement state published no tick count");
     }

@@ -14,6 +14,7 @@ import {
   SteamSessionStore,
   steamTokenOutcome,
   type SteamSessionReader,
+  type SteamTokenAcquisition,
   type StoredSteamSession,
 } from "../../src/main/core/steam-session.js";
 import { AppError } from "../../src/shared/errors.js";
@@ -197,7 +198,7 @@ function fakeStore(
   };
 }
 
-type AcquireAnswer = { token: string | null; refusal?: SteamRefusalReason };
+type AcquireAnswer = SteamTokenAcquisition;
 
 /** An acquisition that records whether it was reached at all. */
 function fakeAcquire(
@@ -209,7 +210,8 @@ function fakeAcquire(
   let calls = 0;
   const acquire = async (): Promise<AcquireAnswer> => {
     calls += 1;
-    return { token, ...(refusal ? { refusal } : {}) };
+    if (token) return { token };
+    return refusal ? { token: null, refusal } : { token: null };
   };
   return Object.defineProperty(acquire, "calls", {
     get: () => calls,

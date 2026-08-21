@@ -25,7 +25,9 @@ window.gwAutomation = (function (): EnhancementAutomation {
         sequence,
         transitions: history.slice(),
         enhancementStatus: enhancement?.status ?? 'not-installed',
-        tickCount: enhancement?.tickCount ?? 0,
+        tickCount: enhancement && "tickCount" in enhancement
+          ? enhancement.tickCount
+          : 0,
       });
     },
   });

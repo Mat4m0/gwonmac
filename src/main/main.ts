@@ -667,12 +667,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       updateRestartInFlight = operation;
       return operation;
     },
-    getClientSession: () => ({
-      appVersion: HOST_VERSION,
-      compatibility: clientRuntime.compatibility,
-      extendedMemory: clientRuntime.extendedMemory,
-      healthToken: clientRuntime.healthToken,
-    }),
+    getClientSession: () => clientRuntime.session(HOST_VERSION),
     recordClientFeatureFailure: (features) => {
       clientRuntime.recordRendererFeatureFailure(features);
     },

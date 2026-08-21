@@ -112,15 +112,14 @@ export type SteamResolutionNote =
   | { note: "acquireFailed"; code: ErrorCode }
   | { note: "storeFailed"; code: ErrorCode };
 
-export interface SteamResolution {
-  token: string | null;
+export type SteamTokenAcquisition =
+  | { token: string; refusal?: never }
+  | { token: null; refusal?: never }
+  | { token: null; refusal: SteamRefusalReason };
+
+export type SteamResolution = SteamTokenAcquisition & {
   notes: SteamResolutionNote[];
-  /**
-   * Why an interactive sign-in produced no token, for the renderer's status
-   * line. Absent when a token was vended or when nothing interactive ran.
-   */
-  refusal?: SteamRefusalReason;
-}
+};
 
 export interface SteamResolutionOptions {
   /**
@@ -130,7 +129,7 @@ export interface SteamResolutionOptions {
    */
   silent: boolean;
   /** Runs the sign-in flow. A `null` token carries why it did not complete. */
-  acquire: () => Promise<{ token: string | null; refusal?: SteamRefusalReason }>;
+  acquire: () => Promise<SteamTokenAcquisition>;
   now?: number;
 }
 
@@ -188,7 +187,7 @@ export async function resolveSteamToken(
     await store.clear().catch(() => undefined);
   }
 
-  let acquired: { token: string | null; refusal?: SteamRefusalReason };
+  let acquired: SteamTokenAcquisition;
   try {
     acquired = await options.acquire();
   } catch (error) {

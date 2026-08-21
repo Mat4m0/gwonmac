@@ -37,7 +37,6 @@ import type {
   RevealKind,
   SocketEvent,
   SettingsResetOutcome,
-  SteamRefusalReason,
   SteamTokenResult,
   StoredCredentials,
   TemplateExportEntry,
@@ -89,6 +88,7 @@ import { exportTemplates, parseExportEntries } from "./template-export.js";
 import {
   MAX_TOKEN_LENGTH,
   SteamSessionCoordinator,
+  type SteamTokenAcquisition,
   type SteamSessionStore,
   steamTokenOutcome,
 } from "./core/steam-session.js";
@@ -891,7 +891,7 @@ export function registerSteamIpcHandlers(
 
   const runSteamSignIn = async (
     win: BrowserWindow,
-  ): Promise<{ token: string | null; refusal?: SteamRefusalReason }> => {
+  ): Promise<SteamTokenAcquisition> => {
     const result = await acquireSteamToken(win, (event) => {
       if (event.k === "opened") logEvent({ k: "steam.signInOpened" });
       if (event.k === "blocked") {
@@ -936,10 +936,16 @@ export function registerSteamIpcHandlers(
         outcome: steamTokenOutcome(resolution),
         silent,
       });
-      return {
-        token: resolution.token,
-        ...(resolution.refusal ? { reason: resolution.refusal } : {}),
-      } satisfies SteamTokenResult;
+      if (resolution.token) {
+        return { token: resolution.token } satisfies SteamTokenResult;
+      }
+      if (resolution.refusal) {
+        return {
+          token: null,
+          reason: resolution.refusal,
+        } satisfies SteamTokenResult;
+      }
+      return { token: null } satisfies SteamTokenResult;
     }),
 
     steamStore: channel(asSteamStoreback, async (win, { token, expiry }) => {

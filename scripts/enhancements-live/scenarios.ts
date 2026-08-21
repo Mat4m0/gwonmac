@@ -189,11 +189,9 @@ export async function waitForPlayable(
 /**
  * The acquired target, or the absence of one.
  *
- * Every field below is read out of the Enhancement snapshot, which the renderer
- * publishes through a global declared with an open index signature: the values
- * cross into Node as `unknown`. They are converted once, here, so that the
- * scenarios and their acceptance checks work in numbers and strings rather than
- * re-deciding what a snapshot field is at every use.
+ * Every field below is read out of the exact Enhancement snapshot. The ready
+ * discriminant is checked once here so scenarios cannot accidentally treat a
+ * waiting or installation-failure state as a partial target.
  */
 type TargetRead = { valid: false } | {
   valid: true;
@@ -208,7 +206,7 @@ type TargetRead = { valid: false } | {
 async function readTarget(page: Page): Promise<TargetRead> {
   return page.evaluate((): TargetRead => {
     const state = window.gwCompanionState;
-    return state?.targetValid
+    return state?.status === "ready" && state.targetValid
       ? {
           valid: true,
           id: Number(state.targetId),
@@ -317,10 +315,13 @@ function validateTargetAcquisition(
 }
 
 async function runMovement({ page }: { page: Page }) {
-  const before = await page.evaluate(() => ({
-    x: Number(window.gwCompanionState?.playerX),
-    y: Number(window.gwCompanionState?.playerY),
-  }));
+  const before = await page.evaluate(() => {
+    const state = window.gwCompanionState;
+    return {
+      x: Number(state?.status === "ready" ? state.playerX : undefined),
+      y: Number(state?.status === "ready" ? state.playerY : undefined),
+    };
+  });
   const viewport = await page.evaluate(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -335,10 +336,13 @@ async function runMovement({ page }: { page: Page }) {
     await page.mouse.up({ button: "right" });
   }
   await page.waitForTimeout(500);
-  const after = await page.evaluate(() => ({
-    x: Number(window.gwCompanionState?.playerX),
-    y: Number(window.gwCompanionState?.playerY),
-  }));
+  const after = await page.evaluate(() => {
+    const state = window.gwCompanionState;
+    return {
+      x: Number(state?.status === "ready" ? state.playerX : undefined),
+      y: Number(state?.status === "ready" ? state.playerY : undefined),
+    };
+  });
   const distance = Math.hypot(after.x - before.x, after.y - before.y);
   // Negated rather than `distance <= 5`: a snapshot without player coordinates
   // — the state the client is in while a map loads — makes this NaN, and NaN
@@ -353,15 +357,16 @@ async function runMovement({ page }: { page: Page }) {
 async function runMapTransition({ page }: { page: Page }) {
   const readState = () => page.evaluate(() => {
     const state = window.gwCompanionState;
+    const ready = state?.status === "ready" ? state : null;
     return {
       status: state?.status ?? null,
-      reason: state?.reason ?? null,
-      mapId: Number(state?.mapId),
-      instance: state?.instanceName ?? null,
-      playerId: Number(state?.playerId),
-      x: Number(state?.playerX),
-      y: Number(state?.playerY),
-      targetValid: state?.targetValid === true,
+      reason: state && "reason" in state ? state.reason : null,
+      mapId: Number(ready?.mapId),
+      instance: ready?.instanceName ?? null,
+      playerId: Number(ready?.playerId),
+      x: Number(ready?.playerX),
+      y: Number(ready?.playerY),
+      targetValid: ready?.targetValid === true,
       // The point of the scenario: a loading snapshot must carry no map,
       // player, or target field at all. An absent state exposes nothing, which
       // is the same answer.
@@ -460,12 +465,16 @@ async function runMapTransition({ page }: { page: Page }) {
     before.mapId,
     { timeout: 5 * 60_000, polling: 100 },
   );
-  const after = await page.evaluate(() => ({
-    mapId: Number(window.gwCompanionState?.mapId),
-    instance: window.gwCompanionState?.instanceName ?? null,
-    playerId: Number(window.gwCompanionState?.playerId),
-    targetValid: window.gwCompanionState?.targetValid === true,
-  }));
+  const after = await page.evaluate(() => {
+    const state = window.gwCompanionState;
+    const ready = state?.status === "ready" ? state : null;
+    return {
+      mapId: Number(ready?.mapId),
+      instance: ready?.instanceName ?? null,
+      playerId: Number(ready?.playerId),
+      targetValid: ready?.targetValid === true,
+    };
+  });
   return {
     route: {
       fromMapId: before.mapId,

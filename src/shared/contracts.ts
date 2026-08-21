@@ -451,10 +451,10 @@ export type SteamRefusalReason =
  * interactive sign-in ran and did not complete; a silent probe with nothing
  * stored answers `{ token: null }` alone, which is a normal launch, not news.
  */
-export interface SteamTokenResult {
-  token: string | null;
-  reason?: SteamRefusalReason;
-}
+export type SteamTokenResult =
+  | { token: string; reason?: never }
+  | { token: null; reason?: never }
+  | { token: null; reason: SteamRefusalReason };
 
 export type ExternalLinkKind =
   | "github"
@@ -634,17 +634,26 @@ export interface ClientHealthToken {
 }
 
 /**
- * What this session is running. `compatibility` is `null` only before a client
- * has been activated; `appVersion` is always known, because a user filing a bug
- * should not have to hunt through the menu bar for it. `healthToken` exists
- * only while the active generation is awaiting renderer health evidence.
+ * What this session is running. A `null` memory result identifies preparation;
+ * an active client always carries the selected memory result. Compatibility
+ * may still be `null` for the official fallback when its hash cannot be read.
+ * `appVersion` is always known, because a user filing a bug should not have to
+ * hunt through the menu bar for it. `healthToken` exists only while the active
+ * generation is awaiting renderer health evidence.
  */
-export interface ClientSession {
-  appVersion: string;
-  compatibility: ClientCompatibility | null;
-  extendedMemory: ExtendedMemoryRuntimeStatus | null;
-  healthToken: ClientHealthToken | null;
-}
+export type ClientSession =
+  | {
+      appVersion: string;
+      compatibility: null;
+      extendedMemory: null;
+      healthToken: null;
+    }
+  | {
+      appVersion: string;
+      compatibility: ClientCompatibility | null;
+      extendedMemory: ExtendedMemoryRuntimeStatus;
+      healthToken: ClientHealthToken | null;
+    };
 
 /**
  * Everything the renderer must know before its first script runs. It used to
