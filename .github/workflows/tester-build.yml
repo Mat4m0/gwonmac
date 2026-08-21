@@ -1,12 +1,12 @@
-# A build for testers names its exact commit and waits for a human approval;
-# nothing else here signs a Preview from a revision somebody chose.
-name: Tester build
+# A developer build names its exact commit and stops after the same ad-hoc
+# packaged smoke used by CI. It never enters an Apple signing environment.
+name: Developer build
 
 on:
   workflow_dispatch:
     inputs:
       commit-sha:
-        description: Exact 40-character commit to build as Preview.
+        description: Exact 40-character commit to build for development testing.
         required: true
         type: string
 
@@ -18,53 +18,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
+  validate:
     if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/macos-verify.yml
-    with:
-      artifact-name: snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
-      artifact-retention-days: 1
-      checkout-ref: ${{ inputs.commit-sha }}
-      package-intent: preview-handoff
-
-  approve:
-    needs: verify
     runs-on: ubuntu-latest
-    environment: snapshot-signing-approval
     steps:
-      - name: Record the exact approved commit
+      - name: Require an exact commit
         env:
           COMMIT_SHA: ${{ inputs.commit-sha }}
         run: |
           if ! [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Invalid Preview commit: $COMMIT_SHA" >&2
+            echo "Invalid developer-build commit: $COMMIT_SHA" >&2
             exit 1
           fi
-          echo "Approved Preview signing for $COMMIT_SHA"
 
-  sign:
-    needs: [verify, approve]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/sign-preview.yml
-    secrets: inherit
+  verify:
+    needs: validate
+    uses: ./.github/workflows/macos-verify.yml
     with:
-      unsigned-artifact-name: snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
-      signed-artifact-name: signed-snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
-      commit-sha: ${{ inputs.commit-sha }}
-      signer-sha: ${{ github.sha }}
-
-  publish:
-    needs: sign
-    permissions:
-      actions: read
-      artifact-metadata: write
-      attestations: write
-      contents: write
-      id-token: write
-    uses: ./.github/workflows/publish-snapshot.yml
-    with:
-      artifact-name: signed-snapshot-assets-${{ github.run_id }}-${{ github.run_attempt }}
-      commit-sha: ${{ inputs.commit-sha }}
-      run-number: ${{ github.run_number }}
-      signer-sha: ${{ github.sha }}
+      artifact-name: developer-build-${{ inputs.commit-sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      artifact-retention-days: 7
+      checkout-ref: ${{ inputs.commit-sha }}
+      package-intent: developer-build

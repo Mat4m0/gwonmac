@@ -38,13 +38,37 @@ certificate, and notarization credentials.
 Use the existing protected `release` GitHub environment. Do not create a Beta
 environment or copy the Apple secrets.
 
-Preview is a separate tester application. It cannot use the public updater. A
-tester snapshot does not replace a versioned release check.
+Manual developer builds are ad-hoc Actions artifacts. They install beside the
+Release application but have no updater or saved-login authority. A developer
+build does not replace a versioned release check.
+
+Historical `snapshot-*` prereleases remain as records. No workflow publishes a
+new public snapshot.
 
 The workflow produces a notarized and stapled DMG, an application-update ZIP,
 `RELEASES.json`, `SHA256SUMS.txt`, and an SPDX SBOM. It creates separate
 repository-bound provenance and SBOM attestations for the ZIP and a provenance
 attestation for the DMG.
+
+## Developer build without Apple setup
+
+Use this only to test a trusted exact commit. Developer builds share the
+canonical `Guild Wars` user-data directory with Release, so back up important
+builds, templates, and game data first.
+
+1. On `main`, manually run **Developer build** with a lowercase 40-character
+   commit SHA.
+2. Download the uniquely named Actions artifact within seven days.
+3. Check that `SOURCE_COMMIT.txt` is the requested SHA, then run
+   `shasum -a 256 -c SHA256SUMS.txt` inside the extracted artifact directory.
+4. Extract and test `Guild Wars Reforged Preview.app`. It is ad-hoc signed, not
+   Apple notarized, and has no saved-login or updater authority.
+
+After the first refused launch, a tester who has verified the commit and
+checksums can use **System Settings → Privacy & Security → Open Anyway**, then
+confirm **Open**. Apple documents this temporary per-app exception in
+[Open apps safely on your Mac](https://support.apple.com/102445). Never disable
+Gatekeeper globally.
 
 ## Before you start
 

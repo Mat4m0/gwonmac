@@ -469,20 +469,20 @@ test("release workflow stages and publishes one tested, attested package version
   );
 });
 
-test("tester snapshots are verified, immutable, bounded, and isolated from releases", () => {
+test("developer builds are exact, ad-hoc, bounded, and isolated from releases", () => {
   const release = read(".github/workflows/release.yml");
   const pullRequest = read(".github/workflows/pr-package.yml");
-  const main = read(".github/workflows/main-snapshot.yml");
+  const main = read(".github/workflows/main-verification.yml");
   const verification = read(".github/workflows/macos-verify.yml");
-  const publisher = read(".github/workflows/publish-snapshot.yml");
-  const signer = read(".github/workflows/sign-preview.yml");
   const manual = read(".github/workflows/tester-build.yml");
   const retention = read("scripts/snapshot-retention.ts");
   const feedback = read(".github/ISSUE_TEMPLATE/preview-feedback.yml");
+  const developerFeedback = read(
+    ".github/ISSUE_TEMPLATE/developer-build-feedback.yml",
+  );
 
-  // One read-only verification path owns PR, main, manual tester, and release
-  // gates. PR artifacts are short-lived and no publishing permission reaches
-  // that reusable workflow.
+  // One read-only verification path owns PR, manual developer, and release
+  // gates. No publishing permission reaches that reusable workflow.
   assert.match(verification, /workflow_call:/);
   assert.match(verification, /permissions:\n {2}contents: read/);
   assert.doesNotMatch(
@@ -500,10 +500,25 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
   );
   assert.match(
     verification,
-    /if: inputs\.artifact-name != ''\n {8}run: pnpm package:built && pnpm test:packaged/,
+    /if: inputs\.packaged-smoke \|\| inputs\.artifact-name != ''\n {8}run: pnpm package:built && pnpm test:packaged/,
   );
   assert.match(verification, /codesign --verify --deep --strict/);
-  assert.match(verification, /Signature=adhoc/);
+  assert.match(verification, /grep "Signature=adhoc"/);
+  assert.match(verification, /grep "TeamIdentifier=not set"/);
+  assert.match(
+    verification,
+    /GW_PACKAGE_INTENT" = "developer-build"[\s\S]*Guild Wars Reforged Preview\.app[\s\S]*io\.github\.mat4m0\.gwonmac\.preview/,
+  );
+  assert.match(
+    verification,
+    /test ! -e "\$app\/Contents\/Resources\/distribution-channel\.json"/,
+  );
+  assert.match(
+    verification,
+    /test ! -e "\$app\/Contents\/embedded\.provisionprofile"/,
+  );
+  assert.match(verification, /External app symlink:/);
+  assert.match(verification, /archive_product="Guild-Wars-Reforged-Preview"/);
   assert.match(verification, /ditto -c -k --sequesterRsrc --keepParent/);
   assert.match(verification, /format: spdx-json/);
   assert.match(verification, /SOURCE_COMMIT\.txt/);
@@ -527,20 +542,22 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
     /contents: write|attestations: write|id-token: write/,
   );
 
-  assert.match(main, /on:\n {2}push:\n {4}branches: \[main\]/);
-  assert.doesNotMatch(main, /pull_request:|workflow_dispatch:/);
-  assert.match(main, /artifact-retention-days: 1/);
-  assert.match(
+  for (const removed of [
+    ".github/workflows/main-snapshot.yml",
+    ".github/workflows/sign-preview.yml",
+    ".github/workflows/publish-snapshot.yml",
+  ]) {
+    assert.equal(existsSync(path.join(root, removed)), false);
+  }
+
+  assert.match(main, /name: Main verification[\s\S]*push:\n {4}branches: \[main\]/);
+  assert.match(main, /permissions:\n {2}contents: read/);
+  assert.match(main, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
+  assert.match(main, /packaged-smoke: true/);
+  assert.match(main, /package-intent: developer-build/);
+  assert.doesNotMatch(
     main,
-    /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
-  );
-  assert.match(main, /run-number: \$\{\{ github\.run_number \}\}/);
-  assert.match(main, /signer-sha: \$\{\{ github\.sha \}\}/);
-  assert.equal((main.match(/signer-sha:/gu) ?? []).length, 2);
-  assert.match(main, /package-intent: preview-handoff/);
-  assert.match(
-    main,
-    /sign:\n {4}needs: verify[\s\S]*uses: \.\/\.github\/workflows\/sign-preview\.yml[\s\S]*publish:\n {4}needs: sign[\s\S]*uses: \.\/\.github\/workflows\/publish-snapshot\.yml/,
+    /artifact-name:|environment:|secrets:|APPLE_|sign:|publish:|contents: write/,
   );
 
   assert.match(release, /name: Versioned release[\s\S]*workflow_dispatch:/);
@@ -550,106 +567,33 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
     /release-build:\n {4}if: github\.ref == 'refs\/heads\/main'\n {4}needs: verify/,
   );
 
-  // Tester dispatch is possible only from the trusted main workflow. The
-  // selected source is an exact commit and publishing waits for signing.
-  assert.match(manual, /name: Tester build[\s\S]*workflow_dispatch:/);
+  // Developer dispatch is possible only from the trusted main workflow. The
+  // selected source is an exact commit, and the workflow stops at an ad-hoc
+  // Actions artifact with no Apple credentials or GitHub release mutation.
+  assert.match(manual, /name: Developer build[\s\S]*workflow_dispatch:/);
+  assert.match(manual, /permissions:\n {2}contents: read/);
   assert.doesNotMatch(
     manual,
-    /schedule:|release-build|package\.json'\)\.version/,
+    /schedule:|pull_request:|push:|release-build|package\.json'\)\.version/,
   );
-  assert.match(manual, /artifact-retention-days: 1/);
+  assert.match(manual, /if: github\.ref == 'refs\/heads\/main'/);
+  assert.match(manual, /if ! \[\[ "\$COMMIT_SHA" =~ \^\[0-9a-f\]\{40\}\$ \]\]/);
+  assert.match(manual, /verify:\n {4}needs: validate/);
+  assert.match(manual, /artifact-retention-days: 7/);
   assert.match(
     manual,
-    /snapshot-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
+    /developer-build-\$\{\{ inputs\.commit-sha \}\}-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
   );
-  assert.match(manual, /run-number: \$\{\{ github\.run_number \}\}/);
-  assert.match(manual, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(manual, /checkout-ref: \$\{\{ inputs\.commit-sha \}\}/);
-  assert.match(manual, /signer-sha: \$\{\{ github\.sha \}\}/);
-  assert.equal((manual.match(/signer-sha:/gu) ?? []).length, 2);
-  assert.match(manual, /package-intent: preview-handoff/);
-  assert.match(manual, /environment: snapshot-signing-approval/);
-  assert.match(manual, /sign:\n {4}needs: \[verify, approve\]/);
-  assert.match(manual, /publish:\n {4}needs: sign/);
-  assert.match(manual, /uses: \.\/\.github\/workflows\/publish-snapshot\.yml/);
-
-  // The verification job has no secrets. The trusted signer verifies the
-  // artifact before importing protected-environment credentials, removes the
-  // keychain, and only then executes the signed applications.
-  assert.match(signer, /environment: snapshot-signing/);
-  assert.match(signer, /ref: \$\{\{ inputs\.signer-sha \}\}/);
-  assert.match(signer, /test "\$\(git rev-parse HEAD\)" = "\$SIGNER_SHA"/);
-  assert.match(signer, /Verify handoff without executing artifact code/);
-  assert.ok(
-    signer.indexOf("Verify handoff without executing artifact code")
-      < signer.indexOf("Import protected Preview signing material"),
-  );
-  assert.match(
-    signer,
-    /test ! -e "\$app\/Contents\/Resources\/distribution-channel\.json"/,
-  );
-  assert.ok(
-    signer.indexOf("Remove signing material before runtime tests")
-      < signer.indexOf("Prove signed Preview Keychain continuity"),
-  );
-  assert.match(signer, /GW_SIGNED_REPLACEMENT_APP_PATH/);
-  assert.match(signer, /GW_SIGNED_CHANNEL: preview/);
-  assert.equal(
-    signer.match(/pnpm test:signed-keychain/gu)?.length,
-    1,
-    "one continuity run already covers relaunch, move, replacement and cleanup",
-  );
-  assert.match(signer, /APPLE_PREVIEW_DEVELOPER_ID_PROFILE/);
-  assert.match(signer, /xcrun notarytool submit/);
-  assert.match(signer, /xcrun stapler staple/);
-  assert.match(signer, /SIGNER_COMMIT\.txt/);
-  assert.match(publisher, /SIGNER_COMMIT\.txt/);
-  assert.match(
-    publisher,
-    /test "\$\(tr -d '\\n' < "\$signer_commit"\)" = "\$SIGNER_SHA"/,
+  assert.match(manual, /package-intent: developer-build/);
+  assert.doesNotMatch(
+    manual,
+    /environment:|secrets:|APPLE_|notarytool|stapler|sign-preview|publish-snapshot|gh release|attestations: write|contents: write|id-token: write/,
   );
   assert.doesNotMatch(verification, /secrets\.|APPLE_DEVELOPER_ID_P12/);
-  assert.match(publisher, /Developer ID signed and notarized by Apple/);
 
-  // The handoff identity and checksums are checked before attestations and
-  // release creation. Cleanup runs last and uses an explicit apply switch.
-  const handoff = publisher.indexOf("- name: Verify package handoff");
-  const attest = publisher.indexOf("- name: Attest snapshot provenance");
-  const publish = publisher.indexOf(
-    "- name: Publish immutable snapshot prerelease",
-  );
-  const prune = publisher.indexOf("- name: Prune expired snapshots");
-  assert.ok(handoff < attest && attest < publish && publish < prune);
-  assert.match(
-    publisher,
-    /test "\$\(tr -d '\\n' < "\$source_commit"\)" = "\$COMMIT_SHA"/,
-  );
-  assert.match(publisher, /shasum -a 256 -c SHA256SUMS\.txt/);
-  assert.match(publisher, /tag="snapshot-\$RUN_NUMBER-\$short"/);
-  assert.match(publisher, /type: string/);
-  assert.match(
-    publisher,
-    /if ! \[\[ "\$RUN_NUMBER" =~ \^\[1-9\]\[0-9\]\*\$ \]\]/,
-  );
-  assert.match(publisher, /group: snapshot-publisher/);
-  assert.match(publisher, /if: steps\.assets\.outputs\.prune == 'true'/);
-  assert.match(
-    publisher,
-    /test\(\\"\^snapshot-\[1-9\]\[0-9\]\*-\[0-9a-f\]\{7,40\}\$\\"\)/,
-  );
-  assert.match(publisher, /--target "\$COMMIT_SHA"/);
-  assert.match(publisher, /--prerelease[\s\S]*--latest=false/);
-  assert.match(
-    publisher,
-    /gh release create "\$TAG" "\$ARCHIVE" "\$CHECKSUM" "\$SBOM"[\s\S]{0,80}"\$SOURCE_COMMIT" "\$SIGNER_COMMIT"/,
-  );
-  assert.match(publisher, /scripts\/snapshot-retention\.ts[\s\S]*--apply/);
-  assert.match(publisher, /only the newest three are retained/);
-  assert.match(publisher, /expire after 14 days/);
-  assert.match(publisher, /preview-feedback\.yml/);
-
-  // Cleanup's authority is the exact snapshot namespace. It deletes a selected
-  // release before its unique tag and cannot match any v* release.
+  // Historical public snapshots remain untouched. Their explicit maintenance
+  // command can delete only the old snapshot namespace and never a v* release.
   assert.match(
     retention,
     /\/\^snapshot-\[1-9\]\[0-9\]\*-\[0-9a-f\]\{7,40\}\$\//,
@@ -674,6 +618,25 @@ test("tester snapshots are verified, immutable, bounded, and isolated from relea
     assert.match(feedback, new RegExp(`id: ${id}[\\s\\S]*?required: true`));
   }
   assert.match(feedback, /id: diagnostics[\s\S]*?required: false/);
+  for (const id of [
+    "commit",
+    "run",
+    "macos",
+    "hardware",
+    "reproduction",
+    "expected",
+    "actual",
+    "versioned-release",
+  ]) {
+    assert.match(
+      developerFeedback,
+      new RegExp(`id: ${id}[\\s\\S]*?required: true`),
+    );
+  }
+  assert.match(
+    developerFeedback,
+    /id: diagnostics[\s\S]*?required: false/,
+  );
 });
 
 test("the root app and website add no runtime package entries and audit exceptions stay explicit", () => {

@@ -14,6 +14,11 @@ on:
         required: false
         type: number
         default: 1
+      packaged-smoke:
+        description: Run the ad-hoc packaged app without uploading an artifact.
+        required: false
+        type: boolean
+        default: false
       dependency-review:
         required: false
         type: boolean
@@ -68,7 +73,7 @@ jobs:
       - run: pnpm audit --audit-level=high
       - run: pnpm verify:runtime
       - name: Package and test the verified build
-        if: inputs.artifact-name != ''
+        if: inputs.packaged-smoke || inputs.artifact-name != ''
         run: pnpm package:built && pnpm test:packaged
 
       - name: Upload Electron failure evidence
@@ -93,13 +98,34 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           signature="$(codesign -dv --verbose=4 "$app" 2>&1)"
           echo "$signature"
-          echo "$signature" | grep -E "Signature=adhoc|TeamIdentifier=not set"
+          echo "$signature" | grep "Signature=adhoc"
+          echo "$signature" | grep "TeamIdentifier=not set"
+
+          archive_product="Guild-Wars-Reforged"
+          if [ "$GW_PACKAGE_INTENT" = "developer-build" ]; then
+            test "$(basename "$app")" = "Guild Wars Reforged Preview.app"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+              "$app/Contents/Info.plist")" = "io.github.mat4m0.gwonmac.preview"
+            test ! -e "$app/Contents/Resources/distribution-channel.json"
+            test ! -e "$app/Contents/embedded.provisionprofile"
+            app_root="$(cd "$app" && pwd -P)"
+            unexpected="$(find "$app" ! -type f ! -type d ! -type l -print -quit)"
+            test -z "$unexpected"
+            while IFS= read -r -d '' link; do
+              target="$(realpath "$link")"
+              case "$target" in
+                "$app_root"/*) ;;
+                *) echo "External app symlink: $link -> $target" >&2; exit 1 ;;
+              esac
+            done < <(find "$app" -type l -print0)
+            archive_product="Guild-Wars-Reforged-Preview"
+          fi
 
           commit="$(git rev-parse HEAD)"
           short="${commit:0:7}"
           mkdir distribution
-          archive="$PWD/distribution/Guild-Wars-Reforged-$short-macOS-arm64.zip"
-          sbom="$PWD/distribution/Guild-Wars-Reforged-$short-macOS-arm64.spdx.json"
+          archive="$PWD/distribution/$archive_product-$short-macOS-arm64.zip"
+          sbom="$PWD/distribution/$archive_product-$short-macOS-arm64.spdx.json"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
           printf '%s\n' "$commit" > distribution/SOURCE_COMMIT.txt
           echo "app=$app" >> "$GITHUB_OUTPUT"
