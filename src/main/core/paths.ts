@@ -86,7 +86,6 @@ export interface MultiProfilePaths {
   readonly root: string;
   readonly buildLibrary: string;
   readonly templates: string;
-  readonly templateSync: string;
   readonly windowState: string;
   readonly gameStorageClearRequest: string;
 }
@@ -101,7 +100,6 @@ export function multiProfilePaths(
     root,
     buildLibrary: path.join(root, "build-library.json"),
     templates: path.join(root, "templates.json"),
-    templateSync: path.join(root, "template-sync.json"),
     windowState: path.join(root, "window-state.json"),
     gameStorageClearRequest: path.join(root, "clear-game-storage-on-start"),
   };

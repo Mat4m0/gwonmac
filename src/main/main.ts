@@ -333,6 +333,9 @@ function buildWindowHost(
     stopCapture: stopDiagnosticCapture,
     reloadGame: (win) => {
       void (async () => {
+        // A refused template generation specifically asks for a reload. The
+        // command reports that as `failed`; it never rejects, and navigation
+        // must still establish the next projection generation.
         await sendRendererCommand(win, { type: "filesystem.sync" });
         sockets.closeAll(win.webContents.id);
         await win.loadURL(RENDERER_URL);

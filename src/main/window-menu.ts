@@ -160,6 +160,7 @@ export function installApplicationMenu({
           },
         },
         {
+          id: "reload-game",
           label: "Reload Game",
           accelerator: "CmdOrCtrl+R",
           click: async () => {

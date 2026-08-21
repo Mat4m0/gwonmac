@@ -24,8 +24,8 @@ import {
 } from "./accounts-window.js";
 import type { ClientRuntime } from "./client-runtime.js";
 import {
+  AccountTemplateSessions,
   loadAccountTemplateLibrary,
-  reconcileAccountTemplates,
   saveAccountTemplateLibrary,
 } from "./core/account-template-library.js";
 import {
@@ -81,6 +81,7 @@ export interface MultipleAccountsControllerOptions {
 export class MultipleAccountsController {
   private readonly accountsLock = new Mutex();
   private readonly templatesLock = new Mutex();
+  private readonly templateSessions = new AccountTemplateSessions<BrowserWindow>();
   private readonly credentialsStores = new Map<string, CredentialsStore>();
   private readonly steamSessionStores = new Map<string, SteamSessionStore>();
   private readonly profileProtocolSessions = new Set<ProfileId>();
@@ -340,17 +341,20 @@ export class MultipleAccountsController {
     });
   }
 
-  async loadTemplates(win: BrowserWindow): Promise<AccountTemplateLibrary | null> {
-    const context = windowRegistry.contextForWebContents(win.webContents.id);
-    if (context?.mode !== "multi" || context.role !== "game") return null;
-    const profile = this.profileFor(context.profileId);
-    const profilePaths = multiProfilePaths(this.options.paths, profile.id);
-    const libraryPath = profile.templates === "shared"
-      ? this.options.paths.multiSharedTemplates
-      : profilePaths.templates;
-    const library = await loadAccountTemplateLibrary(libraryPath);
-    await saveAccountTemplateLibrary(profilePaths.templateSync, library);
-    return library;
+  loadTemplates(win: BrowserWindow): Promise<AccountTemplateLibrary | null> {
+    return this.templatesLock.run(async () => {
+      const context = windowRegistry.contextForWebContents(win.webContents.id);
+      if (context?.mode !== "multi" || context.role !== "game") return null;
+      const profile = this.profileFor(context.profileId);
+      const profilePaths = multiProfilePaths(this.options.paths, profile.id);
+      const libraryPath = profile.templates === "shared"
+        ? this.options.paths.multiSharedTemplates
+        : profilePaths.templates;
+      const library = await loadAccountTemplateLibrary(libraryPath);
+      if (profile.templates === "shared") this.templateSessions.begin(win, library);
+      else this.templateSessions.forget(win);
+      return library;
+    });
   }
 
   saveTemplates(win: BrowserWindow, entries: readonly TemplateExportEntry[]): Promise<void> {
@@ -367,16 +371,12 @@ export class MultipleAccountsController {
         });
         return;
       }
-      const [base, latest] = await Promise.all([
-        loadAccountTemplateLibrary(profilePaths.templateSync),
-        loadAccountTemplateLibrary(this.options.paths.multiSharedTemplates),
-      ]);
-      const merged = {
-        revision: latest.revision + 1,
-        entries: reconcileAccountTemplates(base.entries, latest.entries, entries),
-      };
-      await saveAccountTemplateLibrary(this.options.paths.multiSharedTemplates, merged);
-      await saveAccountTemplateLibrary(profilePaths.templateSync, merged);
+      await this.templateSessions.save(win, entries, {
+        loadLatest: () =>
+          loadAccountTemplateLibrary(this.options.paths.multiSharedTemplates),
+        publish: (library) =>
+          saveAccountTemplateLibrary(this.options.paths.multiSharedTemplates, library),
+      });
     });
   }
 
@@ -467,7 +467,6 @@ export class MultipleAccountsController {
       );
       if (reset && profile.templates === "private") {
         await rm(profilePaths.templates, { force: true });
-        await rm(profilePaths.templateSync, { force: true });
       }
       await mkdir(profilePaths.root, { recursive: true });
       await prepareWindowState(profilePaths.windowState, newWindowOrdinal);
