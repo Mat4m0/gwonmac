@@ -18,8 +18,10 @@ import { fileURLToPath } from "node:url";
 import {
   sweepOrphanDirectories,
   sweepOrphans,
+  AtomicExclusiveWriteError,
   writeAll,
   writeAtomic,
+  writeAtomicExclusive,
   writeAtomicInDir,
   writeAtomicJson,
 } from "../../src/main/core/atomic-file.js";
@@ -112,6 +114,18 @@ describe("atomic-file", () => {
     assert.equal((await stat(path)).mode & 0o777, 0o600);
   });
 
+  it("creates a complete file without replacing an existing target", async () => {
+    const dir = await scratch();
+    const target = join(dir, "exclusive.json");
+    await writeAtomicExclusive(target, '{"first":true}', 0o600);
+    await assert.rejects(
+      writeAtomicExclusive(target, '{"second":true}', 0o600),
+      (error) => error instanceof AtomicExclusiveWriteError && !error.published,
+    );
+    assert.equal(await readFile(target, "utf8"), '{"first":true}');
+    assert.deepEqual(await readdir(dir), ["exclusive.json"]);
+  });
+
   it("writes large payloads through writeAtomicInDir", async () => {
     const dir = await scratch();
     const data = new Uint8Array(512 * 1024).map((_, i) => i & 0xff);
@@ -180,6 +194,15 @@ describe("atomic-file durability", () => {
     const target = join(dir, "durable.bin");
     const events = await recordSyncs(target, () =>
       writeAtomic(target, new Uint8Array([1, 2, 3])),
+    );
+    assert.deepEqual(events, ["file:before-rename", "dir:after-rename"]);
+  });
+
+  it("syncs a create-only temp before publishing its final name", async () => {
+    const dir = await scratch();
+    const target = join(dir, "exclusive.bin");
+    const events = await recordSyncs(target, () =>
+      writeAtomicExclusive(target, new Uint8Array([1, 2, 3])),
     );
     assert.deepEqual(events, ["file:before-rename", "dir:after-rename"]);
   });
