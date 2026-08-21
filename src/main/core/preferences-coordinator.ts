@@ -5,6 +5,7 @@
  */
 import type { AppSettings, AppSettingsPatch } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
+import { isDeepStrictEqual } from "node:util";
 import {
   sameTravelUserPreferences,
   storeTravelShortcuts,
@@ -46,6 +47,31 @@ function unconfirmedTravelWrite(cause: unknown): Error {
   );
 }
 
+async function saveSettingsAndReconcile(
+  path: string,
+  intended: AppSettings,
+): Promise<AppSettings> {
+  try {
+    return await saveSettings(path, intended);
+  } catch (error) {
+    if (!(error instanceof AtomicPublicationUnconfirmedError)) throw error;
+    let active: AppSettings;
+    try {
+      active = await loadSettings(path);
+    } catch (reloadError) {
+      throw new Error(
+        "Settings were published, but gwonmac could not confirm which values are active; reload before retrying.",
+        { cause: reloadError },
+      );
+    }
+    if (isDeepStrictEqual(active, intended)) return active;
+    throw new Error(
+      "Settings were published, but gwonmac found different active values; review them before retrying.",
+      { cause: error },
+    );
+  }
+}
+
 export class PreferencesCoordinator {
   readonly #lock = new Mutex();
   readonly #paths: () => PreferencesPaths;
@@ -62,13 +88,13 @@ export class PreferencesCoordinator {
     return this.#lock.run(async () => {
       const path = this.#paths().settings;
       const current = await loadSettings(path);
-      return saveSettings(path, { ...current, ...patch });
+      return saveSettingsAndReconcile(path, { ...current, ...patch });
     });
   }
 
   resetSettings(): Promise<AppSettings> {
     return this.#lock.run(() =>
-      saveSettings(this.#paths().settings, { ...DEFAULT_SETTINGS })
+      saveSettingsAndReconcile(this.#paths().settings, { ...DEFAULT_SETTINGS })
     );
   }
 
@@ -98,7 +124,7 @@ export class PreferencesCoordinator {
       }
       try {
         if (update.patch.shortcuts !== undefined) {
-          const saved = await saveSettings(paths.settings, {
+          const saved = await saveSettingsAndReconcile(paths.settings, {
             ...settings,
             travelShortcuts: storeTravelShortcuts(
               update.patch.shortcuts,

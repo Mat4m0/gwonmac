@@ -115,6 +115,14 @@ describe("Travel", () => {
       expected,
       patch: { shortcuts: expected.shortcuts, recentLimit: 3 },
     }), /exactly one durable owner/u);
+    assert.throws(() => parseTravelUserPreferencesUpdate({
+      expected,
+      patch: {},
+    }), /exactly one durable owner/u);
+    assert.throws(() => parseTravelUserPreferencesUpdate({
+      expected,
+      patch: { futurePreference: true },
+    }), /exactly one durable owner/u);
     assert.deepEqual(parseTravelUserPreferencesUpdate({
       expected,
       patch: { recentLimit: 3, recentMapIds: [] },

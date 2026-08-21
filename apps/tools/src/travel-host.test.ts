@@ -13,7 +13,7 @@ import {
   type TravelPreferences,
 } from "./travel-host";
 
-function fixture(recentLimit: 0 | 3 | 5 | 10 = 5) {
+function fixture(recentLimit: 0 | 3 | 5 | 10 = 5, refuseRecord = false) {
   let travel: TravelPreferences = Object.freeze({
     shortcuts: DEFAULT_TRAVEL_SHORTCUTS,
     synonyms: Object.freeze([]),
@@ -39,6 +39,7 @@ function fixture(recentLimit: 0 | 3 | 5 | 10 = 5) {
     return save(patch);
   });
   const recordConfirmed = vi.fn(async (mapId: number) => {
+    if (refuseRecord) throw new Error("injected unconfirmed Recent write");
     if (travel.recentLimit !== 0) {
       travel = save({
         recentMapIds: recordRecentTravel(travel.recentMapIds, mapId),
@@ -92,6 +93,18 @@ describe("native Travel host", () => {
 
     expect(host.attempt.value).toEqual({ status: "idle" });
     expect(recordConfirmed).toHaveBeenCalledExactlyOnceWith(449);
+  });
+
+  it("does not claim Recent stayed unchanged when Main cannot confirm it", async () => {
+    vi.useFakeTimers();
+    const { host } = fixture(5, true);
+
+    await host.travel({ mapId: 449 });
+    host.updateGameState({ status: "waiting", reason: "loading" });
+    host.updateGameState({ status: "ready", mapId: 449 });
+    await vi.runAllTimersAsync();
+
+    expect(host.notice.value?.message).toContain("could not confirm whether Recent was updated");
   });
 
   it("always releases a loading attempt after interruption or its arrival deadline", async () => {

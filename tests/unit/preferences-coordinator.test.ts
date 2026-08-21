@@ -24,6 +24,29 @@ async function fixture(): Promise<{
   return { coordinator: new PreferencesCoordinator(() => paths), ...paths };
 }
 
+async function failNextDirectorySync(action: () => Promise<void>): Promise<boolean> {
+  const probe = await open(join(tmpdir(), `gw-preferences-probe-${process.pid}`), "w");
+  const proto = Object.getPrototypeOf(probe) as {
+    sync: (this: FileHandle) => Promise<void>;
+  };
+  await probe.close();
+  const original = proto.sync;
+  let refused = false;
+  proto.sync = async function failAfterRename(this: FileHandle): Promise<void> {
+    if ((await this.stat()).isDirectory() && !refused) {
+      refused = true;
+      throw new Error("injected directory fsync failure");
+    }
+    return original.call(this);
+  };
+  try {
+    await action();
+  } finally {
+    proto.sync = original;
+  }
+  return refused;
+}
+
 describe("PreferencesCoordinator", () => {
   it("keeps the released district-bearing shortcut shape", async () => {
     const { coordinator, settings } = await fixture();
@@ -91,21 +114,7 @@ describe("PreferencesCoordinator", () => {
     const { coordinator, settings, travelPreferences } = await fixture();
     await writeFile(settings, JSON.stringify({ formatVersion: 1, ...DEFAULT_SETTINGS }));
     const current = await coordinator.getTravelPreferences();
-    const probe = await open(join(tmpdir(), `gw-preferences-probe-${process.pid}`), "w");
-    const proto = Object.getPrototypeOf(probe) as {
-      sync: (this: FileHandle) => Promise<void>;
-    };
-    await probe.close();
-    const original = proto.sync;
-    let refusedDirectorySync = false;
-    proto.sync = async function failAfterRename(this: FileHandle): Promise<void> {
-      if ((await this.stat()).isDirectory() && !refusedDirectorySync) {
-        refusedDirectorySync = true;
-        throw new Error("injected directory fsync failure");
-      }
-      return original.call(this);
-    };
-    try {
+    const refusedDirectorySync = await failNextDirectorySync(async () => {
       await assert.rejects(
         coordinator.updateTravelPreferences({
           expected: current,
@@ -113,12 +122,35 @@ describe("PreferencesCoordinator", () => {
         }),
         /could not confirm whether the new value is active/u,
       );
-    } finally {
-      proto.sync = original;
-    }
+    });
 
     assert.equal(refusedDirectorySync, true);
     assert.equal((await coordinator.getTravelPreferences()).recentLimit, 3);
     assert.equal(JSON.parse(await readFile(travelPreferences, "utf8")).recentLimit, 3);
+  });
+
+  it("returns an ordinary settings update that became active before fsync failed", async () => {
+    const { coordinator } = await fixture();
+    let saved = DEFAULT_SETTINGS;
+    const refusedDirectorySync = await failNextDirectorySync(async () => {
+      saved = await coordinator.updateSettings({ showDiagnostics: true });
+    });
+
+    assert.equal(refusedDirectorySync, true);
+    assert.equal(saved.showDiagnostics, true);
+    assert.equal((await coordinator.getSettings()).showDiagnostics, true);
+  });
+
+  it("returns a reset that became active before fsync failed", async () => {
+    const { coordinator } = await fixture();
+    await coordinator.updateSettings({ showDiagnostics: true, renderScale: 1 });
+    let saved = await coordinator.getSettings();
+    const refusedDirectorySync = await failNextDirectorySync(async () => {
+      saved = await coordinator.resetSettings();
+    });
+
+    assert.equal(refusedDirectorySync, true);
+    assert.deepEqual(saved, DEFAULT_SETTINGS);
+    assert.deepEqual(await coordinator.getSettings(), DEFAULT_SETTINGS);
   });
 });

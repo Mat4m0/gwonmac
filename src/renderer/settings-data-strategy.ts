@@ -4,9 +4,9 @@
  */
 import type {
   AppSettings,
-  AppSettingsPatch,
   CacheInfo,
   DownloadActivity,
+  RendererSettingsPatch,
 } from "../shared/contracts.js";
 import type { RendererMilestone } from "../shared/diagnostics.js";
 import { EtaDisplay } from "./progress-display.js";
@@ -15,7 +15,7 @@ type FeedbackTone = "neutral" | "progress" | "success" | "warning" | "error";
 
 type DataStrategyDependencies = Readonly<{
   loadSettings: () => Promise<AppSettings>;
-  persistSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
+  persistSettings: (patch: RendererSettingsPatch) => Promise<AppSettings>;
   feedback: (message?: string, tone?: FeedbackTone, resetAfter?: number) => void;
   milestone: (name: RendererMilestone) => void;
   dialogOpen: () => boolean;
@@ -448,8 +448,19 @@ export function bindSettingsDataStrategy(
         4500,
       );
     } catch {
+      settings = await dependencies.loadSettings().catch(() => null);
       if (settings) renderSettings(settings);
-      dependencies.feedback("Settings could not be saved. Your previous setting is still active; try again.", "error");
+      else {
+        for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="dataStrategy"]')) {
+          radio.checked = false;
+        }
+      }
+      dependencies.feedback(
+        settings
+          ? "Close and reopen Settings to confirm which download mode is active before retrying."
+          : "GWonMac could not confirm the active download mode. Close and reopen Settings before retrying.",
+        "error",
+      );
     }
   }
 

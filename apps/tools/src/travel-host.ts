@@ -146,7 +146,7 @@ export function createNativeTravelHost(
       if (next.mapId !== current.mapId) return;
       void recordConfirmedTravel(current.mapId).catch(() => {
         notice.value = {
-          message: "Travel succeeded, but Recent could not be updated.",
+          message: "Travel succeeded, but gwonmac could not confirm whether Recent was updated.",
           level: "warning",
         };
       });

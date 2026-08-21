@@ -8,7 +8,7 @@
 
 (function () {
   type AppSettings = import('../shared/contracts.js').AppSettings;
-  type AppSettingsPatch = import('../shared/contracts.js').AppSettingsPatch;
+  type RendererSettingsPatch = import('../shared/contracts.js').RendererSettingsPatch;
   type TravelUserPreferences =
     import('../shared/travel.js').TravelUserPreferences;
   type ClientSession = import('../shared/contracts.js').ClientSession;
@@ -421,7 +421,7 @@
   }
 
   // Serialize writes so a slower earlier write cannot replace newer intent.
-  function persistSettings(patch: AppSettingsPatch) {
+  function persistSettings(patch: RendererSettingsPatch) {
     const operation = settingsWrite.then(async () => {
       const saved = await window.gwNative.settings.set(patch);
       currentSettings = saved;
@@ -431,6 +431,23 @@
     });
     settingsWrite = operation.catch(() => undefined);
     return operation;
+  }
+
+  async function recoverSettingsAfterFailedWrite(message: string): Promise<void> {
+    currentSettings = await window.gwNative.settings.get().catch(() => null);
+    if (currentSettings) {
+      fillForm(currentSettings);
+      window.gwApplySettings?.(currentSettings);
+    } else {
+      form.setAttribute('aria-busy', 'true');
+      settingsPanes.inert = true;
+    }
+    setFeedback(
+      currentSettings
+        ? message
+        : 'GWonMac could not confirm the active settings. Close and reopen Settings before retrying.',
+      'error',
+    );
   }
 
   const extendedMemorySetting = import('./extended-memory-setting.js')
@@ -577,7 +594,7 @@
 
   function patchForControl(
     control: HTMLInputElement | HTMLSelectElement,
-  ): AppSettingsPatch | null {
+  ): RendererSettingsPatch | null {
     switch (control.name) {
       case 'renderScale': {
         const value = Number(control.value);
@@ -789,13 +806,9 @@
         }
         setFeedback('Saved.', 'success', 2200);
       })
-      .catch(() => {
-        if (currentSettings) {
-          fillForm(currentSettings);
-          window.gwApplySettings?.(currentSettings);
-        }
-        setFeedback('Settings could not be saved. Your previous setting is still active; try again.', 'error');
-      });
+      .catch(() => recoverSettingsAfterFailedWrite(
+        'Close and reopen Settings to confirm which value is active before retrying.',
+      ));
   });
 
   travelRecentsClear.addEventListener('click', () => {
@@ -836,7 +849,13 @@
       const reset = await window.gwNative.settings.reset();
       if (!reset) return;
       currentSettings = reset;
-      fillForm(reset);
+      currentTravelPreferences = await window.gwNative.travelPreferences.get()
+        .catch(() => null);
+      fillForm(reset, currentTravelPreferences);
+      if (currentTravelPreferences === null) {
+        travelRecentLimit.disabled = true;
+        travelRecentsClear.disabled = true;
+      }
       window.gwApplySettings?.(reset);
       setFeedback(
         'GWonMac settings were reset. Choose a download mode next launch.',
@@ -844,7 +863,11 @@
         4500,
       );
     } catch {
-      setFeedback('GWonMac settings could not be reset. Nothing changed; try again.', 'error');
+      currentSettings = null;
+      currentTravelPreferences = null;
+      form.setAttribute('aria-busy', 'true');
+      settingsPanes.inert = true;
+      setFeedback('GWonMac could not confirm whether settings were reset. Close and reopen Settings to review the active values.', 'error');
     }
   });
 

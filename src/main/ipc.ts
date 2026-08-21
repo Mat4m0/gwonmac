@@ -95,7 +95,7 @@ import type {
   SteamAcquireEvent,
   SteamAcquireResult,
 } from "./steam-acquire.js";
-import { parseSettingsPatch } from "./core/settings.js";
+import { parseRendererSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
 import { FREE_MARGIN, type ChunkStore } from "./core/chunk-store.js";
 import {
@@ -597,7 +597,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       }
     }),
 
-    settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
+    settingsSet: channel(one(parseRendererSettingsPatch), async (win, patch) => {
       const saved = await applySettingsChange(
         win,
         patch,

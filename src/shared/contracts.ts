@@ -386,6 +386,9 @@ export interface AppSettings {
 }
 
 export type AppSettingsPatch = Partial<AppSettings>;
+/** Settings fields the sandboxed renderer may write through generic IPC. */
+export type RendererSettingsPatch = Omit<AppSettingsPatch, "travelShortcuts">
+  & Readonly<{ travelShortcuts?: never }>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
@@ -875,7 +878,7 @@ export interface GwNativeApi {
   };
   settings: {
     get(): Promise<AppSettings>;
-    set(value: AppSettingsPatch): Promise<AppSettings>;
+    set(value: RendererSettingsPatch): Promise<AppSettings>;
     reset(): Promise<AppSettings | null>;
   };
   travelPreferences: {

@@ -326,7 +326,8 @@ function buildWindowHost(
     getProgress: () => clientRuntime.progress,
     getSettings: () => preferences.getSettings(),
     updateSettings: (patch) => preferences.updateSettings(patch),
-    exportDiagnostics: (win) => exportDiagnosticsForWindow(win),
+    exportDiagnostics: (win) =>
+      exportDiagnosticsForWindow(win, () => preferences.getSettings()),
     markPerformanceProblem,
     startCapture: startDiagnosticCapture,
     stopCapture: stopDiagnosticCapture,
@@ -783,7 +784,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
         detail: "Export it now while the capture context is fresh.",
       });
       if (response === 0) {
-        await exportDiagnosticsReport(() => exportDiagnosticsForWindow(win));
+        await exportDiagnosticsReport(() =>
+          exportDiagnosticsForWindow(win, () => preferences.getSettings())
+        );
       }
     });
   }
