@@ -472,6 +472,21 @@ export function createMainWindow(
   // The View menu item carries the same accelerator with
   // `registerAccelerator: false`, so the shortcut is still shown and
   // discoverable without also being bound and fired twice.
+  let menuShortcuts: Parameters<typeof installApplicationMenu>[0]["shortcuts"];
+  const installMenu = () => {
+    // The application menu is global. Settings can finish loading in any game
+    // window, so an unfocused window must never replace the focused owner's
+    // menu with callbacks that close over itself.
+    const focused = windowRegistry.focusedWindow();
+    if (focused ? focused !== win : windowRegistry.gameWindows().length !== 1) {
+      return;
+    }
+    installApplicationMenu({
+      host,
+      ...(menuShortcuts ? { shortcuts: menuShortcuts } : {}),
+      resetWindowState,
+    });
+  };
   installWindowShortcuts(win, {
     run(action) {
       if (action === "tools.toggle") void toggleTools(win);
@@ -479,12 +494,8 @@ export function createMainWindow(
       else void toggleTravel(win);
     },
     changed(shortcuts) {
-      installApplicationMenu({
-        host,
-        win,
-        shortcuts,
-        resetWindowState: () => resetWindowState(win),
-      });
+      menuShortcuts = shortcuts;
+      installMenu();
     },
   });
   void host.getSettings().then((settings) => {
@@ -610,11 +621,6 @@ export function createMainWindow(
     ) host.gameWindowClosed?.();
   });
 
-  const installMenu = () => installApplicationMenu({
-    host,
-    win,
-    resetWindowState: () => resetWindowState(win),
-  });
   win.on("focus", installMenu);
   installMenu();
   void win.loadURL(RENDERER_URL);

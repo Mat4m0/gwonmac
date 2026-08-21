@@ -114,9 +114,11 @@ describe("window registry", () => {
     registry.register(win, { mode: "single", role: "game" });
     assert.equal(registry.windowForWebContents(7), win);
     assert.equal(registry.windowForWebContents(8), null);
+    assert.equal(registry.focusedWindow(), null);
     assert.equal(registry.focusedGameWindow(), null);
     assert.equal(registry.focusedOrSoleGameWindow(), win);
     focused = true;
+    assert.equal(registry.focusedWindow(), win);
     assert.equal(registry.focusedGameWindow(), win);
   });
 

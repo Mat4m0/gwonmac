@@ -40,6 +40,14 @@ export async function isDomActiveElement(target: Locator): Promise<boolean> {
   );
 }
 
+const removeUserData = (userData: string): Promise<void> =>
+  rm(userData, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 100,
+  });
+
 export async function launchOffline(
   prefix: string,
   environment: Record<string, string> = {},
@@ -50,7 +58,7 @@ export async function launchOffline(
     await prepare(userData);
     return await launchOfflineAt(userData, environment);
   } catch (error) {
-    await rm(userData, { recursive: true, force: true });
+    await removeUserData(userData);
     throw error;
   }
 }
@@ -178,5 +186,5 @@ async function stopElectron(app: ElectronApplication): Promise<void> {
 
 export async function closeOffline(fixture: OfflineFixture): Promise<void> {
   await stopElectron(fixture.app);
-  await rm(fixture.userData, { recursive: true, force: true });
+  await removeUserData(fixture.userData);
 }
