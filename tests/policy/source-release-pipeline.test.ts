@@ -757,7 +757,7 @@ test("the website suite runs on its own path-filtered workflow", () => {
   assert.deepEqual(
     vercel.git?.deploymentEnabled,
     {
-      "*": false,
+      "**": false,
       main: true,
       "preview/*": true,
     },
