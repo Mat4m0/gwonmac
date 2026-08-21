@@ -273,7 +273,7 @@ export default tseslint.config(
     },
   },
   {
-    // The six page singletons index.html loads with a `<script>` tag, listed
+    // The five page singletons index.html loads with a `<script>` tag, listed
     // rather than globbed because being a classic script is a property of these
     // files and not of a directory. A classic script is exactly a file with no
     // top-level `import` or `export`: one of either makes it an ES module, and
@@ -293,7 +293,6 @@ export default tseslint.config(
       "src/renderer/harness.ts",
       "src/renderer/loading.ts",
       "src/renderer/settings.ts",
-      "src/renderer/enhancement-settings.ts",
     ],
     rules: {
       "no-var": "off",
