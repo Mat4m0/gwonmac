@@ -79,7 +79,6 @@ describe("resolved profile paths", () => {
       root: `${root}/multi/profiles/${id}`,
       buildLibrary: `${root}/multi/profiles/${id}/build-library.json`,
       templates: `${root}/multi/profiles/${id}/templates.json`,
-      templateSync: `${root}/multi/profiles/${id}/template-sync.json`,
       windowState: `${root}/multi/profiles/${id}/window-state.json`,
       gameStorageClearRequest: `${root}/multi/profiles/${id}/clear-game-storage-on-start`,
     });
