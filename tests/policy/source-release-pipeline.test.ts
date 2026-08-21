@@ -813,6 +813,7 @@ test("Vercel Previews are explicit, exact-head, and collaborator-only", () => {
   assert.match(workflow, /const ref = `heads\/preview\/pr-\$\{issueNumber\}`/);
   assert.match(workflow, /github\.rest\.git\.(?:createRef|updateRef)/);
   assert.match(workflow, /github\.rest\.git\.deleteRef/);
+  assert.match(workflow, /\[404, 422\]\.includes\(error\.status\)/);
   assert.match(
     workflow,
     /actions\/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd/,
