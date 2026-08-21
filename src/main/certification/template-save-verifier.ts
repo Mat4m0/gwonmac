@@ -21,6 +21,7 @@
  * no source string at all.
  */
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import {
   functionImportIndex,
   indexOfBytes,
@@ -553,10 +554,6 @@ export function deriveTemplateSaveBuild(
   return certify(input, draftTemplateSaveBuild(input));
 }
 
-function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 function templateCallerRoles(found: Located): Map<number, TemplateCallerRole> {
   const deleted = [...found.view.callers(
     found.view.functionIndex(found.targets.deleteFile.localFunction),
@@ -902,7 +899,7 @@ function equivalentTemplateSaveBuild(
     || analysis.encodings.canonical !== 0
     || analysis.semanticFingerprint
       !== TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT
-    || !sameJson(analysis.deleteAssertion, EXPECTED_DELETE_ASSERTION)
+    || !isDeepStrictEqual(analysis.deleteAssertion, EXPECTED_DELETE_ASSERTION)
     || entry.bridges.length !== baseline.bridges.length
   ) {
     return null;
@@ -920,7 +917,7 @@ function equivalentTemplateSaveBuild(
       || candidate.callSites.length !== expected.callSites.length
       || (
         expected.stubBody
-        && !sameJson(candidate.stubBody, expected.stubBody)
+        && !isDeepStrictEqual(candidate.stubBody, expected.stubBody)
       )
     ) {
       return null;
