@@ -700,12 +700,12 @@ test("the root app and website add no runtime package entries and audit exceptio
   );
 });
 
-test("packaging cleans its output first, and builds the renderer program", () => {
+test("packaging cleans its output first, and builds the renderer runtime", () => {
   assert.match(script("make"), /scripts\/clean-output\.mjs/);
   assert.match(script("package"), /pnpm build && pnpm package:built/);
   assert.match(script("package:built"), /scripts\/clean-output\.mjs/);
   assert.match(script("verify"), /verify:runtime && pnpm package:built/);
-  assert.match(read("scripts/build.mjs"), /tsconfig\.renderer\.json/);
+  assert.match(read("scripts/build.mjs"), /scripts\/build-renderer\.mjs/);
 });
 
 test("the default gate is deterministic and certifies every shipped test layer", () => {

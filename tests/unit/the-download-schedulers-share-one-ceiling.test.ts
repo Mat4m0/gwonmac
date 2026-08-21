@@ -4,10 +4,7 @@
 // that keeps it one: a fourth const named for the same budget is what a reader
 // would take for the ceiling and what a scheduler would then spend twice.
 //
-// The renderer's import is the fragile half, and its second test is here for
-// that reason. `src/shared` reaches the renderer only through the named
-// allowlist in src/main/protocol.ts; a value import of a module outside it
-// typechecks, lints, passes every unit test, and 404s when the launcher runs.
+// Rollup follows this value import into the emitted renderer closure.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -56,20 +53,12 @@ test("no second declaration of the ceiling exists", () => {
   );
 });
 
-test("the renderer's scheduler can load the module that declares it", () => {
+test("the renderer's scheduler imports the module that declares it", () => {
   const scheduler = read("src/renderer/image-source.ts");
   assert.match(
     scheduler,
     /^import \{\n\s*ARENANET_REQUEST_CEILING,/mu,
     "src/renderer/image-source.ts no longer imports the ceiling as a value",
-  );
-
-  const allowlist = /const RENDERER_SHARED_MODULES = new Set\(\[([^\]]*)\]\)/u
-    .exec(read("src/main/protocol.ts"));
-  assert.ok(allowlist, "src/main/protocol.ts no longer declares the allowlist");
-  assert.ok(
-    allowlist[1]!.includes('"contracts.js"'),
-    "gw://app/shared/contracts.js is no longer served to the renderer",
   );
 });
 

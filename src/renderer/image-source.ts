@@ -9,8 +9,8 @@
  * algorithms testable.
  */
 
-// A runtime import, not a type-only one: src/main/protocol.ts serves
-// build/shared/contracts.js at gw://app/shared/contracts.js for exactly this.
+// A runtime import, not a type-only one: Rollup includes the canonical contract
+// in the renderer's runtime closure.
 import {
   ARENANET_REQUEST_CEILING,
   type SnapshotMetadata,
