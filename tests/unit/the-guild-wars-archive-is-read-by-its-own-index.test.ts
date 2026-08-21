@@ -12,7 +12,7 @@
 // using the id as an index reads an unrelated file — which is what slot 2, the
 // id index, exists to prevent.
 //
-//   node --import ./scripts/ts-hook.mjs --experimental-strip-types --test \
+//   node --import ./scripts/ts-hook.mjs --test \
 //     tests/unit/the-guild-wars-archive-is-read-by-its-own-index.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";

@@ -5,7 +5,7 @@
 // convincing-looking garbage. The signature is four weak fields together, and
 // this is mostly about the near-misses each one has to reject.
 //
-//   node --import ./scripts/ts-hook.mjs --experimental-strip-types --test \
+//   node --import ./scripts/ts-hook.mjs --test \
 //     tests/unit/the-skill-table-is-found-by-shape-not-by-a-pinned-address.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";

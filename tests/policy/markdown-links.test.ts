@@ -25,7 +25,6 @@ const checker = path.join(root, "scripts/check-markdown-links.ts");
 const LOADER = [
   "--import",
   pathToFileURL(path.join(root, "scripts/ts-hook.mjs")).href,
-  "--experimental-strip-types",
 ];
 
 const fixtures: string[] = [];

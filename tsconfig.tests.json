@@ -33,9 +33,9 @@
     "allowJs": true,
     "checkJs": true,
 
-    // `pnpm test:unit` runs Node with `--experimental-strip-types`, which can
-    // only erase syntax. An `enum`, a `namespace`, a parameter property, or an
-    // `import x = require()` would type-check and then fail at run time. This
+    // Node's built-in TypeScript support can only erase syntax. An `enum`, a
+    // `namespace`, a parameter property, or an `import x = require()` would
+    // type-check and then fail at run time. This
     // makes that a compile error instead of a surprise.
     "erasableSyntaxOnly": true,
 

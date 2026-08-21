@@ -868,7 +868,7 @@ test("client recertification reports evidence but cannot grant authority", () =>
   // of it — `pnpm/action-setup` and `pnpm install` are the same defect here.
   assert.match(
     detect,
-    /run: node --import \.\/scripts\/ts-hook\.mjs --experimental-strip-types scripts\/official-client\.ts$/mu,
+    /run: node --import \.\/scripts\/ts-hook\.mjs scripts\/official-client\.ts$/mu,
   );
   assert.doesNotMatch(detect, /pnpm|rustup|certification\.js|--download/);
   assert.match(detect, /permissions:\n {6}contents: read\n {6}issues: write/);
