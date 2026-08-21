@@ -49,6 +49,13 @@ It cannot prove an improvement.
 For a short hitch, record Level 2 for only the reproduction window. Stop soon
 after the problem. A trace that stops before the hitch cannot explain it.
 
+In Multiple Accounts mode, a capture belongs to the registered game window
+that started it for its complete lifetime. Focus changes cannot move its
+status, marker, export, or completion prompt to another profile. Closing or
+crashing the owner stops the capture without falling back to another game.
+Automation uses the focused registered game, or the sole game when exactly one
+exists; it refuses an ambiguous set of unfocused games.
+
 ## Export contents
 
 A current ZIP contains a manifest, report, summary, current events,

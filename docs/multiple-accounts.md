@@ -162,6 +162,11 @@ Warnings, native dialogs, renderer commands, input state, and diagnostics stay
 with the game window that initiated them. Application updates and shared game
 downloads remain application-wide and report progress to every game window.
 
+A performance capture keeps its initiating game window as its owner until it
+stops. Mark, stop, export, and completion feedback cannot move to whichever
+profile gains focus later. Closing or crashing that owner performs bounded
+cleanup and never selects another account as a fallback.
+
 The Account Picker cannot access game sockets, saved login, player files, or
 build writes. Diagnostics use ephemeral window identifiers. They do not record
 profile names, stable profile IDs, account identifiers, credentials, template

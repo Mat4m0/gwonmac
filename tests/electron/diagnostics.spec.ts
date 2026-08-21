@@ -229,13 +229,15 @@ test.describe("diagnostics", () => {
       const modulePath = path.join(root, "build/main/diagnostics.js");
       const contractsPath = path.join(root, "build/shared/contracts.js");
       const stopped = await fixture.app.evaluate(
-        async ({ app: electronApp, contentTracing }, args) => {
+        async ({ app: electronApp, BrowserWindow, contentTracing }, args) => {
           const load = process
             .getBuiltinModule("node:module")
             .createRequire(args.modulePath);
           const diagnostics = load(args.modulePath);
           const { DEFAULT_SETTINGS } = load(args.contractsPath);
-          await diagnostics.startDiagnosticCapture(2);
+          const owner = BrowserWindow.getAllWindows()[0];
+          if (!owner) throw new Error("diagnostics owner is unavailable");
+          await diagnostics.startDiagnosticCapture(owner, 2);
 
           const originalStopRecording = contentTracing.stopRecording;
           let attemptedTarget = "";

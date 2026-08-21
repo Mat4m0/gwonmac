@@ -237,7 +237,7 @@ export function installApplicationMenu({
               label: "Start Performance Capture",
               click: async () => {
                 await resetGameInput(win);
-                void host.startCapture(1).catch((error) => {
+                void host.startCapture(win, 1).catch((error) => {
                   void dialog.showMessageBox(win, {
                     type: "error",
                     buttons: ["OK"],
@@ -253,7 +253,7 @@ export function installApplicationMenu({
               accelerator: "CmdOrCtrl+Shift+M",
               click: async () => {
                 await resetGameInput(win);
-                host.markPerformanceProblem();
+                host.markPerformanceProblem(win);
               },
             },
             {
@@ -261,7 +261,7 @@ export function installApplicationMenu({
               label: "Start Chromium Trace",
               click: async () => {
                 await resetGameInput(win);
-                void host.startCapture(2).catch((error) => {
+                void host.startCapture(win, 2).catch((error) => {
                   void dialog.showMessageBox(win, {
                     type: "error",
                     buttons: ["OK"],
@@ -288,7 +288,7 @@ export function installApplicationMenu({
               label: "Stop Capture",
               click: async () => {
                 await resetGameInput(win);
-                void host.stopCapture();
+                void host.stopCapture(win).catch(() => undefined);
               },
             },
           ],

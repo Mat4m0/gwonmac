@@ -28,6 +28,7 @@ import {
   completedTracePath,
   exportedCaptureLevel,
   stopDiagnosticCapture,
+  stopDiagnosticCaptureForWindow,
 } from "./capture.js";
 import { inspectEventLog, type RedactionResult } from "./detector.js";
 import { runtimeVersions } from "./flight-recorder.js";
@@ -265,6 +266,9 @@ export async function exportDiagnosticsForWindow(
   win: BrowserWindow,
   readSettings: () => Promise<AppSettings>,
 ): Promise<string> {
+  if (activeCaptureLevel() !== 0) {
+    await stopDiagnosticCaptureForWindow(win, "export");
+  }
   // The report has always been a PKZIP archive; `.zip` is the name that lets
   // GitHub accept it as an attachment without a Finder round-trip.
   const { canceled, filePath } = await dialog.showSaveDialog(win, {

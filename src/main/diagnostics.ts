@@ -31,6 +31,7 @@ export {
   setDiagnosticCaptureStoppedHandler,
   startDiagnosticCapture,
   stopDiagnosticCapture,
+  stopDiagnosticCaptureForWindow,
 } from "./diagnostics/capture.js";
 export {
   startClientUpdateSpan,
