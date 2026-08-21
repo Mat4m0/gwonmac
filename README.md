@@ -110,7 +110,7 @@ pnpm exec playwright install chromium
 pnpm dev
 ```
 
-Use `pnpm check` for the fast source gate. Use `pnpm verify` before a pull
+Use `pnpm run check` for the fast source gate. Use `pnpm verify` before a pull
 request. The complete contributor setup is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Documentation

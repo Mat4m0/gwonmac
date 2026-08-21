@@ -10,7 +10,7 @@
 // The test also runs the other way: a token nothing reads is dead weight in
 // the one file people open to find out what they are allowed to change.
 //
-//   node --import ./scripts/ts-hook.mjs --experimental-strip-types --test \
+//   node --import ./scripts/ts-hook.mjs --test \
 //     tests/unit/the-ui-system-has-one-place-to-change-a-colour.test.ts
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

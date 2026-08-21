@@ -41,7 +41,7 @@ import {
   EMPTY_LIBRARY,
   parseBuildLibrary,
 } from "../../shared/builds/parse-library.js";
-import { writeAtomicJson } from "./atomic-file.js";
+import { writeAtomicJson, writeAtomicJsonExclusive } from "./atomic-file.js";
 
 /** Owner-only: a build library is a player's own work, not shared state. */
 const LIBRARY_MODE = 0o600;
@@ -127,6 +127,16 @@ export async function saveBuildLibrary(
 ): Promise<BuildLibrary> {
   const cleaned = parseBuildLibrary(value);
   await writeAtomicJson(path, cleaned, LIBRARY_MODE);
+  return cleaned;
+}
+
+/** First-account import: publish a complete library without replacing recovery data. */
+export async function saveBuildLibraryExclusive(
+  path: string,
+  value: BuildLibrary,
+): Promise<BuildLibrary> {
+  const cleaned = parseBuildLibrary(value);
+  await writeAtomicJsonExclusive(path, cleaned, LIBRARY_MODE);
   return cleaned;
 }
 

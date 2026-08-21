@@ -55,7 +55,7 @@ Start with:
 
 ```bash
 pnpm certification doctor
-pnpm check
+pnpm run check
 pnpm build
 pnpm test:integration
 ```
@@ -276,7 +276,7 @@ Run the downstream chain with exact regression shortcuts disabled:
 ```bash
 pnpm certification recertify "/absolute/path/Gw.jspi.wasm"
 pnpm certification double-click "/absolute/path/Gw.jspi.wasm"
-pnpm check
+pnpm run check
 ```
 
 `recertify` must report per-feature ABI/input-hash-bound verdicts, and

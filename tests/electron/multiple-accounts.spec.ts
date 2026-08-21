@@ -153,6 +153,32 @@ test("Hub exposes the focused chooser, account sheets, and Settings management",
     await fixture.page.getByRole("button", { name: "Delete…" }).click();
     await expect(fixture.page.getByText("Delete Me was permanently deleted.")).toBeVisible();
     await expect(fixture.page.getByText("No archived accounts.")).toBeVisible();
+
+    await fixture.page.evaluate((profileId) =>
+      window.gwNative.accounts.open([profileId as ProfileId]), SECOND);
+    await expect.poll(() => fixture.app.windows().length).toBe(2);
+    const privateGame = fixture.app.windows().find((page) => page !== fixture.page);
+    if (!privateGame) throw new Error("private account window not found");
+    await privateGame.waitForLoadState("domcontentloaded");
+    await privateGame.evaluate(() => window.gwNative.accounts.loadTemplates());
+    await privateGame.evaluate(() => window.gwNative.accounts.saveTemplates([{
+      path: "Skills/Private.txt",
+      contents: "OQCiUyo8AkVwR4KMMGAAAEAA",
+    }]));
+    await privateGame.evaluate(() => window.gwNative.accounts.saveTemplates([{
+      path: "Skills/Private.txt",
+      contents: "OQCiUyo8AkVwR4KMMGAAAEAB",
+    }]));
+    expect(JSON.parse(await readFile(path.join(
+      fixture.userData,
+      "multi",
+      "profiles",
+      SECOND,
+      "templates.json",
+    ), "utf8"))).toMatchObject({
+      revision: 2,
+      entries: [{ contents: "OQCiUyo8AkVwR4KMMGAAAEAB" }],
+    });
   } finally {
     await closeOffline(fixture);
   }
@@ -375,6 +401,10 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       fixture.page.evaluate(() => window.gwNative.credentials.load()),
     ).rejects.toThrow();
 
+    await expect(games[0]!.evaluate(() => window.gwNative.accounts.saveTemplates([{
+      path: "Skills/BeforeLoad.txt",
+      contents: "OQCiUyo8AkVwR4KMMGAAAEAA",
+    }]))).rejects.toThrow(/must load before/);
     await Promise.all(games.map((game) =>
       game.evaluate(() => window.gwNative.accounts.loadTemplates()),
     ));
@@ -386,13 +416,81 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       path: "Skills/Alt.txt",
       contents: "OQCiUyo8AkVwR4KMMGAAAEAB",
     }]));
+    const sharedPath = path.join(fixture.userData, "multi", "shared", "templates.json");
     const sharedTemplates = JSON.parse(await readFile(
-      path.join(fixture.userData, "multi", "shared", "templates.json"),
+      sharedPath,
       "utf8",
-    )) as { entries: Array<{ path: string }> };
+    )) as { revision: number; entries: Array<{ path: string }> };
     expect(sharedTemplates.entries.map((entry) => entry.path)).toEqual([
       "Skills/Alt.txt",
       "Skills/Primary.txt",
+    ]);
+    await games[1]!.evaluate(() => window.gwNative.accounts.saveTemplates([{
+      path: "Skills/Alt.txt",
+      contents: "OQCiUyo8AkVwR4KMMGAAAEAB",
+    }]));
+    expect(JSON.parse(await readFile(sharedPath, "utf8"))).toEqual(sharedTemplates);
+    await expect(games[1]!.evaluate(() => window.gwNative.accounts.saveTemplates([{
+      path: "Skills/Alt.txt",
+      contents: "OQCiUyo8AkVwR4KMMGAAAEAC",
+    }]))).rejects.toThrow(/reload before saving again/);
+
+    const ownedGames = await Promise.all(games.map(async (game) => ({
+      game,
+      credentials: await game.evaluate(() => window.gwNative.credentials.load()),
+    })));
+    const altGame = ownedGames.find(({ credentials }) =>
+      credentials?.username === "second@example.test")?.game;
+    const nonTargetGame = ownedGames.find(({ credentials }) =>
+      credentials?.username === "first@example.test")?.game;
+    if (!altGame || !nonTargetGame) throw new Error("profile pages not found");
+    await Promise.all(ownedGames.map(({ game }) => game.evaluate(() => {
+      (window as typeof window & { __reloadProof?: boolean }).__reloadProof = true;
+    })));
+    await fixture.app.evaluate(({ app, BrowserWindow }) => {
+      const alt = BrowserWindow.getAllWindows().find((win) =>
+        win.getTitle() === "Guild Wars Reforged — Alt");
+      if (!alt) throw new Error("Alt window is unavailable");
+      alt.show();
+      app.focus({ steal: true });
+      alt.focus();
+    });
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getFocusedWindow()?.getTitle(),
+    )).toBe("Guild Wars Reforged — Alt");
+    const reloaded = altGame.waitForEvent("framenavigated", {
+      predicate: (frame) => frame === altGame.mainFrame(),
+    });
+    await fixture.app.evaluate(({ Menu }) => {
+      const item = Menu.getApplicationMenu()?.getMenuItemById("reload-game");
+      if (!item?.click) throw new Error("Reload Game menu item is unavailable");
+      item.click(item, undefined, {} as Electron.KeyboardEvent);
+    });
+    await reloaded;
+    await altGame.waitForLoadState("domcontentloaded");
+    expect(await altGame.evaluate(() =>
+      (window as typeof window & { __reloadProof?: boolean }).__reloadProof,
+    )).toBeUndefined();
+    expect(await nonTargetGame.evaluate(() =>
+      (window as typeof window & { __reloadProof?: boolean }).__reloadProof,
+    )).toBe(true);
+    const reloadedGame = altGame;
+    await reloadedGame.evaluate(() => window.gwNative.accounts.loadTemplates());
+    await reloadedGame.evaluate(() => window.gwNative.accounts.saveTemplates([
+      {
+        path: "Skills/Alt.txt",
+        contents: "OQCiUyo8AkVwR4KMMGAAAEAC",
+      },
+      {
+        path: "Skills/Primary.txt",
+        contents: "OQCiUyo8AkVwR4KMMGAAAEAA",
+      },
+    ]));
+    expect((JSON.parse(await readFile(sharedPath, "utf8")) as {
+      entries: Array<{ path: string; contents: string }>;
+    }).entries).toEqual([
+      { path: "Skills/Alt.txt", contents: "OQCiUyo8AkVwR4KMMGAAAEAC" },
+      { path: "Skills/Primary.txt", contents: "OQCiUyo8AkVwR4KMMGAAAEAA" },
     ]);
 
     const libraries = await Promise.all(games.map((game) =>

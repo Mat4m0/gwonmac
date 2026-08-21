@@ -16,10 +16,13 @@
  *
  */
 import { createHash } from "node:crypto";
+import { COMPANION_DISPATCH_KINDS } from "../../shared/companion-abi.js";
 import {
   enhancementCapabilityProfile,
+  enhancementCapabilitiesCover,
   enhancementHooksFor,
   ENHANCEMENT_TRANSFORM_ABI,
+  parseEnhancementCapabilities,
   validEnhancementCapabilities,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
@@ -73,48 +76,9 @@ const DISPATCH_PARAMS = 6;
  *  command; the widest builder we have takes four scalars. */
 const COMMAND_PARAMS = 5;
 const COMMAND_ARGS = COMMAND_PARAMS - 1;
-const DISPATCH_TICK = 0;
-const DISPATCH_CURSOR = 1;
-const DISPATCH_UI = 2;
 
 function fail(message: string): never {
   throw new Error(`enhancement transform: ${message}`);
-}
-
-function exactCapabilities(value: unknown): EnhancementCapabilities | null {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  const keys = Object.keys(record);
-  if (
-    keys.length !== 7
-    || !Object.hasOwn(record, "nativeCursor")
-    || !Object.hasOwn(record, "targetObservation")
-    || !Object.hasOwn(record, "partyObservation")
-    || !Object.hasOwn(record, "teamApply")
-    || !Object.hasOwn(record, "travelAction")
-    || !Object.hasOwn(record, "xunlaiAction")
-    || !Object.hasOwn(record, "chatAliases")
-    || typeof record.nativeCursor !== "boolean"
-    || typeof record.targetObservation !== "boolean"
-    || typeof record.partyObservation !== "boolean"
-    || typeof record.teamApply !== "boolean"
-    || typeof record.travelAction !== "boolean"
-    || typeof record.xunlaiAction !== "boolean"
-    || typeof record.chatAliases !== "boolean"
-  ) {
-    return null;
-  }
-  return Object.freeze({
-    nativeCursor: record.nativeCursor,
-    targetObservation: record.targetObservation,
-    partyObservation: record.partyObservation,
-    teamApply: record.teamApply,
-    travelAction: record.travelAction,
-    xunlaiAction: record.xunlaiAction,
-    chatAliases: record.chatAliases,
-  });
 }
 
 function encodeName(value: string): Uint8Array {
@@ -259,7 +223,7 @@ function resolveEnhancementTransform(
   build: KnownEnhancementBuild,
   requestedCapabilities: EnhancementCapabilities,
 ) {
-  const capabilities = exactCapabilities(requestedCapabilities)
+  const capabilities = parseEnhancementCapabilities(requestedCapabilities)
     ?? fail("capability selection is invalid");
   if (
     !validEnhancementCapabilities(capabilities)
@@ -268,15 +232,7 @@ function resolveEnhancementTransform(
     fail("capability profile is not certified");
   }
   const supported = supportedEnhancementCapabilities(build);
-  if (
-    (capabilities.nativeCursor && !supported.nativeCursor)
-    || (capabilities.targetObservation && !supported.targetObservation)
-    || (capabilities.partyObservation && !supported.partyObservation)
-    || (capabilities.teamApply && !supported.teamApply)
-    || (capabilities.travelAction && !supported.travelAction)
-    || (capabilities.xunlaiAction && !supported.xunlaiAction)
-    || (capabilities.chatAliases && !supported.chatAliases)
-  ) {
+  if (!enhancementCapabilitiesCover(supported, capabilities)) {
     fail("capability facts are not certified for this build");
   }
   const cursorEvent = build.cursorEvent!;
@@ -333,7 +289,7 @@ function resolveEnhancementTransform(
         build.hookParams,
         build.hookResults,
       ),
-      dispatchKind: DISPATCH_TICK,
+      dispatchKind: COMPANION_DISPATCH_KINDS.tick,
     });
   }
   if (selectedHooks.cursor) {
@@ -344,7 +300,7 @@ function resolveEnhancementTransform(
         cursorEvent.params,
         cursorEvent.results,
       ),
-      dispatchKind: DISPATCH_CURSOR,
+      dispatchKind: COMPANION_DISPATCH_KINDS.cursor,
     });
   }
   const uiDispatcherHook = selectedHooks.ui || capabilities.travelAction
@@ -358,7 +314,7 @@ function resolveEnhancementTransform(
   if (selectedHooks.ui) {
     selected.push({
       ...uiDispatcherHook!,
-      dispatchKind: DISPATCH_UI,
+      dispatchKind: COMPANION_DISPATCH_KINDS.ui,
     });
   }
   const bodyHash = (functionIndex: number): string => {
@@ -793,8 +749,10 @@ function assembleEnhancementTransform(
   };
   const selectedOriginalIndices = selected.map((hook) =>
     appendFunction(hook.typeIndex, bodies[hook.localIndex]!));
+  const uiHookIndex = selected.findIndex((hook) =>
+    hook.dispatchKind === COMPANION_DISPATCH_KINDS.ui);
   const uiOriginalIndex = selectedHooks.ui
-    ? selectedOriginalIndices[selected.findIndex((hook) => hook.dispatchKind === DISPATCH_UI)]!
+    ? selectedOriginalIndices[uiHookIndex]!
     : null;
   selected.forEach((hook, index) => {
     nextBodies[hook.localIndex] = dispatcher(

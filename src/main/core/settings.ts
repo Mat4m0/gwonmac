@@ -28,6 +28,7 @@ import {
   UI_STYLES,
   type AppSettings,
   type AppSettingsPatch,
+  type RendererSettingsPatch,
 } from "../../shared/contracts.js";
 import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
@@ -224,6 +225,23 @@ export function parseSettingsPatch(raw: unknown): AppSettingsPatch {
       Object.assign(patch, { [key]: parsed[key] });
     }
   }
+  return patch;
+}
+
+/** The generic renderer bridge cannot bypass Travel's compare-and-refuse path. */
+export function parseRendererSettingsPatch(raw: unknown): RendererSettingsPatch {
+  if (
+    raw !== null
+    && typeof raw === "object"
+    && !Array.isArray(raw)
+    && Object.hasOwn(raw, "travelShortcuts")
+  ) {
+    throw new AppError(
+      "bad_settings",
+      "settings.travelShortcuts must use the Travel preference capability",
+    );
+  }
+  const { travelShortcuts: _travelShortcuts, ...patch } = parseSettingsPatch(raw);
   return patch;
 }
 

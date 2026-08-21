@@ -39,6 +39,7 @@ import {
   type AppSettings,
 } from "../src/shared/contracts.ts";
 import { parseSettings } from "../src/main/core/settings.ts";
+import { saveWindowState } from "../src/main/core/window-state.ts";
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.ts";
 import {
   compareReleaseVersions,
@@ -90,6 +91,7 @@ if (compareReleaseVersions(parsedCandidate, parsedStable) <= 0) {
 
 const productName = DISTRIBUTION_CHANNEL_CONFIG.release.productName;
 const userData = await mkdtemp(path.join(tmpdir(), "gwonmac-stable-beta-"));
+const windowStatePath = path.join(userData, "window-state.json");
 await writeFile(
   path.join(userData, "settings.json"),
   JSON.stringify({ autoCheckUpdates: false }),
@@ -249,19 +251,11 @@ function semanticSettings(
   return settings;
 }
 
-async function setWindowSize(page: Page, width: number, height: number): Promise<void> {
-  const session = await page.context().newCDPSession(page);
-  try {
-    const { windowId } = await session.send("Browser.getWindowForTarget");
-    await session.send("Browser.setWindowBounds", {
-      windowId,
-      bounds: { width, height },
-    });
-  } finally {
-    await session.detach();
-  }
-  await new Promise((resolve) => setTimeout(resolve, 200));
-}
+const publishWindowSize = (width: number, height: number): Promise<void> =>
+  saveWindowState(windowStatePath, {
+    bounds: { x: 100, y: 100, width, height },
+    mode: "normal",
+  });
 
 async function windowSize(page: Page): Promise<{ width: number; height: number }> {
   return page.evaluate(() => ({ width: outerWidth, height: outerHeight }));
@@ -374,7 +368,17 @@ try {
   );
 
   console.log("stable/beta compatibility: latest Stable creates canonical state");
+  // The Electron suite owns native resize-to-disk behaviour. This release gate
+  // writes through the candidate's canonical serializer so it can concentrate
+  // on whether both packaged versions read the exact same durable shape.
+  await publishWindowSize(1_000, 700);
   running = await launch(stableApp);
+  const stableInitial = await readCanonical(running.page);
+  assert.equal(
+    stableInitial.recovered,
+    false,
+    "latest Stable recovered its fresh build library before the round-trip",
+  );
   const launchedStableVersion = (await running.page.evaluate(
     () => window.gwNative.appUpdates.getState(),
   )).currentVersion;
@@ -398,7 +402,6 @@ try {
     initialLibrary,
   );
   await roundTripProfileStore(running.page, null, "stable-template");
-  await setWindowSize(running.page, 1_000, 700);
   await closePackagedApp(running);
   running = null;
   const stableSettingsDocument = await readSettingsDocument();
@@ -432,9 +435,9 @@ try {
       library: candidateLibrary,
     },
   );
-  await setWindowSize(running.page, 960, 680);
   await closePackagedApp(running);
   running = null;
+  await publishWindowSize(960, 680);
   const candidateSettingsDocument = await readSettingsDocument();
   assert.deepEqual(
     sortedKeys(candidateSettingsDocument),

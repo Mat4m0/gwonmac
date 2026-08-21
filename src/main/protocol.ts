@@ -5,9 +5,9 @@
  *
  * Every filesystem path is resolved and then proved to still be under its root,
  * so a traversal, an encoded separator or an embedded NUL cannot reach a file
- * outside it. The snapshot is served from ranges only. A closed set of shared
- * modules is reachable from `src/shared`, named here rather than inferred, and
- * a route the proxy does not recognise is refused rather than forwarded.
+ * outside it. The snapshot is served from ranges only. Renderer runtime
+ * dependencies are emitted inside the renderer tree, and a route the proxy
+ * does not recognise is refused rather than forwarded.
  *
  * The response headers, including the CSP, are attached here for everything
  * this scheme serves, so no individual handler can serve a document without
@@ -66,25 +66,6 @@ const CSP =
   "object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'; " +
   "frame-ancestors 'none'";
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
-const RENDERER_SHARED_MODULES = new Set([
-  "companion-abi.js",
-  "companion-kernel-contract.js",
-  "contracts.js",
-  "enhancement-config.js",
-  "enhancement-contracts.js",
-  "keyboard-shortcuts.js",
-  "profession-command-trace.js",
-  "travel.js",
-  "travel-command.js",
-  "travel-destinations.js",
-  "travel-preferences.js",
-  "travel-search.js",
-  "project-identity.js",
-  "proxy-routes.js",
-  "release.js",
-  "ui/resize.js",
-]);
-
 /**
  * `Response` accepts a plain `ArrayBuffer`, while Node buffers may be views
  * into a larger pooled backing store. Reuse an already exact buffer; otherwise
@@ -596,25 +577,6 @@ async function handleGwRequest(
           );
     const mime = MIME[path.extname(artifactName)] ?? "application/octet-stream";
     return fileResponse(file, request, mime);
-  }
-
-  // The dynamically loaded Enhancement installer imports the canonical
-  // capability contract. TypeScript emits that contract beside main rather
-  // than copying it into renderer/, so expose only its exact closed graph.
-  // This is deliberately not a generic build/shared route.
-  if (first === "shared") {
-    const moduleName = base.slice("shared/".length);
-    if (RENDERER_SHARED_MODULES.has(moduleName)) {
-      const sharedFile = path.join(
-        app.getAppPath(),
-        "build",
-        "shared",
-        moduleName,
-      );
-      const mime = MIME[path.extname(moduleName)] ?? "application/octet-stream";
-      return fileResponse(sharedFile, request, mime, "no-store");
-    }
-    return new Response("not found", { status: 404, headers: headers() });
   }
 
   const rendererFile = safeUnder(rendererRoot(), pathname);

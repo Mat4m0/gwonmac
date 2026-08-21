@@ -13,9 +13,12 @@
  */
 import {
   enhancementCapabilityProfile,
+  enhancementCapabilitiesCover,
   enhancementCapabilitiesForProfile,
   enhancementCapabilitiesRequested,
+  ENHANCEMENT_CAPABILITY_FIELDS,
   intersectEnhancementCapabilities,
+  NO_ENHANCEMENT_CAPABILITIES,
   ENHANCEMENT_TRANSFORM_ABI,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
@@ -88,37 +91,11 @@ interface PreparedWasmClientModule {
   readonly nativeDoubleClick: boolean;
 }
 
-const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
-  nativeCursor: false,
-  targetObservation: false,
-  partyObservation: false,
-  teamApply: false,
-  travelAction: false,
-  xunlaiAction: false,
-  chatAliases: false,
-});
-
 function capabilityCount(capabilities: EnhancementCapabilities): number {
-  return Number(capabilities.nativeCursor)
-    + Number(capabilities.targetObservation)
-    + Number(capabilities.partyObservation)
-    + Number(capabilities.teamApply)
-    + Number(capabilities.travelAction)
-    + Number(capabilities.xunlaiAction)
-    + Number(capabilities.chatAliases);
-}
-
-function isSubset(
-  candidate: EnhancementCapabilities,
-  maximum: EnhancementCapabilities,
-): boolean {
-  return (!candidate.nativeCursor || maximum.nativeCursor)
-    && (!candidate.targetObservation || maximum.targetObservation)
-    && (!candidate.partyObservation || maximum.partyObservation)
-    && (!candidate.teamApply || maximum.teamApply)
-    && (!candidate.travelAction || maximum.travelAction)
-    && (!candidate.xunlaiAction || maximum.xunlaiAction)
-    && (!candidate.chatAliases || maximum.chatAliases);
+  return ENHANCEMENT_CAPABILITY_FIELDS.reduce(
+    (count, field) => count + Number(capabilities[field]),
+    0,
+  );
 }
 
 /** Largest safe profiles first; read-only observations win ties over commands. */
@@ -136,7 +113,7 @@ function enhancementCandidates(
       return capabilities ? [capabilities] : [];
     })
     .filter((candidate) =>
-      isSubset(candidate, maximum)
+      enhancementCapabilitiesCover(maximum, candidate)
       && enhancementOutputSha256(build, candidate) !== null)
     .sort((left, right) =>
       capabilityCount(right) - capabilityCount(left)
@@ -410,7 +387,7 @@ async function prepareCertifiedChain(
       gameFileSaving: { status: "unavailable", reason: "game-update" },
       enhancementBuild: null,
       requestedCapabilities,
-      effectiveCapabilities: NO_CAPABILITIES,
+      effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       nativeDoubleClick: false,
       failure: await discardUnsupportedCaches(
         compatibilityCacheRoot,
@@ -427,7 +404,7 @@ async function prepareCertifiedChain(
       gameFileSaving: { status: "unavailable", reason: "preparation-failed" },
       enhancementBuild: null,
       requestedCapabilities,
-      effectiveCapabilities: NO_CAPABILITIES,
+      effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       nativeDoubleClick: false,
       failure: {
         stage: "template-save",
@@ -453,7 +430,7 @@ async function prepareCertifiedChain(
       gameFileSaving: { status: "unavailable", reason: "preparation-failed" },
       enhancementBuild: null,
       requestedCapabilities,
-      effectiveCapabilities: NO_CAPABILITIES,
+      effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       nativeDoubleClick: false,
       failure: { stage: "template-save", error },
     };
@@ -467,7 +444,7 @@ async function prepareCertifiedChain(
       gameFileSaving: { status: "available" },
       enhancementBuild: null,
       requestedCapabilities,
-      effectiveCapabilities: NO_CAPABILITIES,
+      effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
@@ -481,7 +458,7 @@ async function prepareCertifiedChain(
       gameFileSaving: { status: "available" },
       enhancementBuild: null,
       requestedCapabilities,
-      effectiveCapabilities: NO_CAPABILITIES,
+      effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       nativeDoubleClick: false,
       failure: {
         stage: "enhancement",
@@ -497,7 +474,7 @@ async function prepareCertifiedChain(
       gameFileSaving: { status: "available" },
       enhancementBuild: null,
       requestedCapabilities,
-      effectiveCapabilities: NO_CAPABILITIES,
+      effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
@@ -536,7 +513,7 @@ async function prepareCertifiedChain(
     gameFileSaving: { status: "available" },
     enhancementBuild,
     requestedCapabilities,
-    effectiveCapabilities: NO_CAPABILITIES,
+    effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
     nativeDoubleClick: false,
     failure: firstFailure === null
       ? null

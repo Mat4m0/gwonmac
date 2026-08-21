@@ -13,6 +13,8 @@ import { rm, stat, writeFile } from "node:fs/promises";
 import type {
   AppSettings,
   AppSettingsPatch,
+  RendererSettingsPatch,
+  SettingsResetOutcome,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { logEvent } from "./diagnostics.js";
@@ -72,7 +74,7 @@ function requestRelaunch(win: BrowserWindow, action: RelaunchAction): void {
 
 export async function applySettingsChange(
   win: BrowserWindow,
-  patch: AppSettingsPatch,
+  patch: RendererSettingsPatch,
   toolsEnabledAtLaunch: boolean,
   read: () => Promise<AppSettings>,
   write: (patch: AppSettingsPatch) => Promise<AppSettings>,
@@ -109,20 +111,20 @@ export async function applySettingsChange(
 
 export async function confirmSettingsReset(
   win: BrowserWindow,
-  reset: () => Promise<AppSettings>,
-): Promise<AppSettings | null> {
+  reset: () => Promise<SettingsResetOutcome>,
+): Promise<SettingsResetOutcome | null> {
   if (
     !(await confirmAction(win, {
       confirmLabel: "Reset GWonMac Settings",
       message: "Reset GWonMac settings?",
       detail:
-        "Display, tools, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
+        "Display, tools, Travel shortcuts, custom search phrases, recent destinations, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
     }))
   ) {
     return null;
   }
   try {
-    const settings = await reset();
+    const outcome = await reset();
     try {
       await resetWindowState(win);
     } catch {
@@ -130,8 +132,8 @@ export async function confirmSettingsReset(
       // separate document and cannot roll that result back.
       logEvent({ k: "window.stateResetFailed" });
     }
-    logEvent({ k: "settings.reset" });
-    return settings;
+    if (outcome.status === "complete") logEvent({ k: "settings.reset" });
+    return outcome;
   } catch (error) {
     logEvent({ k: "settings.resetFailed", code: errorCode(error) });
     throw error;

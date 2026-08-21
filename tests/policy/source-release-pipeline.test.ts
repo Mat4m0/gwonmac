@@ -469,6 +469,30 @@ test("release workflow stages and publishes one tested, attested package version
   );
 });
 
+test("the Stable rollback proof establishes its write generation before saving", () => {
+  const roundTrip = read("scripts/verify-stable-beta-roundtrip.ts");
+  const stableCreation = roundTrip.indexOf(
+    'console.log("stable/beta compatibility: latest Stable creates canonical state")',
+  );
+  const baselineRead = roundTrip.indexOf(
+    "await readCanonical(running.page)",
+    stableCreation,
+  );
+  const firstLibraryWrite = roundTrip.indexOf(
+    "window.gwNative.buildLibrary.set(library)",
+    stableCreation,
+  );
+
+  assert.ok(stableCreation >= 0);
+  assert.ok(baselineRead > stableCreation);
+  assert.ok(firstLibraryWrite > baselineRead);
+  assert.match(roundTrip, /saveWindowState\(windowStatePath/);
+  assert.doesNotMatch(
+    roundTrip,
+    /Browser\.getWindowForTarget|Browser\.setWindowBounds/,
+  );
+});
+
 test("application verification routes conservatively through one required result", () => {
   const workflow = read(".github/workflows/pr-package.yml");
   const classifier = read("scripts/ci-impact.ts");
@@ -700,12 +724,12 @@ test("the root app and website add no runtime package entries and audit exceptio
   );
 });
 
-test("packaging cleans its output first, and builds the renderer program", () => {
+test("packaging cleans its output first, and builds the renderer runtime", () => {
   assert.match(script("make"), /scripts\/clean-output\.mjs/);
   assert.match(script("package"), /pnpm build && pnpm package:built/);
   assert.match(script("package:built"), /scripts\/clean-output\.mjs/);
   assert.match(script("verify"), /verify:runtime && pnpm package:built/);
-  assert.match(read("scripts/build.mjs"), /tsconfig\.renderer\.json/);
+  assert.match(read("scripts/build.mjs"), /scripts\/build-renderer\.mjs/);
 });
 
 test("the default gate is deterministic and certifies every shipped test layer", () => {
@@ -868,7 +892,7 @@ test("client recertification reports evidence but cannot grant authority", () =>
   // of it — `pnpm/action-setup` and `pnpm install` are the same defect here.
   assert.match(
     detect,
-    /run: node --import \.\/scripts\/ts-hook\.mjs --experimental-strip-types scripts\/official-client\.ts$/mu,
+    /run: node --import \.\/scripts\/ts-hook\.mjs scripts\/official-client\.ts$/mu,
   );
   assert.doesNotMatch(detect, /pnpm|rustup|certification\.js|--download/);
   assert.match(detect, /permissions:\n {6}contents: read\n {6}issues: write/);

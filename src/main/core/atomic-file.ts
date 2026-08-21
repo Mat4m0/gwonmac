@@ -2,15 +2,15 @@
  * The only way this process replaces a file whose half-written state a reader
  * could otherwise observe: temp file, fsync, rename, fsync the directory.
  *
- * Nothing here overwrites in place and nothing here is best-effort. A failed
- * write unlinks its own temp file and rethrows, so the target keeps its previous
- * contents rather than acquiring part of the new ones. Temp names carry the
- * writing pid, which is what lets the sweep tell a dead process's debris from a
- * live process's in-flight write; no other code collects them, because chunk
- * pruning deliberately ignores names that are not content hashes.
+ * Nothing here overwrites in place and nothing here is best-effort. A failure
+ * before rename keeps the previous target. A failure while syncing the renamed
+ * entry reports that publication happened but crash durability is unconfirmed.
+ * Temp names carry the writing pid, which lets the sweep tell a dead process's
+ * debris from a live process's in-flight write; no other code collects them,
+ * because chunk pruning deliberately ignores non-content-hash names.
  */
 import { randomBytes } from "node:crypto";
-import { mkdir, open, readdir, rename, unlink } from "node:fs/promises";
+import { link, mkdir, open, readdir, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { AppError } from "../../shared/errors.js";
 
@@ -81,6 +81,32 @@ export async function writeAtomic(
   data: string | Uint8Array,
   mode?: number,
 ): Promise<void> {
+  const { dir, tmp } = await writeTemporary(path, data, mode);
+  let published = false;
+  try {
+    await rename(tmp, path);
+    published = true;
+    await syncDirectory(dir);
+  } catch (error) {
+    await unlink(tmp).catch(() => undefined);
+    if (published) throw new AtomicPublicationUnconfirmedError({ cause: error });
+    throw error;
+  }
+}
+
+/** The final name changed, but its crash durability could not be confirmed. */
+export class AtomicPublicationUnconfirmedError extends Error {
+  constructor(options: ErrorOptions) {
+    super("atomic publication succeeded but could not be confirmed durable", options);
+    this.name = "AtomicPublicationUnconfirmedError";
+  }
+}
+
+async function writeTemporary(
+  path: string,
+  data: string | Uint8Array,
+  mode?: number,
+): Promise<{ readonly dir: string; readonly tmp: string }> {
   const dir = dirname(path);
   await mkdir(dir, { recursive: true });
   const tmp = tempPath(path);
@@ -96,11 +122,43 @@ export async function writeAtomic(
     } finally {
       await handle.close();
     }
-    await rename(tmp, path);
-    await syncDirectory(dir);
+    return { dir, tmp };
   } catch (error) {
     await unlink(tmp).catch(() => undefined);
     throw error;
+  }
+}
+
+/** A create-only publication reports whether its final name became owned. */
+export class AtomicExclusiveWriteError extends Error {
+  readonly published: boolean;
+
+  constructor(
+    published: boolean,
+    options: ErrorOptions,
+  ) {
+    super("create-only atomic publication failed", options);
+    this.name = "AtomicExclusiveWriteError";
+    this.published = published;
+  }
+}
+
+/** Publish a complete file only when the final name does not already exist. */
+export async function writeAtomicExclusive(
+  path: string,
+  data: string | Uint8Array,
+  mode?: number,
+): Promise<void> {
+  const { dir, tmp } = await writeTemporary(path, data, mode);
+  let published = false;
+  try {
+    await link(tmp, path);
+    published = true;
+    await syncDirectory(dir);
+  } catch (cause) {
+    throw new AtomicExclusiveWriteError(published, { cause });
+  } finally {
+    await unlink(tmp).catch(() => undefined);
   }
 }
 
@@ -110,6 +168,14 @@ export async function writeAtomicJson(
   mode?: number,
 ): Promise<void> {
   await writeAtomic(path, JSON.stringify(value), mode);
+}
+
+export async function writeAtomicJsonExclusive(
+  path: string,
+  value: unknown,
+  mode?: number,
+): Promise<void> {
+  await writeAtomicExclusive(path, JSON.stringify(value), mode);
 }
 
 /** Chunk publication: write under a unique temp name in the same directory, then rename. */

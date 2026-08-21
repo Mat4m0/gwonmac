@@ -12,6 +12,7 @@ import {
   loadSettings,
   parseSettings,
   parseSettingsPatch,
+  parseRendererSettingsPatch,
   saveSettings,
 } from "../../src/main/core/settings.js";
 
@@ -226,6 +227,18 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ uiFont: "inter" }), {
       uiFont: "inter",
     });
+  });
+
+  it("keeps Travel shortcuts off the generic renderer settings channel", () => {
+    assert.deepEqual(parseRendererSettingsPatch({ renderScale: 1.5 }), {
+      renderScale: 1.5,
+    });
+    assert.throws(
+      () => parseRendererSettingsPatch({
+        travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
+      }),
+      /Travel preference capability/u,
+    );
   });
 
   it("loads defaults for missing or corrupt files", async () => {

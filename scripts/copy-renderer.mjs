@@ -1,5 +1,5 @@
 // Copies the renderer's static assets into build/. It does not copy the
-// renderer's code: `tsc -p tsconfig.renderer.json` compiles that, and this
+// renderer's code: scripts/build-renderer.mjs compiles that, and this
 // script runs before it so the emit is not overwritten. It does not compile the
 // Enhancement kernel either — scripts/build.mjs owns that, because this script used
 // to run twice per package build and so compiled it twice — and it does not

@@ -83,7 +83,7 @@ jobs:
         id: version
         run: |
           version="$(node -p "require('./package.json').version")"
-          bundle_version="$(node --import ./scripts/ts-hook.mjs --experimental-strip-types -e '
+          bundle_version="$(node --import ./scripts/ts-hook.mjs -e '
             const { macOSBundleVersions } = await import("./scripts/macos-version.js");
             console.log(macOSBundleVersions(process.argv[1]).buildVersion);
           ' "$version")"
@@ -271,7 +271,7 @@ jobs:
           printf 'newly signed replacement\n' > \
             "$replacement/Contents/Resources/upgrade-proof"
           GW_SIGN_APP_PATH="$replacement" \
-            node --import ./scripts/ts-hook.mjs --experimental-strip-types \
+            node --import ./scripts/ts-hook.mjs \
             scripts/sign-distribution-app.ts
           codesign --verify --deep --strict --verbose=2 "$replacement"
           cmp "$APPLE_PROVISIONING_PROFILE" \
@@ -313,7 +313,7 @@ jobs:
           cp "$dmg_source" "$dmg"
           manifest="$asset_dir/RELEASES.json"
           published_at="$(git show -s --format=%cI "$GITHUB_SHA")"
-          node --import ./scripts/ts-hook.mjs --experimental-strip-types \
+          node --import ./scripts/ts-hook.mjs \
             scripts/release-manifest.ts \
             "$VERSION" "$TAG" "$(basename "$zip")" "$published_at" "$manifest"
           sbom="$asset_dir/Guild-Wars-Reforged-$VERSION-macOS-arm64.spdx.json"
@@ -571,13 +571,13 @@ jobs:
           fi
           output="$RUNNER_TEMP/release-body-with-verification.md"
           workflow_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          node --import ./scripts/ts-hook.mjs --experimental-strip-types \
+          node --import ./scripts/ts-hook.mjs \
             scripts/release-verification-record.ts stage \
             "$body" release-assets/SHA256SUMS.txt "$workflow_url" \
             "$GITHUB_SHA" "$VERSION" "$BUNDLE_VERSION" "$output"
           echo "body=$output" >> "$GITHUB_OUTPUT"
           record_workflow_url="$(node --import ./scripts/ts-hook.mjs \
-            --experimental-strip-types scripts/release-verification-record.ts \
+            scripts/release-verification-record.ts \
             workflow-url "$output")"
           echo "workflow-url=$record_workflow_url" >> "$GITHUB_OUTPUT"
 
@@ -690,7 +690,7 @@ jobs:
           body_file="$RUNNER_TEMP/release-body.md"
           node -e 'process.stdout.write(JSON.parse(process.argv[1]).body)' \
             "$release_json" > "$body_file"
-          node --import ./scripts/ts-hook.mjs --experimental-strip-types \
+          node --import ./scripts/ts-hook.mjs \
             scripts/release-verification-record.ts publish \
             "$body_file" "$remote/SHA256SUMS.txt" "$EXPECTED_WORKFLOW_URL" \
             "$GITHUB_SHA" "$VERSION" "$BUNDLE_VERSION"

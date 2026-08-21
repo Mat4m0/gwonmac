@@ -14,6 +14,7 @@
  */
 import {
   enhancementCapabilitiesForProfile,
+  enhancementCapabilitiesCover,
   enhancementCapabilityProfile,
   enhancementConfigWordActive,
   type EnhancementCapabilityProfile,
@@ -306,16 +307,10 @@ export function enhancementProfilesForBuild(
   return Object.entries(build.outputSha256).flatMap(([profile, digest]) => {
     const value = enhancementCapabilitiesForProfile(profile);
     if (!value) return [];
-    return (
-      (!value.nativeCursor || supported.nativeCursor) &&
-      (!value.targetObservation || supported.targetObservation) &&
-      (!value.partyObservation || supported.partyObservation) &&
-      (!value.teamApply || supported.teamApply) &&
-      (!value.travelAction || supported.travelAction) &&
-      (!value.xunlaiAction || supported.xunlaiAction) &&
-      (!value.chatAliases || supported.chatAliases)
+    return enhancementCapabilitiesCover(supported, value)
       && typeof digest === "string"
-    ) ? [profile as EnhancementCapabilityProfile] : [];
+      ? [profile as EnhancementCapabilityProfile]
+      : [];
   }).sort();
 }
 
@@ -378,9 +373,6 @@ export function hasValidEnhancementProfileHashes(
     return typeof digest === "string"
       && /^[0-9a-f]{64}$/.test(digest)
       && capabilities !== null
-      && Object.entries(capabilities).every(
-        ([feature, enabled]) => !enabled
-          || supported[feature as keyof EnhancementCapabilities],
-      );
+      && enhancementCapabilitiesCover(supported, capabilities);
   });
 }

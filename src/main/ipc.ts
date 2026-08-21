@@ -36,6 +36,7 @@ import type {
   TextEditCommand,
   RevealKind,
   SocketEvent,
+  SettingsResetOutcome,
   SteamRefusalReason,
   SteamTokenResult,
   StoredCredentials,
@@ -43,10 +44,10 @@ import type {
 } from "../shared/contracts.js";
 import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
 import {
-  parseTravelPreferencesPatch,
-  type TravelPreferencesDocument,
-  type TravelPreferencesPatch,
-} from "../shared/travel-preferences.js";
+  parseTravelUserPreferencesUpdate,
+  type TravelUserPreferences,
+  type TravelUserPreferencesUpdate,
+} from "../shared/travel.js";
 import { travelDestination } from "../shared/travel-destinations.js";
 import type {
   RendererFrameBatch,
@@ -95,7 +96,7 @@ import type {
   SteamAcquireEvent,
   SteamAcquireResult,
 } from "./steam-acquire.js";
-import { parseSettingsPatch } from "./core/settings.js";
+import { parseRendererSettingsPatch } from "./core/settings.js";
 import type { SocketManager } from "./core/sockets.js";
 import { FREE_MARGIN, type ChunkStore } from "./core/chunk-store.js";
 import {
@@ -145,10 +146,10 @@ export interface IpcContext {
   getChunkStore: () => ChunkStore | null;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
-  resetSettings: () => Promise<AppSettings>;
-  getTravelPreferences: () => Promise<TravelPreferencesDocument>;
-  setTravelPreferences: (patch: TravelPreferencesPatch) => Promise<TravelPreferencesDocument>;
-  recordTravelConfirmation: (mapId: number) => Promise<TravelPreferencesDocument>;
+  resetSettings: () => Promise<SettingsResetOutcome>;
+  getTravelPreferences: () => Promise<TravelUserPreferences>;
+  setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
+  recordTravelConfirmation: (mapId: number) => Promise<TravelUserPreferences>;
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
@@ -597,7 +598,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       }
     }),
 
-    settingsSet: channel(one(parseSettingsPatch), async (win, patch) => {
+    settingsSet: channel(one(parseRendererSettingsPatch), async (win, patch) => {
       const saved = await applySettingsChange(
         win,
         patch,
@@ -610,14 +611,14 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     settingsReset: channel(nothing, async (win) => {
-      const saved = await confirmSettingsReset(win, ctx.resetSettings);
-      if (saved) updateWindowShortcuts(win, saved.shortcutOverrides);
-      return saved;
+      const outcome = await confirmSettingsReset(win, ctx.resetSettings);
+      if (outcome) updateWindowShortcuts(win, outcome.settings.shortcutOverrides);
+      return outcome;
     }),
 
     travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),
-    travelPreferencesSet: channel(one(parseTravelPreferencesPatch), (_win, patch) =>
-      ctx.setTravelPreferences(patch)),
+    travelPreferencesSet: channel(one(parseTravelUserPreferencesUpdate), (_win, update) =>
+      ctx.setTravelPreferences(update)),
     travelPreferencesRecord: channel(asTravelMapId, (_win, mapId) =>
       ctx.recordTravelConfirmation(mapId)),
 

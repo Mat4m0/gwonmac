@@ -7,6 +7,7 @@ import {
   isStoredTravelShortcuts,
   isTravelRequest,
   isTravelShortcuts,
+  parseTravelUserPreferencesUpdate,
   searchTravelDestinations,
   storeTravelShortcuts,
   travelDestination,
@@ -101,5 +102,30 @@ describe("Travel", () => {
     assert.equal(isTravelRequest({
       mapId: 2_000,
     }), false);
+  });
+
+  it("rejects one request that would write both preference files", () => {
+    const expected = {
+      shortcuts: travelShortcutsFromStored([]),
+      synonyms: [],
+      recentLimit: 5,
+      recentMapIds: [],
+    };
+    assert.throws(() => parseTravelUserPreferencesUpdate({
+      expected,
+      patch: { shortcuts: expected.shortcuts, recentLimit: 3 },
+    }), /exactly one durable owner/u);
+    assert.throws(() => parseTravelUserPreferencesUpdate({
+      expected,
+      patch: {},
+    }), /exactly one durable owner/u);
+    assert.throws(() => parseTravelUserPreferencesUpdate({
+      expected,
+      patch: { futurePreference: true },
+    }), /exactly one durable owner/u);
+    assert.deepEqual(parseTravelUserPreferencesUpdate({
+      expected,
+      patch: { recentLimit: 3, recentMapIds: [] },
+    }).patch, { recentLimit: 3, recentMapIds: [] });
   });
 });

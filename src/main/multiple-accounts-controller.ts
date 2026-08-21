@@ -4,7 +4,7 @@
  * and destructive cleanup out of the application composition root.
  */
 import { app, dialog, session, type BrowserWindow } from "electron";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import type {
   AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
@@ -24,14 +24,16 @@ import {
 } from "./accounts-window.js";
 import type { ClientRuntime } from "./client-runtime.js";
 import {
+  AccountTemplateSessions,
   loadAccountTemplateLibrary,
-  reconcileAccountTemplates,
   saveAccountTemplateLibrary,
 } from "./core/account-template-library.js";
-import { saveBuildLibrary } from "./core/build-library.js";
+import {
+  AmbiguousAccountCreationError,
+  createAccountProfile,
+} from "./core/account-profile-creation.js";
 import { CredentialsStore } from "./core/credentials.js";
 import {
-  addMultiProfile,
   archiveMultiProfile,
   beginArchivedProfileDeletion,
   createMultiWorkspace,
@@ -55,7 +57,6 @@ import {
   installGwProtocolHandlerForSession,
   type ProtocolDeps,
 } from "./protocol.js";
-import { parseBuildLibrary } from "../shared/builds/parse-library.js";
 import { applyPendingSessionStorageReset } from "./settings-actions.js";
 import {
   closeProfileWindow,
@@ -80,6 +81,7 @@ export interface MultipleAccountsControllerOptions {
 export class MultipleAccountsController {
   private readonly accountsLock = new Mutex();
   private readonly templatesLock = new Mutex();
+  private readonly templateSessions = new AccountTemplateSessions<BrowserWindow>();
   private readonly credentialsStores = new Map<string, CredentialsStore>();
   private readonly steamSessionStores = new Map<string, SteamSessionStore>();
   private readonly profileProtocolSessions = new Set<ProfileId>();
@@ -248,31 +250,17 @@ export class MultipleAccountsController {
       const workspace = this.activeWorkspace();
       const { paths } = this.options;
       const firstAccount = workspace.profiles.length === 0;
-      if (!firstAccount && (request.copySingleBuilds || request.copySingleTemplates)) {
-        throw new Error("Single Account data can be copied only into the first account");
+      let next: MultiWorkspace;
+      try {
+        next = await createAccountProfile(workspace, request, paths);
+      } catch (error) {
+        if (error instanceof AmbiguousAccountCreationError) {
+          // No later mutation may publish the stale in-memory workspace over a
+          // profile whose final workspace rename may already have succeeded.
+          this.workspace = null;
+        }
+        throw error;
       }
-      const next = addMultiProfile(workspace, request);
-      const profile = next.profiles.at(-1)!;
-      const profilePaths = multiProfilePaths(paths, profile.id);
-      await mkdir(profilePaths.root, { recursive: true });
-      if (firstAccount && request.copySingleBuilds) {
-        await this.importBuildLibraryIfPresent(
-          paths.buildLibrary,
-          profile.builds === "shared"
-            ? paths.multiSharedBuildLibrary
-            : profilePaths.buildLibrary,
-        );
-      }
-      if (firstAccount && request.copySingleTemplates) {
-        const source = await loadAccountTemplateLibrary(paths.multiSingleTemplateImport);
-        await saveAccountTemplateLibrary(
-          profile.templates === "shared"
-            ? paths.multiSharedTemplates
-            : profilePaths.templates,
-          { revision: 1, entries: source.entries },
-        );
-      }
-      await saveMultiWorkspace(paths.multiWorkspace, next);
       this.workspace = next;
       if (firstAccount) {
         await rm(paths.multiSingleTemplateImport, { force: true }).catch(() => undefined);
@@ -353,17 +341,20 @@ export class MultipleAccountsController {
     });
   }
 
-  async loadTemplates(win: BrowserWindow): Promise<AccountTemplateLibrary | null> {
-    const context = windowRegistry.contextForWebContents(win.webContents.id);
-    if (context?.mode !== "multi" || context.role !== "game") return null;
-    const profile = this.profileFor(context.profileId);
-    const profilePaths = multiProfilePaths(this.options.paths, profile.id);
-    const libraryPath = profile.templates === "shared"
-      ? this.options.paths.multiSharedTemplates
-      : profilePaths.templates;
-    const library = await loadAccountTemplateLibrary(libraryPath);
-    await saveAccountTemplateLibrary(profilePaths.templateSync, library);
-    return library;
+  loadTemplates(win: BrowserWindow): Promise<AccountTemplateLibrary | null> {
+    return this.templatesLock.run(async () => {
+      const context = windowRegistry.contextForWebContents(win.webContents.id);
+      if (context?.mode !== "multi" || context.role !== "game") return null;
+      const profile = this.profileFor(context.profileId);
+      const profilePaths = multiProfilePaths(this.options.paths, profile.id);
+      const libraryPath = profile.templates === "shared"
+        ? this.options.paths.multiSharedTemplates
+        : profilePaths.templates;
+      const library = await loadAccountTemplateLibrary(libraryPath);
+      if (profile.templates === "shared") this.templateSessions.begin(win, library);
+      else this.templateSessions.forget(win);
+      return library;
+    });
   }
 
   saveTemplates(win: BrowserWindow, entries: readonly TemplateExportEntry[]): Promise<void> {
@@ -380,16 +371,12 @@ export class MultipleAccountsController {
         });
         return;
       }
-      const [base, latest] = await Promise.all([
-        loadAccountTemplateLibrary(profilePaths.templateSync),
-        loadAccountTemplateLibrary(this.options.paths.multiSharedTemplates),
-      ]);
-      const merged = {
-        revision: latest.revision + 1,
-        entries: reconcileAccountTemplates(base.entries, latest.entries, entries),
-      };
-      await saveAccountTemplateLibrary(this.options.paths.multiSharedTemplates, merged);
-      await saveAccountTemplateLibrary(profilePaths.templateSync, merged);
+      await this.templateSessions.save(win, entries, {
+        loadLatest: () =>
+          loadAccountTemplateLibrary(this.options.paths.multiSharedTemplates),
+        publish: (library) =>
+          saveAccountTemplateLibrary(this.options.paths.multiSharedTemplates, library),
+      });
     });
   }
 
@@ -480,7 +467,6 @@ export class MultipleAccountsController {
       );
       if (reset && profile.templates === "private") {
         await rm(profilePaths.templates, { force: true });
-        await rm(profilePaths.templateSync, { force: true });
       }
       await mkdir(profilePaths.root, { recursive: true });
       await prepareWindowState(profilePaths.windowState, newWindowOrdinal);
@@ -540,21 +526,6 @@ export class MultipleAccountsController {
     await saveAccountMode(this.options.paths.launcherMode, mode);
     app.relaunch();
     app.quit();
-  }
-
-  private async importBuildLibraryIfPresent(
-    source: string,
-    destination: string,
-  ): Promise<void> {
-    let bytes: string;
-    try {
-      bytes = await readFile(source, "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-      throw error;
-    }
-    const library = parseBuildLibrary(JSON.parse(bytes) as unknown);
-    await saveBuildLibrary(destination, library);
   }
 
   private async cleanupProfile(profileId: ProfileId): Promise<void> {

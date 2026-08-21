@@ -11,27 +11,15 @@
     "prepare": "vp exec nuxt prepare"
   },
   "devDependencies": {
+    "@iconify-json/lucide": "1.2.121",
     "@lupinum/ginko-content": "0.3.2",
     "@lupinum/ginko-docs": "0.2.3",
     "nuxt": "4.5.1",
+    "nuxt-site-config": "4.1.2",
     "typescript": "^5.9.3",
     "vite-plus": "0.1.24",
     "vue": "^3.5.35",
     "vue-router": "^5.1.0",
     "vue-tsc": "^3.3.7"
-  },
-  "pnpm": {
-    "overrides": {
-      "brace-expansion": "5.0.9",
-      "sharp": "0.35.3",
-      "tar": "7.5.21",
-      "tmp": "0.2.7"
-    },
-    "onlyBuiltDependencies": [
-      "@parcel/watcher",
-      "esbuild",
-      "sharp",
-      "vue-demi"
-    ]
   }
 }

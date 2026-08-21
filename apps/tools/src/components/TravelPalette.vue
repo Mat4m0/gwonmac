@@ -176,7 +176,7 @@ async function saveShortcut(slot: number, destination: TravelDestination): Promi
     if (!await travelPreferences.assignShortcut(slot, destination)) return;
     setFeedback(`${destination.name} is now shortcut ${slot + 1}.`, "success");
   } catch {
-    setFeedback("Shortcut could not be saved. Your previous shortcut is still active.", "danger");
+    setFeedback("Shortcut could not be saved. Reopen Travel to confirm the active shortcut.", "danger");
   }
 }
 
@@ -185,7 +185,7 @@ async function removeShortcut(slot: number): Promise<void> {
     if (!await travelPreferences.removeShortcut(slot)) return;
     setFeedback(`Shortcut ${slot + 1} removed.`, "success");
   } catch {
-    setFeedback("Shortcut could not be removed. Your previous shortcut is still active.", "danger");
+    setFeedback("Shortcut could not be removed. Reopen Travel to confirm the active shortcut.", "danger");
   }
 }
 
@@ -259,7 +259,7 @@ async function addPhrase(): Promise<void> {
     await nextTick();
     input.value?.focus();
   } catch {
-    phraseError.value = "The search phrase could not be saved. Your previous phrases are unchanged.";
+    phraseError.value = "The search phrase could not be saved. Reopen Travel to confirm your phrases.";
   }
 }
 
@@ -280,7 +280,7 @@ async function updatePhraseTerm(index: number, event: Event): Promise<void> {
     setFeedback(`“${term}” was saved and verified.`, "success");
   } catch {
     if (control !== null) control.value = entry.term;
-    setFeedback("The search phrase could not be changed. Its previous value is still active.", "danger");
+    setFeedback("The search phrase could not be changed. Reopen Travel to confirm its active value.", "danger");
   }
 }
 
@@ -296,7 +296,7 @@ async function updatePhraseDestination(index: number, mapId: number | null): Pro
     }
     setFeedback(`“${entry.term}” now finds ${destination.name}.`, "success");
   } catch {
-    setFeedback("The search phrase could not be changed. Its previous destination is still active.", "danger");
+    setFeedback("The search phrase could not be changed. Reopen Travel to confirm its destination.", "danger");
   }
 }
 
@@ -306,7 +306,7 @@ async function removePhrase(index: number): Promise<void> {
     if (!await travelPreferences.removeSynonym(index)) return;
     setFeedback(removed === undefined ? "Search phrase removed." : `“${removed.term}” removed.`, "success");
   } catch {
-    setFeedback("The search phrase could not be removed. Your previous phrases are unchanged.", "danger");
+    setFeedback("The search phrase could not be removed. Reopen Travel to confirm your phrases.", "danger");
   }
 }
 

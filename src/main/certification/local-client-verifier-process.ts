@@ -23,6 +23,7 @@ import {
 } from "./native-double-click.js";
 import {
   enhancementCapabilitiesForProfile,
+  NO_ENHANCEMENT_CAPABILITIES,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
 import {
@@ -86,15 +87,7 @@ async function main(): Promise<void> {
 
   if (mode === "client") {
     const requestedCapabilities: EnhancementCapabilities | null = requestedProfile === "none"
-      ? Object.freeze({
-          nativeCursor: false,
-          targetObservation: false,
-          partyObservation: false,
-          teamApply: false,
-          travelAction: false,
-          xunlaiAction: false,
-          chatAliases: false,
-        })
+      ? NO_ENHANCEMENT_CAPABILITIES
       : requestedProfile
         ? enhancementCapabilitiesForProfile(requestedProfile)
         : null;

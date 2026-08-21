@@ -24,12 +24,18 @@ import {
 } from "../../src/shared/contracts.ts";
 import {
   ENHANCEMENTS,
+  ENHANCEMENT_CAPABILITY_FIELDS,
   ENHANCEMENT_CAPABILITY_PRESETS,
   enhancementCapabilityProfile,
+  enhancementCapabilitiesCover,
   enhancementCapabilitiesFor,
   enhancementCapabilitiesForProfile,
   enhancementCapabilitiesRequested,
   enhancementHooksFor,
+  NO_ENHANCEMENT_CAPABILITIES,
+  parseEnhancementCapabilities,
+  sameEnhancementCapabilities,
+  type EnhancementCapabilities,
 } from "../../src/shared/enhancement-contracts.ts";
 
 register(
@@ -165,6 +171,68 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
     )),
     null,
   );
+});
+
+test("the capability wire contract is exact and has one empty value", () => {
+  const all = parseEnhancementCapabilities({
+    nativeCursor: true,
+    targetObservation: true,
+    partyObservation: true,
+    teamApply: true,
+    travelAction: true,
+    xunlaiAction: true,
+    chatAliases: true,
+  });
+  assert.ok(all);
+  assert.equal(Object.isFrozen(all), true);
+  assert.deepEqual(Object.keys(all), ENHANCEMENT_CAPABILITY_FIELDS);
+  assert.equal(
+    sameEnhancementCapabilities(all, ENHANCEMENT_CAPABILITY_PRESETS.all),
+    true,
+  );
+  assert.equal(
+    sameEnhancementCapabilities(all, NO_ENHANCEMENT_CAPABILITIES),
+    false,
+  );
+  assert.equal(Object.isFrozen(NO_ENHANCEMENT_CAPABILITIES), true);
+  assert.equal(
+    enhancementCapabilitiesRequested(NO_ENHANCEMENT_CAPABILITIES),
+    false,
+  );
+  assert.deepEqual(NO_ENHANCEMENT_CAPABILITIES, {
+    nativeCursor: false,
+    targetObservation: false,
+    partyObservation: false,
+    teamApply: false,
+    travelAction: false,
+    xunlaiAction: false,
+    chatAliases: false,
+  });
+
+  assert.equal(parseEnhancementCapabilities({ ...all, extra: false }), null);
+  assert.equal(parseEnhancementCapabilities(null), null);
+  assert.equal(parseEnhancementCapabilities([]), null);
+
+  for (const field of ENHANCEMENT_CAPABILITY_FIELDS) {
+    const missing: Record<string, unknown> = Object.fromEntries(
+      Object.entries(all).filter(([key]) => key !== field),
+    );
+    const changed: EnhancementCapabilities = { ...all, [field]: false };
+    const only: EnhancementCapabilities = {
+      ...NO_ENHANCEMENT_CAPABILITIES,
+      [field]: true,
+    };
+    assert.equal(parseEnhancementCapabilities(missing), null, field);
+    assert.equal(parseEnhancementCapabilities({ ...all, [field]: 1 }), null, field);
+    assert.equal(sameEnhancementCapabilities(all, changed), false, field);
+    assert.equal(enhancementCapabilitiesRequested(only), true, field);
+    assert.equal(enhancementCapabilitiesCover(all, only), true, field);
+    assert.equal(
+      enhancementCapabilitiesCover(NO_ENHANCEMENT_CAPABILITIES, only),
+      false,
+      field,
+    );
+  }
 });
 
 test("Tools prepares every certified capability independent of child toggles", () => {

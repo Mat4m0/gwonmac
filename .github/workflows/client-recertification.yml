@@ -38,7 +38,7 @@ jobs:
           node-version: "24"
       - name: Read the published client generation
         id: published
-        run: node --import ./scripts/ts-hook.mjs --experimental-strip-types scripts/official-client.ts
+        run: node --import ./scripts/ts-hook.mjs scripts/official-client.ts
       - name: Skip a generation that already has durable evidence
         id: unreported
         env:

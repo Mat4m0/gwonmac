@@ -23,6 +23,10 @@ import type {
   RendererMetrics,
 } from "./diagnostics.js";
 import type { ErrorCode } from "./errors.js";
+import {
+  ENHANCEMENT_CAPABILITY_FIELDS,
+  type EnhancementCapability,
+} from "./enhancement-contracts.js";
 import type { BuildLibrary } from "./builds/library.js";
 import type { ProfileId } from "./multiple-accounts.js";
 import type { TemplateExportEntry } from "./template-contracts.js";
@@ -41,11 +45,9 @@ import type {
 import {
   DEFAULT_STORED_TRAVEL_SHORTCUTS,
   type StoredTravelShortcuts,
+  type TravelUserPreferences,
+  type TravelUserPreferencesUpdate,
 } from "./travel.js";
-import type {
-  TravelPreferencesDocument,
-  TravelPreferencesPatch,
-} from "./travel-preferences.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -388,6 +390,22 @@ export interface AppSettings {
 }
 
 export type AppSettingsPatch = Partial<AppSettings>;
+/** Settings fields the sandboxed renderer may write through generic IPC. */
+export type RendererSettingsPatch = Omit<AppSettingsPatch, "travelShortcuts">
+  & Readonly<{ travelShortcuts?: never }>;
+
+export type SettingsResetOutcome =
+  | Readonly<{
+      status: "complete";
+      settings: AppSettings;
+      travelPreferences: TravelUserPreferences;
+    }>
+  | Readonly<{
+      status: "partial";
+      settings: AppSettings;
+      travelPreferences: TravelUserPreferences | null;
+      pending: "travel";
+    }>;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
@@ -576,17 +594,8 @@ export interface ClientCompatibility {
   }>;
 }
 
-export const ENHANCEMENT_RUNTIME_FEATURES = [
-  "nativeCursor",
-  "targetObservation",
-  "partyObservation",
-  "teamApply",
-  "travelAction",
-  "xunlaiAction",
-  "chatAliases",
-] as const;
-export type EnhancementRuntimeFeature =
-  (typeof ENHANCEMENT_RUNTIME_FEATURES)[number];
+export const ENHANCEMENT_RUNTIME_FEATURES = ENHANCEMENT_CAPABILITY_FIELDS;
+export type EnhancementRuntimeFeature = EnhancementCapability;
 
 /**
  * The memory module selected for this running client. Saved intent is kept
@@ -877,13 +886,13 @@ export interface GwNativeApi {
   };
   settings: {
     get(): Promise<AppSettings>;
-    set(value: AppSettingsPatch): Promise<AppSettings>;
-    reset(): Promise<AppSettings | null>;
+    set(value: RendererSettingsPatch): Promise<AppSettings>;
+    reset(): Promise<SettingsResetOutcome | null>;
   };
   travelPreferences: {
-    get(): Promise<TravelPreferencesDocument>;
-    set(value: TravelPreferencesPatch): Promise<TravelPreferencesDocument>;
-    recordConfirmed(mapId: number): Promise<TravelPreferencesDocument>;
+    get(): Promise<TravelUserPreferences>;
+    set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
+    recordConfirmed(mapId: number): Promise<TravelUserPreferences>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;

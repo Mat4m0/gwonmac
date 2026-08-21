@@ -326,7 +326,9 @@ import type { AccountProfileSummary } from '../shared/contracts.js';
       setStatus(wasEditing ? 'Account updated.' : 'Account created.', 'success');
       await refresh();
     } catch {
-      profileStatus.textContent = 'The account could not be saved. Use a unique name and close it before changing sharing.';
+      profileStatus.textContent = wasEditing
+        ? 'The account could not be saved. Use a unique name and close it before changing sharing.'
+        : 'The account could not be created. Existing data was kept. Review the name and options; restart before retrying if they were already valid.';
     } finally {
       profileSave.disabled = false;
     }

@@ -57,6 +57,7 @@ import {
   stringShardIndex,
 } from "./skill-strings.js";
 import { findSkillTable, type SkillRecord } from "./skill-table.js";
+import type { SkillCatalogueRecord } from "../../shared/skill-catalogue.js";
 
 /**
  * Title ids below Codex are the account title tracks used by player-only PvE
@@ -91,23 +92,7 @@ const MAX_STREAM_BYTES = 1024 * 1024;
 const SHARD_DECODERS = 8;
 const MAX_ICON_DIMENSION = 256;
 
-export interface SkillFacts {
-  readonly id: number;
-  readonly name: string;
-  readonly profession: string | null;
-  readonly elite: boolean;
-  readonly availability: "pve" | "player-only-pve" | "pvp" | "not-equippable";
-  readonly attribute: string | null;
-  readonly energyCost: number;
-  readonly adrenalineCost: number;
-  readonly healthCost: number;
-  readonly overcast: number;
-  readonly activationSeconds: number;
-  readonly aftercastSeconds: number;
-  readonly rechargeSeconds: number;
-  readonly description: string | null;
-  readonly hasIcon: boolean;
-}
+export type SkillFacts = SkillCatalogueRecord;
 
 /**
  * Why a client yielded no catalogue. All three are recoverable and none is a

@@ -1,5 +1,9 @@
 import { readFile } from "node:fs/promises";
 import {
+  COMPANION_DISPATCH_KINDS,
+  COMPANION_FEATURE_BITS,
+} from "../../src/shared/companion-abi.ts";
+import {
   readCompanionCursorHeader,
   readCompanionCursorPixels,
   readChangedCompanionParty,
@@ -89,10 +93,12 @@ export function readyToolbox(read: ToolboxRead) {
 }
 
 export const MAGIC = 0x42545747;
-export const FEATURE_NATIVE_CURSOR = 1 << 0;
-export const FEATURE_GAME_SNAPSHOT = 1 << 1;
-export const FEATURE_TOOLBOX_FOUNDATION = 1 << 2;
-export const FEATURE_TARGET_OBSERVATION = 1 << 3;
+export const FEATURE_NATIVE_CURSOR = COMPANION_FEATURE_BITS.nativeCursor;
+export const FEATURE_GAME_SNAPSHOT = COMPANION_FEATURE_BITS.gameSnapshot;
+export const FEATURE_TOOLBOX_FOUNDATION =
+  COMPANION_FEATURE_BITS.toolboxFoundation;
+export const FEATURE_TARGET_OBSERVATION =
+  COMPANION_FEATURE_BITS.targetObservation;
 export const ALL_FEATURES = FEATURE_NATIVE_CURSOR
   | FEATURE_GAME_SNAPSHOT
   | FEATURE_TARGET_OBSERVATION;
@@ -523,14 +529,41 @@ export async function createKernel(
         features,
       );
     },
-    tick: () => exports.dispatch(0, 123, 0, 0, 0, 0),
+    tick: () => exports.dispatch(
+      COMPANION_DISPATCH_KINDS.tick,
+      123,
+      0,
+      0,
+      0,
+      0,
+    ),
     cursorEvent: (...args: number[]) =>
-      exports.dispatch(1, args[0] ?? 1, args[1] ?? 2, args[2] ?? 3,
-        args[3] ?? 4, args[4] ?? 5),
+      exports.dispatch(
+        COMPANION_DISPATCH_KINDS.cursor,
+        args[0] ?? 1,
+        args[1] ?? 2,
+        args[2] ?? 3,
+        args[3] ?? 4,
+        args[4] ?? 5,
+      ),
     uiEvent: (message: number, wparam: number, lparam: number) =>
-      exports.dispatch(2, message, wparam, lparam, 0, 0),
+      exports.dispatch(
+        COMPANION_DISPATCH_KINDS.ui,
+        message,
+        wparam,
+        lparam,
+        0,
+        0,
+      ),
     activeFeatures: (features: number) =>
-      exports.dispatch(3, features, 0, 0, 0, 0),
+      exports.dispatch(
+        COMPANION_DISPATCH_KINDS.activeFeatures,
+        features,
+        0,
+        0,
+        0,
+        0,
+      ),
     toolbox: () => readCompanionToolbox(memory.buffer, ADDRESSES.toolbox),
     party: () => readCompanionParty(memory.buffer, ADDRESSES.party),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),

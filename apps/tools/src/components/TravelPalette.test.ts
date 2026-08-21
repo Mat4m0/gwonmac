@@ -325,7 +325,7 @@ describe("TravelPalette", () => {
     await flushPromises();
 
     expect(destinationPicker.props("modelValue")).toBe(480);
-    expect(wrapper.text()).toContain("previous destination is still active");
+    expect(wrapper.text()).toContain("Reopen Travel to confirm its destination");
     expect(wrapper.text()).not.toContain("private destination failure");
     wrapper.unmount();
   });
@@ -412,7 +412,7 @@ describe("TravelPalette", () => {
     });
     await flushPromises();
     expect(wrapper.text()).toContain(
-      "Shortcut could not be saved. Your previous shortcut is still active.",
+      "Shortcut could not be saved. Reopen Travel to confirm the active shortcut.",
     );
     expect(wrapper.text()).not.toContain("private persistence detail");
 
