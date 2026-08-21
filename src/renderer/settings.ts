@@ -15,8 +15,6 @@
   type RendererMilestone =
     import('../shared/diagnostics.js').RendererMilestone;
   type UpdateAction = import('./update-action.js').UpdateAction;
-  type ShortcutAction = import('../shared/keyboard-shortcuts.js').ShortcutAction;
-  type ShortcutBinding = import('../shared/keyboard-shortcuts.js').ShortcutBinding;
 
   const byId = (id: string) => {
     const element = document.getElementById(id);
@@ -91,174 +89,6 @@
   const idleFeedback = 'Changes save automatically.';
   let feedbackTimer: number | null = null;
   let activeSettingsPane = 'data';
-  let recordingShortcut: ShortcutAction | null = null;
-  let pendingShortcutReplacement:
-    | { action: ShortcutAction; conflict: ShortcutAction; binding: ShortcutBinding }
-    | null = null;
-
-  const shortcutModule = import('../shared/keyboard-shortcuts.js');
-  const shortcutRows = new Map<ShortcutAction, HTMLElement>(
-    [...form.querySelectorAll<HTMLElement>('[data-shortcut-action]')].map((row) => [
-      row.dataset.shortcutAction as ShortcutAction,
-      row,
-    ]),
-  );
-
-  function shortcutRowParts(action: ShortcutAction) {
-    const row = shortcutRows.get(action);
-    if (!row) throw new Error(`missing shortcut row: ${action}`);
-    const value = row.querySelector<HTMLElement>('.settings-shortcut-value');
-    const change = row.querySelector<HTMLButtonElement>('.settings-shortcut-change');
-    const message = row.querySelector<HTMLElement>('.settings-shortcut-message');
-    const replace = row.querySelector<HTMLButtonElement>('.settings-shortcut-replace');
-    if (!value || !change || !message || !replace) {
-      throw new Error(`incomplete shortcut row: ${action}`);
-    }
-    return { value, change, message, replace };
-  }
-
-  function clearShortcutMessages(): void {
-    for (const action of shortcutRows.keys()) {
-      const { message, replace } = shortcutRowParts(action);
-      message.textContent = '';
-      message.hidden = true;
-      replace.hidden = true;
-    }
-  }
-
-  async function renderShortcuts(settings: AppSettings): Promise<void> {
-    const { resolveShortcuts, shortcutDisplay } = await shortcutModule;
-    const resolved = resolveShortcuts(settings.shortcutOverrides);
-    for (const action of shortcutRows.keys()) {
-      const { value, change } = shortcutRowParts(action);
-      value.textContent = recordingShortcut === action
-        ? 'Listening…'
-        : shortcutDisplay(resolved[action]);
-      change.textContent = recordingShortcut === action ? 'Cancel' : 'Change';
-    }
-  }
-
-  async function saveShortcutOverrides(
-    overrides: AppSettings['shortcutOverrides'],
-  ): Promise<void> {
-    setFeedback('Saving…', 'progress');
-    try {
-      await persistSettings({ shortcutOverrides: overrides });
-      setFeedback('Shortcut saved.', 'success', 2200);
-    } catch {
-      setFeedback('The shortcut could not be saved. Your previous shortcuts are still active; try again.', 'error');
-    }
-  }
-
-  async function recordShortcut(action: ShortcutAction): Promise<void> {
-    if (!currentSettings) return;
-    if (recordingShortcut === action) {
-      await window.gwNative.shortcuts.cancelCapture();
-      return;
-    }
-    if (recordingShortcut) await window.gwNative.shortcuts.cancelCapture();
-    recordingShortcut = action;
-    pendingShortcutReplacement = null;
-    clearShortcutMessages();
-    await renderShortcuts(currentSettings);
-    const parts = shortcutRowParts(action);
-    parts.message.textContent =
-      'Press Command with a letter or number · Delete clears · Escape cancels.';
-    parts.message.hidden = false;
-    const result = await window.gwNative.shortcuts.capture();
-    if (recordingShortcut !== action) return;
-    recordingShortcut = null;
-    if (result.status === 'cancelled') {
-      clearShortcutMessages();
-      await renderShortcuts(currentSettings);
-      parts.change.focus();
-      return;
-    }
-    if (result.status === 'invalid') {
-      parts.message.textContent = 'Use Command with one letter or number.';
-      parts.message.hidden = false;
-      await renderShortcuts(currentSettings);
-      parts.change.focus();
-      return;
-    }
-    let next = { ...currentSettings.shortcutOverrides };
-    if (result.status === 'cleared') {
-      clearShortcutMessages();
-      const { withShortcutOverride } = await shortcutModule;
-      next = withShortcutOverride(next, action, null);
-      await saveShortcutOverrides(next);
-      parts.change.focus();
-      return;
-    }
-    const {
-      resolveShortcuts,
-      shortcutConflict,
-      shortcutDisplay,
-      shortcutReserved,
-      SHORTCUT_LABELS,
-      withShortcutOverride,
-    } = await shortcutModule;
-    if (shortcutReserved(result.binding)) {
-      parts.message.textContent = `${shortcutDisplay(result.binding)} is reserved by macOS or GWonMac.`;
-      parts.message.hidden = false;
-      await renderShortcuts(currentSettings);
-      parts.change.focus();
-      return;
-    }
-    const conflict = shortcutConflict(
-      action,
-      result.binding,
-      resolveShortcuts(currentSettings.shortcutOverrides),
-    );
-    if (conflict) {
-      pendingShortcutReplacement = { action, conflict, binding: result.binding };
-      parts.message.textContent = `${shortcutDisplay(result.binding)} is used by ${SHORTCUT_LABELS[conflict]}.`;
-      parts.message.hidden = false;
-      parts.replace.hidden = false;
-      await renderShortcuts(currentSettings);
-      parts.replace.focus();
-      return;
-    }
-    next = withShortcutOverride(next, action, result.binding);
-    clearShortcutMessages();
-    await saveShortcutOverrides(next);
-    parts.change.focus();
-  }
-
-  for (const [action, row] of shortcutRows) {
-    row.querySelector<HTMLButtonElement>('.settings-shortcut-change')
-      ?.addEventListener('click', () => void recordShortcut(action));
-    row.querySelector<HTMLButtonElement>('.settings-shortcut-replace')
-      ?.addEventListener('click', () => {
-        const replacement = pendingShortcutReplacement;
-        if (!replacement || replacement.action !== action || !currentSettings) return;
-        const settings = currentSettings;
-        void shortcutModule.then(({ withShortcutOverride }) => {
-          let next = withShortcutOverride(
-            settings.shortcutOverrides,
-            replacement.conflict,
-            null,
-          );
-          next = withShortcutOverride(next, action, replacement.binding);
-          pendingShortcutReplacement = null;
-          clearShortcutMessages();
-          void saveShortcutOverrides(next)
-            .then(() => shortcutRowParts(action).change.focus());
-        });
-      });
-  }
-
-  byId('settings-shortcuts-restore').addEventListener('click', () => {
-    pendingShortcutReplacement = null;
-    clearShortcutMessages();
-    void saveShortcutOverrides({});
-  });
-  dialog.addEventListener('close', () => {
-    if (recordingShortcut) void window.gwNative.shortcuts.cancelCapture();
-    recordingShortcut = null;
-    pendingShortcutReplacement = null;
-    clearShortcutMessages();
-  });
   // Settings is renderer UI, not game input. Keep its keys inside the modal;
   // Escape still reaches the dialog's native cancel behavior because stopping
   // propagation does not cancel the event.
@@ -449,6 +279,38 @@
       'error',
     );
   }
+
+  const shortcutSettings = import('./settings-shortcuts.js').then((module) =>
+    module.bindShortcutSettings({
+      form,
+      dialog,
+      restore: byId('settings-shortcuts-restore'),
+      settings: () => currentSettings,
+      persist: (shortcutOverrides) => persistSettings({ shortcutOverrides }),
+      feedback: setFeedback,
+    }));
+  const travelPreferenceSettings = import('./settings-travel-preferences.js')
+    .then((module) => module.bindTravelPreferenceSettings({
+      limit: travelRecentLimit,
+      clear: travelRecentsClear,
+      current: () => currentTravelPreferences,
+      accept: (preferences) => {
+        currentTravelPreferences = preferences;
+      },
+      renderSettings: () => {
+        if (currentSettings) fillForm(currentSettings);
+      },
+      feedback: setFeedback,
+    }));
+  void import('./settings-accounts.js').then((module) =>
+    module.bindAccountSettings({
+      enable: accountsEnable,
+      status: accountsStatus,
+      modeStatus: accountsModeStatus,
+      singleSetup: accountsSingleSetup,
+      multiActive: accountsMultiActive,
+      returnSingle: accountsReturnSingle,
+    }));
 
   const extendedMemorySetting = import('./extended-memory-setting.js')
     .then((module) => module.bindExtendedMemorySetting(document));
@@ -672,17 +534,15 @@
     teamManagement.checked = settings.teamManagement;
     xunlaiStorage.checked = settings.xunlaiStorage;
     travelPalette.checked = settings.travelPalette;
-    travelRecentLimit.value = String(travelPreferences?.recentLimit ?? 5);
     targetReadout.checked = settings.targetReadout;
-    void renderShortcuts(settings);
+    void shortcutSettings.then((binder) => binder.render(settings));
     toolFeatures.hidden = !settings.gwonmacTools;
     toolsOff.hidden = settings.gwonmacTools;
     teamManagement.disabled = !settings.gwonmacTools;
     xunlaiStorage.disabled = !settings.gwonmacTools;
     travelPalette.disabled = !settings.gwonmacTools;
-    travelRecentLimit.disabled = !settings.gwonmacTools;
-    travelRecentsClear.disabled =
-      !settings.gwonmacTools || (travelPreferences?.recentMapIds.length ?? 0) === 0;
+    void travelPreferenceSettings.then((binder) =>
+      binder.render(settings.gwonmacTools, travelPreferences));
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     updateTrack.value = settings.updateTrack;
@@ -769,25 +629,7 @@
       void dataStrategy.then((controller) => controller.saveSelectedStrategy());
       return;
     }
-    if (control.name === 'travelRecentLimit') {
-      const value = Number(control.value);
-      const expected = currentTravelPreferences;
-      if (expected === null || (value !== 0 && value !== 3 && value !== 5 && value !== 10)) return;
-      setFeedback('Saving…', 'progress');
-      void window.gwNative.travelPreferences.set({ expected, patch: { recentLimit: value } })
-        .then((saved) => {
-          currentTravelPreferences = saved;
-          if (currentSettings) fillForm(currentSettings, saved);
-          setFeedback('Saved.', 'success', 2200);
-        })
-        .catch(async () => {
-          currentTravelPreferences = await window.gwNative.travelPreferences.get()
-            .catch(() => currentTravelPreferences);
-          if (currentSettings) fillForm(currentSettings, currentTravelPreferences);
-          setFeedback('Settings could not confirm which Recent limit is active. Review the current value, then try again.', 'error');
-        });
-      return;
-    }
+    if (control.name === 'travelRecentLimit') return;
     const patch = patchForControl(control);
     if (!patch) return;
     setFeedback('Saving…', 'progress');
@@ -809,25 +651,6 @@
       .catch(() => recoverSettingsAfterFailedWrite(
         'Close and reopen Settings to confirm which value is active before retrying.',
       ));
-  });
-
-  travelRecentsClear.addEventListener('click', () => {
-    const expected = currentTravelPreferences;
-    if (travelRecentsClear.disabled || expected === null) return;
-    setFeedback('Clearing Recent…', 'progress');
-    travelRecentsClear.disabled = true;
-    void window.gwNative.travelPreferences.set({ expected, patch: { recentMapIds: [] } })
-      .then((saved) => {
-        currentTravelPreferences = saved;
-        if (currentSettings) fillForm(currentSettings, saved);
-        setFeedback('Recent destinations cleared.', 'success', 2200);
-      })
-      .catch(async () => {
-        currentTravelPreferences = await window.gwNative.travelPreferences.get()
-          .catch(() => currentTravelPreferences);
-        if (currentSettings) fillForm(currentSettings, currentTravelPreferences);
-        setFeedback('GWonMac could not confirm whether Recent was cleared. Review the current list, then try again.', 'error');
-      });
   });
 
   byId('settings-reveal-data')?.addEventListener('click', () => {
@@ -878,54 +701,6 @@
       settingsPanes.inert = true;
       setFeedback('GWonMac could not confirm whether settings were reset. Close and reopen Settings to review the active values.', 'error');
     }
-  });
-
-  accountsEnable.addEventListener('click', async () => {
-    if (!window.confirm('Enable Multiple Accounts and restart GWonMac? Your current Single Account data will stay untouched.')) return;
-    accountsEnable.disabled = true;
-    accountsStatus.textContent = 'Creating the separate workspace…';
-    try {
-      const { exportEntries, templateFilesystem } = await import('./template-store.js');
-      const filesystem = templateFilesystem();
-      await window.gwNative.accounts.setup({
-        templateEntries: filesystem ? exportEntries(filesystem) : [],
-      });
-    } catch {
-      accountsEnable.disabled = false;
-      accountsStatus.textContent = 'Multiple Accounts could not be enabled. Nothing changed.';
-    }
-  });
-
-  accountsReturnSingle.addEventListener('click', async () => {
-    if (!window.confirm('Return to Single Account mode? GWonMac will restart. Multiple Accounts and Single Account data will both be preserved.')) return;
-    accountsReturnSingle.disabled = true;
-    accountsModeStatus.textContent = 'Restarting in Single Account mode…';
-    try {
-      await window.gwNative.accounts.useSingle();
-    } catch {
-      accountsReturnSingle.disabled = false;
-      accountsModeStatus.textContent = 'The mode change could not be saved. Nothing changed.';
-    }
-  });
-
-  void window.gwNative.accounts.get().then((state) => {
-    const singleMode = state.mode === 'single';
-    const activeProfiles = state.profiles.filter((profile) => !profile.archived);
-    const existingWorkspace = singleMode && activeProfiles.length > 0;
-    accountsModeStatus.textContent = existingWorkspace
-      ? `Single Account mode is active. Your ${activeProfiles.length} Multiple Accounts ${activeProfiles.length === 1 ? 'account is' : 'accounts are'} ready to restore.`
-      : singleMode
-        ? 'Single Account mode is active.'
-      : 'Multiple Accounts mode is active. Use the Account Picker to open and manage accounts.';
-    accountsSingleSetup.hidden = !singleMode;
-    accountsMultiActive.hidden = singleMode;
-    if (existingWorkspace) {
-      accountsEnable.textContent = 'Restore Multiple Accounts and Restart…';
-    }
-  }).catch(() => {
-    accountsModeStatus.textContent = 'Account mode could not be read.';
-    accountsSingleSetup.hidden = true;
-    accountsMultiActive.hidden = true;
   });
 
   window.addEventListener('resize', updateRenderScaleDimensions);
