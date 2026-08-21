@@ -36,6 +36,7 @@ import type {
   TextEditCommand,
   RevealKind,
   SocketEvent,
+  SettingsResetOutcome,
   SteamRefusalReason,
   SteamTokenResult,
   StoredCredentials,
@@ -145,7 +146,7 @@ export interface IpcContext {
   getChunkStore: () => ChunkStore | null;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
-  resetSettings: () => Promise<AppSettings>;
+  resetSettings: () => Promise<SettingsResetOutcome>;
   getTravelPreferences: () => Promise<TravelUserPreferences>;
   setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
   recordTravelConfirmation: (mapId: number) => Promise<TravelUserPreferences>;
@@ -610,9 +611,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     settingsReset: channel(nothing, async (win) => {
-      const saved = await confirmSettingsReset(win, ctx.resetSettings);
-      if (saved) updateWindowShortcuts(win, saved.shortcutOverrides);
-      return saved;
+      const outcome = await confirmSettingsReset(win, ctx.resetSettings);
+      if (outcome) updateWindowShortcuts(win, outcome.settings.shortcutOverrides);
+      return outcome;
     }),
 
     travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),

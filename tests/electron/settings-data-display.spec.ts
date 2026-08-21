@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 import "./settings-test-fixture.mjs";
@@ -252,14 +252,24 @@ test.describe("data and display settings", () => {
     const fixture = await launchOffline(
       "gw-settings-reset-restart-e2e-",
       {},
-      (userData) =>
+      (userData) => Promise.all([
         writeFile(
           path.join(userData, "settings.json"),
           JSON.stringify({ formatVersion: 1, nativeCursor: false }),
         ),
+        writeFile(
+          path.join(userData, "travel-preferences.json"),
+          JSON.stringify({
+            formatVersion: 1,
+            synonyms: [{ term: "home", mapId: 55 }],
+            recentLimit: 3,
+            recentMapIds: [55],
+          }),
+        ),
+      ]).then(() => undefined),
     );
     try {
-      const { app, page } = fixture;
+      const { app, page, userData } = fixture;
       expect(await page.evaluate(async () =>
         "nativeCursor" in await window.gwNative.settings.get())).toBe(false);
       await app.evaluate(({ app: electronApp, dialog }) => {
@@ -290,20 +300,43 @@ test.describe("data and display settings", () => {
       });
 
       const reset = await page.evaluate(() => window.gwNative.settings.reset());
-      expect(reset).toMatchObject({ renderScale: 2 });
+      expect(reset).toMatchObject({
+        status: "complete",
+        settings: { renderScale: 2 },
+        travelPreferences: {
+          synonyms: [],
+          recentLimit: 5,
+          recentMapIds: [],
+        },
+      });
       expect(
         await app.evaluate(() => {
           const { quit, relaunch, options } = globalThis.__resetRestart;
           if (!options) throw new Error("no message box was shown");
-          return { quit, relaunch, buttons: options.buttons };
+          return {
+            quit,
+            relaunch,
+            buttons: options.buttons,
+            detail: options.detail,
+          };
         }),
       ).toEqual({
         quit: false,
         relaunch: false,
         buttons: ["Reset GWonMac Settings", "Cancel"],
+        detail:
+          "Display, tools, Travel shortcuts, custom search phrases, recent destinations, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
       });
       expect(await page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ renderScale: 2 });
+      const rawSettings = JSON.parse(
+        await readFile(path.join(userData, "settings.json"), "utf8"),
+      ) as { travelShortcuts: unknown[] };
+      expect(rawSettings.travelShortcuts[0]).toEqual({
+        mapId: 81,
+        district: "international",
+        districtNumber: 0,
+      });
       await app.evaluate(({ app: electronApp }) => {
         electronApp.quit = globalThis.__resetRestart.originalQuit;
         electronApp.relaunch = globalThis.__resetRestart.originalRelaunch;
@@ -334,13 +367,64 @@ test.describe("data and display settings", () => {
 
       const reset = await page.evaluate(() => window.gwNative.settings.reset());
       expect(reset).toMatchObject({
-        renderScale: 2,
-        showDiagnostics: false,
+        status: "complete",
+        settings: {
+          renderScale: 2,
+          showDiagnostics: false,
+        },
+        travelPreferences: {
+          synonyms: [],
+          recentLimit: 5,
+          recentMapIds: [],
+        },
       });
       expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
         renderScale: 2,
         showDiagnostics: false,
       });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("changes neither preference owner when reset is cancelled", async () => {
+    const fixture = await launchOffline(
+      "gw-settings-reset-cancel-e2e-",
+      {},
+      (userData) => Promise.all([
+        writeFile(
+          path.join(userData, "settings.json"),
+          JSON.stringify({ formatVersion: 1, showDiagnostics: true }),
+        ),
+        writeFile(
+          path.join(userData, "travel-preferences.json"),
+          JSON.stringify({
+            formatVersion: 1,
+            synonyms: [{ term: "home", mapId: 55 }],
+            recentLimit: 3,
+            recentMapIds: [55],
+          }),
+        ),
+      ]).then(() => undefined),
+    );
+    try {
+      const { app, page } = fixture;
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({
+          response: 1,
+          checkboxChecked: false,
+        });
+      });
+      const before = await page.evaluate(async () => ({
+        settings: await window.gwNative.settings.get(),
+        travel: await window.gwNative.travelPreferences.get(),
+      }));
+
+      expect(await page.evaluate(() => window.gwNative.settings.reset())).toBeNull();
+      expect(await page.evaluate(async () => ({
+        settings: await window.gwNative.settings.get(),
+        travel: await window.gwNative.travelPreferences.get(),
+      }))).toEqual(before);
     } finally {
       await closeOffline(fixture);
     }
