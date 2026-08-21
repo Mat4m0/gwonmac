@@ -1,0 +1,21 @@
+# Main keeps one read-only exact-commit gate. It packages the ad-hoc Preview
+# identity for smoke coverage, but publishes no artifact or GitHub release.
+name: Main verification
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-verification
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    uses: ./.github/workflows/macos-verify.yml
+    with:
+      packaged-smoke: true
+      package-intent: developer-build

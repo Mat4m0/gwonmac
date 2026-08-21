@@ -1,6 +1,6 @@
 export type PackageIntent =
   | "local"
-  | "preview-handoff"
+  | "developer-build"
   | "release"
   | "development";
 
@@ -11,7 +11,7 @@ export type PackageMode =
       readonly productChannel: "release";
     }
   | {
-      readonly intent: "preview-handoff";
+      readonly intent: "developer-build";
       readonly kind: "adhoc";
       readonly productChannel: "preview";
     }
@@ -34,9 +34,9 @@ export function resolvePackageMode(value: unknown): PackageMode {
     case "":
     case "local":
       return { intent: "local", kind: "adhoc", productChannel: "release" };
-    case "preview-handoff":
+    case "developer-build":
       return {
-        intent: "preview-handoff",
+        intent: "developer-build",
         kind: "adhoc",
         productChannel: "preview",
       };

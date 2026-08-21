@@ -235,16 +235,19 @@ authority.
 
 ## Saved login
 
-The Release, Preview, and signed Development identities use separate Keychain
-authority. Each identity can read only its own provisioned items.
+The Release and signed Development identities use separate Keychain authority.
+Historical signed Preview builds have their own retained identity too. Each
+identity can read only its own provisioned items; no new signed Preview is
+published.
 
 Each account scope has one item for the ArenaNet user name and password and one
 item for the Steam access token and expiry. The existing fixed items belong
 only to Single Account mode. A read failure does not delete an item. The game
 can continue to its login screen when an item is unavailable.
 
-Unpackaged and ordinary local builds use volatile storage. They do not claim a
-provisioned Keychain item. There is no file or `safeStorage` fallback.
+Unpackaged, ordinary local, and ad-hoc developer builds use volatile storage.
+They do not claim a provisioned Keychain item. There is no file or
+`safeStorage` fallback.
 
 The game proxy does not send or accept browser cookies. The Steam sign-in
 window uses a separate in-memory session. It destroys that session after
@@ -252,8 +255,15 @@ success, failure, or cancellation.
 
 ## Distribution and application updates
 
-Release, Preview, and Development are separate signed identities. Preview is a
-tester application. It cannot use the public application updater.
+Release and Development are separate signed identities. Manual developer builds
+use the Preview application identity only to install beside Release; they are
+ad-hoc signed, carry no distribution marker, and cannot use saved login or the
+public application updater.
+
+Every application identity still uses the canonical `Guild Wars` user-data
+directory. A developer build can therefore change settings, game files, builds,
+templates, diagnostics, and caches even though Keychain access stays isolated.
+Run only a trusted commit and back up important player data before testing.
 
 Stable and Beta are update tracks inside the same Release identity. They share
 the same bundle identity, profile, Keychain authority, settings, and updater.

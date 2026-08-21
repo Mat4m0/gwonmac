@@ -208,9 +208,9 @@ The stack is mergeable only when:
 - clicks, double-clicks, bursts, and drags emit no synthetic touch events;
 - all supported 4 GB profiles allocate above 3 GB, reject mixed generations and
   corrupt caches, and prove that only the WASM memory maximum changes;
-- the Preview signing credentials are available without a code bypass;
-- a signed, notarized, stapled Preview passes the feature QA checklist in
-  [Release verification](release-verification.md).
+- an exact-SHA ad-hoc developer build passes packaged smoke and the feature QA
+  checklist in [Release verification](release-verification.md) without claiming
+  release signing or saved-login authority.
 
 Stable publication remains a human product decision. Automation cannot decide
 whether the game looks and behaves correctly.

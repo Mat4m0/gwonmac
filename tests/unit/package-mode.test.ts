@@ -9,8 +9,8 @@ test("packaging accepts only the four complete supported intents", () => {
     productChannel: "release",
   });
   assert.deepEqual(resolvePackageMode(""), resolvePackageMode("local"));
-  assert.deepEqual(resolvePackageMode("preview-handoff"), {
-    intent: "preview-handoff",
+  assert.deepEqual(resolvePackageMode("developer-build"), {
+    intent: "developer-build",
     kind: "adhoc",
     productChannel: "preview",
   });

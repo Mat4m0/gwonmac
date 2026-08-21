@@ -1,0 +1,81 @@
+name: Developer build feedback
+description: Report results from a temporary exact-commit developer build.
+title: "[Developer build]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing a developer build. These builds are temporary, ad-hoc signed, and unsupported. They have no updater or saved-login authority, but they share the normal Guild Wars data directory. Back up important player data and run only a commit you trust.
+
+        GitHub issues are public. Diagnostics stay on your Mac unless you explicitly attach them. The app excludes credentials, account identifiers, packet contents, HTTP bodies, headers, cookies, filesystem paths, and crash dumps from the diagnostics ZIP.
+  - type: input
+    id: commit
+    attributes:
+      label: Source commit
+      description: Copy the complete 40-character commit from SOURCE_COMMIT.txt.
+      placeholder: f45f7629e9d31d5456ef3387e154a88f53750e84
+    validations:
+      required: true
+  - type: input
+    id: run
+    attributes:
+      label: Actions run URL
+      description: Copy the URL of the Developer build workflow run.
+      placeholder: https://github.com/Mat4m0/gwonmac/actions/runs/123456789
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 15.5
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Mac hardware
+      placeholder: M2 Pro Mac mini
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: versioned-release
+    attributes:
+      label: Does this happen on the latest versioned release?
+      options:
+        - No — this is a developer-build regression
+        - Yes — it also happens on the latest versioned release
+        - I have not compared them
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics (optional)
+      description: If you choose to share diagnostics, drag the `.zip` exported by GWonmac here.
+      placeholder: Drag the .zip file here, or leave this blank.
+    validations:
+      required: false
