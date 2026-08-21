@@ -19,9 +19,13 @@
  * observation of that game — which passes straight through, unread. The bundle
  * owns what a party means.
  */
-import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { TeamApplyCommands } from "../shared/builds/team-apply-runner.js";
 import type { StorageCommand } from "../shared/storage-command.js";
+import type {
+  PublishedTemplate,
+  PublishableTemplate,
+  EmbeddedToolsBundle,
+} from "../shared/tools-bundle-contracts.js";
 import {
   createToolboxLifecycle,
   type MountedTool,
@@ -32,38 +36,6 @@ import {
   templateFilesystem,
 } from "./template-store.js";
 import { sanitiseTemplateName } from "./template-format.js";
-
-type PublishedTemplate = Readonly<{ fileName: string; location: string }>;
-
-/** A build the bundle has already encoded. See apps/tools/src/host.ts. */
-type PublishableTemplate = Readonly<{ name: string; code: string }>;
-
-type ToolsAppHandle = Readonly<{
-  show(): void;
-  hide(): void;
-  toggle(): void;
-  requestClose(): void;
-  update(observation: ToolboxObservation): void;
-  dispose(): void;
-}>;
-
-type ToolsBundle = Readonly<{
-  mountToolsApp(
-    target: HTMLElement,
-    options: {
-      initiallyVisible?: boolean;
-      onVisibilityChange?(visible: boolean): void;
-      publishTemplate:
-        | ((template: PublishableTemplate) => Promise<PublishedTemplate>)
-        | null;
-      commands: TeamApplyCommands | null;
-      storage: StorageCommand | null;
-      applyUnavailable: string | null;
-      observationUnavailable: string | null;
-      development: boolean;
-    },
-  ): ToolsAppHandle;
-}>;
 
 /**
  * Writes one build where the game's own template dialog will find it.
@@ -150,7 +122,7 @@ export function mountToolsInto(
   // not try to resolve a file that only exists after the build step.
   const specifier = "./tools/tools-app.js";
   return Promise.all([import(specifier), window.gwNative.client.session()])
-    .then(([bundle, session]: [ToolsBundle, Awaited<ReturnType<typeof window.gwNative.client.session>>]) => {
+    .then(([bundle, session]: [EmbeddedToolsBundle<HTMLElement>, Awaited<ReturnType<typeof window.gwNative.client.session>>]) => {
       const applyStatus = session.compatibility?.features.teamApply;
       const applyUnavailable = commands === null
         ? applyStatus?.status === 'unavailable'

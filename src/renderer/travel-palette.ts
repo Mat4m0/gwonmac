@@ -6,26 +6,10 @@ import type {
   TravelCommand,
   TravelGameState,
 } from "../shared/travel-command.js";
-
-type TravelPaletteHandle = Readonly<{
-  show(): void;
-  hide(): void;
-  toggle(): void;
-  update(state: TravelGameState): void;
-  dispose(): void;
-}>;
-
-type TravelBundle = Readonly<{
-  mountTravelPalette(
-    target: HTMLElement,
-    options: {
-      command: TravelCommand;
-      development: boolean;
-      initiallyVisible?: boolean;
-      onVisibilityChange?: (visible: boolean) => void;
-    },
-  ): TravelPaletteHandle;
-}>;
+import type {
+  EmbeddedToolsBundle,
+  TravelPaletteHandle,
+} from "../shared/tools-bundle-contracts.js";
 
 export function createTravelPalette(
   parent: HTMLElement,
@@ -72,7 +56,7 @@ export function createTravelPalette(
     if (next && !requested) {
       requested = true;
       const specifier = "./tools/tools-app.js";
-      void import(specifier).then((bundle: TravelBundle) => {
+      void import(specifier).then((bundle: EmbeddedToolsBundle<HTMLElement>) => {
         if (disposed) return;
         app = bundle.mountTravelPalette(host, {
           command,

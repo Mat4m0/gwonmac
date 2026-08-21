@@ -1,16 +1,8 @@
 /** Mounts the Vue Travel palette and exposes its small lifecycle to the renderer. */
 import { createApp, h, ref } from "vue";
-import type { TravelGameState } from "../../../src/shared/travel-command";
 import TravelPalette from "./components/TravelPalette.vue";
 import type { TravelHost } from "./travel-host";
-
-export type TravelPaletteHandle = Readonly<{
-  show(): void;
-  hide(): void;
-  toggle(): void;
-  update(state: TravelGameState): void;
-  dispose(): void;
-}>;
+import type { TravelPaletteHandle } from "../../../src/shared/tools-bundle-contracts";
 
 export function mountTravelPalette(
   target: HTMLElement,
