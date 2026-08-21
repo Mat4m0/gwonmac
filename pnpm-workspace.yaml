@@ -1,8 +1,15 @@
 packages:
   - "apps/*"
-# Default isolated linker keeps .bin links. publicHoistPattern satisfies Electron Forge.
+# Nuxt I18n resolves these declared dependencies from Nuxt Kit rather than from
+# its own package. Keep that compatibility surface exact; Forge also accepts
+# this narrow pattern as proof that pnpm packaging was configured intentionally.
 publicHoistPattern:
-  - "*"
+  - "@intlify/core"
+  - "@intlify/core-base"
+  - "@intlify/message-compiler"
+  - "@intlify/shared"
+  - "@intlify/utils"
+  - "vue-i18n"
 confirmModulesPurge: false
 blockExoticSubdeps: false
 overrides:
@@ -18,6 +25,13 @@ overrides:
   # family, which mismatches the 3.x API and breaks the website build/server.
   unhead: 3.2.3
   "@unhead/vue": 3.2.3
+packageExtensions:
+  "@nuxt/scripts@0.13.4":
+    dependencies:
+      estree-walker: 3.0.3
+  "nuxt-define@1.0.0":
+    dependencies:
+      "@nuxt/kit": 4.5.1
 allowBuilds:
   electron: true
   esbuild: true
