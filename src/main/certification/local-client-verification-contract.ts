@@ -5,7 +5,10 @@
  * exact post-template input and semantic-verifier ABI. This module constructs
  * values; the process-boundary module validates values received over IPC.
  */
-import type { EnhancementCapabilities } from "../../shared/enhancement-contracts.js";
+import {
+  type EnhancementCapability,
+  type EnhancementCapabilities,
+} from "../../shared/enhancement-contracts.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import type { KnownTemplateSaveBuild } from "./template-save-compat.js";
 import {
@@ -32,17 +35,7 @@ export type EnhancementVerificationReason = Extract<
   "enhancement-layout-changed" | "enhancement-transform-failed"
 >;
 
-export const LOCAL_CLIENT_FEATURES = Object.freeze([
-  "nativeCursor",
-  "targetObservation",
-  "partyObservation",
-  "teamApply",
-  "travelAction",
-  "xunlaiAction",
-  "chatAliases",
-] as const satisfies readonly (keyof EnhancementCapabilities)[]);
-
-export type LocalClientFeature = (typeof LOCAL_CLIENT_FEATURES)[number];
+export type LocalClientFeature = EnhancementCapability;
 
 const SHARED_FEATURE_INVARIANTS = [
   "module.input-size",
@@ -181,17 +174,6 @@ export type LocalFeatureVerdict<Feature extends LocalClientFeature> =
 export type LocalFeatureVerdicts = Readonly<{
   [Feature in LocalClientFeature]: LocalFeatureVerdict<Feature>;
 }>;
-
-export const ALL_LOCAL_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities =
-  Object.freeze({
-    nativeCursor: true,
-    targetObservation: true,
-    partyObservation: true,
-    teamApply: true,
-    travelAction: true,
-    xunlaiAction: true,
-    chatAliases: true,
-  });
 
 interface LocalVerificationBase {
   readonly officialSha256: string;

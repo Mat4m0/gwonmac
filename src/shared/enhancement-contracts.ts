@@ -19,21 +19,11 @@ export const ENHANCEMENT_PROGRAMS = [
 
 export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
 
-export type EnhancementCapabilities = Readonly<{
-  nativeCursor: boolean;
-  targetObservation: boolean;
-  partyObservation: boolean;
-  /** Team Apply packet authority. */
-  teamApply: boolean;
-  /** Travel message authority. */
-  travelAction: boolean;
-  /** Xunlai DataWindow authority. */
-  xunlaiAction: boolean;
-  /** Optional parser aliases; buttons and shortcuts remain independent. */
-  chatAliases: boolean;
-}>;
-
-const CAPABILITY_FIELDS = Object.freeze([
+/**
+ * Profile-mask bit order. Reordering or inserting fields changes every profile
+ * identity and requires an Enhancement transform ABI change.
+ */
+export const ENHANCEMENT_CAPABILITY_FIELDS = Object.freeze([
   "nativeCursor",
   "targetObservation",
   "partyObservation",
@@ -41,9 +31,12 @@ const CAPABILITY_FIELDS = Object.freeze([
   "travelAction",
   "xunlaiAction",
   "chatAliases",
-] as const satisfies readonly (keyof EnhancementCapabilities)[]);
+] as const);
 
-const MAX_CAPABILITY_MASK = (1 << CAPABILITY_FIELDS.length) - 1;
+export type EnhancementCapability = (typeof ENHANCEMENT_CAPABILITY_FIELDS)[number];
+export type EnhancementCapabilities = Readonly<Record<EnhancementCapability, boolean>>;
+
+const MAX_CAPABILITY_MASK = (1 << ENHANCEMENT_CAPABILITY_FIELDS.length) - 1;
 const CAPABILITY_PROFILE = /^features-([0-9a-f]{2})$/;
 
 /** A compact transform identity; the two hex digits are the seven capability bits. */
@@ -51,14 +44,16 @@ export type EnhancementCapabilityProfile = `features-${string}`;
 
 function capabilitiesFromMask(mask: number): EnhancementCapabilities {
   return Object.freeze(Object.fromEntries(
-    CAPABILITY_FIELDS.map((field, index) => [field, (mask & (1 << index)) !== 0]),
+    ENHANCEMENT_CAPABILITY_FIELDS.map(
+      (field, index) => [field, (mask & (1 << index)) !== 0],
+    ),
   )) as EnhancementCapabilities;
 }
 
 function capabilityMask(capabilities: EnhancementCapabilities): number | null {
   let mask = 0;
-  for (let index = 0; index < CAPABILITY_FIELDS.length; index += 1) {
-    const enabled = capabilities[CAPABILITY_FIELDS[index]!];
+  for (let index = 0; index < ENHANCEMENT_CAPABILITY_FIELDS.length; index += 1) {
+    const enabled = capabilities[ENHANCEMENT_CAPABILITY_FIELDS[index]!];
     if (typeof enabled !== "boolean") return null;
     if (enabled) mask |= 1 << index;
   }
@@ -81,7 +76,7 @@ export function enhancementCapabilitiesCover(
   available: EnhancementCapabilities,
   requested: EnhancementCapabilities,
 ): boolean {
-  return CAPABILITY_FIELDS.every(
+  return ENHANCEMENT_CAPABILITY_FIELDS.every(
     (field) => !requested[field] || available[field],
   );
 }
@@ -93,7 +88,7 @@ export function isEnhancementCapabilityProfile(
     && enhancementCapabilitiesForProfile(value) !== null;
 }
 
-const NONE: EnhancementCapabilities = Object.freeze({
+export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   targetObservation: false,
   partyObservation: false,
@@ -102,6 +97,47 @@ const NONE: EnhancementCapabilities = Object.freeze({
   xunlaiAction: false,
   chatAliases: false,
 });
+
+function isExactBooleanRecord<Key extends string>(
+  value: unknown,
+  keys: readonly Key[],
+): value is Readonly<Record<Key, boolean>> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const actual = Object.keys(record);
+  return actual.length === keys.length
+    && keys.every(
+      (key) => Object.hasOwn(record, key) && typeof record[key] === "boolean",
+    );
+}
+
+export function parseEnhancementCapabilities(
+  value: unknown,
+): EnhancementCapabilities | null {
+  if (!isExactBooleanRecord(value, ENHANCEMENT_CAPABILITY_FIELDS)) {
+    return null;
+  }
+  return Object.freeze({
+    nativeCursor: value.nativeCursor,
+    targetObservation: value.targetObservation,
+    partyObservation: value.partyObservation,
+    teamApply: value.teamApply,
+    travelAction: value.travelAction,
+    xunlaiAction: value.xunlaiAction,
+    chatAliases: value.chatAliases,
+  });
+}
+
+export function sameEnhancementCapabilities(
+  left: EnhancementCapabilities,
+  right: EnhancementCapabilities,
+): boolean {
+  return ENHANCEMENT_CAPABILITY_FIELDS.every(
+    (field) => left[field] === right[field],
+  );
+}
 
 export function enhancementCapabilityProfile(
   capabilities: EnhancementCapabilities,
@@ -171,7 +207,7 @@ export function enhancementCapabilitiesFor(
         ? ENHANCEMENT_CAPABILITY_PRESETS.all
         : selection.nativeCursor
           ? ENHANCEMENT_CAPABILITY_PRESETS.cursor
-          : NONE;
+          : NO_ENHANCEMENT_CAPABILITIES;
     case "cursor-observer": return ENHANCEMENT_CAPABILITY_PRESETS.cursor;
     case "target-observer": return ENHANCEMENT_CAPABILITY_PRESETS.target;
     case "toolbox-foundation": return ENHANCEMENT_CAPABILITY_PRESETS.party;
@@ -193,13 +229,7 @@ export function enhancementHooksFor(
 export function enhancementCapabilitiesRequested(
   capabilities: EnhancementCapabilities,
 ): boolean {
-  return capabilities.nativeCursor
-    || capabilities.targetObservation
-    || capabilities.partyObservation
-    || capabilities.teamApply
-    || capabilities.travelAction
-    || capabilities.xunlaiAction
-    || capabilities.chatAliases;
+  return ENHANCEMENT_CAPABILITY_FIELDS.some((field) => capabilities[field]);
 }
 
 /** Team Apply alone requires the party observer; local actions do not. */
