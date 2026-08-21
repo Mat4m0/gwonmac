@@ -562,6 +562,135 @@ function hasOnlyZeroWords(
   return true;
 }
 
+type AccountProfessionRow = Readonly<{
+  hero: number;
+  professions: readonly [number, number];
+}>;
+
+type AccountProfessionRowResult =
+  | Readonly<{ status: "accepted"; row: AccountProfessionRow | null }>
+  | Readonly<{ status: "refused" }>;
+
+/** Reads and validates one fixed account-profession row. */
+function readAccountProfessionRow(
+  view: DataView,
+  hero: number,
+): AccountProfessionRowResult {
+  const packed = view.getUint32(PARTY_FIXED_HEADER_BYTES + hero * 4, true);
+  if (packed === 0) return Object.freeze({ status: "accepted", row: null });
+  const primary = packed & 0xff;
+  const secondary = (packed >>> 8) & 0xff;
+  if (
+    hero === 0
+    || primary < 1
+    || primary > 10
+    || secondary > 10
+    || (packed >>> 16) !== 0
+  ) return Object.freeze({ status: "refused" });
+  return Object.freeze({
+    status: "accepted",
+    row: Object.freeze({
+      hero,
+      professions: Object.freeze([primary, secondary] as const),
+    }),
+  });
+}
+
+type PartySlot = NonNullable<
+  NonNullable<ToolboxObservation["party"]>["slots"]
+>[number];
+
+type PartySlotRowResult =
+  | Readonly<{ status: "accepted"; slot: PartySlot; heroId: number }>
+  | Readonly<{ status: "refused" }>;
+
+/** Reads and validates one fixed party slot without deciding cross-slot invariants. */
+function readPartySlotRow(view: DataView, index: number): PartySlotRowResult {
+  const at = PARTY_HEADER_BYTES + index * PARTY_SLOT_BYTES;
+  const heroId = view.getUint32(at, true);
+  const agentId = view.getUint32(at + 4, true);
+  const professions = view.getUint32(at + 8, true);
+  const level = view.getUint32(at + 12, true);
+  const behaviour = view.getUint32(at + 16, true);
+  const slotFlags = view.getUint32(at + 20, true);
+  const disabled = view.getUint32(at + 24, true);
+  const skills: number[] = [];
+  for (let skill = 0; skill < PARTY_SKILL_SLOTS; skill += 1) {
+    skills.push(view.getUint32(at + 28 + skill * 4, true));
+  }
+  const attributes: Array<readonly [number, number]> = [];
+  const attributeIds = new Set<number>();
+  for (let entry = 0; entry < PARTY_ATTRIBUTE_SLOTS; entry += 1) {
+    const packed = view.getUint32(at + 60 + entry * 4, true);
+    const rank = (packed >>> 8) & 0xff;
+    const id = packed & 0xff;
+    if (rank === 0) {
+      if (packed !== 0) return Object.freeze({ status: "refused" });
+      continue;
+    }
+    if (
+      id > ATTRIBUTE_ID_MAX
+      || rank > ATTRIBUTE_RANK_MAX
+      || (packed >>> 16) !== 0
+      || attributeIds.has(id)
+    ) return Object.freeze({ status: "refused" });
+    attributeIds.add(id);
+    attributes.push(Object.freeze([id, rank]));
+  }
+  if ((slotFlags & ~KNOWN_SLOT_FLAGS) !== 0) {
+    return Object.freeze({ status: "refused" });
+  }
+  const occupied = (slotFlags & SLOT_FLAGS.occupied) !== 0;
+  if (occupied) {
+    if (index === 0) {
+      if (heroId !== 0 || agentId === 0 || (slotFlags & SLOT_FLAGS.behaviour) !== 0) {
+        return Object.freeze({ status: "refused" });
+      }
+    } else if (heroId < 1 || heroId > 39) {
+      return Object.freeze({ status: "refused" });
+    }
+    if ((slotFlags & SLOT_FLAGS.behaviour) !== 0 && behaviour > 2) {
+      return Object.freeze({ status: "refused" });
+    }
+    if ((slotFlags & SLOT_FLAGS.skills) !== 0 && disabled > 0xff) {
+      return Object.freeze({ status: "refused" });
+    }
+    if ((slotFlags & SLOT_FLAGS.professions) !== 0) {
+      const primary = professions & 0xff;
+      const secondary = (professions >>> 8) & 0xff;
+      if (primary < 1 || primary > 10 || secondary > 10) {
+        return Object.freeze({ status: "refused" });
+      }
+    }
+  } else if (
+    heroId !== 0 || agentId !== 0 || professions !== 0 || level !== 0
+    || behaviour !== 0 || disabled !== 0 || slotFlags !== 0
+    || skills.some((skill) => skill !== 0)
+    || attributes.length !== 0
+  ) return Object.freeze({ status: "refused" });
+
+  return Object.freeze({
+    status: "accepted",
+    heroId,
+    slot: Object.freeze({
+      index,
+      occupied,
+      hero: occupied && index !== 0 ? heroId : null,
+      agentId: occupied ? agentId : null,
+      level: occupied && level !== 0 ? level : null,
+      professions: (slotFlags & SLOT_FLAGS.professions) !== 0
+        ? Object.freeze([professions & 0xff, (professions >>> 8) & 0xff])
+        : null,
+      behaviour: (slotFlags & SLOT_FLAGS.behaviour) !== 0 ? behaviour : null,
+      skills: (slotFlags & SLOT_FLAGS.skills) !== 0 ? Object.freeze(skills) : null,
+      disabled: (slotFlags & SLOT_FLAGS.skills) !== 0 ? disabled : null,
+      attributes: (slotFlags & SLOT_FLAGS.attributes) !== 0
+        ? Object.freeze(attributes)
+        : null,
+    }),
+  });
+}
+
 export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
   if (
     !(buffer instanceof ArrayBuffer)
@@ -605,127 +734,38 @@ export function readCompanionParty(buffer: ArrayBuffer, pointer: number) {
     stateAccepted: (professionSources & 2) !== 0,
     attributeRowObserved: (professionSources & 4) !== 0,
   });
-  const accountProfessions: Array<Readonly<{
-    hero: number;
-    professions: readonly [number, number];
-  }>> = [];
+  const accountProfessions: AccountProfessionRow[] = [];
   let accountProfessionBits = 0n;
   for (let hero = 0; hero < ACCOUNT_HERO_SLOTS; hero += 1) {
-    const packed = view.getUint32(PARTY_FIXED_HEADER_BYTES + hero * 4, true);
-    if (packed === 0) continue;
-    const primary = packed & 0xff;
-    const secondary = (packed >>> 8) & 0xff;
-    if (
-      hero === 0
-      || primary < 1
-      || primary > 10
-      || secondary > 10
-      || (packed >>> 16) !== 0
-    ) {
+    const result = readAccountProfessionRow(view, hero);
+    if (result.status === "refused") {
       malformed = true;
       continue;
     }
-    accountProfessionBits |= 1n << BigInt(hero);
-    accountProfessions.push(Object.freeze({
-      hero,
-      professions: Object.freeze([primary, secondary] as const),
-    }));
+    if (result.row !== null) {
+      accountProfessionBits |= 1n << BigInt(hero);
+      accountProfessions.push(result.row);
+    }
   }
 
-  type PartySlot = NonNullable<
-    NonNullable<ToolboxObservation["party"]>["slots"]
-  >[number];
   const slots: PartySlot[] = [];
   let occupied = 0;
   const seen = new Set<number>();
   for (let index = 0; index < PARTY_SLOT_COUNT; index += 1) {
-    const at = PARTY_HEADER_BYTES + index * PARTY_SLOT_BYTES;
-    const heroId = view.getUint32(at, true);
-    const agentId = view.getUint32(at + 4, true);
-    const professions = view.getUint32(at + 8, true);
-    const level = view.getUint32(at + 12, true);
-    const behaviour = view.getUint32(at + 16, true);
-    const slotFlags = view.getUint32(at + 20, true);
-    const disabled = view.getUint32(at + 24, true);
-    const skills: number[] = [];
-    for (let skill = 0; skill < PARTY_SKILL_SLOTS; skill += 1) {
-      skills.push(view.getUint32(at + 28 + skill * 4, true));
+    const result = readPartySlotRow(view, index);
+    if (result.status === "refused") {
+      malformed = true;
+      continue;
     }
-    // `id | rank << 8`, invested only. Re-derived rather than trusted: an id
-    // past 44, a rank past 12, or the same attribute twice would each be a
-    // rank the library keeps and a template publishes.
-    const attributes: Array<readonly [number, number]> = [];
-    const attributeIds = new Set<number>();
-    for (let entry = 0; entry < PARTY_ATTRIBUTE_SLOTS; entry += 1) {
-      const packed = view.getUint32(at + 60 + entry * 4, true);
-      const rank = (packed >>> 8) & 0xff;
-      const id = packed & 0xff;
-      // A zero rank is an unused entry — the kernel publishes only invested
-      // attributes — so it ends the list rather than naming attribute zero.
-      if (rank === 0) {
-        if (packed !== 0) malformed = true;
-        continue;
-      }
-      if (
-        id > ATTRIBUTE_ID_MAX
-        || rank > ATTRIBUTE_RANK_MAX
-        || (packed >>> 16) !== 0
-        || attributeIds.has(id)
-      ) {
-        malformed = true;
-      }
-      attributeIds.add(id);
-      attributes.push(Object.freeze([id, rank]));
-    }
-    const isOccupied = (slotFlags & SLOT_FLAGS.occupied) !== 0;
-    if ((slotFlags & ~KNOWN_SLOT_FLAGS) !== 0) malformed = true;
-    if (isOccupied) {
+    const { slot, heroId } = result;
+    if (slot.occupied) {
       occupied += 1;
-      if (index === 0) {
-        if (heroId !== 0 || agentId === 0 || (slotFlags & SLOT_FLAGS.behaviour) !== 0) {
-          malformed = true;
-        }
-      } else {
-        if (heroId < 1 || heroId > 39 || seen.has(heroId)) malformed = true;
+      if (index !== 0) {
+        if (seen.has(heroId)) malformed = true;
         seen.add(heroId);
       }
-      if ((slotFlags & SLOT_FLAGS.behaviour) !== 0 && behaviour > 2) malformed = true;
-      if ((slotFlags & SLOT_FLAGS.skills) !== 0 && disabled > 0xff) malformed = true;
-      if ((slotFlags & SLOT_FLAGS.professions) !== 0) {
-        const primary = professions & 0xff;
-        const secondary = (professions >>> 8) & 0xff;
-        if (primary < 1 || primary > 10 || secondary > 10) malformed = true;
-      }
-    } else if (
-      heroId !== 0 || agentId !== 0 || professions !== 0 || level !== 0
-      || behaviour !== 0 || disabled !== 0 || slotFlags !== 0
-      || skills.some((skill) => skill !== 0)
-      || attributes.length !== 0
-    ) {
-      // An empty slot carrying values is a torn write, not an empty slot.
-      malformed = true;
     }
-    slots.push(Object.freeze({
-      index,
-      occupied: isOccupied,
-      hero: isOccupied && index !== 0 ? heroId : null,
-      agentId: isOccupied ? agentId : null,
-      level: isOccupied && level !== 0 ? level : null,
-      professions: (slotFlags & SLOT_FLAGS.professions) !== 0
-        ? Object.freeze([professions & 0xff, (professions >>> 8) & 0xff])
-        : null,
-      behaviour: (slotFlags & SLOT_FLAGS.behaviour) !== 0 ? behaviour : null,
-      skills: (slotFlags & SLOT_FLAGS.skills) !== 0
-        ? Object.freeze(skills)
-        : null,
-      disabled: (slotFlags & SLOT_FLAGS.skills) !== 0 ? disabled : null,
-      // Its own flag, not `attributes.length`: a character who has invested
-      // nothing publishes an empty list, and that is a real answer rather than
-      // a table nobody read.
-      attributes: (slotFlags & SLOT_FLAGS.attributes) !== 0
-        ? Object.freeze(attributes)
-        : null,
-    }));
+    slots.push(slot);
   }
 
   const secondSequence = view.getUint32(8, true);
