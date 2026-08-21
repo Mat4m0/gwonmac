@@ -55,7 +55,10 @@ from Single Account mode.
 
 The app publishes the workspace before it publishes the selected mode. A
 cancelled or failed enable action leaves Single Account mode selected. A failed
-first-account import does not change its source or publish the account.
+first-account import never changes its source or overwrites existing Multiple
+Accounts data. When Main confirms that the workspace was not published, it
+attempts to remove only destinations created by that attempt. If publication
+cannot be confirmed, it preserves those destinations and requires a restart.
 
 Returning to Single Account mode preserves the complete Multiple Accounts
 workspace. Re-enabling it restores the profiles and libraries. Neither
