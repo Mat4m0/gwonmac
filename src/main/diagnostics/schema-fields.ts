@@ -230,6 +230,7 @@ export const CAPTURE_STOP_REASONS = [
   "buffer-full",
   "export",
   "shutdown",
+  "owner-gone",
 ] as const;
 export type CaptureStopReason = (typeof CAPTURE_STOP_REASONS)[number];
 export const captureStopReason = literal(CAPTURE_STOP_REASONS);

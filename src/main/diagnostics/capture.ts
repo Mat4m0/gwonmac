@@ -10,7 +10,7 @@
  */
 import { rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { contentTracing } from "electron";
+import { contentTracing, type BrowserWindow, type WebContents } from "electron";
 import type { RendererCommand } from "../../shared/contracts.js";
 import { errorCode } from "../../shared/errors.js";
 import { gamePaths } from "../paths.js";
@@ -28,7 +28,42 @@ let traceGuard: ReturnType<typeof setInterval> | null = null;
 let captureTimer: ReturnType<typeof setTimeout> | null = null;
 let captureStopPromise: Promise<void> | null = null;
 let captureStartPromise: Promise<void> | null = null;
-let captureStoppedHandler: (() => void | Promise<void>) | null = null;
+let captureStoppedHandler: ((win: BrowserWindow) => void | Promise<void>) | null = null;
+
+interface CaptureOwner {
+  readonly win: BrowserWindow;
+  readonly contents: WebContents;
+  readonly stopped: () => void;
+}
+
+let captureOwner: CaptureOwner | null = null;
+
+function registeredGameWindow(win: BrowserWindow): boolean {
+  const id = win.webContents.id;
+  return windowRegistry.windowForWebContents(id) === win
+    && windowRegistry.contextForWebContents(id)?.role === "game";
+}
+
+function releaseCaptureOwner(owner: CaptureOwner): void {
+  owner.win.off("closed", owner.stopped);
+  owner.contents.off("render-process-gone", owner.stopped);
+  if (captureOwner === owner) captureOwner = null;
+}
+
+function ownCapture(win: BrowserWindow): CaptureOwner {
+  const contents = win.webContents;
+  const owner: CaptureOwner = {
+    win,
+    contents,
+    stopped: () => {
+      void stopDiagnosticCapture("owner-gone");
+    },
+  };
+  captureOwner = owner;
+  win.once("closed", owner.stopped);
+  contents.once("render-process-gone", owner.stopped);
+  return owner;
+}
 
 /** The level a capture is running at right now, `0` when none is. */
 export function activeCaptureLevel(): 0 | 1 | 2 {
@@ -47,17 +82,14 @@ export function completedTracePath(): string {
 
 /**
  * The renderer half of a capture. `level` crosses as a number inside a typed
- * event rather than spliced into a string of JavaScript. The focused registered
- * game receives it; a sole background game is unambiguous, while multiple
- * unfocused games are refused.
+ * event rather than spliced into a string of JavaScript. Its explicit owner is
+ * retained for the whole capture; later focus changes cannot retarget it.
  */
 const rendererCaptureCommand = (
+  win: BrowserWindow,
   command: Extract<RendererCommand, { type: "diagnostics.capture" }>,
 ): Promise<void> =>
-  sendRendererCommand(
-    windowRegistry.focusedOrSoleGameWindow(),
-    command,
-  ).then((outcome) => {
+  sendRendererCommand(win, command).then((outcome) => {
     if (outcome !== "completed") {
       logEvent({
         k: "renderer.commandIncomplete",
@@ -67,16 +99,19 @@ const rendererCaptureCommand = (
     }
   });
 
-export function markPerformanceProblem(): void {
+export function markPerformanceProblem(win: BrowserWindow): void {
+  if (!registeredGameWindow(win)) return;
+  const owner = captureOwner?.win ?? win;
+  if (owner !== win) return;
   logEvent({ k: "performance.problemMarked" });
-  void rendererCaptureCommand({
+  void rendererCaptureCommand(owner, {
     type: "diagnostics.capture",
     action: "problem-marked",
   });
 }
 
 export function setDiagnosticCaptureStoppedHandler(
-  handler: (() => void | Promise<void>) | null,
+  handler: ((win: BrowserWindow) => void | Promise<void>) | null,
 ): void {
   captureStoppedHandler = handler;
 }
@@ -127,20 +162,32 @@ export async function discardTrace(): Promise<void> {
   }
 }
 
-export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
+export function startDiagnosticCapture(
+  win: BrowserWindow,
+  level: 1 | 2,
+): Promise<void> {
   if (captureLevel !== 0 || captureStopPromise || captureStartPromise) {
     return Promise.reject(new Error("a diagnostics capture is already active"));
   }
+  if (!registeredGameWindow(win)) {
+    return Promise.reject(
+      new Error("diagnostics capture requires a registered game window"),
+    );
+  }
+  const owner = ownCapture(win);
   const operation = (async () => {
     // Beginning a capture replaces the previous capture result. Its raw trace
     // must be deleted first; clearing only the pointer would orphan a file that
     // can contain Chromium process data.
     await discardTrace();
-    await rendererCaptureCommand({ type: "diagnostics.capture", action: "reset" });
+    await rendererCaptureCommand(win, {
+      type: "diagnostics.capture",
+      action: "reset",
+    });
     await recorder.beginCapture();
     resetEventLoopWindow();
     captureLevel = level;
-    await rendererCaptureCommand({
+    await rendererCaptureCommand(win, {
       type: "diagnostics.capture",
       action: "started",
       level,
@@ -187,7 +234,7 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       if (captureTimer) clearTimeout(captureTimer);
       captureTimer = null;
       captureLevel = 0;
-      await rendererCaptureCommand({
+      await rendererCaptureCommand(win, {
         type: "diagnostics.capture",
         action: "stopped",
       });
@@ -201,9 +248,14 @@ export function startDiagnosticCapture(level: 1 | 2): Promise<void> {
       throw error;
     }
   })();
-  captureStartPromise = operation.finally(() => {
-    captureStartPromise = null;
-  });
+  captureStartPromise = operation
+    .catch((error: unknown) => {
+      releaseCaptureOwner(owner);
+      throw error;
+    })
+    .finally(() => {
+      captureStartPromise = null;
+    });
   return captureStartPromise;
 }
 
@@ -218,35 +270,59 @@ export function stopDiagnosticCapture(
     );
   }
   if (captureLevel === 0) return Promise.resolve();
+  const owner = captureOwner;
+  if (!owner) return Promise.reject(new Error("diagnostics capture has no owner"));
   const stoppedLevel = captureLevel;
   captureStopPromise = (async () => {
     if (captureTimer) clearTimeout(captureTimer);
     captureTimer = null;
-    await rendererCaptureCommand({ type: "diagnostics.capture", action: "flush" });
+    await rendererCaptureCommand(owner.win, {
+      type: "diagnostics.capture",
+      action: "flush",
+    });
     const traceCompleted = await stopTrace();
     const completedLevel =
       stoppedLevel === 2 && !traceCompleted ? 1 : stoppedLevel;
     recordedLevel = completedLevel;
-    logEvent({ k: "capture.stopped",
+    logEvent({
+      k: "capture.stopped",
       level: completedLevel,
       reason,
     });
     recorder.endCapture(completedLevel, reason);
     captureLevel = 0;
-    await rendererCaptureCommand({
-        type: "diagnostics.capture",
-        action: "stopped",
-      });
+    await rendererCaptureCommand(owner.win, {
+      type: "diagnostics.capture",
+      action: "stopped",
+    });
     if (
       captureStoppedHandler &&
       (reason === "manual" ||
         reason === "automatic" ||
         reason === "buffer-full")
     ) {
-      queueMicrotask(() => void captureStoppedHandler?.());
+      queueMicrotask(() => void captureStoppedHandler?.(owner.win));
     }
   })().finally(() => {
+    releaseCaptureOwner(owner);
     captureStopPromise = null;
   });
   return captureStopPromise;
+}
+
+export function stopDiagnosticCaptureForWindow(
+  win: BrowserWindow,
+  reason: CaptureMetadata["stopReason"] = "manual",
+): Promise<void> {
+  if (!registeredGameWindow(win)) {
+    return Promise.reject(
+      new Error("diagnostics capture requires a registered game window"),
+    );
+  }
+  if (captureOwner && captureOwner.win !== win) {
+    return Promise.reject(
+      new Error("diagnostics capture belongs to another game window"),
+    );
+  }
+  return stopDiagnosticCapture(reason);
 }

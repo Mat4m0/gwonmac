@@ -476,6 +476,61 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     await expect(altGame.locator("#memory-notice")).toBeHidden();
     await expect(nonTargetGame.locator("#memory-notice")).toBeHidden();
 
+    const focusGame = async (title: string) => {
+      await fixture.app.evaluate(({ app, BrowserWindow }, targetTitle) => {
+        const win = BrowserWindow.getAllWindows().find((candidate) =>
+          candidate.getTitle() === targetTitle);
+        if (!win) throw new Error(`${targetTitle} is unavailable`);
+        win.show();
+        app.focus({ steal: true });
+        win.focus();
+      }, title);
+      await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getFocusedWindow()?.getTitle(),
+      )).toBe(title);
+    };
+    const clickMenu = (id: string) => fixture.app.evaluate(({ Menu }, itemId) => {
+      const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+      if (!item?.click) throw new Error(`${itemId} menu item is unavailable`);
+      item.click(item, undefined, {} as Electron.KeyboardEvent);
+    }, id);
+
+    await fixture.app.evaluate(({ BrowserWindow, dialog }) => {
+      Object.defineProperty(dialog, "showMessageBox", {
+        configurable: true,
+        value: async (first: unknown) => {
+          globalThis.__runtimeDialogParent = first instanceof BrowserWindow
+            ? first.getTitle()
+            : null;
+          return { response: 1, checkboxChecked: false };
+        },
+      });
+      globalThis.__runtimeDialogParent = null;
+    });
+    await focusGame("Guild Wars Reforged — Alt");
+    await clickMenu("start-performance-capture");
+    await expect(altGame.locator("#capture-status")).toBeVisible();
+    await expect(nonTargetGame.locator("#capture-status")).toBeHidden();
+
+    await focusGame("Guild Wars Reforged — Primary");
+    await clickMenu("mark-performance-problem");
+    await clickMenu("stop-capture");
+    await expect(altGame.locator("#capture-status")).toBeVisible();
+    await expect(altGame.locator("#capture-marker")).toBeHidden();
+    await expect(nonTargetGame.locator("#capture-status")).toBeHidden();
+    expect(await fixture.app.evaluate(() => globalThis.__runtimeDialogParent))
+      .toBeNull();
+
+    await focusGame("Guild Wars Reforged — Alt");
+    await clickMenu("mark-performance-problem");
+    await expect(altGame.locator("#capture-marker")).toBeVisible();
+    await clickMenu("stop-capture");
+    await expect(altGame.locator("#capture-status")).toBeHidden();
+    await expect(nonTargetGame.locator("#capture-status")).toBeHidden();
+    await expect.poll(() => fixture.app.evaluate(() =>
+      globalThis.__runtimeDialogParent,
+    )).toBe("Guild Wars Reforged — Alt");
+
     await Promise.all(ownedGames.map(({ game }) => game.evaluate(() => {
       (window as typeof window & { __reloadProof?: boolean }).__reloadProof = true;
     })));
@@ -560,11 +615,24 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     const altPage = identifiedGames.find(({ credentials }) =>
       credentials?.username === "second@example.test")?.game;
     if (!primaryPage || !altPage) throw new Error("profile pages not found");
+    await focusGame("Guild Wars Reforged — Primary");
+    await clickMenu("start-performance-capture");
+    await expect(primaryPage.locator("#capture-status")).toBeVisible();
+    await expect(altPage.locator("#capture-status")).toBeHidden();
+    await fixture.app.evaluate(() => {
+      globalThis.__runtimeDialogParent = null;
+    });
     const primaryClosed = primaryPage.waitForEvent("close", { timeout: 12_000 });
     await primaryPage.evaluate(() => {
       void window.gwNative.app.requestQuit();
     });
     await primaryClosed;
+    await expect.poll(() => altPage.evaluate(() =>
+      window.gwNative.diagnostics.current().then((summary) => summary.captureLevel),
+    )).toBe(0);
+    await expect(altPage.locator("#capture-status")).toBeHidden();
+    expect(await fixture.app.evaluate(() => globalThis.__runtimeDialogParent))
+      .toBeNull();
     expect(await altPage.evaluate(() => window.gwNative.credentials.load())).toEqual({
       username: "second@example.test",
       password: "two",

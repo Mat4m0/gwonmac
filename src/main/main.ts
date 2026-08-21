@@ -48,6 +48,7 @@ import {
   startDiagnosticCapture,
   startDiagnostics,
   stopDiagnosticCapture,
+  stopDiagnosticCaptureForWindow,
   stopDiagnostics,
 } from "./diagnostics.js";
 import type { AppPhase } from "./diagnostics/schema-fields.js";
@@ -328,7 +329,7 @@ function buildWindowHost(
       exportDiagnosticsForWindow(win, () => preferences.getSettings()),
     markPerformanceProblem,
     startCapture: startDiagnosticCapture,
-    stopCapture: stopDiagnosticCapture,
+    stopCapture: stopDiagnosticCaptureForWindow,
     reloadGame: (win) => {
       void (async () => {
         // A refused template generation specifically asks for a reload. The
@@ -756,7 +757,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
   if (ENHANCEMENT_AUTOMATION_ENABLED) {
     process.on("message", (message) => {
       if (message === AUTOMATION_COMMAND.startLevel1Capture) {
-        void startDiagnosticCapture(1).catch((error) => {
+        const win = windowRegistry.focusedOrSoleGameWindow();
+        if (!win) {
+          logEvent({ k: "capture.automationStartFailed", code: "validation" });
+          return;
+        }
+        void startDiagnosticCapture(win, 1).catch((error) => {
           logEvent({
             k: "capture.automationStartFailed",
             code: errorCode(error),
@@ -767,10 +773,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       }
     });
   } else {
-    setDiagnosticCaptureStoppedHandler(async () => {
-      const gameWindows = windowRegistry.gameWindows();
-      const win = gameWindows.find((candidate) => candidate.isFocused())
-        ?? gameWindows[0];
+    setDiagnosticCaptureStoppedHandler(async (win) => {
       if (!win || win.isDestroyed()) return;
       await resetGameInput(win);
       const { response } = await dialog.showMessageBox(win, {
