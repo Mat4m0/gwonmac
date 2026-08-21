@@ -29,7 +29,11 @@ import {
   TOOLBOX_SNAPSHOT_POINTER,
 } from "./packaged-enhancement-fixture.ts";
 
-async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
+async function installTargetReadout(
+  page: Page,
+  moduleBytes: Uint8Array,
+  capabilities = TARGET_ONLY,
+) {
   return page.evaluate(async ({ bytes, tableSize, capabilities, snapshotAbi }: {
     bytes: number[];
     tableSize: number;
@@ -135,7 +139,7 @@ async function installTargetReadout(page: Page, moduleBytes: Uint8Array) {
   }, {
     bytes: [...moduleBytes],
     tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
-    capabilities: TARGET_ONLY,
+    capabilities,
     snapshotAbi: COMPANION_ABI.snapshot.abi,
   });
 }
@@ -341,6 +345,153 @@ export async function assertTargetReadoutLifecycle() {
   }
 }
 
+export async function assertCleanupSafetyGates() {
+  for (const gate of ["observer", "callback", "hook"] as const) {
+    const fixture = await launchPackaged(`gw-packaged-cleanup-${gate}-`, {});
+    try {
+      const pageErrors: string[] = [];
+      fixture.page.on("pageerror", (error) => pageErrors.push(error.message));
+      await fixture.page.waitForFunction(() => {
+        const { Module } = globalThis as PageGlobals;
+        return typeof Module?.socket?.connect === "function";
+      });
+      if (gate === "hook") {
+        await fixture.page.evaluate(async () => {
+          const surfaceSpecifier = "./surface-controller.js";
+          const { installSurfaceController }:
+            typeof import("../../src/renderer/surface-controller.ts") =
+              await import(surfaceSpecifier);
+          window.gwSurfaces = installSurfaceController(document);
+          window.gwToolsSettings = () => Object.freeze({
+            enabled: true,
+            teamManagement: true,
+            xunlaiStorage: true,
+            travelPalette: true,
+            targetReadout: false,
+          });
+        });
+      }
+      await installTargetReadout(
+        fixture.page,
+        installableManifestModule(
+          gate === "hook" ? TOOLBOX_PROGRAM_CAPABILITIES : TARGET_ONLY,
+        ),
+        gate === "hook" ? TOOLBOX_PROGRAM_CAPABILITIES : TARGET_ONLY,
+      );
+      const result = await fixture.page.evaluate((failureGate) => {
+        const probe = (globalThis as ReadoutPageGlobals).__targetReadoutFixture;
+        const reports: string[][] = [];
+        const consoleError = console.error;
+        console.error = (message?: unknown, detail?: unknown) => {
+          if (
+            message === "companion cleanup failed"
+            && detail instanceof AggregateError
+          ) {
+            reports.push(detail.errors.map((failure) =>
+              failure instanceof Error ? failure.message : String(failure)));
+            return;
+          }
+          consoleError(message, detail);
+        };
+        const cancelFrame = globalThis.cancelAnimationFrame;
+        if (failureGate === "hook") {
+          const globalValue = Object.getOwnPropertyDescriptor(
+            WebAssembly.Global.prototype,
+            "value",
+          );
+          if (
+            typeof globalValue?.get !== "function"
+            || typeof globalValue.set !== "function"
+          ) {
+            throw new Error("WebAssembly.Global.value is not instrumentable");
+          }
+          Object.defineProperty(probe.hookSlot, "value", {
+            configurable: true,
+            enumerable: true,
+            get: () => globalValue.get?.call(probe.hookSlot),
+            set: (value: number) => {
+              if (value === 0) {
+                throw new Error("intentional hook disable failure");
+              }
+              globalValue.set?.call(probe.hookSlot, value);
+            },
+          });
+        } else if (failureGate === "observer") {
+          globalThis.cancelAnimationFrame = () => {
+            throw new Error("intentional observer stop failure");
+          };
+        } else {
+          const setTable = probe.table.set.bind(probe.table);
+          probe.table.set = ((index: number, value: CallableFunction | null) => {
+            if (value === null) {
+              throw new Error("intentional callback withdrawal failure");
+            }
+            setTable(index, value);
+          }) as typeof probe.table.set;
+        }
+        try {
+          dispatchEvent(new Event("pagehide"));
+        } finally {
+          globalThis.cancelAnimationFrame = cancelFrame;
+          console.error = consoleError;
+        }
+        return {
+          cursorStatePublished: typeof window.gwCursorState === "function",
+          freed: probe.freed,
+          hook: probe.hookSlot.value,
+          readoutCount: document.querySelectorAll("#enhancement-target").length,
+          reports,
+          runtimeStatus: window.gwCompanionRuntime?.status ?? null,
+          runtimeRetained: window.gwCompanionRuntime === probe.runtime,
+          tableEmpty: probe.table.get(probe.table.length - 1) === null,
+          toolboxCount: document.querySelectorAll("#toolbox-foundation").length,
+        };
+      }, gate);
+
+      if (gate === "observer") {
+        assert.deepEqual(result, {
+          cursorStatePublished: false,
+          freed: [0x11_050, 0x1000],
+          hook: 0,
+          readoutCount: 1,
+          reports: [["Companion cleanup failed during observer disposal"]],
+          runtimeStatus: null,
+          runtimeRetained: false,
+          tableEmpty: true,
+          toolboxCount: 0,
+        });
+      } else if (gate === "callback") {
+        assert.deepEqual(result, {
+          cursorStatePublished: false,
+          freed: [],
+          hook: 0,
+          readoutCount: 0,
+          reports: [["Companion cleanup failed during callback withdrawal"]],
+          runtimeStatus: null,
+          runtimeRetained: false,
+          tableEmpty: false,
+          toolboxCount: 0,
+        });
+      } else {
+        assert.deepEqual(result, {
+          cursorStatePublished: true,
+          freed: [],
+          hook: ENHANCEMENT_BUILD.tableSlot + 1,
+          readoutCount: 0,
+          reports: [["Companion cleanup could not disable dispatch"]],
+          runtimeStatus: "installed",
+          runtimeRetained: true,
+          tableEmpty: false,
+          toolboxCount: 1,
+        });
+      }
+      assert.deepEqual(pageErrors, [], `${gate} cleanup escaped pagehide`);
+    } finally {
+      await closePackaged(fixture);
+    }
+  }
+}
+
 export async function assertToolboxFoundationLifecycle() {
   const fixture = await launchPackaged("gw-packaged-toolbox-foundation-", {});
   try {
@@ -370,6 +521,13 @@ export async function assertToolboxFoundationLifecycle() {
       const freed: number[] = [];
       const storageConfigurations: number[][] = [];
       const travelConfigurations: number[][] = [];
+      const cleanupReports: {
+        message: string;
+        aggregateMessage: string;
+        failures: string[];
+      }[] = [];
+      let cleanupStarted = false;
+      let freeFailurePending = true;
       let nextPointer = 0x1000;
       const malloc = (size: number) => {
         const pointer = nextPointer;
@@ -377,7 +535,13 @@ export async function assertToolboxFoundationLifecycle() {
         allocations.push({ pointer, size });
         return pointer;
       };
-      const free = (pointer: number) => freed.push(pointer);
+      const free = (pointer: number) => {
+        freed.push(pointer);
+        if (cleanupStarted && freeFailurePending) {
+          freeFailurePending = false;
+          throw new Error("intentional allocation release failure");
+        }
+      };
 
       // The fixture uses the exact certified addresses for game globals and
       // the canonical per-build offsets for every link beneath them. High,
@@ -558,11 +722,17 @@ export async function assertToolboxFoundationLifecycle() {
             enhancement_open_storage: () => 1,
             enhancement_configure_storage: (pointer: number, enabled: number) => {
               storageConfigurations.push([pointer, enabled]);
+              if (cleanupStarted && pointer === 0) {
+                throw new Error("intentional storage deconfiguration failure");
+              }
               return 1;
             },
             enhancement_travel: () => 1,
             enhancement_configure_travel: (pointer: number, enabled: number) => {
               travelConfigurations.push([pointer, enabled]);
+              if (cleanupStarted && pointer === 0) {
+                throw new Error("intentional Travel deconfiguration failure");
+              }
               return 1;
             },
             enhancement_take_travel_toggle: () => 0,
@@ -657,8 +827,30 @@ export async function assertToolboxFoundationLifecycle() {
         xunlaiAccess: runtime.xunlaiAccess,
       };
 
-      dispatchEvent(new Event("pagehide"));
+      const consoleError = console.error;
+      console.error = (message?: unknown, detail?: unknown) => {
+        if (
+          message === "companion cleanup failed"
+          && detail instanceof AggregateError
+        ) {
+          cleanupReports.push({
+            message,
+            aggregateMessage: detail.message,
+            failures: detail.errors.map((failure) =>
+              failure instanceof Error ? failure.message : String(failure)),
+          });
+          return;
+        }
+        consoleError(message, detail);
+      };
+      cleanupStarted = true;
+      try {
+        dispatchEvent(new Event("pagehide"));
+      } finally {
+        console.error = consoleError;
+      }
       const after = {
+        cleanupReports,
         cursorStatePublished: typeof window.gwCursorState === "function",
         cursorStyle:
           canvas instanceof HTMLCanvasElement ? canvas.style.cursor : null,
@@ -820,6 +1012,15 @@ export async function assertToolboxFoundationLifecycle() {
       snapshotPointer,
       0x1000,
     ]);
+    assert.deepEqual(result.after.cleanupReports, [{
+      message: "companion cleanup failed",
+      aggregateMessage: "Companion cleanup was incomplete",
+      failures: [
+        "Companion cleanup failed during Toolbox allocation release",
+        "Companion cleanup failed during storage disposal",
+        "Companion cleanup failed during Travel disposal",
+      ],
+    }]);
     assert.deepEqual(result.after.storageConfigurations.at(-1), [0, 0]);
     assert.deepEqual(result.after.travelConfigurations.at(-1), [0, 0]);
     assert.equal(result.after.hook, 0);
@@ -864,6 +1065,7 @@ export async function assertRollbackAfterTablePublication() {
       );
       const allocations: { pointer: number; size: number }[] = [];
       const freed: number[] = [];
+      let freeFailurePending = true;
       let nextPointer = 0x1000;
       const malloc = (size: number) => {
         const pointer = nextPointer;
@@ -871,7 +1073,13 @@ export async function assertRollbackAfterTablePublication() {
         allocations.push({ pointer, size });
         return pointer;
       };
-      const free = (pointer: number) => freed.push(pointer);
+      const free = (pointer: number) => {
+        freed.push(pointer);
+        if (freeFailurePending) {
+          freeFailurePending = false;
+          throw new Error("intentional allocation release failure");
+        }
+      };
       const module = new WebAssembly.Module(Uint8Array.from(bytes));
       const specifier = "./certified-companion-installation.js";
       const { installCertifiedCompanion }:
@@ -926,6 +1134,12 @@ export async function assertRollbackAfterTablePublication() {
       const replacementCursorState = () => null;
       let installedCursorStatePublished = false;
       let rejected = false;
+      let rejection: {
+        name: string;
+        message: string;
+        cause: string | null;
+        errors: string[];
+      } | null = null;
       try {
         globalThis.dispatchEvent(new Event("pagehide"));
         window.gwToolsSettings = () => Object.freeze({
@@ -954,8 +1168,19 @@ export async function assertRollbackAfterTablePublication() {
           capabilities,
           "toolbox-foundation",
         );
-      } catch {
+      } catch (error) {
         rejected = true;
+        rejection = {
+          name: error instanceof Error ? error.name : typeof error,
+          message: error instanceof Error ? error.message : String(error),
+          cause: error instanceof Error && error.cause instanceof Error
+            ? error.cause.message
+            : null,
+          errors: error instanceof AggregateError
+            ? error.errors.map((item) =>
+                item instanceof Error ? item.message : String(item))
+            : [],
+        };
       } finally {
         globalThis.requestAnimationFrame = requestFrame;
       }
@@ -965,6 +1190,7 @@ export async function assertRollbackAfterTablePublication() {
         hook: hookSlot.value,
         installedCursorStatePublished,
         rejected,
+        rejection,
         replacementCursorStatePreserved:
           window.gwCursorState === replacementCursorState,
         runtime: window.gwCompanionRuntime,
@@ -1011,6 +1237,15 @@ export async function assertRollbackAfterTablePublication() {
       hook: 0,
       installedCursorStatePublished: true,
       rejected: true,
+      rejection: {
+        name: "AggregateError",
+        message: "intentional post-table failure",
+        cause: "intentional post-table failure",
+        errors: [
+          "intentional post-table failure",
+          "Companion cleanup failed during Toolbox allocation release",
+        ],
+      },
       replacementCursorStatePreserved: true,
       runtime: undefined,
       readoutCount: 0,
