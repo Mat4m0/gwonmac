@@ -3,6 +3,7 @@
  * It rejects stale, malformed, and cross-input proof messages.
  */
 import { isDeepStrictEqual } from "node:util";
+import { isDigest } from "../../shared/digest.js";
 import {
   enhancementCapabilityProfile,
   enhancementCapabilitiesForProfile,
@@ -38,14 +39,6 @@ import {
   type BridgeKind,
   type KnownTemplateSaveBuild,
 } from "./template-save-compat.js";
-
-function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function isDigest(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
-}
 
 function isIndex(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
@@ -193,6 +186,259 @@ function isTemplateSaveBuild(
   return kinds.size === BRIDGE_KINDS.length;
 }
 
+type SemanticBuild = Readonly<Partial<KnownEnhancementBuild>>;
+
+function matchesCoreProof(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  return build.programId === baseline.programId
+    && isDeepStrictEqual(build.hookParams, baseline.hookParams)
+    && isDeepStrictEqual(build.hookResults, baseline.hookResults);
+}
+
+function matchesCursorProof(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.cursorEvent;
+  if (candidate === undefined) return true;
+  const expected = baseline.cursorEvent;
+  return expected !== undefined
+    && isIndex(candidate.functionIndex)
+    && isIndex(candidate.tableSlot)
+    && candidate.producerFunctions.length === 2
+    && candidate.producerFunctions.every(isIndex)
+    && candidate.producerBodySha256.length === 2
+    && candidate.producerBodySha256.every(isDigest)
+    && Object.values(candidate.layout).every(isIndex)
+    && Object.keys(candidate.layout).sort().join()
+      === Object.keys(expected.layout).sort().join()
+    && isDeepStrictEqual(build.hookParams, baseline.hookParams)
+    && isDeepStrictEqual(build.hookResults, baseline.hookResults)
+    && isDeepStrictEqual(candidate.params, expected.params)
+    && isDeepStrictEqual(candidate.results, expected.results)
+    && isDigest(candidate.bodySha256)
+    && isDeepStrictEqual(candidate.producerParams, expected.producerParams)
+    && isDeepStrictEqual(candidate.producerResults, expected.producerResults)
+    && isDeepStrictEqual(
+      candidate.tableNeighbourBodySha256,
+      expected.tableNeighbourBodySha256,
+    )
+    && candidate.layout.cursorSoftwareModel
+      === candidate.layout.cursorActiveArt + 4
+    && candidate.layout.cursorShowCount === candidate.layout.cursorActiveArt + 8
+    && candidate.layout.cursorArtHotspot === expected.layout.cursorArtHotspot
+    && candidate.layout.cursorArtTexture === expected.layout.cursorArtTexture
+    && candidate.layout.cursorHandleKey === expected.layout.cursorHandleKey
+    && candidate.layout.cursorHandleObject === expected.layout.cursorHandleObject
+    && candidate.layout.cursorViewTexture === expected.layout.cursorViewTexture
+    && candidate.layout.cursorTextureType === expected.layout.cursorTextureType
+    && candidate.layout.cursorTextureWidth === expected.layout.cursorTextureWidth
+    && candidate.layout.cursorTextureHeight === expected.layout.cursorTextureHeight;
+}
+
+function matchesObservationBase(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.observationBase?.layout;
+  if (candidate === undefined) return true;
+  const expected = baseline.observationBase?.layout;
+  return expected !== undefined
+    && Object.keys(candidate).sort().join() === Object.keys(expected).sort().join()
+    && Object.values(candidate).every(isIndex)
+    && [
+      candidate.contextRoot - expected.contextRoot,
+      candidate.agentArray - expected.agentArray,
+      candidate.areaInfo - expected.areaInfo,
+    ].every((delta, _index, deltas) => delta === deltas[0])
+    && Object.entries(expected).every(([key, value]) =>
+      key === "contextRoot" || key === "agentArray" || key === "areaInfo"
+        || candidate[key as keyof typeof candidate] === value);
+}
+
+function matchesTargetObservation(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.targetObservation?.layout;
+  if (candidate === undefined) return true;
+  const expected = baseline.targetObservation?.layout;
+  const candidateObservation = build.observationBase?.layout;
+  const expectedObservation = baseline.observationBase?.layout;
+  return matchesObservationBase(build, baseline)
+    && expected !== undefined
+    && candidateObservation !== undefined
+    && expectedObservation !== undefined
+    && Object.keys(candidate).sort().join() === Object.keys(expected).sort().join()
+    && Object.values(candidate).every(isIndex)
+    && candidate.manualTargetAgentId === candidate.automaticTargetAgentId + 4
+    && [
+      candidate.manualTargetAgentId - expected.manualTargetAgentId,
+      candidate.automaticTargetAgentId - expected.automaticTargetAgentId,
+      candidateObservation.contextRoot - expectedObservation.contextRoot,
+    ].every((delta, _index, deltas) => delta === deltas[0]);
+}
+
+function matchesUiDispatcher(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.uiDispatcher;
+  if (candidate === undefined) return true;
+  const expected = baseline.uiDispatcher;
+  return expected !== undefined
+    && isIndex(candidate.functionIndex)
+    && isDigest(candidate.bodySha256)
+    && isDeepStrictEqual(candidate.params, expected.params)
+    && isDeepStrictEqual(candidate.results, expected.results)
+    && candidate.playerChatMessage === expected.playerChatMessage
+    && candidate.hideHeroPanelMessage === expected.hideHeroPanelMessage
+    && candidate.showHeroPanelMessage === expected.showHeroPanelMessage;
+}
+
+function matchesGameThreadSafePoint(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.gameThread?.drain;
+  if (candidate === undefined) return true;
+  const expected = baseline.gameThread?.drain;
+  return expected !== undefined
+    && isIndex(candidate.functionIndex)
+    && isIndex(candidate.tableSlot)
+    && isDigest(candidate.bodySha256)
+    && isDeepStrictEqual(candidate.params, expected.params)
+    && isDeepStrictEqual(candidate.results, expected.results);
+}
+
+function matchesTravelAction(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.travelAction;
+  if (candidate === undefined) return true;
+  const expected = baseline.travelAction;
+  return expected !== undefined
+    && candidate.enqueueExport === expected.enqueueExport
+    && candidate.configureExport === expected.configureExport
+    && candidate.toggleExport === expected.toggleExport
+    && candidate.messageId === expected.messageId
+    && isIndex(candidate.producer.functionIndex)
+    && isDigest(candidate.producer.bodySha256)
+    && isDeepStrictEqual(candidate.producer.params, expected.producer.params)
+    && isDeepStrictEqual(candidate.producer.results, expected.producer.results)
+    && isIndex(candidate.contextResolver.functionIndex)
+    && isDigest(candidate.contextResolver.bodySha256)
+    && isDeepStrictEqual(
+      candidate.contextResolver.params,
+      expected.contextResolver.params,
+    )
+    && isDeepStrictEqual(
+      candidate.contextResolver.results,
+      expected.contextResolver.results,
+    );
+}
+
+function matchesXunlaiAction(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.xunlaiAction;
+  if (candidate === undefined) return true;
+  const expected = baseline.xunlaiAction;
+  const readers = candidate.accessProof?.readers;
+  const expectedReaders = expected?.accessProof?.readers;
+  const layout = candidate.accessProof?.layout;
+  const expectedLayout = expected?.accessProof?.layout;
+  return expected !== undefined
+    && readers !== undefined
+    && expectedReaders !== undefined
+    && layout !== undefined
+    && expectedLayout !== undefined
+    && candidate.openExport === expected.openExport
+    && candidate.configureExport === expected.configureExport
+    && Object.keys(readers).sort().join() === Object.keys(expectedReaders).sort().join()
+    && Object.entries(readers).every(([name, reader]) => {
+      const expectedReader = expectedReaders[name as keyof typeof expectedReaders];
+      return expectedReader !== undefined
+        && isIndex(reader.functionIndex)
+        && isDigest(reader.bodySha256)
+        && isDeepStrictEqual(reader.params, expectedReader.params)
+        && isDeepStrictEqual(reader.results, expectedReader.results);
+    })
+    && isDeepStrictEqual(layout, expectedLayout)
+    && isIndex(candidate.handler.functionIndex)
+    && isDigest(candidate.handler.bodySha256)
+    && isDeepStrictEqual(candidate.handler.params, expected.handler.params)
+    && isDeepStrictEqual(candidate.handler.results, expected.handler.results);
+}
+
+function matchesChatAliases(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.chatAliases?.parser;
+  if (candidate === undefined) return true;
+  const expected = baseline.chatAliases?.parser;
+  return expected !== undefined
+    && isIndex(candidate.functionIndex)
+    && isDigest(candidate.bodySha256)
+    && isDeepStrictEqual(candidate.params, expected.params)
+    && isDeepStrictEqual(candidate.results, expected.results);
+}
+
+function matchesPartyObservation(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.partyObservation;
+  if (candidate === undefined) return true;
+  const expected = baseline.partyObservation;
+  return expected !== undefined
+    && candidate.playerChatSites === 3
+    && isIndex(candidate.playerChatProducer)
+    && candidate.nearbyPlayerMessageProducers.length === 2
+    && candidate.nearbyPlayerMessageProducers.every(isIndex)
+    && isDeepStrictEqual(candidate.partyDirtyMessages, expected.partyDirtyMessages)
+    && isDeepStrictEqual(candidate.nearbyPlayerMessages, expected.nearbyPlayerMessages)
+    && isDeepStrictEqual(candidate.layout, expected.layout);
+}
+
+function matchesTeamApply(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.teamApply;
+  if (candidate === undefined) return true;
+  const expected = baseline.teamApply;
+  return expected !== undefined
+    && candidate.thunkExport === expected.thunkExport
+    && candidate.professionTrace.readerExport === expected.professionTrace.readerExport
+    && isIndex(candidate.professionTrace.sender.functionIndex)
+    && isDigest(candidate.professionTrace.sender.bodySha256)
+    && isDeepStrictEqual(
+      candidate.professionTrace.sender.params,
+      expected.professionTrace.sender.params,
+    )
+    && isDeepStrictEqual(
+      candidate.professionTrace.sender.results,
+      expected.professionTrace.sender.results,
+    )
+    && candidate.entries.length === expected.entries.length
+    && candidate.entries.every((entry, index) => {
+      const expectedEntry = expected.entries[index];
+      return expectedEntry !== undefined
+        && entry.opcode === expectedEntry.opcode
+        && entry.label === expectedEntry.label
+        && isIndex(entry.functionIndex)
+        && isDigest(entry.bodySha256)
+        && isDeepStrictEqual(entry.params, expectedEntry.params)
+        && isDeepStrictEqual(entry.results, expectedEntry.results);
+    });
+}
+
 function isAutomaticSemanticBuild(
   value: unknown,
   inputSha256: string,
@@ -245,204 +491,19 @@ function isAutomaticSemanticBuild(
     return capabilities !== null
       && enhancementCapabilitiesCover(supported, capabilities);
   })) return false;
-  return ENHANCEMENT_BUILDS.some((baseline) => {
-    const coreMatches = build.programId === baseline.programId
-      && sameJson(build.hookParams, baseline.hookParams)
-      && sameJson(build.hookResults, baseline.hookResults);
-    const cursor = baseline.cursorEvent;
-    const cursorMatches = !hasCursor || (
-      cursor !== undefined
-      && build.cursorEvent !== undefined
-      && isIndex(build.cursorEvent.functionIndex)
-      && isIndex(build.cursorEvent.tableSlot)
-      && build.cursorEvent.producerFunctions.length === 2
-      && build.cursorEvent.producerFunctions.every(isIndex)
-      && build.cursorEvent.producerBodySha256.length === 2
-      && build.cursorEvent.producerBodySha256.every(isDigest)
-      && Object.values(build.cursorEvent.layout).every(isIndex)
-      && Object.keys(build.cursorEvent!.layout).sort().join()
-        === Object.keys(cursor.layout).sort().join()
-      && sameJson(build.hookParams, baseline.hookParams)
-      && sameJson(build.hookResults, baseline.hookResults)
-      && sameJson(build.cursorEvent?.params, cursor.params)
-      && sameJson(build.cursorEvent?.results, cursor.results)
-      && isDigest(build.cursorEvent.bodySha256)
-      && sameJson(build.cursorEvent?.producerParams, cursor.producerParams)
-      && sameJson(build.cursorEvent?.producerResults, cursor.producerResults)
-      && sameJson(build.cursorEvent?.tableNeighbourBodySha256, cursor.tableNeighbourBodySha256)
-      && build.cursorEvent.layout.cursorSoftwareModel
-        === build.cursorEvent.layout.cursorActiveArt + 4
-      && build.cursorEvent.layout.cursorShowCount
-        === build.cursorEvent.layout.cursorActiveArt + 8
-      && build.cursorEvent.layout.cursorArtHotspot === cursor.layout.cursorArtHotspot
-      && build.cursorEvent.layout.cursorArtTexture === cursor.layout.cursorArtTexture
-      && build.cursorEvent.layout.cursorHandleKey === cursor.layout.cursorHandleKey
-      && build.cursorEvent.layout.cursorHandleObject === cursor.layout.cursorHandleObject
-      && build.cursorEvent.layout.cursorViewTexture === cursor.layout.cursorViewTexture
-      && build.cursorEvent.layout.cursorTextureType === cursor.layout.cursorTextureType
-      && build.cursorEvent.layout.cursorTextureWidth === cursor.layout.cursorTextureWidth
-      && build.cursorEvent.layout.cursorTextureHeight === cursor.layout.cursorTextureHeight
-    );
-    const observation = baseline.observationBase?.layout;
-    const target = baseline.targetObservation?.layout;
-    const candidateObservation = build.observationBase?.layout;
-    const candidateTarget = build.targetObservation?.layout;
-    const observationMatches = !hasObservation || (
-      observation !== undefined
-      && candidateObservation !== undefined
-      && Object.keys(candidateObservation).sort().join()
-        === Object.keys(observation).sort().join()
-      && Object.values(candidateObservation).every(isIndex)
-      && [
-        candidateObservation.contextRoot - observation.contextRoot,
-        candidateObservation.agentArray - observation.agentArray,
-        candidateObservation.areaInfo - observation.areaInfo,
-      ].every((delta, _index, deltas) => delta === deltas[0])
-      && Object.entries(observation).every(([key, expected]) =>
-        key === "contextRoot" || key === "agentArray" || key === "areaInfo"
-          || candidateObservation[key as keyof typeof candidateObservation] === expected)
-    );
-    const targetMatches = !hasTarget || (
-      observationMatches
-      && target !== undefined
-      && candidateTarget !== undefined
-      && candidateObservation !== undefined
-      && Object.keys(candidateTarget).sort().join()
-        === Object.keys(target).sort().join()
-      && Object.values(candidateTarget).every(isIndex)
-      && candidateTarget.manualTargetAgentId
-        === candidateTarget.automaticTargetAgentId + 4
-      && [
-        candidateTarget.manualTargetAgentId - target.manualTargetAgentId,
-        candidateTarget.automaticTargetAgentId - target.automaticTargetAgentId,
-        candidateObservation.contextRoot - observation!.contextRoot,
-      ].every((delta, _index, deltas) => delta === deltas[0])
-    );
-    const ui = baseline.uiDispatcher;
-    const gameThread = baseline.gameThread;
-    const travel = baseline.travelAction;
-    const xunlai = baseline.xunlaiAction;
-    const aliases = baseline.chatAliases;
-    const party = baseline.partyObservation;
-    const team = baseline.teamApply;
-    const uiMatches = build.uiDispatcher === undefined || (
-      ui !== undefined
-      && isIndex(build.uiDispatcher.functionIndex)
-      && isDigest(build.uiDispatcher.bodySha256)
-      && sameJson(build.uiDispatcher.params, ui.params)
-      && sameJson(build.uiDispatcher.results, ui.results)
-      && build.uiDispatcher.playerChatMessage === ui.playerChatMessage
-      && build.uiDispatcher.hideHeroPanelMessage === ui.hideHeroPanelMessage
-      && build.uiDispatcher.showHeroPanelMessage === ui.showHeroPanelMessage
-    );
-    const gameThreadMatches = build.gameThread === undefined || (
-      gameThread !== undefined
-      && isIndex(build.gameThread.drain.functionIndex)
-      && isIndex(build.gameThread.drain.tableSlot)
-      && isDigest(build.gameThread.drain.bodySha256)
-      && sameJson(build.gameThread.drain.params, gameThread.drain.params)
-      && sameJson(build.gameThread.drain.results, gameThread.drain.results)
-    );
-    const travelMatches = !hasTravel || (
-      travel !== undefined
-      && build.travelAction !== undefined
-      && build.travelAction.enqueueExport === travel.enqueueExport
-      && build.travelAction.configureExport === travel.configureExport
-      && build.travelAction.toggleExport === travel.toggleExport
-      && build.travelAction.messageId === travel.messageId
-      && isIndex(build.travelAction.producer.functionIndex)
-      && isDigest(build.travelAction.producer.bodySha256)
-      && sameJson(build.travelAction.producer.params, travel.producer.params)
-      && sameJson(build.travelAction.producer.results, travel.producer.results)
-      && isIndex(build.travelAction.contextResolver.functionIndex)
-      && isDigest(build.travelAction.contextResolver.bodySha256)
-      && sameJson(
-        build.travelAction.contextResolver.params,
-        travel.contextResolver.params,
-      )
-      && sameJson(
-        build.travelAction.contextResolver.results,
-        travel.contextResolver.results,
-      )
-    );
-    const readers = build.xunlaiAction?.accessProof?.readers;
-    const baselineReaders = xunlai?.accessProof?.readers;
-    const xunlaiLayout = build.xunlaiAction?.accessProof?.layout;
-    const baselineXunlaiLayout = xunlai?.accessProof?.layout;
-    const xunlaiMatches = !hasXunlai || (
-      xunlai !== undefined
-      && build.xunlaiAction !== undefined
-      && readers !== undefined
-      && baselineReaders !== undefined
-      && xunlaiLayout !== undefined
-      && baselineXunlaiLayout !== undefined
-      && build.xunlaiAction.openExport === xunlai.openExport
-      && build.xunlaiAction.configureExport === xunlai.configureExport
-      && Object.keys(readers).sort().join() === Object.keys(baselineReaders).sort().join()
-      && Object.entries(readers).every(([name, reader]) => {
-        const expected = baselineReaders[name as keyof typeof baselineReaders];
-        return expected !== undefined
-          && isIndex(reader.functionIndex)
-          && isDigest(reader.bodySha256)
-          && sameJson(reader.params, expected.params)
-          && sameJson(reader.results, expected.results);
-      })
-      && sameJson(xunlaiLayout, baselineXunlaiLayout)
-      && isIndex(build.xunlaiAction.handler.functionIndex)
-      && isDigest(build.xunlaiAction.handler.bodySha256)
-      && sameJson(build.xunlaiAction.handler.params, xunlai.handler.params)
-      && sameJson(build.xunlaiAction.handler.results, xunlai.handler.results)
-    );
-    const aliasesMatches = !hasAliases || (
-      aliases !== undefined
-      && build.chatAliases !== undefined
-      && isIndex(build.chatAliases.parser.functionIndex)
-      && isDigest(build.chatAliases.parser.bodySha256)
-      && sameJson(build.chatAliases.parser.params, aliases.parser.params)
-      && sameJson(build.chatAliases.parser.results, aliases.parser.results)
-    );
-    const partyMatches = !hasParty || (
-      party !== undefined
-      && build.partyObservation !== undefined
-      && build.partyObservation.playerChatSites === 3
-      && isIndex(build.partyObservation.playerChatProducer)
-      && build.partyObservation.nearbyPlayerMessageProducers.length === 2
-      && build.partyObservation.nearbyPlayerMessageProducers.every(isIndex)
-      && sameJson(build.partyObservation.partyDirtyMessages, party.partyDirtyMessages)
-      && sameJson(build.partyObservation.nearbyPlayerMessages, party.nearbyPlayerMessages)
-      && sameJson(build.partyObservation.layout, party.layout)
-    );
-    const teamMatches = !hasTeam || (
-      team !== undefined
-      && build.teamApply !== undefined
-      && build.teamApply.thunkExport === team.thunkExport
-      && build.teamApply.professionTrace.readerExport === team.professionTrace.readerExport
-      && isIndex(build.teamApply.professionTrace.sender.functionIndex)
-      && isDigest(build.teamApply.professionTrace.sender.bodySha256)
-      && sameJson(
-        build.teamApply.professionTrace.sender.params,
-        team.professionTrace.sender.params,
-      )
-      && sameJson(
-        build.teamApply.professionTrace.sender.results,
-        team.professionTrace.sender.results,
-      )
-      && build.teamApply.entries.length === team.entries.length
-      && build.teamApply.entries.every((entry, index) => {
-        const expected = team.entries[index];
-        return expected !== undefined
-          && entry.opcode === expected.opcode
-          && entry.label === expected.label
-          && isIndex(entry.functionIndex)
-          && isDigest(entry.bodySha256)
-          && sameJson(entry.params, expected.params)
-          && sameJson(entry.results, expected.results);
-      })
-    );
-    return coreMatches && cursorMatches && observationMatches && targetMatches
-      && uiMatches && gameThreadMatches && travelMatches
-      && xunlaiMatches && aliasesMatches && partyMatches && teamMatches;
-  });
+  return ENHANCEMENT_BUILDS.some((baseline) =>
+    matchesCoreProof(build, baseline)
+    && matchesCursorProof(build, baseline)
+    && matchesObservationBase(build, baseline)
+    && matchesTargetObservation(build, baseline)
+    && matchesUiDispatcher(build, baseline)
+    && matchesGameThreadSafePoint(build, baseline)
+    && matchesTravelAction(build, baseline)
+    && matchesXunlaiAction(build, baseline)
+    && matchesChatAliases(build, baseline)
+    && matchesPartyObservation(build, baseline)
+    && matchesTeamApply(build, baseline)
+  );
 }
 
 /** Boundary check for utility-process messages. */

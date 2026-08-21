@@ -17,6 +17,7 @@
  * the process boundary. Profile state is never consulted.
  */
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import {
   enhancementCapabilityProfile,
   enhancementCapabilitiesRequested,
@@ -86,10 +87,6 @@ declare const WebAssembly: {
 
 function sha256(value: Uint8Array | string): string {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 type EnhancementDerivation = Readonly<{
@@ -576,7 +573,10 @@ function deriveEnhancementBuild(
   if (
     includeTarget
     && (includeParty || includeXunlai)
-    && !sameJson(locatedTarget.observationLayout, locatedLocal?.observationLayout)
+    && !isDeepStrictEqual(
+      locatedTarget.observationLayout,
+      locatedLocal?.observationLayout,
+    )
   ) {
     return Object.freeze({
       build: null,
