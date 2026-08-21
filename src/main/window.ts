@@ -477,12 +477,14 @@ export function createMainWindow(
     // The application menu is global. Settings can finish loading in any game
     // window, so an unfocused window must never replace the focused owner's
     // menu with callbacks that close over itself.
-    if (BrowserWindow.getFocusedWindow() !== win) return;
+    const focused = windowRegistry.focusedWindow();
+    if (focused ? focused !== win : windowRegistry.gameWindows().length !== 1) {
+      return;
+    }
     installApplicationMenu({
       host,
-      win,
       ...(menuShortcuts ? { shortcuts: menuShortcuts } : {}),
-      resetWindowState: () => resetWindowState(win),
+      resetWindowState,
     });
   };
   installWindowShortcuts(win, {

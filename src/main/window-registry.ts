@@ -117,6 +117,10 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
     return this.windows((context) => context.role === "game");
   }
 
+  focusedWindow(): Window | null {
+    return this.windows().find((win) => win.isFocused()) ?? null;
+  }
+
   focusedGameWindow(): Window | null {
     return this.gameWindows().find((win) => win.isFocused()) ?? null;
   }

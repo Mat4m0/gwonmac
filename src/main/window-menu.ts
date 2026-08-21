@@ -35,20 +35,29 @@ import {
   resolveShortcuts,
   shortcutAccelerator,
 } from "../shared/keyboard-shortcuts.js";
+import { windowRegistry } from "./window-registry.js";
 
 const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
 export interface ApplicationMenuActions {
   host: WindowHost;
-  win: BrowserWindow;
   shortcuts?: ReturnType<typeof resolveShortcuts>;
   /** Window state stays window.ts's; the menu only asks for the reset. */
-  resetWindowState: () => Promise<void>;
+  resetWindowState: (win: BrowserWindow) => Promise<void>;
+}
+
+function withGameOwner(
+  run: (win: BrowserWindow) => void | Promise<void>,
+): () => void | Promise<void> {
+  return () => {
+    const win = windowRegistry.focusedOrSoleGameWindow();
+    if (!win) return;
+    return run(win);
+  };
 }
 
 export function installApplicationMenu({
   host,
-  win,
   shortcuts = resolveShortcuts({}),
   resetWindowState,
 }: ApplicationMenuActions): void {
@@ -68,22 +77,22 @@ export function installApplicationMenu({
               { type: "separator" as const },
               {
                 label: "Check for Updates…",
-                click: async () => {
+                click: withGameOwner(async (win) => {
                   await resetGameInput(win);
                   await sendRendererCommand(win, {
                     type: "settings.open",
                     pane: "updates",
                     checkForUpdates: true,
                   });
-                },
+                }),
               },
               {
                 label: "Settings…",
                 accelerator: "CmdOrCtrl+,",
-                click: async () => {
+                click: withGameOwner(async (win) => {
                   await resetGameInput(win);
                   await sendRendererCommand(win, { type: "settings.open" });
-                },
+                }),
               },
               { type: "separator" as const },
               { role: "hide" as const },
@@ -114,12 +123,12 @@ export function installApplicationMenu({
         {
           id: "reset-window-state",
           label: "Reset Window Size and Position",
-          click: async () => {
+          click: withGameOwner(async (win) => {
             await resetGameInput(win);
-            void resetWindowState().catch(() => {
+            void resetWindowState(win).catch(() => {
               logEvent({ k: "window.stateResetFailed" });
             });
-          },
+          }),
         },
         { type: "separator" },
         {
@@ -134,36 +143,36 @@ export function installApplicationMenu({
           // without binding it a second time and firing twice.
           ...(toolsAccelerator ? { accelerator: toolsAccelerator } : {}),
           registerAccelerator: false,
-          click: () => toggleTools(win),
+          click: withGameOwner((win) => toggleTools(win)),
         },
         {
           id: "open-xunlai-storage",
           label: "Open Xunlai Storage",
           ...(storageAccelerator ? { accelerator: storageAccelerator } : {}),
           registerAccelerator: false,
-          click: () => openStorage(win),
+          click: withGameOwner((win) => openStorage(win)),
         },
         {
           id: "open-travel",
           label: "Open Travel",
           ...(travelAccelerator ? { accelerator: travelAccelerator } : {}),
           registerAccelerator: false,
-          click: () => toggleTravel(win),
+          click: withGameOwner((win) => toggleTravel(win)),
         },
         {
           label: "Toggle Diagnostics",
-          click: async () => {
+          click: withGameOwner(async (win) => {
             await resetGameInput(win);
             const cur = await host.getSettings();
             await host.updateSettings({ showDiagnostics: !cur.showDiagnostics });
             await sendRendererCommand(win, { type: "diagnostics.toggle" });
-          },
+          }),
         },
         {
           id: "reload-game",
           label: "Reload Game",
           accelerator: "CmdOrCtrl+R",
-          click: async () => {
+          click: withGameOwner(async (win) => {
             await resetGameInput(win);
             if (host.sockets.size(win.webContents.id) > 0) {
               const { response } = await dialog.showMessageBox(win, {
@@ -177,7 +186,7 @@ export function installApplicationMenu({
               if (response !== 0) return;
             }
             host.reloadGame(win);
-          },
+          }),
         },
         ...(dev
           ? [
@@ -205,18 +214,18 @@ export function installApplicationMenu({
         {
           id: "report-bug",
           label: "Report a Bug…",
-          click: async () => {
+          click: withGameOwner(async (win) => {
             await resetGameInput(win);
             await shell.openExternal(EXTERNAL_URLS.bugReport);
-          },
+          }),
         },
         {
           id: "request-feature",
           label: "Request a Feature…",
-          click: async () => {
+          click: withGameOwner(async (win) => {
             await resetGameInput(win);
             await shell.openExternal(EXTERNAL_URLS.featureRequest);
-          },
+          }),
         },
         // Diagnostics are optional support tools, never a gate before filing
         // an issue. ⌘⇧M stays global for an active performance capture.
@@ -226,16 +235,16 @@ export function installApplicationMenu({
             {
               id: "export-diagnostics",
               label: "Export Recent Diagnostics…",
-              click: async () => {
+              click: withGameOwner(async (win) => {
                 await resetGameInput(win);
                 await exportDiagnosticsReport(win, () => host.exportDiagnostics(win));
-              },
+              }),
             },
             { type: "separator" },
             {
               id: "start-performance-capture",
               label: "Start Performance Capture",
-              click: async () => {
+              click: withGameOwner(async (win) => {
                 await resetGameInput(win);
                 void host.startCapture(win, 1).catch((error) => {
                   void dialog.showMessageBox(win, {
@@ -245,21 +254,21 @@ export function installApplicationMenu({
                     detail: error instanceof Error ? error.message : String(error),
                   }).catch(() => undefined);
                 });
-              },
+              }),
             },
             {
               id: "mark-performance-problem",
               label: "Mark Performance Problem",
               accelerator: "CmdOrCtrl+Shift+M",
-              click: async () => {
+              click: withGameOwner(async (win) => {
                 await resetGameInput(win);
                 host.markPerformanceProblem(win);
-              },
+              }),
             },
             {
               id: "start-chromium-trace",
               label: "Start Chromium Trace",
-              click: async () => {
+              click: withGameOwner(async (win) => {
                 await resetGameInput(win);
                 void host.startCapture(win, 2).catch((error) => {
                   void dialog.showMessageBox(win, {
@@ -269,7 +278,7 @@ export function installApplicationMenu({
                     detail: error instanceof Error ? error.message : String(error),
                   }).catch(() => undefined);
                 });
-              },
+              }),
             },
             // The trace answers a different question from a capture — what the
             // input host decided, not what the frame cost — so it is its own
@@ -278,18 +287,18 @@ export function installApplicationMenu({
             {
               id: "toggle-input-trace",
               label: "Show Input Trace",
-              click: async () => {
+              click: withGameOwner(async (win) => {
                 const enabled = !inputTraceEnabled(win);
                 await setInputTraceVisibility(win, enabled, sendRendererCommand);
-              },
+              }),
             },
             {
               id: "stop-capture",
               label: "Stop Capture",
-              click: async () => {
+              click: withGameOwner(async (win) => {
                 await resetGameInput(win);
                 void host.stopCapture(win).catch(() => undefined);
-              },
+              }),
             },
           ],
         },
