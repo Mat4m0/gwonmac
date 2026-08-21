@@ -16,7 +16,7 @@ import {
   type RendererCommandOutcome,
 } from "../shared/contracts.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
-import { logEvent } from "./diagnostics.js";
+import { logEvent } from "./diagnostics/recorder.js";
 
 interface Pending {
   webContentsId: number;
