@@ -187,12 +187,16 @@ export function assertFeedsDoNotMoveBackward(
   }
 }
 
-async function readPublishedFeeds(
+export async function readPublishedFeeds(
   fetchImpl: typeof fetch,
+  options: { bootstrap: boolean; cacheBust: string },
 ): Promise<UpdateFeeds | null> {
   const responses = await Promise.all(UPDATE_TRACKS.map(async (track) => {
-    const response = await fetchImpl(APP_UPDATE_FEED_URLS[track], {
+    const url = new URL(APP_UPDATE_FEED_URLS[track]);
+    url.searchParams.set("publication", options.cacheBust);
+    const response = await fetchImpl(url, {
       headers: { accept: "application/json" },
+      cache: "no-store",
     });
     if (response.status === 404) return null;
     if (!response.ok) {
@@ -209,7 +213,12 @@ async function readPublishedFeeds(
     return parsed.manifest;
   }));
   const [stable, beta] = responses;
-  if (stable === null && beta === null) return null;
+  if (stable === null && beta === null) {
+    if (options.bootstrap) return null;
+    throw new Error(
+      "published update channels are missing; bootstrap is allowed only for the first deployment",
+    );
+  }
   if (!stable || !beta) {
     throw new Error("published update channels are not an atomic pair");
   }
@@ -241,13 +250,23 @@ async function writeUpdateFeeds(outputDirectory: string, feeds: UpdateFeeds) {
 }
 
 async function main(): Promise<void> {
-  const [releasesFile, outputDirectory] = process.argv.slice(2);
-  if (!releasesFile || !outputDirectory) {
-    throw new Error("usage: update-feeds <releases-json> <output-directory>");
+  const [releasesFile, outputDirectory, mode, ...extra] = process.argv.slice(2);
+  if (
+    !releasesFile
+    || !outputDirectory
+    || extra.length > 0
+    || (mode !== undefined && mode !== "--bootstrap")
+  ) {
+    throw new Error(
+      "usage: update-feeds <releases-json> <output-directory> [--bootstrap]",
+    );
   }
   const payload: unknown = JSON.parse(await readFile(releasesFile, "utf8"));
   const feeds = await buildUpdateFeeds(payload, globalThis.fetch);
-  const previous = await readPublishedFeeds(globalThis.fetch);
+  const previous = await readPublishedFeeds(globalThis.fetch, {
+    bootstrap: mode === "--bootstrap",
+    cacheBust: process.env.GITHUB_RUN_ID ?? Date.now().toString(),
+  });
   if (previous) assertFeedsDoNotMoveBackward(feeds, previous);
   await writeUpdateFeeds(outputDirectory, feeds);
 }

@@ -6,6 +6,11 @@ name: Update feeds
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: Allow the initial deployment when both public feeds are absent
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -34,14 +39,17 @@ jobs:
       - name: Build Stable and Beta feeds from published releases
         id: feeds
         env:
+          BOOTSTRAP: ${{ inputs.bootstrap || false }}
           GH_TOKEN: ${{ github.token }}
         run: |
           output="$RUNNER_TEMP/update-pages"
           gh api --paginate --slurp \
             "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
             | jq 'add' > "$RUNNER_TEMP/releases.json"
+          args=()
+          if [ "$BOOTSTRAP" = "true" ]; then args+=(--bootstrap); fi
           node --import ./scripts/ts-hook.mjs scripts/update-feeds.ts \
-            "$RUNNER_TEMP/releases.json" "$output"
+            "$RUNNER_TEMP/releases.json" "$output" "${args[@]}"
           stable="$output/updates/stable/darwin/arm64/RELEASES.json"
           beta="$output/updates/beta/darwin/arm64/RELEASES.json"
           test -f "$stable"

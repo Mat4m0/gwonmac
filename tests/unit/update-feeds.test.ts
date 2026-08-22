@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   assertFeedsDoNotMoveBackward,
   buildUpdateFeeds,
+  readPublishedFeeds,
   selectUpdateCandidates,
 } from "../../scripts/update-feeds.ts";
 import { releaseAssetUrl } from "../../src/shared/project-identity.ts";
@@ -157,5 +158,59 @@ describe("static update feed publication", () => {
       stable: current.stable,
       beta: manifest("2026.7.0-beta.1"),
     }, current), /beta update channel would move backward/);
+  });
+
+  it("allows absent published feeds only during explicit bootstrap", async () => {
+    const missing = async () => response({}, 404);
+    await assert.rejects(
+      readPublishedFeeds(missing, {
+        bootstrap: false,
+        cacheBust: "run-1",
+      }),
+      /published update channels are missing/,
+    );
+    assert.equal(
+      await readPublishedFeeds(missing, {
+        bootstrap: true,
+        cacheBust: "run-1",
+      }),
+      null,
+    );
+  });
+
+  it("refuses a partial published pair even during bootstrap", async () => {
+    await assert.rejects(
+      readPublishedFeeds(async (input) =>
+        String(input).includes("/stable/")
+          ? response(manifest("2026.7.0"))
+          : response({}, 404), {
+        bootstrap: true,
+        cacheBust: "run-2",
+      }),
+      /not an atomic pair/,
+    );
+  });
+
+  it("cache-busts both published feeds and disables fetch caching", async () => {
+    const requests: string[] = [];
+    const feeds = await readPublishedFeeds(async (input, init) => {
+      const url = String(input);
+      requests.push(url);
+      assert.equal(init?.cache, "no-store");
+      const version = url.includes("/stable/")
+        ? "2026.7.0"
+        : "2026.8.0-beta.1";
+      return response(manifest(version));
+    }, {
+      bootstrap: false,
+      cacheBust: "run 3",
+    });
+
+    assert.equal(feeds?.stable.version, "2026.7.0");
+    assert.equal(feeds?.beta.version, "2026.8.0-beta.1");
+    assert.equal(requests.length, 2);
+    for (const request of requests) {
+      assert.equal(new URL(request).searchParams.get("publication"), "run 3");
+    }
   });
 });

@@ -492,9 +492,14 @@ test("release workflow stages and publishes one tested, attested package version
   assert.match(updateFeedCall, /pages: write/);
   assert.match(updateFeedCall, /id-token: write/);
   assert.match(feedWorkflow, /workflow_call:[\s\S]*workflow_dispatch:/);
+  assert.match(
+    feedWorkflow,
+    /workflow_dispatch:\n {4}inputs:\n {6}bootstrap:[\s\S]*default: false/,
+  );
   assert.match(feedWorkflow, /permissions:\n {2}contents: read/);
   assert.match(updateFeedBuild, /gh api --paginate --slurp/);
   assert.match(updateFeedBuild, /scripts\/update-feeds\.ts/);
+  assert.match(updateFeedBuild, /if \[ "\$BOOTSTRAP" = "true" \]/);
   assert.match(
     read("scripts/update-feeds.ts"),
     /assertFeedsDoNotMoveBackward\(feeds, previous\)/,
