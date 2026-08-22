@@ -698,6 +698,8 @@ test("developer builds are exact, ad-hoc, bounded, and isolated from releases", 
 
 test("the root app and website add no runtime package entries and audit exceptions stay explicit", () => {
   const rootPackage = json("package.json");
+  const workspace = read("pnpm-workspace.yaml");
+  const lockfile = read("pnpm-lock.yaml");
   assert.equal(rootPackage.dependencies, undefined);
   assert.equal(
     rootPackage.devDependencies?.["@electron-forge/shared-types"],
@@ -705,22 +707,26 @@ test("the root app and website add no runtime package entries and audit exceptio
   );
   assert.equal(json("apps/website/package.json").dependencies, undefined);
   assert.match(
-    read("pnpm-workspace.yaml"),
+    workspace,
     /publicHoistPattern:\n {2}- "@intlify\/core"\n {2}- "@intlify\/core-base"\n {2}- "@intlify\/message-compiler"\n {2}- "@intlify\/shared"\n {2}- "@intlify\/utils"\n {2}- "vue-i18n"/u,
   );
   assert.doesNotMatch(
-    read("pnpm-workspace.yaml"),
+    workspace,
     /publicHoistPattern:\s*\n\s*-\s*["']?\*["']?/u,
   );
   assert.deepEqual(
-    read("pnpm-workspace.yaml").match(/GHSA-[a-z0-9-]+/gu),
+    workspace.match(/GHSA-[a-z0-9-]+/gu),
     [
-      "GHSA-jmr9-qjv8-65gv",
       "GHSA-w3rx-r6r6-pgpr",
       "GHSA-5p2g-fcmc-qvqq",
       "GHSA-g7r4-m6w7-qqqr",
     ],
   );
+  assert.match(
+    workspace,
+    /extract-zip: "npm:@electron-internal\/extract-zip@1\.0\.4"/u,
+  );
+  assert.doesNotMatch(lockfile, /(?:^|\n) {2}extract-zip@2\.0\.1:/u);
 });
 
 test("packaging cleans its output first, and builds the renderer runtime", () => {

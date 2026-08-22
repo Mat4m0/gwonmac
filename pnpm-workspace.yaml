@@ -21,6 +21,9 @@ overrides:
   tmp: 0.2.7
   "undici@7": 7.29.0
   "undici@8": 8.9.0
+  # Forge's Packager 18 still names the retired extractor. Electron's hardened
+  # drop-in keeps that API while rejecting symlink escapes.
+  extract-zip: "npm:@electron-internal/extract-zip@1.0.4"
   # Fresh re-resolution rebinds part of the Nuxt graph to the unhead 2.x
   # family, which mismatches the 3.x API and breaks the website build/server.
   unhead: 3.2.3
@@ -45,10 +48,6 @@ allowBuilds:
 # repository-owned PNG background and copies the ICNS icon without parsing it.
 auditConfig:
   ignoreGhsas:
-    # Electron Forge reaches extract-zip only through its packaging toolchain.
-    # No patched extract-zip release exists yet; Electron archives come from
-    # the checksum-verified @electron/get path, not from player-controlled data.
-    - GHSA-jmr9-qjv8-65gv
     - GHSA-w3rx-r6r6-pgpr
     - GHSA-5p2g-fcmc-qvqq
     # The affected esbuild serve-directory path exists only on Windows. Owned
