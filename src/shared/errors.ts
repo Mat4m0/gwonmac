@@ -71,7 +71,6 @@ export const ERROR_CODES = [
   "net_offline",
   "not_ready",
   "proxy_path",
-  "range_required",
   "response_limit",
   "response_too_large",
   "secure_storage",
