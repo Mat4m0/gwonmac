@@ -210,8 +210,11 @@ Packaged builds refuse every developer program.
 Do not change account or product controls to make a scenario pass. A two-factor,
 legal, captcha, or unexpected login screen remains a human boundary.
 
-A live evidence file must not contain game-memory addresses, raw pixels, raw
-packets, account fields, or chat. Store the typed scalar result only.
+Ordinary Enhancement live evidence must not contain game-memory addresses, raw
+pixels, raw packets, account fields, or chat. Store the typed scalar result
+only. The sole exception is the local, operator-consented graphics probe. Its
+screenshot is stored separately under `test-results/` and follows the
+[graphics investigation privacy rules](diagnostics.md#live-graphics-investigation).
 
 ## Performance changes
 

@@ -182,7 +182,6 @@ describe("an observation live run cannot reach the automation tier", () => {
         waitForTimeout: async () => undefined,
       }),
       cdp: asCdp({ send: async () => undefined }),
-      captureGraphicsFrame: async () => "capture-001.png",
       sendAutomationCommand: async () => undefined,
     };
     const observation = scenarioContext("observation", capabilities);
@@ -212,15 +211,9 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.equal(automation.page, capabilities.page);
     assert.equal(automation.sendAutomationCommand, capabilities.sendAutomationCommand);
 
-    const graphics = scenarioContext("graphics-observation", capabilities);
-    assert.deepEqual(
-      Object.keys(graphics).sort(),
-      ["captureGraphicsFrame", "readGraphicsProjection", "wait"],
-    );
-    assert.equal("readCursorProjection" in graphics, false);
-    assert.equal("page" in graphics, false);
-    assert.equal("cdp" in graphics, false);
-    assert.equal("sendAutomationCommand" in graphics, false);
+    const graphics = planFor("graphics-probe").scenario;
+    assert.equal(graphics.tier, "graphics-observation");
+    assert.equal("run" in graphics, false);
   });
 
   it("lets an observation scenario read only the fixed cursor projection", async () => {
@@ -230,7 +223,6 @@ describe("an observation live run cannot reach the automation tier", () => {
         waitForTimeout: async () => "waited",
       }),
       cdp: asCdp(null),
-      captureGraphicsFrame: async () => "capture-001.png",
       sendAutomationCommand: async () => undefined,
     }) as {
       readCursorProjection: () => Promise<unknown>;

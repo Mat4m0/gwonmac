@@ -17,7 +17,6 @@
 // automation surface being present. That separation is the property this
 // module protects.
 import type { StdioOptions } from "node:child_process";
-import { createInterface } from "node:readline/promises";
 import type { CDPSession, Page } from "playwright";
 import type { AutomationCommand } from "../../src/shared/automation.js";
 import type { EnhancementProgram } from "../../src/shared/enhancement-contracts.js";
@@ -63,38 +62,6 @@ export type ObservationContext = Readonly<{
   wait: (milliseconds: number) => Promise<void>;
 }>;
 
-export type GraphicsObservationContext = Readonly<{
-  readGraphicsProjection: () => Promise<GraphicsProbeSample>;
-  captureGraphicsFrame: (sample: GraphicsProbeSample) => Promise<string>;
-  wait: (milliseconds: number) => Promise<void>;
-}>;
-
-export type GraphicsProbeSample = Readonly<{
-  capturedAt: string;
-  rendererNowMs: number;
-  visible: boolean;
-  focused: boolean;
-  devicePixelRatio: number;
-  canvas: Readonly<{
-    cssWidth: number;
-    cssHeight: number;
-    width: number;
-    height: number;
-    offscreenWidth: number;
-    offscreenHeight: number;
-    context: string;
-    contextLost: boolean | null;
-    drawingBufferWidth: number;
-    drawingBufferHeight: number;
-  }>;
-  wasmHeapBytes: number;
-  textures: ReturnType<NonNullable<Window["gwTextureStats"]>> | null;
-  images: Record<string, number | boolean>;
-  programs: ReturnType<NonNullable<Window["gwGlRecon"]>> | null;
-  lifecycle: ReturnType<Window["gwAutomation"]["read"]> | null;
-  diagnostics: Awaited<ReturnType<Window["gwNative"]["diagnostics"]["current"]>>;
-}>;
-
 /**
  * The reading context plus the two capabilities that act on the player's
  * behalf. It is a superset, so a scenario written against the reading context
@@ -113,7 +80,6 @@ export type AutomationContext = ObservationContext & Readonly<{
 export type LiveCapabilities = Readonly<{
   page: Page;
   cdp: CDPSession;
-  captureGraphicsFrame: (sample: GraphicsProbeSample) => Promise<string>;
   sendAutomationCommand: (command: AutomationCommand) => Promise<void>;
 }>;
 
@@ -144,7 +110,6 @@ type GraphicsObservationScenario = {
   tier: "graphics-observation";
   program: EnhancementProgram;
   readiness: LiveReadiness;
-  run(context: GraphicsObservationContext): Promise<unknown>;
   validate(result: LiveResult): void;
 };
 
@@ -599,48 +564,6 @@ async function runCursorCapture({ readCursorProjection, wait }: ObservationConte
   };
 }
 
-async function runGraphicsProbe({
-  readGraphicsProjection,
-  captureGraphicsFrame,
-}: GraphicsObservationContext) {
-  const baseline = await readGraphicsProjection();
-  const captures: Array<{
-    screenshot: string;
-    sample: GraphicsProbeSample;
-  }> = [];
-  console.log(JSON.stringify({
-    checkpoint: "graphics-probe-ready",
-    please: "play normally; press Enter to capture evidence, or type q then Enter to finish",
-    privacy: "a capture saves the visible game window as a local screenshot",
-  }));
-  const input = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    for await (const line of input) {
-      const command = line.trim().toLowerCase();
-      if (command === "q" || command === "quit") break;
-      if (command !== "" && command !== "c" && command !== "capture") {
-        console.log("Press Enter to capture, or type q then Enter to finish.");
-        continue;
-      }
-      const sample = await readGraphicsProjection();
-      const screenshot = await captureGraphicsFrame(sample);
-      captures.push({ screenshot, sample });
-      console.log(JSON.stringify({
-        checkpoint: "graphics-captured",
-        capture: captures.length,
-        screenshot,
-        textureBytes: sample.textures?.knownTextureBytes ?? null,
-        liveTextures: sample.textures?.liveTextures ?? null,
-        wasmHeapBytes: sample.wasmHeapBytes,
-        contextLost: sample.canvas.contextLost,
-      }));
-    }
-  } finally {
-    input.close();
-  }
-  return { baseline, captures };
-}
-
 const noEvidence = async () => null;
 const acceptEvidence = () => {};
 
@@ -693,8 +616,7 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
     tier: "graphics-observation",
     program: "none",
     readiness: "frontend",
-    run: runGraphicsProbe,
-    validate(result: { evidence?: Awaited<ReturnType<typeof runGraphicsProbe>> }) {
+    validate(result: LiveResult) {
       if (!result.evidence) {
         throw new Error("graphics probe recorded no baseline");
       }
@@ -977,61 +899,18 @@ export function scenarioContext(
   capabilities: LiveCapabilities,
 ): ObservationContext;
 export function scenarioContext(
-  tier: "graphics-observation",
+  tier: "automation" | "observation",
   capabilities: LiveCapabilities,
-): GraphicsObservationContext;
-export function scenarioContext(
-  tier: LiveTier,
-  capabilities: LiveCapabilities,
-): AutomationContext | ObservationContext | GraphicsObservationContext {
-  const { page, cdp, captureGraphicsFrame, sendAutomationCommand } = capabilities;
+): AutomationContext | ObservationContext {
+  const { page, cdp, sendAutomationCommand } = capabilities;
   const observation: ObservationContext = {
     readCursorProjection: () => page.evaluate(() =>
       window.gwCompanionRuntime?.cursor ?? null),
     wait: (milliseconds) => page.waitForTimeout(milliseconds),
   };
-  const graphicsObservation: GraphicsObservationContext = {
-    readGraphicsProjection: () => page.evaluate(async (): Promise<GraphicsProbeSample> => {
-      const canvas = document.getElementById("canvas");
-      const visible = canvas instanceof HTMLCanvasElement ? canvas : null;
-      const offscreen = window.Module?.canvas === visible
-        ? window.Module.canvas.offscreen
-        : undefined;
-      const gl = offscreen?.getContext("webgl2") ?? offscreen?.getContext("webgl") ?? null;
-      return {
-        capturedAt: new Date().toISOString(),
-        rendererNowMs: performance.now(),
-        visible: !document.hidden,
-        focused: document.hasFocus(),
-        devicePixelRatio: window.devicePixelRatio || 1,
-        canvas: {
-          cssWidth: visible?.clientWidth ?? 0,
-          cssHeight: visible?.clientHeight ?? 0,
-          width: visible?.width ?? 0,
-          height: visible?.height ?? 0,
-          offscreenWidth: offscreen?.width ?? 0,
-          offscreenHeight: offscreen?.height ?? 0,
-          context: gl?.constructor?.name ?? "none",
-          contextLost: gl ? gl.isContextLost() : null,
-          drawingBufferWidth: gl?.drawingBufferWidth ?? 0,
-          drawingBufferHeight: gl?.drawingBufferHeight ?? 0,
-        },
-        wasmHeapBytes: window.gwWasmHeapBytes?.() ?? 0,
-        textures: window.gwTextureStats?.() ?? null,
-        images: window.gwStats(),
-        programs: window.gwGlRecon?.() ?? null,
-        lifecycle: window.gwAutomation?.read() ?? null,
-        diagnostics: await window.gwNative.diagnostics.current(),
-      };
-    }),
-    captureGraphicsFrame,
-    wait: (milliseconds) => page.waitForTimeout(milliseconds),
-  };
   return Object.freeze(
     tier === "automation"
       ? { ...observation, page, cdp, sendAutomationCommand }
-      : tier === "graphics-observation"
-        ? graphicsObservation
-        : observation,
+      : observation,
   );
 }

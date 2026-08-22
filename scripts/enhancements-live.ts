@@ -21,10 +21,10 @@ import {
   scenarioContext,
   waitForPlayable,
 } from "./enhancements-live/scenarios.js";
-import type { GraphicsProbeSample } from "./enhancements-live/scenarios.js";
 import {
   validateCommonAcceptance,
 } from "./enhancements-live/acceptance.js";
+import { runGraphicsProbeSession } from "./enhancements-live/graphics-probe.js";
 import { projectLiveResult } from "./enhancements-live/result.js";
 
 type Shutdown = { code: number | null; signal: NodeJS.Signals | null };
@@ -73,13 +73,6 @@ if (expectedBuildId === null) {
   process.exit(2);
 }
 const failureDir = path.join(root, "test-results", "enhancements-live");
-const graphicsRunId = new Date().toISOString().replaceAll(/[:.]/g, "-");
-const graphicsDir = path.join(
-  root,
-  "test-results",
-  "graphics-live",
-  graphicsRunId,
-);
 
 const child = spawn(
   electronBin,
@@ -162,7 +155,6 @@ let keepAlive = leaveOpen;
 // readout, so a run that fails its acceptance still reports the readout it
 // failed on.
 let failureResult: unknown = null;
-let graphicsCaptureCount = 0;
 try {
   browser = await chromium.connectOverCDP(endpoint);
   const context = browser.contexts()[0];
@@ -214,70 +206,62 @@ try {
       elapsedMs: performance.now() - start.at,
     };
   }, before);
-  const capabilities = {
-    page,
-    cdp,
-    captureGraphicsFrame: async (sample: GraphicsProbeSample) => {
-      await mkdir(graphicsDir, { recursive: true });
-      graphicsCaptureCount += 1;
-      const stem = `capture-${String(graphicsCaptureCount).padStart(3, "0")}`;
-      const screenshot = `${stem}.png`;
-      await page.screenshot({ path: path.join(graphicsDir, screenshot) });
-      await writeFile(
-        path.join(graphicsDir, `${stem}.json`),
-        JSON.stringify(sample, null, 2),
-      );
-      return screenshot;
-    },
-    sendAutomationCommand,
-  };
-  if (plan.name === "graphics-probe") {
-    console.log(`Graphics evidence directory: ${graphicsDir}`);
-  }
-  // A visual investigation commonly ends by closing the game window. Preserve
-  // one valid common projection before the operator loop so that close remains
-  // a successful end instead of losing the already-written evidence pairs.
-  const graphicsCloseProjection = plan.name === "graphics-probe"
-    ? await projectLiveResult(page, cadence, plan.name)
-    : null;
-  // The tier decides both halves at once, so the automation capabilities cannot
-  // reach an observation scenario even by mistake.
-  const scenarioEvidence = selectedScenario.tier === "automation"
-    ? await selectedScenario.run(scenarioContext("automation", capabilities))
-    : selectedScenario.tier === "graphics-observation"
-      ? await selectedScenario.run(
-          scenarioContext("graphics-observation", capabilities),
-        )
-      : await selectedScenario.run(scenarioContext("observation", capabilities));
-
-  // Assembled once rather than mutated onto the projection: the projection is
-  // what the page reported, and these are what the runner knows about it.
-  const result = {
-    ...(page.isClosed() && graphicsCloseProjection
-      ? graphicsCloseProjection
-      : await projectLiveResult(page, cadence, plan.name)),
+  const runMetadata = () => ({
     tier: plan.tier,
     loginInputs,
-    ...(scenarioEvidence ? { evidence: scenarioEvidence } : {}),
     preflight: {
       cached: !allowUpdate,
       snapshotComplete: preflight.snapshot?.complete === true,
       transformedCache: preflight.client.transformedCache,
     },
     rendererErrors: [...rendererErrors],
-  };
-  failureResult = result;
-  validateCommonAcceptance(result, expectedBuildId, {
-    enhancementExpected: plan.scenario.program !== "none",
-    coreObservation: plan.scenario.program === "target-observer",
   });
-  selectedScenario.validate(result);
-  if (plan.name === "graphics-probe") {
-    await mkdir(graphicsDir, { recursive: true });
-    await writeFile(
-      path.join(graphicsDir, "evidence.json"),
-      JSON.stringify(result.evidence, null, 2),
-    );
+  let result: unknown;
+  if (selectedScenario.tier === "graphics-observation") {
+    const graphics = await runGraphicsProbeSession({
+      page,
+      repositoryRoot: root,
+      cadence,
+    });
+    const graphicsResult = {
+      ...(graphics.finalProjection ?? {
+        scenario: plan.name,
+        windowClosed: graphics.windowClosed,
+      }),
+      ...runMetadata(),
+      evidence: graphics.evidence,
+    };
+    result = graphicsResult;
+    failureResult = result;
+    if (graphics.finalProjection) {
+      validateCommonAcceptance({
+        ...graphics.finalProjection,
+        rendererErrors: graphicsResult.rendererErrors,
+      }, expectedBuildId, {
+        enhancementExpected: false,
+        coreObservation: false,
+      });
+    }
+    selectedScenario.validate(graphicsResult);
+  } else {
+    const capabilities = { page, cdp, sendAutomationCommand };
+    // The tier decides both halves at once, so automation capabilities cannot
+    // reach an observation scenario even by mistake.
+    const scenarioEvidence = selectedScenario.tier === "automation"
+      ? await selectedScenario.run(scenarioContext("automation", capabilities))
+      : await selectedScenario.run(scenarioContext("observation", capabilities));
+    const standardResult = {
+      ...await projectLiveResult(page, cadence, plan.name),
+      ...runMetadata(),
+      ...(scenarioEvidence ? { evidence: scenarioEvidence } : {}),
+    };
+    result = standardResult;
+    failureResult = result;
+    validateCommonAcceptance(standardResult, expectedBuildId, {
+      enhancementExpected: plan.scenario.program !== "none",
+      coreObservation: plan.scenario.program === "target-observer",
+    });
+    selectedScenario.validate(standardResult);
   }
   console.log(JSON.stringify(result));
 
