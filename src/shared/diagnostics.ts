@@ -268,6 +268,7 @@ export type TextureMemorySnapshot = {
 export type GraphicsVisualProblemFields = TextureMemorySnapshot & {
   textureProbeInstalled: boolean;
   wasmHeapBytes: number;
+  webglContextAvailable: boolean;
   contextLost: boolean;
   canvasWidth: number;
   canvasHeight: number;
@@ -275,6 +276,7 @@ export type GraphicsVisualProblemFields = TextureMemorySnapshot & {
   offscreenHeight: number;
   drawingBufferWidth: number;
   drawingBufferHeight: number;
+  programProbeInstalled: boolean;
   livePrograms: number;
   programPassThroughQueries: number;
 };

@@ -210,7 +210,7 @@ declare global {
     gwResolveDataStrategy(snapshotBytes: number): Promise<void>;
     gwLog(visible?: boolean): boolean;
     gwEvictMemory(): number;
-    gwStats(): Record<string, number | boolean>;
+    gwStats?(): Record<string, number | boolean>;
     gwBuildInfo?: Readonly<{
       programId: number;
       buildId: number;

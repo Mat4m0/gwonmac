@@ -27,7 +27,10 @@ import type {
   DiagnosticReport,
   DiagnosticSummary,
 } from "../../shared/diagnostics.js";
-import type { RendererCommandOutcome } from "../../shared/contracts.js";
+import {
+  RENDERER_COMMAND_OUTCOMES,
+  type VisualProblemManifest,
+} from "../../shared/contracts.js";
 export type { DiagnosticReport } from "../../shared/diagnostics.js";
 export type { RedactionResult } from "../../main/diagnostics/detector.js";
 
@@ -69,21 +72,8 @@ interface ManifestFields {
     stride: 7;
     fields: string[];
   };
-  visualProblem?: {
-    rendererOutcome: RendererCommandOutcome;
-    gameWindowCount: number;
-    screenshotRequested: boolean;
-    screenshotIncluded: boolean;
-    screenshotPrivacy: "player-consented-unscanned";
-  };
+  visualProblem?: VisualProblemManifest;
 }
-
-const RENDERER_COMMAND_OUTCOMES = new Set<string>([
-  "completed",
-  "unhandled",
-  "failed",
-  "timed-out",
-]);
 
 /**
  * The alpha's export. One explicit legacy read path: it declares
@@ -140,7 +130,9 @@ function isVisualProblemManifest(
   return isRecord(value)
     && Object.keys(value).length === 5
     && typeof value.rendererOutcome === "string"
-    && RENDERER_COMMAND_OUTCOMES.has(value.rendererOutcome)
+    && RENDERER_COMMAND_OUTCOMES.includes(
+      value.rendererOutcome as VisualProblemManifest["rendererOutcome"],
+    )
     && Number.isSafeInteger(value.gameWindowCount)
     && Number(value.gameWindowCount) >= 1
     && typeof value.screenshotRequested === "boolean"

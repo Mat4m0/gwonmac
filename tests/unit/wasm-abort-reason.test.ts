@@ -13,6 +13,7 @@ import {
 import { WASM_ABORT_REASON_KINDS } from "../../src/shared/diagnostics.ts";
 import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.ts";
 import { asRendererFingerprint } from "../../src/main/diagnostics/schema-fields.ts";
+import { parseRendererMilestoneArgs } from "../../src/main/ipc-values.ts";
 
 describe("wasm abort reasons collapse into the closed vocabulary", () => {
   it("names the failure class of each known Emscripten abort shape", () => {
@@ -180,6 +181,7 @@ describe("the recorded visual problem", () => {
       clockSynchronized: true,
       textureProbeInstalled: true,
       wasmHeapBytes: 556_793_856,
+      webglContextAvailable: true,
       contextLost: false,
       canvasWidth: 4_482,
       canvasHeight: 2_468,
@@ -195,6 +197,7 @@ describe("the recorded visual problem", () => {
       textureUploadBytes: 497_203_201,
       unknownTextureAllocations: 0,
       textureTrackingSaturated: false,
+      programProbeInstalled: true,
       livePrograms: 0,
       programPassThroughQueries: 0,
     };
@@ -206,6 +209,54 @@ describe("the recorded visual problem", () => {
         name: "graphics.visualProblem",
         fields,
       },
+    );
+  });
+
+  it("preserves unavailable WebGL and program probes at the IPC boundary", () => {
+    const fields = {
+      textureProbeInstalled: false,
+      wasmHeapBytes: 0,
+      webglContextAvailable: false,
+      contextLost: false,
+      canvasWidth: 0,
+      canvasHeight: 0,
+      offscreenWidth: 0,
+      offscreenHeight: 0,
+      drawingBufferWidth: 0,
+      drawingBufferHeight: 0,
+      generatedTextures: 0,
+      deletedTextures: 0,
+      liveTextures: 0,
+      trackedTextures: 0,
+      knownTextureBytes: 0,
+      textureUploadBytes: 0,
+      unknownTextureAllocations: 0,
+      textureTrackingSaturated: false,
+      programProbeInstalled: false,
+      livePrograms: 0,
+      programPassThroughQueries: 0,
+    };
+    assert.deepEqual(
+      parseRendererMilestoneArgs([
+        "graphics.visualProblem",
+        12_000,
+        fields,
+      ]),
+      {
+        name: "graphics.visualProblem",
+        rendererTimestampUs: 12_000,
+        fields,
+      },
+    );
+    const incomplete = { ...fields };
+    Reflect.deleteProperty(incomplete, "programProbeInstalled");
+    assert.throws(
+      () => parseRendererMilestoneArgs([
+        "graphics.visualProblem",
+        12_000,
+        incomplete,
+      ]),
+      /invalid renderer milestone/,
     );
   });
 });

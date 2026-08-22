@@ -23,7 +23,7 @@ import { promisify } from "node:util";
 import { app, dialog, type BrowserWindow } from "electron";
 import type {
   AppSettings,
-  RendererCommandOutcome,
+  VisualProblemManifest,
 } from "../../shared/contracts.js";
 import { gamePaths } from "../paths.js";
 import { windowRegistry } from "../window-registry.js";
@@ -45,10 +45,10 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-interface VisualProblemExportBase {
-  rendererOutcome: RendererCommandOutcome;
-  gameWindowCount: number;
-}
+type VisualProblemExportBase = Pick<
+  VisualProblemManifest,
+  "rendererOutcome" | "gameWindowCount"
+>;
 
 export type VisualProblemExport = VisualProblemExportBase & (
   | { screenshotRequested: false; screenshotPng?: never }
@@ -182,7 +182,7 @@ export async function exportDiagnosticsZip(
               screenshotRequested: extras.visualProblem.screenshotRequested,
               screenshotIncluded: files.includes("visual-problem.png"),
               screenshotPrivacy: "player-consented-unscanned",
-            },
+            } satisfies VisualProblemManifest,
           }
         : {}),
       eventLog: {

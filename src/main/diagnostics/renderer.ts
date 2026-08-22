@@ -463,8 +463,18 @@ export function recordRendererMilestone(
   if (name === "graphics.visualProblem") {
     if (!fields || !("contextLost" in fields)) return;
     recordTextureSnapshot(fields, ownerId);
+    recorder.setLatest(
+      "graphics.webglContextAvailableAtVisualProblem",
+      fields.webglContextAvailable,
+      ownerId,
+    );
     recorder.setLatest("graphics.contextLostAtVisualProblem", fields.contextLost, ownerId);
     recorder.setLatest("graphics.visualProblemWasmHeapBytes", fields.wasmHeapBytes, ownerId);
+    recorder.setLatest(
+      "graphics.programProbeInstalledAtVisualProblem",
+      fields.programProbeInstalled,
+      ownerId,
+    );
     recorder.setLatest("graphics.visualProblemLivePrograms", fields.livePrograms, ownerId);
     recorder.setLatest(
       "graphics.visualProblemProgramPassThroughQueries",

@@ -164,16 +164,19 @@ export function parseRendererMilestoneArgs(args: readonly unknown[]): ParsedMile
       "unknownTextureAllocations", "livePrograms", "programPassThroughQueries",
     ] as const;
     const valid = recordIsObject
-      && Object.keys(record).length === numericFields.length + 3
+      && Object.keys(record).length === numericFields.length + 5
       && numericFields.every((field) => isByteCount(record[field]))
       && (record.trackedTextures as number) <= 4_096
       && typeof record.textureProbeInstalled === "boolean"
       && typeof record.textureTrackingSaturated === "boolean"
+      && typeof record.webglContextAvailable === "boolean"
+      && typeof record.programProbeInstalled === "boolean"
       && typeof record.contextLost === "boolean";
     if (!valid) throw new ValidationError("invalid renderer milestone");
     milestoneFields = {
       textureProbeInstalled: record.textureProbeInstalled as boolean,
       wasmHeapBytes: record.wasmHeapBytes as number,
+      webglContextAvailable: record.webglContextAvailable as boolean,
       contextLost: record.contextLost as boolean,
       canvasWidth: record.canvasWidth as number,
       canvasHeight: record.canvasHeight as number,
@@ -189,6 +192,7 @@ export function parseRendererMilestoneArgs(args: readonly unknown[]): ParsedMile
       textureUploadBytes: record.textureUploadBytes as number,
       unknownTextureAllocations: record.unknownTextureAllocations as number,
       textureTrackingSaturated: record.textureTrackingSaturated as boolean,
+      programProbeInstalled: record.programProbeInstalled as boolean,
       livePrograms: record.livePrograms as number,
       programPassThroughQueries: record.programPassThroughQueries as number,
     };

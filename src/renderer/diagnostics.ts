@@ -331,6 +331,7 @@
         {
           textureProbeInstalled: texture !== undefined,
           wasmHeapBytes: window.gwWasmHeapBytes?.() ?? 0,
+          webglContextAvailable: gl !== null,
           contextLost: gl?.isContextLost() ?? false,
           canvasWidth: canvas?.width ?? 0,
           canvasHeight: canvas?.height ?? 0,
@@ -346,6 +347,7 @@
           textureUploadBytes: texture?.textureUploadBytes ?? 0,
           unknownTextureAllocations: texture?.unknownTextureAllocations ?? 0,
           textureTrackingSaturated: texture?.textureTrackingSaturated ?? false,
+          programProbeInstalled: programs !== undefined,
           livePrograms: programs?.livePrograms ?? 0,
           programPassThroughQueries: Object.values(programs?.passThrough ?? {})
             .reduce((total, count) => total + count, 0),

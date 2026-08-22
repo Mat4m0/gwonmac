@@ -9,6 +9,7 @@
 import {
   EVENT_CHANNELS,
   IPC,
+  RENDERER_COMMAND_OUTCOMES,
   type AppUpdateErrorCode,
   type EventChannel,
   type InvokeChannel,
@@ -128,10 +129,11 @@ export type ContractIncompleteRendererCommandOutcome = Exclude<
   "completed"
 >;
 export const INCOMPLETE_RENDERER_COMMAND_OUTCOMES = [
-  "failed",
-  "unhandled",
-  "timed-out",
-] as const satisfies readonly ContractIncompleteRendererCommandOutcome[];
+  ...RENDERER_COMMAND_OUTCOMES.filter(
+    (outcome): outcome is ContractIncompleteRendererCommandOutcome =>
+      outcome !== "completed",
+  ),
+] as const;
 export type IncompleteRendererCommandOutcome =
   (typeof INCOMPLETE_RENDERER_COMMAND_OUTCOMES)[number];
 
