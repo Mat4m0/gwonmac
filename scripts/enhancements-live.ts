@@ -234,6 +234,12 @@ try {
   if (plan.name === "graphics-probe") {
     console.log(`Graphics evidence directory: ${graphicsDir}`);
   }
+  // A visual investigation commonly ends by closing the game window. Preserve
+  // one valid common projection before the operator loop so that close remains
+  // a successful end instead of losing the already-written evidence pairs.
+  const graphicsCloseProjection = plan.name === "graphics-probe"
+    ? await projectLiveResult(page, cadence, plan.name)
+    : null;
   // The tier decides both halves at once, so the automation capabilities cannot
   // reach an observation scenario even by mistake.
   const scenarioEvidence = selectedScenario.tier === "automation"
@@ -247,7 +253,9 @@ try {
   // Assembled once rather than mutated onto the projection: the projection is
   // what the page reported, and these are what the runner knows about it.
   const result = {
-    ...await projectLiveResult(page, cadence, plan.name),
+    ...(page.isClosed() && graphicsCloseProjection
+      ? graphicsCloseProjection
+      : await projectLiveResult(page, cadence, plan.name)),
     tier: plan.tier,
     loginInputs,
     ...(scenarioEvidence ? { evidence: scenarioEvidence } : {}),
