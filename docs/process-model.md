@@ -215,7 +215,8 @@ CDP and `webContents.sendInputEvent()` start after AppKit. They cannot prove a
 physical Command accelerator or native repeat generation. Qualify each release
 candidate in the packaged app on macOS:
 
-1. Open **Help → Diagnostics → Show Input Trace**.
+1. Open **Help → Diagnostics → Show Input Trace** and drag its header away from
+   the text field under test.
 2. Hold a printable character, Backspace, Delete, Left Arrow, and Right Arrow
    in a Guild Wars text field.
 3. Confirm native repeated keydowns, trusted proxy edits, and visible Guild Wars

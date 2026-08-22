@@ -327,8 +327,9 @@ opens its GitHub issue form immediately. GitHub issues are public.
 - Use **Record Performance Problem** for stutter. Reproduce it, press
   **Command-Shift-M**, stop the capture, and export it when prompted.
 - Use **Show Input Trace** for keyboard, text, pointer, shortcut, or gamepad
-  problems. Reproduce the problem, pause the bounded timeline, then copy it
-  into the issue. It omits text, secrets, field lengths, coordinates, account
+  problems. Drag its header to move it away from the Guild Wars control you
+  need to test. Reproduce the problem, pause the bounded timeline, then copy
+  it into the issue. It omits text, secrets, field lengths, coordinates, account
   identifiers, and controller identifiers. Pointer rows say only whether the
   click belonged to the game canvas, a GWonMac surface, a text or secret field,
   or another element. Closing it discards the trace.
