@@ -149,9 +149,12 @@ export const appUpdateErrorCode = literal([
   "download-failed",
 ] as const satisfies readonly AppUpdateErrorCode[]);
 export const appUpdateStage = literal([
+  // Diagnostics produced before static channels shipped used `releases` for
+  // the GitHub REST discovery request. Historical exports remain readable;
+  // current AppUpdater code can emit only `feed`.
   "releases",
   "feed",
-] as const satisfies readonly AppUpdateStage[]);
+] as const satisfies readonly (AppUpdateStage | "releases")[]);
 export const closeReason = literal([
   "requested",
   "peer",

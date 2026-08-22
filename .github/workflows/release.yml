@@ -695,3 +695,11 @@ jobs:
             "$body_file" "$remote/SHA256SUMS.txt" "$EXPECTED_WORKFLOW_URL" \
             "$GITHUB_SHA" "$VERSION" "$BUNDLE_VERSION"
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+  publish-update-feeds:
+    needs: release
+    uses: ./.github/workflows/update-feeds.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

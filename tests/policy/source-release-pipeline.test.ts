@@ -121,8 +121,18 @@ test("the host has one native automatic application replacement path", () => {
   // The periodic re-check must run through the one audited predicate; a
   // deleted tick or a bypassed gate stays green in unit tests, not here.
   assert.match(main, /setInterval\([\s\S]{0,600}periodicCheckDue\(/);
+  assert.equal(
+    [...main.matchAll(/periodicCheckDue\(/g)].length,
+    2,
+    "launch and periodic checks must share the persisted due-time",
+  );
   assert.match(main, /PERIODIC_CHECK_TICK_MS/);
   assert.doesNotMatch(updater, /electron-updater|update-electron-app|Sparkle/);
+  assert.doesNotMatch(updater, /api\.github\.com|\/releases\?per_page/);
+  assert.match(
+    read("src/shared/project-identity.ts"),
+    /mat4m0\.github\.io\/gwonmac\/updates\/stable\/darwin\/arm64\/RELEASES\.json[\s\S]*mat4m0\.github\.io\/gwonmac\/updates\/beta\/darwin\/arm64\/RELEASES\.json/,
+  );
   assert.deepEqual(json("package.json").dependencies ?? {}, {});
 });
 
@@ -257,6 +267,7 @@ test("release entitlements are an exact three-key allowlist", () => {
 
 test("release workflow stages and publishes one tested, attested package version", () => {
   const workflow = read(".github/workflows/release.yml");
+  const feedWorkflow = read(".github/workflows/update-feeds.yml");
   const verification = read(".github/workflows/macos-verify.yml");
   assert.match(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
   assert.match(verification, /runs-on: macos-15/);
@@ -315,7 +326,20 @@ test("release workflow stages and publishes one tested, attested package version
     workflow.indexOf("\n  stage-release:"),
     workflow.indexOf("\n  release:"),
   );
-  const releasePublish = workflow.slice(workflow.indexOf("\n  release:"));
+  const releasePublish = workflow.slice(
+    workflow.indexOf("\n  release:"),
+    workflow.indexOf("\n  publish-update-feeds:"),
+  );
+  const updateFeedCall = workflow.slice(
+    workflow.indexOf("\n  publish-update-feeds:"),
+  );
+  const updateFeedBuild = feedWorkflow.slice(
+    feedWorkflow.indexOf("\n  build:"),
+    feedWorkflow.indexOf("\n  deploy:"),
+  );
+  const updateFeedDeploy = feedWorkflow.slice(
+    feedWorkflow.indexOf("\n  deploy:"),
+  );
   assert.match(releaseBuild, /permissions:[\s\S]{0,80}contents: read/);
   assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
   assert.match(releaseBuild, /actions\/upload-artifact@/);
@@ -462,6 +486,29 @@ test("release workflow stages and publishes one tested, attested package version
     /hdiutil attach[\s\S]*diff -qr[\s\S]*Guild Wars Reforged\.app[\s\S]*hdiutil detach/,
   );
   assert.match(releasePublish, /gh release edit "\$TAG"[\s\S]*--draft=false/);
+  assert.match(updateFeedCall, /needs: release/);
+  assert.match(updateFeedCall, /uses: \.\/\.github\/workflows\/update-feeds\.yml/);
+  assert.match(updateFeedCall, /contents: read/);
+  assert.match(updateFeedCall, /pages: write/);
+  assert.match(updateFeedCall, /id-token: write/);
+  assert.match(feedWorkflow, /workflow_call:[\s\S]*workflow_dispatch:/);
+  assert.match(feedWorkflow, /permissions:\n {2}contents: read/);
+  assert.match(updateFeedBuild, /gh api --paginate --slurp/);
+  assert.match(updateFeedBuild, /scripts\/update-feeds\.ts/);
+  assert.match(
+    read("scripts/update-feeds.ts"),
+    /assertFeedsDoNotMoveBackward\(feeds, previous\)/,
+  );
+  assert.match(updateFeedBuild, /actions\/configure-pages@[0-9a-f]{40}/);
+  assert.match(updateFeedBuild, /actions\/upload-pages-artifact@[0-9a-f]{40}/);
+  assert.doesNotMatch(updateFeedBuild, /contents: write|pages: write|id-token: write/);
+  assert.match(updateFeedDeploy, /needs: build/);
+  assert.match(updateFeedDeploy, /pages: write/);
+  assert.match(updateFeedDeploy, /id-token: write/);
+  assert.match(updateFeedDeploy, /environment:\n {6}name: github-pages/);
+  assert.match(updateFeedDeploy, /actions\/deploy-pages@[0-9a-f]{40}/);
+  assert.match(updateFeedDeploy, /Verify the public channel documents/);
+  assert.match(updateFeedDeploy, /test "\$actual" = "\$expected"/);
   assert.match(workflow, /RELEASES\.json/);
   assert.match(workflow, /\*\.zip \*\.dmg RELEASES\.json \*\.spdx\.json/);
   assert.match(

@@ -259,11 +259,13 @@ renders and connects. It restores that generation when the candidate fails
 early.
 
 **Automatically check for and download app updates** is on by default. The app
-checks at launch and can check again about every six hours. It does not run an
-automatic check during a game connection.
+checks when due after launch, at most once every six hours even across restarts.
+It does not run an automatic check during a game connection.
 
-Turn the setting off to stop automatic GitHub requests. Use **Check for
-Updates** for a manual check.
+Turn the setting off to stop automatic update requests. Use **Check for
+Updates** for a manual check. Release discovery reads a small static Stable or
+Beta channel file; application downloads remain immutable, signed GitHub
+Release assets.
 
 A launch update installs before play. Choose **Play Without Updating** to start
 while it downloads. An update found during play installs on **Restart to

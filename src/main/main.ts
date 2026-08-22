@@ -786,7 +786,16 @@ if (primaryInstance) void app.whenReady().then(async () => {
         context: { mode: "single", role: "game" },
         diagnosticOwnerId: SINGLE_DIAGNOSTIC_OWNER_ID,
       });
-  if (settings.autoCheckUpdates) {
+  // The same persisted due-time governs launch and background checks. A player
+  // who restarts repeatedly therefore does not spend another network request
+  // until the previous settled attempt is six hours old.
+  if (periodicCheckDue({
+    capable: distribution.automaticUpdates,
+    autoCheckUpdates: settings.autoCheckUpdates,
+    activeSockets: sockets.size(),
+    lastUpdateCheckAt: settings.lastUpdateCheckAt,
+    now: Date.now(),
+  })) {
     void checkForAppUpdates(settings.updateTrack);
   }
   // A 30-minute tick with a six-hour due-time instead of a six-hour timer:

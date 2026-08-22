@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { releaseManifest } from "../../scripts/release-manifest.ts";
+import { parseReleaseManifest } from "../../src/shared/release-manifest.ts";
 
 describe("Squirrel.Mac release manifest", () => {
   it("contains exactly one immutable release asset", () => {
@@ -27,5 +28,29 @@ describe("Squirrel.Mac release manifest", () => {
     };
     assert.throws(() => releaseManifest({ ...base, tag: "v2026.8.0" }));
     assert.throws(() => releaseManifest({ ...base, zipName: "../bad.zip" }));
+  });
+
+  it("uses one closed reader for generated and downloaded manifests", () => {
+    const generated: unknown = JSON.parse(releaseManifest({
+      version: "2026.7.0",
+      tag: "v2026.7.0",
+      zipName: "Guild-Wars-Reforged-2026.7.0-macOS-arm64.zip",
+      publishedAt: "2026-07-30T12:00:00Z",
+    }));
+    assert.equal(parseReleaseManifest(generated)?.manifest.version, "2026.7.0");
+    assert.equal(
+      parseReleaseManifest({
+        ...(generated as Record<string, unknown>),
+        url: "https://attacker.invalid/app.zip",
+      }),
+      null,
+    );
+    assert.equal(
+      parseReleaseManifest({
+        ...(generated as Record<string, unknown>),
+        extra: true,
+      }),
+      null,
+    );
   });
 });
