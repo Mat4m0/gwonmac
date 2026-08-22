@@ -27,40 +27,79 @@ export function runGwDatDecoder(
     const chunks: Buffer[] = [];
     let length = 0;
     let settled = false;
-    const fail = (error: Error) => {
-      if (settled) return;
-      settled = true;
-      child.kill();
-      reject(error);
-    };
     const timer = setTimeout(
-      () => fail(new Error("the archive decoder timed out")),
+      () => settle({ error: new Error("the archive decoder timed out") }),
       HELPER_TIMEOUT_MS,
     );
-    child.stdout.on("data", (chunk: Buffer) => {
+    function removeOperationalListeners(): void {
+      child.stdout.removeListener("data", onStdoutData);
+      child.removeListener("close", onChildClose);
+    }
+    function settle(
+      outcome: { readonly value: Buffer } | { readonly error: unknown },
+    ): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      removeOperationalListeners();
+      if ("error" in outcome) {
+        if (child.exitCode === null && child.signalCode === null) child.kill();
+        reject(outcome.error);
+      } else {
+        resolve(outcome.value);
+      }
+    }
+    function onStdoutData(chunk: Buffer): void {
       length += chunk.length;
       if (length > options.maxOutput) {
-        fail(new Error("the archive decoder exceeded its output bound"));
+        settle({
+          error: new Error("the archive decoder exceeded its output bound"),
+        });
       } else {
         chunks.push(chunk);
       }
-    });
-    child.on("error", fail);
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (settled) return;
-      settled = true;
+    }
+    function onChildError(error: Error): void {
+      settle({ error });
+    }
+    function onChildResourceClose(): void {
+      // Like stdin below, the process error listener remains until close so a
+      // failed kill cannot turn cleanup into an uncaught EventEmitter error.
+      child.removeListener("error", onChildError);
+    }
+    function onChildClose(code: number | null): void {
       if (code !== 0) {
-        reject(new Error("the archive decoder refused the local asset"));
+        settle({ error: new Error("the archive decoder refused the local asset") });
         return;
       }
       try {
-        resolve(options.parse(Buffer.concat(chunks, length)));
+        settle({ value: options.parse(Buffer.concat(chunks, length)) });
       } catch (error) {
-        reject(error);
+        settle({ error });
       }
-    });
-    child.stdin.end(input);
+    }
+    function onStdinError(error: NodeJS.ErrnoException): void {
+      // A decoder that refuses an input may close its pipe while Node is still
+      // flushing that input. Its process result owns the refusal.
+      if (error.code !== "EPIPE") settle({ error });
+    }
+    function onStdinClose(): void {
+      // This listener intentionally outlives settlement: removing it while a
+      // buffered write can still report EPIPE would turn expected refusal into
+      // an uncaught process error. The stream's close owns its final cleanup.
+      child.stdin.removeListener("error", onStdinError);
+    }
+    child.stdout.on("data", onStdoutData);
+    child.on("error", onChildError);
+    child.on("close", onChildClose);
+    child.once("close", onChildResourceClose);
+    child.stdin.on("error", onStdinError);
+    child.stdin.once("close", onStdinClose);
+    try {
+      child.stdin.end(input);
+    } catch (error) {
+      settle({ error });
+    }
   });
 }
 
