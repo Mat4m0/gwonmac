@@ -26,12 +26,14 @@ import type {
 import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import {
   runTeamApply,
+  TeamApplyPreflightRefusal,
   type TeamApplyCommands,
   type TeamApplyEvent,
 } from "../../../src/shared/builds/team-apply-runner";
 import { demoLibrary, demoParty, demoSkillCatalogue } from "./fixtures";
 import { cloneLibrary, type Build, type BuildLibrary } from "./model";
 import { devTrace } from "./dev-trace";
+import { teamApplyRuntimeProblemMessage } from "./team-apply-presentation";
 import {
   createSkillCatalogue,
   type SkillCatalogue,
@@ -386,11 +388,29 @@ export function createNativeHost(
         });
         return result;
       } catch (cause) {
+        const reportedCause = cause instanceof TeamApplyPreflightRefusal
+          ? new Error(
+              `${teamApplyRuntimeProblemMessage(cause.problem)} 0 changes were confirmed.`,
+              { cause },
+            )
+          : cause;
+        if (cause instanceof TeamApplyPreflightRefusal) {
+          const event = Object.freeze({
+            state: "failed" as const,
+            message: (reportedCause as Error).message,
+            elapsedMs: 0,
+          });
+          if (development) {
+            if (timeline.length === 64) timeline.shift();
+            timeline.push(event);
+          }
+          onEvent?.(event);
+        }
         const probe = teamApplyProbe(
           plan,
           party.value,
           currentCommandId,
-          cause,
+          reportedCause,
           timeline,
         );
         if (development) {
@@ -399,14 +419,18 @@ export function createNativeHost(
         } else {
           console.warn(
             "[tools] Team Apply failed",
-            cause instanceof Error ? cause.message : String(cause),
+            reportedCause instanceof Error
+              ? reportedCause.message
+              : String(reportedCause),
           );
         }
         devTrace(development, "apply.failed", {
           commandId: currentCommandId,
-          reason: cause instanceof Error ? cause.message : String(cause),
+          reason: reportedCause instanceof Error
+            ? reportedCause.message
+            : String(reportedCause),
         });
-        throw cause;
+        throw reportedCause;
       } finally {
         // A refused confirmation must not leave a packet armed to fire after
         // the UI has already reported failure. Clearing an empty mailbox is a

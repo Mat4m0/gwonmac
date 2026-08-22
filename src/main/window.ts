@@ -36,7 +36,7 @@ import {
   type WindowBounds,
   type WindowState,
 } from "./core/window-state.js";
-import { logEvent } from "./diagnostics.js";
+import { logEvent, resetRendererDiagnostics } from "./diagnostics.js";
 import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
@@ -338,6 +338,8 @@ export function createMainWindow(
   host: WindowHost,
   options: {
     readonly context: WindowContext;
+    /** Process-local account identity retained across renderer recovery. */
+    readonly diagnosticOwnerId: number;
     readonly session?: Electron.Session;
     readonly title?: string;
     readonly windowStatePath?: string;
@@ -393,7 +395,8 @@ export function createMainWindow(
     resetDepth: 0,
   };
   windowStateOwners.set(win, stateOwner);
-  windowRegistry.register(win, context);
+  windowRegistry.register(win, context, options.diagnosticOwnerId);
+  resetRendererDiagnostics(options.diagnosticOwnerId);
   if (options.title) {
     ownedWindowTitles.set(win, options.title);
     win.webContents.on("page-title-updated", (event) => {
@@ -403,6 +406,7 @@ export function createMainWindow(
   }
   updateLongRunningTaskFeedback(host.getProgress(), win);
   const rendererId = win.webContents.id;
+  const diagnosticOwnerId = options.diagnosticOwnerId;
 
   win.once("ready-to-show", () => {
     if (initialState?.mode === "maximized") win.maximize();
@@ -439,20 +443,20 @@ export function createMainWindow(
   // without these a stall of that kind is indistinguishable from a real one.
   // Main stays responsive while the renderer is frozen, so these timestamps
   // are the reliable ones to line up against frames.bin.
-  win.on("focus", () => logEvent({ k: "window.focused" }));
-  win.on("blur", () => logEvent({ k: "window.blurred" }));
-  win.on("minimize", () => logEvent({ k: "window.minimized" }));
-  win.on("restore", () => logEvent({ k: "window.restored" }));
-  win.on("hide", () => logEvent({ k: "window.hidden" }));
-  win.on("show", () => logEvent({ k: "window.shown" }));
+  win.on("focus", () => logEvent({ k: "window.focused" }, diagnosticOwnerId));
+  win.on("blur", () => logEvent({ k: "window.blurred" }, diagnosticOwnerId));
+  win.on("minimize", () => logEvent({ k: "window.minimized" }, diagnosticOwnerId));
+  win.on("restore", () => logEvent({ k: "window.restored" }, diagnosticOwnerId));
+  win.on("hide", () => logEvent({ k: "window.hidden" }, diagnosticOwnerId));
+  win.on("show", () => logEvent({ k: "window.shown" }, diagnosticOwnerId));
   // Only the settled events. Electron emits `will-resize` and `will-move` once
   // per step of a live drag, which would flood the bounded event ring and
   // evict the very evidence these listeners exist to keep.
-  win.on("resized", () => logEvent({ k: "window.resized" }));
-  win.on("moved", () => logEvent({ k: "window.moved" }));
+  win.on("resized", () => logEvent({ k: "window.resized" }, diagnosticOwnerId));
+  win.on("moved", () => logEvent({ k: "window.moved" }, diagnosticOwnerId));
 
   win.webContents.setWindowOpenHandler(() => {
-    logEvent({ k: "security.windowOpenBlocked" });
+    logEvent({ k: "security.windowOpenBlocked" }, diagnosticOwnerId);
     return { action: "deny" };
   });
 
@@ -503,20 +507,20 @@ export function createMainWindow(
       updateWindowShortcuts(win, settings.shortcutOverrides);
     }
   }).catch((error) => {
-    logEvent({ k: "settings.loadFailed", code: errorCode(error) });
+    logEvent({ k: "settings.loadFailed", code: errorCode(error) }, diagnosticOwnerId);
   });
 
   win.webContents.on("will-navigate", (event, url) => {
     if (!isCanonicalRendererUrl(url)) {
       event.preventDefault();
-      logEvent({ k: "security.navigationBlocked" });
+      logEvent({ k: "security.navigationBlocked" }, diagnosticOwnerId);
     }
   });
 
   win.webContents.on("will-redirect", (event, url) => {
     if (!isCanonicalRendererUrl(url)) {
       event.preventDefault();
-      logEvent({ k: "security.redirectBlocked" });
+      logEvent({ k: "security.redirectBlocked" }, diagnosticOwnerId);
     }
   });
 
@@ -540,11 +544,11 @@ export function createMainWindow(
   );
   win.webContents.on("will-attach-webview", (event) => {
     event.preventDefault();
-    logEvent({ k: "security.webviewBlocked" });
+    logEvent({ k: "security.webviewBlocked" }, diagnosticOwnerId);
   });
 
   win.webContents.on("destroyed", () => {
-    logEvent({ k: "webContents.destroyed" });
+    logEvent({ k: "webContents.destroyed" }, diagnosticOwnerId);
     host.sockets.closeAll(rendererId);
   });
 
@@ -554,7 +558,7 @@ export function createMainWindow(
         ? "renderer.processExitedDuringQuit"
         : "renderer.processGone",
       exitCode: details.exitCode,
-    });
+    }, diagnosticOwnerId);
     host.sockets.closeAll(rendererId);
     if (isQuitting()) return;
     if (
@@ -564,7 +568,7 @@ export function createMainWindow(
     ) {
       rendererRecoveryUsed.add(statePath);
       options.onRendererRecoveryStart?.();
-      logEvent({ k: "renderer.recoveryScheduled" });
+      logEvent({ k: "renderer.recoveryScheduled" }, diagnosticOwnerId);
       setTimeout(() => {
         if (isQuitting() || win.isDestroyed()) return;
         void host
@@ -573,7 +577,7 @@ export function createMainWindow(
             logEvent({
               k: "renderer.recoveryPreparationFailed",
               code: errorCode(error),
-            });
+            }, diagnosticOwnerId);
           })
           .finally(() => {
             if (isQuitting() || win.isDestroyed()) return;
@@ -584,7 +588,7 @@ export function createMainWindow(
             createMainWindow(host, options);
             win.destroy();
             options.onRendererRecovered?.();
-            logEvent({ k: "renderer.recovered" });
+            logEvent({ k: "renderer.recovered" }, diagnosticOwnerId);
           });
       }, 500);
     } else if (details.reason !== "clean-exit") {
@@ -607,7 +611,7 @@ export function createMainWindow(
       return;
     }
     event.preventDefault();
-    logEvent({ k: "window.closeRequested" });
+    logEvent({ k: "window.closeRequested" }, diagnosticOwnerId);
     app.quit();
   });
 

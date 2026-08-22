@@ -41,8 +41,8 @@ import {
   canReconcileTeamRoster,
   preflightTeamApply,
   teamRosterOrderMatches,
-  teamApplyProblemMessage,
 } from "./team-apply.js";
+import type { TeamApplyRuntimeProblem } from "./team-apply.js";
 import type { LiveParty, SkillUnlockObservation } from "./live-party.js";
 
 /** The commands the enhancement exposes, as this module needs them. */
@@ -118,6 +118,16 @@ class ApplyRefused extends Error {
   constructor(message: string, elapsedMs = 0) {
     super(message);
     this.elapsedMs = elapsedMs;
+  }
+}
+
+/** Structured refusal for a plan that became invalid before the first write. */
+export class TeamApplyPreflightRefusal extends Error {
+  readonly problem: TeamApplyRuntimeProblem;
+
+  constructor(problem: TeamApplyRuntimeProblem) {
+    super("team apply preflight refused");
+    this.problem = problem;
   }
 }
 class ApplyCancelled extends Error {}
@@ -378,10 +388,7 @@ export async function runTeamApply(
   const opening = environment.party();
   const preflight = preflightTeamApply(plan, opening);
   if (!preflight.ready) {
-    const message = `${teamApplyProblemMessage(preflight.blockers[0])} `
-      + "0 changes were confirmed.";
-    emit(environment, "failed", message);
-    throw new Error(message);
+    throw new TeamApplyPreflightRefusal(preflight.blockers[0]);
   }
 
   const wanted = plan.members

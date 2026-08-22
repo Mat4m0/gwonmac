@@ -92,6 +92,7 @@ export interface ProtocolDeps {
     wasmPath: string;
     jsPath: string;
   } | null;
+  diagnosticOwnerId?: () => number;
 }
 
 /**
@@ -260,6 +261,7 @@ async function handleSnapshot(
   request: Request,
   deps: ProtocolDeps,
 ): Promise<Response> {
+  const ownerId = deps.diagnosticOwnerId?.();
   const active = deps.getActiveClient();
   if (!active || active.store.size <= 0) {
     return new Response("snapshot unavailable", {
@@ -300,7 +302,7 @@ async function handleSnapshot(
     offsetBytes: range.start,
     requestedBytes: length,
     priority,
-  });
+  }, ownerId);
   try {
     const data = await store.readRange(range.start, length, priority);
     requestSpan.end({
@@ -308,7 +310,7 @@ async function handleSnapshot(
       status: 206,
       code: null,
     });
-    count("protocol.snapshotBytes", data.byteLength);
+    count("protocol.snapshotBytes", data.byteLength, ownerId);
     return new Response(compactResponseBody(data), {
       status: 206,
       headers: headers({
@@ -327,7 +329,7 @@ async function handleSnapshot(
       offsetBytes: range.start,
       bytes: length,
       code,
-    });
+    }, ownerId);
     const message =
       code === "chunk_offline"
         ? "No cached copy of this game data is available while offline."
@@ -346,6 +348,7 @@ async function handleProxy(
   request: Request,
   route: ProxyRoute,
   rest: string,
+  ownerId?: number,
 ): Promise<Response> {
   const destination =
     request.destination || request.headers.get("sec-fetch-dest") || "";
@@ -370,7 +373,7 @@ async function handleProxy(
   }
   const url = new URL(request.url);
   const upstream = `https://${host}/${rest}${url.search}`;
-  const requestSpan = startProxyRequestSpan({ route, method });
+  const requestSpan = startProxyRequestSpan({ route, method }, ownerId);
   const fwd = new Headers();
   for (const [k, v] of request.headers) {
     const key = k.toLowerCase();
@@ -428,7 +431,7 @@ async function handleProxy(
       res.headers,
     );
     if (safeHeaders === null) {
-      logEvent({ k: "proxy.redirectBlocked", route });
+      logEvent({ k: "proxy.redirectBlocked", route }, ownerId);
       requestSpan.end({
         status: 502,
         reason: "redirectEscape",
@@ -443,7 +446,7 @@ async function handleProxy(
   } catch (err) {
     const code = errorCode(err);
     requestSpan.end({ status: 502, reason: null, code });
-    logEvent({ k: "proxy.requestFailed", route, code });
+    logEvent({ k: "proxy.requestFailed", route, code }, ownerId);
     return new Response("proxy error", { status: 502, headers: headers() });
   }
 }
@@ -596,7 +599,7 @@ async function handleGwRequest(
 
   if (isProxyRoute(first)) {
     const rest = base.slice(first.length).replace(/^\/+/, "");
-    return handleProxy(request, first, rest);
+    return handleProxy(request, first, rest, deps.diagnosticOwnerId?.());
   }
 
   if (first && !base.includes(".")) {

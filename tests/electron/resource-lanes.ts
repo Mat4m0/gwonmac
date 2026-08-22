@@ -57,6 +57,12 @@ export const desktopExclusiveElectronSpecs = [
     reason: "Binds the fixed game port while it proves the real socket boundary.",
   },
   {
+    file: "diagnostics-ownership.spec.ts",
+    resources: ["multi-window"],
+    reason:
+      "Creates a second registered game window while it proves capture ownership and trace refusal.",
+  },
+  {
     file: "diagnostics.spec.ts",
     resources: ["multi-window"],
     reason:

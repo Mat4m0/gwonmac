@@ -662,6 +662,15 @@ function readPartySlotRow(view: DataView, index: number): PartySlotRowResult {
         return Object.freeze({ status: "refused" });
       }
     }
+    if (
+      ((slotFlags & SLOT_FLAGS.professions) === 0 && professions !== 0)
+      || ((slotFlags & SLOT_FLAGS.behaviour) === 0 && behaviour !== 0)
+      || (
+        (slotFlags & SLOT_FLAGS.skills) === 0
+        && (disabled !== 0 || skills.some((skill) => skill !== 0))
+      )
+      || ((slotFlags & SLOT_FLAGS.attributes) === 0 && attributes.length !== 0)
+    ) return Object.freeze({ status: "refused" });
   } else if (
     heroId !== 0 || agentId !== 0 || professions !== 0 || level !== 0
     || behaviour !== 0 || disabled !== 0 || slotFlags !== 0

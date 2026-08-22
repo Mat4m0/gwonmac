@@ -21,35 +21,79 @@ import {
   type RendererMilestoneFields,
   type WasmMemoryProbeStatus,
 } from "../../shared/diagnostics.js";
-import { activeCaptureLevel } from "./capture.js";
+import {
+  captureOwnsDiagnosticOwner,
+  captureOwnsWebContents,
+} from "./capture.js";
 import { logEvent, recordEvent, recorder } from "./recorder.js";
 import { asRendererFingerprint } from "./schema-fields.js";
 
-let graphics: GraphicsDiagnostics | null = null;
-let rendererClockOffsetUs = 0;
-let rendererClockSynchronized = false;
-// The last WASM heap size a metrics flush reported. Wasm memory only grows
-// within one client run, so each increase is one step of the whole heap
-// staircase; a smaller value means a reloaded client and resets the baseline.
-let lastWasmHeapBytes = 0;
-
-/** The renderer's graphics description, as an export carries it. */
-export function graphicsSnapshot(): GraphicsDiagnostics | null {
-  return graphics;
+interface RendererDiagnosticState {
+  clockOffsetUs: number;
+  clockSynchronized: boolean;
+  /** The last heap size this renderer reported; a smaller value means reload. */
+  lastWasmHeapBytes: number;
 }
 
-export function recordGraphics(value: GraphicsDiagnostics): void {
-  graphics = value;
-  recorder.setLatest("graphics.renderer", value.renderer);
-  recorder.setLatest("graphics.hardwareAcceleration", value.hardwareAcceleration);
-  recorder.setLatest("graphics.canvasWidth", value.canvasWidth);
-  recorder.setLatest("graphics.canvasHeight", value.canvasHeight);
-  recorder.setLatest("graphics.offscreenWidth", value.offscreenWidth);
-  recorder.setLatest("graphics.offscreenHeight", value.offscreenHeight);
-  recorder.setLatest("graphics.drawingBufferWidth", value.drawingBufferWidth);
-  recorder.setLatest("graphics.drawingBufferHeight", value.drawingBufferHeight);
-  recorder.setLatest("graphics.antialias", value.antialias);
-  recorder.setLatest("graphics.samples", value.samples);
+const rendererStates = new Map<number, RendererDiagnosticState>();
+
+function stateFor(ownerId: number): RendererDiagnosticState {
+  let state = rendererStates.get(ownerId);
+  if (!state) {
+    state = {
+      clockOffsetUs: 0,
+      clockSynchronized: false,
+      lastWasmHeapBytes: 0,
+    };
+    rendererStates.set(ownerId, state);
+  }
+  return state;
+}
+
+/** The renderer's graphics description, as an export carries it. */
+export function graphicsSnapshot(ownerId?: number): GraphicsDiagnostics | null {
+  return recorder.graphics(ownerId);
+}
+
+/** Reset state that belongs to one renderer document, not its account. */
+export function resetRendererDiagnostics(ownerId: number): void {
+  rendererStates.delete(ownerId);
+  recorder.clearGraphics(ownerId);
+}
+
+/** Release all process-local evidence after permanent profile deletion. */
+export function forgetRendererDiagnosticsOwner(ownerId: number): void {
+  rendererStates.delete(ownerId);
+  recorder.forgetOwner(ownerId);
+}
+
+export function recordGraphics(
+  ownerId: number,
+  value: GraphicsDiagnostics,
+): void {
+  recorder.setGraphics(ownerId, value);
+  recorder.setLatest("graphics.renderer", value.renderer, ownerId);
+  recorder.setLatest(
+    "graphics.hardwareAcceleration",
+    value.hardwareAcceleration,
+    ownerId,
+  );
+  recorder.setLatest("graphics.canvasWidth", value.canvasWidth, ownerId);
+  recorder.setLatest("graphics.canvasHeight", value.canvasHeight, ownerId);
+  recorder.setLatest("graphics.offscreenWidth", value.offscreenWidth, ownerId);
+  recorder.setLatest("graphics.offscreenHeight", value.offscreenHeight, ownerId);
+  recorder.setLatest(
+    "graphics.drawingBufferWidth",
+    value.drawingBufferWidth,
+    ownerId,
+  );
+  recorder.setLatest(
+    "graphics.drawingBufferHeight",
+    value.drawingBufferHeight,
+    ownerId,
+  );
+  recorder.setLatest("graphics.antialias", value.antialias, ownerId);
+  recorder.setLatest("graphics.samples", value.samples, ownerId);
   logEvent({
     k: "graphics.detected",
     jspi: value.jspi,
@@ -64,7 +108,7 @@ export function recordGraphics(value: GraphicsDiagnostics): void {
     renderScale: value.renderScale,
     antialias: value.antialias,
     samples: value.samples,
-  });
+  }, ownerId);
 }
 
 /**
@@ -86,49 +130,58 @@ const RENDERER_HISTOGRAM_NAMES: Record<RendererHistogramMetric, string> = {
   inputToSubmit: "renderer.inputToSubmit",
 };
 
-export function recordRendererMetrics(value: RendererMetrics): void {
-  recorder.count("renderer.raf", value.rafCount);
-  recorder.count("renderer.rafOver33", value.rafOver33);
-  recorder.count("renderer.rafOver50", value.rafOver50);
-  recorder.count("renderer.swaps", value.swapCount);
-  recorder.count("renderer.presentationFailures", value.presentationFailures);
-  recorder.count("snapshot.reads", value.snapshotReads);
-  recorder.count("snapshot.bytes", value.snapshotBytes);
-  recorder.count("snapshot.readsFromMemory", value.snapshotMemoryReads);
-  recorder.count("cache.memoryHits", value.memoryHits);
-  recorder.count("cache.nativeHits", value.nativeHits);
-  recorder.count("cache.coalesced", value.coalesced);
-  recorder.count("gl.programQueryHits", value.glProgramQueryHits);
-  recorder.count("gl.programQueryMisses", value.glProgramQueryMisses);
-  recorder.count("socket.rendererSendCalls", value.socketSendCalls);
-  recorder.count("socket.rendererPayloadBytes", value.socketPayloadBytes);
+export function recordRendererMetrics(
+  ownerId: number,
+  value: RendererMetrics,
+): void {
+  const state = stateFor(ownerId);
+  recorder.count("renderer.raf", value.rafCount, ownerId);
+  recorder.count("renderer.rafOver33", value.rafOver33, ownerId);
+  recorder.count("renderer.rafOver50", value.rafOver50, ownerId);
+  recorder.count("renderer.swaps", value.swapCount, ownerId);
+  recorder.count(
+    "renderer.presentationFailures",
+    value.presentationFailures,
+    ownerId,
+  );
+  recorder.count("snapshot.reads", value.snapshotReads, ownerId);
+  recorder.count("snapshot.bytes", value.snapshotBytes, ownerId);
+  recorder.count("snapshot.readsFromMemory", value.snapshotMemoryReads, ownerId);
+  recorder.count("cache.memoryHits", value.memoryHits, ownerId);
+  recorder.count("cache.nativeHits", value.nativeHits, ownerId);
+  recorder.count("cache.coalesced", value.coalesced, ownerId);
+  recorder.count("gl.programQueryHits", value.glProgramQueryHits, ownerId);
+  recorder.count("gl.programQueryMisses", value.glProgramQueryMisses, ownerId);
+  recorder.count("socket.rendererSendCalls", value.socketSendCalls, ownerId);
+  recorder.count("socket.rendererPayloadBytes", value.socketPayloadBytes, ownerId);
   recorder.setPeak(
     "socket.rendererPeakSourceBackingBytes",
     value.socketSourceBackingMaxBytes,
+    ownerId,
   );
-  recorder.count("socket.rendererCompactBytes", value.socketCompactBytes);
-  recorder.count("socket.rendererSettles", value.socketSettles);
-  recorder.count("diagnostics.rendererDropped", value.droppedRecords);
+  recorder.count("socket.rendererCompactBytes", value.socketCompactBytes, ownerId);
+  recorder.count("socket.rendererSettles", value.socketSettles, ownerId);
+  recorder.count("diagnostics.rendererDropped", value.droppedRecords, ownerId);
   if (value.wasmHeapBytes > 0) {
-    recorder.setLatest("renderer.wasmHeapBytes", value.wasmHeapBytes);
-    recorder.setPeak("renderer.peakWasmHeapBytes", value.wasmHeapBytes);
+    recorder.setLatest("renderer.wasmHeapBytes", value.wasmHeapBytes, ownerId);
+    recorder.setPeak("renderer.peakWasmHeapBytes", value.wasmHeapBytes, ownerId);
     // Growth is discrete and rare (the glue steps geometrically toward its
     // cap), so every observed rise between flushes becomes one event — steps
     // inside one flush window coalesce. Read with the socket.open map
     // transitions around it, the sequence answers whether a session leaked
     // steadily or stepped up on zone loads — the question a heap-cap abort
     // asks. A decrease is a reloaded client, not a shrink: baseline only.
-    if (value.wasmHeapBytes > lastWasmHeapBytes) {
+    if (value.wasmHeapBytes > state.lastWasmHeapBytes) {
       logEvent({
         k: "wasm.heapGrew",
-        fromBytes: lastWasmHeapBytes,
+        fromBytes: state.lastWasmHeapBytes,
         toBytes: value.wasmHeapBytes,
-      });
+      }, ownerId);
     }
-    lastWasmHeapBytes = value.wasmHeapBytes;
+    state.lastWasmHeapBytes = value.wasmHeapBytes;
   }
   for (const event of value.rendererEvents) {
-    recorder.count(`renderer.event.${event.name}`);
+    recorder.count(`renderer.event.${event.name}`, 1, ownerId);
     const fingerprint = event.fingerprint
       ? asRendererFingerprint(event.fingerprint)
       : null;
@@ -149,30 +202,48 @@ export function recordRendererMetrics(value: RendererMetrics): void {
         recordEvent(
           { k: event.name, fingerprint },
           { timestampUs: Math.round(event.timestampUs) },
+          ownerId,
         );
         break;
     }
   }
   for (const { name } of RENDERER_HISTOGRAMS) {
-    recorder.mergeHistogram(RENDERER_HISTOGRAM_NAMES[name], value[name]);
+    recorder.mergeHistogram(
+      RENDERER_HISTOGRAM_NAMES[name],
+      value[name],
+      ownerId,
+    );
   }
-  recorder.setLatest("renderer.visible", value.visible);
-  recorder.setLatest("renderer.focused", value.focused);
-  recorder.setLatest("renderer.memoryCacheBytes", value.memoryCacheBytes);
-  recorder.setLatest("renderer.memoryCacheChunks", value.memoryCacheChunks);
-  recorder.setLatest("renderer.pendingChunks", value.pendingChunks);
-  recorder.setLatest("snapshot.activeDemand", value.activeDemand);
-  recorder.setLatest("snapshot.activePrefetch", value.activePrefetch);
-  recorder.setLatest("snapshot.queuedDemand", value.queuedDemand);
-  recorder.setLatest("snapshot.queuedPrefetch", value.queuedPrefetch);
-  recorder.setPeak("renderer.peakMemoryCacheBytes", value.memoryCacheBytes);
-  recorder.setPeak("renderer.peakPendingChunks", value.pendingChunks);
+  recorder.setLatest("renderer.visible", value.visible, ownerId);
+  recorder.setLatest("renderer.focused", value.focused, ownerId);
+  recorder.setLatest(
+    "renderer.memoryCacheBytes",
+    value.memoryCacheBytes,
+    ownerId,
+  );
+  recorder.setLatest(
+    "renderer.memoryCacheChunks",
+    value.memoryCacheChunks,
+    ownerId,
+  );
+  recorder.setLatest("renderer.pendingChunks", value.pendingChunks, ownerId);
+  recorder.setLatest("snapshot.activeDemand", value.activeDemand, ownerId);
+  recorder.setLatest("snapshot.activePrefetch", value.activePrefetch, ownerId);
+  recorder.setLatest("snapshot.queuedDemand", value.queuedDemand, ownerId);
+  recorder.setLatest("snapshot.queuedPrefetch", value.queuedPrefetch, ownerId);
+  recorder.setPeak(
+    "renderer.peakMemoryCacheBytes",
+    value.memoryCacheBytes,
+    ownerId,
+  );
+  recorder.setPeak("renderer.peakPendingChunks", value.pendingChunks, ownerId);
   recorder.setPeak(
     "snapshot.peakQueueDepth",
     value.queuedDemand + value.queuedPrefetch,
+    ownerId,
   );
-  recorder.count("cache.evictions", value.cacheEvictions);
-  recorder.count("snapshot.queuePromotions", value.queuePromotions);
+  recorder.count("cache.evictions", value.cacheEvictions, ownerId);
+  recorder.count("snapshot.queuePromotions", value.queuePromotions, ownerId);
   recorder.setLatest(
     "renderer.submittedFps",
     value.intervalMs
@@ -181,8 +252,9 @@ export function recordRendererMetrics(value: RendererMetrics): void {
             value.intervalMs,
         )
       : 0,
+    ownerId,
   );
-  if (activeCaptureLevel() > 0) {
+  if (captureOwnsDiagnosticOwner(ownerId)) {
     for (let index = 0; index < value.socketSendEvents.length; index += 7) {
       recordEvent(
         {
@@ -195,6 +267,7 @@ export function recordRendererMetrics(value: RendererMetrics): void {
           status: value.socketSendEvents[index + 6] ? "sent" : "failed",
         },
         { timestampUs: Math.round(value.socketSendEvents[index]!) },
+        ownerId,
       );
     }
     logEvent({ k: "renderer.metrics",
@@ -226,38 +299,49 @@ export function recordRendererMetrics(value: RendererMetrics): void {
       socketSettles: value.socketSettles,
       socketSettleMaxUs: Math.round(value.socketSettle.maxUs),
       droppedRecords: value.droppedRecords,
-    });
+    }, ownerId);
   }
 }
 
-export async function recordRendererFrames(value: RendererFrameBatch): Promise<void> {
-  if (activeCaptureLevel() === 0) return;
-  await recorder.appendFrames(value);
+export async function recordRendererFrames(
+  webContentsId: number,
+  ownerId: number,
+  value: RendererFrameBatch,
+): Promise<void> {
+  if (!captureOwnsWebContents(webContentsId)) return;
+  await recorder.appendFrames(value, ownerId);
 }
 
-export function recordClockOffset(offsetUs: number, rttUs: number): void {
-  rendererClockOffsetUs = offsetUs;
-  rendererClockSynchronized = true;
-  recorder.setLatest("renderer.clockOffsetUs", Math.round(offsetUs));
-  recorder.setLatest("renderer.clockRttUs", Math.round(rttUs));
+export function recordClockOffset(
+  ownerId: number,
+  offsetUs: number,
+  rttUs: number,
+): void {
+  const state = stateFor(ownerId);
+  state.clockOffsetUs = offsetUs;
+  state.clockSynchronized = true;
+  recorder.setLatest("renderer.clockOffsetUs", Math.round(offsetUs), ownerId);
+  recorder.setLatest("renderer.clockRttUs", Math.round(rttUs), ownerId);
   logEvent({ k: "clock.synchronized",
     offsetUs: Math.round(offsetUs),
     rttUs: Math.round(rttUs),
-  });
+  }, ownerId);
 }
 
 export function recordRendererMilestone(
+  ownerId: number,
   name: RendererMilestone,
   rendererTimestampUs: number,
   fields?: RendererMilestoneFields,
 ): void {
-  const timestampUs = rendererClockSynchronized
-    ? Math.max(0, Math.round(rendererTimestampUs + rendererClockOffsetUs))
+  const state = stateFor(ownerId);
+  const timestampUs = state.clockSynchronized
+    ? Math.max(0, Math.round(rendererTimestampUs + state.clockOffsetUs))
     : recorder.timestampUs();
-  recorder.setLatest(`milestone.${name}Us`, timestampUs);
+  recorder.setLatest(`milestone.${name}Us`, timestampUs, ownerId);
   if (name === "build.info" && fields && "programId" in fields) {
-    recorder.setLatest("client.programId", fields.programId);
-    recorder.setLatest("client.buildId", fields.buildId);
+    recorder.setLatest("client.programId", fields.programId, ownerId);
+    recorder.setLatest("client.buildId", fields.buildId, ownerId);
   }
   if (name === "wasm.abort") {
     // IPC validation guarantees these fields for this name; a call without
@@ -267,82 +351,116 @@ export function recordRendererMilestone(
     // diagnostics.current() to decide first-crash vs repeated-crash copy.
     // The renderer records one crash per client launch, so this counts
     // launches that crashed, not abort re-entries.
-    recorder.count("wasm.crashes");
+    recorder.count("wasm.crashes", 1, ownerId);
     recordEvent(
       {
         k: "wasm.abort",
-        clockSynchronized: rendererClockSynchronized,
+        clockSynchronized: state.clockSynchronized,
         reasonKind: fields.reasonKind,
         fingerprint: asRendererFingerprint(fields.fingerprint),
         heapBytes: fields.heapBytes,
       },
       { timestampUs },
+      ownerId,
     );
     return;
   }
   if (name === "wasm.exit") {
     if (!fields || !("code" in fields)) return;
-    recorder.count("wasm.crashes");
+    recorder.count("wasm.crashes", 1, ownerId);
     recordEvent(
       {
         k: "wasm.exit",
-        clockSynchronized: rendererClockSynchronized,
+        clockSynchronized: state.clockSynchronized,
         code: fields.code,
         heapBytes: fields.heapBytes,
       },
       { timestampUs },
+      ownerId,
     );
     return;
   }
   if (name === "wasm.memoryProbe") {
     if (!fields || !("status" in fields)) return;
-    recorder.setLatest("wasm.memoryProbe.status", fields.status);
+    recorder.setLatest("wasm.memoryProbe.status", fields.status, ownerId);
     recordEvent(
       {
         k: "wasm.memoryProbe",
-        clockSynchronized: rendererClockSynchronized,
+        clockSynchronized: state.clockSynchronized,
         status: fields.status as WasmMemoryProbeStatus,
       },
       { timestampUs },
+      ownerId,
     );
     return;
   }
   if (name === "wasm.growthRequested") {
     if (!fields || !("requestedBytes" in fields)) return;
-    recorder.count("wasm.growthRequests");
-    recorder.count(`wasm.growthRequests.${fields.outcome}`);
-    recorder.setLatest("wasm.growth.outcome", fields.outcome);
-    recorder.setLatest("wasm.growth.stackFingerprint", fields.stackFingerprint);
-    recorder.setLatest("wasm.growth.requestedBytes", fields.requestedBytes);
-    recorder.setLatest("wasm.growth.beforeBytes", fields.beforeBytes);
-    recorder.setLatest("wasm.growth.afterBytes", fields.afterBytes);
-    recorder.setLatest("wasm.growth.stackDepth", fields.stackDepth);
-    recorder.setLatest("wasm.growth.frame0Function", fields.frame0Function);
-    recorder.setLatest("wasm.growth.frame0Offset", fields.frame0Offset);
-    recorder.setLatest("wasm.growth.frame1Function", fields.frame1Function);
-    recorder.setLatest("wasm.growth.frame1Offset", fields.frame1Offset);
-    recorder.setLatest("wasm.textures.live", fields.liveTextures);
-    recorder.setLatest("wasm.textures.tracked", fields.trackedTextures);
-    recorder.setLatest("wasm.textures.knownBytes", fields.knownTextureBytes);
-    recorder.setLatest("wasm.textures.uploadBytes", fields.textureUploadBytes);
+    recorder.count("wasm.growthRequests", 1, ownerId);
+    recorder.count(`wasm.growthRequests.${fields.outcome}`, 1, ownerId);
+    recorder.setLatest("wasm.growth.outcome", fields.outcome, ownerId);
+    recorder.setLatest(
+      "wasm.growth.stackFingerprint",
+      fields.stackFingerprint,
+      ownerId,
+    );
+    recorder.setLatest(
+      "wasm.growth.requestedBytes",
+      fields.requestedBytes,
+      ownerId,
+    );
+    recorder.setLatest("wasm.growth.beforeBytes", fields.beforeBytes, ownerId);
+    recorder.setLatest("wasm.growth.afterBytes", fields.afterBytes, ownerId);
+    recorder.setLatest("wasm.growth.stackDepth", fields.stackDepth, ownerId);
+    recorder.setLatest(
+      "wasm.growth.frame0Function",
+      fields.frame0Function,
+      ownerId,
+    );
+    recorder.setLatest("wasm.growth.frame0Offset", fields.frame0Offset, ownerId);
+    recorder.setLatest(
+      "wasm.growth.frame1Function",
+      fields.frame1Function,
+      ownerId,
+    );
+    recorder.setLatest("wasm.growth.frame1Offset", fields.frame1Offset, ownerId);
+    recorder.setLatest("wasm.textures.live", fields.liveTextures, ownerId);
+    recorder.setLatest("wasm.textures.tracked", fields.trackedTextures, ownerId);
+    recorder.setLatest(
+      "wasm.textures.knownBytes",
+      fields.knownTextureBytes,
+      ownerId,
+    );
+    recorder.setLatest(
+      "wasm.textures.uploadBytes",
+      fields.textureUploadBytes,
+      ownerId,
+    );
     recorder.setLatest(
       "wasm.textures.unknownAllocations",
       fields.unknownTextureAllocations,
+      ownerId,
     );
     recorder.setLatest(
       "wasm.textures.trackingSaturated",
       fields.textureTrackingSaturated,
+      ownerId,
     );
-    recorder.setPeak("wasm.textures.peakLive", fields.liveTextures);
-    recorder.setPeak("wasm.textures.peakKnownBytes", fields.knownTextureBytes);
+    recorder.setPeak("wasm.textures.peakLive", fields.liveTextures, ownerId);
+    recorder.setPeak(
+      "wasm.textures.peakKnownBytes",
+      fields.knownTextureBytes,
+      ownerId,
+    );
     recordEvent(
       {
         k: "wasm.growthRequested",
-        clockSynchronized: rendererClockSynchronized,
+        clockSynchronized: state.clockSynchronized,
         ...fields,
         stackFingerprint: asRendererFingerprint(fields.stackFingerprint),
       },
       { timestampUs },
+      ownerId,
     );
     return;
   }
@@ -355,12 +473,13 @@ export function recordRendererMilestone(
     recordEvent(
       {
         k: "enhancement.installed",
-        clockSynchronized: rendererClockSynchronized,
+        clockSynchronized: state.clockSynchronized,
         companionAbi: fields.companionAbi,
         installation: fields.installation,
         capabilityProfile: profile,
       },
       { timestampUs },
+      ownerId,
     );
     return;
   }
@@ -371,15 +490,17 @@ export function recordRendererMilestone(
     recordEvent(
       {
         k: "enhancement.uninstalled",
-        clockSynchronized: rendererClockSynchronized,
+        clockSynchronized: state.clockSynchronized,
         installation: fields.installation,
       },
       { timestampUs },
+      ownerId,
     );
     return;
   }
   recordEvent(
-    { k: name, clockSynchronized: rendererClockSynchronized },
+    { k: name, clockSynchronized: state.clockSynchronized },
     { timestampUs },
+    ownerId,
   );
 }

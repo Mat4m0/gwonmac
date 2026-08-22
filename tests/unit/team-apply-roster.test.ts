@@ -3,16 +3,29 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   runTeamApply,
+  TeamApplyPreflightRefusal,
   type TeamApplyEnvironment,
 } from "../../src/shared/builds/team-apply-runner.ts";
 import { liveParty } from "../../src/shared/builds/live-party.ts";
 import { heroId } from "../../src/shared/builds/library.ts";
+import type { TeamApplyRuntimeProblem } from "../../src/shared/builds/team-apply.ts";
 import {
   applyHarness as harness,
   applyMember as member,
   applyParty as party,
   applyPlan as plan,
 } from "./team-apply-fixture.ts";
+
+test("primary-mismatch facts carry exact professions", () => {
+  const problem: TeamApplyRuntimeProblem = {
+    rule: "primary-mismatch",
+    hero: null,
+    observed: "W",
+    // @ts-expect-error presentation text is not a profession fact.
+    wanted: "Warrior",
+  };
+  assert.equal(problem.rule, "primary-mismatch");
+});
 
 test("a behaviour already set is not sent again", async () => {
   const game = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]);
@@ -124,14 +137,22 @@ test("applying outside an outpost is refused before anything is sent", async () 
   const outside = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }], false);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), behaviour: "fight" })]), outside.environment, 1),
-    /Enter a PvE outpost/,
+    (error: unknown) => {
+      assert.ok(error instanceof TeamApplyPreflightRefusal);
+      assert.deepEqual(error.problem, { rule: "not-outpost" });
+      return true;
+    },
   );
   assert.deepEqual(outside.sent, []);
 
   const unknown = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }], null);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), behaviour: "fight" })]), unknown.environment, 1),
-    /Waiting to confirm that this is a PvE outpost/,
+    (error: unknown) => {
+      assert.ok(error instanceof TeamApplyPreflightRefusal);
+      assert.deepEqual(error.problem, { rule: "outpost-unknown" });
+      return true;
+    },
   );
   assert.deepEqual(unknown.sent, []);
 });

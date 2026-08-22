@@ -171,6 +171,7 @@ const api = {
     get: () => ipcRenderer.invoke(IPC.settingsGet),
     set: (value) => ipcRenderer.invoke(IPC.settingsSet, value),
     reset: () => ipcRenderer.invoke(IPC.settingsReset),
+    onChange: (callback) => listen(IPC.settingsEvent, callback),
   },
   travelPreferences: {
     get: () => ipcRenderer.invoke(IPC.travelPreferencesGet),

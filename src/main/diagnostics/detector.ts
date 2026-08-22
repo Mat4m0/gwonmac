@@ -26,6 +26,8 @@ const isNonnegativeNumber: Guard<number> = (value): value is number =>
   isNumber(value) && value >= 0;
 const isSequence: Guard<number> = (value): value is number =>
   Number.isSafeInteger(value) && (value as number) > 0;
+const isOwnerId: Guard<number> = (value): value is number =>
+  Number.isSafeInteger(value) && (value as number) >= 0;
 const isString: Guard<string> = (value): value is string =>
   typeof value === "string";
 const isIso: Guard<string> = (value): value is string =>
@@ -44,6 +46,7 @@ const OPTIONAL_ENVELOPE: Readonly<Record<string, Guard<unknown>>> = {
   durationUs: isNonnegativeNumber,
   traceId: isUuid,
   spanId: isUuid,
+  ownerId: isOwnerId,
 };
 
 export interface EventLogInspection {

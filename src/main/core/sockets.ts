@@ -133,8 +133,8 @@ export type SocketFactory = (options: {
   family: 4 | 6;
 }) => ManagedSocket;
 export interface SocketMetrics {
-  count(name: string, delta?: number): void;
-  observe(name: string, durationUs: number): void;
+  count(name: string, delta?: number, ownerId?: number): void;
+  observe(name: string, durationUs: number, ownerId?: number): void;
   gauge?(name: string, value: number): void;
   peakGauge?(name: string, value: number): void;
 }
@@ -208,15 +208,19 @@ export class SocketManager {
       clearTimeout(timer);
       if (entry.closed) return;
       entry.opened = true;
-      this.metrics?.count("socket.opened");
-      this.metrics?.observe("socket.connect", (Date.now() - entry.openedAt) * 1_000);
+      this.metrics?.count("socket.opened", 1, ownerId);
+      this.metrics?.observe(
+        "socket.connect",
+        (Date.now() - entry.openedAt) * 1_000,
+        ownerId,
+      );
       this.emit(ownerId, { type: "open", socketId: id, port: parsed.port });
     });
 
     socket.on("data", (buf) => {
       if (entry.closed) return;
       entry.bytesReceived += buf.byteLength;
-      this.metrics?.count("socket.bytesReceived", buf.byteLength);
+      this.metrics?.count("socket.bytesReceived", buf.byteLength, ownerId);
       this.emit(ownerId, {
         type: "data",
         socketId: id,
@@ -254,21 +258,22 @@ export class SocketManager {
     await new Promise<void>((resolve, reject) => {
       const reservation = this.reserve(entry, data.byteLength, resolve, reject);
       const started = process.hrtime.bigint();
-      this.metrics?.count("socket.sendCalls");
-      this.metrics?.count("socket.sendPayloadBytes", data.byteLength);
+      this.metrics?.count("socket.sendCalls", 1, entry.ownerId);
+      this.metrics?.count("socket.sendPayloadBytes", data.byteLength, entry.ownerId);
       try {
         entry.socket.write(data, (err) => {
           if (!this.release(entry, reservation)) return;
           this.metrics?.observe(
             "socket.writeCallback",
             Number((process.hrtime.bigint() - started) / 1_000n),
+            entry.ownerId,
           );
           if (err) {
-            this.metrics?.count("socket.sendFailures");
+            this.metrics?.count("socket.sendFailures", 1, entry.ownerId);
             reservation.reject(new ValidationError("socket send failed"));
           } else {
             entry.bytesSent += data.byteLength;
-            this.metrics?.count("socket.bytesSent", data.byteLength);
+            this.metrics?.count("socket.bytesSent", data.byteLength, entry.ownerId);
             reservation.resolve();
           }
         });
@@ -324,13 +329,13 @@ export class SocketManager {
   ): Reservation {
     const ownerQueued = this.queuedByOwner.get(entry.ownerId) ?? 0;
     if (entry.queuedBytes + bytes > MAX_QUEUED_BYTES_PER_SOCKET) {
-      this.metrics?.count("socket.sendFailures");
+      this.metrics?.count("socket.sendFailures", 1, entry.ownerId);
       throw new AllowlistError(
         `socket send queue exceeds ${MAX_QUEUED_BYTES_PER_SOCKET} bytes`,
       );
     }
     if (ownerQueued + bytes > MAX_QUEUED_BYTES_PER_OWNER) {
-      this.metrics?.count("socket.sendFailures");
+      this.metrics?.count("socket.sendFailures", 1, entry.ownerId);
       throw new AllowlistError(
         `owner send queue exceeds ${MAX_QUEUED_BYTES_PER_OWNER} bytes`,
       );
@@ -372,7 +377,7 @@ export class SocketManager {
     error: Error,
   ): void {
     if (!this.release(entry, reservation)) return;
-    this.metrics?.count("socket.sendFailures");
+    this.metrics?.count("socket.sendFailures", 1, entry.ownerId);
     reservation.reject(error);
   }
 
@@ -418,8 +423,12 @@ export class SocketManager {
         new ValidationError("socket closed before queued send completed"),
       );
     }
-    this.metrics?.count("socket.closed");
-    this.metrics?.observe("socket.lifetime", (Date.now() - entry.openedAt) * 1_000);
+    this.metrics?.count("socket.closed", 1, entry.ownerId);
+    this.metrics?.observe(
+      "socket.lifetime",
+      (Date.now() - entry.openedAt) * 1_000,
+      entry.ownerId,
+    );
     this.sockets.delete(entry.id);
     const set = this.byOwner.get(entry.ownerId);
     set?.delete(entry.id);

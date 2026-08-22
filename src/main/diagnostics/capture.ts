@@ -22,8 +22,10 @@ import { resetEventLoopWindow } from "./samplers.js";
 
 let captureLevel: 0 | 1 | 2 = 0;
 let recordedLevel: 0 | 1 | 2 = 0;
+let recordedOwnerId: number | null = null;
 let tracePath = "";
 let lastTracePath = "";
+let lastTraceOwnerId: number | null = null;
 let traceGuard: ReturnType<typeof setInterval> | null = null;
 let captureTimer: ReturnType<typeof setTimeout> | null = null;
 let captureStopPromise: Promise<void> | null = null;
@@ -33,6 +35,7 @@ let captureStoppedHandler: ((win: BrowserWindow) => void | Promise<void>) | null
 interface CaptureOwner {
   readonly win: BrowserWindow;
   readonly contents: WebContents;
+  readonly diagnosticOwnerId: number;
   readonly stopped: () => void;
 }
 
@@ -52,9 +55,14 @@ function releaseCaptureOwner(owner: CaptureOwner): void {
 
 function ownCapture(win: BrowserWindow): CaptureOwner {
   const contents = win.webContents;
+  const diagnosticOwnerId = windowRegistry.diagnosticOwnerForWindow(win);
+  if (diagnosticOwnerId === null) {
+    throw new Error("diagnostics capture requires an account owner");
+  }
   const owner: CaptureOwner = {
     win,
     contents,
+    diagnosticOwnerId,
     stopped: () => {
       void stopDiagnosticCapture("owner-gone");
     },
@@ -70,14 +78,33 @@ export function activeCaptureLevel(): 0 | 1 | 2 {
   return captureLevel;
 }
 
+/** A renderer only observes the capture that it owns. */
+export function captureLevelForWindow(win: BrowserWindow): 0 | 1 | 2 {
+  return captureOwner?.win === win ? captureLevel : 0;
+}
+
+/** Whether window-local evidence belongs in the active capture. */
+export function captureOwnsWebContents(id: number): boolean {
+  return captureOwner?.contents.id === id && captureLevel !== 0;
+}
+
+/** Whether account-local evidence belongs in the active capture. */
+export function captureOwnsDiagnosticOwner(ownerId: number): boolean {
+  return captureOwner?.diagnosticOwnerId === ownerId && captureLevel !== 0;
+}
+
 /** The level an export declares: the last capture's, not the live one's. */
-export function exportedCaptureLevel(): 0 | 1 | 2 {
-  return recordedLevel;
+export function exportedCaptureLevel(ownerId?: number): 0 | 1 | 2 {
+  return ownerId === undefined || ownerId === recordedOwnerId
+    ? recordedLevel
+    : 0;
 }
 
 /** The completed raw trace an export sanitizes, or `""` when there is none. */
-export function completedTracePath(): string {
-  return lastTracePath;
+export function completedTracePath(ownerId?: number): string {
+  return ownerId === undefined || ownerId === lastTraceOwnerId
+    ? lastTracePath
+    : "";
 }
 
 /**
@@ -91,11 +118,13 @@ const rendererCaptureCommand = (
 ): Promise<void> =>
   sendRendererCommand(win, command).then((outcome) => {
     if (outcome !== "completed") {
+      const ownerId = windowRegistry.diagnosticOwnerForWindow(win);
+      if (ownerId === null) return;
       logEvent({
         k: "renderer.commandIncomplete",
         action: command.action,
         outcome,
-      });
+      }, ownerId);
     }
   });
 
@@ -103,7 +132,9 @@ export function markPerformanceProblem(win: BrowserWindow): void {
   if (!registeredGameWindow(win)) return;
   const owner = captureOwner?.win ?? win;
   if (owner !== win) return;
-  logEvent({ k: "performance.problemMarked" });
+  const ownerId = windowRegistry.diagnosticOwnerForWindow(owner);
+  if (ownerId === null) return;
+  logEvent({ k: "performance.problemMarked" }, ownerId);
   void rendererCaptureCommand(owner, {
     type: "diagnostics.capture",
     action: "problem-marked",
@@ -116,7 +147,7 @@ export function setDiagnosticCaptureStoppedHandler(
   captureStoppedHandler = handler;
 }
 
-async function stopTrace(): Promise<boolean> {
+async function stopTrace(ownerId: number): Promise<boolean> {
   if (!tracePath) return false;
   if (traceGuard) clearInterval(traceGuard);
   traceGuard = null;
@@ -125,13 +156,14 @@ async function stopTrace(): Promise<boolean> {
     await contentTracing.stopRecording(target);
     tracePath = "";
     lastTracePath = target;
+    lastTraceOwnerId = ownerId;
     // Size is the first thing anyone asks after an export goes wrong.
     const bytes = await stat(target).then((info) => info.size, () => 0);
-    recorder.setLatest("capture.traceBytes", bytes);
-    logEvent({ k: "chromiumTrace.stopped", bytes });
+    recorder.setLatest("capture.traceBytes", bytes, ownerId);
+    logEvent({ k: "chromiumTrace.stopped", bytes }, ownerId);
     return true;
   } catch (err) {
-    logEvent({ k: "chromiumTrace.stopFailed", code: errorCode(err) });
+    logEvent({ k: "chromiumTrace.stopFailed", code: errorCode(err) }, ownerId);
     // A failed stop cannot produce a trustworthy Chromium trace. Delete the
     // exact target now, but retain it in `tracePath` if deletion itself fails
     // so quit or the next capture can retry instead of orphaning it.
@@ -159,6 +191,7 @@ export async function discardTrace(): Promise<void> {
     await rm(target, { force: true });
     if (tracePath === target) tracePath = "";
     if (lastTracePath === target) lastTracePath = "";
+    if (!lastTracePath) lastTraceOwnerId = null;
   }
 }
 
@@ -174,6 +207,11 @@ export function startDiagnosticCapture(
       new Error("diagnostics capture requires a registered game window"),
     );
   }
+  if (level === 2 && windowRegistry.gameWindows().length !== 1) {
+    return Promise.reject(
+      new Error("Chromium tracing requires exactly one open game window"),
+    );
+  }
   const owner = ownCapture(win);
   const operation = (async () => {
     // Beginning a capture replaces the previous capture result. Its raw trace
@@ -184,7 +222,7 @@ export function startDiagnosticCapture(
       type: "diagnostics.capture",
       action: "reset",
     });
-    await recorder.beginCapture();
+    await recorder.beginCapture(owner.diagnosticOwnerId);
     resetEventLoopWindow();
     captureLevel = level;
     await rendererCaptureCommand(win, {
@@ -195,7 +233,7 @@ export function startDiagnosticCapture(
     captureTimer = setTimeout(() => {
       void stopDiagnosticCapture("automatic");
     }, 120_000);
-    logEvent({ k: "capture.started", level });
+    logEvent({ k: "capture.started", level }, owner.diagnosticOwnerId);
     recordedLevel = level;
     if (level !== 2) return;
 
@@ -243,8 +281,12 @@ export function startDiagnosticCapture(
       // so shutdown or the next capture can retry.
       await discardTrace().catch(() => undefined);
       recordedLevel = 0;
+      recordedOwnerId = null;
       recorder.cancelCapture();
-      logEvent({ k: "chromiumTrace.startFailed", code: errorCode(error) });
+      logEvent(
+        { k: "chromiumTrace.startFailed", code: errorCode(error) },
+        owner.diagnosticOwnerId,
+      );
       throw error;
     }
   })();
@@ -280,15 +322,16 @@ export function stopDiagnosticCapture(
       type: "diagnostics.capture",
       action: "flush",
     });
-    const traceCompleted = await stopTrace();
+    const traceCompleted = await stopTrace(owner.diagnosticOwnerId);
     const completedLevel =
       stoppedLevel === 2 && !traceCompleted ? 1 : stoppedLevel;
     recordedLevel = completedLevel;
+    recordedOwnerId = owner.diagnosticOwnerId;
     logEvent({
       k: "capture.stopped",
       level: completedLevel,
       reason,
-    });
+    }, owner.diagnosticOwnerId);
     recorder.endCapture(completedLevel, reason);
     captureLevel = 0;
     await rendererCaptureCommand(owner.win, {

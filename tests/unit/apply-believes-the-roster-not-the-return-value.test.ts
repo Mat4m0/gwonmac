@@ -11,10 +11,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   runTeamApply,
+  TeamApplyPreflightRefusal,
 } from "../../src/shared/builds/team-apply-runner.ts";
 import { heroId, skillId } from "../../src/shared/builds/library.ts";
 import type {
   TeamApplyMember,
+  TeamApplyRuntimeProblem,
 } from "../../src/shared/builds/team-apply.ts";
 import { preflightTeamApply } from "../../src/shared/builds/team-apply.ts";
 import {
@@ -24,6 +26,14 @@ import {
   applyParty as party,
   applyPlan as plan,
 } from "./team-apply-fixture.ts";
+
+function isPreflightRefusal(expected: TeamApplyRuntimeProblem) {
+  return (error: unknown): boolean => {
+    assert.ok(error instanceof TeamApplyPreflightRefusal);
+    assert.deepEqual(error.problem, expected);
+    return true;
+  };
+}
 
 test("Hard Mode is changed and confirmed before any team command", async () => {
   const game = harness([]);
@@ -99,28 +109,33 @@ test("a wrong player primary refuses before changing difficulty", async () => {
       game.environment,
       2,
     ),
-    /assigned build is for W, but the observed primary is R/,
+    isPreflightRefusal({
+      rule: "primary-mismatch",
+      hero: null,
+      wanted: "W",
+      observed: "R",
+    }),
   );
   assert.deepEqual(game.sent, []);
 });
 
 test("missing player, partial roster and known-locked hero all send zero commands", async () => {
-  for (const [observed, message] of [
-    [party([], true, false, null), /own character has not been observed/],
-    [{ ...party([]), partial: true }, /complete party roster/],
+  for (const [observed, problem] of [
+    [party([], true, false, null), { rule: "player-unobserved" }],
+    [{ ...party([]), partial: true }, { rule: "partial-roster" }],
     [{
       ...party([]),
       accountHeroes: new Map([[heroId(6), {
         availability: "locked" as const,
         professions: ["W", "R"] as const,
       }]]),
-    }, /Koss is not unlocked/],
+    }, { rule: "hero-locked", hero: heroId(6) }],
   ] as const) {
     const game = harness([]);
     const environment = { ...game.environment, party: () => observed };
     await assert.rejects(
       runTeamApply(plan([member({ hero: heroId(6), behaviour: "guard" })]), environment, 1),
-      message,
+      isPreflightRefusal(problem),
     );
     assert.deepEqual(game.sent, []);
   }
@@ -189,7 +204,12 @@ test("an absent hero's known primary mismatch refuses before roster mutation", a
       { ...game.environment, party: () => observed },
       1,
     ),
-    /assigned build is for W, but the observed primary is R/,
+    isPreflightRefusal({
+      rule: "primary-mismatch",
+      hero: heroId(6),
+      wanted: "W",
+      observed: "R",
+    }),
   );
   assert.deepEqual(game.sent, []);
 });
@@ -214,7 +234,11 @@ test("a known-locked assigned skill refuses before the first command", async () 
       { ...game.environment, party: () => observed },
       1,
     ),
-    /Koss's assigned build uses skills 350, 351, which are not unlocked/,
+    isPreflightRefusal({
+      rule: "skill-locked",
+      hero: heroId(6),
+      skills: [skillId(350), skillId(351)],
+    }),
   );
   assert.deepEqual(game.sent, []);
 });
@@ -737,7 +761,7 @@ test("unobserved professions refuse before the first command", async () => {
   }]);
   await assert.rejects(
     runTeamApply(plan([member({ hero: heroId(6), build: build() })]), game.environment, 1),
-    /Koss's professions have not been observed yet/,
+    isPreflightRefusal({ rule: "professions-unobserved", hero: heroId(6) }),
   );
   assert.deepEqual(game.sent, []);
 });
@@ -755,7 +779,12 @@ test("a wrong primary profession refuses before changing difficulty", async () =
       game.environment,
       1,
     ),
-    /Koss's assigned build is for W, but the observed primary is R/,
+    isPreflightRefusal({
+      rule: "primary-mismatch",
+      hero: heroId(6),
+      wanted: "W",
+      observed: "R",
+    }),
   );
   assert.deepEqual(game.sent, []);
 });

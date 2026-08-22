@@ -6,14 +6,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { PreferencesCoordinator } from "../../src/main/core/preferences-coordinator.js";
-import { DEFAULT_SETTINGS } from "../../src/shared/contracts.js";
+import { DEFAULT_SETTINGS, type AppSettings } from "../../src/shared/contracts.js";
 import {
   replaceTravelShortcut,
 } from "../../src/shared/travel.js";
 
 type ResetOutcome = Awaited<ReturnType<PreferencesCoordinator["resetSettings"]>>;
 
-async function fixture(): Promise<{
+async function fixture(
+  publish?: ConstructorParameters<typeof PreferencesCoordinator>[2],
+): Promise<{
   coordinator: PreferencesCoordinator;
   settings: string;
   travelPreferences: string;
@@ -23,7 +25,10 @@ async function fixture(): Promise<{
     settings: join(dir, "settings.json"),
     travelPreferences: join(dir, "travel-preferences.json"),
   };
-  return { coordinator: new PreferencesCoordinator(() => paths), ...paths };
+  return {
+    coordinator: new PreferencesCoordinator(() => paths, undefined, publish),
+    ...paths,
+  };
 }
 
 async function failSync(
@@ -77,6 +82,43 @@ async function seedNonDefaultPreferences(
 }
 
 describe("PreferencesCoordinator", () => {
+  it("publishes shortcut commits and the active result of an ambiguous write", async () => {
+    const published: AppSettings[] = [];
+    const { coordinator, settings } = await fixture((value) => {
+      published.push(value);
+    });
+    const current = await coordinator.getTravelPreferences();
+    const shortcuts = replaceTravelShortcut(current.shortcuts, 0, { mapId: 55 });
+    await coordinator.updateTravelPreferences({
+      expected: current,
+      patch: { shortcuts },
+    });
+    assert.deepEqual(published.at(-1)?.travelShortcuts[0], {
+      mapId: 55,
+      district: "international",
+      districtNumber: 0,
+    });
+
+    const refused = await failSync(
+      "directory",
+      1,
+      async () => {
+        await assert.rejects(
+          coordinator.updateSettings({ showDiagnostics: true }),
+          /different active values/u,
+        );
+      },
+      async () => {
+        await writeFile(
+          settings,
+          JSON.stringify({ formatVersion: 1, ...DEFAULT_SETTINGS }),
+        );
+      },
+    );
+    assert.equal(refused, true);
+    assert.equal(published.at(-1)?.showDiagnostics, false);
+  });
+
   it("keeps the released district-bearing shortcut shape", async () => {
     const { coordinator, settings } = await fixture();
     const current = await coordinator.getTravelPreferences();

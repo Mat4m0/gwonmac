@@ -10,7 +10,10 @@ import { randomUUID } from "node:crypto";
 import type { Digest } from "../../shared/digest.js";
 import type { ErrorCode } from "../../shared/errors.js";
 import type { ProxyRoute } from "../core/proxy-routes.js";
-import { activeCaptureLevel } from "./capture.js";
+import {
+  activeCaptureLevel,
+  captureOwnsDiagnosticOwner,
+} from "./capture.js";
 import { recordEvent, recorder } from "./recorder.js";
 import type { DiagnosticEvent } from "./schema.js";
 
@@ -25,11 +28,12 @@ function closedSpan<End>(
   finish: (outcome: End) => DiagnosticEvent,
   histogram: string,
   recordEvents = true,
+  ownerId?: number,
 ): ClosedDiagnosticSpan<End> {
   const started = recorder.timestampUs();
   const traceId = randomUUID();
   const spanId = randomUUID();
-  if (recordEvents) recordEvent(begin, { traceId, spanId });
+  if (recordEvents) recordEvent(begin, { traceId, spanId }, ownerId);
   let ended = false;
   return {
     traceId,
@@ -38,16 +42,16 @@ function closedSpan<End>(
       if (ended) return 0;
       ended = true;
       const durationUs = recorder.timestampUs() - started;
-      recorder.observe(histogram, durationUs);
+      recorder.observe(histogram, durationUs, ownerId);
       if (recordEvents || durationUs >= 50_000) {
-        recordEvent(finish(outcome), { durationUs, traceId, spanId });
+        recordEvent(finish(outcome), { durationUs, traceId, spanId }, ownerId);
       }
       return durationUs;
     },
   };
 }
 
-export function startDnsResolveSpan(): ClosedDiagnosticSpan<
+export function startDnsResolveSpan(ownerId?: number): ClosedDiagnosticSpan<
   | { status: "ok"; code: null }
   | { status: "error"; code: ErrorCode }
 > {
@@ -55,6 +59,8 @@ export function startDnsResolveSpan(): ClosedDiagnosticSpan<
     { k: "dns.resolve.begin" },
     (outcome) => ({ k: "dns.resolve.end", ...outcome }),
     "dns.resolve",
+    true,
+    ownerId,
   );
 }
 
@@ -95,12 +101,16 @@ export type SnapshotReadSpanOutcome =
 
 export function startSnapshotReadSpan(
   start: SnapshotReadSpanStart,
+  ownerId?: number,
 ): ClosedDiagnosticSpan<SnapshotReadSpanOutcome> {
   return closedSpan(
     { k: "snapshot.read.begin", ...start },
     (outcome) => ({ k: "snapshot.read.end", ...start, ...outcome }),
     "snapshot.read",
-    activeCaptureLevel() > 0,
+    ownerId === undefined
+      ? activeCaptureLevel() > 0
+      : captureOwnsDiagnosticOwner(ownerId),
+    ownerId,
   );
 }
 
@@ -117,10 +127,13 @@ export type ProxyRequestSpanOutcome =
 
 export function startProxyRequestSpan(
   start: ProxyRequestSpanStart,
+  ownerId?: number,
 ): ClosedDiagnosticSpan<ProxyRequestSpanOutcome> {
   return closedSpan(
     { k: "proxy.request.begin", ...start },
     (outcome) => ({ k: "proxy.request.end", ...start, ...outcome }),
     "proxy.request",
+    true,
+    ownerId,
   );
 }

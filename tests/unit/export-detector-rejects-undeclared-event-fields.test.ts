@@ -84,6 +84,12 @@ describe("export detector", () => {
     assert.equal(result.schemaChecked, events.length);
   });
 
+  it("accepts only a nonnegative ephemeral window owner", () => {
+    assert.doesNotThrow(() => inspectEventLog(line({ ownerId: 7 })));
+    rejects(line({ ownerId: -1 }), /record key ownerId/);
+    rejects(line({ ownerId: 1.5 }), /record key ownerId/);
+  });
+
   it("rejects a declared event that carries a field the schema does not declare", () => {
     // The regression this exists for: a build whose `app.uncaughtException`
     // still pushed `error.message` into the log.

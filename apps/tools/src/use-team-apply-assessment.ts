@@ -3,17 +3,17 @@
  * Planning and preflight authority remain in the shared Team Apply domain module.
  */
 import { computed } from "vue";
-import { PROFESSIONS, heroLabel } from "../../../src/shared/builds/heroes";
+import { PROFESSIONS } from "../../../src/shared/builds/heroes";
 import { buildById, type TeamSlot } from "../../../src/shared/builds/library";
 import {
   preflightTeamApply,
   resolveTeamApplyPlan,
-  teamApplyProblemMessage,
   type TeamApplyProblem,
   type TeamApplyRuntimeProblem,
 } from "../../../src/shared/builds/team-apply";
 import type { LibraryController } from "./use-library";
 import type { Team } from "./model";
+import { teamApplyRuntimePresentation } from "./team-apply-presentation";
 
 export interface TeamApplyIssue {
   readonly id: string;
@@ -74,24 +74,6 @@ const storedProblemControl = (problem: TeamApplyProblem): TeamApplyIssue["contro
   }
 };
 
-const runtimeProblemGuidance = (problem: TeamApplyRuntimeProblem): string | null => {
-  switch (problem.rule) {
-    case "party-unavailable": return "Enter the game on a character and wait for party observation.";
-    case "pvp": return "Travel to a PvE outpost. Your saved builds and teams remain available.";
-    case "region-unknown": return "Wait for the region check, or travel to a PvE outpost.";
-    case "not-outpost": return "Travel to any PvE outpost before applying.";
-    case "outpost-unknown": return "Wait for the outpost check to finish.";
-    case "partial-roster": return "Wait until every party member is visible to GWonMac.";
-    case "mode-unobserved": return "Wait for Normal or Hard Mode to be observed.";
-    case "player-unobserved": return "Wait for your character to finish loading.";
-    case "professions-unobserved": return "Wait for profession observation, then try again.";
-    case "primary-mismatch": return "Choose a build with the observed primary profession.";
-    case "hero-locked": return "Choose an unlocked hero or unlock this hero in Guild Wars.";
-    case "hero-availability-unknown": return "Add this hero in the Guild Wars party window first.";
-    case "skill-locked": return "Choose an unlocked skill, or unlock it in Guild Wars before applying.";
-  }
-};
-
 const runtimeProblemControl = (
   problem: TeamApplyRuntimeProblem,
 ): TeamApplyIssue["control"] => {
@@ -130,15 +112,6 @@ export function useTeamApplyAssessment(
     return slot < 0 ? [] : [slot];
   };
 
-  const runtimeProblemMessage = (problem: TeamApplyRuntimeProblem): string => {
-    if (problem.rule !== "skill-locked") return teamApplyProblemMessage(problem);
-    const owner = problem.hero === null
-      ? "Your assigned build"
-      : `${heroLabel(problem.hero)}'s assigned build`;
-    const names = problem.skills.map((skill) => controller.skills.get(skill).name);
-    return `${owner} uses ${names.join(", ")}, which ${names.length === 1 ? "is" : "are"} not unlocked.`;
-  };
-
   const assessment = computed(() => {
     const issues: TeamApplyIssue[] = [];
     if (controller.applyUnavailable) {
@@ -174,13 +147,19 @@ export function useTeamApplyAssessment(
     }
     const result = preflightTeamApply(resolution.plan, controller.party.value);
     if (!result.ready) {
-      result.blockers.forEach((problem, index) => issues.push({
-        id: `runtime-${problem.rule}-${"hero" in problem ? problem.hero ?? "player" : index}`,
-        message: runtimeProblemMessage(problem),
-        guidance: runtimeProblemGuidance(problem),
-        slots: runtimeProblemSlots(problem),
-        control: runtimeProblemControl(problem),
-      }));
+      result.blockers.forEach((problem, index) => {
+        const presentation = teamApplyRuntimePresentation(
+          problem,
+          (skill) => controller.skills.get(skill).name,
+        );
+        issues.push({
+          id: `runtime-${problem.rule}-${"hero" in problem ? problem.hero ?? "player" : index}`,
+          message: presentation.message,
+          guidance: presentation.guidance,
+          slots: runtimeProblemSlots(problem),
+          control: runtimeProblemControl(problem),
+        });
+      });
     }
     if (configured.value === 0) {
       issues.push({

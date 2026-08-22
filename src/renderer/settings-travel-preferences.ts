@@ -22,16 +22,16 @@ export function bindTravelPreferenceSettings(options: Readonly<{
     toolsEnabled: boolean,
     preferences: TravelUserPreferences | null,
   ): void {
-    options.limit.value = String(preferences?.recentLimit ?? 5);
-    options.limit.disabled = !toolsEnabled;
+    if (preferences === null) options.limit.selectedIndex = -1;
+    else options.limit.value = String(preferences.recentLimit);
+    options.limit.disabled = !toolsEnabled || preferences === null;
     options.clear.disabled =
-      !toolsEnabled || (preferences?.recentMapIds.length ?? 0) === 0;
+      !toolsEnabled || preferences === null || preferences.recentMapIds.length === 0;
   }
 
   async function reconcileAfterFailure(message: string): Promise<void> {
-    const current = options.current();
     const active = await window.gwNative.travelPreferences.get()
-      .catch(() => current);
+      .catch(() => null);
     options.accept(active);
     options.renderSettings();
     options.feedback(message, 'error');

@@ -23,6 +23,7 @@ interface RegisteredWindow {
 interface Entry<Window extends RegisteredWindow> {
   readonly win: Window;
   readonly context: WindowContext;
+  readonly diagnosticOwnerId: number | null;
 }
 
 export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
@@ -32,7 +33,11 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
   #singleGameWindow: Window | null = null;
   #hubWindow: Window | null = null;
 
-  register(win: Window, context: WindowContext): void {
+  register(
+    win: Window,
+    context: WindowContext,
+    diagnosticOwnerId: number | null = null,
+  ): void {
     const id = win.webContents.id;
     if (this.#byWebContents.has(id)) {
       throw new AppError("validation", "window is already registered");
@@ -55,7 +60,7 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
       this.#profileWindows.set(context.profileId, win);
     }
     this.#webContentsIds.set(win, id);
-    this.#byWebContents.set(id, { win, context });
+    this.#byWebContents.set(id, { win, context, diagnosticOwnerId });
   }
 
   unregister(win: Window): void {
@@ -84,6 +89,22 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
   windowForWebContents(id: number): Window | null {
     const entry = this.#byWebContents.get(id);
     return entry && !entry.win.isDestroyed() ? entry.win : null;
+  }
+
+  diagnosticOwnerForWindow(win: Window): number | null {
+    const id = this.#webContentsIds.get(win);
+    if (id === undefined) return null;
+    const entry = this.#byWebContents.get(id);
+    return entry?.win === win && !win.isDestroyed()
+      ? entry.diagnosticOwnerId
+      : null;
+  }
+
+  diagnosticOwnerForWebContents(id: number): number | null {
+    const entry = this.#byWebContents.get(id);
+    return entry && !entry.win.isDestroyed()
+      ? entry.diagnosticOwnerId
+      : null;
   }
 
   singleGameWindow(): Window | null {

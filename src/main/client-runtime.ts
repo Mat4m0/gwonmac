@@ -20,7 +20,6 @@
  * untouched, including builds present in historic regression tables.
  */
 import { net } from "electron";
-import { statfs } from "node:fs/promises";
 import {
   type CacheInfo,
   type ClientCompatibility,
@@ -59,8 +58,9 @@ import {
   type ActiveClient,
 } from "./active-client.js";
 import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
+import { readClientCacheInfo } from "./core/client-cache-info.js";
 import { encodedChunkLimit } from "./core/chunk-format.js";
-import { ChunkStore, FREE_MARGIN } from "./core/chunk-store.js";
+import { ChunkStore } from "./core/chunk-store.js";
 import {
   prepareClientModule,
   type ClientCertification,
@@ -167,9 +167,6 @@ export class ClientRuntime {
   private gameUpdateAbort: AbortController | null = null;
   /** Exact candidate identity captured by a renderer before it loads glue. */
   private candidateHealthToken: ClientHealthToken | null = null;
-  private readonly rendererFailedFeatures = new Set<
-    Exclude<keyof ClientCompatibility["features"], "gameFileSaving">
-  >();
   private readonly patchFetch: PatchFetch;
 
   constructor(private readonly options: ClientRuntimeOptions) {
@@ -184,39 +181,7 @@ export class ClientRuntime {
   }
 
   get compatibility(): ClientCompatibility | null {
-    const compatibility = this.activeSlot.current?.compatibility ?? null;
-    if (!compatibility || this.rendererFailedFeatures.size === 0) {
-      return compatibility;
-    }
-    const effectiveStatus = <
-      Feature extends Exclude<keyof ClientCompatibility["features"], "gameFileSaving">,
-    >(feature: Feature): ClientCompatibility["features"][Feature] =>
-      this.rendererFailedFeatures.has(feature)
-        ? { status: "unavailable", reason: "preparation-failed" }
-        : compatibility.features[feature];
-    return Object.freeze({
-      ...compatibility,
-      features: Object.freeze({
-        gameFileSaving: compatibility.features.gameFileSaving,
-        nativeCursor: effectiveStatus("nativeCursor"),
-        targetObservation: effectiveStatus("targetObservation"),
-        partyObservation: effectiveStatus("partyObservation"),
-        teamApply: effectiveStatus("teamApply"),
-        travelAction: effectiveStatus("travelAction"),
-        xunlaiAction: effectiveStatus("xunlaiAction"),
-        chatAliases: effectiveStatus("chatAliases"),
-      }),
-    });
-  }
-
-  recordRendererFeatureFailure(
-    features: readonly Exclude<keyof ClientCompatibility["features"], "gameFileSaving">[],
-  ): void {
-    for (const feature of features) {
-      if (this.activeSlot.current?.compatibility?.features[feature].status === "available") {
-        this.rendererFailedFeatures.add(feature);
-      }
-    }
+    return this.activeSlot.current?.compatibility ?? null;
   }
 
   get healthToken(): ClientHealthToken | null {
@@ -267,46 +232,10 @@ export class ClientRuntime {
   }
 
   async cacheInfo(): Promise<CacheInfo> {
-    const store = this.activeSlot.current?.store ?? null;
-    // Advisory only — the download preflight re-measures and enforces. An
-    // unreadable volume therefore answers "could not be measured" rather than
-    // blocking the Full Game card on a measurement error.
-    let freeBytes = -1;
-    try {
-      const fsStat = await statfs(store?.chunksDir ?? this.options.paths.userData);
-      freeBytes = Number(fsStat.bavail) * Number(fsStat.bsize);
-    } catch {
-      // Keep the "could not be measured" answer.
-    }
-    if (!store) {
-      return {
-        bytes: 0,
-        chunks: 0,
-        totalBytes: 0,
-        totalChunks: 0,
-        freeBytes,
-        fullDownloadShortfall: 0,
-      };
-    }
-    const resident = await store.residentIndices();
-    const bytes = resident.reduce(
-      (total, index) => total + store.chunkByteLength(index),
-      0,
+    return readClientCacheInfo(
+      this.activeSlot.current?.store ?? null,
+      this.options.paths.userData,
     );
-    // Remaining bytes rather than the preflight's hash-deduplicated need: close
-    // enough for a card, and always the pessimistic side of the two.
-    const remaining = Math.max(0, store.size - bytes);
-    const fullDownloadShortfall = remaining > 0 && freeBytes >= 0
-      ? Math.max(0, remaining + FREE_MARGIN - freeBytes)
-      : 0;
-    return {
-      bytes,
-      chunks: resident.length,
-      totalBytes: store.size,
-      totalChunks: store.hashes.length,
-      freeBytes,
-      fullDownloadShortfall,
-    };
   }
 
   private commitProgress(next: DownloadProgress): void {
@@ -577,7 +506,6 @@ export class ClientRuntime {
     const previous = this.activeSlot.current;
     // Renderer installation failures belong to one served generation. A retry
     // or game update prepares a fresh session and must get a fresh attempt.
-    this.rendererFailedFeatures.clear();
     const active: ActiveClient = this.activeSlot.publish({
       artifactsDir: this.options.paths.artifacts,
       store,

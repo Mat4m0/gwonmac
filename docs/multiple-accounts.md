@@ -21,6 +21,7 @@ takes effect after a restart.
 | --- | --- |
 | Verified client, chunks, compatibility artifacts, and skill assets | Shared app infrastructure |
 | Application updater and update preferences | Shared app infrastructure |
+| Application settings and shortcuts | Shared settings document, published to every live game window |
 | Active account mode | Launcher-mode document |
 | Single saved login | Existing fixed Keychain items |
 | Single Guild Wars files and templates | Default Electron session |
@@ -162,12 +163,19 @@ Warnings, native dialogs, renderer commands, input state, and diagnostics stay
 with the game window that initiated them. Application updates and shared game
 downloads remain application-wide and report progress to every game window.
 
+The verified client's compatibility result is shared and immutable for its
+generation. A renderer-side Enhancement installation failure affects only that
+renderer document and generation; it cannot disable another open account.
+
 A performance capture keeps its initiating game window as its owner until it
 stops. Mark, stop, export, and completion feedback cannot move to whichever
 profile gains focus later. Closing or crashing that owner performs bounded
 cleanup and never selects another account as a fallback.
+Level 2 Chromium tracing is available only when exactly one game window is
+open, because Chromium exposes one process-wide tracing session.
 
 The Account Picker cannot access game sockets, saved login, player files, or
-build writes. Diagnostics use ephemeral window identifiers. They do not record
+build writes. Diagnostics use process-local account tokens that survive one
+renderer recovery but not an app restart. They do not record
 profile names, stable profile IDs, account identifiers, credentials, template
 contents, or game traffic.

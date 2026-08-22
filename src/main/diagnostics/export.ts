@@ -23,6 +23,7 @@ import { promisify } from "node:util";
 import { app, dialog, type BrowserWindow } from "electron";
 import type { AppSettings } from "../../shared/contracts.js";
 import { gamePaths } from "../paths.js";
+import { windowRegistry } from "../window-registry.js";
 import {
   activeCaptureLevel,
   completedTracePath,
@@ -80,6 +81,8 @@ export async function exportDiagnosticsZip(
   targetPath: string,
   extras: {
     appVersion: string;
+    diagnosticOwnerId?: number;
+    includePreviousSession?: boolean;
     electronVersions: Record<string, string>;
     settings: AppSettings;
   },
@@ -95,10 +98,21 @@ export async function exportDiagnosticsZip(
   );
   await mkdir(staging, { recursive: true, mode: 0o700 });
   try {
-    const summary = recorder.summary(exportedCaptureLevel());
-    const exportedEvents = await recorder.exportedEvents();
-    const capture = recorder.captureResult();
-    const previous = await previousAbnormalSession(dir, recorder.sessionId);
+    const capture = recorder.captureResult(extras.diagnosticOwnerId);
+    const captureLevel = exportedCaptureLevel(extras.diagnosticOwnerId);
+    const summary = capture?.summary
+      ?? (extras.diagnosticOwnerId === undefined
+        ? recorder.summary(captureLevel)
+        : recorder.summaryForOwner(
+            extras.diagnosticOwnerId,
+            captureLevel,
+          ));
+    const exportedEvents = await recorder.exportedEvents(
+      extras.diagnosticOwnerId,
+    );
+    const previous = extras.includePreviousSession === false
+      ? null
+      : await previousAbnormalSession(dir, recorder.sessionId);
     // The detector runs before anything is written, and it throws. An
     // event this build cannot account for stops the export rather than being
     // scrubbed on the way out.
@@ -113,13 +127,13 @@ export async function exportDiagnosticsZip(
     ];
     if (previous) files.push("previous-events.jsonl");
     if (capture) files.push("capture-summary.json");
-    const framePath = recorder.framePath();
+    const framePath = recorder.framePath(extras.diagnosticOwnerId);
     if (framePath) {
       await copyFile(framePath, path.join(staging, "frames.bin"));
       files.push("frames.bin");
     }
     let traceBytesScanned = 0;
-    const rawTrace = completedTracePath();
+    const rawTrace = completedTracePath(extras.diagnosticOwnerId);
     if (rawTrace) {
       traceBytesScanned = await sanitizeTraceFile(
         rawTrace,
@@ -133,7 +147,7 @@ export async function exportDiagnosticsZip(
       formatVersion: 2,
       applicationVersion: extras.appVersion,
       sessionId: recorder.sessionId,
-      captureLevel: exportedCaptureLevel(),
+      captureLevel,
       exportedAt: new Date().toISOString(),
       droppedEventCount: summary.droppedEvents,
       includedFiles: files,
@@ -197,7 +211,7 @@ export async function exportDiagnosticsZip(
       capture,
       profilerContaminated: files.includes("chromium-trace.json"),
       sessionId: recorder.sessionId,
-      captureLevel: exportedCaptureLevel(),
+      captureLevel,
     });
     // The event log is written byte for byte as the detector inspected it.
     // Redacting it afterwards would mean the file in the export is not the
@@ -221,7 +235,8 @@ export async function exportDiagnosticsZip(
         {
           ...environmentSnapshot(),
           gpu: await gpuEnvironment(),
-          graphics: graphicsSnapshot(),
+          graphics: capture?.graphics
+            ?? graphicsSnapshot(extras.diagnosticOwnerId),
           electronVersions: extras.electronVersions,
         },
         null,
@@ -266,9 +281,10 @@ export async function exportDiagnosticsForWindow(
   win: BrowserWindow,
   readSettings: () => Promise<AppSettings>,
 ): Promise<string> {
-  if (activeCaptureLevel() !== 0) {
-    await stopDiagnosticCaptureForWindow(win, "export");
-  }
+  // `captureLevel` remains zero while reset and recorder setup are in flight.
+  // The owner-bound stop also waits that starting operation, so export cannot
+  // race it by trying to infer the complete lifecycle from the public level.
+  await stopDiagnosticCaptureForWindow(win, "export");
   // The report has always been a PKZIP archive; `.zip` is the name that lets
   // GitHub accept it as an attachment without a Finder round-trip.
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
@@ -277,8 +293,15 @@ export async function exportDiagnosticsForWindow(
     filters: [{ name: "Guild Wars diagnostics", extensions: ["zip"] }],
   });
   if (canceled || !filePath) return "";
+  const context = windowRegistry.contextForWebContents(win.webContents.id);
+  const diagnosticOwnerId = windowRegistry.diagnosticOwnerForWindow(win);
+  if (diagnosticOwnerId === null) {
+    throw new Error("diagnostics export requires an account owner");
+  }
   return exportDiagnosticsZip(filePath, {
     appVersion: app.getVersion(),
+    diagnosticOwnerId,
+    includePreviousSession: context?.mode === "single",
     electronVersions: runtimeVersions(),
     settings: await readSettings(),
   });
