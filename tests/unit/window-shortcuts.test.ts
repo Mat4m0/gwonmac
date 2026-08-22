@@ -79,15 +79,24 @@ describe("window shortcut input", () => {
     })), false);
 
     assert.equal(dispatch(keyDown("KeyX", "x")), true);
-    assert.deepEqual(edits, []);
+    assert.deepEqual(edits, ["cut"]);
     assert.equal(dispatch(keyDown("KeyX", "x", { isAutoRepeat: true })), true);
-    assert.deepEqual(edits, []);
+    assert.deepEqual(edits, ["cut"]);
+    // The translated chord may reuse X, but only with Control and no Command.
+    assert.equal(dispatch(keyDown("KeyX", "x", {
+      meta: false, control: true,
+    })), false);
+    assert.equal(dispatch({
+      ...keyDown("KeyX", "x", { meta: false, control: true }),
+      type: "keyUp",
+    }), false);
     assert.equal(dispatch({
       ...keyDown("KeyX", "x"), type: "keyUp", meta: false,
     }), true);
     assert.deepEqual(edits, ["cut"]);
 
     assert.equal(dispatch(keyDown("KeyA", "a")), true);
+    assert.deepEqual(edits, ["cut", "selectAll"]);
     releaseWindowShortcutKey(win, "KeyA");
     assert.deepEqual(edits, ["cut", "selectAll"]);
 

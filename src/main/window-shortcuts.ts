@@ -33,6 +33,9 @@ type ClaimedKey = 'capture' | 'shortcut' | GameTextEditCommand;
 const claimedDecision = (claim: ClaimedKey): 'capture' | 'shortcut' =>
   claim === 'capture' ? 'capture' : 'shortcut';
 
+const isTextEditClaim = (claim: ClaimedKey): claim is GameTextEditCommand =>
+  claim !== 'capture' && claim !== 'shortcut';
+
 const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
   if (!input.meta || input.control || input.shift || input.alt) return null;
   if (input.code === 'KeyA') return 'selectAll';
@@ -53,6 +56,14 @@ class WindowShortcuts {
     win.webContents.on("before-input-event", (event, input) => {
       if (input.type === "keyUp") {
         const decision = this.#claimedCodes.get(input.code);
+        if (decision && isTextEditClaim(decision) && input.control && !input.meta) {
+          recordMainInput(win, {
+            source: 'main', kind: 'native-key', phase: 'up',
+            key: tracedKey(input.key), repeat: false,
+            decision: 'forwarded',
+          });
+          return;
+        }
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'up',
           key: tracedKey(input.key), repeat: false,
@@ -61,16 +72,23 @@ class WindowShortcuts {
         if (decision) {
           this.#claimedCodes.delete(input.code);
           event.preventDefault();
-          if (
-            decision !== 'capture'
-            && decision !== 'shortcut'
-          ) this.#actions.edit(decision);
         }
         return;
       }
       if (input.type !== "keyDown") return;
       const claimed = this.#claimedCodes.get(input.code);
       if (claimed) {
+        // The translated Guild Wars chord deliberately reuses A or X while
+        // the physical Command shortcut remains claimed. Let only that exact
+        // Control event through; repeats and unmodified leaks stay contained.
+        if (isTextEditClaim(claimed) && input.control && !input.meta) {
+          recordMainInput(win, {
+            source: 'main', kind: 'native-key', phase: 'down',
+            key: tracedKey(input.key), repeat: input.isAutoRepeat,
+            decision: 'forwarded',
+          });
+          return;
+        }
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'down',
           key: tracedKey(input.key), repeat: input.isAutoRepeat,
@@ -111,6 +129,7 @@ class WindowShortcuts {
           decision: 'shortcut',
         });
         this.#claimedCodes.set(input.code, edit);
+        this.#actions.edit(edit);
         return;
       }
       for (const [action, binding] of Object.entries(this.#shortcuts)) {
@@ -153,13 +172,7 @@ class WindowShortcuts {
   }
 
   release(code: string): void {
-    const decision = this.#claimedCodes.get(code);
     this.#claimedCodes.delete(code);
-    if (
-      decision !== undefined
-      && decision !== 'capture'
-      && decision !== 'shortcut'
-    ) this.#actions.edit(decision);
   }
 
   #finish(result: ShortcutCaptureResult): void {
@@ -199,7 +212,7 @@ export function cancelWindowShortcutCapture(win: BrowserWindow): void {
   controllers.get(win)?.cancelCapture();
 }
 
-/** Complete a release that AppKit consumed before `before-input-event`. */
+/** Forget a release that AppKit consumed before `before-input-event`. */
 export function releaseWindowShortcutKey(
   win: BrowserWindow,
   code: string,

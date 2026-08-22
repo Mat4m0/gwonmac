@@ -176,7 +176,8 @@ physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
 
 Main claims physical Command-A/C/X/V before the renderer can hold their base
-keys. It runs the edit after that physical key is released. Edit menu clicks
+keys and runs the edit immediately. The claim contains physical repeats and
+releases while allowing the translated Control chord through. Edit menu clicks
 use the same semantic command and focused-window route. A hidden Guild Wars
 text proxy claims the command. An ordinary gwonmac input declines it so
 Chromium edits normally. Copy and Cut send only non-password proxy text to
