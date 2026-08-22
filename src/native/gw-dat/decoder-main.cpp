@@ -1,7 +1,5 @@
 #include <cstdint>
-#include <cstdio>
 #include <iostream>
-#include <iterator>
 #include <string_view>
 #include <vector>
 
@@ -28,10 +26,18 @@ void writeU32(std::uint32_t value) {
 int main(int argc, char** argv) {
   const bool raw = argc == 2 && std::string_view(argv[1]) == "--raw";
   if (argc != (raw ? 2 : 1)) return 1;
-  std::vector<unsigned char> input{
-      std::istreambuf_iterator<char>(std::cin),
-      std::istreambuf_iterator<char>()};
-  if (input.size() < 8 || input.size() > kMaxCompressedBytes) return 2;
+  std::vector<unsigned char> input(kMaxCompressedBytes + 1);
+  std::cin.read(
+      reinterpret_cast<char*>(input.data()),
+      static_cast<std::streamsize>(input.size()));
+  const std::streamsize inputSize = std::cin.gcount();
+  if (
+      std::cin.bad() || inputSize < 8
+      || inputSize > static_cast<std::streamsize>(kMaxCompressedBytes)
+  ) {
+    return 2;
+  }
+  input.resize(static_cast<std::size_t>(inputSize));
 
   const std::size_t tail = input.size() - 4;
   const std::uint32_t declared =
