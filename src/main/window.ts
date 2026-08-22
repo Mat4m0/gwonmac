@@ -95,8 +95,7 @@ interface WindowStateOwner {
 const preparedWindowStates = new Map<string, WindowState | null>();
 const windowStateOwners = new Map<BrowserWindow, WindowStateOwner>();
 const ownedWindowTitles = new WeakMap<BrowserWindow, string>();
-const profileCloses = new WeakSet<BrowserWindow>();
-const PROFILE_CLOSE_DEADLINE_MS = 6_000;
+const profileCloses = new WeakMap<BrowserWindow, Promise<void>>();
 let downloadPowerBlockerId: number | null = null;
 
 export function updateLongRunningTaskFeedback(
@@ -290,26 +289,54 @@ export function setOwnedWindowTitle(win: BrowserWindow, title: string): void {
   win.setTitle(title);
 }
 
-/** Flush and destroy exactly one Multi game window without quitting the app. */
-export async function closeProfileWindow(win: BrowserWindow): Promise<void> {
-  if (win.isDestroyed() || profileCloses.has(win)) return;
-  profileCloses.add(win);
-  try {
-    await Promise.race([
-      (async () => {
-        await sendRendererCommand(win, { type: "filesystem.sync" });
-        await flushWindowState(win);
-      })(),
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, PROFILE_CLOSE_DEADLINE_MS);
-      }),
-    ]);
-  } catch (error) {
-    logEvent({ k: "window.stateSaveFailed" });
-    console.error("profile close persistence failed", error);
-  } finally {
-    if (!win.isDestroyed()) win.destroy();
+async function closeProfileWindowOnce(win: BrowserWindow): Promise<void> {
+  while (!win.isDestroyed()) {
+    const outcome = await sendRendererCommand(win, { type: "filesystem.sync" });
+    if (outcome === "completed") break;
+
+    let response: number;
+    try {
+      response = (await dialog.showMessageBox(win, {
+        type: "warning",
+        buttons: ["Retry", "Close Without Saving", "Cancel"],
+        defaultId: 2,
+        cancelId: 2,
+        noLink: true,
+        message: "This account could not finish saving",
+        detail:
+          "Keep the account open and retry, or close it knowing that recent game files may be lost.",
+      })).response;
+    } catch (error) {
+      console.error("profile close confirmation failed", error);
+      return;
+    }
+    if (response === 0) continue;
+    if (response !== 1) return;
+    break;
   }
+  if (win.isDestroyed()) return;
+  try {
+    await flushWindowState(win);
+  } catch (error) {
+    logEvent(
+      { k: "window.stateSaveFailed" },
+      windowRegistry.diagnosticOwnerForWindow(win) ?? undefined,
+    );
+    console.error("profile window state save failed", error);
+  }
+  if (!win.isDestroyed()) win.destroy();
+}
+
+/** Flush and destroy exactly one Multi game window without quitting the app. */
+export function closeProfileWindow(win: BrowserWindow): Promise<void> {
+  if (win.isDestroyed()) return Promise.resolve();
+  const active = profileCloses.get(win);
+  if (active) return active;
+  const operation = closeProfileWindowOnce(win).finally(() => {
+    profileCloses.delete(win);
+  });
+  profileCloses.set(win, operation);
+  return operation;
 }
 
 /** The only renderer URL, and it carries no configuration. */
