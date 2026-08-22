@@ -332,8 +332,11 @@ opens its GitHub issue form immediately. GitHub issues are public.
   identifiers, and controller identifiers. Pointer rows say only whether the
   click belonged to the game canvas, a GWonMac surface, a text or secret field,
   or another element. Closing it discards the trace.
-- Holding a character, Backspace, or Delete in Guild Wars text fields follows
-  the repeat delay and speed configured in macOS Keyboard settings.
+- Holding a character, Backspace, Delete, Left Arrow, or Right Arrow in Guild
+  Wars text fields follows the repeat delay and speed configured in macOS
+  Keyboard settings. gwonmac stores an app-specific press-and-hold preference;
+  it does not change the global macOS preference. A packaged physical check is
+  the final proof for each Guild Wars client update.
 
 The diagnostics ZIP excludes saved login, account request bodies, game traffic,
 chat, and crash dumps. Other text is scanned for known secret and path patterns.

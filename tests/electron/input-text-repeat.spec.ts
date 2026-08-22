@@ -29,10 +29,13 @@ type RepeatProbe = {
   edits: EditObservation[];
 };
 
-test('physical repeats preserve Chromium hidden-proxy editing', async () => {
+test('Chromium preserves supplied repeat events in hidden-proxy editing', async () => {
   const fixture = await launchCachedClient('gw-text-repeat-contract-');
   try {
     const { app, page } = fixture;
+    expect(await app.evaluate(({ systemPreferences }) =>
+      systemPreferences.getUserDefault('ApplePressAndHoldEnabled', 'boolean')))
+      .toBe(false);
     await startGameInput(page);
     await page.evaluate(() => {
       const field = document.getElementById('osk-input-text');

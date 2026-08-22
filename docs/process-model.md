@@ -184,11 +184,13 @@ keeps clipboard text in main and inserts it as one trusted Chromium edit.
 Select All sends Guild Wars Control-A. Password text never crosses the renderer
 bridge. Physical Control stays available to Guild Wars unchanged.
 
-The native input host registers `ApplePressAndHoldEnabled = false` as a
-process-only default before the first game window exists. This makes macOS send
-its physical repeat keydowns to hidden text proxies for printable characters,
-Backspace, and Delete. It does not write the player's preferences, create a
-timer, or synthesize repeat cadence; macOS remains the sole repeat clock.
+Before the first window exists, Electron writes the bundle-specific persistent
+`ApplePressAndHoldEnabled = false` preference. This makes macOS send physical
+repeat keydowns to hidden text proxies for printable characters, Backspace,
+Delete, and navigation keys. It does not change the global macOS preference,
+create a timer, or synthesize repeat cadence. macOS remains the sole repeat
+clock. Automated tests prove how Chromium handles supplied repeat events. A
+packaged physical test proves that AppKit supplies them to the current client.
 
 Certified Core supplies native double-click and the Guild Wars cursor. Core is
 required behavior. It is not a saved player preference. If an ArenaNet build
@@ -206,6 +208,27 @@ clears the memory. The trace is not persisted, exported with diagnostics, or
 sent over the network. Copy keeps the newest complete rows that fit the same
 bounded clipboard contract used elsewhere and states how many older rows were
 omitted.
+
+### Packaged input qualification
+
+CDP and `webContents.sendInputEvent()` start after AppKit. They cannot prove a
+physical Command accelerator or native repeat generation. Qualify each release
+candidate in the packaged app on macOS:
+
+1. Open **Help → Diagnostics → Show Input Trace**.
+2. Hold a printable character, Backspace, Delete, Left Arrow, and Right Arrow
+   in a Guild Wars text field.
+3. Confirm native repeated keydowns, trusted proxy edits, and visible Guild Wars
+   changes at the macOS repeat cadence.
+4. Use physical Command-A/C/X/V and each matching Edit menu item.
+5. Confirm Copy and Cut update the pasteboard, Paste preserves Unicode and
+   multiline text, and Select All changes the visible Guild Wars editor.
+6. Release Command before the editing key. Repeat with the editing key released
+   first.
+7. Confirm no bare game key, unmatched key-up, or held-key state remains.
+
+Stop qualification if multiline Paste does not produce trusted proxy events.
+Record the events. Do not restore character-by-character Paste as a fallback.
 
 ## Native network boundary
 
