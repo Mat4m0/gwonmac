@@ -193,17 +193,10 @@ const INVOCATIONS: Invocation[] = [
       expected: {
         shortcuts: [null, null, null, null, null, null, null, null, null],
         synonyms: [],
-        recentLimit: 5,
-        recentMapIds: [],
       },
-      patch: { recentLimit: 3 },
+      patch: { synonyms: [{ term: "home", mapId: 55 }] },
     }],
     channel: IPC.travelPreferencesSet,
-  },
-  {
-    path: "travelPreferences.recordConfirmed",
-    args: [55],
-    channel: IPC.travelPreferencesRecord,
   },
   { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {
@@ -320,7 +313,7 @@ const INVOCATIONS: Invocation[] = [
   },
   {
     path: "clipboard.edit",
-    args: ["paste"],
+    args: [{ command: "paste" }],
     channel: IPC.clipboardEdit,
   },
   {
@@ -574,6 +567,18 @@ test("a handler that throws reports failure instead of false completion", async 
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(sent, [
     { channel: IPC.rendererCommandDone, args: [12, "failed"] },
+  ]);
+});
+
+test("a renderer can decline a semantic command for main-process fallback", async () => {
+  const { api, sent, handlers } = load();
+  api.commands.handle(() => "unhandled");
+  const [deliver] = handlers(IPC.rendererCommand);
+  assert.ok(deliver, "the preload registered no renderer-command listener");
+  deliver({}, 13, { type: "text.edit", command: "copy" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(sent, [
+    { channel: IPC.rendererCommandDone, args: [13, "unhandled"] },
   ]);
 });
 

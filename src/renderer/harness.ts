@@ -1081,13 +1081,11 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     Object.values(Module.oskInput).filter((input): input is HTMLElement => !!input),
   );
 
-  // Claim standard macOS editing before game input sees the base keys. The
-  // official client otherwise mixes Windows Control editing with ordinary
-  // A/C/V/X game bindings whenever Command is held.
+  // Route semantic Edit-menu commands through the active proxy. AppKit owns
+  // their Command accelerators before game input can see a bare base key.
   host.installTextEditing({
     fields: oskInputs,
-    writeText: (text) => native().clipboard.writeText(text),
-    edit: (command) => native().clipboard.edit(command),
+    edit: (request) => native().clipboard.edit(request),
     diagnostics: window.gwDiagnostics,
     trace: inputTrace,
     log,

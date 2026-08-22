@@ -32,7 +32,7 @@ import type {
   FullDownloadOutcome,
   GraphicsDiagnostics,
   InvokeChannel,
-  TextEditCommand,
+  GameTextEditRequest,
   RevealKind,
   SocketEvent,
   SettingsResetOutcome,
@@ -47,7 +47,6 @@ import {
   type TravelUserPreferences,
   type TravelUserPreferencesUpdate,
 } from "../shared/travel.js";
-import { travelDestination } from "../shared/travel-destinations.js";
 import type {
   RendererFrameBatch,
   RendererMetrics,
@@ -147,7 +146,6 @@ export interface IpcContext {
   resetSettings: () => Promise<SettingsResetOutcome>;
   getTravelPreferences: () => Promise<TravelUserPreferences>;
   setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
-  recordTravelConfirmation: (mapId: number) => Promise<TravelUserPreferences>;
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
@@ -335,13 +333,6 @@ const asFiniteNumber = (what: string) =>
     return value;
   });
 
-const asTravelMapId = one((value: unknown): number => {
-  if (!Number.isSafeInteger(value) || travelDestination(Number(value)) === null) {
-    throw new ValidationError("invalid Travel destination");
-  }
-  return Number(value);
-});
-
 const asSocketPayload: Parser<{ socketId: number; bytes: Uint8Array }> = (args) => {
   exact(args, 2);
   const socketId = parseSocketId(args[0]);
@@ -440,11 +431,29 @@ const asClipboardText = one((value: unknown): string => {
   return value;
 });
 
-const asTextEditCommand = one((value: unknown): TextEditCommand => {
-  if (value !== "selectAll" && value !== "cut" && value !== "paste") {
-    throw new ValidationError("invalid text edit command");
+const asGameTextEditRequest = one((value: unknown): GameTextEditRequest => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("invalid game text edit request");
   }
-  return value;
+  const request = value as Record<string, unknown>;
+  if (request.command === "copy" || request.command === "cut") {
+    if (
+      Object.keys(request).some((key) => key !== "command" && key !== "text")
+      || typeof request.text !== "string"
+      || request.text.length === 0
+      || request.text.length > CLIPBOARD_TEXT_CEILING
+    ) {
+      throw new ValidationError("invalid game text export request");
+    }
+    return { command: request.command, text: request.text };
+  }
+  if (
+    (request.command === "paste" || request.command === "selectAll")
+    && Object.keys(request).length === 1
+  ) {
+    return { command: request.command };
+  }
+  throw new ValidationError("invalid game text edit request");
 });
 
 const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
@@ -566,9 +575,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
     travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),
     travelPreferencesSet: channel(one(parseTravelUserPreferencesUpdate), (_win, update) =>
       ctx.setTravelPreferences(update)),
-    travelPreferencesRecord: channel(asTravelMapId, (_win, mapId) =>
-      ctx.recordTravelConfirmation(mapId)),
-
     shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
     shortcutCaptureCancel: channel(nothing, (win) => {
       cancelWindowShortcutCapture(win);
@@ -688,8 +694,8 @@ export function registerIpcHandlers(ctx: IpcContext): {
       clipboard.writeText(text);
     }),
 
-    clipboardEdit: channel(asTextEditCommand, (win, command) => {
-      editGameText(win.webContents, command);
+    clipboardEdit: channel(asGameTextEditRequest, async (win, request) => {
+      await editGameText(win.webContents, request);
     }),
 
     // Truncated rather than refused: a player who copied something large before

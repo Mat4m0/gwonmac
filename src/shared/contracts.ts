@@ -710,6 +710,7 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
 export type RendererCommand =
   | { type: "input.reset" }
   | { type: "input.release"; code: string }
+  | { type: "text.edit"; command: GameTextEditCommand }
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
   | { type: "storage.open" }
@@ -729,7 +730,7 @@ export type RendererCommand =
   | { type: "diagnostics.capture"; action: "started"; level: 1 | 2 };
 
 /** What the renderer can truthfully acknowledge over IPC. */
-export type RendererCommandCompletion = "completed" | "failed";
+export type RendererCommandCompletion = "completed" | "unhandled" | "failed";
 
 /** Main adds its own bounded-wait result to the renderer's acknowledgement. */
 export type RendererCommandOutcome =
@@ -766,7 +767,6 @@ export const IPC = {
   settingsEvent: "gw:settings:event",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
-  travelPreferencesRecord: "gw:travelPreferences:record",
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   buildLibraryGet: "gw:buildLibrary:get",
@@ -851,7 +851,13 @@ export type EventChannel = (typeof EVENT_CHANNELS)[number];
 /** Every channel the renderer `invoke`s, i.e. every channel main must answer. */
 export type InvokeChannel = Exclude<keyof typeof IPC, EventChannel>;
 
-export type TextEditCommand = "selectAll" | "cut" | "paste";
+export type GameTextEditRequest =
+  | { command: "copy"; text: string }
+  | { command: "cut"; text: string }
+  | { command: "paste" }
+  | { command: "selectAll" };
+
+export type GameTextEditCommand = GameTextEditRequest["command"];
 
 // Far above any text a game field holds, low enough that a renderer gone
 // wrong cannot stuff megabytes into the OS pasteboard.
@@ -872,7 +878,11 @@ export interface GwNativeApi {
      * promise settles, so an awaited capture flush cannot be acknowledged
      * early or have a rejection disguised as success.
      */
-    handle(handler: (command: RendererCommand) => void | Promise<void>): void;
+    handle(
+      handler: (
+        command: RendererCommand,
+      ) => void | "unhandled" | Promise<void | "unhandled">,
+    ): void;
   };
   inputTrace: {
     onEntry(callback: (entry: MainInputTraceEntry) => void): () => void;
@@ -903,7 +913,6 @@ export interface GwNativeApi {
   travelPreferences: {
     get(): Promise<TravelUserPreferences>;
     set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
-    recordConfirmed(mapId: number): Promise<TravelUserPreferences>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;
@@ -983,8 +992,8 @@ export interface GwNativeApi {
      * never arrives here.
      */
     writeText(text: string): Promise<void>;
-    /** Apply a trusted edit command to the game's active text field. */
-    edit(command: TextEditCommand): Promise<void>;
+    /** Apply one validated request to the game's active text field. */
+    edit(request: GameTextEditRequest): Promise<void>;
     /**
      * Read the OS pasteboard so a player can import build codes they copied
      * from a guild page or a forum post.

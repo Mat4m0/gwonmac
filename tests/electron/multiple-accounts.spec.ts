@@ -682,8 +682,40 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
         await focused;
       const item = Menu.getApplicationMenu()?.getMenuItemById(request.id);
       if (!item?.click) throw new Error(`${request.id} menu item is unavailable`);
-      item.click(item, undefined, {} as Electron.KeyboardEvent);
+      item.click(item, win, {} as Electron.KeyboardEvent);
     }, { title, id });
+
+    await Promise.all([
+      altGame.evaluate(() => {
+        const field = document.getElementById("osk-input-text");
+        if (!(field instanceof HTMLInputElement)) throw new Error("Alt proxy missing");
+        field.value = "alt selection";
+        field.focus();
+        field.setSelectionRange(0, 3);
+        (window.Module as { oskActiveInput?: Element | null }).oskActiveInput = field;
+      }),
+      nonTargetGame.evaluate(() => {
+        const field = document.getElementById("osk-input-text");
+        if (!(field instanceof HTMLInputElement)) throw new Error("Primary proxy missing");
+        field.value = "primary selection";
+        field.focus();
+        field.setSelectionRange(0, 7);
+        (window.Module as { oskActiveInput?: Element | null }).oskActiveInput = field;
+      }),
+    ]);
+    const clipboardBeforeFocusedEdit = await fixture.app.evaluate(
+      ({ clipboard }) => clipboard.readText(),
+    );
+    await clickMenuForGame("Guild Wars Reforged — Alt", "edit-copy");
+    await expect.poll(() => fixture.app.evaluate(
+      ({ clipboard }) => clipboard.readText(),
+    )).toBe("alt");
+    await expect(nonTargetGame.locator("#osk-input-text"))
+      .toHaveValue("primary selection");
+    await fixture.app.evaluate(
+      ({ clipboard }, text) => clipboard.writeText(text),
+      clipboardBeforeFocusedEdit,
+    );
 
     await fixture.app.evaluate(({ BrowserWindow, dialog }) => {
       Object.defineProperty(dialog, "showMessageBox", {

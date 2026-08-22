@@ -6,12 +6,9 @@ import {
   travelDestination,
 } from "./travel-destinations.js";
 import {
-  TRAVEL_PREFERENCES_FORMAT,
-  parseTravelPreferences,
+  createTravelPreferences,
   parseTravelPreferencesPatch,
   type TravelPreferencesPatch,
-  type TravelRecentLimit,
-  type TravelRecentMapIds,
   type TravelSynonyms,
 } from "./travel-preferences.js";
 
@@ -94,16 +91,12 @@ export type TravelShortcuts = readonly [
 export type TravelUserPreferences = Readonly<{
   shortcuts: TravelShortcuts;
   synonyms: TravelSynonyms;
-  recentLimit: TravelRecentLimit;
-  recentMapIds: TravelRecentMapIds;
 }>;
 
 export type TravelUserPreferencesPatch =
   | Readonly<{
       shortcuts: TravelShortcuts;
       synonyms?: never;
-      recentLimit?: never;
-      recentMapIds?: never;
     }>
   | (TravelPreferencesPatch & Readonly<{ shortcuts?: never }>);
 
@@ -144,22 +137,15 @@ export function parseTravelUserPreferences(value: unknown): TravelUserPreference
   }
   const input = value as Record<string, unknown>;
   if (
-    Object.keys(input).length !== 4
+    Object.keys(input).length !== 2
     || !isTravelShortcuts(input.shortcuts)
   ) throw new TypeError("Travel preferences are invalid");
-  const travel = parseTravelPreferences({
-    formatVersion: TRAVEL_PREFERENCES_FORMAT,
-    synonyms: input.synonyms,
-    recentLimit: input.recentLimit,
-    recentMapIds: input.recentMapIds,
-  });
+  const travel = createTravelPreferences(input.synonyms);
   return Object.freeze({
     shortcuts: Object.freeze(input.shortcuts.map((shortcut) =>
       shortcut === null ? null : Object.freeze({ ...shortcut })
     )) as TravelShortcuts,
     synonyms: travel.synonyms,
-    recentLimit: travel.recentLimit,
-    recentMapIds: travel.recentMapIds,
   });
 }
 
@@ -185,7 +171,7 @@ export function parseTravelUserPreferencesUpdate(
   if (
     keys.length === 0
     || (hasShortcuts && hasTravelDocumentField)
-    || keys.some((key) => !["shortcuts", "synonyms", "recentLimit", "recentMapIds"].includes(key))
+    || keys.some((key) => !["shortcuts", "synonyms"].includes(key))
     || (hasShortcuts && !isTravelShortcuts(patchInput.shortcuts))
   ) throw new TypeError("Travel preference update must change exactly one durable owner");
   const documentPatch = hasShortcuts
@@ -206,8 +192,7 @@ export function sameTravelUserPreferences(
   left: TravelUserPreferences,
   right: TravelUserPreferences,
 ): boolean {
-  return left.recentLimit === right.recentLimit
-    && left.shortcuts.every((entry, index) =>
+  return left.shortcuts.every((entry, index) =>
       entry?.mapId === right.shortcuts[index]?.mapId
       && (entry === null) === (right.shortcuts[index] === null)
     )
@@ -215,9 +200,7 @@ export function sameTravelUserPreferences(
     && left.synonyms.every((entry, index) =>
       entry.term === right.synonyms[index]?.term
       && entry.mapId === right.synonyms[index]?.mapId
-    )
-    && left.recentMapIds.length === right.recentMapIds.length
-    && left.recentMapIds.every((mapId, index) => mapId === right.recentMapIds[index]);
+    );
 }
 
 export function isStoredTravelShortcuts(value: unknown): value is StoredTravelShortcuts {

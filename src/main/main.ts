@@ -15,6 +15,7 @@ import {
   Notification,
   powerMonitor,
   session,
+  systemPreferences,
 } from "electron";
 import { readFileSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
@@ -397,6 +398,16 @@ if (primaryInstance) void app.whenReady().then(async () => {
   if (INJECT_STARTUP_FAILURE) {
     throw new Error("injected startup failure");
   }
+  // AppKit reads this bundle-specific persistent preference when it creates
+  // text clients. Set it before any BrowserWindow can construct one. This does
+  // not change the global macOS keyboard preference or synthesize cadence.
+  if (process.platform === "darwin") {
+    systemPreferences.setUserDefault(
+      "ApplePressAndHoldEnabled",
+      "boolean",
+      false,
+    );
+  }
   app.setAboutPanelOptions({
     applicationName: app.getName(),
     applicationVersion: HOST_VERSION,
@@ -666,7 +677,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     resetSettings: () => preferences.resetSettings(),
     getTravelPreferences: () => preferences.getTravelPreferences(),
     setTravelPreferences: (update) => preferences.updateTravelPreferences(update),
-    recordTravelConfirmation: (mapId) => preferences.recordTravelConfirmation(mapId),
     toolsEnabledAtLaunch: settings.gwonmacTools,
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),

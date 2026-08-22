@@ -31,7 +31,7 @@ export const DEFAULT_SHORTCUTS: Readonly<Record<ShortcutAction, ShortcutBinding>
 
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
-    "tools.toggle": "Toggle Tools",
+    "tools.toggle": "Show or hide GWonMac Tools",
     "storage.open": "Open Xunlai storage",
     "travel.open": "Open Travel",
   });

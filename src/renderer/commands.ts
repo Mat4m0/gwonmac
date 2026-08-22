@@ -15,6 +15,8 @@
     { type: 'diagnostics.capture' }
   >;
 
+  type TextEditEventDetail = import('./text-editing.js').TextEditEventDetail;
+
   /**
    * Fires a renderer event and reports whether anything claimed it.
    *
@@ -59,6 +61,12 @@
       case 'input.release':
         dispatch('gw:input-release', command.code);
         break;
+      case 'text.edit': {
+        const detail: TextEditEventDetail = { command: command.command };
+        if (!dispatch('gw:text-edit', detail)) return 'unhandled';
+        await detail.done;
+        break;
+      }
       case 'tools.toggle':
         // Nothing listens unless the Toolbox capability installed, and a player
         // who pressed the shortcut is owed the difference between "opened" and
