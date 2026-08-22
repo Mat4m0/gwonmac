@@ -100,13 +100,12 @@ export async function exportDiagnosticsZip(
   try {
     const capture = recorder.captureResult(extras.diagnosticOwnerId);
     const captureLevel = exportedCaptureLevel(extras.diagnosticOwnerId);
-    const summary = capture?.summary
-      ?? (extras.diagnosticOwnerId === undefined
-        ? recorder.summary(captureLevel)
-        : recorder.summaryForOwner(
-            extras.diagnosticOwnerId,
-            captureLevel,
-          ));
+    // The main report keeps the complete safe session around a capture. The
+    // capture's narrower measurements remain in capture-summary.json, while its
+    // metadata, frames, and trace retain their own exact lifetime below.
+    const summary = extras.diagnosticOwnerId === undefined
+      ? recorder.summary(captureLevel)
+      : recorder.summaryForOwner(extras.diagnosticOwnerId, captureLevel);
     const exportedEvents = await recorder.exportedEvents(
       extras.diagnosticOwnerId,
     );

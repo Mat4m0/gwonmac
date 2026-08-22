@@ -168,7 +168,6 @@ export class FlightRecorder {
   private captureCounters: Map<string, number> | null = null;
   private captureHistograms: Map<string, Histogram> | null = null;
   private captureLatest: DiagnosticFields | null = null;
-  private captureEventSequences: Set<number> | null = null;
   private captureGraphics: GraphicsDiagnostics | null = null;
   /**
    * The renderer whose window-local evidence this capture accepts. App-global
@@ -177,13 +176,13 @@ export class FlightRecorder {
   private captureOwnerId: number | null = null;
   private captureStartedUs = 0;
   private captureFirstSequenceNumber = 0;
+  private captureLastSequenceNumber = 0;
   private captureStartedDroppedEvents = 0;
   private completedCapture: {
     ownerId: number;
     graphics: GraphicsDiagnostics | null;
     metadata: CaptureMetadata;
     summary: DiagnosticSummary;
-    eventSequences: ReadonlySet<number>;
   } | null = null;
   private seq = 0;
   private droppedEvents = 0;
@@ -229,8 +228,11 @@ export class FlightRecorder {
       this.count("diagnostics.evictedEvents");
     }
     this.events.push(record);
-    if (this.captureEventSequences && this.includesInCapture(ownerId)) {
-      this.captureEventSequences.add(record.seq);
+    if (this.captureOwnerId !== null && this.includesInCapture(ownerId)) {
+      if (this.captureLastSequenceNumber === 0) {
+        this.captureFirstSequenceNumber = record.seq;
+      }
+      this.captureLastSequenceNumber = record.seq;
     }
     this.writes = this.writes
       .then(() => this.append(record))
@@ -357,11 +359,11 @@ export class FlightRecorder {
     this.captureCounters = new Map();
     this.captureHistograms = new Map();
     this.captureLatest = {};
-    this.captureEventSequences = new Set();
     this.captureGraphics = this.ownerGraphics.get(ownerId) ?? null;
     this.captureOwnerId = ownerId;
     this.captureStartedUs = this.timestampUs();
     this.captureFirstSequenceNumber = this.seq + 1;
+    this.captureLastSequenceNumber = 0;
     this.captureStartedDroppedEvents = this.droppedEvents;
     this.completedCapture = null;
   }
@@ -375,12 +377,10 @@ export class FlightRecorder {
       return;
     }
     const endedUs = this.timestampUs();
-    const eventSequences = this.captureEventSequences ?? new Set<number>();
     const ownerId = this.captureOwnerId;
     if (ownerId === null) return;
-    const firstSequenceNumber = eventSequences.values().next().value
-      ?? this.captureFirstSequenceNumber;
-    const lastSequenceNumber = [...eventSequences].at(-1) ?? this.seq;
+    const firstSequenceNumber = this.captureFirstSequenceNumber;
+    const lastSequenceNumber = this.captureLastSequenceNumber || this.seq;
     this.completedCapture = {
       ownerId,
       graphics: this.captureGraphics,
@@ -399,16 +399,15 @@ export class FlightRecorder {
         this.captureLatest,
         this.droppedEvents - this.captureStartedDroppedEvents,
       ),
-      eventSequences,
     };
     this.captureCounters = null;
     this.captureHistograms = null;
     this.captureLatest = null;
-    this.captureEventSequences = null;
     this.captureGraphics = null;
     this.captureOwnerId = null;
     this.captureStartedUs = 0;
     this.captureFirstSequenceNumber = 0;
+    this.captureLastSequenceNumber = 0;
     this.captureStartedDroppedEvents = 0;
   }
 
@@ -430,11 +429,11 @@ export class FlightRecorder {
     this.captureCounters = null;
     this.captureHistograms = null;
     this.captureLatest = null;
-    this.captureEventSequences = null;
     this.captureGraphics = null;
     this.captureOwnerId = null;
     this.captureStartedUs = 0;
     this.captureFirstSequenceNumber = 0;
+    this.captureLastSequenceNumber = 0;
     this.captureStartedDroppedEvents = 0;
   }
 
@@ -554,12 +553,7 @@ export class FlightRecorder {
       records.push(...parseLogRecords(await readFile(file, "utf8")));
     }
     records.sort((left, right) => left.seq - right.seq);
-    const captured = this.captureResult(ownerId)
-      ? this.completedCapture?.eventSequences
-      : undefined;
-    if (captured) {
-      records = records.filter((record) => captured.has(record.seq));
-    } else if (ownerId !== undefined) {
+    if (ownerId !== undefined) {
       records = records.filter(
         (record) => record.ownerId === undefined || record.ownerId === ownerId,
       );

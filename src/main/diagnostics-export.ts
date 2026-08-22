@@ -13,9 +13,20 @@ export async function exportDiagnosticsReport(
   win: BrowserWindow,
   exportDiagnostics: () => Promise<string>,
 ): Promise<void> {
-  if (diagnosticsExportInFlight) return;
+  const ownerId = windowRegistry.diagnosticOwnerForWindow(win);
+  if (ownerId === null) {
+    throw new Error("diagnostics export requires an account owner");
+  }
+  if (diagnosticsExportInFlight) {
+    await dialog.showMessageBox(win, {
+      type: "info",
+      buttons: ["OK"],
+      message: "Another diagnostics export is in progress",
+      detail: "Wait for it to finish, then try again.",
+    }).catch(() => undefined);
+    return;
+  }
   diagnosticsExportInFlight = true;
-  const ownerId = windowRegistry.diagnosticOwnerForWindow(win) ?? undefined;
   try {
     const saved = await exportDiagnostics();
     if (!saved) return;
