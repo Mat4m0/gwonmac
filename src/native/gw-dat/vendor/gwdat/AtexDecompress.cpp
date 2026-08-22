@@ -40,7 +40,7 @@ void AtexDecompress(unsigned int* InputBuffer, unsigned int BufferSize, unsigned
 
     int BlockSize = ColorDataSize + AlphaDataSize2 + AlphaDataSize;
 
-    int BlockCount = ImageDescriptor.xres * ImageDescriptor.yres / 16;
+    const unsigned int BlockCount = static_cast<unsigned int>(ImageDescriptor.block_count);
 
     if (! BlockCount)
     {

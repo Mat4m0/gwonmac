@@ -11,7 +11,6 @@
 namespace {
 constexpr std::size_t kMaxCompressedBytes = 1024 * 1024;
 constexpr std::uint32_t kMaxDecodedBytes = 1024 * 1024;
-constexpr int kMaxDimension = 256;
 
 void writeU16(std::uint16_t value) {
   std::cout.put(static_cast<char>(value & 0xff));
@@ -64,9 +63,9 @@ int main(int argc, char** argv) {
   delete[] unpacked;
   if (
       texture.width <= 0 || texture.height <= 0
-      || texture.width > kMaxDimension || texture.height > kMaxDimension
       || texture.rgba_data.size()
-          != static_cast<std::size_t>(texture.width * texture.height)
+          != static_cast<std::size_t>(texture.width)
+              * static_cast<std::size_t>(texture.height)
   ) {
     return 5;
   }

@@ -16,16 +16,18 @@ Keep both grants and the required upstream credit beside the source:
 texture after decompression. Skill icons use `DXTL`. This is the `'L'` case in
 `ProcessImageFile`.
 
-## Do not modify the vendored algorithm
+## Do not modify the vendored decoding algorithm
 
 > [!CAUTION]
-> Treat these files as a black box. Take an upstream change instead of cleaning
-> up or correcting the transcribed code.
+> Treat the transcribed decompression and pixel-decoding logic as a black box.
+> Take an upstream change instead of cleaning up or correcting that algorithm.
 
 The source was transcribed by hand from compiled x86 code. Some variables have
-register-based names such as `EBPminus8` and `ESIplus8`. Put project-owned
-validation and fixes in the wrapper in the parent directory. The wrapper must
-bound each input and output dimension before it calls the vendored code.
+register-based names such as `EBPminus8` and `ESIplus8`. Project-owned
+validation lives in the wrapper directory above this one. It must bound each
+dimension and derive checked pixel, byte, and block counts before the vendored
+reader allocates or decompresses. The reader may consume those validated
+counts; it must not derive them again with narrower arithmetic.
 
 `scripts/build.mjs` applies three required compiler adjustments:
 

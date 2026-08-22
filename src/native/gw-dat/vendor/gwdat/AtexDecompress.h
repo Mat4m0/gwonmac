@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 struct SImageDescriptor
 {
     int xres, yres;
@@ -9,6 +11,7 @@ struct SImageDescriptor
     unsigned char* image;
     int imageformat;
     int c;
+    std::size_t block_count;
 };
 
 struct SImageData
