@@ -32,7 +32,7 @@ import type {
   FullDownloadOutcome,
   GraphicsDiagnostics,
   InvokeChannel,
-  TextEditCommand,
+  GameTextEditRequest,
   RevealKind,
   SocketEvent,
   SettingsResetOutcome,
@@ -440,11 +440,29 @@ const asClipboardText = one((value: unknown): string => {
   return value;
 });
 
-const asTextEditCommand = one((value: unknown): TextEditCommand => {
-  if (value !== "selectAll" && value !== "cut" && value !== "paste") {
-    throw new ValidationError("invalid text edit command");
+const asGameTextEditRequest = one((value: unknown): GameTextEditRequest => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("invalid game text edit request");
   }
-  return value;
+  const request = value as Record<string, unknown>;
+  if (request.command === "copy" || request.command === "cut") {
+    if (
+      Object.keys(request).some((key) => key !== "command" && key !== "text")
+      || typeof request.text !== "string"
+      || request.text.length === 0
+      || request.text.length > CLIPBOARD_TEXT_CEILING
+    ) {
+      throw new ValidationError("invalid game text export request");
+    }
+    return { command: request.command, text: request.text };
+  }
+  if (
+    (request.command === "paste" || request.command === "selectAll")
+    && Object.keys(request).length === 1
+  ) {
+    return { command: request.command };
+  }
+  throw new ValidationError("invalid game text edit request");
 });
 
 const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
@@ -688,8 +706,8 @@ export function registerIpcHandlers(ctx: IpcContext): {
       clipboard.writeText(text);
     }),
 
-    clipboardEdit: channel(asTextEditCommand, (win, command) => {
-      editGameText(win.webContents, command);
+    clipboardEdit: channel(asGameTextEditRequest, async (win, request) => {
+      await editGameText(win.webContents, request);
     }),
 
     // Truncated rather than refused: a player who copied something large before

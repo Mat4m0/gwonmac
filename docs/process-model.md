@@ -175,13 +175,14 @@ recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
 
-The game's hidden text proxies own macOS editing while they are active.
-Command-A/C/X/V are claimed before game input and never arrive as bare
-A/C/X/V game keys. Copy and paste use the proxy; select-all and cut become the
-Control chords already owned by Guild Wars' visible editor. Physical Control
-stays available to Guild Wars unchanged. The application menu keeps its Edit
-commands clickable but does not register their AppKit accelerators. Password
-text never crosses the renderer bridge.
+The macOS application menu owns Command-A/C/X/V and its Edit menu clicks. It
+sends one semantic command to the focused renderer. A hidden Guild Wars text
+proxy claims the command. An ordinary gwonmac input declines it so Chromium
+edits normally. Copy and Cut send only non-password proxy text to main. Main
+writes Cut text to the pasteboard before it sends Guild Wars Control-X. Paste
+keeps clipboard text in main and inserts it as one trusted Chromium edit.
+Select All sends Guild Wars Control-A. Password text never crosses the renderer
+bridge. Physical Control stays available to Guild Wars unchanged.
 
 The native input host registers `ApplePressAndHoldEnabled = false` as a
 process-only default before the first game window exists. This makes macOS send

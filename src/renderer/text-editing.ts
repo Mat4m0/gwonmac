@@ -1,14 +1,14 @@
 /**
- * Native macOS editing for the game's hidden text proxies.
+ * Semantic macOS editing for the game's hidden text proxies.
  *
- * The official client understands Windows-style Control chords and also sees
- * Command combinations as their unmodified base keys. Claiming Command editing
- * here gives players one predictable macOS contract and keeps the Command
- * chord itself out of the game input stream. Copy and paste use the proxy;
- * select-all and cut translate to the Control chords the visible game editor
- * already owns.
+ * The application menu owns Command-A/C/X/V. This module decides whether its
+ * focused renderer target belongs to Guild Wars, ordinary Chromium editing,
+ * or no editor, and sends only bounded non-secret game requests to main.
  */
-import type { TextEditCommand } from '../shared/contracts.js';
+import type {
+  GameTextEditCommand,
+  GameTextEditRequest,
+} from '../shared/contracts.js';
 import type {
   InputTrace,
   InputTraceInputType,
@@ -17,35 +17,43 @@ import type {
 
 type GameTextField = HTMLInputElement | HTMLTextAreaElement;
 
+export type TextEditEventDetail = {
+  command: GameTextEditCommand;
+  done?: Promise<void>;
+};
+
 type TextEditingOptions = {
   /** The OSK proxy fields; anything else keeps Chromium's ordinary editing. */
   fields: Iterable<unknown>;
-  writeText(text: string): Promise<void>;
-  edit(command: TextEditCommand): Promise<void>;
+  edit(request: GameTextEditRequest): Promise<void>;
   diagnostics?: GameInputDiagnostics;
   trace?: InputTrace;
   log(...values: unknown[]): void;
 };
 
-type EditingCommand = TextEditCommand | 'copy';
-
-const EDITING_COMMANDS = new Map<string, EditingCommand>([
-  ['a', 'selectAll'],
-  ['c', 'copy'],
-  ['v', 'paste'],
-  ['x', 'cut'],
-]);
-
 const isGameTextField = (value: unknown): value is GameTextField =>
   value instanceof HTMLTextAreaElement || value instanceof HTMLInputElement;
+
+const isOrdinaryEditable = (value: Element | null): boolean => {
+  if (value instanceof HTMLTextAreaElement) {
+    return !value.disabled && !value.readOnly;
+  }
+  if (value instanceof HTMLInputElement) {
+    return !value.disabled && !value.readOnly && value.type !== 'hidden';
+  }
+  return value instanceof HTMLElement && value.isContentEditable;
+};
 
 const canExportText = (field: GameTextField): boolean =>
   field instanceof HTMLTextAreaElement || field.type !== 'password';
 
-const selection = (field: GameTextField) => ({
-  start: field.selectionStart,
-  end: field.selectionEnd,
-});
+const selectedText = (field: GameTextField): string | null => {
+  const start = field.selectionStart;
+  const end = field.selectionEnd;
+  return start !== null && end !== null && start !== end
+    ? field.value.slice(start, end)
+    : null;
+};
 
 const inputType = (value: string): InputTraceInputType => {
   if (value === 'insertText') return 'insert-text';
@@ -60,16 +68,12 @@ const inputType = (value: string): InputTraceInputType => {
 
 export const installTextEditing = ({
   fields,
-  writeText,
   edit,
   diagnostics,
   trace,
   log,
 }: TextEditingOptions): void => {
   const sources = new Set<GameTextField>();
-  // Semantic commands follow the active keyboard layout (`event.key`), while
-  // release ownership follows the exact physical key (`event.code`).
-  const claimedKeys = new Set<string>();
   for (const field of fields) {
     if (isGameTextField(field)) sources.add(field);
   }
@@ -117,86 +121,54 @@ export const installTextEditing = ({
   const reportClipboardFailure = (error: unknown) => {
     diagnostics?.event('clipboard.writeFailed', error);
     log(
-      '[warn] clipboard write refused:',
+      '[warn] clipboard edit refused:',
       error instanceof Error ? error.message : String(error),
     );
   };
 
-  window.addEventListener('keydown', (event) => {
-    const command = EDITING_COMMANDS.get(event.key.toLowerCase());
-    if (!event.isTrusted || !command) return;
-    if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+  window.addEventListener('gw:text-edit', (event) => {
+    if (!(event instanceof CustomEvent)) return;
+    const detail = event.detail as TextEditEventDetail | undefined;
+    if (!detail || ![
+      'copy',
+      'cut',
+      'paste',
+      'selectAll',
+    ].includes(detail.command)) return;
+
     const active = document.activeElement;
-    if (!isGameTextField(active) || !sources.has(active)) return;
+    if (!isGameTextField(active) || !sources.has(active)) {
+      // Main performs normal Chromium editing only for a real editable target.
+      // A canvas, button, or body focus is a handled no-op.
+      if (!isOrdinaryEditable(active)) event.preventDefault();
+      return;
+    }
 
     event.preventDefault();
-    event.stopImmediatePropagation();
-    const code = event.code;
-    trace?.record({
-      source: 'renderer', kind: 'key', phase: 'down',
-      owner: active.type === 'password' || active.type === 'email'
-        ? 'secret'
-        : 'text',
-      repeat: event.repeat, trusted: event.isTrusted, decision: 'command',
-    });
-    if (claimedKeys.has(code) || event.repeat) {
-      return;
-    }
-    claimedKeys.add(code);
-
-    if (command === 'selectAll') {
-      void edit('selectAll');
-      return;
+    let request: GameTextEditRequest | null = null;
+    if (detail.command === 'paste' || detail.command === 'selectAll') {
+      request = { command: detail.command };
+    } else if (canExportText(active)) {
+      const selected = selectedText(active);
+      if (detail.command === 'copy') {
+        const text = selected ?? active.value;
+        if (text) request = { command: 'copy', text };
+      } else if (selected) {
+        request = { command: 'cut', text: selected };
+      }
     }
 
-    if (command === 'paste') {
-      void edit('paste');
-      return;
-    }
-
-    if (command === 'copy') {
-      if (!canExportText(active)) return;
-      const { start, end } = selection(active);
-      const text = start !== null && end !== null && start !== end
-        ? active.value.slice(start, end)
-        : active.value;
-      if (!text) return;
-      void writeText(text).then(
-        () => diagnostics?.event('clipboard.copied'),
-        reportClipboardFailure,
-      );
-      return;
-    }
-
-    if (canExportText(active)) void edit('cut');
-  }, true);
-
-  window.addEventListener('keyup', (event) => {
-    if (!event.isTrusted || event.ctrlKey || event.altKey) return;
-    if (!claimedKeys.delete(event.code)) return;
-    const active = document.activeElement;
-    trace?.record({
-      source: 'renderer', kind: 'key', phase: 'up',
-      owner: isGameTextField(active) &&
-        (active.type === 'password' || active.type === 'email')
-        ? 'secret'
-        : 'text',
-      repeat: event.repeat, trusted: event.isTrusted, decision: 'command',
-    });
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  }, true);
-
-  const clearClaimedKeys = () => claimedKeys.clear();
-  window.addEventListener('blur', clearClaimedKeys);
-  window.addEventListener('pagehide', clearClaimedKeys);
-  window.addEventListener('gw:input-reset', clearClaimedKeys);
-  window.addEventListener('gw:input-release', (event) => {
-    if (event instanceof CustomEvent && typeof event.detail === 'string') {
-      claimedKeys.delete(event.detail);
-    }
-  });
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') clearClaimedKeys();
+    if (!request) return;
+    detail.done = edit(request).then(
+      () => {
+        if (request.command === 'copy' || request.command === 'cut') {
+          diagnostics?.event('clipboard.copied');
+        }
+      },
+      (error) => {
+        reportClipboardFailure(error);
+        throw error;
+      },
+    );
   });
 };

@@ -32,7 +32,6 @@ describe("window shortcut input", () => {
     const actions: string[] = [];
     installWindowShortcuts(win, {
       run: (action) => actions.push(action),
-      changed: () => undefined,
     });
     updateWindowShortcuts(win, {});
 

@@ -9,13 +9,17 @@
  */
 import {
   app,
+  BrowserWindow,
   dialog,
   Menu,
   shell,
-  type BrowserWindow,
+  type BaseWindow,
   type MenuItemConstructorOptions,
 } from "electron";
-import { EXTERNAL_URLS } from "../shared/contracts.js";
+import {
+  EXTERNAL_URLS,
+  type GameTextEditCommand,
+} from "../shared/contracts.js";
 import { logEvent } from "./diagnostics.js";
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import {
@@ -31,19 +35,48 @@ import {
   setInputTraceVisibility,
 } from './input-trace.js';
 import type { WindowHost } from "./window.js";
-import {
-  resolveShortcuts,
-  shortcutAccelerator,
-} from "../shared/keyboard-shortcuts.js";
 import { windowRegistry } from "./window-registry.js";
 
 const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
 export interface ApplicationMenuActions {
   host: WindowHost;
-  shortcuts?: ReturnType<typeof resolveShortcuts>;
   /** Window state stays window.ts's; the menu only asks for the reset. */
   resetWindowState: (win: BrowserWindow) => Promise<void>;
+}
+
+async function editFocusedText(
+  suppliedWindow: BaseWindow | undefined,
+  command: GameTextEditCommand,
+): Promise<void> {
+  const win = suppliedWindow
+    ? BrowserWindow.fromId(suppliedWindow.id)
+    : null;
+  if (!win || win.isDestroyed()) return;
+  const context = windowRegistry.contextForWebContents(win.webContents.id);
+  if (context?.role !== "game") return;
+  const outcome = await sendRendererCommand(win, { type: "text.edit", command });
+  if (outcome !== "unhandled") return;
+  if (command === "cut") win.webContents.cut();
+  else if (command === "copy") win.webContents.copy();
+  else if (command === "paste") win.webContents.paste();
+  else win.webContents.selectAll();
+}
+
+function editMenuItem(
+  id: string,
+  label: string,
+  accelerator: string,
+  command: GameTextEditCommand,
+): MenuItemConstructorOptions {
+  return {
+    id,
+    label,
+    accelerator,
+    click: (_item, win) => {
+      void editFocusedText(win, command);
+    },
+  };
 }
 
 function withGameOwner(
@@ -58,14 +91,10 @@ function withGameOwner(
 
 export function installApplicationMenu({
   host,
-  shortcuts = resolveShortcuts({}),
   resetWindowState,
 }: ApplicationMenuActions): void {
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
-  const toolsAccelerator = shortcutAccelerator(shortcuts["tools.toggle"]);
-  const storageAccelerator = shortcutAccelerator(shortcuts["storage.open"]);
-  const travelAccelerator = shortcutAccelerator(shortcuts["travel.open"]);
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac
@@ -107,13 +136,15 @@ export function installApplicationMenu({
     {
       label: "Edit",
       submenu: [
-        // AppKit consumes these role accelerators before Electron emits
-        // `before-input-event`. Keep the clickable menu commands, but let the
-        // renderer's active game-text owner receive physical Command chords.
-        { role: "cut", registerAccelerator: false },
-        { role: "copy", registerAccelerator: false },
-        { role: "paste", registerAccelerator: false },
-        { role: "selectAll", registerAccelerator: false },
+        editMenuItem("edit-cut", "Cut", "CmdOrCtrl+X", "cut"),
+        editMenuItem("edit-copy", "Copy", "CmdOrCtrl+C", "copy"),
+        editMenuItem("edit-paste", "Paste", "CmdOrCtrl+V", "paste"),
+        editMenuItem(
+          "edit-select-all",
+          "Select All",
+          "CmdOrCtrl+A",
+          "selectAll",
+        ),
       ],
     },
     {
@@ -133,30 +164,17 @@ export function installApplicationMenu({
         { type: "separator" },
         {
           id: "toggle-tools",
-          label: "Toggle Tools",
-          // Displayed, not bound. Electron dispatches a key to the page before
-          // it considers menu shortcuts, and Guild Wars claims most single
-          // letters whatever modifier is held -- it handles `b` and its
-          // preventDefault cancels the accelerator with it. The key is owned by
-          // `before-input-event` in window.ts instead, which runs before the
-          // page; `registerAccelerator: false` keeps the shortcut visible here
-          // without binding it a second time and firing twice.
-          ...(toolsAccelerator ? { accelerator: toolsAccelerator } : {}),
-          registerAccelerator: false,
+          label: "Show or hide GWonMac Tools",
           click: withGameOwner((win) => toggleTools(win)),
         },
         {
           id: "open-xunlai-storage",
           label: "Open Xunlai Storage",
-          ...(storageAccelerator ? { accelerator: storageAccelerator } : {}),
-          registerAccelerator: false,
           click: withGameOwner((win) => openStorage(win)),
         },
         {
           id: "open-travel",
           label: "Open Travel",
-          ...(travelAccelerator ? { accelerator: travelAccelerator } : {}),
-          registerAccelerator: false,
           click: withGameOwner((win) => toggleTravel(win)),
         },
         {

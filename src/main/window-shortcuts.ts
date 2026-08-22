@@ -24,9 +24,6 @@ const tracedKey = (key: string) => {
 
 interface ShortcutActions {
   run(action: ShortcutAction): void;
-  changed(
-    shortcuts: ReturnType<typeof resolveShortcuts>,
-  ): void;
 }
 
 class WindowShortcuts {
@@ -109,7 +106,6 @@ class WindowShortcuts {
 
   update(overrides: ShortcutOverrides): void {
     this.#shortcuts = resolveShortcuts(overrides);
-    this.#actions.changed(this.#shortcuts);
   }
 
   capture(): Promise<ShortcutCaptureResult> {

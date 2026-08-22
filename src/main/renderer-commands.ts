@@ -29,7 +29,11 @@ export const RENDERER_COMMAND_TIMEOUT_MS = 5_000;
 ipcMain.on(IPC.rendererCommandDone, (event, id: unknown, outcome: unknown) => {
   if (
     typeof id !== "number"
-    || (outcome !== "completed" && outcome !== "failed")
+    || (
+      outcome !== "completed"
+      && outcome !== "unhandled"
+      && outcome !== "failed"
+    )
   ) {
     return;
   }
