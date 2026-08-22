@@ -36,6 +36,8 @@ test("keeps renderer capture evidence with its owning window", async () => {
         samples: 4,
       });
 
+      recorder.record({ k: "window.shown" }, {}, ownerId);
+      recorder.record({ k: "window.hidden" }, {}, peerId);
       await recorder.beginCapture(ownerId);
       renderer.recordGraphics(ownerId, graphics("owner-gpu", 1280));
       renderer.recordGraphics(peerId, graphics("peer-gpu", 1920));
@@ -57,6 +59,8 @@ test("keeps renderer capture evidence with its owning window", async () => {
         ownerId,
       );
       recorder.endCapture(1, "manual");
+      recorder.record({ k: "window.resized" }, {}, ownerId);
+      recorder.record({ k: "window.moved" }, {}, peerId);
       const capture = recorder.captureResult();
       renderer.recordGraphics(ownerId, graphics("replacement-gpu", 1440));
       const captureGraphicsAfterReplacement =
@@ -77,6 +81,9 @@ test("keeps renderer capture evidence with its owning window", async () => {
       const peerEvents = JSON.parse(
         `[${(await recorder.exportedEvents(peerId)).text.replaceAll("\n", ",")}]`,
       ).map((event: { name: string }) => event.name);
+      const ownerEvents = JSON.parse(
+        `[${(await recorder.exportedEvents(ownerId)).text.replaceAll("\n", ",")}]`,
+      ).map((event: { name: string }) => event.name);
       return {
         counters: capture?.summary.counters,
         latest: capture?.summary.latest,
@@ -86,6 +93,7 @@ test("keeps renderer capture evidence with its owning window", async () => {
         peerCapture: recorder.captureResult(peerId),
         peerFrames: recorder.framePath(peerId),
         peerEvents,
+        ownerEvents,
         captureGraphicsAfterReplacement,
         liveGraphicsAfterReplacement,
         milestoneBefore,
@@ -116,7 +124,18 @@ test("keeps renderer capture evidence with its owning window", async () => {
     expect(result.counters?.["test.peer"]).toBeUndefined();
     expect(result.peerEvents).toContain("electron.ready");
     expect(result.peerEvents).toContain("window.blurred");
+    expect(result.peerEvents).toContain("window.hidden");
+    expect(result.peerEvents).toContain("window.moved");
     expect(result.peerEvents).not.toContain("window.focused");
+    expect(result.peerEvents).not.toContain("window.shown");
+    expect(result.peerEvents).not.toContain("window.resized");
+    expect(result.ownerEvents).toContain("electron.ready");
+    expect(result.ownerEvents).toContain("window.focused");
+    expect(result.ownerEvents).toContain("window.shown");
+    expect(result.ownerEvents).toContain("window.resized");
+    expect(result.ownerEvents).not.toContain("window.blurred");
+    expect(result.ownerEvents).not.toContain("window.hidden");
+    expect(result.ownerEvents).not.toContain("window.moved");
     expect(result.replacementMilestone).toBeGreaterThanOrEqual(
       result.milestoneBefore,
     );
@@ -233,6 +252,149 @@ test("only the owner observes a capture and Level 2 refuses shared tracing", asy
     expect(result.captureChromiumPids).not.toContain(result.ownerPid);
     expect(result.ownerChromiumPids).toContain(result.ownerPid);
     expect(result.ownerChromiumPids).not.toContain(result.peerPid);
+  } finally {
+    await closeOffline(fixture);
+  }
+});
+
+test("keeps exports globally serialized and reports contention to its owner", async () => {
+  const fixture = await launchOffline("gw-diagnostics-export-contention-e2e-");
+  try {
+    const result = await fixture.app.evaluate(
+      async ({ BrowserWindow, dialog }, modulePath) => {
+        const load = process
+          .getBuiltinModule("node:module")
+          .createRequire(modulePath);
+        const { exportDiagnosticsReport } = load(modulePath);
+        const { recorder } = load(
+          modulePath.replace(/diagnostics-export\.js$/u, "diagnostics/recorder.js"),
+        );
+        const { windowRegistry } = load(
+          modulePath.replace(/diagnostics-export\.js$/u, "window-registry.js"),
+        );
+        const first = new BrowserWindow({ show: false, title: "First owner" });
+        const peer = new BrowserWindow({ show: false, title: "Peer owner" });
+        windowRegistry.register(first, {
+          mode: "multi",
+          role: "game",
+          profileId: "export-first",
+        }, 301);
+        windowRegistry.register(peer, {
+          mode: "multi",
+          role: "game",
+          profileId: "export-peer",
+        }, 302);
+
+        const originalShowMessageBox = dialog.showMessageBox;
+        const messages: Array<{
+          parent: string | null;
+          message: string;
+          detail: string | undefined;
+        }> = [];
+        Object.defineProperty(dialog, "showMessageBox", {
+          configurable: true,
+          value: async (parent: unknown, options: {
+            message: string;
+            detail?: string;
+          }) => {
+            messages.push({
+              parent: parent instanceof BrowserWindow ? parent.getTitle() : null,
+              message: options.message,
+              detail: options.detail,
+            });
+            return { response: 0, checkboxChecked: false };
+          },
+        });
+
+        let releaseFirst: () => void = () => undefined;
+        let markFirstEntered: () => void = () => undefined;
+        const firstEntered = new Promise<void>((resolve) => {
+          markFirstEntered = resolve;
+        });
+        const firstReleased = new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+        let firstCalls = 0;
+        let peerCalls = 0;
+        try {
+          const exportingFirst = exportDiagnosticsReport(first, async () => {
+            firstCalls += 1;
+            markFirstEntered();
+            await firstReleased;
+            return "first.zip";
+          });
+          await firstEntered;
+          // Ownership is captured before the work starts. Its completion remains
+          // attributable even when the initiating window closes in the meantime.
+          windowRegistry.unregister(first);
+          first.destroy();
+          await exportDiagnosticsReport(peer, async () => {
+            peerCalls += 1;
+            return "must-not-run.zip";
+          });
+          releaseFirst();
+          await exportingFirst;
+          await exportDiagnosticsReport(peer, async () => {
+            peerCalls += 1;
+            return "peer.zip";
+          });
+          await exportDiagnosticsReport(peer, async () => {
+            peerCalls += 1;
+            throw new Error("owned export failure");
+          });
+
+          const eventOwners = async (ownerId: number, name: string) =>
+            (await recorder.exportedEvents(ownerId)).text
+              .split("\n")
+              .filter(Boolean)
+              .map((line: string) => JSON.parse(line) as {
+                name: string;
+                ownerId?: number;
+              })
+              .filter((event: { name: string }) => event.name === name)
+              .map((event: { ownerId?: number }) => event.ownerId);
+          return {
+            firstCalls,
+            peerCalls,
+            messages,
+            firstExportOwners: await eventOwners(301, "diagnostics.exported"),
+            peerExportOwners: await eventOwners(302, "diagnostics.exported"),
+            peerFailureOwners: await eventOwners(302, "diagnostics.exportFailed"),
+          };
+        } finally {
+          releaseFirst();
+          Object.defineProperty(dialog, "showMessageBox", {
+            configurable: true,
+            value: originalShowMessageBox,
+          });
+          windowRegistry.unregister(first);
+          windowRegistry.unregister(peer);
+          if (!first.isDestroyed()) first.destroy();
+          if (!peer.isDestroyed()) peer.destroy();
+        }
+      },
+      path.join(root, "build/main/diagnostics-export.js"),
+    );
+
+    expect(result).toEqual({
+      firstCalls: 1,
+      peerCalls: 2,
+      messages: [
+        {
+          parent: "Peer owner",
+          message: "Another diagnostics export is in progress",
+          detail: "Wait for it to finish, then try again.",
+        },
+        {
+          parent: "Peer owner",
+          message: "Diagnostics export failed",
+          detail: "owned export failure",
+        },
+      ],
+      firstExportOwners: [301],
+      peerExportOwners: [302],
+      peerFailureOwners: [302],
+    });
   } finally {
     await closeOffline(fixture);
   }

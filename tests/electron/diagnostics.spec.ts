@@ -737,8 +737,31 @@ test.describe("diagnostics", () => {
           checkboxChecked: false,
         });
       });
+      const diagnosticOwnerId = await app.evaluate(({ BrowserWindow }, modulePath) => {
+        const load = process.getBuiltinModule("node:module").createRequire(modulePath);
+        const { recorder } = load(
+          modulePath.replace(/diagnostics\.js$/u, "diagnostics/recorder.js"),
+        );
+        const { windowRegistry } = load(
+          modulePath.replace(/diagnostics\.js$/u, "window-registry.js"),
+        );
+        const win = BrowserWindow.getAllWindows()[0];
+        if (!win) throw new Error("diagnostics owner is unavailable");
+        const ownerId = windowRegistry.diagnosticOwnerForWindow(win);
+        if (ownerId === null) throw new Error("diagnostics owner id is unavailable");
+        recorder.record({ k: "window.shown" }, {}, ownerId);
+        recorder.count("test.session.before", 1, ownerId);
+        return ownerId;
+      }, path.join(root, "build/main/diagnostics.js"));
       await clickMenu(app, "start-performance-capture");
       await expect(page.locator("#capture-status")).toBeVisible();
+      await app.evaluate((_, args) => {
+        const load = process.getBuiltinModule("node:module").createRequire(args.modulePath);
+        const { recorder } = load(
+          args.modulePath.replace(/diagnostics\.js$/u, "diagnostics/recorder.js"),
+        );
+        recorder.count("test.capture", 1, args.ownerId);
+      }, { modulePath: path.join(root, "build/main/diagnostics.js"), ownerId: diagnosticOwnerId });
       await page.evaluate(async () => {
         window.gwDiagnostics.swap(200, 50, 25);
         await window.gwDiagnostics.flush();
@@ -750,6 +773,14 @@ test.describe("diagnostics", () => {
       });
       await clickMenu(app, "stop-capture");
       await expect(page.locator("#capture-status")).toBeHidden();
+      await app.evaluate((_, args) => {
+        const load = process.getBuiltinModule("node:module").createRequire(args.modulePath);
+        const { recorder } = load(
+          args.modulePath.replace(/diagnostics\.js$/u, "diagnostics/recorder.js"),
+        );
+        recorder.record({ k: "window.resized" }, {}, args.ownerId);
+        recorder.count("test.session.after", 1, args.ownerId);
+      }, { modulePath: path.join(root, "build/main/diagnostics.js"), ownerId: diagnosticOwnerId });
 
       const target = path.join(diagnosticRoot, "capture.zip");
       const modulePath = path.join(root, "build/main/diagnostics.js");
@@ -761,6 +792,7 @@ test.describe("diagnostics", () => {
           const diagnostics = require(args.modulePath);
           await diagnostics.exportDiagnosticsZip(args.target, {
             appVersion: electronApp.getVersion(),
+            diagnosticOwnerId: args.ownerId,
             // OS/Chromium summary documents are pattern-scanned rather than
             // certified. Plant the adversarial values there; app-authored
             // events have no free-text recording API anymore.
@@ -779,7 +811,7 @@ test.describe("diagnostics", () => {
             },
           });
         },
-        { modulePath, target },
+        { modulePath, target, ownerId: diagnosticOwnerId },
       );
 
       const extracted = path.join(diagnosticRoot, "extracted");
@@ -850,6 +882,30 @@ test.describe("diagnostics", () => {
       expect(exportedText).toContain("[redacted-path]");
       expect(exportedText).toContain("[redacted-email]");
       expect(events).toContain("performance.problemmarked");
+      expect(events).toContain("window.shown");
+      expect(events).toContain("window.resized");
+      const eventRecords = events
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as { name: string; seq: number });
+      expect(eventRecords.find((event) => event.name === "window.shown")?.seq)
+        .toBeLessThan(manifest.capture.firstSequenceNumber);
+      expect(eventRecords.find((event) => event.name === "window.resized")?.seq)
+        .toBeGreaterThan(manifest.capture.lastSequenceNumber);
+      const summary = JSON.parse(
+        await readFile(path.join(extracted, "summary.json"), "utf8"),
+      );
+      const captureSummary = JSON.parse(
+        await readFile(path.join(extracted, "capture-summary.json"), "utf8"),
+      );
+      expect(summary.counters).toMatchObject({
+        "test.session.before": 1,
+        "test.capture": 1,
+        "test.session.after": 1,
+      });
+      expect(captureSummary.counters).toMatchObject({ "test.capture": 1 });
+      expect(captureSummary.counters["test.session.before"]).toBeUndefined();
+      expect(captureSummary.counters["test.session.after"]).toBeUndefined();
 
       const environment = JSON.parse(
         await readFile(path.join(extracted, "environment.json"), "utf8"),
