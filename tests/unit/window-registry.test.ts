@@ -5,10 +5,15 @@ import { WindowRegistry } from "../../src/main/window-registry.js";
 import { parseProfileId } from "../../src/shared/multiple-accounts.js";
 import { AppError } from "../../src/shared/errors.js";
 
-function fake(id: number) {
+function fake(id: number, processId?: number) {
   let destroyed = false;
   return {
-    webContents: { id },
+    webContents: {
+      id,
+      ...(processId === undefined
+        ? {}
+        : { getOSProcessId: () => processId }),
+    },
     isDestroyed: () => destroyed,
     isFocused: () => false,
     destroy: () => { destroyed = true; },
@@ -43,6 +48,32 @@ describe("window registry", () => {
       42,
     );
     assert.equal(registry.diagnosticOwnerForWindow(replacement), 42);
+  });
+
+  it("attributes a renderer process only to its exact account owner", () => {
+    const registry = new WindowRegistry<ReturnType<typeof fake>>();
+    const first = fake(7, 700);
+    const second = fake(8, 800);
+    registry.register(first, { mode: "single", role: "game" }, 101);
+    registry.register(second, {
+      mode: "multi",
+      role: "game",
+      profileId: parseProfileId("b2521fbf-50a8-424c-823a-bd5be4b58ace"),
+    }, 202);
+    assert.equal(registry.diagnosticOwnerForProcessId(700), 101);
+    assert.equal(registry.diagnosticOwnerForProcessId(800), 202);
+    assert.equal(registry.diagnosticOwnerForProcessId(900), null);
+  });
+
+  it("refuses to assign a renderer process shared by different owners", () => {
+    const registry = new WindowRegistry<ReturnType<typeof fake>>();
+    registry.register(fake(7, 700), { mode: "single", role: "game" }, 101);
+    registry.register(fake(8, 700), {
+      mode: "multi",
+      role: "game",
+      profileId: parseProfileId("b2521fbf-50a8-424c-823a-bd5be4b58ace"),
+    }, 202);
+    assert.equal(registry.diagnosticOwnerForProcessId(700), null);
   });
 
   it("enforces one live game window for a profile", () => {

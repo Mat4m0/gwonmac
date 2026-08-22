@@ -85,6 +85,7 @@ export function resetRendererRecovery(statePath: string): void {
 }
 interface WindowStateOwner {
   readonly path: string;
+  readonly diagnosticOwnerId: number;
   restored: WindowState | null;
   lastNormalBounds: WindowBounds | null;
   timer: ReturnType<typeof setTimeout> | null;
@@ -131,9 +132,10 @@ function primaryWorkArea(): WindowBounds {
 export async function prepareWindowState(
   statePath = gamePaths().windowState,
   newWindowOrdinal?: number,
+  diagnosticOwnerId?: number,
 ): Promise<boolean> {
   const loaded = await loadWindowState(statePath, () => {
-    logEvent({ k: "window.stateCorruptCleared" });
+    logEvent({ k: "window.stateCorruptCleared" }, diagnosticOwnerId);
   });
   const restored = loaded
     ? fitWindowStateToDisplays(loaded, workAreas(), primaryWorkArea())
@@ -153,7 +155,7 @@ export async function prepareWindowState(
       mode: restored.mode,
       width: restored.bounds.width,
       height: restored.bounds.height,
-    });
+    }, diagnosticOwnerId);
   }
   return restored !== null;
 }
@@ -202,7 +204,10 @@ function scheduleWindowStateSave(win: BrowserWindow): void {
   owner.timer = setTimeout(() => {
     owner.timer = null;
     void persistWindowState(win).catch(() => {
-      logEvent({ k: "window.stateSaveFailed" });
+      logEvent(
+        { k: "window.stateSaveFailed" },
+        owner.diagnosticOwnerId,
+      );
     });
   }, 300);
 }
@@ -275,7 +280,7 @@ export function resetWindowState(win: BrowserWindow): Promise<void> {
       logEvent({ k: "window.stateReset",
         width: settled.bounds.width,
         height: settled.bounds.height,
-      });
+      }, owner.diagnosticOwnerId);
     } finally {
       owner.resetDepth -= 1;
     }
@@ -415,6 +420,7 @@ export function createMainWindow(
 
   const stateOwner: WindowStateOwner = {
     path: statePath,
+    diagnosticOwnerId: options.diagnosticOwnerId,
     restored: initialState,
     lastNormalBounds: initialState?.bounds ?? null,
     timer: null,
@@ -425,6 +431,7 @@ export function createMainWindow(
   windowStateOwners.set(win, stateOwner);
   windowRegistry.register(win, context, options.diagnosticOwnerId);
   resetRendererDiagnostics(options.diagnosticOwnerId);
+  logEvent({ k: "window.created" }, options.diagnosticOwnerId);
   if (options.title) {
     ownedWindowTitles.set(win, options.title);
     win.webContents.on("page-title-updated", (event) => {
@@ -457,7 +464,7 @@ export function createMainWindow(
   const persistMode = (): void => {
     if (stateOwner.resetDepth > 0) return;
     void persistWindowState(win).catch(() => {
-      logEvent({ k: "window.stateSaveFailed" });
+      logEvent({ k: "window.stateSaveFailed" }, diagnosticOwnerId);
     });
   };
   win.on("maximize", persistMode);

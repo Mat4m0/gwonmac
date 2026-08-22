@@ -581,10 +581,14 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     credentialsLoad: channel(nothing, async (win) => {
+      const ownerId = diagnosticOwner(win);
       try {
         return await secretOperation(() => ctx.credentialsStoreFor(win).load());
       } catch (error) {
-        logEvent({ k: "credentials.loadFailed", code: errorCode(error) });
+        logEvent(
+          { k: "credentials.loadFailed", code: errorCode(error) },
+          ownerId,
+        );
         throw error;
       }
     }),
@@ -594,20 +598,28 @@ export function registerIpcHandlers(ctx: IpcContext): {
     credentialsSave: channel(
       one(parseCredentials),
       async (win, value: StoredCredentials) => {
+        const ownerId = diagnosticOwner(win);
         try {
           await secretOperation(() => ctx.credentialsStoreFor(win).save(value));
         } catch (error) {
-          logEvent({ k: "credentials.saveFailed", code: errorCode(error) });
+          logEvent(
+            { k: "credentials.saveFailed", code: errorCode(error) },
+            ownerId,
+          );
           throw error;
         }
       },
     ),
 
     credentialsClear: channel(nothing, async (win) => {
+      const ownerId = diagnosticOwner(win);
       try {
         await secretOperation(() => ctx.credentialsStoreFor(win).clear());
       } catch (error) {
-        logEvent({ k: "credentials.clearFailed", code: errorCode(error) });
+        logEvent(
+          { k: "credentials.clearFailed", code: errorCode(error) },
+          ownerId,
+        );
         throw error;
       }
     }),
@@ -706,11 +718,18 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     templatesExport: channel(one(parseExportEntries), async (win, entries) => {
+      const ownerId = diagnosticOwner(win);
       const result = await exportTemplates(win, entries);
       if (result.status === "written") {
-        logEvent({ k: "templates.exported", count: result.count });
+        logEvent(
+          { k: "templates.exported", count: result.count },
+          ownerId,
+        );
       } else if (result.status === "failed") {
-        logEvent({ k: "templates.exportFailed", code: result.errorCode });
+        logEvent(
+          { k: "templates.exportFailed", code: result.errorCode },
+          ownerId,
+        );
       }
       return result;
     }),
@@ -827,7 +846,10 @@ function registerChannelDefinitions(
       try {
         input = def.parse(args);
       } catch (error) {
-        logEvent({ k: "ipc.rejected", channel: name, code: errorCode(error) });
+        logEvent(
+          { k: "ipc.rejected", channel: name, code: errorCode(error) },
+          windows.diagnosticOwnerForWindow(win) ?? undefined,
+        );
         throw error;
       }
       return def.run(win, input);
@@ -853,17 +875,33 @@ export function registerSteamIpcHandlers(
     }
     return coordinator;
   };
+  const diagnosticOwner = (win: BrowserWindow): number => {
+    const ownerId = (windows ?? windowRegistry).diagnosticOwnerForWindow(win);
+    if (ownerId === null) {
+      throw new ValidationError("game window has no diagnostics owner");
+    }
+    return ownerId;
+  };
 
   const runSteamSignIn = async (
     win: BrowserWindow,
+    ownerId: number,
   ): Promise<SteamTokenAcquisition> => {
     const result = await acquireSteamToken(win, (event) => {
-      if (event.k === "opened") logEvent({ k: "steam.signInOpened" });
+      if (event.k === "opened") {
+        logEvent({ k: "steam.signInOpened" }, ownerId);
+      }
       if (event.k === "blocked") {
-        logEvent({ k: "steam.signInBlocked", what: event.what });
+        logEvent(
+          { k: "steam.signInBlocked", what: event.what },
+          ownerId,
+        );
       }
       if (event.k === "settled") {
-        logEvent({ k: "steam.signInResult", outcome: event.outcome });
+        logEvent(
+          { k: "steam.signInResult", outcome: event.outcome },
+          ownerId,
+        );
       }
     });
     // The reason survives to the renderer: a player whose sign-in failed used
@@ -880,27 +918,39 @@ export function registerSteamIpcHandlers(
     // here would only turn "no token" into a launch failure.
     steamToken: channel(asSilentFlag, async (win, silent) => {
       const steam = coordinatorFor(win);
+      const ownerId = diagnosticOwner(win);
       if (isQuitting()) throw new ValidationError("application is quitting");
       const resolution = await steam.resolve({
         silent,
-        acquire: () => runSteamSignIn(win),
+        acquire: () => runSteamSignIn(win, ownerId),
       });
       for (const note of resolution.notes) {
         if (note.note === "loadFailed") {
-          logEvent({ k: "steam.tokenLoadFailed", code: note.code });
+          logEvent(
+            { k: "steam.tokenLoadFailed", code: note.code },
+            ownerId,
+          );
         }
-        if (note.note === "expired") logEvent({ k: "steam.tokenExpired" });
+        if (note.note === "expired") {
+          logEvent({ k: "steam.tokenExpired" }, ownerId);
+        }
         if (note.note === "storeFailed") {
-          logEvent({ k: "steam.tokenStoreFailed", code: note.code });
+          logEvent(
+            { k: "steam.tokenStoreFailed", code: note.code },
+            ownerId,
+          );
         }
         if (note.note === "acquireFailed") {
-          logEvent({ k: "steam.signInResult", outcome: "failed" });
+          logEvent(
+            { k: "steam.signInResult", outcome: "failed" },
+            ownerId,
+          );
         }
       }
       logEvent({ k: "steam.tokenRequested",
         outcome: steamTokenOutcome(resolution),
         silent,
-      });
+      }, ownerId);
       if (resolution.token) {
         return { token: resolution.token } satisfies SteamTokenResult;
       }
@@ -916,18 +966,23 @@ export function registerSteamIpcHandlers(
     steamStore: channel(asSteamStoreback, async (win, { token, expiry }) => {
       if (isQuitting()) throw new ValidationError("application is quitting");
       const steam = coordinatorFor(win);
+      const ownerId = diagnosticOwner(win);
       const outcome = await steam.refresh(token, expiry);
-      logEvent({ k: "steam.storeback", outcome });
+      logEvent({ k: "steam.storeback", outcome }, ownerId);
     }),
 
     steamClear: channel(nothing, async (win) => {
       if (isQuitting()) throw new ValidationError("application is quitting");
       const steam = coordinatorFor(win);
+      const ownerId = diagnosticOwner(win);
       try {
         await steam.clear();
-        logEvent({ k: "steam.tokenCleared" });
+        logEvent({ k: "steam.tokenCleared" }, ownerId);
       } catch (error) {
-        logEvent({ k: "steam.tokenClearFailed", code: errorCode(error) });
+        logEvent(
+          { k: "steam.tokenClearFailed", code: errorCode(error) },
+          ownerId,
+        );
         throw error;
       }
     }),

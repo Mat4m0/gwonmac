@@ -17,6 +17,7 @@ import {
   type RendererCommandOutcome,
 } from "../shared/contracts.js";
 import { logEvent } from "./diagnostics/recorder.js";
+import { windowRegistry } from "./window-registry.js";
 
 interface Pending {
   webContentsId: number;
@@ -150,11 +151,15 @@ export async function editWindowText(
  * the Toolbox capability it stopped them for a refusal that only reached a log.
  */
 export async function toggleTools(win: BrowserWindow): Promise<void> {
+  const ownerId = windowRegistry.diagnosticOwnerForWindow(win) ?? undefined;
   const outcome = await sendRendererCommand(win, { type: "tools.toggle" });
   // The renderer refuses outright when the Toolbox capability is not
   // installed, which is the ordinary case on a launch that did not ask for it.
   if (outcome !== "completed") {
-    logEvent({ k: "tools.toggleRefused", outcome });
+    logEvent(
+      { k: "tools.toggleRefused", outcome },
+      ownerId,
+    );
   }
 }
 
