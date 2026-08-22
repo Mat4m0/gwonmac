@@ -144,60 +144,17 @@
   font-size: var(--ui-font-size-sm);
 }
 
-.travel-recent-list,
 .travel-results {
   display: grid;
   gap: 3px;
 }
 
-.travel-recent-row {
-  display: grid;
-  min-width: 0;
-  min-height: 50px;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--ui-space-3);
-  padding: var(--ui-space-2) var(--ui-space-3);
-  border: 1px solid transparent;
-  border-radius: var(--ui-radius-sm);
-  background: transparent;
-  color: var(--ui-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.travel-recent-row:hover:not(:disabled) {
-  border-color: var(--ui-outline);
-  background: var(--ui-hover);
-}
-
-.travel-recent-row[data-active="true"] {
-  border-color: var(--ui-outline);
-  background: var(--ui-hover);
-  box-shadow: var(--ui-shadow-row-selected);
-}
-
-.travel-recent-row svg {
-  width: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.75;
-}
-
-.travel-recent-row strong,
-.travel-recent-row small,
 .travel-result strong,
 .travel-result small {
   display: block;
 }
 
-.travel-recent-row strong { font-size: var(--ui-font-size-lg); }
-.travel-recent-row small,
 .travel-result small { color: var(--ui-text-faint); }
-.travel-recent-row > span:last-child { color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
 
 .travel-favorite-grid {
   display: grid;
@@ -244,7 +201,6 @@
   background: var(--ui-hover);
 }
 
-.travel-recent-row:active:not(:disabled),
 .travel-result:active:not(:disabled) { filter: brightness(0.86); }
 
 .travel-result[aria-selected="true"] { box-shadow: var(--ui-shadow-row-selected); }
@@ -418,17 +374,6 @@
 .travel-destination-help { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
 .travel-destination-help { margin: 0; padding: var(--ui-space-2); }
 .travel-destination-clear { justify-self: start; color: var(--ui-danger); }
-.travel-recents-setting {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--ui-space-2);
-}
-.travel-recents-setting > span strong,
-.travel-recents-setting > span small { display: block; }
-.travel-recents-setting > span small { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
-.travel-clear-recents { color: var(--ui-danger); }
-
 .travel-footer {
   display: flex;
   min-height: 40px;

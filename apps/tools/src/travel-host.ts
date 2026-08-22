@@ -1,6 +1,6 @@
 /**
  * Host boundary for Quick Travel. The Vue palette owns presentation; this
- * module owns confirmed recents and one named game command. Main owns every
+ * module owns one named game command. Main owns every
  * durable preference write and stale-window refusal.
  */
 import { ref, type Ref } from "vue";
@@ -13,7 +13,6 @@ import {
   DEFAULT_TRAVEL_SHORTCUTS,
   TRAVEL_DESTINATIONS,
   travelDestination,
-  recordRecentTravel,
   type TravelRequest,
   type TravelUserPreferences,
   type TravelUserPreferencesPatch,
@@ -37,7 +36,6 @@ export interface TravelHost {
   readonly unavailable: string | null;
   loadPreferences(): Promise<TravelPreferences>;
   savePreferences(patch: TravelPreferencePatch): Promise<TravelPreferences>;
-  recordConfirmedTravel(mapId: number): Promise<TravelPreferences>;
   travel(request: TravelRequest): Promise<void>;
   updateGameState(state: TravelGameState): void;
   dispose(): void;
@@ -65,8 +63,6 @@ export function createNativeTravelHost(
   };
   const loadPreferences = async (): Promise<TravelPreferences> =>
     remember(await api.travelPreferences.get());
-  const recordConfirmedTravel = async (mapId: number): Promise<TravelPreferences> =>
-    remember(await api.travelPreferences.recordConfirmed(mapId));
   return {
     state,
     attempt,
@@ -79,7 +75,6 @@ export function createNativeTravelHost(
       const expected = currentPreferences ?? await loadPreferences();
       return remember(await api.travelPreferences.set({ expected, patch }));
     },
-    recordConfirmedTravel,
     async travel(request) {
       if (attempt.value.status !== "idle") return;
       attempt.value = { status: "queued", mapId: request.mapId };
@@ -144,12 +139,6 @@ export function createNativeTravelHost(
       }
       clearAttempt();
       if (next.mapId !== current.mapId) return;
-      void recordConfirmedTravel(current.mapId).catch(() => {
-        notice.value = {
-          message: "Travel succeeded, but gwonmac could not confirm whether Recent was updated.",
-          level: "warning",
-        };
-      });
     },
     dispose() {
       clearAttempt();
@@ -176,18 +165,11 @@ export function createDemoTravelHost(): TravelHost {
   let current: TravelPreferences = Object.freeze({
     shortcuts: DEFAULT_TRAVEL_SHORTCUTS,
     synonyms: Object.freeze([]),
-    recentLimit: 5,
-    recentMapIds: Object.freeze([55, 449, 194]),
   });
   const save = (patch: TravelPreferencePatch): TravelPreferences => {
-    const recentLimit = patch.recentLimit ?? current.recentLimit;
     current = Object.freeze({
       shortcuts: patch.shortcuts ?? current.shortcuts,
       synonyms: patch.synonyms ?? current.synonyms,
-      recentLimit,
-      recentMapIds: recentLimit === 0
-        ? Object.freeze([])
-        : patch.recentMapIds ?? current.recentMapIds,
     });
     return current;
   };
@@ -201,10 +183,6 @@ export function createDemoTravelHost(): TravelHost {
     },
     async savePreferences(patch) {
       return save(patch);
-    },
-    async recordConfirmedTravel(mapId) {
-      if (current.recentLimit === 0) return current;
-      return save({ recentMapIds: recordRecentTravel(current.recentMapIds, mapId) });
     },
     async travel(request) {
       attempt.value = { status: "queued", mapId: request.mapId };

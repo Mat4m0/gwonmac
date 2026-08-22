@@ -118,7 +118,7 @@ export async function confirmSettingsReset(
       confirmLabel: "Reset GWonMac Settings",
       message: "Reset GWonMac settings?",
       detail:
-        "Display, tools, Travel shortcuts, custom search phrases, recent destinations, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
+        "Display, tools, Travel shortcuts, custom search phrases, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
     }))
   ) {
     return null;

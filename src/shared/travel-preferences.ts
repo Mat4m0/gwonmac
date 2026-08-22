@@ -23,14 +23,12 @@ export type TravelPreferencesDocument = Readonly<{
 
 export type TravelPreferencesPatch = Readonly<{
   synonyms?: TravelSynonyms;
-  recentLimit?: TravelRecentLimit;
-  recentMapIds?: TravelRecentMapIds;
 }>;
 
 export const DEFAULT_TRAVEL_PREFERENCES: TravelPreferencesDocument = Object.freeze({
   formatVersion: TRAVEL_PREFERENCES_FORMAT,
   synonyms: Object.freeze([]),
-  recentLimit: 5,
+  recentLimit: 0,
   recentMapIds: Object.freeze([]),
 });
 
@@ -99,17 +97,11 @@ export function parseTravelPreferencesPatch(value: unknown): TravelPreferencesPa
     throw new TypeError("Travel preference patch must be an object");
   }
   const input = value as Record<string, unknown>;
-  if (Object.keys(input).some((key) => !["synonyms", "recentLimit", "recentMapIds"].includes(key))) {
+  if (Object.keys(input).some((key) => key !== "synonyms")) {
     throw new TypeError("Travel preference patch has an unknown field");
   }
   if ("synonyms" in input && !isTravelSynonyms(input.synonyms)) {
     throw new TypeError("Travel synonyms are invalid");
-  }
-  if ("recentLimit" in input && !isTravelRecentLimit(input.recentLimit)) {
-    throw new TypeError("Travel recent limit is invalid");
-  }
-  if ("recentMapIds" in input && !isTravelRecentMapIds(input.recentMapIds)) {
-    throw new TypeError("Travel recent destinations are invalid");
   }
   return input as TravelPreferencesPatch;
 }
@@ -121,17 +113,9 @@ export function applyTravelPreferencesPatch(
   return parseTravelPreferences({
     formatVersion: TRAVEL_PREFERENCES_FORMAT,
     synonyms: patch.synonyms ?? current.synonyms,
-    recentLimit: patch.recentLimit ?? current.recentLimit,
-    recentMapIds: patch.recentLimit === 0 ? [] : patch.recentMapIds ?? current.recentMapIds,
+    // Keep the released v1 fields readable by Stable, but never retain or
+    // publish Recent history after the feature was withdrawn.
+    recentLimit: 0,
+    recentMapIds: [],
   });
-}
-
-export function recordRecentTravel(
-  current: TravelRecentMapIds,
-  mapId: number,
-): TravelRecentMapIds {
-  if (travelDestination(mapId) === null) {
-    throw new RangeError(`Travel destination ${mapId} is not reviewed`);
-  }
-  return Object.freeze([mapId, ...current.filter((candidate) => candidate !== mapId)].slice(0, 10));
 }

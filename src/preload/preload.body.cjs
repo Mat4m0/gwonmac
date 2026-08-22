@@ -176,7 +176,6 @@ const api = {
   travelPreferences: {
     get: () => ipcRenderer.invoke(IPC.travelPreferencesGet),
     set: (value) => ipcRenderer.invoke(IPC.travelPreferencesSet, value),
-    recordConfirmed: (mapId) => ipcRenderer.invoke(IPC.travelPreferencesRecord, mapId),
   },
   shortcuts: {
     capture: () => ipcRenderer.invoke(IPC.shortcutCapture),

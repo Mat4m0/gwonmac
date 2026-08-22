@@ -193,17 +193,10 @@ const INVOCATIONS: Invocation[] = [
       expected: {
         shortcuts: [null, null, null, null, null, null, null, null, null],
         synonyms: [],
-        recentLimit: 5,
-        recentMapIds: [],
       },
-      patch: { recentLimit: 3 },
+      patch: { synonyms: [{ term: "home", mapId: 55 }] },
     }],
     channel: IPC.travelPreferencesSet,
-  },
-  {
-    path: "travelPreferences.recordConfirmed",
-    args: [55],
-    channel: IPC.travelPreferencesRecord,
   },
   { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {

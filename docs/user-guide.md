@@ -128,16 +128,14 @@ After that restart, these choices update immediately:
   shortcut, and the `/chest` and `/xunlai` chat commands in a supported PvE
   outpost, after the current character's storage access is confirmed.
 - **Quick Travel palette** (Beta) opens with Command-T or the `/tp` chat
-  command. It shows your most recent completed trips and a customizable 3×3
-  Quick Travel grid. Press 1–9 to use a saved destination, choose **Edit** to
+  command. It shows a customizable 3×3 Quick Travel grid. Press 1–9 to use a
+  saved destination, choose **Edit** to
   replace or remove one, or press Command-1 through Command-9 while a search
   result is selected. Type any of the 199 reviewed direct-travel destinations,
   an official alias such as `la`, `kama`, or `eotn`, or your own custom synonym,
   then press Return. Locked destinations remain visible; Guild Wars decides
   whether the current character can travel there. Travel keeps the current
-  Guild Wars region and language and uses district Any. In Settings, choose
-  Off, 3, 5, or 10 recent destinations. Off clears the history and stops
-  recording; **Clear Recent** clears it without changing the selected count.
+  Guild Wars region and language and uses district Any.
 
 Tools and Travel stay open when you click Guild Wars behind them. Press Tab to
 move the keyboard into the topmost GWonMac window. Press Escape to close that
@@ -311,7 +309,7 @@ removes game preferences, templates, screenshots, and chat logs. It keeps game
 data, `gwonmac` settings, and saved login.
 
 Use **Reset GWonMac settings…** for launcher defaults. It also clears Travel
-shortcuts, search phrases, and Recent history. If Travel preferences cannot be
+shortcuts and search phrases. If Travel preferences cannot be
 reset after the other settings, the app keeps the completed settings reset and
 asks you to run the same reset again. Use **View → Reset Window Size and
 Position** for an off-screen window. These actions do not clear saved login.

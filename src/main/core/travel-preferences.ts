@@ -7,7 +7,6 @@ import {
   DEFAULT_TRAVEL_PREFERENCES,
   applyTravelPreferencesPatch,
   parseTravelPreferences,
-  recordRecentTravel,
   type TravelPreferencesDocument,
   type TravelPreferencesPatch,
 } from "../../shared/travel-preferences.js";
@@ -43,20 +42,6 @@ export async function updateTravelPreferences(
     await loadTravelPreferences(path, onRecovered),
     patch,
   );
-  await writeAtomicJson(path, next);
-  return next;
-}
-
-export async function recordConfirmedTravel(
-  path: string,
-  mapId: number,
-  onRecovered?: (backupPath: string) => void | Promise<void>,
-): Promise<TravelPreferencesDocument> {
-  const current = await loadTravelPreferences(path, onRecovered);
-  if (current.recentLimit === 0) return current;
-  const next = applyTravelPreferencesPatch(current, {
-    recentMapIds: recordRecentTravel(current.recentMapIds, mapId),
-  });
   await writeAtomicJson(path, next);
   return next;
 }

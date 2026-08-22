@@ -666,7 +666,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     resetSettings: () => preferences.resetSettings(),
     getTravelPreferences: () => preferences.getTravelPreferences(),
     setTravelPreferences: (update) => preferences.updateTravelPreferences(update),
-    recordTravelConfirmation: (mapId) => preferences.recordTravelConfirmation(mapId),
     toolsEnabledAtLaunch: settings.gwonmacTools,
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),

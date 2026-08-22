@@ -75,8 +75,6 @@ async function seedNonDefaultPreferences(
     expected: current,
     patch: {
       synonyms: [{ term: "home", mapId: 55 }],
-      recentLimit: 3,
-      recentMapIds: [55],
     },
   });
 }
@@ -189,15 +187,15 @@ describe("PreferencesCoordinator", () => {
       await assert.rejects(
         coordinator.updateTravelPreferences({
           expected: current,
-          patch: { recentLimit: 3 },
+          patch: { synonyms: [{ term: "home", mapId: 55 }] },
         }),
         /could not confirm whether the new value is active/u,
       );
     });
 
     assert.equal(refusedDirectorySync, true);
-    assert.equal((await coordinator.getTravelPreferences()).recentLimit, 3);
-    assert.equal(JSON.parse(await readFile(travelPreferences, "utf8")).recentLimit, 3);
+    assert.deepEqual((await coordinator.getTravelPreferences()).synonyms, [{ term: "home", mapId: 55 }]);
+    assert.deepEqual(JSON.parse(await readFile(travelPreferences, "utf8")).synonyms, [{ term: "home", mapId: 55 }]);
   });
 
   it("returns an ordinary settings update that became active before fsync failed", async () => {
@@ -238,8 +236,6 @@ describe("PreferencesCoordinator", () => {
     assert.deepEqual(outcome.travelPreferences, {
       shortcuts: (await coordinator.getTravelPreferences()).shortcuts,
       synonyms: [],
-      recentLimit: 5,
-      recentMapIds: [],
     });
   });
 
