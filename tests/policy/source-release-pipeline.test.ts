@@ -129,10 +129,12 @@ test("the host has one native automatic application replacement path", () => {
   assert.match(main, /PERIODIC_CHECK_TICK_MS/);
   assert.doesNotMatch(updater, /electron-updater|update-electron-app|Sparkle/);
   assert.doesNotMatch(updater, /api\.github\.com|\/releases\?per_page/);
-  assert.match(
-    read("src/shared/project-identity.ts"),
-    /mat4m0\.github\.io\/gwonmac\/updates\/stable\/darwin\/arm64\/RELEASES\.json[\s\S]*mat4m0\.github\.io\/gwonmac\/updates\/beta\/darwin\/arm64\/RELEASES\.json/,
-  );
+  const identity = read("src/shared/project-identity.ts");
+  assert.match(identity, /GITHUB_OWNER = "Mat4m0"/);
+  assert.match(identity, /GITHUB_REPOSITORY = "gwonmac"/);
+  assert.match(identity, /GITHUB_OWNER\.toLowerCase\(\).*github\.io/);
+  assert.match(identity, /stable: `\$\{UPDATE_FEED_ROOT\}\/stable\/darwin\/arm64\/RELEASES\.json`/);
+  assert.match(identity, /beta: `\$\{UPDATE_FEED_ROOT\}\/beta\/darwin\/arm64\/RELEASES\.json`/);
   assert.deepEqual(json("package.json").dependencies ?? {}, {});
 });
 
