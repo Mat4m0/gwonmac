@@ -24,6 +24,7 @@ import {
 import {
   validateCommonAcceptance,
 } from "./enhancements-live/acceptance.js";
+import { runGraphicsProbeSession } from "./enhancements-live/graphics-probe.js";
 import { projectLiveResult } from "./enhancements-live/result.js";
 
 type Shutdown = { code: number | null; signal: NodeJS.Signals | null };
@@ -205,37 +206,63 @@ try {
       elapsedMs: performance.now() - start.at,
     };
   }, before);
-  const capabilities = {
-    page,
-    cdp,
-    sendAutomationCommand,
-  };
-  // The tier decides both halves at once, so the automation capabilities cannot
-  // reach an observation scenario even by mistake.
-  const scenarioEvidence = selectedScenario.tier === "automation"
-    ? await selectedScenario.run(scenarioContext("automation", capabilities))
-    : await selectedScenario.run(scenarioContext("observation", capabilities));
-
-  // Assembled once rather than mutated onto the projection: the projection is
-  // what the page reported, and these are what the runner knows about it.
-  const result = {
-    ...await projectLiveResult(page, cadence, plan.name),
+  const runMetadata = () => ({
     tier: plan.tier,
     loginInputs,
-    ...(scenarioEvidence ? { evidence: scenarioEvidence } : {}),
     preflight: {
       cached: !allowUpdate,
       snapshotComplete: preflight.snapshot?.complete === true,
       transformedCache: preflight.client.transformedCache,
     },
     rendererErrors: [...rendererErrors],
-  };
-  failureResult = result;
-  validateCommonAcceptance(result, expectedBuildId, {
-    enhancementExpected: plan.scenario.program !== "none",
-    coreObservation: plan.scenario.program === "target-observer",
   });
-  selectedScenario.validate(result);
+  let result: unknown;
+  if (selectedScenario.tier === "graphics-observation") {
+    const graphics = await runGraphicsProbeSession({
+      page,
+      repositoryRoot: root,
+      cadence,
+    });
+    const graphicsResult = {
+      ...(graphics.finalProjection ?? {
+        scenario: plan.name,
+        windowClosed: graphics.windowClosed,
+      }),
+      ...runMetadata(),
+      evidence: graphics.evidence,
+    };
+    result = graphicsResult;
+    failureResult = result;
+    if (graphics.finalProjection) {
+      validateCommonAcceptance({
+        ...graphics.finalProjection,
+        rendererErrors: graphicsResult.rendererErrors,
+      }, expectedBuildId, {
+        enhancementExpected: false,
+        coreObservation: false,
+      });
+    }
+    selectedScenario.validate(graphicsResult);
+  } else {
+    const capabilities = { page, cdp, sendAutomationCommand };
+    // The tier decides both halves at once, so automation capabilities cannot
+    // reach an observation scenario even by mistake.
+    const scenarioEvidence = selectedScenario.tier === "automation"
+      ? await selectedScenario.run(scenarioContext("automation", capabilities))
+      : await selectedScenario.run(scenarioContext("observation", capabilities));
+    const standardResult = {
+      ...await projectLiveResult(page, cadence, plan.name),
+      ...runMetadata(),
+      ...(scenarioEvidence ? { evidence: scenarioEvidence } : {}),
+    };
+    result = standardResult;
+    failureResult = result;
+    validateCommonAcceptance(standardResult, expectedBuildId, {
+      enhancementExpected: plan.scenario.program !== "none",
+      coreObservation: plan.scenario.program === "target-observer",
+    });
+    selectedScenario.validate(standardResult);
+  }
   console.log(JSON.stringify(result));
 
   if (leaveOpen) {

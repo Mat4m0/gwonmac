@@ -5,7 +5,10 @@
  * data, pointers, stack prose, or an unbounded per-texture history.
  */
 
-import type { RendererMilestoneFieldsByName } from "../shared/diagnostics.js";
+import type {
+  RendererMilestoneFieldsByName,
+  TextureMemorySnapshot,
+} from "../shared/diagnostics.js";
 
 type GrowthFields = RendererMilestoneFieldsByName["wasm.growthRequested"];
 
@@ -261,6 +264,17 @@ export function installWasmMemoryAttribution({
   let unknownTextureAllocations = 0;
   let textureTrackingSaturated = false;
   let observationFailureReported = false;
+
+  const resetTextureContext = () => {
+    textures.clear();
+    bindings.clear();
+    generatedTextures = 0;
+    deletedTextures = 0;
+    knownTextureBytes = 0;
+    textureUploadBytes = 0;
+    unknownTextureAllocations = 0;
+    textureTrackingSaturated = false;
+  };
 
   const observe = (callback: () => void) => {
     try {
@@ -522,7 +536,7 @@ export function installWasmMemoryAttribution({
     };
   }
 
-  const textureSnapshot = () => ({
+  const textureSnapshot = (): TextureMemorySnapshot => ({
     generatedTextures,
     deletedTextures,
     liveTextures: Math.max(0, generatedTextures - deletedTextures),
@@ -592,5 +606,6 @@ export function installWasmMemoryAttribution({
 
   return Object.freeze({
     snapshot: () => Object.freeze(textureSnapshot()),
+    resetContext: resetTextureContext,
   });
 }

@@ -80,6 +80,26 @@ not hide an earlier fatal event.
 The app does not collect crash dumps. Renderer console text remains local and
 bounded.
 
+### Player visual-problem report
+
+**Help → Report Visual Problem…** creates one owner-bound report while the
+defect is visible. It records the current canvas and drawing-buffer sizes,
+WebGL context state, WASM heap size, bounded current-context texture allocation
+totals, and GL program totals. In Multiple Accounts mode, the renderer mark and optional
+screenshot both come from the window that opened the command.
+
+The player must choose **Include Screenshot**, **Diagnostics Only**, or
+**Cancel**. A screenshot is never automatic. The manifest records the renderer
+command outcome, open game-window count, whether a screenshot was requested,
+whether one was captured, and its privacy class. The validator rejects an
+included screenshot without recorded consent or a valid PNG signature.
+
+This report can distinguish a lost WebGL context, a failed presentation path,
+incomplete texture tracking, unusual allocation growth, and a Multiple
+Accounts correlation. It cannot identify which Guild Wars asset should have
+occupied a surface. Compare affected and healthy reports before changing the
+client or renderer.
+
 ## Privacy protections
 
 The export uses separate protections for separate data classes.
@@ -131,6 +151,12 @@ The recorder does not collect these values:
 Do not add a general string log route. Add a typed outcome only when it is
 needed to decide or diagnose behavior.
 
+An explicitly consented `visual-problem.png` is a separate evidence class. It
+contains only the initiating game window as displayed. It can contain visible
+character, account, and chat text, so the consent dialog and documentation tell
+the player to inspect the ZIP before sharing it. Diagnostics-only reports keep
+the exclusion list above.
+
 ## Validate and read an export
 
 Run the validator before you trust an export:
@@ -168,6 +194,34 @@ The tools warn about different hardware, operating systems, application
 versions, GPU renderers, render scales, canvas sizes, visibility, capture
 levels, and overlapping windows. Do not ignore these warnings.
 
+## Live graphics investigation
+
+Use the local graphics probe when a visual defect cannot be reproduced in an
+offline fixture. It starts the normal profile and observes the renderer through
+an ephemeral loopback debugging endpoint:
+
+```bash
+pnpm graphics:live
+```
+
+Play normally. Press Enter in the probe terminal to save one evidence pair.
+Type `q`, then press Enter, to stop the probe and close the app cleanly. Each
+pair contains a screenshot and a JSON file with the same bounded renderer
+state. The JSON contains canvas dimensions, WebGL context status, WASM heap
+size, texture counters, image-cache counters, program-cache counters, and the
+closed diagnostic summary.
+
+The probe stores each run in a new directory under
+`test-results/graphics-live/`. It does not overwrite an earlier run. A
+screenshot can contain character, account, or chat information that is visible
+in the game. Inspect it before sharing it. The screenshot is separate from a
+diagnostics ZIP and is never included automatically.
+
+The probe cannot identify a Guild Wars texture, read texture pixels, read raw
+game memory, or prove what a scene should look like. Use it to compare a clean
+and affected session at the same location, render scale, and account count.
+Do not treat one machine's clean result as proof that another GPU is healthy.
+
 ## WASM memory evidence
 
 The renderer observes the official client's imported heap-growth boundary. It
@@ -178,8 +232,10 @@ heap size before and after, closed outcome, and a short numeric WASM call chain.
 Stack text does not cross IPC.
 
 The same boundary samples bounded WebGL texture totals without content or
-per-texture history. Unknown or saturated tracking makes the known byte total a
-lower bound.
+per-texture history. The local graphics probe can read those counters on
+demand. A context reset clears context-owned totals before WebGL can reuse
+texture IDs. Unknown or saturated tracking makes the known byte total a lower
+bound.
 
 A failed growth request at the compiled limit proves that the official client
 requested more memory than that module permits. It does not identify which

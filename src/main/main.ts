@@ -94,6 +94,7 @@ import {
   updateWindowShortcuts,
 } from './window-shortcuts.js';
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
+import { reportVisualProblem } from "./visual-problem-report.js";
 import { resetGameInput, sendRendererCommand } from "./renderer-commands.js";
 import { STEAM_OAUTH } from "./core/steam-oauth.js";
 import { acquireSteamToken } from "./steam-acquire.js";
@@ -370,6 +371,8 @@ function buildWindowHost(
     updateSettings: (patch) => preferences.updateSettings(patch),
     exportDiagnostics: (win) =>
       exportDiagnosticsForWindow(win, () => preferences.getSettings()),
+    reportVisualProblem: (win) =>
+      reportVisualProblem(win, () => preferences.getSettings()),
     markPerformanceProblem,
     startCapture: startDiagnosticCapture,
     stopCapture: stopDiagnosticCaptureForWindow,

@@ -24,7 +24,7 @@ import type { EnhancementDoctorReport } from "../../src/tools/enhancement-worksp
 import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.js";
 import { runToolboxFoundation, runToolboxHeroPanel } from "./toolbox-scenarios.js";
 
-export type LiveTier = "automation" | "observation";
+export type LiveTier = "automation" | "observation" | "graphics-observation";
 export type LiveReadiness = "frontend" | "observer" | "toolbox" | "cursor" | "storage";
 
 /** Serializable readiness predicate shared by preflight and the final wait. */
@@ -106,7 +106,17 @@ type ObservationScenario = {
   validate(result: LiveResult): void;
 };
 
-export type LiveScenario = AutomationScenario | ObservationScenario;
+type GraphicsObservationScenario = {
+  tier: "graphics-observation";
+  program: EnhancementProgram;
+  readiness: LiveReadiness;
+  validate(result: LiveResult): void;
+};
+
+export type LiveScenario =
+  | AutomationScenario
+  | ObservationScenario
+  | GraphicsObservationScenario;
 
 /**
  * Which scenario runs, how the app is launched for it, and which channels the
@@ -602,6 +612,16 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
     run: noEvidence,
     validate: acceptEvidence,
   }),
+  "graphics-probe": Object.freeze({
+    tier: "graphics-observation",
+    program: "none",
+    readiness: "frontend",
+    validate(result: LiveResult) {
+      if (!result.evidence) {
+        throw new Error("graphics probe recorded no baseline");
+      }
+    },
+  }),
   target: Object.freeze({
     tier: "automation",
     program: "target-observer",
@@ -722,8 +742,8 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
     run: noEvidence,
     validate: acceptEvidence,
   }),
-  // The one observation-tier scenario today: it reads only the fixed cursor
-  // projection the renderer published and asks a human for every state change.
+  // Observation scenarios receive fixed typed projections and no page, input,
+  // CDP, or parent-process command handle.
   "cursor-capture": Object.freeze({
     tier: "observation",
     program: "cursor-observer",
@@ -879,7 +899,7 @@ export function scenarioContext(
   capabilities: LiveCapabilities,
 ): ObservationContext;
 export function scenarioContext(
-  tier: LiveTier,
+  tier: "automation" | "observation",
   capabilities: LiveCapabilities,
 ): AutomationContext | ObservationContext {
   const { page, cdp, sendAutomationCommand } = capabilities;

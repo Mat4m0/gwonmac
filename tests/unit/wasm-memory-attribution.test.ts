@@ -238,6 +238,51 @@ describe("WASM growth provenance", () => {
     assert.equal(investigation?.snapshot().trackedTextures, 4_096);
     assert.equal(investigation?.snapshot().textureTrackingSaturated, true);
   });
+
+  it("drops dead-context residency before texture ids can be reused", () => {
+    const module = { HEAPU8: new Uint8Array(16) };
+    const textureIds = new DataView(module.HEAPU8.buffer);
+    const noop = (...values: number[]) => { void values; };
+    const imports = {
+      env: {
+        emscripten_resize_heap: () => false,
+        glGenTextures: noop,
+        glBindTexture: noop,
+        glTexStorage2D: noop,
+      },
+    };
+    const investigation = installWasmMemoryAttribution({
+      imports,
+      module,
+      recordGrowth: () => {},
+      log: () => {},
+    });
+    if (!investigation) assert.fail("memory attribution was not installed");
+
+    textureIds.setUint32(0, 7, true);
+    imports.env.glGenTextures(1, 0);
+    imports.env.glBindTexture(GL_TEXTURE_2D, 7);
+    imports.env.glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, 4, 4);
+    assert.equal(investigation.snapshot().knownTextureBytes, 64);
+
+    investigation.resetContext();
+    assert.deepEqual(investigation.snapshot(), {
+      generatedTextures: 0,
+      deletedTextures: 0,
+      liveTextures: 0,
+      trackedTextures: 0,
+      knownTextureBytes: 0,
+      textureUploadBytes: 0,
+      unknownTextureAllocations: 0,
+      textureTrackingSaturated: false,
+    });
+
+    imports.env.glGenTextures(1, 0);
+    imports.env.glBindTexture(GL_TEXTURE_2D, 7);
+    imports.env.glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, 2, 2);
+    assert.equal(investigation.snapshot().knownTextureBytes, 16);
+    assert.equal(investigation.snapshot().trackedTextures, 1);
+  });
 });
 
 describe("texture storage estimates", () => {

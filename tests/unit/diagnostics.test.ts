@@ -346,6 +346,62 @@ describe("capture validation, format 2", () => {
       /trace scan and included files disagree/,
     );
   });
+
+  it("requires explicit consent and a valid PNG for visual evidence", () => {
+    const capture = currentCapture(events);
+    capture.visualProblemScreenshot = new Uint8Array([
+      137, 80, 78, 71, 13, 10, 26, 10,
+    ]);
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /screenshot file presence is inconsistent/,
+    );
+
+    capture.manifest.includedFiles.push("visual-problem.png");
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /screenshot has no manifest declaration/,
+    );
+
+    capture.manifest.visualProblem = {
+      rendererOutcome: "completed",
+      gameWindowCount: 2,
+      screenshotRequested: false,
+      screenshotIncluded: true,
+      screenshotPrivacy: "player-consented-unscanned",
+    };
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /screenshot was included without consent/,
+    );
+
+    capture.manifest.visualProblem.screenshotRequested = true;
+    capture.visualProblemScreenshot = new Uint8Array([1, 2, 3]);
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /screenshot is not a PNG/,
+    );
+
+    capture.visualProblemScreenshot = new Uint8Array([
+      137, 80, 78, 71, 13, 10, 26, 10,
+    ]);
+    assert.deepEqual(validateCapture(capture), []);
+
+    Object.defineProperty(capture.manifest, "visualProblem", {
+      configurable: true,
+      value: {
+        rendererOutcome: "completed",
+        gameWindowCount: 2,
+        screenshotRequested: "false",
+        screenshotIncluded: true,
+        screenshotPrivacy: "player-consented-unscanned",
+      },
+    });
+    assert.match(
+      validateCapture(capture).join("\n"),
+      /manifest declaration is invalid/,
+    );
+  });
 });
 
 // Format 1 is the alpha's export, and 117 of them are in the wild. The

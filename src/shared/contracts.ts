@@ -725,17 +725,40 @@ export type RendererCommand =
   | { type: "diagnostics.toggle" }
   | {
       type: "diagnostics.capture";
-      action: "reset" | "stopped" | "flush" | "problem-marked";
+      action:
+        | "reset"
+        | "stopped"
+        | "flush"
+        | "problem-marked"
+        | "visual-problem";
     }
   | { type: "diagnostics.capture"; action: "started"; level: 1 | 2 };
 
 /** What the renderer can truthfully acknowledge over IPC. */
-export type RendererCommandCompletion = "completed" | "unhandled" | "failed";
+export const RENDERER_COMMAND_COMPLETIONS = [
+  "completed",
+  "unhandled",
+  "failed",
+] as const;
+export type RendererCommandCompletion =
+  (typeof RENDERER_COMMAND_COMPLETIONS)[number];
 
 /** Main adds its own bounded-wait result to the renderer's acknowledgement. */
+export const RENDERER_COMMAND_OUTCOMES = [
+  ...RENDERER_COMMAND_COMPLETIONS,
+  "timed-out",
+] as const;
 export type RendererCommandOutcome =
-  | RendererCommandCompletion
-  | "timed-out";
+  (typeof RENDERER_COMMAND_OUTCOMES)[number];
+
+/** The visual-report metadata written into a diagnostics ZIP manifest. */
+export interface VisualProblemManifest {
+  rendererOutcome: RendererCommandOutcome;
+  gameWindowCount: number;
+  screenshotRequested: boolean;
+  screenshotIncluded: boolean;
+  screenshotPrivacy: "player-consented-unscanned";
+}
 
 /**
  * The two `gw://` routes the build editor fetches.

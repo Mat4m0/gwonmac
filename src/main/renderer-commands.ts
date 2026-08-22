@@ -11,6 +11,7 @@
 import { ipcMain, type BrowserWindow } from "electron";
 import {
   IPC,
+  RENDERER_COMMAND_COMPLETIONS,
   type GameTextEditCommand,
   type RendererCommand,
   type RendererCommandCompletion,
@@ -31,10 +32,8 @@ export const RENDERER_COMMAND_TIMEOUT_MS = 5_000;
 ipcMain.on(IPC.rendererCommandDone, (event, id: unknown, outcome: unknown) => {
   if (
     typeof id !== "number"
-    || (
-      outcome !== "completed"
-      && outcome !== "unhandled"
-      && outcome !== "failed"
+    || !RENDERER_COMMAND_COMPLETIONS.includes(
+      outcome as RendererCommandCompletion,
     )
   ) {
     return;
