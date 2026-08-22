@@ -175,19 +175,27 @@ recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
 
-The game's hidden text proxies own macOS editing while they are active.
-Command-A/C/X/V are claimed before game input and never arrive as bare
-A/C/X/V game keys. Copy and paste use the proxy; select-all and cut become the
-Control chords already owned by Guild Wars' visible editor. Physical Control
-stays available to Guild Wars unchanged. The application menu keeps its Edit
-commands clickable but does not register their AppKit accelerators. Password
-text never crosses the renderer bridge.
+Main claims physical Command-A/C/X/V before the renderer can hold their base
+keys and runs the edit immediately. The claim contains physical repeats and
+releases while allowing the translated Control chord through. Edit menu clicks
+use the same semantic command and focused-window route. A hidden Guild Wars
+text proxy claims the command. An ordinary gwonmac input declines it so
+Chromium edits normally. Copy and Cut send only non-password proxy text to
+main. Main writes Cut text to the pasteboard before it sends Guild Wars
+Control-X. Paste validates the clipboard in main and sends Guild Wars a
+Control-V chord, which also produces Chromium's trusted native Paste edit
+(`insertFromPaste`). Select All mirrors the full selection onto the proxy and
+sends Guild Wars Control-A, so a following Cut can export the same selection.
+Password text never crosses the renderer bridge. Physical Control stays
+available to Guild Wars unchanged.
 
-The native input host registers `ApplePressAndHoldEnabled = false` as a
-process-only default before the first game window exists. This makes macOS send
-its physical repeat keydowns to hidden text proxies for printable characters,
-Backspace, and Delete. It does not write the player's preferences, create a
-timer, or synthesize repeat cadence; macOS remains the sole repeat clock.
+Before the first window exists, Electron writes the bundle-specific persistent
+`ApplePressAndHoldEnabled = false` preference. This makes macOS send physical
+repeat keydowns to hidden text proxies for printable characters, Backspace,
+Delete, and navigation keys. It does not change the global macOS preference,
+create a timer, or synthesize repeat cadence. macOS remains the sole repeat
+clock. Automated tests prove how Chromium handles supplied repeat events. A
+packaged physical test proves that AppKit supplies them to the current client.
 
 Certified Core supplies native double-click and the Guild Wars cursor. Core is
 required behavior. It is not a saved player preference. If an ArenaNet build
@@ -205,6 +213,29 @@ clears the memory. The trace is not persisted, exported with diagnostics, or
 sent over the network. Copy keeps the newest complete rows that fit the same
 bounded clipboard contract used elsewhere and states how many older rows were
 omitted.
+
+### Packaged input qualification
+
+CDP and `webContents.sendInputEvent()` start after AppKit. They cannot prove a
+physical Command accelerator or native repeat generation. Qualify each release
+candidate in the packaged app on macOS:
+
+1. Open **Help → Diagnostics → Show Input Trace** and drag its header away from
+   the text field under test.
+2. Hold a printable character, Backspace, Delete, Left Arrow, and Right Arrow
+   in a Guild Wars text field.
+3. Confirm native repeated keydowns, trusted proxy edits, and visible Guild Wars
+   changes at the macOS repeat cadence.
+4. Use physical Command-A/C/X/V and each matching Edit menu item.
+5. Confirm Copy and Cut update the pasteboard, Paste preserves Unicode and
+   multiline text, and Select All changes the visible Guild Wars editor.
+6. Release Command before the editing key. Repeat with the editing key released
+   first.
+7. Confirm no bare game key, unmatched key-up, or held-key state remains.
+
+Stop qualification if Paste does not produce trusted `insert-paste` proxy
+events. Record the events. Do not restore character-by-character Paste as a
+fallback.
 
 ## Native network boundary
 

@@ -103,7 +103,7 @@ function listen(eventChannel, callback) {
 /**
  * @type {((
  *   command: import("../shared/contracts.js").RendererCommand,
- * ) => void | Promise<void>) | null}
+ * ) => void | "unhandled" | Promise<void | "unhandled">) | null}
  */
 let rendererCommandHandler = null;
 ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
@@ -115,7 +115,11 @@ ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
   void Promise.resolve()
     .then(() => handler(command))
     .then(
-      () => ipcRenderer.send(IPC.rendererCommandDone, id, "completed"),
+      (result) => ipcRenderer.send(
+        IPC.rendererCommandDone,
+        id,
+        result === "unhandled" ? "unhandled" : "completed",
+      ),
       () => ipcRenderer.send(IPC.rendererCommandDone, id, "failed"),
     );
 });
@@ -232,7 +236,7 @@ const api = {
   clipboard: {
     writeText: (text) => ipcRenderer.invoke(IPC.clipboardWriteText, text),
     readText: () => ipcRenderer.invoke(IPC.clipboardReadText),
-    edit: (command) => ipcRenderer.invoke(IPC.clipboardEdit, command),
+    edit: (request) => ipcRenderer.invoke(IPC.clipboardEdit, request),
   },
   templates: {
     export: (entries) => ipcRenderer.invoke(IPC.templatesExport, entries),

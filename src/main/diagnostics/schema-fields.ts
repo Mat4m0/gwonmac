@@ -127,6 +127,7 @@ export type ContractIncompleteRendererCommandOutcome = Exclude<
 >;
 export const INCOMPLETE_RENDERER_COMMAND_OUTCOMES = [
   "failed",
+  "unhandled",
   "timed-out",
 ] as const satisfies readonly ContractIncompleteRendererCommandOutcome[];
 export type IncompleteRendererCommandOutcome =

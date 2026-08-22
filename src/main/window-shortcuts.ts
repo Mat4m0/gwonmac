@@ -3,6 +3,7 @@
  * Settings stay durable elsewhere; this controller owns only the live input state.
  */
 import type { BrowserWindow } from "electron";
+import type { GameTextEditCommand } from "../shared/contracts.js";
 import {
   resolveShortcuts,
   shortcutFromInput,
@@ -24,26 +25,49 @@ const tracedKey = (key: string) => {
 
 interface ShortcutActions {
   run(action: ShortcutAction): void;
-  changed(
-    shortcuts: ReturnType<typeof resolveShortcuts>,
-  ): void;
+  edit(command: GameTextEditCommand): void;
 }
+
+type ClaimedKey = 'capture' | 'shortcut' | GameTextEditCommand;
+
+const claimedDecision = (claim: ClaimedKey): 'capture' | 'shortcut' =>
+  claim === 'capture' ? 'capture' : 'shortcut';
+
+const isTextEditClaim = (claim: ClaimedKey): claim is GameTextEditCommand =>
+  claim !== 'capture' && claim !== 'shortcut';
+
+const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
+  if (!input.meta || input.control || input.shift || input.alt) return null;
+  if (input.code === 'KeyA') return 'selectAll';
+  if (input.code === 'KeyC') return 'copy';
+  if (input.code === 'KeyV') return 'paste';
+  if (input.code === 'KeyX') return 'cut';
+  return null;
+};
 
 class WindowShortcuts {
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({});
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
-  #claimedCodes = new Map<string, 'capture' | 'shortcut'>();
+  #claimedCodes = new Map<string, ClaimedKey>();
 
   constructor(win: BrowserWindow, actions: ShortcutActions) {
     this.#actions = actions;
     win.webContents.on("before-input-event", (event, input) => {
       if (input.type === "keyUp") {
         const decision = this.#claimedCodes.get(input.code);
+        if (decision && isTextEditClaim(decision) && input.control && !input.meta) {
+          recordMainInput(win, {
+            source: 'main', kind: 'native-key', phase: 'up',
+            key: tracedKey(input.key), repeat: false,
+            decision: 'forwarded',
+          });
+          return;
+        }
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'up',
           key: tracedKey(input.key), repeat: false,
-          decision: decision ?? 'forwarded',
+          decision: decision ? claimedDecision(decision) : 'forwarded',
         });
         if (decision) {
           this.#claimedCodes.delete(input.code);
@@ -54,9 +78,21 @@ class WindowShortcuts {
       if (input.type !== "keyDown") return;
       const claimed = this.#claimedCodes.get(input.code);
       if (claimed) {
+        // The translated Guild Wars chord deliberately reuses A or X while
+        // the physical Command shortcut remains claimed. Let only that exact
+        // Control event through; repeats and unmodified leaks stay contained.
+        if (isTextEditClaim(claimed) && input.control && !input.meta) {
+          recordMainInput(win, {
+            source: 'main', kind: 'native-key', phase: 'down',
+            key: tracedKey(input.key), repeat: input.isAutoRepeat,
+            decision: 'forwarded',
+          });
+          return;
+        }
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'down',
-          key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: claimed,
+          key: tracedKey(input.key), repeat: input.isAutoRepeat,
+          decision: claimedDecision(claimed),
         });
         event.preventDefault();
         return;
@@ -84,6 +120,18 @@ class WindowShortcuts {
           : { status: "invalid" });
         return;
       }
+      const edit = textEditCommand(input);
+      if (edit) {
+        event.preventDefault();
+        recordMainInput(win, {
+          source: 'main', kind: 'native-key', phase: 'down',
+          key: tracedKey(input.key), repeat: input.isAutoRepeat,
+          decision: 'shortcut',
+        });
+        this.#claimedCodes.set(input.code, edit);
+        this.#actions.edit(edit);
+        return;
+      }
       for (const [action, binding] of Object.entries(this.#shortcuts)) {
         if (binding && shortcutMatches(binding, input)) {
           recordMainInput(win, {
@@ -109,7 +157,6 @@ class WindowShortcuts {
 
   update(overrides: ShortcutOverrides): void {
     this.#shortcuts = resolveShortcuts(overrides);
-    this.#actions.changed(this.#shortcuts);
   }
 
   capture(): Promise<ShortcutCaptureResult> {

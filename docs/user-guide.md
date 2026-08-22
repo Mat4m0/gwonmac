@@ -150,8 +150,9 @@ The same pane lists **Keyboard shortcuts**. Choose **Change**, then press a
 Command shortcut to replace the default. Letter and number shortcuts use their
 physical keyboard positions, so they stay stable when Option or the active
 keyboard layout changes. Control remains available to Guild Wars. Delete clears a shortcut, Escape
-cancels recording, and **Restore default shortcuts** restores Command-B for
-Tools, Command-Shift-C for Xunlai storage, and Command-T for Travel. Shortcuts work only while the
+cancels recording. **Show or hide GWonMac Tools** uses Command-B by default.
+**Restore default shortcuts** also restores Command-Shift-C for Xunlai storage
+and Command-T for Travel. Shortcuts work only while the
 Guild Wars window is active. GWonMac keeps normal editing and application
 shortcuts such as Command-C and Command-Q, plus Travel's Command-1 through
 Command-9 assignments, reserved.
@@ -326,13 +327,17 @@ opens its GitHub issue form immediately. GitHub issues are public.
 - Use **Record Performance Problem** for stutter. Reproduce it, press
   **Command-Shift-M**, stop the capture, and export it when prompted.
 - Use **Show Input Trace** for keyboard, text, pointer, shortcut, or gamepad
-  problems. Reproduce the problem, pause the bounded timeline, then copy it
-  into the issue. It omits text, secrets, field lengths, coordinates, account
+  problems. Drag its header to move it away from the Guild Wars control you
+  need to test. Reproduce the problem, pause the bounded timeline, then copy
+  it into the issue. It omits text, secrets, field lengths, coordinates, account
   identifiers, and controller identifiers. Pointer rows say only whether the
   click belonged to the game canvas, a GWonMac surface, a text or secret field,
   or another element. Closing it discards the trace.
-- Holding a character, Backspace, or Delete in Guild Wars text fields follows
-  the repeat delay and speed configured in macOS Keyboard settings.
+- Holding a character, Backspace, Delete, Left Arrow, or Right Arrow in Guild
+  Wars text fields follows the repeat delay and speed configured in macOS
+  Keyboard settings. gwonmac stores an app-specific press-and-hold preference;
+  it does not change the global macOS preference. A packaged physical check is
+  the final proof for each Guild Wars client update.
 
 The diagnostics ZIP excludes saved login, account request bodies, game traffic,
 chat, and crash dumps. Other text is scanned for known secret and path patterns.

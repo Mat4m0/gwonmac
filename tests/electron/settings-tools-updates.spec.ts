@@ -175,12 +175,12 @@ test.describe("tools and update settings", () => {
       await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "0");
       await expect(page.locator("body")).toHaveAttribute("data-shortcut-leaks", "0");
       expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu()
-        ?.getMenuItemById("toggle-tools")?.accelerator)).toBe("Command+Shift+K");
+        ?.getMenuItemById("toggle-tools")?.accelerator)).toBeNull();
 
       await storageRow.locator(".settings-shortcut-change").click();
       await sendInput("K", ["meta", "shift"]);
       await expect(storageRow.locator(".settings-shortcut-message"))
-        .toContainText("used by Toggle Tools");
+        .toContainText("used by Show or hide GWonMac Tools");
       await storageRow.locator(".settings-shortcut-replace").click();
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({

@@ -41,6 +41,7 @@ import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
 import {
+  editWindowText,
   openStorage,
   sendRendererCommand,
   toggleTools,
@@ -473,10 +474,6 @@ export function createMainWindow(
   // so `preventDefault()` here means neither our page nor the client ever sees
   // the key. There is nothing to out-race and no ordering to get wrong.
   //
-  // The View menu item carries the same accelerator with
-  // `registerAccelerator: false`, so the shortcut is still shown and
-  // discoverable without also being bound and fired twice.
-  let menuShortcuts: Parameters<typeof installApplicationMenu>[0]["shortcuts"];
   const installMenu = () => {
     // The application menu is global. Settings can finish loading in any game
     // window, so an unfocused window must never replace the focused owner's
@@ -487,7 +484,6 @@ export function createMainWindow(
     }
     installApplicationMenu({
       host,
-      ...(menuShortcuts ? { shortcuts: menuShortcuts } : {}),
       resetWindowState,
     });
   };
@@ -497,9 +493,8 @@ export function createMainWindow(
       else if (action === "storage.open") void openStorage(win);
       else void toggleTravel(win);
     },
-    changed(shortcuts) {
-      menuShortcuts = shortcuts;
-      installMenu();
+    edit(command) {
+      void editWindowText(win, command);
     },
   });
   void host.getSettings().then((settings) => {

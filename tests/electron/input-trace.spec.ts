@@ -67,6 +67,27 @@ test.describe("input trace", () => {
       await toggleTrace(page);
       await expect(page.locator("#input-trace")).toBeVisible();
 
+      const panel = page.locator('#input-trace');
+      const header = panel.locator('header');
+      const beforeMove = await panel.boundingBox();
+      const headerBox = await header.boundingBox();
+      if (!beforeMove || !headerBox) throw new Error('input trace panel missing');
+      const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+      await page.mouse.move(headerBox.x + 8, headerBox.y + headerBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(viewport.width - 20, 20);
+      await page.mouse.up();
+      const afterMove = await panel.boundingBox();
+      if (!afterMove) throw new Error('input trace panel missing after drag');
+      expect(afterMove.y).toBeLessThan(beforeMove.y);
+      expect(afterMove.y).toBeGreaterThanOrEqual(11);
+      expect(afterMove.y).toBeLessThanOrEqual(viewport.height - afterMove.height - 11);
+      expect(afterMove.x).toBeLessThanOrEqual(viewport.width - afterMove.width - 11);
+
+      const beforeButton = await panel.boundingBox();
+      await panel.locator('[data-role="clear"]').click();
+      expect(await panel.boundingBox()).toEqual(beforeButton);
+
       await page.mouse.move(box.x + 120, box.y + 120);
       await page.mouse.dblclick(box.x + 120, box.y + 120);
 

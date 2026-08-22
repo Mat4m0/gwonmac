@@ -33,4 +33,17 @@ describe("the macOS input policy", () => {
       );
     }
   });
+
+  it("sets the bundle-specific repeat preference before the first window", async () => {
+    const main = await readFile("src/main/main.ts", "utf8");
+    assert.match(
+      main,
+      /systemPreferences\.setUserDefault\(\s*"ApplePressAndHoldEnabled",\s*"boolean",\s*false/u,
+    );
+    const ready = main.indexOf("app.whenReady().then");
+    const repeatPolicy = main.indexOf("systemPreferences.setUserDefault");
+    const firstWindow = main.indexOf("createAccountsWindow(", repeatPolicy);
+    assert.ok(ready >= 0 && repeatPolicy > ready);
+    assert.ok(firstWindow > repeatPolicy);
+  });
 });

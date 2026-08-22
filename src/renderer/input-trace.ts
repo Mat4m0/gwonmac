@@ -11,6 +11,7 @@ import { CLIPBOARD_TEXT_CEILING } from '../shared/contracts.js';
 
 const TRACE_CAPACITY = 1_000;
 const VISIBLE_ROWS = 18;
+const EDGE_MARGIN = 12;
 
 const OVERLAY_CSS = `
 #input-trace { position:fixed; bottom:12px; left:12px; z-index:5;
@@ -21,7 +22,9 @@ const OVERLAY_CSS = `
   font-variant-numeric:tabular-nums; pointer-events:none; user-select:none; }
 #input-trace[hidden] { display:none; }
 #input-trace header { display:flex; align-items:center; gap:8px; margin-bottom:6px;
-  color:#c8aa6e; text-transform:uppercase; letter-spacing:.06em; }
+  color:#c8aa6e; text-transform:uppercase; letter-spacing:.06em;
+  pointer-events:auto; cursor:grab; touch-action:none; }
+#input-trace header[data-dragging] { cursor:grabbing; }
 #input-trace header span[data-role="count"] { color:#8d8a82; margin-left:auto; }
 #input-trace button { pointer-events:auto; padding:2px 8px; border:1px solid #524e44;
   border-radius:2px; background:#1d1c19; color:#e8e4d8; font:inherit;
@@ -107,7 +110,7 @@ export function createInputTrace(
   root.id = 'input-trace';
   root.hidden = true;
   root.innerHTML = `
-    <header>
+    <header title="Drag to move">
       Input harness
       <button type="button" data-role="pause">Pause</button>
       <button type="button" data-role="copy">Copy</button>
@@ -130,6 +133,51 @@ export function createInputTrace(
   let lastAt: number | null = null;
   let sequence = 0;
   let painting = false;
+  let positioned = false;
+
+  const placeInsideWindow = (left: number, top: number) => {
+    const bounds = root.getBoundingClientRect();
+    const maxLeft = Math.max(EDGE_MARGIN, innerWidth - bounds.width - EDGE_MARGIN);
+    const maxTop = Math.max(EDGE_MARGIN, innerHeight - bounds.height - EDGE_MARGIN);
+    root.style.left = `${Math.min(Math.max(left, EDGE_MARGIN), maxLeft)}px`;
+    root.style.top = `${Math.min(Math.max(top, EDGE_MARGIN), maxTop)}px`;
+    root.style.bottom = 'auto';
+    positioned = true;
+  };
+
+  const header = root.querySelector<HTMLElement>('header')!;
+  let drag: { pointerId: number; offsetX: number; offsetY: number } | null = null;
+  const finishDrag = (event: PointerEvent) => {
+    if (drag?.pointerId !== event.pointerId) return;
+    drag = null;
+    header.removeAttribute('data-dragging');
+  };
+  header.addEventListener('pointerdown', (event) => {
+    if (
+      event.button !== 0
+      || (event.target instanceof Element && event.target.closest('button'))
+    ) return;
+    const bounds = root.getBoundingClientRect();
+    drag = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - bounds.left,
+      offsetY: event.clientY - bounds.top,
+    };
+    header.dataset.dragging = '';
+    header.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  header.addEventListener('pointermove', (event) => {
+    if (drag?.pointerId !== event.pointerId) return;
+    placeInsideWindow(event.clientX - drag.offsetX, event.clientY - drag.offsetY);
+  });
+  header.addEventListener('pointerup', finishDrag);
+  header.addEventListener('pointercancel', finishDrag);
+  window.addEventListener('resize', () => {
+    if (!positioned || root.hidden) return;
+    const bounds = root.getBoundingClientRect();
+    placeInsideWindow(bounds.left, bounds.top);
+  });
 
   const paint = () => {
     painting = false;
@@ -141,6 +189,10 @@ export function createInputTrace(
       return li;
     }));
     count.textContent = `${entries.length}/${TRACE_CAPACITY}`;
+    if (positioned && !root.hidden) {
+      const bounds = root.getBoundingClientRect();
+      placeInsideWindow(bounds.left, bounds.top);
+    }
   };
   const schedulePaint = () => {
     if (painting) return;

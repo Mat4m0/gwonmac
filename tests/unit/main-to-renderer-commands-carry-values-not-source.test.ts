@@ -265,6 +265,14 @@ test("one physical key release crosses preload and is acknowledged", async () =>
   assert.deepEqual(fixture.acknowledgements(), [[1, "completed"]]);
 });
 
+test("ordinary renderer text editing declines to the main-process fallback", async () => {
+  const fixture = harness(ARGV);
+  fixture.deliver(1, { type: "text.edit", command: "copy" });
+  await new Promise(setImmediate);
+  assert.deepEqual(fixture.dispatched, ["gw:text-edit"]);
+  assert.deepEqual(fixture.acknowledgements(), [[1, "unhandled"]]);
+});
+
 test("input harness state crosses as an explicit value and is acknowledged", async () => {
   const fixture = harness(ARGV);
   fixture.deliver(1, { type: "input.trace", enabled: true });
