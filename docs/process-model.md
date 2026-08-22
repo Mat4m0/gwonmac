@@ -184,9 +184,10 @@ Chromium edits normally. Copy and Cut send only non-password proxy text to
 main. Main writes Cut text to the pasteboard before it sends Guild Wars
 Control-X. Paste validates the clipboard in main and sends Guild Wars a
 Control-V chord, which also produces Chromium's trusted native Paste edit
-(`insertFromPaste`). Select All sends Guild Wars Control-A. Password text never
-crosses the renderer bridge. Physical Control stays available to Guild Wars
-unchanged.
+(`insertFromPaste`). Select All mirrors the full selection onto the proxy and
+sends Guild Wars Control-A, so a following Cut can export the same selection.
+Password text never crosses the renderer bridge. Physical Control stays
+available to Guild Wars unchanged.
 
 Before the first window exists, Electron writes the bundle-specific persistent
 `ApplePressAndHoldEnabled = false` preference. This makes macOS send physical

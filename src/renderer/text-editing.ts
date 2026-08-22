@@ -146,7 +146,13 @@ export const installTextEditing = ({
 
     event.preventDefault();
     let request: GameTextEditRequest | null = null;
-    if (detail.command === 'paste' || detail.command === 'selectAll') {
+    if (detail.command === 'selectAll') {
+      // Guild Wars keeps its visible selection internally. Mirror this one
+      // semantic selection onto the proxy so a following Cut can export the
+      // exact selected text before the destructive Control-X chord.
+      active.select();
+      request = { command: 'selectAll' };
+    } else if (detail.command === 'paste') {
       request = { command: detail.command };
     } else if (canExportText(active)) {
       const selected = selectedText(active);

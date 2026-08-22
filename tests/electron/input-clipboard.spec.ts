@@ -202,6 +202,13 @@ test.describe("renderer text editing", () => {
           ]);
 
         await clickEdit(app, EDIT_ITEMS.selectAll);
+        expect(await page.evaluate(() => {
+          const field = document.getElementById("osk-input-multiline") as HTMLTextAreaElement;
+          return [field.selectionStart, field.selectionEnd];
+        })).toEqual([0, "é🙂 line\nnext".length]);
+        await clickEdit(app, EDIT_ITEMS.cut);
+        await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+          .toBe("é🙂 line\nnext");
         expect(await page.evaluate(() => (window as OskWindow).__clipboardGameKeys))
           .toEqual([
             { type: "keydown", key: "Control", code: "ControlLeft", control: true, meta: false, trusted: true },
@@ -219,6 +226,10 @@ test.describe("renderer text editing", () => {
             { type: "keydown", key: "Control", code: "ControlLeft", control: true, meta: false, trusted: true },
             { type: "keydown", key: "a", code: "KeyA", control: true, meta: false, trusted: true },
             { type: "keyup", key: "a", code: "KeyA", control: true, meta: false, trusted: true },
+            { type: "keyup", key: "Control", code: "ControlLeft", control: false, meta: false, trusted: true },
+            { type: "keydown", key: "Control", code: "ControlLeft", control: true, meta: false, trusted: true },
+            { type: "keydown", key: "x", code: "KeyX", control: true, meta: false, trusted: true },
+            { type: "keyup", key: "x", code: "KeyX", control: true, meta: false, trusted: true },
             { type: "keyup", key: "Control", code: "ControlLeft", control: false, meta: false, trusted: true },
           ]);
       } finally {
