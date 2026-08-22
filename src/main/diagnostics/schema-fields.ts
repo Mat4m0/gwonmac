@@ -119,6 +119,7 @@ export const RENDERER_CAPTURE_ACTIONS = [
   "stopped",
   "flush",
   "problem-marked",
+  "visual-problem",
 ] as const satisfies readonly ContractRendererCaptureAction[];
 export type RendererCaptureAction =
   (typeof RENDERER_CAPTURE_ACTIONS)[number];

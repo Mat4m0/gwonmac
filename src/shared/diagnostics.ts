@@ -207,6 +207,7 @@ export const RENDERER_MILESTONES = [
   "wasm.exit",
   "wasm.memoryProbe",
   "wasm.growthRequested",
+  "graphics.visualProblem",
   // The renderer half of the Enhancement story: whether our code was actually
   // live in the game's call path. Main records that a transformed module was
   // *prepared*; only these say the hook was installed, refused, or withdrawn —
@@ -252,6 +253,32 @@ export const WASM_MEMORY_PROBE_STATUSES = [
 export type WasmMemoryProbeStatus =
   (typeof WASM_MEMORY_PROBE_STATUSES)[number];
 
+/** Bounded texture counters only. No texture identity or pixels escape. */
+export type TextureMemorySnapshot = {
+  generatedTextures: number;
+  deletedTextures: number;
+  liveTextures: number;
+  trackedTextures: number;
+  knownTextureBytes: number;
+  textureUploadBytes: number;
+  unknownTextureAllocations: number;
+  textureTrackingSaturated: boolean;
+};
+
+export type GraphicsVisualProblemFields = TextureMemorySnapshot & {
+  textureProbeInstalled: boolean;
+  wasmHeapBytes: number;
+  contextLost: boolean;
+  canvasWidth: number;
+  canvasHeight: number;
+  offscreenWidth: number;
+  offscreenHeight: number;
+  drawingBufferWidth: number;
+  drawingBufferHeight: number;
+  livePrograms: number;
+  programPassThroughQueries: number;
+};
+
 export interface RendererMilestoneFieldsByName {
   "build.info": { programId: string | number; buildId: string | number };
   /**
@@ -273,7 +300,7 @@ export interface RendererMilestoneFieldsByName {
    * numeric WASM frames preserve attribution without exporting stack prose;
    * texture fields are aggregate lifetime evidence at the same instant.
    */
-  "wasm.growthRequested": {
+  "wasm.growthRequested": TextureMemorySnapshot & {
     requestedBytes: number;
     beforeBytes: number;
     afterBytes: number;
@@ -288,15 +315,8 @@ export interface RendererMilestoneFieldsByName {
     frame2Offset: number;
     frame3Function: number;
     frame3Offset: number;
-    generatedTextures: number;
-    deletedTextures: number;
-    liveTextures: number;
-    trackedTextures: number;
-    knownTextureBytes: number;
-    textureUploadBytes: number;
-    unknownTextureAllocations: number;
-    textureTrackingSaturated: boolean;
   };
+  "graphics.visualProblem": GraphicsVisualProblemFields;
   /**
    * The hook went live. `capabilityProfile` is the closed profile vocabulary
    * from contracts — typed as string here because contracts imports this file;

@@ -15,10 +15,10 @@ import type {
 import type {
   RendererEventName,
   RendererMetrics,
+  TextureMemorySnapshot,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { PublishedCompanionState } from "./companion-snapshot.js";
-import type { TextureMemorySnapshot } from "./wasm-memory-attribution.js";
 import type {
   InputTrace as SharedInputTrace,
   InputTraceEntry as SharedInputTraceEntry,
@@ -105,6 +105,7 @@ declare global {
     captureStarted(level: 1 | 2): void;
     captureStopped(): void;
     problemMarked(): void;
+    visualProblem(): Promise<void>;
     event(name: RendererEventName, value?: unknown): void;
     snapshot(
       durationUs: number,

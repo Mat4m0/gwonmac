@@ -173,3 +173,39 @@ describe("the recorded heap staircase", () => {
     );
   });
 });
+
+describe("the recorded visual problem", () => {
+  it("contains only bounded graphics and texture state", () => {
+    const fields = {
+      clockSynchronized: true,
+      textureProbeInstalled: true,
+      wasmHeapBytes: 556_793_856,
+      contextLost: false,
+      canvasWidth: 4_482,
+      canvasHeight: 2_468,
+      offscreenWidth: 4_482,
+      offscreenHeight: 2_468,
+      drawingBufferWidth: 4_482,
+      drawingBufferHeight: 2_468,
+      generatedTextures: 1_025,
+      deletedTextures: 638,
+      liveTextures: 387,
+      trackedTextures: 387,
+      knownTextureBytes: 260_111_733,
+      textureUploadBytes: 497_203_201,
+      unknownTextureAllocations: 0,
+      textureTrackingSaturated: false,
+      livePrograms: 0,
+      programPassThroughQueries: 0,
+    };
+    assert.deepEqual(
+      diagnosticEventRecord({ k: "graphics.visualProblem", ...fields }),
+      {
+        subsystem: "graphics",
+        level: "info",
+        name: "graphics.visualProblem",
+        fields,
+      },
+    );
+  });
+});

@@ -602,6 +602,10 @@ Module = {
     });
     if (memoryAttribution) {
       window.gwTextureStats = memoryAttribution.snapshot;
+      addEventListener(
+        'gw:graphics-context-reset',
+        memoryAttribution.resetContext,
+      );
     } else {
       delete window.gwTextureStats;
     }

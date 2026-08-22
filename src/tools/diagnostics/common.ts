@@ -27,6 +27,7 @@ import type {
   DiagnosticReport,
   DiagnosticSummary,
 } from "../../shared/diagnostics.js";
+import type { RendererCommandOutcome } from "../../shared/contracts.js";
 export type { DiagnosticReport } from "../../shared/diagnostics.js";
 export type { RedactionResult } from "../../main/diagnostics/detector.js";
 
@@ -68,7 +69,21 @@ interface ManifestFields {
     stride: 7;
     fields: string[];
   };
+  visualProblem?: {
+    rendererOutcome: RendererCommandOutcome;
+    gameWindowCount: number;
+    screenshotRequested: boolean;
+    screenshotIncluded: boolean;
+    screenshotPrivacy: "player-consented-unscanned";
+  };
 }
+
+const RENDERER_COMMAND_OUTCOMES = new Set<string>([
+  "completed",
+  "unhandled",
+  "failed",
+  "timed-out",
+]);
 
 /**
  * The alpha's export. One explicit legacy read path: it declares
@@ -97,6 +112,7 @@ export interface Capture {
   eventLog?: string;
   frames?: FrameAnalysis;
   frameError?: string;
+  visualProblemScreenshot?: Uint8Array;
 }
 
 export interface FrameAnalysis {
@@ -116,6 +132,20 @@ export interface FrameAnalysis {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isVisualProblemManifest(
+  value: unknown,
+): value is NonNullable<ManifestFields["visualProblem"]> {
+  return isRecord(value)
+    && Object.keys(value).length === 5
+    && typeof value.rendererOutcome === "string"
+    && RENDERER_COMMAND_OUTCOMES.has(value.rendererOutcome)
+    && Number.isSafeInteger(value.gameWindowCount)
+    && Number(value.gameWindowCount) >= 1
+    && typeof value.screenshotRequested === "boolean"
+    && typeof value.screenshotIncluded === "boolean"
+    && value.screenshotPrivacy === "player-consented-unscanned";
 }
 
 export function isDiagnosticReport(value: unknown): value is DiagnosticReport {
@@ -256,6 +286,13 @@ export async function withCapture<T>(
           error instanceof Error ? error.message : String(error);
       }
     }
+    try {
+      capture.visualProblemScreenshot = new Uint8Array(
+        await readFile(path.join(root, "visual-problem.png")),
+      );
+    } catch (error) {
+      if (!isRecord(error) || error.code !== "ENOENT") throw error;
+    }
     return await action(capture, root);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -326,6 +363,41 @@ export function validateCapture(capture: Capture): string[] {
     errors.push("frames.bin schema is missing or unsupported");
   }
   if (capture.frameError) errors.push(capture.frameError);
+  const visualProblemValue = capture.manifest.visualProblem;
+  const visualProblem = isVisualProblemManifest(visualProblemValue)
+    ? visualProblemValue
+    : undefined;
+  if (visualProblemValue !== undefined && !visualProblem) {
+    errors.push("visual-problem manifest declaration is invalid");
+  }
+  const screenshotDeclared = capture.manifest.includedFiles.includes(
+    "visual-problem.png",
+  );
+  const screenshotPresent = capture.visualProblemScreenshot !== undefined;
+  if (screenshotDeclared !== screenshotPresent) {
+    errors.push("visual-problem screenshot file presence is inconsistent");
+  }
+  if (screenshotDeclared && !visualProblem) {
+    errors.push("visual-problem screenshot has no manifest declaration");
+  }
+  if (visualProblem) {
+    if (visualProblem.screenshotIncluded !== screenshotDeclared) {
+      errors.push("visual-problem screenshot declaration is inconsistent");
+    }
+    if (
+      visualProblem.screenshotIncluded
+      && visualProblem.screenshotRequested !== true
+    ) {
+      errors.push("visual-problem screenshot was included without consent");
+    }
+  }
+  if (capture.visualProblemScreenshot !== undefined) {
+    const png = capture.visualProblemScreenshot;
+    const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (signature.some((byte, index) => png[index] !== byte)) {
+      errors.push("visual-problem screenshot is not a PNG");
+    }
+  }
   if (
     capture.manifest.includedFiles.includes("capture-summary.json") &&
     !capture.captureSummary

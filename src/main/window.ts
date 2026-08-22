@@ -69,6 +69,7 @@ export interface WindowHost {
   getSettings: () => Promise<AppSettings>;
   updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
   exportDiagnostics: (win: BrowserWindow) => Promise<string>;
+  reportVisualProblem: (win: BrowserWindow) => Promise<void>;
   markPerformanceProblem: (win: BrowserWindow) => void;
   startCapture: (win: BrowserWindow, level: 1 | 2) => Promise<void>;
   stopCapture: (win: BrowserWindow) => Promise<void>;

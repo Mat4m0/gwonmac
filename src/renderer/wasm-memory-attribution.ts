@@ -5,7 +5,10 @@
  * data, pointers, stack prose, or an unbounded per-texture history.
  */
 
-import type { RendererMilestoneFieldsByName } from "../shared/diagnostics.js";
+import type {
+  RendererMilestoneFieldsByName,
+  TextureMemorySnapshot,
+} from "../shared/diagnostics.js";
 
 type GrowthFields = RendererMilestoneFieldsByName["wasm.growthRequested"];
 
@@ -68,18 +71,6 @@ export interface WasmStackFrame {
 interface TextureRecord {
   levelBytes: Float64Array | null;
   bytes: number;
-}
-
-/** Bounded counters only. No texture identity, dimensions, or pixels escape. */
-export interface TextureMemorySnapshot {
-  generatedTextures: number;
-  deletedTextures: number;
-  liveTextures: number;
-  trackedTextures: number;
-  knownTextureBytes: number;
-  textureUploadBytes: number;
-  unknownTextureAllocations: number;
-  textureTrackingSaturated: boolean;
 }
 
 const MAX_TRACKED_TEXTURES = 4_096;
@@ -273,6 +264,17 @@ export function installWasmMemoryAttribution({
   let unknownTextureAllocations = 0;
   let textureTrackingSaturated = false;
   let observationFailureReported = false;
+
+  const resetTextureContext = () => {
+    textures.clear();
+    bindings.clear();
+    generatedTextures = 0;
+    deletedTextures = 0;
+    knownTextureBytes = 0;
+    textureUploadBytes = 0;
+    unknownTextureAllocations = 0;
+    textureTrackingSaturated = false;
+  };
 
   const observe = (callback: () => void) => {
     try {
@@ -604,5 +606,6 @@ export function installWasmMemoryAttribution({
 
   return Object.freeze({
     snapshot: () => Object.freeze(textureSnapshot()),
+    resetContext: resetTextureContext,
   });
 }

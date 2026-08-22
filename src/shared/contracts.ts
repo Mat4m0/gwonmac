@@ -725,7 +725,12 @@ export type RendererCommand =
   | { type: "diagnostics.toggle" }
   | {
       type: "diagnostics.capture";
-      action: "reset" | "stopped" | "flush" | "problem-marked";
+      action:
+        | "reset"
+        | "stopped"
+        | "flush"
+        | "problem-marked"
+        | "visual-problem";
     }
   | { type: "diagnostics.capture"; action: "started"; level: 1 | 2 };
 

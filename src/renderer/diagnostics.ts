@@ -311,6 +311,48 @@
       if (marker) marker.hidden = false;
       announceCapture('Performance problem marked.');
     },
+    async visualProblem() {
+      while (flushing) await new Promise((resolve) => setTimeout(resolve, 0));
+      const visible = document.getElementById('canvas');
+      const canvas = visible instanceof globalThis.HTMLCanvasElement
+        ? visible
+        : null;
+      const offscreen = window.Module?.canvas === canvas
+        ? window.Module.canvas.offscreen
+        : undefined;
+      const gl = offscreen?.getContext('webgl2')
+        ?? offscreen?.getContext('webgl')
+        ?? null;
+      const texture = window.gwTextureStats?.();
+      const programs = window.gwGlRecon?.();
+      await window.gwNative.diagnostics.recordRendererMilestone(
+        'graphics.visualProblem',
+        performance.now() * 1000,
+        {
+          textureProbeInstalled: texture !== undefined,
+          wasmHeapBytes: window.gwWasmHeapBytes?.() ?? 0,
+          contextLost: gl?.isContextLost() ?? false,
+          canvasWidth: canvas?.width ?? 0,
+          canvasHeight: canvas?.height ?? 0,
+          offscreenWidth: offscreen?.width ?? 0,
+          offscreenHeight: offscreen?.height ?? 0,
+          drawingBufferWidth: gl?.drawingBufferWidth ?? 0,
+          drawingBufferHeight: gl?.drawingBufferHeight ?? 0,
+          generatedTextures: texture?.generatedTextures ?? 0,
+          deletedTextures: texture?.deletedTextures ?? 0,
+          liveTextures: texture?.liveTextures ?? 0,
+          trackedTextures: texture?.trackedTextures ?? 0,
+          knownTextureBytes: texture?.knownTextureBytes ?? 0,
+          textureUploadBytes: texture?.textureUploadBytes ?? 0,
+          unknownTextureAllocations: texture?.unknownTextureAllocations ?? 0,
+          textureTrackingSaturated: texture?.textureTrackingSaturated ?? false,
+          livePrograms: programs?.livePrograms ?? 0,
+          programPassThroughQueries: Object.values(programs?.passThrough ?? {})
+            .reduce((total, count) => total + count, 0),
+        },
+      );
+      await flush();
+    },
     event: recordEvent,
     // This is per readAsync. The cache() counters below are per chunk, so
     // mixing them would produce a ratio with two different denominators.
