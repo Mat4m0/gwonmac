@@ -411,14 +411,13 @@ export class FlightRecorder {
     this.captureStartedDroppedEvents = 0;
   }
 
-  captureResult(ownerId?: number): {
+  captureResult(ownerId: number): {
     graphics: GraphicsDiagnostics | null;
     metadata: CaptureMetadata;
     summary: DiagnosticSummary;
   } | null {
     if (
-      ownerId !== undefined
-      && this.completedCapture?.ownerId !== ownerId
+      this.completedCapture?.ownerId !== ownerId
     ) {
       return null;
     }
@@ -531,7 +530,7 @@ export class FlightRecorder {
     await this.writes;
   }
 
-  async exportedEvents(ownerId?: number): Promise<{
+  async exportedEvents(ownerId: number): Promise<{
     text: string;
     firstSeq: number;
     lastSeq: number;
@@ -553,11 +552,15 @@ export class FlightRecorder {
       records.push(...parseLogRecords(await readFile(file, "utf8")));
     }
     records.sort((left, right) => left.seq - right.seq);
-    if (ownerId !== undefined) {
-      records = records.filter(
-        (record) => record.ownerId === undefined || record.ownerId === ownerId,
-      );
-    }
+    // Completeness describes the persisted session, not the account-safe view
+    // returned below. Events owned by another account create intentional gaps
+    // after filtering; those gaps must not look like lost diagnostic records.
+    const completeFromStart =
+      records[0]?.seq === 1
+      && records.every((record, index) => record.seq === index + 1);
+    records = records.filter(
+      (record) => record.ownerId === undefined || record.ownerId === ownerId,
+    );
     const first = records[0];
     const last = records.at(-1);
     return {
@@ -566,9 +569,7 @@ export class FlightRecorder {
       lastSeq: last?.seq ?? 0,
       firstTimestampUs: first?.tsUs ?? 0,
       lastTimestampUs: last?.tsUs ?? 0,
-      completeFromStart:
-        first?.seq === 1 &&
-        records.every((record, index) => record.seq === index + 1),
+      completeFromStart,
     };
   }
 

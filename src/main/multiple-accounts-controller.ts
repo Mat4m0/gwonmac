@@ -497,9 +497,9 @@ export class MultipleAccountsController {
       }
       await mkdir(profilePaths.root, { recursive: true });
       await prepareWindowState(
+        this.diagnosticOwnerFor(profileId),
         profilePaths.windowState,
         newWindowOrdinal,
-        this.diagnosticOwnerFor(profileId),
       );
       failureStage = "starting";
       let hubWasVisibleBeforeRecovery = false;

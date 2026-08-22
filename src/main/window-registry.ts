@@ -9,10 +9,11 @@ import type { BrowserWindow } from "electron";
 import type { ProfileId } from "../shared/multiple-accounts.js";
 import { AppError } from "../shared/errors.js";
 
-export type WindowContext =
+export type GameWindowContext =
   | Readonly<{ mode: "single"; role: "game" }>
-  | Readonly<{ mode: "multi"; role: "hub" }>
   | Readonly<{ mode: "multi"; role: "game"; profileId: ProfileId }>;
+export type HubWindowContext = Readonly<{ mode: "multi"; role: "hub" }>;
+export type WindowContext = GameWindowContext | HubWindowContext;
 
 interface RegisteredWindow {
   readonly webContents: {
@@ -36,14 +37,24 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
   #singleGameWindow: Window | null = null;
   #hubWindow: Window | null = null;
 
+  register(win: Window, context: HubWindowContext): void;
+  register(
+    win: Window,
+    context: GameWindowContext,
+    diagnosticOwnerId: number,
+  ): void;
   register(
     win: Window,
     context: WindowContext,
-    diagnosticOwnerId: number | null = null,
+    diagnosticOwnerId?: number,
   ): void {
     const id = win.webContents.id;
     if (this.#byWebContents.has(id)) {
       throw new AppError("validation", "window is already registered");
+    }
+    const ownerId = context.role === "game" ? diagnosticOwnerId : null;
+    if (ownerId === undefined) {
+      throw new AppError("validation", "game window requires a diagnostics owner");
     }
     if (context.mode === "single") {
       if (this.#singleGameWindow && !this.#singleGameWindow.isDestroyed()) {
@@ -63,7 +74,11 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
       this.#profileWindows.set(context.profileId, win);
     }
     this.#webContentsIds.set(win, id);
-    this.#byWebContents.set(id, { win, context, diagnosticOwnerId });
+    this.#byWebContents.set(id, {
+      win,
+      context,
+      diagnosticOwnerId: ownerId,
+    });
   }
 
   unregister(win: Window): void {
@@ -101,6 +116,14 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
     return entry?.win === win && !win.isDestroyed()
       ? entry.diagnosticOwnerId
       : null;
+  }
+
+  requireDiagnosticOwnerForWindow(win: Window): number {
+    const ownerId = this.diagnosticOwnerForWindow(win);
+    if (ownerId === null) {
+      throw new AppError("validation", "game window has no diagnostics owner");
+    }
+    return ownerId;
   }
 
   diagnosticOwnerForWebContents(id: number): number | null {

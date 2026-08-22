@@ -11,6 +11,7 @@ import type {
 import { APP_AND_UPDATE_EVENT_SCHEMA } from "./schema-app-update.js";
 import { PROTOCOL_AND_RENDERER_EVENT_SCHEMA } from "./schema-protocol-renderer.js";
 import type { EventSpec, FieldGuard } from "./schema-fields.js";
+
 export const DIAGNOSTIC_EVENT_SCHEMA = {
   ...APP_AND_UPDATE_EVENT_SCHEMA,
   ...PROTOCOL_AND_RENDERER_EVENT_SCHEMA,
@@ -32,6 +33,20 @@ type FieldsOf<K extends DiagnosticEventName> = {
 export type DiagnosticEvent = {
   [K in DiagnosticEventName]: { k: K } & FieldsOf<K>;
 }[DiagnosticEventName];
+
+type EventNamesWithScope<Scope extends EventSpec["scope"]> = {
+  [K in DiagnosticEventName]:
+    (typeof DIAGNOSTIC_EVENT_SCHEMA)[K]["scope"] extends Scope ? K : never;
+}[DiagnosticEventName];
+
+export type AppDiagnosticEvent = Extract<
+  DiagnosticEvent,
+  { k: EventNamesWithScope<"app"> }
+>;
+export type OwnerDiagnosticEvent = Extract<
+  DiagnosticEvent,
+  { k: EventNamesWithScope<"owner"> }
+>;
 
 export interface DiagnosticEventRecord {
   subsystem: DiagnosticSubsystem;

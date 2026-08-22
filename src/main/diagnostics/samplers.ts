@@ -89,14 +89,18 @@ export function sampleProcesses(): void {
       metric.memory.workingSetSize * 1_024,
       ownerId,
     );
-    logEvent({ k: "process.chromium",
-      pid: metric.pid,
-      cpuPercentElectron: metric.cpu.percentCPUUsage,
-      idleWakeupsPerSecond: metric.cpu.idleWakeupsPerSecond,
-      rssBytes: metric.memory.workingSetSize * 1_024,
-      privateBytes: (metric.memory.privateBytes ?? 0) * 1_024,
-      sandboxed: metric.sandboxed ?? false,
-    }, ownerId);
+    // Non-renderer Chromium totals remain app-global metrics. Only a renderer
+    // process has an account owner and may enter an account's event log.
+    if (ownerId !== undefined) {
+      logEvent({ k: "process.chromium",
+        pid: metric.pid,
+        cpuPercentElectron: metric.cpu.percentCPUUsage,
+        idleWakeupsPerSecond: metric.cpu.idleWakeupsPerSecond,
+        rssBytes: metric.memory.workingSetSize * 1_024,
+        privateBytes: (metric.memory.privateBytes ?? 0) * 1_024,
+        sandboxed: metric.sandboxed ?? false,
+      }, ownerId);
+    }
     const aggregateKey = `${prefix}:${ownerId ?? "global"}`;
     const aggregate = aggregates.get(aggregateKey) ?? {
       cpuPercent: 0,

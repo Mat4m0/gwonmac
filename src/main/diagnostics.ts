@@ -66,8 +66,7 @@ export {
 export function diagnosticSummary(win?: BrowserWindow): DiagnosticSummary {
   if (!win) return recorder.summary(activeCaptureLevel());
   const level = captureLevelForWindow(win);
-  const ownerId = windowRegistry.diagnosticOwnerForWindow(win);
-  if (ownerId === null) return recorder.summary(0);
+  const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
   return level === 0
     ? recorder.summaryForOwner(ownerId, 0)
     : recorder.activeCaptureSummary(level);

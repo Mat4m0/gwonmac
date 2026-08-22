@@ -37,21 +37,25 @@ import {
 export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // Protocol requests and their four closed span families.
   "protocol.installed": {
+    scope: "app",
     subsystem: "protocol",
     level: "info",
     fields: none,
   },
   "dns.resolve.begin": {
+    scope: "owner",
     subsystem: "dns",
     level: "debug",
     fields: none,
   },
   "dns.resolve.end": {
+    scope: "owner",
     subsystem: "dns",
     level: "debug",
     fields: { status: literal(["ok", "error"] as const), code: nullable(code) },
   },
   "snapshot.read.begin": {
+    scope: "owner",
     subsystem: "snapshot",
     level: "debug",
     fields: {
@@ -61,6 +65,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     },
   },
   "snapshot.read.end": {
+    scope: "owner",
     subsystem: "snapshot",
     level: "debug",
     fields: {
@@ -73,16 +78,19 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     },
   },
   "snapshot.rangeFailed": {
+    scope: "owner",
     subsystem: "snapshot",
     level: "error",
     fields: { offsetBytes: finiteNumber, bytes: finiteNumber, code },
   },
   "proxy.request.begin": {
+    scope: "owner",
     subsystem: "proxy",
     level: "debug",
     fields: { route: proxyRoute, method: proxyMethod },
   },
   "proxy.request.end": {
+    scope: "owner",
     subsystem: "proxy",
     level: "debug",
     fields: {
@@ -94,11 +102,13 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     },
   },
   "proxy.redirectBlocked": {
+    scope: "owner",
     subsystem: "proxy",
     level: "warn",
     fields: { route: proxyRoute },
   },
   "proxy.requestFailed": {
+    scope: "owner",
     subsystem: "proxy",
     level: "error",
     fields: { route: proxyRoute, code },
@@ -108,11 +118,13 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // not supply one. Warn rather than error: the editor stays usable and both
   // reasons are recoverable on a later request.
   "protocol.skillCatalogueRefused": {
+    scope: "owner",
     subsystem: "protocol",
     level: "warn",
     fields: { reason: catalogueRefusal },
   },
   "protocol.gameFontRefused": {
+    scope: "owner",
     subsystem: "protocol",
     level: "warn",
     fields: { reason: literal(["unsupported", "read-or-format"] as const) },
@@ -120,6 +132,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
 
   // Managed sockets and IPC rejection.
   "socket.open": {
+    scope: "owner",
     subsystem: "socket",
     level: "info",
     // The port is the closed production allowlist, so a reset on the game
@@ -127,16 +140,19 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     fields: { socketId: finiteNumber, port: literal([...ALLOWED_PORTS]) },
   },
   "socket.close": {
+    scope: "owner",
     subsystem: "socket",
     level: "info",
     fields: { socketId: finiteNumber, reason: closeReason },
   },
   "socket.error": {
+    scope: "owner",
     subsystem: "socket",
     level: "warn",
     fields: { socketId: finiteNumber, code: socketFailureCode },
   },
   "socket.rendererSend": {
+    scope: "owner",
     subsystem: "socket",
     level: "debug",
     fields: {
@@ -149,6 +165,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     },
   },
   "ipc.rejected": {
+    scope: "owner",
     subsystem: "app",
     level: "warn",
     fields: { channel: invokeChannel, code },
@@ -156,76 +173,91 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
 
   // Renderer recovery and renderer-originated fixed events.
   "renderer.processExitedDuringQuit": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { exitCode: finiteNumber },
   },
   "renderer.processGone": {
+    scope: "owner",
     subsystem: "renderer",
     level: "error",
     fields: { exitCode: finiteNumber },
   },
   "renderer.recoveryScheduled": {
+    scope: "owner",
     subsystem: "renderer",
     level: "warn",
     fields: none,
   },
   "renderer.recoveryPreparationFailed": {
+    scope: "owner",
     subsystem: "renderer",
     level: "error",
     fields: { code },
   },
   "renderer.recovered": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: none,
   },
   "renderer.commandIncomplete": {
+    scope: "owner",
     subsystem: "renderer",
     level: "warn",
     fields: { action: captureAction, outcome: incompleteCommandOutcome },
   },
   "renderer.windowError": {
+    scope: "owner",
     subsystem: "renderer",
     level: "error",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "renderer.unhandledRejection": {
+    scope: "owner",
     subsystem: "renderer",
     level: "error",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "graphics.contextLost": {
+    scope: "owner",
     subsystem: "graphics",
     level: "error",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "graphics.contextRestored": {
+    scope: "owner",
     subsystem: "graphics",
     level: "info",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "graphics.presentationFailed": {
+    scope: "owner",
     subsystem: "graphics",
     level: "error",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "client.glueLoadFailed": {
+    scope: "owner",
     subsystem: "renderer",
     level: "error",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "filesystem.persistenceFailed": {
+    scope: "owner",
     subsystem: "renderer",
     level: "error",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "audio.resumeFailed": {
+    scope: "owner",
     subsystem: "renderer",
     level: "warn",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "pointerLock.failed": {
+    scope: "owner",
     subsystem: "renderer",
     level: "warn",
     fields: { fingerprint: rendererFingerprintOrNull },
@@ -234,6 +266,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // black textures. The count and timestamps tie a visual artifact report to
   // the reads that failed under it.
   "snapshot.readFailed": {
+    scope: "owner",
     subsystem: "snapshot",
     level: "error",
     fields: { fingerprint: rendererFingerprintOrNull },
@@ -242,21 +275,25 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // pass-through polling. Its absence in a capture rules the cache out of a
   // rendering-artifact investigation.
   "graphics.programCacheSaturated": {
+    scope: "owner",
     subsystem: "graphics",
     level: "warn",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "clipboard.copied": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "clipboard.writeFailed": {
+    scope: "owner",
     subsystem: "renderer",
     level: "warn",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
   "graphics.detected": {
+    scope: "owner",
     subsystem: "graphics",
     level: "info",
     fields: {
@@ -275,6 +312,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     },
   },
   "renderer.metrics": {
+    scope: "owner",
     subsystem: "renderer",
     level: "debug",
     fields: {
@@ -309,6 +347,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     },
   },
   "clock.synchronized": {
+    scope: "owner",
     subsystem: "renderer",
     level: "debug",
     fields: { offsetUs: finiteNumber, rttUs: finiteNumber },
@@ -317,71 +356,85 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // Renderer milestones. Build identifiers stay in gauges/environment; the
   // event records only the fixed synchronization fact common to every entry.
   "renderer.loaded": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "wasm.instantiate.begin": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "wasm.instantiate.end": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "wasm.streamingFallback": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "runtime.initialized": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "frame.firstSubmit": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "startup.complete": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "launcher.choiceShown": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "launcher.quickSelected": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "launcher.fullSelected": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "launcher.playNowSelected": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "launcher.bootReleased": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "build.info": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
   },
   "snapshot.fatalRead": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean },
@@ -394,6 +447,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // 2 GiB, so a crash recorded at the cap is memory exhaustion whatever
   // prose the abort carried.
   "wasm.abort": {
+    scope: "owner",
     subsystem: "renderer",
     level: "error",
     fields: {
@@ -404,6 +458,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     },
   },
   "wasm.exit": {
+    scope: "owner",
     subsystem: "renderer",
     level: "error",
     fields: { clockSynchronized: boolean, code: finiteNumber, heapBytes: finiteNumber },
@@ -415,11 +470,13 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // sequence answers whether a session leaked steadily or stepped up on
   // zone loads — the question every heap-cap abort asks.
   "wasm.heapGrew": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { fromBytes: finiteNumber, toBytes: finiteNumber },
   },
   "wasm.memoryProbe": {
+    scope: "owner",
     subsystem: "wasm",
     level: "info",
     fields: {
@@ -432,6 +489,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // the request. Texture figures are bounded aggregates, never object names
   // or pixel data.
   "wasm.growthRequested": {
+    scope: "owner",
     subsystem: "wasm",
     level: "info",
     fields: {
@@ -465,6 +523,7 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // actually live in the game's call path — the first fact a wasm.abort
   // triage needs.
   "enhancement.installed": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: {
@@ -475,11 +534,13 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     },
   },
   "enhancement.installFailed": {
+    scope: "owner",
     subsystem: "renderer",
     level: "warn",
     fields: { clockSynchronized: boolean },
   },
   "enhancement.uninstalled": {
+    scope: "owner",
     subsystem: "renderer",
     level: "info",
     fields: { clockSynchronized: boolean, installation: finiteNumber },

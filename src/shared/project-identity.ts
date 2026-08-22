@@ -13,13 +13,15 @@
  * This module refuses to own what is downloaded, when, or whether the answer
  * may be believed. It builds an address and makes no request.
  */
-export const RELEASE_REPO = "Mat4m0/gwonmac";
+const GITHUB_OWNER = "Mat4m0";
+const GITHUB_REPOSITORY = "gwonmac";
+export const RELEASE_REPO = `${GITHUB_OWNER}/${GITHUB_REPOSITORY}`;
 export const APPLE_TEAM_ID = "9NN976MFZ4";
+const UPDATE_FEED_ROOT =
+  `https://${GITHUB_OWNER.toLowerCase()}.github.io/${GITHUB_REPOSITORY}/updates`;
 export const APP_UPDATE_FEED_URLS = {
-  stable:
-    "https://mat4m0.github.io/gwonmac/updates/stable/darwin/arm64/RELEASES.json",
-  beta:
-    "https://mat4m0.github.io/gwonmac/updates/beta/darwin/arm64/RELEASES.json",
+  stable: `${UPDATE_FEED_ROOT}/stable/darwin/arm64/RELEASES.json`,
+  beta: `${UPDATE_FEED_ROOT}/beta/darwin/arm64/RELEASES.json`,
 } as const;
 
 /** One published release's asset, addressed by the tag it was published under. */

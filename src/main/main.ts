@@ -566,7 +566,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
   );
   if (activeAccountMode === "single") {
-    await prepareWindowState(undefined, undefined, SINGLE_DIAGNOSTIC_OWNER_ID);
+    await prepareWindowState(SINGLE_DIAGNOSTIC_OWNER_ID);
   }
   const keychain: NativeKeychain = persistentSecrets
     ? nativeHost
@@ -598,8 +598,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     rememberCheckedAt: async (lastUpdateCheckAt) => {
       await preferences.updateSettings({ lastUpdateCheckAt });
     },
-    recordFailure: (stage, reason) => {
-      logEvent({ k: "appUpdate.requestFailed", stage, reason });
+    recordFailure: (reason) => {
+      logEvent({ k: "appUpdate.requestFailed", reason });
     },
     publish: (state) => {
       if (state.phase === "failed") {
@@ -837,14 +837,15 @@ if (primaryInstance) void app.whenReady().then(async () => {
       if (message === AUTOMATION_COMMAND.startLevel1Capture) {
         const win = windowRegistry.focusedOrSoleGameWindow();
         if (!win) {
-          logEvent({ k: "capture.automationStartFailed", code: "validation" });
           return;
         }
+        const diagnosticOwnerId =
+          windowRegistry.requireDiagnosticOwnerForWindow(win);
         void startDiagnosticCapture(win, 1).catch((error) => {
           logEvent({
             k: "capture.automationStartFailed",
             code: errorCode(error),
-          }, windowRegistry.diagnosticOwnerForWindow(win) ?? undefined);
+          }, diagnosticOwnerId);
         });
       } else if (message === AUTOMATION_COMMAND.stopCapture) {
         void stopDiagnosticCapture();

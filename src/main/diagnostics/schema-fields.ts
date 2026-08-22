@@ -31,7 +31,6 @@ import {
   formatReleaseVersion,
   parseReleaseVersion,
 } from "../../shared/release.js";
-import type { AppUpdateStage } from "../app-updater.js";
 import {
   isProxyRoute,
   type ProxyRoute,
@@ -46,6 +45,8 @@ export interface EventSpec {
   readonly subsystem: DiagnosticSubsystem;
   readonly level: DiagnosticLevel;
   readonly fields: Readonly<Record<string, FieldGuard<DiagnosticScalar>>>;
+  /** Whether this event belongs to the process or exactly one game account. */
+  readonly scope: "app" | "owner";
 }
 
 export const finiteNumber: FieldGuard<number> = (value): value is number =>
@@ -149,13 +150,6 @@ export const appUpdateErrorCode = literal([
   "feed-invalid",
   "download-failed",
 ] as const satisfies readonly AppUpdateErrorCode[]);
-export const appUpdateStage = literal([
-  // Diagnostics produced before static channels shipped used `releases` for
-  // the GitHub REST discovery request. Historical exports remain readable;
-  // current AppUpdater code can emit only `feed`.
-  "releases",
-  "feed",
-] as const satisfies readonly (AppUpdateStage | "releases")[]);
 export const closeReason = literal([
   "requested",
   "peer",
