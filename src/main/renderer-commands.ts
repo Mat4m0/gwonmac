@@ -11,6 +11,7 @@
 import { ipcMain, type BrowserWindow } from "electron";
 import {
   IPC,
+  type GameTextEditCommand,
   type RendererCommand,
   type RendererCommandCompletion,
   type RendererCommandOutcome,
@@ -118,6 +119,19 @@ export function sendRendererCommand(
  */
 export async function resetGameInput(win: BrowserWindow): Promise<void> {
   await sendRendererCommand(win, { type: "input.reset" });
+}
+
+/** One semantic edit route for both physical shortcuts and Edit menu clicks. */
+export async function editWindowText(
+  win: BrowserWindow,
+  command: GameTextEditCommand,
+): Promise<void> {
+  const outcome = await sendRendererCommand(win, { type: "text.edit", command });
+  if (outcome !== "unhandled") return;
+  if (command === "cut") win.webContents.cut();
+  else if (command === "copy") win.webContents.copy();
+  else if (command === "paste") win.webContents.paste();
+  else win.webContents.selectAll();
 }
 
 /**

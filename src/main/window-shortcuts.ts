@@ -3,6 +3,7 @@
  * Settings stay durable elsewhere; this controller owns only the live input state.
  */
 import type { BrowserWindow } from "electron";
+import type { GameTextEditCommand } from "../shared/contracts.js";
 import {
   resolveShortcuts,
   shortcutFromInput,
@@ -24,13 +25,28 @@ const tracedKey = (key: string) => {
 
 interface ShortcutActions {
   run(action: ShortcutAction): void;
+  edit(command: GameTextEditCommand): void;
 }
+
+type ClaimedKey = 'capture' | 'shortcut' | GameTextEditCommand;
+
+const claimedDecision = (claim: ClaimedKey): 'capture' | 'shortcut' =>
+  claim === 'capture' ? 'capture' : 'shortcut';
+
+const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
+  if (!input.meta || input.control || input.shift || input.alt) return null;
+  if (input.code === 'KeyA') return 'selectAll';
+  if (input.code === 'KeyC') return 'copy';
+  if (input.code === 'KeyV') return 'paste';
+  if (input.code === 'KeyX') return 'cut';
+  return null;
+};
 
 class WindowShortcuts {
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({});
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
-  #claimedCodes = new Map<string, 'capture' | 'shortcut'>();
+  #claimedCodes = new Map<string, ClaimedKey>();
 
   constructor(win: BrowserWindow, actions: ShortcutActions) {
     this.#actions = actions;
@@ -40,11 +56,15 @@ class WindowShortcuts {
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'up',
           key: tracedKey(input.key), repeat: false,
-          decision: decision ?? 'forwarded',
+          decision: decision ? claimedDecision(decision) : 'forwarded',
         });
         if (decision) {
           this.#claimedCodes.delete(input.code);
           event.preventDefault();
+          if (
+            decision !== 'capture'
+            && decision !== 'shortcut'
+          ) this.#actions.edit(decision);
         }
         return;
       }
@@ -53,7 +73,8 @@ class WindowShortcuts {
       if (claimed) {
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'down',
-          key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: claimed,
+          key: tracedKey(input.key), repeat: input.isAutoRepeat,
+          decision: claimedDecision(claimed),
         });
         event.preventDefault();
         return;
@@ -79,6 +100,17 @@ class WindowShortcuts {
         this.#finish(binding
           ? { status: "captured", binding }
           : { status: "invalid" });
+        return;
+      }
+      const edit = textEditCommand(input);
+      if (edit) {
+        event.preventDefault();
+        recordMainInput(win, {
+          source: 'main', kind: 'native-key', phase: 'down',
+          key: tracedKey(input.key), repeat: input.isAutoRepeat,
+          decision: 'shortcut',
+        });
+        this.#claimedCodes.set(input.code, edit);
         return;
       }
       for (const [action, binding] of Object.entries(this.#shortcuts)) {
@@ -121,7 +153,13 @@ class WindowShortcuts {
   }
 
   release(code: string): void {
+    const decision = this.#claimedCodes.get(code);
     this.#claimedCodes.delete(code);
+    if (
+      decision !== undefined
+      && decision !== 'capture'
+      && decision !== 'shortcut'
+    ) this.#actions.edit(decision);
   }
 
   #finish(result: ShortcutCaptureResult): void {
@@ -161,7 +199,7 @@ export function cancelWindowShortcutCapture(win: BrowserWindow): void {
   controllers.get(win)?.cancelCapture();
 }
 
-/** Forget a release that AppKit consumed before `before-input-event`. */
+/** Complete a release that AppKit consumed before `before-input-event`. */
 export function releaseWindowShortcutKey(
   win: BrowserWindow,
   code: string,

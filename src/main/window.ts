@@ -41,6 +41,7 @@ import { isCanonicalRendererUrl } from "./core/renderer-trust.js";
 import { isQuitting } from "./lifecycle.js";
 import { gamePaths, preloadPath } from "./paths.js";
 import {
+  editWindowText,
   openStorage,
   sendRendererCommand,
   toggleTools,
@@ -491,6 +492,9 @@ export function createMainWindow(
       if (action === "tools.toggle") void toggleTools(win);
       else if (action === "storage.open") void openStorage(win);
       else void toggleTravel(win);
+    },
+    edit(command) {
+      void editWindowText(win, command);
     },
   });
   void host.getSettings().then((settings) => {

@@ -175,14 +175,16 @@ recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
 
-The macOS application menu owns Command-A/C/X/V and its Edit menu clicks. It
-sends one semantic command to the focused renderer. A hidden Guild Wars text
-proxy claims the command. An ordinary gwonmac input declines it so Chromium
-edits normally. Copy and Cut send only non-password proxy text to main. Main
-writes Cut text to the pasteboard before it sends Guild Wars Control-X. Paste
-keeps clipboard text in main and inserts it as one trusted Chromium edit.
-Select All sends Guild Wars Control-A. Password text never crosses the renderer
-bridge. Physical Control stays available to Guild Wars unchanged.
+Main claims physical Command-A/C/X/V before the renderer can hold their base
+keys. It runs the edit after that physical key is released. Edit menu clicks
+use the same semantic command and focused-window route. A hidden Guild Wars
+text proxy claims the command. An ordinary gwonmac input declines it so
+Chromium edits normally. Copy and Cut send only non-password proxy text to
+main. Main writes Cut text to the pasteboard before it sends Guild Wars
+Control-X. Paste keeps clipboard text in main and inserts it as one trusted
+Chromium edit. Select All sends Guild Wars Control-A. Password text never
+crosses the renderer bridge. Physical Control stays available to Guild Wars
+unchanged.
 
 Before the first window exists, Electron writes the bundle-specific persistent
 `ApplePressAndHoldEnabled = false` preference. This makes macOS send physical

@@ -30,8 +30,10 @@ describe("window shortcut input", () => {
       },
     } as unknown as BrowserWindow;
     const actions: string[] = [];
+    const edits: string[] = [];
     installWindowShortcuts(win, {
       run: (action) => actions.push(action),
+      edit: (command) => edits.push(command),
     });
     updateWindowShortcuts(win, {});
 
@@ -75,6 +77,19 @@ describe("window shortcut input", () => {
       meta: false,
       control: true,
     })), false);
+
+    assert.equal(dispatch(keyDown("KeyX", "x")), true);
+    assert.deepEqual(edits, []);
+    assert.equal(dispatch(keyDown("KeyX", "x", { isAutoRepeat: true })), true);
+    assert.deepEqual(edits, []);
+    assert.equal(dispatch({
+      ...keyDown("KeyX", "x"), type: "keyUp", meta: false,
+    }), true);
+    assert.deepEqual(edits, ["cut"]);
+
+    assert.equal(dispatch(keyDown("KeyA", "a")), true);
+    releaseWindowShortcutKey(win, "KeyA");
+    assert.deepEqual(edits, ["cut", "selectAll"]);
 
     const capture = captureWindowShortcut(win);
     assert.equal(dispatch(keyDown("KeyK", "k", { shift: true })), true);

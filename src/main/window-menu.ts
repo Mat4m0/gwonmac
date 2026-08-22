@@ -23,6 +23,7 @@ import {
 import { logEvent } from "./diagnostics.js";
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import {
+  editWindowText,
   openStorage,
   resetGameInput,
   sendRendererCommand,
@@ -55,12 +56,7 @@ async function editFocusedText(
   if (!win || win.isDestroyed()) return;
   const context = windowRegistry.contextForWebContents(win.webContents.id);
   if (context?.role !== "game") return;
-  const outcome = await sendRendererCommand(win, { type: "text.edit", command });
-  if (outcome !== "unhandled") return;
-  if (command === "cut") win.webContents.cut();
-  else if (command === "copy") win.webContents.copy();
-  else if (command === "paste") win.webContents.paste();
-  else win.webContents.selectAll();
+  await editWindowText(win, command);
 }
 
 function editMenuItem(
