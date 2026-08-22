@@ -182,10 +182,10 @@ use the same semantic command and focused-window route. A hidden Guild Wars
 text proxy claims the command. An ordinary gwonmac input declines it so
 Chromium edits normally. Copy and Cut send only non-password proxy text to
 main. Main writes Cut text to the pasteboard before it sends Guild Wars
-Control-X. Paste keeps clipboard text in main and inserts it as one trusted
-Chromium edit. Select All sends Guild Wars Control-A. Password text never
-crosses the renderer bridge. Physical Control stays available to Guild Wars
-unchanged.
+Control-X. Paste keeps clipboard text in main and invokes one trusted Chromium
+native Paste edit (`insertFromPaste`). Select All sends Guild Wars Control-A.
+Password text never crosses the renderer bridge. Physical Control stays
+available to Guild Wars unchanged.
 
 Before the first window exists, Electron writes the bundle-specific persistent
 `ApplePressAndHoldEnabled = false` preference. This makes macOS send physical
@@ -231,8 +231,9 @@ candidate in the packaged app on macOS:
    first.
 7. Confirm no bare game key, unmatched key-up, or held-key state remains.
 
-Stop qualification if multiline Paste does not produce trusted proxy events.
-Record the events. Do not restore character-by-character Paste as a fallback.
+Stop qualification if Paste does not produce trusted `insert-paste` proxy
+events. Record the events. Do not restore character-by-character Paste as a
+fallback.
 
 ## Native network boundary
 

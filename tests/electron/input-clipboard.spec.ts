@@ -22,6 +22,7 @@ type OskWindow = typeof window & {
   Module: { oskActiveInput?: Element | null };
   __clipboardGameKeys?: KeyObservation[];
   __clipboardInputs?: InputObservation[];
+  __passwordPasteEvents?: Array<Omit<InputObservation, "data">>;
 };
 
 const EDIT_ITEMS = {
@@ -181,8 +182,8 @@ test.describe("renderer text editing", () => {
         await expect(page.locator("#osk-input-text")).toHaveValue("é🙂 line next");
         expect(await page.evaluate(() => (window as OskWindow).__clipboardInputs))
           .toEqual([
-            { phase: "beforeinput", inputType: "insertText", data: "é🙂 line\nnext", trusted: true },
-            { phase: "input", inputType: "insertText", data: "é🙂 line next", trusted: true },
+            { phase: "beforeinput", inputType: "insertFromPaste", data: "é🙂 line\nnext", trusted: true },
+            { phase: "input", inputType: "insertFromPaste", data: "é🙂 line next", trusted: true },
           ]);
 
         await page.evaluate(() => {
@@ -196,10 +197,8 @@ test.describe("renderer text editing", () => {
         await expect(page.locator("#osk-input-multiline")).toHaveValue("é🙂 line\nnext");
         expect(await page.evaluate(() => (window as OskWindow).__clipboardInputs))
           .toEqual([
-            { phase: "beforeinput", inputType: "insertText", data: "é🙂 line\nnext", trusted: true },
-            { phase: "input", inputType: "insertText", data: "é🙂 line", trusted: true },
-            { phase: "input", inputType: "insertText", data: null, trusted: true },
-            { phase: "input", inputType: "insertText", data: "next", trusted: true },
+            { phase: "beforeinput", inputType: "insertFromPaste", data: "é🙂 line\nnext", trusted: true },
+            { phase: "input", inputType: "insertFromPaste", data: "é🙂 line\nnext", trusted: true },
           ]);
 
         await clickEdit(app, EDIT_ITEMS.selectAll);
@@ -234,6 +233,17 @@ test.describe("renderer text editing", () => {
           const field = document.getElementById("osk-input-password");
           if (!(field instanceof HTMLInputElement)) throw new Error("password proxy missing");
           (window as OskWindow).Module.oskActiveInput = field;
+          (window as OskWindow).__passwordPasteEvents = [];
+          for (const phase of ["beforeinput", "input"] as const) {
+            field.addEventListener(phase, (event) => {
+              if (!(event instanceof InputEvent)) return;
+              (window as OskWindow).__passwordPasteEvents?.push({
+                phase,
+                inputType: event.inputType,
+                trusted: event.isTrusted,
+              });
+            });
+          }
           field.value = "hunter2";
           field.focus();
           field.select();
@@ -245,6 +255,11 @@ test.describe("renderer text editing", () => {
         await expect(page.locator("#osk-input-password")).toHaveValue("hunter2");
         await clickEdit(app, EDIT_ITEMS.paste);
         await expect(page.locator("#osk-input-password")).toHaveValue("sentinel");
+        expect(await page.evaluate(() => (window as OskWindow).__passwordPasteEvents))
+          .toEqual([
+            { phase: "beforeinput", inputType: "insertFromPaste", trusted: true },
+            { phase: "input", inputType: "insertFromPaste", trusted: true },
+          ]);
 
         await app.evaluate(({ BrowserWindow, Menu }) => {
           const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];

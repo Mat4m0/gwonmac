@@ -47,8 +47,11 @@ export async function editGameText(
     return;
   }
 
-  // Keep clipboard contents in main. Chromium emits one trusted edit with the
-  // complete Unicode payload, which ArenaNet's OSK listener forwards.
-  const text = clipboard.readText().slice(0, CLIPBOARD_TEXT_CEILING);
-  if (text) await contents.insertText(text);
+  // ArenaNet distinguishes Paste from ordinary typing by InputEvent.inputType.
+  // Use Chromium's native command so the focused proxy emits insertFromPaste;
+  // insertText emits insertText and the official client treats the complete
+  // clipboard payload as one typing operation instead.
+  const text = clipboard.readText();
+  if (!text || text.length > CLIPBOARD_TEXT_CEILING) return;
+  contents.paste();
 }
