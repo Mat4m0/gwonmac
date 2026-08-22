@@ -482,13 +482,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
   drainSecrets(): Promise<void>;
 } {
   const paths = gamePaths();
-  const diagnosticOwner = (win: BrowserWindow): number => {
-    const ownerId = ctx.windows.diagnosticOwnerForWindow(win);
-    if (ownerId === null) {
-      throw new ValidationError("game window has no diagnostics owner");
-    }
-    return ownerId;
-  };
   const secretOperations = new Set<Promise<unknown>>();
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
@@ -515,7 +508,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
     snapshotMetadata: channel(nothing, () => ctx.getSnapshotMetadata()),
 
     dnsResolve: channel(asString("dns name"), async (win, name) => {
-      const lookup = startDnsResolveSpan(diagnosticOwner(win));
+      const lookup = startDnsResolveSpan(
+        ctx.windows.requireDiagnosticOwnerForWindow(win),
+      );
       try {
         const address = await resolveDns(name);
         lookup.end({ status: "ok", code: null });
@@ -531,7 +526,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     socketSend: channel(asSocketPayload, async (win, { socketId, bytes }) => {
-      const ownerId = diagnosticOwner(win);
+      const ownerId = ctx.windows.requireDiagnosticOwnerForWindow(win);
       count("socket.ipcReceiveCalls", 1, ownerId);
       count("socket.ipcPayloadBytes", bytes.byteLength, ownerId);
       count("socket.ipcBackingBytes", bytes.buffer.byteLength, ownerId);
@@ -581,7 +576,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     credentialsLoad: channel(nothing, async (win) => {
-      const ownerId = diagnosticOwner(win);
+      const ownerId = ctx.windows.requireDiagnosticOwnerForWindow(win);
       try {
         return await secretOperation(() => ctx.credentialsStoreFor(win).load());
       } catch (error) {
@@ -598,7 +593,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     credentialsSave: channel(
       one(parseCredentials),
       async (win, value: StoredCredentials) => {
-        const ownerId = diagnosticOwner(win);
+        const ownerId = ctx.windows.requireDiagnosticOwnerForWindow(win);
         try {
           await secretOperation(() => ctx.credentialsStoreFor(win).save(value));
         } catch (error) {
@@ -612,7 +607,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     credentialsClear: channel(nothing, async (win) => {
-      const ownerId = diagnosticOwner(win);
+      const ownerId = ctx.windows.requireDiagnosticOwnerForWindow(win);
       try {
         await secretOperation(() => ctx.credentialsStoreFor(win).clear());
       } catch (error) {
@@ -646,7 +641,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     diagnosticsGraphics: channel(asGraphics, (win, value) => {
-      recordGraphics(diagnosticOwner(win), value);
+      recordGraphics(ctx.windows.requireDiagnosticOwnerForWindow(win), value);
     }),
 
     diagnosticsClockSync: channel(
@@ -660,18 +655,22 @@ export function registerIpcHandlers(ctx: IpcContext): {
     diagnosticsClockResult: channel(
       asClockResult,
       (win, { offsetUs, rttUs }) => {
-        recordClockOffset(diagnosticOwner(win), offsetUs, rttUs);
+        recordClockOffset(
+          ctx.windows.requireDiagnosticOwnerForWindow(win),
+          offsetUs,
+          rttUs,
+        );
       },
     ),
 
     diagnosticsRendererMetrics: channel(asRendererMetrics, (win, value) => {
-      recordRendererMetrics(diagnosticOwner(win), value);
+      recordRendererMetrics(ctx.windows.requireDiagnosticOwnerForWindow(win), value);
     }),
 
     diagnosticsRendererFrames: channel(asRendererFrames, async (win, value) => {
       await recordRendererFrames(
         win.webContents.id,
-        diagnosticOwner(win),
+        ctx.windows.requireDiagnosticOwnerForWindow(win),
         value,
       );
     }),
@@ -680,7 +679,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       asMilestone,
       (win, { name, rendererTimestampUs, fields }) => {
         recordRendererMilestone(
-          diagnosticOwner(win),
+          ctx.windows.requireDiagnosticOwnerForWindow(win),
           name,
           rendererTimestampUs,
           fields,
@@ -718,7 +717,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     templatesExport: channel(one(parseExportEntries), async (win, entries) => {
-      const ownerId = diagnosticOwner(win);
+      const ownerId = ctx.windows.requireDiagnosticOwnerForWindow(win);
       const result = await exportTemplates(win, entries);
       if (result.status === "written") {
         logEvent(
@@ -846,10 +845,15 @@ function registerChannelDefinitions(
       try {
         input = def.parse(args);
       } catch (error) {
-        logEvent(
-          { k: "ipc.rejected", channel: name, code: errorCode(error) },
-          windows.diagnosticOwnerForWindow(win) ?? undefined,
-        );
+        const context = windows.contextForWebContents(win.webContents.id);
+        // Hub input has no account owner and must never become global evidence
+        // in every account's export. Game input always has its exact owner.
+        if (context?.role === "game") {
+          logEvent(
+            { k: "ipc.rejected", channel: name, code: errorCode(error) },
+            windows.requireDiagnosticOwnerForWindow(win),
+          );
+        }
         throw error;
       }
       return def.run(win, input);
@@ -875,13 +879,7 @@ export function registerSteamIpcHandlers(
     }
     return coordinator;
   };
-  const diagnosticOwner = (win: BrowserWindow): number => {
-    const ownerId = (windows ?? windowRegistry).diagnosticOwnerForWindow(win);
-    if (ownerId === null) {
-      throw new ValidationError("game window has no diagnostics owner");
-    }
-    return ownerId;
-  };
+  const ownerRegistry = windows ?? windowRegistry;
 
   const runSteamSignIn = async (
     win: BrowserWindow,
@@ -918,7 +916,7 @@ export function registerSteamIpcHandlers(
     // here would only turn "no token" into a launch failure.
     steamToken: channel(asSilentFlag, async (win, silent) => {
       const steam = coordinatorFor(win);
-      const ownerId = diagnosticOwner(win);
+      const ownerId = ownerRegistry.requireDiagnosticOwnerForWindow(win);
       if (isQuitting()) throw new ValidationError("application is quitting");
       const resolution = await steam.resolve({
         silent,
@@ -966,7 +964,7 @@ export function registerSteamIpcHandlers(
     steamStore: channel(asSteamStoreback, async (win, { token, expiry }) => {
       if (isQuitting()) throw new ValidationError("application is quitting");
       const steam = coordinatorFor(win);
-      const ownerId = diagnosticOwner(win);
+      const ownerId = ownerRegistry.requireDiagnosticOwnerForWindow(win);
       const outcome = await steam.refresh(token, expiry);
       logEvent({ k: "steam.storeback", outcome }, ownerId);
     }),
@@ -974,7 +972,7 @@ export function registerSteamIpcHandlers(
     steamClear: channel(nothing, async (win) => {
       if (isQuitting()) throw new ValidationError("application is quitting");
       const steam = coordinatorFor(win);
-      const ownerId = diagnosticOwner(win);
+      const ownerId = ownerRegistry.requireDiagnosticOwnerForWindow(win);
       try {
         await steam.clear();
         logEvent({ k: "steam.tokenCleared" }, ownerId);

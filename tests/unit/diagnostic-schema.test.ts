@@ -4,7 +4,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AppError } from "../../src/shared/errors.ts";
-import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.ts";
+import {
+  diagnosticEventRecord,
+  diagnosticEventSpec,
+} from "../../src/main/diagnostics/schema.ts";
 import { asAppVersion } from "../../src/main/diagnostics/schema-fields.ts";
 import {
   asDigest,
@@ -14,6 +17,13 @@ import {
 const FINGERPRINT = "a".repeat(64);
 
 describe("diagnosticEventRecord", () => {
+  it("classifies account evidence at the same canonical definition as its fields", () => {
+    assert.equal(diagnosticEventSpec("credentials.loadFailed").scope, "owner");
+    assert.equal(diagnosticEventSpec("socket.error").scope, "owner");
+    assert.equal(diagnosticEventSpec("appUpdate.failed").scope, "app");
+    assert.equal(diagnosticEventSpec("fullDownload.failed").scope, "app");
+  });
+
   it("owns the subsystem and level of an event, so a call site cannot disagree", () => {
     assert.deepEqual(diagnosticEventRecord({ k: "prefetch.failed", code: "chunk_offline" }), {
       subsystem: "cache",

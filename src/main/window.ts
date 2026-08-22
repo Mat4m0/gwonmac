@@ -52,7 +52,7 @@ import {
   installWindowShortcuts,
   updateWindowShortcuts,
 } from "./window-shortcuts.js";
-import { windowRegistry, type WindowContext } from "./window-registry.js";
+import { windowRegistry, type GameWindowContext } from "./window-registry.js";
 
 // Tests launch the app dozens of times; without this they steal keyboard focus
 // on every launch. Focus-dependent specs leave the flag unset.
@@ -130,9 +130,9 @@ function primaryWorkArea(): WindowBounds {
 }
 
 export async function prepareWindowState(
+  diagnosticOwnerId: number,
   statePath = gamePaths().windowState,
   newWindowOrdinal?: number,
-  diagnosticOwnerId?: number,
 ): Promise<boolean> {
   const loaded = await loadWindowState(statePath, () => {
     logEvent({ k: "window.stateCorruptCleared" }, diagnosticOwnerId);
@@ -295,6 +295,7 @@ export function setOwnedWindowTitle(win: BrowserWindow, title: string): void {
 }
 
 async function closeProfileWindowOnce(win: BrowserWindow): Promise<void> {
+  const diagnosticOwnerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
   while (!win.isDestroyed()) {
     const outcome = await sendRendererCommand(win, { type: "filesystem.sync" });
     if (outcome === "completed") break;
@@ -325,7 +326,7 @@ async function closeProfileWindowOnce(win: BrowserWindow): Promise<void> {
   } catch (error) {
     logEvent(
       { k: "window.stateSaveFailed" },
-      windowRegistry.diagnosticOwnerForWindow(win) ?? undefined,
+      diagnosticOwnerId,
     );
     console.error("profile window state save failed", error);
   }
@@ -370,7 +371,7 @@ export function rendererInitArgument(options: {
 export function createMainWindow(
   host: WindowHost,
   options: {
-    readonly context: WindowContext;
+    readonly context: GameWindowContext;
     /** Process-local account identity retained across renderer recovery. */
     readonly diagnosticOwnerId: number;
     readonly session?: Electron.Session;
@@ -536,7 +537,7 @@ export function createMainWindow(
       updateWindowShortcuts(win, settings.shortcutOverrides);
     }
   }).catch((error) => {
-    logEvent({ k: "settings.loadFailed", code: errorCode(error) }, diagnosticOwnerId);
+    logEvent({ k: "settings.loadFailed", code: errorCode(error) });
   });
 
   win.webContents.on("will-navigate", (event, url) => {

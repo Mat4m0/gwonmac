@@ -61,7 +61,7 @@ test("keeps renderer capture evidence with its owning window", async () => {
       recorder.endCapture(1, "manual");
       recorder.record({ k: "window.resized" }, {}, ownerId);
       recorder.record({ k: "window.moved" }, {}, peerId);
-      const capture = recorder.captureResult();
+      const capture = recorder.captureResult(ownerId);
       renderer.recordGraphics(ownerId, graphics("replacement-gpu", 1440));
       const captureGraphicsAfterReplacement =
         recorder.captureResult(ownerId)?.graphics?.renderer;
@@ -78,11 +78,13 @@ test("keeps renderer capture evidence with its owning window", async () => {
         renderer.graphicsSnapshot(peerId)?.renderer;
       renderer.forgetRendererDiagnosticsOwner(peerId);
       const forgottenPeer = recorder.summaryForOwner(peerId, 0);
+      const peerExport = await recorder.exportedEvents(peerId);
+      const ownerExport = await recorder.exportedEvents(ownerId);
       const peerEvents = JSON.parse(
-        `[${(await recorder.exportedEvents(peerId)).text.replaceAll("\n", ",")}]`,
+        `[${peerExport.text.replaceAll("\n", ",")}]`,
       ).map((event: { name: string }) => event.name);
       const ownerEvents = JSON.parse(
-        `[${(await recorder.exportedEvents(ownerId)).text.replaceAll("\n", ",")}]`,
+        `[${ownerExport.text.replaceAll("\n", ",")}]`,
       ).map((event: { name: string }) => event.name);
       return {
         counters: capture?.summary.counters,
@@ -94,6 +96,8 @@ test("keeps renderer capture evidence with its owning window", async () => {
         peerFrames: recorder.framePath(peerId),
         peerEvents,
         ownerEvents,
+        peerCompleteFromStart: peerExport.completeFromStart,
+        ownerCompleteFromStart: ownerExport.completeFromStart,
         captureGraphicsAfterReplacement,
         liveGraphicsAfterReplacement,
         milestoneBefore,
@@ -119,6 +123,8 @@ test("keeps renderer capture evidence with its owning window", async () => {
       captureGraphicsAfterReplacement: "owner-gpu",
       liveGraphicsAfterReplacement: "replacement-gpu",
       forgottenPeerGraphics: null,
+      peerCompleteFromStart: true,
+      ownerCompleteFromStart: true,
     });
     expect(result.forgottenPeerCounters?.["test.peer"]).toBeUndefined();
     expect(result.counters?.["test.peer"]).toBeUndefined();

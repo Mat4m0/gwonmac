@@ -9,7 +9,12 @@ import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { gamePaths } from "../paths.js";
 import { FlightRecorder } from "./flight-recorder.js";
-import type { DiagnosticEvent } from "./schema.js";
+import {
+  diagnosticEventSpec,
+  type AppDiagnosticEvent,
+  type DiagnosticEvent,
+  type OwnerDiagnosticEvent,
+} from "./schema.js";
 
 export const recorder = new FlightRecorder();
 
@@ -25,17 +30,43 @@ export interface EventDetail {
   timestampUs?: number;
 }
 
+function writeEvent(
+  event: DiagnosticEvent,
+  detail: EventDetail,
+  ownerId?: number,
+): void {
+  const scope = diagnosticEventSpec(event.k).scope;
+  if (
+    (scope === "owner" && ownerId === undefined)
+    || (scope === "app" && ownerId !== undefined)
+  ) {
+    throw new Error(`diagnostic event ${event.k} has invalid ${scope} ownership`);
+  }
+  recorder.record(event, detail, ownerId);
+}
+
+export function recordEvent(
+  event: AppDiagnosticEvent,
+  detail?: EventDetail,
+): void;
+export function recordEvent(
+  event: OwnerDiagnosticEvent,
+  detail: EventDetail,
+  ownerId: number,
+): void;
 export function recordEvent(
   event: DiagnosticEvent,
   detail: EventDetail = {},
   ownerId?: number,
 ): void {
-  recorder.record(event, detail, ownerId);
+  writeEvent(event, detail, ownerId);
 }
 
 /** The only public event-recording API. */
+export function logEvent(event: AppDiagnosticEvent): void;
+export function logEvent(event: OwnerDiagnosticEvent, ownerId: number): void;
 export function logEvent(event: DiagnosticEvent, ownerId?: number): void {
-  recordEvent(event, {}, ownerId);
+  writeEvent(event, {}, ownerId);
 }
 
 export function count(name: string, delta = 1, ownerId?: number): void {

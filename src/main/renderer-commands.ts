@@ -151,7 +151,7 @@ export async function editWindowText(
  * the Toolbox capability it stopped them for a refusal that only reached a log.
  */
 export async function toggleTools(win: BrowserWindow): Promise<void> {
-  const ownerId = windowRegistry.diagnosticOwnerForWindow(win) ?? undefined;
+  const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
   const outcome = await sendRendererCommand(win, { type: "tools.toggle" });
   // The renderer refuses outright when the Toolbox capability is not
   // installed, which is the ordinary case on a launch that did not ask for it.

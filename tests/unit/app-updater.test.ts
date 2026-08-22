@@ -5,7 +5,6 @@ import {
   PERIODIC_CHECK_DUE_MS,
   PERIODIC_CHECK_TICK_MS,
   periodicCheckDue,
-  type AppUpdateStage,
 } from "../../src/main/app-updater.ts";
 import type {
   AppUpdateErrorCode,
@@ -50,7 +49,7 @@ function fixture(options: {
   const states: AppUpdateState[] = [];
   const remembered: number[] = [];
   const feeds: string[] = [];
-  const failures: { stage: AppUpdateStage; reason: AppUpdateErrorCode }[] = [];
+  const failures: AppUpdateErrorCode[] = [];
   let nativeChecks = 0;
   let installs = 0;
   const updater = new AppUpdater({
@@ -79,7 +78,7 @@ function fixture(options: {
       remembered.push(value);
     },
     publish: (state) => states.push(state),
-    recordFailure: (stage, reason) => failures.push({ stage, reason }),
+    recordFailure: (reason) => failures.push(reason),
   });
   return {
     updater,
@@ -323,7 +322,7 @@ describe("application updater", () => {
       }),
     });
     await f.updater.check("beta");
-    assert.deepEqual(f.failures, [{ stage: "feed", reason: "timeout" }]);
+    assert.deepEqual(f.failures, ["timeout"]);
     const state = f.updater.getState();
     assert.equal(state.phase === "failed" && state.reason, "timeout");
   });

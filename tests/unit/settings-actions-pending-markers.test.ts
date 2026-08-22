@@ -62,7 +62,7 @@ test("ENOENT means no destructive startup action is pending", async () => {
   );
 
   await applyPendingCacheClear(paths);
-  await applyPendingGameStorageReset(paths);
+  await applyPendingGameStorageReset(paths, 1);
 });
 
 test("marker inspection failures other than ENOENT remain visible", async () => {
@@ -72,5 +72,5 @@ test("marker inspection failures other than ENOENT remain visible", async () => 
   const paths = pathsWithMarkers(brokenMarkerPath, brokenMarkerPath);
 
   await assert.rejects(applyPendingCacheClear(paths), { code: "ENOTDIR" });
-  await assert.rejects(applyPendingGameStorageReset(paths), { code: "ENOTDIR" });
+  await assert.rejects(applyPendingGameStorageReset(paths, 1), { code: "ENOTDIR" });
 });

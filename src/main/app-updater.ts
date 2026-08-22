@@ -30,7 +30,6 @@ import {
 import { parseReleaseManifest } from "../shared/release-manifest.js";
 import { redactDiagnosticText } from "./diagnostics/text-scan.js";
 
-export type AppUpdateStage = "feed";
 const TIMEOUT_MS = 5_000;
 
 interface NativeUpdater {
@@ -52,7 +51,7 @@ export interface AppUpdaterOptions {
    * Keeps the cause of a discarded transport or parse fault. Injected rather
    * than recorded here, so this class stays constructible without Electron.
    */
-  recordFailure: (stage: AppUpdateStage, reason: AppUpdateErrorCode) => void;
+  recordFailure: (reason: AppUpdateErrorCode) => void;
 }
 
 export class AppUpdater {
@@ -188,7 +187,6 @@ export class AppUpdater {
       } catch (error) {
         await this.failAndRemember(
           this.noteFailure(
-            "feed",
             controller.signal.aborted ? "timeout" : "offline",
             error,
           ),
@@ -208,7 +206,7 @@ export class AppUpdater {
         body = await response.json();
       } catch (error) {
         await this.failAndRemember(
-          this.noteFailure("feed", "unreadable", error),
+          this.noteFailure("unreadable", error),
         );
         return;
       }
@@ -217,7 +215,7 @@ export class AppUpdater {
         !feed
         || !isReleaseEligibleForTrack(feed.releaseVersion, track)
       ) {
-        await this.failAndRemember(this.noteFailure("feed", "feed-invalid"));
+        await this.failAndRemember(this.noteFailure("feed-invalid"));
         return;
       }
       const checkedAtValue = this.now();
@@ -277,18 +275,17 @@ export class AppUpdater {
 
   /**
    * The one place a fault that stops a check is kept rather than dropped. The
-   * stage and reason are bounded and reach diagnostics; an error is text this
+   * The bounded reason reaches diagnostics; an error is text this
    * process did not author, so it is redacted and goes no further than the
    * console. Transport, JSON, and closed-contract failures all name the one
    * static-feed boundary without retaining provider prose.
    */
   private noteFailure(
-    stage: AppUpdateStage,
     reason: AppUpdateErrorCode,
     error?: unknown,
   ): AppUpdateErrorCode {
-    this.options.recordFailure(stage, reason);
-    const summary = `Update check failed at ${stage}: ${reason}`;
+    this.options.recordFailure(reason);
+    const summary = `Update check failed at feed: ${reason}`;
     if (error === undefined) console.warn(summary);
     else console.warn(summary, redactDiagnosticText(String(error)));
     return reason;

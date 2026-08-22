@@ -576,7 +576,7 @@ test.describe("the Steam credential seam", () => {
     const diagnosticRoot = await mkdtemp(path.join(tmpdir(), "gwdiag-steam-"));
     const target = path.join(diagnosticRoot, "capture.zip");
     await fixture.app.evaluate(
-      async ({ app }, args) => {
+      async ({ app, BrowserWindow }, args) => {
         const { createRequire } = process.getBuiltinModule("module");
         const load = createRequire(args.modulePath);
         const diagnostics = load(args.modulePath) as {
@@ -585,8 +585,18 @@ test.describe("the Steam credential seam", () => {
             meta: Record<string, unknown>,
           ): Promise<void>;
         };
+        const { windowRegistry } = load(
+          args.modulePath.replace(/diagnostics\.js$/u, "window-registry.js"),
+        );
+        const win = BrowserWindow.getAllWindows()[0];
+        const ownerId = win
+          ? windowRegistry.diagnosticOwnerForWindow(win)
+          : null;
+        if (ownerId === null) throw new Error("diagnostics owner is unavailable");
         await diagnostics.exportDiagnosticsZip(args.target, {
           appVersion: app.getVersion(),
+          diagnosticOwnerId: ownerId,
+          includePreviousSession: false,
           electronVersions: { electron: process.versions.electron },
           settings: {
             renderScale: 1,

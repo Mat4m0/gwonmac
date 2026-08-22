@@ -25,10 +25,8 @@ import type { AppSettings } from "../../shared/contracts.js";
 import { gamePaths } from "../paths.js";
 import { windowRegistry } from "../window-registry.js";
 import {
-  activeCaptureLevel,
   completedTracePath,
   exportedCaptureLevel,
-  stopDiagnosticCapture,
   stopDiagnosticCaptureForWindow,
 } from "./capture.js";
 import { inspectEventLog, type RedactionResult } from "./detector.js";
@@ -81,13 +79,12 @@ export async function exportDiagnosticsZip(
   targetPath: string,
   extras: {
     appVersion: string;
-    diagnosticOwnerId?: number;
-    includePreviousSession?: boolean;
+    diagnosticOwnerId: number;
+    includePreviousSession: boolean;
     electronVersions: Record<string, string>;
     settings: AppSettings;
   },
 ): Promise<string> {
-  if (activeCaptureLevel() !== 0) await stopDiagnosticCapture("export");
   await recorder.flush();
   const dir = gamePaths().diagnostics;
   const staging = path.join(dir, `export-${randomUUID()}`);
@@ -103,15 +100,16 @@ export async function exportDiagnosticsZip(
     // The main report keeps the complete safe session around a capture. The
     // capture's narrower measurements remain in capture-summary.json, while its
     // metadata, frames, and trace retain their own exact lifetime below.
-    const summary = extras.diagnosticOwnerId === undefined
-      ? recorder.summary(captureLevel)
-      : recorder.summaryForOwner(extras.diagnosticOwnerId, captureLevel);
+    const summary = recorder.summaryForOwner(
+      extras.diagnosticOwnerId,
+      captureLevel,
+    );
     const exportedEvents = await recorder.exportedEvents(
       extras.diagnosticOwnerId,
     );
-    const previous = extras.includePreviousSession === false
-      ? null
-      : await previousAbnormalSession(dir, recorder.sessionId);
+    const previous = extras.includePreviousSession
+      ? await previousAbnormalSession(dir, recorder.sessionId)
+      : null;
     // The detector runs before anything is written, and it throws. An
     // event this build cannot account for stops the export rather than being
     // scrubbed on the way out.

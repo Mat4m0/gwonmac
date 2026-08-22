@@ -151,8 +151,7 @@ export function installApplicationMenu({
           id: "reset-window-state",
           label: "Reset Window Size and Position",
           click: withGameOwner(async (win) => {
-            const ownerId =
-              windowRegistry.diagnosticOwnerForWindow(win) ?? undefined;
+            const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
             await resetGameInput(win);
             void resetWindowState(win).catch(() => {
               logEvent(

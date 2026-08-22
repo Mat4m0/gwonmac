@@ -25,10 +25,6 @@ import { windowRegistry } from "./window-registry.js";
 
 type RelaunchAction = "capabilityEnable" | "cacheClear" | "gameStorageReset";
 
-function diagnosticOwner(win: BrowserWindow): number | undefined {
-  return windowRegistry.diagnosticOwnerForWindow(win) ?? undefined;
-}
-
 async function confirmAction(
   win: BrowserWindow,
   copy: {
@@ -118,7 +114,7 @@ export async function confirmSettingsReset(
   win: BrowserWindow,
   reset: () => Promise<SettingsResetOutcome>,
 ): Promise<SettingsResetOutcome | null> {
-  const ownerId = diagnosticOwner(win);
+  const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
   if (
     !(await confirmAction(win, {
       confirmLabel: "Reset GWonMac Settings",
@@ -175,7 +171,7 @@ export async function requestGameStorageReset(
   win: BrowserWindow,
   markerPath: string,
 ): Promise<boolean> {
-  const ownerId = diagnosticOwner(win);
+  const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
   if (
     !(await confirmAction(win, {
       confirmLabel: "Reset and Restart",
@@ -220,7 +216,7 @@ export async function applyPendingCacheClear(paths: GamePaths): Promise<void> {
 
 export async function applyPendingGameStorageReset(
   paths: GamePaths,
-  diagnosticOwnerId?: number,
+  diagnosticOwnerId: number,
 ): Promise<void> {
   await applyPendingSessionStorageReset(
     session.defaultSession,
@@ -232,7 +228,7 @@ export async function applyPendingGameStorageReset(
 export async function applyPendingSessionStorageReset(
   owner: Session,
   markerPath: string,
-  diagnosticOwnerId?: number,
+  diagnosticOwnerId: number,
 ): Promise<boolean> {
   if (!(await pendingMarkerExists(markerPath))) return false;
   // This runs before a renderer can mount IDBFS. Clearing it later would race

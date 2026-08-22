@@ -261,14 +261,24 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#capture-status")).toBeHidden();
 
       const target = path.join(diagnosticRoot, "capture.zip");
-      await app.evaluate(async ({ app: electronApp }, args) => {
+      await app.evaluate(async ({ app: electronApp, BrowserWindow }, args) => {
         const load = process
           .getBuiltinModule("node:module")
           .createRequire(args.modulePath);
         const diagnostics = load(args.modulePath);
         const { DEFAULT_SETTINGS } = load(args.contractsPath);
+        const { windowRegistry } = load(
+          args.modulePath.replace(/diagnostics\.js$/u, "window-registry.js"),
+        );
+        const win = BrowserWindow.getAllWindows()[0];
+        const ownerId = win
+          ? windowRegistry.diagnosticOwnerForWindow(win)
+          : null;
+        if (ownerId === null) throw new Error("diagnostics owner is unavailable");
         await diagnostics.exportDiagnosticsZip(args.target, {
           appVersion: electronApp.getVersion(),
+          diagnosticOwnerId: ownerId,
+          includePreviousSession: false,
           electronVersions: { electron: process.versions.electron },
           settings: DEFAULT_SETTINGS,
         });
@@ -307,8 +317,13 @@ test.describe("diagnostics", () => {
             .createRequire(args.modulePath);
           const diagnostics = load(args.modulePath);
           const { DEFAULT_SETTINGS } = load(args.contractsPath);
+          const { windowRegistry } = load(
+            args.modulePath.replace(/diagnostics\.js$/u, "window-registry.js"),
+          );
           const owner = BrowserWindow.getAllWindows()[0];
           if (!owner) throw new Error("diagnostics owner is unavailable");
+          const ownerId = windowRegistry.diagnosticOwnerForWindow(owner);
+          if (ownerId === null) throw new Error("diagnostics owner is unavailable");
           await diagnostics.startDiagnosticCapture(owner, 2);
 
           const originalStopRecording = contentTracing.stopRecording;
@@ -328,6 +343,8 @@ test.describe("diagnostics", () => {
           }
           await diagnostics.exportDiagnosticsZip(args.target, {
             appVersion: electronApp.getVersion(),
+            diagnosticOwnerId: ownerId,
+            includePreviousSession: false,
             electronVersions: { electron: process.versions.electron },
             settings: DEFAULT_SETTINGS,
           });
@@ -793,6 +810,7 @@ test.describe("diagnostics", () => {
           await diagnostics.exportDiagnosticsZip(args.target, {
             appVersion: electronApp.getVersion(),
             diagnosticOwnerId: args.ownerId,
+            includePreviousSession: true,
             // OS/Chromium summary documents are pattern-scanned rather than
             // certified. Plant the adversarial values there; app-authored
             // events have no free-text recording API anymore.

@@ -324,12 +324,14 @@ async function handleSnapshot(
   } catch (err) {
     const code = errorCode(err);
     requestSpan.end({ returnedBytes: 0, code, status: 503 });
-    logEvent({
-      k: "snapshot.rangeFailed",
-      offsetBytes: range.start,
-      bytes: length,
-      code,
-    }, ownerId);
+    if (ownerId !== undefined) {
+      logEvent({
+        k: "snapshot.rangeFailed",
+        offsetBytes: range.start,
+        bytes: length,
+        code,
+      }, ownerId);
+    }
     const message =
       code === "chunk_offline"
         ? "No cached copy of this game data is available while offline."
@@ -431,7 +433,9 @@ async function handleProxy(
       res.headers,
     );
     if (safeHeaders === null) {
-      logEvent({ k: "proxy.redirectBlocked", route }, ownerId);
+      if (ownerId !== undefined) {
+        logEvent({ k: "proxy.redirectBlocked", route }, ownerId);
+      }
       requestSpan.end({
         status: 502,
         reason: "redirectEscape",
@@ -446,7 +450,9 @@ async function handleProxy(
   } catch (err) {
     const code = errorCode(err);
     requestSpan.end({ status: 502, reason: null, code });
-    logEvent({ k: "proxy.requestFailed", route, code }, ownerId);
+    if (ownerId !== undefined) {
+      logEvent({ k: "proxy.requestFailed", route, code }, ownerId);
+    }
     return new Response("proxy error", { status: 502, headers: headers() });
   }
 }
@@ -483,12 +489,17 @@ async function handleGwRequest(
     if (!active || request.method !== "GET") return missing();
     const assets = fontFor(active);
     const font = await assets.font(gameFontRole);
-    if (!font && !reportedGameFontRefusals.has(assets)) {
+    const ownerId = deps.diagnosticOwnerId?.();
+    if (
+      !font
+      && ownerId !== undefined
+      && !reportedGameFontRefusals.has(assets)
+    ) {
       reportedGameFontRefusals.add(assets);
       logEvent({
         k: "protocol.gameFontRefused",
         reason: assets.refusal() ?? "unsupported",
-      });
+      }, ownerId);
     }
     return font
       ? new Response(compactResponseBody(font), {
@@ -515,7 +526,13 @@ async function handleGwRequest(
     if (!active || request.method !== "GET") return empty();
     const read = await assetsFor(active).catalogue();
     if (!read.ok) {
-      logEvent({ k: "protocol.skillCatalogueRefused", reason: read.reason });
+      const ownerId = deps.diagnosticOwnerId?.();
+      if (ownerId !== undefined) {
+        logEvent(
+          { k: "protocol.skillCatalogueRefused", reason: read.reason },
+          ownerId,
+        );
+      }
       return empty();
     }
     const body = JSON.stringify(read.skills);

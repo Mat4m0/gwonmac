@@ -94,17 +94,13 @@ export function captureOwnsDiagnosticOwner(ownerId: number): boolean {
 }
 
 /** The level an export declares: the last capture's, not the live one's. */
-export function exportedCaptureLevel(ownerId?: number): 0 | 1 | 2 {
-  return ownerId === undefined || ownerId === recordedOwnerId
-    ? recordedLevel
-    : 0;
+export function exportedCaptureLevel(ownerId: number): 0 | 1 | 2 {
+  return ownerId === recordedOwnerId ? recordedLevel : 0;
 }
 
 /** The completed raw trace an export sanitizes, or `""` when there is none. */
-export function completedTracePath(ownerId?: number): string {
-  return ownerId === undefined || ownerId === lastTraceOwnerId
-    ? lastTracePath
-    : "";
+export function completedTracePath(ownerId: number): string {
+  return ownerId === lastTraceOwnerId ? lastTracePath : "";
 }
 
 /**
