@@ -23,6 +23,23 @@ const sendControlChord = (contents: WebContents, keyCode: 'A' | 'X'): void => {
   contents.sendInputEvent({ type: 'keyUp', keyCode: 'Control' });
 };
 
+const sendControlPaste = (contents: WebContents): void => {
+  contents.sendInputEvent({
+    type: 'keyDown', keyCode: 'Control', modifiers: ['control'],
+  });
+  contents.sendInputEvent({
+    type: 'keyDown', keyCode: 'V', modifiers: ['control'],
+  });
+  // sendInputEvent reproduces the key transition but does not run Chromium's
+  // default Paste action. Invoke it while Control-V is down, matching the
+  // ordering of a physical Control-V gesture.
+  contents.paste();
+  contents.sendInputEvent({
+    type: 'keyUp', keyCode: 'V', modifiers: ['control'],
+  });
+  contents.sendInputEvent({ type: 'keyUp', keyCode: 'Control' });
+};
+
 export async function editGameText(
   contents: WebContents,
   request: GameTextEditRequest,
@@ -47,11 +64,10 @@ export async function editGameText(
     return;
   }
 
-  // ArenaNet distinguishes Paste from ordinary typing by InputEvent.inputType.
-  // Use Chromium's native command so the focused proxy emits insertFromPaste;
-  // insertText emits insertText and the official client treats the complete
-  // clipboard payload as one typing operation instead.
+  // The visible editor owns Paste through the same Windows-style keyboard
+  // protocol as Select All and Cut. A proxy-only Chromium paste updates the
+  // hidden field but does not commit the edit to Guild Wars.
   const text = clipboard.readText();
   if (!text || text.length > CLIPBOARD_TEXT_CEILING) return;
-  contents.paste();
+  sendControlPaste(contents);
 }
