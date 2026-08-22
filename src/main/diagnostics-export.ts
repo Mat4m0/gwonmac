@@ -5,6 +5,7 @@
 import { dialog, type BrowserWindow } from "electron";
 import { errorCode } from "../shared/errors.js";
 import { logEvent } from "./diagnostics.js";
+import { windowRegistry } from "./window-registry.js";
 
 let diagnosticsExportInFlight = false;
 
@@ -14,12 +15,13 @@ export async function exportDiagnosticsReport(
 ): Promise<void> {
   if (diagnosticsExportInFlight) return;
   diagnosticsExportInFlight = true;
+  const ownerId = windowRegistry.diagnosticOwnerForWindow(win) ?? undefined;
   try {
     const saved = await exportDiagnostics();
     if (!saved) return;
-    logEvent({ k: "diagnostics.exported" });
+    logEvent({ k: "diagnostics.exported" }, ownerId);
   } catch (error) {
-    logEvent({ k: "diagnostics.exportFailed", code: errorCode(error) });
+    logEvent({ k: "diagnostics.exportFailed", code: errorCode(error) }, ownerId);
     await dialog.showMessageBox(win, {
       type: "error",
       buttons: ["OK"],

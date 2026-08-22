@@ -152,7 +152,18 @@ test("only the owner observes a capture and Level 2 refuses shared tracing", asy
           profileId: "diagnostics-peer",
         }, 202);
         try {
+          await peer.loadURL("data:text/html,peer");
           await diagnostics.startDiagnosticCapture(peer, 1);
+          const { exportDiagnosticsReport } = load(
+            modulePath.replace(/diagnostics\.js$/u, "diagnostics-export.js"),
+          );
+          await exportDiagnosticsReport(peer, async () => "saved");
+          const samplers = load(
+            modulePath.replace(/diagnostics\.js$/u, "diagnostics/samplers.js"),
+          );
+          for (let index = 0; index < 5; index += 1) {
+            samplers.sampleProcesses();
+          }
           const ownerLevel = diagnostics.diagnosticSummary(owner).captureLevel;
           const peerLevel = diagnostics.diagnosticSummary(peer).captureLevel;
           const span = diagnostics.startSnapshotReadSpan(
@@ -164,9 +175,14 @@ test("only the owner observes a capture and Level 2 refuses shared tracing", asy
           const { recorder } = load(
             modulePath.replace(/diagnostics\.js$/u, "diagnostics/recorder.js"),
           );
-          const captureEvents = JSON.parse(
+          const captureRecords = JSON.parse(
             `[${(await recorder.exportedEvents(202)).text.replaceAll("\n", ",")}]`,
-          ).map((event: { name: string }) => event.name);
+          ) as Array<{ name: string; fields: { pid?: number } }>;
+          const ownerId = windowRegistry.diagnosticOwnerForWindow(owner);
+          if (ownerId === null) throw new Error("owner diagnostics unavailable");
+          const ownerRecords = JSON.parse(
+            `[${(await recorder.exportedEvents(ownerId)).text.replaceAll("\n", ",")}]`,
+          ) as Array<{ name: string; fields: { pid?: number } }>;
           let levelTwoError = "";
           try {
             await diagnostics.startDiagnosticCapture(owner, 2);
@@ -178,7 +194,16 @@ test("only the owner observes a capture and Level 2 refuses shared tracing", asy
             ownerLevel,
             peerLevel,
             ownerIdDiffersFromWebContents: peer.webContents.id !== 202,
-            captureEvents,
+            captureEvents: captureRecords.map((event) => event.name),
+            ownerEvents: ownerRecords.map((event) => event.name),
+            captureChromiumPids: captureRecords
+              .filter((event) => event.name === "process.chromium")
+              .map((event) => event.fields.pid),
+            ownerChromiumPids: ownerRecords
+              .filter((event) => event.name === "process.chromium")
+              .map((event) => event.fields.pid),
+            ownerPid: owner.webContents.getOSProcessId(),
+            peerPid: peer.webContents.getOSProcessId(),
             levelTwoError,
           };
         } finally {
@@ -190,16 +215,24 @@ test("only the owner observes a capture and Level 2 refuses shared tracing", asy
       path.join(root, "build/main/diagnostics.js"),
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ownerLevel: 0,
       peerLevel: 1,
       ownerIdDiffersFromWebContents: true,
       captureEvents: expect.arrayContaining([
+        "diagnostics.exported",
         "snapshot.read.begin",
         "snapshot.read.end",
       ]),
+      ownerEvents: expect.not.arrayContaining(["diagnostics.exported"]),
       levelTwoError: "Chromium tracing requires exactly one open game window",
     });
+    expect(result.captureEvents).toContain("process.main");
+    expect(result.ownerEvents).toContain("process.main");
+    expect(result.captureChromiumPids).toContain(result.peerPid);
+    expect(result.captureChromiumPids).not.toContain(result.ownerPid);
+    expect(result.ownerChromiumPids).toContain(result.ownerPid);
+    expect(result.ownerChromiumPids).not.toContain(result.peerPid);
   } finally {
     await closeOffline(fixture);
   }

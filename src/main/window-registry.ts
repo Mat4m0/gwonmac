@@ -15,7 +15,10 @@ export type WindowContext =
   | Readonly<{ mode: "multi"; role: "game"; profileId: ProfileId }>;
 
 interface RegisteredWindow {
-  readonly webContents: { readonly id: number };
+  readonly webContents: {
+    readonly id: number;
+    getOSProcessId?(): number;
+  };
   isDestroyed(): boolean;
   isFocused(): boolean;
 }
@@ -105,6 +108,27 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
     return entry && !entry.win.isDestroyed()
       ? entry.diagnosticOwnerId
       : null;
+  }
+
+  /** Resolve a live renderer process without treating an ambiguous PID as owned. */
+  diagnosticOwnerForProcessId(processId: number): number | null {
+    let ownerId: number | null = null;
+    for (const { win, diagnosticOwnerId } of this.#byWebContents.values()) {
+      let rendererProcessId: number | undefined;
+      try {
+        rendererProcessId = win.webContents.getOSProcessId?.();
+      } catch {
+        continue;
+      }
+      if (
+        win.isDestroyed()
+        || diagnosticOwnerId === null
+        || rendererProcessId !== processId
+      ) continue;
+      if (ownerId !== null && ownerId !== diagnosticOwnerId) return null;
+      ownerId = diagnosticOwnerId;
+    }
+    return ownerId;
   }
 
   singleGameWindow(): Window | null {

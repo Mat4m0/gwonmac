@@ -490,12 +490,17 @@ export class MultipleAccountsController {
       const reset = await applyPendingSessionStorageReset(
         owner,
         profilePaths.gameStorageClearRequest,
+        this.diagnosticOwnerFor(profileId),
       );
       if (reset && profile.templates === "private") {
         await rm(profilePaths.templates, { force: true });
       }
       await mkdir(profilePaths.root, { recursive: true });
-      await prepareWindowState(profilePaths.windowState, newWindowOrdinal);
+      await prepareWindowState(
+        profilePaths.windowState,
+        newWindowOrdinal,
+        this.diagnosticOwnerFor(profileId),
+      );
       failureStage = "starting";
       let hubWasVisibleBeforeRecovery = false;
       const win = createMainWindow(this.options.windowHost, {

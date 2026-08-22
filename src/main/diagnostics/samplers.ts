@@ -14,6 +14,7 @@ import { app, powerMonitor, screen } from "electron";
 import { runtimeVersions } from "./flight-recorder.js";
 import { logEvent, recorder } from "./recorder.js";
 import { asAppVersion } from "./schema-fields.js";
+import { windowRegistry } from "../window-registry.js";
 
 const SAMPLE_INTERVAL_MS = 1_000;
 const PROCESS_SAMPLE_INTERVAL = 5;
@@ -27,7 +28,7 @@ const eventLoop = monitorEventLoopDelay({ resolution: 5 });
 let previousEventLoopUtilization = performance.eventLoopUtilization();
 let eventLoopWindowStartedUs = 0;
 
-function sampleProcesses(): void {
+export function sampleProcesses(): void {
   sampleNumber += 1;
   const detailedSample =
     sampleNumber % PROCESS_SAMPLE_INTERVAL === 0;
@@ -66,14 +67,28 @@ function sampleProcesses(): void {
   }
 
   if (!detailedSample) return;
-  const aggregates = new Map<string, { cpuPercent: number; rssBytes: number }>();
+  const aggregates = new Map<
+    string,
+    { cpuPercent: number; rssBytes: number; ownerId?: number }
+  >();
   for (const metric of app.getAppMetrics()) {
     const prefix = `process.${metric.type.toLowerCase()}`;
+    const ownerId = metric.type === "Tab"
+      ? windowRegistry.diagnosticOwnerForProcessId(metric.pid) ?? undefined
+      : undefined;
+    // An unregistered renderer must not become global evidence in every
+    // account's report.
+    if (metric.type === "Tab" && ownerId === undefined) continue;
     recorder.setLatest(
       `${prefix}.cpuPercentElectron`,
       metric.cpu.percentCPUUsage,
+      ownerId,
     );
-    recorder.setLatest(`${prefix}.rssBytes`, metric.memory.workingSetSize * 1_024);
+    recorder.setLatest(
+      `${prefix}.rssBytes`,
+      metric.memory.workingSetSize * 1_024,
+      ownerId,
+    );
     logEvent({ k: "process.chromium",
       pid: metric.pid,
       cpuPercentElectron: metric.cpu.percentCPUUsage,
@@ -81,18 +96,32 @@ function sampleProcesses(): void {
       rssBytes: metric.memory.workingSetSize * 1_024,
       privateBytes: (metric.memory.privateBytes ?? 0) * 1_024,
       sandboxed: metric.sandboxed ?? false,
-    });
-    const aggregate = aggregates.get(prefix) ?? { cpuPercent: 0, rssBytes: 0 };
+    }, ownerId);
+    const aggregateKey = `${prefix}:${ownerId ?? "global"}`;
+    const aggregate = aggregates.get(aggregateKey) ?? {
+      cpuPercent: 0,
+      rssBytes: 0,
+      ...(ownerId === undefined ? {} : { ownerId }),
+    };
     aggregate.cpuPercent += metric.cpu.percentCPUUsage;
     aggregate.rssBytes += metric.memory.workingSetSize * 1_024;
-    aggregates.set(prefix, aggregate);
+    aggregates.set(aggregateKey, aggregate);
   }
-  for (const [prefix, aggregate] of aggregates) {
-    recorder.count(`${prefix}.cpuPercentElectronSum`, aggregate.cpuPercent);
-    recorder.count(`${prefix}.cpuSamples`);
-    recorder.setLatest(`${prefix}.cpuPercentElectron`, aggregate.cpuPercent);
-    recorder.setLatest(`${prefix}.rssBytes`, aggregate.rssBytes);
-    recorder.setPeak(`${prefix}.peakRssBytes`, aggregate.rssBytes);
+  for (const [key, aggregate] of aggregates) {
+    const prefix = key.slice(0, key.lastIndexOf(":"));
+    recorder.count(
+      `${prefix}.cpuPercentElectronSum`,
+      aggregate.cpuPercent,
+      aggregate.ownerId,
+    );
+    recorder.count(`${prefix}.cpuSamples`, 1, aggregate.ownerId);
+    recorder.setLatest(
+      `${prefix}.cpuPercentElectron`,
+      aggregate.cpuPercent,
+      aggregate.ownerId,
+    );
+    recorder.setLatest(`${prefix}.rssBytes`, aggregate.rssBytes, aggregate.ownerId);
+    recorder.setPeak(`${prefix}.peakRssBytes`, aggregate.rssBytes, aggregate.ownerId);
   }
 }
 

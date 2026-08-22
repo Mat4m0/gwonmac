@@ -516,7 +516,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   }
   await applyPendingCacheClear(paths);
   if (activeAccountMode === "single") {
-    await applyPendingGameStorageReset(paths);
+    await applyPendingGameStorageReset(paths, SINGLE_DIAGNOSTIC_OWNER_ID);
   }
   await ensureDirs(activeAccountMode);
   await startDiagnostics();
@@ -565,7 +565,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     settings,
     enhancementProgram,
   );
-  if (activeAccountMode === "single") await prepareWindowState();
+  if (activeAccountMode === "single") {
+    await prepareWindowState(undefined, undefined, SINGLE_DIAGNOSTIC_OWNER_ID);
+  }
   const keychain: NativeKeychain = persistentSecrets
     ? nativeHost
     : new VolatileNativeKeychain();
@@ -842,7 +844,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
           logEvent({
             k: "capture.automationStartFailed",
             code: errorCode(error),
-          });
+          }, windowRegistry.diagnosticOwnerForWindow(win) ?? undefined);
         });
       } else if (message === AUTOMATION_COMMAND.stopCapture) {
         void stopDiagnosticCapture();
@@ -867,7 +869,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
       }
     });
   }
-  logEvent({ k: "window.created" });
   if (profileMatches) {
     void clientRuntime.requestUpdate();
   } else {

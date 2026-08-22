@@ -21,8 +21,13 @@ import { logEvent } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
 import { resetGameInput } from "./renderer-commands.js";
 import { resetWindowState } from "./window.js";
+import { windowRegistry } from "./window-registry.js";
 
 type RelaunchAction = "capabilityEnable" | "cacheClear" | "gameStorageReset";
+
+function diagnosticOwner(win: BrowserWindow): number | undefined {
+  return windowRegistry.diagnosticOwnerForWindow(win) ?? undefined;
+}
 
 async function confirmAction(
   win: BrowserWindow,
@@ -113,6 +118,7 @@ export async function confirmSettingsReset(
   win: BrowserWindow,
   reset: () => Promise<SettingsResetOutcome>,
 ): Promise<SettingsResetOutcome | null> {
+  const ownerId = diagnosticOwner(win);
   if (
     !(await confirmAction(win, {
       confirmLabel: "Reset GWonMac Settings",
@@ -130,7 +136,7 @@ export async function confirmSettingsReset(
     } catch {
       // The settings document is already durable. Window geometry is a
       // separate document and cannot roll that result back.
-      logEvent({ k: "window.stateResetFailed" });
+      logEvent({ k: "window.stateResetFailed" }, ownerId);
     }
     if (outcome.status === "complete") logEvent({ k: "settings.reset" });
     return outcome;
@@ -169,6 +175,7 @@ export async function requestGameStorageReset(
   win: BrowserWindow,
   markerPath: string,
 ): Promise<boolean> {
+  const ownerId = diagnosticOwner(win);
   if (
     !(await confirmAction(win, {
       confirmLabel: "Reset and Restart",
@@ -182,10 +189,13 @@ export async function requestGameStorageReset(
   try {
     await writeFile(markerPath, "", { mode: 0o600 });
   } catch (error) {
-    logEvent({ k: "filesystem.resetFailed", code: errorCode(error) });
+    logEvent(
+      { k: "filesystem.resetFailed", code: errorCode(error) },
+      ownerId,
+    );
     throw error;
   }
-  logEvent({ k: "filesystem.resetRequested" });
+  logEvent({ k: "filesystem.resetRequested" }, ownerId);
   requestRelaunch(win, "gameStorageReset");
   return true;
 }
@@ -210,16 +220,19 @@ export async function applyPendingCacheClear(paths: GamePaths): Promise<void> {
 
 export async function applyPendingGameStorageReset(
   paths: GamePaths,
+  diagnosticOwnerId?: number,
 ): Promise<void> {
   await applyPendingSessionStorageReset(
     session.defaultSession,
     paths.gameStorageClearRequest,
+    diagnosticOwnerId,
   );
 }
 
 export async function applyPendingSessionStorageReset(
   owner: Session,
   markerPath: string,
+  diagnosticOwnerId?: number,
 ): Promise<boolean> {
   if (!(await pendingMarkerExists(markerPath))) return false;
   // This runs before a renderer can mount IDBFS. Clearing it later would race
@@ -229,6 +242,6 @@ export async function applyPendingSessionStorageReset(
     storages: ["indexdb"],
   });
   await rm(markerPath, { force: true });
-  logEvent({ k: "filesystem.resetCompleted" });
+  logEvent({ k: "filesystem.resetCompleted" }, diagnosticOwnerId);
   return true;
 }
