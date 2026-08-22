@@ -9,8 +9,6 @@
 (function () {
   type AppSettings = import('../shared/contracts.js').AppSettings;
   type RendererSettingsPatch = import('../shared/contracts.js').RendererSettingsPatch;
-  type TravelUserPreferences =
-    import('../shared/travel.js').TravelUserPreferences;
   type ClientSession = import('../shared/contracts.js').ClientSession;
   type RendererMilestone =
     import('../shared/diagnostics.js').RendererMilestone;
@@ -47,12 +45,6 @@
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
   const travelPalette = form.elements.namedItem('travelPalette') as HTMLInputElement;
-  const travelRecentLimit = form.elements.namedItem(
-    'travelRecentLimit',
-  ) as HTMLSelectElement;
-  const travelRecentsClear = byId(
-    'settings-travel-recents-clear',
-  ) as HTMLButtonElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
   const toolFeatures = byId('settings-tool-features');
   const toolsOff = byId('settings-tools-off');
@@ -82,7 +74,6 @@
   let currentSession: ClientSession | null = null;
 
   let currentSettings: AppSettings | null = null;
-  let currentTravelPreferences: TravelUserPreferences | null = null;
   let settingsLoad: Promise<AppSettings> | null = null;
   let settingsWrite: Promise<unknown> = Promise.resolve();
   type FeedbackTone = 'neutral' | 'progress' | 'success' | 'warning' | 'error';
@@ -288,19 +279,6 @@
       settings: () => currentSettings,
       persist: (shortcutOverrides) => persistSettings({ shortcutOverrides }),
       recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
-      feedback: setFeedback,
-    }));
-  const travelPreferenceSettings = import('./settings-travel-preferences.js')
-    .then((module) => module.bindTravelPreferenceSettings({
-      limit: travelRecentLimit,
-      clear: travelRecentsClear,
-      current: () => currentTravelPreferences,
-      accept: (preferences) => {
-        currentTravelPreferences = preferences;
-      },
-      renderSettings: () => {
-        if (currentSettings) fillForm(currentSettings);
-      },
       feedback: setFeedback,
     }));
   void import('./settings-accounts.js').then((module) =>
@@ -523,10 +501,7 @@
     }
   }
 
-  function fillForm(
-    settings: AppSettings,
-    travelPreferences = currentTravelPreferences,
-  ) {
+  function fillForm(settings: AppSettings) {
     renderScale.value = String(settings.renderScale);
     uiStyle.value = settings.uiStyle;
     uiFont.value = settings.uiFont;
@@ -548,8 +523,6 @@
     teamManagement.disabled = !settings.gwonmacTools;
     xunlaiStorage.disabled = !settings.gwonmacTools;
     travelPalette.disabled = !settings.gwonmacTools;
-    void travelPreferenceSettings.then((binder) =>
-      binder.render(settings.gwonmacTools, travelPreferences));
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     updateTrack.value = settings.updateTrack;
@@ -582,10 +555,7 @@
     settingsCache.textContent = 'Checking downloaded game data…';
     try {
       await settingsWrite;
-      [currentSettings, currentTravelPreferences] = await Promise.all([
-        window.gwNative.settings.get(),
-        window.gwNative.travelPreferences.get(),
-      ]);
+      currentSettings = await window.gwNative.settings.get();
       fillForm(currentSettings);
       // "Last checked 4 minutes ago" goes stale while a window sits open.
       // The client build's status is the answer to "why is my cursor plain?",
@@ -636,7 +606,6 @@
       void dataStrategy.then((controller) => controller.saveSelectedStrategy());
       return;
     }
-    if (control.name === 'travelRecentLimit') return;
     const patch = patchForControl(control);
     if (!patch) return;
     setFeedback('Saving…', 'progress');
@@ -679,8 +648,7 @@
       const outcome = await window.gwNative.settings.reset();
       if (!outcome) return;
       currentSettings = outcome.settings;
-      currentTravelPreferences = outcome.travelPreferences;
-      fillForm(outcome.settings, outcome.travelPreferences);
+      fillForm(outcome.settings);
       window.gwApplySettings?.(outcome.settings);
       if (outcome.status === 'partial') {
         setFeedback(
@@ -698,7 +666,6 @@
       }
     } catch {
       currentSettings = null;
-      currentTravelPreferences = null;
       form.setAttribute('aria-busy', 'true');
       settingsPanes.inert = true;
       setFeedback('GWonMac could not confirm whether settings were reset. Close and reopen Settings to review the active values.', 'error');

@@ -108,12 +108,10 @@ describe("Travel", () => {
     const expected = {
       shortcuts: travelShortcutsFromStored([]),
       synonyms: [],
-      recentLimit: 5,
-      recentMapIds: [],
     };
     assert.throws(() => parseTravelUserPreferencesUpdate({
       expected,
-      patch: { shortcuts: expected.shortcuts, recentLimit: 3 },
+      patch: { shortcuts: expected.shortcuts, synonyms: [] },
     }), /exactly one durable owner/u);
     assert.throws(() => parseTravelUserPreferencesUpdate({
       expected,
@@ -125,7 +123,7 @@ describe("Travel", () => {
     }), /exactly one durable owner/u);
     assert.deepEqual(parseTravelUserPreferencesUpdate({
       expected,
-      patch: { recentLimit: 3, recentMapIds: [] },
-    }).patch, { recentLimit: 3, recentMapIds: [] });
+      patch: { synonyms: [{ term: "home", mapId: 55 }] },
+    }).patch, { synonyms: [{ term: "home", mapId: 55 }] });
   });
 });

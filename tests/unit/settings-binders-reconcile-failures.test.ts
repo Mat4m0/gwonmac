@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
-import type { TravelUserPreferences } from "../../src/shared/travel.ts";
 import { bindShortcutSettings } from "../../src/renderer/settings-shortcuts.ts";
-import { bindTravelPreferenceSettings } from "../../src/renderer/settings-travel-preferences.ts";
 
 type Listener = () => void;
 
@@ -98,56 +96,6 @@ test("a failed shortcut write reconciles through Settings and leaves capture mod
 
     assert.equal(row.valueElement.textContent, "⌘B");
     assert.equal(row.change.textContent, "Change");
-  } finally {
-    uninstall();
-  }
-});
-
-test("a failed Travel write and reload makes the pane unknown and disabled", async () => {
-  const limit = new FakeElement();
-  limit.value = "10";
-  const clear = new FakeElement();
-  let current: TravelUserPreferences | null = {
-    shortcuts: [null, null, null, null, null, null, null, null, null],
-    synonyms: [],
-    recentLimit: 5,
-    recentMapIds: [55],
-  };
-  let reconciled!: () => void;
-  const reconciliation = new Promise<void>((resolve) => { reconciled = resolve; });
-  let render!: () => void;
-  const uninstall = installWindow({
-    gwNative: {
-      travelPreferences: {
-        set: async () => { throw new Error("write failed"); },
-        get: async () => { throw new Error("reload failed"); },
-      },
-    },
-  });
-  try {
-    const binder = bindTravelPreferenceSettings({
-      limit: limit as unknown as HTMLSelectElement,
-      clear: clear as unknown as HTMLButtonElement,
-      current: () => current,
-      accept: (preferences) => { current = preferences; },
-      renderSettings: () => {
-        binder.render(true, current);
-        render?.();
-      },
-      feedback: () => {},
-    });
-    render = reconciled;
-    binder.render(true, current);
-    assert.equal(limit.disabled, false);
-
-    limit.value = "10";
-    limit.dispatch("change");
-    await reconciliation;
-
-    assert.equal(current, null);
-    assert.equal(limit.disabled, true);
-    assert.equal(limit.selectedIndex, -1);
-    assert.equal(clear.disabled, true);
   } finally {
     uninstall();
   }

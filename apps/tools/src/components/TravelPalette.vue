@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import {
-  TRAVEL_RECENT_LIMITS,
   TRAVEL_SEARCH_QUERY_LIMIT,
   TRAVEL_SHORTCUT_LIMIT,
   highlightTravelDestinationName,
@@ -10,7 +9,6 @@ import {
   searchTravelDestinations,
   travelDestination,
   type TravelDestination,
-  type TravelRecentLimit,
   type TravelRequest,
 } from "../../../../src/shared/travel";
 import type { TravelHost } from "../travel-host";
@@ -45,8 +43,6 @@ const travelPreferences = useTravelPreferences(props.host);
 const {
   shortcuts,
   synonyms,
-  recentLimit,
-  recentMapIds,
   pending: preferenceWritePending,
   disabled: preferenceControlsDisabled,
 } = travelPreferences;
@@ -64,15 +60,6 @@ const shortcutRows = computed(() => Array.from({ length: TRAVEL_SHORTCUT_LIMIT }
   return { index, request, destination: request === null ? null : travelDestination(request.mapId) };
 }));
 const assignedShortcuts = computed(() => shortcutRows.value.filter((row) => row.destination !== null));
-const recentRows = computed(() => recentMapIds.value
-  .slice(0, recentLimit.value)
-  .map((mapId) => travelDestination(mapId))
-  .filter((destination): destination is TravelDestination => destination !== null)
-);
-const storedRecentRows = computed(() => recentMapIds.value
-  .map((mapId) => travelDestination(mapId))
-  .filter((destination): destination is TravelDestination => destination !== null)
-);
 const activeDestination = computed(() => results.value[active.value] ?? null);
 const statusText = computed(() => feedback.value || props.host.unavailable || "");
 const statusLevel = computed(() => feedback.value
@@ -310,24 +297,6 @@ async function removePhrase(index: number): Promise<void> {
   }
 }
 
-async function setRecentLimit(limit: TravelRecentLimit): Promise<void> {
-  try {
-    if (!await travelPreferences.setRecentLimit(limit)) return;
-    setFeedback(limit === 0 ? "Recent trips are off and stored history was cleared." : `Showing the last ${limit} confirmed trips.`, "success");
-  } catch {
-    setFeedback("The Recent setting could not be changed.", "danger");
-  }
-}
-
-async function clearRecentTrips(): Promise<void> {
-  try {
-    if (!await travelPreferences.clearRecentTrips()) return;
-    setFeedback("Recent trips cleared. Shortcuts and search phrases are unchanged.", "success");
-  } catch {
-    setFeedback("Recent trips could not be cleared.", "danger");
-  }
-}
-
 async function moveActive(direction: 1 | -1): Promise<void> {
   if (results.value.length === 0) return;
   active.value = (active.value + direction + results.value.length) % results.value.length;
@@ -355,9 +324,6 @@ function onKeydown(event: KeyboardEvent): void {
     if (activeDestination.value !== null) {
       event.preventDefault();
       void travel({ mapId: activeDestination.value.mapId });
-    } else if (!hasQuery.value && recentRows.value[0] !== undefined) {
-      event.preventDefault();
-      void travel({ mapId: recentRows.value[0].mapId });
     }
     return;
   }
@@ -401,12 +367,6 @@ onBeforeUnmount(() => window.clearTimeout(closeTimer));
     </section>
 
     <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="tabpanel" aria-labelledby="travel-mode-tab">
-      <section v-if="recentRows.length" class="travel-section travel-recents" aria-labelledby="travel-recents-title">
-        <header class="travel-section-head"><h2 id="travel-recents-title">Recent trips</h2><span>Return travels to the latest</span></header>
-        <div class="travel-recent-list">
-          <button v-for="(destination, index) in recentRows" :key="destination.mapId" type="button" class="travel-recent-row" :data-active="index === 0" :disabled="travelPending || host.unavailable !== null" @click="travel({ mapId: destination.mapId })"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" /></svg><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><kbd v-if="index === 0" class="ui-kbd">return</kbd><span v-else>Travel</span></button>
-        </div>
-      </section>
       <section class="travel-section travel-favorites" aria-labelledby="travel-favorites-title">
         <header class="travel-section-head"><h2 id="travel-favorites-title">Favorites</h2><span>Press 1–9</span></header>
         <div v-if="assignedShortcuts.length" class="travel-favorite-grid">
@@ -431,12 +391,6 @@ onBeforeUnmount(() => window.clearTimeout(closeTimer));
         <div v-else-if="!addingPhrase" class="travel-phrases-empty">No phrases saved yet.</div>
         <form v-if="addingPhrase" class="travel-add-phrase" @submit.prevent="addPhrase"><label><span class="ui-sr-only">New search phrase</span><input id="travel-new-phrase" v-model="newPhraseTerm" class="ui-input" maxlength="40" placeholder="Phrase, e.g. daily run" :disabled="preferenceControlsDisabled" :aria-invalid="phraseError ? 'true' : undefined" :aria-describedby="phraseError ? 'travel-phrase-error' : undefined"></label><TravelDestinationPicker v-model="newPhraseMapId" label="Destination for new search phrase" :disabled="preferenceControlsDisabled" /><span class="travel-add-phrase-actions"><button type="button" class="ui-button" :disabled="preferenceControlsDisabled" @click="cancelAddPhrase">Cancel</button><button type="submit" class="ui-button" :disabled="preferenceControlsDisabled || !newPhraseTerm.trim() || newPhraseMapId === null">Save</button></span></form>
         <p v-if="phraseError" id="travel-phrase-error" class="ui-field-error travel-phrase-error">{{ phraseError }}</p>
-      </section>
-
-      <section class="travel-customize-group travel-recents-setting" aria-labelledby="travel-recent-settings-title">
-        <span><strong id="travel-recent-settings-title">Recent trips</strong><small>{{ storedRecentRows.length }} confirmed destinations stored</small></span>
-        <div class="ui-segment travel-recent-options" role="group" aria-label="Number of recent trips"><button v-for="limit in TRAVEL_RECENT_LIMITS" :key="limit" type="button" :aria-pressed="recentLimit === limit" :disabled="preferenceControlsDisabled" @click="setRecentLimit(limit)">{{ limit === 0 ? 'Off' : limit }}</button></div>
-        <button type="button" class="ui-button travel-clear-recents" :disabled="preferenceControlsDisabled || storedRecentRows.length === 0" @click="clearRecentTrips">Clear</button>
       </section>
     </section>
     <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</span><span v-if="mode === 'travel' || hasQuery" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span></footer>

@@ -769,7 +769,6 @@ export const IPC = {
   settingsEvent: "gw:settings:event",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
-  travelPreferencesRecord: "gw:travelPreferences:record",
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   buildLibraryGet: "gw:buildLibrary:get",
@@ -916,7 +915,6 @@ export interface GwNativeApi {
   travelPreferences: {
     get(): Promise<TravelUserPreferences>;
     set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
-    recordConfirmed(mapId: number): Promise<TravelUserPreferences>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;

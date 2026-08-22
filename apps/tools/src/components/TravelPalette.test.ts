@@ -3,8 +3,6 @@ import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_TRAVEL_SHORTCUTS,
-  recordRecentTravel,
-  type TravelRecentLimit,
   type TravelShortcuts,
   type TravelSynonyms,
 } from "../../../../src/shared/travel";
@@ -19,15 +17,11 @@ import TravelPalette from "./TravelPalette.vue";
 function fixture(options: Readonly<{
   shortcuts?: TravelShortcuts;
   synonyms?: TravelSynonyms;
-  recentLimit?: TravelRecentLimit;
-  recentMapIds?: readonly number[];
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({ status: "ready", mapId: 55 });
   let preferences: TravelPreferences = Object.freeze({
     shortcuts: options.shortcuts ?? DEFAULT_TRAVEL_SHORTCUTS,
     synonyms: options.synonyms ?? Object.freeze([]),
-    recentLimit: options.recentLimit ?? 5,
-    recentMapIds: options.recentMapIds ?? Object.freeze([55, 449, 194, 642, 81]),
   });
   const attempt = ref<TravelHost["attempt"]["value"]>({ status: "idle" });
   const notice = ref<TravelHost["notice"]["value"]>(null);
@@ -37,24 +31,10 @@ function fixture(options: Readonly<{
   const savePreferences = vi.fn<TravelHost["savePreferences"]>(async (
     patch: TravelPreferencePatch,
   ) => {
-    const recentLimit = patch.recentLimit ?? preferences.recentLimit;
     preferences = Object.freeze({
       shortcuts: patch.shortcuts ?? preferences.shortcuts,
       synonyms: patch.synonyms ?? preferences.synonyms,
-      recentLimit,
-      recentMapIds: recentLimit === 0
-        ? Object.freeze([])
-        : patch.recentMapIds ?? preferences.recentMapIds,
     });
-    return preferences;
-  });
-  const recordConfirmedTravel = vi.fn<TravelHost["recordConfirmedTravel"]>(async (mapId) => {
-    if (preferences.recentLimit !== 0) {
-      preferences = Object.freeze({
-        ...preferences,
-        recentMapIds: recordRecentTravel(preferences.recentMapIds, mapId),
-      });
-    }
     return preferences;
   });
   const traceSearch = vi.fn<TravelHost["traceSearch"]>();
@@ -65,7 +45,6 @@ function fixture(options: Readonly<{
     unavailable: null,
     async loadPreferences() { return preferences; },
     savePreferences,
-    recordConfirmedTravel,
     travel,
     updateGameState(next) {
       state.value = next;
@@ -75,7 +54,6 @@ function fixture(options: Readonly<{
         attempt.value = { status: "loading", mapId: current.mapId };
       } else if (current.status === "loading" && next.status === "ready") {
         attempt.value = { status: "idle" };
-        if (next.mapId === current.mapId) void recordConfirmedTravel(current.mapId);
       }
     },
     dispose() {},
@@ -91,18 +69,15 @@ function fixture(options: Readonly<{
     state,
     travel,
     savePreferences,
-    recordConfirmedTravel,
     traceSearch,
   };
 }
 
 describe("TravelPalette", () => {
-  it("opens in Travel with configured recents and compact assigned favorites", async () => {
-    const { wrapper } = fixture({ recentLimit: 3 });
+  it("opens in Travel with compact assigned favorites", async () => {
+    const { wrapper } = fixture();
     await flushPromises();
 
-    expect(wrapper.findAll(".travel-recent-row")).toHaveLength(3);
-    expect(wrapper.get('.travel-recent-row[data-active="true"] .ui-kbd').text()).toBe("return");
     expect(wrapper.findAll(".travel-favorite")).toHaveLength(6);
     expect(wrapper.text()).toContain("Lion's Arch");
     expect(wrapper.findAll(".travel-favorite").map((favorite) => favorite.text())).toEqual([
@@ -145,15 +120,6 @@ describe("TravelPalette", () => {
     await flushPromises();
     expect(tabs[0]?.attributes("tabindex")).toBe("0");
     expect(document.activeElement).toBe(tabs[0]?.element);
-    wrapper.unmount();
-  });
-
-  it("hides Recent when recording is off", async () => {
-    const { wrapper } = fixture({ recentLimit: 0, recentMapIds: [] });
-    await flushPromises();
-
-    expect(wrapper.find(".travel-recents").exists()).toBe(false);
-    expect(wrapper.findAll(".travel-favorite")).toHaveLength(6);
     wrapper.unmount();
   });
 
@@ -282,8 +248,6 @@ describe("TravelPalette", () => {
     savePreferences.mockResolvedValueOnce(Object.freeze({
       shortcuts: DEFAULT_TRAVEL_SHORTCUTS,
       synonyms: Object.freeze([]),
-      recentLimit: 5,
-      recentMapIds: Object.freeze([55, 449, 194]),
     }));
 
     await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
@@ -330,45 +294,7 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("configures and clears confirmed Recent trips inside Customize", async () => {
-    const { wrapper, savePreferences } = fixture();
-    await flushPromises();
-
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
-    const limitThree = wrapper.findAll('[aria-label="Number of recent trips"] button')
-      .find((button) => button.text() === "3");
-    expect(limitThree).toBeDefined();
-    await limitThree!.trigger("click");
-    await flushPromises();
-    expect(savePreferences.mock.calls[0]?.[0].recentLimit).toBe(3);
-
-    await wrapper.get(".travel-clear-recents").trigger("click");
-    await flushPromises();
-    expect(savePreferences.mock.calls[1]?.[0].recentMapIds).toEqual([]);
-    expect(wrapper.text()).toContain("Recent trips cleared");
-    wrapper.unmount();
-  });
-
-  it("records a recent destination only after loading and the exact ready map", async () => {
-    const { wrapper, host, recordConfirmedTravel } = fixture();
-    await flushPromises();
-    await wrapper.get('[role="combobox"]').setValue("kama");
-    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
-    await flushPromises();
-    expect(recordConfirmedTravel).not.toHaveBeenCalled();
-
-    host.updateGameState({ status: "waiting", reason: "loading" });
-    await flushPromises();
-    expect(recordConfirmedTravel).not.toHaveBeenCalled();
-
-    host.updateGameState({ status: "ready", mapId: 449 });
-    await flushPromises();
-    expect(recordConfirmedTravel).toHaveBeenCalledOnce();
-    expect(recordConfirmedTravel).toHaveBeenCalledWith(449);
-    wrapper.unmount();
-  });
-
-  it("does not record a rejected or mismatched trip", async () => {
+  it("shows a rejected trip without leaking private host details", async () => {
     const rejected = fixture();
     await flushPromises();
     rejected.travel.mockImplementationOnce(async () => {
@@ -381,22 +307,11 @@ describe("TravelPalette", () => {
     await rejected.wrapper.get('[role="combobox"]').setValue("kama");
     await rejected.wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
     await flushPromises();
-    expect(rejected.recordConfirmedTravel).not.toHaveBeenCalled();
     expect(rejected.wrapper.text()).toContain(
       "Travel could not start. Check Guild Wars, then try again.",
     );
     rejected.wrapper.unmount();
 
-    const mismatched = fixture();
-    await flushPromises();
-    await mismatched.wrapper.get('[role="combobox"]').setValue("kama");
-    await mismatched.wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
-    mismatched.host.updateGameState({ status: "waiting", reason: "loading" });
-    await flushPromises();
-    mismatched.host.updateGameState({ status: "ready", mapId: 55 });
-    await flushPromises();
-    expect(mismatched.recordConfirmedTravel).not.toHaveBeenCalled();
-    mismatched.wrapper.unmount();
   });
 
   it("preserves the previous shortcut and explains a failed save", async () => {

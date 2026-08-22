@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { serializeTravelPreferencesV1 } from "../../src/main/core/travel-preferences-v1.js";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 import "./settings-test-fixture.mjs";
 
@@ -259,12 +260,10 @@ test.describe("data and display settings", () => {
         ),
         writeFile(
           path.join(userData, "travel-preferences.json"),
-          JSON.stringify({
+          JSON.stringify(serializeTravelPreferencesV1({
             formatVersion: 1,
             synonyms: [{ term: "home", mapId: 55 }],
-            recentLimit: 3,
-            recentMapIds: [55],
-          }),
+          })),
         ),
       ]).then(() => undefined),
     );
@@ -305,8 +304,6 @@ test.describe("data and display settings", () => {
         settings: { renderScale: 2 },
         travelPreferences: {
           synonyms: [],
-          recentLimit: 5,
-          recentMapIds: [],
         },
       });
       expect(
@@ -325,7 +322,7 @@ test.describe("data and display settings", () => {
         relaunch: false,
         buttons: ["Reset GWonMac Settings", "Cancel"],
         detail:
-          "Display, tools, Travel shortcuts, custom search phrases, recent destinations, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
+          "Display, tools, Travel shortcuts, custom search phrases, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
       });
       expect(await page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ renderScale: 2 });
@@ -374,8 +371,6 @@ test.describe("data and display settings", () => {
         },
         travelPreferences: {
           synonyms: [],
-          recentLimit: 5,
-          recentMapIds: [],
         },
       });
       expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
@@ -398,12 +393,10 @@ test.describe("data and display settings", () => {
         ),
         writeFile(
           path.join(userData, "travel-preferences.json"),
-          JSON.stringify({
+          JSON.stringify(serializeTravelPreferencesV1({
             formatVersion: 1,
             synonyms: [{ term: "home", mapId: 55 }],
-            recentLimit: 3,
-            recentMapIds: [55],
-          }),
+          })),
         ),
       ]).then(() => undefined),
     );

@@ -7,7 +7,6 @@ import {
   replaceTravelShortcut,
   searchTravelDestinations,
   type TravelDestination,
-  type TravelRecentLimit,
   type TravelShortcuts,
   type TravelSynonyms,
 } from "../../../src/shared/travel";
@@ -16,8 +15,6 @@ import type { TravelHost, TravelPreferences } from "./travel-host";
 export function useTravelPreferences(host: TravelHost) {
   const shortcuts = ref<TravelShortcuts>(EMPTY_TRAVEL_SHORTCUTS);
   const synonyms = ref<TravelSynonyms>([]);
-  const recentLimit = ref<TravelRecentLimit>(5);
-  const recentMapIds = ref<readonly number[]>([]);
   const ready = ref(false);
   const pending = ref(false);
   const disabled = computed(() => !ready.value || pending.value);
@@ -26,8 +23,6 @@ export function useTravelPreferences(host: TravelHost) {
   const apply = (preferences: TravelPreferences): void => {
     shortcuts.value = preferences.shortcuts;
     synonyms.value = preferences.synonyms;
-    recentLimit.value = preferences.recentLimit;
-    recentMapIds.value = preferences.recentMapIds;
   };
   const load = async (): Promise<boolean> => {
     const generation = ++loadGeneration;
@@ -72,8 +67,6 @@ export function useTravelPreferences(host: TravelHost) {
   return Object.freeze({
     shortcuts,
     synonyms,
-    recentLimit,
-    recentMapIds,
     ready,
     pending,
     disabled,
@@ -100,12 +93,6 @@ export function useTravelPreferences(host: TravelHost) {
     },
     async removeSynonym(index: number) {
       return save({ synonyms: synonyms.value.filter((_, candidate) => candidate !== index) });
-    },
-    async setRecentLimit(limit: TravelRecentLimit) {
-      return save({ recentLimit: limit, ...(limit === 0 ? { recentMapIds: [] } : {}) });
-    },
-    async clearRecentTrips() {
-      return save({ recentMapIds: [] });
     },
   });
 }

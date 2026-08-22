@@ -36,20 +36,18 @@
   the lockfile, and require a clean `pnpm install --frozen-lockfile` plus
   `pnpm test:website` and `pnpm package:built` to pass.
 
-## Split Travel preference storage
+## Travel v1 rollback placeholders
 
-- Why: published Stable reads the district-bearing shortcut records in
-  `settings.json`. Current Travel synonyms and recents need their own document
-  that Stable does not parse or rewrite.
-- Introduced: 2026-08-21, when Main became the one owner of both Travel
-  preference files.
-- Depends on it: numbered Travel shortcuts, synonyms, Recent history, and
-  rollback to a supported Stable release.
-- Remove when: the oldest Stable release that the project still supports for
-  rollback owns the chosen single Travel document, and the signed
-  Stable-to-candidate-to-the-same-Stable compatibility matrix passes with that
-  storage shape. Migrate once, then remove the old field and this entry in the
-  same change.
+- Why: Stable v2026.8.9 requires `travel-preferences.json` to contain the exact
+  four-field v1 shape. The withdrawn Recent fields therefore serialize only as
+  disabled, empty placeholders; the runtime model contains only synonyms.
+- Introduced: 2026-08-22 when Recent destinations were withdrawn.
+- Depends on it: rollback from a newer release to v2026.8.9 without losing
+  Travel search phrases.
+- Remove when: v2026.8.9 is outside the supported rollback window and the signed
+  Stable-to-candidate-to-the-same-Stable compatibility matrix passes with a
+  synonyms-only document. Remove the storage-codec placeholders and this entry
+  in the same change.
 
 ## Ginko consumer icon compatibility
 

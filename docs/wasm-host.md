@@ -226,7 +226,7 @@ remains usable; no party-state fallback is allowed.
 
 Travel accepts only one reviewed map ID from the renderer. The exact `/tp`
 command sets one named, one-shot palette toggle that the renderer takes and
-clears. Search text, aliases, destinations, recents, and numbered shortcuts stay
+clears. Search text, aliases, destinations, and numbered shortcuts stay
 in the host-owned Vue interface. At the certified frame drain, the transform
 rechecks the reviewed map list, invokes the independently proved client helper
 that resolves the player's current region and language, validates those values,
@@ -238,17 +238,16 @@ UI message.
 The Tools host owns one Travel attempt: `idle`, `queued`, or `loading`. A
 three-second start deadline and a separate thirty-second arrival deadline both
 return it to `idle`; disconnect, corrupt snapshot, and other non-loading states
-also end a loading attempt. Only an exact ready map after an observed loading
-transition records Recent. The Vue component renders this state but does not
+also end a loading attempt. The Vue component renders this state but does not
 interpret the game protocol or own its timers.
 
 Shortcut slots remain in `settings.json` using the district-bearing shape the
 published Stable understands. The current runtime projects those records to
-map IDs and ignores their old district values. Synonyms and confirmed recents
-live in `travel-preferences.json`, a Travel-owned atomic document that older
-Stable builds neither parse nor rewrite. Main serializes Clear Recent and
-arrival recording under one lock, so an older read cannot resurrect cleared
-history.
+map IDs and ignores their old district values. Synonyms live in
+`travel-preferences.json`, a Travel-owned atomic document that Stable v2026.8.9
+reads as an exact four-field shape. The current runtime projects only
+synonyms, atomically clears withdrawn history on first load, and writes disabled,
+empty compatibility placeholders so rollback remains safe.
 
 Main exposes one composed Travel preference snapshot to every renderer. A save
 includes the snapshot the renderer edited. Main refuses the save if another

@@ -25,7 +25,6 @@ import { DEFAULT_SETTINGS } from "../../shared/contracts.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import {
   loadTravelPreferences,
-  recordConfirmedTravel,
   updateTravelPreferences,
 } from "./travel-preferences.js";
 
@@ -41,8 +40,6 @@ function composeTravelPreferences(
   return Object.freeze({
     shortcuts: travelShortcutsFromStored(settings.travelShortcuts),
     synonyms: travel.synonyms,
-    recentLimit: travel.recentLimit,
-    recentMapIds: travel.recentMapIds,
   });
 }
 
@@ -151,8 +148,6 @@ export class PreferencesCoordinator {
           paths.travelPreferences,
           {
             synonyms: DEFAULT_TRAVEL_PREFERENCES.synonyms,
-            recentLimit: DEFAULT_TRAVEL_PREFERENCES.recentLimit,
-            recentMapIds: DEFAULT_TRAVEL_PREFERENCES.recentMapIds,
           },
           this.#onTravelRecovered,
         );
@@ -243,28 +238,6 @@ export class PreferencesCoordinator {
           this.#onTravelRecovered,
         );
         return composeTravelPreferences(settings, saved);
-      } catch (error) {
-        if (error instanceof AtomicPublicationUnconfirmedError) {
-          throw unconfirmedTravelWrite(error);
-        }
-        throw error;
-      }
-    });
-  }
-
-  recordTravelConfirmation(mapId: number): Promise<TravelUserPreferences> {
-    return this.#lock.run(async () => {
-      const paths = this.#paths();
-      const settings = await loadSettings(paths.settings);
-      try {
-        return composeTravelPreferences(
-          settings,
-          await recordConfirmedTravel(
-            paths.travelPreferences,
-            mapId,
-            this.#onTravelRecovered,
-          ),
-        );
       } catch (error) {
         if (error instanceof AtomicPublicationUnconfirmedError) {
           throw unconfirmedTravelWrite(error);

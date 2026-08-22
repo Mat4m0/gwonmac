@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 import { packageVersion } from "./settings-test-fixture.mjs";
 
 test.describe("tools and update settings", () => {
-  test("configures and clears confirmed Travel recents", async () => {
+  test("removes Travel Recent controls while accepting the released file", async () => {
     const fixture = await launchOffline(
       "gw-settings-travel-recents-e2e-",
       {},
@@ -31,7 +31,7 @@ test.describe("tools and update settings", () => {
       },
     );
     try {
-      const { app, page } = fixture;
+      const { app, page, userData } = fixture;
       await app.evaluate(({ Menu }) => {
         Menu.getApplicationMenu()
           ?.items[0]?.submenu?.items.find((item) => item.label === "Settings…")
@@ -39,21 +39,20 @@ test.describe("tools and update settings", () => {
       });
       await page.locator("#settings-tab-controls").click();
 
-      const limit = page.locator('select[name="travelRecentLimit"]');
-      const clear = page.getByRole("button", { name: "Clear Recent" });
-      await expect(limit).toHaveValue("5");
-      await expect(limit.locator("option")).toHaveCount(4);
-      await expect(clear).toBeEnabled();
-      await limit.selectOption("3");
-      await expect.poll(() => page.evaluate(() => window.gwNative.travelPreferences.get()))
-        .toMatchObject({ recentLimit: 3, recentMapIds: [55, 449, 194] });
-
-      await clear.click();
-      await expect.poll(() => page.evaluate(() => window.gwNative.travelPreferences.get()))
-        .toMatchObject({ recentLimit: 3, recentMapIds: [] });
-      await expect(clear).toBeDisabled();
-      await expect(page.locator("#settings-feedback"))
-        .toHaveText("Recent destinations cleared.");
+      await expect(page.locator('select[name="travelRecentLimit"]')).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Clear Recent" })).toHaveCount(0);
+      await expect(page.getByText("Recent destinations", { exact: true })).toHaveCount(0);
+      await expect(page.evaluate(() => window.gwNative.travelPreferences.get()))
+        .resolves.toMatchObject({ synonyms: [] });
+      expect(JSON.parse(await readFile(
+        path.join(userData, "travel-preferences.json"),
+        "utf8",
+      ))).toEqual({
+        formatVersion: 1,
+        synonyms: [],
+        recentLimit: 0,
+        recentMapIds: [],
+      });
     } finally {
       await closeOffline(fixture);
     }
