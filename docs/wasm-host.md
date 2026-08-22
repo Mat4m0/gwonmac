@@ -244,10 +244,10 @@ interpret the game protocol or own its timers.
 Shortcut slots remain in `settings.json` using the district-bearing shape the
 published Stable understands. The current runtime projects those records to
 map IDs and ignores their old district values. Synonyms live in
-`travel-preferences.json`, a Travel-owned atomic document that older Stable
-builds neither parse nor rewrite. Its released v1 shape still carries disabled,
-empty Recent fields for rollback compatibility; the runtime does not expose or
-write Recent history.
+`travel-preferences.json`, a Travel-owned atomic document that Stable v2026.8.9
+reads as an exact four-field shape. The current runtime projects only
+synonyms, atomically clears withdrawn history on first load, and writes disabled,
+empty compatibility placeholders so rollback remains safe.
 
 Main exposes one composed Travel preference snapshot to every renderer. A save
 includes the snapshot the renderer edited. Main refuses the save if another

@@ -6,8 +6,7 @@ import {
   travelDestination,
 } from "./travel-destinations.js";
 import {
-  TRAVEL_PREFERENCES_FORMAT,
-  parseTravelPreferences,
+  createTravelPreferences,
   parseTravelPreferencesPatch,
   type TravelPreferencesPatch,
   type TravelSynonyms,
@@ -141,12 +140,7 @@ export function parseTravelUserPreferences(value: unknown): TravelUserPreference
     Object.keys(input).length !== 2
     || !isTravelShortcuts(input.shortcuts)
   ) throw new TypeError("Travel preferences are invalid");
-  const travel = parseTravelPreferences({
-    formatVersion: TRAVEL_PREFERENCES_FORMAT,
-    synonyms: input.synonyms,
-    recentLimit: 0,
-    recentMapIds: [],
-  });
+  const travel = createTravelPreferences(input.synonyms);
   return Object.freeze({
     shortcuts: Object.freeze(input.shortcuts.map((shortcut) =>
       shortcut === null ? null : Object.freeze({ ...shortcut })

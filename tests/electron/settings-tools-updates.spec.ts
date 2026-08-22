@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 import { packageVersion } from "./settings-test-fixture.mjs";
@@ -31,7 +31,7 @@ test.describe("tools and update settings", () => {
       },
     );
     try {
-      const { app, page } = fixture;
+      const { app, page, userData } = fixture;
       await app.evaluate(({ Menu }) => {
         Menu.getApplicationMenu()
           ?.items[0]?.submenu?.items.find((item) => item.label === "Settings…")
@@ -44,6 +44,15 @@ test.describe("tools and update settings", () => {
       await expect(page.getByText("Recent destinations", { exact: true })).toHaveCount(0);
       await expect(page.evaluate(() => window.gwNative.travelPreferences.get()))
         .resolves.toMatchObject({ synonyms: [] });
+      expect(JSON.parse(await readFile(
+        path.join(userData, "travel-preferences.json"),
+        "utf8",
+      ))).toEqual({
+        formatVersion: 1,
+        synonyms: [],
+        recentLimit: 0,
+        recentMapIds: [],
+      });
     } finally {
       await closeOffline(fixture);
     }

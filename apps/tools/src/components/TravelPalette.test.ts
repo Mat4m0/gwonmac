@@ -74,11 +74,10 @@ function fixture(options: Readonly<{
 }
 
 describe("TravelPalette", () => {
-  it("opens in Travel with compact assigned favorites and no Recent history", async () => {
+  it("opens in Travel with compact assigned favorites", async () => {
     const { wrapper } = fixture();
     await flushPromises();
 
-    expect(wrapper.text()).not.toContain("Recent trips");
     expect(wrapper.findAll(".travel-favorite")).toHaveLength(6);
     expect(wrapper.text()).toContain("Lion's Arch");
     expect(wrapper.findAll(".travel-favorite").map((favorite) => favorite.text())).toEqual([

@@ -8,9 +8,9 @@ import {
   updateTravelPreferences,
 } from "../../src/main/core/travel-preferences.js";
 import {
-  parseTravelPreferences,
   parseTravelPreferencesPatch,
 } from "../../src/shared/travel-preferences.js";
+import { parseTravelPreferencesV1 } from "../../src/main/core/travel-preferences-v1.js";
 
 describe("Travel preferences", () => {
   it("preserves corrupt bytes before returning defaults and reports the backup", async () => {
@@ -26,8 +26,6 @@ describe("Travel preferences", () => {
     assert.deepEqual(loaded, {
       formatVersion: 1,
       synonyms: [],
-      recentLimit: 0,
-      recentMapIds: [],
     });
     assert.match(
       recovered,
@@ -42,7 +40,7 @@ describe("Travel preferences", () => {
     const saved = await updateTravelPreferences(path, {
       synonyms: [{ term: "home", mapId: 55 }],
     });
-    assert.deepEqual(saved.recentMapIds, []);
+    assert.deepEqual(saved.synonyms, [{ term: "home", mapId: 55 }]);
     assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
       formatVersion: 1,
       synonyms: [{ term: "home", mapId: 55 }],
@@ -51,7 +49,7 @@ describe("Travel preferences", () => {
     });
   });
 
-  it("reads the released shape and clears legacy Recent data on the next write", async () => {
+  it("projects the released shape and clears withdrawn history on first load", async () => {
     const dir = await mkdtemp(join(tmpdir(), "gw-travel-preferences-"));
     const path = join(dir, "travel-preferences.json");
     await writeFile(path, JSON.stringify({
@@ -61,8 +59,10 @@ describe("Travel preferences", () => {
       recentMapIds: [55, 81],
     }));
 
-    assert.deepEqual((await loadTravelPreferences(path)).recentMapIds, [55, 81]);
-    await updateTravelPreferences(path, { synonyms: [{ term: "home", mapId: 55 }] });
+    assert.deepEqual(await loadTravelPreferences(path), {
+      formatVersion: 1,
+      synonyms: [{ term: "home", mapId: 55 }],
+    });
     assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
       formatVersion: 1,
       synonyms: [{ term: "home", mapId: 55 }],
@@ -78,8 +78,8 @@ describe("Travel preferences", () => {
       recentLimit: 5,
       recentMapIds: [],
     };
-    assert.throws(() => parseTravelPreferences(document), /invalid/u);
-    assert.throws(() => parseTravelPreferences({
+    assert.throws(() => parseTravelPreferencesV1(document), /invalid/u);
+    assert.throws(() => parseTravelPreferencesV1({
       ...document,
       synonyms: [],
       future: true,

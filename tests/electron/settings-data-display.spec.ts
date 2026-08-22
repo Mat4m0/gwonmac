@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { serializeTravelPreferencesV1 } from "../../src/main/core/travel-preferences-v1.js";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 import "./settings-test-fixture.mjs";
 
@@ -259,12 +260,10 @@ test.describe("data and display settings", () => {
         ),
         writeFile(
           path.join(userData, "travel-preferences.json"),
-          JSON.stringify({
+          JSON.stringify(serializeTravelPreferencesV1({
             formatVersion: 1,
             synonyms: [{ term: "home", mapId: 55 }],
-            recentLimit: 3,
-            recentMapIds: [55],
-          }),
+          })),
         ),
       ]).then(() => undefined),
     );
@@ -394,12 +393,10 @@ test.describe("data and display settings", () => {
         ),
         writeFile(
           path.join(userData, "travel-preferences.json"),
-          JSON.stringify({
+          JSON.stringify(serializeTravelPreferencesV1({
             formatVersion: 1,
             synonyms: [{ term: "home", mapId: 55 }],
-            recentLimit: 3,
-            recentMapIds: [55],
-          }),
+          })),
         ),
       ]).then(() => undefined),
     );
