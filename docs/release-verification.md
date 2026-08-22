@@ -131,6 +131,8 @@ channel files from all published GitHub Releases. It validates their exact
 release-owned `RELEASES.json` and ZIP assets, deploys both files together as one
 GitHub Pages artifact, and compares the public files with the generated hashes.
 GitHub Releases remain canonical; Pages contains only this rebuildable pointer.
+After this mechanism first reaches `main`, dispatch **Update feeds** once to
+publish the current channels. Later release runs invoke it automatically.
 If feed deployment fails, the previous Pages deployment remains valid. Dispatch
 the standalone **Update feeds** workflow before announcing the release; it
 repairs discovery without rebuilding or republishing application assets.
@@ -246,7 +248,7 @@ Wars template through production IDBFS.
 ## Post-publication updater checks
 
 A production updater check cannot happen before publication. First confirm the
-workflow's `deploy-update-feeds` job passed, then perform the check within 30
+`publish-update-feeds / deploy` job passed, then perform the check within 30
 minutes after publication.
 
 For a Beta or RC, start from latest signed Stable, select Beta, and install the
