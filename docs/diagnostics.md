@@ -168,6 +168,34 @@ The tools warn about different hardware, operating systems, application
 versions, GPU renderers, render scales, canvas sizes, visibility, capture
 levels, and overlapping windows. Do not ignore these warnings.
 
+## Live graphics investigation
+
+Use the local graphics probe when a visual defect cannot be reproduced in an
+offline fixture. It starts the normal profile and observes the renderer through
+an ephemeral loopback debugging endpoint:
+
+```bash
+pnpm graphics:live
+```
+
+Play normally. Press Enter in the probe terminal to save one evidence pair.
+Type `q`, then press Enter, to stop the probe and close the app cleanly. Each
+pair contains a screenshot and a JSON file with the same bounded renderer
+state. The JSON contains canvas dimensions, WebGL context status, WASM heap
+size, texture counters, image-cache counters, program-cache counters, and the
+closed diagnostic summary.
+
+The probe stores each run in a new directory under
+`test-results/graphics-live/`. It does not overwrite an earlier run. A
+screenshot can contain character, account, or chat information that is visible
+in the game. Inspect it before sharing it. The screenshot is separate from a
+diagnostics ZIP and is never included automatically.
+
+The probe cannot identify a Guild Wars texture, read texture pixels, read raw
+game memory, or prove what a scene should look like. Use it to compare a clean
+and affected session at the same location, render scale, and account count.
+Do not treat one machine's clean result as proof that another GPU is healthy.
+
 ## WASM memory evidence
 
 The renderer observes the official client's imported heap-growth boundary. It
@@ -178,8 +206,8 @@ heap size before and after, closed outcome, and a short numeric WASM call chain.
 Stack text does not cross IPC.
 
 The same boundary samples bounded WebGL texture totals without content or
-per-texture history. Unknown or saturated tracking makes the known byte total a
-lower bound.
+per-texture history. The local graphics probe can read those counters on
+demand. Unknown or saturated tracking makes the known byte total a lower bound.
 
 A failed growth request at the compiled limit proves that the official client
 requested more memory than that module permits. It does not identify which

@@ -82,13 +82,16 @@ describe("an observation live run cannot reach the automation tier", () => {
   it("gives every scenario exactly one tier", () => {
     const tiers = Object.entries(scenarios).map(([name, scenario]) => {
       assert.ok(
-        scenario.tier === "observation" || scenario.tier === "automation",
+        scenario.tier === "observation"
+          || scenario.tier === "graphics-observation"
+          || scenario.tier === "automation",
         `${name} declares no tier`,
       );
       return scenario.tier;
     });
     // Both tiers exist, so neither branch below is dead.
     assert.ok(tiers.includes("observation"));
+    assert.ok(tiers.includes("graphics-observation"));
     assert.ok(tiers.includes("automation"));
   });
 
@@ -97,6 +100,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.equal(planFor("target").scenario.readiness, "observer");
     assert.equal(planFor("toolbox-foundation").scenario.readiness, "toolbox");
     assert.equal(planFor("cursor-capture").scenario.readiness, "cursor");
+    assert.equal(planFor("graphics-probe").scenario.readiness, "frontend");
   });
 
   it("launches the app with the automation gate off, whatever the caller exports", () => {
@@ -105,6 +109,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     const observation = planFor("cursor-capture", { GW_ENHANCEMENT_AUTOMATION: "1" });
     assert.equal(observation.tier, "observation");
     assert.equal("GW_ENHANCEMENT_AUTOMATION" in observation.env, false);
+    assert.equal(planFor("graphics-probe").scenario.program, "none");
 
     const automation = planFor("movement");
     assert.equal(automation.env.GW_ENHANCEMENT_AUTOMATION, "1");
@@ -114,6 +119,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     // main.ts serves AUTOMATION_COMMAND over the Node IPC channel. Without the
     // channel there is nothing to send on: child.send does not exist.
     assert.deepEqual(planFor("cursor-capture").stdio, ["ignore", "pipe", "pipe"]);
+    assert.deepEqual(planFor("graphics-probe").stdio, ["ignore", "pipe", "pipe"]);
     assert.deepEqual(planFor("movement").stdio, [
       "ignore",
       "pipe",
@@ -176,6 +182,7 @@ describe("an observation live run cannot reach the automation tier", () => {
         waitForTimeout: async () => undefined,
       }),
       cdp: asCdp({ send: async () => undefined }),
+      captureGraphicsFrame: async () => "capture-001.png",
       sendAutomationCommand: async () => undefined,
     };
     const observation = scenarioContext("observation", capabilities);
@@ -204,6 +211,16 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.ok("page" in automation && "sendAutomationCommand" in automation);
     assert.equal(automation.page, capabilities.page);
     assert.equal(automation.sendAutomationCommand, capabilities.sendAutomationCommand);
+
+    const graphics = scenarioContext("graphics-observation", capabilities);
+    assert.deepEqual(
+      Object.keys(graphics).sort(),
+      ["captureGraphicsFrame", "readGraphicsProjection", "wait"],
+    );
+    assert.equal("readCursorProjection" in graphics, false);
+    assert.equal("page" in graphics, false);
+    assert.equal("cdp" in graphics, false);
+    assert.equal("sendAutomationCommand" in graphics, false);
   });
 
   it("lets an observation scenario read only the fixed cursor projection", async () => {
@@ -213,6 +230,7 @@ describe("an observation live run cannot reach the automation tier", () => {
         waitForTimeout: async () => "waited",
       }),
       cdp: asCdp(null),
+      captureGraphicsFrame: async () => "capture-001.png",
       sendAutomationCommand: async () => undefined,
     }) as {
       readCursorProjection: () => Promise<unknown>;

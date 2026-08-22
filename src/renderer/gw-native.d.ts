@@ -18,6 +18,7 @@ import type {
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { PublishedCompanionState } from "./companion-snapshot.js";
+import type { TextureMemorySnapshot } from "./wasm-memory-attribution.js";
 import type {
   InputTrace as SharedInputTrace,
   InputTraceEntry as SharedInputTraceEntry,
@@ -187,9 +188,7 @@ declare global {
           callback: (error?: unknown) => void,
         ): void;
       };
-      canvas?: {
-        offscreen?: { width: number; height: number };
-      };
+      canvas?: HTMLCanvasElement & { offscreen?: OffscreenCanvas };
     };
     gwApplySettings?(settings: AppSettings): void;
     gwSurfaces: GwonmacSurfaceController;
@@ -205,6 +204,8 @@ declare global {
     gwSnapshotState?(): Partial<RendererMetrics>;
     /** Current WASM linear-memory size; present once the client is hosted. */
     gwWasmHeapBytes?(): number;
+    /** Bounded texture counters for local developer diagnostics. */
+    gwTextureStats?(): TextureMemorySnapshot;
     gwResolveDataStrategy(snapshotBytes: number): Promise<void>;
     gwLog(visible?: boolean): boolean;
     gwEvictMemory(): number;

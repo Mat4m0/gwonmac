@@ -600,6 +600,11 @@ Module = {
     milestone('wasm.memoryProbe', {
       status: memoryAttribution ? 'installed' : 'resizeImportMissing',
     });
+    if (memoryAttribution) {
+      window.gwTextureStats = memoryAttribution.snapshot;
+    } else {
+      delete window.gwTextureStats;
+    }
     host.installClientExit({
       imports,
       instance: () => gameWasmInstance,

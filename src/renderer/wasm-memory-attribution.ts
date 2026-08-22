@@ -70,6 +70,18 @@ interface TextureRecord {
   bytes: number;
 }
 
+/** Bounded counters only. No texture identity, dimensions, or pixels escape. */
+export interface TextureMemorySnapshot {
+  generatedTextures: number;
+  deletedTextures: number;
+  liveTextures: number;
+  trackedTextures: number;
+  knownTextureBytes: number;
+  textureUploadBytes: number;
+  unknownTextureAllocations: number;
+  textureTrackingSaturated: boolean;
+}
+
 const MAX_TRACKED_TEXTURES = 4_096;
 const MAX_TEXTURE_IDS_PER_CALL = 4_096;
 const MAX_STACK_FRAMES = 4;
@@ -522,7 +534,7 @@ export function installWasmMemoryAttribution({
     };
   }
 
-  const textureSnapshot = () => ({
+  const textureSnapshot = (): TextureMemorySnapshot => ({
     generatedTextures,
     deletedTextures,
     liveTextures: Math.max(0, generatedTextures - deletedTextures),

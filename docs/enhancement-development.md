@@ -194,6 +194,11 @@ Use `--leave-open` only for human inspection. A failure or timeout already
 leaves Electron open and writes bounded output under
 `test-results/enhancements-live/`.
 
+Use `pnpm graphics:live` for an operator-driven visual investigation. It uses
+the observation tier with no developer Enhancement program. Press Enter to
+save a screenshot and its bounded numeric state. The diagnostics document owns
+the [privacy boundary and procedure](diagnostics.md#live-graphics-investigation).
+
 The harness uses the normal profile and reads structured renderer state through
 a random loopback endpoint. An observation scenario gets only a fixed typed
 projection. An automation scenario can get trusted input and the bounded parent
