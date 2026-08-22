@@ -1,0 +1,99 @@
+# Rebuildable application-update discovery. Versioned releases invoke this
+# after publication; maintainers may dispatch it alone to recover a failed
+# deployment without rebuilding, resigning, or republishing the application.
+name: Update feeds
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: Allow the initial deployment when both public feeds are absent
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-feeds
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      beta-sha256: ${{ steps.feeds.outputs.beta-sha256 }}
+      stable-sha256: ${{ steps.feeds.outputs.stable-sha256 }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+      - name: Configure update-feed Pages artifact
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Build Stable and Beta feeds from published releases
+        id: feeds
+        env:
+          BOOTSTRAP: ${{ inputs.bootstrap || false }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          output="$RUNNER_TEMP/update-pages"
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            | jq 'add' > "$RUNNER_TEMP/releases.json"
+          args=()
+          if [ "$BOOTSTRAP" = "true" ]; then args+=(--bootstrap); fi
+          node --import ./scripts/ts-hook.mjs scripts/update-feeds.ts \
+            "$RUNNER_TEMP/releases.json" "$output" "${args[@]}"
+          stable="$output/updates/stable/darwin/arm64/RELEASES.json"
+          beta="$output/updates/beta/darwin/arm64/RELEASES.json"
+          test -f "$stable"
+          test -f "$beta"
+          {
+            echo "stable-sha256=$(sha256sum "$stable" | awk '{print $1}')"
+            echo "beta-sha256=$(sha256sum "$beta" | awk '{print $1}')"
+            echo "output=$output"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload the complete channel site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ steps.feeds.outputs.output }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy both update channels atomically
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+      - name: Verify the public channel documents
+        env:
+          BASE_URL: ${{ steps.deployment.outputs.page_url }}
+          BETA_SHA256: ${{ needs.build.outputs.beta-sha256 }}
+          STABLE_SHA256: ${{ needs.build.outputs.stable-sha256 }}
+        run: |
+          for track in stable beta; do
+            url="${BASE_URL%/}/updates/$track/darwin/arm64/RELEASES.json?run=$GITHUB_RUN_ID"
+            file="$RUNNER_TEMP/$track-RELEASES.json"
+            curl --fail --location --retry 5 --retry-all-errors \
+              --output "$file" "$url"
+            actual="$(sha256sum "$file" | awk '{print $1}')"
+            if [ "$track" = "stable" ]; then expected="$STABLE_SHA256"
+            else expected="$BETA_SHA256"
+            fi
+            test "$actual" = "$expected"
+          done

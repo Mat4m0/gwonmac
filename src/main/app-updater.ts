@@ -2,11 +2,11 @@
  * The single owner of application updates: discovery, feed validation,
  * download, ready, and install.
  *
- * It is also the only caller of the releases API in this project.
  * `periodicCheckDue` holds every gate on an automatic check and is pure, so the
  * gates are provable without running a timer; an open game socket defers an
  * automatic check because a Squirrel download must not compete with live game
- * traffic.
+ * traffic. Release discovery reads one static channel document and never
+ * spends a GitHub REST API request from the player's shared public IP.
  *
  * Only a package carrying the release marker may reach Squirrel.Mac. The
  * selected Stable/Beta track is read once per check. Stable admits only
@@ -20,28 +20,17 @@ import type {
   AppUpdateErrorCode,
   AppUpdateState,
 } from "../shared/contracts.js";
-import { RELEASE_REPO } from "../shared/contracts.js";
-import { releaseAssetUrl } from "../shared/project-identity.js";
+import { APP_UPDATE_FEED_URLS } from "../shared/project-identity.js";
 import {
   compareReleaseVersions,
-  formatReleaseVersion,
   isReleaseEligibleForTrack,
   parseReleaseVersion,
-  releaseMetadataMatchesStage,
-  type ReleaseVersion,
   type UpdateTrack,
 } from "../shared/release.js";
+import { parseReleaseManifest } from "../shared/release-manifest.js";
 import { redactDiagnosticText } from "./diagnostics/text-scan.js";
 
-/**
- * Which of the two requests a check makes was the one that lost its answer.
- * The state a check publishes says only what went wrong, and the same reason
- * reads very differently for the releases list than for one release's feed.
- */
-export type AppUpdateStage = "releases" | "feed";
-
-const API_URL =
-  `https://api.github.com/repos/${RELEASE_REPO}/releases?per_page=100`;
+export type AppUpdateStage = "feed";
 const TIMEOUT_MS = 5_000;
 
 interface NativeUpdater {
@@ -49,21 +38,6 @@ interface NativeUpdater {
   checkForUpdates(): void;
   quitAndInstall(): void;
 }
-
-interface ReleaseAsset {
-  name: string;
-  url: string;
-}
-
-interface ReleaseCandidate {
-  tag: string;
-  version: ReleaseVersion;
-  assets: ReleaseAsset[];
-}
-
-type FeedValidation =
-  | { url: string }
-  | { reason: AppUpdateErrorCode };
 
 export interface AppUpdaterOptions {
   currentVersion: string;
@@ -207,14 +181,14 @@ export class AppUpdater {
     let response: Response;
     try {
       try {
-        response = await this.fetchImpl(API_URL, {
+        response = await this.fetchImpl(APP_UPDATE_FEED_URLS[track], {
           signal: controller.signal,
-          headers: { accept: "application/vnd.github+json" },
+          headers: { accept: "application/json" },
         });
       } catch (error) {
         await this.failAndRemember(
           this.noteFailure(
-            "releases",
+            "feed",
             controller.signal.aborted ? "timeout" : "offline",
             error,
           ),
@@ -234,30 +208,22 @@ export class AppUpdater {
         body = await response.json();
       } catch (error) {
         await this.failAndRemember(
-          this.noteFailure("releases", "unreadable", error),
+          this.noteFailure("feed", "unreadable", error),
         );
         return;
       }
-      const candidates = parseCandidates(body, track);
-      if (candidates === null) {
-        await this.failAndRemember(this.noteFailure("releases", "unreadable"));
+      const feed = parseReleaseManifest(body);
+      if (
+        !feed
+        || !isReleaseEligibleForTrack(feed.releaseVersion, track)
+      ) {
+        await this.failAndRemember(this.noteFailure("feed", "feed-invalid"));
         return;
       }
-      const latest = candidates[0] ?? null;
       const checkedAtValue = this.now();
       const checkedAt = new Date(checkedAtValue).toISOString();
       await this.remember(checkedAtValue);
-      if (!latest) {
-        this.setState({
-          phase: "up-to-date",
-          currentVersion: this.options.currentVersion,
-          latestVersion: this.options.currentVersion,
-          checkedAt,
-        });
-        return;
-      }
-
-      const comparison = compareReleaseVersions(latest.version, current);
+      const comparison = compareReleaseVersions(feed.releaseVersion, current);
       if (
         track === "stable"
         && current.channel !== "stable"
@@ -267,7 +233,7 @@ export class AppUpdater {
           phase: "manual-stable-return",
           currentVersion: this.options.currentVersion,
           checkedAt,
-          stableVersion: formatReleaseVersion(latest.version),
+          stableVersion: feed.manifest.version,
         });
         return;
       }
@@ -275,29 +241,25 @@ export class AppUpdater {
         this.setState({
           phase: "up-to-date",
           currentVersion: this.options.currentVersion,
-          latestVersion: formatReleaseVersion(latest.version),
+          latestVersion: feed.manifest.version,
           checkedAt,
         });
         return;
       }
-
-      const feed = await this.validatedFeed(latest, controller.signal);
-      if ("reason" in feed) {
-        this.fail(feed.reason, checkedAt);
-        return;
-      }
-      const latestVersion = formatReleaseVersion(latest.version);
       // Publish the owned transition before calling native code. A synchronous
       // native event or refusal can then close this exact download instead of
       // racing a later transition back to `downloading`.
       this.setState({
         phase: "downloading",
         currentVersion: this.options.currentVersion,
-        latestVersion,
+        latestVersion: feed.manifest.version,
         checkedAt,
       });
       try {
-        this.options.nativeUpdater.setFeedURL({ url: feed.url });
+        // Squirrel reads the immutable release-owned copy after this owner has
+        // validated the mutable channel pointer. A channel deployment between
+        // these two operations therefore cannot retarget the active download.
+        this.options.nativeUpdater.setFeedURL({ url: feed.immutableFeedUrl });
       } catch {
         this.updateFailed();
         return;
@@ -313,59 +275,12 @@ export class AppUpdater {
     }
   }
 
-  private async validatedFeed(
-    release: ReleaseCandidate,
-    signal: AbortSignal,
-  ): Promise<FeedValidation> {
-    const manifests = release.assets.filter((asset) => asset.name === "RELEASES.json");
-    const expectedZip =
-      `Guild-Wars-Reforged-${formatReleaseVersion(release.version)}-macOS-arm64.zip`;
-    const zips = release.assets.filter((asset) => asset.name === expectedZip);
-    if (manifests.length !== 1 || zips.length !== 1) {
-      return { reason: "feed-invalid" };
-    }
-    const manifestUrl = releaseAssetUrl(release.tag, "RELEASES.json");
-    if (manifests[0]?.url !== manifestUrl) return { reason: "feed-invalid" };
-    const zip = zips[0];
-    if (!zip || zip.url !== releaseAssetUrl(release.tag, zip.name)) {
-      return { reason: "feed-invalid" };
-    }
-    let response: Response;
-    try {
-      response = await this.fetchImpl(manifestUrl, { signal });
-    } catch (error) {
-      return {
-        reason: this.noteFailure(
-          "feed",
-          signal.aborted ? "timeout" : "offline",
-          error,
-        ),
-      };
-    }
-    if (isRateLimited(response)) return { reason: "rate-limited" };
-    if (!response.ok) return { reason: "server" };
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch (error) {
-      return { reason: this.noteFailure("feed", "unreadable", error) };
-    }
-    return validManifest(
-      body,
-      formatReleaseVersion(release.version),
-      release.tag,
-      zip.url,
-    )
-      ? { url: manifestUrl }
-      : { reason: "feed-invalid" };
-  }
-
   /**
    * The one place a fault that stops a check is kept rather than dropped. The
    * stage and reason are bounded and reach diagnostics; an error is text this
    * process did not author, so it is redacted and goes no further than the
-   * console. A body that parses as JSON but is not the document expected
-   * raises none, and every stage still names itself.
+   * console. Transport, JSON, and closed-contract failures all name the one
+   * static-feed boundary without retaining provider prose.
    */
   private noteFailure(
     stage: AppUpdateStage,
@@ -443,70 +358,6 @@ export function periodicCheckDue(input: PeriodicCheckInput): boolean {
   // A recorded check far in the future means the clock moved backwards;
   // waiting for it to become the past would suppress checks indefinitely.
   return elapsed >= PERIODIC_CHECK_DUE_MS || -elapsed >= PERIODIC_CHECK_DUE_MS;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function parseCandidates(
-  body: unknown,
-  track: UpdateTrack,
-): ReleaseCandidate[] | null {
-  if (!Array.isArray(body)) return null;
-  const candidates: ReleaseCandidate[] = [];
-  const versions = new Set<string>();
-  for (const value of body) {
-    // A missing or malformed publication flag is not evidence that a release
-    // is public. This also keeps a staged approval draft out of both tracks.
-    if (!isRecord(value) || value.draft !== false) continue;
-    const tag = value.tag_name;
-    if (typeof tag !== "string") continue;
-    const version = parseReleaseVersion(tag);
-    if (!version) continue;
-    if (typeof value.prerelease !== "boolean") continue;
-    // GitHub metadata and the canonical tag must describe the same release.
-    // Refusing disagreement prevents an incorrectly flagged alpha or stable
-    // build from crossing the selected-track boundary.
-    if (!releaseMetadataMatchesStage(version, value.prerelease)) continue;
-    if (!isReleaseEligibleForTrack(version, track)) continue;
-    const canonical = formatReleaseVersion(version);
-    if (versions.has(canonical)) return null;
-    versions.add(canonical);
-    if (!Array.isArray(value.assets)) return null;
-    const assets: ReleaseAsset[] = [];
-    for (const asset of value.assets) {
-      if (
-        !isRecord(asset)
-        || typeof asset.name !== "string"
-        || typeof asset.browser_download_url !== "string"
-      ) return null;
-      assets.push({ name: asset.name, url: asset.browser_download_url });
-    }
-    candidates.push({ tag, version, assets });
-  }
-  candidates.sort((a, b) => compareReleaseVersions(b.version, a.version));
-  return candidates;
-}
-
-function validManifest(
-  value: unknown,
-  version: string,
-  tag: string,
-  zipUrl: string,
-): boolean {
-  if (!isRecord(value)) return false;
-  const keys = Object.keys(value).sort();
-  return (
-    keys.join(",") === "name,notes,pub_date,tag,url,version"
-    && value.url === zipUrl
-    && value.name === `Guild Wars Reforged v${version}`
-    && value.version === version
-    && value.tag === tag
-    && value.notes === ""
-    && typeof value.pub_date === "string"
-    && !Number.isNaN(Date.parse(value.pub_date))
-  );
 }
 
 function isRateLimited(response: Response): boolean {

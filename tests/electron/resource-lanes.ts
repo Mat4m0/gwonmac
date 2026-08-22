@@ -6,7 +6,7 @@
  */
 
 export const backgroundSafeElectronSpecs = [
-  "a-launch-checks-github-once-unless-opted-out.spec.ts",
+  "a-update-feed-network-policy.spec.ts",
   "build-templates.spec.ts",
   "client-runtime-concurrency.spec.ts",
   "enhancement-cursor.spec.ts",

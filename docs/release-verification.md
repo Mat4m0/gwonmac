@@ -126,6 +126,19 @@ The final job does not rebuild or replace an asset. It downloads the draft,
 checks its commit, release stage, asset inventory, and checksum digest, and then
 removes the draft flag.
 
+After publication, the workflow rebuilds the small Stable and Beta update
+channel files from all published GitHub Releases. It validates their exact
+release-owned `RELEASES.json` and ZIP assets, deploys both files together as one
+GitHub Pages artifact, and compares the public files with the generated hashes.
+GitHub Releases remain canonical; Pages contains only this rebuildable pointer.
+After this mechanism first reaches `main`, dispatch **Update feeds** once with
+**bootstrap** enabled to publish the initial channel pair. Bootstrap is only
+valid while both public feeds are absent. Later release runs invoke the workflow
+without it and fail closed if either published feed disappears.
+If feed deployment fails, the previous Pages deployment remains valid. Dispatch
+the standalone **Update feeds** workflow before announcing the release; it
+repairs discovery without rebuilding or republishing application assets.
+
 If any staged asset changes, start a new staging run and repeat approval. Never
 replace a published asset in place.
 
@@ -236,8 +249,9 @@ Wars template through production IDBFS.
 
 ## Post-publication updater checks
 
-A production updater check cannot happen before publication. Perform it within
-30 minutes after publication.
+A production updater check cannot happen before publication. First confirm the
+`publish-update-feeds / deploy` job passed, then perform the check within 30
+minutes after publication.
 
 For a Beta or RC, start from latest signed Stable, select Beta, and install the
 exact candidate through the production updater. Confirm the same identity,

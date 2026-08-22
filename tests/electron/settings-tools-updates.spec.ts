@@ -378,38 +378,14 @@ test.describe("tools and update settings", () => {
         const zip = `Guild-Wars-Reforged-${version}-macOS-arm64.zip`;
         const base =
           `https://github.com/Mat4m0/gwonmac/releases/download/${tag}`;
-        globalThis.fetch = async (input) => {
-          const url = String(input);
-          return new Response(JSON.stringify(
-            url === "https://api.github.com/repos/Mat4m0/gwonmac/releases?per_page=100"
-              ? [{
-                  tag_name: tag,
-                  draft: false,
-                  // A stable offer is eligible on both tracks and lets a beta
-                  // or RC advance to its final release. The Preview tester
-                  // identity cannot reach AppUpdater at all.
-                  prerelease: false,
-                  assets: [
-                    {
-                      name: "RELEASES.json",
-                      browser_download_url: `${base}/RELEASES.json`,
-                    },
-                    {
-                      name: zip,
-                      browser_download_url: `${base}/${zip}`,
-                    },
-                  ],
-                }]
-              : {
-                  url: `${base}/${zip}`,
-                  name: `Guild Wars Reforged v${version}`,
-                  version,
-                  tag,
-                  pub_date: "2026-07-30T00:00:00.000Z",
-                  notes: "",
-                },
-          ), { status: 200 });
-        };
+        globalThis.fetch = async () => new Response(JSON.stringify({
+          url: `${base}/${zip}`,
+          name: `Guild Wars Reforged v${version}`,
+          version,
+          tag,
+          pub_date: "2026-07-30T00:00:00.000Z",
+          notes: "",
+        }), { status: 200 });
         autoUpdater.setFeedURL = () => undefined;
         autoUpdater.checkForUpdates = () => {
           queueMicrotask(() => autoUpdater.emit("update-downloaded"));

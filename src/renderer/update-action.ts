@@ -17,7 +17,7 @@ import type {
 import { parseReleaseVersion } from '../shared/release.js';
 
 const FAILURE_MESSAGE: Record<AppUpdateErrorCode, string> = {
-  'rate-limited': 'Too many update checks. Try again in an hour.',
+  'rate-limited': 'The update service is busy. Try again later.',
   offline: "Couldn't check for updates. Check your internet connection and try again.",
   timeout: "Couldn't check for updates. Try again.",
   server: "Couldn't check for updates. Try again.",

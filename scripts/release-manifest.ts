@@ -6,6 +6,7 @@ import {
   formatReleaseVersion,
   parseReleaseVersion,
 } from "../src/shared/release.js";
+import { parseReleaseManifest } from "../src/shared/release-manifest.js";
 
 export function releaseManifest(options: {
   version: string;
@@ -32,14 +33,18 @@ export function releaseManifest(options: {
     throw new Error("release publication timestamp is invalid");
   }
   const url = releaseAssetUrl(options.tag, options.zipName);
-  return `${JSON.stringify({
+  const manifest = {
     url,
     name: `Guild Wars Reforged v${options.version}`,
     version: options.version,
     tag: options.tag,
     pub_date: publishedAt.toISOString(),
     notes: "",
-  }, null, 2)}\n`;
+  };
+  if (!parseReleaseManifest(manifest)) {
+    throw new Error("generated release manifest is invalid");
+  }
+  return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
 async function main(): Promise<void> {

@@ -357,12 +357,11 @@ export interface AppSettings {
   showDiagnostics: boolean;
   dataStrategy: DataStrategy;
   /**
-   * Automatic release checks: a GitHub request at launch, then at most one
-   * every six hours while the app stays open, on by default so players stay
-   * current, and declared plainly wherever the checkbox appears. `false`
-   * means this app makes no network request to GitHub unless the user asks
-   * for one — with no exceptions, including the check on an uncertified
-   * client build. Opting out is one checkbox, honored forever.
+   * Automatic release checks: one static channel request when no settled
+   * attempt was recorded in the previous six hours, including across app
+   * restarts. It is on by default so players stay current and declared plainly
+   * wherever the checkbox appears. `false` means no automatic update request;
+   * opting out is one checkbox, honored forever.
    */
   autoCheckUpdates: boolean;
   /**
@@ -374,8 +373,8 @@ export interface AppSettings {
   updateTrack: UpdateTrack;
   /**
    * When the last release-check attempt completed, in epoch milliseconds, or
-   * `null` if one has never run. An unsupported local build can finish without
-   * contacting GitHub; this records the attempt, not a network claim.
+   * `null` if one has never run. This records a settled attempt, not a claim
+   * that a network request reached its destination.
    */
   lastUpdateCheckAt: number | null;
   /**
@@ -490,9 +489,8 @@ export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
  * renderer renders one message per member, and because "we could not tell"
  * must never arrive looking like "you are up to date".
  *
- * `rate-limited` is separate from `server` on purpose: GitHub allows 60
- * unauthenticated requests per hour per IP, and a manual button invites
- * mashing, so that case needs its own sentence.
+ * `rate-limited` remains separate from `server`: a static host may still ask
+ * a client to slow down, and that answer needs its own sentence.
  */
 export type AppUpdateErrorCode =
   | "rate-limited"

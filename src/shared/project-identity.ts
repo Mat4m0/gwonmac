@@ -15,6 +15,12 @@
  */
 export const RELEASE_REPO = "Mat4m0/gwonmac";
 export const APPLE_TEAM_ID = "9NN976MFZ4";
+export const APP_UPDATE_FEED_URLS = {
+  stable:
+    "https://mat4m0.github.io/gwonmac/updates/stable/darwin/arm64/RELEASES.json",
+  beta:
+    "https://mat4m0.github.io/gwonmac/updates/beta/darwin/arm64/RELEASES.json",
+} as const;
 
 /** One published release's asset, addressed by the tag it was published under. */
 export function releaseAssetUrl(tag: string, name: string): string {
