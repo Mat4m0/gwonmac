@@ -70,9 +70,12 @@ publishes no cooldown data.
 The shared record is fixed at 60 bytes and uses an odd/even publication
 sequence. The renderer reads the sequence before and after the payload and
 withdraws torn or stale publications. Geometry and recharge data remain
-separate until
+separate until the presentation coordinator in
+[`skill-overlays-installation.ts`](../src/renderer/skill-overlays-installation.ts)
+joins their lifecycles. Both HUDs use the single coordinate conversion in
+[`skill-slot-projection.ts`](../src/renderer/skill-slot-projection.ts), and
 [`skill-cooldown-overlay-consumer.ts`](../src/renderer/skill-cooldown-overlay-consumer.ts)
-joins their two complete eight-slot projections.
+joins the two complete eight-slot records.
 
 Text updates are bounded by the formatter's visible output. Above three seconds
 the view changes only when the upward-rounded whole second changes. Below three

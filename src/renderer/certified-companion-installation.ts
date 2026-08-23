@@ -36,10 +36,7 @@ import {
   COMPANION_SKILL_COOLDOWN_BYTES,
   COMPANION_SKILL_SLOT_BYTES,
 } from "./companion-skill-snapshot.js";
-import { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
-import { createSkillKeyOverlayConsumer } from "./skill-key-overlay-consumer.js";
-import { createSkillCooldownObservationInstallation } from "./skill-cooldown-state-installation.js";
-import { createSkillCooldownOverlayInstallation } from "./skill-cooldown-overlay-installation.js";
+import { createSkillOverlaysInstallation } from "./skill-overlays-installation.js";
 import { validateCompanionOwnedRegions } from "./companion-owned-regions.js";
 import {
   observeCompanion,
@@ -140,14 +137,9 @@ export async function installCertifiedCompanion(
   // launches always receive `none`; developer observers request their scalar
   // projection explicitly without implicitly mounting the Toolbox overlay.
   const foundation = capabilities.partyObservation;
-  const hasSkillSlotGeometry = capabilities.skillSlotGeometry;
-  const skillSlotGeometry = createSkillSlotGeometryInstallation(hasSkillSlotGeometry);
-  const skillCooldowns = createSkillCooldownObservationInstallation(
-    capabilities.skillCooldownObservation,
-  );
-  const skillCooldownOverlay = createSkillCooldownOverlayInstallation(
-    capabilities.skillCooldownObservation && hasSkillSlotGeometry,
-  );
+  const skills = createSkillOverlaysInstallation(capabilities);
+  const skillSlotGeometry = skills.geometry;
+  const skillCooldowns = skills.cooldowns;
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const publishObserverState = program === "target-observer";
   const featureFlags =
@@ -155,10 +147,7 @@ export async function installCertifiedCompanion(
     | (observeState ? COMPANION_FEATURE_BITS.gameSnapshot : 0)
     | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
     | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
-    | (hasSkillSlotGeometry ? COMPANION_FEATURE_BITS.skillSlotGeometry : 0)
-    | (capabilities.skillCooldownObservation
-      ? COMPANION_FEATURE_BITS.skillCooldownObservation
-      : 0);
+    | skills.certifiedFeatureFlags;
   if (featureFlags === 0) return null;
 
   const manifest = decodeEnhancementManifest(module, capabilities);
@@ -262,7 +251,6 @@ export async function installCertifiedCompanion(
   let disposeReadout = () => {};
   let disposeToolbox = () => {};
   let disposeToolSettings = () => {};
-  let disposeSkillKeyOverlay = () => {};
   let disposeCursorRefresh = () => {};
   let professionTrace: ReturnType<typeof createProfessionCommandTrace> | null = null;
   let installedCallback: CallableFunction | null = null;
@@ -304,10 +292,9 @@ export async function installCertifiedCompanion(
       attempt("cursor disposal", disposeCursor);
       attempt("target readout disposal", disposeReadout);
       attempt("Toolbox disposal", disposeToolbox);
-      attempt("skill key overlay disposal", disposeSkillKeyOverlay);
+      attempt("skill overlay disposal", skills.disposePresentation);
       attempt("skill-slot feed disposal", skillSlotGeometry.dispose);
       attempt("skill cooldown feed disposal", skillCooldowns.dispose);
-      attempt("skill cooldown overlay disposal", skillCooldownOverlay.dispose);
     }
     attempt("Tools settings listener disposal", disposeToolSettings);
     attempt("Trade alias disable", () => { configureTradeToggle?.(0); });
@@ -664,20 +651,7 @@ export async function installCertifiedCompanion(
       window.gwCursorState = installedCursorState;
     }
     let optionalSettings = window.gwToolsSettings();
-    let skillKeyConsumer: ReturnType<typeof createSkillKeyOverlayConsumer> | null = null;
-    if (hasSkillSlotGeometry) {
-      const canvas = document.getElementById("canvas");
-      if (!(canvas instanceof HTMLCanvasElement)) {
-        throw new Error("Enhancement skill key target is missing");
-      }
-      skillKeyConsumer = createSkillKeyOverlayConsumer(document.body, canvas);
-      const unsubscribe = skillSlotGeometry.subscribe(skillKeyConsumer.update);
-      disposeSkillKeyOverlay = () => {
-        unsubscribe();
-        skillKeyConsumer?.dispose();
-        skillKeyConsumer = null;
-      };
-    }
+    skills.mount(document.body, optionalSettings);
     const configureTradeAlias = () => {
       configureTradeToggle?.(optionalSettings.enabled ? 1 : 0);
     };
@@ -729,28 +703,13 @@ export async function installCertifiedCompanion(
         readout = null;
       }
     };
-    const hasSkillKeyBindings = () =>
-      optionalSettings.skillKeyBindings.some((binding) => binding !== null);
-    const syncSkillKeys = () => {
-      skillKeyConsumer?.setBindings(optionalSettings.skillKeyBindings);
-      skillKeyConsumer?.setEnabled(
-        policy().skillSlotGeometry && hasSkillKeyBindings(),
-      );
-    };
-    const syncSkillCooldowns = () => skillCooldownOverlay.sync(
-      optionalSettings.skillCooldownColor,
+    const syncSkillOverlays = () => skills.sync(
+      optionalSettings,
+      policy().skillSlotGeometry,
       policy().skillCooldownOverlay,
     );
-    skillCooldownOverlay.mount(
-      document.body,
-      optionalSettings.skillCooldownColor,
-      false,
-      skillSlotGeometry.subscribe,
-      skillCooldowns.subscribe,
-    );
     setTargetEnabled();
-    syncSkillKeys();
-    syncSkillCooldowns();
+    syncSkillOverlays();
     disposeReadout = () => {
       readout?.dispose();
       readout = null;
@@ -769,14 +728,11 @@ export async function installCertifiedCompanion(
         // prove that it became PvE without restarting.
         | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
         | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0)
-        | (hasSkillSlotGeometry
-            && policy().skillSlotGeometry
-            && (hasSkillKeyBindings() || policy().skillCooldownOverlay)
-          ? COMPANION_FEATURE_BITS.skillSlotGeometry
-          : 0)
-        | (capabilities.skillCooldownObservation && policy().skillCooldownOverlay
-          ? COMPANION_FEATURE_BITS.skillCooldownObservation
-          : 0);
+        | skills.activeFeatureFlags(
+          optionalSettings,
+          policy().skillSlotGeometry,
+          policy().skillCooldownOverlay,
+        );
       kernelDispatch(
         COMPANION_DISPATCH_KINDS.activeFeatures,
         active,
@@ -861,8 +817,7 @@ export async function installCertifiedCompanion(
       tracePolicy("settings");
       syncToolboxAvailability();
       setTargetEnabled();
-      syncSkillKeys();
-      syncSkillCooldowns();
+      syncSkillOverlays();
       syncActiveObservers();
       syncStoragePolicy();
       syncTravelPolicy();
@@ -996,8 +951,7 @@ export async function installCertifiedCompanion(
               snapshotPlayRegion = next;
               tracePolicy("region");
               setTargetEnabled();
-              syncSkillKeys();
-              syncSkillCooldowns();
+              syncSkillOverlays();
               syncActiveObservers();
             }
             readout?.update(state);
@@ -1023,8 +977,7 @@ export async function installCertifiedCompanion(
             if (playRegion() !== previousRegion) {
               tracePolicy("region");
               setTargetEnabled();
-              syncSkillKeys();
-              syncSkillCooldowns();
+              syncSkillOverlays();
               syncActiveObservers();
             }
             syncTravelPolicy();

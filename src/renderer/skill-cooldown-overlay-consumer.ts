@@ -8,6 +8,7 @@ import type {
   CompanionSkillSlotState,
 } from "./companion-skill-snapshot.js";
 import { createSkillCooldownOverlay, type SkillCooldownSlot } from "./skill-cooldown-overlay.js";
+import { projectSkillSlots } from "./skill-slot-projection.js";
 
 export function createSkillCooldownOverlayConsumer(
   parent: HTMLElement,
@@ -27,19 +28,15 @@ export function createSkillCooldownOverlayConsumer(
       || geometry.slots.length !== 8
       || cooldowns.rechargeTimestamps.length !== 8
     ) return null;
-    const canvasRect = canvas.getBoundingClientRect();
-    const scaleX = canvasRect.width / geometry.viewportWidth;
-    const scaleY = canvasRect.height / geometry.viewportHeight;
+    const projected = projectSkillSlots(geometry, canvas);
+    if (projected === null) return null;
     const slots: SkillCooldownSlot[] = [];
     for (let index = 0; index < 8; index += 1) {
-      const rect = geometry.slots[index]!;
+      const rect = projected[index]!;
       const timestamp = cooldowns.rechargeTimestamps[index]!;
       const remainingMs = timestamp === 0 ? 0 : (timestamp - cooldowns.gameTimer) >>> 0;
       slots.push(Object.freeze({
-        x: canvasRect.left + rect.left * scaleX,
-        y: canvasRect.top + (geometry.viewportHeight - rect.top) * scaleY,
-        width: (rect.right - rect.left) * scaleX,
-        height: (rect.top - rect.bottom) * scaleY,
+        ...rect,
         remainingMs,
       }));
     }

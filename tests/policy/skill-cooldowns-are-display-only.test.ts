@@ -7,6 +7,8 @@ const rendererSources = [
   "src/renderer/skill-cooldown-overlay.ts",
   "src/renderer/skill-cooldown-overlay-consumer.ts",
   "src/renderer/skill-cooldown-state-installation.ts",
+  "src/renderer/skill-overlays-installation.ts",
+  "src/renderer/skill-slot-projection.ts",
   "src/renderer/settings-skill-cooldowns.ts",
 ] as const;
 
