@@ -39,3 +39,16 @@ test("filters selling and buying without relying on chip colour", async ({ page 
   await expect(dialog.getByRole("option")).toHaveCount(4);
   await expect(dialog.getByText("WTS", { exact: true })).toHaveCount(4);
 });
+
+test("saves offers and players in an anchored drawer", async ({ page }) => {
+  const dialog = page.getByRole("dialog", { name: "Trade Chat" });
+  await dialog.getByRole("button", { name: "☆ Save offer" }).click();
+  await dialog.getByRole("button", { name: "☆ Follow player" }).click();
+  await dialog.getByRole("button", { name: /Saved 2/ }).click();
+  const drawer = dialog.getByRole("complementary", { name: "Saved trade items" });
+  await expect(drawer).toContainText("Tyria Cartographer");
+  await drawer.getByRole("button", { name: /Players 1/ }).click();
+  await expect(drawer).toContainText("1 current offer");
+  await drawer.getByRole("button", { name: "Close Saved" }).click();
+  await expect(drawer).toHaveCount(0);
+});

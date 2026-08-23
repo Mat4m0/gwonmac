@@ -129,9 +129,11 @@ import {
 import { editGameText } from './game-text-editing.js';
 import {
   parseTradeSearchRequest,
+  parseTradeSavedState,
   parseTradeSource,
   type TradeSearchRequest,
   type TradeSource,
+  type TradeSavedState,
 } from "../shared/trade-chat.js";
 import type { TradeChatService } from "./core/trade-chat-service.js";
 
@@ -156,6 +158,8 @@ export interface IpcContext {
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
   tradeChat: TradeChatService;
+  getTradeSaved: () => Promise<TradeSavedState>;
+  setTradeSaved: (value: TradeSavedState) => Promise<TradeSavedState>;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -616,6 +620,16 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     tradeUnsubscribe: channel(nothing, (win) => {
       ctx.tradeChat.unsubscribe(win.webContents.id);
+    }),
+
+    tradeSavedGet: channel(nothing, async () => {
+      await requireTradeEnabled();
+      return ctx.getTradeSaved();
+    }),
+
+    tradeSavedSet: channel(one(parseTradeSavedState), async (_win, value) => {
+      await requireTradeEnabled();
+      return ctx.setTradeSaved(value);
     }),
 
     tradeSearch: channel(asTradeSearchRequest, async (win, request) => {

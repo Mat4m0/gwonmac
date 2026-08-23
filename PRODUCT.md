@@ -48,6 +48,8 @@ Tools provides Build and Team authoring, party capture, team-code exchange,
 read-only Trade Chat discovery, Target Distance, local Xunlai storage opening,
 and explicit Team Apply. Trade Chat is an independent surface with public
 Kamadan and Pre-Searing feeds; players still publish listings in Guild Wars.
+Players may locally save an exact offer or follow a character to highlight
+their listings; this never sends or automates game chat.
 Storage
 has its own opt-in and can be opened from Tools, with its customizable
 Command-Shift-C default shortcut, or by

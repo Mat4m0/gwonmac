@@ -181,6 +181,8 @@ const api = {
     unsubscribe: () => ipcRenderer.invoke(IPC.tradeUnsubscribe),
     search: (request) => ipcRenderer.invoke(IPC.tradeSearch, request),
     retry: (source) => ipcRenderer.invoke(IPC.tradeRetry, source),
+    getSaved: () => ipcRenderer.invoke(IPC.tradeSavedGet),
+    setSaved: (value) => ipcRenderer.invoke(IPC.tradeSavedSet, value),
     onEvent: (callback) => listen(IPC.tradeEvent, callback),
   },
   travelPreferences: {

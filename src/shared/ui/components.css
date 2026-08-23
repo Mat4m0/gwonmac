@@ -302,6 +302,41 @@
   font-weight: var(--ui-font-weight-semibold);
 }
 
+/* Persistent button state is explicit in text and tone. This is shared by
+ * starred Trade items and any future binary action; colour is never its only
+ * signal because the button label changes with aria-pressed. */
+.ui-button[aria-pressed="true"] {
+  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  box-shadow: var(--ui-shadow-selected);
+  color: var(--ui-accent-ink);
+}
+
+/* A non-modal parallel surface anchored to the control that opened it. The
+ * feature owner decides its edge and dimensions; this primitive owns material,
+ * internal flow, and the shared heading rhythm. */
+.ui-drawer {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ui-panel-fill) padding-box, var(--ui-ring-gilt) border-box;
+  box-shadow: var(--ui-shadow-raised), var(--ui-shadow);
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+.ui-drawer-head {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-3) var(--ui-space-3) var(--ui-space-2);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ui-drawer { backdrop-filter: none; }
+}
+
 .ui-button[data-variant="primary"]:hover:not(:disabled):not([aria-disabled="true"]) {
   filter: brightness(1.2);
 }

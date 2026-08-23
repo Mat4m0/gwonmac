@@ -73,12 +73,15 @@ density, or behavior.
   ledger, with the selected offer in a bottom inspector.
 - At narrow widths, keep the Trade Chat list DOM and open the selected offer in
   an in-window sheet. The sheet keeps the shared button and scroll primitives.
-- Anchor the new-message hint inside the Trade Chat ledger. Merge new messages
-  immediately when the player is near the top; otherwise queue them without
-  moving the current reading position, then merge and clear the queue at the
-  exact top.
+- Merge Trade Chat messages immediately near the top. Away from the top, queue
+  them silently without moving the reading position or showing a repeating
+  arrival hint; merge the queue when the reader returns to the exact top.
 - Reveal local Trade Chat results 25 at a time as the player nears the bottom,
   up to 200 results.
+- Keep saved offers and followed players in one right-anchored Saved drawer.
+  It is non-modal at wide widths and an in-window sheet when narrow. Its entry
+  and exit share the right edge, focus returns to its trigger, and reduced
+  motion replaces translation with a brief cross-fade.
 - Scroll to revealed Trade Chat messages smoothly by default and instantly
   when reduced motion is active.
 - Keep scrolling flex and grid children shrinkable.

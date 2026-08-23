@@ -144,7 +144,11 @@ source, search for an item or character, and use **Selling** or **Buying** to
 filter whole-word `WTS` and `WTB` messages. Select a row to read the complete
 message and exact time, then copy the character name or message. The feature is
 read-only: publish listings and contact players through normal Guild Wars chat.
-Nothing from the feed, searches, or copied character names is saved.
+Feed history, searches, and copied character names are not saved automatically.
+Use **Save offer** to keep an exact local copy of a useful listing. Use
+**Follow player** to highlight that character's current and future listings.
+Open **Saved** to review Offers and Players in a right-side drawer. These saved
+items stay on this Mac; GWonMac does not send them to either public feed.
 
 Tools and Travel stay open when you click Guild Wars behind them. Press Tab to
 move the keyboard into the topmost GWonMac window. Press Escape to close that

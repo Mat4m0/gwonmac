@@ -44,7 +44,7 @@ The first release does not include:
 - automatic whispers or trade actions;
 - a GWonMac marketplace, account, database, or backend;
 - price estimation, price history, item recognition, or inventory integration;
-- saved searches, watches, notifications, bookmarks, or ignored players;
+- saved searches, notifications, alerts, notes, tags, or ignored players;
 - regular expressions or a query language;
 - importing remote messages into the Guild Wars chat panel.
 
@@ -101,6 +101,7 @@ Do not copy these Toolbox++ implementation choices:
 | P0 | keep useful results during a connection failure | continue my current search and recover clearly |
 | P0 | use Trade at narrow and wide window sizes | keep it useful beside the game |
 | P0 | use the complete flow with a keyboard | avoid switching repeatedly between input methods |
+| P0 | save an offer or follow a player | keep useful leads and recognize their new listings |
 | Later | prepare an empty whisper to the selected character | shorten contact after the client action is certified |
 | Later | save a useful search | repeat a proven search when actual use justifies persistence |
 
@@ -184,8 +185,8 @@ reorder the row.
 
 Live results are newest first. When the player is at the top, new messages may
 appear immediately. When the player has scrolled away from the top, the list
-must not jump. A compact **New messages** action returns to the latest results.
-Scrolling fully back to the top performs the same merge and clears the action.
+must not jump or show a repeating arrival notice. New messages merge silently
+when the player scrolls fully back to the top.
 
 ## Trade intent filter
 
@@ -210,6 +211,7 @@ The detail pane is calm and sparse. It shows:
 - the character name;
 - the relative time and an exact local timestamp;
 - **Copy character name** as the primary first-release action;
+- **Save offer** and **Follow player** as explicit local actions;
 - **Copy message** as a secondary action; and
 - source attribution with **Open Kamadan** or **Open Ascalon** as a secondary
   link.
@@ -263,8 +265,7 @@ The core Trade feature must not depend on this enhancement.
 
 1. The player clears the query.
 2. The preserved live feed returns at its previous position.
-3. If newer messages accumulated, **New messages** offers a deliberate return
-   to the top.
+3. Newer messages merge silently when the player returns fully to the top.
 
 ## States and recovery
 
@@ -307,7 +308,8 @@ keeps normal pointer and keyboard input everywhere else.
 ## Data and architecture
 
 The public Kamadan and Ascalon services remain the only sources of truth for
-trade messages. GWonMac does not persist a copy of their history.
+trade messages. GWonMac does not persist their history. It stores only offers
+the player explicitly saves and player names the player explicitly follows.
 
 Main owns one `TradeChatService` for the app process:
 
@@ -345,6 +347,11 @@ network request while scrolling.
 Multiple game accounts share the same public network connection and in-memory
 feeds. Selection, query, filter, source, and scroll state stay with each Trade
 Chat window. No account identity or profile data is sent to either source.
+
+Saved offers and followed players live in one bounded, owner-only local JSON
+document. The Saved drawer separates Offers and Players. A saved offer keeps
+its exact source, timestamp, sender, message, and saved time. Following a player
+highlights matching current and future rows without sending anything upstream.
 
 ## Privacy, safety, and external dependency
 

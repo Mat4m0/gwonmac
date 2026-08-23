@@ -15,6 +15,8 @@ export const TRADE_LIMITS = Object.freeze({
   messageCharacters: 1_024,
   liveMessages: 100,
   searchResults: 200,
+  savedOffers: 100,
+  savedPlayers: 100,
   payloadBytes: 1024 * 1024,
 });
 
@@ -62,6 +64,18 @@ export type TradeSearchResult = Readonly<{
   messages: readonly TradeMessage[];
 }>;
 
+export type TradeSavedOffer = TradeMessage & Readonly<{ savedAt: number }>;
+export type TradeSavedPlayer = Readonly<{ sender: string; savedAt: number }>;
+export type TradeSavedState = Readonly<{
+  offers: readonly TradeSavedOffer[];
+  players: readonly TradeSavedPlayer[];
+}>;
+
+export const EMPTY_TRADE_SAVED_STATE: TradeSavedState = Object.freeze({
+  offers: Object.freeze([]),
+  players: Object.freeze([]),
+});
+
 export type TradeEvent =
   | Readonly<{
       type: "status";
@@ -94,6 +108,35 @@ export function parseTradeSearchRequest(value: unknown): TradeSearchRequest {
     throw new TypeError("invalid trade query");
   }
   return Object.freeze({ source, query });
+}
+
+export function parseTradeSavedState(value: unknown): TradeSavedState {
+  if (
+    !isRecord(value)
+    || !hasOnlyKeys(value, ["offers", "players"])
+    || !Array.isArray(value.offers)
+    || !Array.isArray(value.players)
+    || value.offers.length > TRADE_LIMITS.savedOffers
+    || value.players.length > TRADE_LIMITS.savedPlayers
+  ) throw new TypeError("invalid saved trade state");
+
+  const offers = value.offers.map((candidate) => parseSavedOffer(candidate));
+  const players = value.players.map((candidate) => parseSavedPlayer(candidate));
+  if (offers.some((offer) => offer === null) || players.some((player) => player === null)) {
+    throw new TypeError("invalid saved trade state");
+  }
+  const typedOffers = offers as TradeSavedOffer[];
+  const typedPlayers = players as TradeSavedPlayer[];
+  if (
+    new Set(typedOffers.map((offer) => `${offer.source}:${offer.timestamp}`)).size
+      !== typedOffers.length
+    || new Set(typedPlayers.map((player) => player.sender.toLocaleLowerCase())).size
+      !== typedPlayers.length
+  ) throw new TypeError("duplicate saved trade entry");
+  return Object.freeze({
+    offers: Object.freeze(typedOffers),
+    players: Object.freeze(typedPlayers),
+  });
 }
 
 export type ParsedTradePayload =
@@ -164,6 +207,33 @@ function parseTimestamp(value: unknown): number | null {
       ? Number(value)
       : Number.NaN;
   return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
+function parseSavedOffer(value: unknown): TradeSavedOffer | null {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    "source", "timestamp", "sender", "message", "replacementTimestamp", "savedAt",
+  ])) return null;
+  if (!isTradeSource(value.source)) return null;
+  const message = parseTradeMessage(value.source, {
+    t: value.timestamp,
+    s: value.sender,
+    m: value.message,
+    ...(value.replacementTimestamp === undefined ? {} : { r: value.replacementTimestamp }),
+  });
+  const savedAt = parseTimestamp(value.savedAt);
+  return message && savedAt !== null ? Object.freeze({ ...message, savedAt }) : null;
+}
+
+function parseSavedPlayer(value: unknown): TradeSavedPlayer | null {
+  if (
+    !isRecord(value)
+    || !hasOnlyKeys(value, ["sender", "savedAt"])
+    || typeof value.sender !== "string"
+    || value.sender.length === 0
+    || countCharacters(value.sender) > TRADE_LIMITS.senderCharacters
+  ) return null;
+  const savedAt = parseTimestamp(value.savedAt);
+  return savedAt === null ? null : Object.freeze({ sender: value.sender, savedAt });
 }
 
 function deduplicate(messages: readonly TradeMessage[]): TradeMessage[] {

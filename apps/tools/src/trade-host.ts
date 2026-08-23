@@ -4,6 +4,7 @@ import type {
   TradeMessage,
   TradeSearchRequest,
   TradeSearchResult,
+  TradeSavedState,
   TradeSnapshot,
   TradeSource,
 } from "../../../src/shared/trade-chat";
@@ -17,6 +18,8 @@ export type TradeHost = Readonly<{
   onEvent(callback: (event: TradeEvent) => void): () => void;
   copy(text: string): Promise<void>;
   openSource(source: TradeSource): Promise<void>;
+  getSaved(): Promise<TradeSavedState>;
+  setSaved(value: TradeSavedState): Promise<TradeSavedState>;
 }>;
 
 export function createNativeTradeHost(api: GwNativeApi): TradeHost {
@@ -30,6 +33,8 @@ export function createNativeTradeHost(api: GwNativeApi): TradeHost {
     openSource: (source) => api.app.openExternal(
       source === "kamadan" ? "kamadanTrade" : "preSearingTrade",
     ),
+    getSaved: () => api.trade.getSaved(),
+    setSaved: (value) => api.trade.setSaved(value),
   });
 }
 
@@ -50,6 +55,7 @@ export function createDemoTradeHost(): TradeHost {
   let source: TradeSource = "kamadan";
   const listeners = new Set<(event: TradeEvent) => void>();
   let timer: ReturnType<typeof setInterval> | null = null;
+  let saved: TradeSavedState = { offers: [], players: [] };
   const start = () => {
     if (timer) return;
     timer = setInterval(() => {
@@ -104,6 +110,11 @@ export function createDemoTradeHost(): TradeHost {
       await navigator.clipboard?.writeText(text);
     },
     async openSource() {},
+    async getSaved() { return saved; },
+    async setSaved(value) {
+      saved = value;
+      return saved;
+    },
   });
 }
 

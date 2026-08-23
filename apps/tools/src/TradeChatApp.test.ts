@@ -58,7 +58,7 @@ describe("TradeChatApp", () => {
     wrapper.unmount();
   });
 
-  it("reveals 25 more rows near the bottom and clears pending messages at the top", async () => {
+  it("reveals 25 more rows near the bottom and silently merges new messages at the top", async () => {
     const messages = Array.from({ length: 60 }, (_, index): TradeMessage => ({
       source: "kamadan",
       timestamp: Date.now() - index * 1_000,
@@ -79,6 +79,8 @@ describe("TradeChatApp", () => {
       },
       async copy() {},
       async openSource() {},
+      async getSaved() { return { offers: [], players: [] }; },
+      async setSaved(value) { return value; },
     };
     const wrapper = mount(TradeChatApp, {
       attachTo: document.body,
@@ -107,12 +109,30 @@ describe("TradeChatApp", () => {
       },
     });
     await flushPromises();
-    expect(wrapper.get(".pending-messages").text()).toContain("1 new message");
+    expect(wrapper.find(".pending-messages").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("new message");
 
     (list.element as HTMLElement).scrollTop = 0;
     await list.trigger("scroll");
     expect(wrapper.find(".pending-messages").exists()).toBe(false);
     expect(wrapper.get(".trade-row").text()).toContain("Newest Trader");
+    wrapper.unmount();
+  });
+
+  it("saves offers and players, highlights them, and exposes both drawer lists", async () => {
+    const wrapper = await ledger();
+    await wrapper.get(".inspector-actions button:first-child").trigger("click");
+    await flushPromises();
+    expect(wrapper.get(".trade-row").attributes("data-saved-offer")).toBe("");
+
+    await wrapper.get(".inspector-actions button:nth-child(2)").trigger("click");
+    await flushPromises();
+    expect(wrapper.get(".trade-row").attributes("data-saved-player")).toBe("");
+
+    await wrapper.get(".saved-trigger").trigger("click");
+    expect(wrapper.get(".trade-saved-drawer").text()).toContain("Tyria Cartographer");
+    await wrapper.get(".saved-tabs button:last-child").trigger("click");
+    expect(wrapper.get(".trade-saved-drawer").text()).toContain("1 current offer");
     wrapper.unmount();
   });
 });

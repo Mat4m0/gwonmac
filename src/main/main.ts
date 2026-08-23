@@ -40,6 +40,7 @@ import { loadSettings } from "./core/settings.js";
 import { PreferencesCoordinator } from "./core/preferences-coordinator.js";
 import { SocketManager } from "./core/sockets.js";
 import { TradeChatService } from "./core/trade-chat-service.js";
+import { TradeSavedStore } from "./core/trade-saved-store.js";
 import {
   count,
   exportDiagnosticsForWindow,
@@ -584,6 +585,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   const sockets = buildSocketManager();
   const tradeChat = new TradeChatService();
+  const tradeSaved = new TradeSavedStore(paths.tradeSaved);
   appUpdaterController = new AppUpdater({
     currentVersion: HOST_VERSION,
     capable: distribution.automaticUpdates,
@@ -680,6 +682,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     setTravelPreferences: (update) => preferences.updateTravelPreferences(update),
     toolsEnabledAtLaunch: settings.gwonmacTools,
     tradeChat,
+    getTradeSaved: () => tradeSaved.get(),
+    setTradeSaved: (value) => tradeSaved.set(value),
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>

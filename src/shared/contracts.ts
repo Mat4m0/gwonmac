@@ -62,6 +62,7 @@ import type {
   TradeEvent,
   TradeSearchRequest,
   TradeSearchResult,
+  TradeSavedState,
   TradeSnapshot,
   TradeSource,
 } from "./trade-chat.js";
@@ -811,6 +812,8 @@ export const IPC = {
   tradeSearch: "gw:trade:search",
   tradeRetry: "gw:trade:retry",
   tradeEvent: "gw:trade:event",
+  tradeSavedGet: "gw:trade:saved:get",
+  tradeSavedSet: "gw:trade:saved:set",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
   shortcutCapture: "gw:shortcuts:capture",
@@ -960,6 +963,8 @@ export interface GwNativeApi {
     unsubscribe(): Promise<void>;
     search(request: TradeSearchRequest): Promise<TradeSearchResult>;
     retry(source: TradeSource): Promise<void>;
+    getSaved(): Promise<TradeSavedState>;
+    setSaved(value: TradeSavedState): Promise<TradeSavedState>;
     onEvent(callback: (event: TradeEvent) => void): () => void;
   };
   travelPreferences: {

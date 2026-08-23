@@ -15,6 +15,8 @@ import {
   type TradeConnectionState,
   type TradeEvent,
   type TradeMessage,
+  type TradeSavedOffer,
+  type TradeSavedState,
   type TradeSource,
 } from "../../../src/shared/trade-chat";
 import { useFloatingWindow } from "./use-floating-window";
@@ -44,6 +46,11 @@ const searching = ref(false);
 const searchProblem = ref("");
 const notice = ref("");
 const detailOpen = ref(false);
+const savedOpen = ref(false);
+const savedTab = ref<"offers" | "players">("offers");
+const saved = ref<TradeSavedState>({ offers: [], players: [] });
+const savedButton = ref<HTMLButtonElement | null>(null);
+const savedClose = ref<HTMLButtonElement | null>(null);
 const visibleLimit = ref(25);
 const searchInput = ref<HTMLInputElement | null>(null);
 const list = ref<HTMLElement | null>(null);
@@ -79,9 +86,15 @@ const selected = computed(() => {
   const timestamp = current.value.selection;
   return timestamp === null
     ? null
-    : [...current.value.live, ...current.value.search, ...current.value.pending]
+    : [
+      ...current.value.live,
+      ...current.value.search,
+      ...current.value.pending,
+      ...saved.value.offers.filter((offer) => offer.source === source.value),
+    ]
       .find((message) => message.timestamp === timestamp) ?? null;
 });
+const savedCount = computed(() => saved.value.offers.length + saved.value.players.length);
 const emptyHeading = computed(() => {
   if (searching.value) return "Searching the trade ledger…";
   if (searchProblem.value) return "Search could not finish";
@@ -93,6 +106,7 @@ const emptyHeading = computed(() => {
 let requestRevision = 0;
 let stopEvents: (() => void) | null = null;
 let clock: ReturnType<typeof setInterval> | null = null;
+let noticeTimer: number | null = null;
 const now = ref(Date.now());
 
 async function subscribe(next: TradeSource): Promise<void> {
@@ -170,15 +184,6 @@ function onTradeEvent(event: TradeEvent): void {
   ensureSelection(target, target.live);
 }
 
-function revealPending(): void {
-  commitPending();
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-  nextTick(() => list.value?.scrollTo({
-    top: 0,
-    behavior: reducedMotion ? "auto" : "smooth",
-  }));
-}
-
 function commitPending(): void {
   if (!current.value.pending.length) return;
   current.value.live = sortNewest([
@@ -206,13 +211,91 @@ function selectMessage(message: TradeMessage): void {
 async function copy(value: string, label: string): Promise<void> {
   try {
     await props.host.copy(value);
-    notice.value = `${label} copied`;
+    showNotice(`${label} copied`);
   } catch {
-    notice.value = "Clipboard access was refused. Select the text and copy it manually.";
+    showNotice("Clipboard access was refused. Select the text and copy it manually.");
   }
-  window.setTimeout(() => {
-    if (notice.value.startsWith(label) || notice.value.startsWith("Clipboard")) notice.value = "";
-  }, 3_000);
+}
+
+function showNotice(message: string): void {
+  if (noticeTimer) clearTimeout(noticeTimer);
+  notice.value = message;
+  noticeTimer = window.setTimeout(() => { notice.value = ""; }, 3_000);
+}
+
+function offerSaved(message: TradeMessage): boolean {
+  return saved.value.offers.some((offer) =>
+    offer.source === message.source && offer.timestamp === message.timestamp
+  );
+}
+
+function playerSaved(sender: string): boolean {
+  const key = sender.toLocaleLowerCase();
+  return saved.value.players.some((player) => player.sender.toLocaleLowerCase() === key);
+}
+
+async function save(next: TradeSavedState, success: string): Promise<void> {
+  const previous = saved.value;
+  saved.value = next;
+  try {
+    saved.value = await props.host.setSaved(next);
+    showNotice(success);
+  } catch {
+    saved.value = previous;
+    showNotice("Saved items could not be updated.");
+  }
+}
+
+function toggleOffer(message: TradeMessage): void {
+  const exists = offerSaved(message);
+  const offers = exists
+    ? saved.value.offers.filter((offer) =>
+      offer.source !== message.source || offer.timestamp !== message.timestamp
+    )
+    : [{ ...message, savedAt: Date.now() }, ...saved.value.offers]
+      .slice(0, TRADE_LIMITS.savedOffers);
+  void save({ ...saved.value, offers }, exists ? "Offer removed" : "Offer saved");
+}
+
+function togglePlayer(sender: string): void {
+  const key = sender.toLocaleLowerCase();
+  const exists = playerSaved(sender);
+  const players = exists
+    ? saved.value.players.filter((player) => player.sender.toLocaleLowerCase() !== key)
+    : [{ sender, savedAt: Date.now() }, ...saved.value.players]
+      .slice(0, TRADE_LIMITS.savedPlayers);
+  void save({ ...saved.value, players }, exists ? "Player unfollowed" : "Player followed");
+}
+
+function openSaved(): void {
+  savedOpen.value = true;
+  nextTick(() => savedClose.value?.focus());
+}
+
+function closeSaved(): void {
+  savedOpen.value = false;
+  nextTick(() => savedButton.value?.focus());
+}
+
+async function inspectSavedOffer(offer: TradeSavedOffer): Promise<void> {
+  if (source.value !== offer.source) {
+    source.value = offer.source;
+    await nextTick();
+  }
+  states[offer.source].selection = offer.timestamp;
+  detailOpen.value = true;
+  savedOpen.value = false;
+}
+
+function findPlayer(sender: string): void {
+  query.value = sender;
+  savedOpen.value = false;
+  void runSearch();
+}
+
+function currentOffersFor(sender: string): number {
+  const key = sender.toLocaleLowerCase();
+  return current.value.live.filter((message) => message.sender.toLocaleLowerCase() === key).length;
 }
 
 function onListKeydown(event: KeyboardEvent): void {
@@ -233,6 +316,12 @@ function onListKeydown(event: KeyboardEvent): void {
 
 function onWindowKeydown(event: KeyboardEvent): void {
   if (!props.visible || !props.active) return;
+  if (event.key === "Escape" && savedOpen.value) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeSaved();
+    return;
+  }
   if (
     event.key === "/"
     && !(event.target instanceof HTMLInputElement)
@@ -261,12 +350,16 @@ onMounted(() => {
   window.addEventListener("keydown", onWindowKeydown);
   clock = setInterval(() => { now.value = Date.now(); }, 30_000);
   if (props.visible) void subscribe(source.value);
+  void props.host.getSaved().then((value) => { saved.value = value; }).catch(() => {
+    showNotice("Saved items are unavailable for this session.");
+  });
 });
 onBeforeUnmount(() => {
   requestRevision += 1;
   stopEvents?.();
   window.removeEventListener("keydown", onWindowKeydown);
   if (clock) clearInterval(clock);
+  if (noticeTimer) clearTimeout(noticeTimer);
   void props.host.unsubscribe();
 });
 
@@ -371,10 +464,19 @@ function exactTime(timestamp: number): string {
           </button>
           <button v-if="submittedQuery" type="button" class="ui-button" @click="clearSearch">Live feed</button>
         </form>
-        <div class="ui-segment intent-segment" data-fill aria-label="Offer intent">
-          <button :aria-pressed="intent === 'all'" @click="intent = 'all'">All</button>
-          <button :aria-pressed="intent === 'selling'" @click="intent = 'selling'">Selling</button>
-          <button :aria-pressed="intent === 'buying'" @click="intent = 'buying'">Buying</button>
+        <div class="trade-toolbar-actions">
+          <div class="ui-segment intent-segment" data-fill aria-label="Offer intent">
+            <button :aria-pressed="intent === 'all'" @click="intent = 'all'">All</button>
+            <button :aria-pressed="intent === 'selling'" @click="intent = 'selling'">Selling</button>
+            <button :aria-pressed="intent === 'buying'" @click="intent = 'buying'">Buying</button>
+          </div>
+          <button
+            ref="savedButton"
+            class="ui-button saved-trigger"
+            :aria-expanded="savedOpen"
+            aria-controls="trade-saved-drawer"
+            @click="savedOpen ? closeSaved() : openSaved()"
+          ><span aria-hidden="true">★</span> Saved <span class="saved-count">{{ savedCount }}</span></button>
         </div>
       </div>
 
@@ -389,12 +491,6 @@ function exactTime(timestamp: number): string {
         <div class="trade-columns" aria-hidden="true">
           <span>Intent</span><span>Character</span><span>Message</span><span>Age</span>
         </div>
-        <button
-          v-if="current.pending.length"
-          class="ui-button pending-messages"
-          data-variant="primary"
-          @click="revealPending"
-        >{{ current.pending.length }} new {{ current.pending.length === 1 ? "message" : "messages" }}</button>
         <div
           v-if="searching || (!visibleMessages.length && (current.status === 'connecting' || current.status === 'reconnecting'))"
           class="trade-state"
@@ -429,16 +525,19 @@ function exactTime(timestamp: number): string {
             class="trade-row"
             role="option"
             :data-timestamp="message.timestamp"
+            :data-saved-offer="offerSaved(message) ? '' : undefined"
+            :data-saved-player="playerSaved(message.sender) ? '' : undefined"
             :aria-selected="current.selection === message.timestamp"
             @click="selectMessage(message)"
           >
             <span class="intent-cell">
+              <span v-if="offerSaved(message)" class="saved-mark" aria-label="Saved offer">★</span>
               <span v-for="tag in messageIntents(message.message)" :key="tag" class="ui-chip" :data-intent="tag">
                 {{ tag === "selling" ? "WTS" : "WTB" }}
               </span>
               <span v-if="!messageIntents(message.message).length" class="ui-chip">Other</span>
             </span>
-            <bdi class="character-cell">{{ message.sender }}</bdi>
+            <bdi class="character-cell"><span v-if="playerSaved(message.sender)" class="followed-mark" aria-label="Followed player">★</span>{{ message.sender }}</bdi>
             <bdi class="message-cell">{{ message.message }}</bdi>
             <time class="age-cell" :datetime="new Date(message.timestamp).toISOString()">{{ age(message.timestamp) }}</time>
           </button>
@@ -461,6 +560,16 @@ function exactTime(timestamp: number): string {
             <p><bdi>{{ selected.message }}</bdi></p>
           </div>
           <div class="inspector-actions">
+            <button
+              class="ui-button"
+              :aria-pressed="offerSaved(selected)"
+              @click="toggleOffer(selected)"
+            >{{ offerSaved(selected) ? "★ Saved offer" : "☆ Save offer" }}</button>
+            <button
+              class="ui-button"
+              :aria-pressed="playerSaved(selected.sender)"
+              @click="togglePlayer(selected.sender)"
+            >{{ playerSaved(selected.sender) ? "★ Following player" : "☆ Follow player" }}</button>
             <button class="ui-button" data-variant="primary" @click="copy(selected.sender, 'Character name')">
               Copy character
             </button>
@@ -473,6 +582,56 @@ function exactTime(timestamp: number): string {
           <p>The complete message and copy actions will appear here.</p>
         </div>
       </section>
+
+      <Transition name="saved-drawer">
+        <aside
+          v-if="savedOpen"
+          id="trade-saved-drawer"
+          class="trade-saved-drawer ui-drawer ui-raised"
+          role="complementary"
+          aria-label="Saved trade items"
+          @keydown.esc.stop.prevent="closeSaved"
+        >
+          <header class="saved-drawer-head ui-drawer-head">
+            <div>
+              <strong>Saved</strong>
+              <span>{{ savedCount }} {{ savedCount === 1 ? "item" : "items" }}</span>
+            </div>
+            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved">×</button>
+          </header>
+          <div class="ui-segment saved-tabs" data-fill aria-label="Saved item type">
+            <button :aria-pressed="savedTab === 'offers'" @click="savedTab = 'offers'">Offers {{ saved.offers.length }}</button>
+            <button :aria-pressed="savedTab === 'players'" @click="savedTab = 'players'">Players {{ saved.players.length }}</button>
+          </div>
+          <div class="saved-drawer-body ui-scroll">
+            <template v-if="savedTab === 'offers'">
+              <div v-if="!saved.offers.length" class="ui-empty">
+                <strong>No saved offers</strong>
+                <p>Save an offer from its detail panel to keep a local copy.</p>
+              </div>
+              <article v-for="offer in saved.offers" :key="`${offer.source}:${offer.timestamp}`" class="saved-card">
+                <button class="saved-card-main" @click="inspectSavedOffer(offer)">
+                  <span><bdi>{{ offer.sender }}</bdi><small>{{ offer.source === "kamadan" ? "Kamadan" : "Pre-Searing" }} · saved {{ age(offer.savedAt) }}</small></span>
+                  <bdi>{{ offer.message }}</bdi>
+                </button>
+                <button class="saved-remove" aria-label="Remove saved offer" @click="toggleOffer(offer)">★</button>
+              </article>
+            </template>
+            <template v-else>
+              <div v-if="!saved.players.length" class="ui-empty">
+                <strong>No followed players</strong>
+                <p>Follow a player to highlight every offer they post.</p>
+              </div>
+              <article v-for="player in saved.players" :key="player.sender.toLocaleLowerCase()" class="saved-card saved-player-card">
+                <button class="saved-card-main" @click="findPlayer(player.sender)">
+                  <span><bdi>★ {{ player.sender }}</bdi><small>{{ currentOffersFor(player.sender) }} current {{ currentOffersFor(player.sender) === 1 ? "offer" : "offers" }} in {{ sourceLabel }}</small></span>
+                </button>
+                <button class="saved-remove" :aria-label="`Unfollow ${player.sender}`" @click="togglePlayer(player.sender)">★</button>
+              </article>
+            </template>
+          </div>
+        </aside>
+      </Transition>
 
       <Transition name="notice">
         <div v-if="notice" class="ui-toast trade-notice" role="status">{{ notice }}</div>
