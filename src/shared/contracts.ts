@@ -58,6 +58,13 @@ import {
   UPDATE_TRACKS,
   type UpdateTrack,
 } from "./release.js";
+import type {
+  TradeEvent,
+  TradeSearchRequest,
+  TradeSearchResult,
+  TradeSnapshot,
+  TradeSource,
+} from "./trade-chat.js";
 
 export { RELEASE_REPO } from "./project-identity.js";
 export { DEFAULT_UPDATE_TRACK, UPDATE_TRACKS };
@@ -470,7 +477,9 @@ export type ExternalLinkKind =
   | "discord"
   | "donate"
   | "releases"
-  | "store";
+  | "store"
+  | "kamadanTrade"
+  | "preSearingTrade";
 
 /**
  * Directories the renderer may ask to reveal in Finder. A closed enum, never
@@ -489,6 +498,8 @@ export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
   releases: `https://github.com/${RELEASE_REPO}/releases`,
   // Official ArenaNet store, for players who do not own the game yet.
   store: "https://store.guildwars.com/en-us",
+  kamadanTrade: "https://kamadan.gwtoolbox.com",
+  preSearingTrade: "https://ascalon.gwtoolbox.com",
 };
 
 /**
@@ -720,6 +731,7 @@ export type RendererCommand =
   | { type: "text.edit"; command: GameTextEditCommand }
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
+  | { type: "trade.toggle" }
   | { type: "storage.open" }
   | { type: "travel.toggle" }
   | {
@@ -794,6 +806,11 @@ export const IPC = {
   settingsSet: "gw:settings:set",
   settingsReset: "gw:settings:reset",
   settingsEvent: "gw:settings:event",
+  tradeSubscribe: "gw:trade:subscribe",
+  tradeUnsubscribe: "gw:trade:unsubscribe",
+  tradeSearch: "gw:trade:search",
+  tradeRetry: "gw:trade:retry",
+  tradeEvent: "gw:trade:event",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
   shortcutCapture: "gw:shortcuts:capture",
@@ -868,6 +885,7 @@ export const EVENT_CHANNELS = [
   "progressEvent",
   "socketEvent",
   "settingsEvent",
+  "tradeEvent",
   "rendererCommand",
   "rendererCommandDone",
   "inputTraceEvent",
@@ -936,6 +954,13 @@ export interface GwNativeApi {
     set(value: RendererSettingsPatch): Promise<AppSettings>;
     reset(): Promise<SettingsResetOutcome | null>;
     onChange(callback: (settings: AppSettings) => void): () => void;
+  };
+  trade: {
+    subscribe(source: TradeSource): Promise<TradeSnapshot>;
+    unsubscribe(): Promise<void>;
+    search(request: TradeSearchRequest): Promise<TradeSearchResult>;
+    retry(source: TradeSource): Promise<void>;
+    onEvent(callback: (event: TradeEvent) => void): () => void;
   };
   travelPreferences: {
     get(): Promise<TravelUserPreferences>;

@@ -39,6 +39,7 @@ import { RendererClientSessions } from "./renderer-client-sessions.js";
 import { loadSettings } from "./core/settings.js";
 import { PreferencesCoordinator } from "./core/preferences-coordinator.js";
 import { SocketManager } from "./core/sockets.js";
+import { TradeChatService } from "./core/trade-chat-service.js";
 import {
   count,
   exportDiagnosticsForWindow,
@@ -582,6 +583,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     onProgress: setProgress,
   });
   const sockets = buildSocketManager();
+  const tradeChat = new TradeChatService();
   appUpdaterController = new AppUpdater({
     currentVersion: HOST_VERSION,
     capable: distribution.automaticUpdates,
@@ -677,6 +679,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getTravelPreferences: () => preferences.getTravelPreferences(),
     setTravelPreferences: (update) => preferences.updateTravelPreferences(update),
     toolsEnabledAtLaunch: settings.gwonmacTools,
+    tradeChat,
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>
@@ -783,6 +786,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       await Promise.all(gameWindows.map((win) => flushWindowState(win)));
     }
     sockets.closeAll();
+    tradeChat.dispose();
     updateLongRunningTaskFeedback(INITIAL_PROGRESS, null);
     await clientRuntime.shutdown();
     if (activeAccountMode === "single") await clearBrowserCookies("quit");

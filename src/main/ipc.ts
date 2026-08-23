@@ -127,6 +127,13 @@ import {
   requestGameStorageReset,
 } from "./settings-actions.js";
 import { editGameText } from './game-text-editing.js';
+import {
+  parseTradeSearchRequest,
+  parseTradeSource,
+  type TradeSearchRequest,
+  type TradeSource,
+} from "../shared/trade-chat.js";
+import type { TradeChatService } from "./core/trade-chat-service.js";
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -148,6 +155,7 @@ export interface IpcContext {
   setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
+  tradeChat: TradeChatService;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -464,11 +472,29 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
     value !== "discord" &&
     value !== "donate" &&
     value !== "releases" &&
-    value !== "store"
+    value !== "store" &&
+    value !== "kamadanTrade" &&
+    value !== "preSearingTrade"
   ) {
     throw new ValidationError("invalid external link kind");
   }
   return value;
+});
+
+const asTradeSource = one((value: unknown): TradeSource => {
+  try {
+    return parseTradeSource(value);
+  } catch {
+    throw new ValidationError("invalid trade source");
+  }
+});
+
+const asTradeSearchRequest = one((value: unknown): TradeSearchRequest => {
+  try {
+    return parseTradeSearchRequest(value);
+  } catch {
+    throw new ValidationError("invalid trade search request");
+  }
 });
 
 const asAccountsSetup = one(parseAccountsSetup);
@@ -483,6 +509,12 @@ export function registerIpcHandlers(ctx: IpcContext): {
 } {
   const paths = gamePaths();
   const secretOperations = new Set<Promise<unknown>>();
+  const tradeCleanupInstalled = new Set<number>();
+  const requireTradeEnabled = async (): Promise<void> => {
+    if (!(await ctx.getSettings()).gwonmacTools) {
+      throw new AllowlistError("trade chat is disabled");
+    }
+  };
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
       return Promise.reject(new ValidationError("application is quitting"));
@@ -565,6 +597,39 @@ export function registerIpcHandlers(ctx: IpcContext): {
     settingsReset: channel(nothing, async (win) => {
       const outcome = await confirmSettingsReset(win, ctx.resetSettings);
       return outcome;
+    }),
+
+    tradeSubscribe: channel(asTradeSource, async (win, source) => {
+      await requireTradeEnabled();
+      const id = win.webContents.id;
+      if (!tradeCleanupInstalled.has(id)) {
+        tradeCleanupInstalled.add(id);
+        win.webContents.once("destroyed", () => {
+          tradeCleanupInstalled.delete(id);
+          ctx.tradeChat.unsubscribe(id);
+        });
+      }
+      return ctx.tradeChat.subscribe(id, source, (event) => {
+        sendIfLive(win, IPC.tradeEvent, event);
+      });
+    }),
+
+    tradeUnsubscribe: channel(nothing, (win) => {
+      ctx.tradeChat.unsubscribe(win.webContents.id);
+    }),
+
+    tradeSearch: channel(asTradeSearchRequest, async (win, request) => {
+      await requireTradeEnabled();
+      return ctx.tradeChat.search(
+        win.webContents.id,
+        request.source,
+        request.query,
+      );
+    }),
+
+    tradeRetry: channel(asTradeSource, async (win, source) => {
+      await requireTradeEnabled();
+      ctx.tradeChat.retry(win.webContents.id, source);
     }),
 
     travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),

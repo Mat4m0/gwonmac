@@ -135,7 +135,9 @@ test("the host has one native automatic application replacement path", () => {
   assert.match(identity, /GITHUB_OWNER\.toLowerCase\(\).*github\.io/);
   assert.match(identity, /stable: `\$\{UPDATE_FEED_ROOT\}\/stable\/darwin\/arm64\/RELEASES\.json`/);
   assert.match(identity, /beta: `\$\{UPDATE_FEED_ROOT\}\/beta\/darwin\/arm64\/RELEASES\.json`/);
-  assert.deepEqual(json("package.json").dependencies ?? {}, {});
+  assert.deepEqual(json("package.json").dependencies, {
+    ws: "^8.21.3",
+  });
 });
 
 test("distribution channels use preflighted signing and a scoped marker", () => {
@@ -494,11 +496,16 @@ test("developer builds are exact, ad-hoc, bounded, and isolated from releases", 
   );
 });
 
-test("the root app and website add no runtime package entries and audit exceptions stay explicit", () => {
+test("runtime package entries and audit exceptions stay explicit", () => {
   const rootPackage = json("package.json");
   const workspace = read("pnpm-workspace.yaml");
   const lockfile = read("pnpm-lock.yaml");
-  assert.equal(rootPackage.dependencies, undefined);
+  assert.deepEqual(rootPackage.dependencies, {
+    // The main process owns the bounded public trade-feed connection. Keeping
+    // this exact allowlist makes any further runtime dependency an intentional
+    // policy change.
+    ws: "^8.21.3",
+  });
   assert.equal(
     rootPackage.devDependencies?.["@electron-forge/shared-types"],
     "^7.11.2",

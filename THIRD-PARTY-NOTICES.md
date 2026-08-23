@@ -46,6 +46,13 @@ repository, the packaged application, or a release artifact.
 
 ## GWToolbox++ and GuildWarsMapBrowser
 
+Trade Chat interoperates with the public read-only Kamadan and Pre-Searing
+services operated for GWToolbox++ at `kamadan.gwtoolbox.com` and
+`ascalon.gwtoolbox.com`. GWonMac is not affiliated with those services. It uses
+their bounded public WebSocket protocol and links back to the selected source.
+Release remains conditional on confirming the service owner's permission or
+published compatibility expectations.
+
 `src/native/gw-dat/vendor/` is a source port from
 [GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), which distributes it
 under the MIT License and identifies it as derived from
@@ -63,6 +70,12 @@ and cached there. The original Latin UI font is also read from that local game
 archive and converted to a browser font in memory. As with the game cursor
 described above, none of this game content is copied into this repository, the
 packaged application, or any release artifact.
+
+## ws
+
+The main process uses [`ws`](https://github.com/websockets/ws) for bounded
+WebSocket client connections. `ws` is copyright its contributors and is
+distributed under the MIT License.
 
 ## QT Friz Quad
 
