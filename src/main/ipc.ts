@@ -920,6 +920,13 @@ function registerChannelDefinitions(
     const name = key as InvokeChannel;
     ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
       const win = assertSender(windows, event, def.role);
+      const traceSaved = name === "tradeSavedGet" || name === "tradeSavedSet";
+      if (traceSaved) {
+        console.info("[trade:saved] ipc received", {
+          operation: name === "tradeSavedSet" ? "set" : "get",
+          ...tradeSavedArgumentCounts(args),
+        });
+      }
       let input: unknown;
       try {
         input = def.parse(args);
@@ -933,11 +940,59 @@ function registerChannelDefinitions(
             windows.requireDiagnosticOwnerForWindow(win),
           );
         }
+        if (traceSaved) {
+          console.error("[trade:saved] ipc payload rejected", {
+            operation: name === "tradeSavedSet" ? "set" : "get",
+            code: errorCode(error),
+            name: error instanceof Error ? error.name : typeof error,
+            reason: tradeSavedErrorReason(error),
+          });
+        }
         throw error;
       }
-      return def.run(win, input);
+      try {
+        const output = await def.run(win, input);
+        if (traceSaved) {
+          console.info("[trade:saved] ipc completed", {
+            operation: name === "tradeSavedSet" ? "set" : "get",
+          });
+        }
+        return output;
+      } catch (error) {
+        if (traceSaved) {
+          console.error("[trade:saved] ipc failed", {
+            operation: name === "tradeSavedSet" ? "set" : "get",
+            code: errorCode(error),
+            name: error instanceof Error ? error.name : typeof error,
+            reason: tradeSavedErrorReason(error),
+          });
+        }
+        throw error;
+      }
     });
   }
+}
+
+/** Inspect only collection sizes. Saved feed text and player names stay private. */
+function tradeSavedArgumentCounts(args: readonly unknown[]): Readonly<{
+  offers?: number;
+  players?: number;
+}> {
+  const value = args[0];
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  return {
+    ...(Array.isArray(record.offers) ? { offers: record.offers.length } : {}),
+    ...(Array.isArray(record.players) ? { players: record.players.length } : {}),
+  };
+}
+
+function tradeSavedErrorReason(error: unknown): string {
+  if (!(error instanceof Error)) return "non-error";
+  if (error.message === "duplicate saved trade entry") return "duplicate-entry";
+  if (error.message === "invalid saved trade state") return "invalid-state";
+  if (error.message === "trade chat is disabled") return "tools-disabled";
+  return "operation-failed";
 }
 
 export function registerSteamIpcHandlers(

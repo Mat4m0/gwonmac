@@ -24,6 +24,8 @@ export type TradeHost = Readonly<{
 
 export function createNativeTradeHost(api: GwNativeApi): TradeHost {
   const savedApi = api.trade as Partial<GwNativeApi["trade"]>;
+  const getSaved = savedApi.getSaved;
+  const setSaved = savedApi.setSaved;
   return Object.freeze({
     subscribe: (source) => api.trade.subscribe(source),
     unsubscribe: () => api.trade.unsubscribe(),
@@ -34,13 +36,56 @@ export function createNativeTradeHost(api: GwNativeApi): TradeHost {
     openSource: (source) => api.app.openExternal(
       source === "kamadan" ? "kamadanTrade" : "preSearingTrade",
     ),
-    getSaved: () => savedApi.getSaved
-      ? savedApi.getSaved()
-      : Promise.reject(new Error("trade_saved_restart_required")),
-    setSaved: (value) => savedApi.setSaved
-      ? savedApi.setSaved(value)
-      : Promise.reject(new Error("trade_saved_restart_required")),
+    getSaved: () => invokeSaved("get", undefined, getSaved),
+    setSaved: (value) => invokeSaved(
+      "set",
+      { offers: value.offers.length, players: value.players.length },
+      setSaved ? () => setSaved(value) : undefined,
+    ),
   });
+}
+
+async function invokeSaved(
+  operation: "get" | "set",
+  counts: Readonly<{ offers: number; players: number }> | undefined,
+  invoke: (() => Promise<TradeSavedState>) | undefined,
+): Promise<TradeSavedState> {
+  if (!invoke) {
+    console.error("[trade:saved] renderer bridge unavailable", { operation, counts });
+    throw new Error("trade_saved_restart_required");
+  }
+  console.info("[trade:saved] renderer invoke", { operation, counts });
+  try {
+    const saved = await invoke();
+    console.info("[trade:saved] renderer completed", {
+      operation,
+      offers: saved.offers.length,
+      players: saved.players.length,
+    });
+    return saved;
+  } catch (error) {
+    console.error("[trade:saved] renderer failed", {
+      operation,
+      counts,
+      error: rendererError(error),
+    });
+    throw error;
+  }
+}
+
+/** Never let saved player names, offer text, or open-ended errors enter the console. */
+function rendererError(error: unknown): Readonly<{ name: string; reason: string }> {
+  if (!(error instanceof Error)) return { name: typeof error, reason: "non-error" };
+  const reason = error.message.includes("duplicate saved trade entry")
+    ? "duplicate-entry"
+    : error.message.includes("invalid saved trade state")
+      ? "invalid-state"
+      : error.message.includes("No handler registered")
+        ? "missing-ipc-handler"
+        : error.message.includes("trade_saved_restart_required")
+          ? "bridge-unavailable"
+          : "ipc-failed";
+  return { name: error.name, reason };
 }
 
 const DEMO_MESSAGES: readonly TradeMessage[] = [
