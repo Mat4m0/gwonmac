@@ -15,11 +15,13 @@ export function useFloatingWindow(options: {
   initialPosition: { left: number; top: number };
   minWidth: number;
   minHeight: number;
+  viewportMargin?: number;
 }) {
   const panel = ref<HTMLElement | null>(null);
   const resizeGrip = ref<HTMLButtonElement | null>(null);
   const position = ref({ ...options.initialPosition });
   const size = ref<{ width: number; height: number } | null>(null);
+  const margin = options.viewportMargin ?? 0;
   const panelStyle = computed(() => options.mode === "embedded"
     ? {
         left: `${position.value.left}px`,
@@ -32,14 +34,16 @@ export function useFloatingWindow(options: {
 
   const fitToViewport = () => {
     if (options.mode !== "embedded" || !panel.value) return;
-    const width = Math.min(panel.value.offsetWidth, window.innerWidth);
-    const height = Math.min(panel.value.offsetHeight, window.innerHeight);
+    const availableWidth = Math.max(0, window.innerWidth - margin * 2);
+    const availableHeight = Math.max(0, window.innerHeight - margin * 2);
+    const width = Math.min(panel.value.offsetWidth, availableWidth);
+    const height = Math.min(panel.value.offsetHeight, availableHeight);
     if (width !== panel.value.offsetWidth || height !== panel.value.offsetHeight) {
       size.value = { width, height };
     }
     position.value = {
-      left: Math.max(0, Math.min(window.innerWidth - width, position.value.left)),
-      top: Math.max(0, Math.min(window.innerHeight - height, position.value.top)),
+      left: Math.max(margin, Math.min(window.innerWidth - width - margin, position.value.left)),
+      top: Math.max(margin, Math.min(window.innerHeight - height - margin, position.value.top)),
     };
   };
 
@@ -55,12 +59,12 @@ export function useFloatingWindow(options: {
     element.dataset.dragging = "";
     const move = (next: PointerEvent) => {
       position.value = {
-        left: Math.max(0, Math.min(
-          window.innerWidth - element.offsetWidth,
+        left: Math.max(margin, Math.min(
+          window.innerWidth - element.offsetWidth - margin,
           next.clientX - offsetX,
         )),
-        top: Math.max(0, Math.min(
-          window.innerHeight - element.offsetHeight,
+        top: Math.max(margin, Math.min(
+          window.innerHeight - element.offsetHeight - margin,
           next.clientY - offsetY,
         )),
       };
@@ -89,10 +93,10 @@ export function useFloatingWindow(options: {
         return { width: box.width, height: box.height };
       },
       limits: () => ({
-        minWidth: Math.min(options.minWidth, window.innerWidth - position.value.left),
-        minHeight: Math.min(options.minHeight, window.innerHeight - position.value.top),
-        maxWidth: window.innerWidth - position.value.left,
-        maxHeight: window.innerHeight - position.value.top,
+        minWidth: Math.min(options.minWidth, window.innerWidth - position.value.left - margin),
+        minHeight: Math.min(options.minHeight, window.innerHeight - position.value.top - margin),
+        maxWidth: window.innerWidth - position.value.left - margin,
+        maxHeight: window.innerHeight - position.value.top - margin,
       }),
       resize: (width, height) => { size.value = { width, height }; },
       setActive: (active) => {

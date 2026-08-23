@@ -58,10 +58,15 @@ export type TradeSearchRequest = Readonly<{
   query: string;
 }>;
 
+export type TradeSearchMatch = Readonly<{
+  message: TradeMessage;
+  postCount: number;
+}>;
+
 export type TradeSearchResult = Readonly<{
   source: TradeSource;
   query: string;
-  messages: readonly TradeMessage[];
+  matches: readonly TradeSearchMatch[];
 }>;
 
 export type TradeSavedOffer = TradeMessage & Readonly<{ savedAt: number }>;

@@ -5,7 +5,7 @@
  * URLs and reconnect mechanics stop here; subscribers receive only the bounded
  * shared contract and no message text is ever written to diagnostics.
  */
-import WebSocket, { type RawData } from "ws";
+import WebSocket, { type ClientOptions, type RawData } from "ws";
 import {
   TRADE_LIMITS,
   TRADE_SOURCES,
@@ -14,6 +14,7 @@ import {
   type TradeConnectionState,
   type TradeEvent,
   type TradeMessage,
+  type TradeSearchMatch,
   type TradeSearchResult,
   type TradeSnapshot,
   type TradeSource,
@@ -25,11 +26,24 @@ const PING_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 10_000;
 const RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000] as const;
 
+type TradeServiceTiming = Readonly<{
+  searchTimeoutMs: number;
+  pingIntervalMs: number;
+  pongTimeoutMs: number;
+  reconnectDelaysMs: readonly number[];
+}>;
+
+export type TradeChatServiceOptions = Readonly<{
+  createSocket?: (url: string, options: ClientOptions) => WebSocket;
+  random?: () => number;
+  timing?: Partial<TradeServiceTiming>;
+}>;
+
 type Listener = (event: TradeEvent) => void;
 
 type PendingSearch = {
-  readonly promise: Promise<TradeSearchResult>;
-  readonly resolve: (result: TradeSearchResult) => void;
+  readonly promise: Promise<readonly TradeMessage[]>;
+  readonly resolve: (result: readonly TradeMessage[]) => void;
   readonly reject: (reason: Error) => void;
   readonly timer: ReturnType<typeof setTimeout>;
 };
@@ -53,6 +67,21 @@ export class TradeChatService {
     TRADE_SOURCES.map((source) => [source, createFeed(source)]),
   );
   readonly #subscriptions = new Map<number, TradeSource>();
+  readonly #createSocket: (url: string, options: ClientOptions) => WebSocket;
+  readonly #random: () => number;
+  readonly #timing: TradeServiceTiming;
+
+  constructor(options: TradeChatServiceOptions = {}) {
+    this.#createSocket = options.createSocket ?? ((url, socketOptions) =>
+      new WebSocket(url, socketOptions));
+    this.#random = options.random ?? Math.random;
+    this.#timing = {
+      searchTimeoutMs: options.timing?.searchTimeoutMs ?? SEARCH_TIMEOUT_MS,
+      pingIntervalMs: options.timing?.pingIntervalMs ?? PING_INTERVAL_MS,
+      pongTimeoutMs: options.timing?.pongTimeoutMs ?? PONG_TIMEOUT_MS,
+      reconnectDelaysMs: options.timing?.reconnectDelaysMs ?? RECONNECT_DELAYS_MS,
+    };
+  }
 
   subscribe(id: number, source: TradeSource, listener: Listener): TradeSnapshot {
     this.unsubscribe(id);
@@ -80,6 +109,22 @@ export class TradeChatService {
     if (this.#subscriptions.get(id) !== source) {
       return Promise.reject(new Error("trade source is not subscribed"));
     }
+    const playerQuery = `user:${query}`;
+    const queries = [query];
+    if ([...playerQuery].length <= TRADE_LIMITS.queryCharacters) queries.push(playerQuery);
+    return Promise.allSettled(queries.map((candidate) => this.#query(source, candidate)))
+      .then((results) => {
+        const messages = results.flatMap((result) => result.status === "fulfilled"
+          ? result.value
+          : []);
+        if (messages.length === 0 && results.every((result) => result.status === "rejected")) {
+          throw new Error("trade search failed");
+        }
+        return Object.freeze({ source, query, matches: groupSearchMatches(messages) });
+      });
+  }
+
+  #query(source: TradeSource, query: string): Promise<readonly TradeMessage[]> {
     const feed = this.#feed(source);
     if (feed.socket?.readyState !== WebSocket.OPEN) {
       return Promise.reject(new Error("trade feed is not connected"));
@@ -87,9 +132,9 @@ export class TradeChatService {
     const existing = feed.pendingSearches.get(query);
     if (existing) return existing.promise;
 
-    let resolve!: (result: TradeSearchResult) => void;
+    let resolve!: (result: readonly TradeMessage[]) => void;
     let reject!: (reason: Error) => void;
-    const promise = new Promise<TradeSearchResult>((accept, refuse) => {
+    const promise = new Promise<readonly TradeMessage[]>((accept, refuse) => {
       resolve = accept;
       reject = refuse;
     });
@@ -98,7 +143,7 @@ export class TradeChatService {
       if (!pending) return;
       feed.pendingSearches.delete(query);
       pending.reject(new Error("trade search timed out"));
-    }, SEARCH_TIMEOUT_MS);
+    }, this.#timing.searchTimeoutMs);
     feed.pendingSearches.set(query, { promise, resolve, reject, timer });
     feed.socket.send(JSON.stringify({ query }), (error) => {
       if (!error) return;
@@ -133,7 +178,7 @@ export class TradeChatService {
     if (feed.socket || feed.subscribers.size === 0) return;
     feed.closing = false;
     this.#setStatus(feed, feed.reconnectAttempt === 0 ? "connecting" : "reconnecting");
-    const socket = new WebSocket(TRADE_SOURCE_URLS[feed.source].websocket, {
+    const socket = this.#createSocket(TRADE_SOURCE_URLS[feed.source].websocket, {
       followRedirects: false,
       handshakeTimeout: CONNECT_TIMEOUT_MS,
       maxPayload: TRADE_LIMITS.payloadBytes,
@@ -191,11 +236,7 @@ export class TradeChatService {
       if (!pending) return;
       feed.pendingSearches.delete(payload.query);
       clearTimeout(pending.timer);
-      pending.resolve(Object.freeze({
-        source: feed.source,
-        query: payload.query,
-        messages: payload.messages,
-      }));
+      pending.resolve(payload.messages);
       return;
     }
     this.#insertMessage(feed, payload.message);
@@ -224,16 +265,16 @@ export class TradeChatService {
       if (feed.socket !== socket || socket.readyState !== WebSocket.OPEN) return;
       socket.ping();
       if (feed.pongTimer) clearTimeout(feed.pongTimer);
-      feed.pongTimer = setTimeout(() => socket.terminate(), PONG_TIMEOUT_MS);
-    }, PING_INTERVAL_MS);
+      feed.pongTimer = setTimeout(() => socket.terminate(), this.#timing.pongTimeoutMs);
+    }, this.#timing.pingIntervalMs);
   }
 
   #scheduleReconnect(feed: Feed): void {
     this.#setStatus(feed, "reconnecting");
-    const index = Math.min(feed.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1);
-    const base = RECONNECT_DELAYS_MS[index]!;
+    const index = Math.min(feed.reconnectAttempt, this.#timing.reconnectDelaysMs.length - 1);
+    const base = this.#timing.reconnectDelaysMs[index]!;
     feed.reconnectAttempt += 1;
-    const delay = Math.round(base * (0.8 + Math.random() * 0.4));
+    const delay = Math.round(base * (0.8 + this.#random() * 0.4));
     feed.reconnectTimer = setTimeout(() => {
       feed.reconnectTimer = null;
       this.#connect(feed);
@@ -293,6 +334,21 @@ export class TradeChatService {
   #feed(source: TradeSource): Feed {
     return this.#feeds.get(source)!;
   }
+}
+
+function groupSearchMatches(messages: readonly TradeMessage[]): readonly TradeSearchMatch[] {
+  const unique = new Map<number, TradeMessage>();
+  for (const message of messages) unique.set(message.timestamp, message);
+  const groups = new Map<string, { message: TradeMessage; postCount: number }>();
+  for (const message of [...unique.values()].sort((a, b) => b.timestamp - a.timestamp)) {
+    const key = message.sender.toLocaleLowerCase();
+    const group = groups.get(key);
+    if (group) group.postCount += 1;
+    else groups.set(key, { message, postCount: 1 });
+  }
+  return Object.freeze([...groups.values()]
+    .slice(0, TRADE_LIMITS.searchResults)
+    .map((match) => Object.freeze(match)));
 }
 
 function createFeed(source: TradeSource): Feed {

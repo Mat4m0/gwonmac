@@ -53,8 +53,19 @@
 }
 
 .saved-trigger { white-space: nowrap; }
-.saved-trigger > span:first-child,
+.saved-trigger > .trade-icon,
 .saved-count { color: var(--ui-accent); }
+
+.trade-icon {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.15em;
+}
 
 .trade-search {
   display: grid;
@@ -175,15 +186,15 @@
 .row-quick-action:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 1px; }
 
 .trade-row:hover { background: var(--ui-hover); }
-.trade-row[aria-selected="true"] {
+.trade-row[aria-current="true"] {
   background: var(--ui-selected);
   box-shadow: var(--ui-shadow-row-selected);
 }
 .trade-row[data-saved-offer] {
-  box-shadow: inset 3px 0 0 var(--ui-accent);
+  box-shadow: inset 1px 0 0 var(--ui-accent);
 }
-.trade-row[data-saved-offer][aria-selected="true"] {
-  box-shadow: inset 3px 0 0 var(--ui-accent), var(--ui-shadow-row-selected);
+.trade-row[data-saved-offer][aria-current="true"] {
+  box-shadow: inset 1px 0 0 var(--ui-accent), var(--ui-shadow-row-selected);
 }
 .trade-row:focus-visible {
   position: relative;
@@ -307,7 +318,7 @@
   justify-content: center;
   gap: var(--ui-space-2);
 }
-.inspector-actions .ui-button { min-height: 34px; padding-inline: var(--ui-space-2); }
+.inspector-actions .ui-button { min-height: 34px; gap: var(--ui-space-1); padding-inline: var(--ui-space-2); }
 .inspector-actions .ui-link { padding-inline: var(--ui-space-1); white-space: nowrap; }
 .trade-inspector .mobile-back { display: none; }
 
@@ -354,9 +365,10 @@
 }
 .saved-card-main > span { display: grid; min-width: 0; gap: var(--ui-space-1); }
 .saved-card-main bdi { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-card-main bdi .trade-icon { margin-right: var(--ui-space-1); }
 .saved-card-main > bdi { color: var(--ui-text-muted); }
 .saved-card-main small { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
-.saved-remove { color: var(--ui-accent); font-size: var(--ui-font-size-lg); }
+.saved-remove { display: grid; place-items: center; color: var(--ui-accent); font-size: var(--ui-font-size-lg); }
 .saved-card-main:hover,
 .saved-remove:hover { background: var(--ui-hover); }
 .saved-card-main:active,

@@ -13,7 +13,7 @@
  * arguments and either forwards one owner-local capability directly or calls
  * the workflow owner; it returns codes rather than inventing prose.
  */
-import { clipboard, ipcMain, shell, type BrowserWindow } from "electron";
+import { clipboard, shell, type BrowserWindow } from "electron";
 import type {
   AppSettings,
   AppSettingsPatch,
@@ -64,7 +64,6 @@ import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import {
   AllowlistError,
-  AppError,
   errorCode,
   ValidationError,
 } from "../shared/errors.js";
@@ -110,10 +109,6 @@ import {
   startDnsResolveSpan,
 } from "./diagnostics.js";
 import { gamePaths } from "./paths.js";
-import {
-  isAccountsRendererUrl,
-  isCanonicalRendererUrl,
-} from "./core/renderer-trust.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
 import { windowRegistry, type WindowRegistry } from "./window-registry.js";
@@ -128,6 +123,13 @@ import {
   requestGameStorageReset,
 } from "./settings-actions.js";
 import { editGameText } from './game-text-editing.js';
+import {
+  channel,
+  registerChannelDefinitions,
+  sendIfLive,
+  type AnyChannelDef,
+  type Parser,
+} from "./ipc-channel-registry.js";
 import {
   parseTradeSearchRequest,
   parseTradeSavedState,
@@ -198,76 +200,6 @@ export interface IpcContext {
 }
 
 type SteamInvokeChannel = "steamToken" | "steamStore" | "steamClear";
-
-function assertSender(
-  registry: WindowRegistry,
-  event: Electron.IpcMainInvokeEvent,
-  role: "game" | "hub" | "any",
-): BrowserWindow {
-  const win = registry.windowForWebContents(event.sender.id);
-  const context = registry.contextForWebContents(event.sender.id);
-  if (!win || !context || (role !== "any" && context.role !== role)) {
-    throw new AllowlistError("unowned ipc sender");
-  }
-  if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
-    throw new AllowlistError("ipc sender is not the main frame");
-  }
-  const trusted = context.role === "hub"
-    ? isAccountsRendererUrl(event.senderFrame.url)
-    : isCanonicalRendererUrl(event.senderFrame.url);
-  if (!trusted) {
-    throw new AllowlistError("invalid ipc origin");
-  }
-  return win;
-}
-
-function sendIfLive(win: BrowserWindow, channel: string, value: unknown): boolean {
-  if (win.isDestroyed() || win.webContents.isDestroyed()) return false;
-  try {
-    win.webContents.send(channel, value);
-    return true;
-  } catch {
-    // Renderer destruction can race the checks above. Socket callbacks are
-    // native and synchronous, so that ordinary teardown must not escape into
-    // the process-wide fatal-error handler.
-    return false;
-  }
-}
-
-/**
- * Turns the raw `invoke` arguments into the handler's input, or throws. One per
- * channel, and no channel can be registered without one.
- */
-type Parser<In> = (args: readonly unknown[]) => In;
-type Run<In, Out> = (win: BrowserWindow, input: In) => Out | Promise<Out>;
-
-interface ChannelDef<In, Out> {
-  readonly parse: Parser<In>;
-  readonly run: Run<In, Out>;
-  readonly role: "game" | "hub" | "any";
-}
-
-/**
- * A definition with its input type erased, for the `satisfies` constraint.
- * `ChannelDef` is invariant in `In` — `In` is the return of `parse` and a
- * parameter of `run` — so the erasure has to widen each side in its own
- * direction: `parse` to `unknown`, `run` to `never`. That accepts every
- * `channel()` result without an `any` anywhere.
- */
-interface AnyChannelDef {
-  readonly parse: Parser<unknown>;
-  readonly run: Run<never, unknown>;
-  readonly role: "game" | "hub" | "any";
-}
-
-/** You cannot construct a channel without a parser. That is the point. */
-function channel<In, Out>(
-  parse: Parser<In>,
-  run: Run<In, Out>,
-  role: "game" | "hub" | "any" = "game",
-): ChannelDef<In, Out> {
-  return { parse, run, role };
-}
 
 /** For the channels that carry nothing. Still a parser, still explicit. */
 const exact = (args: readonly unknown[], count: number): void => {
@@ -625,20 +557,12 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     tradeSavedGet: channel(nothing, async () => {
       await requireTradeEnabled();
-      try {
-        return await ctx.getTradeSaved();
-      } catch (error) {
-        throw tradeSavedOperationError("get", error);
-      }
+      return ctx.getTradeSaved();
     }),
 
     tradeSavedSet: channel(one(parseTradeSavedState), async (_win, value) => {
       await requireTradeEnabled();
-      try {
-        return await ctx.setTradeSaved(value);
-      } catch (error) {
-        throw tradeSavedOperationError("set", error);
-      }
+      return ctx.setTradeSaved(value);
     }),
 
     tradeSearch: channel(asTradeSearchRequest, async (win, request) => {
@@ -907,128 +831,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
       }
     },
   };
-}
-
-function registerChannelDefinitions(
-  windows: WindowRegistry,
-  handlers: Partial<Record<InvokeChannel, AnyChannelDef>>,
-): void {
-  // One registration, uniform and total: `assertSender` first, then the
-  // channel's own parser, then its run. The cast is the erasure `satisfies`
-  // left behind — `parse` produced exactly what `run` takes when `channel()`
-  // typechecked the pair.
-  //
-  // A refused payload is recorded here rather than by the handler, because the
-  // handler is never entered. Two channels used to parse inside their own
-  // `try` and log `credentials.saveFailed` / `settings.saveFailed`; one event
-  // in the loop keeps that evidence for a bug report and extends it to all
-  // thirty, so a "saved login stopped working" export shows the rejection
-  // instead of nothing.
-  for (const [key, definition] of Object.entries(handlers)) {
-    const def = definition as ChannelDef<unknown, unknown>;
-    const name = key as InvokeChannel;
-    ipcMain.handle(IPC[name], async (event, ...args: unknown[]) => {
-      const win = assertSender(windows, event, def.role);
-      const traceSaved = name === "tradeSavedGet" || name === "tradeSavedSet";
-      if (traceSaved) {
-        console.info("[trade:saved] ipc received", {
-          operation: name === "tradeSavedSet" ? "set" : "get",
-          ...tradeSavedArgumentCounts(args),
-        });
-      }
-      let input: unknown;
-      try {
-        input = def.parse(args);
-      } catch (error) {
-        const context = windows.contextForWebContents(win.webContents.id);
-        // Hub input has no account owner and must never become global evidence
-        // in every account's export. Game input always has its exact owner.
-        if (context?.role === "game") {
-          logEvent(
-            { k: "ipc.rejected", channel: name, code: errorCode(error) },
-            windows.requireDiagnosticOwnerForWindow(win),
-          );
-        }
-        if (traceSaved) {
-          console.error("[trade:saved] ipc payload rejected", {
-            operation: name === "tradeSavedSet" ? "set" : "get",
-            code: errorCode(error),
-            name: error instanceof Error ? error.name : typeof error,
-            reason: tradeSavedErrorReason(error),
-          });
-        }
-        throw error;
-      }
-      try {
-        const output = await def.run(win, input);
-        if (traceSaved) {
-          console.info("[trade:saved] ipc completed", {
-            operation: name === "tradeSavedSet" ? "set" : "get",
-          });
-        }
-        return output;
-      } catch (error) {
-        if (traceSaved) {
-          console.error("[trade:saved] ipc failed", {
-            operation: name === "tradeSavedSet" ? "set" : "get",
-            code: errorCode(error),
-            name: error instanceof Error ? error.name : typeof error,
-            reason: tradeSavedErrorReason(error),
-          });
-        }
-        throw error;
-      }
-    });
-  }
-}
-
-/** Inspect only collection sizes. Saved feed text and player names stay private. */
-function tradeSavedArgumentCounts(args: readonly unknown[]): Readonly<{
-  offers?: number;
-  players?: number;
-}> {
-  const value = args[0];
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const record = value as Record<string, unknown>;
-  return {
-    ...(Array.isArray(record.offers) ? { offers: record.offers.length } : {}),
-    ...(Array.isArray(record.players) ? { players: record.players.length } : {}),
-  };
-}
-
-function tradeSavedErrorReason(error: unknown): string {
-  if (!(error instanceof Error)) return "non-error";
-  if (error.message === "duplicate saved trade entry") return "duplicate-entry";
-  if (error.message === "invalid saved trade state") return "invalid-state";
-  if (error.message === "trade chat is disabled") return "tools-disabled";
-  return "operation-failed";
-}
-
-/** Send only a bounded technical reason across Electron's otherwise opaque rejection. */
-function tradeSavedOperationError(
-  operation: "get" | "set",
-  error: unknown,
-): AppError {
-  const code = errorCode(error);
-  const reason = code !== "unknown"
-    ? code
-    : technicalErrorReason(error);
-  return new AppError(
-    code,
-    `trade_saved_${operation}_failed:${reason}`,
-    { cause: error },
-  );
-}
-
-function technicalErrorReason(error: unknown): string {
-  if (!(error instanceof Error)) return "non-error";
-  const rawCode = "code" in error && typeof error.code === "string"
-    ? error.code
-    : "";
-  if (/^[A-Z][A-Z0-9_]{1,31}$/u.test(rawCode)) return rawCode.toLocaleLowerCase();
-  return /^[A-Za-z][A-Za-z0-9]{0,31}Error$/u.test(error.name)
-    ? error.name.toLocaleLowerCase()
-    : "unclassified";
 }
 
 export function registerSteamIpcHandlers(

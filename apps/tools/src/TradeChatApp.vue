@@ -15,11 +15,20 @@ import {
   type TradeConnectionState,
   type TradeEvent,
   type TradeMessage,
+  type TradeSearchMatch,
   type TradeSavedOffer,
   type TradeSavedState,
   type TradeSource,
 } from "../../../src/shared/trade-chat";
+import {
+  insertTradeMessage,
+  liveLedgerRows,
+  searchLedgerRows,
+  tradeMessageIntents,
+  type TradeIntent,
+} from "./trade-ledger";
 import { useFloatingWindow } from "./use-floating-window";
+import TradeIcon from "./TradeIcon.vue";
 
 const props = defineProps<{
   host: TradeHost;
@@ -29,17 +38,17 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: []; ready: [] }>();
 
-type Intent = "all" | "selling" | "buying";
 type SourceState = {
   status: TradeConnectionState;
   live: TradeMessage[];
   pending: TradeMessage[];
-  search: TradeMessage[];
+  search: TradeSearchMatch[];
   selection: number | null;
+  savedSelection: number | null;
 };
 
 const source = ref<TradeSource>("kamadan");
-const intent = ref<Intent>("all");
+const intent = ref<TradeIntent>("all");
 const query = ref("");
 const submittedQuery = ref("");
 const searching = ref(false);
@@ -49,6 +58,7 @@ const detailOpen = ref(false);
 const savedOpen = ref(false);
 const savedTab = ref<"offers" | "players">("offers");
 const saved = ref<TradeSavedState>({ offers: [], players: [] });
+const savedReady = ref(false);
 const savedButton = ref<HTMLButtonElement | null>(null);
 const savedClose = ref<HTMLButtonElement | null>(null);
 const visibleLimit = ref(25);
@@ -64,6 +74,7 @@ const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
   initialPosition: { left: 64, top: 54 },
   minWidth: 520,
   minHeight: 400,
+  viewportMargin: 32,
 });
 
 const current = computed(() => states[source.value]);
@@ -74,39 +85,20 @@ const statusLabel = computed(() => ({
   reconnecting: "Reconnecting",
   unavailable: "Unavailable",
 })[current.value.status]);
-const baseMessages = computed(() => submittedQuery.value
-  ? current.value.search
-  : current.value.live);
-const intentMatches = computed(() => baseMessages.value.filter((message) => {
-  const tags = messageIntents(message.message);
-  return intent.value === "all" || tags.includes(intent.value);
-}));
-const displayedRows = computed(() => {
-  if (!submittedQuery.value) {
-    return intentMatches.value.map((message) => ({ message, count: 1 }));
-  }
-  const groups = new Map<string, { message: TradeMessage; count: number }>();
-  for (const message of sortNewest([...intentMatches.value])) {
-    const key = message.sender.toLocaleLowerCase();
-    const existing = groups.get(key);
-    if (existing) existing.count += 1;
-    else groups.set(key, { message, count: 1 });
-  }
-  return [...groups.values()];
-});
+const displayedRows = computed(() => submittedQuery.value
+  ? searchLedgerRows(current.value.search, intent.value)
+  : liveLedgerRows(current.value.live, intent.value));
 const filtered = computed(() => displayedRows.value.map((row) => row.message));
 const visibleMessages = computed(() => filtered.value.slice(0, visibleLimit.value));
 const selected = computed(() => {
   const timestamp = current.value.selection;
   return timestamp === null
     ? null
-    : [
-      ...current.value.live,
-      ...current.value.search,
-      ...current.value.pending,
-      ...saved.value.offers.filter((offer) => offer.source === source.value),
-    ]
-      .find((message) => message.timestamp === timestamp) ?? null;
+    : current.value.savedSelection === timestamp
+      ? saved.value.offers.find((offer) =>
+          offer.source === source.value && offer.timestamp === timestamp
+        ) ?? null
+      : displayedRows.value.find((row) => row.message.timestamp === timestamp)?.message ?? null;
 });
 const savedCount = computed(() => saved.value.offers.length + saved.value.players.length);
 const emptyHeading = computed(() => {
@@ -118,13 +110,16 @@ const emptyHeading = computed(() => {
 });
 
 function groupedPostCount(message: TradeMessage): number {
-  return displayedRows.value.find((row) => row.message.timestamp === message.timestamp)?.count ?? 1;
+  return displayedRows.value.find((row) => row.message.timestamp === message.timestamp)?.postCount ?? 1;
 }
 
 let requestRevision = 0;
 let stopEvents: (() => void) | null = null;
 let clock: ReturnType<typeof setInterval> | null = null;
 let noticeTimer: number | null = null;
+let savedRevision = 0;
+let confirmedSaved: TradeSavedState = { offers: [], players: [] };
+let savedWrites = Promise.resolve();
 const now = ref(Date.now());
 
 async function subscribe(next: TradeSource): Promise<void> {
@@ -137,7 +132,7 @@ async function subscribe(next: TradeSource): Promise<void> {
     if (revision !== requestRevision || source.value !== next || !props.visible) return;
     target.status = snapshot.status;
     target.live = [...snapshot.messages];
-    ensureSelection(target, target.live);
+    ensureSelection(target, displayedRows.value.map((row) => row.message), next);
     emit("ready");
     if (submittedQuery.value) await runSearch(revision);
   } catch {
@@ -152,28 +147,21 @@ async function runSearch(existingRevision?: number): Promise<void> {
   searchProblem.value = "";
   if (!trimmed) {
     searching.value = false;
-    ensureSelection(current.value, current.value.live);
+    ensureSelection(current.value, current.value.live, source.value);
     return;
   }
   const revision = existingRevision ?? ++requestRevision;
   const requestedSource = source.value;
   searching.value = true;
   try {
-    const requests = [props.host.search({ source: requestedSource, query: trimmed })];
-    const playerQuery = `user:${trimmed}`;
-    if (
-      !trimmed.toLocaleLowerCase().startsWith("user:")
-      && [...playerQuery].length <= TRADE_LIMITS.queryCharacters
-    ) {
-      requests.push(props.host.search({ source: requestedSource, query: playerQuery }));
-    }
-    const results = await Promise.all(requests);
+    const result = await props.host.search({ source: requestedSource, query: trimmed });
     if (revision !== requestRevision || source.value !== requestedSource) return;
-    current.value.search = sortNewest([...new Map(
-      results.flatMap((result) => result.messages)
-        .map((message) => [message.timestamp, message] as const),
-    ).values()]).slice(0, TRADE_LIMITS.searchResults);
-    ensureSelection(current.value, current.value.search);
+    current.value.search = [...result.matches];
+    ensureSelection(
+      current.value,
+      current.value.search.map((match) => match.message),
+      source.value,
+    );
   } catch {
     if (revision === requestRevision) {
       current.value.search = [];
@@ -196,7 +184,7 @@ function clearSearch(): void {
   searching.value = false;
   visibleLimit.value = 25;
   requestRevision += 1;
-  ensureSelection(current.value, current.value.live);
+  ensureSelection(current.value, current.value.live, source.value);
 }
 
 function onTradeEvent(event: TradeEvent): void {
@@ -211,19 +199,19 @@ function onTradeEvent(event: TradeEvent): void {
   )) return;
   const nearTop = event.source !== source.value || !list.value || list.value.scrollTop < 36;
   if (nearTop) {
-    target.live = sortNewest([event.message, ...target.live]).slice(0, TRADE_LIMITS.liveMessages);
+    target.live = insertTradeMessage(target.live, event.message);
   } else {
-    target.pending = sortNewest([event.message, ...target.pending]);
+    target.pending = insertTradeMessage(target.pending, event.message);
   }
-  ensureSelection(target, target.live);
+  ensureSelection(target, target.live, event.source);
 }
 
 function commitPending(): void {
   if (!current.value.pending.length) return;
-  current.value.live = sortNewest([
-    ...current.value.pending,
-    ...current.value.live,
-  ]).slice(0, TRADE_LIMITS.liveMessages);
+  current.value.live = current.value.pending.reduce(
+    (messages, message) => insertTradeMessage(messages, message),
+    current.value.live,
+  );
   current.value.pending = [];
 }
 
@@ -239,6 +227,7 @@ function onListScroll(event: Event): void {
 
 function selectMessage(message: TradeMessage): void {
   current.value.selection = message.timestamp;
+  current.value.savedSelection = null;
   detailOpen.value = true;
 }
 
@@ -268,21 +257,23 @@ function playerSaved(sender: string): boolean {
   return saved.value.players.some((player) => player.sender.toLocaleLowerCase() === key);
 }
 
-async function save(next: TradeSavedState, success: string): Promise<void> {
-  const previous = saved.value;
+function save(next: TradeSavedState, success: string): void {
+  const revision = ++savedRevision;
   saved.value = next;
-  try {
-    saved.value = await props.host.setSaved(next);
-    showNotice(success);
-  } catch (cause) {
-    saved.value = previous;
-    showNotice(cause instanceof Error && cause.message === "trade_saved_restart_required"
-      ? "Restart GWonMac once to enable Saved items."
-      : "Saved items could not be updated.");
-  }
+  savedWrites = savedWrites.then(async () => {
+    try {
+      confirmedSaved = await props.host.setSaved(next);
+      if (revision === savedRevision) saved.value = confirmedSaved;
+      showNotice(success);
+    } catch {
+      if (revision === savedRevision) saved.value = confirmedSaved;
+      showNotice("Saved items could not be updated. Try again.");
+    }
+  });
 }
 
 function toggleOffer(message: TradeMessage): void {
+  if (!savedReady.value) return;
   const exists = offerSaved(message);
   const offers = exists
     ? saved.value.offers.filter((offer) =>
@@ -290,17 +281,18 @@ function toggleOffer(message: TradeMessage): void {
     )
     : [{ ...message, savedAt: Date.now() }, ...saved.value.offers]
       .slice(0, TRADE_LIMITS.savedOffers);
-  void save({ ...saved.value, offers }, exists ? "Offer removed" : "Offer saved");
+  save({ ...saved.value, offers }, exists ? "Offer removed" : "Offer saved");
 }
 
 function togglePlayer(sender: string): void {
+  if (!savedReady.value) return;
   const key = sender.toLocaleLowerCase();
   const exists = playerSaved(sender);
   const players = exists
     ? saved.value.players.filter((player) => player.sender.toLocaleLowerCase() !== key)
     : [{ sender, savedAt: Date.now() }, ...saved.value.players]
       .slice(0, TRADE_LIMITS.savedPlayers);
-  void save({ ...saved.value, players }, exists ? "Player unfollowed" : "Player followed");
+  save({ ...saved.value, players }, exists ? "Player unfollowed" : "Player followed");
 }
 
 function openSaved(): void {
@@ -314,11 +306,12 @@ function closeSaved(): void {
 }
 
 async function inspectSavedOffer(offer: TradeSavedOffer): Promise<void> {
+  states[offer.source].selection = offer.timestamp;
+  states[offer.source].savedSelection = offer.timestamp;
   if (source.value !== offer.source) {
     source.value = offer.source;
     await nextTick();
   }
-  states[offer.source].selection = offer.timestamp;
   detailOpen.value = true;
   savedOpen.value = false;
 }
@@ -373,6 +366,9 @@ watch(source, (next) => {
   visibleLimit.value = 25;
   if (props.visible) void subscribe(next);
 });
+watch(displayedRows, (rows) => {
+  ensureSelection(current.value, rows.map((row) => row.message), source.value);
+});
 watch(() => props.visible, (visible) => {
   if (visible) void subscribe(source.value);
   else {
@@ -386,10 +382,12 @@ onMounted(() => {
   window.addEventListener("keydown", onWindowKeydown);
   clock = setInterval(() => { now.value = Date.now(); }, 30_000);
   if (props.visible) void subscribe(source.value);
-  void props.host.getSaved().then((value) => { saved.value = value; }).catch((cause: unknown) => {
-    showNotice(cause instanceof Error && cause.message === "trade_saved_restart_required"
-      ? "Restart GWonMac once to enable Saved items."
-      : "Saved items are unavailable for this session.");
+  void props.host.getSaved().then((value) => {
+    confirmedSaved = value;
+    saved.value = value;
+    savedReady.value = true;
+  }).catch(() => {
+    showNotice("Saved items are unavailable for this session.");
   });
 });
 onBeforeUnmount(() => {
@@ -402,12 +400,24 @@ onBeforeUnmount(() => {
 });
 
 function state(): SourceState {
-  return { status: "unavailable", live: [], pending: [], search: [], selection: null };
+  return {
+    status: "unavailable",
+    live: [],
+    pending: [],
+    search: [],
+    selection: null,
+    savedSelection: null,
+  };
 }
-function sortNewest(messages: TradeMessage[]): TradeMessage[] {
-  return messages.sort((left, right) => right.timestamp - left.timestamp);
-}
-function ensureSelection(target: SourceState, messages: readonly TradeMessage[]): void {
+function ensureSelection(
+  target: SourceState,
+  messages: readonly TradeMessage[],
+  targetSource: TradeSource,
+): void {
+  if (target.savedSelection !== null && saved.value.offers.some((offer) =>
+    offer.source === targetSource && offer.timestamp === target.savedSelection
+  )) return;
+  target.savedSelection = null;
   if (!messages.some((message) => message.timestamp === target.selection)) {
     target.selection = messages[0]?.timestamp ?? null;
   }
@@ -416,13 +426,7 @@ function removeReplacement(target: SourceState, timestamp: number | undefined): 
   if (timestamp === undefined) return;
   target.live = target.live.filter((message) => message.timestamp !== timestamp);
   target.pending = target.pending.filter((message) => message.timestamp !== timestamp);
-  target.search = target.search.filter((message) => message.timestamp !== timestamp);
-}
-function messageIntents(message: string): Intent[] {
-  const selling = /(?:^|[^a-z0-9])wts(?:$|[^a-z0-9])/iu.test(message);
-  const buying = /(?:^|[^a-z0-9])wtb(?:$|[^a-z0-9])/iu.test(message);
-  return [selling ? "selling" : null, buying ? "buying" : null]
-    .filter((value): value is Intent => value !== null);
+  target.search = target.search.filter(({ message }) => message.timestamp !== timestamp);
 }
 function age(timestamp: number): string {
   const seconds = Math.max(0, Math.floor((now.value - timestamp) / 1000));
@@ -514,8 +518,9 @@ function exactTime(timestamp: number): string {
             class="ui-button saved-trigger"
             :aria-expanded="savedOpen"
             aria-controls="trade-saved-drawer"
+            :disabled="!savedReady"
             @click="savedOpen ? closeSaved() : openSaved()"
-          ><span aria-hidden="true">★</span> Saved <span class="saved-count">{{ savedCount }}</span></button>
+          ><TradeIcon name="star" :filled="savedCount > 0" /> Saved <span class="saved-count">{{ savedCount }}</span></button>
         </div>
       </div>
 
@@ -556,7 +561,7 @@ function exactTime(timestamp: number): string {
           v-else
           ref="list"
           class="trade-list ui-scroll"
-          role="listbox"
+          role="list"
           aria-label="Trade offers"
           @scroll="onListScroll"
           @keydown="onListKeydown"
@@ -565,26 +570,25 @@ function exactTime(timestamp: number): string {
             v-for="message in visibleMessages"
             :key="message.timestamp"
             class="trade-row-shell"
-            role="presentation"
+            role="listitem"
           >
             <button
               class="trade-row"
-              role="option"
               :data-timestamp="message.timestamp"
               :data-saved-offer="offerSaved(message) ? '' : undefined"
               :data-saved-player="playerSaved(message.sender) ? '' : undefined"
-              :aria-selected="current.selection === message.timestamp"
+              :aria-current="current.selection === message.timestamp ? 'true' : undefined"
               @click="selectMessage(message)"
             >
               <span class="intent-cell">
-                <span v-if="offerSaved(message)" class="saved-mark" aria-label="Saved offer">★</span>
-                <span v-for="tag in messageIntents(message.message)" :key="tag" class="ui-chip" :data-intent="tag">
+                <span v-if="offerSaved(message)" class="saved-mark" aria-label="Saved offer"><TradeIcon name="star" filled /></span>
+                <span v-for="tag in tradeMessageIntents(message.message)" :key="tag" class="ui-chip" :data-intent="tag">
                   {{ tag === "selling" ? "WTS" : "WTB" }}
                 </span>
-                <span v-if="!messageIntents(message.message).length" class="ui-chip">Other</span>
+                <span v-if="!tradeMessageIntents(message.message).length" class="ui-chip">Other</span>
               </span>
               <span class="character-cell">
-                <span v-if="playerSaved(message.sender)" class="followed-mark" aria-label="Followed player">★</span>
+                <span v-if="playerSaved(message.sender)" class="followed-mark" aria-label="Followed player"><TradeIcon name="player" filled /></span>
                 <bdi>{{ message.sender }}</bdi>
                 <span
                   v-if="groupedPostCount(message) > 1"
@@ -600,16 +604,18 @@ function exactTime(timestamp: number): string {
                 class="row-quick-action"
                 :aria-label="`${offerSaved(message) ? 'Remove saved' : 'Save'} offer from ${message.sender}`"
                 :aria-pressed="offerSaved(message)"
+                :disabled="!savedReady"
                 :title="offerSaved(message) ? 'Remove saved offer' : 'Save offer'"
                 @click="toggleOffer(message)"
-              >{{ offerSaved(message) ? "★" : "☆" }}</button>
+              ><TradeIcon name="star" :filled="offerSaved(message)" /></button>
               <button
                 class="row-quick-action"
                 :aria-label="`${playerSaved(message.sender) ? 'Unfollow' : 'Follow'} ${message.sender}`"
                 :aria-pressed="playerSaved(message.sender)"
+                :disabled="!savedReady"
                 :title="playerSaved(message.sender) ? 'Unfollow player' : 'Follow player'"
                 @click="togglePlayer(message.sender)"
-              ><span aria-hidden="true">{{ playerSaved(message.sender) ? "♟" : "♙" }}</span></button>
+              ><TradeIcon name="player" :filled="playerSaved(message.sender)" /></button>
             </div>
           </div>
           <button
@@ -639,13 +645,15 @@ function exactTime(timestamp: number): string {
             <button
               class="ui-button"
               :aria-pressed="offerSaved(selected)"
+              :disabled="!savedReady"
               @click="toggleOffer(selected)"
-            >{{ offerSaved(selected) ? "★ Saved" : "☆ Save" }}</button>
+            ><TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save" }}</button>
             <button
               class="ui-button"
               :aria-pressed="playerSaved(selected.sender)"
+              :disabled="!savedReady"
               @click="togglePlayer(selected.sender)"
-            >{{ playerSaved(selected.sender) ? "★ Following" : "☆ Follow" }}</button>
+            ><TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow" }}</button>
             <button class="ui-button" data-variant="primary" @click="copy(selected.sender, 'Character name')">
               Copy name
             </button>
@@ -690,7 +698,7 @@ function exactTime(timestamp: number): string {
                   <span><bdi>{{ offer.sender }}</bdi><small>{{ offer.source === "kamadan" ? "Kamadan" : "Pre-Searing" }} · saved {{ age(offer.savedAt) }}</small></span>
                   <bdi>{{ offer.message }}</bdi>
                 </button>
-                <button class="saved-remove" aria-label="Remove saved offer" @click="toggleOffer(offer)">★</button>
+                <button class="saved-remove" aria-label="Remove saved offer" @click="toggleOffer(offer)"><TradeIcon name="star" filled /></button>
               </article>
             </template>
             <template v-else>
@@ -700,9 +708,9 @@ function exactTime(timestamp: number): string {
               </div>
               <article v-for="player in saved.players" :key="player.sender.toLocaleLowerCase()" class="saved-card saved-player-card">
                 <button class="saved-card-main" @click="findPlayer(player.sender)">
-                  <span><bdi>★ {{ player.sender }}</bdi><small>{{ currentOffersFor(player.sender) }} current {{ currentOffersFor(player.sender) === 1 ? "offer" : "offers" }} in {{ sourceLabel }}</small></span>
+                  <span><bdi><TradeIcon name="player" filled />{{ player.sender }}</bdi><small>{{ currentOffersFor(player.sender) }} current {{ currentOffersFor(player.sender) === 1 ? "offer" : "offers" }} in {{ sourceLabel }}</small></span>
                 </button>
-                <button class="saved-remove" :aria-label="`Unfollow ${player.sender}`" @click="togglePlayer(player.sender)">★</button>
+                <button class="saved-remove" :aria-label="`Unfollow ${player.sender}`" @click="togglePlayer(player.sender)"><TradeIcon name="player" filled /></button>
               </article>
             </template>
           </div>

@@ -198,6 +198,20 @@ const INVOCATIONS: Invocation[] = [
     }],
     channel: IPC.travelPreferencesSet,
   },
+  { path: "trade.subscribe", args: ["kamadan"], channel: IPC.tradeSubscribe },
+  { path: "trade.unsubscribe", args: [], channel: IPC.tradeUnsubscribe },
+  {
+    path: "trade.search",
+    args: [{ source: "kamadan", query: "black dye" }],
+    channel: IPC.tradeSearch,
+  },
+  { path: "trade.retry", args: ["kamadan"], channel: IPC.tradeRetry },
+  { path: "trade.getSaved", args: [], channel: IPC.tradeSavedGet },
+  {
+    path: "trade.setSaved",
+    args: [{ offers: [], players: [] }],
+    channel: IPC.tradeSavedSet,
+  },
   { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {
     path: "accounts.setup",
@@ -382,6 +396,11 @@ const SUBSCRIPTIONS: Subscription[] = [
     path: "appUpdates.onState",
     channel: IPC.appUpdatesState,
     subscribe: (api, listener) => api.appUpdates.onState(listener),
+  },
+  {
+    path: "trade.onEvent",
+    channel: IPC.tradeEvent,
+    subscribe: (api, listener) => api.trade.onEvent(listener),
   },
 ];
 

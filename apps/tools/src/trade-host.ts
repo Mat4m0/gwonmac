@@ -30,9 +30,6 @@ type NativeTradeHostApi = Readonly<{
 }>;
 
 export function createNativeTradeHost(api: NativeTradeHostApi): TradeHost {
-  const savedApi = api.trade as Partial<GwNativeApi["trade"]>;
-  const getSaved = savedApi.getSaved;
-  const setSaved = savedApi.setSaved;
   return Object.freeze({
     subscribe: (source) => api.trade.subscribe(source),
     unsubscribe: () => api.trade.unsubscribe(),
@@ -43,79 +40,10 @@ export function createNativeTradeHost(api: NativeTradeHostApi): TradeHost {
     openSource: (source) => api.app.openExternal(
       source === "kamadan" ? "kamadanTrade" : "preSearingTrade",
     ),
-    getSaved: () => invokeSaved("get", undefined, getSaved),
-    setSaved: (value) => setSavedState(value, setSaved),
+    getSaved: () => api.trade.getSaved(),
+    // Vue state can contain proxies, which Electron cannot structured-clone.
+    setSaved: (value) => api.trade.setSaved(parseTradeSavedState(value)),
   });
-}
-
-async function setSavedState(
-  value: TradeSavedState,
-  setSaved: GwNativeApi["trade"]["setSaved"] | undefined,
-): Promise<TradeSavedState> {
-  const counts = { offers: value.offers.length, players: value.players.length };
-  let normalized: TradeSavedState;
-  try {
-    // Vue may hand us reactive proxies. Rebuild the bounded shared contract so
-    // Electron receives a plain structured-cloneable object.
-    normalized = parseTradeSavedState(value);
-    console.info("[trade:saved] renderer payload normalized", counts);
-  } catch (error) {
-    console.error("[trade:saved] renderer payload rejected", {
-      counts,
-      error: rendererError(error),
-    });
-    throw error;
-  }
-  return invokeSaved(
-    "set",
-    counts,
-    setSaved ? () => setSaved(normalized) : undefined,
-  );
-}
-
-async function invokeSaved(
-  operation: "get" | "set",
-  counts: Readonly<{ offers: number; players: number }> | undefined,
-  invoke: (() => Promise<TradeSavedState>) | undefined,
-): Promise<TradeSavedState> {
-  if (!invoke) {
-    console.error("[trade:saved] renderer bridge unavailable", { operation, counts });
-    throw new Error("trade_saved_restart_required");
-  }
-  console.info("[trade:saved] renderer invoke", { operation, counts });
-  try {
-    const saved = await invoke();
-    console.info("[trade:saved] renderer completed", {
-      operation,
-      offers: saved.offers.length,
-      players: saved.players.length,
-    });
-    return saved;
-  } catch (error) {
-    console.error("[trade:saved] renderer failed", {
-      operation,
-      counts,
-      error: rendererError(error),
-    });
-    throw error;
-  }
-}
-
-/** Never let saved player names, offer text, or open-ended errors enter the console. */
-function rendererError(error: unknown): Readonly<{ name: string; reason: string }> {
-  if (!(error instanceof Error)) return { name: typeof error, reason: "non-error" };
-  const forwarded = /trade_saved_(?:get|set)_failed:([a-z0-9_-]+)/u.exec(error.message)?.[1];
-  const reason = forwarded
-    ?? (error.message.includes("duplicate saved trade entry")
-    ? "duplicate-entry"
-    : error.message.includes("invalid saved trade state")
-      ? "invalid-state"
-      : error.message.includes("No handler registered")
-        ? "missing-ipc-handler"
-        : error.message.includes("trade_saved_restart_required")
-          ? "bridge-unavailable"
-          : "ipc-failed");
-  return { name: error.name, reason };
 }
 
 const DEMO_MESSAGES: readonly TradeMessage[] = [
@@ -164,15 +92,20 @@ export function createDemoTradeHost(): TradeHost {
     async unsubscribe() {},
     async search(request) {
       const query = request.query.toLocaleLowerCase();
-      const player = query.startsWith("user:") ? query.slice(5).trim() : null;
+      const groups = new Map<string, { message: TradeMessage; postCount: number }>();
+      for (const message of DEMO_MESSAGES.filter((candidate) =>
+        candidate.source === request.source
+        && (candidate.message.toLocaleLowerCase().includes(query)
+          || candidate.sender.toLocaleLowerCase().includes(query))
+      ).sort((left, right) => right.timestamp - left.timestamp)) {
+        const key = message.sender.toLocaleLowerCase();
+        const group = groups.get(key);
+        if (group) group.postCount += 1;
+        else groups.set(key, { message, postCount: 1 });
+      }
       return {
         ...request,
-        messages: DEMO_MESSAGES.filter((message) =>
-          message.source === request.source
-          && (player === null
-            ? message.message.toLocaleLowerCase().includes(query)
-            : message.sender.toLocaleLowerCase().includes(player))
-        ),
+        matches: [...groups.values()],
       };
     },
     async retry(next) {

@@ -1,8 +1,12 @@
 import { flushPromises, mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import TradeChatApp from "./TradeChatApp.vue";
 import { createDemoTradeHost, type TradeHost } from "./trade-host";
-import type { TradeEvent, TradeMessage } from "../../../src/shared/trade-chat";
+import type {
+  TradeEvent,
+  TradeMessage,
+  TradeSavedState,
+} from "../../../src/shared/trade-chat";
 
 async function ledger() {
   const wrapper = mount(TradeChatApp, {
@@ -87,7 +91,12 @@ describe("TradeChatApp", () => {
         return { source, status: "live", messages };
       },
       async unsubscribe() {},
-      async search(request) { return { ...request, messages }; },
+      async search(request) {
+        return {
+          ...request,
+          matches: messages.map((message) => ({ message, postCount: 1 })),
+        };
+      },
       async retry() {},
       onEvent(callback) {
         events.publish = callback;
@@ -114,16 +123,19 @@ describe("TradeChatApp", () => {
     await list.trigger("scroll");
     expect(wrapper.findAll(".trade-row")).toHaveLength(50);
 
-    events.publish?.({
-      type: "message",
-      source: "kamadan",
-      message: {
+    const arrivalBase = Date.now() + 1_000;
+    for (let index = 0; index < 150; index += 1) {
+      events.publish?.({
+        type: "message",
         source: "kamadan",
-        timestamp: Date.now() + 1_000,
-        sender: "Newest Trader",
-        message: "WTS a newly arrived offer",
-      },
-    });
+        message: {
+          source: "kamadan",
+          timestamp: arrivalBase + index,
+          sender: `Newest Trader ${index}`,
+          message: "WTS a newly arrived offer",
+        },
+      });
+    }
     await flushPromises();
     expect(wrapper.find(".pending-messages").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("new message");
@@ -131,7 +143,8 @@ describe("TradeChatApp", () => {
     (list.element as HTMLElement).scrollTop = 0;
     await list.trigger("scroll");
     expect(wrapper.find(".pending-messages").exists()).toBe(false);
-    expect(wrapper.get(".trade-row").text()).toContain("Newest Trader");
+    expect(wrapper.get(".trade-row").text()).toContain("Newest Trader 149");
+    expect(wrapper.get(".trade-summary").text()).toContain("100 offers");
     wrapper.unmount();
   });
 
@@ -152,11 +165,11 @@ describe("TradeChatApp", () => {
     wrapper.unmount();
   });
 
-  it("explains when a restart is required for the saved-items bridge", async () => {
+  it("restores confirmed saved state when persistence fails", async () => {
     const demo = createDemoTradeHost();
     const host: TradeHost = {
       ...demo,
-      async setSaved() { throw new Error("trade_saved_restart_required"); },
+      async setSaved() { throw new Error("disk unavailable"); },
     };
     const wrapper = mount(TradeChatApp, {
       attachTo: document.body,
@@ -167,8 +180,84 @@ describe("TradeChatApp", () => {
     await wrapper.get(".row-quick-action").trigger("click");
     await flushPromises();
 
-    expect(wrapper.get(".trade-notice").text()).toBe("Restart GWonMac once to enable Saved items.");
+    expect(wrapper.get(".trade-notice").text()).toBe("Saved items could not be updated. Try again.");
     expect(wrapper.get(".trade-row").attributes("data-saved-offer")).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("serializes rapid saved actions without losing either change", async () => {
+    const demo = createDemoTradeHost();
+    const writes: Array<{
+      value: TradeSavedState;
+      resolve: (value: TradeSavedState) => void;
+    }> = [];
+    const setSaved = vi.fn((value: TradeSavedState) => new Promise<TradeSavedState>((resolve) => {
+      writes.push({ value, resolve });
+    }));
+    const wrapper = mount(TradeChatApp, {
+      attachTo: document.body,
+      props: {
+        host: { ...demo, setSaved },
+        mode: "standalone",
+        visible: true,
+        active: true,
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get(".inspector-actions button:first-child").trigger("click");
+    await wrapper.get(".inspector-actions button:nth-child(2)").trigger("click");
+    await flushPromises();
+    expect(setSaved).toHaveBeenCalledTimes(1);
+    writes[0]!.resolve(writes[0]!.value);
+    await flushPromises();
+    expect(setSaved).toHaveBeenCalledTimes(2);
+    expect(writes[1]!.value.offers).toHaveLength(1);
+    expect(writes[1]!.value.players).toHaveLength(1);
+    writes[1]!.resolve(writes[1]!.value);
+    await flushPromises();
+    expect(wrapper.get(".trade-row").attributes("data-saved-offer")).toBe("");
+    expect(wrapper.get(".trade-row").attributes("data-saved-player")).toBe("");
+    wrapper.unmount();
+  });
+
+  it("keeps the inspector aligned with the active intent filter", async () => {
+    const wrapper = await ledger();
+    expect(wrapper.get(".trade-inspector").text()).toContain("WTS arms");
+    await wrapper.get(".intent-segment button:last-child").trigger("click");
+    await flushPromises();
+    expect(wrapper.get(".trade-inspector").text()).toContain("WTB cupcakes");
+    expect(wrapper.get(".trade-inspector").text()).not.toContain("WTS arms");
+    wrapper.unmount();
+  });
+
+  it("keeps a saved offer selected while switching its source", async () => {
+    const demo = createDemoTradeHost();
+    const savedOffer = {
+      source: "pre-searing" as const,
+      timestamp: 99,
+      sender: "Archived Trader",
+      message: "WTS an archived Charr kit",
+      savedAt: Date.now(),
+    };
+    const wrapper = mount(TradeChatApp, {
+      attachTo: document.body,
+      props: {
+        host: {
+          ...demo,
+          async getSaved() { return { offers: [savedOffer], players: [] }; },
+        },
+        mode: "standalone",
+        visible: true,
+        active: true,
+      },
+    });
+    await flushPromises();
+    await wrapper.get(".saved-trigger").trigger("click");
+    await wrapper.get(".saved-card-main").trigger("click");
+    await flushPromises();
+    expect(wrapper.get(".ui-panel-title").text()).toBe("Pre-Searing Trade");
+    expect(wrapper.get(".trade-inspector").text()).toContain("archived Charr kit");
     wrapper.unmount();
   });
 });

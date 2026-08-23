@@ -33,7 +33,7 @@ test("IPC still refuses a sender that is not the main frame at the canonical URL
   // for real in tests/electron/sandbox.spec.ts — means the main frame cannot
   // leave the canonical URL. `isCanonicalRendererUrl` itself is executed in
   // tests/unit/renderer-trust.test.ts.
-  const ipc = read("src/main/ipc.ts");
+  const ipc = read("src/main/ipc-channel-registry.ts");
   assert.match(ipc, /event\.senderFrame !== event\.sender\.mainFrame/u);
   assert.match(ipc, /isCanonicalRendererUrl\(event\.senderFrame\.url\)/u);
 });
@@ -45,7 +45,7 @@ test("production resolves native windows only through the window registry", () =
     assert.doesNotMatch(source, /BrowserWindow\.(?:getAllWindows|getFocusedWindow|fromWebContents)\(/u, file);
   }
   assert.match(
-    read("src/main/ipc.ts"),
+    read("src/main/ipc-channel-registry.ts"),
     /registry\.windowForWebContents\(event\.sender\.id\)/u,
   );
 });

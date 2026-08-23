@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import WebSocket from "ws";
+import { TradeChatService } from "../../src/main/core/trade-chat-service.js";
 import { TradeSavedStore } from "../../src/main/core/trade-saved-store.js";
 import {
   parseTradePayload,
@@ -104,3 +107,129 @@ describe("trade chat contracts", () => {
     }
   });
 });
+
+class FakeTradeSocket extends EventEmitter {
+  readyState: number = WebSocket.CONNECTING;
+  readonly sent: string[] = [];
+  pings = 0;
+  terminated = false;
+
+  open(): void {
+    this.readyState = WebSocket.OPEN;
+    this.emit("open");
+  }
+
+  message(value: unknown): void {
+    this.emit("message", Buffer.from(JSON.stringify(value)));
+  }
+
+  send(value: string, callback?: (error?: Error) => void): void {
+    this.sent.push(value);
+    callback?.();
+  }
+
+  ping(): void { this.pings += 1; }
+
+  close(): void {
+    this.readyState = WebSocket.CLOSED;
+    this.emit("close");
+  }
+
+  terminate(): void {
+    this.terminated = true;
+    this.close();
+  }
+}
+
+describe("trade chat service", () => {
+  it("shares one connection and coalesces semantic offer and player searches", async () => {
+    const socket = new FakeTradeSocket();
+    const service = serviceWith([socket]);
+    service.subscribe(1, "kamadan", () => undefined);
+    service.subscribe(2, "kamadan", () => undefined);
+    socket.open();
+    assert.equal(socket.sent.length, 1);
+
+    const first = service.search(1, "kamadan", "dye");
+    const second = service.search(2, "kamadan", "dye");
+    assert.deepEqual(socket.sent.slice(1).map(queryFrom), ["dye", "user:dye"]);
+    socket.message({
+      query: "dye",
+      results: [
+        { t: 3, s: "Spam Trader", m: "WTS dye" },
+        { t: 2, s: "Spam Trader", m: "WTS another dye" },
+      ],
+    });
+    socket.message({
+      query: "user:dye",
+      results: [{ t: 1, s: "Dye Collector", m: "WTB ectos" }],
+    });
+
+    const [a, b] = await Promise.all([first, second]);
+    assert.deepEqual(a, b);
+    assert.equal(a.matches.length, 2);
+    assert.equal(a.matches[0]?.message.sender, "Spam Trader");
+    assert.equal(a.matches[0]?.postCount, 2);
+    service.dispose();
+  });
+
+  it("bounds live history, applies replacements, and stops after the last subscriber", () => {
+    const socket = new FakeTradeSocket();
+    const service = serviceWith([socket]);
+    service.subscribe(1, "kamadan", () => undefined);
+    service.subscribe(2, "kamadan", () => undefined);
+    socket.open();
+    for (let timestamp = 1; timestamp <= 110; timestamp += 1) {
+      socket.message({ t: timestamp, s: `Trader ${timestamp}`, m: "WTS item" });
+    }
+    socket.message({ t: 111, s: "Replacement", m: "WTS replacement", r: 110 });
+    const snapshot = service.subscribe(3, "kamadan", () => undefined);
+    assert.equal(snapshot.messages.length, 100);
+    assert.equal(snapshot.messages[0]?.timestamp, 111);
+    assert.ok(!snapshot.messages.some((message) => message.timestamp === 110));
+    service.unsubscribe(1);
+    service.unsubscribe(2);
+    assert.equal(socket.readyState, WebSocket.OPEN);
+    service.unsubscribe(3);
+    assert.equal(socket.readyState, WebSocket.CLOSED);
+  });
+
+  it("times out unanswered searches and reconnects while subscribed", async () => {
+    const first = new FakeTradeSocket();
+    const second = new FakeTradeSocket();
+    const service = serviceWith([first, second], {
+      searchTimeoutMs: 5,
+      reconnectDelaysMs: [1],
+    });
+    service.subscribe(1, "kamadan", () => undefined);
+    first.open();
+    await assert.rejects(service.search(1, "kamadan", "ecto"), /trade search failed/);
+    first.close();
+    await delay(10);
+    assert.equal(second.listenerCount("open"), 1);
+    service.dispose();
+  });
+});
+
+function serviceWith(
+  sockets: FakeTradeSocket[],
+  timing: { searchTimeoutMs?: number; reconnectDelaysMs?: readonly number[] } = {},
+): TradeChatService {
+  return new TradeChatService({
+    createSocket: () => {
+      const socket = sockets.shift();
+      assert.ok(socket, "unexpected WebSocket connection");
+      return socket as unknown as WebSocket;
+    },
+    random: () => 0.5,
+    timing,
+  });
+}
+
+function queryFrom(value: string): string {
+  return (JSON.parse(value) as { query: string }).query;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
