@@ -1,4 +1,7 @@
-/** Canonical settings and display rules for the presentation-only skill timer. */
+/**
+ * Canonical settings and display rules for the presentation-only skill timer.
+ * This module owns no game observation, DOM, persistence, or input behavior.
+ */
 export const SKILL_COOLDOWN_PRESETS = ["red", "cream", "gold", "blue"] as const;
 export type SkillCooldownPreset = (typeof SKILL_COOLDOWN_PRESETS)[number];
 

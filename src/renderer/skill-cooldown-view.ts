@@ -1,4 +1,7 @@
-/** Shared native-style cooldown text used by the HUD and Settings preview. */
+/**
+ * Shared native-style cooldown text used by the HUD and Settings preview.
+ * Font, outline, optical position, scaling, and color stay identical in both.
+ */
 import {
   formatSkillCooldown,
   skillCooldownCssColor,

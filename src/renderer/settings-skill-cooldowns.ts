@@ -1,4 +1,7 @@
-/** Settings binder for the single canonical cooldown presentation choice. */
+/**
+ * Settings binder for the single canonical cooldown presentation choice.
+ * The shared view remains the only owner of how that choice is drawn.
+ */
 import type { AppSettings } from "../shared/contracts.js";
 import {
   isSkillCooldownColor,

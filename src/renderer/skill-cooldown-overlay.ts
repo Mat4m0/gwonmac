@@ -1,4 +1,7 @@
-/** Pointer-transparent eight-slot cooldown presentation. */
+/**
+ * Pointer-transparent eight-slot cooldown presentation.
+ * This owner writes the DOM only when visible labels or slot geometry change.
+ */
 import type { SkillCooldownColor } from "../shared/skill-cooldowns.js";
 import { formatSkillCooldown } from "../shared/skill-cooldowns.js";
 import { createSkillCooldownView } from "./skill-cooldown-view.js";

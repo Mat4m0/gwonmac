@@ -1,4 +1,7 @@
-/** Joins certified slot geometry and recharge state at the presentation edge. */
+/**
+ * Joins certified slot geometry and recharge state at the presentation edge.
+ * Neither source is reinterpreted or retained as gameplay state here.
+ */
 import type { SkillCooldownColor } from "../shared/skill-cooldowns.js";
 import type {
   CompanionSkillCooldownState,

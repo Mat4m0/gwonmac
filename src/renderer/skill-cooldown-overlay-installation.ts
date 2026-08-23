@@ -1,4 +1,7 @@
-/** Owns the cooldown HUD and its subscriptions to accepted native state. */
+/**
+ * Owns the cooldown HUD and subscriptions to accepted native state. Certified
+ * memory allocation remains in the observation installation.
+ */
 import type { SkillCooldownColor } from "../shared/skill-cooldowns.js";
 import type {
   CompanionSkillCooldownState,
