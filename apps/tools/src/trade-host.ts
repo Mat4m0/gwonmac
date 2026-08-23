@@ -1,12 +1,13 @@
 /** The narrow host boundary used by the Trade Chat Vue surface. */
-import type {
-  TradeEvent,
-  TradeMessage,
-  TradeSearchRequest,
-  TradeSearchResult,
-  TradeSavedState,
-  TradeSnapshot,
-  TradeSource,
+import {
+  parseTradeSavedState,
+  type TradeEvent,
+  type TradeMessage,
+  type TradeSearchRequest,
+  type TradeSearchResult,
+  type TradeSavedState,
+  type TradeSnapshot,
+  type TradeSource,
 } from "../../../src/shared/trade-chat";
 import type { GwNativeApi } from "../../../src/shared/contracts";
 
@@ -22,7 +23,13 @@ export type TradeHost = Readonly<{
   setSaved(value: TradeSavedState): Promise<TradeSavedState>;
 }>;
 
-export function createNativeTradeHost(api: GwNativeApi): TradeHost {
+type NativeTradeHostApi = Readonly<{
+  trade: GwNativeApi["trade"];
+  clipboard: Pick<GwNativeApi["clipboard"], "writeText">;
+  app: Pick<GwNativeApi["app"], "openExternal">;
+}>;
+
+export function createNativeTradeHost(api: NativeTradeHostApi): TradeHost {
   const savedApi = api.trade as Partial<GwNativeApi["trade"]>;
   const getSaved = savedApi.getSaved;
   const setSaved = savedApi.setSaved;
@@ -37,12 +44,33 @@ export function createNativeTradeHost(api: GwNativeApi): TradeHost {
       source === "kamadan" ? "kamadanTrade" : "preSearingTrade",
     ),
     getSaved: () => invokeSaved("get", undefined, getSaved),
-    setSaved: (value) => invokeSaved(
-      "set",
-      { offers: value.offers.length, players: value.players.length },
-      setSaved ? () => setSaved(value) : undefined,
-    ),
+    setSaved: (value) => setSavedState(value, setSaved),
   });
+}
+
+async function setSavedState(
+  value: TradeSavedState,
+  setSaved: GwNativeApi["trade"]["setSaved"] | undefined,
+): Promise<TradeSavedState> {
+  const counts = { offers: value.offers.length, players: value.players.length };
+  let normalized: TradeSavedState;
+  try {
+    // Vue may hand us reactive proxies. Rebuild the bounded shared contract so
+    // Electron receives a plain structured-cloneable object.
+    normalized = parseTradeSavedState(value);
+    console.info("[trade:saved] renderer payload normalized", counts);
+  } catch (error) {
+    console.error("[trade:saved] renderer payload rejected", {
+      counts,
+      error: rendererError(error),
+    });
+    throw error;
+  }
+  return invokeSaved(
+    "set",
+    counts,
+    setSaved ? () => setSaved(normalized) : undefined,
+  );
 }
 
 async function invokeSaved(
