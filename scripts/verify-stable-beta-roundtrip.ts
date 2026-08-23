@@ -188,6 +188,8 @@ const candidateSettingsDomains = Array.from(
       targetReadout: cycle(booleanValues, index),
       shortcutOverrides: {},
       skillKeyBindings: [null, null, null, null, null, null, null, null],
+      skillCooldownOverlayEnabled: cycle(booleanValues, index),
+      skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: cycle(booleanValues, index + 1),
       showDiagnostics: cycle(booleanValues, index),
       dataStrategy: "full",

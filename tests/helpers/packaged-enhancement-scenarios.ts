@@ -369,6 +369,8 @@ export async function assertCleanupSafetyGates() {
             travelPalette: true,
             targetReadout: false,
             skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
+            skillCooldownOverlayEnabled: true,
+            skillCooldownColor: { kind: "preset", preset: "red" } as const,
           });
         });
       }
@@ -710,6 +712,8 @@ export async function assertToolboxFoundationLifecycle() {
       travelPalette: true,
         targetReadout: false,
         skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
+        skillCooldownOverlayEnabled: true,
+        skillCooldownColor: { kind: "preset", preset: "red" } as const,
       });
       const runtime = await installCertifiedCompanion(
         {
@@ -1153,6 +1157,8 @@ export async function assertRollbackAfterTablePublication() {
       travelPalette: true,
           targetReadout: false,
           skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
+          skillCooldownOverlayEnabled: true,
+          skillCooldownColor: { kind: "preset", preset: "red" } as const,
         });
         globalThis.requestAnimationFrame = () => {
           installedCursorStatePublished = typeof window.gwCursorState === "function";

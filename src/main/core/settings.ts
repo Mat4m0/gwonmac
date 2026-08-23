@@ -35,6 +35,10 @@ import {
   cloneSkillKeyBindings,
   isSkillKeyBindings,
 } from "../../shared/skill-key-bindings.js";
+import {
+  cloneSkillCooldownColor,
+  isSkillCooldownColor,
+} from "../../shared/skill-cooldowns.js";
 import { isStoredTravelShortcuts } from "../../shared/travel.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
@@ -142,6 +146,12 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.skillKeyBindings = cloneSkillKeyBindings(src.skillKeyBindings);
   }
+  if ("skillCooldownColor" in src) {
+    if (!isSkillCooldownColor(src.skillCooldownColor)) {
+      throw new AppError("bad_settings", "settings.skillCooldownColor has an invalid color");
+    }
+    out.skillCooldownColor = cloneSkillCooldownColor(src.skillCooldownColor);
+  }
   if ("travelShortcuts" in src) {
     if (!isStoredTravelShortcuts(src.travelShortcuts)) {
       throw new AppError("bad_settings", "settings.travelShortcuts has invalid destinations");
@@ -156,6 +166,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "xunlaiStorage",
     "travelPalette",
     "targetReadout",
+    "skillCooldownOverlayEnabled",
     "extendedMemoryEnabled",
   ] as const) {
     if (setting in src) out[setting] = asBool(src[setting], setting);
