@@ -38,7 +38,7 @@ import {
 } from "./companion-skill-snapshot.js";
 import { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
 import { createSkillKeyOverlayConsumer } from "./skill-key-overlay-consumer.js";
-import { createSkillCooldownObservationInstallation } from "./skill-cooldown-observation-installation.js";
+import { createSkillCooldownObservationInstallation } from "./skill-cooldown-state-installation.js";
 import { validateCompanionOwnedRegions } from "./companion-owned-regions.js";
 import {
   observeCompanion,

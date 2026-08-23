@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { createSkillCooldownObservationInstallation } from "../../src/renderer/skill-cooldown-observation-installation.ts";
+import { createSkillCooldownObservationInstallation } from "../../src/renderer/skill-cooldown-state-installation.ts";
 
 it("withdraws a cooldown publication whose sequence stops advancing", () => {
   let now = 0;
