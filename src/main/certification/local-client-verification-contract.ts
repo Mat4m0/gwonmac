@@ -93,10 +93,10 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "local.ui-dispatcher",
     "chat.alias-parser-anchor",
   ] as const),
-  skillKeyOverlay: Object.freeze([
+  skillSlotGeometry: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
-    "skill-overlay.frame-constructor",
-    "skill-overlay.frame-layout",
+    "skill-slots.frame-constructor",
+    "skill-slots.frame-layout",
   ] as const),
 } as const satisfies Readonly<
   Record<LocalClientFeature, readonly string[]>
@@ -166,8 +166,8 @@ export interface LocalFeatureCertificateMap {
   }> & RequiredBuildFact<"observationBase" | "uiDispatcher" | "gameThread">;
   readonly chatAliases: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"uiDispatcher" | "chatAliases">;
-  readonly skillKeyOverlay: Readonly<{ core: EnhancementProofCore }>
-    & RequiredBuildFact<"skillKeyOverlay">;
+  readonly skillSlotGeometry: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"skillSlotGeometry">;
 }
 
 export type LocalFeatureVerdict<Feature extends LocalClientFeature> =
@@ -344,8 +344,8 @@ export function localFeatureVerdictsForBuild(
         chatAliases: build.chatAliases,
       })
     : null;
-  const skillKeyOverlay = core !== null && build?.skillKeyOverlay !== undefined
-    ? Object.freeze({ core, skillKeyOverlay: build.skillKeyOverlay })
+  const skillSlotGeometry = core !== null && build?.skillSlotGeometry !== undefined
+    ? Object.freeze({ core, skillSlotGeometry: build.skillSlotGeometry })
     : null;
   return Object.freeze({
     nativeCursor: featureVerdict<"nativeCursor">(
@@ -397,12 +397,12 @@ export function localFeatureVerdictsForBuild(
       failures.chatAliases,
       "chat.alias-parser-anchor",
     ),
-    skillKeyOverlay: featureVerdict<"skillKeyOverlay">(
+    skillSlotGeometry: featureVerdict<"skillSlotGeometry">(
       inputSha256,
-      requested.skillKeyOverlay,
-      skillKeyOverlay,
-      failures.skillKeyOverlay,
-      "skill-overlay.frame-constructor",
+      requested.skillSlotGeometry,
+      skillSlotGeometry,
+      failures.skillSlotGeometry,
+      "skill-slots.frame-constructor",
     ),
   });
 }

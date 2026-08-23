@@ -23,7 +23,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         travelAction: { status: "off" },
         xunlaiAction: { status: "off" },
         chatAliases: { status: "off" },
-        skillKeyOverlay: { status: "off" },
+        skillSlotGeometry: { status: "off" },
       },
     },
     extendedMemory: supported

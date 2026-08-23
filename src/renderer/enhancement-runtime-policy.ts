@@ -56,6 +56,6 @@ export function enhancementRuntimePolicy(
     travelPalette: pve && (
       developerStorage || (settings.enabled && settings.travelPalette === true)
     ),
-    skillKeyOverlay: settings.enabled && pve,
+    skillSlotGeometry: settings.enabled && pve,
   });
 }

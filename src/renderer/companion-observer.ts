@@ -15,21 +15,23 @@ import {
   type CompanionPartyState,
   type CompanionSnapshot,
   type CompanionToolboxState,
-  type CompanionSkillKeyState,
   type PublishedCompanionState,
   readChangedCompanionParty,
   readChangedCompanionToolbox,
   readCompanionSnapshot,
-  readCompanionSkillKeys,
   sameCompanionToolboxState,
 } from "./companion-snapshot.js";
+import {
+  type CompanionSkillSlotState,
+  readCompanionSkillSlots,
+} from "./companion-skill-snapshot.js";
 
 type SnapshotObserverTarget = {
   memory: WebAssembly.Memory;
   snapshotPointer: number;
   toolboxPointer: number;
   partyPointer: number;
-  skillKeyPointer?: number;
+  skillSlotPointer?: number;
   snapshotReads: number;
   rejectedSnapshots: number;
   hertz: number;
@@ -41,8 +43,8 @@ type StateConsumer = {
   update(state: CompanionSnapshot): void;
 };
 
-type SkillKeyConsumer = {
-  update(state: CompanionSkillKeyState): void;
+type SkillSlotConsumer = {
+  update(state: CompanionSkillSlotState): void;
 };
 
 /**
@@ -79,7 +81,7 @@ export function observeCompanion(
   toolbox: ToolboxConsumer | null,
   observeState: boolean,
   publishState: boolean,
-  skillKeys: SkillKeyConsumer | null = null,
+  skillSlots: SkillSlotConsumer | null = null,
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -155,10 +157,10 @@ export function observeCompanion(
         toolbox.update(party === null ? state : { ...state, party });
       }
     }
-    if (skillKeys) {
-      skillKeys.update(readCompanionSkillKeys(
+    if (skillSlots) {
+      skillSlots.update(readCompanionSkillSlots(
         runtime.memory.buffer,
-        runtime.skillKeyPointer ?? 0,
+        runtime.skillSlotPointer ?? 0,
       ));
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.

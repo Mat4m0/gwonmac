@@ -26,7 +26,7 @@ static mut CACHE_FRAME_COUNT: u32 = 0;
 static mut CACHE_AGE: u32 = CACHE_AUDIT_TICKS;
 static mut CACHE_SLOT_IDS: [u32; 8] = [0; 8];
 
-const EMPTY_RECT: SkillKeyRect = SkillKeyRect {
+const EMPTY_RECT: SkillSlotRect = SkillSlotRect {
     left: 0.0,
     bottom: 0.0,
     right: 0.0,
@@ -85,11 +85,11 @@ unsafe fn visible(layout: Layout, frame: u32) -> bool {
         .is_some_and(|state| state & CREATED != 0 && state & HIDDEN == 0)
 }
 
-unsafe fn rect(layout: Layout, frame: u32) -> Option<(SkillKeyRect, f32, f32)> {
+unsafe fn rect(layout: Layout, frame: u32) -> Option<(SkillSlotRect, f32, f32)> {
     let read = |field| offset(frame, field).and_then(|at| unsafe { read_f32(at) });
     let viewport_width = read(layout.frame_viewport_width)?;
     let viewport_height = read(layout.frame_viewport_height)?;
-    let next = SkillKeyRect {
+    let next = SkillSlotRect {
         left: read(layout.frame_screen_left)?,
         bottom: read(layout.frame_screen_bottom)?,
         right: read(layout.frame_screen_right)?,
@@ -119,7 +119,7 @@ unsafe fn rect(layout: Layout, frame: u32) -> Option<(SkillKeyRect, f32, f32)> {
     Some((next, viewport_width, viewport_height))
 }
 
-type Observation = (f32, f32, [SkillKeyRect; 8]);
+type Observation = (f32, f32, [SkillSlotRect; 8]);
 
 unsafe fn collect_cached(
     layout: Layout,
@@ -235,16 +235,16 @@ unsafe fn collect(layout: Layout, skill_bar_id: u32) -> Option<Observation> {
     Some(observed)
 }
 
-unsafe fn publish(frame_id: u32, observed: Option<(f32, f32, [SkillKeyRect; 8])>) {
+unsafe fn publish(frame_id: u32, observed: Option<(f32, f32, [SkillSlotRect; 8])>) {
     let next = unsafe { SEQUENCE }.wrapping_add(2) & !1;
-    let snapshot = unsafe { POINTER as *mut SkillKeySnapshot };
+    let snapshot = unsafe { POINTER as *mut SkillSlotSnapshot };
     let (flags, viewport_width, viewport_height, slots) = observed
-        .map(|(width, height, slots)| (FLAG_SKILL_KEYS_READY, width, height, slots))
+        .map(|(width, height, slots)| (FLAG_SKILL_SLOTS_READY, width, height, slots))
         .unwrap_or((0, 0.0, 0.0, [EMPTY_RECT; 8]));
     unsafe {
         write_volatile(&mut (*snapshot).sequence, next.wrapping_sub(1));
-        write_volatile(&mut (*snapshot).magic, SKILL_KEY_MAGIC);
-        write_volatile(&mut (*snapshot).abi_and_size, SKILL_KEY_ABI_AND_SIZE);
+        write_volatile(&mut (*snapshot).magic, SKILL_SLOT_MAGIC);
+        write_volatile(&mut (*snapshot).abi_and_size, SKILL_SLOT_ABI_AND_SIZE);
         write_volatile(&mut (*snapshot).flags, flags);
         write_volatile(&mut (*snapshot).frame_id, if flags == 0 { 0 } else { frame_id });
         write_volatile(&mut (*snapshot).viewport_width, viewport_width);
@@ -264,7 +264,7 @@ pub(crate) unsafe fn initialize(pointer: u32) {
         CACHE_AGE = CACHE_AUDIT_TICKS;
         CACHE_SLOT_IDS = [0; 8];
     }
-    for index in 0..SKILL_KEY_BYTES / 4 {
+    for index in 0..SKILL_SLOT_BYTES / 4 {
         unsafe { write_volatile((pointer + index * 4) as *mut u32, 0) };
     }
     unsafe { publish(0, None) };

@@ -18,6 +18,6 @@ export function effectiveCapabilities(
     travelAction: features.travelAction.status === "available",
     xunlaiAction: features.xunlaiAction.status === "available",
     chatAliases: features.chatAliases.status === "available",
-    skillKeyOverlay: features.skillKeyOverlay.status === "available",
+    skillSlotGeometry: features.skillSlotGeometry.status === "available",
   });
 }

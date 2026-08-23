@@ -20,7 +20,7 @@ export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.free
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -30,7 +30,7 @@ export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -40,7 +40,7 @@ export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -50,7 +50,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -60,7 +60,7 @@ export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -70,7 +70,7 @@ export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -80,7 +80,7 @@ export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -90,7 +90,7 @@ export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -100,7 +100,7 @@ export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.fr
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -110,7 +110,7 @@ export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,

@@ -31,7 +31,7 @@ export const ENHANCEMENT_CAPABILITY_FIELDS = Object.freeze([
   "travelAction",
   "xunlaiAction",
   "chatAliases",
-  "skillKeyOverlay",
+  "skillSlotGeometry",
 ] as const);
 
 export type EnhancementCapability = (typeof ENHANCEMENT_CAPABILITY_FIELDS)[number];
@@ -97,7 +97,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-  skillKeyOverlay: false,
+  skillSlotGeometry: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -129,7 +129,7 @@ export function parseEnhancementCapabilities(
     travelAction: value.travelAction,
     xunlaiAction: value.xunlaiAction,
     chatAliases: value.chatAliases,
-    skillKeyOverlay: value.skillKeyOverlay,
+    skillSlotGeometry: value.skillSlotGeometry,
   });
 }
 
@@ -191,7 +191,7 @@ export function enhancementConfigWordActive(
   }
   if (owner === "cursor") return capabilities.nativeCursor;
   if (owner === "party") return capabilities.partyObservation;
-  if (owner === "skill-overlay") return capabilities.skillKeyOverlay;
+  if (owner === "skill-slots") return capabilities.skillSlotGeometry;
   return owner === "storage" && capabilities.xunlaiAction;
 }
 
@@ -241,7 +241,7 @@ export function validEnhancementCapabilities(
   capabilities: EnhancementCapabilities,
 ): boolean {
   return (!capabilities.teamApply || capabilities.partyObservation)
-    && (!capabilities.skillKeyOverlay || capabilities.partyObservation)
+    && (!capabilities.skillSlotGeometry || capabilities.partyObservation)
     && (!capabilities.chatAliases
       || capabilities.travelAction
       || capabilities.xunlaiAction);
@@ -265,7 +265,7 @@ export function intersectEnhancementCapabilities(
     xunlaiAction,
     chatAliases: requested.chatAliases && supported.chatAliases
       && (travelAction || xunlaiAction),
-    skillKeyOverlay: requested.skillKeyOverlay && supported.skillKeyOverlay
+    skillSlotGeometry: requested.skillSlotGeometry && supported.skillSlotGeometry
       && partyObservation,
   });
 }

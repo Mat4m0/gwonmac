@@ -21,6 +21,7 @@ import {
 import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import { indexOfBytes } from "../core/wasm-binary.js";
+import { isDeepStrictEqual } from "node:util";
 
 const INITIALIZER_SHA256 =
   "e4b1af23a4efcbb7fd1c484c4168553c91df5df7e1e40a65ff31bb4ca10790e1";
@@ -35,6 +36,22 @@ const ID_RESOLVER_SHA256 =
 
 const FRAME_ARRAY = 5_906_396;
 const FRAME_COUNT = 5_906_404;
+const SKILL_SLOT_LAYOUT = Object.freeze({
+  frameArray: FRAME_ARRAY,
+  frameCount: FRAME_COUNT,
+  frameBytes: 0x1c8,
+  frameChildOffsetId: 0xb8,
+  frameId: 0xbc,
+  framePositionFlags: 0xd8,
+  frameViewportWidth: 0x104,
+  frameViewportHeight: 0x108,
+  frameScreenLeft: 0x10c,
+  frameScreenBottom: 0x110,
+  frameScreenRight: 0x114,
+  frameScreenTop: 0x118,
+  frameRelation: 0x128,
+  frameState: 0x18c,
+});
 
 function utf16Le(value: string): Uint8Array {
   const bytes = new Uint8Array((value.length + 1) * 2);
@@ -68,13 +85,50 @@ function uniqueStaticAddress(
   return matches.length === 1 ? matches[0]! : null;
 }
 
-export type SkillKeyOverlayProof = NonNullable<
-  KnownEnhancementBuild["skillKeyOverlay"]
+export type SkillSlotGeometryProof = NonNullable<
+  KnownEnhancementBuild["skillSlotGeometry"]
 >;
 
-export function deriveSkillKeyOverlay(
+/** Validate every proof field crossing back from the isolated verifier. */
+export function isSkillSlotGeometryProof(
+  value: unknown,
+): value is SkillSlotGeometryProof {
+  if (!value || typeof value !== "object") return false;
+  const proof = value as Partial<SkillSlotGeometryProof>;
+  const initializer = proof.initializer;
+  const constructor = proof.constructor;
+  return Object.keys(proof).sort().join() ===
+      "constructor,initializer,labelAddress,layout"
+    && initializer !== undefined
+    && Object.keys(initializer).sort().join() ===
+      "bodySha256,constructorCallOperand,functionIndex,params,results"
+    && Number.isSafeInteger(initializer.functionIndex)
+    && initializer.functionIndex >= 0
+    && Number.isSafeInteger(initializer.constructorCallOperand)
+    && initializer.constructorCallOperand >= 0
+    && isDeepStrictEqual(initializer.params, ["i32", "i32"])
+    && isDeepStrictEqual(initializer.results, [])
+    && initializer.bodySha256 === INITIALIZER_SHA256
+    && constructor !== undefined
+    && Object.keys(constructor).sort().join() ===
+      "bodySha256,functionIndex,params,results"
+    && Number.isSafeInteger(constructor.functionIndex)
+    && constructor.functionIndex >= 0
+    && isDeepStrictEqual(
+      constructor.params,
+      ["i32", "i32", "i32", "i32", "i32", "i32"],
+    )
+    && isDeepStrictEqual(constructor.results, ["i32"])
+    && constructor.bodySha256 === CONSTRUCTOR_SHA256
+    && typeof proof.labelAddress === "number"
+    && Number.isSafeInteger(proof.labelAddress)
+    && proof.labelAddress > 0
+    && isDeepStrictEqual(proof.layout, SKILL_SLOT_LAYOUT);
+}
+
+export function deriveSkillSlotGeometry(
   context: EnhancementProofContext,
-): SkillKeyOverlayProof | null {
+): SkillSlotGeometryProof | null {
   const { module } = context;
   const label = utf16Le("SkillBar");
   const labelAddress = uniqueStaticAddress(context, label);
@@ -156,21 +210,6 @@ export function deriveSkillKeyOverlay(
       bodySha256: CONSTRUCTOR_SHA256,
     }),
     labelAddress,
-    layout: Object.freeze({
-      frameArray: FRAME_ARRAY,
-      frameCount: FRAME_COUNT,
-      frameBytes: 0x1c8,
-      frameChildOffsetId: 0xb8,
-      frameId: 0xbc,
-      framePositionFlags: 0xd8,
-      frameViewportWidth: 0x104,
-      frameViewportHeight: 0x108,
-      frameScreenLeft: 0x10c,
-      frameScreenBottom: 0x110,
-      frameScreenRight: 0x114,
-      frameScreenTop: 0x118,
-      frameRelation: 0x128,
-      frameState: 0x18c,
-    }),
+    layout: SKILL_SLOT_LAYOUT,
   });
 }

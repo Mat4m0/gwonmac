@@ -1,7 +1,6 @@
 /**
- * The decoders for the three fixed-layout records the companion kernel
- * publishes into shared memory: the game snapshot, the cursor, and the toolbox
- * state.
+ * Decoders for the companion kernel's general game, cursor, toolbox, and party
+ * records. Feature-specific records live beside their owning capability.
  *
  * Shared memory is untrusted input here. Every record is checked against its
  * magic, its ABI and its declared size, and each field is re-validated against
@@ -191,77 +190,6 @@ export type PublishedCompanionState =
   | CompanionSnapshot
   | Readonly<{ status: "unsupported" }>
   | Readonly<{ status: "error"; reason: string }>;
-
-export const COMPANION_SKILL_KEY_ABI = COMPANION_ABI.skillKeys.abi;
-export const COMPANION_SKILL_KEY_BYTES = COMPANION_ABI.skillKeys.bytes;
-
-const SKILL_KEY_MAGIC = 0x534b5747;
-const SKILL_KEY_READY = 1;
-
-/** Decode the bounded frame projection; labels remain an app-owned concern. */
-export function readCompanionSkillKeys(buffer: ArrayBuffer, pointer: number) {
-  if (
-    !(buffer instanceof ArrayBuffer)
-    || !Number.isInteger(pointer)
-    || pointer < 0
-    || pointer + COMPANION_SKILL_KEY_BYTES > buffer.byteLength
-  ) return Object.freeze({ status: "waiting", reason: "memory" } as const);
-  const view = new DataView(buffer, pointer, COMPANION_SKILL_KEY_BYTES);
-  const firstSequence = view.getUint32(8, true);
-  if ((firstSequence & 1) !== 0) {
-    return Object.freeze({ status: "waiting", reason: "writing" } as const);
-  }
-  const magic = view.getUint32(0, true);
-  const abi = view.getUint16(4, true);
-  const bytes = view.getUint16(6, true);
-  const flags = view.getUint32(12, true);
-  const frameId = view.getUint32(16, true);
-  const viewportWidth = view.getFloat32(20, true);
-  const viewportHeight = view.getFloat32(24, true);
-  const slots = Object.freeze(Array.from({ length: 8 }, (_, index) => {
-    const at = 28 + index * 16;
-    return Object.freeze({
-      left: view.getFloat32(at, true),
-      bottom: view.getFloat32(at + 4, true),
-      right: view.getFloat32(at + 8, true),
-      top: view.getFloat32(at + 12, true),
-    });
-  }));
-  const secondSequence = view.getUint32(8, true);
-  if (
-    magic !== SKILL_KEY_MAGIC
-    || abi !== COMPANION_SKILL_KEY_ABI
-    || bytes !== COMPANION_SKILL_KEY_BYTES
-    || firstSequence !== secondSequence
-    || (secondSequence & 1) !== 0
-    || (flags & ~SKILL_KEY_READY) !== 0
-  ) return Object.freeze({ status: "waiting", reason: "snapshot" } as const);
-  if ((flags & SKILL_KEY_READY) === 0) {
-    return Object.freeze({ status: "waiting", reason: "frame" } as const);
-  }
-  const finite = (value: number) => Number.isFinite(value) && Math.abs(value) <= 32_768;
-  if (
-    frameId === 0
-    || !finite(viewportWidth)
-    || !finite(viewportHeight)
-    || viewportWidth <= 0
-    || viewportHeight <= 0
-    || slots.some(({ left, bottom, right, top }) =>
-      ![left, bottom, right, top].every(finite)
-      || left < 0 || bottom < 0 || right <= left || top <= bottom
-      || right > viewportWidth || top > viewportHeight)
-  ) return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
-  return Object.freeze({
-    status: "ready" as const,
-    sequence: secondSequence,
-    frameId,
-    viewportWidth,
-    viewportHeight,
-    slots,
-  });
-}
-
-export type CompanionSkillKeyState = ReturnType<typeof readCompanionSkillKeys>;
 
 /* The cursor bitmap lives in its own region: the core snapshot is full, and
    4 KB of pixels do not belong in a per-frame read. */

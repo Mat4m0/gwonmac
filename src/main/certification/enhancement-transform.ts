@@ -253,7 +253,7 @@ function resolveEnhancementTransform(
     : null;
   const travelAction = build.travelAction!;
   const chatAliases = build.chatAliases!;
-  const skillKeyOverlay = build.skillKeyOverlay!;
+  const skillSlotGeometry = build.skillSlotGeometry!;
   const hasActionQueue = capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction;
@@ -331,32 +331,32 @@ function resolveEnhancementTransform(
     if (!body) fail(`function ${functionIndex} has no body`);
     return createHash("sha256").update(body).digest("hex");
   };
-  const skillInitializer = capabilities.skillKeyOverlay
+  const skillInitializer = capabilities.skillSlotGeometry
     ? resolveHook(
         "SkillBar initializer",
-        skillKeyOverlay.initializer.functionIndex,
-        skillKeyOverlay.initializer.params,
-        skillKeyOverlay.initializer.results,
+        skillSlotGeometry.initializer.functionIndex,
+        skillSlotGeometry.initializer.params,
+        skillSlotGeometry.initializer.results,
       )
     : null;
-  const skillConstructor = capabilities.skillKeyOverlay
+  const skillConstructor = capabilities.skillSlotGeometry
     ? resolveHook(
         "SkillBar frame constructor",
-        skillKeyOverlay.constructor.functionIndex,
-        skillKeyOverlay.constructor.params,
-        skillKeyOverlay.constructor.results,
+        skillSlotGeometry.constructor.functionIndex,
+        skillSlotGeometry.constructor.params,
+        skillSlotGeometry.constructor.results,
       )
     : null;
   if (skillInitializer && skillConstructor) {
     if (
-      bodyHash(skillKeyOverlay.initializer.functionIndex)
-        !== skillKeyOverlay.initializer.bodySha256
-      || bodyHash(skillKeyOverlay.constructor.functionIndex)
-        !== skillKeyOverlay.constructor.bodySha256
+      bodyHash(skillSlotGeometry.initializer.functionIndex)
+        !== skillSlotGeometry.initializer.bodySha256
+      || bodyHash(skillSlotGeometry.constructor.functionIndex)
+        !== skillSlotGeometry.constructor.bodySha256
     ) fail("SkillBar frame capture bodies do not match their certificates");
-    const operand = skillKeyOverlay.initializer.constructorCallOperand;
+    const operand = skillSlotGeometry.initializer.constructorCallOperand;
     const body = bodies[skillInitializer.localIndex]!;
-    const expected = paddedIndex(skillKeyOverlay.constructor.functionIndex);
+    const expected = paddedIndex(skillSlotGeometry.constructor.functionIndex);
     if (
       body[operand - 1] !== 0x10
       || expected.some((byte, index) => body[operand + index] !== byte)
@@ -667,7 +667,7 @@ function resolveEnhancementTransform(
     xunlaiAction,
     travelAction,
     chatAliases,
-    skillKeyOverlay,
+    skillSlotGeometry,
     skillInitializer,
     skillConstructor,
     commands,
@@ -706,7 +706,7 @@ function assembleEnhancementTransform(
     table,
     nextTableSize,
     hasActionQueue,
-    skillKeyOverlay,
+    skillSlotGeometry,
     skillInitializer,
     skillConstructor,
   } = resolution;
@@ -746,7 +746,7 @@ function assembleEnhancementTransform(
     return first;
   };
   const hookGlobalIndex = allocateGlobals(1);
-  const skillBarFrameGlobalIndex = capabilities.skillKeyOverlay
+  const skillBarFrameGlobalIndex = capabilities.skillSlotGeometry
     ? allocateGlobals(1)
     : 0;
   const commandPendingGlobalIndex = hasActionQueue ? allocateGlobals(1) : 0;
@@ -829,7 +829,7 @@ function assembleEnhancementTransform(
       dispatchTypeIndex,
       selectedOriginalIndices[index]!,
       hookGlobalIndex,
-      capabilities.skillKeyOverlay
+      capabilities.skillSlotGeometry
         && hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
         ? skillBarFrameGlobalIndex
         : null,
@@ -844,7 +844,7 @@ function assembleEnhancementTransform(
         uleb(1), uleb(1), Uint8Array.of(0x7f),
         ...Array.from({ length: 6 }, (_, index) =>
           concat(Uint8Array.of(0x20), uleb(index))),
-        Uint8Array.of(0x10), uleb(skillKeyOverlay.constructor.functionIndex),
+        Uint8Array.of(0x10), uleb(skillSlotGeometry.constructor.functionIndex),
         Uint8Array.of(0x22), uleb(6),
         Uint8Array.of(0x24), uleb(skillBarFrameGlobalIndex),
         Uint8Array.of(0x20), uleb(6),
@@ -856,7 +856,7 @@ function assembleEnhancementTransform(
     );
     rewrittenInitializer.set(
       paddedIndex(wrapperIndex),
-      skillKeyOverlay.initializer.constructorCallOperand,
+      skillSlotGeometry.initializer.constructorCallOperand,
     );
     nextBodies[skillInitializer.localIndex] = rewrittenInitializer;
   }

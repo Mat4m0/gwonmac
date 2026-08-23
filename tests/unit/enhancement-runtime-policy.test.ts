@@ -20,7 +20,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     teamManagement: false,
     xunlaiStorage: false,
     travelPalette: false,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
     tools: true,
@@ -28,7 +28,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     teamManagement: true,
     xunlaiStorage: true,
     travelPalette: true,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
     tools: true,
@@ -36,7 +36,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     teamManagement: false,
     xunlaiStorage: true,
     travelPalette: true,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
     tools: false,
@@ -44,7 +44,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     teamManagement: false,
     xunlaiStorage: false,
     travelPalette: false,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
   });
 });
 
@@ -86,7 +86,7 @@ test("product tool settings remain live once the capability is present", () => {
     teamManagement: true,
     xunlaiStorage: false,
     travelPalette: true,
-    skillKeyOverlay: true,
+    skillSlotGeometry: true,
   });
 });
 

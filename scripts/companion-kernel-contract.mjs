@@ -32,7 +32,7 @@ export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
   companion_cursor_bytes: COMPANION_ABI.cursor.bytes,
   companion_toolbox_bytes: COMPANION_ABI.toolbox.bytes,
   companion_party_bytes: COMPANION_ABI.party.bytes,
-  companion_skill_key_bytes: COMPANION_ABI.skillKeys.bytes,
+  companion_skill_slot_bytes: COMPANION_ABI.skillSlots.bytes,
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([

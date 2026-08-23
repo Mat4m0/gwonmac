@@ -30,10 +30,11 @@ import {
   COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
   COMPANION_PARTY_BYTES,
-  COMPANION_SKILL_KEY_BYTES,
   type CompanionSnapshot,
 } from "./companion-snapshot.js";
-import { createSkillKeyOverlayInstallation } from "./skill-key-overlay-installation.js";
+import { COMPANION_SKILL_SLOT_BYTES } from "./companion-skill-snapshot.js";
+import { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
+import { createSkillKeyOverlayConsumer } from "./skill-key-overlay-consumer.js";
 import { validateCompanionOwnedRegions } from "./companion-owned-regions.js";
 import {
   observeCompanion,
@@ -134,8 +135,8 @@ export async function installCertifiedCompanion(
   // launches always receive `none`; developer observers request their scalar
   // projection explicitly without implicitly mounting the Toolbox overlay.
   const foundation = capabilities.partyObservation;
-  const skillKeys = capabilities.skillKeyOverlay;
-  const skillKeyOverlay = createSkillKeyOverlayInstallation(skillKeys);
+  const hasSkillSlotGeometry = capabilities.skillSlotGeometry;
+  const skillSlotGeometry = createSkillSlotGeometryInstallation(hasSkillSlotGeometry);
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const publishObserverState = program === "target-observer";
   const featureFlags =
@@ -143,7 +144,7 @@ export async function installCertifiedCompanion(
     | (observeState ? COMPANION_FEATURE_BITS.gameSnapshot : 0)
     | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
     | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
-    | (skillKeys ? COMPANION_FEATURE_BITS.skillKeyOverlay : 0);
+    | (hasSkillSlotGeometry ? COMPANION_FEATURE_BITS.skillSlotGeometry : 0);
   if (featureFlags === 0) return null;
 
   const manifest = decodeEnhancementManifest(module, capabilities);
@@ -247,6 +248,7 @@ export async function installCertifiedCompanion(
   let disposeReadout = () => {};
   let disposeToolbox = () => {};
   let disposeToolSettings = () => {};
+  let disposeSkillKeyOverlay = () => {};
   let disposeCursorRefresh = () => {};
   let professionTrace: ReturnType<typeof createProfessionCommandTrace> | null = null;
   let installedCallback: CallableFunction | null = null;
@@ -288,7 +290,8 @@ export async function installCertifiedCompanion(
       attempt("cursor disposal", disposeCursor);
       attempt("target readout disposal", disposeReadout);
       attempt("Toolbox disposal", disposeToolbox);
-      attempt("skill key overlay disposal", skillKeyOverlay.dispose);
+      attempt("skill key overlay disposal", disposeSkillKeyOverlay);
+      attempt("skill-slot feed disposal", skillSlotGeometry.dispose);
     }
     attempt("Tools settings listener disposal", disposeToolSettings);
     attempt("Trade alias disable", () => { configureTradeToggle?.(0); });
@@ -311,7 +314,7 @@ export async function installCertifiedCompanion(
         attempt("party allocation release", () => {
           if (partyPointer) free(partyPointer);
         });
-        attempt("skill key allocation release", () => skillKeyOverlay.release(free));
+        attempt("skill-slot allocation release", () => skillSlotGeometry.release(free));
       }
       attempt("command payload release", () => {
         if (payloadPointer) free(payloadPointer);
@@ -397,7 +400,7 @@ export async function installCertifiedCompanion(
       toolboxPointer = Number(exports.malloc(COMPANION_TOOLBOX_BYTES));
       partyPointer = Number(exports.malloc(COMPANION_PARTY_BYTES));
     }
-    skillKeyOverlay.allocate(exports.malloc as (bytes: number) => unknown);
+    skillSlotGeometry.allocate(exports.malloc as (bytes: number) => unknown);
     if (capabilities.teamApply) {
       payloadPointer = Number(
         exports.malloc(teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES),
@@ -417,7 +420,7 @@ export async function installCertifiedCompanion(
       || (capabilities.nativeCursor && !cursorPointer)
       || (foundation && !toolboxPointer)
       || (foundation && !partyPointer)
-      || !skillKeyOverlay.allocated
+      || !skillSlotGeometry.allocated
       || (capabilities.teamApply && !payloadPointer)
       || (storageInstallation !== null && !storageInstallation.region().pointer)
       || (travelInstallation !== null && !travelInstallation.region().pointer)
@@ -449,7 +452,7 @@ export async function installCertifiedCompanion(
             { name: "party", pointer: partyPointer, size: COMPANION_PARTY_BYTES, align: 4 },
           ]
         : []),
-      ...(skillKeyOverlay.region === null ? [] : [skillKeyOverlay.region]),
+      ...(skillSlotGeometry.region === null ? [] : [skillSlotGeometry.region]),
       ...(capabilities.teamApply
         ? [
             {
@@ -542,7 +545,7 @@ export async function installCertifiedCompanion(
       toolboxBytes: number,
       partyPointer: number,
       partyBytes: number,
-      skillKeyPointer: number,
+      skillSlotPointer: number,
       skillKeyBytes: number,
       featureFlags: number,
     ) => number;
@@ -564,7 +567,7 @@ export async function installCertifiedCompanion(
     const kernelCursorBytes = kernel.exports.companion_cursor_bytes as KernelScalar;
     const kernelToolboxBytes = kernel.exports.companion_toolbox_bytes as KernelScalar;
     const kernelPartyBytes = kernel.exports.companion_party_bytes as KernelScalar;
-    const kernelSkillKeyBytes = kernel.exports.companion_skill_key_bytes as KernelScalar;
+    const kernelSkillSlotBytes = kernel.exports.companion_skill_slot_bytes as KernelScalar;
     if (
       kernelAbi() !== COMPANION_ABI
       || kernelConfigBytes() !== configBytes
@@ -572,7 +575,7 @@ export async function installCertifiedCompanion(
       || kernelCursorBytes() !== COMPANION_CURSOR_BYTES
       || kernelToolboxBytes() !== COMPANION_TOOLBOX_BYTES
       || kernelPartyBytes() !== COMPANION_PARTY_BYTES
-      || kernelSkillKeyBytes() !== COMPANION_SKILL_KEY_BYTES
+      || kernelSkillSlotBytes() !== COMPANION_SKILL_SLOT_BYTES
       || kernelInit(
         snapshotPointer,
         observeState ? COMPANION_SNAPSHOT_BYTES : 0,
@@ -584,8 +587,8 @@ export async function installCertifiedCompanion(
         foundation ? COMPANION_TOOLBOX_BYTES : 0,
         partyPointer,
         foundation ? COMPANION_PARTY_BYTES : 0,
-        skillKeyOverlay.pointer,
-        skillKeyOverlay.bytes,
+        skillSlotGeometry.pointer,
+        skillSlotGeometry.bytes,
         featureFlags,
       ) !== 1
     ) {
@@ -634,12 +637,19 @@ export async function installCertifiedCompanion(
       window.gwCursorState = installedCursorState;
     }
     let optionalSettings = window.gwToolsSettings();
-    if (skillKeys) {
-      skillKeyOverlay.mount(
-        document.body,
-        optionalSettings.skillKeyBindings,
-        false,
-      );
+    let skillKeyConsumer: ReturnType<typeof createSkillKeyOverlayConsumer> | null = null;
+    if (hasSkillSlotGeometry) {
+      const canvas = document.getElementById("canvas");
+      if (!(canvas instanceof HTMLCanvasElement)) {
+        throw new Error("Enhancement skill key target is missing");
+      }
+      skillKeyConsumer = createSkillKeyOverlayConsumer(document.body, canvas);
+      const unsubscribe = skillSlotGeometry.subscribe(skillKeyConsumer.update);
+      disposeSkillKeyOverlay = () => {
+        unsubscribe();
+        skillKeyConsumer?.dispose();
+        skillKeyConsumer = null;
+      };
     }
     const configureTradeAlias = () => {
       configureTradeToggle?.(optionalSettings.enabled ? 1 : 0);
@@ -692,10 +702,14 @@ export async function installCertifiedCompanion(
         readout = null;
       }
     };
-    const syncSkillKeys = () => skillKeyOverlay.sync(
-      optionalSettings.skillKeyBindings,
-      policy().skillKeyOverlay,
-    );
+    const hasSkillKeyBindings = () =>
+      optionalSettings.skillKeyBindings.some((binding) => binding !== null);
+    const syncSkillKeys = () => {
+      skillKeyConsumer?.setBindings(optionalSettings.skillKeyBindings);
+      skillKeyConsumer?.setEnabled(
+        policy().skillSlotGeometry && hasSkillKeyBindings(),
+      );
+    };
     setTargetEnabled();
     syncSkillKeys();
     disposeReadout = () => {
@@ -716,8 +730,10 @@ export async function installCertifiedCompanion(
         // prove that it became PvE without restarting.
         | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
         | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0)
-        | (skillKeys && policy().skillKeyOverlay
-          ? COMPANION_FEATURE_BITS.skillKeyOverlay
+        | (hasSkillSlotGeometry
+            && policy().skillSlotGeometry
+            && hasSkillKeyBindings()
+          ? COMPANION_FEATURE_BITS.skillSlotGeometry
           : 0);
       kernelDispatch(
         COMPANION_DISPATCH_KINDS.activeFeatures,
@@ -828,7 +844,7 @@ export async function installCertifiedCompanion(
       snapshotPointer,
       toolboxPointer,
       partyPointer,
-      skillKeyPointer: skillKeyOverlay.pointer,
+      skillSlotPointer: skillSlotGeometry.pointer,
       hertz: 0,
       lastRenderUs: 0,
       renderSamples: [] as number[],
@@ -969,7 +985,7 @@ export async function installCertifiedCompanion(
         : null,
       observeState,
       publishObserverState,
-      skillKeyOverlay.sink,
+      skillSlotGeometry.sink,
     );
     companionInstallations = installation;
     if (program !== "none") window.gwCompanionRuntime = runtime;

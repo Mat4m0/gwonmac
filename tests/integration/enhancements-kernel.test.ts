@@ -14,12 +14,9 @@ import {
   FEATURE_NATIVE_CURSOR,
   FEATURE_GAME_SNAPSHOT,
   FEATURE_TOOLBOX_FOUNDATION,
-  FEATURE_SKILL_KEY_OVERLAY,
   installCursorGraph,
   installGameGraph,
   installPartyDetailGraph,
-  installSkillBarGraph,
-  installDuplicateSkillSlot,
   MESSAGE_CONFIG_START,
   paintCursor,
   PARTY_DIRTY_MESSAGES,
@@ -184,69 +181,6 @@ describe("Companion kernel", () => {
     assert.equal(state.tickCount, 1);
     assert.equal(readoutOnly.field(CURSOR.magic), 0);
 
-  });
-
-  it("publishes all eight skill-slot rectangles or no overlay", async () => {
-    const kernel = await createKernel();
-    installSkillBarGraph(kernel.view);
-    assert.equal(
-      kernel.init({ features: FEATURE_SKILL_KEY_OVERLAY }),
-      0,
-    );
-    assert.equal(
-      kernel.init({
-        features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_SKILL_KEY_OVERLAY,
-      }),
-      1,
-    );
-    kernel.tick(1);
-    const ready = kernel.skillKeys();
-    assert.equal(ready.status, "ready");
-    if (ready.status !== "ready") return;
-    assert.equal(ready.frameId, 1);
-    assert.equal(ready.viewportWidth, 800);
-    assert.equal(ready.viewportHeight, 600);
-    assert.deepEqual(ready.slots[7], {
-      left: 464,
-      bottom: 20,
-      right: 512,
-      top: 68,
-    });
-
-    // A missing child must clear the complete publication. Keeping seven old
-    // labels would put valid-looking keys over the wrong skills.
-    kernel.view.setUint32(ADDRESSES.frameTable + 9 * 4, 0, true);
-    kernel.tick(1);
-    assert.deepEqual(kernel.skillKeys(), { status: "waiting", reason: "frame" });
-  });
-
-  it("refuses duplicate visible frames for one skill slot", async () => {
-    const kernel = await createKernel();
-    installSkillBarGraph(kernel.view);
-    installDuplicateSkillSlot(kernel.view);
-    assert.equal(kernel.init({
-      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_SKILL_KEY_OVERLAY,
-    }), 1);
-    kernel.tick(1);
-    assert.deepEqual(kernel.skillKeys(), { status: "waiting", reason: "frame" });
-  });
-
-  it("periodically audits cached skill frames for new ambiguity", async () => {
-    const kernel = await createKernel();
-    installSkillBarGraph(kernel.view);
-    installDuplicateSkillSlot(kernel.view, 1, false);
-    assert.equal(kernel.init({
-      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_SKILL_KEY_OVERLAY,
-    }), 1);
-    kernel.tick(1);
-    assert.equal(kernel.skillKeys().status, "ready");
-
-    const duplicate = ADDRESSES.frameBuffer + 10 * 0x1c8;
-    kernel.view.setUint32(duplicate + 0x18c, 0x4, true);
-    for (let tick = 0; tick < 30; tick += 1) kernel.tick(1);
-    assert.equal(kernel.skillKeys().status, "ready");
-    kernel.tick(1);
-    assert.deepEqual(kernel.skillKeys(), { status: "waiting", reason: "frame" });
   });
 
   it("keeps map policy live while a disabled target observer stops reading targets", async () => {

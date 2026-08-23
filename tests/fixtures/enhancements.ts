@@ -18,9 +18,11 @@ import {
   COMPANION_TOOLBOX_BYTES,
   COMPANION_PARTY_BYTES,
   readCompanionParty,
-  readCompanionSkillKeys,
-  COMPANION_SKILL_KEY_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
+import {
+  readCompanionSkillSlots,
+  COMPANION_SKILL_SLOT_BYTES,
+} from "../../src/renderer/companion-skill-snapshot.ts";
 import {
   ENHANCEMENT_CONFIG_WORD_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
@@ -101,8 +103,8 @@ export const FEATURE_TOOLBOX_FOUNDATION =
   COMPANION_FEATURE_BITS.toolboxFoundation;
 export const FEATURE_TARGET_OBSERVATION =
   COMPANION_FEATURE_BITS.targetObservation;
-export const FEATURE_SKILL_KEY_OVERLAY =
-  COMPANION_FEATURE_BITS.skillKeyOverlay;
+export const FEATURE_SKILL_SLOT_GEOMETRY =
+  COMPANION_FEATURE_BITS.skillSlotGeometry;
 export const ALL_FEATURES = FEATURE_NATIVE_CURSOR
   | FEATURE_GAME_SNAPSHOT
   | FEATURE_TARGET_OBSERVATION;
@@ -269,7 +271,7 @@ export const ADDRESSES = Object.freeze({
   texture: 0x8400,
   toolbox: 0x9000,
   party: 0xa800,
-  skillKeys: 0xc000,
+  skillSlots: 0xc000,
   partyContext: 0xa000,
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
@@ -365,7 +367,7 @@ export interface KernelOverrides {
   toolboxPointer?: number;
   partyPointer?: number;
   partySize?: number;
-  skillKeyPointer?: number;
+  skillSlotPointer?: number;
   skillKeySize?: number;
   toolboxSize?: number;
 }
@@ -389,7 +391,7 @@ export type KernelInit = (
   toolboxSize: number,
   partyPointer: number,
   partySize: number,
-  skillKeyPointer: number,
+  skillSlotPointer: number,
   skillKeySize: number,
   features: number,
 ) => number;
@@ -545,13 +547,13 @@ export async function createKernel(
           ?? ((features & FEATURE_TOOLBOX_FOUNDATION) !== 0
             ? COMPANION_PARTY_BYTES
             : 0),
-        overrides.skillKeyPointer
-          ?? ((features & FEATURE_SKILL_KEY_OVERLAY) !== 0
-            ? ADDRESSES.skillKeys
+        overrides.skillSlotPointer
+          ?? ((features & FEATURE_SKILL_SLOT_GEOMETRY) !== 0
+            ? ADDRESSES.skillSlots
             : 0),
         overrides.skillKeySize
-          ?? ((features & FEATURE_SKILL_KEY_OVERLAY) !== 0
-            ? COMPANION_SKILL_KEY_BYTES
+          ?? ((features & FEATURE_SKILL_SLOT_GEOMETRY) !== 0
+            ? COMPANION_SKILL_SLOT_BYTES
             : 0),
         features,
       );
@@ -593,7 +595,7 @@ export async function createKernel(
       ),
     toolbox: () => readCompanionToolbox(memory.buffer, ADDRESSES.toolbox),
     party: () => readCompanionParty(memory.buffer, ADDRESSES.party),
-    skillKeys: () => readCompanionSkillKeys(memory.buffer, ADDRESSES.skillKeys),
+    skillSlots: () => readCompanionSkillSlots(memory.buffer, ADDRESSES.skillSlots),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
     published: () => readCompanionCursorPixels(memory.buffer, ADDRESSES.cursor),

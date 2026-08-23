@@ -6,6 +6,8 @@ import {
   type SkillKeySlot,
 } from "../../src/renderer/skill-key-overlay.js";
 import { createSkillKeyOverlayConsumer } from "../../src/renderer/skill-key-overlay-consumer.js";
+import { createCompanionSequenceFeed } from "../../src/renderer/companion-sequence-feed.js";
+import type { CompanionSkillSlotState } from "../../src/renderer/companion-skill-snapshot.js";
 
 class FakeElement {
   id = "";
@@ -212,9 +214,10 @@ test("the consumer withdraws geometry whose publisher stopped advancing", () => 
   } as HTMLCanvasElement;
   let time = 0;
   const timer: { pending?: () => void } = {};
-  const consumer = createSkillKeyOverlayConsumer(
-    body as unknown as HTMLElement,
-    canvas,
+  const consumer = createSkillKeyOverlayConsumer(body as unknown as HTMLElement, canvas);
+  const feed = createCompanionSequenceFeed<CompanionSkillSlotState>(
+    { status: "waiting", reason: "memory" },
+    { status: "waiting", reason: "stale" },
     {
       now: () => time,
       staleAfterMs: 500,
@@ -227,6 +230,7 @@ test("the consumer withdraws geometry whose publisher stopped advancing", () => 
       },
     },
   );
+  const unsubscribe = feed.subscribe(consumer.update);
   consumer.setBindings([slots()[0]!.binding, null, null, null, null, null, null, null]);
   consumer.setEnabled(true);
   const ready = {
@@ -242,7 +246,7 @@ test("the consumer withdraws geometry whose publisher stopped advancing", () => 
       top: 68,
     })),
   };
-  consumer.update(ready);
+  feed.update(ready);
   const root = body.children[0]!;
   assert.equal(root.style.display, "block");
   time = 499;
@@ -251,8 +255,19 @@ test("the consumer withdraws geometry whose publisher stopped advancing", () => 
   time = 500;
   timer.pending?.();
   assert.equal(root.style.display, "none");
-  consumer.update({ ...ready, sequence: 4 });
+  feed.update({ ...ready, sequence: 4 });
   assert.equal(root.style.display, "block");
+  feed.update({ status: "waiting", reason: "snapshot" });
+  feed.update({ ...ready, sequence: 4 });
+  assert.equal(
+    root.style.display,
+    "none",
+    "a rejected snapshot cannot revive the sequence it invalidated",
+  );
+  feed.update({ ...ready, sequence: 6 });
+  assert.equal(root.style.display, "block");
+  unsubscribe();
+  feed.dispose();
   consumer.dispose();
 });
 

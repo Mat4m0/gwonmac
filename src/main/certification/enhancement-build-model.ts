@@ -25,7 +25,7 @@ import {
   type EnhancementCursorLayout,
   type EnhancementObservationBaseLayout,
   type EnhancementPartyLayout,
-  type EnhancementSkillKeyOverlayLayout,
+  type EnhancementSkillSlotGeometryLayout,
   type EnhancementStorageLayout,
   type EnhancementTargetLayout,
 } from "../../shared/enhancement-config.js";
@@ -112,7 +112,7 @@ export function enhancementConfigWords(
               ? build.partyObservation?.layout[field.key]
               : field.owner === "storage"
                 ? build.xunlaiAction?.accessProof?.layout[field.key]
-                : build.skillKeyOverlay?.layout[field.key];
+                : build.skillSlotGeometry?.layout[field.key];
       if (field.owner === "storage" && build.xunlaiAction === undefined) {
         return 0;
       }
@@ -277,8 +277,8 @@ export interface KnownEnhancementBuild {
     nearbyPlayerMessageProducers: readonly [number, number];
     layout: EnhancementPartyLayout;
   }>;
-  /** Certified capture site and read-only frame layout for the skill key overlay. */
-  skillKeyOverlay?: Readonly<{
+  /** Certified capture site and read-only frame layout for all skill-slot HUDs. */
+  skillSlotGeometry?: Readonly<{
     initializer: Readonly<{
       functionIndex: number;
       params: readonly ["i32", "i32"];
@@ -293,7 +293,7 @@ export interface KnownEnhancementBuild {
       bodySha256: string;
     }>;
     labelAddress: number;
-    layout: EnhancementSkillKeyOverlayLayout;
+    layout: EnhancementSkillSlotGeometryLayout;
   }>;
 }
 
@@ -318,7 +318,7 @@ export function supportedEnhancementCapabilities(
     travelAction,
     xunlaiAction,
     chatAliases: build.uiDispatcher !== undefined && build.chatAliases !== undefined,
-    skillKeyOverlay: build.skillKeyOverlay !== undefined,
+    skillSlotGeometry: build.skillSlotGeometry !== undefined,
   });
 }
 
@@ -387,7 +387,7 @@ export function hasValidEnhancementProfileHashes(
     build.chatAliases !== undefined
     && build.uiDispatcher === undefined
   ) return false;
-  if (build.skillKeyOverlay !== undefined && build.skillKeyOverlay.labelAddress === 0) {
+  if (build.skillSlotGeometry !== undefined && build.skillSlotGeometry.labelAddress === 0) {
     return false;
   }
   const actual = Object.entries(build.outputSha256);

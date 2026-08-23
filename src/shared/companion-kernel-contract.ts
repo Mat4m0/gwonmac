@@ -23,7 +23,7 @@ export const COMPANION_KERNEL_SIGNATURES: readonly Readonly<{
   { name: "companion_cursor_bytes", typeIndex: 2 },
   { name: "companion_toolbox_bytes", typeIndex: 2 },
   { name: "companion_party_bytes", typeIndex: 2 },
-  { name: "companion_skill_key_bytes", typeIndex: 2 },
+  { name: "companion_skill_slot_bytes", typeIndex: 2 },
 ]);
 
 export const COMPANION_KERNEL_EXPORTS = Object.freeze(

@@ -33,7 +33,7 @@ function compatibility(
       travelAction: off,
       xunlaiAction: off,
       chatAliases: off,
-      skillKeyOverlay: off,
+      skillSlotGeometry: off,
       ...overrides,
     },
   };
@@ -58,7 +58,7 @@ const IDS = [
   "settings-feature-targetObservation", "settings-feature-partyObservation",
   "settings-feature-teamApply",
   "settings-feature-travelAction", "settings-feature-xunlaiAction",
-  "settings-feature-chatAliases", "settings-feature-skillKeyOverlay",
+  "settings-feature-chatAliases", "settings-feature-skillSlotGeometry",
 ] as const;
 
 function compatibilityDom() {
@@ -201,7 +201,7 @@ describe("client compatibility notice", () => {
                       travelAction,
                       xunlaiAction,
                       chatAliases,
-                      skillKeyOverlay: off,
+                      skillSlotGeometry: off,
                     } satisfies ClientCompatibility["features"];
                 const report = compatibilityReport({
                   clientSha256: "b".repeat(64),

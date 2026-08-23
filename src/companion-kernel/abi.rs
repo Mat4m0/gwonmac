@@ -30,15 +30,15 @@ pub(crate) const FEATURE_NATIVE_CURSOR: u32 = 1 << 0;
 pub(crate) const FEATURE_GAME_SNAPSHOT: u32 = 1 << 1;
 pub(crate) const FEATURE_TOOLBOX_FOUNDATION: u32 = 1 << 2;
 pub(crate) const FEATURE_TARGET_OBSERVATION: u32 = 1 << 3;
-pub(crate) const FEATURE_SKILL_KEY_OVERLAY: u32 = 1 << 4;
+pub(crate) const FEATURE_SKILL_SLOT_GEOMETRY: u32 = 1 << 4;
 pub(crate) const KNOWN_FEATURES: u32 =
     FEATURE_NATIVE_CURSOR | FEATURE_GAME_SNAPSHOT | FEATURE_TOOLBOX_FOUNDATION
-        | FEATURE_TARGET_OBSERVATION | FEATURE_SKILL_KEY_OVERLAY;
+        | FEATURE_TARGET_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY;
 
-pub(crate) const SKILL_KEY_BYTES: u32 = size_of::<SkillKeySnapshot>() as u32;
-pub(crate) const SKILL_KEY_MAGIC: u32 = 0x534b_5747;
-pub(crate) const SKILL_KEY_ABI_AND_SIZE: u32 = (SKILL_KEY_BYTES << 16) | 1;
-pub(crate) const FLAG_SKILL_KEYS_READY: u32 = 1 << 0;
+pub(crate) const SKILL_SLOT_BYTES: u32 = size_of::<SkillSlotSnapshot>() as u32;
+pub(crate) const SKILL_SLOT_MAGIC: u32 = 0x534b_5747;
+pub(crate) const SKILL_SLOT_ABI_AND_SIZE: u32 = (SKILL_SLOT_BYTES << 16) | 1;
+pub(crate) const FLAG_SKILL_SLOTS_READY: u32 = 1 << 0;
 
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
 pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
@@ -420,7 +420,7 @@ pub(crate) struct ToolboxSnapshot {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct SkillKeyRect {
+pub(crate) struct SkillSlotRect {
     pub(crate) left: f32,
     pub(crate) bottom: f32,
     pub(crate) right: f32,
@@ -428,7 +428,7 @@ pub(crate) struct SkillKeyRect {
 }
 
 #[repr(C)]
-pub(crate) struct SkillKeySnapshot {
+pub(crate) struct SkillSlotSnapshot {
     pub(crate) magic: u32,
     pub(crate) abi_and_size: u32,
     pub(crate) sequence: u32,
@@ -436,7 +436,7 @@ pub(crate) struct SkillKeySnapshot {
     pub(crate) frame_id: u32,
     pub(crate) viewport_width: f32,
     pub(crate) viewport_height: f32,
-    pub(crate) slots: [SkillKeyRect; SKILL_SLOTS],
+    pub(crate) slots: [SkillSlotRect; SKILL_SLOTS],
 }
 
 /// One party position, as much of it as has been read.
@@ -509,5 +509,5 @@ const _: [(); 1560] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
-const _: [(); 16] = [(); size_of::<SkillKeyRect>()];
-const _: [(); 156] = [(); size_of::<SkillKeySnapshot>()];
+const _: [(); 16] = [(); size_of::<SkillSlotRect>()];
+const _: [(); 156] = [(); size_of::<SkillSlotSnapshot>()];

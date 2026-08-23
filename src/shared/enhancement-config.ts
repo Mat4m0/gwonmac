@@ -123,7 +123,7 @@ export type EnhancementStorageLayout = Pick<EnhancementLayout,
   | "worldPlayers" | "playerRecordStride" | "playerRecordAgentId"
   | "playerRecordAccessFlags" | "playerRecordNumber" | "areaInfoType"
 >;
-export type EnhancementSkillKeyOverlayLayout = Pick<EnhancementLayout,
+export type EnhancementSkillSlotGeometryLayout = Pick<EnhancementLayout,
   | "frameArray" | "frameCount" | "frameBytes" | "frameChildOffsetId"
   | "frameId" | "framePositionFlags" | "frameViewportWidth"
   | "frameViewportHeight" | "frameScreenLeft" | "frameScreenBottom"
@@ -132,11 +132,11 @@ export type EnhancementSkillKeyOverlayLayout = Pick<EnhancementLayout,
 export type EnhancementPartyLayout = Omit<EnhancementLayout,
   keyof EnhancementObservationBaseLayout | keyof EnhancementTargetLayout
   | keyof EnhancementCursorLayout | keyof EnhancementStorageLayout
-  | keyof EnhancementSkillKeyOverlayLayout
+  | keyof EnhancementSkillSlotGeometryLayout
 >;
 
 type Owner = "observation" | "target" | "cursor" | "party" | "storage"
-  | "skill-overlay";
+  | "skill-slots";
 type ConfigField =
   | Readonly<{
     source: "layout";
@@ -149,8 +149,8 @@ type ConfigField =
   | Readonly<{ source: "layout"; owner: "storage"; key: keyof EnhancementStorageLayout }>
   | Readonly<{
     source: "layout";
-    owner: "skill-overlay";
-    key: keyof EnhancementSkillKeyOverlayLayout;
+    owner: "skill-slots";
+    key: keyof EnhancementSkillSlotGeometryLayout;
   }>
   | Readonly<{
     source: "dispatcher";
@@ -174,10 +174,10 @@ const party = (
 const storage = (
   ...keys: readonly (keyof EnhancementStorageLayout)[]
 ): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "storage" }));
-const skillOverlay = (
-  ...keys: readonly (keyof EnhancementSkillKeyOverlayLayout)[]
+const skillSlots = (
+  ...keys: readonly (keyof EnhancementSkillSlotGeometryLayout)[]
 ): readonly ConfigField[] => keys.map((key) => ({
-  source: "layout", key, owner: "skill-overlay",
+  source: "layout", key, owner: "skill-slots",
 }));
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
@@ -193,7 +193,7 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...observation("areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags"),
   ...party("worldProfessionStates", "professionStateStride", "worldCharacterSkills"),
   ...storage("worldPlayers", "playerRecordStride", "playerRecordAgentId", "playerRecordAccessFlags", "playerRecordNumber", "areaInfoType"),
-  ...skillOverlay(
+  ...skillSlots(
     "frameArray", "frameCount", "frameBytes", "frameChildOffsetId", "frameId",
     "framePositionFlags", "frameViewportWidth", "frameViewportHeight",
     "frameScreenLeft", "frameScreenBottom", "frameScreenRight", "frameScreenTop",

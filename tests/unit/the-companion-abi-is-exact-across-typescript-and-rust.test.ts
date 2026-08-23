@@ -19,7 +19,7 @@ const FEATURE_NAMES = Object.freeze({
   gameSnapshot: "FEATURE_GAME_SNAPSHOT",
   toolboxFoundation: "FEATURE_TOOLBOX_FOUNDATION",
   targetObservation: "FEATURE_TARGET_OBSERVATION",
-  skillKeyOverlay: "FEATURE_SKILL_KEY_OVERLAY",
+  skillSlotGeometry: "FEATURE_SKILL_SLOT_GEOMETRY",
 } as const);
 
 const DISPATCH_NAMES = Object.freeze({

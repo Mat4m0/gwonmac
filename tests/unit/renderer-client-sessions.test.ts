@@ -16,7 +16,7 @@ const base: ClientSession = {
       travelAction: { status: "available" },
       xunlaiAction: { status: "available" },
       chatAliases: { status: "available" },
-      skillKeyOverlay: { status: "available" },
+      skillSlotGeometry: { status: "available" },
     },
   },
   extendedMemory: {

@@ -397,10 +397,10 @@ export class ClientRuntime {
           supported.chatAliases,
           preparationFailed,
         ),
-        skillKeyOverlay: optionalFeatureStatus(
-          requested.skillKeyOverlay,
-          effective.skillKeyOverlay,
-          supported.skillKeyOverlay,
+        skillSlotGeometry: optionalFeatureStatus(
+          requested.skillSlotGeometry,
+          effective.skillSlotGeometry,
+          supported.skillSlotGeometry,
           preparationFailed,
         ),
       },
@@ -413,7 +413,7 @@ export class ClientRuntime {
     gauge("enhancement.effectiveTravelAction", effective.travelAction);
     gauge("enhancement.effectiveXunlaiAction", effective.xunlaiAction);
     gauge("enhancement.effectiveChatAliases", effective.chatAliases);
-    gauge("enhancement.effectiveSkillKeyOverlay", effective.skillKeyOverlay);
+    gauge("enhancement.effectiveSkillSlotGeometry", effective.skillSlotGeometry);
 
     if (prepared.failure?.stage === "template-save") {
       logEvent({ k: "wasm.templateSavePrepareFailed",

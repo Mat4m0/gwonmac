@@ -188,7 +188,7 @@ describe("companion kernel build contract", () => {
       { name: "companion_cursor_bytes", typeIndex: 2 },
       { name: "companion_toolbox_bytes", typeIndex: 2 },
       { name: "companion_party_bytes", typeIndex: 2 },
-      { name: "companion_skill_key_bytes", typeIndex: 2 },
+      { name: "companion_skill_slot_bytes", typeIndex: 2 },
     ]);
   });
 
@@ -252,7 +252,7 @@ describe("companion kernel build contract", () => {
       companion_cursor_bytes: COMPANION_CURSOR_BYTES,
       companion_toolbox_bytes: COMPANION_TOOLBOX_BYTES,
       companion_party_bytes: COMPANION_PARTY_BYTES,
-      companion_skill_key_bytes: COMPANION_KERNEL_EXPORT_VALUES.companion_skill_key_bytes,
+      companion_skill_slot_bytes: COMPANION_KERNEL_EXPORT_VALUES.companion_skill_slot_bytes,
     });
     // One export per value, so a region added to the kernel cannot be left
     // unverified by forgetting to state its size.

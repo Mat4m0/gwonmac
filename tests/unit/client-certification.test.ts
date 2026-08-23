@@ -22,7 +22,7 @@ const ALL_CAPABILITIES = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
-    skillKeyOverlay: false,
+    skillSlotGeometry: false,
 });
 
 function localVerification(

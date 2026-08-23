@@ -9,7 +9,7 @@ export const COMPANION_ABI = Object.freeze({
   cursor: Object.freeze({ abi: 1, bytes: 4_160 }),
   toolbox: Object.freeze({ abi: 4, bytes: 64 }),
   party: Object.freeze({ abi: 7, bytes: 1_560 }),
-  skillKeys: Object.freeze({ abi: 1, bytes: 156 }),
+  skillSlots: Object.freeze({ abi: 1, bytes: 156 }),
 });
 
 export const COMPANION_FEATURE_BITS = Object.freeze({
@@ -17,7 +17,7 @@ export const COMPANION_FEATURE_BITS = Object.freeze({
   gameSnapshot: 1 << 1,
   toolboxFoundation: 1 << 2,
   targetObservation: 1 << 3,
-  skillKeyOverlay: 1 << 4,
+  skillSlotGeometry: 1 << 4,
 });
 
 export const COMPANION_DISPATCH_KINDS = Object.freeze({
