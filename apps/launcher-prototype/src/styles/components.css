@@ -76,6 +76,12 @@
   border-block-end: 1px solid var(--line);
 }
 
+.funding-bar {
+  min-height: 62px;
+  background: linear-gradient(90deg, rgba(24, 18, 13, 0.98), rgba(35, 25, 16, 0.96));
+  box-shadow: inset 3px 0 var(--gold);
+}
+
 .funding-copy {
   display: grid;
   gap: 2px;

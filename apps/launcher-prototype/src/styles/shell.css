@@ -388,6 +388,11 @@
   font-weight: 700;
 }
 
+.account-mini-avatar svg {
+  width: 17px;
+  height: 17px;
+}
+
 .account-menu {
   position: absolute;
   inset-inline: 0;
@@ -400,6 +405,43 @@
   border-radius: 13px;
   background: #201d19;
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.62), inset 0 0 0 1px var(--line);
+}
+
+.account-menu-heading {
+  display: grid;
+  gap: 2px;
+  padding: 10px 10px 8px;
+}
+
+.account-menu-heading small {
+  color: var(--muted);
+}
+
+.quick-account-option {
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.quick-account-option:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.quick-account-option > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+}
+
+.quick-account-option input {
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  accent-color: #c99046;
 }
 
 .account-menu button {

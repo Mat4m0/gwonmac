@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { nextTick, ref, watch } from "vue";
 import { X } from "@lucide/vue";
 import AccountsView from "./views/AccountsView.vue";
 import HomeView from "./views/HomeView.vue";
@@ -20,34 +20,29 @@ const {
   accountMenuOpen,
   addAccount,
   addAccountOpen,
-  completeSignIn,
   fundingGoal,
   fundingOpen,
   fundingPlacement,
   fundingRaised,
   launchAccount,
+  launchQuickStart,
   navigate,
+  quickStartAccounts,
   reset,
   route,
   runningAccounts,
   scenario,
-  selectAccount,
-  selectedAccount,
-  selectedAccountId,
   settings,
   settingsSection,
   showToast,
-  signInAccountId,
   stopAccount,
+  toggleQuickStart,
   toast,
 } = useLauncher();
 
 const activeArticleId = ref("event");
 const newAccountName = ref("");
 const launcherContent = ref<HTMLElement | null>(null);
-const signInAccount = computed(() =>
-  accounts.value.find((account) => account.id === signInAccountId.value),
-);
 
 const openArticle = (articleId: string) => {
   activeArticleId.value = articleId;
@@ -61,10 +56,18 @@ const submitNewAccount = () => {
 };
 
 const saveSettings = () => showToast("Settings saved.");
-
-watch(route, async () => {
+const resetContentScroll = async () => {
   await nextTick();
   launcherContent.value?.scrollTo({ top: 0 });
+};
+
+const setSettingsSection = async (section: SettingsSection) => {
+  settingsSection.value = section;
+  await resetContentScroll();
+};
+
+watch(route, async () => {
+  await resetContentScroll();
 });
 </script>
 
@@ -103,45 +106,44 @@ watch(route, async () => {
           :funding-placement="fundingPlacement"
           :funding-raised="fundingRaised"
           :funding-goal="fundingGoal"
+          :settings="settings"
           @navigate="navigate"
           @open-article="openArticle"
+          @open-news-settings="settingsSection = 'news'; navigate('settings')"
           @support="fundingOpen = true"
         />
-        <NewsView v-else-if="route === 'news'" :key="activeArticleId" :initial-article-id="activeArticleId" />
+        <NewsView v-else-if="route === 'news'" :key="activeArticleId" :initial-article-id="activeArticleId" :settings="settings" @open-settings="settingsSection = 'news'; navigate('settings')" />
         <SettingsView
           v-else-if="route === 'settings'"
           v-model:settings="settings"
           :active-section="settingsSection"
-          @update:active-section="settingsSection = $event as SettingsSection"
+          @update:active-section="setSettingsSection($event as SettingsSection)"
           @save="saveSettings"
         />
-        <IssuesView v-else-if="route === 'issues'" :scenario="scenario" />
+        <IssuesView v-else-if="route === 'issues'" :scenario="scenario" @section-change="resetContentScroll" />
         <AccountsView
           v-else
           :accounts="accounts"
-          :settings="settings"
-          :selected-account-id="selectedAccountId"
           @add="addAccountOpen = true"
           @launch="launchAccount"
-          @select="selectAccount"
+          @quick-start="launchQuickStart"
           @stop="stopAccount"
-          @update:multiple-windows="settings.multipleWindows = $event"
+          @toggle-quick-start="toggleQuickStart"
         />
       </main>
 
       <LaunchDock
-        v-if="selectedAccount"
         :accounts="accounts"
-        :selected-account="selectedAccount"
+        :quick-start-count="quickStartAccounts.length"
         :running-count="runningAccounts.length"
         :scenario="scenario"
         :menu-open="accountMenuOpen"
         :funding-placement="fundingPlacement"
         :funding-raised="fundingRaised"
         :funding-goal="fundingGoal"
-        @launch="launchAccount"
+        @quick-start="launchQuickStart"
         @navigate="navigate"
-        @select="selectAccount"
+        @toggle-account="toggleQuickStart"
         @update:menu-open="accountMenuOpen = $event"
         @support="fundingOpen = true"
       />
@@ -165,19 +167,11 @@ watch(route, async () => {
         <div class="modal-actions"><button class="secondary-button" type="button" @click="fundingOpen = false">Close</button><button class="primary-button" type="button" @click="fundingOpen = false; showToast('This would open the project support page.')">Open support page</button></div>
       </BaseModal>
 
-      <BaseModal v-if="signInAccount" title="Sign in to account" @close="signInAccountId = null">
-        <button class="modal-close" type="button" aria-label="Close" @click="signInAccountId = null"><X aria-hidden="true" /></button>
-        <span class="eyebrow">{{ signInAccount.name }}</span>
-        <h1>Sign in before playing</h1>
-        <p>The official Guild Wars login opens in this account’s game window. The launcher does not store your password.</p>
-        <div class="modal-actions"><button class="secondary-button" type="button" @click="signInAccountId = null">Cancel</button><button class="primary-button" type="button" @click="completeSignIn">Open sign-in</button></div>
-      </BaseModal>
-
       <BaseModal v-if="addAccountOpen" title="Add an account" @close="addAccountOpen = false">
         <button class="modal-close" type="button" aria-label="Close" @click="addAccountOpen = false"><X aria-hidden="true" /></button>
         <span class="eyebrow">Accounts</span>
         <h1>Add an account</h1>
-        <p>Give this account a name. You will sign in when you start it for the first time.</p>
+        <p>Give this game window a name so you can find it in Quick start.</p>
         <form class="account-form" @submit.prevent="submitNewAccount">
           <label for="account-name">Account name</label>
           <input id="account-name" v-model="newAccountName" name="account-name" autocomplete="off" placeholder="Storage account" required />

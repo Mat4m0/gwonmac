@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from "vue";
-import { Command, Download, Monitor, Wrench } from "@lucide/vue";
+import { Command, Download, Monitor, Newspaper, Wrench } from "@lucide/vue";
 import type { LauncherSettings, SettingsSection } from "../model";
 
 defineProps<{
@@ -16,6 +16,7 @@ const emit = defineEmits<{
 
 const sections: Array<{ id: SettingsSection; label: string; icon: Component }> = [
   { id: "updates", label: "Updates and game files", icon: Download },
+  { id: "news", label: "News", icon: Newspaper },
   { id: "tools", label: "Optional Tools", icon: Wrench },
   { id: "display", label: "Display", icon: Monitor },
   { id: "shortcuts", label: "Shortcuts", icon: Command },
@@ -63,6 +64,24 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
               <button class="secondary-button" type="button">Download now</button>
             </div>
           </section>
+        </div>
+      </div>
+
+      <div v-else-if="activeSection === 'news'">
+        <div class="content-heading"><div><span class="eyebrow">Settings</span><h1>News</h1><p>Choose which updates appear on Home and in News.</p></div></div>
+        <div class="setting-groups">
+          <section class="setting-group">
+            <h2>News sources</h2>
+            <label class="setting-row">
+              <span><strong>Show Guild Wars news</strong><small>Official game updates, events, and patch notes.</small></span>
+              <input v-model="settings.showGuildWarsNews" class="switch" type="checkbox" />
+            </label>
+            <label class="setting-row">
+              <span><strong>Show Reforged for macOS news</strong><small>Launcher releases, Tools updates, and project notices.</small></span>
+              <input v-model="settings.showMacNews" class="switch" type="checkbox" />
+            </label>
+          </section>
+          <p v-if="!settings.showGuildWarsNews && !settings.showMacNews" class="inline-notice">Home will show launcher status instead of news. You can turn either source back on here.</p>
         </div>
       </div>
 

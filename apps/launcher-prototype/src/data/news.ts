@@ -3,6 +3,7 @@ import type { NewsArticle } from "../model";
 export const newsArticles: NewsArticle[] = [
   {
     id: "event",
+    sourceKey: "guild-wars",
     source: "Guild Wars",
     date: "Starts Aug 25",
     title: "Wayfarer’s Reverie starts Tuesday",
@@ -15,6 +16,7 @@ export const newsArticles: NewsArticle[] = [
   },
   {
     id: "client-update",
+    sourceKey: "guild-wars",
     source: "Official Guild Wars",
     date: "Aug 19, 2026",
     title: "Client stability update",
@@ -28,17 +30,18 @@ export const newsArticles: NewsArticle[] = [
   },
   {
     id: "multiple-accounts",
+    sourceKey: "macos",
     source: "Reforged for macOS",
     date: "Aug 17, 2026",
-    title: "Start every account from one launcher",
-    summary: "Open separate game windows without opening another launcher.",
+    title: "Accounts and Quick start are now in one launcher",
+    summary: "Open one game window or your usual group from the same launcher.",
     image: "/images/bg-reforged.jpg",
     paragraphs: [
-      "Accounts now stay in the main launcher. Choose an account and start it directly from the Accounts screen or the Play menu.",
+      "Add accounts only when you need them. Quick start opens your selected accounts together, each in its own game window.",
     ],
     bullets: [
       "Each account keeps its own login and settings.",
-      "Multiple game windows can be enabled or disabled immediately.",
+      "Every saved account can open in its own game window.",
       "The launcher never copies keyboard or mouse input between accounts.",
     ],
   },

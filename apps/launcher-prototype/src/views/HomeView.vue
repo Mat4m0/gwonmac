@@ -1,35 +1,42 @@
 <script setup lang="ts">
 import { ArrowRight } from "@lucide/vue";
+import { computed } from "vue";
 import { newsArticles } from "../data/news";
-import type { FundingPlacement, RouteName, Scenario } from "../model";
+import type { FundingPlacement, LauncherSettings, RouteName, Scenario } from "../model";
 import FundingProgress from "../components/FundingProgress.vue";
 
-defineProps<{
+const props = defineProps<{
   scenario: Scenario;
   fundingPlacement: FundingPlacement;
   fundingRaised: number;
   fundingGoal: number;
+  settings: LauncherSettings;
 }>();
 
 const emit = defineEmits<{
   navigate: [route: RouteName];
   openArticle: [articleId: string];
+  openNewsSettings: [];
   support: [];
 }>();
 
-const feature = newsArticles[0]!;
+const feature = computed(() =>
+  newsArticles.find((article) =>
+    article.sourceKey === "guild-wars" ? props.settings.showGuildWarsNews : props.settings.showMacNews,
+  ),
+);
 </script>
 
 <template>
   <div class="home-layout">
-    <section class="feature-story" :style="{ backgroundImage: `url(${feature.image})` }">
+    <section class="feature-story" :style="{ backgroundImage: `url(${feature?.image ?? '/images/bg-reforged.jpg'})` }">
       <div class="feature-overlay"></div>
       <div class="feature-copy">
-        <span class="eyebrow">Guild Wars news · Aug 23</span>
-        <h1>{{ feature.title }}.</h1>
-        <p>{{ feature.summary }} All weekly bonuses will be active.</p>
-        <button class="text-button" type="button" @click="emit('openArticle', feature.id)">
-          Read update
+        <span class="eyebrow">{{ feature ? `${feature.source} · ${feature.date}` : "Launcher status" }}</span>
+        <h1>{{ feature ? `${feature.title}.` : "Ready when you are." }}</h1>
+        <p>{{ feature ? feature.summary : "News is hidden. Guild Wars and your launcher settings still work normally." }}</p>
+        <button class="text-button" type="button" @click="feature ? emit('openArticle', feature.id) : emit('openNewsSettings')">
+          {{ feature ? "Read update" : "Choose news" }}
           <ArrowRight aria-hidden="true" />
         </button>
       </div>
@@ -54,20 +61,20 @@ const feature = newsArticles[0]!;
       </section>
 
       <div class="summary-list">
-        <button type="button" @click="emit('openArticle', 'client-update')">
+        <button v-if="settings.showGuildWarsNews" type="button" @click="emit('openArticle', 'client-update')">
           <span class="eyebrow">Guild Wars</span>
           <span><strong>Client stability update</strong><small>Fixed a cinematic crash and map reveal problems.</small></span>
           <span class="pill">Aug 19</span>
         </button>
-        <button type="button" @click="emit('openArticle', 'multiple-accounts')">
+        <button v-if="settings.showMacNews" type="button" @click="emit('openArticle', 'multiple-accounts')">
           <span class="eyebrow">macOS</span>
-          <span><strong>Version 2026.8.9 installed</strong><small>You have the latest Stable version.</small></span>
-          <span class="pill good">Current</span>
+          <span><strong>Quick start added to the launcher</strong><small>Choose accounts and open them together.</small></span>
+          <span class="pill">New</span>
         </button>
         <button type="button" @click="emit('navigate', 'issues')">
           <span class="eyebrow">Issues</span>
-          <span><strong>{{ scenario === "degraded" ? "Two Tools are unavailable" : "No known issues" }}</strong><small>{{ scenario === "degraded" ? "Your saved data is safe." : "Everything you enabled is available." }}</small></span>
-          <span class="pill" :class="scenario === 'degraded' ? 'warning' : 'good'">{{ scenario === "degraded" ? "Checking" : "All clear" }}</span>
+          <span><strong>{{ scenario === "degraded" ? "Some Tools are unavailable" : "Two known game issues" }}</strong><small>{{ scenario === "degraded" ? "Guild Wars still works." : "Workarounds are available." }}</small></span>
+          <span class="pill" :class="scenario === 'degraded' ? 'warning' : ''">{{ scenario === "degraded" ? "Checking" : "View" }}</span>
         </button>
       </div>
 

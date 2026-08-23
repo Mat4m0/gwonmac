@@ -39,8 +39,8 @@ const emit = defineEmits<{
         :value="fundingPlacement"
         @change="emit('update:funding-placement', ($event.target as HTMLSelectElement).value as FundingPlacement)"
       >
-        <option value="home">Home card · recommended</option>
-        <option value="bar">Top bar</option>
+        <option value="bar">Top bar · selected</option>
+        <option value="home">Home card</option>
         <option value="dock">Launch dock</option>
         <option value="hidden">Hidden</option>
       </select>

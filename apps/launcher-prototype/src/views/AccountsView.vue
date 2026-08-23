@@ -1,19 +1,15 @@
 <script setup lang="ts">
-import { LogIn, PanelTopOpen, PanelsTopLeft, Play, ShieldCheck, UserPlus } from "@lucide/vue";
-import type { Account, LauncherSettings } from "../model";
+import { PanelTopOpen, Play, ShieldCheck, UserPlus, Zap } from "@lucide/vue";
+import type { Account } from "../model";
 
-defineProps<{
-  accounts: Account[];
-  settings: LauncherSettings;
-  selectedAccountId: string;
-}>();
+defineProps<{ accounts: Account[] }>();
 
 const emit = defineEmits<{
   add: [];
   launch: [accountId: string];
-  select: [accountId: string];
+  quickStart: [];
   stop: [accountId: string];
-  "update:multiple-windows": [enabled: boolean];
+  toggleQuickStart: [accountId: string];
 }>();
 </script>
 
@@ -22,65 +18,42 @@ const emit = defineEmits<{
     <aside class="section-sidebar account-sidebar">
       <span class="eyebrow">Launcher</span>
       <h1>Accounts</h1>
-      <p>Start every account from this launcher. Each account opens in its own game window.</p>
-      <button class="secondary-button add-account-button" type="button" @click="emit('add')">
-        <UserPlus aria-hidden="true" />
-        Add account
-      </button>
+      <p>Add an account when you want another game window. There is no separate mode or launcher.</p>
+      <button class="secondary-button add-account-button" type="button" @click="emit('add')"><UserPlus aria-hidden="true" />Add account</button>
     </aside>
+
     <section class="section-content accounts-screen">
-      <div class="content-heading">
-        <div><span class="eyebrow">Accounts</span><h1>Choose an account</h1><p>You do not need another launcher. Start, stop, and switch between game windows here.</p></div>
+      <div class="content-heading account-heading">
+        <div><span class="eyebrow">Accounts</span><h1>Game windows</h1><p>Start one account or open your usual set with Quick start.</p></div>
+        <button class="primary-button" type="button" @click="emit('quickStart')"><Zap aria-hidden="true" />Quick start</button>
       </div>
 
-      <section class="multi-window-setting">
-        <div class="setting-icon"><PanelsTopLeft aria-hidden="true" /></div>
-        <div>
-          <strong>Multiple game windows</strong>
-          <p>Allow more than one account to run at the same time. This change applies immediately.</p>
-        </div>
-        <input
-          class="switch"
-          type="checkbox"
-          :checked="settings.multipleWindows"
-          aria-label="Multiple game windows"
-          @change="emit('update:multiple-windows', ($event.target as HTMLInputElement).checked)"
-        />
+      <section class="quick-start-panel">
+        <div class="setting-icon"><Zap aria-hidden="true" /></div>
+        <div><strong>Quick start session</strong><p>Select the accounts that should open together. You can change this at any time.</p></div>
+        <span>{{ accounts.filter((account) => account.quickStart).length }} selected</span>
       </section>
 
       <div class="account-grid">
-        <article
-          v-for="account in accounts"
-          :key="account.id"
-          class="account-card"
-          :class="{ selected: selectedAccountId === account.id, running: account.status === 'running' }"
-        >
-          <button class="account-card-main" type="button" @click="emit('select', account.id)">
+        <article v-for="account in accounts" :key="account.id" class="account-card" :class="{ running: account.status === 'running' }">
+          <div class="account-card-main">
             <span class="account-avatar">{{ account.initial }}</span>
-            <span class="account-copy">
-              <strong>{{ account.name }}</strong>
-              <small>{{ account.note }}</small>
-            </span>
-            <span class="account-state" :class="account.status">
-              <span class="status-dot" :class="account.status === 'running' ? 'ready' : ''"></span>
-              {{ account.status === "running" ? "Running" : account.status === "login-required" ? "Sign in required" : "Ready" }}
-            </span>
-          </button>
-          <div class="account-actions">
-            <button v-if="account.status === 'running'" class="secondary-button" type="button" @click="emit('stop', account.id)">Stop</button>
-            <button class="primary-button" type="button" @click="emit('launch', account.id)">
-              <PanelTopOpen v-if="account.status === 'running'" aria-hidden="true" />
-              <LogIn v-else-if="account.status === 'login-required'" aria-hidden="true" />
-              <Play v-else aria-hidden="true" />
-              {{ account.status === "running" ? "Show game" : account.status === "login-required" ? "Sign in and play" : "Play" }}
-            </button>
+            <span class="account-copy"><strong>{{ account.name }}</strong><small>{{ account.note }}</small></span>
+            <span class="account-state" :class="account.status"><span class="status-dot" :class="account.status === 'running' ? 'ready' : ''"></span>{{ account.status === "running" ? "Open" : "Ready" }}</span>
+          </div>
+          <div class="account-card-footer">
+            <label class="quick-start-choice"><input type="checkbox" :checked="account.quickStart" @change="emit('toggleQuickStart', account.id)" />Include in Quick start</label>
+            <div class="account-actions">
+              <button v-if="account.status === 'running'" class="secondary-button" type="button" @click="emit('stop', account.id)">Stop</button>
+              <button class="primary-button" type="button" @click="emit('launch', account.id)"><PanelTopOpen v-if="account.status === 'running'" aria-hidden="true" /><Play v-else aria-hidden="true" />{{ account.status === "running" ? "Show game" : "Play" }}</button>
+            </div>
           </div>
         </article>
       </div>
 
       <section class="account-explainer">
         <ShieldCheck aria-hidden="true" />
-        <div><strong>Accounts stay separate</strong><p>Each game window keeps its own login and settings. The launcher does not copy keyboard or mouse input between accounts.</p></div>
+        <div><strong>Each account stays separate</strong><p>Each account opens in its own game window. Guild Wars handles sign-in inside that window.</p></div>
       </section>
     </section>
   </div>

@@ -1,8 +1,8 @@
 export type RouteName = "home" | "news" | "settings" | "issues" | "accounts";
 export type Scenario = "ready" | "updating" | "degraded" | "offline";
 export type FundingPlacement = "home" | "bar" | "dock" | "hidden";
-export type SettingsSection = "updates" | "tools" | "display" | "shortcuts";
-export type AccountStatus = "ready" | "running" | "login-required";
+export type SettingsSection = "updates" | "news" | "tools" | "display" | "shortcuts";
+export type AccountStatus = "ready" | "running";
 
 export interface Account {
   id: string;
@@ -10,6 +10,7 @@ export interface Account {
   note: string;
   initial: string;
   status: AccountStatus;
+  quickStart: boolean;
 }
 
 export interface LauncherSettings {
@@ -19,13 +20,15 @@ export interface LauncherSettings {
   quickTravel: boolean;
   xunlaiStorage: boolean;
   applyTeams: boolean;
-  multipleWindows: boolean;
+  showGuildWarsNews: boolean;
+  showMacNews: boolean;
   renderScale: "2" | "1.5" | "1";
   interfaceStyle: "guild-wars" | "reforged" | "modern";
 }
 
 export interface NewsArticle {
   id: string;
+  sourceKey: "guild-wars" | "macos";
   source: string;
   date: string;
   title: string;
@@ -42,7 +45,8 @@ export const createDefaultSettings = (): LauncherSettings => ({
   quickTravel: true,
   xunlaiStorage: true,
   applyTeams: false,
-  multipleWindows: true,
+  showGuildWarsNews: true,
+  showMacNews: true,
   renderScale: "2",
   interfaceStyle: "guild-wars",
 });
@@ -54,19 +58,6 @@ export const createDefaultAccounts = (): Account[] => [
     note: "Last played today",
     initial: "M",
     status: "ready",
-  },
-  {
-    id: "storage",
-    name: "Storage account",
-    note: "Last played 4 days ago",
-    initial: "S",
-    status: "ready",
-  },
-  {
-    id: "pvp",
-    name: "PvP account",
-    note: "Sign in before playing",
-    initial: "P",
-    status: "login-required",
+    quickStart: true,
   },
 ];
