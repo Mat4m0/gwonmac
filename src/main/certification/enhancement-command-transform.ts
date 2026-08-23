@@ -102,6 +102,9 @@ export function localActionSlashParser(
   enabledGlobalIndex: number,
   travelEnabledGlobalIndex: number,
   travelToggleGlobalIndex: number,
+  tradeEnabledGlobalIndex: number,
+  tradeToggleGlobalIndex: number,
+  tradeAliases: boolean,
   travelAliases: boolean,
   xunlaiAliases: boolean,
 ): Uint8Array {
@@ -112,6 +115,16 @@ export function localActionSlashParser(
   );
   return concat(
     uleb(0),
+    ...(tradeAliases ? [concat(
+      Uint8Array.of(0x02, 0x40),
+      exactSlashCommand(1, "/trade"),
+      Uint8Array.of(0x45, 0x0d), uleb(0),
+      Uint8Array.of(0x23), uleb(tradeEnabledGlobalIndex),
+      Uint8Array.of(0x45, 0x0d), uleb(0),
+      Uint8Array.of(0x41), sleb(1),
+      Uint8Array.of(0x24), uleb(tradeToggleGlobalIndex),
+      Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x0f, 0x0b),
+    )] : []),
     ...(travelAliases ? [concat(
       // Travel has its own setting and does not borrow the storage mailbox or
       // payload. The renderer takes this bounded signal.
@@ -141,6 +154,32 @@ export function localActionSlashParser(
       Uint8Array.of(0x24), uleb(pendingGlobalIndex),
       Uint8Array.of(0x41), sleb(1),
     )] : [original()]),
+    Uint8Array.of(0x0b),
+  );
+}
+
+/** Enables the exact host-only `/trade` alias and clears stale signals when off. */
+export function tradeToggleConfigure(
+  enabledGlobalIndex: number,
+  toggleGlobalIndex: number,
+): Uint8Array {
+  return concat(
+    uleb(0),
+    Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x45, 0x45),
+    Uint8Array.of(0x24), uleb(enabledGlobalIndex),
+    Uint8Array.of(0x23), uleb(enabledGlobalIndex), Uint8Array.of(0x45, 0x04, 0x40),
+    Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x24), uleb(toggleGlobalIndex),
+    Uint8Array.of(0x0b),
+    Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x0b),
+  );
+}
+
+/** Reads and clears the single pending Trade Chat toggle. */
+export function tradeToggleTake(toggleGlobalIndex: number): Uint8Array {
+  return concat(
+    uleb(0),
+    Uint8Array.of(0x23), uleb(toggleGlobalIndex),
+    Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x24), uleb(toggleGlobalIndex),
     Uint8Array.of(0x0b),
   );
 }

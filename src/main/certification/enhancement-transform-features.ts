@@ -16,6 +16,8 @@ import {
   localActionSlashParser,
   storageConfigure,
   storageEnqueue,
+  tradeToggleConfigure,
+  tradeToggleTake,
 } from "./enhancement-command-transform.js";
 import {
   travelConfigure,
@@ -45,6 +47,8 @@ export type TransformTypeIndices = Readonly<{
   travelEnqueue: number | null;
   travelConfigure: number | null;
   travelToggle: number | null;
+  tradeConfigure: number | null;
+  tradeToggle: number | null;
 }>;
 
 export type TransformGlobalIndices = Readonly<{
@@ -55,6 +59,8 @@ export type TransformGlobalIndices = Readonly<{
   travelPayload: number;
   travelEnabled: number;
   travelToggle: number;
+  tradeEnabled: number;
+  tradeToggle: number;
 }>;
 
 export type TransformRewriteWorkspace = Readonly<{
@@ -105,8 +111,30 @@ export function applyFeatureContributions(
       globalIndices.storageEnabled,
       globalIndices.travelEnabled,
       globalIndices.travelToggle,
+      globalIndices.tradeEnabled,
+      globalIndices.tradeToggle,
+      capabilities.chatAliases,
       capabilities.travelAction,
       capabilities.xunlaiAction,
+    );
+  };
+  const addTradeExports = (): void => {
+    if (!capabilities.chatAliases) return;
+    addedFunctionExports.push(
+      {
+        name: "enhancement_configure_trade_toggle",
+        index: appendFunction(
+          required(typeIndices.tradeConfigure, "trade configure function type"),
+          tradeToggleConfigure(globalIndices.tradeEnabled, globalIndices.tradeToggle),
+        ),
+      },
+      {
+        name: "enhancement_take_trade_toggle",
+        index: appendFunction(
+          required(typeIndices.tradeToggle, "trade toggle function type"),
+          tradeToggleTake(globalIndices.tradeToggle),
+        ),
+      },
     );
   };
   if (!commandDrainBoundary) {
@@ -117,6 +145,7 @@ export function applyFeatureContributions(
         bodies[parser.localIndex]!,
       ));
     }
+    addTradeExports();
     return;
   }
 
@@ -221,6 +250,7 @@ export function applyFeatureContributions(
   if (capabilities.chatAliases) {
     rewriteAliases(required(parserOriginalIndex, "original storage slash parser"));
   }
+  addTradeExports();
 
   if (capabilities.xunlaiAction) {
     addedFunctionExports.push(

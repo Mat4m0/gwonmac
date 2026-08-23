@@ -99,6 +99,7 @@ describe("memory warning presenter", () => {
         dismiss = surface.dismiss;
         return {
           setOpen(value) { open.push(value); },
+          raise() {},
           dispose() {},
         };
       },

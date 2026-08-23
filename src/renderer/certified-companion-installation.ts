@@ -193,6 +193,19 @@ export async function installCertifiedCompanion(
     ? (await import("./enhancement-travel-installation.js"))
         .createTravelInstallation(exports, true)
     : null;
+  const configureTradeToggle = capabilities.chatAliases
+    ? (typeof exports.enhancement_configure_trade_toggle === "function"
+        ? exports.enhancement_configure_trade_toggle as (enabled: number) => number
+        : null)
+    : null;
+  const takeTradeToggle = capabilities.chatAliases
+    ? (typeof exports.enhancement_take_trade_toggle === "function"
+        ? exports.enhancement_take_trade_toggle as () => number
+        : null)
+    : null;
+  if (capabilities.chatAliases && (!configureTradeToggle || !takeTradeToggle)) {
+    throw new Error("the aliases profile derived a module with no Trade Chat toggle");
+  }
   // The guard above proves `free` is callable, but WebAssembly exports are typed
   // as the bare `Function`, so the kernel's ABI has to be named here or the five
   // call sites below stop checking what they pass.
@@ -271,6 +284,7 @@ export async function installCertifiedCompanion(
       attempt("Toolbox disposal", disposeToolbox);
     }
     attempt("Tools settings listener disposal", disposeToolSettings);
+    attempt("Trade alias disable", () => { configureTradeToggle?.(0); });
     if (observerStopped) {
       attempt("profession trace disposal", () => professionTrace?.dispose());
     }
@@ -638,6 +652,14 @@ export async function installCertifiedCompanion(
       window.gwCursorState = installedCursorState;
     }
     let optionalSettings = window.gwToolsSettings();
+    const configureTradeAlias = () => {
+      configureTradeToggle?.(optionalSettings.enabled ? 1 : 0);
+    };
+    const pollTradeAlias = () => {
+      if (takeTradeToggle?.() === 1 && optionalSettings.enabled) {
+        window.dispatchEvent(new CustomEvent("gw:trade-toggle"));
+      }
+    };
     let snapshotPlayRegion: RuntimePlayRegion | null = observeState
       ? "unknown"
       : null;
@@ -760,6 +782,10 @@ export async function installCertifiedCompanion(
             import("./tools-host.js").then(({ mountToolsInto }) =>
               mountToolsInto(host, onVisibilityChange, commands, storage, true),
             ),
+          mountTrade: (host, onVisibilityChange) =>
+            import("./tools-host.js").then(({ mountTradeInto }) =>
+              mountTradeInto(host, onVisibilityChange),
+            ),
         })
       : null;
     if (professionTracePointer !== 0 && professionTraceReader !== null) {
@@ -783,6 +809,7 @@ export async function installCertifiedCompanion(
       syncActiveObservers();
       syncStoragePolicy();
       syncTravelPolicy();
+      configureTradeAlias();
     };
     window.addEventListener("gw:tools-settings", onToolSettings);
     disposeToolSettings = () =>
@@ -795,6 +822,7 @@ export async function installCertifiedCompanion(
     syncActiveObservers();
     syncStoragePolicy();
     syncTravelPolicy();
+    configureTradeAlias();
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;
     const observerRuntime = {
@@ -911,6 +939,7 @@ export async function installCertifiedCompanion(
             readout?.update(state);
             syncStoragePolicy();
             syncTravelPolicy();
+            pollTradeAlias();
           } }
         : null,
       foundation
@@ -933,6 +962,7 @@ export async function installCertifiedCompanion(
               syncActiveObservers();
             }
             syncTravelPolicy();
+            pollTradeAlias();
             toolbox?.update(state);
           } }
         : null,
