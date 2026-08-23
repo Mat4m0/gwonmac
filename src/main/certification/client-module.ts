@@ -185,6 +185,8 @@ function enhancementCache(
     travelAction: capabilities.travelAction,
     xunlaiAction: capabilities.xunlaiAction,
     chatAliases: capabilities.chatAliases,
+    skillSlotGeometry: capabilities.skillSlotGeometry,
+    skillCooldownObservation: capabilities.skillCooldownObservation,
   };
   return {
     inputSha256: build.sha256,

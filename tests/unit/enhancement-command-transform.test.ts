@@ -66,7 +66,8 @@ describe("Enhancement command transform", () => {
       travelAction: false,
       xunlaiAction: false,
       chatAliases: false,
-    skillSlotGeometry: false,
+      skillSlotGeometry: false,
+      skillCooldownObservation: false,
     };
     const commandsOutput = transformEnhancementWasm(input, build, commandsOnly);
     const commandsExports = parseExports(sectionById(splitSections(commandsOutput), 7));
@@ -133,7 +134,8 @@ describe("Enhancement command transform", () => {
           travelAction: false,
           xunlaiAction: false,
           chatAliases: false,
-    skillSlotGeometry: false,
+          skillSlotGeometry: false,
+          skillCooldownObservation: false,
         }),
         null,
         "a profile without local actions must not accept their manifest",
@@ -149,7 +151,8 @@ describe("Enhancement command transform", () => {
         travelAction: false,
         xunlaiAction: false,
         chatAliases: false,
-    skillSlotGeometry: false,
+        skillSlotGeometry: false,
+        skillCooldownObservation: false,
       }),
       null,
       "manifest comparison must reject unexpected storage authority",
@@ -163,7 +166,8 @@ describe("Enhancement command transform", () => {
         travelAction: true,
         xunlaiAction: true,
         chatAliases: true,
-    skillSlotGeometry: false,
+        skillSlotGeometry: false,
+        skillCooldownObservation: false,
       }),
       null,
       "manifest comparison must reject missing storage authority",
@@ -219,7 +223,8 @@ describe("Enhancement command transform", () => {
       travelAction: false,
       xunlaiAction: false,
       chatAliases: true,
-    skillSlotGeometry: false,
+      skillSlotGeometry: false,
+      skillCooldownObservation: false,
     } as const;
     assert.equal(
       intersectEnhancementCapabilities(aliasesOnly, aliasesOnly).chatAliases,

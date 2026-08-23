@@ -36,6 +36,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       xunlaiAction: selected(capabilities.xunlaiAction),
       chatAliases: selected(capabilities.chatAliases),
       skillSlotGeometry: selected(capabilities.skillSlotGeometry),
+      skillCooldownObservation: selected(capabilities.skillCooldownObservation),
     },
   };
   return {
@@ -76,6 +77,7 @@ describe("effective Enhancement capability boundary", () => {
           xunlaiAction: off,
           chatAliases: off,
           skillSlotGeometry: off,
+          skillCooldownObservation: off,
         },
       },
     };
@@ -89,6 +91,7 @@ describe("effective Enhancement capability boundary", () => {
       xunlaiAction: false,
       chatAliases: false,
       skillSlotGeometry: false,
+      skillCooldownObservation: false,
     });
   });
 

@@ -45,6 +45,7 @@ function projectCompatibility(
       xunlaiAction: status("xunlaiAction"),
       chatAliases: status("chatAliases"),
       skillSlotGeometry: status("skillSlotGeometry"),
+      skillCooldownObservation: status("skillCooldownObservation"),
     }),
   });
 }

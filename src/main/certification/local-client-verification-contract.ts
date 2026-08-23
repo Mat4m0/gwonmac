@@ -98,6 +98,11 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "skill-slots.frame-constructor",
     "skill-slots.frame-layout",
   ] as const),
+  skillCooldownObservation: Object.freeze([
+    ...SHARED_FEATURE_INVARIANTS,
+    "skill-cooldown.recharge-reader",
+    "skill-cooldown.precise-timer",
+  ] as const),
 } as const satisfies Readonly<
   Record<LocalClientFeature, readonly string[]>
 >);
@@ -168,6 +173,10 @@ export interface LocalFeatureCertificateMap {
     & RequiredBuildFact<"uiDispatcher" | "chatAliases">;
   readonly skillSlotGeometry: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"skillSlotGeometry">;
+  readonly skillCooldownObservation: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<
+      "observationBase" | "partyObservation" | "skillCooldownObservation"
+    >;
 }
 
 export type LocalFeatureVerdict<Feature extends LocalClientFeature> =
@@ -347,6 +356,17 @@ export function localFeatureVerdictsForBuild(
   const skillSlotGeometry = core !== null && build?.skillSlotGeometry !== undefined
     ? Object.freeze({ core, skillSlotGeometry: build.skillSlotGeometry })
     : null;
+  const skillCooldownObservation = core !== null
+      && build?.observationBase !== undefined
+      && build.partyObservation !== undefined
+      && build.skillCooldownObservation !== undefined
+    ? Object.freeze({
+        core,
+        observationBase: build.observationBase,
+        partyObservation: build.partyObservation,
+        skillCooldownObservation: build.skillCooldownObservation,
+      })
+    : null;
   return Object.freeze({
     nativeCursor: featureVerdict<"nativeCursor">(
       inputSha256,
@@ -403,6 +423,13 @@ export function localFeatureVerdictsForBuild(
       skillSlotGeometry,
       failures.skillSlotGeometry,
       "skill-slots.frame-constructor",
+    ),
+    skillCooldownObservation: featureVerdict<"skillCooldownObservation">(
+      inputSha256,
+      requested.skillCooldownObservation,
+      skillCooldownObservation,
+      failures.skillCooldownObservation,
+      "skill-cooldown.recharge-reader",
     ),
   });
 }

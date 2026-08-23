@@ -63,6 +63,9 @@ export function createCompanionSequenceFeed<State extends SequencedState>(
   };
 
   return Object.freeze({
+    get state() {
+      return current;
+    },
     update(next: State) {
       if (next.status !== "ready" || !Number.isSafeInteger(next.sequence)) {
         if (acceptedSequence !== null) blockedSequence = acceptedSequence;

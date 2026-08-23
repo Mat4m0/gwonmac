@@ -26,7 +26,8 @@ const NONE: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillSlotGeometry: false,
+  skillSlotGeometry: false,
+  skillCooldownObservation: false,
 });
 const ALL: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -37,7 +38,8 @@ const ALL: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
-    skillSlotGeometry: false,
+  skillSlotGeometry: false,
+  skillCooldownObservation: false,
 });
 const CURSOR: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -52,7 +54,8 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
-    skillSlotGeometry: false,
+  skillSlotGeometry: false,
+  skillCooldownObservation: false,
 });
 const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   ...NONE,

@@ -24,6 +24,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         xunlaiAction: { status: "off" },
         chatAliases: { status: "off" },
         skillSlotGeometry: { status: "off" },
+        skillCooldownObservation: { status: "off" },
       },
     },
     extendedMemory: supported

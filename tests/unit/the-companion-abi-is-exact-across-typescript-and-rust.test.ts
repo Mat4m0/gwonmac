@@ -20,6 +20,7 @@ const FEATURE_NAMES = Object.freeze({
   toolboxFoundation: "FEATURE_TOOLBOX_FOUNDATION",
   targetObservation: "FEATURE_TARGET_OBSERVATION",
   skillSlotGeometry: "FEATURE_SKILL_SLOT_GEOMETRY",
+  skillCooldownObservation: "FEATURE_SKILL_COOLDOWN_OBSERVATION",
 } as const);
 
 const DISPATCH_NAMES = Object.freeze({
@@ -149,7 +150,7 @@ function replaced(source: string, from: string, to: string): string {
 
 test("the independent TypeScript and Rust companion contracts match exactly", () => {
   assertExactContract(rustSource);
-  assert.equal(typescriptConfigSlots().length, 110);
+  assert.equal(typescriptConfigSlots().length, 111);
 });
 
 test("same-size field swaps, bit drift, opcode drift, and new names are rejected", () => {

@@ -32,9 +32,13 @@ import {
   COMPANION_PARTY_BYTES,
   type CompanionSnapshot,
 } from "./companion-snapshot.js";
-import { COMPANION_SKILL_SLOT_BYTES } from "./companion-skill-snapshot.js";
+import {
+  COMPANION_SKILL_COOLDOWN_BYTES,
+  COMPANION_SKILL_SLOT_BYTES,
+} from "./companion-skill-snapshot.js";
 import { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
 import { createSkillKeyOverlayConsumer } from "./skill-key-overlay-consumer.js";
+import { createSkillCooldownObservationInstallation } from "./skill-cooldown-observation-installation.js";
 import { validateCompanionOwnedRegions } from "./companion-owned-regions.js";
 import {
   observeCompanion,
@@ -137,6 +141,9 @@ export async function installCertifiedCompanion(
   const foundation = capabilities.partyObservation;
   const hasSkillSlotGeometry = capabilities.skillSlotGeometry;
   const skillSlotGeometry = createSkillSlotGeometryInstallation(hasSkillSlotGeometry);
+  const skillCooldowns = createSkillCooldownObservationInstallation(
+    capabilities.skillCooldownObservation,
+  );
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const publishObserverState = program === "target-observer";
   const featureFlags =
@@ -144,7 +151,10 @@ export async function installCertifiedCompanion(
     | (observeState ? COMPANION_FEATURE_BITS.gameSnapshot : 0)
     | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
     | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
-    | (hasSkillSlotGeometry ? COMPANION_FEATURE_BITS.skillSlotGeometry : 0);
+    | (hasSkillSlotGeometry ? COMPANION_FEATURE_BITS.skillSlotGeometry : 0)
+    | (capabilities.skillCooldownObservation
+      ? COMPANION_FEATURE_BITS.skillCooldownObservation
+      : 0);
   if (featureFlags === 0) return null;
 
   const manifest = decodeEnhancementManifest(module, capabilities);
@@ -292,6 +302,7 @@ export async function installCertifiedCompanion(
       attempt("Toolbox disposal", disposeToolbox);
       attempt("skill key overlay disposal", disposeSkillKeyOverlay);
       attempt("skill-slot feed disposal", skillSlotGeometry.dispose);
+      attempt("skill cooldown feed disposal", skillCooldowns.dispose);
     }
     attempt("Tools settings listener disposal", disposeToolSettings);
     attempt("Trade alias disable", () => { configureTradeToggle?.(0); });
@@ -315,6 +326,7 @@ export async function installCertifiedCompanion(
           if (partyPointer) free(partyPointer);
         });
         attempt("skill-slot allocation release", () => skillSlotGeometry.release(free));
+        attempt("skill cooldown allocation release", () => skillCooldowns.release(free));
       }
       attempt("command payload release", () => {
         if (payloadPointer) free(payloadPointer);
@@ -401,6 +413,7 @@ export async function installCertifiedCompanion(
       partyPointer = Number(exports.malloc(COMPANION_PARTY_BYTES));
     }
     skillSlotGeometry.allocate(exports.malloc as (bytes: number) => unknown);
+    skillCooldowns.allocate(exports.malloc as (bytes: number) => unknown);
     if (capabilities.teamApply) {
       payloadPointer = Number(
         exports.malloc(teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES),
@@ -421,6 +434,7 @@ export async function installCertifiedCompanion(
       || (foundation && !toolboxPointer)
       || (foundation && !partyPointer)
       || !skillSlotGeometry.allocated
+      || !skillCooldowns.allocated
       || (capabilities.teamApply && !payloadPointer)
       || (storageInstallation !== null && !storageInstallation.region().pointer)
       || (travelInstallation !== null && !travelInstallation.region().pointer)
@@ -453,6 +467,7 @@ export async function installCertifiedCompanion(
           ]
         : []),
       ...(skillSlotGeometry.region === null ? [] : [skillSlotGeometry.region]),
+      ...(skillCooldowns.region === null ? [] : [skillCooldowns.region]),
       ...(capabilities.teamApply
         ? [
             {
@@ -547,6 +562,8 @@ export async function installCertifiedCompanion(
       partyBytes: number,
       skillSlotPointer: number,
       skillKeyBytes: number,
+      skillCooldownPointer: number,
+      skillCooldownBytes: number,
       featureFlags: number,
     ) => number;
     type KernelDispatch = (
@@ -568,6 +585,8 @@ export async function installCertifiedCompanion(
     const kernelToolboxBytes = kernel.exports.companion_toolbox_bytes as KernelScalar;
     const kernelPartyBytes = kernel.exports.companion_party_bytes as KernelScalar;
     const kernelSkillSlotBytes = kernel.exports.companion_skill_slot_bytes as KernelScalar;
+    const kernelSkillCooldownBytes =
+      kernel.exports.companion_skill_cooldown_bytes as KernelScalar;
     if (
       kernelAbi() !== COMPANION_ABI
       || kernelConfigBytes() !== configBytes
@@ -576,6 +595,7 @@ export async function installCertifiedCompanion(
       || kernelToolboxBytes() !== COMPANION_TOOLBOX_BYTES
       || kernelPartyBytes() !== COMPANION_PARTY_BYTES
       || kernelSkillSlotBytes() !== COMPANION_SKILL_SLOT_BYTES
+      || kernelSkillCooldownBytes() !== COMPANION_SKILL_COOLDOWN_BYTES
       || kernelInit(
         snapshotPointer,
         observeState ? COMPANION_SNAPSHOT_BYTES : 0,
@@ -589,6 +609,8 @@ export async function installCertifiedCompanion(
         foundation ? COMPANION_PARTY_BYTES : 0,
         skillSlotGeometry.pointer,
         skillSlotGeometry.bytes,
+        skillCooldowns.pointer,
+        skillCooldowns.bytes,
         featureFlags,
       ) !== 1
     ) {
@@ -734,6 +756,9 @@ export async function installCertifiedCompanion(
             && policy().skillSlotGeometry
             && hasSkillKeyBindings()
           ? COMPANION_FEATURE_BITS.skillSlotGeometry
+          : 0)
+        | (capabilities.skillCooldownObservation
+          ? COMPANION_FEATURE_BITS.skillCooldownObservation
           : 0);
       kernelDispatch(
         COMPANION_DISPATCH_KINDS.activeFeatures,
@@ -845,6 +870,7 @@ export async function installCertifiedCompanion(
       toolboxPointer,
       partyPointer,
       skillSlotPointer: skillSlotGeometry.pointer,
+      skillCooldownPointer: skillCooldowns.pointer,
       hertz: 0,
       lastRenderUs: 0,
       renderSamples: [] as number[],
@@ -897,6 +923,9 @@ export async function installCertifiedCompanion(
       },
       get toolbox() {
         return toolbox?.state ?? null;
+      },
+      get skillCooldowns() {
+        return skillCooldowns.state;
       },
       // One certified tri-state for the Xunlai live scenario. No player,
       // account, pointer, or raw record leaves the snapshot decoder.
@@ -986,6 +1015,7 @@ export async function installCertifiedCompanion(
       observeState,
       publishObserverState,
       skillSlotGeometry.sink,
+      skillCooldowns.sink,
     );
     companionInstallations = installation;
     if (program !== "none") window.gwCompanionRuntime = runtime;

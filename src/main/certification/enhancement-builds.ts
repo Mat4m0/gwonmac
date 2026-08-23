@@ -473,6 +473,30 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           worldCharacterSkills: 0x710,
         }),
       }),
+      skillCooldownObservation: Object.freeze({
+        // #8704 is the unique bounded Skillbar row/slot reader. It reads the
+        // recharge timestamp and subtracts the precise timer returned by #249.
+        reader: Object.freeze({
+          functionIndex: 8704,
+          params: Object.freeze(["i32", "i32", "i32"] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256:
+            "de894c4032f9c9cf7a50a8f36ad1174446ead7246bf9ae830f43d8e45eb0d697",
+          timerCallOperand: 200,
+        }),
+        timer: Object.freeze({
+          functionIndex: 249,
+          params: Object.freeze([] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256:
+            "f2b448b590efb575ca868617b0a41d544971b29ecec04a69247f3a2f7210e773",
+        }),
+        layout: Object.freeze({
+          // Skillbar::skills starts at +4. The reader's total row offset is
+          // +12, so the timestamp is +8 inside each 0x14-byte slot.
+          skillSlotRecharge: 0x08,
+        }),
+      }),
     }),
   ]);
 

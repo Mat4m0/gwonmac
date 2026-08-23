@@ -20,7 +20,9 @@ import {
   readCompanionParty,
 } from "../../src/renderer/companion-snapshot.ts";
 import {
+  COMPANION_SKILL_COOLDOWN_BYTES,
   readCompanionSkillSlots,
+  readCompanionSkillCooldowns,
   COMPANION_SKILL_SLOT_BYTES,
 } from "../../src/renderer/companion-skill-snapshot.ts";
 import {
@@ -105,6 +107,8 @@ export const FEATURE_TARGET_OBSERVATION =
   COMPANION_FEATURE_BITS.targetObservation;
 export const FEATURE_SKILL_SLOT_GEOMETRY =
   COMPANION_FEATURE_BITS.skillSlotGeometry;
+export const FEATURE_SKILL_COOLDOWN_OBSERVATION =
+  COMPANION_FEATURE_BITS.skillCooldownObservation;
 export const ALL_FEATURES = FEATURE_NATIVE_CURSOR
   | FEATURE_GAME_SNAPSHOT
   | FEATURE_TARGET_OBSERVATION;
@@ -272,6 +276,7 @@ export const ADDRESSES = Object.freeze({
   toolbox: 0x9000,
   party: 0xa800,
   skillSlots: 0xc000,
+  skillCooldowns: 0xc100,
   partyContext: 0xa000,
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
@@ -348,6 +353,9 @@ export const POLICY_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("areaInfo")
 export const PLAYER_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldProfessionStates");
 export const XUNLAI_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldPlayers");
 export const SKILL_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("frameArray");
+export const COOLDOWN_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf(
+  "skillSlotRecharge",
+);
 export const PLAYER_RECORD_INDEX = 42;
 export const PLAYER_RECORD_ADDRESS =
   ADDRESSES.playerRecordBuffer + PLAYER_RECORD_INDEX * DETAIL.playerStride;
@@ -368,7 +376,9 @@ export interface KernelOverrides {
   partyPointer?: number;
   partySize?: number;
   skillSlotPointer?: number;
-  skillKeySize?: number;
+  skillSlotSize?: number;
+  skillCooldownPointer?: number;
+  skillCooldownSize?: number;
   toolboxSize?: number;
 }
 
@@ -392,7 +402,9 @@ export type KernelInit = (
   partyPointer: number,
   partySize: number,
   skillSlotPointer: number,
-  skillKeySize: number,
+  skillSlotSize: number,
+  skillCooldownPointer: number,
+  skillCooldownSize: number,
   features: number,
 ) => number;
 export type KernelDispatch = (
@@ -551,18 +563,26 @@ export async function createKernel(
           ?? ((features & FEATURE_SKILL_SLOT_GEOMETRY) !== 0
             ? ADDRESSES.skillSlots
             : 0),
-        overrides.skillKeySize
+        overrides.skillSlotSize
           ?? ((features & FEATURE_SKILL_SLOT_GEOMETRY) !== 0
             ? COMPANION_SKILL_SLOT_BYTES
+            : 0),
+        overrides.skillCooldownPointer
+          ?? ((features & FEATURE_SKILL_COOLDOWN_OBSERVATION) !== 0
+            ? ADDRESSES.skillCooldowns
+            : 0),
+        overrides.skillCooldownSize
+          ?? ((features & FEATURE_SKILL_COOLDOWN_OBSERVATION) !== 0
+            ? COMPANION_SKILL_COOLDOWN_BYTES
             : 0),
         features,
       );
     },
-    tick: (skillBarFrameId = 0) => exports.dispatch(
+    tick: (skillBarFrameId = 0, skillTimer = 0) => exports.dispatch(
       COMPANION_DISPATCH_KINDS.tick,
       123,
       skillBarFrameId,
-      0,
+      skillTimer,
       0,
       0,
     ),
@@ -596,6 +616,8 @@ export async function createKernel(
     toolbox: () => readCompanionToolbox(memory.buffer, ADDRESSES.toolbox),
     party: () => readCompanionParty(memory.buffer, ADDRESSES.party),
     skillSlots: () => readCompanionSkillSlots(memory.buffer, ADDRESSES.skillSlots),
+    skillCooldowns: () =>
+      readCompanionSkillCooldowns(memory.buffer, ADDRESSES.skillCooldowns),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
     published: () => readCompanionCursorPixels(memory.buffer, ADDRESSES.cursor),

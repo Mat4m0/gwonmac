@@ -17,6 +17,7 @@ const base: ClientSession = {
       xunlaiAction: { status: "available" },
       chatAliases: { status: "available" },
       skillSlotGeometry: { status: "available" },
+      skillCooldownObservation: { status: "off" },
     },
   },
   extendedMemory: {

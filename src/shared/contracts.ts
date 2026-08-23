@@ -618,6 +618,7 @@ export interface ClientCompatibility {
     xunlaiAction: OptionalFeatureStatus;
     chatAliases: OptionalFeatureStatus;
     skillSlotGeometry: OptionalFeatureStatus;
+    skillCooldownObservation: OptionalFeatureStatus;
   }>;
 }
 

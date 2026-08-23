@@ -22,7 +22,9 @@ import {
   sameCompanionToolboxState,
 } from "./companion-snapshot.js";
 import {
+  type CompanionSkillCooldownState,
   type CompanionSkillSlotState,
+  readCompanionSkillCooldowns,
   readCompanionSkillSlots,
 } from "./companion-skill-snapshot.js";
 
@@ -32,6 +34,7 @@ type SnapshotObserverTarget = {
   toolboxPointer: number;
   partyPointer: number;
   skillSlotPointer?: number;
+  skillCooldownPointer?: number;
   snapshotReads: number;
   rejectedSnapshots: number;
   hertz: number;
@@ -45,6 +48,10 @@ type StateConsumer = {
 
 type SkillSlotConsumer = {
   update(state: CompanionSkillSlotState): void;
+};
+
+type SkillCooldownConsumer = {
+  update(state: CompanionSkillCooldownState): void;
 };
 
 /**
@@ -82,6 +89,7 @@ export function observeCompanion(
   observeState: boolean,
   publishState: boolean,
   skillSlots: SkillSlotConsumer | null = null,
+  skillCooldowns: SkillCooldownConsumer | null = null,
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -161,6 +169,12 @@ export function observeCompanion(
       skillSlots.update(readCompanionSkillSlots(
         runtime.memory.buffer,
         runtime.skillSlotPointer ?? 0,
+      ));
+    }
+    if (skillCooldowns) {
+      skillCooldowns.update(readCompanionSkillCooldowns(
+        runtime.memory.buffer,
+        runtime.skillCooldownPointer ?? 0,
       ));
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.

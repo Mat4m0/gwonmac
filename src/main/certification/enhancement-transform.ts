@@ -95,6 +95,7 @@ function dispatcher(
   originalIndex: number,
   hookGlobalIndex: number,
   extraArgumentGlobal: number | null = null,
+  extraArgumentFunction: number | null = null,
 ): Uint8Array {
   const args = Array.from({ length: paramCount }, (_, index) =>
     concat(Uint8Array.of(0x20), uleb(index)),
@@ -104,6 +105,9 @@ function dispatcher(
     ...(extraArgumentGlobal === null
       ? []
       : [concat(Uint8Array.of(0x23), uleb(extraArgumentGlobal))]),
+    ...(extraArgumentFunction === null
+      ? []
+      : [concat(Uint8Array.of(0x10), uleb(extraArgumentFunction))]),
   ];
   return concat(
     uleb(0),
@@ -254,6 +258,7 @@ function resolveEnhancementTransform(
   const travelAction = build.travelAction!;
   const chatAliases = build.chatAliases!;
   const skillSlotGeometry = build.skillSlotGeometry!;
+  const skillCooldown = build.skillCooldownObservation!;
   const hasActionQueue = capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction;
@@ -347,6 +352,22 @@ function resolveEnhancementTransform(
         skillSlotGeometry.constructor.results,
       )
     : null;
+  const skillCooldownReader = capabilities.skillCooldownObservation
+    ? resolveHook(
+        "skill recharge reader",
+        skillCooldown.reader.functionIndex,
+        skillCooldown.reader.params,
+        skillCooldown.reader.results,
+      )
+    : null;
+  const skillTimer = capabilities.skillCooldownObservation
+    ? resolveHook(
+        "precise skill timer",
+        skillCooldown.timer.functionIndex,
+        skillCooldown.timer.params,
+        skillCooldown.timer.results,
+      )
+    : null;
   if (skillInitializer && skillConstructor) {
     if (
       bodyHash(skillSlotGeometry.initializer.functionIndex)
@@ -361,6 +382,21 @@ function resolveEnhancementTransform(
       body[operand - 1] !== 0x10
       || expected.some((byte, index) => body[operand + index] !== byte)
     ) fail("SkillBar constructor call site does not match its certificate");
+  }
+  if (skillCooldownReader && skillTimer) {
+    if (
+      bodyHash(skillCooldown.reader.functionIndex)
+        !== skillCooldown.reader.bodySha256
+      || bodyHash(skillCooldown.timer.functionIndex)
+        !== skillCooldown.timer.bodySha256
+    ) fail("skill cooldown bodies do not match their certificates");
+    const operand = skillCooldown.reader.timerCallOperand;
+    const body = bodies[skillCooldownReader.localIndex]!;
+    const expected = paddedIndex(skillCooldown.timer.functionIndex);
+    if (
+      body[operand - 1] !== 0x10
+      || expected.some((byte, index) => body[operand + index] !== byte)
+    ) fail("skill timer call site does not match its certificate");
   }
   if (bodyHash(build.hookFunction) !== build.hookBodySha256) {
     fail("tick body does not match its semantic fingerprint");
@@ -668,6 +704,7 @@ function resolveEnhancementTransform(
     travelAction,
     chatAliases,
     skillSlotGeometry,
+    skillCooldown,
     skillInitializer,
     skillConstructor,
     commands,
@@ -832,6 +869,10 @@ function assembleEnhancementTransform(
       capabilities.skillSlotGeometry
         && hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
         ? skillBarFrameGlobalIndex
+        : null,
+      capabilities.skillCooldownObservation
+        && hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
+        ? resolution.skillCooldown.timer.functionIndex
         : null,
     );
   });
