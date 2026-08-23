@@ -679,6 +679,7 @@ export async function installCertifiedCompanion(
       installedCursorState = () => cursor?.state ?? null;
       window.gwCursorState = installedCursorState;
     }
+    let optionalSettings = window.gwToolsSettings();
     const skillKeyConsumer = skillKeys
       ? (() => {
           const element = document.getElementById("canvas");
@@ -686,6 +687,7 @@ export async function installCertifiedCompanion(
             throw new Error("Enhancement skill key target is missing");
           }
           const consumer = createSkillKeyOverlayConsumer(document.body, element);
+          consumer.setBindings(optionalSettings.skillKeyBindings);
           disposeSkillKeys = consumer.dispose;
           return consumer;
         })()
@@ -742,7 +744,12 @@ export async function installCertifiedCompanion(
         readout = null;
       }
     };
+    const syncSkillKeys = () => {
+      skillKeyConsumer?.setBindings(optionalSettings.skillKeyBindings);
+      skillKeyConsumer?.setEnabled(policy().skillKeyOverlay);
+    };
     setTargetEnabled();
+    syncSkillKeys();
     disposeReadout = () => {
       readout?.dispose();
       readout = null;
@@ -761,7 +768,9 @@ export async function installCertifiedCompanion(
         // prove that it became PvE without restarting.
         | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
         | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0)
-        | (skillKeys ? COMPANION_FEATURE_BITS.skillKeyOverlay : 0);
+        | (skillKeys && policy().skillKeyOverlay
+          ? COMPANION_FEATURE_BITS.skillKeyOverlay
+          : 0);
       kernelDispatch(
         COMPANION_DISPATCH_KINDS.activeFeatures,
         active,
@@ -846,6 +855,7 @@ export async function installCertifiedCompanion(
       tracePolicy("settings");
       syncToolboxAvailability();
       setTargetEnabled();
+      syncSkillKeys();
       syncActiveObservers();
       syncStoragePolicy();
       syncTravelPolicy();
@@ -975,6 +985,7 @@ export async function installCertifiedCompanion(
               snapshotPlayRegion = next;
               tracePolicy("region");
               setTargetEnabled();
+              syncSkillKeys();
               syncActiveObservers();
             }
             readout?.update(state);
@@ -1000,6 +1011,7 @@ export async function installCertifiedCompanion(
             if (playRegion() !== previousRegion) {
               tracePolicy("region");
               setTargetEnabled();
+              syncSkillKeys();
               syncActiveObservers();
             }
             syncTravelPolicy();

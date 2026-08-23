@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import type { BrowserWindow } from "electron";
 import {
   captureWindowShortcut,
+  captureWindowSkillKey,
+  cancelWindowSkillKeyCapture,
   installWindowShortcuts,
   releaseWindowShortcutKey,
   updateWindowShortcuts,
@@ -138,5 +140,46 @@ describe("window shortcut input", () => {
     // the same exact code through the native normalization route.
     releaseWindowShortcutKey(win, "KeyW");
     assert.equal(dispatch(keyDown("KeyW", "w", { isAutoRepeat: true })), false);
+
+    const skillCapture = captureWindowSkillKey(win);
+    assert.equal(dispatch(keyDown("ShiftLeft", "Shift", {
+      meta: false, control: false, shift: true,
+    })), true);
+    assert.equal(dispatch(keyDown("F12", "F12", {
+      meta: true, control: true, shift: true, alt: true,
+    })), true);
+    assert.deepEqual(await skillCapture, {
+      status: "captured",
+      binding: {
+        input: { kind: "keyboard", code: "F12" },
+        modifiers: { control: true, option: true, shift: true, command: true },
+      },
+    });
+    assert.deepEqual(actions, ["tools.toggle"]);
+    assert.equal(dispatch({
+      ...keyDown("F12", "F12", {
+        meta: false, control: false, shift: false, alt: false,
+      }),
+      type: "keyUp",
+    }), true);
+    assert.equal(dispatch({
+      ...keyDown("ShiftLeft", "Shift", {
+        meta: false, control: false, shift: false,
+      }),
+      type: "keyUp",
+    }), true);
+
+    const mouseRace = captureWindowSkillKey(win);
+    assert.equal(dispatch(keyDown("AltLeft", "Alt", {
+      meta: false, control: false, shift: false, alt: true,
+    })), true);
+    cancelWindowSkillKeyCapture(win);
+    assert.deepEqual(await mouseRace, { status: "cancelled" });
+    assert.equal(dispatch({
+      ...keyDown("AltLeft", "Alt", {
+        meta: false, control: false, shift: false, alt: false,
+      }),
+      type: "keyUp",
+    }), true);
   });
 });

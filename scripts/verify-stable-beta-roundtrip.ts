@@ -187,6 +187,7 @@ const candidateSettingsDomains = Array.from(
       travelShortcuts: cycle(travelShortcutValues, index),
       targetReadout: cycle(booleanValues, index),
       shortcutOverrides: {},
+      skillKeyBindings: [null, null, null, null, null, null, null, null],
       extendedMemoryEnabled: cycle(booleanValues, index + 1),
       showDiagnostics: cycle(booleanValues, index),
       dataStrategy: "full",

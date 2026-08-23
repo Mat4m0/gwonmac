@@ -2,15 +2,15 @@
  * The skill-key HUD above Guild Wars' eight skill slots.
  *
  * This module owns presentation and rejects malformed display projections. It
- * does not discover game frames, read bindings, or translate input. Those
- * values must arrive from one certified game-owned source before this surface
- * is connected to the running client.
+ * does not discover game frames or read settings. Those values must arrive
+ * through the one consumer that joins certified geometry with saved labels.
  */
+import { isSkillKeyBinding, type SkillKeyBinding } from "../shared/skill-key-bindings.js";
+import { createSkillKeyBindingView } from "./skill-key-binding-view.js";
 
 const MAX_SLOT_COUNT = 8;
 const MAX_COORDINATE = 32_768;
 const MAX_SLOT_EDGE = 2_048;
-const MAX_LABEL_CHARACTERS = 8;
 
 const ROOT_STYLE = [
   "position:fixed",
@@ -23,32 +23,12 @@ const ROOT_STYLE = [
 ].join(";");
 
 const SLOT_STYLE = "position:absolute;pointer-events:none";
-const LABEL_STYLE = [
-  "position:absolute",
-  "display:flex",
-  "align-items:center",
-  "justify-content:center",
-  "box-sizing:border-box",
-  "padding:0 0.22em",
-  "border:1px solid #e8e3c052",
-  "border-radius:0.2em",
-  "color:#fffdf3",
-  "background:#484637f2",
-  "box-shadow:inset 0 1px #ffffff1f,0 1px 2px #000b",
-  "font-family:-apple-system,BlinkMacSystemFont,\"SF Pro Text\",sans-serif",
-  "font-weight:650",
-  "font-variant-numeric:tabular-nums",
-  "line-height:1",
-  "text-shadow:0 1px 1px #000",
-  "-webkit-font-smoothing:antialiased",
-].join(";");
-
 export type SkillKeySlot = Readonly<{
   x: number;
   y: number;
   width: number;
   height: number;
-  label: string;
+  binding: SkillKeyBinding;
 }>;
 
 export type SkillKeyOverlayState = Readonly<{
@@ -67,7 +47,7 @@ function skillKeySlot(value: unknown): SkillKeySlot | null {
     return null;
   }
   const slot = value as Record<string, unknown>;
-  const { x, y, width, height, label } = slot;
+  const { x, y, width, height, binding } = slot;
   if (
     !finiteBounded(x, MAX_COORDINATE)
     || !finiteBounded(y, MAX_COORDINATE)
@@ -75,15 +55,11 @@ function skillKeySlot(value: unknown): SkillKeySlot | null {
     || !finiteBounded(height, MAX_SLOT_EDGE)
     || width <= 0
     || height <= 0
-    || typeof label !== "string"
-    || label !== label.trim()
-    || label.length === 0
-    || Array.from(label).length > MAX_LABEL_CHARACTERS
-    || /[\p{Cc}\p{Cs}]/u.test(label)
+    || !isSkillKeyBinding(binding)
   ) {
     return null;
   }
-  return Object.freeze({ x, y, width, height, label });
+  return Object.freeze({ x, y, width, height, binding });
 }
 
 /** Return the complete display projection, or nothing for a state we cannot
@@ -109,7 +85,8 @@ export function skillKeyOverlayProjection(
 
 function slotSignature(slots: readonly SkillKeySlot[]): string {
   return slots
-    .map(({ x, y, width, height, label }) => `${x},${y},${width},${height},${label}`)
+    .map(({ x, y, width, height, binding }) =>
+      `${x},${y},${width},${height},${JSON.stringify(binding)}`)
     .join(";");
 }
 
@@ -125,11 +102,8 @@ export function createSkillKeyOverlay(parent: HTMLElement) {
   const views = Array.from({ length: MAX_SLOT_COUNT }, () => {
     const slot = document.createElement("span");
     slot.style.cssText = SLOT_STYLE;
-    const label = document.createElement("span");
-    label.style.cssText = LABEL_STYLE;
-    slot.append(label);
     root.append(slot);
-    return { slot, label };
+    return { slot, binding: createSkillKeyBindingView(slot) };
   });
   parent.append(root);
 
@@ -148,13 +122,13 @@ export function createSkillKeyOverlay(parent: HTMLElement) {
       slots.forEach((slot, index) => {
         const view = views[index]!;
         const edge = Math.min(slot.width, slot.height);
-        const badgeEdge = Math.round(Math.min(42, Math.max(16, edge * 0.36)));
-        const inset = Math.round(Math.max(2, edge * 0.04));
+        const badgeEdge = Math.round(Math.min(42, Math.max(17, edge * 0.295)));
+        const inset = Math.round(Math.max(2, edge * 0.018));
         view.slot.style.cssText = `${SLOT_STYLE};display:block;left:${slot.x}px;top:${slot.y}px;`
           + `width:${slot.width}px;height:${slot.height}px`;
-        view.label.style.cssText = `${LABEL_STYLE};right:${inset}px;bottom:${inset}px;`
-          + `min-width:${badgeEdge}px;height:${badgeEdge}px;font-size:${Math.round(badgeEdge * 0.68)}px`;
-        view.label.textContent = slot.label;
+        view.binding.element.style.cssText = `--skill-key-edge:${badgeEdge}px;position:absolute;`
+          + `right:${inset}px;bottom:${inset}px;max-width:calc(100% - ${inset * 2}px)`;
+        view.binding.update(slot.binding);
       });
       views.slice(slots.length).forEach(({ slot }) => {
         slot.style.cssText = `${SLOT_STYLE};display:none`;

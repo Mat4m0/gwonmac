@@ -272,6 +272,16 @@
       recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
       feedback: setFeedback,
     }));
+  const skillKeySettings = import('./settings-skill-keys.js').then((module) =>
+    module.bindSkillKeySettings({
+      fieldset: byId('settings-skill-keys') as HTMLFieldSetElement,
+      dialog,
+      clearAll: byId('settings-skill-keys-clear') as HTMLButtonElement,
+      settings: () => currentSettings,
+      persist: (skillKeyBindings) => persistSettings({ skillKeyBindings }),
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      feedback: setFeedback,
+    }));
   void import('./settings-accounts.js').then((module) =>
     module.bindAccountSettings({
       enable: accountsEnable,
@@ -505,6 +515,7 @@
     travelPalette.checked = settings.travelPalette;
     targetReadout.checked = settings.targetReadout;
     void shortcutSettings.then((binder) => binder.render(settings));
+    void skillKeySettings.then((binder) => binder.render(settings));
     toolFeatures.hidden = !settings.gwonmacTools;
     toolsOff.hidden = settings.gwonmacTools;
     teamManagement.disabled = !settings.gwonmacTools;

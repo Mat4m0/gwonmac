@@ -114,7 +114,9 @@ import { isQuitting } from "./lifecycle.js";
 import { windowRegistry, type WindowRegistry } from "./window-registry.js";
 import {
   cancelWindowShortcutCapture,
+  cancelWindowSkillKeyCapture,
   captureWindowShortcut,
+  captureWindowSkillKey,
 } from "./window-shortcuts.js";
 import {
   applySettingsChange,
@@ -585,6 +587,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
     shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
     shortcutCaptureCancel: channel(nothing, (win) => {
       cancelWindowShortcutCapture(win);
+    }),
+    skillKeyCapture: channel(nothing, (win) => captureWindowSkillKey(win)),
+    skillKeyCaptureCancel: channel(nothing, (win) => {
+      cancelWindowSkillKeyCapture(win);
     }),
 
     credentialsLoad: channel(nothing, async (win) => {

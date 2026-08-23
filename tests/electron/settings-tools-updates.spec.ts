@@ -320,6 +320,93 @@ test.describe("tools and update settings", () => {
     }
   });
 
+  test("records display-only keyboard, mouse, and wheel labels", async () => {
+    const fixture = await launchOffline(
+      "gw-settings-skill-keys-e2e-",
+      {},
+      async (userData) => {
+        await writeFile(
+          path.join(userData, "settings.json"),
+          JSON.stringify({ gwonmacTools: true }),
+          { mode: 0o600 },
+        );
+      },
+    );
+    try {
+      const { app, page } = fixture;
+      const sendInput = (
+        keyCode: string,
+        modifiers: Array<"meta" | "control" | "shift" | "alt"> = [],
+      ) => app.evaluate(({ BrowserWindow }, input) => {
+        const contents = BrowserWindow.getAllWindows()[0]?.webContents;
+        contents?.sendInputEvent({
+          type: "keyDown",
+          keyCode: input.keyCode,
+          modifiers: input.modifiers,
+        });
+        contents?.sendInputEvent({
+          type: "keyUp",
+          keyCode: input.keyCode,
+          modifiers: input.modifiers,
+        });
+      }, { keyCode, modifiers });
+      await app.evaluate(({ Menu }) => {
+        Menu.getApplicationMenu()
+          ?.items[0]?.submenu?.items.find((item) => item.label === "Settings…")
+          ?.click();
+      });
+      await page.locator("#settings-tab-controls").click();
+      await expect(page.locator("#settings-skill-keys")).toBeVisible();
+
+      const rows = page.locator("[data-skill-key-slot]");
+      const first = rows.nth(0);
+      await first.locator(".settings-skill-key-change").click();
+      await expect(first.locator(".settings-skill-key-message"))
+        .toContainText("mouse button");
+      await sendInput("F12", ["control", "alt", "shift", "meta"]);
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).skillKeyBindings[0],
+      )).toEqual({
+        input: { kind: "keyboard", code: "F12" },
+        modifiers: { control: true, option: true, shift: true, command: true },
+      });
+      await expect(first.locator(".skill-key-plate")).toContainText("⌃⌥⇧⌘F12");
+
+      const help = page.locator("#settings-skill-keys-help");
+      const helpBox = await help.boundingBox();
+      if (!helpBox) throw new Error("skill-key help must be visible");
+      const second = rows.nth(1);
+      await second.locator(".settings-skill-key-change").click();
+      await page.mouse.click(helpBox.x + 4, helpBox.y + 4, { button: "right" });
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).skillKeyBindings[1],
+      )).toMatchObject({ input: { kind: "mouse-button", button: 2 } });
+
+      const third = rows.nth(2);
+      await third.locator(".settings-skill-key-change").click();
+      await page.mouse.move(helpBox.x + 4, helpBox.y + 4);
+      await page.mouse.wheel(0, -120);
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).skillKeyBindings[2],
+      )).toMatchObject({ input: { kind: "wheel", direction: "up" } });
+
+      const fourth = rows.nth(3);
+      await fourth.locator(".settings-skill-key-change").click();
+      await fourth.locator(".settings-skill-key-change").click();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).skillKeyBindings[3],
+      )).toBeNull();
+
+      await page.locator("#settings-skill-keys-clear").click();
+      await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({
+          skillKeyBindings: [null, null, null, null, null, null, null, null],
+        });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("the application menu opens Settings and the dedicated Updates pane", async () => {
     const fixture = await launchOffline("gw-settings-menu-e2e-");
     try {

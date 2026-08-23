@@ -9,13 +9,18 @@ import { createSkillKeyOverlayConsumer } from "../../src/renderer/skill-key-over
 
 class FakeElement {
   id = "";
+  className = "";
+  hidden = false;
+  title = "";
   textContent = "";
   textWrites = 0;
   style = { cssText: "", display: "" };
   attributes = new Map<string, string>();
+  dataset: Record<string, string> = {};
   children: FakeElement[] = [];
   parent: FakeElement | null = null;
   ownerDocument: FakeDocument;
+  classList = { add: (...names: string[]) => { this.className += ` ${names.join(" ")}`; } };
 
   constructor(ownerDocument: FakeDocument) {
     this.ownerDocument = ownerDocument;
@@ -38,6 +43,11 @@ class FakeElement {
     }
   }
 
+  replaceChildren(...children: FakeElement[]) {
+    this.children = [];
+    this.append(...children);
+  }
+
   remove() {
     const siblings = this.parent?.children;
     if (siblings) siblings.splice(siblings.indexOf(this), 1);
@@ -46,8 +56,22 @@ class FakeElement {
 }
 
 class FakeDocument {
+  head: FakeElement;
+
+  constructor() {
+    this.head = new FakeElement(this);
+  }
+
   createElement() {
     return new FakeElement(this);
+  }
+
+  createElementNS() {
+    return new FakeElement(this);
+  }
+
+  getElementById(id: string) {
+    return this.head.children.find((child) => child.id === id) ?? null;
   }
 }
 
@@ -57,7 +81,10 @@ const slots = (): readonly SkillKeySlot[] => Object.freeze(
     y: 320,
     width: 50,
     height: 50,
-    label: "C",
+    binding: {
+      input: { kind: "keyboard" as const, code: "KeyC" },
+      modifiers: { control: false, option: false, shift: false, command: false },
+    },
   })],
 );
 
@@ -75,11 +102,11 @@ test("a custom projection adds only the changed key label", () => {
   assert.equal(view.root.style.display, "block");
   assert.equal(view.root.children.length, 8);
   assert.deepEqual(
-    view.root.children.map((slot) => slot.children[0]?.textContent),
-    ["C", "", "", "", "", "", "", ""],
+    view.root.children.map((slot) => slot.children[0]?.children.at(-1)?.textContent),
+    ["C", undefined, undefined, undefined, undefined, undefined, undefined, undefined],
   );
   assert.match(view.root.children[0]!.style.cssText, /left:464px;top:320px/u);
-  assert.match(view.root.children[0]!.children[0]!.style.cssText, /min-width:18px/u);
+  assert.match(view.root.children[0]!.children[0]!.style.cssText, /--skill-key-edge:17px/u);
   assert.match(view.root.children[1]!.style.cssText, /display:none/u);
 });
 
@@ -89,8 +116,8 @@ test("a malformed or absent custom binding hides the complete overlay", () => {
     [],
     [{ ...good[0]!, x: Number.NaN }],
     [{ ...good[0]!, width: 0 }],
-    [{ ...good[0]!, label: " C " }],
-    [{ ...good[0]!, label: "123456789" }],
+    [{ ...good[0]!, binding: null }],
+    [{ ...good[0]!, binding: { input: { kind: "keyboard", code: "Unknown" }, modifiers: {} } }],
   ]) {
     assert.equal(skillKeyOverlayProjection({ status: "ready", slots: bad }), null);
   }
@@ -105,14 +132,12 @@ test("an unchanged frame performs no text write", () => {
   const view = mount();
   const state = { status: "ready", slots: slots() };
   view.overlay.update(state);
-  const writes = view.root.children.reduce(
-    (total, slot) => total + (slot.children[0]?.textWrites ?? 0),
-    0,
-  );
+  const writes = view.root.children.reduce((total, slot) =>
+    total + (slot.children[0]?.children.at(-1)?.textWrites ?? 0), 0);
   for (let frame = 0; frame < 240; frame += 1) view.overlay.update(state);
   assert.equal(
     view.root.children.reduce(
-      (total, slot) => total + (slot.children[0]?.textWrites ?? 0),
+      (total, slot) => total + (slot.children[0]?.children.at(-1)?.textWrites ?? 0),
       0,
     ),
     writes,
@@ -129,6 +154,8 @@ test("the consumer maps only slot eight's custom C binding", () => {
     body as unknown as HTMLElement,
     canvas,
   );
+  consumer.setBindings([null, null, null, null, null, null, null, slots()[0]!.binding]);
+  consumer.setEnabled(true);
   consumer.update({
     status: "ready",
     sequence: 2,
@@ -143,9 +170,27 @@ test("the consumer maps only slot eight's custom C binding", () => {
     })),
   });
   const root = body.children[0]!;
-  assert.equal(root.children[0]!.children[0]!.textContent, "C");
+  assert.equal(root.children[0]!.children[0]!.children.at(-1)?.textContent, "C");
   assert.match(root.children[0]!.style.cssText, /left:474px;top:552px/u);
   assert.match(root.children[1]!.style.cssText, /display:none/u);
+  consumer.setEnabled(false);
+  assert.equal(root.style.display, "none");
+  consumer.setEnabled(true);
+  assert.equal(root.style.display, "none", "a re-enabled overlay waits for fresh geometry");
+  consumer.update({
+    status: "ready",
+    sequence: 4,
+    frameId: 1,
+    viewportWidth: 800,
+    viewportHeight: 600,
+    slots: Array.from({ length: 8 }, (_, index) => ({
+      left: 100 + index * 52,
+      bottom: 20,
+      right: 148 + index * 52,
+      top: 68,
+    })),
+  });
+  assert.equal(root.style.display, "block");
 });
 
 test("the surface never takes input or enters the accessibility tree", () => {

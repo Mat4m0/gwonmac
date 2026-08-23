@@ -31,6 +31,10 @@ import {
 import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
 import { isShortcutOverrides } from "../../shared/keyboard-shortcuts.js";
+import {
+  cloneSkillKeyBindings,
+  isSkillKeyBindings,
+} from "../../shared/skill-key-bindings.js";
 import { isStoredTravelShortcuts } from "../../shared/travel.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
@@ -131,6 +135,12 @@ export function parseSettings(raw: unknown): AppSettings {
       throw new AppError("bad_settings", "settings.shortcutOverrides has invalid bindings");
     }
     out.shortcutOverrides = { ...src.shortcutOverrides };
+  }
+  if ("skillKeyBindings" in src) {
+    if (!isSkillKeyBindings(src.skillKeyBindings)) {
+      throw new AppError("bad_settings", "settings.skillKeyBindings has invalid bindings");
+    }
+    out.skillKeyBindings = cloneSkillKeyBindings(src.skillKeyBindings);
   }
   if ("travelShortcuts" in src) {
     if (!isStoredTravelShortcuts(src.travelShortcuts)) {

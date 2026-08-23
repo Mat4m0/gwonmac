@@ -200,6 +200,7 @@ declare global {
       xunlaiStorage: boolean;
       travelPalette: boolean;
       targetReadout: boolean;
+      skillKeyBindings: AppSettings['skillKeyBindings'];
     }>;
     gwLoading: LoadingController;
     gwDiagnostics: RendererDiagnostics;

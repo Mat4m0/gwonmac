@@ -260,6 +260,16 @@ const INVOCATIONS: Invocation[] = [
     args: [],
     channel: IPC.shortcutCaptureCancel,
   },
+  {
+    path: "skillKeys.captureKeyboard",
+    args: [],
+    channel: IPC.skillKeyCapture,
+  },
+  {
+    path: "skillKeys.cancelKeyboardCapture",
+    args: [],
+    channel: IPC.skillKeyCaptureCancel,
+  },
   { path: "buildLibrary.get", args: [], channel: IPC.buildLibraryGet },
   {
     path: "buildLibrary.set",

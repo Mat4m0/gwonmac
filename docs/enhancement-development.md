@@ -31,6 +31,9 @@ current optional features are:
   autocomplete and 1–9 shortcuts. A named, bounded Travel action reaches the
   certified client dispatcher only from the game-thread drain. It has a separate
   Settings opt-in.
+- **Skill key labels**: show player-authored keyboard, mouse-button, and wheel
+  labels over certified skill-slot rectangles. The feature is display-only and
+  never changes or forwards game input.
 
 These features then change live. Live observers and commands stop when disabled
 or when map policy refuses them. Host-only authoring remains available without
