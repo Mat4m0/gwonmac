@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Component } from "vue";
-import { Command, Download, Monitor, Newspaper, Wrench } from "@lucide/vue";
+import { Command, Download, House, Monitor, Wrench } from "@lucide/vue";
+import { dailyActivities } from "../data/dailies";
 import type { LauncherSettings, SettingsSection } from "../model";
 
 defineProps<{
@@ -16,11 +17,12 @@ const emit = defineEmits<{
 
 const sections: Array<{ id: SettingsSection; label: string; icon: Component }> = [
   { id: "updates", label: "Updates and game files", icon: Download },
-  { id: "news", label: "News", icon: Newspaper },
+  { id: "home", label: "Home", icon: House },
   { id: "tools", label: "Optional Tools", icon: Wrench },
   { id: "display", label: "Display", icon: Monitor },
   { id: "shortcuts", label: "Shortcuts", icon: Command },
 ];
+
 </script>
 
 <template>
@@ -67,9 +69,23 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
         </div>
       </div>
 
-      <div v-else-if="activeSection === 'news'">
-        <div class="content-heading"><div><span class="eyebrow">Settings</span><h1>News</h1><p>Choose which updates appear on Home and in News.</p></div></div>
+      <div v-else-if="activeSection === 'home'">
+        <div class="content-heading"><div><span class="eyebrow">Settings</span><h1>Home</h1><p>Choose what appears in the Home side panel.</p></div></div>
         <div class="setting-groups">
+          <section class="setting-group">
+            <h2>Home tabs</h2>
+            <label class="setting-row">
+              <span><strong>Show dailies</strong><small>Adds daily Guild Wars activities beside News.</small></span>
+              <input v-model="settings.showDailies" class="switch" type="checkbox" />
+            </label>
+            <label class="setting-row" :class="{ disabled: !settings.showDailies }">
+              <span><strong>Open Home with</strong><small>The selected tab also appears first.</small></span>
+              <select v-model="settings.defaultHomePanel" :disabled="!settings.showDailies">
+                <option value="news">News</option>
+                <option value="dailies">Dailies</option>
+              </select>
+            </label>
+          </section>
           <section class="setting-group">
             <h2>News sources</h2>
             <label class="setting-row">
@@ -81,7 +97,16 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
               <input v-model="settings.showMacNews" class="switch" type="checkbox" />
             </label>
           </section>
-          <p v-if="!settings.showGuildWarsNews && !settings.showMacNews" class="inline-notice">Home will show launcher status instead of news. You can turn either source back on here.</p>
+          <section class="setting-group" :class="{ disabled: !settings.showDailies }">
+            <h2>Daily activities</h2>
+            <div class="settings-check-grid">
+              <label v-for="activity in dailyActivities" :key="activity.kind">
+                <input v-model="settings.dailyActivityVisibility[activity.kind]" type="checkbox" :disabled="!settings.showDailies" />
+                {{ activity.label }}
+              </label>
+            </div>
+          </section>
+          <p v-if="!settings.showGuildWarsNews && !settings.showMacNews" class="inline-notice">The News tab will stay available and show a link back to these settings.</p>
         </div>
       </div>
 

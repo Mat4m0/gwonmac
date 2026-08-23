@@ -109,10 +109,10 @@ watch(route, async () => {
           :settings="settings"
           @navigate="navigate"
           @open-article="openArticle"
-          @open-news-settings="settingsSection = 'news'; navigate('settings')"
+          @open-home-settings="settingsSection = 'home'; navigate('settings')"
           @support="fundingOpen = true"
         />
-        <NewsView v-else-if="route === 'news'" :key="activeArticleId" :initial-article-id="activeArticleId" :settings="settings" @open-settings="settingsSection = 'news'; navigate('settings')" />
+        <NewsView v-else-if="route === 'news'" :key="activeArticleId" :initial-article-id="activeArticleId" :settings="settings" @open-settings="settingsSection = 'home'; navigate('settings')" />
         <SettingsView
           v-else-if="route === 'settings'"
           v-model:settings="settings"

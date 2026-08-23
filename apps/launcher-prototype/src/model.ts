@@ -1,8 +1,17 @@
 export type RouteName = "home" | "news" | "settings" | "issues" | "accounts";
 export type Scenario = "ready" | "updating" | "degraded" | "offline";
 export type FundingPlacement = "home" | "bar" | "dock" | "hidden";
-export type SettingsSection = "updates" | "news" | "tools" | "display" | "shortcuts";
+export type SettingsSection = "updates" | "home" | "tools" | "display" | "shortcuts";
 export type AccountStatus = "ready" | "running";
+export type HomePanel = "news" | "dailies";
+export type DailyActivityKind =
+  | "mission"
+  | "bounty"
+  | "combat"
+  | "vanquish"
+  | "shining-blade"
+  | "vanguard"
+  | "sandford";
 
 export interface Account {
   id: string;
@@ -22,6 +31,9 @@ export interface LauncherSettings {
   applyTeams: boolean;
   showGuildWarsNews: boolean;
   showMacNews: boolean;
+  showDailies: boolean;
+  defaultHomePanel: HomePanel;
+  dailyActivityVisibility: Record<DailyActivityKind, boolean>;
   renderScale: "2" | "1.5" | "1";
   interfaceStyle: "guild-wars" | "reforged" | "modern";
 }
@@ -47,6 +59,17 @@ export const createDefaultSettings = (): LauncherSettings => ({
   applyTeams: false,
   showGuildWarsNews: true,
   showMacNews: true,
+  showDailies: true,
+  defaultHomePanel: "news",
+  dailyActivityVisibility: {
+    mission: true,
+    bounty: true,
+    combat: true,
+    vanquish: true,
+    "shining-blade": true,
+    vanguard: true,
+    sandford: true,
+  },
   renderScale: "2",
   interfaceStyle: "guild-wars",
 });
