@@ -109,6 +109,10 @@ function featureFailuresFromVerdicts(
   const travelAction = refusalForFeature("travelAction", verdicts.travelAction);
   const xunlaiAction = refusalForFeature("xunlaiAction", verdicts.xunlaiAction);
   const chatAliases = refusalForFeature("chatAliases", verdicts.chatAliases);
+  const skillKeyOverlay = refusalForFeature(
+    "skillKeyOverlay",
+    verdicts.skillKeyOverlay,
+  );
   if (
     nativeCursor === null
     || targetObservation === null
@@ -117,6 +121,7 @@ function featureFailuresFromVerdicts(
     || travelAction === null
     || xunlaiAction === null
     || chatAliases === null
+    || skillKeyOverlay === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -126,6 +131,7 @@ function featureFailuresFromVerdicts(
     ...(travelAction ? { travelAction } : {}),
     ...(xunlaiAction ? { xunlaiAction } : {}),
     ...(chatAliases ? { chatAliases } : {}),
+    ...(skillKeyOverlay ? { skillKeyOverlay } : {}),
   });
 }
 

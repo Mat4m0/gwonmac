@@ -15,10 +15,12 @@ import {
   type CompanionPartyState,
   type CompanionSnapshot,
   type CompanionToolboxState,
+  type CompanionSkillKeyState,
   type PublishedCompanionState,
   readChangedCompanionParty,
   readChangedCompanionToolbox,
   readCompanionSnapshot,
+  readCompanionSkillKeys,
   sameCompanionToolboxState,
 } from "./companion-snapshot.js";
 
@@ -27,6 +29,7 @@ type SnapshotObserverTarget = {
   snapshotPointer: number;
   toolboxPointer: number;
   partyPointer: number;
+  skillKeyPointer?: number;
   snapshotReads: number;
   rejectedSnapshots: number;
   hertz: number;
@@ -36,6 +39,10 @@ type SnapshotObserverTarget = {
 
 type StateConsumer = {
   update(state: CompanionSnapshot): void;
+};
+
+type SkillKeyConsumer = {
+  update(state: CompanionSkillKeyState): void;
 };
 
 /**
@@ -72,6 +79,7 @@ export function observeCompanion(
   toolbox: ToolboxConsumer | null,
   observeState: boolean,
   publishState: boolean,
+  skillKeys: SkillKeyConsumer | null = null,
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -146,6 +154,12 @@ export function observeCompanion(
         // roster region was read", and a key holding nothing says the opposite.
         toolbox.update(party === null ? state : { ...state, party });
       }
+    }
+    if (skillKeys) {
+      skillKeys.update(readCompanionSkillKeys(
+        runtime.memory.buffer,
+        runtime.skillKeyPointer ?? 0,
+      ));
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.
     cursor?.poll();

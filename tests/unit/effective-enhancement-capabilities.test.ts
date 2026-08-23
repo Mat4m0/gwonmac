@@ -35,6 +35,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       travelAction: selected(capabilities.travelAction),
       xunlaiAction: selected(capabilities.xunlaiAction),
       chatAliases: selected(capabilities.chatAliases),
+      skillKeyOverlay: selected(capabilities.skillKeyOverlay),
     },
   };
   return {
@@ -74,6 +75,7 @@ describe("effective Enhancement capability boundary", () => {
           travelAction: off,
           xunlaiAction: off,
           chatAliases: off,
+          skillKeyOverlay: off,
         },
       },
     };
@@ -86,6 +88,7 @@ describe("effective Enhancement capability boundary", () => {
       travelAction: false,
       xunlaiAction: false,
       chatAliases: false,
+      skillKeyOverlay: false,
     });
   });
 

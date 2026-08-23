@@ -609,6 +609,7 @@ export interface ClientCompatibility {
     travelAction: OptionalFeatureStatus;
     xunlaiAction: OptionalFeatureStatus;
     chatAliases: OptionalFeatureStatus;
+    skillKeyOverlay: OptionalFeatureStatus;
   }>;
 }
 

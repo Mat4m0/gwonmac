@@ -93,6 +93,11 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "local.ui-dispatcher",
     "chat.alias-parser-anchor",
   ] as const),
+  skillKeyOverlay: Object.freeze([
+    ...SHARED_FEATURE_INVARIANTS,
+    "skill-overlay.frame-constructor",
+    "skill-overlay.frame-layout",
+  ] as const),
 } as const satisfies Readonly<
   Record<LocalClientFeature, readonly string[]>
 >);
@@ -161,6 +166,8 @@ export interface LocalFeatureCertificateMap {
   }> & RequiredBuildFact<"observationBase" | "uiDispatcher" | "gameThread">;
   readonly chatAliases: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"uiDispatcher" | "chatAliases">;
+  readonly skillKeyOverlay: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"skillKeyOverlay">;
 }
 
 export type LocalFeatureVerdict<Feature extends LocalClientFeature> =
@@ -337,6 +344,9 @@ export function localFeatureVerdictsForBuild(
         chatAliases: build.chatAliases,
       })
     : null;
+  const skillKeyOverlay = core !== null && build?.skillKeyOverlay !== undefined
+    ? Object.freeze({ core, skillKeyOverlay: build.skillKeyOverlay })
+    : null;
   return Object.freeze({
     nativeCursor: featureVerdict<"nativeCursor">(
       inputSha256,
@@ -386,6 +396,13 @@ export function localFeatureVerdictsForBuild(
       chatAliases,
       failures.chatAliases,
       "chat.alias-parser-anchor",
+    ),
+    skillKeyOverlay: featureVerdict<"skillKeyOverlay">(
+      inputSha256,
+      requested.skillKeyOverlay,
+      skillKeyOverlay,
+      failures.skillKeyOverlay,
+      "skill-overlay.frame-constructor",
     ),
   });
 }

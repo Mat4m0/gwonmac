@@ -25,6 +25,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+    skillKeyOverlay: false,
 });
 const ALL: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -35,6 +36,7 @@ const ALL: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+    skillKeyOverlay: false,
 });
 const CURSOR: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -49,6 +51,7 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+    skillKeyOverlay: false,
 });
 const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -245,7 +248,7 @@ function automaticPartyTeam(): ProvedVerification {
 
 describe("local client verification boundary", () => {
   it("accepts the verifier's complete baseline proof", () => {
-    assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256, ALL), true);
   });
 
   it("rejects an exact authored row that did not cross semantic proof", () => {
@@ -260,7 +263,7 @@ describe("local client verification boundary", () => {
 
   it("rejects a proof for any other official client", () => {
     assert.equal(
-      isLocalClientVerification(valid(), "0".repeat(64)),
+      isLocalClientVerification(valid(), "0".repeat(64), ALL),
       false,
     );
   });
@@ -277,7 +280,7 @@ describe("local client verification boundary", () => {
           },
         },
       },
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, ALL), false);
   });
 
   it("accepts a relocated hook but rejects an incompatible signature", () => {
@@ -289,14 +292,14 @@ describe("local client verification boundary", () => {
       },
       ALL,
     );
-    assert.equal(isLocalClientVerification(relocated, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(relocated, TEMPLATE.sha256, ALL), true);
     assert.equal(isLocalClientVerification({
       ...relocated,
       enhancementBuild: {
         ...relocated.enhancementBuild,
         hookParams: ["i64"],
       },
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, ALL), false);
   });
 
   it("accepts a structurally derived cursor proof and rejects malformed layouts", () => {
@@ -405,14 +408,14 @@ describe("local client verification boundary", () => {
       reasons: ["enhancement-layout-changed"],
     };
     assert.equal(
-      isLocalClientVerification(templateOnly, TEMPLATE.sha256),
+      isLocalClientVerification(templateOnly, TEMPLATE.sha256, ALL),
       true,
     );
     assert.equal(isLocalClientVerification({
       ...templateOnly,
       templateSaveBuild: null,
       enhancementBuild: ENHANCEMENT,
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, ALL), false);
   });
 
   it("represents an unrequested enhancement as a proved template, not a refusal", () => {
@@ -523,14 +526,14 @@ describe("local client verification boundary", () => {
       verifierAbi: SEMANTIC_VERIFIER_ABI,
     });
     const received: unknown = JSON.parse(JSON.stringify(refusal));
-    assert.equal(isLocalClientVerification(received, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(received, TEMPLATE.sha256, ALL), true);
 
     const invalidCandidates = structuredClone(refusal) as unknown as {
       featureVerdicts: { nativeCursor: { candidates: number } };
     };
     invalidCandidates.featureVerdicts.nativeCursor.candidates = 1;
     assert.equal(
-      isLocalClientVerification(invalidCandidates, TEMPLATE.sha256),
+      isLocalClientVerification(invalidCandidates, TEMPLATE.sha256, ALL),
       false,
     );
 
@@ -540,7 +543,7 @@ describe("local client verification boundary", () => {
     invalidInvariant.featureVerdicts.nativeCursor.invariant =
       "nativeCursor-structure-changed";
     assert.equal(
-      isLocalClientVerification(invalidInvariant, TEMPLATE.sha256),
+      isLocalClientVerification(invalidInvariant, TEMPLATE.sha256, ALL),
       false,
     );
   });

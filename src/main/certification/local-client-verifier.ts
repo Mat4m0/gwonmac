@@ -64,6 +64,7 @@ import {
   type LocalFeatureInvariant,
 } from "./local-client-verification-contract.js";
 import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
+import { deriveSkillKeyOverlay } from "./enhancement-skill-key-overlay-proof.js";
 
 export { isLocalClientVerification } from "./local-client-verification-boundary.js";
 export {
@@ -148,6 +149,9 @@ function failuresForRequested(
       : {}),
     ...(requested.chatAliases
       ? { chatAliases: changedFeature("chatAliases", invariant) }
+      : {}),
+    ...(requested.skillKeyOverlay
+      ? { skillKeyOverlay: changedFeature("skillKeyOverlay", invariant) }
       : {}),
   });
 }
@@ -299,6 +303,7 @@ function diagnoseFeatureFailures(
   locatedCursor: AutomaticCursorLocation | null,
   locatedTarget: AutomaticTargetLocation | null,
   locatedLocal: AutomaticLocalActionsLocation | null,
+  locatedSkillKeyOverlay: ReturnType<typeof deriveSkillKeyOverlay>,
   context: EnhancementProofContext,
 ): LocalFeatureFailures {
   const needsLocalEvidence = (requested.partyObservation
@@ -307,9 +312,12 @@ function diagnoseFeatureFailures(
     || (requested.travelAction && !locatedLocal?.travelAction)
     || (requested.xunlaiAction && !locatedLocal?.xunlaiAction)
     || (requested.chatAliases && !locatedLocal?.chatAliases);
+  const needsSkillEvidence = requested.skillKeyOverlay
+    && locatedSkillKeyOverlay === null;
   const needsEvidence = (requested.nativeCursor && !locatedCursor)
     || (requested.targetObservation && !locatedTarget)
-    || needsLocalEvidence;
+    || needsLocalEvidence
+    || needsSkillEvidence;
   const evidence = needsEvidence ? structuralEvidence(input, context) : null;
   const roles = needsLocalEvidence
     ? inspectLocalActionRoleCandidates(input, ENHANCEMENT_BUILDS, context)
@@ -323,6 +331,7 @@ function diagnoseFeatureFailures(
   const travelShared = sharedEvidenceFailure("travelAction", evidence);
   const xunlaiShared = sharedEvidenceFailure("xunlaiAction", evidence);
   const aliasesShared = sharedEvidenceFailure("chatAliases", evidence);
+  const skillShared = sharedEvidenceFailure("skillKeyOverlay", evidence);
   return Object.freeze({
     ...(requested.nativeCursor && !locatedCursor
       ? { nativeCursor: cursorFailure(evidence) }
@@ -478,6 +487,15 @@ function diagnoseFeatureFailures(
               : changedFeature("chatAliases", "chat.alias-parser-anchor")),
         }
       : {}),
+    ...(needsSkillEvidence
+      ? {
+          skillKeyOverlay: skillShared
+            ?? changedFeature(
+              "skillKeyOverlay",
+              "skill-overlay.frame-constructor",
+            ),
+        }
+      : {}),
   });
 }
 
@@ -527,6 +545,9 @@ function deriveEnhancementBuild(
         locatedTarget?.observationLayout,
       )
     : null;
+  const locatedSkillKeyOverlay = requestedCapabilities.skillKeyOverlay
+    ? deriveSkillKeyOverlay(context)
+    : null;
   const cursor = locatedCursor?.baseline.cursorEvent;
   const includeCursor = locatedCursor !== null && cursor !== undefined;
   const includeTarget = locatedTarget !== null;
@@ -550,12 +571,16 @@ function deriveEnhancementBuild(
   const includeAliases = requestedCapabilities.chatAliases
     && locatedLocal?.uiDispatcher != null
     && locatedLocal.chatAliases != null;
+  const includeSkillKeyOverlay = requestedCapabilities.skillKeyOverlay
+    && includeParty
+    && locatedSkillKeyOverlay !== null;
   const failures = diagnoseFeatureFailures(
     templateOutput,
     requestedCapabilities,
     locatedCursor,
     locatedTarget,
     locatedLocal,
+    locatedSkillKeyOverlay,
     context,
   );
   const localContributes = includeParty || includeTeam || includeTravel
@@ -657,6 +682,9 @@ function deriveEnhancementBuild(
       partyObservation: locatedLocal.partyObservation,
     } : {}),
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
+    ...(includeSkillKeyOverlay
+      ? { skillKeyOverlay: locatedSkillKeyOverlay }
+      : {}),
   });
   const maximum: EnhancementCapabilities = Object.freeze({
     nativeCursor: includeCursor,
@@ -666,6 +694,7 @@ function deriveEnhancementBuild(
     travelAction: includeTravel,
     xunlaiAction: includeXunlai,
     chatAliases: includeAliases,
+    skillKeyOverlay: includeSkillKeyOverlay,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

@@ -86,6 +86,20 @@ export interface EnhancementLayout {
   playerRecordAccessFlags: number;
   playerRecordNumber: number;
   areaInfoType: number;
+  frameArray: number;
+  frameCount: number;
+  frameBytes: number;
+  frameChildOffsetId: number;
+  frameId: number;
+  framePositionFlags: number;
+  frameViewportWidth: number;
+  frameViewportHeight: number;
+  frameScreenLeft: number;
+  frameScreenBottom: number;
+  frameScreenRight: number;
+  frameScreenTop: number;
+  frameRelation: number;
+  frameState: number;
 }
 
 export type EnhancementObservationBaseLayout = Pick<EnhancementLayout,
@@ -109,12 +123,20 @@ export type EnhancementStorageLayout = Pick<EnhancementLayout,
   | "worldPlayers" | "playerRecordStride" | "playerRecordAgentId"
   | "playerRecordAccessFlags" | "playerRecordNumber" | "areaInfoType"
 >;
+export type EnhancementSkillKeyOverlayLayout = Pick<EnhancementLayout,
+  | "frameArray" | "frameCount" | "frameBytes" | "frameChildOffsetId"
+  | "frameId" | "framePositionFlags" | "frameViewportWidth"
+  | "frameViewportHeight" | "frameScreenLeft" | "frameScreenBottom"
+  | "frameScreenRight" | "frameScreenTop" | "frameRelation" | "frameState"
+>;
 export type EnhancementPartyLayout = Omit<EnhancementLayout,
   keyof EnhancementObservationBaseLayout | keyof EnhancementTargetLayout
   | keyof EnhancementCursorLayout | keyof EnhancementStorageLayout
+  | keyof EnhancementSkillKeyOverlayLayout
 >;
 
-type Owner = "observation" | "target" | "cursor" | "party" | "storage";
+type Owner = "observation" | "target" | "cursor" | "party" | "storage"
+  | "skill-overlay";
 type ConfigField =
   | Readonly<{
     source: "layout";
@@ -125,6 +147,11 @@ type ConfigField =
   | Readonly<{ source: "layout"; owner: "cursor"; key: keyof EnhancementCursorLayout }>
   | Readonly<{ source: "layout"; owner: "party"; key: keyof EnhancementPartyLayout }>
   | Readonly<{ source: "layout"; owner: "storage"; key: keyof EnhancementStorageLayout }>
+  | Readonly<{
+    source: "layout";
+    owner: "skill-overlay";
+    key: keyof EnhancementSkillKeyOverlayLayout;
+  }>
   | Readonly<{
     source: "dispatcher";
     key: "playerChatMessage" | "hideHeroPanelMessage" | "showHeroPanelMessage";
@@ -147,6 +174,11 @@ const party = (
 const storage = (
   ...keys: readonly (keyof EnhancementStorageLayout)[]
 ): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "storage" }));
+const skillOverlay = (
+  ...keys: readonly (keyof EnhancementSkillKeyOverlayLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({
+  source: "layout", key, owner: "skill-overlay",
+}));
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...observation("contextRoot", "agentArray"),
@@ -161,6 +193,12 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...observation("areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags"),
   ...party("worldProfessionStates", "professionStateStride", "worldCharacterSkills"),
   ...storage("worldPlayers", "playerRecordStride", "playerRecordAgentId", "playerRecordAccessFlags", "playerRecordNumber", "areaInfoType"),
+  ...skillOverlay(
+    "frameArray", "frameCount", "frameBytes", "frameChildOffsetId", "frameId",
+    "framePositionFlags", "frameViewportWidth", "frameViewportHeight",
+    "frameScreenLeft", "frameScreenBottom", "frameScreenRight", "frameScreenTop",
+    "frameRelation", "frameState",
+  ),
   { source: "dispatcher", key: "playerChatMessage", owner: "party" },
   { source: "dispatcher", key: "hideHeroPanelMessage", owner: "party" },
   { source: "dispatcher", key: "showHeroPanelMessage", owner: "party" },

@@ -30,8 +30,10 @@ import {
   COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
   COMPANION_PARTY_BYTES,
+  COMPANION_SKILL_KEY_BYTES,
   type CompanionSnapshot,
 } from "./companion-snapshot.js";
+import { createSkillKeyOverlayConsumer } from "./skill-key-overlay-consumer.js";
 import {
   observeCompanion,
   recordCompanionLifecycle,
@@ -131,13 +133,15 @@ export async function installCertifiedCompanion(
   // launches always receive `none`; developer observers request their scalar
   // projection explicitly without implicitly mounting the Toolbox overlay.
   const foundation = capabilities.partyObservation;
+  const skillKeys = capabilities.skillKeyOverlay;
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const publishObserverState = program === "target-observer";
   const featureFlags =
     (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
     | (observeState ? COMPANION_FEATURE_BITS.gameSnapshot : 0)
     | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
-    | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0);
+    | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
+    | (skillKeys ? COMPANION_FEATURE_BITS.skillKeyOverlay : 0);
   if (featureFlags === 0) return null;
 
   const manifest = decodeEnhancementManifest(module, capabilities);
@@ -231,6 +235,7 @@ export async function installCertifiedCompanion(
   let cursorPointer = 0;
   let toolboxPointer = 0;
   let partyPointer = 0;
+  let skillKeyPointer = 0;
   let payloadPointer = 0;
   let professionTracePointer = 0;
   // What malloc returned, which is what free must be given. The aligned base
@@ -241,6 +246,7 @@ export async function installCertifiedCompanion(
   let disposeReadout = () => {};
   let disposeToolbox = () => {};
   let disposeToolSettings = () => {};
+  let disposeSkillKeys = () => {};
   let disposeCursorRefresh = () => {};
   let professionTrace: ReturnType<typeof createProfessionCommandTrace> | null = null;
   let installedCallback: CallableFunction | null = null;
@@ -282,6 +288,7 @@ export async function installCertifiedCompanion(
       attempt("cursor disposal", disposeCursor);
       attempt("target readout disposal", disposeReadout);
       attempt("Toolbox disposal", disposeToolbox);
+      attempt("skill key overlay disposal", disposeSkillKeys);
     }
     attempt("Tools settings listener disposal", disposeToolSettings);
     attempt("Trade alias disable", () => { configureTradeToggle?.(0); });
@@ -303,6 +310,9 @@ export async function installCertifiedCompanion(
         });
         attempt("party allocation release", () => {
           if (partyPointer) free(partyPointer);
+        });
+        attempt("skill key allocation release", () => {
+          if (skillKeyPointer) free(skillKeyPointer);
         });
       }
       attempt("command payload release", () => {
@@ -389,6 +399,9 @@ export async function installCertifiedCompanion(
       toolboxPointer = Number(exports.malloc(COMPANION_TOOLBOX_BYTES));
       partyPointer = Number(exports.malloc(COMPANION_PARTY_BYTES));
     }
+    if (skillKeys) {
+      skillKeyPointer = Number(exports.malloc(COMPANION_SKILL_KEY_BYTES));
+    }
     if (capabilities.teamApply) {
       payloadPointer = Number(
         exports.malloc(teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES),
@@ -408,6 +421,7 @@ export async function installCertifiedCompanion(
       || (capabilities.nativeCursor && !cursorPointer)
       || (foundation && !toolboxPointer)
       || (foundation && !partyPointer)
+      || (skillKeys && !skillKeyPointer)
       || (capabilities.teamApply && !payloadPointer)
       || (storageInstallation !== null && !storageInstallation.region().pointer)
       || (travelInstallation !== null && !travelInstallation.region().pointer)
@@ -438,6 +452,14 @@ export async function installCertifiedCompanion(
             { name: "toolbox", pointer: toolboxPointer, size: COMPANION_TOOLBOX_BYTES, align: 4 },
             { name: "party", pointer: partyPointer, size: COMPANION_PARTY_BYTES, align: 4 },
           ]
+        : []),
+      ...(skillKeys
+        ? [{
+            name: "skill keys",
+            pointer: skillKeyPointer,
+            size: COMPANION_SKILL_KEY_BYTES,
+            align: 4,
+          }]
         : []),
       ...(capabilities.teamApply
         ? [
@@ -566,6 +588,8 @@ export async function installCertifiedCompanion(
       toolboxBytes: number,
       partyPointer: number,
       partyBytes: number,
+      skillKeyPointer: number,
+      skillKeyBytes: number,
       featureFlags: number,
     ) => number;
     type KernelDispatch = (
@@ -586,6 +610,7 @@ export async function installCertifiedCompanion(
     const kernelCursorBytes = kernel.exports.companion_cursor_bytes as KernelScalar;
     const kernelToolboxBytes = kernel.exports.companion_toolbox_bytes as KernelScalar;
     const kernelPartyBytes = kernel.exports.companion_party_bytes as KernelScalar;
+    const kernelSkillKeyBytes = kernel.exports.companion_skill_key_bytes as KernelScalar;
     if (
       kernelAbi() !== COMPANION_ABI
       || kernelConfigBytes() !== configBytes
@@ -593,6 +618,7 @@ export async function installCertifiedCompanion(
       || kernelCursorBytes() !== COMPANION_CURSOR_BYTES
       || kernelToolboxBytes() !== COMPANION_TOOLBOX_BYTES
       || kernelPartyBytes() !== COMPANION_PARTY_BYTES
+      || kernelSkillKeyBytes() !== COMPANION_SKILL_KEY_BYTES
       || kernelInit(
         snapshotPointer,
         observeState ? COMPANION_SNAPSHOT_BYTES : 0,
@@ -604,6 +630,8 @@ export async function installCertifiedCompanion(
         foundation ? COMPANION_TOOLBOX_BYTES : 0,
         partyPointer,
         foundation ? COMPANION_PARTY_BYTES : 0,
+        skillKeyPointer,
+        skillKeys ? COMPANION_SKILL_KEY_BYTES : 0,
         featureFlags,
       ) !== 1
     ) {
@@ -651,6 +679,17 @@ export async function installCertifiedCompanion(
       installedCursorState = () => cursor?.state ?? null;
       window.gwCursorState = installedCursorState;
     }
+    const skillKeyConsumer = skillKeys
+      ? (() => {
+          const element = document.getElementById("canvas");
+          if (!(element instanceof HTMLCanvasElement)) {
+            throw new Error("Enhancement skill key target is missing");
+          }
+          const consumer = createSkillKeyOverlayConsumer(document.body, element);
+          disposeSkillKeys = consumer.dispose;
+          return consumer;
+        })()
+      : null;
     let optionalSettings = window.gwToolsSettings();
     const configureTradeAlias = () => {
       configureTradeToggle?.(optionalSettings.enabled ? 1 : 0);
@@ -721,7 +760,8 @@ export async function installCertifiedCompanion(
         // commands are denied. It is the only way an unknown region can later
         // prove that it became PvE without restarting.
         | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
-        | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0);
+        | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0)
+        | (skillKeys ? COMPANION_FEATURE_BITS.skillKeyOverlay : 0);
       kernelDispatch(
         COMPANION_DISPATCH_KINDS.activeFeatures,
         active,
@@ -830,6 +870,7 @@ export async function installCertifiedCompanion(
       snapshotPointer,
       toolboxPointer,
       partyPointer,
+      skillKeyPointer,
       hertz: 0,
       lastRenderUs: 0,
       renderSamples: [] as number[],
@@ -968,6 +1009,7 @@ export async function installCertifiedCompanion(
         : null,
       observeState,
       publishObserverState,
+      skillKeyConsumer,
     );
     companionInstallations = installation;
     if (program !== "none") window.gwCompanionRuntime = runtime;

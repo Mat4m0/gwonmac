@@ -231,6 +231,7 @@ test.describe("client compatibility", () => {
               travelAction: { status: "off" },
               xunlaiAction: { status: "off" },
               chatAliases: { status: "off" },
+              skillKeyOverlay: { status: "off" },
             },
           },
         );

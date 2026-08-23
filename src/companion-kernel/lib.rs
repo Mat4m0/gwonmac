@@ -42,6 +42,7 @@ mod abi;
 mod cursor;
 mod memory;
 mod party;
+mod skill_keys;
 mod toolbox;
 
 use abi::*;
@@ -677,12 +678,16 @@ pub unsafe extern "C" fn companion_init(
     toolbox_size: u32,
     party_ptr: u32,
     party_size: u32,
+    skill_key_ptr: u32,
+    skill_key_size: u32,
     features: u32,
 ) -> u32 {
     if features == 0
         || features & !KNOWN_FEATURES != 0
         || features & FEATURE_TARGET_OBSERVATION != 0
             && features & FEATURE_GAME_SNAPSHOT == 0
+        || features & FEATURE_SKILL_KEY_OVERLAY != 0
+            && features & FEATURE_TOOLBOX_FOUNDATION == 0
         || config_size != CONFIG_BYTES
         || config_ptr & 3 != 0
         || !contains(config_ptr, config_size)
@@ -713,6 +718,12 @@ pub unsafe extern "C" fn companion_init(
             party_ptr,
             party_size,
             PARTY_BYTES,
+        )
+        || !valid_region(
+            features & FEATURE_SKILL_KEY_OVERLAY != 0,
+            skill_key_ptr,
+            skill_key_size,
+            SKILL_KEY_BYTES,
         )
     {
         return 0;
@@ -749,6 +760,9 @@ pub unsafe extern "C" fn companion_init(
             toolbox::initialize(toolbox_ptr);
             party::initialize(party_ptr);
         }
+        if features & FEATURE_SKILL_KEY_OVERLAY != 0 {
+            skill_keys::initialize(skill_key_ptr);
+        }
     }
     1
 }
@@ -779,6 +793,9 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
             if features & FEATURE_NATIVE_CURSOR != 0 {
                 unsafe { cursor::tick(layout) };
             }
+            if active & FEATURE_SKILL_KEY_OVERLAY != 0 {
+                unsafe { skill_keys::tick(layout, b) };
+            }
         }
         DISPATCH_CURSOR => {
             if unsafe { INITIALIZED } && unsafe { FEATURES } & FEATURE_NATIVE_CURSOR != 0 {
@@ -806,7 +823,10 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
                 return;
             }
             let available = unsafe { FEATURES };
-            if a & !available != 0 || a & FEATURE_NATIVE_CURSOR != available & FEATURE_NATIVE_CURSOR
+            if a & !available != 0
+                || a & FEATURE_NATIVE_CURSOR != available & FEATURE_NATIVE_CURSOR
+                || a & FEATURE_SKILL_KEY_OVERLAY != 0
+                    && a & FEATURE_TOOLBOX_FOUNDATION == 0
             {
                 return;
             }
@@ -825,7 +845,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, _c: u32, 
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    14
+    15
 }
 
 #[no_mangle]
@@ -851,6 +871,11 @@ pub extern "C" fn companion_toolbox_bytes() -> u32 {
 #[no_mangle]
 pub extern "C" fn companion_party_bytes() -> u32 {
     PARTY_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_skill_key_bytes() -> u32 {
+    SKILL_KEY_BYTES
 }
 
 #[no_mangle]

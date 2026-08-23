@@ -47,6 +47,7 @@ import {
   parseIndexVector,
   parseExports,
   parseTypes,
+  paddedIndex,
   sectionById,
   sleb,
   splitSections,
@@ -93,10 +94,17 @@ function dispatcher(
   dispatchTypeIndex: number,
   originalIndex: number,
   hookGlobalIndex: number,
+  extraArgumentGlobal: number | null = null,
 ): Uint8Array {
   const args = Array.from({ length: paramCount }, (_, index) =>
     concat(Uint8Array.of(0x20), uleb(index)),
   );
+  const dispatchArgs = [
+    ...args,
+    ...(extraArgumentGlobal === null
+      ? []
+      : [concat(Uint8Array.of(0x23), uleb(extraArgumentGlobal))]),
+  ];
   return concat(
     uleb(0),
     // The game-owned function always runs in the game module and on the
@@ -112,8 +120,8 @@ function dispatcher(
     Uint8Array.of(0x0f, 0x0b),
     Uint8Array.of(0x41),
     sleb(dispatchKind),
-    ...args,
-    ...Array.from({ length: DISPATCH_PARAMS - 1 - paramCount }, () =>
+    ...dispatchArgs,
+    ...Array.from({ length: DISPATCH_PARAMS - 1 - dispatchArgs.length }, () =>
       concat(Uint8Array.of(0x41), sleb(0)),
     ),
     Uint8Array.of(0x23),
@@ -245,6 +253,7 @@ function resolveEnhancementTransform(
     : null;
   const travelAction = build.travelAction!;
   const chatAliases = build.chatAliases!;
+  const skillKeyOverlay = build.skillKeyOverlay!;
   const hasActionQueue = capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction;
@@ -322,6 +331,37 @@ function resolveEnhancementTransform(
     if (!body) fail(`function ${functionIndex} has no body`);
     return createHash("sha256").update(body).digest("hex");
   };
+  const skillInitializer = capabilities.skillKeyOverlay
+    ? resolveHook(
+        "SkillBar initializer",
+        skillKeyOverlay.initializer.functionIndex,
+        skillKeyOverlay.initializer.params,
+        skillKeyOverlay.initializer.results,
+      )
+    : null;
+  const skillConstructor = capabilities.skillKeyOverlay
+    ? resolveHook(
+        "SkillBar frame constructor",
+        skillKeyOverlay.constructor.functionIndex,
+        skillKeyOverlay.constructor.params,
+        skillKeyOverlay.constructor.results,
+      )
+    : null;
+  if (skillInitializer && skillConstructor) {
+    if (
+      bodyHash(skillKeyOverlay.initializer.functionIndex)
+        !== skillKeyOverlay.initializer.bodySha256
+      || bodyHash(skillKeyOverlay.constructor.functionIndex)
+        !== skillKeyOverlay.constructor.bodySha256
+    ) fail("SkillBar frame capture bodies do not match their certificates");
+    const operand = skillKeyOverlay.initializer.constructorCallOperand;
+    const body = bodies[skillInitializer.localIndex]!;
+    const expected = paddedIndex(skillKeyOverlay.constructor.functionIndex);
+    if (
+      body[operand - 1] !== 0x10
+      || expected.some((byte, index) => body[operand + index] !== byte)
+    ) fail("SkillBar constructor call site does not match its certificate");
+  }
   if (bodyHash(build.hookFunction) !== build.hookBodySha256) {
     fail("tick body does not match its semantic fingerprint");
   }
@@ -555,6 +595,14 @@ function resolveEnhancementTransform(
       name: "Travel UI dispatcher",
       functionIndex: uiDispatcherHook!.localIndex + importCount,
     }] : []),
+    ...(skillInitializer ? [{
+      name: "SkillBar initializer",
+      functionIndex: skillInitializer.localIndex + importCount,
+    }] : []),
+    ...(skillConstructor ? [{
+      name: "SkillBar frame constructor",
+      functionIndex: skillConstructor.localIndex + importCount,
+    }] : []),
   ];
   const roleByFunction = new Map<number, string>();
   for (const role of exclusiveRoles) {
@@ -619,6 +667,9 @@ function resolveEnhancementTransform(
     xunlaiAction,
     travelAction,
     chatAliases,
+    skillKeyOverlay,
+    skillInitializer,
+    skillConstructor,
     commands,
     professionBuilder,
     skillBuilder,
@@ -655,6 +706,9 @@ function assembleEnhancementTransform(
     table,
     nextTableSize,
     hasActionQueue,
+    skillKeyOverlay,
+    skillInitializer,
+    skillConstructor,
   } = resolution;
 
   const globals = vectorPayload(sectionById(sections, 6));
@@ -692,6 +746,9 @@ function assembleEnhancementTransform(
     return first;
   };
   const hookGlobalIndex = allocateGlobals(1);
+  const skillBarFrameGlobalIndex = capabilities.skillKeyOverlay
+    ? allocateGlobals(1)
+    : 0;
   const commandPendingGlobalIndex = hasActionQueue ? allocateGlobals(1) : 0;
   const commandArgumentGlobalBase = hasActionQueue
     ? allocateGlobals(COMMAND_ARGS)
@@ -772,8 +829,37 @@ function assembleEnhancementTransform(
       dispatchTypeIndex,
       selectedOriginalIndices[index]!,
       hookGlobalIndex,
+      capabilities.skillKeyOverlay
+        && hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
+        ? skillBarFrameGlobalIndex
+        : null,
     );
   });
+
+  if (skillInitializer && skillConstructor) {
+    const wrapperIndex = appendFunction(
+      skillConstructor.typeIndex,
+      concat(
+        // One i32 local holds the constructor result while it is published.
+        uleb(1), uleb(1), Uint8Array.of(0x7f),
+        ...Array.from({ length: 6 }, (_, index) =>
+          concat(Uint8Array.of(0x20), uleb(index))),
+        Uint8Array.of(0x10), uleb(skillKeyOverlay.constructor.functionIndex),
+        Uint8Array.of(0x22), uleb(6),
+        Uint8Array.of(0x24), uleb(skillBarFrameGlobalIndex),
+        Uint8Array.of(0x20), uleb(6),
+        Uint8Array.of(0x0b),
+      ),
+    );
+    const rewrittenInitializer = new Uint8Array(
+      nextBodies[skillInitializer.localIndex]!,
+    );
+    rewrittenInitializer.set(
+      paddedIndex(wrapperIndex),
+      skillKeyOverlay.initializer.constructorCallOperand,
+    );
+    nextBodies[skillInitializer.localIndex] = rewrittenInitializer;
+  }
 
   const addedFunctionExports: Array<Readonly<{ name: string; index: number }>> = [];
   applyFeatureContributions(resolution, {

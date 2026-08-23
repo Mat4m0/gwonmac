@@ -44,6 +44,7 @@ function projectCompatibility(
       travelAction: status("travelAction"),
       xunlaiAction: status("xunlaiAction"),
       chatAliases: status("chatAliases"),
+      skillKeyOverlay: status("skillKeyOverlay"),
     }),
   });
 }

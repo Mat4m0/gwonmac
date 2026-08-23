@@ -118,26 +118,26 @@ test("one capability plan derives hooks without losing feature identity", () => 
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
-      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false },
+      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillKeyOverlay: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "target-observer"),
-      { nativeCursor: false, targetObservation: true, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false },
+      { nativeCursor: false, targetObservation: true, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillKeyOverlay: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-foundation"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillKeyOverlay: true },
     );
     // The read foundation and the write program differ by exactly this bit,
     // and no saved setting reaches the second: choosing the panel can never
     // carry the ability to send a packet in with it.
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-commands"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true, chatAliases: true },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true, chatAliases: true, skillKeyOverlay: true },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "xunlai-storage"),
-      { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true },
+      { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true, skillKeyOverlay: false },
     );
   }
 });
@@ -145,10 +145,10 @@ test("one capability plan derives hooks without losing feature identity", () => 
 test("launch intent resolves to the canonical frozen capability profiles", () => {
   const cases = [
     [{ nativeCursor: true, tools: false }, "none", "features-01"],
-    [{ nativeCursor: true, tools: true }, "none", "features-7f"],
+    [{ nativeCursor: true, tools: true }, "none", "features-ff"],
     [{ nativeCursor: false, tools: false }, "cursor-observer", "features-01"],
     [{ nativeCursor: true, tools: false }, "target-observer", "features-02"],
-    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "features-04"],
+    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "features-84"],
     [{ nativeCursor: false, tools: false }, "xunlai-storage", "features-70"],
   ] as const;
   for (const [selection, program, profile] of cases) {
@@ -182,6 +182,7 @@ test("the capability wire contract is exact and has one empty value", () => {
     travelAction: true,
     xunlaiAction: true,
     chatAliases: true,
+    skillKeyOverlay: true,
   });
   assert.ok(all);
   assert.equal(Object.isFrozen(all), true);
@@ -207,6 +208,7 @@ test("the capability wire contract is exact and has one empty value", () => {
     travelAction: false,
     xunlaiAction: false,
     chatAliases: false,
+    skillKeyOverlay: false,
   });
 
   assert.equal(parseEnhancementCapabilities({ ...all, extra: false }), null);
@@ -275,6 +277,7 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
         travelAction: unavailable,
         xunlaiAction: unavailable,
         chatAliases: unavailable,
+        skillKeyOverlay: { status: "off" },
       },
     },
   }), enhancementCapabilitiesForProfile("features-07"));
