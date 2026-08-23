@@ -21,7 +21,10 @@ import {
 import path from "node:path";
 import { promisify } from "node:util";
 import { app, dialog, type BrowserWindow } from "electron";
-import type { AppSettings } from "../../shared/contracts.js";
+import type {
+  AppSettings,
+  VisualProblemManifest,
+} from "../../shared/contracts.js";
 import { gamePaths } from "../paths.js";
 import { windowRegistry } from "../window-registry.js";
 import {
@@ -41,6 +44,16 @@ import {
 } from "./text-scan.js";
 
 const execFileAsync = promisify(execFile);
+
+type VisualProblemExportBase = Pick<
+  VisualProblemManifest,
+  "rendererOutcome" | "gameWindowCount"
+>;
+
+export type VisualProblemExport = VisualProblemExportBase & (
+  | { screenshotRequested: false; screenshotPng?: never }
+  | { screenshotRequested: true; screenshotPng?: Uint8Array }
+);
 
 /**
  * The Chromium trace is the one document nobody here authored, so it is the
@@ -83,8 +96,15 @@ export async function exportDiagnosticsZip(
     includePreviousSession: boolean;
     electronVersions: Record<string, string>;
     settings: AppSettings;
+    visualProblem?: VisualProblemExport;
   },
 ): Promise<string> {
+  if (
+    extras.visualProblem?.screenshotPng?.byteLength
+    && extras.visualProblem.screenshotRequested !== true
+  ) {
+    throw new Error("visual-problem screenshot requires explicit consent");
+  }
   await recorder.flush();
   const dir = gamePaths().diagnostics;
   const staging = path.join(dir, `export-${randomUUID()}`);
@@ -124,6 +144,8 @@ export async function exportDiagnosticsZip(
     ];
     if (previous) files.push("previous-events.jsonl");
     if (capture) files.push("capture-summary.json");
+    const screenshot = extras.visualProblem?.screenshotPng;
+    if (screenshot?.byteLength) files.push("visual-problem.png");
     const framePath = recorder.framePath(extras.diagnosticOwnerId);
     if (framePath) {
       await copyFile(framePath, path.join(staging, "frames.bin"));
@@ -152,6 +174,17 @@ export async function exportDiagnosticsZip(
       // both counts by running the same closed schema over events.jsonl.
       redaction: { ...inspection, traceBytesScanned } satisfies RedactionResult,
       profilerContaminated: files.includes("chromium-trace.json"),
+      ...(extras.visualProblem
+        ? {
+            visualProblem: {
+              rendererOutcome: extras.visualProblem.rendererOutcome,
+              gameWindowCount: extras.visualProblem.gameWindowCount,
+              screenshotRequested: extras.visualProblem.screenshotRequested,
+              screenshotIncluded: files.includes("visual-problem.png"),
+              screenshotPrivacy: "player-consented-unscanned",
+            } satisfies VisualProblemManifest,
+          }
+        : {}),
       eventLog: {
         completeFromStart: exportedEvents.completeFromStart,
         firstSequenceNumber: exportedEvents.firstSeq,
@@ -235,6 +268,8 @@ export async function exportDiagnosticsZip(
           graphics: capture?.graphics
             ?? graphicsSnapshot(extras.diagnosticOwnerId),
           electronVersions: extras.electronVersions,
+          gameWindowCount: extras.visualProblem?.gameWindowCount
+            ?? windowRegistry.gameWindows().length,
         },
         null,
         2,
@@ -260,6 +295,11 @@ export async function exportDiagnosticsZip(
       await writeFile(file, text, { mode: 0o600 });
       await chmod(file, 0o600);
     }
+    if (screenshot?.byteLength) {
+      const file = path.join(staging, "visual-problem.png");
+      await writeFile(file, screenshot, { mode: 0o600 });
+      await chmod(file, 0o600);
+    }
     await execFileAsync("ditto", ["-c", "-k", "--sequesterRsrc", staging, zipPart]);
     await chmod(zipPart, 0o600);
     await rename(zipPart, zipPath);
@@ -277,6 +317,7 @@ export async function exportDiagnosticsZip(
 export async function exportDiagnosticsForWindow(
   win: BrowserWindow,
   readSettings: () => Promise<AppSettings>,
+  options: { visualProblem?: VisualProblemExport } = {},
 ): Promise<string> {
   // `captureLevel` remains zero while reset and recorder setup are in flight.
   // The owner-bound stop also waits that starting operation, so export cannot
@@ -285,8 +326,10 @@ export async function exportDiagnosticsForWindow(
   // The report has always been a PKZIP archive; `.zip` is the name that lets
   // GitHub accept it as an attachment without a Finder round-trip.
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
-    title: "Export Diagnostics",
-    defaultPath: "guild-wars-diagnostics.zip",
+    title: options.visualProblem ? "Save Visual Problem Report" : "Export Diagnostics",
+    defaultPath: options.visualProblem
+      ? "guild-wars-visual-problem.zip"
+      : "guild-wars-diagnostics.zip",
     filters: [{ name: "Guild Wars diagnostics", extensions: ["zip"] }],
   });
   if (canceled || !filePath) return "";
@@ -301,5 +344,6 @@ export async function exportDiagnosticsForWindow(
     includePreviousSession: context?.mode === "single",
     electronVersions: runtimeVersions(),
     settings: await readSettings(),
+    ...options,
   });
 }

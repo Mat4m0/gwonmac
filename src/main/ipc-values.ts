@@ -155,6 +155,47 @@ export function parseRendererMilestoneArgs(args: readonly unknown[]): ParsedMile
       unknownTextureAllocations: record.unknownTextureAllocations as number,
       textureTrackingSaturated: record.textureTrackingSaturated as boolean,
     };
+  } else if (name === "graphics.visualProblem") {
+    const numericFields = [
+      "wasmHeapBytes", "canvasWidth", "canvasHeight", "offscreenWidth",
+      "offscreenHeight", "drawingBufferWidth", "drawingBufferHeight",
+      "generatedTextures", "deletedTextures", "liveTextures",
+      "trackedTextures", "knownTextureBytes", "textureUploadBytes",
+      "unknownTextureAllocations", "livePrograms", "programPassThroughQueries",
+    ] as const;
+    const valid = recordIsObject
+      && Object.keys(record).length === numericFields.length + 5
+      && numericFields.every((field) => isByteCount(record[field]))
+      && (record.trackedTextures as number) <= 4_096
+      && typeof record.textureProbeInstalled === "boolean"
+      && typeof record.textureTrackingSaturated === "boolean"
+      && typeof record.webglContextAvailable === "boolean"
+      && typeof record.programProbeInstalled === "boolean"
+      && typeof record.contextLost === "boolean";
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      textureProbeInstalled: record.textureProbeInstalled as boolean,
+      wasmHeapBytes: record.wasmHeapBytes as number,
+      webglContextAvailable: record.webglContextAvailable as boolean,
+      contextLost: record.contextLost as boolean,
+      canvasWidth: record.canvasWidth as number,
+      canvasHeight: record.canvasHeight as number,
+      offscreenWidth: record.offscreenWidth as number,
+      offscreenHeight: record.offscreenHeight as number,
+      drawingBufferWidth: record.drawingBufferWidth as number,
+      drawingBufferHeight: record.drawingBufferHeight as number,
+      generatedTextures: record.generatedTextures as number,
+      deletedTextures: record.deletedTextures as number,
+      liveTextures: record.liveTextures as number,
+      trackedTextures: record.trackedTextures as number,
+      knownTextureBytes: record.knownTextureBytes as number,
+      textureUploadBytes: record.textureUploadBytes as number,
+      unknownTextureAllocations: record.unknownTextureAllocations as number,
+      textureTrackingSaturated: record.textureTrackingSaturated as boolean,
+      programProbeInstalled: record.programProbeInstalled as boolean,
+      livePrograms: record.livePrograms as number,
+      programPassThroughQueries: record.programPassThroughQueries as number,
+    };
   } else if (name === "enhancement.installed") {
     const valid = recordIsObject && Object.keys(record).length === 3
       && typeof record.companionAbi === "number" && Number.isSafeInteger(record.companionAbi) && record.companionAbi >= 0

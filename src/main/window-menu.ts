@@ -238,6 +238,14 @@ export function installApplicationMenu({
           }),
         },
         {
+          id: "report-visual-problem",
+          label: "Report Visual Problem…",
+          click: withGameOwner(async (win) => {
+            await resetGameInput(win);
+            await host.reportVisualProblem(win);
+          }),
+        },
+        {
           id: "request-feature",
           label: "Request a Feature…",
           click: withGameOwner(async (win) => {

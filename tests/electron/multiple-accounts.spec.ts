@@ -689,6 +689,7 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       altGame.evaluate(() => {
         const field = document.getElementById("osk-input-text");
         if (!(field instanceof HTMLInputElement)) throw new Error("Alt proxy missing");
+        field.type = "text";
         field.value = "alt selection";
         field.focus();
         field.setSelectionRange(0, 3);
@@ -697,6 +698,7 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       nonTargetGame.evaluate(() => {
         const field = document.getElementById("osk-input-text");
         if (!(field instanceof HTMLInputElement)) throw new Error("Primary proxy missing");
+        field.type = "text";
         field.value = "primary selection";
         field.focus();
         field.setSelectionRange(0, 7);

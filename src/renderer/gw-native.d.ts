@@ -15,6 +15,7 @@ import type {
 import type {
   RendererEventName,
   RendererMetrics,
+  TextureMemorySnapshot,
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { PublishedCompanionState } from "./companion-snapshot.js";
@@ -104,6 +105,7 @@ declare global {
     captureStarted(level: 1 | 2): void;
     captureStopped(): void;
     problemMarked(): void;
+    visualProblem(): Promise<void>;
     event(name: RendererEventName, value?: unknown): void;
     snapshot(
       durationUs: number,
@@ -187,9 +189,7 @@ declare global {
           callback: (error?: unknown) => void,
         ): void;
       };
-      canvas?: {
-        offscreen?: { width: number; height: number };
-      };
+      canvas?: HTMLCanvasElement & { offscreen?: OffscreenCanvas };
     };
     gwApplySettings?(settings: AppSettings): void;
     gwSurfaces: GwonmacSurfaceController;
@@ -205,10 +205,12 @@ declare global {
     gwSnapshotState?(): Partial<RendererMetrics>;
     /** Current WASM linear-memory size; present once the client is hosted. */
     gwWasmHeapBytes?(): number;
+    /** Bounded texture counters for local developer diagnostics. */
+    gwTextureStats?(): TextureMemorySnapshot;
     gwResolveDataStrategy(snapshotBytes: number): Promise<void>;
     gwLog(visible?: boolean): boolean;
     gwEvictMemory(): number;
-    gwStats(): Record<string, number | boolean>;
+    gwStats?(): Record<string, number | boolean>;
     gwBuildInfo?: Readonly<{
       programId: number;
       buildId: number;

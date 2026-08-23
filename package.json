@@ -42,6 +42,7 @@
     "test:policy": "node --import ./scripts/ts-hook.mjs --test --test-timeout=60000 tests/policy/*.ts",
     "test:release": "node --import ./scripts/ts-hook.mjs --test --test-timeout=60000 tests/release/*.ts",
     "enhancements:live": "pnpm build && node --import ./scripts/ts-hook.mjs scripts/enhancements-live.ts",
+    "graphics:live": "GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario graphics-probe",
     "certification": "pnpm build && node build/tools/certification.js",
     "client:official": "node --import ./scripts/ts-hook.mjs scripts/official-client.ts",
     "enhancements:visual": "pnpm build && node --import ./scripts/ts-hook.mjs scripts/enhancements-visual.ts",

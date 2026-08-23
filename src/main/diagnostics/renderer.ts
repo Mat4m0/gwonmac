@@ -19,6 +19,7 @@ import {
   type RendererMetrics,
   type RendererMilestone,
   type RendererMilestoneFields,
+  type TextureMemorySnapshot,
   type WasmMemoryProbeStatus,
 } from "../../shared/diagnostics.js";
 import {
@@ -36,6 +37,28 @@ interface RendererDiagnosticState {
 }
 
 const rendererStates = new Map<number, RendererDiagnosticState>();
+
+function recordTextureSnapshot(
+  fields: TextureMemorySnapshot,
+  ownerId: number,
+): void {
+  recorder.setLatest("wasm.textures.live", fields.liveTextures, ownerId);
+  recorder.setLatest("wasm.textures.tracked", fields.trackedTextures, ownerId);
+  recorder.setLatest("wasm.textures.knownBytes", fields.knownTextureBytes, ownerId);
+  recorder.setLatest("wasm.textures.uploadBytes", fields.textureUploadBytes, ownerId);
+  recorder.setLatest(
+    "wasm.textures.unknownAllocations",
+    fields.unknownTextureAllocations,
+    ownerId,
+  );
+  recorder.setLatest(
+    "wasm.textures.trackingSaturated",
+    fields.textureTrackingSaturated,
+    ownerId,
+  );
+  recorder.setPeak("wasm.textures.peakLive", fields.liveTextures, ownerId);
+  recorder.setPeak("wasm.textures.peakKnownBytes", fields.knownTextureBytes, ownerId);
+}
 
 function stateFor(ownerId: number): RendererDiagnosticState {
   let state = rendererStates.get(ownerId);
@@ -424,40 +447,45 @@ export function recordRendererMilestone(
       ownerId,
     );
     recorder.setLatest("wasm.growth.frame1Offset", fields.frame1Offset, ownerId);
-    recorder.setLatest("wasm.textures.live", fields.liveTextures, ownerId);
-    recorder.setLatest("wasm.textures.tracked", fields.trackedTextures, ownerId);
-    recorder.setLatest(
-      "wasm.textures.knownBytes",
-      fields.knownTextureBytes,
-      ownerId,
-    );
-    recorder.setLatest(
-      "wasm.textures.uploadBytes",
-      fields.textureUploadBytes,
-      ownerId,
-    );
-    recorder.setLatest(
-      "wasm.textures.unknownAllocations",
-      fields.unknownTextureAllocations,
-      ownerId,
-    );
-    recorder.setLatest(
-      "wasm.textures.trackingSaturated",
-      fields.textureTrackingSaturated,
-      ownerId,
-    );
-    recorder.setPeak("wasm.textures.peakLive", fields.liveTextures, ownerId);
-    recorder.setPeak(
-      "wasm.textures.peakKnownBytes",
-      fields.knownTextureBytes,
-      ownerId,
-    );
+    recordTextureSnapshot(fields, ownerId);
     recordEvent(
       {
         k: "wasm.growthRequested",
         clockSynchronized: state.clockSynchronized,
         ...fields,
         stackFingerprint: asRendererFingerprint(fields.stackFingerprint),
+      },
+      { timestampUs },
+      ownerId,
+    );
+    return;
+  }
+  if (name === "graphics.visualProblem") {
+    if (!fields || !("contextLost" in fields)) return;
+    recordTextureSnapshot(fields, ownerId);
+    recorder.setLatest(
+      "graphics.webglContextAvailableAtVisualProblem",
+      fields.webglContextAvailable,
+      ownerId,
+    );
+    recorder.setLatest("graphics.contextLostAtVisualProblem", fields.contextLost, ownerId);
+    recorder.setLatest("graphics.visualProblemWasmHeapBytes", fields.wasmHeapBytes, ownerId);
+    recorder.setLatest(
+      "graphics.programProbeInstalledAtVisualProblem",
+      fields.programProbeInstalled,
+      ownerId,
+    );
+    recorder.setLatest("graphics.visualProblemLivePrograms", fields.livePrograms, ownerId);
+    recorder.setLatest(
+      "graphics.visualProblemProgramPassThroughQueries",
+      fields.programPassThroughQueries,
+      ownerId,
+    );
+    recordEvent(
+      {
+        k: "graphics.visualProblem",
+        clockSynchronized: state.clockSynchronized,
+        ...fields,
       },
       { timestampUs },
       ownerId,

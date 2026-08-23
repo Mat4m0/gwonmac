@@ -50,6 +50,9 @@
       case 'problem-marked':
         diagnostics.problemMarked();
         break;
+      case 'visual-problem':
+        await diagnostics.visualProblem();
+        break;
     }
   }
 

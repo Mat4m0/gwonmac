@@ -165,7 +165,7 @@ test.describe("live client", () => {
                     : handler.target?.id || handler.target?.constructor?.name,
               capture: handler.useCapture,
             })),
-          stats: window.gwStats(),
+          stats: window.gwStats?.() ?? null,
         };
       });
 
@@ -185,6 +185,12 @@ test.describe("live client", () => {
           "utf8",
         ),
       );
+      const rendererStats = platform.stats;
+      if (rendererStats === null) {
+        throw new Error(
+          "the ready client did not install its renderer statistics probe",
+        );
+      }
 
       // Reported before the assertions run: when ArenaNet ships a new build the
       // canary goes red, and the two hashes below are exactly what
@@ -211,7 +217,7 @@ test.describe("live client", () => {
             `- Renderer: ${String(platform.renderer)}`,
             `- JSPI initialized: ${platform.jspi ? "yes" : "no"}`,
             "- Hardware frame submitted: yes",
-            `- Gamepad host imports: ${platform.stats.gamepadImports ? "available" : "missing"}`,
+            `- Gamepad host imports: ${rendererStats.gamepadImports ? "available" : "missing"}`,
             "",
           ].join("\n"),
         );
@@ -304,11 +310,11 @@ test.describe("live client", () => {
         expect(platform.wheelHandlers).toEqual([
           { target: "canvas", capture: 0 },
         ]);
-        expect(platform.stats.gamepadImports).toBe(true);
+        expect(rendererStats.gamepadImports).toBe(true);
         expect(String(platform.renderer)).not.toMatch(
           /swiftshader|llvmpipe|software/i,
         );
-        expect(platform.stats.reads).toBeGreaterThan(0);
+        expect(rendererStats.reads).toBeGreaterThan(0);
       });
 
       const applyScale = (renderScale: AppSettings["renderScale"]) =>
