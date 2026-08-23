@@ -175,6 +175,19 @@ function featureStatusLabel(status: ClientCompatibility['features'][Feature]): s
   }
 }
 
+function cooldownPresentationStatus(
+  features: ClientCompatibility['features'],
+): ClientCompatibility['features'][Feature] {
+  const cooldown = features.skillCooldownObservation;
+  const geometry = features.skillSlotGeometry;
+  if (cooldown.status === 'unavailable') return cooldown;
+  if (geometry.status === 'unavailable') return geometry;
+  if (cooldown.status === 'off' || geometry.status === 'off') return offFeatureStatus;
+  return cooldown;
+}
+
+const offFeatureStatus = Object.freeze({ status: 'off' } as const);
+
 /**
  * Render the session into both fixed compatibility surfaces.
  */
@@ -210,8 +223,11 @@ export function renderClientCompatibility(
   const report = compatibilityReport(session.compatibility);
   settingsAvailability.open = report.degraded;
   for (const feature of Object.keys(session.compatibility.features) as Feature[]) {
+    const status = feature === 'skillCooldownObservation'
+      ? cooldownPresentationStatus(session.compatibility.features)
+      : session.compatibility.features[feature];
     requiredElement(root, `settings-feature-${feature}`).textContent =
-      featureStatusLabel(session.compatibility.features[feature]);
+      featureStatusLabel(status);
   }
   const detail = report.details.join(' ');
   settingsStatus.hidden = false;

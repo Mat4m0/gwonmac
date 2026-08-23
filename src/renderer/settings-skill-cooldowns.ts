@@ -5,6 +5,7 @@
 import type { AppSettings } from "../shared/contracts.js";
 import {
   isSkillCooldownColor,
+  isSkillCooldownCustomHex,
   SKILL_COOLDOWN_PRESET_COLORS,
   type SkillCooldownColor,
   type SkillCooldownPreset,
@@ -12,13 +13,14 @@ import {
 import { createSkillCooldownView } from "./skill-cooldown-view.js";
 import { createSkillKeyBindingView } from "./skill-key-binding-view.js";
 
-const HEX = /^#[0-9a-fA-F]{6}$/u;
+type FeedbackTone = "neutral" | "progress" | "success" | "warning" | "error";
 
 export function bindSkillCooldownSettings(options: Readonly<{
   fieldset: HTMLFieldSetElement;
   settings: () => AppSettings | null;
   persist: (patch: Pick<AppSettings, "skillCooldownColor">) => Promise<unknown>;
   recoverAfterPersistFailure: (message: string) => Promise<void>;
+  feedback: (message: string, tone: FeedbackTone, resetAfter?: number) => void;
 }>) {
   const choices = [...options.fieldset.querySelectorAll<HTMLInputElement>(
     'input[name="skillCooldownColorChoice"]',
@@ -43,8 +45,8 @@ export function bindSkillCooldownSettings(options: Readonly<{
   const selected = (): SkillCooldownColor | null => {
     const value = choices.find((choice) => choice.checked)?.value;
     if (value === "custom") {
-      return HEX.test(text.value)
-        ? { kind: "custom", value: text.value as `#${string}` }
+      return isSkillCooldownCustomHex(text.value)
+        ? { kind: "custom", value: text.value }
         : null;
     }
     return value === "red" || value === "cream" || value === "gold" || value === "blue"
@@ -62,12 +64,14 @@ export function bindSkillCooldownSettings(options: Readonly<{
     }
   };
   const validateText = () => {
-    text.setCustomValidity(HEX.test(text.value) ? "" : "Enter a six-digit color such as #e35a4f.");
+    text.setCustomValidity(isSkillCooldownCustomHex(text.value) ? "" : "Enter a six-digit color such as #e35a4f.");
   };
   const save = async (color: SkillCooldownColor) => {
     if (!isSkillCooldownColor(color)) return;
+    options.feedback("Saving…", "progress");
     try {
       await options.persist({ skillCooldownColor: color });
+      options.feedback("Cooldown color saved.", "success", 2200);
     } catch {
       await options.recoverAfterPersistFailure(
         "Review the active cooldown color before trying again.",
@@ -77,7 +81,7 @@ export function bindSkillCooldownSettings(options: Readonly<{
 
   choices.forEach((choice) => choice.addEventListener("change", () => {
     const color = selected();
-    picker.disabled = choice.value !== "custom" && !choices.some((item) => item.value === "custom" && item.checked);
+    picker.disabled = !choices.some((item) => item.value === "custom" && item.checked);
     text.disabled = picker.disabled;
     drawPreview();
     if (color) void save(color);
@@ -94,7 +98,7 @@ export function bindSkillCooldownSettings(options: Readonly<{
   });
   text.addEventListener("input", () => {
     validateText();
-    if (!HEX.test(text.value)) return;
+    if (!isSkillCooldownCustomHex(text.value)) return;
     customValue = text.value;
     picker.value = customValue;
     drawPreview();

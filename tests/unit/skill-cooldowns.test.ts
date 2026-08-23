@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   formatSkillCooldown,
   isSkillCooldownColor,
+  isSkillCooldownCustomHex,
   skillCooldownCssColor,
 } from "../../src/shared/skill-cooldowns.js";
 
@@ -34,8 +35,10 @@ test("cooldown colors accept only the closed presets or exact six-digit RGB", ()
   assert.equal(isSkillCooldownColor({ kind: "custom", value: "#12aBcF" }), true);
   assert.equal(skillCooldownCssColor({ kind: "custom", value: "#12aBcF" }), "#12aBcF");
   for (const value of ["#fff", "#1234567", "123456", "#gg0000", "#12345 "]) {
+    assert.equal(isSkillCooldownCustomHex(value), false);
     assert.equal(isSkillCooldownColor({ kind: "custom", value }), false);
   }
+  assert.equal(isSkillCooldownCustomHex("#12aBcF"), true);
   assert.equal(isSkillCooldownColor({ kind: "preset", preset: "green" }), false);
   assert.equal(isSkillCooldownColor({ kind: "preset", preset: "red", extra: true }), false);
 });

@@ -20,6 +20,10 @@ export const MAX_SKILL_COOLDOWN_MS = 1_800_000;
 const CUSTOM_COLOR = /^#[0-9a-fA-F]{6}$/u;
 const PRESETS = new Set<unknown>(SKILL_COOLDOWN_PRESETS);
 
+export function isSkillCooldownCustomHex(value: unknown): value is `#${string}` {
+  return typeof value === "string" && CUSTOM_COLOR.test(value);
+}
+
 export function isSkillCooldownColor(value: unknown): value is SkillCooldownColor {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const color = value as Record<string, unknown>;
@@ -28,8 +32,7 @@ export function isSkillCooldownColor(value: unknown): value is SkillCooldownColo
   }
   return color.kind === "custom"
     && Object.keys(color).length === 2
-    && typeof color.value === "string"
-    && CUSTOM_COLOR.test(color.value);
+    && isSkillCooldownCustomHex(color.value);
 }
 
 export function cloneSkillCooldownColor(color: SkillCooldownColor): SkillCooldownColor {

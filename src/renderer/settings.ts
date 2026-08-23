@@ -288,6 +288,7 @@
       settings: () => currentSettings,
       persist: (patch) => persistSettings(patch),
       recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      feedback: setFeedback,
     }));
   void import('./settings-accounts.js').then((module) =>
     module.bindAccountSettings({

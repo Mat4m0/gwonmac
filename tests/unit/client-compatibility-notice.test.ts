@@ -263,6 +263,23 @@ describe("client compatibility notice", () => {
     assert.equal(dom.element("settings-availability").open, true);
   });
 
+  it("reports cooldown presentation unavailable when slot geometry is unavailable", () => {
+    const dom = compatibilityDom();
+    renderClientCompatibility(dom.root, {
+      appVersion: "2026.7.0",
+      extendedMemory: STANDARD_MEMORY,
+      healthToken: null,
+      compatibility: compatibility({
+        skillSlotGeometry: unavailable("game-update"),
+        skillCooldownObservation: available,
+      }),
+    });
+    assert.equal(
+      dom.element("settings-feature-skillCooldownObservation").textContent,
+      "Unavailable",
+    );
+  });
+
   it("dismisses the launcher even when acknowledgement cannot persist", async () => {
     const dom = compatibilityDom();
     let acknowledgements = 0;
