@@ -544,6 +544,33 @@
               </div>
               <button type="button" id="settings-skill-keys-clear" class="ui-link" data-skill-key-capture-control>Clear all labels</button>
             </fieldset>
+            <fieldset id="settings-skill-cooldowns" class="settings-skill-cooldowns" hidden
+                      aria-describedby="settings-skill-cooldowns-help">
+              <legend>Skill cooldowns</legend>
+              <label class="settings-check ui-check">
+                <input type="checkbox" name="skillCooldownOverlayEnabled">
+                <span>Show cooldown numbers</span>
+              </label>
+              <p id="settings-skill-cooldowns-help" class="settings-note">Displays Guild Wars’ existing recharge state only. It never changes or sends game controls.</p>
+              <div class="settings-skill-cooldown-layout">
+                <div class="settings-skill-cooldown-colors" role="radiogroup" aria-label="Cooldown number color">
+                  <label><input type="radio" name="skillCooldownColorChoice" value="red"><span data-cooldown-swatch="red"></span><span>Guild Wars red <small>Recommended</small></span></label>
+                  <label><input type="radio" name="skillCooldownColorChoice" value="cream"><span data-cooldown-swatch="cream"></span><span>Native cream</span></label>
+                  <label><input type="radio" name="skillCooldownColorChoice" value="gold"><span data-cooldown-swatch="gold"></span><span>Warm gold</span></label>
+                  <label><input type="radio" name="skillCooldownColorChoice" value="blue"><span data-cooldown-swatch="blue"></span><span>Icy blue</span></label>
+                  <label><input type="radio" name="skillCooldownColorChoice" value="custom"><span class="settings-skill-cooldown-custom-swatch"></span><span>Custom color</span></label>
+                  <div class="settings-skill-cooldown-custom">
+                    <input type="color" name="skillCooldownCustomPicker" aria-label="Choose custom cooldown color">
+                    <input type="text" name="skillCooldownCustomHex" class="ui-input" inputmode="text"
+                           pattern="#[0-9a-fA-F]{6}" maxlength="7" spellcheck="false"
+                           aria-label="Custom cooldown hexadecimal color">
+                  </div>
+                </div>
+                <div class="settings-skill-cooldown-preview" aria-label="Cooldown and key label preview">
+                  <span class="settings-skill-cooldown-preview-slot"></span>
+                </div>
+              </div>
+            </fieldset>
           </div>
           <details id="settings-availability" class="settings-availability">
             <summary>Availability for this Guild Wars version</summary>

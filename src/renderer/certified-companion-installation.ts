@@ -39,6 +39,7 @@ import {
 import { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
 import { createSkillKeyOverlayConsumer } from "./skill-key-overlay-consumer.js";
 import { createSkillCooldownObservationInstallation } from "./skill-cooldown-state-installation.js";
+import { createSkillCooldownOverlayInstallation } from "./skill-cooldown-overlay-installation.js";
 import { validateCompanionOwnedRegions } from "./companion-owned-regions.js";
 import {
   observeCompanion,
@@ -143,6 +144,9 @@ export async function installCertifiedCompanion(
   const skillSlotGeometry = createSkillSlotGeometryInstallation(hasSkillSlotGeometry);
   const skillCooldowns = createSkillCooldownObservationInstallation(
     capabilities.skillCooldownObservation,
+  );
+  const skillCooldownOverlay = createSkillCooldownOverlayInstallation(
+    capabilities.skillCooldownObservation && hasSkillSlotGeometry,
   );
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const publishObserverState = program === "target-observer";
@@ -303,6 +307,7 @@ export async function installCertifiedCompanion(
       attempt("skill key overlay disposal", disposeSkillKeyOverlay);
       attempt("skill-slot feed disposal", skillSlotGeometry.dispose);
       attempt("skill cooldown feed disposal", skillCooldowns.dispose);
+      attempt("skill cooldown overlay disposal", skillCooldownOverlay.dispose);
     }
     attempt("Tools settings listener disposal", disposeToolSettings);
     attempt("Trade alias disable", () => { configureTradeToggle?.(0); });
@@ -732,8 +737,20 @@ export async function installCertifiedCompanion(
         policy().skillSlotGeometry && hasSkillKeyBindings(),
       );
     };
+    const syncSkillCooldowns = () => skillCooldownOverlay.sync(
+      optionalSettings.skillCooldownColor,
+      policy().skillCooldownOverlay,
+    );
+    skillCooldownOverlay.mount(
+      document.body,
+      optionalSettings.skillCooldownColor,
+      false,
+      skillSlotGeometry.subscribe,
+      skillCooldowns.subscribe,
+    );
     setTargetEnabled();
     syncSkillKeys();
+    syncSkillCooldowns();
     disposeReadout = () => {
       readout?.dispose();
       readout = null;
@@ -754,10 +771,10 @@ export async function installCertifiedCompanion(
         | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0)
         | (hasSkillSlotGeometry
             && policy().skillSlotGeometry
-            && hasSkillKeyBindings()
+            && (hasSkillKeyBindings() || policy().skillCooldownOverlay)
           ? COMPANION_FEATURE_BITS.skillSlotGeometry
           : 0)
-        | (capabilities.skillCooldownObservation
+        | (capabilities.skillCooldownObservation && policy().skillCooldownOverlay
           ? COMPANION_FEATURE_BITS.skillCooldownObservation
           : 0);
       kernelDispatch(
@@ -845,6 +862,7 @@ export async function installCertifiedCompanion(
       syncToolboxAvailability();
       setTargetEnabled();
       syncSkillKeys();
+      syncSkillCooldowns();
       syncActiveObservers();
       syncStoragePolicy();
       syncTravelPolicy();
@@ -979,6 +997,7 @@ export async function installCertifiedCompanion(
               tracePolicy("region");
               setTargetEnabled();
               syncSkillKeys();
+              syncSkillCooldowns();
               syncActiveObservers();
             }
             readout?.update(state);
@@ -1005,6 +1024,7 @@ export async function installCertifiedCompanion(
               tracePolicy("region");
               setTargetEnabled();
               syncSkillKeys();
+              syncSkillCooldowns();
               syncActiveObservers();
             }
             syncTravelPolicy();

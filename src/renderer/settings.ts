@@ -282,6 +282,13 @@
       recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
       feedback: setFeedback,
     }));
+  const skillCooldownSettings = import('./settings-skill-cooldowns.js').then((module) =>
+    module.bindSkillCooldownSettings({
+      fieldset: byId('settings-skill-cooldowns') as HTMLFieldSetElement,
+      settings: () => currentSettings,
+      persist: (patch) => persistSettings(patch),
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+    }));
   void import('./settings-accounts.js').then((module) =>
     module.bindAccountSettings({
       enable: accountsEnable,
@@ -474,6 +481,7 @@
       case 'xunlaiStorage':
       case 'travelPalette':
       case 'targetReadout':
+      case 'skillCooldownOverlayEnabled':
         return control instanceof globalThis.HTMLInputElement
           ? { [control.name]: control.checked }
           : null;
@@ -516,6 +524,7 @@
     targetReadout.checked = settings.targetReadout;
     void shortcutSettings.then((binder) => binder.render(settings));
     void skillKeySettings.then((binder) => binder.render(settings));
+    void skillCooldownSettings.then((binder) => binder.render(settings));
     toolFeatures.hidden = !settings.gwonmacTools;
     toolsOff.hidden = settings.gwonmacTools;
     teamManagement.disabled = !settings.gwonmacTools;
