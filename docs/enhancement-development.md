@@ -72,10 +72,15 @@ Use the visual fixture for presentation work:
 ```bash
 pnpm enhancements:visual -- target
 pnpm enhancements:visual -- map
+pnpm enhancements:visual -- skill-keys \
+  --font=/tmp/gwonmac-font-calibration-display/font.ttf \
+  --reference=/path/to/native-skill-badge.png
 ```
 
 The fixture is developer-only. It must not become packaged navigation or a
-second production UI.
+second production UI. The skill-key run renders the production component at
+1×, 1.5×, and 2×, places the native crop beside the custom `7`, and reports
+each badge's dimensions and fixed right/bottom inset as JSON.
 
 ## Live Tools feedback loop
 
