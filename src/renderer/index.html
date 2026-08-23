@@ -457,9 +457,16 @@
             </fieldset>
             <fieldset class="settings-shortcuts" aria-describedby="settings-shortcuts-help">
               <legend>Keyboard shortcuts</legend>
-              <p id="settings-shortcuts-help" class="settings-note">Shortcuts work while the Guild Wars window is active.</p>
+              <p id="settings-shortcuts-help" class="settings-note">Change or clear any shortcut. Shortcuts work while the Guild Wars window is active.</p>
               <div class="settings-shortcut-row" data-shortcut-action="tools.toggle">
                 <span class="settings-shortcut-name">Show or hide GWonMac Tools</span>
+                <kbd class="settings-shortcut-value">—</kbd>
+                <button type="button" class="ui-button settings-shortcut-change">Change</button>
+                <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+                <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
+              </div>
+              <div class="settings-shortcut-row" data-shortcut-action="trade.toggle">
+                <span class="settings-shortcut-name">Show or hide Trade Chat</span>
                 <kbd class="settings-shortcut-value">—</kbd>
                 <button type="button" class="ui-button settings-shortcut-change">Change</button>
                 <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>

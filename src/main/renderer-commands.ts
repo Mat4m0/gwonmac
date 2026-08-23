@@ -162,6 +162,11 @@ export async function toggleTools(win: BrowserWindow): Promise<void> {
   }
 }
 
+/** Show or hide the independent read-only Trade Chat surface. */
+export async function toggleTrade(win: BrowserWindow): Promise<void> {
+  await sendRendererCommand(win, { type: "trade.toggle" });
+}
+
 /**
  * Ask the certified game-thread command queue to open Xunlai storage.
  *

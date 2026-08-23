@@ -3,6 +3,7 @@
 @import "./styles/build.css";
 @import "./styles/catalogue.css";
 @import "./styles/team.css";
+@import "./styles/trade.css";
 
 /* Cmd+T is one focused command surface. Travel is immediate; persistent setup
  * remains available in the same frame without becoming the default view. */

@@ -20,6 +20,7 @@ export type ToolsAppHandle = Readonly<{
   show: () => void;
   hide: () => void;
   toggle: () => void;
+  setActive: (active: boolean) => void;
   requestClose: () => void;
   /** The companion's latest game projection; the Tools domain interprets it. */
   update: (observation: ToolboxObservation) => void;
@@ -54,6 +55,21 @@ export type TravelPaletteMountOptions = Readonly<{
   onVisibilityChange?: (visible: boolean) => void;
 }>;
 
+export type TradeChatHandle = Readonly<{
+  show: () => void;
+  hide: () => void;
+  toggle: () => void;
+  setActive: (active: boolean) => void;
+  dispose: () => void;
+}>;
+
+export type TradeChatMountOptions = Readonly<{
+  initiallyVisible?: boolean;
+  onVisibilityChange?: (visible: boolean) => void;
+  mode: "standalone" | "embedded";
+  development: boolean;
+}>;
+
 /** The exact named exports of the generated Tools module. */
 export type EmbeddedToolsBundle<Target> = Readonly<{
   mountToolsApp: (
@@ -64,4 +80,8 @@ export type EmbeddedToolsBundle<Target> = Readonly<{
     target: Target,
     options: TravelPaletteMountOptions,
   ) => TravelPaletteHandle;
+  mountTradeChat: (
+    target: Target,
+    options: TradeChatMountOptions,
+  ) => TradeChatHandle;
 }>;

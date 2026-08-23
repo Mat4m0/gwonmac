@@ -54,6 +54,7 @@ declare global {
 
   interface GwonmacSurfaceHandle {
     setOpen(open: boolean): void;
+    raise(): void;
     dispose(): void;
   }
 

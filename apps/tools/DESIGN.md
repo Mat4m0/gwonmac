@@ -35,6 +35,11 @@ corner, or layer system.
 - Use `.ui-frame` for a framed panel.
 - Use `.ui-well` for a recessed content surface.
 - Use `.ui-raised` for a pressable raised surface.
+- Combine `.ui-panel-head` with `.ui-window-head` for floating windows that
+  carry a title and supporting line. The shared primitive owns normal and
+  constrained-viewport padding; feature styles must not retune it.
+- Use `.ui-scroll` for scrollable wells and lists so scrollbar material stays
+  consistent across Builds, Trade, and Travel.
 - Use the shared components for buttons, fields, checks, tabs, rows, skill
   slots, progress, empty states, banners, toasts, and resize grips.
 - Give each interactive control visible hover, focus, active, selected,
@@ -47,7 +52,7 @@ density, or behavior.
 
 ## Window and interaction rules
 
-- Settings and Tools use the same visible resize grip.
+- Settings, Builds and teams, and Trade Chat use the same visible resize grip.
 - Pointer resize uses capture and handles cancellation and lost capture.
 - Arrow keys resize the window. Shift increases the step.
 - Start a Tools drag only from title-bar furniture.
@@ -61,6 +66,33 @@ density, or behavior.
 - Keep version availability collapsed in Settings unless something is
   unavailable.
 - Keep a dragged window inside the viewport.
+- Let Builds and teams and Trade Chat remain open together. Pointer interaction
+  raises one explicit surface; do not add a generic tool registry.
+- Treat Trade Chat as a working ledger, not a chat transcript or a variation of
+  Builds and teams. Keep source, search, and intent controls above one semantic
+  ledger, with the selected offer in a bottom inspector.
+- At narrow widths, keep the Trade Chat list DOM and open the selected offer in
+  an in-window sheet. The sheet keeps the shared button and scroll primitives.
+- Merge Trade Chat messages immediately near the top. Away from the top, queue
+  them silently without moving the reading position or showing a repeating
+  arrival hint; merge the queue when the reader returns to the exact top.
+- Reveal local Trade Chat results 25 at a time as the player nears the bottom,
+  up to 200 results.
+- Search offer text and the upstream `user:` character index together, then
+  merge results by message timestamp. Clearing the field returns immediately
+  to the live ledger.
+- Collapse repeated search matches from one character to their newest matching
+  post and show the group count. Keep the live ledger chronological and
+  ungrouped.
+- Keep saved offers and followed players in one right-anchored Saved drawer.
+  It is non-modal at wide widths and an in-window sheet when narrow. Its entry
+  and exit share the right edge, focus returns to its trigger, and reduced
+  motion replaces translation with a brief cross-fade.
+- Reveal compact save and follow actions on ledger-row hover or keyboard focus;
+  keep them visible for touch input. Keep the bottom inspector actions on one
+  compact, wrapping row so the message remains the visual focus.
+- Scroll to revealed Trade Chat messages smoothly by default and instantly
+  when reduced motion is active.
 - Keep scrolling flex and grid children shrinkable.
 - Use container width to change panel layout.
 - Keep the skill bar usable with pointer, touch, and keyboard input.

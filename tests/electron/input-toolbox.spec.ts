@@ -67,6 +67,17 @@ test.describe("renderer Tools input", () => {
                 onVisibilityChange: (visible: boolean) => void,
               ): Promise<{
                 setVisible(visible: boolean): void;
+                setActive?(active: boolean): void;
+                requestClose(): void;
+                update(state: object): void;
+                dispose(): void;
+              } | null>;
+              mountTrade?(
+                host: HTMLElement,
+                onVisibilityChange: (visible: boolean) => void,
+              ): Promise<{
+                setVisible(visible: boolean): void;
+                setActive?(active: boolean): void;
                 requestClose(): void;
                 update(state: object): void;
                 dispose(): void;
@@ -120,6 +131,9 @@ test.describe("renderer Tools input", () => {
               setVisible: (visible: boolean) => {
                 panel.style.display = visible ? "block" : "none";
               },
+              setActive: (active: boolean) => {
+                panel.dataset.active = String(active);
+              },
               requestClose: () => {
                 panel.style.display = "none";
                 onVisibilityChange(false);
@@ -134,6 +148,43 @@ test.describe("renderer Tools input", () => {
                   (state as { firstHeroId?: number }).firstHeroId ?? "",
                 );
               },
+              dispose: () => panel.remove(),
+            });
+          },
+          mountTrade: (
+            host: HTMLElement,
+            onVisibilityChange: (visible: boolean) => void,
+          ) => {
+            const panel = document.createElement("div");
+            panel.dataset.testid = "stub-trade";
+            panel.style.cssText =
+              "position:fixed;left:340px;top:24px;width:280px;height:160px;"
+              + "padding:12px;background:#141414;pointer-events:auto;display:none";
+            const action = document.createElement("button");
+            action.type = "button";
+            action.textContent = "Trade action";
+            const field = document.createElement("input");
+            field.type = "search";
+            field.setAttribute("aria-label", "Trade field");
+            const close = document.createElement("button");
+            close.type = "button";
+            close.textContent = "Close trade";
+            const hide = () => {
+              panel.style.display = "none";
+              onVisibilityChange(false);
+            };
+            close.addEventListener("click", hide);
+            panel.append(action, field, close);
+            host.append(panel);
+            return Promise.resolve({
+              setVisible: (visible: boolean) => {
+                panel.style.display = visible ? "block" : "none";
+              },
+              setActive: (active: boolean) => {
+                panel.dataset.active = String(active);
+              },
+              requestClose: hide,
+              update: () => undefined,
               dispose: () => panel.remove(),
             });
           },
@@ -184,6 +235,7 @@ test.describe("renderer Tools input", () => {
       const body = page.locator("body");
       const root = page.locator("#toolbox-foundation");
       const tool = page.getByTestId("stub-tool");
+      const trade = page.getByTestId("stub-trade");
       await expect(root).not.toHaveAttribute("data-open");
       await expect(tool).toBeHidden();
 
@@ -221,6 +273,20 @@ test.describe("renderer Tools input", () => {
       });
       await expect(tool).toHaveAttribute("data-observations", "2");
       await expect(tool).toHaveAttribute("data-hero-id", "24");
+
+      // Trade is an independent surface. Opening it keeps Builds visible, and
+      // Escape dismisses only the last raised surface.
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:trade-toggle", { cancelable: true }));
+      });
+      await expect(trade).toBeVisible();
+      await expect(tool).toBeVisible();
+      await page.getByRole("button", { name: "Trade action" }).click();
+      await expect(trade).toHaveAttribute("data-active", "true");
+      await expect(tool).toHaveAttribute("data-active", "false");
+      await page.keyboard.press("Escape");
+      await expect(trade).toBeHidden();
+      await expect(tool).toBeVisible();
 
       await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
         .toBe(true);
@@ -328,7 +394,7 @@ test.describe("renderer Tools input", () => {
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");
 
       // The stable host remains even though the retired HUD trigger does not.
-      await expect(page.locator("#toolbox-tool")).toHaveCount(1);
+      await expect(page.locator("#toolbox-builds")).toHaveCount(1);
       await expect(root.locator('[data-role="hud"]')).toHaveCount(0);
 
       // The native game cursor published on the canvas is mirrored over
@@ -445,7 +511,7 @@ test.describe("renderer Tools input", () => {
       };
       await page.keyboard.press("Control+Shift+Space");
       await expect(root).toHaveAttribute("data-open", "true");
-      await expect(page.locator("#toolbox-tool")).toHaveAttribute("data-ready", "true");
+      await expect(page.locator("#toolbox-builds")).toHaveAttribute("data-ready", "true");
       await expect(page.locator('.tools-stage[data-mode="embedded"]')).toBeVisible();
       await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
       await expect(page.getByText("Saved on this Mac")).toBeVisible();

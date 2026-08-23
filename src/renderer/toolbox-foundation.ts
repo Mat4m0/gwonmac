@@ -1,39 +1,15 @@
 /**
- * The Tools overlay: the layer a tool draws on above the game canvas.
+ * The shared in-game boundary for the two independent Tools windows.
  *
- * The overlay owns the boundary and nothing else — the toggle commands, the
- * event stops, pointer-lock release, the cursor mirror, focus transfer and
- * teardown.
- * It draws no panel of its own. It used to: three rows of companion state, with
- * their own titlebar, drag and placement, kept beside the mounted tool and
- * permanently hidden whenever one was mounted. Two panels arguing over one
- * corner of the screen is not an interface, and the one nobody could see was
- * still being written to on every companion poll.
- *
- * There is deliberately no widget registry, plugin surface or layout engine
- * here. One tool mounts, it brings its own window, and a second tool can
- * introduce a layout when it exists and needs one.
- *
- * The overlay is chrome, so it owns only its own pixels: every click that is
- * not on Tools chrome still belongs to the game.
+ * Builds & Teams and Trade Chat mount lazily into explicit hosts. They may be
+ * open together; the last interacted host owns visual stacking, Escape and
+ * Tab. There is intentionally no registry or general layout system.
  */
 import { createNonActivatingSurface } from "./non-activating-surface.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 
-/**
- * The companion's toolbox projection, as `window.gwCompanionRuntime.toolbox`
- * publishes it. The overlay draws none of it — it holds the latest one and
- * hands it to the mounted tool, which is the only thing here that draws.
- *
- * The shared domain owns this projection. This overlay is only its courier.
- */
 type ToolboxState = ToolboxObservation;
 
-/**
- * Non-modal palette styling. The overlay root never intercepts the pointer;
- * only what the tool draws is interactive, so the game keeps owning every
- * click that is not on Tools chrome.
- */
 const OVERLAY_CSS = `
 #toolbox-foundation {
   position: fixed;
@@ -44,50 +20,48 @@ const OVERLAY_CSS = `
   color: #e8e4d8;
   font: 12px/1.45 -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
 }
+#toolbox-foundation > [data-role] {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 `;
 
 const TOGGLE_CODE = "Space";
 
-/**
- * A tool mounted into the overlay. It draws its own window; the overlay tells
- * it when it is meant to be on screen and tears it down at the end.
- */
 export interface MountedTool {
   setVisible(visible: boolean): void;
-  /** Ask the tool to close so it can protect any unsaved authoring work. */
+  setActive?(active: boolean): void;
   requestClose(): void;
-  /**
-   * The companion's latest projection of the running game.
-   *
-   * Push, not pull: the overlay is already on the observer's update path, and a
-   * tool that polled instead would be a second reader of the same region on a
-   * cadence nobody chose. Called on mount with whatever has arrived so far, so
-   * a tool loaded after the game was already running does not start blank.
-   */
   update(state: ToolboxState): void;
   dispose(): void;
 }
 
+type MountTool = (
+  host: HTMLElement,
+  onVisibilityChange: (visible: boolean) => void,
+) => Promise<MountedTool | null>;
+
+type FoundationOptions = {
+  /** Existing Builds & Teams mount. The name stays compatible with fixtures. */
+  mountTool: MountTool;
+  /** The separate host-only Trade Chat mount. */
+  mountTrade?: MountTool;
+};
+
+type Slot = {
+  readonly name: "builds" | "trade";
+  readonly host: HTMLElement;
+  readonly mount: MountTool;
+  readonly surface: GwonmacSurfaceHandle;
+  tool: MountedTool | null;
+  requested: boolean;
+  visible: boolean;
+};
+
 export function createToolboxFoundation(
   parent: HTMLElement,
-  options: {
-    /**
-     * Loads the tool into the overlay, on the first open rather than at
-     * install: a player who never opens Tools never pays for the bundle.
-     *
-     * Required. The overlay has nothing to show without it, and an overlay
-     * that could be built without a tool is a configuration nothing ships and
-     * every test would then be free to certify.
-     *
-     * `onVisibilityChange` is how a tool that hides itself — its own close
-     * control — says so. Without it the overlay goes on believing it is open
-     * and the next toggle closes an already-hidden tool instead of reopening it.
-     */
-    mountTool: (
-      host: HTMLElement,
-      onVisibilityChange: (visible: boolean) => void,
-    ) => Promise<MountedTool | null>;
-  },
+  options: FoundationOptions,
 ) {
   const document = parent.ownerDocument;
   const canvas = document.getElementById("canvas");
@@ -98,223 +72,189 @@ export function createToolboxFoundation(
   const style = document.createElement("style");
   style.id = "toolbox-foundation-style";
   style.textContent = OVERLAY_CSS;
-
   const root = document.createElement("section");
   root.id = "toolbox-foundation";
   root.setAttribute("aria-label", "Tools");
-
-  // Where the tool draws: a full-bleed layer inside the overlay root. A tool
-  // brings its own window and positions it against the viewport, so it is given
-  // the viewport rather than a box to escape from. Being inside the root is
-  // what matters — that is where the event stops and the cursor mirror live, so
-  // a tool needs no second boundary of its own.
-  const toolHost = document.createElement("div");
-  toolHost.id = "toolbox-tool";
-  toolHost.dataset.role = "tool";
-  root.append(toolHost);
+  const buildsHost = makeHost(document, "toolbox-builds", "builds");
+  const tradeHost = makeHost(document, "toolbox-trade", "trade");
+  root.append(buildsHost, tradeHost);
   parent.append(style, root);
 
-  // Everything the tool draws is non-activating. Clicking it operates the
-  // control without taking the keyboard, so the game keeps receiving keys
-  // until the player clicks into something they can actually type in.
-  const surface = createNonActivatingSurface(root, () => canvas);
-
-  let tool: MountedTool | null = null;
-  let toolRequested = false;
+  const nonActivating = createNonActivatingSurface(root, () => canvas);
+  let state: ToolboxState = Object.freeze({ status: "waiting" });
   let disposed = false;
-  const ensureTool = () => {
-    if (toolRequested) return;
-    toolRequested = true;
-    // The tool reports its own visibility back, which is how its close control
-    // reaches the overlay. Echoes of the overlay's own `setVisible` come back
-    // through here too and stop at `setOpen`'s no-change guard.
-    void options.mountTool(toolHost, (visible) => setOpen(visible))
+  let stackOrder = 0;
+  let active: Slot | null = null;
+
+  const requestClose = (slot: Slot): void => {
+    if (!slot.visible) return;
+    if (slot.tool) slot.tool.requestClose();
+    else setOpen(slot, false);
+  };
+  const makeSlot = (
+    name: Slot["name"],
+    element: HTMLElement,
+    mount: MountTool,
+  ): Slot => {
+    const slot: Slot = {
+      name,
+      host: element,
+      mount,
+      tool: null,
+      requested: false,
+      visible: false,
+      surface: window.gwSurfaces.register({
+        root: element,
+        priority: 4,
+        dismiss: () => requestClose(slot),
+      }),
+    };
+    return slot;
+  };
+  const builds = makeSlot("builds", buildsHost, options.mountTool);
+  const trade = options.mountTrade
+    ? makeSlot("trade", tradeHost, options.mountTrade)
+    : null;
+  const slots = (): Slot[] => trade ? [builds, trade] : [builds];
+
+  const activate = (slot: Slot) => {
+    active = slot;
+    slot.host.style.zIndex = String(++stackOrder);
+    slot.surface.raise();
+    for (const candidate of slots()) {
+      candidate.tool?.setActive?.(candidate === slot);
+    }
+  };
+
+  const ensure = (slot: Slot) => {
+    if (slot.requested) return;
+    slot.requested = true;
+    void slot.mount(slot.host, (visible) => setOpen(slot, visible))
       .then((mounted) => {
         if (disposed) {
           mounted?.dispose();
           return;
         }
-        tool = mounted;
-        // The overlay may have been closed again while the bundle loaded, and
-        // the companion has almost certainly published since — the tool loads
-        // on first open, which is minutes into a session. Both are caught up
-        // here rather than waiting for the next toggle and the next publish.
-        tool?.setVisible(overlayOpen);
-        tool?.update(state);
+        slot.tool = mounted;
+        mounted?.setVisible(slot.visible);
+        mounted?.setActive?.(active === slot);
+        if (slot.name === "builds") mounted?.update(state);
       });
   };
 
-  let state: ToolboxState = Object.freeze({ status: "waiting" });
-  let overlayOpen = false;
-
-  const requestClose = () => {
-    if (!overlayOpen) return;
-    if (tool) tool.requestClose();
-    else setOpen(false);
-  };
-  const dismissable = window.gwSurfaces.register({
-    root,
-    priority: 4,
-    dismiss: requestClose,
-  });
-
-  const releaseGameInput = () => {
-    window.dispatchEvent(new CustomEvent("gw:input-reset"));
-  };
-
-  const setOpen = (next: boolean) => {
-    if (next === overlayOpen) return;
-    overlayOpen = next;
-    if (next) ensureTool();
-    tool?.setVisible(next);
-    root.dataset.open = String(next);
-    dismissable.setOpen(next);
-    // Pointer lock still has to go: the tool is unreachable by a captured
-    // cursor. The keyboard, though, stays with the game — opening Tools is not
-    // a statement that you have stopped playing.
+  const setOpen = (slot: Slot, next: boolean) => {
+    if (slot.visible === next) return;
+    slot.visible = next;
+    if (next) {
+      ensure(slot);
+      activate(slot);
+    }
+    slot.tool?.setVisible(next);
+    slot.host.dataset.open = String(next);
+    slot.surface.setOpen(next);
+    root.dataset.open = String(slots().some((candidate) => candidate.visible));
     if (next && document.pointerLockElement !== null) document.exitPointerLock();
-    // A menu command can arrive while another renderer-owned control has focus.
-    // Say where the keyboard goes rather than assuming it stayed.
-    surface.releaseKeyboard();
+    if (!next && active === slot) {
+      active = slots().filter((candidate) => candidate.visible)
+        .sort((left, right) => Number(right.host.style.zIndex) - Number(left.host.style.zIndex))[0] ?? null;
+      active?.surface.raise();
+      for (const candidate of slots()) candidate.tool?.setActive?.(candidate === active);
+    }
+    nonActivating.releaseKeyboard();
   };
 
-  const toggleOpen = () => {
-    if (overlayOpen) requestClose();
-    else setOpen(true);
-  };
-
-  // The global chord toggles Tools. The shared surface controller separately
-  // owns Escape and keyboard entry for whichever GWonMac surface is topmost.
-  const onToggleChord = (event: KeyboardEvent) => {
-    const toggles =
-      event.code === TOGGLE_CODE &&
-      event.ctrlKey &&
-      event.shiftKey &&
-      !event.altKey &&
-      !event.metaKey;
-    if (!toggles) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    toggleOpen();
-  };
-
-  // Events from Tools chrome stop at this renderer-owned boundary. The game's
-  // window/document listeners continue to own every event outside it, and
-  // pointer capture during a drag keeps even fast drags inside the boundary.
-  const stopAtOverlay = (event: Event) => event.stopPropagation();
-  for (const name of [
-    "keydown",
-    "keyup",
-    "pointerdown",
-    "pointerup",
-    "pointermove",
-    "mousedown",
-    "mouseup",
-    "mousemove",
-    "click",
-    "wheel",
-    "contextmenu",
-  ]) {
-    root.addEventListener(name, stopAtOverlay);
+  const toggle = (slot: Slot) => slot.visible ? requestClose(slot) : setOpen(slot, true);
+  for (const slot of slots()) {
+    slot.host.addEventListener("pointerdown", () => {
+      if (slot.visible) activate(slot);
+    }, true);
   }
 
-  // The native Guild Wars cursor is published as the canvas's style cursor.
-  // Mirror it so the game cursor stays the cursor over Tools chrome too;
-  // with the native cursor off the mirrored value is empty and the system
-  // arrow shows.
-  const mirrorCursor = () => {
-    root.style.cursor = canvas.style.cursor;
-  };
-  const cursorMirror = new MutationObserver(mirrorCursor);
-  cursorMirror.observe(canvas, {
-    attributes: true,
-    attributeFilter: ["style"],
-  });
-  mirrorCursor();
-
-  // The menu's accelerator arrives here as a command, already taken by the main
-  // process before the renderer -- and so before the game -- could see the key
-  // at all. Answering it is what tells `commands.ts` the capability is
-  // installed: the event is cancelable, and cancelling it is this overlay
-  // saying "handled". The chord below stays as the keyboard-only route for a
-  // build with no menu.
-  const onCommand = (event: Event) => {
+  const onToggleChord = (event: KeyboardEvent) => {
+    if (
+      event.code !== TOGGLE_CODE
+      || !event.ctrlKey
+      || !event.shiftKey
+      || event.altKey
+      || event.metaKey
+    ) return;
     event.preventDefault();
-    toggleOpen();
+    event.stopImmediatePropagation();
+    toggle(builds);
   };
-  window.addEventListener("gw:tools-toggle", onCommand);
+  const onBuildsCommand = (event: Event) => {
+    event.preventDefault();
+    toggle(builds);
+  };
+  const onTradeCommand = (event: Event) => {
+    if (!trade) return;
+    event.preventDefault();
+    toggle(trade);
+  };
+
+  const stopAtOverlay = (event: Event) => event.stopPropagation();
+  for (const name of [
+    "keydown", "keyup", "pointerdown", "pointerup", "pointermove",
+    "mousedown", "mouseup", "mousemove", "click", "wheel", "contextmenu",
+  ]) root.addEventListener(name, stopAtOverlay);
+
+  const mirrorCursor = () => { root.style.cursor = canvas.style.cursor; };
+  const cursorMirror = new MutationObserver(mirrorCursor);
+  cursorMirror.observe(canvas, { attributes: true, attributeFilter: ["style"] });
+  mirrorCursor();
+  window.addEventListener("gw:tools-toggle", onBuildsCommand);
+  window.addEventListener("gw:trade-toggle", onTradeCommand);
   window.addEventListener("keydown", onToggleChord, true);
 
   return {
-    /**
-     * The companion's latest toolbox projection, from the observer.
-     *
-     * Held as well as forwarded: the tool mounts on first open, long after the
-     * game starts publishing, and `ensureTool` replays this into it. Without
-     * that the panel would show nothing until the party next changed.
-     */
     update(next: ToolboxState) {
       state = next;
-      tool?.update(next);
+      builds.tool?.update(next);
     },
-    get state() {
-      return state;
-    },
+    get state() { return state; },
     dispose() {
       disposed = true;
-      tool?.dispose();
-      tool = null;
-      dismissable.dispose();
-      surface.dispose();
-      cursorMirror.disconnect();
-      window.removeEventListener("gw:tools-toggle", onCommand);
-      window.removeEventListener("keydown", onToggleChord, true);
-      releaseGameInput();
-      if (root.contains(document.activeElement)) {
-        canvas.focus({ preventScroll: true });
+      for (const slot of slots()) {
+        slot.tool?.dispose();
+        slot.surface.dispose();
       }
+      nonActivating.dispose();
+      cursorMirror.disconnect();
+      window.removeEventListener("gw:tools-toggle", onBuildsCommand);
+      window.removeEventListener("gw:trade-toggle", onTradeCommand);
+      window.removeEventListener("keydown", onToggleChord, true);
+      window.dispatchEvent(new CustomEvent("gw:input-reset"));
+      if (root.contains(document.activeElement)) canvas.focus({ preventScroll: true });
       style.remove();
       root.remove();
     },
   };
 }
 
-/**
- * Owns the optional lifetime around one toolbox foundation.
- *
- * Both certified and host-only sessions can change their Tools setting while
- * the renderer stays alive. Keeping that transition here makes disabling mean
- * the same thing in both paths: the DOM, command listener, chord, and mounted
- * tool all disappear together. The latest observation is retained so a later
- * re-enable starts current rather than waiting for the next game poll.
- */
 export function createToolboxLifecycle(
   parent: HTMLElement,
-  options: Parameters<typeof createToolboxFoundation>[1],
+  options: FoundationOptions,
 ) {
   let foundation: ReturnType<typeof createToolboxFoundation> | null = null;
   let state: ToolboxState = Object.freeze({ status: "waiting" });
   let disposed = false;
-
   return {
     setEnabled(enabled: boolean) {
       if (disposed) return;
       if (enabled) {
-        if (foundation !== null) return;
+        if (foundation) return;
         foundation = createToolboxFoundation(parent, options);
         foundation.update(state);
-        return;
+      } else {
+        foundation?.dispose();
+        foundation = null;
       }
-      foundation?.dispose();
-      foundation = null;
     },
     update(next: ToolboxState) {
       state = next;
       foundation?.update(next);
     },
-    get state() {
-      return foundation?.state ?? null;
-    },
+    get state() { return foundation?.state ?? null; },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -322,4 +262,11 @@ export function createToolboxLifecycle(
       foundation = null;
     },
   };
+}
+
+function makeHost(document: Document, id: string, role: string): HTMLElement {
+  const element = document.createElement("div");
+  element.id = id;
+  element.dataset.role = role;
+  return element;
 }

@@ -1,8 +1,44 @@
-import { expect, test } from "@playwright/test";
+import {
+  expect,
+  test,
+  type ElectronApplication,
+  type Page,
+} from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 import { packageVersion } from "./settings-test-fixture.mjs";
+
+type ShortcutModifier = "meta" | "control" | "shift" | "alt";
+
+function sendInput(
+  app: ElectronApplication,
+  keyCode: string,
+  modifiers: ShortcutModifier[] = [],
+) {
+  return app.evaluate(({ BrowserWindow }, input) => {
+    const contents = BrowserWindow.getAllWindows()[0]?.webContents;
+    contents?.sendInputEvent({
+      type: "keyDown",
+      keyCode: input.keyCode,
+      modifiers: input.modifiers,
+    });
+    contents?.sendInputEvent({
+      type: "keyUp",
+      keyCode: input.keyCode,
+      modifiers: input.modifiers,
+    });
+  }, { keyCode, modifiers });
+}
+
+async function openControls(app: ElectronApplication, page: Page) {
+  await app.evaluate(({ Menu }) => {
+    Menu.getApplicationMenu()
+      ?.items[0]?.submenu?.items.find((item) => item.label === "Settings…")
+      ?.click();
+  });
+  await page.locator("#settings-tab-controls").click();
+}
 
 test.describe("tools and update settings", () => {
   test("removes Travel Recent controls while accepting the released file", async () => {
@@ -97,35 +133,16 @@ test.describe("tools and update settings", () => {
   });
 
   test("records, replaces, clears, and restores app shortcuts without firing them", async () => {
-      const fixture = await launchOffline("gw-settings-shortcuts-e2e-");
+    const fixture = await launchOffline("gw-settings-shortcuts-e2e-");
     try {
       const { app, page } = fixture;
-      const sendInput = (
-        keyCode: string,
-        modifiers: Array<"meta" | "control" | "shift" | "alt"> = [],
-      ) => app.evaluate(({ BrowserWindow }, input) => {
-        const contents = BrowserWindow.getAllWindows()[0]?.webContents;
-        contents?.sendInputEvent({
-          type: "keyDown",
-          keyCode: input.keyCode,
-          modifiers: input.modifiers,
-        });
-        contents?.sendInputEvent({
-          type: "keyUp",
-          keyCode: input.keyCode,
-          modifiers: input.modifiers,
-        });
-      }, { keyCode, modifiers });
-      await app.evaluate(({ Menu }) => {
-        Menu.getApplicationMenu()
-          ?.items[0]?.submenu?.items.find((item) => item.label === "Settings…")
-          ?.click();
-      });
-      await page.locator("#settings-tab-controls").click();
+      await openControls(app, page);
 
       const toolsRow = page.locator('[data-shortcut-action="tools.toggle"]');
+      const tradeRow = page.locator('[data-shortcut-action="trade.toggle"]');
       const storageRow = page.locator('[data-shortcut-action="storage.open"]');
       await expect(toolsRow.locator("kbd")).toHaveText("⌘B");
+      await expect(tradeRow.locator("kbd")).toHaveText("⌘⇧B");
       await expect(storageRow.locator("kbd")).toHaveText("⌘⇧C");
 
       await page.evaluate(() => {
@@ -150,7 +167,7 @@ test.describe("tools and update settings", () => {
       await expect(toolsRow.locator("kbd")).toHaveText("Listening…");
       await expect(toolsRow.locator(".settings-shortcut-message"))
         .toContainText("Delete clears · Escape cancels");
-      await sendInput("B", ["meta"]);
+      await sendInput(app, "B", ["meta"]);
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({
           shortcutOverrides: {},
@@ -159,7 +176,7 @@ test.describe("tools and update settings", () => {
 
       await toolsRow.locator(".settings-shortcut-change").click();
       await expect(toolsRow.locator("kbd")).toHaveText("Listening…");
-      await sendInput("K", ["meta", "shift"]);
+      await sendInput(app, "K", ["meta", "shift"]);
       await expect.poll(async () => ({
         key: await toolsRow.locator("kbd").textContent(),
         message: await toolsRow.locator(".settings-shortcut-message").textContent(),
@@ -177,7 +194,7 @@ test.describe("tools and update settings", () => {
         ?.getMenuItemById("toggle-tools")?.accelerator)).toBeNull();
 
       await storageRow.locator(".settings-shortcut-change").click();
-      await sendInput("K", ["meta", "shift"]);
+      await sendInput(app, "K", ["meta", "shift"]);
       await expect(storageRow.locator(".settings-shortcut-message"))
         .toContainText("used by Show or hide GWonMac Tools");
       await storageRow.locator(".settings-shortcut-replace").click();
@@ -191,19 +208,113 @@ test.describe("tools and update settings", () => {
       await expect(toolsRow.locator("kbd")).toHaveText("Not set");
 
       await storageRow.locator(".settings-shortcut-change").click();
-      await sendInput("Backspace");
+      await sendInput(app, "Backspace");
       await expect(storageRow.locator("kbd")).toHaveText("Not set");
 
+      await tradeRow.locator(".settings-shortcut-change").click();
+      await expect(tradeRow.locator("kbd")).toHaveText("Listening…");
       await page.locator("#settings-shortcuts-restore").click();
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ shortcutOverrides: {} });
       await expect(toolsRow.locator("kbd")).toHaveText("⌘B");
+      await expect(tradeRow.locator("kbd")).toHaveText("⌘⇧B");
+      await expect(tradeRow.locator(".settings-shortcut-change")).toHaveText("Change");
       await expect(storageRow.locator("kbd")).toHaveText("⌘⇧C");
       await page.locator("#settings-done").click();
-      await sendInput("B", ["control"]);
+      await sendInput(app, "B", ["control"]);
       await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "0");
-      await sendInput("B", ["meta"]);
+      await sendInput(app, "B", ["meta"]);
       await expect(page.locator("body")).toHaveAttribute("data-shortcut-actions", "1");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("changes, clears, and restores the Trade Chat shortcut", async () => {
+    const fixture = await launchOffline(
+      "gw-settings-trade-shortcut-e2e-",
+      {},
+      (userData) => writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({ gwonmacTools: true }),
+        { mode: 0o600 },
+      ),
+    );
+    try {
+      const { app, page } = fixture;
+
+      await page.evaluate(() => {
+        document.body.dataset.tradeShortcutActions = "0";
+        document.body.dataset.tradeShortcutLeaks = "0";
+        window.addEventListener("gw:trade-toggle", (event) => {
+          event.preventDefault();
+          document.body.dataset.tradeShortcutActions = String(
+            Number(document.body.dataset.tradeShortcutActions ?? "0") + 1,
+          );
+        });
+        window.addEventListener("keydown", (event) => {
+          if (event.code === "KeyK") {
+            document.body.dataset.tradeShortcutLeaks = String(
+              Number(document.body.dataset.tradeShortcutLeaks ?? "0") + 1,
+            );
+          }
+        }, true);
+      });
+      await sendInput(app, "B", ["meta", "shift"]);
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-trade-shortcut-actions",
+        "1",
+      );
+
+      await openControls(app, page);
+      const tradeRow = page.locator('[data-shortcut-action="trade.toggle"]');
+      await expect(tradeRow.locator("kbd")).toHaveText("⌘⇧B");
+      await tradeRow.locator(".settings-shortcut-change").click();
+      await sendInput(app, "K", ["meta", "shift"]);
+      await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
+        .toMatchObject({
+          shortcutOverrides: {
+            "trade.toggle": { key: "k", shift: true, option: false },
+          },
+        });
+      await expect(tradeRow.locator("kbd")).toHaveText("⌘⇧K");
+
+      await page.locator("#settings-done").click();
+      await sendInput(app, "B", ["meta", "shift"]);
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-trade-shortcut-actions",
+        "1",
+      );
+      await sendInput(app, "K", ["meta", "shift"]);
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-trade-shortcut-actions",
+        "2",
+      );
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-trade-shortcut-leaks",
+        "0",
+      );
+
+      await openControls(app, page);
+      await tradeRow.locator(".settings-shortcut-change").click();
+      await sendInput(app, "Backspace");
+      await expect(tradeRow.locator("kbd")).toHaveText("Not set");
+      await page.locator("#settings-done").click();
+      await sendInput(app, "K", ["meta", "shift"]);
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-trade-shortcut-actions",
+        "2",
+      );
+
+      await openControls(app, page);
+      await page.locator("#settings-shortcuts-restore").click();
+      await expect(tradeRow.locator("kbd")).toHaveText("⌘⇧B");
+      await page.locator("#settings-done").click();
+      await sendInput(app, "B", ["meta", "shift"]);
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-trade-shortcut-actions",
+        "3",
+      );
     } finally {
       await closeOffline(fixture);
     }

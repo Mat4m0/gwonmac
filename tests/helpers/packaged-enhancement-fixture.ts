@@ -708,7 +708,7 @@ export async function assertPackagedHostOnlyToolsSession() {
         })));
       assert.equal(claimed, true, "the production Tools command was not claimed");
       await fixture.page.waitForSelector('#toolbox-foundation[data-open="true"]');
-      await fixture.page.waitForSelector('#toolbox-tool[data-ready="true"]', {
+      await fixture.page.waitForSelector('#toolbox-builds[data-ready="true"]', {
         state: "attached",
       });
       await fixture.page.waitForSelector('.tools-stage[data-mode="embedded"]', {
@@ -852,7 +852,7 @@ export async function assertPackagedHostOnlyToolsAfterSoftRefusal() {
       })));
     assert.equal(claimed, true, "soft refusal did not install host-only Tools");
     await fixture.page.waitForSelector('#toolbox-foundation[data-open="true"]');
-    await fixture.page.waitForSelector('#toolbox-tool[data-ready="true"]', {
+    await fixture.page.waitForSelector('#toolbox-builds[data-ready="true"]', {
       state: "attached",
     });
     await fixture.page.waitForSelector('.tools-stage[data-mode="embedded"]', {

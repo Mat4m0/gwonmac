@@ -8,11 +8,20 @@ import { createDemoHost } from "./host";
 import { mountToolsApp } from "./mount";
 import { createDemoTravelHost } from "./travel-host";
 import { mountTravelPalette } from "./travel-mount";
+import { createDemoTradeHost } from "./trade-host";
+import { mountTradeChat } from "./trade-mount";
 
 const target = document.getElementById("app");
 if (!target) throw new Error("Tools workbench mount is missing");
 
-if (new URLSearchParams(window.location.search).has("travel")) {
+const params = new URLSearchParams(window.location.search);
+if (params.has("trade")) {
+  mountTradeChat(target, {
+    host: createDemoTradeHost(),
+    mode: "standalone",
+    initiallyVisible: true,
+  });
+} else if (params.has("travel")) {
   mountTravelPalette(target, {
     host: createDemoTravelHost(),
     initiallyVisible: true,

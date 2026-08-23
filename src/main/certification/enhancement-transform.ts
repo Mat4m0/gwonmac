@@ -676,6 +676,9 @@ function assembleEnhancementTransform(
             : []),
         ]
       : []),
+    ...(capabilities.chatAliases
+      ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
+      : []),
   ];
   for (const name of addedExportNames) {
     if (existingExports.some((entry) => entry.name === name)) {
@@ -698,6 +701,8 @@ function assembleEnhancementTransform(
   const travelPayloadGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
   const travelEnabledGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
   const travelToggleGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
+  const tradeEnabledGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
+  const tradeToggleGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
   const traceGlobalBase = capabilities.teamApply
     ? allocateGlobals(PROFESSION_TRACE_WORDS)
     : 0;
@@ -736,6 +741,12 @@ function assembleEnhancementTransform(
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
     : null;
   const travelToggleTypeIndex = capabilities.travelAction
+    ? appendType({ params: [], results: [0x7f] })
+    : null;
+  const tradeConfigureTypeIndex = capabilities.chatAliases
+    ? appendType({ params: [0x7f], results: [0x7f] })
+    : null;
+  const tradeToggleTypeIndex = capabilities.chatAliases
     ? appendType({ params: [], results: [0x7f] })
     : null;
 
@@ -778,6 +789,8 @@ function assembleEnhancementTransform(
       travelEnqueue: travelEnqueueTypeIndex,
       travelConfigure: travelConfigureTypeIndex,
       travelToggle: travelToggleTypeIndex,
+      tradeConfigure: tradeConfigureTypeIndex,
+      tradeToggle: tradeToggleTypeIndex,
     },
     globalIndices: {
       commandPending: commandPendingGlobalIndex,
@@ -787,6 +800,8 @@ function assembleEnhancementTransform(
       travelPayload: travelPayloadGlobalIndex,
       travelEnabled: travelEnabledGlobalIndex,
       travelToggle: travelToggleGlobalIndex,
+      tradeEnabled: tradeEnabledGlobalIndex,
+      tradeToggle: tradeToggleGlobalIndex,
     },
     traceGlobals,
     uiOriginalIndex,

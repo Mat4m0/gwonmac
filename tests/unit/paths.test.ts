@@ -25,6 +25,7 @@ describe("resolved profile paths", () => {
       userData: root,
       settings: `${root}/settings.json`,
       travelPreferences: `${root}/travel-preferences.json`,
+      tradeSaved: `${root}/trade-saved.json`,
       buildLibrary: `${root}/build-library.json`,
       windowState: `${root}/window-state.json`,
       launcherMode: `${root}/launcher-mode.json`,

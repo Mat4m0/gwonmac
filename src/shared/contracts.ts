@@ -58,6 +58,14 @@ import {
   UPDATE_TRACKS,
   type UpdateTrack,
 } from "./release.js";
+import type {
+  TradeEvent,
+  TradeSearchRequest,
+  TradeSearchResult,
+  TradeSavedState,
+  TradeSnapshot,
+  TradeSource,
+} from "./trade-chat.js";
 
 export { RELEASE_REPO } from "./project-identity.js";
 export { DEFAULT_UPDATE_TRACK, UPDATE_TRACKS };
@@ -352,7 +360,7 @@ export interface AppSettings {
   travelShortcuts: StoredTravelShortcuts;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
-  /** Player changes to the three app-owned shortcuts; missing entries use defaults. */
+  /** Player changes to the app-owned shortcuts; missing entries use defaults. */
   shortcutOverrides: ShortcutOverrides;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
@@ -470,7 +478,9 @@ export type ExternalLinkKind =
   | "discord"
   | "donate"
   | "releases"
-  | "store";
+  | "store"
+  | "kamadanTrade"
+  | "preSearingTrade";
 
 /**
  * Directories the renderer may ask to reveal in Finder. A closed enum, never
@@ -489,6 +499,8 @@ export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
   releases: `https://github.com/${RELEASE_REPO}/releases`,
   // Official ArenaNet store, for players who do not own the game yet.
   store: "https://store.guildwars.com/en-us",
+  kamadanTrade: "https://kamadan.gwtoolbox.com",
+  preSearingTrade: "https://ascalon.gwtoolbox.com",
 };
 
 /**
@@ -720,6 +732,7 @@ export type RendererCommand =
   | { type: "text.edit"; command: GameTextEditCommand }
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
+  | { type: "trade.toggle" }
   | { type: "storage.open" }
   | { type: "travel.toggle" }
   | {
@@ -794,6 +807,13 @@ export const IPC = {
   settingsSet: "gw:settings:set",
   settingsReset: "gw:settings:reset",
   settingsEvent: "gw:settings:event",
+  tradeSubscribe: "gw:trade:subscribe",
+  tradeUnsubscribe: "gw:trade:unsubscribe",
+  tradeSearch: "gw:trade:search",
+  tradeRetry: "gw:trade:retry",
+  tradeEvent: "gw:trade:event",
+  tradeSavedGet: "gw:trade:saved:get",
+  tradeSavedSet: "gw:trade:saved:set",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
   shortcutCapture: "gw:shortcuts:capture",
@@ -868,6 +888,7 @@ export const EVENT_CHANNELS = [
   "progressEvent",
   "socketEvent",
   "settingsEvent",
+  "tradeEvent",
   "rendererCommand",
   "rendererCommandDone",
   "inputTraceEvent",
@@ -936,6 +957,15 @@ export interface GwNativeApi {
     set(value: RendererSettingsPatch): Promise<AppSettings>;
     reset(): Promise<SettingsResetOutcome | null>;
     onChange(callback: (settings: AppSettings) => void): () => void;
+  };
+  trade: {
+    subscribe(source: TradeSource): Promise<TradeSnapshot>;
+    unsubscribe(): Promise<void>;
+    search(request: TradeSearchRequest): Promise<TradeSearchResult>;
+    retry(source: TradeSource): Promise<void>;
+    getSaved(): Promise<TradeSavedState>;
+    setSaved(value: TradeSavedState): Promise<TradeSavedState>;
+    onEvent(callback: (event: TradeEvent) => void): () => void;
   };
   travelPreferences: {
     get(): Promise<TravelUserPreferences>;

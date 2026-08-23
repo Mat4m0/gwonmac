@@ -350,7 +350,7 @@ describe("Enhancement command transform", () => {
     assert.deepEqual(dispatches, [[build.travelAction!.messageId, payload, 0]]);
   });
 
-  it("consumes /tp and the two exact storage commands at their named boundaries", () => {
+  it("consumes /trade, /tp and exact storage commands at their named boundaries", () => {
     const input = fixture();
     const build = manifest(input);
     const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_COMMANDS);
@@ -378,6 +378,10 @@ describe("Enhancement command transform", () => {
       (payload: number, enabled: number) => number;
     const takeTravelToggle = instance.exports[build.travelAction!.toggleExport] as
       () => number;
+    const configureTrade = instance.exports.enhancement_configure_trade_toggle as
+      (enabled: number) => number;
+    const takeTradeToggle = instance.exports.enhancement_take_trade_toggle as
+      () => number;
     const payload = 64;
     const message = 256;
     words.set([0, 0, 3], payload / 4);
@@ -398,7 +402,17 @@ describe("Enhancement command transform", () => {
     assert.deepEqual(gameCalls, [11, 11]);
     assert.equal(takeTravelToggle(), 0);
 
+    writeMessage("/trade");
+    assert.equal(slash(11, message), 0, "disabled Trade Chat preserves Guild Wars parsing");
+    assert.equal(takeTradeToggle(), 0);
+    assert.equal(configureTrade(1), 1);
+    assert.equal(slash(11, message), 1, "the exact Trade Chat command is consumed");
+    assert.equal(takeTradeToggle(), 1, "the renderer receives one Trade Chat toggle");
+    assert.equal(takeTradeToggle(), 0, "taking the Trade Chat request clears it");
+    assert.equal(configureTrade(0), 1);
+
     assert.equal(configureTravel(128, 1), 1);
+    writeMessage("/tp");
     assert.equal(slash(11, message), 1, "the exact Travel command is consumed");
     assert.equal(takeTravelToggle(), 1, "the renderer receives one toggle request");
     assert.equal(takeTravelToggle(), 0, "taking the request clears it");
@@ -406,14 +420,14 @@ describe("Enhancement command transform", () => {
     assert.equal(configure(payload, 1), 1);
     writeMessage("/chest");
     assert.equal(slash(12, message), 1, "the exact command is consumed");
-    assert.deepEqual(gameCalls, [11, 11], "slash handling only queues the action");
+    assert.deepEqual(gameCalls, [11, 11, 11], "slash handling only queues the action");
     frame(70, 700);
-    assert.deepEqual(gameCalls, [11, 11, payload, 70]);
+    assert.deepEqual(gameCalls, [11, 11, 11, payload, 70]);
 
     writeMessage("/xunlai");
     assert.equal(slash(13, message), 1, "the alias uses the same mailbox");
     frame(80, 800);
-    assert.deepEqual(gameCalls, [11, 11, payload, 70, payload, 80]);
+    assert.deepEqual(gameCalls, [11, 11, 11, payload, 70, payload, 80]);
 
     assert.equal(command(31, 4242, 0, 0, 0), 1);
     writeMessage("/chest");
@@ -430,12 +444,13 @@ describe("Enhancement command transform", () => {
     );
 
     for (const nearMiss of [
-      "/TP", "/tpp", "/tp ", "/Chest", "/chests", "/chest extra", "/xunlaii", "/storage",
+      "/Trade", "/trade ", "/trade foo", "/TP", "/tpp", "/tp ",
+      "/Chest", "/chests", "/chest extra", "/xunlaii", "/storage",
     ]) {
       writeMessage(nearMiss);
       assert.equal(slash(99, message), 0, nearMiss);
     }
-    assert.deepEqual(gameCalls.slice(-8), [99, 99, 99, 99, 99, 99, 99, 99]);
+    assert.deepEqual(gameCalls.slice(-11), Array(11).fill(99));
   });
 
   it("dispatches queued commands only from the certified game-thread callback", () => {

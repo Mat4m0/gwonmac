@@ -6,6 +6,7 @@ import {
   onMounted,
   ref,
   shallowRef,
+  toRef,
   watch,
 } from "vue";
 import type { ToolsHost } from "./host";
@@ -28,12 +29,13 @@ import SkillBar from "./components/SkillBar.vue";
 import TeamDetail from "./components/TeamDetail.vue";
 import ModalDialog from "./components/ModalDialog.vue";
 import { navigateRows, navigateTabs } from "./tab-keyboard";
-import { installResizeGrip } from "../../../src/shared/ui/resize";
+import { useFloatingWindow } from "./use-floating-window";
 
 const props = defineProps<{
   host: ToolsHost;
   mode: "standalone" | "embedded";
   visible: boolean;
+  active: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -41,12 +43,15 @@ const emit = defineEmits<{
 }>();
 
 const controller = useLibrary(props.host);
-const panel = ref<HTMLElement | null>(null);
-const resizeGrip = ref<HTMLButtonElement | null>(null);
 const search = ref<HTMLInputElement | null>(null);
 const mobileView = ref<"list" | "detail">("list");
-const position = ref({ left: 28, top: 42 });
-const size = ref<{ width: number; height: number } | null>(null);
+const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
+  mode: props.mode,
+  visible: toRef(props, "visible"),
+  initialPosition: { left: 28, top: 42 },
+  minWidth: 320,
+  minHeight: 360,
+});
 const composer = ref<"build" | "team" | "import-team" | null>(null);
 const draftCode = ref("");
 const draftName = ref("");
@@ -78,35 +83,11 @@ const hasObservedParty = computed(() =>
   props.host.party.value.status === "ready"
   && (props.host.party.value.player !== null || props.host.party.value.heroes.length > 0)
 );
-const panelStyle = computed(() => {
-  if (props.mode !== "embedded") return undefined;
-  return {
-    left: `${position.value.left}px`,
-    top: `${position.value.top}px`,
-    ...(size.value
-      ? { width: `${size.value.width}px`, height: `${size.value.height}px` }
-      : {}),
-  };
-});
-
-const fitPanelToViewport = () => {
-  if (props.mode !== "embedded" || !panel.value) return;
-  const width = Math.min(panel.value.offsetWidth, window.innerWidth);
-  const height = Math.min(panel.value.offsetHeight, window.innerHeight);
-  if (width !== panel.value.offsetWidth || height !== panel.value.offsetHeight) {
-    size.value = { width, height };
-  }
-  position.value = {
-    left: Math.max(0, Math.min(window.innerWidth - width, position.value.left)),
-    top: Math.max(0, Math.min(window.innerHeight - height, position.value.top)),
-  };
-};
 watch(
   () => props.visible,
   (visible) => {
     if (visible) {
       requestAnimationFrame(() => {
-        fitPanelToViewport();
         // The embedded palette opens over a running game and must leave the
         // keyboard with it. Explicitly clicking into a field still focuses the
         // field; only the standalone window chooses a typing target on show.
@@ -233,41 +214,8 @@ const startBlankBuild = async () => {
   mobileView.value = "detail";
 };
 
-const startDrag = (event: PointerEvent) => {
-  if (props.mode !== "embedded" || !panel.value) return;
-  if ((event.target as Element).closest("button, input, select, textarea, a, summary, label")) return;
-  const element = panel.value;
-  const handle = event.currentTarget as HTMLElement;
-  const box = element.getBoundingClientRect();
-  const offsetX = event.clientX - box.left;
-  const offsetY = event.clientY - box.top;
-  handle.setPointerCapture(event.pointerId);
-  element.dataset.dragging = "";
-  const move = (next: PointerEvent) => {
-    const left = Math.max(
-      0,
-      Math.min(window.innerWidth - element.offsetWidth, next.clientX - offsetX),
-    );
-    const top = Math.max(
-      0,
-      Math.min(window.innerHeight - element.offsetHeight, next.clientY - offsetY),
-    );
-    position.value = { left, top };
-  };
-  const finish = () => {
-    delete element.dataset.dragging;
-    for (const name of ["pointermove", "pointerup", "pointercancel", "lostpointercapture"] as const) {
-      handle.removeEventListener(name, name === "pointermove" ? move : finish);
-    }
-  };
-  handle.addEventListener("pointermove", move);
-  handle.addEventListener("pointerup", finish);
-  handle.addEventListener("pointercancel", finish);
-  handle.addEventListener("lostpointercapture", finish);
-};
-
 const onKeydown = (event: KeyboardEvent) => {
-  if (!props.visible) return;
+  if (!props.visible || !props.active) return;
   const editable =
     event.target instanceof HTMLInputElement
     || event.target instanceof HTMLTextAreaElement
@@ -288,37 +236,11 @@ const onKeydown = (event: KeyboardEvent) => {
   }
 };
 
-let disposeResize: (() => void) | null = null;
-
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
-  window.addEventListener("resize", fitPanelToViewport);
-  requestAnimationFrame(fitPanelToViewport);
-  if (props.mode === "embedded" && panel.value && resizeGrip.value) {
-    disposeResize = installResizeGrip(resizeGrip.value, {
-      size: () => {
-        const box = panel.value!.getBoundingClientRect();
-        return { width: box.width, height: box.height };
-      },
-      limits: () => ({
-        minWidth: Math.min(320, window.innerWidth - position.value.left),
-        minHeight: Math.min(360, window.innerHeight - position.value.top),
-        maxWidth: window.innerWidth - position.value.left,
-        maxHeight: window.innerHeight - position.value.top,
-      }),
-      resize: (width, height) => { size.value = { width, height }; },
-      setActive: (active) => {
-        if (!panel.value) return;
-        if (active) panel.value.dataset.resizing = "";
-        else delete panel.value.dataset.resizing;
-      },
-    });
-  }
 });
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
-  window.removeEventListener("resize", fitPanelToViewport);
-  disposeResize?.();
 });
 </script>
 
@@ -336,7 +258,7 @@ onBeforeUnmount(() => {
       aria-label="GWonMac Tools"
       role="dialog"
     >
-      <header class="ui-panel-head window-bar" @pointerdown="startDrag">
+      <header class="ui-panel-head ui-window-head window-bar" @pointerdown="startDrag">
         <div class="window-brand" aria-hidden="true">GW</div>
         <div class="window-identity">
           <h1 class="ui-panel-title">GWonMac Tools</h1>

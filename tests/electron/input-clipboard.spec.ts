@@ -65,10 +65,12 @@ test.describe("renderer text editing", () => {
           })),
           appAccelerators: [
             "toggle-tools",
+            "toggle-trade",
             "open-xunlai-storage",
             "open-travel",
           ].map((id) => menu?.getMenuItemById(id)?.accelerator),
           toolsLabel: menu?.getMenuItemById("toggle-tools")?.label,
+          tradeLabel: menu?.getMenuItemById("toggle-trade")?.label,
         };
       })).toEqual({
         edit: [
@@ -77,8 +79,9 @@ test.describe("renderer text editing", () => {
           { id: "edit-paste", label: "Paste", role: null, accelerator: "CmdOrCtrl+V", hasClick: true },
           { id: "edit-select-all", label: "Select All", role: null, accelerator: "CmdOrCtrl+A", hasClick: true },
         ],
-        appAccelerators: [null, null, null],
+        appAccelerators: [null, null, null, null],
         toolsLabel: "Show or hide GWonMac Tools",
+        tradeLabel: "Show or hide Trade Chat",
       });
     } finally {
       await closeOffline(fixture);

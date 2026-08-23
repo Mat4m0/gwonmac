@@ -2,7 +2,12 @@
  * Canonical app-shortcut actions, defaults, persistence shapes, and pure operations.
  * Main and renderer consume this one model so interception and presentation agree.
  */
-export const SHORTCUT_ACTIONS = ["tools.toggle", "storage.open", "travel.open"] as const;
+export const SHORTCUT_ACTIONS = [
+  "tools.toggle",
+  "trade.toggle",
+  "storage.open",
+  "travel.open",
+] as const;
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number];
 
 export interface ShortcutBinding {
@@ -25,6 +30,7 @@ export type ShortcutCaptureResult =
 export const DEFAULT_SHORTCUTS: Readonly<Record<ShortcutAction, ShortcutBinding>> =
   Object.freeze({
     "tools.toggle": Object.freeze({ key: "b", shift: false, option: false }),
+    "trade.toggle": Object.freeze({ key: "b", shift: true, option: false }),
     "storage.open": Object.freeze({ key: "c", shift: true, option: false }),
     "travel.open": Object.freeze({ key: "t", shift: false, option: false }),
   });
@@ -32,6 +38,7 @@ export const DEFAULT_SHORTCUTS: Readonly<Record<ShortcutAction, ShortcutBinding>
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
     "tools.toggle": "Show or hide GWonMac Tools",
+    "trade.toggle": "Show or hide Trade Chat",
     "storage.open": "Open Xunlai storage",
     "travel.open": "Open Travel",
   });
@@ -76,6 +83,9 @@ export function resolveShortcuts(
     "tools.toggle": overrides["tools.toggle"] === undefined
       ? DEFAULT_SHORTCUTS["tools.toggle"]
       : overrides["tools.toggle"],
+    "trade.toggle": overrides["trade.toggle"] === undefined
+      ? DEFAULT_SHORTCUTS["trade.toggle"]
+      : overrides["trade.toggle"],
     "storage.open": overrides["storage.open"] === undefined
       ? DEFAULT_SHORTCUTS["storage.open"]
       : overrides["storage.open"],

@@ -133,6 +133,23 @@ After that restart, these choices update immediately:
   whether the current character can travel there. Travel keeps the current
   Guild Wars region and language and uses district Any.
 
+Open **Trade Chat** from the View menu, with Command-Shift-B, or by typing the
+exact lowercase `/trade` command on a certified client. The Trade window is
+independent from Builds and teams, so both can stay open. `/trade` passes
+through to Guild Wars when Tools is disabled or the current parser is not
+certified; the menu and shortcut do not depend on client certification.
+
+Trade Chat shows the public Kamadan and Pre-Searing Ascalon feeds. Choose one
+source, search for an item or character, and use **Selling** or **Buying** to
+filter whole-word `WTS` and `WTB` messages. Select a row to read the complete
+message and exact time, then copy the character name or message. The feature is
+read-only: publish listings and contact players through normal Guild Wars chat.
+Feed history, searches, and copied character names are not saved automatically.
+Use **Save offer** to keep an exact local copy of a useful listing. Use
+**Follow player** to highlight that character's current and future listings.
+Open **Saved** to review Offers and Players in a right-side drawer. These saved
+items stay on this Mac; GWonMac does not send them to either public feed.
+
 Tools and Travel stay open when you click Guild Wars behind them. Press Tab to
 move the keyboard into the topmost GWonMac window. Press Escape to close that
 window and return the keyboard to Guild Wars. If a confirmation dialog is open,
@@ -144,9 +161,10 @@ The same pane lists **Keyboard shortcuts**. Choose **Change**, then press a
 Command shortcut to replace the default. Letter and number shortcuts use their
 physical keyboard positions, so they stay stable when Option or the active
 keyboard layout changes. Control remains available to Guild Wars. Delete clears a shortcut, Escape
-cancels recording. **Show or hide GWonMac Tools** uses Command-B by default.
-**Restore default shortcuts** also restores Command-Shift-C for Xunlai storage
-and Command-T for Travel. Shortcuts work only while the
+cancels recording. **Show or hide GWonMac Tools** uses Command-B by default,
+and **Show or hide Trade Chat** uses Command-Shift-B. **Restore default
+shortcuts** also restores Command-Shift-C for Xunlai storage, Command-T for
+Travel, and Command-Shift-B for Trade Chat. Shortcuts work only while the
 Guild Wars window is active. GWonMac keeps normal editing and application
 shortcuts such as Command-C and Command-Q, plus Travel's Command-1 through
 Command-9 assignments, reserved.

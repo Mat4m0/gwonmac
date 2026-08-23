@@ -736,6 +736,8 @@ export async function assertToolboxFoundationLifecycle() {
               return 1;
             },
             enhancement_take_travel_toggle: () => 0,
+            enhancement_configure_trade_toggle: () => 1,
+            enhancement_take_trade_toggle: () => 0,
           },
         },
         module,

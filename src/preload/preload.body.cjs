@@ -176,6 +176,15 @@ const api = {
     reset: () => ipcRenderer.invoke(IPC.settingsReset),
     onChange: (callback) => listen(IPC.settingsEvent, callback),
   },
+  trade: {
+    subscribe: (source) => ipcRenderer.invoke(IPC.tradeSubscribe, source),
+    unsubscribe: () => ipcRenderer.invoke(IPC.tradeUnsubscribe),
+    search: (request) => ipcRenderer.invoke(IPC.tradeSearch, request),
+    retry: (source) => ipcRenderer.invoke(IPC.tradeRetry, source),
+    getSaved: () => ipcRenderer.invoke(IPC.tradeSavedGet),
+    setSaved: (value) => ipcRenderer.invoke(IPC.tradeSavedSet, value),
+    onEvent: (callback) => listen(IPC.tradeEvent, callback),
+  },
   travelPreferences: {
     get: () => ipcRenderer.invoke(IPC.travelPreferencesGet),
     set: (value) => ipcRenderer.invoke(IPC.travelPreferencesSet, value),

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
 import { bindShortcutSettings } from "../../src/renderer/settings-shortcuts.ts";
+import { SHORTCUT_ACTIONS } from "../../src/shared/keyboard-shortcuts.ts";
 
 type Listener = () => void;
 
@@ -57,16 +58,18 @@ function installWindow(value: object): () => void {
 }
 
 test("a failed shortcut write reconciles through Settings and leaves capture mode", async () => {
-  const row = new FakeShortcutRow("tools.toggle");
+  const rows = SHORTCUT_ACTIONS.map((action) => new FakeShortcutRow(action));
+  const row = rows[0]!;
   const restore = new FakeElement();
   const dialog = new FakeElement();
   let current = { ...DEFAULT_SETTINGS };
+  let captureCancellations = 0;
   let recovered!: () => void;
   const recovery = new Promise<void>((resolve) => { recovered = resolve; });
   const uninstall = installWindow({
     gwNative: {
       shortcuts: {
-        cancelCapture: async () => {},
+        cancelCapture: async () => { captureCancellations += 1; },
         capture: async () => ({
           status: "captured",
           binding: { key: "k", shift: true, option: false },
@@ -77,7 +80,7 @@ test("a failed shortcut write reconciles through Settings and leaves capture mod
   try {
     bindShortcutSettings({
       form: {
-        querySelectorAll: () => [row],
+        querySelectorAll: () => rows,
       } as unknown as HTMLFormElement,
       dialog: dialog as unknown as HTMLDialogElement,
       restore: restore as unknown as HTMLElement,
@@ -96,6 +99,7 @@ test("a failed shortcut write reconciles through Settings and leaves capture mod
 
     assert.equal(row.valueElement.textContent, "⌘B");
     assert.equal(row.change.textContent, "Change");
+    assert.equal(captureCancellations, 1);
   } finally {
     uninstall();
   }
