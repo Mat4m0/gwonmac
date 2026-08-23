@@ -1,4 +1,7 @@
-/** The one conversion from certified game coordinates to viewport CSS pixels. */
+/**
+ * The one conversion from certified game coordinates to viewport CSS pixels.
+ * Invalid geometry and hidden canvases withdraw the complete projection.
+ */
 import type { CompanionSkillSlotState } from "./companion-skill-snapshot.js";
 
 export type SkillSlotProjection = Readonly<{

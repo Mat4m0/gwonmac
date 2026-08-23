@@ -84,6 +84,7 @@ test("product tool settings remain live once the capability is present", () => {
     teamManagement: true,
     xunlaiStorage: false,
     travelPalette: true,
+    skillCooldownOverlayEnabled: true,
   }, "pve"), {
     tools: true,
     targetReadout: false,
