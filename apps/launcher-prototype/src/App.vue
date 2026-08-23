@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { X } from "@lucide/vue";
+import { Check, X } from "@lucide/vue";
 import AccountsView from "./views/AccountsView.vue";
 import HomeView from "./views/HomeView.vue";
 import IssuesView from "./views/IssuesView.vue";
@@ -183,8 +183,16 @@ watch(route, async () => {
       <BaseModal v-if="gameFilesOpen" title="Redownload game files" @close="gameFilesOpen = false">
         <span class="eyebrow">Game files</span>
         <h1>Redownload game files?</h1>
-        <p>The launcher will remove the local Guild Wars game files and download a fresh copy.</p>
-        <p>Your accounts, builds, and launcher settings will not be changed.</p>
+        <p>The launcher will replace only the downloaded Guild Wars game data with a fresh copy.</p>
+        <section class="kept-data" aria-labelledby="kept-data-heading">
+          <h2 id="kept-data-heading">Kept on your Mac</h2>
+          <ul>
+            <li><Check aria-hidden="true" />Account profiles and launcher settings</li>
+            <li><Check aria-hidden="true" />Build templates and saved team builds</li>
+            <li><Check aria-hidden="true" />Tool settings, shortcuts, and Quick Travel favorites</li>
+            <li><Check aria-hidden="true" />Screenshots</li>
+          </ul>
+        </section>
         <div class="modal-actions">
           <button class="secondary-button" type="button" @click="gameFilesOpen = false">Cancel</button>
           <button class="danger-button" type="button" @click="redownloadGameFiles">Redownload files</button>

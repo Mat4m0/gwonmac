@@ -255,6 +255,42 @@
   margin-block-start: 10px;
 }
 
+.kept-data {
+  margin-block-start: 20px;
+  padding: 16px;
+  border-radius: 11px;
+  background: rgba(167, 200, 117, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(167, 200, 117, 0.12);
+}
+
+.kept-data h2 {
+  font-size: 0.86rem;
+}
+
+.kept-data ul {
+  display: grid;
+  gap: 9px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kept-data li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  color: #d8d1c6;
+  font-size: 0.82rem;
+}
+
+.kept-data svg {
+  width: 16px;
+  height: 16px;
+  margin-block-start: 1px;
+  color: var(--green);
+}
+
 .modal-close {
   position: absolute;
   inset-block-start: 18px;

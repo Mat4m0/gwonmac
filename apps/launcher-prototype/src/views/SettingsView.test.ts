@@ -12,6 +12,7 @@ describe("Settings", () => {
     });
 
     expect(wrapper.text()).not.toContain("Download all game files");
+    expect(wrapper.text()).toContain("Templates, screenshots, accounts, and settings stay in place");
     await wrapper.get(".maintenance-setting-row button").trigger("click");
     expect(wrapper.emitted("redownloadGameFiles")).toHaveLength(1);
   });

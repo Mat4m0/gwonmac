@@ -66,7 +66,7 @@ const unavailableShortcuts = (current: ShortcutKey) =>
           <section class="setting-group">
             <h2>Game files</h2>
             <div class="setting-row maintenance-setting-row">
-              <span><strong>Redownload game files</strong><small>Replace the local game files with a fresh copy. Accounts and launcher settings stay in place.</small></span>
+              <span><strong>Redownload game files</strong><small>Replace only downloaded game data. Templates, screenshots, accounts, and settings stay in place.</small></span>
               <button class="secondary-button" type="button" @click="emit('redownloadGameFiles')">
                 <RotateCcw aria-hidden="true" />
                 Redownload…
