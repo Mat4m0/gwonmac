@@ -8,6 +8,7 @@ import {
   shortcutConflict,
   shortcutDisplay,
   shortcutReserved,
+  SHORTCUT_ACTIONS,
   SHORTCUT_LABELS,
   withShortcutOverride,
   type ShortcutAction,
@@ -33,10 +34,15 @@ export function bindShortcutSettings(options: Readonly<{
   let pendingReplacement:
     | { action: ShortcutAction; conflict: ShortcutAction; binding: ShortcutBinding }
     | null = null;
-  const rows = new Map<ShortcutAction, HTMLElement>(
+  const discoveredRows = new Map<ShortcutAction, HTMLElement>(
     [...options.form.querySelectorAll<HTMLElement>('[data-shortcut-action]')]
       .map((row) => [row.dataset.shortcutAction as ShortcutAction, row]),
   );
+  const rows = new Map<ShortcutAction, HTMLElement>(SHORTCUT_ACTIONS.map((action) => {
+    const row = discoveredRows.get(action);
+    if (!row) throw new Error(`missing shortcut row: ${action}`);
+    return [action, row];
+  }));
 
   function parts(action: ShortcutAction) {
     const row = rows.get(action);
@@ -82,6 +88,12 @@ export function bindShortcutSettings(options: Readonly<{
       );
       const current = options.settings();
       if (current) await render(current);
+    } finally {
+      // A captured Command chord can lose its key-up to AppKit. Once the
+      // setting transaction settles, release the capture claim so the newly
+      // assigned shortcut is usable immediately. Auto-repeat is still ignored
+      // by the main-process shortcut controller.
+      await window.gwNative.shortcuts.cancelCapture();
     }
   }
 
@@ -174,12 +186,19 @@ export function bindShortcutSettings(options: Readonly<{
   }
 
   options.restore.addEventListener('click', () => {
-    pendingReplacement = null;
-    clearMessages();
-    void save({});
+    void (async () => {
+      if (recording) await window.gwNative.shortcuts.cancelCapture();
+      recording = null;
+      pendingReplacement = null;
+      clearMessages();
+      await save({});
+    })();
   });
   options.dialog.addEventListener('close', () => {
-    if (recording) void window.gwNative.shortcuts.cancelCapture();
+    // AppKit can consume the matching key-up while Command is held. Always
+    // clear capture-owned key claims when Settings closes, even after capture
+    // already returned a binding, so the new shortcut works on its first use.
+    void window.gwNative.shortcuts.cancelCapture();
     recording = null;
     pendingReplacement = null;
     clearMessages();

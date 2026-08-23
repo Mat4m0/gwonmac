@@ -360,7 +360,7 @@ export interface AppSettings {
   travelShortcuts: StoredTravelShortcuts;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
-  /** Player changes to the three app-owned shortcuts; missing entries use defaults. */
+  /** Player changes to the app-owned shortcuts; missing entries use defaults. */
   shortcutOverrides: ShortcutOverrides;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;

@@ -540,6 +540,8 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   #settings-form .settings-rtab[aria-selected="true"] { border-left: 0; border-bottom-color: var(--ui-accent); }
   .settings-panes { padding: var(--ui-space-3); }
   #settings-tool-features { grid-template-columns: minmax(0, 1fr); }
+  .settings-shortcut-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .settings-shortcut-name { grid-column: 1 / -1; }
   .settings-quality-seg { flex-direction: column; }
   .settings-quality-seg label { width: 100%; }
 }
