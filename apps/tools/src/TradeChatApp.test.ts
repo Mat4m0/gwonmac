@@ -42,8 +42,20 @@ describe("TradeChatApp", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("Quiet Ember");
     expect(wrapper.text()).not.toContain("Silver Wayfarer");
-    await wrapper.get(".trade-search button:last-child").trigger("click");
+    await wrapper.get("input[type=search]").setValue("");
     expect(wrapper.text()).toContain("Silver Wayfarer");
+    expect(wrapper.text()).toContain("Latest messages");
+    wrapper.unmount();
+  });
+
+  it("searches player names through the upstream user query", async () => {
+    const wrapper = await ledger();
+    await wrapper.get("input[type=search]").setValue("Tyria Cartographer");
+    await wrapper.get(".trade-search").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Tyria Cartographer");
+    expect(wrapper.text()).not.toContain("Silver Wayfarer");
     wrapper.unmount();
   });
 

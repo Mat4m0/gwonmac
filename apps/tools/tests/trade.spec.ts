@@ -18,6 +18,19 @@ test("searches and inspects the Kamadan ledger", async ({ page }) => {
   await expect(dialog.getByRole("option")).toHaveCount(6);
 });
 
+test("searches character names and returns to live when cleared", async ({ page }) => {
+  const dialog = page.getByRole("dialog", { name: "Trade Chat" });
+  const search = dialog.getByRole("searchbox", { name: "Search offers or character names" });
+  await search.fill("Tyria Cartographer");
+  await dialog.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(dialog.getByRole("option")).toHaveCount(1);
+  await expect(dialog.getByRole("option")).toContainText("Tyria Cartographer");
+
+  await search.fill("");
+  await expect(dialog.getByText("Latest messages", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("option").first()).toContainText("Tyria Cartographer");
+});
+
 test("keeps Pre-Searing separate and adapts to a narrow window", async ({ page }) => {
   await page.setViewportSize({ width: 600, height: 720 });
   const dialog = page.getByRole("dialog", { name: "Trade Chat" });

@@ -163,11 +163,14 @@ export function createDemoTradeHost(): TradeHost {
     async unsubscribe() {},
     async search(request) {
       const query = request.query.toLocaleLowerCase();
+      const player = query.startsWith("user:") ? query.slice(5).trim() : null;
       return {
         ...request,
         messages: DEMO_MESSAGES.filter((message) =>
           message.source === request.source
-          && `${message.sender} ${message.message}`.toLocaleLowerCase().includes(query)
+          && (player === null
+            ? message.message.toLocaleLowerCase().includes(query)
+            : message.sender.toLocaleLowerCase().includes(player))
         ),
       };
     },

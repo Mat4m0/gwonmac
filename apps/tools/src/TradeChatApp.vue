@@ -141,9 +141,20 @@ async function runSearch(existingRevision?: number): Promise<void> {
   const requestedSource = source.value;
   searching.value = true;
   try {
-    const result = await props.host.search({ source: requestedSource, query: trimmed });
+    const requests = [props.host.search({ source: requestedSource, query: trimmed })];
+    const playerQuery = `user:${trimmed}`;
+    if (
+      !trimmed.toLocaleLowerCase().startsWith("user:")
+      && [...playerQuery].length <= TRADE_LIMITS.queryCharacters
+    ) {
+      requests.push(props.host.search({ source: requestedSource, query: playerQuery }));
+    }
+    const results = await Promise.all(requests);
     if (revision !== requestRevision || source.value !== requestedSource) return;
-    current.value.search = [...result.messages];
+    current.value.search = sortNewest([...new Map(
+      results.flatMap((result) => result.messages)
+        .map((message) => [message.timestamp, message] as const),
+    ).values()]).slice(0, TRADE_LIMITS.searchResults);
     ensureSelection(current.value, current.value.search);
   } catch {
     if (revision === requestRevision) {
@@ -153,6 +164,11 @@ async function runSearch(existingRevision?: number): Promise<void> {
   } finally {
     if (revision === requestRevision) searching.value = false;
   }
+}
+
+function onQueryInput(event: Event): void {
+  const value = (event.target as HTMLInputElement).value;
+  if (!value.trim() && submittedQuery.value) clearSearch();
 }
 
 function clearSearch(): void {
@@ -456,6 +472,7 @@ function exactTime(timestamp: number): string {
             <input
               ref="searchInput"
               v-model="query"
+              @input="onQueryInput"
               type="search"
               maxlength="128"
               placeholder="Search offers or character names"

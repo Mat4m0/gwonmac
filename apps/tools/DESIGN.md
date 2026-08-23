@@ -78,6 +78,9 @@ density, or behavior.
   arrival hint; merge the queue when the reader returns to the exact top.
 - Reveal local Trade Chat results 25 at a time as the player nears the bottom,
   up to 200 results.
+- Search offer text and the upstream `user:` character index together, then
+  merge results by message timestamp. Clearing the field returns immediately
+  to the live ledger.
 - Keep saved offers and followed players in one right-anchored Saved drawer.
   It is non-modal at wide widths and an in-window sheet when narrow. Its entry
   and exit share the right edge, focus returns to its trigger, and reduced
