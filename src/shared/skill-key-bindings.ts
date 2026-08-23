@@ -21,12 +21,10 @@ export type SkillKeyBinding = Readonly<{
   modifiers: SkillKeyModifiers;
 }>;
 
-export type SkillKeyKeyboardCaptureResult =
+export type SkillKeyCaptureResult =
   | Readonly<{
       status: "captured";
-      binding: SkillKeyBinding & Readonly<{
-        input: Readonly<{ kind: "keyboard"; code: string }>;
-      }>;
+      binding: SkillKeyBinding;
     }>
   | Readonly<{ status: "cancelled" }>
   | Readonly<{ status: "invalid" }>;

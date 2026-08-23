@@ -15,7 +15,8 @@ import {
 import { recordMainInput } from './input-trace.js';
 import {
   isSkillKeyKeyboardCode,
-  type SkillKeyKeyboardCaptureResult,
+  type SkillKeyBinding,
+  type SkillKeyCaptureResult,
 } from "../shared/skill-key-bindings.js";
 
 const tracedKey = (key: string) => {
@@ -56,7 +57,7 @@ class WindowShortcuts {
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({});
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
-  #skillCapture: ((result: SkillKeyKeyboardCaptureResult) => void) | null = null;
+  #skillCapture: ((result: SkillKeyCaptureResult) => void) | null = null;
   #claimedCodes = new Map<string, ClaimedKey>();
 
   constructor(win: BrowserWindow, actions: ShortcutActions) {
@@ -198,7 +199,7 @@ class WindowShortcuts {
     });
   }
 
-  captureSkillKey(): Promise<SkillKeyKeyboardCaptureResult> {
+  captureSkillKey(): Promise<SkillKeyCaptureResult> {
     this.cancelCapture();
     return new Promise((resolve) => {
       this.#skillCapture = resolve;
@@ -218,6 +219,12 @@ class WindowShortcuts {
     this.#finishSkillCapture({ status: "cancelled" });
   }
 
+  captureSkillPointer(binding: SkillKeyBinding): boolean {
+    if (!this.#skillCapture) return false;
+    this.#finishSkillCapture({ status: "captured", binding });
+    return true;
+  }
+
   release(code: string): void {
     this.#claimedCodes.delete(code);
   }
@@ -230,7 +237,7 @@ class WindowShortcuts {
   }
 
 
-  #finishSkillCapture(result: SkillKeyKeyboardCaptureResult): void {
+  #finishSkillCapture(result: SkillKeyCaptureResult): void {
     const resolve = this.#skillCapture;
     if (!resolve) return;
     this.#skillCapture = null;
@@ -269,11 +276,18 @@ export function cancelWindowShortcutCapture(win: BrowserWindow): void {
 
 export function captureWindowSkillKey(
   win: BrowserWindow,
-): Promise<SkillKeyKeyboardCaptureResult> {
+): Promise<SkillKeyCaptureResult> {
   const controller = controllers.get(win);
   return controller
     ? controller.captureSkillKey()
     : Promise.resolve({ status: "cancelled" });
+}
+
+export function captureWindowSkillKeyPointer(
+  win: BrowserWindow,
+  binding: SkillKeyBinding,
+): boolean {
+  return controllers.get(win)?.captureSkillPointer(binding) ?? false;
 }
 
 export function cancelWindowSkillKeyCapture(win: BrowserWindow): void {

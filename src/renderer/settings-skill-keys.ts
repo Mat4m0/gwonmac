@@ -60,10 +60,10 @@ export function bindSkillKeySettings(options: Readonly<{
     const wasRecording = recording !== null;
     generation += 1;
     stopRendererCapture();
-    if (wasRecording) void window.gwNative.skillKeys.cancelKeyboardCapture();
+    if (wasRecording) void window.gwNative.skillKeys.cancelCapture();
     recording = null;
     const settings = options.settings();
-    if (settings) render(settings);
+    if (settings) draw(settings);
   }
 
   async function save(bindings: SkillKeyBindings): Promise<void> {
@@ -88,11 +88,15 @@ export function bindSkillKeySettings(options: Readonly<{
     if (slot === null) return;
     generation += 1;
     stopRendererCapture();
-    void window.gwNative.skillKeys.cancelKeyboardCapture();
     recording = null;
     const settings = options.settings();
     if (!settings) return;
     void save(withSkillKeyBinding(settings.skillKeyBindings, slot, binding));
+  }
+
+  function submitPointer(binding: SkillKeyBinding): void {
+    stopRendererCapture();
+    void window.gwNative.skillKeys.submitPointer(binding).catch(() => cancel());
   }
 
   function onMouseDown(event: MouseEvent): void {
@@ -106,7 +110,7 @@ export function bindSkillKeySettings(options: Readonly<{
         contextMenu.stopImmediatePropagation();
       }, { capture: true, once: true });
     }
-    accept({
+    submitPointer({
       input: { kind: "mouse-button", button: event.button },
       modifiers: modifiersFromEvent(event),
     });
@@ -116,13 +120,13 @@ export function bindSkillKeySettings(options: Readonly<{
     if (recording === null || captureControl(event) || event.deltaY === 0) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    accept({
+    submitPointer({
       input: { kind: "wheel", direction: event.deltaY < 0 ? "up" : "down" },
       modifiers: modifiersFromEvent(event),
     });
   }
 
-  function render(settings: AppSettings): void {
+  function draw(settings: AppSettings): void {
     options.fieldset.hidden = !settings.gwonmacTools;
     rows.forEach((_row, slot) => {
       const binding = settings.skillKeyBindings[slot] ?? null;
@@ -149,10 +153,10 @@ export function bindSkillKeySettings(options: Readonly<{
     recording = slot;
     const token = ++generation;
     const settings = options.settings();
-    if (settings) render(settings);
+    if (settings) draw(settings);
     window.addEventListener("mousedown", onMouseDown, true);
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
-    const result = await window.gwNative.skillKeys.captureKeyboard();
+    const result = await window.gwNative.skillKeys.capture();
     if (token !== generation || recording !== slot) return;
     if (result.status === "captured") accept(result.binding);
     else if (result.status === "invalid") {
@@ -179,5 +183,14 @@ export function bindSkillKeySettings(options: Readonly<{
   options.dialog.addEventListener("close", cancel);
   window.addEventListener("blur", cancel);
 
-  return Object.freeze({ render, cancel });
+  return Object.freeze({
+    render(settings: AppSettings) {
+      // A settings/profile refresh replaces the context in which recording
+      // started. Cancel before drawing the new source of truth so the next key
+      // cannot be saved against a different context.
+      if (recording !== null) cancel();
+      draw(settings);
+    },
+    cancel,
+  });
 }

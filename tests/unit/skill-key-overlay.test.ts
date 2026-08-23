@@ -204,6 +204,58 @@ test("the consumer maps only slot eight's custom C binding", () => {
   assert.equal(root.style.display, "block");
 });
 
+test("the consumer withdraws geometry whose publisher stopped advancing", () => {
+  const document = new FakeDocument();
+  const body = document.createElement();
+  const canvas = {
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+  } as HTMLCanvasElement;
+  let time = 0;
+  const timer: { pending?: () => void } = {};
+  const consumer = createSkillKeyOverlayConsumer(
+    body as unknown as HTMLElement,
+    canvas,
+    {
+      now: () => time,
+      staleAfterMs: 500,
+      schedule: (callback) => {
+        timer.pending = callback;
+        return 1;
+      },
+      cancel: () => {
+        delete timer.pending;
+      },
+    },
+  );
+  consumer.setBindings([slots()[0]!.binding, null, null, null, null, null, null, null]);
+  consumer.setEnabled(true);
+  const ready = {
+    status: "ready" as const,
+    sequence: 2,
+    frameId: 1,
+    viewportWidth: 800,
+    viewportHeight: 600,
+    slots: Array.from({ length: 8 }, (_, index) => ({
+      left: index * 50,
+      bottom: 20,
+      right: index * 50 + 48,
+      top: 68,
+    })),
+  };
+  consumer.update(ready);
+  const root = body.children[0]!;
+  assert.equal(root.style.display, "block");
+  time = 499;
+  timer.pending?.();
+  assert.equal(root.style.display, "block");
+  time = 500;
+  timer.pending?.();
+  assert.equal(root.style.display, "none");
+  consumer.update({ ...ready, sequence: 4 });
+  assert.equal(root.style.display, "block");
+  consumer.dispose();
+});
+
 test("the surface never takes input or enters the accessibility tree", () => {
   const view = mount();
   assert.match(view.root.style.cssText, /pointer-events:none/u);

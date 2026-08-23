@@ -4,6 +4,7 @@ import type { BrowserWindow } from "electron";
 import {
   captureWindowShortcut,
   captureWindowSkillKey,
+  captureWindowSkillKeyPointer,
   cancelWindowSkillKeyCapture,
   installWindowShortcuts,
   releaseWindowShortcutKey,
@@ -168,6 +169,21 @@ describe("window shortcut input", () => {
       }),
       type: "keyUp",
     }), true);
+
+    const pointerCapture = captureWindowSkillKey(win);
+    const pointerBinding = {
+      input: { kind: "mouse-button" as const, button: 4 },
+      modifiers: { control: false, option: true, shift: false, command: false },
+    };
+    assert.equal(captureWindowSkillKeyPointer(win, pointerBinding), true);
+    assert.equal(captureWindowSkillKeyPointer(win, pointerBinding), false);
+    assert.deepEqual(await pointerCapture, {
+      status: "captured",
+      binding: pointerBinding,
+    });
+    assert.equal(dispatch(keyDown("KeyQ", "q", {
+      meta: false, control: false, shift: false, alt: false,
+    })), false, "a later keyboard event cannot replace the pointer winner");
 
     const mouseRace = captureWindowSkillKey(win);
     assert.equal(dispatch(keyDown("AltLeft", "Alt", {

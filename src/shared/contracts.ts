@@ -43,8 +43,9 @@ import type {
   ShortcutOverrides,
 } from "./keyboard-shortcuts.js";
 import type {
+  SkillKeyBinding,
   SkillKeyBindings,
-  SkillKeyKeyboardCaptureResult,
+  SkillKeyCaptureResult,
 } from "./skill-key-bindings.js";
 import {
   DEFAULT_STORED_TRAVEL_SHORTCUTS,
@@ -827,6 +828,7 @@ export const IPC = {
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   skillKeyCapture: "gw:skillKeys:capture",
+  skillKeyCapturePointer: "gw:skillKeys:capturePointer",
   skillKeyCaptureCancel: "gw:skillKeys:captureCancel",
   buildLibraryGet: "gw:buildLibrary:get",
   buildLibrarySet: "gw:buildLibrary:set",
@@ -986,8 +988,9 @@ export interface GwNativeApi {
     cancelCapture(): Promise<void>;
   };
   skillKeys: {
-    captureKeyboard(): Promise<SkillKeyKeyboardCaptureResult>;
-    cancelKeyboardCapture(): Promise<void>;
+    capture(): Promise<SkillKeyCaptureResult>;
+    submitPointer(binding: SkillKeyBinding): Promise<boolean>;
+    cancelCapture(): Promise<void>;
   };
   buildLibrary: {
     get(): Promise<{ library: BuildLibrary; recovered: boolean }>;

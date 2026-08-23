@@ -12,11 +12,19 @@ use crate::abi::*;
 use crate::memory::*;
 
 const MAX_FRAMES: u32 = 16_384;
+// Slot frames are stable for long stretches. Revalidate the eight cached
+// frames every tick, but only audit the complete table twice a second. A frame
+// count or parent change forces an immediate audit.
+const CACHE_AUDIT_TICKS: u32 = 30;
 const CREATED: u32 = 0x4;
 const HIDDEN: u32 = 0x200;
 
 static mut POINTER: u32 = 0;
 static mut SEQUENCE: u32 = 0;
+static mut CACHE_PARENT_ID: u32 = 0;
+static mut CACHE_FRAME_COUNT: u32 = 0;
+static mut CACHE_AGE: u32 = CACHE_AUDIT_TICKS;
+static mut CACHE_SLOT_IDS: [u32; 8] = [0; 8];
 
 const EMPTY_RECT: SkillKeyRect = SkillKeyRect {
     left: 0.0,
@@ -111,20 +119,59 @@ unsafe fn rect(layout: Layout, frame: u32) -> Option<(SkillKeyRect, f32, f32)> {
     Some((next, viewport_width, viewport_height))
 }
 
-unsafe fn collect(layout: Layout, skill_bar_id: u32) -> Option<(f32, f32, [SkillKeyRect; 8])> {
-    if skill_bar_id == 0 || !valid_layout(layout) {
-        return None;
-    }
-    let (array, count) = unsafe { frame_table(layout)? };
+type Observation = (f32, f32, [SkillKeyRect; 8]);
+
+unsafe fn collect_cached(
+    layout: Layout,
+    array: u32,
+    count: u32,
+    skill_bar_id: u32,
+    slot_ids: [u32; 8],
+) -> Option<Observation> {
     let parent = unsafe { frame_at(layout, array, count, skill_bar_id)? };
     if !unsafe { visible(layout, parent) } {
         return None;
     }
     let parent_relation = offset(parent, layout.frame_relation)?;
     let mut slots = [EMPTY_RECT; 8];
-    let mut found = 0_u32;
     let mut viewport_width = 0.0;
     let mut viewport_height = 0.0;
+    for (child, id) in slot_ids.iter().copied().enumerate() {
+        let frame = unsafe { frame_at(layout, array, count, id)? };
+        let relation = offset(frame, layout.frame_relation)
+            .and_then(|at| unsafe { read_u32(at) });
+        let stored_child = offset(frame, layout.frame_child_offset_id)
+            .and_then(|at| unsafe { read_u32(at) });
+        if relation != Some(parent_relation)
+            || stored_child != Some(child as u32)
+            || !unsafe { visible(layout, frame) }
+        {
+            return None;
+        }
+        let (bounds, width, height) = unsafe { rect(layout, frame)? };
+        if child != 0 && (width != viewport_width || height != viewport_height) {
+            return None;
+        }
+        viewport_width = width;
+        viewport_height = height;
+        slots[child] = bounds;
+    }
+    Some((viewport_width, viewport_height, slots))
+}
+
+unsafe fn discover(
+    layout: Layout,
+    array: u32,
+    count: u32,
+    skill_bar_id: u32,
+) -> Option<(Observation, [u32; 8])> {
+    let parent = unsafe { frame_at(layout, array, count, skill_bar_id)? };
+    if !unsafe { visible(layout, parent) } {
+        return None;
+    }
+    let parent_relation = offset(parent, layout.frame_relation)?;
+    let mut slot_ids = [0_u32; 8];
+    let mut found = 0_u32;
     for id in 1..count {
         let Some(frame) = (unsafe { frame_at(layout, array, count, id) }) else {
             continue;
@@ -139,19 +186,53 @@ unsafe fn collect(layout: Layout, skill_bar_id: u32) -> Option<(f32, f32, [Skill
         else {
             continue;
         };
-        if child >= 8 || found & (1 << child) != 0 || !unsafe { visible(layout, frame) } {
+        if child >= 8 || !unsafe { visible(layout, frame) } {
             continue;
         }
-        let (bounds, width, height) = unsafe { rect(layout, frame)? };
-        if found != 0 && (width != viewport_width || height != viewport_height) {
+        // Two visible frames claiming one skill slot are ambiguous. Never let
+        // table order decide which plausible-looking rectangle reaches the HUD.
+        if found & (1 << child) != 0 {
             return None;
         }
-        viewport_width = width;
-        viewport_height = height;
-        slots[child as usize] = bounds;
+        slot_ids[child as usize] = id;
         found |= 1 << child;
     }
-    (found == 0xff).then_some((viewport_width, viewport_height, slots))
+    if found != 0xff {
+        return None;
+    }
+    let observed = unsafe {
+        collect_cached(layout, array, count, skill_bar_id, slot_ids)?
+    };
+    Some((observed, slot_ids))
+}
+
+unsafe fn collect(layout: Layout, skill_bar_id: u32) -> Option<Observation> {
+    if skill_bar_id == 0 || !valid_layout(layout) {
+        return None;
+    }
+    let (array, count) = unsafe { frame_table(layout)? };
+    let cache_matches = unsafe {
+        CACHE_PARENT_ID == skill_bar_id
+            && CACHE_FRAME_COUNT == count
+            && CACHE_AGE < CACHE_AUDIT_TICKS
+    };
+    if cache_matches {
+        let slot_ids = unsafe { CACHE_SLOT_IDS };
+        if let Some(observed) = unsafe {
+            collect_cached(layout, array, count, skill_bar_id, slot_ids)
+        } {
+            unsafe { CACHE_AGE = CACHE_AGE.saturating_add(1) };
+            return Some(observed);
+        }
+    }
+    let (observed, slot_ids) = unsafe { discover(layout, array, count, skill_bar_id)? };
+    unsafe {
+        CACHE_PARENT_ID = skill_bar_id;
+        CACHE_FRAME_COUNT = count;
+        CACHE_AGE = 0;
+        CACHE_SLOT_IDS = slot_ids;
+    }
+    Some(observed)
 }
 
 unsafe fn publish(frame_id: u32, observed: Option<(f32, f32, [SkillKeyRect; 8])>) {
@@ -178,6 +259,10 @@ pub(crate) unsafe fn initialize(pointer: u32) {
     unsafe {
         POINTER = pointer;
         SEQUENCE = 0;
+        CACHE_PARENT_ID = 0;
+        CACHE_FRAME_COUNT = 0;
+        CACHE_AGE = CACHE_AUDIT_TICKS;
+        CACHE_SLOT_IDS = [0; 8];
     }
     for index in 0..SKILL_KEY_BYTES / 4 {
         unsafe { write_volatile((pointer + index * 4) as *mut u32, 0) };

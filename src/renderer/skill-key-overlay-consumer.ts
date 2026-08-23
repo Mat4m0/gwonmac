@@ -11,9 +11,20 @@ import {
   type SkillKeyBindings,
 } from "../shared/skill-key-bindings.js";
 
+const DEFAULT_STALE_AFTER_MS = 500;
+type FreshnessTimer = ReturnType<typeof globalThis.setTimeout> | number;
+
+type FreshnessOptions = Readonly<{
+  now?: () => number;
+  schedule?: (callback: () => void, delay: number) => FreshnessTimer;
+  cancel?: (timer: FreshnessTimer) => void;
+  staleAfterMs?: number;
+}>;
+
 export function createSkillKeyOverlayConsumer(
   parent: HTMLElement,
   canvas: HTMLCanvasElement,
+  freshness: FreshnessOptions = {},
 ) {
   const overlay = createSkillKeyOverlay(parent);
   let state: CompanionSkillKeyState = Object.freeze({
@@ -23,12 +34,42 @@ export function createSkillKeyOverlayConsumer(
   let bindings = EMPTY_SKILL_KEY_BINDINGS;
   let enabled = false;
   let blockedSequence: number | null = null;
+  let observedSequence: number | null = null;
+  let staleSequence: number | null = null;
+  let advancedAt = 0;
+  let freshnessTimer: FreshnessTimer | null = null;
+  const now = freshness.now ?? (() => performance.now());
+  const schedule = freshness.schedule ?? ((callback, delay) =>
+    globalThis.setTimeout(callback, delay));
+  const cancelTimer = freshness.cancel ?? ((timer) => globalThis.clearTimeout(timer));
+  const staleAfterMs = freshness.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
 
-  const render = () => {
+  const stopFreshnessTimer = () => {
+    if (freshnessTimer !== null) cancelTimer(freshnessTimer);
+    freshnessTimer = null;
+  };
+
+  const watchFreshness = () => {
+    if (freshnessTimer !== null || observedSequence === null) return;
+    const remaining = staleAfterMs - (now() - advancedAt);
+    freshnessTimer = schedule(() => {
+      freshnessTimer = null;
+      if (observedSequence === null) return;
+      if (now() - advancedAt < staleAfterMs) {
+        watchFreshness();
+        return;
+      }
+      staleSequence = observedSequence;
+      render();
+    }, Math.max(0, remaining));
+  };
+
+  function render() {
     if (
       !enabled
       || state.status !== "ready"
       || state.sequence === blockedSequence
+      || state.sequence === staleSequence
     ) {
       overlay.update({ status: "waiting" });
       return;
@@ -51,10 +92,20 @@ export function createSkillKeyOverlayConsumer(
         }];
       }),
     });
-  };
+  }
   return Object.freeze({
     update(next: CompanionSkillKeyState) {
       state = next;
+      if (next.status === "ready" && next.sequence !== observedSequence) {
+        observedSequence = next.sequence;
+        staleSequence = null;
+        advancedAt = now();
+        watchFreshness();
+      } else if (next.status !== "ready") {
+        observedSequence = null;
+        staleSequence = null;
+        stopFreshnessTimer();
+      }
       if (
         enabled
         && next.status === "ready"
@@ -73,6 +124,9 @@ export function createSkillKeyOverlayConsumer(
       enabled = next;
       render();
     },
-    dispose: overlay.dispose,
+    dispose() {
+      stopFreshnessTimer();
+      overlay.dispose();
+    },
   });
 }

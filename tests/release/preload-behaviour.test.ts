@@ -261,12 +261,20 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.shortcutCaptureCancel,
   },
   {
-    path: "skillKeys.captureKeyboard",
+    path: "skillKeys.capture",
     args: [],
     channel: IPC.skillKeyCapture,
   },
   {
-    path: "skillKeys.cancelKeyboardCapture",
+    path: "skillKeys.submitPointer",
+    args: [{
+      input: { kind: "mouse-button", button: 2 },
+      modifiers: { control: false, option: false, shift: false, command: false },
+    }],
+    channel: IPC.skillKeyCapturePointer,
+  },
+  {
+    path: "skillKeys.cancelCapture",
     args: [],
     channel: IPC.skillKeyCaptureCancel,
   },

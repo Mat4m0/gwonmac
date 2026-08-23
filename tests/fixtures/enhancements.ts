@@ -702,6 +702,30 @@ export function installSkillBarGraph(view: DataView, parentId = 1) {
   }
 }
 
+/** Add a second visible frame that claims slot zero of the installed bar. */
+export function installDuplicateSkillSlot(
+  view: DataView,
+  parentId = 1,
+  visible = true,
+) {
+  const id = 10;
+  const frameBytes = 0x1c8;
+  const frame = (frameId: number) => ADDRESSES.frameBuffer + frameId * frameBytes;
+  const duplicate = frame(id);
+  view.setUint32(ADDRESSES.frameCountGlobal, id + 1, true);
+  view.setUint32(ADDRESSES.frameTable + id * 4, duplicate, true);
+  view.setUint32(duplicate + 0xbc, id, true);
+  view.setUint32(duplicate + 0x18c, visible ? 0x4 : 0x204, true);
+  view.setUint32(duplicate + 0xb8, 0, true);
+  view.setUint32(duplicate + 0x128, frame(parentId) + 0x128, true);
+  view.setFloat32(duplicate + 0x104, 800, true);
+  view.setFloat32(duplicate + 0x108, 600, true);
+  view.setFloat32(duplicate + 0x10c, 100, true);
+  view.setFloat32(duplicate + 0x110, 20, true);
+  view.setFloat32(duplicate + 0x114, 148, true);
+  view.setFloat32(duplicate + 0x118, 68, true);
+}
+
 /**
  * Everything hanging off `WorldContext`, for the two heroes `installGameGraph`
  * puts in the party.
