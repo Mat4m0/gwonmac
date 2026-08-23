@@ -178,6 +178,30 @@
   box-shadow: var(--ui-title-shadow);
 }
 
+/* Floating work windows carry a title and supporting line, unlike compact
+ * panel headers. Keep their breathing room in one primitive so every tool
+ * window uses the same chrome instead of tuning title padding per feature. */
+.ui-window-head {
+  min-height: 54px;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-2) var(--ui-space-3);
+}
+
+@container (max-width: 480px) {
+  .ui-window-head {
+    min-height: 42px;
+    gap: var(--ui-space-2);
+    padding: var(--ui-space-1) var(--ui-space-2);
+  }
+}
+
+@media (max-height: 520px) {
+  .ui-window-head {
+    min-height: 42px;
+    padding-block: var(--ui-space-1);
+  }
+}
+
 .ui-panel-title {
   flex: 1;
   min-width: 0;

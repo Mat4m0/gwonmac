@@ -45,7 +45,10 @@ Required template compatibility and Core cursor support run when their exact
 client proofs permit them. Optional **gwonmac Tools Beta** is off by default.
 
 Tools provides Build and Team authoring, party capture, team-code exchange,
-Target Distance, local Xunlai storage opening, and explicit Team Apply. Storage
+read-only Trade Chat discovery, Target Distance, local Xunlai storage opening,
+and explicit Team Apply. Trade Chat is an independent surface with public
+Kamadan and Pre-Searing feeds; players still publish listings in Guild Wars.
+Storage
 has its own opt-in and can be opened from Tools, with its customizable
 Command-Shift-C default shortcut, or by
 typing `/chest` or `/xunlai` in supported PvE outposts. Team Apply is a bounded
@@ -75,7 +78,9 @@ See [Release verification](docs/release-verification.md).
 - No Windows or Linux version.
 - No redistribution of ArenaNet game binaries.
 - No autonomous gameplay.
-- No bots, macros, input broadcasting, synchronized control, or trading tools.
+- No bots, macros, input broadcasting, synchronized control, automated trading,
+  listing publication, trade execution, pricing manipulation, inventory
+  automation, or chat automation.
 - No cloned application installations or duplicated ArenaNet game downloads
   for Multiple Accounts mode.
 - No generic memory, packet, command, or plugin API.

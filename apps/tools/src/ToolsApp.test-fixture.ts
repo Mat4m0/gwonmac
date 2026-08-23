@@ -7,7 +7,7 @@ import { createDemoHost, type ToolsHost } from "./host";
 export async function workbench(host: ToolsHost = createDemoHost()) {
   const wrapper = mount(ToolsApp, {
     attachTo: document.body,
-    props: { host, mode: "standalone", visible: true },
+    props: { host, mode: "standalone", visible: true, active: true },
   });
   await flushPromises();
   return wrapper;

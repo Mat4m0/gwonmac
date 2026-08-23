@@ -125,6 +125,11 @@ export function installSurfaceController(
           if (next) surfaces.set(id, { ...surface, order: order++ });
           else surfaces.delete(id);
         },
+        raise() {
+          const current = surfaces.get(id);
+          if (!current) return;
+          surfaces.set(id, { ...current, order: order++ });
+        },
         dispose() {
           open = false;
           surfaces.delete(id);

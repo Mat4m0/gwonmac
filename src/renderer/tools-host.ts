@@ -152,6 +152,7 @@ export function mountToolsInto(
           if (visible) app.show();
           else app.hide();
         },
+        setActive: app.setActive,
         requestClose: app.requestClose,
         update: app.update,
         dispose: app.dispose,
@@ -160,6 +161,35 @@ export function mountToolsInto(
     .catch((cause: unknown) => {
       console.error("[tools] the Tools application failed to load", cause);
       host.textContent = "Tools could not be loaded — see the console.";
+      return null;
+    });
+}
+
+/** Loads the independent read-only Trade Chat window into its own host. */
+export function mountTradeInto(
+  host: HTMLElement,
+  onVisibilityChange: (visible: boolean) => void,
+): Promise<MountedTool | null> {
+  const specifier = "./tools/tools-app.js";
+  return import(specifier)
+    .then((bundle: EmbeddedToolsBundle<HTMLElement>) => {
+      const app = bundle.mountTradeChat(host, {
+        initiallyVisible: false,
+        onVisibilityChange,
+        mode: "embedded",
+        development: window.gwNative.init.development,
+      });
+      return {
+        setVisible: (visible: boolean) => visible ? app.show() : app.hide(),
+        setActive: app.setActive,
+        requestClose: app.hide,
+        update: () => {},
+        dispose: app.dispose,
+      };
+    })
+    .catch((cause: unknown) => {
+      console.error("[tools] Trade Chat failed to load", cause);
+      host.textContent = "Trade Chat could not be loaded — see the console.";
       return null;
     });
 }
@@ -183,6 +213,7 @@ export function mountHostOnlyTools(
         null,
         templatePublishingAvailable,
       ),
+    mountTrade: mountTradeInto,
   });
   const syncEnabled = () => {
     const settings = window.gwToolsSettings();

@@ -21,6 +21,7 @@ describe("keyboard shortcuts", () => {
       "storage.open": null,
     }), {
       "tools.toggle": { key: "k", shift: true, option: false },
+      "trade.toggle": DEFAULT_SHORTCUTS["trade.toggle"],
       "storage.open": null,
       "travel.open": DEFAULT_SHORTCUTS["travel.open"],
     });

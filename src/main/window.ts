@@ -44,6 +44,7 @@ import {
   editWindowText,
   openStorage,
   sendRendererCommand,
+  toggleTrade,
   toggleTools,
   toggleTravel,
 } from "./renderer-commands.js";
@@ -526,6 +527,7 @@ export function createMainWindow(
   installWindowShortcuts(win, {
     run(action) {
       if (action === "tools.toggle") void toggleTools(win);
+      else if (action === "trade.toggle") void toggleTrade(win);
       else if (action === "storage.open") void openStorage(win);
       else void toggleTravel(win);
     },

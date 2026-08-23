@@ -28,6 +28,7 @@ import {
   resetGameInput,
   sendRendererCommand,
   toggleTravel,
+  toggleTrade,
   toggleTools,
 } from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
@@ -166,6 +167,11 @@ export function installApplicationMenu({
           id: "toggle-tools",
           label: "Show or hide GWonMac Tools",
           click: withGameOwner((win) => toggleTools(win)),
+        },
+        {
+          id: "toggle-trade",
+          label: "Show or hide Trade Chat",
+          click: withGameOwner((win) => toggleTrade(win)),
         },
         {
           id: "open-xunlai-storage",

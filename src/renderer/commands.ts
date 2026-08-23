@@ -82,6 +82,11 @@
           );
         }
         break;
+      case 'trade.toggle':
+        if (!dispatch('gw:trade-toggle')) {
+          throw new Error('Trade Chat is not available in this launch.');
+        }
+        break;
       case 'storage.open': {
         const result: { error?: unknown } = {};
         if (!dispatch('gw:storage-open', result)) {

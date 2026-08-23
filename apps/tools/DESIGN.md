@@ -35,6 +35,11 @@ corner, or layer system.
 - Use `.ui-frame` for a framed panel.
 - Use `.ui-well` for a recessed content surface.
 - Use `.ui-raised` for a pressable raised surface.
+- Combine `.ui-panel-head` with `.ui-window-head` for floating windows that
+  carry a title and supporting line. The shared primitive owns normal and
+  constrained-viewport padding; feature styles must not retune it.
+- Use `.ui-scroll` for scrollable wells and lists so scrollbar material stays
+  consistent across Builds, Trade, and Travel.
 - Use the shared components for buttons, fields, checks, tabs, rows, skill
   slots, progress, empty states, banners, toasts, and resize grips.
 - Give each interactive control visible hover, focus, active, selected,
@@ -47,7 +52,7 @@ density, or behavior.
 
 ## Window and interaction rules
 
-- Settings and Tools use the same visible resize grip.
+- Settings, Builds and teams, and Trade Chat use the same visible resize grip.
 - Pointer resize uses capture and handles cancellation and lost capture.
 - Arrow keys resize the window. Shift increases the step.
 - Start a Tools drag only from title-bar furniture.
@@ -61,6 +66,21 @@ density, or behavior.
 - Keep version availability collapsed in Settings unless something is
   unavailable.
 - Keep a dragged window inside the viewport.
+- Let Builds and teams and Trade Chat remain open together. Pointer interaction
+  raises one explicit surface; do not add a generic tool registry.
+- Treat Trade Chat as a working ledger, not a chat transcript or a variation of
+  Builds and teams. Keep source, search, and intent controls above one semantic
+  ledger, with the selected offer in a bottom inspector.
+- At narrow widths, keep the Trade Chat list DOM and open the selected offer in
+  an in-window sheet. The sheet keeps the shared button and scroll primitives.
+- Anchor the new-message hint inside the Trade Chat ledger. Merge new messages
+  immediately when the player is near the top; otherwise queue them without
+  moving the current reading position, then merge and clear the queue at the
+  exact top.
+- Reveal local Trade Chat results 25 at a time as the player nears the bottom,
+  up to 200 results.
+- Scroll to revealed Trade Chat messages smoothly by default and instantly
+  when reduced motion is active.
 - Keep scrolling flex and grid children shrinkable.
 - Use container width to change panel layout.
 - Keep the skill bar usable with pointer, touch, and keyboard input.

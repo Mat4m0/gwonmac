@@ -23,6 +23,7 @@ export function mountToolsApp(
   let lastPartyTrace = "";
   const development = options.development === true;
   const visible = ref(options.initiallyVisible ?? options.mode === "standalone");
+  const active = ref(options.mode === "standalone");
   const tools = ref<InstanceType<typeof ToolsApp> | null>(null);
   const setVisible = (next: boolean) => {
     if (visible.value === next) return;
@@ -39,6 +40,7 @@ export function mountToolsApp(
           host: options.host,
           mode: options.mode,
           visible: visible.value,
+          active: active.value,
           onClose: () => setVisible(false),
           onReady: () => {
             target.dataset.ready = "true";
@@ -56,6 +58,7 @@ export function mountToolsApp(
     show: () => setVisible(true),
     hide: () => setVisible(false),
     toggle: () => setVisible(!visible.value),
+    setActive: (next: boolean) => { active.value = next; },
     requestClose: () => tools.value?.requestClose(),
     update: (observation: ToolboxObservation) => {
       options.host.party.value = liveParty(observation);
