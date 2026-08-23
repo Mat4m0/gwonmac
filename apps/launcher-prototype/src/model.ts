@@ -1,8 +1,10 @@
 export type RouteName = "home" | "news" | "settings" | "issues" | "accounts";
 export type Scenario = "ready" | "updating" | "degraded" | "offline";
 export type FundingPlacement = "home" | "bar" | "dock" | "hidden";
-export type SettingsSection = "updates" | "home" | "tools" | "display" | "shortcuts";
+export type SettingsSection = "updates" | "home" | "tools" | "display";
 export type AccountStatus = "ready" | "running";
+export type AccountIcon = "user" | "chest" | "swords" | "shield" | "crown";
+export type AccountColor = "amber" | "red" | "blue" | "green" | "violet";
 export type HomePanel = "news" | "dailies";
 export type DailyActivityKind =
   | "mission"
@@ -17,18 +19,32 @@ export interface Account {
   id: string;
   name: string;
   note: string;
-  initial: string;
+  icon: AccountIcon;
+  color: AccountColor;
   status: AccountStatus;
   quickStart: boolean;
 }
 
+export interface AccountProfile {
+  name: string;
+  icon: AccountIcon;
+  color: AccountColor;
+}
+
 export interface LauncherSettings {
   automaticUpdates: boolean;
+  downloadAllGameFiles: boolean;
   releaseTrack: "stable" | "beta";
   toolsEnabled: boolean;
   quickTravel: boolean;
   xunlaiStorage: boolean;
   applyTeams: boolean;
+  shortcuts: {
+    toggleTools: string;
+    quickTravel: string;
+    xunlaiStorage: string;
+    applyTeams: string;
+  };
   showGuildWarsNews: boolean;
   showMacNews: boolean;
   showDailies: boolean;
@@ -52,11 +68,18 @@ export interface NewsArticle {
 
 export const createDefaultSettings = (): LauncherSettings => ({
   automaticUpdates: true,
+  downloadAllGameFiles: true,
   releaseTrack: "stable",
   toolsEnabled: true,
   quickTravel: true,
   xunlaiStorage: true,
   applyTeams: false,
+  shortcuts: {
+    toggleTools: "⌘B",
+    quickTravel: "⌘T",
+    xunlaiStorage: "⌘⇧C",
+    applyTeams: "⌘⇧A",
+  },
   showGuildWarsNews: true,
   showMacNews: true,
   showDailies: true,
@@ -79,7 +102,8 @@ export const createDefaultAccounts = (): Account[] => [
     id: "main",
     name: "Main account",
     note: "Last played today",
-    initial: "M",
+    icon: "user",
+    color: "amber",
     status: "ready",
     quickStart: true,
   },

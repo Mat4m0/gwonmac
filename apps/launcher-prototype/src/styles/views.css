@@ -53,6 +53,9 @@
 
 .home-summary {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 30px 30px 34px;
   background: linear-gradient(145deg, rgba(20, 18, 15, 0.96), rgba(9, 9, 8, 0.94));
   backdrop-filter: blur(18px) saturate(115%);
@@ -154,6 +157,9 @@
 }
 
 .summary-list {
+  flex: 1;
+  display: grid;
+  grid-auto-rows: minmax(68px, 1fr);
   margin-block-start: 0;
 }
 
@@ -189,10 +195,14 @@
 }
 
 .home-panel {
+  flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .home-panel-empty {
+  flex: 1;
   min-height: 190px;
   display: grid;
   place-items: center;
@@ -217,7 +227,8 @@
 }
 
 .dailies-panel {
-  margin-block-start: 14px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .daily-reset {
@@ -244,9 +255,10 @@
 }
 
 .daily-grid {
-  max-height: 260px;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(58px, 1fr);
   gap: 8px;
   overflow-y: auto;
   padding-inline-end: 3px;
@@ -344,6 +356,8 @@
 }
 
 .section-sidebar {
+  display: flex;
+  flex-direction: column;
   padding: 30px 22px;
   border-inline-end: 1px solid var(--line);
   background: rgba(10, 9, 8, 0.84);
@@ -526,14 +540,6 @@
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.055);
 }
 
-.setting-group.disabled {
-  opacity: 0.62;
-}
-
-.setting-row.disabled {
-  opacity: 0.62;
-}
-
 .setting-group > h2 {
   padding: 14px 17px 11px;
   color: var(--gold);
@@ -589,19 +595,35 @@
   accent-color: #c99046;
 }
 
-.save-row {
-  max-width: 780px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 18px;
-  margin-block-start: 22px;
+.tool-setting + .tool-setting {
+  border-block-start: 1px solid var(--line);
 }
 
-.save-row span {
-  margin-inline-end: auto;
+.tool-setting .setting-row {
+  border-block-start: 1px solid var(--line);
+}
+
+.tool-shortcut-row {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 7px 17px 11px 38px;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.shortcut-input {
+  width: 112px;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #26221d;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .status-metrics {
@@ -807,16 +829,129 @@
   text-align: start;
 }
 
-.account-avatar {
+.account-avatar-base {
   width: 46px;
   height: 46px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  color: #ffe0aa;
-  background: linear-gradient(145deg, #895d30, #312117);
+  color: #fff2da;
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.16);
-  font: 700 1.05rem var(--serif);
+}
+
+.account-avatar-base svg {
+  width: 21px;
+  height: 21px;
+}
+
+.account-color-amber { background: linear-gradient(145deg, #95642f, #352218); }
+.account-color-red { background: linear-gradient(145deg, #984b3e, #351817); }
+.account-color-blue { background: linear-gradient(145deg, #476f94, #172838); }
+.account-color-green { background: linear-gradient(145deg, #587d4d, #1d3020); }
+.account-color-violet { background: linear-gradient(145deg, #765a91, #2b1e39); }
+
+.account-profile-form {
+  display: grid;
+  gap: 10px;
+  margin-block-start: 22px;
+}
+
+.account-profile-preview {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-block-end: 6px;
+  padding: 13px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.account-profile-preview .account-avatar-base {
+  width: 54px;
+  height: 54px;
+}
+
+.account-profile-preview > div {
+  display: grid;
+}
+
+.account-profile-preview small {
+  color: var(--muted);
+}
+
+.field-label,
+.profile-choice-group legend {
+  font-weight: 650;
+}
+
+.profile-choice-group {
+  min-width: 0;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.profile-choice-group legend {
+  margin-block-end: 9px;
+}
+
+.profile-icon-options,
+.profile-color-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profile-icon-options label,
+.profile-color-options label {
+  position: relative;
+  min-height: 70px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  padding: 8px 5px;
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.profile-icon-options input,
+.profile-color-options input {
+  position: absolute;
+  opacity: 0;
+}
+
+.profile-icon-options label:has(input:checked),
+.profile-color-options label:has(input:checked) {
+  color: var(--ink);
+  background: rgba(221, 178, 96, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(221, 178, 96, 0.3);
+}
+
+.profile-icon-options label:has(input:focus-visible),
+.profile-color-options label:has(input:focus-visible) {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 2px;
+}
+
+.profile-icon-options .account-avatar-base {
+  width: 34px;
+  height: 34px;
+}
+
+.profile-icon-options .account-avatar-base svg {
+  width: 17px;
+  height: 17px;
+}
+
+.profile-color-dot {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .account-copy {
@@ -993,10 +1128,6 @@
     padding-block: 10px;
   }
 
-  .daily-grid {
-    max-height: 184px;
-  }
-
   .daily-grid > a {
     min-height: 58px;
     padding: 8px;
@@ -1028,6 +1159,11 @@
 }
 
 @media (max-width: 640px) {
+  input,
+  select {
+    font-size: 16px;
+  }
+
   .feature-copy {
     padding: 28px 22px;
   }
@@ -1111,5 +1247,33 @@
   .contact-panel,
   .help-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 460px) {
+  .home-tabs-heading {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .home-tab-control {
+    width: auto;
+    flex: 1;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  .home-tab-control button {
+    padding-inline: 7px;
+  }
+
+  .home-content-settings {
+    width: 40px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .profile-icon-options,
+  .profile-color-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

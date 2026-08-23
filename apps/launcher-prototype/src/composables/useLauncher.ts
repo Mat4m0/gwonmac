@@ -3,6 +3,7 @@ import {
   createDefaultAccounts,
   createDefaultSettings,
   type Account,
+  type AccountProfile,
   type FundingPlacement,
   type RouteName,
   type Scenario,
@@ -47,10 +48,6 @@ export const useLauncher = () => {
     const account = accounts.value.find((item) => item.id === accountId);
     if (!account) return;
 
-    if (scenario.value === "offline") {
-      showToast("Guild Wars cannot start while the game files are unavailable.");
-      return;
-    }
     if (account.status === "running") {
       showToast(`${account.name} is already open.`);
       return;
@@ -60,10 +57,6 @@ export const useLauncher = () => {
   };
 
   const launchQuickStart = () => {
-    if (scenario.value === "offline") {
-      showToast("Guild Wars cannot start while the game files are unavailable.");
-      return;
-    }
     if (!quickStartAccounts.value.length) {
       showToast("Choose at least one account for Quick start.");
       accountMenuOpen.value = true;
@@ -98,20 +91,31 @@ export const useLauncher = () => {
     showToast(`${account.name} stopped.`);
   };
 
-  const addAccount = (name: string) => {
-    const cleanName = name.trim();
+  const addAccount = (profile: AccountProfile) => {
+    const cleanName = profile.name.trim();
     if (!cleanName) return;
     const account: Account = {
       id: `account-${accounts.value.length + 1}`,
       name: cleanName,
       note: "Not played yet",
-      initial: cleanName.slice(0, 1).toUpperCase(),
+      icon: profile.icon,
+      color: profile.color,
       status: "ready",
       quickStart: false,
     };
     accounts.value.push(account);
     addAccountOpen.value = false;
     showToast(`${account.name} added.`);
+  };
+
+  const updateAccount = (accountId: string, profile: AccountProfile) => {
+    const account = accounts.value.find((item) => item.id === accountId);
+    const cleanName = profile.name.trim();
+    if (!account || !cleanName) return;
+    account.name = cleanName;
+    account.icon = profile.icon;
+    account.color = profile.color;
+    showToast(`${account.name} updated.`);
   };
 
   const reset = () => {
@@ -150,5 +154,6 @@ export const useLauncher = () => {
     stopAccount,
     toggleQuickStart,
     toast,
+    updateAccount,
   };
 };

@@ -32,9 +32,9 @@ const showSection = (nextSection: typeof section.value) => {
       <span class="eyebrow">Help</span>
       <h1>Known issues</h1>
       <nav aria-label="Issue sections">
-        <button type="button" :class="{ active: section === 'current' }" @click="showSection('current')"><Activity aria-hidden="true" />Current</button>
-        <button type="button" :class="{ active: section === 'resolved' }" @click="showSection('resolved')"><CheckCheck aria-hidden="true" />Fixed</button>
-        <button type="button" :class="{ active: section === 'help' }" @click="showSection('help')"><Info aria-hidden="true" />Get help</button>
+        <button type="button" :class="{ active: section === 'current' }" :aria-pressed="section === 'current'" @click="showSection('current')"><Activity aria-hidden="true" />Current</button>
+        <button type="button" :class="{ active: section === 'resolved' }" :aria-pressed="section === 'resolved'" @click="showSection('resolved')"><CheckCheck aria-hidden="true" />Fixed</button>
+        <button type="button" :class="{ active: section === 'help' }" :aria-pressed="section === 'help'" @click="showSection('help')"><Info aria-hidden="true" />Get help</button>
       </nav>
       <div class="help-shortcuts">
         <a href="https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml" target="_blank" rel="noreferrer"><Bug aria-hidden="true" />Report a bug<ExternalLink aria-hidden="true" /></a>

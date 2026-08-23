@@ -296,17 +296,7 @@
   color: var(--gold-bright);
 }
 
-.account-form {
-  display: grid;
-  gap: 8px;
-  margin-block-start: 22px;
-}
-
-.account-form label {
-  font-weight: 650;
-}
-
-.account-form input,
+.account-profile-form > input,
 .setting-row select {
   min-height: 42px;
   padding: 9px 11px;

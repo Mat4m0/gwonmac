@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { X } from "@lucide/vue";
 import AccountsView from "./views/AccountsView.vue";
 import HomeView from "./views/HomeView.vue";
@@ -7,13 +7,14 @@ import IssuesView from "./views/IssuesView.vue";
 import NewsView from "./views/NewsView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import AppHeader from "./components/AppHeader.vue";
+import AccountProfileModal from "./components/AccountProfileModal.vue";
 import BaseModal from "./components/BaseModal.vue";
 import FundingProgress from "./components/FundingProgress.vue";
 import LaunchDock from "./components/LaunchDock.vue";
 import PrototypeToolbar from "./components/PrototypeToolbar.vue";
 import StatusBanner from "./components/StatusBanner.vue";
 import { useLauncher } from "./composables/useLauncher";
-import type { FundingPlacement, Scenario, SettingsSection } from "./model";
+import type { AccountProfile, FundingPlacement, Scenario, SettingsSection } from "./model";
 
 const {
   accounts,
@@ -38,24 +39,29 @@ const {
   stopAccount,
   toggleQuickStart,
   toast,
+  updateAccount,
 } = useLauncher();
 
 const activeArticleId = ref("event");
-const newAccountName = ref("");
+const editingAccountId = ref<string | null>(null);
 const launcherContent = ref<HTMLElement | null>(null);
+const editingAccount = computed(() =>
+  accounts.value.find((account) => account.id === editingAccountId.value),
+);
 
 const openArticle = (articleId: string) => {
   activeArticleId.value = articleId;
   navigate("news");
 };
 
-const submitNewAccount = () => {
-  if (!newAccountName.value.trim()) return;
-  addAccount(newAccountName.value);
-  newAccountName.value = "";
+const saveAccount = (profile: AccountProfile) => {
+  if (editingAccountId.value) {
+    updateAccount(editingAccountId.value, profile);
+    editingAccountId.value = null;
+    return;
+  }
+  addAccount(profile);
 };
-
-const saveSettings = () => showToast("Settings saved.");
 const resetContentScroll = async () => {
   await nextTick();
   launcherContent.value?.scrollTo({ top: 0 });
@@ -118,13 +124,13 @@ watch(route, async () => {
           v-model:settings="settings"
           :active-section="settingsSection"
           @update:active-section="setSettingsSection($event as SettingsSection)"
-          @save="saveSettings"
         />
         <IssuesView v-else-if="route === 'issues'" :scenario="scenario" @section-change="resetContentScroll" />
         <AccountsView
           v-else
           :accounts="accounts"
           @add="addAccountOpen = true"
+          @edit="editingAccountId = $event"
           @launch="launchAccount"
           @quick-start="launchQuickStart"
           @stop="stopAccount"
@@ -167,17 +173,17 @@ watch(route, async () => {
         <div class="modal-actions"><button class="secondary-button" type="button" @click="fundingOpen = false">Close</button><button class="primary-button" type="button" @click="fundingOpen = false; showToast('This would open the project support page.')">Open support page</button></div>
       </BaseModal>
 
-      <BaseModal v-if="addAccountOpen" title="Add an account" @close="addAccountOpen = false">
-        <button class="modal-close" type="button" aria-label="Close" @click="addAccountOpen = false"><X aria-hidden="true" /></button>
-        <span class="eyebrow">Accounts</span>
-        <h1>Add an account</h1>
-        <p>Give this game window a name so you can find it in Quick start.</p>
-        <form class="account-form" @submit.prevent="submitNewAccount">
-          <label for="account-name">Account name</label>
-          <input id="account-name" v-model="newAccountName" name="account-name" autocomplete="off" placeholder="Storage account" required />
-          <div class="modal-actions"><button class="secondary-button" type="button" @click="addAccountOpen = false">Cancel</button><button class="primary-button" type="submit">Add account</button></div>
-        </form>
-      </BaseModal>
+      <AccountProfileModal
+        v-if="addAccountOpen"
+        @close="addAccountOpen = false"
+        @save="saveAccount"
+      />
+      <AccountProfileModal
+        v-if="editingAccount"
+        :account="editingAccount"
+        @close="editingAccountId = null"
+        @save="saveAccount"
+      />
     </section>
   </div>
 </template>

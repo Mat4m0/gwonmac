@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { PanelTopOpen, Play, ShieldCheck, UserPlus, Zap } from "@lucide/vue";
+import { PanelTopOpen, Pencil, Play, ShieldCheck, UserPlus, Zap } from "@lucide/vue";
+import AccountAvatar from "../components/AccountAvatar.vue";
 import type { Account } from "../model";
 
 defineProps<{ accounts: Account[] }>();
 
 const emit = defineEmits<{
   add: [];
+  edit: [accountId: string];
   launch: [accountId: string];
   quickStart: [];
   stop: [accountId: string];
@@ -37,13 +39,14 @@ const emit = defineEmits<{
       <div class="account-grid">
         <article v-for="account in accounts" :key="account.id" class="account-card" :class="{ running: account.status === 'running' }">
           <div class="account-card-main">
-            <span class="account-avatar">{{ account.initial }}</span>
+            <AccountAvatar :icon="account.icon" :color="account.color" />
             <span class="account-copy"><strong>{{ account.name }}</strong><small>{{ account.note }}</small></span>
             <span class="account-state" :class="account.status"><span class="status-dot" :class="account.status === 'running' ? 'ready' : ''"></span>{{ account.status === "running" ? "Open" : "Ready" }}</span>
           </div>
           <div class="account-card-footer">
             <label class="quick-start-choice"><input type="checkbox" :checked="account.quickStart" @change="emit('toggleQuickStart', account.id)" />Include in Quick start</label>
             <div class="account-actions">
+              <button class="secondary-button" type="button" @click="emit('edit', account.id)"><Pencil aria-hidden="true" />Customize</button>
               <button v-if="account.status === 'running'" class="secondary-button" type="button" @click="emit('stop', account.id)">Stop</button>
               <button class="primary-button" type="button" @click="emit('launch', account.id)"><PanelTopOpen v-if="account.status === 'running'" aria-hidden="true" /><Play v-else aria-hidden="true" />{{ account.status === "running" ? "Show game" : "Play" }}</button>
             </div>

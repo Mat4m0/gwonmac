@@ -39,9 +39,9 @@ watch(visibleArticles, (articles) => {
       <span class="eyebrow">Updates</span>
       <h1>News</h1>
       <nav aria-label="News filters">
-        <button type="button" :class="{ active: filter === 'all' }" @click="filter = 'all'">All news</button>
-        <button v-if="settings.showGuildWarsNews" type="button" :class="{ active: filter === 'guild-wars' }" @click="filter = 'guild-wars'">Guild Wars</button>
-        <button v-if="settings.showMacNews" type="button" :class="{ active: filter === 'macos' }" @click="filter = 'macos'">Reforged for macOS</button>
+        <button type="button" :class="{ active: filter === 'all' }" :aria-pressed="filter === 'all'" @click="filter = 'all'">All news</button>
+        <button v-if="settings.showGuildWarsNews" type="button" :class="{ active: filter === 'guild-wars' }" :aria-pressed="filter === 'guild-wars'" @click="filter = 'guild-wars'">Guild Wars</button>
+        <button v-if="settings.showMacNews" type="button" :class="{ active: filter === 'macos' }" :aria-pressed="filter === 'macos'" @click="filter = 'macos'">Reforged for macOS</button>
       </nav>
       <button class="sidebar-settings-link" type="button" @click="emit('openSettings')"><Settings aria-hidden="true" />News settings</button>
     </aside>
@@ -54,7 +54,7 @@ watch(visibleArticles, (articles) => {
 
       <div v-if="activeArticle" class="news-layout">
         <div class="news-list">
-          <button v-for="article in visibleArticles" :key="article.id" type="button" :class="{ active: activeId === article.id }" :style="{ backgroundImage: `linear-gradient(90deg, rgba(11, 10, 9, .96), rgba(11, 10, 9, .48)), url(${article.image})` }" @click="activeId = article.id">
+          <button v-for="article in visibleArticles" :key="article.id" type="button" :class="{ active: activeId === article.id }" :aria-pressed="activeId === article.id" :style="{ backgroundImage: `linear-gradient(90deg, rgba(11, 10, 9, .96), rgba(11, 10, 9, .48)), url(${article.image})` }" @click="activeId = article.id">
             <span class="eyebrow">{{ article.source }}</span><strong>{{ article.title }}</strong><small>{{ article.date }}</small>
           </button>
         </div>

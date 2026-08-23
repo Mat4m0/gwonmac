@@ -444,6 +444,16 @@
   accent-color: #c99046;
 }
 
+.quick-account-option .account-avatar-base {
+  width: 32px;
+  height: 32px;
+}
+
+.quick-account-option .account-avatar-base svg {
+  width: 16px;
+  height: 16px;
+}
+
 .account-menu button {
   width: 100%;
   min-height: 54px;
@@ -628,6 +638,64 @@
 
   .account-menu {
     width: min(320px, calc(100vw - 28px));
+  }
+}
+
+@media (max-width: 460px) {
+  .app-header {
+    grid-template-columns: 1fr;
+    padding-inline: 6px;
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .primary-nav {
+    width: 100%;
+  }
+
+  .primary-nav button {
+    min-width: 0;
+    flex: 1;
+    padding-inline: 7px;
+  }
+
+  .play-group,
+  .account-picker {
+    min-width: 0;
+  }
+
+  .account-picker {
+    flex: 1;
+  }
+
+  .account-picker-button {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 28px minmax(0, 1fr) 14px;
+    gap: 6px;
+    padding-inline: 7px;
+  }
+
+  .account-picker-button strong {
+    max-width: none;
+  }
+
+  .account-picker-button .account-mini-avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .account-picker-button > svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .play-button {
+    min-width: 0;
+    flex: 1;
+    padding-inline: 10px;
   }
 }
 

@@ -1,28 +1,19 @@
 <script setup lang="ts">
 import type { Component } from "vue";
-import { Command, Download, House, Monitor, Wrench } from "@lucide/vue";
+import { Download, House, Monitor, Wrench } from "@lucide/vue";
 import { dailyActivities } from "../data/dailies";
 import type { LauncherSettings, SettingsSection } from "../model";
 
-defineProps<{
-  activeSection: SettingsSection;
-}>();
-
+defineProps<{ activeSection: SettingsSection }>();
 const settings = defineModel<LauncherSettings>("settings", { required: true });
-
-const emit = defineEmits<{
-  "update:active-section": [section: SettingsSection];
-  save: [];
-}>();
+const emit = defineEmits<{ "update:active-section": [section: SettingsSection] }>();
 
 const sections: Array<{ id: SettingsSection; label: string; icon: Component }> = [
-  { id: "updates", label: "Updates and game files", icon: Download },
+  { id: "updates", label: "Game and updates", icon: Download },
   { id: "home", label: "Home", icon: House },
-  { id: "tools", label: "Optional Tools", icon: Wrench },
+  { id: "tools", label: "Tools", icon: Wrench },
   { id: "display", label: "Display", icon: Monitor },
-  { id: "shortcuts", label: "Shortcuts", icon: Command },
 ];
-
 </script>
 
 <template>
@@ -36,6 +27,7 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
           :key="section.id"
           type="button"
           :class="{ active: activeSection === section.id }"
+          :aria-current="activeSection === section.id ? 'page' : undefined"
           @click="emit('update:active-section', section.id)"
         >
           <component :is="section.icon" aria-hidden="true" />
@@ -46,12 +38,14 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
 
     <section class="section-content settings-screen">
       <div v-if="activeSection === 'updates'">
-        <div class="content-heading"><div><span class="eyebrow">Settings</span><h1>Updates and game files</h1></div></div>
+        <div class="content-heading">
+          <div><span class="eyebrow">Settings</span><h1>Game and updates</h1><p>Keep the launcher and game files ready.</p></div>
+        </div>
         <div class="setting-groups">
           <section class="setting-group">
-            <h2>App updates</h2>
+            <h2>Launcher updates</h2>
             <label class="setting-row">
-              <span><strong>Download app updates automatically</strong><small>Checks when you open the launcher.</small></span>
+              <span><strong>Download updates automatically</strong><small>Checks when you open the launcher.</small></span>
               <input v-model="settings.automaticUpdates" class="switch" type="checkbox" />
             </label>
             <label class="setting-row">
@@ -61,16 +55,18 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
           </section>
           <section class="setting-group">
             <h2>Game files</h2>
-            <div class="setting-row">
-              <span><strong>Complete game download</strong><small>26.4 GB downloaded · 4.8 GB left</small></span>
-              <button class="secondary-button" type="button">Download now</button>
-            </div>
+            <label class="setting-row">
+              <span><strong>Download all game files</strong><small>Keeps maps, audio, and cinematics ready before you need them.</small></span>
+              <input v-model="settings.downloadAllGameFiles" class="switch" type="checkbox" />
+            </label>
           </section>
         </div>
       </div>
 
       <div v-else-if="activeSection === 'home'">
-        <div class="content-heading"><div><span class="eyebrow">Settings</span><h1>Home</h1><p>Choose what appears in the Home side panel.</p></div></div>
+        <div class="content-heading">
+          <div><span class="eyebrow">Settings</span><h1>Home</h1><p>Choose what appears beside the featured update.</p></div>
+        </div>
         <div class="setting-groups">
           <section class="setting-group">
             <h2>Home tabs</h2>
@@ -78,9 +74,9 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
               <span><strong>Show dailies</strong><small>Adds daily Guild Wars activities beside News.</small></span>
               <input v-model="settings.showDailies" class="switch" type="checkbox" />
             </label>
-            <label class="setting-row" :class="{ disabled: !settings.showDailies }">
+            <label v-if="settings.showDailies" class="setting-row">
               <span><strong>Open Home with</strong><small>The selected tab also appears first.</small></span>
-              <select v-model="settings.defaultHomePanel" :disabled="!settings.showDailies">
+              <select v-model="settings.defaultHomePanel">
                 <option value="news">News</option>
                 <option value="dailies">Dailies</option>
               </select>
@@ -97,49 +93,90 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
               <input v-model="settings.showMacNews" class="switch" type="checkbox" />
             </label>
           </section>
-          <section class="setting-group" :class="{ disabled: !settings.showDailies }">
+          <section v-if="settings.showDailies" class="setting-group">
             <h2>Daily activities</h2>
             <div class="settings-check-grid">
               <label v-for="activity in dailyActivities" :key="activity.kind">
-                <input v-model="settings.dailyActivityVisibility[activity.kind]" type="checkbox" :disabled="!settings.showDailies" />
+                <input v-model="settings.dailyActivityVisibility[activity.kind]" type="checkbox" />
                 {{ activity.label }}
               </label>
             </div>
           </section>
-          <p v-if="!settings.showGuildWarsNews && !settings.showMacNews" class="inline-notice">The News tab will stay available and show a link back to these settings.</p>
+          <p v-if="!settings.showGuildWarsNews && !settings.showMacNews" class="inline-notice">News will show a link back to these settings.</p>
         </div>
       </div>
 
       <div v-else-if="activeSection === 'tools'">
-        <div class="content-heading"><div><span class="eyebrow">Settings</span><h1>Optional Tools</h1><p>Turn on only the features you want. Guild Wars works without them.</p></div></div>
+        <div class="content-heading">
+          <div><span class="eyebrow">Settings</span><h1>Tools</h1><p>Turn on only what you use. Guild Wars works without Tools.</p></div>
+        </div>
         <div class="setting-groups">
           <section class="setting-group">
             <h2>Tools</h2>
             <label class="setting-row">
-              <span><strong>Enable optional Tools Beta</strong><small>Adds Builds, Teams, Quick Travel, and storage shortcuts.</small></span>
+              <span><strong>Enable Tools Beta</strong><small>Adds optional in-game features.</small></span>
               <input v-model="settings.toolsEnabled" class="switch" type="checkbox" />
             </label>
+            <label v-if="settings.toolsEnabled" class="setting-row shortcut-setting-row">
+              <span><strong>Show or hide Tools</strong><small>Keyboard shortcut while Guild Wars is active.</small></span>
+              <input v-model="settings.shortcuts.toggleTools" class="shortcut-input" aria-label="Show or hide Tools shortcut" />
+            </label>
+            <label v-if="settings.toolsEnabled" class="setting-row">
+              <span><strong>Interface style</strong><small>Changes the in-game Tools interface.</small></span>
+              <select v-model="settings.interfaceStyle"><option value="guild-wars">Guild Wars</option><option value="reforged">Reforged</option><option value="modern">Modern</option></select>
+            </label>
           </section>
-          <section class="setting-group" :class="{ disabled: !settings.toolsEnabled }">
-            <h2>Choose Tools</h2>
-            <label class="setting-row"><span><strong>Quick Travel</strong><small>Search destinations and save shortcuts.</small></span><input v-model="settings.quickTravel" class="switch" type="checkbox" :disabled="!settings.toolsEnabled" /></label>
-            <label class="setting-row"><span><strong>Open Xunlai storage</strong><small>Open storage in supported PvE outposts.</small></span><input v-model="settings.xunlaiStorage" class="switch" type="checkbox" :disabled="!settings.toolsEnabled" /></label>
-            <label class="setting-row"><span><strong>Apply teams</strong><small>Adds an Apply button in supported PvE outposts. Nothing runs automatically.</small></span><input v-model="settings.applyTeams" class="switch" type="checkbox" :disabled="!settings.toolsEnabled" /></label>
+
+          <section v-if="settings.toolsEnabled" class="setting-group tool-settings-group">
+            <h2>Features</h2>
+            <div class="tool-setting">
+              <label class="setting-row">
+                <span><strong>Quick Travel</strong><small>Search destinations and save favorites.</small></span>
+                <input v-model="settings.quickTravel" class="switch" type="checkbox" />
+              </label>
+              <label v-if="settings.quickTravel" class="tool-shortcut-row">
+                <span>Keyboard shortcut</span>
+                <input v-model="settings.shortcuts.quickTravel" class="shortcut-input" aria-label="Quick Travel shortcut" />
+              </label>
+            </div>
+            <div class="tool-setting">
+              <label class="setting-row">
+                <span><strong>Xunlai storage</strong><small>Open storage in supported PvE outposts.</small></span>
+                <input v-model="settings.xunlaiStorage" class="switch" type="checkbox" />
+              </label>
+              <label v-if="settings.xunlaiStorage" class="tool-shortcut-row">
+                <span>Keyboard shortcut</span>
+                <input v-model="settings.shortcuts.xunlaiStorage" class="shortcut-input" aria-label="Xunlai storage shortcut" />
+              </label>
+            </div>
+            <div class="tool-setting">
+              <label class="setting-row">
+                <span><strong>Apply teams</strong><small>Adds an Apply button in supported PvE outposts.</small></span>
+                <input v-model="settings.applyTeams" class="switch" type="checkbox" />
+              </label>
+              <label v-if="settings.applyTeams" class="tool-shortcut-row">
+                <span>Keyboard shortcut</span>
+                <input v-model="settings.shortcuts.applyTeams" class="shortcut-input" aria-label="Apply teams shortcut" />
+              </label>
+            </div>
           </section>
         </div>
       </div>
 
-      <div v-else-if="activeSection === 'display'">
-        <div class="content-heading"><div><span class="eyebrow">Settings</span><h1>Display</h1></div></div>
-        <div class="setting-groups"><section class="setting-group"><h2>Rendering</h2><label class="setting-row"><span><strong>Render scale</strong><small>Lower this if the game runs slowly.</small></span><select v-model="settings.renderScale"><option value="2">Retina · 2×</option><option value="1.5">Balanced · 1.5×</option><option value="1">Performance · 1×</option></select></label><label class="setting-row"><span><strong>Interface style</strong><small>Changes the in-game Tools interface.</small></span><select v-model="settings.interfaceStyle"><option value="guild-wars">Guild Wars</option><option value="reforged">Reforged</option><option value="modern">Modern</option></select></label></section></div>
-      </div>
-
       <div v-else>
-        <div class="content-heading"><div><span class="eyebrow">Settings</span><h1>Keyboard shortcuts</h1></div></div>
-        <div class="setting-groups"><section class="setting-group"><h2>While Guild Wars is active</h2><div class="setting-row"><span><strong>Show or hide Tools</strong><small>Command-B</small></span><button class="secondary-button" type="button">Change</button></div><div class="setting-row"><span><strong>Quick Travel</strong><small>Command-T</small></span><button class="secondary-button" type="button">Change</button></div><div class="setting-row"><span><strong>Open Xunlai storage</strong><small>Command-Shift-C</small></span><button class="secondary-button" type="button">Change</button></div></section></div>
+        <div class="content-heading">
+          <div><span class="eyebrow">Settings</span><h1>Display</h1><p>Balance image quality and performance.</p></div>
+        </div>
+        <div class="setting-groups">
+          <section class="setting-group">
+            <h2>Rendering</h2>
+            <label class="setting-row">
+              <span><strong>Render scale</strong><small>Lower this if Guild Wars runs slowly.</small></span>
+              <select v-model="settings.renderScale"><option value="2">Retina · 2×</option><option value="1.5">Balanced · 1.5×</option><option value="1">Performance · 1×</option></select>
+            </label>
+          </section>
+        </div>
       </div>
-
-      <div class="save-row"><span>Changes apply to this prototype immediately.</span><button class="primary-button" type="button" @click="emit('save')">Save settings</button></div>
     </section>
   </div>
 </template>

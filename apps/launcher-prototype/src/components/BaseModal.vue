@@ -8,6 +8,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLElement | null>(null);
 const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+const inertSiblings: HTMLElement[] = [];
 
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.key === "Escape") {
@@ -34,12 +35,25 @@ const handleKeydown = (event: KeyboardEvent) => {
 
 onMounted(async () => {
   document.addEventListener("keydown", handleKeydown);
+  const layer = dialog.value?.parentElement;
+  const launcher = layer?.parentElement;
+  if (layer && launcher) {
+    Array.from(launcher.children).forEach((element) => {
+      if (element instanceof HTMLElement && element !== layer && !element.inert) {
+        element.inert = true;
+        inertSiblings.push(element);
+      }
+    });
+  }
   await nextTick();
   dialog.value?.querySelector<HTMLElement>("button, input, select, a[href]")?.focus();
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener("keydown", handleKeydown);
+  inertSiblings.forEach((element) => {
+    element.inert = false;
+  });
   previouslyFocused?.focus();
 });
 </script>
