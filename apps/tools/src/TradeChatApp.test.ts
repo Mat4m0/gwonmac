@@ -135,4 +135,24 @@ describe("TradeChatApp", () => {
     expect(wrapper.get(".trade-saved-drawer").text()).toContain("1 current offer");
     wrapper.unmount();
   });
+
+  it("explains when a restart is required for the saved-items bridge", async () => {
+    const demo = createDemoTradeHost();
+    const host: TradeHost = {
+      ...demo,
+      async setSaved() { throw new Error("trade_saved_restart_required"); },
+    };
+    const wrapper = mount(TradeChatApp, {
+      attachTo: document.body,
+      props: { host, mode: "standalone", visible: true, active: true },
+    });
+    await flushPromises();
+
+    await wrapper.get(".row-quick-action").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".trade-notice").text()).toBe("Restart GWonMac once to enable Saved items.");
+    expect(wrapper.get(".trade-row").attributes("data-saved-offer")).toBeUndefined();
+    wrapper.unmount();
+  });
 });

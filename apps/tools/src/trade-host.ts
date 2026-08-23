@@ -23,6 +23,7 @@ export type TradeHost = Readonly<{
 }>;
 
 export function createNativeTradeHost(api: GwNativeApi): TradeHost {
+  const savedApi = api.trade as Partial<GwNativeApi["trade"]>;
   return Object.freeze({
     subscribe: (source) => api.trade.subscribe(source),
     unsubscribe: () => api.trade.unsubscribe(),
@@ -33,8 +34,12 @@ export function createNativeTradeHost(api: GwNativeApi): TradeHost {
     openSource: (source) => api.app.openExternal(
       source === "kamadan" ? "kamadanTrade" : "preSearingTrade",
     ),
-    getSaved: () => api.trade.getSaved(),
-    setSaved: (value) => api.trade.setSaved(value),
+    getSaved: () => savedApi.getSaved
+      ? savedApi.getSaved()
+      : Promise.reject(new Error("trade_saved_restart_required")),
+    setSaved: (value) => savedApi.setSaved
+      ? savedApi.setSaved(value)
+      : Promise.reject(new Error("trade_saved_restart_required")),
   });
 }
 

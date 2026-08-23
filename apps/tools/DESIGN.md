@@ -82,6 +82,9 @@ density, or behavior.
   It is non-modal at wide widths and an in-window sheet when narrow. Its entry
   and exit share the right edge, focus returns to its trigger, and reduced
   motion replaces translation with a brief cross-fade.
+- Reveal compact save and follow actions on ledger-row hover or keyboard focus;
+  keep them visible for touch input. Keep the bottom inspector actions on one
+  compact, wrapping row so the message remains the visual focus.
 - Scroll to revealed Trade Chat messages smoothly by default and instantly
   when reduced motion is active.
 - Keep scrolling flex and grid children shrinkable.

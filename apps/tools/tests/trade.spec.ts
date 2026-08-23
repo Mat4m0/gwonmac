@@ -42,8 +42,10 @@ test("filters selling and buying without relying on chip colour", async ({ page 
 
 test("saves offers and players in an anchored drawer", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Trade Chat" });
-  await dialog.getByRole("button", { name: "☆ Save offer" }).click();
-  await dialog.getByRole("button", { name: "☆ Follow player" }).click();
+  const firstOffer = dialog.getByRole("option").first();
+  await firstOffer.hover();
+  await dialog.getByRole("button", { name: "Save offer from Tyria Cartographer" }).click();
+  await dialog.getByRole("button", { name: "Follow Tyria Cartographer" }).click();
   await dialog.getByRole("button", { name: /Saved 2/ }).click();
   const drawer = dialog.getByRole("complementary", { name: "Saved trade items" });
   await expect(drawer).toContainText("Tyria Cartographer");

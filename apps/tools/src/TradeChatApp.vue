@@ -240,9 +240,11 @@ async function save(next: TradeSavedState, success: string): Promise<void> {
   try {
     saved.value = await props.host.setSaved(next);
     showNotice(success);
-  } catch {
+  } catch (cause) {
     saved.value = previous;
-    showNotice("Saved items could not be updated.");
+    showNotice(cause instanceof Error && cause.message === "trade_saved_restart_required"
+      ? "Restart GWonMac once to enable Saved items."
+      : "Saved items could not be updated.");
   }
 }
 
@@ -350,8 +352,10 @@ onMounted(() => {
   window.addEventListener("keydown", onWindowKeydown);
   clock = setInterval(() => { now.value = Date.now(); }, 30_000);
   if (props.visible) void subscribe(source.value);
-  void props.host.getSaved().then((value) => { saved.value = value; }).catch(() => {
-    showNotice("Saved items are unavailable for this session.");
+  void props.host.getSaved().then((value) => { saved.value = value; }).catch((cause: unknown) => {
+    showNotice(cause instanceof Error && cause.message === "trade_saved_restart_required"
+      ? "Restart GWonMac once to enable Saved items."
+      : "Saved items are unavailable for this session.");
   });
 });
 onBeforeUnmount(() => {
@@ -519,28 +523,49 @@ function exactTime(timestamp: number): string {
           @scroll="onListScroll"
           @keydown="onListKeydown"
         >
-          <button
+          <div
             v-for="message in visibleMessages"
             :key="message.timestamp"
-            class="trade-row"
-            role="option"
-            :data-timestamp="message.timestamp"
-            :data-saved-offer="offerSaved(message) ? '' : undefined"
-            :data-saved-player="playerSaved(message.sender) ? '' : undefined"
-            :aria-selected="current.selection === message.timestamp"
-            @click="selectMessage(message)"
+            class="trade-row-shell"
+            role="presentation"
           >
-            <span class="intent-cell">
-              <span v-if="offerSaved(message)" class="saved-mark" aria-label="Saved offer">★</span>
-              <span v-for="tag in messageIntents(message.message)" :key="tag" class="ui-chip" :data-intent="tag">
-                {{ tag === "selling" ? "WTS" : "WTB" }}
+            <button
+              class="trade-row"
+              role="option"
+              :data-timestamp="message.timestamp"
+              :data-saved-offer="offerSaved(message) ? '' : undefined"
+              :data-saved-player="playerSaved(message.sender) ? '' : undefined"
+              :aria-selected="current.selection === message.timestamp"
+              @click="selectMessage(message)"
+            >
+              <span class="intent-cell">
+                <span v-if="offerSaved(message)" class="saved-mark" aria-label="Saved offer">★</span>
+                <span v-for="tag in messageIntents(message.message)" :key="tag" class="ui-chip" :data-intent="tag">
+                  {{ tag === "selling" ? "WTS" : "WTB" }}
+                </span>
+                <span v-if="!messageIntents(message.message).length" class="ui-chip">Other</span>
               </span>
-              <span v-if="!messageIntents(message.message).length" class="ui-chip">Other</span>
-            </span>
-            <bdi class="character-cell"><span v-if="playerSaved(message.sender)" class="followed-mark" aria-label="Followed player">★</span>{{ message.sender }}</bdi>
-            <bdi class="message-cell">{{ message.message }}</bdi>
-            <time class="age-cell" :datetime="new Date(message.timestamp).toISOString()">{{ age(message.timestamp) }}</time>
-          </button>
+              <bdi class="character-cell"><span v-if="playerSaved(message.sender)" class="followed-mark" aria-label="Followed player">★</span>{{ message.sender }}</bdi>
+              <bdi class="message-cell">{{ message.message }}</bdi>
+              <time class="age-cell" :datetime="new Date(message.timestamp).toISOString()">{{ age(message.timestamp) }}</time>
+            </button>
+            <div class="row-quick-actions">
+              <button
+                class="row-quick-action"
+                :aria-label="`${offerSaved(message) ? 'Remove saved' : 'Save'} offer from ${message.sender}`"
+                :aria-pressed="offerSaved(message)"
+                :title="offerSaved(message) ? 'Remove saved offer' : 'Save offer'"
+                @click="toggleOffer(message)"
+              >{{ offerSaved(message) ? "★" : "☆" }}</button>
+              <button
+                class="row-quick-action"
+                :aria-label="`${playerSaved(message.sender) ? 'Unfollow' : 'Follow'} ${message.sender}`"
+                :aria-pressed="playerSaved(message.sender)"
+                :title="playerSaved(message.sender) ? 'Unfollow player' : 'Follow player'"
+                @click="togglePlayer(message.sender)"
+              ><span aria-hidden="true">{{ playerSaved(message.sender) ? "♟" : "♙" }}</span></button>
+            </div>
+          </div>
           <button
             v-if="visibleLimit < filtered.length"
             class="ui-button load-more"
@@ -564,17 +589,17 @@ function exactTime(timestamp: number): string {
               class="ui-button"
               :aria-pressed="offerSaved(selected)"
               @click="toggleOffer(selected)"
-            >{{ offerSaved(selected) ? "★ Saved offer" : "☆ Save offer" }}</button>
+            >{{ offerSaved(selected) ? "★ Saved" : "☆ Save" }}</button>
             <button
               class="ui-button"
               :aria-pressed="playerSaved(selected.sender)"
               @click="togglePlayer(selected.sender)"
-            >{{ playerSaved(selected.sender) ? "★ Following player" : "☆ Follow player" }}</button>
+            >{{ playerSaved(selected.sender) ? "★ Following" : "☆ Follow" }}</button>
             <button class="ui-button" data-variant="primary" @click="copy(selected.sender, 'Character name')">
-              Copy character
+              Copy name
             </button>
-            <button class="ui-button" @click="copy(selected.message, 'Message')">Copy message</button>
-            <button class="ui-link" @click="props.host.openSource(source)">Open {{ sourceLabel }} feed</button>
+            <button class="ui-button" @click="copy(selected.message, 'Message')">Copy text</button>
+            <button class="ui-link" @click="props.host.openSource(source)">{{ sourceLabel }} feed ↗</button>
           </div>
         </template>
         <div v-else class="ui-empty">
