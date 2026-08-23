@@ -41,6 +41,7 @@ import type {
   StoredCredentials,
   TemplateExportEntry,
 } from "../shared/contracts.js";
+import type { ContentFeedState, ContentReadMarker } from "../shared/content-feed.js";
 import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
 import {
   parseTravelUserPreferencesUpdate,
@@ -155,6 +156,9 @@ export interface IpcContext {
   getAppUpdateState: () => AppUpdateState;
   checkAppUpdates: () => Promise<void>;
   restartAndInstallUpdate: (win: BrowserWindow) => Promise<void>;
+  getContentState: () => ContentFeedState;
+  refreshContent: () => Promise<ContentFeedState>;
+  markContentRead: (value: ContentReadMarker) => Promise<void>;
   getClientSession: (win: BrowserWindow) => ClientSession;
   recordClientFeatureFailure: (
     win: BrowserWindow,
@@ -464,6 +468,7 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
     value !== "discord" &&
     value !== "donate" &&
     value !== "releases" &&
+    value !== "arenanetNews" &&
     value !== "store"
   ) {
     throw new ValidationError("invalid external link kind");
@@ -472,6 +477,21 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
 });
 
 const asAccountsSetup = one(parseAccountsSetup);
+const asContentReadMarker = one((value: unknown): ContentReadMarker => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("invalid content read marker");
+  }
+  const marker = value as Record<string, unknown>;
+  if (
+    Object.keys(marker).some((key) => key !== "id" && key !== "revision")
+    || typeof marker.id !== "string"
+    || marker.id.length === 0
+    || marker.id.length > 96
+    || !Number.isSafeInteger(marker.revision)
+    || (marker.revision as number) <= 0
+  ) throw new ValidationError("invalid content read marker");
+  return { id: marker.id, revision: marker.revision as number };
+});
 const asAccountProfileCreate = one(parseAccountProfileCreate);
 const asAccountProfileUpdate = one(parseAccountProfileUpdate);
 const asProfileId = one(parseProfileId);
@@ -751,6 +771,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
       nothing,
       (win) => ctx.restartAndInstallUpdate(win),
     ),
+    contentGetState: channel(nothing, () => ctx.getContentState()),
+    contentRefresh: channel(nothing, () => ctx.refreshContent()),
+    contentMarkRead: channel(asContentReadMarker, (_win, value) =>
+      ctx.markContentRead(value)),
     accountsGet: channel(
       nothing,
       () => ctx.getAccountsState(),

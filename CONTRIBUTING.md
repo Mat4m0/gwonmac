@@ -54,6 +54,9 @@ pnpm exec playwright install chromium
 pnpm dev
 ```
 
+Use `pnpm dev:content -- --scenario arenanet-update` to launch the signed local
+news/status feed. Ordinary `pnpm dev` does not contact the production feed.
+
 Requirements are listed in the [README](README.md#build-from-source).
 
 ## Keep the pull request small

@@ -36,6 +36,7 @@ describe("settings", () => {
       // Automatic app-update checks remain a separate preference from the
       // required ArenaNet game-data download.
       autoCheckUpdates: true,
+      onlineContentEnabled: true,
       updateTrack: "stable",
       lastUpdateCheckAt: null,
       // No client build has been warned about yet, so every build warns once.
@@ -76,6 +77,7 @@ describe("settings", () => {
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
+      onlineContentEnabled: true,
       updateTrack: "stable",
       lastUpdateCheckAt: null,
       compatibilityNoticeSeenFor: null,
@@ -284,6 +286,7 @@ describe("settings", () => {
       "formatVersion",
       "gwonmacTools",
       "lastUpdateCheckAt",
+      "onlineContentEnabled",
       "renderScale",
       "shortcutOverrides",
       "showDiagnostics",
@@ -343,6 +346,7 @@ describe("settings", () => {
       // stored the setting inherits the current default; an explicit opt-out
       // remains false on the ordinary parse path.
       autoCheckUpdates: true,
+      onlineContentEnabled: true,
       updateTrack: "stable",
       lastUpdateCheckAt: null,
       compatibilityNoticeSeenFor: null,

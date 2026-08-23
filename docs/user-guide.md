@@ -248,6 +248,17 @@ risk.
 
 ArenaNet game updates and `gwonmac` application updates are independent.
 
+**Updates & Status** also shows current known issues, project news, and recent
+release notes. Important information may appear during the time the launcher
+is already preparing Guild Wars. It never adds a wait or prevents play.
+
+**Check online for news and service status** is on by default and is separate
+from application updates. Turn it off to stop requests to the GWonMac GitHub
+Pages site. Guild Wars login, game downloads, and app-update checks keep their
+own settings and behavior. When status cannot be refreshed, the app says that
+the saved information may be out of date instead of claiming everything is
+working.
+
 At startup, the app verifies the official ArenaNet client. A changed client is a
 candidate. The app keeps one verified previous generation until the candidate
 renders and connects. It restores that generation when the candidate fails

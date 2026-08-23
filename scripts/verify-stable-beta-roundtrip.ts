@@ -191,6 +191,7 @@ const candidateSettingsDomains = Array.from(
       showDiagnostics: cycle(booleanValues, index),
       dataStrategy: "full",
       autoCheckUpdates: false,
+      onlineContentEnabled: cycle(booleanValues, index + 1),
       updateTrack: cycle(UPDATE_TRACKS, index),
       lastUpdateCheckAt: cycle(updateCheckValues, index),
       compatibilityNoticeSeenFor: cycle(compatibilityValues, index),

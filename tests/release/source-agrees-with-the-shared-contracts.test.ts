@@ -76,7 +76,7 @@ test("every main→renderer event channel is named somewhere in main", async () 
     .filter((file) => file && existsSync(path.join(root, file)))
     .map(read)
     .join("\n");
-  assert.equal(EVENT_CHANNELS.length, 7);
+  assert.equal(EVENT_CHANNELS.length, 8);
   for (const key of EVENT_CHANNELS) {
     assert.match(main, new RegExp(`\\bIPC\\.${key}\\b`), `${key} is missing from main`);
   }

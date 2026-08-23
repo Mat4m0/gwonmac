@@ -564,7 +564,8 @@ jobs:
         run: |
           body="$RUNNER_TEMP/release-body.md"
           if [ "${{ steps.release-state.outputs.create }}" = "true" ]; then
-            : > "$body"
+            node --import ./scripts/ts-hook.mjs scripts/content-feed.ts \
+              release-notes content/feed-source.json "$VERSION" "$body"
           else
             gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
               --json body --jq .body > "$body"

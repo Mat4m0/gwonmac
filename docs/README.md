@@ -10,6 +10,7 @@ its rules.
 | Which process owns this work? | [Process model](process-model.md) |
 | How do Single and Multiple Accounts mode isolate player data? | [Multiple Accounts](multiple-accounts.md) |
 | How do ArenaNet client files and game data update? | [Content pipeline](content-pipeline.md) |
+| How are project news and service-status messages trusted and published? | [Project content feed](project-content-feed.md) |
 | How does the official client host and certification work? | [WASM host](wasm-host.md) |
 | How do client features remain safe across ArenaNet updates? | [ArenaNet compatibility](arenanet-compatibility.md) |
 | What can diagnostics record and export? | [Diagnostics](diagnostics.md) |

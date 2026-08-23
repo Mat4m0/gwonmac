@@ -10,6 +10,7 @@
   type RendererSettingsPatch = import('../shared/contracts.js').RendererSettingsPatch;
   type ClientSession = import('../shared/contracts.js').ClientSession;
   type UpdateAction = import('./update-action.js').UpdateAction;
+  type ContentFeedState = import('../shared/content-feed.js').ContentFeedState;
 
   const byId = (id: string) => {
     const element = document.getElementById(id);
@@ -37,6 +38,14 @@
   const autoCheckUpdates = form.elements.namedItem(
     'autoCheckUpdates',
   ) as HTMLInputElement;
+  const onlineContentEnabled = form.elements.namedItem(
+    'onlineContentEnabled',
+  ) as HTMLInputElement;
+  const contentRefresh = byId('settings-refresh-content') as HTMLButtonElement;
+  const contentBadge = byId('settings-content-badge');
+  const contentSummary = byId('settings-content-summary');
+  const contentList = byId('settings-content-list');
+  const contentUnread = byId('settings-updates-unread');
   const updateTrack = form.elements.namedItem('updateTrack') as HTMLSelectElement;
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
   const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
@@ -71,6 +80,7 @@
   let currentSession: ClientSession | null = null;
 
   let currentSettings: AppSettings | null = null;
+  let currentContent: ContentFeedState | null = null;
   let settingsLoad: Promise<AppSettings> | null = null;
   let settingsWrite: Promise<unknown> = Promise.resolve();
   type FeedbackTone = 'neutral' | 'progress' | 'success' | 'warning' | 'error';
@@ -153,6 +163,102 @@
       selectedTab?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
     if (name === 'templates') templatePane?.refresh();
+    if (name === 'updates') void markVisibleContentRead();
+  }
+
+  const contentActionLink = {
+    'discord-support': 'discord',
+    'arenanet-news': 'arenanetNews',
+    'app-releases': 'releases',
+  } as const;
+
+  function renderContent(state: ContentFeedState) {
+    currentContent = state;
+    contentUnread.hidden = state.unreadCount === 0 || activeSettingsPane === 'updates';
+    contentRefresh.disabled = state.phase === 'disabled' || state.phase === 'refreshing';
+    contentBadge.dataset.level = state.notices.some((notice) => notice.severity === 'degraded')
+      ? 'warning'
+      : 'neutral';
+    let status: readonly [string, string];
+    if (state.phase === 'disabled') {
+      status = ['Off', 'Online news and service-status checks are off.'];
+    } else if (state.phase === 'refreshing') {
+      status = ['Checking…', 'Checking for current information…'];
+    } else if (state.phase === 'current') {
+      status = state.notices.length > 0
+        ? ['Update available', 'There is current information about Guild Wars or GWonMac.']
+        : ['All clear', 'Everything we know about is working.'];
+    } else if (state.phase === 'stale') {
+      status = ['May be outdated', 'Status could not be refreshed. Saved information may be out of date.'];
+    } else {
+      status = ['Unavailable', 'Status could not be refreshed. You can keep playing.'];
+    }
+    contentBadge.textContent = status[0];
+    contentSummary.textContent = status[1];
+    contentList.replaceChildren();
+    for (const notice of state.notices) {
+      const article = document.createElement('article');
+      article.className = 'settings-content-item';
+      article.dataset.severity = notice.severity;
+      const title = document.createElement('h5');
+      title.textContent = notice.title;
+      const summary = document.createElement('p');
+      summary.textContent = notice.summary;
+      article.append(title, summary);
+      if (notice.details.length > 0) {
+        const details = document.createElement('ul');
+        for (const line of notice.details) {
+          const item = document.createElement('li');
+          item.textContent = line;
+          details.append(item);
+        }
+        article.append(details);
+      }
+      if (notice.action) {
+        const action = document.createElement('button');
+        action.type = 'button';
+        action.className = 'ui-link';
+        action.textContent = notice.action === 'discord-support'
+          ? 'Open Discord support'
+          : notice.action === 'arenanet-news'
+            ? 'Read ArenaNet news'
+            : 'View GWonMac releases';
+        action.addEventListener('click', () => {
+          void window.gwNative.app.openExternal(contentActionLink[notice.action!]);
+        });
+        article.append(action);
+      }
+      contentList.append(article);
+    }
+    for (const release of state.releases.slice(0, 5)) {
+      const article = document.createElement('article');
+      article.className = 'settings-content-item';
+      const title = document.createElement('h5');
+      title.textContent = `${release.title} · ${release.version}`;
+      const summary = document.createElement('p');
+      summary.textContent = release.summary;
+      article.append(title, summary);
+      if (release.highlights.length > 0) {
+        const highlights = document.createElement('ul');
+        for (const line of release.highlights) {
+          const item = document.createElement('li');
+          item.textContent = line;
+          highlights.append(item);
+        }
+        article.append(highlights);
+      }
+      contentList.append(article);
+    }
+  }
+
+  async function markVisibleContentRead() {
+    if (!currentContent) return;
+    await Promise.all([
+      ...currentContent.notices.map((notice) =>
+        window.gwNative.content.markRead({ id: notice.id, revision: notice.revision })),
+      ...currentContent.releases.map((release) =>
+        window.gwNative.content.markRead({ id: `release-${release.version}`, revision: 1 })),
+    ]).catch(() => undefined);
   }
 
   const railTabs = [...form.querySelectorAll<HTMLElement>('.settings-rtab')];
@@ -293,6 +399,27 @@
     currentSettings = settings;
     fillForm(settings);
     window.gwApplySettings?.(settings);
+  });
+
+  window.gwNative.content.onState((state) => {
+    renderContent(state);
+    if (activeSettingsPane === 'updates') void markVisibleContentRead();
+  });
+  void window.gwNative.content.getState().then(renderContent).catch(() => {
+    renderContent({
+      phase: 'unavailable',
+      notices: [],
+      releases: [],
+      unreadCount: 0,
+    });
+  });
+  contentRefresh.addEventListener('click', () => {
+    contentRefresh.disabled = true;
+    void window.gwNative.content.refresh().then(renderContent).catch(() => {
+      contentSummary.textContent = 'Status could not be refreshed. You can keep playing.';
+    }).finally(() => {
+      contentRefresh.disabled = currentSettings?.onlineContentEnabled !== true;
+    });
   });
 
   function requestUpdateCheck() {
@@ -471,6 +598,10 @@
         return control instanceof globalThis.HTMLInputElement
           ? { autoCheckUpdates: control.checked }
           : null;
+      case 'onlineContentEnabled':
+        return control instanceof globalThis.HTMLInputElement
+          ? { onlineContentEnabled: control.checked }
+          : null;
       case 'updateTrack':
         return control.value === 'stable' || control.value === 'beta'
           ? { updateTrack: control.value }
@@ -512,6 +643,8 @@
     travelPalette.disabled = !settings.gwonmacTools;
     targetReadout.disabled = !settings.gwonmacTools;
     autoCheckUpdates.checked = settings.autoCheckUpdates;
+    onlineContentEnabled.checked = settings.onlineContentEnabled;
+    contentRefresh.disabled = !settings.onlineContentEnabled;
     updateTrack.value = settings.updateTrack;
     void extendedMemorySetting.then((setting) => {
       setting.render(settings.extendedMemoryEnabled, currentSession?.extendedMemory ?? null);

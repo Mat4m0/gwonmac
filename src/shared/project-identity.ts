@@ -23,6 +23,8 @@ export const APP_UPDATE_FEED_URLS = {
   stable: `${UPDATE_FEED_ROOT}/stable/darwin/arm64/RELEASES.json`,
   beta: `${UPDATE_FEED_ROOT}/beta/darwin/arm64/RELEASES.json`,
 } as const;
+export const CONTENT_FEED_URL =
+  `https://${GITHUB_OWNER.toLowerCase()}.github.io/${GITHUB_REPOSITORY}/content/v1/feed.json`;
 
 /** One published release's asset, addressed by the tag it was published under. */
 export function releaseAssetUrl(tag: string, name: string): string {

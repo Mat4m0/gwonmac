@@ -52,6 +52,7 @@ test.describe("sandbox boundary", () => {
           "client",
           "clipboard",
           "commands",
+          "content",
           "credentials",
           "diagnostics",
           "dns",

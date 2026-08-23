@@ -85,6 +85,19 @@
         </div>
         <div id="loading-detail"></div>
       </div>
+      <!-- Important project news sits beside startup status instead of over the
+           artwork. The launcher gives the player one line; Settings owns the
+           complete explanation and any follow-up action. -->
+      <div id="loading-content-notice" hidden>
+        <button type="button" id="loading-content-open">
+          <span class="loading-content-dot" aria-hidden="true"></span>
+          <span id="loading-content-kicker">Status</span>
+          <span class="loading-content-separator" aria-hidden="true">·</span>
+          <span id="loading-content-title"></span>
+          <span id="loading-content-summary" class="sr-only"></span>
+          <span class="loading-content-details" aria-hidden="true">Details</span>
+        </button>
+      </div>
       <!-- Shown only after a game-client crash; loading.ts writes the label.
            Left of Retry so the primary action keeps the rightmost spot. -->
       <button type="button" id="loading-report" hidden>Report a Bug…</button>
@@ -218,7 +231,9 @@
                 data-pane="controls">Tools</button>
         <button type="button" class="settings-rtab" id="settings-tab-updates"
                 role="tab" aria-selected="false" aria-controls="settings-pane-updates"
-                data-pane="updates">Updates</button>
+                data-pane="updates">Updates &amp; Status
+          <span id="settings-updates-unread" class="settings-unread" aria-label="New updates" hidden></span>
+        </button>
         <button type="button" class="settings-rtab" id="settings-tab-accounts"
                 role="tab" aria-selected="false" aria-controls="settings-pane-accounts"
                 data-pane="accounts">Accounts</button>
@@ -503,8 +518,30 @@
 
         <section class="settings-pane" id="settings-pane-updates" role="tabpanel"
                  aria-labelledby="settings-tab-updates">
-          <h3 id="settings-updates-title" class="settings-pane-title">Updates</h3>
-          <p class="settings-pane-intro">Keep GWonMac current without interrupting an active game connection.</p>
+          <h3 id="settings-updates-title" class="settings-pane-title">Updates &amp; Status</h3>
+          <p class="settings-pane-intro">See current known issues, project news, and GWonMac updates.</p>
+          <section class="settings-content-status" aria-labelledby="settings-content-heading">
+            <div class="settings-setting-head">
+              <h4 id="settings-content-heading" class="settings-section-title">News and service status</h4>
+              <span id="settings-content-badge" class="ui-chip" data-level="neutral">Checking…</span>
+            </div>
+            <p id="settings-content-summary" class="settings-note" role="status" aria-live="polite">
+              Checking for current information…
+            </p>
+            <div id="settings-content-list" class="settings-content-list"></div>
+            <label class="settings-check ui-check">
+              <input type="checkbox" name="onlineContentEnabled">
+              <span>Check online for news and service status</span>
+            </label>
+            <p class="settings-note">This contacts the GWonMac GitHub Pages site. It does not affect Guild Wars login, game downloads, or app-update checks.</p>
+            <div class="settings-actions-row">
+              <button type="button" id="settings-refresh-content" class="ui-button">
+                Refresh status
+              </button>
+            </div>
+          </section>
+          <div class="settings-divider" aria-hidden="true"></div>
+          <h4 class="settings-section-title">GWonMac updates</h4>
           <p class="settings-status">
             Version <span id="settings-update-version">—</span>
             · <span id="settings-update-stage">Unversioned</span>

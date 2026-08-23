@@ -181,11 +181,11 @@ for (const option of [
 }
 assert.equal(fuses[FuseV1Options.EnableCookieEncryption], FuseState.DISABLE);
 const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
-// A release package is update-capable and the check defaults on; every smoke
+// A release package enables both remote services by default; every smoke
 // profile opts out so this test remains network-independent for every channel.
 await writeFile(
   path.join(userData, "settings.json"),
-  JSON.stringify({ autoCheckUpdates: false }),
+  JSON.stringify({ autoCheckUpdates: false, onlineContentEnabled: false }),
   { mode: 0o600 },
 );
 await writeFile(path.join(userData, "credentials.bin"), "retired-credentials");

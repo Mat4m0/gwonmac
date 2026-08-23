@@ -22,6 +22,7 @@
     "postinstall": "install-electron",
     "build": "node scripts/build.mjs",
     "dev": "pnpm build && electron-forge start",
+    "dev:content": "node --import ./scripts/ts-hook.mjs scripts/dev-content-feed.ts",
     "dev:signed": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts",
     "test:signed-dev": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts --test-keychain",
     "tools:dev": "pnpm --filter @gwonmac/tools-ui dev",

@@ -121,6 +121,22 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     level: "warn",
     fields: { reason: appUpdateErrorCode },
   },
+  "contentFeed.failed": {
+    scope: "app",
+    subsystem: "app",
+    level: "warn",
+    fields: {
+      reason: literal([
+        "network",
+        "timeout",
+        "oversized",
+        "invalid-signature",
+        "invalid-schema",
+        "rollback",
+        "server",
+      ] as const),
+    },
+  },
   "orphanTemps.swept": {
     scope: "app",
     subsystem: "app",

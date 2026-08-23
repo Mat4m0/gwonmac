@@ -33,6 +33,7 @@ import type {
 } from "../shared/enhancement-contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
+import { CONTENT_FEED_URL } from "../shared/project-identity.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { RendererClientSessions } from "./renderer-client-sessions.js";
@@ -69,6 +70,10 @@ import {
 } from "./lifecycle.js";
 import { sweepOrphanDirectories } from "./core/atomic-file.js";
 import { documentDirectories } from "./core/paths.js";
+import {
+  ContentFeedController,
+  PRODUCTION_CONTENT_PUBLIC_KEYS,
+} from "./content-feed.js";
 import { gamePaths } from "./paths.js";
 import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
@@ -173,6 +178,7 @@ const preferences = new PreferencesCoordinator(
   publishSettings,
 );
 let appUpdaterController: AppUpdater | null = null;
+let contentFeedController: ContentFeedController | null = null;
 const rendererClientSessions = new RendererClientSessions<BrowserWindow>();
 const SINGLE_DIAGNOSTIC_OWNER_ID = 1;
 let updateRestartInFlight: Promise<void> | null = null;
@@ -286,6 +292,7 @@ function publishSettings(settings: AppSettings): void {
     updateWindowShortcuts(win, settings.shortcutOverrides);
   }
   sendToRenderer(IPC.settingsEvent, settings);
+  contentFeedController?.setEnabled(settings.onlineContentEnabled);
 }
 
 function packagedDistributionChannel(): DistributionChannel | null {
@@ -305,6 +312,40 @@ function packagedDistributionChannel(): DistributionChannel | null {
   } catch {
     return null;
   }
+}
+
+function contentFeedConfiguration(): {
+  readonly endpoint: string;
+  readonly publicKeys: Readonly<Record<string, string>>;
+} | null {
+  if (app.isPackaged) {
+    return {
+      endpoint: CONTENT_FEED_URL,
+      publicKeys: PRODUCTION_CONTENT_PUBLIC_KEYS,
+    };
+  }
+  const endpoint = process.env.GW_TEST_CONTENT_FEED_URL;
+  const publicKey = process.env.GW_TEST_CONTENT_PUBLIC_KEY;
+  if (!endpoint || !publicKey || publicKey.length > 256) return null;
+  try {
+    const url = new URL(endpoint);
+    if (
+      url.protocol !== "http:"
+      || url.hostname !== "127.0.0.1"
+      || !url.port
+      || url.pathname !== "/content/v1/feed.json"
+      || url.username
+      || url.password
+      || url.search
+      || url.hash
+    ) return null;
+  } catch {
+    return null;
+  }
+  return {
+    endpoint,
+    publicKeys: { "content-test-01": publicKey },
+  };
 }
 
 async function ensureDirs(mode: AccountMode): Promise<void> {
@@ -557,6 +598,21 @@ if (primaryInstance) void app.whenReady().then(async () => {
         "The settings file was corrupt. Defaults were restored and a diagnostic copy was preserved.",
     });
   });
+  const contentConfiguration = contentFeedConfiguration();
+  if (contentConfiguration) {
+    contentFeedController = new ContentFeedController({
+      statePath: paths.contentState,
+      endpoint: contentConfiguration.endpoint,
+      publicKeys: contentConfiguration.publicKeys,
+      enabled: settings.onlineContentEnabled,
+      publish: (state) => sendToRenderer(IPC.contentState, state),
+      recordFailure: (reason) => logEvent({
+        k: "contentFeed.failed",
+        reason,
+      }),
+    });
+    await contentFeedController.start();
+  }
   const enhancementSelection = enhancementSelectionFor(settings);
   const enhancementProgram = DEVELOPER_ENHANCEMENT_PROGRAM;
   const enhancementCapabilities = requestedEnhancementCapabilities(
@@ -720,6 +776,19 @@ if (primaryInstance) void app.whenReady().then(async () => {
       updateRestartInFlight = operation;
       return operation;
     },
+    getContentState: () => contentFeedController?.getState() ?? ({
+      phase: "unavailable",
+      notices: [],
+      releases: [],
+      unreadCount: 0,
+    }),
+    refreshContent: () => contentFeedController?.refresh() ?? Promise.resolve({
+      phase: "unavailable",
+      notices: [],
+      releases: [],
+      unreadCount: 0,
+    }),
+    markContentRead: (value) => contentFeedController?.markRead(value) ?? Promise.resolve(),
     getClientSession: (win) => rendererClientSessions.session(
       {
         owner: win,
@@ -756,6 +825,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
 
   onAppQuit(async () => {
+    contentFeedController?.stop();
     if (activeAccountMode === "single") {
       const win = windowRegistry.singleGameWindow();
       if (win && !win.isDestroyed()) {

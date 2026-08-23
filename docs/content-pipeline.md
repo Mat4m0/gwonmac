@@ -17,10 +17,15 @@ release operations.
 | --- | --- | --- | --- |
 | Guild Wars client and game data | ArenaNet patch service | `ClientRuntime` and `PatchClient` | Automatic background download |
 | `gwonmac` application | Published GitHub releases | `AppUpdater` | Stable or Beta, automatic or manual checks |
+| Project news and service status | Signed GitHub Pages document | `ContentFeedController` | Presentation only; never controls Play or compatibility |
 
 These systems do not authorize each other. An ArenaNet update cannot install a
 new `gwonmac` release. A `gwonmac` release cannot make an unknown ArenaNet
 client build certified.
+
+The status row is documented separately in
+[Project news and service status](project-content-feed.md). It can explain the
+other two systems but cannot authorize either one.
 
 ## ArenaNet data flow
 

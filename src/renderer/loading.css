@@ -125,6 +125,40 @@
    is visible so the dock never shows two states at once. */
 #loading-boot { flex:1; min-width:0; display:flex; align-items:center;
                 justify-content:space-between; gap:20px; }
+
+/* Project status is part of the dock's existing information hierarchy. It is
+   deliberately one quiet line: no card over the art, no duplicate summary,
+   and no decision to make before the game can start. */
+#loading-content-notice { min-width:0; margin-inline-start:auto; }
+#loading-content-notice[hidden] { display:none; }
+#loading-content-open {
+  max-width:min(58vw,680px);
+  min-height:38px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:7px 10px;
+  border:0;
+  border-radius:7px;
+  color:#d8caaa;
+  background:transparent;
+  font:13px/1.35 var(--ui-font);
+  text-align:start;
+  cursor:default;
+  transition:background-color .15s ease, color .15s ease, transform .1s ease-out;
+}
+#loading-content-open:hover { color:#fff0d5; background:#ffb48812; }
+#loading-content-open:active { transform:scale(.98); transition:none; }
+#loading-content-open:focus-visible { outline:2px solid #ff9d66; outline-offset:2px; }
+.loading-content-dot { width:7px; height:7px; flex:none; border-radius:50%;
+                       background:#e89563; box-shadow:0 0 0 3px #e8956321; }
+#loading-content-notice[data-severity="degraded"] .loading-content-dot {
+  background:#ff8f6b; box-shadow:0 0 0 3px #ff8f6b24; }
+#loading-content-kicker { flex:none; color:#e89563; font-size:12px; }
+.loading-content-separator { flex:none; color:#e8dcc052; }
+#loading-content-title { min-width:0; overflow:hidden; text-overflow:ellipsis;
+                         white-space:nowrap; color:#eee3c9; }
+.loading-content-details { flex:none; color:#ffb488; }
 #loading-retry,
 #loading-report { min-height:38px; padding:8px 22px; border:1px solid #7a4b38;
                  border-radius:6px; color:#eee3c9; background:#201a14e8;
@@ -272,7 +306,10 @@
   .client-compat-actions { justify-content:center; flex-wrap:wrap; }
   /* space-between would pin the text to the left edge while Retry is hidden;
      centered, the boot line and an eventual Retry read as one group. */
-  #loading-boot { width:100%; text-align:center; justify-content:center; }
+  #loading-boot { width:100%; flex-wrap:wrap; text-align:center;
+                  justify-content:center; gap:6px 14px; }
+  #loading-content-notice { width:100%; margin:0; }
+  #loading-content-open { max-width:100%; margin:auto; }
   #loading-footer { flex-direction:column; align-items:center; gap:4px; }
   #loading-legal { text-align:center; max-width:100%; }
   #loading-logo { width:min(520px,82vw); }

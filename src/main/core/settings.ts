@@ -164,6 +164,12 @@ export function parseSettings(raw: unknown): AppSettings {
   if ("autoCheckUpdates" in src) {
     out.autoCheckUpdates = asBool(src.autoCheckUpdates, "autoCheckUpdates");
   }
+  if ("onlineContentEnabled" in src) {
+    out.onlineContentEnabled = asBool(
+      src.onlineContentEnabled,
+      "onlineContentEnabled",
+    );
+  }
   if ("updateTrack" in src) {
     if (!UPDATE_TRACK_VALUES.has(src.updateTrack as AppSettings["updateTrack"])) {
       throw new AppError("bad_settings", "settings.updateTrack has unknown value");

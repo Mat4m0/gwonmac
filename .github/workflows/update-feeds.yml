@@ -11,6 +11,12 @@ on:
         description: Allow the initial deployment when both public feeds are absent
         type: boolean
         default: false
+  push:
+    branches: [main]
+    paths:
+      - content/feed-source.json
+      - scripts/content-feed.ts
+      - src/shared/content-feed.ts
 
 permissions:
   contents: read
@@ -23,7 +29,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment:
+      name: content-signing
     outputs:
+      content-sha256: ${{ steps.content.outputs.content-sha256 }}
       beta-sha256: ${{ steps.feeds.outputs.beta-sha256 }}
       stable-sha256: ${{ steps.feeds.outputs.stable-sha256 }}
     steps:
@@ -60,6 +69,31 @@ jobs:
             echo "output=$output"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Sign project news and status
+        id: content
+        env:
+          CONTENT_FEED_KEY_ID: content-2026-01
+          CONTENT_FEED_PRIVATE_KEY: ${{ secrets.CONTENT_FEED_PRIVATE_KEY }}
+        run: |
+          output="${{ steps.feeds.outputs.output }}"
+          published="$RUNNER_TEMP/published-content-feed.json"
+          status="$(curl --silent --show-error --location \
+            --output "$published" --write-out '%{http_code}' \
+            "https://mat4m0.github.io/gwonmac/content/v1/feed.json?publication=$GITHUB_RUN_ID")"
+          if [ "$status" = "200" ]; then
+            node --import ./scripts/ts-hook.mjs scripts/content-feed.ts \
+              assert-forward content/feed-source.json "$published" \
+              "MCowBQYDK2VwAyEAj0KdcosR6qYd4AxBBOQRCny6yVDrr3TyU6d/sIoGx0U="
+          elif [ "$status" != "404" ]; then
+            echo "published content feed returned HTTP $status" >&2
+            exit 1
+          fi
+          node --import ./scripts/ts-hook.mjs scripts/content-feed.ts sign \
+            content/feed-source.json "$output/content/v1/feed.json"
+          file="$output/content/v1/feed.json"
+          echo "content-sha256=$(sha256sum "$file" | awk '{print $1}')" \
+            >> "$GITHUB_OUTPUT"
+
       - name: Upload the complete channel site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
@@ -85,6 +119,7 @@ jobs:
           BASE_URL: ${{ steps.deployment.outputs.page_url }}
           BETA_SHA256: ${{ needs.build.outputs.beta-sha256 }}
           STABLE_SHA256: ${{ needs.build.outputs.stable-sha256 }}
+          CONTENT_SHA256: ${{ needs.build.outputs.content-sha256 }}
         run: |
           for track in stable beta; do
             url="${BASE_URL%/}/updates/$track/darwin/arm64/RELEASES.json?run=$GITHUB_RUN_ID"
@@ -97,3 +132,11 @@ jobs:
             fi
             test "$actual" = "$expected"
           done
+          content_url="${BASE_URL%/}/content/v1/feed.json?run=$GITHUB_RUN_ID"
+          content_file="$RUNNER_TEMP/content-feed.json"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --output "$content_file" "$content_url"
+          test "$(sha256sum "$content_file" | awk '{print $1}')" = "$CONTENT_SHA256"
+          node --import ./scripts/ts-hook.mjs scripts/content-feed.ts verify \
+            "$content_file" \
+            "MCowBQYDK2VwAyEAj0KdcosR6qYd4AxBBOQRCny6yVDrr3TyU6d/sIoGx0U="

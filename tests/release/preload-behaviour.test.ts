@@ -340,6 +340,13 @@ const INVOCATIONS: Invocation[] = [
     args: [],
     channel: IPC.appUpdatesRestartAndInstall,
   },
+  { path: "content.getState", args: [], channel: IPC.contentGetState },
+  { path: "content.refresh", args: [], channel: IPC.contentRefresh },
+  {
+    path: "content.markRead",
+    args: [{ id: "known-memory-pressure", revision: 2 }],
+    channel: IPC.contentMarkRead,
+  },
 ];
 
 /** The main→renderer streams, which subscribe instead of invoking. */
@@ -382,6 +389,11 @@ const SUBSCRIPTIONS: Subscription[] = [
     path: "appUpdates.onState",
     channel: IPC.appUpdatesState,
     subscribe: (api, listener) => api.appUpdates.onState(listener),
+  },
+  {
+    path: "content.onState",
+    channel: IPC.contentState,
+    subscribe: (api, listener) => api.content.onState(listener),
   },
 ];
 

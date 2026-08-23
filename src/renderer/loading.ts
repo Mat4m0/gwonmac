@@ -205,6 +205,34 @@ window.gwLoading = (function (): LoadingController {
   }
   void renderFooterStatus();
 
+  const contentNotice = el('loading-content-notice');
+  const renderContentNotice = (
+    state: import('../shared/content-feed.js').ContentFeedState,
+  ) => {
+    const notice = state.notices.find((entry) => entry.severity === 'degraded')
+      ?? state.notices.find((entry) => entry.severity === 'important');
+    if (!notice) {
+      contentNotice.hidden = true;
+      return;
+    }
+    el('loading-content-kicker').textContent = notice.kind === 'arenanet-update'
+      ? 'Guild Wars update'
+      : notice.kind === 'known-issue'
+        ? 'Known issue'
+        : 'Status update';
+    el('loading-content-title').textContent = notice.title;
+    el('loading-content-summary').textContent = notice.summary;
+    contentNotice.dataset.severity = notice.severity;
+    contentNotice.hidden = false;
+  };
+  window.gwNative.content.onState(renderContentNotice);
+  void window.gwNative.content.getState().then(renderContentNotice).catch(() => {});
+  el('loading-content-open').addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('gw:settings', {
+      detail: { pane: 'updates' },
+    }));
+  });
+
   // A failed boot gets a one-click retry, same as View → Reload Game.
   retry?.addEventListener('click', async () => {
     const requestedRecovery = recovery;

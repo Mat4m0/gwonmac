@@ -31,6 +31,7 @@ import type { BuildLibrary } from "./builds/library.js";
 import type { ProfileId } from "./multiple-accounts.js";
 import type { TemplateExportEntry } from "./template-contracts.js";
 import type { MainInputTraceEntry } from "./input-trace.js";
+import type { ContentFeedState } from "./content-feed.js";
 import type {
   AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
@@ -371,6 +372,8 @@ export interface AppSettings {
    * opting out is one checkbox, honored forever.
    */
   autoCheckUpdates: boolean;
+  /** Fetch the signed, presentation-only project news and service-status feed. */
+  onlineContentEnabled: boolean;
   /**
    * Which release stages the one release updater may discover. This is a
    * preference inside the `release` distribution identity, not a package or
@@ -430,6 +433,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showDiagnostics: false,
   dataStrategy: "full",
   autoCheckUpdates: true,
+  onlineContentEnabled: true,
   updateTrack: DEFAULT_UPDATE_TRACK,
   lastUpdateCheckAt: null,
   compatibilityNoticeSeenFor: null,
@@ -470,6 +474,7 @@ export type ExternalLinkKind =
   | "discord"
   | "donate"
   | "releases"
+  | "arenanetNews"
   | "store";
 
 /**
@@ -487,6 +492,7 @@ export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
   discord: "https://discord.gg/Z9ft52RBD3",
   donate: "https://ko-fi.com/mat4m0",
   releases: `https://github.com/${RELEASE_REPO}/releases`,
+  arenanetNews: "https://www.guildwars.com/en/news/",
   // Official ArenaNet store, for players who do not own the game yet.
   store: "https://store.guildwars.com/en-us",
 };
@@ -839,6 +845,10 @@ export const IPC = {
   appUpdatesCheck: "gw:appUpdates:check",
   appUpdatesRestartAndInstall: "gw:appUpdates:restartAndInstall",
   appUpdatesState: "gw:appUpdates:state",
+  contentGetState: "gw:content:getState",
+  contentRefresh: "gw:content:refresh",
+  contentMarkRead: "gw:content:markRead",
+  contentState: "gw:content:state",
   accountsGet: "gw:accounts:get",
   accountsSetup: "gw:accounts:setup",
   accountsOpen: "gw:accounts:open",
@@ -872,6 +882,7 @@ export const EVENT_CHANNELS = [
   "rendererCommandDone",
   "inputTraceEvent",
   "appUpdatesState",
+  "contentState",
 ] as const;
 
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
@@ -1056,6 +1067,12 @@ export interface GwNativeApi {
     check(): Promise<void>;
     restartAndInstall(): Promise<void>;
     onState(callback: (state: AppUpdateState) => void): () => void;
+  };
+  content: {
+    getState(): Promise<ContentFeedState>;
+    refresh(): Promise<ContentFeedState>;
+    markRead(value: { readonly id: string; readonly revision: number }): Promise<void>;
+    onState(callback: (state: ContentFeedState) => void): () => void;
   };
   accounts: {
     get(): Promise<AccountsState>;

@@ -253,6 +253,12 @@ const api = {
       ipcRenderer.invoke(IPC.appUpdatesRestartAndInstall),
     onState: (callback) => listen(IPC.appUpdatesState, callback),
   },
+  content: {
+    getState: () => ipcRenderer.invoke(IPC.contentGetState),
+    refresh: () => ipcRenderer.invoke(IPC.contentRefresh),
+    markRead: (value) => ipcRenderer.invoke(IPC.contentMarkRead, value),
+    onState: (callback) => listen(IPC.contentState, callback),
+  },
   accounts: {
     get: () => ipcRenderer.invoke(IPC.accountsGet),
     setup: (value) => ipcRenderer.invoke(IPC.accountsSetup, value),

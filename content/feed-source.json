@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "sequence": 1,
+  "publishedAt": "2026-08-23T00:00:00Z",
+  "notices": [],
+  "releases": [
+    {
+      "version": "2026.8.9",
+      "track": "stable",
+      "publishedAt": "2026-08-22T00:00:00Z",
+      "title": "The complete game, ready up front",
+      "summary": "GWonMac now downloads the complete Guild Wars data set automatically, so later areas and missions do not stop to fetch missing files.",
+      "highlights": [
+        "Downloads all required game data during setup",
+        "Keeps startup progress clear and recoverable"
+      ]
+    }
+  ]
+}
