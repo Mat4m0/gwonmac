@@ -9,6 +9,7 @@ import {
   type SkillKeyBinding,
   type SkillKeyBindings,
   type SkillKeyModifiers,
+  skillKeyPresentation,
   withSkillKeyBinding,
 } from "../shared/skill-key-bindings.js";
 import { createSkillKeyBindingView } from "./skill-key-binding-view.js";
@@ -39,7 +40,8 @@ export function bindSkillKeySettings(options: Readonly<{
   const views = rows.map((row) => {
     const preview = row.querySelector<HTMLElement>(".settings-skill-key-preview");
     if (!preview) throw new Error("missing skill-key preview");
-    return createSkillKeyBindingView(preview);
+    preview.setAttribute("role", "img");
+    return { preview, binding: createSkillKeyBindingView(preview) };
   });
 
   const rowParts = (slot: number) => {
@@ -131,7 +133,14 @@ export function bindSkillKeySettings(options: Readonly<{
     rows.forEach((_row, slot) => {
       const binding = settings.skillKeyBindings[slot] ?? null;
       const { change, clear, message } = rowParts(slot);
-      views[slot]!.update(binding);
+      const view = views[slot]!;
+      view.binding.update(binding);
+      view.preview.setAttribute(
+        "aria-label",
+        binding === null
+          ? `Skill ${slot + 1}: native key ${slot + 1}`
+          : `Skill ${slot + 1}: ${skillKeyPresentation(binding).accessibleLabel}`,
+      );
       change.textContent = recording === slot ? "Cancel" : "Change";
       clear.disabled = binding === null || recording !== null;
       message.hidden = recording !== slot;
