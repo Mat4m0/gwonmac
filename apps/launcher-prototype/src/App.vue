@@ -132,7 +132,6 @@ watch(route, async () => {
           @add="addAccountOpen = true"
           @edit="editingAccountId = $event"
           @launch="launchAccount"
-          @quick-start="launchQuickStart"
           @stop="stopAccount"
           @toggle-quick-start="toggleQuickStart"
         />

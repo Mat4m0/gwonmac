@@ -26,7 +26,20 @@ describe("Home content", () => {
     const wrapper = mountHome();
     await wrapper.get("button[aria-pressed='false']").trigger("click");
     expect(wrapper.text()).toContain("Gate of Pain");
-    expect(wrapper.text()).toContain("Changes in");
+    expect(wrapper.text()).toContain("Next reset");
+  });
+
+  it("shows two dated daily sections before expanding to the full week", async () => {
+    const wrapper = mountHome("dailies");
+
+    expect(wrapper.findAll(".daily-day")).toHaveLength(2);
+    expect(wrapper.text()).toContain("Today");
+    expect(wrapper.text()).toContain("Tomorrow");
+
+    await wrapper.get(".show-week-button").trigger("click");
+
+    expect(wrapper.findAll(".daily-day")).toHaveLength(7);
+    expect(wrapper.find(".show-week-button").exists()).toBe(false);
   });
 
   it("puts Dailies first and opens it when selected in settings", () => {

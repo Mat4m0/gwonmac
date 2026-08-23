@@ -157,31 +157,33 @@
 }
 
 .summary-list {
-  flex: 1;
   display: grid;
-  grid-auto-rows: minmax(68px, 1fr);
+  align-content: start;
+  gap: 10px;
   margin-block-start: 0;
 }
 
 .summary-list > button {
   width: 100%;
-  min-height: 92px;
+  min-height: 84px;
   display: grid;
   grid-template-columns: 78px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-  padding: 16px 3px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 15px;
   border: 0;
-  border-block-start: 1px solid var(--line);
+  border-radius: 11px;
   color: inherit;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
   text-align: start;
-  transition-property: background-color;
+  transition-property: background-color, box-shadow;
   transition-duration: 140ms;
 }
 
 .summary-list > button:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow: inset 0 0 0 1px rgba(221, 178, 96, 0.12);
 }
 
 .summary-list > button > span:nth-child(2) {
@@ -236,8 +238,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  margin-block-end: 10px;
-  padding: 10px 12px;
+  margin-block-end: 16px;
+  padding: 11px 14px;
   border-radius: 10px;
   background: rgba(221, 178, 96, 0.075);
 }
@@ -254,14 +256,53 @@
   font-variant-numeric: tabular-nums;
 }
 
-.daily-grid {
+.daily-scroll {
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(58px, 1fr);
-  gap: 8px;
+  align-content: start;
+  gap: 22px;
   overflow-y: auto;
-  padding-inline-end: 3px;
+  overscroll-behavior: contain;
+  padding-inline-end: 5px;
+}
+
+.daily-day {
+  display: grid;
+  gap: 9px;
+}
+
+.daily-date-heading {
+  min-height: 34px;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-inline: 3px;
+}
+
+.daily-date-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.daily-date-heading h2 {
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.daily-date-heading time,
+.daily-date-heading > span {
+  color: var(--muted);
+  font-size: 0.69rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.daily-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .daily-grid > a {
@@ -327,13 +368,44 @@
   height: 16px;
 }
 
+.show-week-button {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.035);
+  font-weight: 650;
+}
+
+.show-week-button:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.show-week-button svg {
+  width: 16px;
+  height: 16px;
+  color: var(--gold);
+}
+
+.show-week-button svg:last-child {
+  width: 14px;
+  height: 14px;
+  margin-inline-start: 2px;
+  color: var(--muted);
+}
+
 .daily-schedule-link {
   min-height: 38px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 7px;
-  margin-block-start: 7px;
+  margin-block-start: 10px;
   color: var(--muted);
   font-size: 0.76rem;
   text-decoration: none;
@@ -766,8 +838,8 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
-  margin-block-end: 20px;
-  padding: 16px;
+  margin-block-end: 18px;
+  padding: 17px 18px;
   border-radius: 13px;
   background: rgba(221, 178, 96, 0.08);
   box-shadow: inset 0 0 0 1px rgba(221, 178, 96, 0.18);
@@ -796,14 +868,14 @@
 
 .account-grid {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .account-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
-  padding: 12px;
+  padding: 16px;
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.04);
   box-shadow: inset 0 0 0 1px transparent;
@@ -1006,16 +1078,12 @@
   accent-color: #c99046;
 }
 
-.account-heading > .primary-button {
-  flex: none;
-}
-
 .account-explainer {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 13px;
-  margin-block-start: 20px;
-  padding: 15px;
+  margin-block-start: 18px;
+  padding: 16px 18px;
   border-radius: 12px;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.025);

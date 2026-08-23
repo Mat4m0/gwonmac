@@ -3,7 +3,9 @@ import type { Component } from "vue";
 import { computed, ref, watch } from "vue";
 import {
   ArrowRight,
+  CalendarDays,
   Castle,
+  ChevronDown,
   Clock3,
   Crosshair,
   ExternalLink,
@@ -16,7 +18,7 @@ import {
   Swords,
 } from "@lucide/vue";
 import FundingProgress from "../components/FundingProgress.vue";
-import { dailyActivities } from "../data/dailies";
+import { dailySchedule } from "../data/dailies";
 import { newsArticles } from "../data/news";
 import type {
   DailyActivityKind,
@@ -55,6 +57,7 @@ const dailyIcons: Record<DailyActivityKind, Component> = {
 const activePanel = ref<HomePanel>(
   props.settings.showDailies ? props.settings.defaultHomePanel : "news",
 );
+const showFullWeek = ref(false);
 
 const homeTabs = computed<HomePanel[]>(() => {
   if (!props.settings.showDailies) return ["news"];
@@ -63,9 +66,45 @@ const homeTabs = computed<HomePanel[]>(() => {
     : ["news", "dailies"];
 });
 
-const visibleDailies = computed(() =>
-  dailyActivities.filter((activity) => props.settings.dailyActivityVisibility[activity.kind]),
+const visibleSchedule = computed(() =>
+  dailySchedule.slice(0, showFullWeek.value ? 7 : 2).map((day) => ({
+    ...day,
+    activities: day.activities.filter(
+      (activity) => props.settings.dailyActivityVisibility[activity.kind],
+    ),
+  })),
 );
+
+const hasVisibleDailies = computed(() =>
+  Object.values(props.settings.dailyActivityVisibility).some(Boolean),
+);
+
+const dayDetails = (dayOffset: number) => {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + dayOffset);
+
+  const iso = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+
+  return {
+    label:
+      dayOffset === 0
+        ? "Today"
+        : dayOffset === 1
+          ? "Tomorrow"
+          : new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(date),
+    date: new Intl.DateTimeFormat(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    }).format(date),
+    iso,
+  };
+};
 
 const dailyReset = computed(() => {
   const now = new Date();
@@ -188,28 +227,49 @@ watch(
         aria-label="Dailies"
       >
         <div class="daily-reset">
-          <div><span class="eyebrow">Today</span><strong>Changes in {{ dailyReset.remaining }}</strong></div>
+          <div><span class="eyebrow">Next reset</span><strong>In {{ dailyReset.remaining }}</strong></div>
           <span>{{ dailyReset.localTime }} local time</span>
         </div>
-        <div v-if="visibleDailies.length" class="daily-grid">
-          <a
-            v-for="activity in visibleDailies"
-            :key="activity.kind"
-            :href="`https://wiki.guildwars.com/wiki/${activity.wikiPath}`"
-            target="_blank"
-            rel="noreferrer"
+        <div v-if="hasVisibleDailies" class="daily-scroll">
+          <section
+            v-for="day in visibleSchedule"
+            :key="day.dayOffset"
+            class="daily-day"
+            :aria-labelledby="`daily-date-${day.dayOffset}`"
           >
-            <span class="daily-icon"><component :is="dailyIcons[activity.kind]" aria-hidden="true" /></span>
-            <span><small>{{ activity.label }}</small><strong>{{ activity.name }}</strong></span>
-            <ExternalLink aria-hidden="true" />
-          </a>
+            <header class="daily-date-heading">
+              <div>
+                <h2 :id="`daily-date-${day.dayOffset}`">{{ dayDetails(day.dayOffset).label }}</h2>
+                <time :datetime="dayDetails(day.dayOffset).iso">{{ dayDetails(day.dayOffset).date }}</time>
+              </div>
+              <span>{{ day.activities.length }} {{ day.activities.length === 1 ? "activity" : "activities" }}</span>
+            </header>
+            <div class="daily-grid">
+              <a
+                v-for="activity in day.activities"
+                :key="activity.kind"
+                :href="`https://wiki.guildwars.com/wiki/${activity.wikiPath}`"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span class="daily-icon"><component :is="dailyIcons[activity.kind]" aria-hidden="true" /></span>
+                <span><small>{{ activity.label }}</small><strong>{{ activity.name }}</strong></span>
+                <ExternalLink aria-hidden="true" />
+              </a>
+            </div>
+          </section>
+          <button v-if="!showFullWeek" class="show-week-button" type="button" @click="showFullWeek = true">
+            <CalendarDays aria-hidden="true" />
+            Show full week
+            <ChevronDown aria-hidden="true" />
+          </button>
         </div>
         <div v-else class="home-panel-empty">
           <Clock3 aria-hidden="true" />
           <strong>No dailies selected</strong>
           <button type="button" @click="emit('openHomeSettings')">Choose activities</button>
         </div>
-        <a class="daily-schedule-link" href="https://wiki.guildwars.com/wiki/Daily_activities" target="_blank" rel="noreferrer">
+        <a v-if="hasVisibleDailies" class="daily-schedule-link" href="https://wiki.guildwars.com/wiki/Daily_activities" target="_blank" rel="noreferrer">
           View the full schedule
           <ExternalLink aria-hidden="true" />
         </a>

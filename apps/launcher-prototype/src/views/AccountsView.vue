@@ -9,7 +9,6 @@ const emit = defineEmits<{
   add: [];
   edit: [accountId: string];
   launch: [accountId: string];
-  quickStart: [];
   stop: [accountId: string];
   toggleQuickStart: [accountId: string];
 }>();
@@ -26,13 +25,12 @@ const emit = defineEmits<{
 
     <section class="section-content accounts-screen">
       <div class="content-heading account-heading">
-        <div><span class="eyebrow">Accounts</span><h1>Game windows</h1><p>Start one account or open your usual set with Quick start.</p></div>
-        <button class="primary-button" type="button" @click="emit('quickStart')"><Zap aria-hidden="true" />Quick start</button>
+        <div><span class="eyebrow">Accounts</span><h1>Game windows</h1><p>Start one account here, or choose which accounts open together from the launch bar.</p></div>
       </div>
 
       <section class="quick-start-panel">
         <div class="setting-icon"><Zap aria-hidden="true" /></div>
-        <div><strong>Quick start session</strong><p>Select the accounts that should open together. You can change this at any time.</p></div>
+        <div><strong>Quick start session</strong><p>Choose the accounts included when you use Quick start in the launch bar.</p></div>
         <span>{{ accounts.filter((account) => account.quickStart).length }} selected</span>
       </section>
 
