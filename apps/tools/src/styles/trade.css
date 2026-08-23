@@ -214,13 +214,28 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.character-cell { color: var(--ui-text-bright); }
+.character-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  color: var(--ui-text-bright);
+}
+.character-cell bdi { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .message-cell { color: var(--ui-text-muted); }
 .age-cell {
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+.group-count {
+  padding: 2px 6px;
+  border: 1px solid var(--ui-line-soft);
+  border-radius: 999px;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-xs);
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .load-more { margin: var(--ui-space-3) auto; }
@@ -281,6 +296,8 @@
 }
 .inspector-meta bdi { color: var(--ui-accent); font-size: var(--ui-font-size-lg); }
 .inspector-meta time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inspector-meta > span { display: grid; justify-items: end; gap: 2px; }
+.inspector-meta small { color: var(--ui-text-faint); font-size: var(--ui-font-size-xs); }
 
 .inspector-actions {
   display: flex;

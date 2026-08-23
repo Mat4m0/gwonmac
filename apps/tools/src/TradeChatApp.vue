@@ -77,10 +77,24 @@ const statusLabel = computed(() => ({
 const baseMessages = computed(() => submittedQuery.value
   ? current.value.search
   : current.value.live);
-const filtered = computed(() => baseMessages.value.filter((message) => {
+const intentMatches = computed(() => baseMessages.value.filter((message) => {
   const tags = messageIntents(message.message);
   return intent.value === "all" || tags.includes(intent.value);
 }));
+const displayedRows = computed(() => {
+  if (!submittedQuery.value) {
+    return intentMatches.value.map((message) => ({ message, count: 1 }));
+  }
+  const groups = new Map<string, { message: TradeMessage; count: number }>();
+  for (const message of sortNewest([...intentMatches.value])) {
+    const key = message.sender.toLocaleLowerCase();
+    const existing = groups.get(key);
+    if (existing) existing.count += 1;
+    else groups.set(key, { message, count: 1 });
+  }
+  return [...groups.values()];
+});
+const filtered = computed(() => displayedRows.value.map((row) => row.message));
 const visibleMessages = computed(() => filtered.value.slice(0, visibleLimit.value));
 const selected = computed(() => {
   const timestamp = current.value.selection;
@@ -102,6 +116,10 @@ const emptyHeading = computed(() => {
   if (current.value.status === "unavailable") return "Trade feed unavailable";
   return "Waiting for trade messages";
 });
+
+function groupedPostCount(message: TradeMessage): number {
+  return displayedRows.value.find((row) => row.message.timestamp === message.timestamp)?.count ?? 1;
+}
 
 let requestRevision = 0;
 let stopEvents: (() => void) | null = null;
@@ -505,7 +523,10 @@ function exactTime(timestamp: number): string {
         <span>
           {{ submittedQuery ? `Results for “${submittedQuery}”` : "Latest messages" }}
         </span>
-        <span>{{ filtered.length }} {{ filtered.length === 1 ? "offer" : "offers" }}</span>
+        <span>
+          {{ filtered.length }}
+          {{ submittedQuery ? (filtered.length === 1 ? "trader" : "traders") : (filtered.length === 1 ? "offer" : "offers") }}
+        </span>
       </div>
 
       <div class="trade-ledger ui-well">
@@ -562,7 +583,15 @@ function exactTime(timestamp: number): string {
                 </span>
                 <span v-if="!messageIntents(message.message).length" class="ui-chip">Other</span>
               </span>
-              <bdi class="character-cell"><span v-if="playerSaved(message.sender)" class="followed-mark" aria-label="Followed player">★</span>{{ message.sender }}</bdi>
+              <span class="character-cell">
+                <span v-if="playerSaved(message.sender)" class="followed-mark" aria-label="Followed player">★</span>
+                <bdi>{{ message.sender }}</bdi>
+                <span
+                  v-if="groupedPostCount(message) > 1"
+                  class="group-count"
+                  :aria-label="`Latest of ${groupedPostCount(message)} matching posts`"
+                >{{ groupedPostCount(message) }} posts</span>
+              </span>
               <bdi class="message-cell">{{ message.message }}</bdi>
               <time class="age-cell" :datetime="new Date(message.timestamp).toISOString()">{{ age(message.timestamp) }}</time>
             </button>
@@ -597,7 +626,12 @@ function exactTime(timestamp: number): string {
           <div class="inspector-copy">
             <div class="inspector-meta">
               <bdi>{{ selected.sender }}</bdi>
-              <time :datetime="new Date(selected.timestamp).toISOString()">{{ exactTime(selected.timestamp) }}</time>
+              <span>
+                <small v-if="groupedPostCount(selected) > 1">
+                  Latest of {{ groupedPostCount(selected) }} matching posts
+                </small>
+                <time :datetime="new Date(selected.timestamp).toISOString()">{{ exactTime(selected.timestamp) }}</time>
+              </span>
             </div>
             <p><bdi>{{ selected.message }}</bdi></p>
           </div>

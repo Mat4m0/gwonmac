@@ -125,6 +125,7 @@ const DEMO_MESSAGES: readonly TradeMessage[] = [
   fixture("kamadan", 4, "Acolyte Mira", "WTS chocolate bunnies 4e per stack"),
   fixture("kamadan", 5, "Artic Voyager", "WTB +5 energy spear, message your offer"),
   fixture("kamadan", 6, "Quiet Ember", "WTS unded Polar Bear 100a | Envoy Axe 20a | q12 Eblade 6a"),
+  fixture("kamadan", 7, "Tyria Cartographer", "Earlier trade listing, now superseded"),
   fixture("pre-searing", 1, "Vanguard Althea", "WTB Charr carvings and red iris flowers"),
   fixture("pre-searing", 2, "Northlands Scout", "WTS purple Charr bag, offer"),
   fixture("pre-searing", 3, "Ascalon Merchant", "WTS dyes, iron ingots and wood planks"),

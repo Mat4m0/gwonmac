@@ -81,6 +81,9 @@ density, or behavior.
 - Search offer text and the upstream `user:` character index together, then
   merge results by message timestamp. Clearing the field returns immediately
   to the live ledger.
+- Collapse repeated search matches from one character to their newest matching
+  post and show the group count. Keep the live ledger chronological and
+  ungrouped.
 - Keep saved offers and followed players in one right-anchored Saved drawer.
   It is non-modal at wide widths and an in-window sheet when narrow. Its entry
   and exit share the right edge, focus returns to its trigger, and reduced

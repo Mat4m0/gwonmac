@@ -56,6 +56,10 @@ describe("TradeChatApp", () => {
 
     expect(wrapper.text()).toContain("Tyria Cartographer");
     expect(wrapper.text()).not.toContain("Silver Wayfarer");
+    expect(wrapper.findAll(".trade-row")).toHaveLength(1);
+    expect(wrapper.get(".group-count").text()).toBe("2 posts");
+    expect(wrapper.get(".trade-row").text()).toContain("WTS arms 29e each");
+    expect(wrapper.get(".trade-row").text()).not.toContain("Earlier trade listing");
     wrapper.unmount();
   });
 
@@ -144,7 +148,7 @@ describe("TradeChatApp", () => {
     await wrapper.get(".saved-trigger").trigger("click");
     expect(wrapper.get(".trade-saved-drawer").text()).toContain("Tyria Cartographer");
     await wrapper.get(".saved-tabs button:last-child").trigger("click");
-    expect(wrapper.get(".trade-saved-drawer").text()).toContain("1 current offer");
+    expect(wrapper.get(".trade-saved-drawer").text()).toContain("2 current offers");
     wrapper.unmount();
   });
 
