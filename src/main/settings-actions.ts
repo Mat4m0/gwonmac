@@ -96,12 +96,6 @@ export async function applySettingsChange(
       return previous;
     }
     const saved = await write(patch);
-    if (previous.dataStrategy !== saved.dataStrategy) {
-      logEvent({
-        k: "launcher.strategyChanged",
-        strategy: saved.dataStrategy ?? "unselected",
-      });
-    }
     if (restartForCapability) requestRelaunch(win, "capabilityEnable");
     return saved;
   } catch (error) {
@@ -120,7 +114,7 @@ export async function confirmSettingsReset(
       confirmLabel: "Reset GWonMac Settings",
       message: "Reset GWonMac settings?",
       detail:
-        "Display, tools, Travel shortcuts, custom search phrases, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
+        "Display, tools, Travel shortcuts, custom search phrases, window size and position, and diagnostics return to their defaults. Downloaded game data and your saved login stay untouched.",
     }))
   ) {
     return null;
@@ -209,7 +203,6 @@ async function pendingMarkerExists(markerPath: string): Promise<boolean> {
 export async function applyPendingCacheClear(paths: GamePaths): Promise<void> {
   if (!(await pendingMarkerExists(paths.cacheClearRequest))) return;
   await rm(paths.chunks, { recursive: true, force: true });
-  await rm(paths.bootChunks, { force: true });
   await rm(paths.cacheClearRequest, { force: true });
   logEvent({ k: "cache.clearedAtStartup" });
 }

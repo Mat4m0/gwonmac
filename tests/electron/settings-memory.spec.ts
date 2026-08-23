@@ -21,7 +21,6 @@ test.describe("extended memory settings", () => {
           JSON.stringify({
             autoCheckUpdates: false,
             extendedMemoryEnabled: true,
-            dataStrategy: "quick",
           }),
         );
       },

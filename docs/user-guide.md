@@ -65,18 +65,14 @@ access with the published Release app.
 
 ## Game data
 
-**Quick Start** is the recommended default. It downloads areas when the game
-needs them and keeps verified data for later.
+Guild Wars starts as soon as the required data is ready. The remaining game
+data downloads automatically in the background while you play. It needs disk
+space and does not make login or online play available offline.
 
-**Download Full Game** downloads all available chunks. It needs more time and
-disk space. It does not make login or online play available offline.
-
-During a full download, you can pause, resume, return to Quick Start, or choose
-**Play While Downloading**. Verified chunks remain when you switch modes. The
-Dock icon shows active progress.
-
-To change the next launch, open **Guild Wars Reforged → Settings… → Game Data**.
-This does not interrupt the current game.
+Open **Guild Wars Reforged → Settings… → Game Data** to see progress or pause
+and resume the download. Verified data remains when you pause or close the app,
+and the next launch continues automatically. The Dock icon shows active
+progress.
 
 Use **Clear Game Data…** only to remove downloaded area data. The app confirms
 the action and restarts. It keeps the small official client files.

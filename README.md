@@ -58,14 +58,9 @@ Releases page also provides checksums, an SBOM, and build attestations. See
 
 ## Start the game
 
-On the first start, select one game-data mode:
-
-| Mode | Result |
-| --- | --- |
-| **Quick Start** | Download the required files first. Download each area when you visit it. |
-| **Full Game** | Download all game data before normal play. |
-
-You can change the mode later in **Settings → Game Data**. The
+Guild Wars starts as soon as the required data is ready, then downloads the
+rest of the game in the background while you play. You can see progress or
+pause the download in **Settings → Game Data**. The
 [user guide](docs/user-guide.md) explains sign-in, updates, Tools, recovery,
 and local data.
 

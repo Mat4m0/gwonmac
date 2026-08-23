@@ -18,7 +18,6 @@ import {
   digestOrNull,
   finiteNumber,
   incompleteCommandOutcome,
-  launcherStrategy,
   literal,
   none,
   nullable,
@@ -401,12 +400,6 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     level: "warn",
     fields: { code },
   },
-  "launcher.strategyChanged": {
-    scope: "app",
-    subsystem: "settings",
-    level: "info",
-    fields: { strategy: launcherStrategy },
-  },
   "settings.reset": {
     scope: "app",
     subsystem: "settings",
@@ -595,12 +588,6 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     fields: { files: finiteNumber, bytes: finiteNumber },
   },
   "cache.staleChunkCleanupSkipped": {
-    scope: "app",
-    subsystem: "cache",
-    level: "warn",
-    fields: { code },
-  },
-  "prefetch.failed": {
     scope: "app",
     subsystem: "cache",
     level: "warn",

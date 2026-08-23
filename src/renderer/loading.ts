@@ -173,8 +173,8 @@ window.gwLoading = (function (): LoadingController {
   window.addEventListener('focus', syncBackgroundVideo);
   syncBackgroundVideo();
 
-  // The passive health line: version, data mode, and (once a client is
-  // active) the game build's short id, in the footer on every launch. The
+  // The passive health line: version and (once a client is active) the game
+  // build's short id, in the footer on every launch. The
   // version used to live only in the macOS About panel, which meant a bug
   // report had to go hunting for it — and under CalVer the number doubles as
   // a staleness signal. Everything here is already-local data; no request is
@@ -183,13 +183,7 @@ window.gwLoading = (function (): LoadingController {
     const native = window.gwNative;
     if (!native) return;
     try {
-      const [session, settings] = await Promise.all([
-        native.client.session(),
-        native.settings.get(),
-      ]);
-      const mode = settings.dataStrategy === 'quick'
-        ? 'Quick Start'
-        : settings.dataStrategy === 'full' ? 'Full Game' : '';
+      const session = await native.client.session();
       const build = session.compatibility
         ? `game client ${session.compatibility.clientSha256.slice(0, 8)}`
         : '';
@@ -203,7 +197,7 @@ window.gwLoading = (function (): LoadingController {
       // this fan project, and the line must never read like an ArenaNet
       // product version. The vocabulary matches the compatibility surfaces.
       version.textContent =
-        [`App version ${session.appVersion}`, mode, build]
+        [`App version ${session.appVersion}`, build]
           .filter(Boolean).join(' · ');
     } catch {
       // The footer is informational; a failed read shows nothing extra.

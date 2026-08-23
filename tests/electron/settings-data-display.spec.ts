@@ -322,7 +322,7 @@ test.describe("data and display settings", () => {
         relaunch: false,
         buttons: ["Reset GWonMac Settings", "Cancel"],
         detail:
-          "Display, tools, Travel shortcuts, custom search phrases, window size and position, diagnostics, and launcher choices return to their defaults. Downloaded game data and your saved login stay untouched.",
+          "Display, tools, Travel shortcuts, custom search phrases, window size and position, and diagnostics return to their defaults. Downloaded game data and your saved login stay untouched.",
       });
       expect(await page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ renderScale: 2 });

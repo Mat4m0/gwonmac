@@ -13,9 +13,9 @@ release operations.
 
 `gwonmac` has two update sources:
 
-| Update | Source | Runtime owner | Player choice |
+| Update | Source | Runtime owner | Behavior |
 | --- | --- | --- | --- |
-| Guild Wars client and game data | ArenaNet patch service | `ClientRuntime` and `PatchClient` | Quick Start or Full Game |
+| Guild Wars client and game data | ArenaNet patch service | `ClientRuntime` and `PatchClient` | Automatic background download |
 | `gwonmac` application | Published GitHub releases | `AppUpdater` | Stable or Beta, automatic or manual checks |
 
 These systems do not authorize each other. An ArenaNet update cannot install a
@@ -105,8 +105,8 @@ active store by mistake.
 
 ## Snapshot chunk store
 
-The ArenaNet snapshot remains chunked in Quick Start mode. The app does not
-assemble one full snapshot file for on-demand use.
+The ArenaNet snapshot remains chunked while the complete game downloads in the
+background. The app does not assemble one full snapshot file for on-demand use.
 
 `ChunkStore` maps a requested range to content-addressed chunks. It coalesces
 concurrent requests for the same hash. It verifies bytes before atomic
@@ -167,24 +167,18 @@ power assertion. The renderer does not create a second download state.
 Cache residency is the download truth. A saved counter is not download proof.
 Progress, transfer rate, and estimated time come from the native operation.
 
-## Quick Start and Full Game
+## Automatic game-data download
 
-The `dataStrategy` setting records intent:
+After the required client data is ready, the renderer starts the official
+client and the complete snapshot download together. Foreground area requests
+outrank queued background work, so entering a new area does not wait behind the
+bulk download.
 
-- `null` means the player has not made the first-run choice;
-- `quick` starts after the required data is ready and fetches areas on demand;
-- `full` prepares all missing snapshot chunks before normal start, unless the
-  player explicitly chooses to play while it downloads.
+The background operation verifies content hashes at startup, including when
+all expected chunk names are present. Corrupt data re-enters the repair path.
 
-The renderer resolves this intent against native cache residency before it
-starts the official client. Guild Wars networking, audio, and graphics do not
-start behind the first-run choice.
-
-Full Game verifies the content hashes at startup. It does this even when all
-expected chunk names are present. Corrupt data re-enters the repair path.
-
-Pausing or leaving Full Game stops speculative work. It does not remove
-verified chunks. A later run resumes from verified residency.
+Pausing stops speculative work for the current session. It does not remove
+verified chunks. A later launch resumes automatically from verified residency.
 
 ## Offline behavior
 

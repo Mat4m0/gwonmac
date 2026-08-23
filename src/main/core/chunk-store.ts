@@ -15,17 +15,14 @@
  */
 import { readFile, readdir, stat, statfs, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  ARENANET_REQUEST_CEILING,
-  type PrefetchProgress,
-} from "../../shared/contracts.js";
+import { ARENANET_REQUEST_CEILING } from "../../shared/contracts.js";
 import { AppError, type ErrorCode } from "../../shared/errors.js";
 import {
   DownloadRateAverage,
   secondsRemaining,
 } from "../../shared/progress.js";
 import { mapPool } from "./async-pool.js";
-import { writeAtomicInDir, writeAtomicJson } from "./atomic-file.js";
+import { writeAtomicInDir } from "./atomic-file.js";
 import { decodeChunk, verifyChunkHash } from "./chunk-format.js";
 import type { CompressionMode } from "./manifest.js";
 import { packResidentBits } from "./snapshot.js";
@@ -48,7 +45,6 @@ export interface ChunkStoreOptions {
   chunkHashes: string[];
   compression?: CompressionMode;
   fetch?: ChunkBytesFetcher | null;
-  bootListPath?: string;
   metrics?: ChunkStoreMetrics;
 }
 
@@ -104,7 +100,6 @@ export class ChunkStore {
   readonly hashes: string[];
   readonly chunksDir: string;
   readonly compression: CompressionMode;
-  readonly bootListPath: string;
 
   private readonly fetchFn: ChunkBytesFetcher | null;
   private readonly metrics: ChunkStoreMetrics | null;
@@ -122,8 +117,6 @@ export class ChunkStore {
   private residentChunkCount = 0;
   private residentByteCount = 0;
   private residentReady: Promise<void> | null = null;
-  private readonly touched = new Set<number>();
-  private touchedDirty = false;
   private stopFlag = false;
   fetched = 0;
 
@@ -135,7 +128,6 @@ export class ChunkStore {
     this.compression = opts.compression ?? "none";
     this.fetchFn = opts.fetch ?? null;
     this.metrics = opts.metrics ?? null;
-    this.bootListPath = opts.bootListPath ?? join(opts.chunksDir, "boot-chunks.json");
     for (const [index, hash] of this.hashes.entries()) {
       const current = this.hashResidency.get(hash) ?? { chunks: 0, bytes: 0 };
       current.chunks += 1;
@@ -365,12 +357,6 @@ export class ChunkStore {
     const first = Math.floor(offset / this.chunkSize);
     const last = Math.floor((offset + length - 1) / this.chunkSize);
     const indices = Array.from({ length: last - first + 1 }, (_, n) => first + n);
-    for (const i of indices) {
-      if (!this.touched.has(i)) {
-        this.touched.add(i);
-        this.touchedDirty = true;
-      }
-    }
     const chunks = await Promise.all(indices.map((i) => this.ensureChunk(i, priority)));
 
     if (first === last) {
@@ -486,114 +472,6 @@ export class ChunkStore {
     this.metrics?.gauge?.("snapshot.native.queuedPrefetch", this.prefetchQueue.length);
     this.metrics?.gauge?.("snapshot.native.inFlightBytes", this.activeNetworkBytes);
     this.metrics?.peak?.("snapshot.native.peakQueueDepth", queueDepth);
-  }
-
-  get touchedIndices(): ReadonlySet<number> {
-    return this.touched;
-  }
-
-  /**
-   * The boot list records chunk INDICES, so it means something only against
-   * the chunking it was written for. It has always recorded `chunkSize`; it
-   * never checked it, so a change to remote chunking silently reinterpreted
-   * every stored index against a different byte range. A mismatch is a cache
-   * miss: we lose one warm start, not correctness.
-   *
-   * Geometry, not content, is the key, and `chunkSize` is the whole of it —
-   * index `i` is `[i*chunkSize, (i+1)*chunkSize)` no matter how many chunks
-   * the snapshot has. The indices stay meaningful across an ArenaNet client
-   * update — they are still the same byte ranges the game touches at boot — so
-   * gating on anything that tracks the snapshot's *contents* would throw the
-   * hint away on every update for nothing. `count` is exactly such a thing:
-   * `Gw.snapshot` is the game data, so essentially every client update changes
-   * its size and therefore its chunk count. It is still written, for
-   * diagnostics, and a snapshot that shrank simply drops the indices it can no
-   * longer address rather than discarding the whole file. Every prefetched
-   * chunk is hash-verified on arrival, so a wrong index costs a wasted fetch,
-   * never a wrong byte.
-   *
-   * An entry that is not a chunk index at all is different: that file is not
-   * one of ours, and it is refused rather than partly believed.
-   *
-   * A boot list with no `formatVersion` is the shape the public alpha wrote.
-   * It carried the same fields, so it is read as written.
-   */
-  private async readBootChunks(): Promise<number[] | null> {
-    let raw: unknown;
-    try {
-      raw = JSON.parse(await readFile(this.bootListPath, "utf8"));
-    } catch {
-      return null;
-    }
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const record = raw as Record<string, unknown>;
-    if (record.formatVersion !== undefined && record.formatVersion !== 1) {
-      return null;
-    }
-    if (record.chunkSize !== this.chunkSize || !Array.isArray(record.chunks)) {
-      return null;
-    }
-    const chunks: number[] = [];
-    for (const index of record.chunks as unknown[]) {
-      if (typeof index !== "number" || !Number.isSafeInteger(index) || index < 0) {
-        return null;
-      }
-      if (index < this.hashes.length) chunks.push(index);
-    }
-    return [...new Set(chunks)].sort((a, b) => a - b);
-  }
-
-  async saveTouched(): Promise<void> {
-    if (!this.touchedDirty) return;
-    const known = (await this.readBootChunks()) ?? [];
-    const merged = [...new Set([...known, ...this.touched])].sort((a, b) => a - b);
-    if (JSON.stringify(merged) !== JSON.stringify(known)) {
-      await writeAtomicJson(this.bootListPath, {
-        formatVersion: 1,
-        chunkSize: this.chunkSize,
-        count: this.hashes.length,
-        chunks: merged,
-      });
-    }
-    this.touchedDirty = false;
-  }
-
-  async prefetch(
-    onProgress?: (p: PrefetchProgress) => void,
-    jobs = ARENANET_REQUEST_CEILING,
-  ): Promise<void> {
-    if (!this.fetchFn) return;
-    const want = await this.readBootChunks();
-    if (!want) return;
-    const todo: number[] = [];
-    for (const i of want) {
-      if (!(await this.isResident(i))) todo.push(i);
-    }
-    if (!todo.length) return;
-
-    let done = 0;
-    const total = todo.length;
-    onProgress?.({ completedChunks: 0, totalChunks: total });
-    await mapPool(
-      todo,
-      jobs,
-      async (i) => {
-        try {
-          await this.ensureChunk(i, "prefetch");
-        } catch {
-          // game will ask again; prefetch miss is not fatal
-        }
-        done += 1;
-        if (done % 8 === 0 || done === total) {
-          onProgress?.({ completedChunks: done, totalChunks: total });
-        }
-      },
-      () => this.stopFlag,
-    );
-    onProgress?.({
-      completedChunks: this.stopFlag ? done : total,
-      totalChunks: total,
-    });
   }
 
   async downloadAll(opts: {

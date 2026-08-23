@@ -9,17 +9,7 @@ import {
   launchOfflineAt,
 } from "./fixtures.mjs";
 
-/** The reply this spec holds open on `gw:cache:downloadAll`. */
-interface DownloadOutcome {
-  status: string;
-  errorCode?: string;
-}
-
 declare global {
-  // Probes installed by this spec: the first two in the main process, the last
-  // in the renderer. They exist only while it runs.
-  var __failLauncherDownloadTest: ((result: DownloadOutcome) => void) | undefined;
-  var __fullGameVerificationCalls: number | undefined;
   var __gameStorageReset: {
     accept: boolean;
     quit: number;
@@ -41,7 +31,7 @@ declare global {
 }
 
 test.describe("launcher recovery", () => {
-  test("keeps verified data, retries interruption, and verifies before startup", async () => {
+  test("starts the complete download automatically without blocking play", async () => {
     const fixture = await launchCachedClient(
       "gw-launcher-e2e-",
       {},
@@ -49,108 +39,21 @@ test.describe("launcher recovery", () => {
       { snapshotSize: 8 * 1024 ** 3 },
     );
     try {
-      const { app, page } = fixture;
-      await expect(page.locator("#data-choice")).toBeVisible();
-      // One decision and one consent line. The game tools live in Settings
-      // only — a first launch must not ask about restarts.
-      await expect(page.locator("#data-choice-auto-updates")).toBeChecked();
-      await expect(page.locator("#data-choice")).toContainText(
-        "at most once every six hours",
+      const { page } = fixture;
+      await expect(page.locator("#client-compat-play")).toBeVisible();
+      await page.locator("#client-compat-play").click();
+      await expect.poll(() => page.evaluate(() =>
+        [...globalThis.document.scripts].some((script) =>
+          script.src.endsWith("/Gw.jspi.js"),
+        ))).toBe(true);
+      await page.locator("#loading-links [data-settings]").click();
+      await expect(page.locator("#settings-pane-data")).toContainText(
+        "downloads the complete game in the background while you play",
       );
-      await expect(page.locator("#data-choice")).not.toContainText("cursor");
-      await expect(page.locator("#data-choice")).not.toContainText("restart");
-      // The recommended card reads first.
-      await expect(
-        page.locator(".data-choice-actions .data-choice-option").first(),
-      ).toHaveId("data-choice-quick");
-      // The card carries the size, the disk reality, and the hybrid promise.
-      await expect(page.locator("#data-choice-full-size")).toContainText(
-        "Download 8.00 GB first",
-      );
-      await expect(page.locator("#data-choice-full-size")).toContainText(
-        "free on this Mac",
-      );
-      await expect(page.locator("#data-choice-full-size")).toContainText(
-        "You can play while it downloads.",
-      );
-      expect(
-        await page.evaluate(() =>
-          [...globalThis.document.scripts].some((script) =>
-            script.src.endsWith("/Gw.jspi.js"),
-          ),
-        ),
-      ).toBe(false);
-
-      await app.evaluate(({ ipcMain }) => {
-        let firstRequest = true;
-        ipcMain.removeHandler("gw:cache:downloadAll");
-        ipcMain.handle("gw:cache:downloadAll", () => {
-          if (!firstRequest) return { status: "stopped" };
-          firstRequest = false;
-          return new Promise<DownloadOutcome>((resolve) => {
-            globalThis.__failLauncherDownloadTest = resolve;
-          });
-        });
-      });
-      await page.locator("#data-choice-full").click();
-      await expect(page.locator("#data-download")).toBeVisible();
-      await expect(page.locator("#data-download-toggle")).toHaveText(
-        "Pause Download",
-      );
-      await app.evaluate(() => {
-        // The download reports a code; the sentence below is the renderer's.
-        globalThis.__failLauncherDownloadTest?.({
-          status: "failed",
-          errorCode: "fetch_failed",
-        });
-        // Cleared rather than deleted: every read is optional-chained, so this
-        // is the same "the probe is spent" state without a `delete` on a global.
-        globalThis.__failLauncherDownloadTest = undefined;
-      });
-      await expect(page.locator("#data-download-status")).toHaveText(
+      await expect(page.locator("#settings-download-full")).toHaveText("Resume Download");
+      await expect(page.locator("#settings-cache")).toHaveText(
         "The download could not continue. Check your connection, then choose Resume Download.",
       );
-      await expect(page.locator("#data-download-detail")).toHaveText(
-        "Verified data is safe. Choose Resume Download to try again.",
-      );
-      await expect(page.locator("#data-download-toggle")).toHaveText(
-        "Resume Download",
-      );
-      expect(
-        await page.evaluate(async () =>
-          (await window.gwNative.settings.get()).dataStrategy,
-        ),
-      ).toBe("full");
-      const size = 8 * 1024 ** 3;
-      await app.evaluate(({ ipcMain }, totalBytes) => {
-        ipcMain.removeHandler("gw:cache:info");
-        ipcMain.handle("gw:cache:info", () => ({
-          bytes: totalBytes,
-          chunks: 1,
-          totalBytes,
-          totalChunks: 1,
-          freeBytes: -1,
-          fullDownloadShortfall: 0,
-        }));
-        ipcMain.removeHandler("gw:cache:downloadAll");
-        ipcMain.handle("gw:cache:downloadAll", () => {
-          globalThis.__fullGameVerificationCalls =
-            (globalThis.__fullGameVerificationCalls || 0) + 1;
-          return { status: "failed", errorCode: "disk_full" };
-        });
-      }, size);
-      await page.reload();
-
-      await expect(page.locator("#data-download")).toBeVisible();
-      await expect(page.locator("#data-download-status")).toHaveText(
-        "There is not enough free disk space to download the full game. Free some space, then choose Resume Download.",
-      );
-      await expect(page.locator("#data-download-toggle")).toHaveText(
-        "Resume Download",
-      );
-      expect(
-        await app.evaluate(() => globalThis.__fullGameVerificationCalls),
-      ).toBe(1);
     } finally {
       await closeOffline(fixture);
     }

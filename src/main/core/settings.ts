@@ -16,7 +16,6 @@
  */
 import { readFile } from "node:fs/promises";
 import {
-  DATA_STRATEGIES,
   DEFAULT_SETTINGS,
   LAST_UPDATE_CHECK_AT_MAX,
   RENDER_SCALES,
@@ -37,7 +36,6 @@ import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
 
 const RENDER_SCALE_VALUES = new Set<AppSettings["renderScale"]>(RENDER_SCALES);
-const DATA_STRATEGY_VALUES = new Set<AppSettings["dataStrategy"]>(DATA_STRATEGIES);
 const UI_STYLE_VALUES = new Set<AppSettings["uiStyle"]>(UI_STYLES);
 const UI_FONT_VALUES = new Set<AppSettings["uiFont"]>(UI_FONTS);
 const UPDATE_TRACK_VALUES = new Set<AppSettings["updateTrack"]>(UPDATE_TRACKS);
@@ -71,6 +69,7 @@ function asBoundedInteger(
 }
 const SETTINGS_KEYS = new Set(Object.keys(DEFAULT_SETTINGS));
 const SETTINGS_FORMAT = 1;
+const LEGACY_DATA_STRATEGIES: ReadonlySet<unknown> = new Set([null, "quick", "full"]);
 
 function asBool(v: unknown, field: string): boolean {
   if (typeof v !== "boolean") {
@@ -154,17 +153,14 @@ export function parseSettings(raw: unknown): AppSettings {
   if ("showDiagnostics" in src) {
     out.showDiagnostics = asBool(src.showDiagnostics, "showDiagnostics");
   }
-  if ("dataStrategy" in src) {
-    if (
-      !DATA_STRATEGY_VALUES.has(src.dataStrategy as AppSettings["dataStrategy"])
-    ) {
-      throw new AppError(
-        "bad_settings",
-        "settings.dataStrategy must be quick, full, or null",
-      );
-    }
-    out.dataStrategy = src.dataStrategy as AppSettings["dataStrategy"];
+  if ("dataStrategy" in src && !LEGACY_DATA_STRATEGIES.has(src.dataStrategy)) {
+    throw new AppError(
+      "bad_settings",
+      "settings.dataStrategy must be quick, full, or null",
+    );
   }
+  // Hard cutover: every readable legacy value becomes the rollback-safe value.
+  out.dataStrategy = "full";
   if ("autoCheckUpdates" in src) {
     out.autoCheckUpdates = asBool(src.autoCheckUpdates, "autoCheckUpdates");
   }

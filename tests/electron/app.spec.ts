@@ -13,7 +13,6 @@ import {
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { electronBin, root } from "./fixtures.mjs";
-import { seedCachedClient } from "../helpers/cached-client.js";
 
 /** How a spawned Electron process ended, as `child_process` reports it. */
 type ProcessExit = { code: number | null; signal: NodeJS.Signals | null };
@@ -534,76 +533,6 @@ test.describe("Electron application", () => {
       expect(await readFile(path.join(userData, "settings.json"), "utf8")).toBe(settings);
     } finally {
       await app.close().catch(() => {});
-      await rm(userData, { recursive: true, force: true });
-    }
-  });
-
-  test("in-game Full Game strategy owns the next launch", async () => {
-    const env = launchEnv({
-      GW_REQUIRE_CACHED_CLIENT: "1",
-      GW_BACKGROUND_LAUNCH: "1",
-    });
-    const userData = await mkdtemp(path.join(tmpdir(), "gw-strategy-e2e-"));
-    await seedCachedClient(
-      {
-        artifacts: path.join(userData, "game", "artifacts"),
-        userData,
-      },
-      { snapshotSize: 8 * 1024 ** 3 },
-    );
-    const app = await launch(userData, env);
-    try {
-      const page = await app.firstWindow({ timeout: 30_000 });
-      await page.waitForLoadState("domcontentloaded");
-      await expect(page.locator("#data-choice")).toBeVisible();
-      await page.locator("#data-choice-quick").click();
-      await expect(page.locator("#client-compat-play")).toBeVisible();
-      await page.locator("#client-compat-play").click();
-      await expect
-        .poll(() =>
-          page.evaluate(() =>
-            [...globalThis.document.scripts].some((script) =>
-              script.src.endsWith("/Gw.jspi.js"))),
-        )
-        .toBe(true);
-
-      await page.locator("#loading-links [data-settings]").click();
-      await page.locator('input[name="dataStrategy"][value="full"]').check();
-      await expect
-        .poll(() =>
-          page.evaluate(async () =>
-            (await window.gwNative.settings.get()).dataStrategy),
-        )
-        .toBe("full");
-      await expect(page.locator("#settings-feedback")).toContainText(
-        "before Guild Wars starts next time",
-      );
-      await page.locator("#settings-done").click();
-
-      // The next-launch presentation is the subject here. Keep its full-game
-      // operation inert so this network-independent fixture never asks
-      // ArenaNet for the intentionally unresident advertised snapshot.
-      await app.evaluate(({ ipcMain }) => {
-        ipcMain.removeHandler("gw:cache:downloadAll");
-        ipcMain.handle("gw:cache:downloadAll", () => ({ status: "stopped" }));
-      });
-
-      await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(page.locator("#data-download")).toBeVisible();
-      expect(
-        await page.evaluate(() =>
-          [...globalThis.document.scripts].some((script) =>
-            script.src.endsWith("/Gw.jspi.js"))),
-      ).toBe(false);
-      await page.locator("#data-download-quick").click();
-      await expect
-        .poll(() =>
-          page.evaluate(async () =>
-            (await window.gwNative.settings.get()).dataStrategy),
-        )
-        .toBe("quick");
-    } finally {
-      await app.close();
       await rm(userData, { recursive: true, force: true });
     }
   });

@@ -205,7 +205,6 @@ export const steamStorebackOutcome = literal([
   "failed",
 ] as const);
 export const windowMode = literal(["normal", "maximized", "fullscreen"] as const);
-export const launcherStrategy = literal(["quick", "full", "unselected"] as const);
 export const snapshotPriority = literal(["demand", "prefetch"] as const);
 export const proxyMethod = literal(["GET", "POST", "PUT"] as const);
 export const catalogueRefusal = literal<CatalogueRefusal>([

@@ -523,7 +523,6 @@ export async function assertPackagedOffSession() {
     "gw-packaged-enhancement-off-",
     {
       compatibilityNoticeSeenFor: OFFICIAL_SHA256,
-      dataStrategy: "quick",
     },
     {
       cachedClient: true,
@@ -676,7 +675,6 @@ export async function assertPackagedHostOnlyToolsSession() {
     "gw-packaged-host-only-tools-",
     {
       compatibilityNoticeSeenFor: OFFICIAL_SHA256,
-      dataStrategy: "quick",
       gwonmacTools: true,
     },
     {
@@ -826,7 +824,6 @@ export async function assertPackagedHostOnlyToolsAfterSoftRefusal() {
     "gw-packaged-host-only-tools-soft-refusal-",
     {
       compatibilityNoticeSeenFor: createHash("sha256").update(module).digest("hex"),
-      dataStrategy: "quick",
       gwonmacTools: true,
     },
     {

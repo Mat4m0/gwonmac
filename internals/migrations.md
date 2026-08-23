@@ -1,5 +1,19 @@
 # Active migrations
 
+## Retired game-data strategy field
+
+- Why: Stable v2026.8.9 expects `settings.json` to contain `dataStrategy` and
+  restores its first-run chooser when the key is absent. The runtime now has
+  one automatic complete-game download path, so the field serializes only as
+  the rollback-safe value `full` and controls no current behavior.
+- Introduced: 2026-08-23 with the automatic complete-game download cutover.
+- Depends on it: rollback from a newer release to v2026.8.9 without asking the
+  player to choose a retired download mode again.
+- Remove when: v2026.8.9 is outside the supported rollback window and the
+  signed Stable-to-candidate-to-the-same-Stable compatibility matrix permits a
+  settings document without `dataStrategy`. Remove the contract field, parser
+  normalization, serializer output, tests, and this entry together.
+
 ## Unhead 3.x family pin
 
 - Why: a fresh Nuxt dependency resolution can mix Unhead 2.x and 3.x APIs,

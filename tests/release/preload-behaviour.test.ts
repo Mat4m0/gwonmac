@@ -364,11 +364,6 @@ const SUBSCRIPTIONS: Subscription[] = [
     subscribe: (api, listener) => api.progress.onChange(listener),
   },
   {
-    path: "progress.onPrefetch",
-    channel: IPC.prefetchEvent,
-    subscribe: (api, listener) => api.progress.onPrefetch(listener),
-  },
-  {
     path: "sockets.onEvent",
     channel: IPC.socketEvent,
     subscribe: (api, listener) => api.sockets.onEvent(listener),

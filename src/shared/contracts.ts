@@ -177,6 +177,8 @@ export interface DownloadActivity {
   bytesPerSecond: number;
   secondsRemaining: number | null;
   noticeCode?: NoticeCode;
+  /** Canonical state of the automatic complete-game download, when active or settled. */
+  fullDownload?: FullDownloadState;
 }
 
 /**
@@ -197,6 +199,13 @@ export interface DownloadFailure {
 
 export type DownloadProgress = DownloadActivity | DownloadFailure;
 
+export type FullDownloadState =
+  | { status: "running" }
+  | { status: "stopping" }
+  | { status: "complete" }
+  | { status: "paused" }
+  | { status: "failed"; errorCode: ErrorCode };
+
 /**
  * How a full-game download ended. It replaces a `boolean` plus a rejected
  * promise carrying an English sentence: Electron flattens a rejection to its
@@ -208,11 +217,6 @@ export type FullDownloadOutcome =
   | { status: "complete" }
   | { status: "stopped" }
   | { status: "failed"; errorCode: ErrorCode };
-
-export interface PrefetchProgress {
-  completedChunks: number;
-  totalChunks: number;
-}
 
 export interface CacheInfo {
   bytes: number;
@@ -323,8 +327,6 @@ export const RENDER_SCALES = [1, 1.5, 2] as const;
 export type RenderScale = (typeof RENDER_SCALES)[number];
 export const UI_PANEL_OPACITY_MIN = 65;
 export const UI_PANEL_OPACITY_MAX = 100;
-export const DATA_STRATEGIES = [null, "quick", "full"] as const;
-export type DataStrategy = (typeof DATA_STRATEGIES)[number];
 export const LAST_UPDATE_CHECK_AT_MAX = 8_640_000_000_000_000;
 
 export interface AppSettings {
@@ -355,7 +357,12 @@ export interface AppSettings {
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
   showDiagnostics: boolean;
-  dataStrategy: DataStrategy;
+  /**
+   * Rollback-only storage field. Runtime behavior is always `full`; keeping
+   * this exact key lets the currently supported Stable release read a profile
+   * written by this version without restoring its first-run chooser.
+   */
+  dataStrategy: "full";
   /**
    * Automatic release checks: one static channel request when no settled
    * attempt was recorded in the previous six hours, including across app
@@ -421,7 +428,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   shortcutOverrides: {},
   extendedMemoryEnabled: false,
   showDiagnostics: false,
-  dataStrategy: null,
+  dataStrategy: "full",
   autoCheckUpdates: true,
   updateTrack: DEFAULT_UPDATE_TRACK,
   lastUpdateCheckAt: null,
@@ -777,7 +784,6 @@ export const SKILL_ICON_PATTERN = /^skill-icons\/([0-9]{1,7})\.bmp$/u;
 export const IPC = {
   progressCurrent: "gw:progress:current",
   progressEvent: "gw:progress:event",
-  prefetchEvent: "gw:prefetch:event",
   snapshotMetadata: "gw:snapshot:metadata",
   dnsResolve: "gw:dns:resolve",
   socketConnect: "gw:socket:connect",
@@ -850,8 +856,8 @@ export type IpcChannel = (typeof IPC)[keyof typeof IPC];
 
 /**
  * The channels that are not request/response and so have no `ipcMain.handle`
- * handler: three main→renderer events, the main→renderer command, and the
- * renderer's acknowledgement of it, which is an `ipcRenderer.send`.
+ * handler: main→renderer events, the main→renderer command, and the renderer's
+ * acknowledgement of it, which is an `ipcRenderer.send`.
  *
  * Named here so `InvokeChannel` below can be derived rather than listed. The
  * handler registry in `src/main/ipc.ts` is checked against it, which is what
@@ -860,7 +866,6 @@ export type IpcChannel = (typeof IPC)[keyof typeof IPC];
  */
 export const EVENT_CHANNELS = [
   "progressEvent",
-  "prefetchEvent",
   "socketEvent",
   "settingsEvent",
   "rendererCommand",
@@ -913,7 +918,6 @@ export interface GwNativeApi {
   progress: {
     current(): Promise<DownloadProgress>;
     onChange(callback: (value: DownloadProgress) => void): () => void;
-    onPrefetch(callback: (value: PrefetchProgress) => void): () => void;
   };
   snapshot: {
     metadata(): Promise<SnapshotMetadata>;
