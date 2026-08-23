@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import { createDefaultSettings } from "../model";
 import HomeView from "./HomeView.vue";
 
-const mountHome = (defaultPanel: "news" | "dailies" = "news") => {
+const mountHome = (
+  defaultPanel: "news" | "dailies" = "news",
+  configure?: (settings: ReturnType<typeof createDefaultSettings>) => void,
+) => {
   const settings = createDefaultSettings();
   settings.defaultHomePanel = defaultPanel;
+  configure?.(settings);
   return mount(HomeView, {
     props: {
       scenario: "ready",
@@ -30,5 +34,19 @@ describe("Home content", () => {
     const buttons = wrapper.findAll(".home-tab-control button");
     expect(buttons[0]!.text()).toContain("Dailies");
     expect(buttons[0]!.attributes("aria-pressed")).toBe("true");
+  });
+
+  it("removes Dailies when it is disabled", () => {
+    const wrapper = mountHome("dailies", (settings) => {
+      settings.showDailies = false;
+    });
+    const buttons = wrapper.findAll(".home-tab-control button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.text()).toContain("News");
+  });
+
+  it("does not repeat the launch status in the Home side panel", () => {
+    const wrapper = mountHome();
+    expect(wrapper.find(".readiness-card").exists()).toBe(false);
   });
 });

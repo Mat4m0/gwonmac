@@ -3,16 +3,17 @@ import type { Component } from "vue";
 import { computed, ref, watch } from "vue";
 import {
   ArrowRight,
+  Castle,
   Clock3,
+  Crosshair,
   ExternalLink,
   MapPinned,
   Newspaper,
-  Package,
-  Shield,
-  Skull,
+  PackageOpen,
+  ScrollText,
+  ShieldCheck,
   SlidersHorizontal,
   Swords,
-  Trophy,
 } from "@lucide/vue";
 import FundingProgress from "../components/FundingProgress.vue";
 import { dailyActivities } from "../data/dailies";
@@ -42,13 +43,13 @@ const emit = defineEmits<{
 }>();
 
 const dailyIcons: Record<DailyActivityKind, Component> = {
-  mission: Swords,
-  bounty: Skull,
-  combat: Trophy,
+  mission: ScrollText,
+  bounty: Crosshair,
+  combat: Swords,
   vanquish: MapPinned,
-  "shining-blade": Shield,
-  vanguard: Swords,
-  sandford: Package,
+  "shining-blade": ShieldCheck,
+  vanguard: Castle,
+  sandford: PackageOpen,
 };
 
 const activePanel = ref<HomePanel>(
@@ -142,18 +143,11 @@ watch(
             {{ tab === "news" ? "News" : "Dailies" }}
           </button>
         </div>
-        <button class="home-content-settings" type="button" aria-label="Open Home content settings" @click="emit('openHomeSettings')">
+        <button class="home-content-settings" type="button" @click="emit('openHomeSettings')">
           <SlidersHorizontal aria-hidden="true" />
+          Customize
         </button>
       </div>
-
-      <section class="readiness-card" :class="scenario">
-        <span class="status-dot" :class="scenario"></span>
-        <div>
-          <strong>{{ scenario === "updating" ? "Updating Guild Wars" : scenario === "degraded" ? "Guild Wars is ready" : scenario === "offline" ? "Offline" : "Ready to play" }}</strong>
-          <p>{{ scenario === "updating" ? "Downloading the latest game files" : scenario === "degraded" ? "Two optional Tools are being checked" : scenario === "offline" ? "Using the files already on this Mac" : "Guild Wars and your enabled Tools are available" }}</p>
-        </div>
-      </section>
 
       <div
         v-if="activePanel === 'news'"
