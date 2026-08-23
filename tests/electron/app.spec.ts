@@ -78,6 +78,8 @@ test.describe("Electron application", () => {
     const app = await launch(userData, env);
     try {
       await app.firstWindow({ timeout: 30_000 });
+      expect(await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]?.isVisible())).toBe(false);
       await app.evaluate(({ BrowserWindow }) => {
         const win = BrowserWindow.getAllWindows()[0];
         win?.minimize();

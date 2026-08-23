@@ -6,6 +6,7 @@
  * activation can reveal the same window again.
  */
 import { app, BrowserWindow, Menu, session } from "electron";
+import { BACKGROUND_LAUNCH } from "./background-launch.js";
 import type { ProtocolDeps } from "./protocol.js";
 import { installGwProtocolHandlerForSession } from "./protocol.js";
 import { preloadPath } from "./paths.js";
@@ -70,6 +71,7 @@ export function createAccountsWindow(deps: ProtocolDeps): BrowserWindow {
     return existing;
   }
   const owner = session.fromPartition("persist:gw-multi-hub", { cache: false });
+  if (BACKGROUND_LAUNCH) app.dock?.hide();
   if (!protocolInstalled) {
     installGwProtocolHandlerForSession(owner, deps);
     protocolInstalled = true;
@@ -104,7 +106,9 @@ export function createAccountsWindow(deps: ProtocolDeps): BrowserWindow {
     if (url !== HUB_URL) event.preventDefault();
   });
   win.webContents.on("will-attach-webview", (event) => event.preventDefault());
-  win.once("ready-to-show", () => win.show());
+  win.once("ready-to-show", () => {
+    if (!BACKGROUND_LAUNCH) win.show();
+  });
   win.on("focus", installAccountsMenu);
   installAccountsMenu();
   win.on("close", (event) => {

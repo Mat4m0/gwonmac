@@ -101,8 +101,9 @@ export async function launchOfflineAt(
     if (value !== undefined) env[key] = value;
   }
   Object.assign(env, {
-    // Launch without taking keyboard focus. Specs that assert on real OS focus
-    // (document.hasFocus, pointer lock, fullscreen) pass GW_BACKGROUND_LAUNCH: "0".
+    // Keep the real Electron windows hidden while they render. Specs that
+    // assert on native visibility, OS focus, pointer lock, or fullscreen pass
+    // GW_BACKGROUND_LAUNCH: "0".
     GW_BACKGROUND_LAUNCH: "1",
     ...environment,
     // Every default launch is offline by policy. With no seeded generation the
