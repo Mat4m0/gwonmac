@@ -97,7 +97,7 @@ export default tseslint.config(
       "**/node_modules/**",
       ".claude/**",
       ".pnpm-store/**",
-      "dist/**",
+      "**/dist/**",
       "dist-release/**",
       ".vite/**",
       "**/.nuxt/**",
