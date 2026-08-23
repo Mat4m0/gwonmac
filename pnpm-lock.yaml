@@ -84,6 +84,37 @@ importers:
         specifier: ^10.4.1
         version: 10.4.1(eslint@10.7.0(jiti@2.7.0))
 
+  apps/launcher-prototype:
+    dependencies:
+      '@lucide/vue':
+        specifier: ^1.33.0
+        version: 1.33.0(vue@3.5.40(typescript@5.9.3))
+      vue:
+        specifier: ^3.5.40
+        version: 3.5.40(typescript@5.9.3)
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.8
+        version: 6.0.8(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
+      '@vue/test-utils':
+        specifier: ^2.4.6
+        version: 2.4.11(@vue/compiler-dom@3.5.40)(@vue/server-renderer@3.5.40)(vue@3.5.40(typescript@5.9.3))
+      happy-dom:
+        specifier: ^20.8.4
+        version: 20.11.1
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vite:
+        specifier: ^8.1.5
+        version: 8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0)
+      vitest:
+        specifier: ^4.0.18
+        version: 4.1.10(@types/node@24.13.3)(happy-dom@20.11.1)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))
+      vue-tsc:
+        specifier: ^3.3.8
+        version: 3.3.8(typescript@5.9.3)
+
   apps/tools:
     dependencies:
       vue:
@@ -1421,6 +1452,11 @@ packages:
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@inquirer/prompts': '>= 3 < 8'
+
+  '@lucide/vue@1.33.0':
+    resolution: {integrity: sha512-8d3HnIIglHnosvsnm+IWNy8XhYYJvkf4YEgQqb74HnY3ihzdz+7XX4MxMZoyKdw7pbKOGno2HoaHTq7DH/v5AA==}
+    peerDependencies:
+      vue: '>=3.0.1'
 
   '@lupinum/ginko-content@0.3.2':
     resolution: {integrity: sha512-0Ynn1+ZB5HUECcFkZi96IsUD2mjpcslYmoP2XasDK2KTJWQ60FKJeAbiaGb/MwpBDQjTLQXFkQIdAPyHleXwvQ==}
@@ -9631,6 +9667,10 @@ snapshots:
     dependencies:
       '@inquirer/prompts': 6.0.1
       '@inquirer/type': 1.5.5
+
+  '@lucide/vue@1.33.0(vue@3.5.40(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.40(typescript@5.9.3)
 
   '@lupinum/ginko-content@0.3.2(a229819565679b1be13a02e738322424)':
     dependencies:

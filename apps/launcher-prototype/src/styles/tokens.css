@@ -1,0 +1,140 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --ink: #f3ecdf;
+  --muted: #aaa194;
+  --faint: #777067;
+  --gold: #ddb260;
+  --gold-bright: #f5cf88;
+  --green: #a7c875;
+  --red: #ee8f7e;
+  --panel: rgba(13, 12, 10, 0.94);
+  --panel-soft: rgba(26, 24, 21, 0.82);
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --line: rgba(255, 242, 219, 0.12);
+  --serif: Georgia, "Times New Roman", serif;
+  --radius-window: 22px;
+  --radius-card: 14px;
+  --radius-control: 9px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: #080807;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 70% -10%, rgba(104, 62, 32, 0.38), transparent 42%),
+    #080807;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+select,
+input {
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible,
+[tabindex="-1"]:focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 3px;
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+.skip-link {
+  position: fixed;
+  inset-block-start: 8px;
+  inset-inline-start: 8px;
+  z-index: 100;
+  translate: 0 -140%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: #15100a;
+  background: var(--gold-bright);
+}
+
+.skip-link:focus {
+  translate: 0;
+}
+
+.eyebrow {
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.73rem;
+  white-space: nowrap;
+}
+
+.pill.good {
+  color: #bcd991;
+  background: rgba(90, 128, 51, 0.22);
+}
+
+.pill.warning {
+  color: #f0c27b;
+  background: rgba(175, 111, 38, 0.22);
+}
+
+.good-text {
+  color: var(--green);
+}

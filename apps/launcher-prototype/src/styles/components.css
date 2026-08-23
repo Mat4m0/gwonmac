@@ -1,0 +1,341 @@
+.primary-button,
+.secondary-button,
+.text-button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-control);
+  transition-property: color, background-color, border-color, transform, filter;
+  transition-duration: 120ms;
+}
+
+.primary-button {
+  padding: 9px 16px;
+  border: 1px solid rgba(255, 220, 158, 0.78);
+  color: #1a1209;
+  background: linear-gradient(#f5d394, #c78a3b);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.48), 0 9px 24px rgba(0, 0, 0, 0.34);
+  font-weight: 700;
+}
+
+.primary-button:hover {
+  filter: brightness(1.08);
+}
+
+.primary-button svg,
+.secondary-button svg,
+.text-button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.secondary-button {
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.secondary-button:hover {
+  border-color: rgba(255, 240, 215, 0.24);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.text-button {
+  width: fit-content;
+  padding: 6px 0;
+  border: 0;
+  border-block-end: 1px solid rgba(221, 178, 96, 0.52);
+  border-radius: 0;
+  color: var(--gold-bright);
+  background: transparent;
+}
+
+.text-button:hover {
+  color: #ffe3ac;
+  border-color: currentColor;
+}
+
+.play-button {
+  min-width: 190px;
+  min-height: 56px;
+  font-size: 1rem;
+}
+
+.funding {
+  display: grid;
+  grid-template-columns: minmax(240px, auto) minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  min-height: 68px;
+  padding: 10px 24px;
+  color: var(--ink);
+  background: rgba(17, 15, 13, 0.94);
+  border-block-end: 1px solid var(--line);
+}
+
+.funding-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.funding-copy strong {
+  font-size: 0.86rem;
+}
+
+.funding-copy span,
+.funding-values {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.funding-meter {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.funding-values {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #bd7930, #f1c66d);
+  transition: width 240ms ease;
+}
+
+.funding.compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  margin-block-start: 18px;
+  padding: 15px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
+}
+
+.funding.compact .funding-meter {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.funding.compact .secondary-button {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.switch {
+  appearance: none;
+  position: relative;
+  width: 48px;
+  height: 28px;
+  flex: none;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #5a544c;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: background-color 180ms ease;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-start: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+  transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.switch:checked {
+  background: #a66e2d;
+}
+
+.switch:checked::after {
+  transform: translateX(20px);
+}
+
+.switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.toast-region {
+  position: absolute;
+  inset-inline-end: 24px;
+  inset-block-end: 130px;
+  z-index: 44;
+  pointer-events: none;
+}
+
+.toast {
+  max-width: 380px;
+  padding: 12px 15px;
+  border-radius: 10px;
+  color: var(--ink);
+  background: rgba(31, 28, 24, 0.98);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), inset 0 0 0 1px var(--line);
+}
+
+.modal-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(4, 4, 3, 0.72);
+  backdrop-filter: blur(12px);
+  overscroll-behavior: contain;
+}
+
+.modal {
+  position: relative;
+  width: min(600px, 100%);
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  padding: 30px;
+  border-radius: 18px;
+  background: #1b1814;
+  box-shadow: 0 32px 110px rgba(0, 0, 0, 0.72), inset 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.modal h1 {
+  margin-block: 8px 12px;
+  font: 400 2.2rem/1.05 var(--serif);
+}
+
+.modal > p {
+  color: var(--muted);
+}
+
+.modal-close {
+  position: absolute;
+  inset-block-start: 18px;
+  inset-inline-end: 18px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.modal-close:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.modal-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-block-start: 24px;
+}
+
+.cost-list {
+  display: grid;
+  margin-block: 22px;
+}
+
+.cost-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding-block: 11px;
+  border-block-end: 1px solid var(--line);
+}
+
+.cost-list dt,
+.cost-list dd {
+  margin: 0;
+}
+
+.cost-list dd {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost-list .total {
+  color: var(--gold-bright);
+}
+
+.account-form {
+  display: grid;
+  gap: 8px;
+  margin-block-start: 22px;
+}
+
+.account-form label {
+  font-weight: 650;
+}
+
+.account-form input,
+.setting-row select {
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  background: #26221d;
+}
+
+@media (max-width: 760px) {
+  .funding {
+    grid-template-columns: 1fr auto;
+    gap: 9px;
+    padding-inline: 16px;
+  }
+
+  .funding-meter {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .funding-copy span {
+    display: none;
+  }
+
+  .play-button {
+    min-width: 160px;
+  }
+
+  .toast-region {
+    inset-inline: 14px;
+    inset-block-end: 168px;
+  }
+
+  .toast {
+    max-width: none;
+  }
+}

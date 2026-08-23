@@ -98,6 +98,7 @@ export default tseslint.config(
       ".claude/**",
       ".pnpm-store/**",
       "dist/**",
+      "**/dist/**",
       "dist-release/**",
       ".vite/**",
       "**/.nuxt/**",
@@ -213,7 +214,7 @@ export default tseslint.config(
   },
   {
     // The website may read canonical contracts, never main-process code.
-    files: ["apps/{website,tools}/**/*.{js,mjs,ts,vue}"],
+    files: ["apps/{website,tools,launcher-prototype}/**/*.{js,mjs,ts,vue}"],
     rules: {
       "no-restricted-imports": [
         "error",
