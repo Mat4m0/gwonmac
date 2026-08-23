@@ -12,6 +12,11 @@ describe("Settings", () => {
     });
 
     expect(wrapper.text()).not.toContain("Keyboard shortcuts");
+    expect(wrapper.text()).toContain("Build management");
+    expect(wrapper.text()).toContain("Quick Travel");
+    expect(wrapper.text()).toContain("Xunlai storage");
+    expect(wrapper.text()).not.toContain("Apply teams");
+    expect(wrapper.text()).not.toContain("Show or hide Tools");
     expect(wrapper.findAllComponents(ShortcutRecorder)).toHaveLength(3);
 
     const quickTravelRecorder = wrapper.findAllComponents(ShortcutRecorder)[1]!;

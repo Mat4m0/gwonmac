@@ -36,14 +36,13 @@ export interface LauncherSettings {
   downloadAllGameFiles: boolean;
   releaseTrack: "stable" | "beta";
   toolsEnabled: boolean;
+  buildManagement: boolean;
   quickTravel: boolean;
   xunlaiStorage: boolean;
-  applyTeams: boolean;
   shortcuts: {
-    toggleTools: string;
+    buildManagement: string;
     quickTravel: string;
     xunlaiStorage: string;
-    applyTeams: string;
   };
   showGuildWarsNews: boolean;
   showMacNews: boolean;
@@ -71,14 +70,13 @@ export const createDefaultSettings = (): LauncherSettings => ({
   downloadAllGameFiles: true,
   releaseTrack: "stable",
   toolsEnabled: true,
+  buildManagement: true,
   quickTravel: true,
   xunlaiStorage: true,
-  applyTeams: false,
   shortcuts: {
-    toggleTools: "⌘B",
+    buildManagement: "⌘B",
     quickTravel: "⌘T",
     xunlaiStorage: "⇧⌘C",
-    applyTeams: "⇧⌘A",
   },
   showGuildWarsNews: true,
   showMacNews: true,
