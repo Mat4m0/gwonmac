@@ -57,8 +57,12 @@ const STYLE = `
   box-sizing: border-box;
   font-size: calc(var(--skill-key-edge) * .53);
 }
-.skill-key-plate-text {
-  padding-top: calc(var(--skill-key-edge) * .04);
+.skill-key-main-glyph {
+  display: inline-block;
+  transform: translate(
+    calc(var(--skill-key-edge) * .01),
+    calc(var(--skill-key-edge) * .055)
+  );
 }
 .skill-key-plate-part + .skill-key-plate-part {
   box-shadow: inset 1px 0 rgb(19 18 14 / 66%), -1px 0 rgb(255 255 241 / 12%);
@@ -166,15 +170,17 @@ export function createSkillKeyBindingView(parent: HTMLElement) {
       plate.dataset.compact = String(presentation.modifiers.length >= 3);
       for (const glyph of presentation.modifiers) {
         const part = document.createElement("span");
-        part.className = "skill-key-plate-part skill-key-plate-modifier skill-key-plate-text";
+        part.className = "skill-key-plate-part skill-key-plate-modifier";
         part.textContent = glyph;
         plate.append(part);
       }
       const main = document.createElement("span");
       main.className = "skill-key-plate-part skill-key-plate-main";
       if (presentation.main.kind === "text") {
-        main.classList.add("skill-key-plate-text");
-        main.textContent = presentation.main.label;
+        const glyph = document.createElement("span");
+        glyph.className = "skill-key-main-glyph";
+        glyph.textContent = presentation.main.label;
+        main.append(glyph);
         main.dataset.wide = String(presentation.main.label.length > 1);
         main.dataset.long = String(presentation.main.label.length > 2);
       } else {

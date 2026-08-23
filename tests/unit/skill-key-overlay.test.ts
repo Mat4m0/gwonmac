@@ -96,13 +96,24 @@ function mount() {
   return { body, overlay, root };
 }
 
+const textOf = (element: FakeElement | undefined): string | undefined =>
+  element === undefined
+    ? undefined
+    : element.textContent + element.children.map((child) => textOf(child) ?? "").join("");
+
+const textWritesOf = (element: FakeElement | undefined): number =>
+  element === undefined
+    ? 0
+    : element.textWrites
+      + element.children.reduce((total, child) => total + textWritesOf(child), 0);
+
 test("a custom projection adds only the changed key label", () => {
   const view = mount();
   view.overlay.update({ status: "ready", slots: slots() });
   assert.equal(view.root.style.display, "block");
   assert.equal(view.root.children.length, 8);
   assert.deepEqual(
-    view.root.children.map((slot) => slot.children[0]?.children.at(-1)?.textContent),
+    view.root.children.map((slot) => textOf(slot.children[0]?.children.at(-1))),
     ["C", undefined, undefined, undefined, undefined, undefined, undefined, undefined],
   );
   assert.match(view.root.children[0]!.style.cssText, /left:464px;top:320px/u);
@@ -133,11 +144,11 @@ test("an unchanged frame performs no text write", () => {
   const state = { status: "ready", slots: slots() };
   view.overlay.update(state);
   const writes = view.root.children.reduce((total, slot) =>
-    total + (slot.children[0]?.children.at(-1)?.textWrites ?? 0), 0);
+    total + textWritesOf(slot.children[0]?.children.at(-1)), 0);
   for (let frame = 0; frame < 240; frame += 1) view.overlay.update(state);
   assert.equal(
     view.root.children.reduce(
-      (total, slot) => total + (slot.children[0]?.children.at(-1)?.textWrites ?? 0),
+      (total, slot) => total + textWritesOf(slot.children[0]?.children.at(-1)),
       0,
     ),
     writes,
@@ -170,7 +181,7 @@ test("the consumer maps only slot eight's custom C binding", () => {
     })),
   });
   const root = body.children[0]!;
-  assert.equal(root.children[0]!.children[0]!.children.at(-1)?.textContent, "C");
+  assert.equal(textOf(root.children[0]!.children[0]!.children.at(-1)), "C");
   assert.match(root.children[0]!.style.cssText, /left:474px;top:552px/u);
   assert.match(root.children[1]!.style.cssText, /display:none/u);
   consumer.setEnabled(false);
