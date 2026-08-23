@@ -64,6 +64,7 @@ import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import {
   AllowlistError,
+  AppError,
   errorCode,
   ValidationError,
 } from "../shared/errors.js";
@@ -624,12 +625,20 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     tradeSavedGet: channel(nothing, async () => {
       await requireTradeEnabled();
-      return ctx.getTradeSaved();
+      try {
+        return await ctx.getTradeSaved();
+      } catch (error) {
+        throw tradeSavedOperationError("get", error);
+      }
     }),
 
     tradeSavedSet: channel(one(parseTradeSavedState), async (_win, value) => {
       await requireTradeEnabled();
-      return ctx.setTradeSaved(value);
+      try {
+        return await ctx.setTradeSaved(value);
+      } catch (error) {
+        throw tradeSavedOperationError("set", error);
+      }
     }),
 
     tradeSearch: channel(asTradeSearchRequest, async (win, request) => {
@@ -993,6 +1002,33 @@ function tradeSavedErrorReason(error: unknown): string {
   if (error.message === "invalid saved trade state") return "invalid-state";
   if (error.message === "trade chat is disabled") return "tools-disabled";
   return "operation-failed";
+}
+
+/** Send only a bounded technical reason across Electron's otherwise opaque rejection. */
+function tradeSavedOperationError(
+  operation: "get" | "set",
+  error: unknown,
+): AppError {
+  const code = errorCode(error);
+  const reason = code !== "unknown"
+    ? code
+    : technicalErrorReason(error);
+  return new AppError(
+    code,
+    `trade_saved_${operation}_failed:${reason}`,
+    { cause: error },
+  );
+}
+
+function technicalErrorReason(error: unknown): string {
+  if (!(error instanceof Error)) return "non-error";
+  const rawCode = "code" in error && typeof error.code === "string"
+    ? error.code
+    : "";
+  if (/^[A-Z][A-Z0-9_]{1,31}$/u.test(rawCode)) return rawCode.toLocaleLowerCase();
+  return /^[A-Za-z][A-Za-z0-9]{0,31}Error$/u.test(error.name)
+    ? error.name.toLocaleLowerCase()
+    : "unclassified";
 }
 
 export function registerSteamIpcHandlers(

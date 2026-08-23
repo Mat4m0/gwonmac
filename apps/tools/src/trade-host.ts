@@ -76,7 +76,9 @@ async function invokeSaved(
 /** Never let saved player names, offer text, or open-ended errors enter the console. */
 function rendererError(error: unknown): Readonly<{ name: string; reason: string }> {
   if (!(error instanceof Error)) return { name: typeof error, reason: "non-error" };
-  const reason = error.message.includes("duplicate saved trade entry")
+  const forwarded = /trade_saved_(?:get|set)_failed:([a-z0-9_-]+)/u.exec(error.message)?.[1];
+  const reason = forwarded
+    ?? (error.message.includes("duplicate saved trade entry")
     ? "duplicate-entry"
     : error.message.includes("invalid saved trade state")
       ? "invalid-state"
@@ -84,7 +86,7 @@ function rendererError(error: unknown): Readonly<{ name: string; reason: string 
         ? "missing-ipc-handler"
         : error.message.includes("trade_saved_restart_required")
           ? "bridge-unavailable"
-          : "ipc-failed";
+          : "ipc-failed");
   return { name: error.name, reason };
 }
 
