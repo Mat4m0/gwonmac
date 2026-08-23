@@ -27,6 +27,7 @@ import type {
 import { errorCode } from "../shared/errors.js";
 import { longRunningTaskFeedback } from "../shared/progress.js";
 import type { SocketManager } from "./core/sockets.js";
+import { BACKGROUND_LAUNCH } from "./background-launch.js";
 import {
   defaultWindowState,
   cascadeWindowState,
@@ -53,11 +54,6 @@ import {
   updateWindowShortcuts,
 } from "./window-shortcuts.js";
 import { windowRegistry, type GameWindowContext } from "./window-registry.js";
-
-// Tests launch the app dozens of times; without this they steal keyboard focus
-// on every launch. Focus-dependent specs leave the flag unset.
-const BACKGROUND_LAUNCH =
-  !app.isPackaged && process.env.GW_BACKGROUND_LAUNCH === "1";
 
 export interface WindowHost {
   sockets: SocketManager;
@@ -447,7 +443,8 @@ export function createMainWindow(
 
   win.once("ready-to-show", () => {
     if (initialState?.mode === "maximized") win.maximize();
-    if (BACKGROUND_LAUNCH || options.showInactive) win.showInactive();
+    if (BACKGROUND_LAUNCH) return;
+    if (options.showInactive) win.showInactive();
     else win.show();
     if (initialState?.mode === "fullscreen") win.setFullScreen(true);
   });

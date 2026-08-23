@@ -86,7 +86,9 @@ test.describe("renderer text editing", () => {
   });
 
   test("copies, cuts, pastes Unicode, and selects through one game route", async () => {
-    const fixture = await launchCachedClient("gw-clipboard-e2e-");
+    const fixture = await launchCachedClient("gw-clipboard-e2e-", {
+      GW_BACKGROUND_LAUNCH: "0",
+    });
     try {
       const { app, page } = fixture;
       await startGameInput(page);
