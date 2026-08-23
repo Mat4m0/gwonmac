@@ -1,5 +1,6 @@
 .primary-button,
 .secondary-button,
+.danger-button,
 .text-button {
   min-height: 42px;
   display: inline-flex;
@@ -41,6 +42,19 @@
 .secondary-button:hover {
   border-color: rgba(255, 240, 215, 0.24);
   background: rgba(255, 255, 255, 0.09);
+}
+
+.danger-button {
+  padding: 9px 16px;
+  border: 1px solid rgba(244, 151, 128, 0.55);
+  color: #fff1ed;
+  background: linear-gradient(#a94432, #792b20);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.16), 0 8px 20px rgba(0, 0, 0, 0.28);
+  font-weight: 700;
+}
+
+.danger-button:hover {
+  filter: brightness(1.08);
 }
 
 .text-button {
@@ -235,6 +249,10 @@
 
 .modal > p {
   color: var(--muted);
+}
+
+.modal > p + p {
+  margin-block-start: 10px;
 }
 
 .modal-close {

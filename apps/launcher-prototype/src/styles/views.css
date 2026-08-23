@@ -644,6 +644,11 @@
   min-width: 180px;
 }
 
+.maintenance-setting-row .secondary-button {
+  flex: none;
+  white-space: nowrap;
+}
+
 .settings-check-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

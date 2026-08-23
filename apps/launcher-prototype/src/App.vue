@@ -44,6 +44,7 @@ const {
 
 const activeArticleId = ref("event");
 const editingAccountId = ref<string | null>(null);
+const gameFilesOpen = ref(false);
 const launcherContent = ref<HTMLElement | null>(null);
 const editingAccount = computed(() =>
   accounts.value.find((account) => account.id === editingAccountId.value),
@@ -61,6 +62,12 @@ const saveAccount = (profile: AccountProfile) => {
     return;
   }
   addAccount(profile);
+};
+
+const redownloadGameFiles = () => {
+  gameFilesOpen.value = false;
+  scenario.value = "updating";
+  showToast("Game files will be downloaded again.");
 };
 const resetContentScroll = async () => {
   await nextTick();
@@ -124,6 +131,7 @@ watch(route, async () => {
           v-model:settings="settings"
           :active-section="settingsSection"
           @update:active-section="setSettingsSection($event as SettingsSection)"
+          @redownload-game-files="gameFilesOpen = true"
         />
         <IssuesView v-else-if="route === 'issues'" :scenario="scenario" @section-change="resetContentScroll" />
         <AccountsView
@@ -170,6 +178,17 @@ watch(route, async () => {
         </dl>
         <p>Support is optional. The launcher and the game work the same either way.</p>
         <div class="modal-actions"><button class="secondary-button" type="button" @click="fundingOpen = false">Close</button><button class="primary-button" type="button" @click="fundingOpen = false; showToast('This would open the project support page.')">Open support page</button></div>
+      </BaseModal>
+
+      <BaseModal v-if="gameFilesOpen" title="Redownload game files" @close="gameFilesOpen = false">
+        <span class="eyebrow">Game files</span>
+        <h1>Redownload game files?</h1>
+        <p>The launcher will remove the local Guild Wars game files and download a fresh copy.</p>
+        <p>Your accounts, builds, and launcher settings will not be changed.</p>
+        <div class="modal-actions">
+          <button class="secondary-button" type="button" @click="gameFilesOpen = false">Cancel</button>
+          <button class="danger-button" type="button" @click="redownloadGameFiles">Redownload files</button>
+        </div>
       </BaseModal>
 
       <AccountProfileModal

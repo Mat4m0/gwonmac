@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import type { Component } from "vue";
-import { Download, House, Monitor, Wrench } from "@lucide/vue";
+import { Download, House, Monitor, RotateCcw, Wrench } from "@lucide/vue";
 import ShortcutRecorder from "../components/ShortcutRecorder.vue";
 import { dailyActivities } from "../data/dailies";
 import type { LauncherSettings, SettingsSection } from "../model";
 
 defineProps<{ activeSection: SettingsSection }>();
 const settings = defineModel<LauncherSettings>("settings", { required: true });
-const emit = defineEmits<{ "update:active-section": [section: SettingsSection] }>();
+const emit = defineEmits<{
+  "update:active-section": [section: SettingsSection];
+  redownloadGameFiles: [];
+}>();
 
 const sections: Array<{ id: SettingsSection; label: string; icon: Component }> = [
   { id: "updates", label: "Game and updates", icon: Download },
@@ -62,10 +65,13 @@ const unavailableShortcuts = (current: ShortcutKey) =>
           </section>
           <section class="setting-group">
             <h2>Game files</h2>
-            <label class="setting-row">
-              <span><strong>Download all game files</strong><small>Keeps maps, audio, and cinematics ready before you need them.</small></span>
-              <input v-model="settings.downloadAllGameFiles" class="switch" type="checkbox" />
-            </label>
+            <div class="setting-row maintenance-setting-row">
+              <span><strong>Redownload game files</strong><small>Replace the local game files with a fresh copy. Accounts and launcher settings stay in place.</small></span>
+              <button class="secondary-button" type="button" @click="emit('redownloadGameFiles')">
+                <RotateCcw aria-hidden="true" />
+                Redownload…
+              </button>
+            </div>
           </section>
         </div>
       </div>

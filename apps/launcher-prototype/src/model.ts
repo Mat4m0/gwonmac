@@ -33,7 +33,6 @@ export interface AccountProfile {
 
 export interface LauncherSettings {
   automaticUpdates: boolean;
-  downloadAllGameFiles: boolean;
   releaseTrack: "stable" | "beta";
   toolsEnabled: boolean;
   buildManagement: boolean;
@@ -67,7 +66,6 @@ export interface NewsArticle {
 
 export const createDefaultSettings = (): LauncherSettings => ({
   automaticUpdates: true,
-  downloadAllGameFiles: true,
   releaseTrack: "stable",
   toolsEnabled: true,
   buildManagement: true,

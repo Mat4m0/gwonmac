@@ -5,6 +5,17 @@ import ShortcutRecorder from "../components/ShortcutRecorder.vue";
 import SettingsView from "./SettingsView.vue";
 
 describe("Settings", () => {
+  it("offers a confirmed redownload action instead of a game download option", async () => {
+    const settings = createDefaultSettings();
+    const wrapper = mount(SettingsView, {
+      props: { activeSection: "updates", settings },
+    });
+
+    expect(wrapper.text()).not.toContain("Download all game files");
+    await wrapper.get(".maintenance-setting-row button").trigger("click");
+    expect(wrapper.emitted("redownloadGameFiles")).toHaveLength(1);
+  });
+
   it("keeps shortcuts with the enabled tool instead of a separate section", async () => {
     const settings = createDefaultSettings();
     const wrapper = mount(SettingsView, {
