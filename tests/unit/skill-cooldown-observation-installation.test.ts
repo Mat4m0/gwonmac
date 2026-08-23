@@ -28,4 +28,17 @@ it("withdraws a cooldown publication whose sequence stops advancing", () => {
   assert.ok(expire);
   expire();
   assert.deepEqual(installation.state, { status: "waiting", reason: "stale" });
+  installation.sink?.update(Object.freeze({
+    status: "ready",
+    sequence: 2,
+    generation: 1,
+    gameTimer: 10_100,
+    playerAgentId: 7,
+    rechargeTimestamps: Object.freeze([0, 11_000, 0, 0, 0, 0, 0, 0]),
+  }));
+  assert.deepEqual(
+    installation.state,
+    { status: "waiting", reason: "stale" },
+    "the same frozen publication must not reappear on the next render frame",
+  );
 });
