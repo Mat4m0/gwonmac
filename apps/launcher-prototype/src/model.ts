@@ -77,8 +77,8 @@ export const createDefaultSettings = (): LauncherSettings => ({
   shortcuts: {
     toggleTools: "⌘B",
     quickTravel: "⌘T",
-    xunlaiStorage: "⌘⇧C",
-    applyTeams: "⌘⇧A",
+    xunlaiStorage: "⇧⌘C",
+    applyTeams: "⇧⌘A",
   },
   showGuildWarsNews: true,
   showMacNews: true,

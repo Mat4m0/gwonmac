@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Component } from "vue";
 import { Download, House, Monitor, Wrench } from "@lucide/vue";
+import ShortcutRecorder from "../components/ShortcutRecorder.vue";
 import { dailyActivities } from "../data/dailies";
 import type { LauncherSettings, SettingsSection } from "../model";
 
@@ -14,6 +15,12 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
   { id: "tools", label: "Tools", icon: Wrench },
   { id: "display", label: "Display", icon: Monitor },
 ];
+
+type ShortcutKey = keyof LauncherSettings["shortcuts"];
+const unavailableShortcuts = (current: ShortcutKey) =>
+  Object.entries(settings.value.shortcuts)
+    .filter(([key, shortcut]) => key !== current && shortcut)
+    .map(([, shortcut]) => shortcut);
 </script>
 
 <template>
@@ -117,10 +124,14 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
               <span><strong>Enable Tools Beta</strong><small>Adds optional in-game features.</small></span>
               <input v-model="settings.toolsEnabled" class="switch" type="checkbox" />
             </label>
-            <label v-if="settings.toolsEnabled" class="setting-row shortcut-setting-row">
+            <div v-if="settings.toolsEnabled" class="setting-row shortcut-setting-row">
               <span><strong>Show or hide Tools</strong><small>Keyboard shortcut while Guild Wars is active.</small></span>
-              <input v-model="settings.shortcuts.toggleTools" class="shortcut-input" aria-label="Show or hide Tools shortcut" />
-            </label>
+              <ShortcutRecorder
+                v-model="settings.shortcuts.toggleTools"
+                label="Show or hide Tools"
+                :unavailable-shortcuts="unavailableShortcuts('toggleTools')"
+              />
+            </div>
             <label v-if="settings.toolsEnabled" class="setting-row">
               <span><strong>Interface style</strong><small>Changes the in-game Tools interface.</small></span>
               <select v-model="settings.interfaceStyle"><option value="guild-wars">Guild Wars</option><option value="reforged">Reforged</option><option value="modern">Modern</option></select>
@@ -134,30 +145,42 @@ const sections: Array<{ id: SettingsSection; label: string; icon: Component }> =
                 <span><strong>Quick Travel</strong><small>Search destinations and save favorites.</small></span>
                 <input v-model="settings.quickTravel" class="switch" type="checkbox" />
               </label>
-              <label v-if="settings.quickTravel" class="tool-shortcut-row">
+              <div v-if="settings.quickTravel" class="tool-shortcut-row">
                 <span>Keyboard shortcut</span>
-                <input v-model="settings.shortcuts.quickTravel" class="shortcut-input" aria-label="Quick Travel shortcut" />
-              </label>
+                <ShortcutRecorder
+                  v-model="settings.shortcuts.quickTravel"
+                  label="Quick Travel"
+                  :unavailable-shortcuts="unavailableShortcuts('quickTravel')"
+                />
+              </div>
             </div>
             <div class="tool-setting">
               <label class="setting-row">
                 <span><strong>Xunlai storage</strong><small>Open storage in supported PvE outposts.</small></span>
                 <input v-model="settings.xunlaiStorage" class="switch" type="checkbox" />
               </label>
-              <label v-if="settings.xunlaiStorage" class="tool-shortcut-row">
+              <div v-if="settings.xunlaiStorage" class="tool-shortcut-row">
                 <span>Keyboard shortcut</span>
-                <input v-model="settings.shortcuts.xunlaiStorage" class="shortcut-input" aria-label="Xunlai storage shortcut" />
-              </label>
+                <ShortcutRecorder
+                  v-model="settings.shortcuts.xunlaiStorage"
+                  label="Xunlai storage"
+                  :unavailable-shortcuts="unavailableShortcuts('xunlaiStorage')"
+                />
+              </div>
             </div>
             <div class="tool-setting">
               <label class="setting-row">
                 <span><strong>Apply teams</strong><small>Adds an Apply button in supported PvE outposts.</small></span>
                 <input v-model="settings.applyTeams" class="switch" type="checkbox" />
               </label>
-              <label v-if="settings.applyTeams" class="tool-shortcut-row">
+              <div v-if="settings.applyTeams" class="tool-shortcut-row">
                 <span>Keyboard shortcut</span>
-                <input v-model="settings.shortcuts.applyTeams" class="shortcut-input" aria-label="Apply teams shortcut" />
-              </label>
+                <ShortcutRecorder
+                  v-model="settings.shortcuts.applyTeams"
+                  label="Apply teams"
+                  :unavailable-shortcuts="unavailableShortcuts('applyTeams')"
+                />
+              </div>
             </div>
           </section>
         </div>

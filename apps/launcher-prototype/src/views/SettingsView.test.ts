@@ -1,6 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import { createDefaultSettings } from "../model";
+import ShortcutRecorder from "../components/ShortcutRecorder.vue";
 import SettingsView from "./SettingsView.vue";
 
 describe("Settings", () => {
@@ -11,10 +12,15 @@ describe("Settings", () => {
     });
 
     expect(wrapper.text()).not.toContain("Keyboard shortcuts");
-    expect(wrapper.findAll("[aria-label$='shortcut']")).toHaveLength(3);
+    expect(wrapper.findAllComponents(ShortcutRecorder)).toHaveLength(3);
 
-    await wrapper.get("[aria-label='Quick Travel shortcut']").setValue("⌘G");
-    expect(settings.shortcuts.quickTravel).toBe("⌘G");
+    const quickTravelRecorder = wrapper.findAllComponents(ShortcutRecorder)[1]!;
+    await quickTravelRecorder.get(".shortcut-record-button").trigger("click");
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { code: "KeyG", key: "G", ctrlKey: true, shiftKey: true }),
+    );
+    await wrapper.vm.$nextTick();
+    expect(settings.shortcuts.quickTravel).toBe("⌃⇧G");
   });
 
   it("removes tool-only choices when Tools are disabled", async () => {
@@ -25,7 +31,7 @@ describe("Settings", () => {
 
     await wrapper.get("input[type='checkbox']").setValue(false);
     expect(wrapper.text()).not.toContain("Quick Travel");
-    expect(wrapper.find(".shortcut-input").exists()).toBe(false);
+    expect(wrapper.findComponent(ShortcutRecorder).exists()).toBe(false);
   });
 
   it("removes daily choices when Dailies are disabled", async () => {
