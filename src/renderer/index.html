@@ -99,58 +99,6 @@
       <pre id="loading-crash-text"></pre>
     </details>
 
-    <!-- One decision, two cards, and a single plainly-worded consent line.
-         The game tools live in Settings: their defaults are right for a first
-         launch, and a player who has never played has no basis to answer. -->
-    <section id="data-choice" aria-labelledby="data-choice-title" hidden>
-      <div class="dock-info">
-        <h2 id="data-choice-title">How would you like to play?</h2>
-        <p>You can change this any time in Settings.</p>
-        <p>
-          <label>
-            <input type="checkbox" id="data-choice-auto-updates" checked>
-            Check for app updates. Checks when due after launch, at most once every six hours.
-          </label>
-        </p>
-        <p id="data-choice-error" role="status" hidden></p>
-      </div>
-      <div class="data-choice-actions">
-        <button type="button" id="data-choice-quick" class="data-choice-option recommended">
-          <span class="data-choice-name">Quick Start</span>
-          <span class="data-choice-badge">Recommended</span>
-          <span class="data-choice-description">Play now. Each area downloads when you need it.</span>
-        </button>
-        <button type="button" id="data-choice-full" class="data-choice-option">
-          <span class="data-choice-name">Download Full Game</span>
-          <span id="data-choice-full-size" class="data-choice-description">Download everything first. You can play while it downloads.</span>
-        </button>
-      </div>
-    </section>
-
-    <section id="data-download" aria-labelledby="data-download-title" hidden>
-      <div id="data-download-track" aria-hidden="true">
-        <div id="data-download-fill"></div>
-      </div>
-      <div class="dock-info">
-        <h2 id="data-download-title" class="sr-only">Downloading the full game</h2>
-        <p id="data-download-status" role="status" aria-live="polite">
-          Preparing the download…
-        </p>
-        <p id="data-download-detail">You can close the launcher and continue later.</p>
-      </div>
-      <div class="data-download-actions">
-        <button type="button" id="data-download-quick" class="launcher-link">
-          Back to Quick Start
-        </button>
-        <button type="button" id="data-download-toggle" class="launcher-secondary">
-          Pause Download
-        </button>
-        <button type="button" id="data-download-play" class="launcher-primary">
-          Play While Downloading
-        </button>
-      </div>
-    </section>
-
     <section id="client-compat" aria-labelledby="client-compat-title" hidden>
       <div class="dock-info">
         <h2 id="client-compat-title"></h2>
@@ -283,29 +231,16 @@
         <section class="settings-pane" id="settings-pane-data" role="tabpanel"
                  aria-labelledby="settings-tab-data">
           <h3 id="settings-data-title" class="settings-pane-title">Game data</h3>
-          <p class="settings-pane-intro">Choose how much Guild Wars downloads before you play.</p>
+          <p class="settings-pane-intro">Guild Wars downloads the complete game in the background while you play.</p>
           <p id="settings-cache" class="settings-status" role="status" aria-live="polite">
             Checking downloaded game data…
           </p>
           <div id="settings-progress" aria-hidden="true" hidden>
             <div id="settings-progress-fill"></div>
           </div>
-          <fieldset class="settings-data-strategy">
-            <legend>Game data mode</legend>
-            <div class="settings-seg ui-segment" role="presentation">
-              <label class="settings-radio">
-                <input type="radio" name="dataStrategy" value="quick">
-                <span>Quick Start</span>
-              </label>
-              <label class="settings-radio">
-                <input type="radio" name="dataStrategy" value="full">
-                <span>Full Game</span>
-              </label>
-            </div>
-          </fieldset>
           <p id="settings-data-note" class="settings-note"></p>
           <div class="settings-data-actions">
-            <button type="button" id="settings-download-full" class="ui-button" data-variant="primary">Start Downloading Now</button>
+            <button type="button" id="settings-download-full" class="ui-button" data-variant="primary">Pause Download</button>
             <button type="button" id="settings-reveal-data" class="ui-button">Show in Finder</button>
           </div>
           <p class="settings-note">Game data lives in your Library folder; Show in Finder opens it.</p>
@@ -635,7 +570,7 @@
           <button type="button" id="settings-reset-launcher" class="ui-link quiet-danger" data-variant="danger">
             Reset GWonMac settings…
           </button>
-          <p class="settings-danger-sub">Restores display, tools, window position, and launcher choices. Downloaded game data and your login are kept.</p>
+          <p class="settings-danger-sub">Restores display, tools, and window position. Downloaded game data and your login are kept.</p>
         </section>
 
         <section class="settings-pane" id="settings-pane-accounts" role="tabpanel"

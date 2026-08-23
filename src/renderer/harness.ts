@@ -1325,7 +1325,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       else console.log(s);
       return s;
     };
-    await window.gwResolveDataStrategy(meta.size);
+    await window.gwResolveClientCompatibility();
   } catch (e) {
     window.gwLoading?.fail('Game data could not be prepared.');
     return log(

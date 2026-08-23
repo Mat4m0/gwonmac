@@ -1,6 +1,5 @@
 /**
- * One owner for launcher strategy, full-download presentation, and Settings.
- * Cache residency is the download-progress truth; dataStrategy is only intent.
+ * One owner for Settings and its supporting application actions.
  *
  * index.html loads this as a classic script, so the file carries no top-level
  * import or export and names the contracts through type-only `import(…)`.
@@ -10,8 +9,6 @@
   type AppSettings = import('../shared/contracts.js').AppSettings;
   type RendererSettingsPatch = import('../shared/contracts.js').RendererSettingsPatch;
   type ClientSession = import('../shared/contracts.js').ClientSession;
-  type RendererMilestone =
-    import('../shared/diagnostics.js').RendererMilestone;
   type UpdateAction = import('./update-action.js').UpdateAction;
 
   const byId = (id: string) => {
@@ -189,12 +186,6 @@
       if (target.dataset.pane) selectPane(target.dataset.pane);
   });
 
-  const launcherMilestone = (name: RendererMilestone) => {
-    void window.gwNative.diagnostics
-      .recordRendererMilestone(name, performance.now() * 1000)
-      .catch(() => {});
-  };
-
   function loadSettings() {
     if (currentSettings) return Promise.resolve(currentSettings);
     if (!settingsLoad) {
@@ -293,13 +284,9 @@
 
   const extendedMemorySetting = import('./extended-memory-setting.js')
     .then((module) => module.bindExtendedMemorySetting(document));
-  const dataStrategy = import('./settings-data-strategy.js')
-    .then((module) => module.bindSettingsDataStrategy(document, {
-      loadSettings,
-      persistSettings,
+  const gameData = import('./settings-game-data.js')
+    .then((module) => module.bindGameDataController(document, {
       feedback: setFeedback,
-      milestone: launcherMilestone,
-      dialogOpen: () => dialog.open,
     }));
 
   window.gwNative.settings.onChange((settings) => {
@@ -529,14 +516,11 @@
     void extendedMemorySetting.then((setting) => {
       setting.render(settings.extendedMemoryEnabled, currentSession?.extendedMemory ?? null);
     });
-    void dataStrategy.then((controller) => controller.renderSettings(settings));
+    void gameData.then((controller) => controller.renderSettings());
     updateRenderScaleDimensions();
   }
 
-  window.gwResolveDataStrategy = async (snapshotBytes) => {
-    await (await dataStrategy).resolve(snapshotBytes);
-    await resolveClientCompatibility();
-  };
+  window.gwResolveClientCompatibility = resolveClientCompatibility;
   async function openSettings() {
     const wasOpen = dialog.open;
     const needsSettings = currentSettings === null;
@@ -561,7 +545,7 @@
       // The client build's status is the answer to "why is my cursor plain?",
       // so it is in Settings whether or not the launcher notice was ever seen.
       await readSession().catch(() => undefined);
-      await (await dataStrategy).refresh();
+      await (await gameData).refresh();
       if (feedback.textContent === 'Loading settings…') setFeedback();
     } catch {
       setFeedback('Settings could not be loaded. Close Settings and try again.', 'error');
@@ -602,10 +586,6 @@
       !(control instanceof globalThis.HTMLInputElement) &&
       !(control instanceof globalThis.HTMLSelectElement)
     ) return;
-    if (control.name === 'dataStrategy') {
-      void dataStrategy.then((controller) => controller.saveSelectedStrategy());
-      return;
-    }
     const patch = patchForControl(control);
     if (!patch) return;
     setFeedback('Saving…', 'progress');
@@ -659,7 +639,7 @@
         );
       } else {
         setFeedback(
-          'GWonMac settings and Travel preferences were reset. Choose a download mode next launch.',
+          'GWonMac settings and Travel preferences were reset. Game data will download automatically next launch.',
           'success',
           4500,
         );

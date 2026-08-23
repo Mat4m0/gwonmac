@@ -44,7 +44,6 @@ describe("resolved profile paths", () => {
       nativeDoubleClick: `${root}/game/double-click`,
       extendedMemory: `${root}/game/extended-memory`,
       chunks: `${root}/game/chunks`,
-      bootChunks: `${root}/game/boot-chunks.json`,
       skillAssets: `${root}/game/skill-assets`,
       cacheClearRequest: `${root}/clear-cache-on-start`,
       gameStorageClearRequest: `${root}/clear-game-storage-on-start`,

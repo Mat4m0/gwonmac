@@ -229,12 +229,12 @@ describe("atomic-file orphan sweep", () => {
     await writeFile(join(dir, abandoned), "partial");
     await writeFile(join(dir, ours), "in flight");
     await writeFile(join(dir, "chunkhash"), "real chunk");
-    await writeFile(join(dir, "boot-chunks.json"), "{}");
+    await writeFile(join(dir, "metadata.json"), "{}");
 
     assert.equal(await sweepOrphans(dir), 1);
     assert.deepEqual((await readdir(dir)).sort(), [
-      "boot-chunks.json",
       "chunkhash",
+      "metadata.json",
       ours,
     ].sort());
   });

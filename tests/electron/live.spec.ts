@@ -91,7 +91,6 @@ test.describe("live client", () => {
         renderScale: 2,
         nativeCursor: false,
         showDiagnostics: false,
-        dataStrategy: "quick",
       }),
       { mode: 0o600 },
     );

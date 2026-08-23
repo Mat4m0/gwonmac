@@ -13,7 +13,6 @@
 import type {
   DownloadActivity,
   DownloadProgress,
-  PrefetchProgress,
 } from "./contracts.js";
 
 /** Never a failure, so it is typed as the activity it is: spreading a
@@ -25,11 +24,6 @@ export const INITIAL_PROGRESS: DownloadActivity = {
   total: 0,
   bytesPerSecond: 0,
   secondsRemaining: null,
-};
-
-export const EMPTY_PREFETCH: PrefetchProgress = {
-  completedChunks: 0,
-  totalChunks: 0,
 };
 
 export function longRunningTaskFeedback(value: DownloadProgress): {

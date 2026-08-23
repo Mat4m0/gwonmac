@@ -825,7 +825,6 @@ test.describe("diagnostics", () => {
               renderScale: 1,
               nativeCursor: false,
               showDiagnostics: false,
-              dataStrategy: "quick",
             },
           });
         },

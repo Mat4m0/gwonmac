@@ -10,15 +10,6 @@ export const boxOf = async (locator: Locator) => {
 
 export async function startGameInput(page: Page) {
   const canvas = page.locator("#canvas");
-  const quickStart = page.locator("#data-choice-quick");
-  await expect
-    .poll(
-      async () =>
-        (await canvas.getAttribute("data-input-ready")) === "true" ||
-        (await quickStart.isVisible()),
-    )
-    .toBe(true);
-  if (await quickStart.isVisible()) await quickStart.click();
   const acceptCompatibility = page.locator("#client-compat-play");
   await expect.poll(async () =>
     (await canvas.getAttribute("data-input-ready")) === "true"

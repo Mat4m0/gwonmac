@@ -602,7 +602,6 @@ test.describe("the Steam credential seam", () => {
             renderScale: 1,
             nativeCursor: false,
             showDiagnostics: false,
-            dataStrategy: "quick",
           },
         });
       },

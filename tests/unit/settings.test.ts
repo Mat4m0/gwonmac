@@ -32,10 +32,9 @@ describe("settings", () => {
       shortcutOverrides: {},
       extendedMemoryEnabled: false,
       showDiagnostics: false,
-      dataStrategy: null,
-      // On by default since the 2026-07 UX revision, and declared as a
-      // pre-checked line at first run. Unticking it is the one flag that stops
-      // every network request nobody asked for, without exception.
+      dataStrategy: "full",
+      // Automatic app-update checks remain a separate preference from the
+      // required ArenaNet game-data download.
       autoCheckUpdates: true,
       updateTrack: "stable",
       lastUpdateCheckAt: null,
@@ -58,7 +57,6 @@ describe("settings", () => {
       renderScale: 1,
       touchMode: "off",
       showDiagnostics: true,
-      dataStrategy: "full",
     });
     assert.equal("cursorTheme" in got, false);
     assert.equal("nativeCursor" in got, false);
@@ -127,6 +125,9 @@ describe("settings", () => {
     assert.equal("uiBorderWidth" in parseSettings({ uiBorderWidth: 4 }), false);
     assert.equal("uiRadius" in parseSettings({ uiRadius: 16 }), false);
     assert.equal("nativeCursor" in parseSettings({ nativeCursor: "yes" }), false);
+    assert.equal(parseSettings({ dataStrategy: null }).dataStrategy, "full");
+    assert.equal(parseSettings({ dataStrategy: "quick" }).dataStrategy, "full");
+    assert.equal(parseSettings({ dataStrategy: "full" }).dataStrategy, "full");
     assert.throws(() => parseSettings({ dataStrategy: "automatic" }), AppError);
     assert.throws(() => parseSettings([]), AppError);
   });
@@ -313,7 +314,6 @@ describe("settings", () => {
       nativeCursor: true,
       touchMode: "translate",
       showDiagnostics: true,
-      dataStrategy: "full",
       cursorTheme: "guild-wars-2",
     };
     await writeFile(path, JSON.stringify(alpha));
@@ -339,10 +339,9 @@ describe("settings", () => {
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately
-      // including the update check, which now defaults on: a profile that
-      // never answered the question inherits the current default, while any
-      // profile that completed first run carries its explicit answer and an
-      // opt-out is therefore never overridden.
+      // including the update check, which defaults on. A profile that never
+      // stored the setting inherits the current default; an explicit opt-out
+      // remains false on the ordinary parse path.
       autoCheckUpdates: true,
       updateTrack: "stable",
       lastUpdateCheckAt: null,

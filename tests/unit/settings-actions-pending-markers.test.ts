@@ -51,7 +51,6 @@ function pathsWithMarkers(
     cacheClearRequest,
     gameStorageClearRequest,
     chunks: path.join(root, "chunks"),
-    bootChunks: path.join(root, "boot-chunks.json"),
   } as GamePaths;
 }
 

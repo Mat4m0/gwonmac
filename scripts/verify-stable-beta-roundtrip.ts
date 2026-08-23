@@ -28,7 +28,6 @@ import {
   type BuildLibrary,
 } from "../src/shared/builds/library.ts";
 import {
-  DATA_STRATEGIES,
   LAST_UPDATE_CHECK_AT_MAX,
   RENDER_SCALES,
   UI_PANEL_OPACITY_MAX,
@@ -168,7 +167,6 @@ const domainCaseCount = Math.max(
   UI_FONTS.length,
   opacityValues.length,
   booleanValues.length,
-  DATA_STRATEGIES.length,
   UPDATE_TRACKS.length,
   updateCheckValues.length,
   compatibilityValues.length,
@@ -191,7 +189,7 @@ const candidateSettingsDomains = Array.from(
       shortcutOverrides: {},
       extendedMemoryEnabled: cycle(booleanValues, index + 1),
       showDiagnostics: cycle(booleanValues, index),
-      dataStrategy: cycle(DATA_STRATEGIES, index),
+      dataStrategy: "full",
       autoCheckUpdates: false,
       updateTrack: cycle(UPDATE_TRACKS, index),
       lastUpdateCheckAt: cycle(updateCheckValues, index),

@@ -39,7 +39,6 @@ export interface GamePaths {
   nativeDoubleClick: string;
   extendedMemory: string;
   chunks: string;
-  bootChunks: string;
   skillAssets: string;
   cacheClearRequest: string;
   gameStorageClearRequest: string;
@@ -72,7 +71,6 @@ export function gamePaths(userData: string): GamePaths {
     nativeDoubleClick: path.join(game, "double-click"),
     extendedMemory: path.join(game, "extended-memory"),
     chunks: path.join(game, "chunks"),
-    bootChunks: path.join(game, "boot-chunks.json"),
     // Icons and text decoded out of the player's own archive, under a
     // per-client-build directory so a new build starts a new cache rather than
     // serving last build's art. Discardable: deleting it costs a re-decode.

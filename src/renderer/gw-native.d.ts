@@ -207,7 +207,7 @@ declare global {
     gwWasmHeapBytes?(): number;
     /** Bounded texture counters for local developer diagnostics. */
     gwTextureStats?(): TextureMemorySnapshot;
-    gwResolveDataStrategy(snapshotBytes: number): Promise<void>;
+    gwResolveClientCompatibility(): Promise<void>;
     gwLog(visible?: boolean): boolean;
     gwEvictMemory(): number;
     gwStats?(): Record<string, number | boolean>;

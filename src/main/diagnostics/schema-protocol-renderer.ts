@@ -397,36 +397,6 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     level: "info",
     fields: { clockSynchronized: boolean },
   },
-  "launcher.choiceShown": {
-    scope: "owner",
-    subsystem: "renderer",
-    level: "info",
-    fields: { clockSynchronized: boolean },
-  },
-  "launcher.quickSelected": {
-    scope: "owner",
-    subsystem: "renderer",
-    level: "info",
-    fields: { clockSynchronized: boolean },
-  },
-  "launcher.fullSelected": {
-    scope: "owner",
-    subsystem: "renderer",
-    level: "info",
-    fields: { clockSynchronized: boolean },
-  },
-  "launcher.playNowSelected": {
-    scope: "owner",
-    subsystem: "renderer",
-    level: "info",
-    fields: { clockSynchronized: boolean },
-  },
-  "launcher.bootReleased": {
-    scope: "owner",
-    subsystem: "renderer",
-    level: "info",
-    fields: { clockSynchronized: boolean },
-  },
   "build.info": {
     scope: "owner",
     subsystem: "renderer",

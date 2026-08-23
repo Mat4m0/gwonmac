@@ -136,18 +136,13 @@
 /* Response on pointer-down, not on release: every dock control presses. */
 #loading-retry:active,
 #loading-report:active:not(:disabled),
-.data-choice-option:active,
-.data-download-actions button:active:not(:disabled),
 .client-compat-actions button:active:not(:disabled) { transform:scale(.97); }
 #loading-retry:focus-visible,
 #loading-report:focus-visible { outline:2px solid #ff9d66; outline-offset:2px; }
 #loading-retry[hidden],
 #loading-report[hidden] { display:none; }
 #loading-report:disabled { opacity:.6; }
-#loading-dock:has(#data-choice:not([hidden])) #loading-boot,
-#loading-dock:has(#client-compat:not([hidden])) #loading-boot,
-#loading-dock:has(#data-download:not([hidden])) #loading-boot { display:none; }
-#loading-dock:has(#data-download:not([hidden])) #loading-bar { display:none; }
+#loading-dock:has(#client-compat:not([hidden])) #loading-boot { display:none; }
 
 /* The crash's technical detail: a full-width row under the boot line, closed
    by default so the plain-language sentence stays the first thing read. */
@@ -177,13 +172,9 @@
 #loading-label.error { color:#ff8f6b; }
 
 /* --------------------------------------------------- dock decision panels */
-#data-choice,
-#client-compat,
-#data-download { flex:1; min-width:0; display:flex; align-items:center;
+#client-compat { flex:1; min-width:0; display:flex; align-items:center;
                  justify-content:space-between; gap:20px; color:#eee3c9; }
-#data-choice[hidden],
-#client-compat[hidden],
-#data-download[hidden] { display:none; }
+#client-compat[hidden] { display:none; }
 /* The compatibility notice: a heading, the contract, and the version answer
    beneath it, which is a separate sentence and not a conclusion drawn from
    the heading. */
@@ -195,83 +186,10 @@
 .client-compat-version { margin:3px 0 0; font-size:12.5px; color:#e8dcc08c; }
 
 .dock-info { min-width:0; }
-#data-choice-title { margin:0 0 2px; font-size:17px; font-weight:400;
-                     font-family:var(--ui-font-display);
-                     letter-spacing:var(--ui-display-letter-spacing); color:#f2e8d2; }
 .dock-info > p { margin:0; font-size:13px; color:#d8caaaad; }
-/* The gate's save-failure line: never shares a slot with the size label. */
-#data-choice-error { color:#ff8f6b; }
 
-/* First-run options: two compact cards on the dock's action side. */
-.data-choice-actions { display:flex; gap:12px; flex-shrink:0; }
-.data-choice-option {
-  position:relative;
-  display:grid;
-  grid-template-columns:1fr auto;
-  gap:3px 8px;
-  align-items:center;
-  width:230px;
-  box-sizing:border-box;
-  padding:10px 13px;
-  border:1px solid #7a4b38;
-  border-radius:8px;
-  background:#201a14e8;
-  color:#eee3c9;
-  font:inherit;
-  text-align:left;
-  cursor:default;
-  transition:transform .1s ease-out;
-}
-.data-choice-option:hover {
-  border-color:#e07a40;
-  background:#2b2117f2;
-}
-.data-choice-option:active { background:#15110d; }
-.data-choice-option:focus-visible {
-  outline:2px solid #ff9d66;
-  outline-offset:2px;
-}
-/* The recommended card is the dock's gold primary. */
-.data-choice-option.recommended {
-  border-color:#b04d1c;
-  background:#6f2c14e8;
-  box-shadow:inset 0 0 0 1px #ffab7318;
-}
-.data-choice-option.recommended:hover { background:#8f3d1af2; }
-.data-choice-option.recommended .data-choice-name { color:#fff8e7; }
-.data-choice-name { font-size:15px; color:#fff2cf; }
-.data-choice-badge {
-  padding:2px 6px;
-  color:#ffb488;
-  border:1px solid #b04d1c80;
-  border-radius:4px;
-  font-size:10px;
-  letter-spacing:.05em;
-  text-transform:uppercase;
-}
-.data-choice-description {
-  grid-column:1 / -1;
-  color:#d8caaaad;
-  font-size:11.5px;
-  line-height:1.35;
-}
-.data-choice-option.recommended .data-choice-description { color:#f0dfb7b3; }
-
-/* Download progress rail replaces the boot rail while this panel is up. */
-#data-download-track { position:absolute; top:-1px; left:0; right:0; height:3px;
-                       overflow:hidden; background:#201a14; }
-#data-download-fill { width:0; height:100%;
-                      background:linear-gradient(90deg,#8a3a16,#e87038 55%,#ffb488);
-                      box-shadow:0 0 10px #e8703899;
-                      transition:width .25s ease; }
-#data-download-status { font-size:15px; color:#f0dfb7; }
-#data-download-detail { font-size:12.5px; color:#d8caaa8f; }
-
-/* Dock panel controls, shared by the download panel and the compatibility
-   notice so two dock panels cannot look like two applications. */
-.data-download-actions,
+/* Compatibility notice controls. */
 .client-compat-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
-.data-download-actions button,
 .client-compat-actions button {
   min-height:38px;
   padding:8px 16px;
@@ -283,27 +201,21 @@
   cursor:default;
   transition:transform .1s ease-out;
 }
-.data-download-actions button:hover:not(:disabled),
 .client-compat-actions button:hover:not(:disabled) {
   border-color:#e07a40;
   background:#2b2117f2;
 }
-.data-download-actions button:focus-visible,
 .client-compat-actions button:focus-visible {
   outline:2px solid #ff9d66;
   outline-offset:2px;
 }
-.data-download-actions button:disabled,
 .client-compat-actions button:disabled { opacity:.5; }
-.data-download-actions .launcher-primary,
 .client-compat-actions .launcher-primary {
   border-color:#b04d1c;
   color:#fff8e7;
   background:#6f2c14;
 }
-.data-download-actions .launcher-primary:hover:not(:disabled),
 .client-compat-actions .launcher-primary:hover:not(:disabled) { background:#8f3d1a; }
-.data-download-actions .launcher-link,
 .client-compat-actions .launcher-link {
   border-color:transparent;
   color:#d8caaaad;
@@ -311,7 +223,6 @@
   text-decoration:underline;
   text-underline-offset:3px;
 }
-.data-download-actions .launcher-link:hover:not(:disabled),
 .client-compat-actions .launcher-link:hover:not(:disabled) {
   color:#ffb488;
   border-color:transparent;
@@ -355,12 +266,9 @@
                          justify-content:center; max-width:none; }
   #loading-inner { box-sizing:border-box; padding-top:72px; }
   #loading-dock { flex-wrap:wrap; align-content:center; padding:12px 18px; }
-  #data-choice, #client-compat, #data-download {
+  #client-compat {
     flex-direction:column; align-items:stretch;
     justify-content:center; gap:10px; text-align:center; }
-  .data-choice-actions { justify-content:center; }
-  .data-choice-option { width:auto; flex:1; max-width:260px; }
-  .data-download-actions,
   .client-compat-actions { justify-content:center; flex-wrap:wrap; }
   /* space-between would pin the text to the left edge while Retry is hidden;
      centered, the boot line and an eventual Retry read as one group. */
@@ -371,6 +279,6 @@
 }
 
 @media (prefers-reduced-motion:reduce) {
-  #loading, #loading-fill, #data-download-fill { transition:none; }
+  #loading, #loading-fill { transition:none; }
   #loading-bar.busy #loading-fill { animation:none; width:100%; opacity:.5; }
 }

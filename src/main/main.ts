@@ -25,7 +25,6 @@ import {
   IPC,
   type AppSettings,
   type DownloadProgress,
-  type PrefetchProgress,
   type UpdateTrack,
 } from "../shared/contracts.js";
 import type {
@@ -268,10 +267,6 @@ function setProgress(next: DownloadProgress): void {
     for (const win of gameWindows) updateLongRunningTaskFeedback(next, win);
   }
   sendToRenderer(IPC.progressEvent, next);
-}
-
-function setPrefetch(next: PrefetchProgress): void {
-  sendToRenderer(IPC.prefetchEvent, { ...next });
 }
 
 function sendToRenderer(channel: string, value: unknown): void {
@@ -585,7 +580,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementCapabilities,
     extendedMemoryEnabled: settings.extendedMemoryEnabled,
     onProgress: setProgress,
-    onPrefetch: setPrefetch,
   });
   const sockets = buildSocketManager();
   appUpdaterController = new AppUpdater({

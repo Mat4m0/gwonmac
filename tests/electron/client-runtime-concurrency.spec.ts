@@ -13,6 +13,97 @@ const patchClientModule = path.join(root, "build/main/core/patch-client.js");
 const pathsModule = path.join(root, "build/main/core/paths.js");
 
 test.describe("client generation coordination", () => {
+  test("starts the complete download when a client becomes ready", async () => {
+    const fixture = await launchOffline("gw-runtime-auto-download-e2e-");
+    try {
+      const result = await fixture.app.evaluate(
+        async (_electron, modules) => {
+          const fs = process.getBuiltinModule("node:fs/promises");
+          const { createRequire } = process.getBuiltinModule("node:module");
+          const os = process.getBuiltinModule("node:os");
+          const path = process.getBuiltinModule("node:path");
+          const require = createRequire(path.join(process.cwd(), "package.json"));
+          const { ClientRuntime } = require(modules.clientRuntime);
+          const { gamePaths } = require(modules.paths);
+          const root = await fs.mkdtemp(path.join(os.tmpdir(), "gw-runtime-auto-download-"));
+          const paths = gamePaths(root);
+          const progress: DownloadProgress[] = [];
+          let downloads = 0;
+          const runtime = new ClientRuntime({
+            paths,
+            hostVersion: "test",
+            cachedOnly: true,
+            extendedMemoryEnabled: false,
+            enhancementCapabilities: {
+              nativeCursor: false,
+              targetObservation: false,
+              partyObservation: false,
+            },
+            onProgress: (value: DownloadProgress) => progress.push(value),
+          });
+          const store = {
+            chunksDir: paths.chunks,
+            size: 400,
+            chunkSize: 400,
+            hashes: ["chunk"],
+            resume: () => undefined,
+            stop: () => undefined,
+            residentIndices: async () => [0],
+            chunkByteLength: () => 400,
+            downloadAll: async ({ onProgress }: {
+              onProgress: (value: {
+                received: number;
+                total: number;
+                bytesPerSecond: number;
+                secondsRemaining: number | null;
+              }) => void;
+            }) => {
+              downloads += 1;
+              onProgress({
+                received: 400,
+                total: 400,
+                bytesPerSecond: 400,
+                secondsRemaining: null,
+              });
+              return true;
+            },
+          };
+          const active = runtime.activeSlot.publish({
+            artifactsDir: paths.artifacts,
+            store,
+            wasmPath: "/active/Gw.jspi.wasm",
+            jsPath: "/active/Gw.jspi.js",
+            compatibility: null,
+            extendedMemory: {
+              requestedAtLaunch: false,
+              status: "standard",
+              effectiveCapBytes: 2_147_483_648,
+              fallbackReason: null,
+            },
+          });
+          runtime.clientReady(active);
+          while (runtime.fullDownload) await runtime.fullDownload.promise;
+          await runtime.shutdown();
+          await fs.rm(root, { recursive: true, force: true });
+          return {
+            downloads,
+            states: progress.flatMap((value) =>
+              value.phase !== "error" && value.fullDownload
+                ? [value.fullDownload.status]
+                : []),
+          };
+        },
+        { clientRuntime: clientRuntimeModule, paths: pathsModule },
+      );
+      expect(result).toEqual({
+        downloads: 1,
+        states: ["running", "running", "complete"],
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("owns snapshot metadata and cache capacity policy", async () => {
     const fixture = await launchOffline("gw-runtime-cache-policy-e2e-");
     try {
@@ -43,7 +134,6 @@ test.describe("client generation coordination", () => {
               partyObservation: false,
             },
             onProgress: () => undefined,
-            onPrefetch: () => undefined,
           });
           runtime.activeSlot.publish({
             artifactsDir: paths.artifacts,
@@ -56,7 +146,6 @@ test.describe("client generation coordination", () => {
               residentBits: async () => Uint8Array.of(0b101),
               chunkByteLength: (index: number) => index === 2 ? 200 : 400,
               stop: () => undefined,
-              saveTouched: async () => undefined,
             },
             wasmPath: "/active/Gw.jspi.wasm",
             jsPath: "/active/Gw.jspi.js",
@@ -168,7 +257,6 @@ test.describe("client generation coordination", () => {
                 readyObservations.push(runtime.active !== null);
               }
             },
-            onPrefetch: () => undefined,
           });
           const preparingSession = runtime.session("test-app");
           let refusal: string | null = null;
@@ -188,7 +276,6 @@ test.describe("client generation coordination", () => {
             artifactsDir: paths.artifacts,
             store: {
               stop: () => undefined,
-              saveTouched: async () => undefined,
             },
             wasmPath: "/active/Gw.jspi.wasm",
             jsPath: "/active/Gw.jspi.js",
@@ -276,7 +363,6 @@ test.describe("client generation coordination", () => {
               partyObservation: false,
             },
             onProgress: (value: DownloadProgress) => progress.push(value),
-            onPrefetch: () => undefined,
           });
           let updateSignal: AbortSignal | undefined;
           let started!: () => void;
@@ -372,7 +458,6 @@ test.describe("client generation coordination", () => {
               partyObservation: false,
             },
             onProgress: () => undefined,
-            onPrefetch: () => undefined,
           });
           let updateSignal: AbortSignal | undefined;
           let started!: () => void;
@@ -463,7 +548,6 @@ test.describe("client generation coordination", () => {
               partyObservation: false,
             },
             onProgress: () => undefined,
-            onPrefetch: () => undefined,
           });
           let updateCalls = 0;
           const originalUpdate = PatchClient.prototype.update;
@@ -539,11 +623,9 @@ test.describe("client generation coordination", () => {
               partyObservation: false,
             },
             onProgress: (value: DownloadProgress) => progress.push(value),
-            onPrefetch: () => undefined,
           });
           const activeStore = {
             stop: () => undefined,
-            saveTouched: async () => undefined,
           };
           runtime.activeSlot.publish({
             artifactsDir: paths.artifacts,
@@ -651,7 +733,6 @@ test.describe("client generation coordination", () => {
               partyObservation: false,
             },
             onProgress: () => undefined,
-            onPrefetch: () => undefined,
           });
           const originalUpdate = PatchClient.prototype.update;
           let patchCalls = 0;
@@ -745,11 +826,9 @@ test.describe("client generation coordination", () => {
               partyObservation: false,
             },
             onProgress: () => undefined,
-            onPrefetch: () => undefined,
           });
           const store = {
             stop: () => undefined,
-            saveTouched: async () => undefined,
           };
           runtime.activeSlot.publish({
             artifactsDir: paths.artifacts,
@@ -860,11 +939,9 @@ test.describe("client generation coordination", () => {
               partyObservation: false,
             },
             onProgress: () => undefined,
-            onPrefetch: () => undefined,
           });
           const store = {
             stop: () => undefined,
-            saveTouched: async () => undefined,
           };
           const generation = runtime.activeSlot.publish({
             artifactsDir: paths.artifacts,
@@ -1027,11 +1104,9 @@ test.describe("client generation coordination", () => {
               partyObservation: false,
             },
             onProgress: () => undefined,
-            onPrefetch: () => undefined,
           });
           const store = {
             stop: () => undefined,
-            saveTouched: async () => undefined,
           };
           const generation = runtime.activeSlot.publish({
             artifactsDir: paths.artifacts,

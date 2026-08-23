@@ -147,7 +147,6 @@ const api = {
   progress: {
     current: () => ipcRenderer.invoke(IPC.progressCurrent),
     onChange: (callback) => listen(IPC.progressEvent, callback),
-    onPrefetch: (callback) => listen(IPC.prefetchEvent, callback),
   },
   snapshot: {
     metadata: () => ipcRenderer.invoke(IPC.snapshotMetadata),

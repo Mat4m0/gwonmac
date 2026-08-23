@@ -25,10 +25,10 @@ describe("diagnosticEventRecord", () => {
   });
 
   it("owns the subsystem and level of an event, so a call site cannot disagree", () => {
-    assert.deepEqual(diagnosticEventRecord({ k: "prefetch.failed", code: "chunk_offline" }), {
+    assert.deepEqual(diagnosticEventRecord({ k: "fullDownload.failed", code: "chunk_offline" }), {
       subsystem: "cache",
-      level: "warn",
-      name: "prefetch.failed",
+      level: "error",
+      name: "fullDownload.failed",
       fields: { code: "chunk_offline" },
     });
     assert.deepEqual(diagnosticEventRecord({ k: "app.uncaughtException", code: "unknown" }), {

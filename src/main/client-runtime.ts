@@ -31,8 +31,8 @@ import {
   type OptionalFeatureStatus,
   type DownloadProgress,
   type FullDownloadOutcome,
+  type FullDownloadState,
   type NoticeCode,
-  type PrefetchProgress,
   type SnapshotMetadata,
 } from "../shared/contracts.js";
 import {
@@ -138,7 +138,6 @@ interface ClientRuntimeOptions {
   enhancementCapabilities: EnhancementCapabilities;
   extendedMemoryEnabled: boolean;
   onProgress: (progress: DownloadProgress) => void;
-  onPrefetch: (progress: PrefetchProgress) => void;
 }
 
 export class ClientRuntime {
@@ -152,7 +151,6 @@ export class ClientRuntime {
    */
   private readonly generationLock = new Mutex();
   private progressValue: DownloadProgress = { ...INITIAL_PROGRESS };
-  private saveTouchedTimer: ReturnType<typeof setInterval> | null = null;
   private initialResidencyRecorded = false;
   /**
    * The store the download is actually driving, kept beside its promise. After
@@ -278,7 +276,6 @@ export class ClientRuntime {
       chunkSize,
       chunkHashes,
       compression,
-      bootListPath: this.options.paths.bootChunks,
       fetch: this.options.cachedOnly
         ? async () => {
             throw new Error("cached live probe cannot download missing chunks");
@@ -520,14 +517,8 @@ export class ClientRuntime {
           fingerprint: candidateFingerprint,
         })
       : null;
-    if (this.saveTouchedTimer) clearInterval(this.saveTouchedTimer);
-    this.saveTouchedTimer = setInterval(() => {
-      if (this.activeSlot.current?.generation !== active.generation) return;
-      void active.store.saveTouched().catch(() => undefined);
-    }, 5_000);
     if (previous && previous.store !== store) {
       previous.store.stop();
-      void previous.store.saveTouched().catch(() => undefined);
     }
     return active;
   }
@@ -610,6 +601,7 @@ export class ClientRuntime {
     active: ActiveClient,
     label: string,
     noticeCode?: NoticeCode,
+    fullDownload?: FullDownloadState,
   ): void {
     if (this.activeSlot.current?.generation !== active.generation) {
       throw new NotReadyError("ready progress requires the active client generation");
@@ -619,24 +611,13 @@ export class ClientRuntime {
       phase: "ready",
       label,
       ...(noticeCode ? { noticeCode } : {}),
+      ...(fullDownload ? { fullDownload } : {}),
     });
   }
 
   private clientReady(active: ActiveClient, noticeCode?: NoticeCode): void {
     this.publishReadyProgress(active, "Starting Guild Wars", noticeCode);
-    void active.store
-      .prefetch((progress) => {
-        if (this.activeSlot.current?.generation === active.generation) {
-          this.options.onPrefetch(progress);
-        }
-      })
-      .then(() => {
-        if (this.activeSlot.current?.generation !== active.generation) return;
-        return this.recordResidency(active.store);
-      })
-      .catch((error) =>
-        logEvent({ k: "prefetch.failed", code: errorCode(error) }),
-      );
+    void this.downloadAll();
   }
 
   private async activatePublishedAndReady(noticeCode?: NoticeCode): Promise<void> {
@@ -831,6 +812,7 @@ export class ClientRuntime {
       ...INITIAL_PROGRESS,
       phase: "image",
       label: "Downloading full game",
+      fullDownload: { status: "running" },
     });
     let lastProgressLogAt = 0;
     const promise = active.store
@@ -844,6 +826,7 @@ export class ClientRuntime {
             total: value.total,
             bytesPerSecond: value.bytesPerSecond,
             secondsRemaining: value.secondsRemaining,
+            fullDownload: { status: "running" },
           });
           const now = Date.now();
           if (now - lastProgressLogAt >= 5_000) {
@@ -868,6 +851,8 @@ export class ClientRuntime {
           this.publishReadyProgress(
             active,
             complete ? "Full game downloaded" : "Download stopped",
+            undefined,
+            { status: complete ? "complete" : "paused" },
           );
         }
         return { status: complete ? "complete" : "stopped" };
@@ -876,7 +861,12 @@ export class ClientRuntime {
         const code = errorCode(error);
         logEvent({ k: "fullDownload.failed", code });
         if (this.activeSlot.current?.generation === active.generation) {
-          this.publishReadyProgress(active, "Download paused");
+          this.publishReadyProgress(
+            active,
+            "Download paused",
+            undefined,
+            { status: "failed", errorCode: code },
+          );
         }
         return { status: "failed", errorCode: code };
       })
@@ -891,6 +881,12 @@ export class ClientRuntime {
     const download = this.fullDownload;
     if (!download) return;
     logEvent({ k: "fullDownload.stopRequested" });
+    if (this.progressValue.phase === "image") {
+      this.commitProgress({
+        ...this.progressValue,
+        fullDownload: { status: "stopping" },
+      });
+    }
     download.store.stop();
   }
 
@@ -972,10 +968,7 @@ export class ClientRuntime {
       new Error("game client update interrupted for application shutdown"),
     );
     await update?.catch(() => undefined);
-    if (this.saveTouchedTimer) clearInterval(this.saveTouchedTimer);
-    this.saveTouchedTimer = null;
     const active = this.activeSlot.current;
     active?.store.stop();
-    await active?.store.saveTouched().catch(() => undefined);
   }
 }
