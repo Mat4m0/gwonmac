@@ -279,8 +279,15 @@ export async function installCertifiedCompanion(
       }
     });
     const observerStopped = attempt("observer disposal", stopObserver);
+    // Cursor refresh owns DOM listeners that call cursorEventCount(), which
+    // reads the kernel runtime allocation. Its disposal is therefore an
+    // independent runtime-memory barrier, not a consequence of stopping the
+    // animation-frame observer.
+    const cursorRefreshDisposed = attempt(
+      "cursor refresh disposal",
+      disposeCursorRefresh,
+    );
     if (observerStopped) {
-      attempt("cursor refresh disposal", disposeCursorRefresh);
       attempt("cursor disposal", disposeCursor);
       attempt("target readout disposal", disposeReadout);
       attempt("Toolbox disposal", disposeToolbox);
@@ -334,9 +341,11 @@ export async function installCertifiedCompanion(
           if (snapshotPointer) free(snapshotPointer);
         });
       }
-      attempt("runtime allocation release", () => {
-        if (runtimeAllocation) free(runtimeAllocation);
-      });
+      if (cursorRefreshDisposed) {
+        attempt("runtime allocation release", () => {
+          if (runtimeAllocation) free(runtimeAllocation);
+        });
+      }
     }
     const runtimeWithdrawn = attempt("runtime withdrawal", () => {
       if (window.gwCompanionRuntime === installedRuntime) {
