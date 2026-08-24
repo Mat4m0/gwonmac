@@ -1236,6 +1236,8 @@ export async function assertRollbackAfterTablePublication() {
       (rollbackCursorPointer + COMPANION_CURSOR_BYTES + 7) & ~7;
     const rollbackPartyPointer =
       rollbackToolboxPointer + COMPANION_TOOLBOX_BYTES;
+    const rollbackPlayRegionPointer =
+      rollbackPartyPointer + COMPANION_PARTY_BYTES;
     assert.deepEqual(result, {
       allocations: [
         { pointer: 0x1000, size: 65_551 },
@@ -1246,10 +1248,12 @@ export async function assertRollbackAfterTablePublication() {
         { pointer: rollbackCursorPointer, size: COMPANION_CURSOR_BYTES },
         { pointer: rollbackToolboxPointer, size: COMPANION_TOOLBOX_BYTES },
         { pointer: rollbackPartyPointer, size: COMPANION_PARTY_BYTES },
+        { pointer: rollbackPlayRegionPointer, size: COMPANION_PLAY_REGION_BYTES },
       ],
       freed: [
         rollbackToolboxPointer,
         rollbackPartyPointer,
+        rollbackPlayRegionPointer,
         rollbackCursorPointer,
         rollbackConfigPointer,
         0x1000,
