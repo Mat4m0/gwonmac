@@ -50,10 +50,13 @@ ipcMain.on(IPC.rendererCommandDone, (event, id: unknown, outcome: unknown) => {
  * hangs: every caller is a menu action or a capture step, and capture stop runs
  * on the quit path.
  *
- * A command sent while a page is still loading is dropped by Chromium — the
- * handler is not registered yet — so `did-finish-load` is a give-up signal, not
- * a deadline. Once a page is loaded, only its replacement, its destruction, or
- * the loss of its renderer process settles a command it has not answered.
+ * `isLoadingMainFrame()` is not a readiness boundary. The renderer installs
+ * this command handler after DOMContentLoaded, before Electron emits
+ * `did-finish-load`, so a command may be handled while the main frame still
+ * reports loading. Conversely, a command sent before the handler exists may be
+ * dropped; the bounded timeout handles that honest uncertainty. Only page
+ * replacement, destruction, or loss of the renderer process may fail a command
+ * before its handler answers.
  *
  * A renderer whose process is gone cannot answer, and after a second crash the
  * window and its `webContents` are both still alive with the canonical URL —
@@ -89,7 +92,6 @@ export function sendRendererCommand(
       pending.delete(id);
       contents.off("destroyed", failed);
       contents.off("render-process-gone", failed);
-      contents.off("did-finish-load", failed);
       contents.off("did-start-navigation", abandon);
       resolve(outcome);
     };
@@ -102,7 +104,6 @@ export function sendRendererCommand(
     pending.set(id, { webContentsId: contents.id, settle });
     contents.once("destroyed", failed);
     contents.once("render-process-gone", failed);
-    contents.once("did-finish-load", failed);
     contents.on("did-start-navigation", abandon);
     try {
       contents.send(IPC.rendererCommand, id, command);
