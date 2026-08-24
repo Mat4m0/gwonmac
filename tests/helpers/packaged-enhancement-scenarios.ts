@@ -1020,6 +1020,7 @@ export async function assertToolboxFoundationLifecycle() {
     assert.deepEqual(result.after.freed, [
       statePointer,
       partyPointer,
+      playRegionPointer,
       commandPointer,
       storagePointer,
       travelPointer,
