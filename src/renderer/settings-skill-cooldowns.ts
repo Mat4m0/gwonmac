@@ -17,7 +17,6 @@ type FeedbackTone = "neutral" | "progress" | "success" | "warning" | "error";
 
 export function bindSkillCooldownSettings(options: Readonly<{
   fieldset: HTMLFieldSetElement;
-  settings: () => AppSettings | null;
   persist: (patch: Pick<AppSettings, "skillCooldownColor">) => Promise<unknown>;
   recoverAfterPersistFailure: (message: string) => Promise<void>;
   feedback: (message: string, tone: FeedbackTone, resetAfter?: number) => void;

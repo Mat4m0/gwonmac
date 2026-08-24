@@ -161,6 +161,10 @@ range band.
   move the wheel. Control, Option, Shift, and Command become part of the label.
   **Clear** restores the native number for that slot. Labels do not change the
   Guild Wars controls.
+- **Skill cooldowns** show the remaining recharge time over each unavailable
+  skill. In **Settings → Tools**, you can turn the numbers off and choose Guild
+  Wars red, native cream, warm gold, icy blue, or a custom color. This display
+  reads the game's existing recharge state; it does not activate skills.
 
 The same pane lists **Keyboard shortcuts**. Choose **Change**, then press a
 Command shortcut to replace the default. Letter and number shortcuts use their
@@ -193,8 +197,8 @@ transitions, and unknown regions. The saved Build and Team library stays
 available. Apply checks policy before each step and stops when the state
 changes.
 
-Skill key labels also stop outside a confirmed PvE region. Their saved display
-bindings remain in Settings.
+Skill key labels and cooldown numbers also stop outside a confirmed PvE region.
+Their saved display settings remain in Settings.
 
 The saved library still works when live client integration is unavailable. You
 can edit, import, and export. Live party data, storage opening, Travel, and Apply remain

@@ -285,7 +285,6 @@
   const skillCooldownSettings = import('./settings-skill-cooldowns.js').then((module) =>
     module.bindSkillCooldownSettings({
       fieldset: byId('settings-skill-cooldowns') as HTMLFieldSetElement,
-      settings: () => currentSettings,
       persist: (patch) => persistSettings(patch),
       recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
       feedback: setFeedback,
