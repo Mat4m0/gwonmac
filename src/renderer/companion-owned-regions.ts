@@ -9,6 +9,9 @@ export type CompanionOwnedRegion = Readonly<{
   align: number;
 }>;
 
+export const COMPANION_KERNEL_RUNTIME_BYTES = 65_536;
+export const COMPANION_KERNEL_RUNTIME_ALIGN = 16;
+
 export function validateCompanionOwnedRegions(
   regions: readonly CompanionOwnedRegion[],
   heapBytes: number,

@@ -32,14 +32,13 @@ import {
   COMPANION_PARTY_BYTES,
   type CompanionSnapshot,
 } from "./companion-snapshot.js";
-import {
-  COMPANION_SKILL_COOLDOWN_BYTES,
-  COMPANION_SKILL_SLOT_BYTES,
-} from "./companion-skill-snapshot.js";
-import { COMPANION_PLAY_REGION_BYTES } from "./companion-play-region-snapshot.js";
 import { createPlayRegionObservationInstallation } from "./play-region-state-installation.js";
 import { createSkillOverlaysInstallation } from "./skill-overlays-installation.js";
-import { validateCompanionOwnedRegions } from "./companion-owned-regions.js";
+import {
+  COMPANION_KERNEL_RUNTIME_ALIGN,
+  COMPANION_KERNEL_RUNTIME_BYTES,
+  validateCompanionOwnedRegions,
+} from "./companion-owned-regions.js";
 import {
   observeCompanion,
   recordCompanionLifecycle,
@@ -61,11 +60,7 @@ import {
   COMPANION_DISPATCH_KINDS,
   COMPANION_FEATURE_BITS,
 } from "../shared/companion-abi.js";
-import {
-  COMPANION_KERNEL_EXPORTS,
-  COMPANION_KERNEL_IMPORTS,
-  companionKernelSignatureBytes,
-} from "../shared/companion-kernel-contract.js";
+import { installCompanionKernel } from "./companion-kernel-loader.js";
 import {
   enhancementRuntimePolicy,
   type RuntimePlayRegion,
@@ -77,7 +72,6 @@ import {
 } from "./profession-command-trace.js";
 
 const COMPANION_ABI = COMPANION_DESCRIPTOR.kernel;
-const COMPANION_RUNTIME_BYTES = 65_536;
 /**
  * The side module's `__memory_base` must be 16-byte aligned: the wasm linker
  * places the module's data segments at fixed offsets *from* this base, so a
@@ -89,23 +83,6 @@ const COMPANION_RUNTIME_BYTES = 65_536;
  * not 16. So the block is over-allocated by the alignment and the base is
  * rounded up inside it; the raw pointer is what has to be freed.
  */
-const COMPANION_RUNTIME_ALIGN = 16;
-const companionKernelSignatureModule = new WebAssembly.Module(
-  companionKernelSignatureBytes(),
-);
-
-// A Wasm import is the platform's exact function-type check. JavaScript
-// reflection cannot distinguish i32 from f32/f64 or void from i32.
-function hasExactCompanionSignatures(exports: WebAssembly.Exports): boolean {
-  try {
-    new WebAssembly.Instance(companionKernelSignatureModule, {
-      kernel: exports,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 let companionInstallations = 0;
 
@@ -400,14 +377,16 @@ export async function installCertifiedCompanion(
   };
   try {
     runtimeAllocation = Number(
-      exports.malloc(COMPANION_RUNTIME_BYTES + COMPANION_RUNTIME_ALIGN - 1),
+      exports.malloc(
+        COMPANION_KERNEL_RUNTIME_BYTES + COMPANION_KERNEL_RUNTIME_ALIGN - 1,
+      ),
     );
     // Rounded with arithmetic rather than a bitmask: pointers reach past what
     // a 32-bit bitwise operation can represent as the heap grows.
     const runtimePointer = runtimeAllocation === 0
       ? 0
-      : Math.ceil(runtimeAllocation / COMPANION_RUNTIME_ALIGN)
-        * COMPANION_RUNTIME_ALIGN;
+      : Math.ceil(runtimeAllocation / COMPANION_KERNEL_RUNTIME_ALIGN)
+        * COMPANION_KERNEL_RUNTIME_ALIGN;
     if (observeState) {
       snapshotPointer = Number(exports.malloc(COMPANION_SNAPSHOT_BYTES));
     }
@@ -460,8 +439,8 @@ export async function installCertifiedCompanion(
       {
         name: "runtime",
         pointer: runtimePointer,
-        size: COMPANION_RUNTIME_BYTES,
-        align: COMPANION_RUNTIME_ALIGN,
+        size: COMPANION_KERNEL_RUNTIME_BYTES,
+        align: COMPANION_KERNEL_RUNTIME_ALIGN,
       },
       ...(observeState
         ? [{ name: "snapshot", pointer: snapshotPointer, size: COMPANION_SNAPSHOT_BYTES, align: 4 }]
@@ -501,14 +480,13 @@ export async function installCertifiedCompanion(
       ...(travelInstallation === null ? [] : [travelInstallation.region()]),
     ];
     validateCompanionOwnedRegions(ownedRegions, memory.buffer.byteLength);
-    const runtimeEnd = runtimePointer + COMPANION_RUNTIME_BYTES;
     // A side module is normally loaded by Emscripten's dynamic linker, which
     // supplies zeroed BSS. We are the loader here, so establish that invariant
     // for this whole private block before its active data segment is applied.
     new Uint8Array(
       memory.buffer,
       runtimePointer,
-      COMPANION_RUNTIME_BYTES,
+      COMPANION_KERNEL_RUNTIME_BYTES,
     ).fill(0);
     new Uint32Array(
       memory.buffer,
@@ -518,122 +496,45 @@ export async function installCertifiedCompanion(
     storageInstallation?.initialize(memory);
     travelInstallation?.initialize();
 
-    const response = await fetch("companion-kernel.wasm");
-    if (!response.ok) throw new Error("Companion kernel is unavailable");
-    const kernelBytes = await response.arrayBuffer();
-    const kernelSha256 = [...new Uint8Array(
-      await crypto.subtle.digest("SHA-256", kernelBytes),
-    )].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    const kernelModule = await WebAssembly.compile(kernelBytes);
-    const imports = WebAssembly.Module.imports(kernelModule)
-      .map((entry) => `${entry.module}.${entry.name}:${entry.kind}`)
-      .sort();
-    if (JSON.stringify(imports) !== JSON.stringify(COMPANION_KERNEL_IMPORTS)) {
-      throw new Error("Companion kernel import surface is invalid");
-    }
-    const kernelExports = WebAssembly.Module.exports(kernelModule)
-      .map((entry) => `${entry.name}:${entry.kind}`)
-      .sort();
-    if (JSON.stringify(kernelExports) !== JSON.stringify(COMPANION_KERNEL_EXPORTS)) {
-      throw new Error("Companion kernel export surface is invalid");
-    }
-    const immutableI32 = (value: number) => new WebAssembly.Global(
-      { value: "i32", mutable: false },
-      value,
-    );
-    const kernel = await WebAssembly.instantiate(kernelModule, {
-      env: {
-        memory,
-        __indirect_function_table: new WebAssembly.Table({
-          initial: 0,
-          maximum: 0,
-          element: "anyfunc",
-        }),
-        __memory_base: immutableI32(runtimePointer),
-        __stack_pointer: new WebAssembly.Global(
-          { value: "i32", mutable: true },
-          runtimeEnd,
-        ),
-        __table_base: immutableI32(0),
+    const kernel = await installCompanionKernel({
+      memory,
+      runtimePointer,
+      featureFlags,
+      regions: {
+        snapshot: {
+          pointer: snapshotPointer,
+          bytes: observeState ? COMPANION_SNAPSHOT_BYTES : 0,
+        },
+        config: { pointer: configPointer, bytes: configBytes },
+        cursor: {
+          pointer: cursorPointer,
+          bytes: capabilities.nativeCursor ? COMPANION_CURSOR_BYTES : 0,
+        },
+        toolbox: {
+          pointer: toolboxPointer,
+          bytes: foundation ? COMPANION_TOOLBOX_BYTES : 0,
+        },
+        party: {
+          pointer: partyPointer,
+          bytes: foundation ? COMPANION_PARTY_BYTES : 0,
+        },
+        skillSlots: {
+          pointer: skillSlotGeometry.pointer,
+          bytes: skillSlotGeometry.bytes,
+        },
+        skillCooldowns: {
+          pointer: skillCooldowns.pointer,
+          bytes: skillCooldowns.bytes,
+        },
+        playRegion: {
+          pointer: playRegions.pointer,
+          bytes: playRegions.bytes,
+        },
       },
     });
-    if (!hasExactCompanionSignatures(kernel.exports)) {
-      throw new Error("Companion kernel export signatures are invalid");
-    }
-    type KernelInit = (
-      snapshotPointer: number,
-      snapshotBytes: number,
-      configPointer: number,
-      configBytes: number,
-      cursorPointer: number,
-      cursorBytes: number,
-      toolboxPointer: number,
-      toolboxBytes: number,
-      partyPointer: number,
-      partyBytes: number,
-      skillSlotPointer: number,
-      skillKeyBytes: number,
-      skillCooldownPointer: number,
-      skillCooldownBytes: number,
-      playRegionPointer: number,
-      playRegionBytes: number,
-      featureFlags: number,
-    ) => number;
-    type KernelDispatch = (
-      messageId: number,
-      wParam: number,
-      lParam: number,
-      cursorData: number,
-      cursorWidth: number,
-      cursorHeight: number,
-    ) => void;
-    type KernelScalar = () => number;
-    const kernelInit = kernel.exports.companion_init as KernelInit;
-    const kernelDispatch = kernel.exports.companion_dispatch as KernelDispatch;
-    const cursorEventCount = kernel.exports.companion_cursor_event_count as KernelScalar;
-    const kernelAbi = kernel.exports.companion_abi as KernelScalar;
-    const kernelConfigBytes = kernel.exports.companion_config_bytes as KernelScalar;
-    const kernelSnapshotBytes = kernel.exports.companion_snapshot_bytes as KernelScalar;
-    const kernelCursorBytes = kernel.exports.companion_cursor_bytes as KernelScalar;
-    const kernelToolboxBytes = kernel.exports.companion_toolbox_bytes as KernelScalar;
-    const kernelPartyBytes = kernel.exports.companion_party_bytes as KernelScalar;
-    const kernelSkillSlotBytes = kernel.exports.companion_skill_slot_bytes as KernelScalar;
-    const kernelSkillCooldownBytes =
-      kernel.exports.companion_skill_cooldown_bytes as KernelScalar;
-    const kernelPlayRegionBytes =
-      kernel.exports.companion_play_region_bytes as KernelScalar;
-    if (
-      kernelAbi() !== COMPANION_ABI
-      || kernelConfigBytes() !== configBytes
-      || kernelSnapshotBytes() !== COMPANION_SNAPSHOT_BYTES
-      || kernelCursorBytes() !== COMPANION_CURSOR_BYTES
-      || kernelToolboxBytes() !== COMPANION_TOOLBOX_BYTES
-      || kernelPartyBytes() !== COMPANION_PARTY_BYTES
-      || kernelSkillSlotBytes() !== COMPANION_SKILL_SLOT_BYTES
-      || kernelSkillCooldownBytes() !== COMPANION_SKILL_COOLDOWN_BYTES
-      || kernelPlayRegionBytes() !== COMPANION_PLAY_REGION_BYTES
-      || kernelInit(
-        snapshotPointer,
-        observeState ? COMPANION_SNAPSHOT_BYTES : 0,
-        configPointer,
-        configBytes,
-        cursorPointer,
-        capabilities.nativeCursor ? COMPANION_CURSOR_BYTES : 0,
-        toolboxPointer,
-        foundation ? COMPANION_TOOLBOX_BYTES : 0,
-        partyPointer,
-        foundation ? COMPANION_PARTY_BYTES : 0,
-        skillSlotGeometry.pointer,
-        skillSlotGeometry.bytes,
-        skillCooldowns.pointer,
-        skillCooldowns.bytes,
-        playRegions.pointer,
-        playRegions.bytes,
-        featureFlags,
-      ) !== 1
-    ) {
-      throw new Error("Companion kernel rejected its ABI");
-    }
+    const kernelSha256 = kernel.sha256;
+    const kernelDispatch = kernel.dispatch;
+    const cursorEventCount = kernel.cursorEventCount;
 
     let cursorRefreshes = 0;
     let hiddenRetry: HiddenCursorRetry | null = null;

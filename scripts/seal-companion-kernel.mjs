@@ -13,8 +13,8 @@ export const COMPANION_KERNEL_CANDIDATE =
   "build/.companion-kernel.unsealed.wasm";
 export const COMPANION_KERNEL_ARTIFACT =
   "build/renderer/companion-kernel.wasm";
-export const COMPANION_RENDERER =
-  "build/renderer/certified-companion-installation.js";
+export const COMPANION_KERNEL_LOADER =
+  "build/renderer/companion-kernel-loader.js";
 export const COMPANION_KERNEL_HASH_PLACEHOLDER =
   "__COMPANION_KERNEL_SHA256_PLACEHOLDER__";
 export const COMPANION_KERNEL_HASH_BINDING =
@@ -29,7 +29,7 @@ export function companionKernelSha256(bytes) {
 }
 
 /** @param {string} source @param {string} expectedSha256 */
-export function verifySealedCompanionRenderer(source, expectedSha256) {
+export function verifySealedCompanionLoader(source, expectedSha256) {
   const declaration = new RegExp(
     `const ${COMPANION_KERNEL_HASH_BINDING} = "([a-f0-9]{64})";`,
     "g",
@@ -51,7 +51,7 @@ export function verifySealedCompanionRenderer(source, expectedSha256) {
 }
 
 /** @param {string} source @param {string} sha256 */
-export function sealCompanionRendererSource(source, sha256) {
+export function sealCompanionLoaderSource(source, sha256) {
   if (!/^[a-f0-9]{64}$/.test(sha256)) {
     throw new Error("companion kernel seal is not a SHA-256 digest");
   }
@@ -59,10 +59,10 @@ export function sealCompanionRendererSource(source, sha256) {
     source.includes(COMPANION_KERNEL_HASH_BINDING)
     || source.includes(COMPANION_KERNEL_HASH_PLACEHOLDER)
   ) {
-    throw new Error("companion renderer already contains a kernel seal");
+    throw new Error("companion kernel loader already contains a seal");
   }
   if (source.split(COMPILE_MARKER).length !== 2) {
-    throw new Error("companion renderer compile boundary is not unique");
+    throw new Error("companion kernel loader compile boundary is not unique");
   }
   const check =
     `const ${COMPANION_KERNEL_HASH_BINDING} = `
@@ -73,73 +73,73 @@ export function sealCompanionRendererSource(source, sha256) {
   const sealed = source
     .replace(COMPILE_MARKER, check)
     .replace(COMPANION_KERNEL_HASH_PLACEHOLDER, sha256);
-  verifySealedCompanionRenderer(sealed, sha256);
+  verifySealedCompanionLoader(sealed, sha256);
   return sealed;
 }
 
 /**
- * Validate the rustc candidate, prepare the renderer seal, then publish each
+ * Validate the rustc candidate, prepare the loader seal, then publish each
  * through an atomic rename with the served artifact last. A failed candidate
  * never reaches the served path.
  *
- * @param {{candidatePath?: string, artifactPath?: string, rendererPath?: string}} [paths]
+ * @param {{candidatePath?: string, artifactPath?: string, loaderPath?: string}} [paths]
  */
 export function sealCompanionKernelBuild(paths = {}) {
   const candidatePath = paths.candidatePath ?? COMPANION_KERNEL_CANDIDATE;
   const artifactPath = paths.artifactPath ?? COMPANION_KERNEL_ARTIFACT;
-  const rendererPath = paths.rendererPath ?? COMPANION_RENDERER;
+  const loaderPath = paths.loaderPath ?? COMPANION_KERNEL_LOADER;
   if (candidatePath === artifactPath) {
     throw new Error("companion candidate and artifact paths must differ");
   }
 
-  const rendererTemp = `${rendererPath}.seal-${process.pid}.tmp`;
-  const restoreTemp = `${rendererPath}.restore-${process.pid}.tmp`;
-  let renderer;
-  let rendererMode;
-  let rendererPublished = false;
+  const loaderTemp = `${loaderPath}.seal-${process.pid}.tmp`;
+  const restoreTemp = `${loaderPath}.restore-${process.pid}.tmp`;
+  let loader;
+  let loaderMode;
+  let loaderPublished = false;
   try {
     const candidate = readFileSync(candidatePath);
     validateCompanionKernelContract(candidate);
     const sha256 = companionKernelSha256(candidate);
-    renderer = readFileSync(rendererPath, "utf8");
-    rendererMode = statSync(rendererPath).mode & 0o777;
-    const sealedRenderer = sealCompanionRendererSource(renderer, sha256);
-    writeFileSync(rendererTemp, sealedRenderer, {
-      mode: rendererMode,
+    loader = readFileSync(loaderPath, "utf8");
+    loaderMode = statSync(loaderPath).mode & 0o777;
+    const sealedLoader = sealCompanionLoaderSource(loader, sha256);
+    writeFileSync(loaderTemp, sealedLoader, {
+      mode: loaderMode,
     });
-    renameSync(rendererTemp, rendererPath);
-    rendererPublished = true;
+    renameSync(loaderTemp, loaderPath);
+    loaderPublished = true;
     renameSync(candidatePath, artifactPath);
-    verifySealedCompanionRenderer(readFileSync(rendererPath, "utf8"), sha256);
+    verifySealedCompanionLoader(readFileSync(loaderPath, "utf8"), sha256);
     if (companionKernelSha256(readFileSync(artifactPath)) !== sha256) {
       throw new Error("published companion kernel changed during sealing");
     }
     return sha256;
   } catch (error) {
     // The artifact is the activation boundary. Never leave one behind from a
-    // failed seal, and restore the original renderer after a later failure.
+    // failed seal, and restore the original loader after a later failure.
     rmSync(artifactPath, { force: true });
-    rmSync(rendererTemp, { force: true });
+    rmSync(loaderTemp, { force: true });
     if (
-      rendererPublished
-      && renderer !== undefined
-      && rendererMode !== undefined
+      loaderPublished
+      && loader !== undefined
+      && loaderMode !== undefined
     ) {
       try {
-        writeFileSync(restoreTemp, renderer, { mode: rendererMode });
-        renameSync(restoreTemp, rendererPath);
+        writeFileSync(restoreTemp, loader, { mode: loaderMode });
+        renameSync(restoreTemp, loaderPath);
       } catch {
         rmSync(restoreTemp, { force: true });
       }
     }
     throw error;
   } finally {
-    rmSync(rendererTemp, { force: true });
+    rmSync(loaderTemp, { force: true });
     rmSync(restoreTemp, { force: true });
   }
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   sealCompanionKernelBuild();
-  console.log("sealed companion kernel artifact and renderer hash");
+  console.log("sealed companion kernel artifact and loader hash");
 }
