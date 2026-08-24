@@ -407,6 +407,59 @@ test.describe("tools and update settings", () => {
     }
   });
 
+  test("persists and re-renders skill cooldown presentation settings", async () => {
+    const fixture = await launchOffline(
+      "gw-settings-skill-cooldowns-e2e-",
+      {},
+      async (userData) => {
+        await writeFile(
+          path.join(userData, "settings.json"),
+          JSON.stringify({ gwonmacTools: true }),
+          { mode: 0o600 },
+        );
+      },
+    );
+    try {
+      const { app, page } = fixture;
+      await openControls(app, page);
+      const fieldset = page.locator("#settings-skill-cooldowns");
+      await expect(fieldset).toBeVisible();
+
+      const enabled = fieldset.locator('[name="skillCooldownOverlayEnabled"]');
+      await enabled.uncheck();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).skillCooldownOverlayEnabled,
+      )).toBe(false);
+
+      await fieldset.locator('[name="skillCooldownColorChoice"][value="gold"]')
+        .check();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).skillCooldownColor,
+      )).toEqual({ kind: "preset", preset: "gold" });
+
+      await fieldset.locator('[name="skillCooldownColorChoice"][value="custom"]')
+        .check();
+      const customHex = fieldset.locator('[name="skillCooldownCustomHex"]');
+      await customHex.fill("#123abc");
+      await customHex.press("Tab");
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).skillCooldownColor,
+      )).toEqual({ kind: "custom", value: "#123abc" });
+
+      await page.locator("#settings-done").click();
+      await openControls(app, page);
+      await expect(enabled).not.toBeChecked();
+      await expect(
+        fieldset.locator('[name="skillCooldownColorChoice"][value="custom"]'),
+      ).toBeChecked();
+      await expect(customHex).toHaveValue("#123abc");
+      await expect(fieldset.locator(".skill-cooldown-glyph"))
+        .toHaveText("2.9");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("the application menu opens Settings and the dedicated Updates pane", async () => {
     const fixture = await launchOffline("gw-settings-menu-e2e-");
     try {

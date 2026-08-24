@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { bindSkillCooldownSettings } from "../../src/renderer/settings-skill-cooldowns.ts";
-import { DEFAULT_SETTINGS, type AppSettings } from "../../src/shared/contracts.ts";
+import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
 import type { SkillCooldownColor } from "../../src/shared/skill-cooldowns.ts";
 
 type Listener = () => void;
@@ -84,7 +84,7 @@ class FakeFieldset extends FakeElement {
   }
 }
 
-function fixture(settings: AppSettings, fail = false) {
+function fixture(fail = false) {
   const document = new FakeDocument();
   const fieldset = new FakeFieldset(document);
   const saved: SkillCooldownColor[] = [];
@@ -92,7 +92,6 @@ function fixture(settings: AppSettings, fail = false) {
   let recoveries = 0;
   const binder = bindSkillCooldownSettings({
     fieldset: fieldset as unknown as HTMLFieldSetElement,
-    settings: () => settings,
     persist: async ({ skillCooldownColor }) => {
       if (fail) throw new Error("disk full");
       saved.push(skillCooldownColor);
@@ -107,7 +106,7 @@ const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 test("cooldown settings render the canonical choice and shared preview", () => {
   const settings = { ...DEFAULT_SETTINGS, gwonmacTools: true };
-  const view = fixture(settings);
+  const view = fixture();
   view.binder.render(settings);
   assert.equal(view.fieldset.hidden, false);
   assert.equal(view.fieldset.enabled.checked, settings.skillCooldownOverlayEnabled);
@@ -118,7 +117,7 @@ test("cooldown settings render the canonical choice and shared preview", () => {
 
 test("cooldown settings reject malformed custom colors and persist valid colors", async () => {
   const settings = { ...DEFAULT_SETTINGS, gwonmacTools: true };
-  const view = fixture(settings);
+  const view = fixture();
   view.binder.render(settings);
   view.fieldset.choices.forEach((choice) => { choice.checked = choice.value === "custom"; });
   view.fieldset.choices[4]!.dispatch("change");
@@ -149,7 +148,7 @@ test("cooldown settings reject malformed custom colors and persist valid colors"
 
 test("cooldown settings recover the active state after a failed write", async () => {
   const settings = { ...DEFAULT_SETTINGS, gwonmacTools: true };
-  const view = fixture(settings, true);
+  const view = fixture(true);
   view.binder.render(settings);
   view.fieldset.choices.forEach((choice) => { choice.checked = choice.value === "gold"; });
   view.fieldset.choices[2]!.dispatch("change");
