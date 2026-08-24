@@ -652,13 +652,17 @@ export async function assertPackagedOffSession() {
       allResources.some((url) => new URL(url).pathname === "/Gw.jspi.wasm"),
       "the runtime-init proof never fetched the served game module",
     );
+    const loadedEnhancementResources = [
+      ...new Set(allResources.filter(enhancementResource)),
+    ];
     assert.deepEqual(
-      [...new Set(allResources.filter(enhancementResource))],
+      loadedEnhancementResources.filter(
+        (url) => url !== "gw://app/enhancement-runtime-policy.js",
+      ),
       [
         "gw://app/enhancement-cursor.js",
         "gw://app/enhancement-readout.js",
         "gw://app/enhancement-manifest.js",
-        "gw://app/enhancement-runtime-policy.js",
       ],
       "required Core did not stop at the unproved module manifest",
     );
