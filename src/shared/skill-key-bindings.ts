@@ -169,11 +169,28 @@ export function isSkillKeyBindings(value: unknown): value is SkillKeyBindings {
     && value.every((binding) => binding === null || isSkillKeyBinding(binding));
 }
 
+function cloneSkillKeyBinding(binding: SkillKeyBinding | null): SkillKeyBinding | null {
+  if (binding === null) return null;
+  return Object.freeze({
+    input: Object.freeze({ ...binding.input }),
+    modifiers: Object.freeze({ ...binding.modifiers }),
+  });
+}
+
 export function cloneSkillKeyBindings(bindings: SkillKeyBindings): SkillKeyBindings {
-  return bindings.map((binding) => binding === null ? null : {
-    input: { ...binding.input },
-    modifiers: { ...binding.modifiers },
-  }) as unknown as SkillKeyBindings;
+  if (!isSkillKeyBindings(bindings)) {
+    throw new Error("Skill key bindings are invalid");
+  }
+  return Object.freeze([
+    cloneSkillKeyBinding(bindings[0]),
+    cloneSkillKeyBinding(bindings[1]),
+    cloneSkillKeyBinding(bindings[2]),
+    cloneSkillKeyBinding(bindings[3]),
+    cloneSkillKeyBinding(bindings[4]),
+    cloneSkillKeyBinding(bindings[5]),
+    cloneSkillKeyBinding(bindings[6]),
+    cloneSkillKeyBinding(bindings[7]),
+  ]);
 }
 
 const MODIFIER_PRESENTATION = [
@@ -219,7 +236,12 @@ export function withSkillKeyBinding(
   binding: SkillKeyBinding | null,
 ): SkillKeyBindings {
   if (!Number.isSafeInteger(slot) || slot < 0 || slot >= 8) return bindings;
-  const next = cloneSkillKeyBindings(bindings) as unknown as (SkillKeyBinding | null)[];
-  next[slot] = binding;
-  return next as unknown as SkillKeyBindings;
+  if (binding !== null && !isSkillKeyBinding(binding)) {
+    throw new Error("Skill key binding is invalid");
+  }
+  const selected = (index: number) => index === slot ? binding : bindings[index]!;
+  return cloneSkillKeyBindings([
+    selected(0), selected(1), selected(2), selected(3),
+    selected(4), selected(5), selected(6), selected(7),
+  ]);
 }

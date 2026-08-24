@@ -4,6 +4,7 @@
  * presentation can consume the same certified, fail-closed projection.
  */
 import { COMPANION_ABI } from "../shared/companion-abi.js";
+import { MAX_SKILL_COOLDOWN_MS } from "../shared/skill-cooldowns.js";
 
 export const COMPANION_SKILL_SLOT_ABI = COMPANION_ABI.skillSlots.abi;
 export const COMPANION_SKILL_SLOT_BYTES = COMPANION_ABI.skillSlots.bytes;
@@ -78,12 +79,30 @@ export type CompanionSkillSlotState =
   | ReturnType<typeof readCompanionSkillSlots>
   | Readonly<{ status: "waiting"; reason: "stale" }>;
 
+/** Ignore heartbeat-only sequence changes while preserving moved-bar updates. */
+export function sameCompanionSkillSlotGeometry(
+  previous: CompanionSkillSlotState,
+  next: CompanionSkillSlotState,
+): boolean {
+  if (previous.status !== "ready" || next.status !== "ready") return false;
+  return previous.frameId === next.frameId
+    && previous.viewportWidth === next.viewportWidth
+    && previous.viewportHeight === next.viewportHeight
+    && previous.slots.every((slot, index) => {
+      const candidate = next.slots[index];
+      return candidate !== undefined
+        && slot.left === candidate.left
+        && slot.bottom === candidate.bottom
+        && slot.right === candidate.right
+        && slot.top === candidate.top;
+    });
+}
+
 export const COMPANION_SKILL_COOLDOWN_ABI = COMPANION_ABI.skillCooldowns.abi;
 export const COMPANION_SKILL_COOLDOWN_BYTES = COMPANION_ABI.skillCooldowns.bytes;
 
 const SKILL_COOLDOWN_MAGIC = 0x53435747;
 const SKILL_COOLDOWN_FLAGS = Object.freeze({ ready: 1, loading: 2 });
-const MAX_SKILL_RECHARGE_MS = 1_800_000;
 
 /** Decode one all-or-nothing player recharge publication. */
 export function readCompanionSkillCooldowns(buffer: ArrayBuffer, pointer: number) {
@@ -134,7 +153,7 @@ export function readCompanionSkillCooldowns(buffer: ArrayBuffer, pointer: number
   if (
     playerAgentId === 0
     || rechargeTimestamps.some((timestamp) =>
-      timestamp !== 0 && (timestamp - gameTimer) >>> 0 > MAX_SKILL_RECHARGE_MS)
+      timestamp !== 0 && (timestamp - gameTimer) >>> 0 > MAX_SKILL_COOLDOWN_MS)
   ) return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
   return Object.freeze({
     status: "ready" as const,

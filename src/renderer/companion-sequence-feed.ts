@@ -11,11 +11,16 @@ type SequencedState = Readonly<{
 
 type FreshnessTimer = ReturnType<typeof globalThis.setTimeout> | number;
 
-export type CompanionSequenceFeedOptions = Readonly<{
+export type CompanionSequenceFeedOptions<State extends SequencedState = SequencedState> = Readonly<{
   now?: () => number;
   schedule?: (callback: () => void, delay: number) => FreshnessTimer;
   cancel?: (timer: FreshnessTimer) => void;
   staleAfterMs?: number | null;
+  /**
+   * Suppress a listener notification when only publication metadata changed.
+   * The accepted sequence and freshness deadline still advance.
+   */
+  sameReadyState?: (previous: State, next: State) => boolean;
 }>;
 
 const DEFAULT_STALE_AFTER_MS = 500;
@@ -39,7 +44,7 @@ function isNewerSequence(candidate: number, previous: number): boolean {
 export function createCompanionSequenceFeed<State extends SequencedState>(
   initial: State,
   stale: State,
-  options: CompanionSequenceFeedOptions = {},
+  options: CompanionSequenceFeedOptions<State> = {},
 ) {
   const listeners = new Set<(state: State) => void>();
   const now = options.now ?? (() => performance.now());
@@ -66,6 +71,14 @@ export function createCompanionSequenceFeed<State extends SequencedState>(
     if (current === state) return;
     current = state;
     for (const listener of listeners) listener(state);
+  };
+  const publishReady = (state: State) => {
+    const equivalent = current.status === "ready"
+      && options.sameReadyState?.(current, state) === true;
+    current = state;
+    if (!equivalent) {
+      for (const listener of listeners) listener(state);
+    }
   };
   const stopTimer = () => {
     if (timer !== null) cancel(timer);
@@ -129,7 +142,7 @@ export function createCompanionSequenceFeed<State extends SequencedState>(
       blockedSequence = null;
       advancedAt = now();
       watch();
-      publish(next);
+      publishReady(next);
     },
     withdraw,
     subscribe(listener: (state: State) => void) {

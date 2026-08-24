@@ -13,8 +13,6 @@ import {
   CONTINUOUS_COMPANION_FRESHNESS,
   type CompanionSequenceFeedOptions,
 } from "./companion-sequence-feed.js";
-export type SkillCooldownObservationState = CompanionSkillCooldownState;
-
 export function createSkillCooldownObservationInstallation(
   available: boolean,
   freshness: CompanionSequenceFeedOptions = CONTINUOUS_COMPANION_FRESHNESS,

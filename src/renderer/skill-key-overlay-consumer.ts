@@ -23,13 +23,8 @@ export function createSkillKeyOverlayConsumer(
   });
   let bindings = EMPTY_SKILL_KEY_BINDINGS;
   let enabled = false;
-  let blockedSequence: number | null = null;
   function render() {
-    if (
-      !enabled
-      || state.status !== "ready"
-      || state.sequence === blockedSequence
-    ) {
+    if (!enabled || state.status !== "ready") {
       overlay.update({ status: "waiting" });
       return;
     }
@@ -50,14 +45,11 @@ export function createSkillKeyOverlayConsumer(
       }),
     });
   }
+  const view = parent.ownerDocument.defaultView;
+  view?.addEventListener("resize", render);
   return Object.freeze({
     update(next: CompanionSkillSlotState) {
       state = next;
-      if (
-        enabled
-        && next.status === "ready"
-        && next.sequence !== blockedSequence
-      ) blockedSequence = null;
       render();
     },
     setBindings(next: SkillKeyBindings) {
@@ -65,13 +57,11 @@ export function createSkillKeyOverlayConsumer(
       render();
     },
     setEnabled(next: boolean) {
-      if (enabled && !next) {
-        blockedSequence = state.status === "ready" ? state.sequence : null;
-      }
       enabled = next;
       render();
     },
     dispose() {
+      view?.removeEventListener("resize", render);
       overlay.dispose();
     },
   });

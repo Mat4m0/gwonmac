@@ -2,7 +2,12 @@
  * Joins certified slot geometry and recharge state at the presentation edge.
  * Neither source is reinterpreted or retained as gameplay state here.
  */
-import type { SkillCooldownColor } from "../shared/skill-cooldowns.js";
+import {
+  DEFAULT_SKILL_COOLDOWN_COLOR,
+  formatSkillCooldown,
+  skillCooldownCssColor,
+  type SkillCooldownColor,
+} from "../shared/skill-cooldowns.js";
 import type {
   CompanionSkillCooldownState,
   CompanionSkillSlotState,
@@ -17,8 +22,16 @@ export function createSkillCooldownOverlayConsumer(
   const overlay = createSkillCooldownOverlay(parent);
   let geometry: CompanionSkillSlotState = Object.freeze({ status: "waiting", reason: "memory" });
   let cooldowns: CompanionSkillCooldownState = Object.freeze({ status: "waiting", reason: "memory" });
-  let color: SkillCooldownColor = Object.freeze({ kind: "preset", preset: "red" });
+  let color: SkillCooldownColor = DEFAULT_SKILL_COOLDOWN_COLOR;
   let enabled = false;
+
+  function cooldownSignature(state: CompanionSkillCooldownState): string {
+    if (state.status !== "ready") return "waiting";
+    return state.rechargeTimestamps.map((timestamp) => formatSkillCooldown(
+      timestamp === 0 ? 0 : (timestamp - state.gameTimer) >>> 0,
+    ) ?? "").join("|");
+  }
+  let visibleCooldowns = cooldownSignature(cooldowns);
 
   function projection(): readonly SkillCooldownSlot[] | null {
     if (
@@ -43,6 +56,8 @@ export function createSkillCooldownOverlayConsumer(
     return Object.freeze(slots);
   }
   function render() { overlay.update(projection(), color); }
+  const view = parent.ownerDocument.defaultView;
+  view?.addEventListener("resize", render);
 
   return Object.freeze({
     update(next: CompanionSkillSlotState) {
@@ -51,14 +66,20 @@ export function createSkillCooldownOverlayConsumer(
     },
     setCooldownState(next: CompanionSkillCooldownState) {
       cooldowns = next;
-      render();
+      const signature = cooldownSignature(next);
+      if (signature === visibleCooldowns) return;
+      visibleCooldowns = signature;
+      if (enabled) render();
     },
     sync(nextColor: SkillCooldownColor, nextEnabled: boolean) {
+      const changed = enabled !== nextEnabled
+        || skillCooldownCssColor(color) !== skillCooldownCssColor(nextColor);
       color = nextColor;
       enabled = nextEnabled;
-      render();
+      if (changed) render();
     },
     dispose() {
+      view?.removeEventListener("resize", render);
       overlay.dispose();
     },
   });

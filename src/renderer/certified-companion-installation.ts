@@ -3,11 +3,11 @@
  * it needs, allocates its shared memory, hands it the manifest's config, and
  * starts the observer.
  *
- * All or nothing. Every precondition is checked before anything is allocated,
- * and any failure afterwards releases everything this installation took before
- * rethrowing, so there is no state where some hooks are live and others are
- * not. A module that carries no decodable manifest, or that lacks an export the
- * kernel needs, gets no kernel at all rather than a partial one.
+ * Host prerequisites are checked before allocation. Later initialization is a
+ * transaction: a failure releases every resource proved unreachable by the
+ * current observer and callback safety barriers before it rethrows. A module
+ * that carries no decodable manifest, or that lacks an export the kernel needs,
+ * gets no kernel at all rather than a partial one.
  *
  * What a failed installation costs the launch is the harness's decision, not
  * this module's.
@@ -494,8 +494,6 @@ export async function installCertifiedCompanion(
       console.debug(`[tools:dev] policy ${JSON.stringify({ reason, ...summary })}`);
     };
     const targetEnabled = () => policy().targetReadout;
-    const skillGeometryEnabled = () =>
-      policy().skillKeyLabels || policy().skillCooldowns;
     const setTargetEnabled = () => {
       if (!observeState) return;
       if (targetEnabled()) readout ??= createTargetReadout(document.body);
@@ -506,8 +504,7 @@ export async function installCertifiedCompanion(
     };
     const syncSkillOverlays = () => skills.sync(
       policySnapshot().settings,
-      skillGeometryEnabled(),
-      policy().skillCooldowns,
+      policy(),
     );
     setTargetEnabled();
     syncSkillOverlays();
@@ -534,11 +531,7 @@ export async function installCertifiedCompanion(
           ? COMPANION_FEATURE_BITS.playRegionObservation
           : 0)
         | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0)
-        | skills.activeFeatureFlags(
-          policySnapshot().settings,
-          skillGeometryEnabled(),
-          policy().skillCooldowns,
-        );
+        | skills.activeFeatureFlags;
       kernelDispatch(
         COMPANION_DISPATCH_KINDS.activeFeatures,
         active,

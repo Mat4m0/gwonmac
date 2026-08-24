@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  cloneSkillKeyBindings,
   EMPTY_SKILL_KEY_BINDINGS,
   isSkillKeyBindings,
   skillKeyPresentation,
@@ -56,4 +57,43 @@ test("requires exactly eight closed, bounded bindings", () => {
     [{ input: { kind: "wheel", direction: "left" }, modifiers }, ...good.slice(1)],
     [{ input: { kind: "keyboard", code: "KeyC", label: "C" }, modifiers }, ...good.slice(1)],
   ]) assert.equal(isSkillKeyBindings(invalid), false);
+});
+
+test("clone and update return deeply frozen independent tuples", () => {
+  const source = withSkillKeyBinding(EMPTY_SKILL_KEY_BINDINGS, 0, {
+    input: { kind: "keyboard", code: "KeyC" },
+    modifiers,
+  });
+  const clone = cloneSkillKeyBindings(source);
+  const updated = withSkillKeyBinding(clone, 7, {
+    input: { kind: "wheel", direction: "up" },
+    modifiers: { ...modifiers, command: false },
+  });
+
+  assert.notEqual(clone, source);
+  assert.notEqual(clone[0], source[0]);
+  assert.equal(Object.isFrozen(clone), true);
+  assert.equal(Object.isFrozen(clone[0]), true);
+  assert.equal(Object.isFrozen(clone[0]?.input), true);
+  assert.equal(Object.isFrozen(clone[0]?.modifiers), true);
+  assert.equal(clone[7], null);
+  assert.deepEqual(updated[0], clone[0]);
+  assert.deepEqual(updated[7]?.input, { kind: "wheel", direction: "up" });
+  assert.equal(Object.isFrozen(updated), true);
+  assert.equal(Object.isFrozen(updated[7]), true);
+});
+
+test("clone and update reject malformed values at the runtime boundary", () => {
+  assert.throws(
+    () => cloneSkillKeyBindings([null] as never),
+    /bindings are invalid/,
+  );
+  assert.throws(
+    () => withSkillKeyBinding(
+      EMPTY_SKILL_KEY_BINDINGS,
+      0,
+      { input: { kind: "keyboard", code: "Unknown" }, modifiers } as never,
+    ),
+    /binding is invalid/,
+  );
 });

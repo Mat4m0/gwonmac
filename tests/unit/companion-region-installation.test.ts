@@ -166,3 +166,38 @@ test("sequence ordering accepts uint32 wrap and suppresses duplicate publication
 
   assert.deepEqual(observed, [waiting, ready(0xffff_fffe), ready(0)]);
 });
+
+test("an equivalent heartbeat refreshes freshness without notifying listeners", () => {
+  let time = 0;
+  const timer: { pending?: () => void } = {};
+  const feed = createCompanionSequenceFeed<State>(waiting, stale, {
+    now: () => time,
+    staleAfterMs: 500,
+    schedule: (callback) => {
+      timer.pending = callback;
+      return 1;
+    },
+    cancel: () => { delete timer.pending; },
+    sameReadyState: (previous, next) =>
+      previous.status === "ready"
+      && next.status === "ready"
+      && previous.value === next.value,
+  });
+  const observed: State[] = [];
+  feed.subscribe((state) => observed.push(state));
+
+  feed.update(ready(2, 7));
+  time = 400;
+  feed.update(ready(4, 7));
+
+  assert.deepEqual(observed, [waiting, ready(2, 7)]);
+  assert.deepEqual(feed.state, ready(4, 7), "the latest heartbeat remains canonical");
+
+  time = 899;
+  timer.pending?.();
+  assert.equal(feed.state.status, "ready");
+  time = 900;
+  timer.pending?.();
+  assert.equal(feed.state, stale);
+  assert.deepEqual(observed, [waiting, ready(2, 7), stale]);
+});

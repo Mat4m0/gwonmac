@@ -4,6 +4,7 @@
  */
 import {
   COMPANION_SKILL_SLOT_BYTES,
+  sameCompanionSkillSlotGeometry,
   type CompanionSkillSlotState,
 } from "./companion-skill-snapshot.js";
 import { createCompanionRegionInstallation } from "./companion-region-installation.js";
@@ -19,5 +20,6 @@ export function createSkillSlotGeometryInstallation(available: boolean) {
     waiting,
     stale,
     freshness: CONTINUOUS_COMPANION_FRESHNESS,
+    sameReadyState: sameCompanionSkillSlotGeometry,
   });
 }
