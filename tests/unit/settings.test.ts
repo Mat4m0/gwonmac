@@ -22,6 +22,7 @@ describe("settings", () => {
       renderScale: 2,
       uiStyle: "guild-wars",
       uiFont: "guild-wars",
+      controllerPromptStyle: "game-default",
       uiPanelOpacity: 94,
       gwonmacTools: false,
       teamManagement: true,
@@ -68,6 +69,7 @@ describe("settings", () => {
       renderScale: 1,
       uiStyle: "guild-wars",
       uiFont: "guild-wars",
+      controllerPromptStyle: "game-default",
       gwonmacTools: false,
       teamManagement: true,
       xunlaiStorage: false,
@@ -118,6 +120,19 @@ describe("settings", () => {
     assert.equal(parseSettings({ uiFont: "inter" }).uiFont, "inter");
     assert.throws(() => parseSettings({ uiFont: "papyrus" }), AppError);
     assert.throws(() => parseSettings({ uiFont: false }), AppError);
+  });
+
+  it("accepts only the two supported controller prompt styles", () => {
+    assert.equal(
+      parseSettings({ controllerPromptStyle: "game-default" }).controllerPromptStyle,
+      "game-default",
+    );
+    assert.equal(
+      parseSettings({ controllerPromptStyle: "playstation" }).controllerPromptStyle,
+      "playstation",
+    );
+    assert.throws(() => parseSettings({ controllerPromptStyle: "nintendo" }), AppError);
+    assert.throws(() => parseSettings({ controllerPromptStyle: true }), AppError);
   });
 
   it("rejects unknown types", () => {
@@ -262,6 +277,9 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ uiFont: "inter" }), {
       uiFont: "inter",
     });
+    assert.deepEqual(parseSettingsPatch({ controllerPromptStyle: "playstation" }), {
+      controllerPromptStyle: "playstation",
+    });
   });
 
   it("keeps Travel shortcuts off the generic renderer settings channel", () => {
@@ -313,6 +331,7 @@ describe("settings", () => {
     assert.deepEqual(Object.keys(disk).sort(), [
       "autoCheckUpdates",
       "compatibilityNoticeSeenFor",
+      "controllerPromptStyle",
       "dataStrategy",
       "extendedMemoryEnabled",
       "formatVersion",
@@ -365,6 +384,7 @@ describe("settings", () => {
       renderScale: 1.5,
       uiStyle: "guild-wars",
       uiFont: "guild-wars",
+      controllerPromptStyle: "game-default",
       gwonmacTools: false,
       teamManagement: true,
       xunlaiStorage: false,

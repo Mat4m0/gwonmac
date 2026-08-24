@@ -17,6 +17,7 @@
 import { readFile } from "node:fs/promises";
 import {
   DEFAULT_SETTINGS,
+  CONTROLLER_PROMPT_STYLES,
   LAST_UPDATE_CHECK_AT_MAX,
   RENDER_SCALES,
   UPDATE_TRACKS,
@@ -46,6 +47,9 @@ import { quarantineCorruptDocument } from "./corrupt-document.js";
 const RENDER_SCALE_VALUES = new Set<AppSettings["renderScale"]>(RENDER_SCALES);
 const UI_STYLE_VALUES = new Set<AppSettings["uiStyle"]>(UI_STYLES);
 const UI_FONT_VALUES = new Set<AppSettings["uiFont"]>(UI_FONTS);
+const CONTROLLER_PROMPT_STYLE_VALUES = new Set<AppSettings["controllerPromptStyle"]>(
+  CONTROLLER_PROMPT_STYLES,
+);
 const UPDATE_TRACK_VALUES = new Set<AppSettings["updateTrack"]>(UPDATE_TRACKS);
 
 /**
@@ -125,6 +129,14 @@ export function parseSettings(raw: unknown): AppSettings {
       throw new AppError("bad_settings", "settings.uiFont has unknown value");
     }
     out.uiFont = src.uiFont as AppSettings["uiFont"];
+  }
+  if ("controllerPromptStyle" in src) {
+    if (!CONTROLLER_PROMPT_STYLE_VALUES.has(
+      src.controllerPromptStyle as AppSettings["controllerPromptStyle"],
+    )) {
+      throw new AppError("bad_settings", "settings.controllerPromptStyle has unknown value");
+    }
+    out.controllerPromptStyle = src.controllerPromptStyle as AppSettings["controllerPromptStyle"];
   }
   if ("uiPanelOpacity" in src) {
     out.uiPanelOpacity = asBoundedInteger(

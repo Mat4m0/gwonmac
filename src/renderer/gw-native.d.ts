@@ -19,6 +19,8 @@ import type {
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { PublishedCompanionState } from "./companion-snapshot.js";
+import type { VirtualGamepadController } from "./virtual-gamepad.js";
+import type { ControllerPromptTextureStats } from "./controller-prompt-texture.js";
 import type {
   InputTrace as SharedInputTrace,
   InputTraceEntry as SharedInputTraceEntry,
@@ -211,6 +213,10 @@ declare global {
     gwWasmHeapBytes?(): number;
     /** Bounded texture counters for local developer diagnostics. */
     gwTextureStats?(): TextureMemorySnapshot;
+    /** Bounded atlas-sized upload fingerprints; unpackaged development only. */
+    gwControllerPromptTextureStats?(): ControllerPromptTextureStats;
+    /** Unpackaged-development controller used to exercise Guild Wars' real gamepad UI. */
+    gwVirtualGamepad?: VirtualGamepadController;
     gwResolveClientCompatibility(): Promise<void>;
     gwLog(visible?: boolean): boolean;
     gwEvictMemory(): number;

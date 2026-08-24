@@ -28,6 +28,7 @@ import {
   type BuildLibrary,
 } from "../src/shared/builds/library.ts";
 import {
+  CONTROLLER_PROMPT_STYLES,
   LAST_UPDATE_CHECK_AT_MAX,
   RENDER_SCALES,
   UI_PANEL_OPACITY_MAX,
@@ -165,6 +166,7 @@ const domainCaseCount = Math.max(
   RENDER_SCALES.length,
   UI_STYLES.length,
   UI_FONTS.length,
+  CONTROLLER_PROMPT_STYLES.length,
   opacityValues.length,
   booleanValues.length,
   UPDATE_TRACKS.length,
@@ -179,6 +181,7 @@ const candidateSettingsDomains = Array.from(
       renderScale: cycle(RENDER_SCALES, index),
       uiStyle: cycle(UI_STYLES, index),
       uiFont: cycle(UI_FONTS, index),
+      controllerPromptStyle: cycle(CONTROLLER_PROMPT_STYLES, index),
       uiPanelOpacity: cycle(opacityValues, index),
       gwonmacTools: cycle(booleanValues, index),
       teamManagement: cycle(booleanValues, index + 1),

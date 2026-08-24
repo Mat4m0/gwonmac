@@ -52,6 +52,7 @@ function rendererCheckout(): string {
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
   write("src/renderer/images/logo.webp", "webp");
+  write("src/renderer/images/playstation-controller-prompts.png", "controller-png");
   write("src/renderer/images/hero-poster.jpg", "jpeg");
   write("src/renderer/images/hero-video.webm", "webm");
   write("apps/website/public/bg-reforged.jpg", "landscape");
@@ -102,6 +103,13 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "webm",
     );
     assert.equal(
+      readFileSync(
+        path.join(root, "build/renderer/images/playstation-controller-prompts.png"),
+        "utf8",
+      ),
+      "controller-png",
+    );
+    assert.equal(
       readFileSync(path.join(root, "build/renderer/images/bg-reforged.jpg"), "utf8"),
       "landscape",
     );
@@ -134,6 +142,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "images/hero-poster.jpg",
       "images/hero-video.webm",
       "images/logo.webp",
+      "images/playstation-controller-prompts.png",
       "index.html",
       "loading.css",
       // Copied out of src/shared, and flattened to `ui/` so the renderer and

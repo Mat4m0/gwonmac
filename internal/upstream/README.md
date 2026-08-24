@@ -29,6 +29,7 @@ named in the file that contains them.
 | [recertify.md](recertify.md) | Maintainer recovery procedure | First test whether the workaround can be deleted. Re-derive semantics when automated proof refuses. |
 | [investigation-log.md](investigation-log.md) | Wrong-turn archive | Real input shapes and live measurements resolved the template, cursor, modifier, and timer failures. |
 | [memory-exhaustion-log.md](memory-exhaustion-log.md) | Long-session memory evidence | The examined client has a 2 GiB WebAssembly maximum and can exhaust it during normal long runs. A larger maximum buys time but does not fix growth. |
+| [controller-prompt-atlas.md](controller-prompt-atlas.md) | Exact-build texture evidence | The PlayStation prompt option replaces one uniquely observed 256×512 RGBA controller atlas and fails closed on other client builds. |
 | [investigation-template.md](investigation-template.md) | Investigation format | Record one hypothesis, one measurement, and one lesson per round. |
 
 The retired hero-panel observer has a separate

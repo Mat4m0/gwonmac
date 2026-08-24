@@ -28,6 +28,7 @@
   ) as RadioNodeList;
   const uiStyle = form.elements.namedItem('uiStyle') as RadioNodeList;
   const uiFont = form.elements.namedItem('uiFont') as RadioNodeList;
+  const controllerPromptStyle = form.elements.namedItem('controllerPromptStyle') as RadioNodeList;
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
   ) as HTMLInputElement;
@@ -461,6 +462,10 @@
         return control.value === 'guild-wars' || control.value === 'inter'
           ? { uiFont: control.value }
           : null;
+      case 'controllerPromptStyle':
+        return control.value === 'game-default' || control.value === 'playstation'
+          ? { controllerPromptStyle: control.value }
+          : null;
       case 'uiPanelOpacity':
       {
         // The slider's own min/max/step are the bounds; a value outside them
@@ -510,6 +515,7 @@
     renderScale.value = String(settings.renderScale);
     uiStyle.value = settings.uiStyle;
     uiFont.value = settings.uiFont;
+    controllerPromptStyle.value = settings.controllerPromptStyle;
     for (const { name } of appearanceRanges) {
       const range = appearanceRange(name);
       if (range) range.value = String(settings[name]);
@@ -620,6 +626,10 @@
         }
         if (patch.extendedMemoryEnabled !== undefined) {
           setFeedback('Saved. Restart GWonMac to apply the memory limit.', 'success', 4500);
+          return;
+        }
+        if (patch.controllerPromptStyle !== undefined) {
+          setFeedback('Saved. Restart GWonMac to apply controller button symbols.', 'success', 4500);
           return;
         }
         setFeedback('Saved.', 'success', 2200);

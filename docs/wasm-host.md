@@ -25,6 +25,49 @@ generation.
 
 Production does not use Asyncify as a fallback.
 
+## Controller prompt texture
+
+The optional PlayStation prompt style is a renderer-owned presentation change.
+It wraps only the official client's Emscripten `glTexImage2D` and full-atlas
+`glTexSubImage2D` imports. It does not patch WebGL prototypes, edit `Gw.dat`, or
+alter the verified client artifacts.
+
+The replacement requires an observed WebGL checksum for Guild Wars' 256×512
+RGBA controller atlas, certified against one exact JSPi client SHA. Width and
+height are not proof, and the older native TexMod/uMod checksum is not accepted
+at runtime. A mismatch, malformed heap range, unsupported upload, or missing
+import passes the original call through unchanged. During a match, the host
+temporarily places the app-owned pixels at the existing WASM pointer, calls the
+synchronous upload, and restores the client bytes in `finally`.
+
+A level-zero redefinition, partial or compressed update, texture deletion, or
+WebGL context reset withdraws the remembered match. This prevents a reused or
+changed texture from inheriting stale replacement state. Exact measurements and
+the recertification procedure are preserved in
+`internal/upstream/controller-prompt-atlas.md`.
+
+The replacement atlas is one removable static PNG composed from Kenney's CC0
+Input Prompts. Its byte hash and dimensions are pinned by policy tests, and its
+provenance is recorded in `THIRD-PARTY-NOTICES.md`. The saved setting has one
+source of truth; removing this feature later also removes the asset, wrapper,
+UI choice, and setting. The ordinary settings reader then ignores the retired
+key.
+
+This is not a Tools or Enhancement capability. It reads no game state, sends
+no command, and has no PvE/PvP policy. It is a launch-time renderer preference,
+like render scale. ArenaNet updates remain playable because an unknown atlas
+hash passes through unchanged. Supporting a changed atlas requires reviewing
+the new texture and adding one exact client/hash certification; it never
+requires weakening the matcher or changing the Enhancement contract.
+
+In an unpackaged development build, `gwVirtualGamepad` can expose Guild Wars'
+real gamepad UI without hardware. Run `gwVirtualGamepad.activateUi()` in the
+game window's DevTools console. Buttons 0–3 are Cross, Circle, Square, and
+Triangle. The helper preserves physical controllers, exists only when the
+preload marks the launch as development, and restores `navigator.getGamepads`
+on unload. Button methods send normal gamepad state to the official client, so
+use them only in a safe test area.
+
 Awaited image, DNS, saved-login, Steam, advertisement, age, and shop operations
 always return promises. The preload exposes only the required capability. The
 main process keeps validation and native ownership. Steam is the only federated
