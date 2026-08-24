@@ -92,20 +92,16 @@ export function createDemoTradeHost(): TradeHost {
     async unsubscribe() {},
     async search(request) {
       const query = request.query.toLocaleLowerCase();
-      const groups = new Map<string, { message: TradeMessage; postCount: number }>();
-      for (const message of DEMO_MESSAGES.filter((candidate) =>
+      const messages = DEMO_MESSAGES.filter((candidate) =>
         candidate.source === request.source
-        && (candidate.message.toLocaleLowerCase().includes(query)
-          || candidate.sender.toLocaleLowerCase().includes(query))
-      ).sort((left, right) => right.timestamp - left.timestamp)) {
-        const key = message.sender.toLocaleLowerCase();
-        const group = groups.get(key);
-        if (group) group.postCount += 1;
-        else groups.set(key, { message, postCount: 1 });
-      }
+        && (request.scope === "player"
+          ? candidate.sender.toLocaleLowerCase() === query
+          : candidate.message.toLocaleLowerCase().includes(query)
+            || candidate.sender.toLocaleLowerCase().includes(query))
+      ).sort((left, right) => right.timestamp - left.timestamp);
       return {
         ...request,
-        matches: [...groups.values()],
+        messages,
       };
     },
     async retry(next) {

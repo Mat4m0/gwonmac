@@ -52,7 +52,7 @@ describe("TradeChatApp", () => {
     wrapper.unmount();
   });
 
-  it("searches player names through the upstream user query", async () => {
+  it("shows every matching listing instead of grouping by player", async () => {
     const wrapper = await ledger();
     await wrapper.get("input[type=search]").setValue("Tyria Cartographer");
     await wrapper.get(".trade-search").trigger("submit");
@@ -60,10 +60,37 @@ describe("TradeChatApp", () => {
 
     expect(wrapper.text()).toContain("Tyria Cartographer");
     expect(wrapper.text()).not.toContain("Silver Wayfarer");
-    expect(wrapper.findAll(".trade-row")).toHaveLength(1);
-    expect(wrapper.get(".group-count").text()).toBe("2 posts");
-    expect(wrapper.get(".trade-row").text()).toContain("WTS arms 29e each");
-    expect(wrapper.get(".trade-row").text()).not.toContain("Earlier trade listing");
+    expect(wrapper.findAll(".trade-row")).toHaveLength(2);
+    expect(wrapper.findAll(".trade-row")[0]!.text()).toContain("WTS arms 29e each");
+    expect(wrapper.findAll(".trade-row")[1]!.text()).toContain("Earlier trade listing");
+    expect(wrapper.get(".trade-summary").text()).toContain("2 offers");
+    wrapper.unmount();
+  });
+
+  it("opens exact player listings and returns to the preserved ledger", async () => {
+    const wrapper = await ledger();
+    const list = wrapper.get(".trade-list");
+    Object.defineProperty(list.element, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 64,
+    });
+    const originalSelection = wrapper.findAll(".trade-row")[0]!.attributes("data-selected");
+
+    await wrapper.findAll(".character-cell")[0]!.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".player-summary").text()).toContain("Tyria Cartographer");
+    expect(wrapper.findAll(".trade-row")).toHaveLength(2);
+    expect(wrapper.findAll(".trade-row").every(
+      (row) => row.text().includes("Tyria Cartographer"),
+    )).toBe(true);
+
+    await wrapper.get(".player-summary .ui-link").trigger("click");
+    await flushPromises();
+    expect(wrapper.findAll(".trade-row")).toHaveLength(7);
+    expect(wrapper.findAll(".trade-row")[0]!.attributes("data-selected")).toBe(originalSelection);
+    expect((wrapper.get(".trade-list").element as HTMLElement).scrollTop).toBe(64);
     wrapper.unmount();
   });
 
@@ -94,7 +121,7 @@ describe("TradeChatApp", () => {
       async search(request) {
         return {
           ...request,
-          matches: messages.map((message) => ({ message, postCount: 1 })),
+          messages,
         };
       },
       async retry() {},

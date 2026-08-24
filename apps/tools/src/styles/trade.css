@@ -87,12 +87,30 @@
   font-variant-numeric: tabular-nums;
 }
 
-.trade-summary span:first-child {
+.trade-summary > span:first-child {
   overflow: hidden;
   color: var(--ui-text);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.player-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ui-space-3);
+}
+
+.player-summary strong {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ui-space-1);
+  color: var(--ui-text-bright);
+}
+
+.player-summary bdi { overflow: hidden; text-overflow: ellipsis; }
+.player-summary .ui-link { flex: none; white-space: nowrap; }
 
 .trade-ledger {
   position: relative;
@@ -134,14 +152,11 @@
   width: 100%;
   min-height: 52px;
   padding: var(--ui-space-2) var(--ui-space-3);
-  border: 0;
   border-bottom: 1px solid var(--ui-line-soft);
   background: var(--ui-row-fill);
   color: var(--ui-text);
   font: inherit;
-  text-align: left;
   text-shadow: var(--ui-text-shadow);
-  cursor: pointer;
 }
 
 .trade-row-shell:hover .trade-row,
@@ -186,21 +201,22 @@
 .row-quick-action:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 1px; }
 
 .trade-row:hover { background: var(--ui-hover); }
-.trade-row[aria-current="true"] {
+.trade-row[data-selected] {
   background: var(--ui-selected);
   box-shadow: var(--ui-shadow-row-selected);
 }
 .trade-row[data-saved-offer] {
   box-shadow: inset 1px 0 0 var(--ui-accent);
 }
-.trade-row[data-saved-offer][aria-current="true"] {
+.trade-row[data-saved-offer][data-selected] {
   box-shadow: inset 1px 0 0 var(--ui-accent), var(--ui-shadow-row-selected);
 }
-.trade-row:focus-visible {
+.character-cell:focus-visible,
+.offer-cell:focus-visible {
   position: relative;
   z-index: 1;
   outline: 2px solid var(--ui-focus);
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
 
 .intent-cell {
@@ -229,26 +245,38 @@
   display: flex;
   align-items: center;
   gap: var(--ui-space-1);
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
   color: var(--ui-text-bright);
+  font: inherit;
+  text-align: left;
+  text-shadow: inherit;
+  cursor: pointer;
 }
 .character-cell bdi { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.message-cell { color: var(--ui-text-muted); }
+.character-cell:hover bdi { color: var(--ui-accent); text-decoration: underline; text-underline-offset: 3px; }
+.message-cell {
+  color: var(--ui-text-muted);
+}
+.offer-cell {
+  display: block;
+  padding: var(--ui-space-1) 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  text-shadow: inherit;
+  cursor: pointer;
+}
+.offer-cell:hover { color: var(--ui-text-bright); }
 .age-cell {
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.group-count {
-  padding: 2px 6px;
-  border: 1px solid var(--ui-line-soft);
-  border-radius: 999px;
-  color: var(--ui-text-muted);
-  font-size: var(--ui-font-size-xs);
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
 .load-more { margin: var(--ui-space-3) auto; }
 
 .trade-state {
@@ -307,8 +335,19 @@
 }
 .inspector-meta bdi { color: var(--ui-accent); font-size: var(--ui-font-size-lg); }
 .inspector-meta time { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.inspector-meta > span { display: grid; justify-items: end; gap: 2px; }
-.inspector-meta small { color: var(--ui-text-faint); font-size: var(--ui-font-size-xs); }
+.inspector-player {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ui-space-1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.inspector-player:hover bdi { text-decoration: underline; text-underline-offset: 3px; }
+.inspector-player:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
 
 .inspector-actions {
   display: flex;
@@ -431,10 +470,12 @@
   .age-cell { grid-column: 2; grid-row: 1; }
   .character-cell { grid-column: 1 / -1; grid-row: 2; }
   .message-cell {
-    display: -webkit-box;
     grid-column: 1 / -1;
     grid-row: 3;
     white-space: normal;
+  }
+  .message-cell bdi {
+    display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }

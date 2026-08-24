@@ -10,7 +10,7 @@ describe("native trade host", () => {
     const trade: GwNativeApi["trade"] = {
       async subscribe(source) { return { source, status: "live", messages: [] }; },
       async unsubscribe() {},
-      async search(request) { return { ...request, matches: [] }; },
+      async search(request) { return { ...request, messages: [] }; },
       async retry() {},
       onEvent() { return () => undefined; },
       async getSaved() { return { offers: [], players: [] }; },

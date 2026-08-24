@@ -56,17 +56,13 @@ export type TradeSnapshot = Readonly<{
 export type TradeSearchRequest = Readonly<{
   source: TradeSource;
   query: string;
-}>;
-
-export type TradeSearchMatch = Readonly<{
-  message: TradeMessage;
-  postCount: number;
+  scope: "all" | "player";
 }>;
 
 export type TradeSearchResult = Readonly<{
   source: TradeSource;
   query: string;
-  matches: readonly TradeSearchMatch[];
+  messages: readonly TradeMessage[];
 }>;
 
 export type TradeSavedOffer = TradeMessage & Readonly<{ savedAt: number }>;
@@ -103,16 +99,19 @@ export function parseTradeSource(value: unknown): TradeSource {
 }
 
 export function parseTradeSearchRequest(value: unknown): TradeSearchRequest {
-  if (!isRecord(value) || !hasOnlyKeys(value, ["source", "query"])) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["source", "query", "scope"])) {
     throw new TypeError("invalid trade search request");
   }
   const source = parseTradeSource(value.source);
+  if (value.scope !== "all" && value.scope !== "player") {
+    throw new TypeError("invalid trade search scope");
+  }
   if (typeof value.query !== "string") throw new TypeError("invalid trade query");
   const query = value.query.trim();
   if (query.length === 0 || countCharacters(query) > TRADE_LIMITS.queryCharacters) {
     throw new TypeError("invalid trade query");
   }
-  return Object.freeze({ source, query });
+  return Object.freeze({ source, query, scope: value.scope });
 }
 
 export function parseTradeSavedState(value: unknown): TradeSavedState {

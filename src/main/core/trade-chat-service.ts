@@ -14,7 +14,6 @@ import {
   type TradeConnectionState,
   type TradeEvent,
   type TradeMessage,
-  type TradeSearchMatch,
   type TradeSearchResult,
   type TradeSnapshot,
   type TradeSource,
@@ -105,13 +104,21 @@ export class TradeChatService {
     if (feed.subscribers.size === 0) this.#stop(feed);
   }
 
-  search(id: number, source: TradeSource, query: string): Promise<TradeSearchResult> {
+  search(
+    id: number,
+    source: TradeSource,
+    query: string,
+    scope: "all" | "player",
+  ): Promise<TradeSearchResult> {
     if (this.#subscriptions.get(id) !== source) {
       return Promise.reject(new Error("trade source is not subscribed"));
     }
     const playerQuery = `user:${query}`;
-    const queries = [query];
-    if ([...playerQuery].length <= TRADE_LIMITS.queryCharacters) queries.push(playerQuery);
+    const queries = scope === "player" ? [playerQuery] : [query];
+    if (
+      scope === "all"
+      && [...playerQuery].length <= TRADE_LIMITS.queryCharacters
+    ) queries.push(playerQuery);
     return Promise.allSettled(queries.map((candidate) => this.#query(source, candidate)))
       .then((results) => {
         const messages = results.flatMap((result) => result.status === "fulfilled"
@@ -120,7 +127,7 @@ export class TradeChatService {
         if (messages.length === 0 && results.every((result) => result.status === "rejected")) {
           throw new Error("trade search failed");
         }
-        return Object.freeze({ source, query, matches: groupSearchMatches(messages) });
+        return Object.freeze({ source, query, messages: mergeSearchMessages(messages) });
       });
   }
 
@@ -336,19 +343,13 @@ export class TradeChatService {
   }
 }
 
-function groupSearchMatches(messages: readonly TradeMessage[]): readonly TradeSearchMatch[] {
+function mergeSearchMessages(messages: readonly TradeMessage[]): readonly TradeMessage[] {
   const unique = new Map<number, TradeMessage>();
   for (const message of messages) unique.set(message.timestamp, message);
-  const groups = new Map<string, { message: TradeMessage; postCount: number }>();
-  for (const message of [...unique.values()].sort((a, b) => b.timestamp - a.timestamp)) {
-    const key = message.sender.toLocaleLowerCase();
-    const group = groups.get(key);
-    if (group) group.postCount += 1;
-    else groups.set(key, { message, postCount: 1 });
-  }
-  return Object.freeze([...groups.values()]
+  return Object.freeze([...unique.values()]
+    .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, TRADE_LIMITS.searchResults)
-    .map((match) => Object.freeze(match)));
+    .map((message) => Object.freeze(message)));
 }
 
 function createFeed(source: TradeSource): Feed {

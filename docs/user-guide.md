@@ -142,8 +142,11 @@ certified; the menu and shortcut do not depend on client certification.
 Trade Chat shows the public Kamadan and Pre-Searing Ascalon feeds. Choose one
 source, search for an item or character, and use **Selling** or **Buying** to
 filter whole-word `WTS` and `WTB` messages. Select a row to read the complete
-message and exact time, then copy the character name or message. The feature is
-read-only: publish listings and contact players through normal Guild Wars chat.
+message and exact time. Select a character name to see that character's recent
+listings, then use **Back to results** or **Back to offers** to return to the
+same ledger position. Copy the character name or message when you find a useful
+listing. The feature is read-only: publish listings and contact players through
+normal Guild Wars chat.
 Feed history, searches, and copied character names are not saved automatically.
 Use **Save offer** to keep an exact local copy of a useful listing. Use
 **Follow player** to highlight that character's current and future listings.

@@ -15,15 +15,13 @@ import {
   type TradeConnectionState,
   type TradeEvent,
   type TradeMessage,
-  type TradeSearchMatch,
   type TradeSavedOffer,
   type TradeSavedState,
   type TradeSource,
 } from "../../../src/shared/trade-chat";
 import {
   insertTradeMessage,
-  liveLedgerRows,
-  searchLedgerRows,
+  tradeLedgerRows,
   tradeMessageIntents,
   type TradeIntent,
 } from "./trade-ledger";
@@ -42,9 +40,17 @@ type SourceState = {
   status: TradeConnectionState;
   live: TradeMessage[];
   pending: TradeMessage[];
-  search: TradeSearchMatch[];
+  search: TradeMessage[];
   selection: number | null;
   savedSelection: number | null;
+};
+
+type PlayerReturnState = {
+  scrollTop: number;
+  selection: number | null;
+  savedSelection: number | null;
+  visibleLimit: number;
+  focusTimestamp: number | null;
 };
 
 const source = ref<TradeSource>("kamadan");
@@ -53,6 +59,11 @@ const query = ref("");
 const submittedQuery = ref("");
 const searching = ref(false);
 const searchProblem = ref("");
+const playerName = ref("");
+const playerMessages = ref<TradeMessage[]>([]);
+const playerSearching = ref(false);
+const playerProblem = ref("");
+const playerReturn = ref<PlayerReturnState | null>(null);
 const notice = ref("");
 const detailOpen = ref(false);
 const savedOpen = ref(false);
@@ -85,10 +96,12 @@ const statusLabel = computed(() => ({
   reconnecting: "Reconnecting",
   unavailable: "Unavailable",
 })[current.value.status]);
-const displayedRows = computed(() => submittedQuery.value
-  ? searchLedgerRows(current.value.search, intent.value)
-  : liveLedgerRows(current.value.live, intent.value));
-const filtered = computed(() => displayedRows.value.map((row) => row.message));
+const sourceMessages = computed(() => playerName.value
+  ? playerMessages.value
+  : submittedQuery.value
+    ? current.value.search
+    : current.value.live);
+const filtered = computed(() => tradeLedgerRows(sourceMessages.value, intent.value));
 const visibleMessages = computed(() => filtered.value.slice(0, visibleLimit.value));
 const selected = computed(() => {
   const timestamp = current.value.selection;
@@ -98,20 +111,19 @@ const selected = computed(() => {
       ? saved.value.offers.find((offer) =>
           offer.source === source.value && offer.timestamp === timestamp
         ) ?? null
-      : displayedRows.value.find((row) => row.message.timestamp === timestamp)?.message ?? null;
+      : filtered.value.find((message) => message.timestamp === timestamp) ?? null;
 });
 const savedCount = computed(() => saved.value.offers.length + saved.value.players.length);
 const emptyHeading = computed(() => {
+  if (playerSearching.value) return `Finding listings from ${playerName.value}…`;
+  if (playerProblem.value) return "Player listings could not load";
   if (searching.value) return "Searching the trade ledger…";
   if (searchProblem.value) return "Search could not finish";
+  if (playerName.value) return `No listings from ${playerName.value}`;
   if (submittedQuery.value) return "No matching offers";
   if (current.value.status === "unavailable") return "Trade feed unavailable";
   return "Waiting for trade messages";
 });
-
-function groupedPostCount(message: TradeMessage): number {
-  return displayedRows.value.find((row) => row.message.timestamp === message.timestamp)?.postCount ?? 1;
-}
 
 let requestRevision = 0;
 let stopEvents: (() => void) | null = null;
@@ -132,7 +144,7 @@ async function subscribe(next: TradeSource): Promise<void> {
     if (revision !== requestRevision || source.value !== next || !props.visible) return;
     target.status = snapshot.status;
     target.live = [...snapshot.messages];
-    ensureSelection(target, displayedRows.value.map((row) => row.message), next);
+    ensureSelection(target, filtered.value, next);
     emit("ready");
     if (submittedQuery.value) await runSearch(revision);
   } catch {
@@ -141,6 +153,8 @@ async function subscribe(next: TradeSource): Promise<void> {
 }
 
 async function runSearch(existingRevision?: number): Promise<void> {
+  resetPlayerView();
+  detailOpen.value = false;
   const trimmed = query.value.trim();
   submittedQuery.value = trimmed;
   visibleLimit.value = 25;
@@ -154,14 +168,14 @@ async function runSearch(existingRevision?: number): Promise<void> {
   const requestedSource = source.value;
   searching.value = true;
   try {
-    const result = await props.host.search({ source: requestedSource, query: trimmed });
+    const result = await props.host.search({
+      source: requestedSource,
+      query: trimmed,
+      scope: "all",
+    });
     if (revision !== requestRevision || source.value !== requestedSource) return;
-    current.value.search = [...result.matches];
-    ensureSelection(
-      current.value,
-      current.value.search.map((match) => match.message),
-      source.value,
-    );
+    current.value.search = [...result.messages];
+    ensureSelection(current.value, current.value.search, source.value);
   } catch {
     if (revision === requestRevision) {
       current.value.search = [];
@@ -178,6 +192,8 @@ function onQueryInput(event: Event): void {
 }
 
 function clearSearch(): void {
+  resetPlayerView();
+  detailOpen.value = false;
   query.value = "";
   submittedQuery.value = "";
   searchProblem.value = "";
@@ -229,6 +245,73 @@ function selectMessage(message: TradeMessage): void {
   current.value.selection = message.timestamp;
   current.value.savedSelection = null;
   detailOpen.value = true;
+}
+
+async function openPlayer(sender: string, focusTimestamp: number | null = null): Promise<void> {
+  if (!playerName.value) {
+    playerReturn.value = {
+      scrollTop: list.value?.scrollTop ?? 0,
+      selection: current.value.selection,
+      savedSelection: current.value.savedSelection,
+      visibleLimit: visibleLimit.value,
+      focusTimestamp,
+    };
+  }
+  playerName.value = sender;
+  playerMessages.value = [];
+  playerProblem.value = "";
+  playerSearching.value = true;
+  visibleLimit.value = 25;
+  detailOpen.value = false;
+  savedOpen.value = false;
+  const revision = ++requestRevision;
+  const requestedSource = source.value;
+  try {
+    const result = await props.host.search({
+      source: requestedSource,
+      query: sender,
+      scope: "player",
+    });
+    if (revision !== requestRevision || source.value !== requestedSource) return;
+    const key = sender.toLocaleLowerCase();
+    playerMessages.value = result.messages.filter(
+      (message) => message.sender.toLocaleLowerCase() === key,
+    );
+    ensureSelection(current.value, playerMessages.value, source.value);
+  } catch {
+    if (revision === requestRevision) {
+      playerMessages.value = [];
+      playerProblem.value = "The feed did not answer. Go back or try again.";
+    }
+  } finally {
+    if (revision === requestRevision) playerSearching.value = false;
+  }
+}
+
+function closePlayer(): void {
+  const previous = playerReturn.value;
+  requestRevision += 1;
+  resetPlayerView();
+  detailOpen.value = false;
+  if (!previous) return;
+  current.value.selection = previous.selection;
+  current.value.savedSelection = previous.savedSelection;
+  visibleLimit.value = previous.visibleLimit;
+  void nextTick(() => {
+    if (list.value) list.value.scrollTop = previous.scrollTop;
+    const selector = previous.focusTimestamp === null
+      ? null
+      : `[data-player-timestamp="${previous.focusTimestamp}"]`;
+    if (selector) list.value?.querySelector<HTMLElement>(selector)?.focus();
+  });
+}
+
+function resetPlayerView(): void {
+  playerName.value = "";
+  playerMessages.value = [];
+  playerSearching.value = false;
+  playerProblem.value = "";
+  playerReturn.value = null;
 }
 
 async function copy(value: string, label: string): Promise<void> {
@@ -317,9 +400,7 @@ async function inspectSavedOffer(offer: TradeSavedOffer): Promise<void> {
 }
 
 function findPlayer(sender: string): void {
-  query.value = sender;
-  savedOpen.value = false;
-  void runSearch();
+  void openPlayer(sender);
 }
 
 function currentOffersFor(sender: string): number {
@@ -362,12 +443,13 @@ function onWindowKeydown(event: KeyboardEvent): void {
 }
 
 watch(source, (next) => {
+  resetPlayerView();
   detailOpen.value = false;
   visibleLimit.value = 25;
   if (props.visible) void subscribe(next);
 });
-watch(displayedRows, (rows) => {
-  ensureSelection(current.value, rows.map((row) => row.message), source.value);
+watch(filtered, (messages) => {
+  ensureSelection(current.value, messages, source.value);
 });
 watch(() => props.visible, (visible) => {
   if (visible) void subscribe(source.value);
@@ -426,7 +508,10 @@ function removeReplacement(target: SourceState, timestamp: number | undefined): 
   if (timestamp === undefined) return;
   target.live = target.live.filter((message) => message.timestamp !== timestamp);
   target.pending = target.pending.filter((message) => message.timestamp !== timestamp);
-  target.search = target.search.filter(({ message }) => message.timestamp !== timestamp);
+  target.search = target.search.filter((message) => message.timestamp !== timestamp);
+  playerMessages.value = playerMessages.value.filter(
+    (message) => message.timestamp !== timestamp,
+  );
 }
 function age(timestamp: number): string {
   const seconds = Math.max(0, Math.floor((now.value - timestamp) / 1000));
@@ -525,12 +610,18 @@ function exactTime(timestamp: number): string {
       </div>
 
       <div class="trade-summary" aria-live="polite">
-        <span>
+        <span v-if="!playerName">
           {{ submittedQuery ? `Results for “${submittedQuery}”` : "Latest messages" }}
+        </span>
+        <span v-else class="player-summary">
+          <button class="ui-link" @click="closePlayer">
+            ← {{ submittedQuery ? "Back to results" : "Back to offers" }}
+          </button>
+          <strong><TradeIcon name="player" /><bdi>{{ playerName }}</bdi></strong>
         </span>
         <span>
           {{ filtered.length }}
-          {{ submittedQuery ? (filtered.length === 1 ? "trader" : "traders") : (filtered.length === 1 ? "offer" : "offers") }}
+          {{ filtered.length === 1 ? "offer" : "offers" }}
         </span>
       </div>
 
@@ -539,7 +630,7 @@ function exactTime(timestamp: number): string {
           <span>Intent</span><span>Character</span><span>Message</span><span>Age</span>
         </div>
         <div
-          v-if="searching || (!visibleMessages.length && (current.status === 'connecting' || current.status === 'reconnecting'))"
+          v-if="playerSearching || searching || (!visibleMessages.length && (current.status === 'connecting' || current.status === 'reconnecting'))"
           class="trade-state"
           role="status"
         >
@@ -548,11 +639,18 @@ function exactTime(timestamp: number): string {
         </div>
         <div v-else-if="!visibleMessages.length" class="trade-state">
           <strong>{{ emptyHeading }}</strong>
-          <p v-if="searchProblem">{{ searchProblem }}</p>
+          <p v-if="playerProblem">{{ playerProblem }}</p>
+          <p v-else-if="searchProblem">{{ searchProblem }}</p>
+          <p v-else-if="playerName">This character has no recent listings in {{ sourceLabel }}.</p>
           <p v-else-if="submittedQuery">Try a shorter item name, character name, or another intent.</p>
           <p v-else>Messages will appear here as soon as the public feed answers.</p>
           <button
-            v-if="current.status === 'unavailable' || searchProblem"
+            v-if="playerProblem"
+            class="ui-button"
+            @click="openPlayer(playerName)"
+          >Try again</button>
+          <button
+            v-else-if="current.status === 'unavailable' || searchProblem"
             class="ui-button"
             @click="props.host.retry(source); subscribe(source)"
           >Try again</button>
@@ -572,13 +670,11 @@ function exactTime(timestamp: number): string {
             class="trade-row-shell"
             role="listitem"
           >
-            <button
+            <div
               class="trade-row"
-              :data-timestamp="message.timestamp"
               :data-saved-offer="offerSaved(message) ? '' : undefined"
               :data-saved-player="playerSaved(message.sender) ? '' : undefined"
-              :aria-current="current.selection === message.timestamp ? 'true' : undefined"
-              @click="selectMessage(message)"
+              :data-selected="current.selection === message.timestamp ? '' : undefined"
             >
               <span class="intent-cell">
                 <span v-if="offerSaved(message)" class="saved-mark" aria-label="Saved offer"><TradeIcon name="star" filled /></span>
@@ -587,18 +683,24 @@ function exactTime(timestamp: number): string {
                 </span>
                 <span v-if="!tradeMessageIntents(message.message).length" class="ui-chip">Other</span>
               </span>
-              <span class="character-cell">
+              <button
+                class="character-cell"
+                :data-player-timestamp="message.timestamp"
+                :aria-label="`Show listings from ${message.sender}`"
+                @click="openPlayer(message.sender, message.timestamp)"
+              >
                 <span v-if="playerSaved(message.sender)" class="followed-mark" aria-label="Followed player"><TradeIcon name="player" filled /></span>
                 <bdi>{{ message.sender }}</bdi>
-                <span
-                  v-if="groupedPostCount(message) > 1"
-                  class="group-count"
-                  :aria-label="`Latest of ${groupedPostCount(message)} matching posts`"
-                >{{ groupedPostCount(message) }} posts</span>
-              </span>
-              <bdi class="message-cell">{{ message.message }}</bdi>
+              </button>
+              <button
+                class="message-cell offer-cell"
+                :data-timestamp="message.timestamp"
+                :aria-current="current.selection === message.timestamp ? 'true' : undefined"
+                :aria-label="`Inspect offer from ${message.sender}`"
+                @click="selectMessage(message)"
+              ><bdi>{{ message.message }}</bdi></button>
               <time class="age-cell" :datetime="new Date(message.timestamp).toISOString()">{{ age(message.timestamp) }}</time>
-            </button>
+            </div>
             <div class="row-quick-actions">
               <button
                 class="row-quick-action"
@@ -627,17 +729,18 @@ function exactTime(timestamp: number): string {
       </div>
 
       <section class="trade-inspector ui-raised ui-scroll" :aria-label="selected ? `Offer from ${selected.sender}` : 'Offer detail'">
-        <button class="ui-button mobile-back" @click="detailOpen = false">Back to offers</button>
+        <button class="ui-button mobile-back" @click="detailOpen = false">
+          {{ playerName ? `Back to ${playerName}` : "Back to offers" }}
+        </button>
         <template v-if="selected">
           <div class="inspector-copy">
             <div class="inspector-meta">
-              <bdi>{{ selected.sender }}</bdi>
-              <span>
-                <small v-if="groupedPostCount(selected) > 1">
-                  Latest of {{ groupedPostCount(selected) }} matching posts
-                </small>
-                <time :datetime="new Date(selected.timestamp).toISOString()">{{ exactTime(selected.timestamp) }}</time>
-              </span>
+              <button
+                class="inspector-player"
+                :aria-label="`Show listings from ${selected.sender}`"
+                @click="openPlayer(selected.sender, selected.timestamp)"
+              ><TradeIcon name="player" /><bdi>{{ selected.sender }}</bdi></button>
+              <time :datetime="new Date(selected.timestamp).toISOString()">{{ exactTime(selected.timestamp) }}</time>
             </div>
             <p><bdi>{{ selected.message }}</bdi></p>
           </div>

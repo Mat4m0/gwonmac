@@ -93,6 +93,7 @@ Do not copy these Toolbox++ implementation choices:
 | P0 | see recent messages from either supported source | notice current offers without visiting a website |
 | P0 | switch between Kamadan and Pre-Searing | browse each economy without mixing their messages |
 | P0 | search for an item or player name | reduce a fast feed to relevant messages |
+| P0 | open a character's recent listings | compare everything that character posted |
 | P0 | show only `WTS` messages | find someone selling an item I want |
 | P0 | show only `WTB` messages | find someone buying an item I own |
 | P0 | compare the full message and its age | judge whether contacting the player is worthwhile |
@@ -175,6 +176,16 @@ Each result row shows:
 - a compact relative time such as `2m` or `1h`;
 - enough original message text to identify the trade; and
 - restrained **WTS** and **WTB** markers when the message contains those terms.
+
+Search shows every matching message. It does not group different messages from
+one character into one row. Duplicate upstream timestamps still produce one
+row because the timestamp identifies one canonical message.
+
+The character name is a separate control from the message. Selecting the name
+opens that character's recent listings from the active source. **Back to
+results** or **Back to offers** restores the prior query, intent filter,
+selection, progressive reveal count, and scroll position. The player view uses
+the same bounded ledger and does not create or persist a player profile.
 
 The original wording is canonical. GWonMac does not rewrite a message into a
 structured listing.
@@ -267,6 +278,14 @@ The core Trade feature must not depend on this enhancement.
 2. The preserved live feed returns at its previous position.
 3. Newer messages merge silently when the player returns fully to the top.
 
+### Compare one character's listings
+
+1. The player selects a character name in a result row or message detail.
+2. Trade Chat shows that character's recent messages from the active source.
+3. The player compares the individual messages or opens one message detail.
+4. The player selects **Back to results** or **Back to offers**.
+5. The prior ledger returns at its previous position.
+
 ## States and recovery
 
 | State | Required behavior |
@@ -281,6 +300,7 @@ The core Trade feature must not depend on this enhancement.
 | Invalid response | Ignore the unsafe response, preserve valid rows, and retry safely |
 | No selection | Prompt the player to select a message; do not fill the pane with help text |
 | Narrow detail | Show **Back to results** and preserve list state |
+| Player listings | Keep Back available during loading, empty, and failure states |
 
 The feed does not use an empty-state illustration. The interface should feel
 like a compact working tool, consistent with Hero/Build management.
@@ -385,6 +405,8 @@ The feature is ready when all of these statements are true:
 - Switching between Kamadan and Pre-Searing replaces the complete source view
   and never mixes their messages.
 - A player can submit a plain-text search and return to the live feed.
+- Search keeps every distinct matching message, including messages from the same character.
+- Selecting a character shows that character's recent listings and returns to the preserved ledger.
 - **Selling** and **Buying** apply the defined `WTS` and `WTB` rules.
 - Results remain readable and stable while new live messages arrive.
 - Selecting a result shows the complete original message and exact age.
@@ -412,8 +434,5 @@ Do not add these until first-release use shows a concrete need:
    sending text.
 2. Saved searches and foreground-only alerts can help repeated item hunts, but
    they add persistence, notification rules, and noise.
-3. Sender-focused history can be added if the upstream search contract supports
-   it reliably.
-
 Each follow-up needs its own acceptance criterion. None should delay the core
 find-and-contact experience.

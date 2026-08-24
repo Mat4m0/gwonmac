@@ -1,11 +1,9 @@
 import {
   TRADE_LIMITS,
   type TradeMessage,
-  type TradeSearchMatch,
 } from "../../../src/shared/trade-chat";
 
 export type TradeIntent = "all" | "selling" | "buying";
-export type TradeLedgerRow = Readonly<{ message: TradeMessage; postCount: number }>;
 
 export function tradeMessageIntents(message: string): Exclude<TradeIntent, "all">[] {
   const selling = /(?:^|[^a-z0-9])wts(?:$|[^a-z0-9])/iu.test(message);
@@ -14,20 +12,11 @@ export function tradeMessageIntents(message: string): Exclude<TradeIntent, "all"
     .filter((value): value is Exclude<TradeIntent, "all"> => value !== null);
 }
 
-export function liveLedgerRows(
+export function tradeLedgerRows(
   messages: readonly TradeMessage[],
   intent: TradeIntent,
-): TradeLedgerRow[] {
-  return messages
-    .filter((message) => matchesIntent(message, intent))
-    .map((message) => ({ message, postCount: 1 }));
-}
-
-export function searchLedgerRows(
-  matches: readonly TradeSearchMatch[],
-  intent: TradeIntent,
-): TradeLedgerRow[] {
-  return matches.filter(({ message }) => matchesIntent(message, intent));
+): TradeMessage[] {
+  return messages.filter((message) => matchesIntent(message, intent));
 }
 
 export function insertTradeMessage(

@@ -12,7 +12,7 @@ test("searches and inspects the Kamadan ledger", async ({ page }) => {
   await dialog.getByRole("searchbox").fill("Polar Bear");
   await dialog.getByRole("button", { name: "Search", exact: true }).click();
   await expect(dialog.locator(".trade-row")).toHaveCount(1);
-  await dialog.locator(".trade-row").click();
+  await dialog.locator(".offer-cell").click();
   await expect(dialog.getByText("Quiet Ember")).toHaveCount(2);
   await dialog.getByRole("button", { name: "Live feed" }).click();
   await expect(dialog.locator(".trade-row")).toHaveCount(7);
@@ -23,11 +23,11 @@ test("searches character names and returns to live when cleared", async ({ page 
   const search = dialog.getByRole("searchbox", { name: "Search offers or character names" });
   await search.fill("Tyria Cartographer");
   await dialog.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(dialog.locator(".trade-row")).toHaveCount(1);
-  await expect(dialog.locator(".trade-row")).toContainText("Tyria Cartographer");
-  await expect(dialog.getByText("2 posts", { exact: true })).toBeVisible();
-  await expect(dialog.locator(".trade-row")).toContainText("WTS arms 29e each");
-  await expect(dialog.locator(".trade-row")).not.toContainText("Earlier trade listing");
+  const rows = dialog.locator(".trade-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText("Tyria Cartographer");
+  await expect(rows.first()).toContainText("WTS arms 29e each");
+  await expect(rows.last()).toContainText("Earlier trade listing");
 
   await search.fill("");
   await expect(dialog.getByText("Latest messages", { exact: true })).toBeVisible();
@@ -40,10 +40,26 @@ test("keeps Pre-Searing separate and adapts to a narrow window", async ({ page }
   await dialog.getByRole("button", { name: "Pre-Searing" }).click();
   await expect(dialog.locator(".trade-row").first()).toContainText("Vanguard Althea");
   await expect(dialog.getByText("Tyria Cartographer")).toHaveCount(0);
-  await dialog.locator(".trade-row").first().click();
+  await dialog.locator(".offer-cell").first().click();
   await expect(dialog.getByRole("button", { name: "Back to offers" })).toBeVisible();
   await dialog.getByRole("button", { name: "Back to offers" }).click();
   await expect(dialog.locator(".trade-row").first()).toBeVisible();
+});
+
+test("opens a player's listings and returns to the prior results", async ({ page }) => {
+  const dialog = page.getByRole("dialog", { name: "Trade Chat" });
+  await dialog.getByRole("searchbox").fill("arms");
+  await dialog.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(dialog.locator(".trade-row")).toHaveCount(1);
+
+  await dialog.getByRole("list", { name: "Trade offers" })
+    .getByRole("button", { name: "Show listings from Tyria Cartographer" }).click();
+  await expect(dialog.locator(".trade-row")).toHaveCount(2);
+  await expect(dialog.getByText("Earlier trade listing, now superseded")).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Back to results" }).click();
+  await expect(dialog.locator(".trade-row")).toHaveCount(1);
+  await expect(dialog.getByText("Results for “arms”", { exact: true })).toBeVisible();
 });
 
 test("filters selling and buying without relying on chip colour", async ({ page }) => {

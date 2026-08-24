@@ -584,6 +584,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
         win.webContents.id,
         request.source,
         request.query,
+        request.scope,
       );
     }),
 

@@ -202,7 +202,7 @@ const INVOCATIONS: Invocation[] = [
   { path: "trade.unsubscribe", args: [], channel: IPC.tradeUnsubscribe },
   {
     path: "trade.search",
-    args: [{ source: "kamadan", query: "black dye" }],
+    args: [{ source: "kamadan", query: "black dye", scope: "all" }],
     channel: IPC.tradeSearch,
   },
   { path: "trade.retry", args: ["kamadan"], channel: IPC.tradeRetry },

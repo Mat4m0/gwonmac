@@ -53,11 +53,19 @@ describe("trade chat contracts", () => {
   it("rejects malformed payloads and invalid searches", () => {
     assert.equal(parseTradePayload("kamadan", { t: 1, s: "", m: "WTS" }), null);
     assert.equal(parseTradePayload("kamadan", { t: -1, s: "A", m: "WTS" }), null);
-    assert.throws(() => parseTradeSearchRequest({ source: "both", query: "ecto" }));
-    assert.throws(() => parseTradeSearchRequest({ source: "kamadan", query: " " }));
+    assert.throws(() => parseTradeSearchRequest({
+      source: "both", query: "ecto", scope: "all",
+    }));
+    assert.throws(() => parseTradeSearchRequest({
+      source: "kamadan", query: " ", scope: "all",
+    }));
+    assert.throws(() => parseTradeSearchRequest({
+      source: "kamadan", query: "ecto", scope: "sender",
+    }));
     assert.throws(() => parseTradeSearchRequest({
       source: "kamadan",
       query: "x".repeat(129),
+      scope: "all",
     }));
   });
 
@@ -150,8 +158,8 @@ describe("trade chat service", () => {
     socket.open();
     assert.equal(socket.sent.length, 1);
 
-    const first = service.search(1, "kamadan", "dye");
-    const second = service.search(2, "kamadan", "dye");
+    const first = service.search(1, "kamadan", "dye", "all");
+    const second = service.search(2, "kamadan", "dye", "all");
     assert.deepEqual(socket.sent.slice(1).map(queryFrom), ["dye", "user:dye"]);
     socket.message({
       query: "dye",
@@ -167,9 +175,17 @@ describe("trade chat service", () => {
 
     const [a, b] = await Promise.all([first, second]);
     assert.deepEqual(a, b);
-    assert.equal(a.matches.length, 2);
-    assert.equal(a.matches[0]?.message.sender, "Spam Trader");
-    assert.equal(a.matches[0]?.postCount, 2);
+    assert.equal(a.messages.length, 3);
+    assert.equal(a.messages[0]?.sender, "Spam Trader");
+    assert.equal(a.messages[1]?.message, "WTS another dye");
+
+    const player = service.search(1, "kamadan", "Spam Trader", "player");
+    assert.equal(queryFrom(socket.sent.at(-1)!), "user:Spam Trader");
+    socket.message({
+      query: "user:Spam Trader",
+      results: [{ t: 4, s: "Spam Trader", m: "WTS one more dye" }],
+    });
+    assert.deepEqual((await player).messages.map((message) => message.timestamp), [4]);
     service.dispose();
   });
 
@@ -203,7 +219,7 @@ describe("trade chat service", () => {
     });
     service.subscribe(1, "kamadan", () => undefined);
     first.open();
-    await assert.rejects(service.search(1, "kamadan", "ecto"), /trade search failed/);
+    await assert.rejects(service.search(1, "kamadan", "ecto", "all"), /trade search failed/);
     first.close();
     await delay(10);
     assert.equal(second.listenerCount("open"), 1);
