@@ -118,16 +118,18 @@ async function installTargetReadout(
     region.setUint32(20, 0, true);
     region.setUint32(24, 1, true);
     region.setUint32(8, 2, true);
-    await new Promise<void>((resolve, reject) => {
-      const deadline = performance.now() + 2_000;
-      const observe = () => {
-        if (runtime.readout !== null) resolve();
-        else if (performance.now() >= deadline) {
-          reject(new Error("target readout did not activate in PvE"));
-        } else requestAnimationFrame(observe);
-      };
-      requestAnimationFrame(observe);
-    });
+    if (capabilities.targetObservation) {
+      await new Promise<void>((resolve, reject) => {
+        const deadline = performance.now() + 2_000;
+        const observe = () => {
+          if (runtime.readout !== null) resolve();
+          else if (performance.now() >= deadline) {
+            reject(new Error("target readout did not activate in PvE"));
+          } else requestAnimationFrame(observe);
+        };
+        requestAnimationFrame(observe);
+      });
+    }
 
     let sequence = 0;
     const publish = ({
