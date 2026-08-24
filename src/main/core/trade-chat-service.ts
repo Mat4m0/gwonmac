@@ -11,15 +11,23 @@ import {
   TRADE_SOURCES,
   TRADE_SOURCE_URLS,
   parseTradePayload,
+  parseTraderPriceHistoryPayload,
+  parseTraderQuotePayload,
   type TradeConnectionState,
   type TradeEvent,
   type TradeMessage,
   type TradeSearchResult,
   type TradeSnapshot,
   type TradeSource,
+  type TraderPriceHistoryRequest,
+  type TraderPricePoint,
+  type TraderQuoteSnapshot,
 } from "../../shared/trade-chat.js";
 
 const CONNECT_TIMEOUT_MS = 10_000;
+const PRICE_TIMEOUT_MS = 10_000;
+const PRICE_CACHE_MS = 60_000;
+const HISTORY_CACHE_MS = 30_000;
 const SEARCH_TIMEOUT_MS = 8_000;
 const PING_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 10_000;
@@ -34,6 +42,7 @@ type TradeServiceTiming = Readonly<{
 
 export type TradeChatServiceOptions = Readonly<{
   createSocket?: (url: string, options: ClientOptions) => WebSocket;
+  fetch?: typeof fetch;
   random?: () => number;
   timing?: Partial<TradeServiceTiming>;
 }>;
@@ -67,12 +76,20 @@ export class TradeChatService {
   );
   readonly #subscriptions = new Map<number, TradeSource>();
   readonly #createSocket: (url: string, options: ClientOptions) => WebSocket;
+  readonly #fetch: typeof fetch;
   readonly #random: () => number;
   readonly #timing: TradeServiceTiming;
+  #quoteCache: { value: TraderQuoteSnapshot; expiresAt: number } | null = null;
+  #quoteRequest: Promise<TraderQuoteSnapshot> | null = null;
+  readonly #historyCache = new Map<
+    string,
+    { value: readonly TraderPricePoint[]; expiresAt: number }
+  >();
 
   constructor(options: TradeChatServiceOptions = {}) {
     this.#createSocket = options.createSocket ?? ((url, socketOptions) =>
       new WebSocket(url, socketOptions));
+    this.#fetch = options.fetch ?? fetch;
     this.#random = options.random ?? Math.random;
     this.#timing = {
       searchTimeoutMs: options.timing?.searchTimeoutMs ?? SEARCH_TIMEOUT_MS,
@@ -80,6 +97,42 @@ export class TradeChatService {
       pongTimeoutMs: options.timing?.pongTimeoutMs ?? PONG_TIMEOUT_MS,
       reconnectDelaysMs: options.timing?.reconnectDelaysMs ?? RECONNECT_DELAYS_MS,
     };
+  }
+
+  getTraderQuotes(): Promise<TraderQuoteSnapshot> {
+    const now = Date.now();
+    if (this.#quoteCache && this.#quoteCache.expiresAt > now) {
+      return Promise.resolve(this.#quoteCache.value);
+    }
+    if (this.#quoteRequest) return this.#quoteRequest;
+    this.#quoteRequest = this.#getJson("/trader_quotes")
+      .then(parseTraderQuotePayload)
+      .then((value) => {
+        this.#quoteCache = { value, expiresAt: Date.now() + PRICE_CACHE_MS };
+        return value;
+      })
+      .finally(() => { this.#quoteRequest = null; });
+    return this.#quoteRequest;
+  }
+
+  async getTraderPriceHistory(
+    request: TraderPriceHistoryRequest,
+  ): Promise<readonly TraderPricePoint[]> {
+    const key = `${request.modelId}:${request.from}:${request.to}`;
+    const cached = this.#historyCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const value = parseTraderPriceHistoryPayload(
+      request.modelId,
+      await this.#getJson(
+        `/pricing_history/${request.modelId}/${request.from}/${request.to}`,
+      ),
+    );
+    this.#historyCache.set(key, { value, expiresAt: Date.now() + HISTORY_CACHE_MS });
+    if (this.#historyCache.size > 24) {
+      const oldest = this.#historyCache.keys().next().value;
+      if (oldest) this.#historyCache.delete(oldest);
+    }
+    return value;
   }
 
   subscribe(id: number, source: TradeSource, listener: Listener): TradeSnapshot {
@@ -178,6 +231,32 @@ export class TradeChatService {
     for (const feed of this.#feeds.values()) {
       feed.subscribers.clear();
       this.#stop(feed);
+    }
+    this.#historyCache.clear();
+  }
+
+  async #getJson(path: string): Promise<unknown> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PRICE_TIMEOUT_MS);
+    try {
+      const response = await this.#fetch(
+        new URL(path, TRADE_SOURCE_URLS.kamadan.website).toString(),
+        {
+          headers: { "User-Agent": "GWonMac Trader Prices" },
+          redirect: "error",
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) throw new Error("trader prices request failed");
+      const text = await response.text();
+      if (text.length > TRADE_LIMITS.pricePayloadBytes) {
+        throw new Error("trader prices response was too large");
+      }
+      return JSON.parse(text) as unknown;
+    } catch {
+      throw new Error("trader prices are unavailable");
+    } finally {
+      clearTimeout(timer);
     }
   }
 

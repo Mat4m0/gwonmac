@@ -138,12 +138,14 @@ import {
   type Parser,
 } from "./ipc-channel-registry.js";
 import {
+  parseTraderPriceHistoryRequest,
   parseTradeSearchRequest,
   parseTradeSavedState,
   parseTradeSource,
   type TradeSearchRequest,
   type TradeSource,
   type TradeSavedState,
+  type TraderPriceHistoryRequest,
 } from "../shared/trade-chat.js";
 import type { TradeChatService } from "./core/trade-chat-service.js";
 
@@ -447,6 +449,14 @@ const asTradeSearchRequest = one((value: unknown): TradeSearchRequest => {
   }
 });
 
+const asTraderPriceHistoryRequest = one((value: unknown): TraderPriceHistoryRequest => {
+  try {
+    return parseTraderPriceHistoryRequest(value);
+  } catch {
+    throw new ValidationError("invalid trader price history request");
+  }
+});
+
 const asAccountsSetup = one(parseAccountsSetup);
 const asAccountProfileCreate = one(parseAccountProfileCreate);
 const asAccountProfileUpdate = one(parseAccountProfileUpdate);
@@ -576,6 +586,16 @@ export function registerIpcHandlers(ctx: IpcContext): {
     tradeSavedSet: channel(one(parseTradeSavedState), async (_win, value) => {
       await requireTradeEnabled();
       return ctx.setTradeSaved(value);
+    }),
+
+    traderQuotesGet: channel(nothing, async () => {
+      await requireTradeEnabled();
+      return ctx.tradeChat.getTraderQuotes();
+    }),
+
+    traderPriceHistoryGet: channel(asTraderPriceHistoryRequest, async (_win, request) => {
+      await requireTradeEnabled();
+      return ctx.tradeChat.getTraderPriceHistory(request);
     }),
 
     tradeSearch: channel(asTradeSearchRequest, async (win, request) => {

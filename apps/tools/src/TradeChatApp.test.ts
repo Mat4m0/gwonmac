@@ -1,4 +1,5 @@
 import { flushPromises, mount } from "@vue/test-utils";
+import { nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import TradeChatApp from "./TradeChatApp.vue";
 import { createDemoTradeHost, type TradeHost } from "./trade-host";
@@ -23,6 +24,41 @@ async function ledger() {
 }
 
 describe("TradeChatApp", () => {
+  it("opens trader prices and returns without losing the listing state", async () => {
+    const wrapper = await ledger();
+    await wrapper.get("input[type=search]").setValue("arms");
+    await wrapper.get(".trade-search").trigger("submit");
+    await flushPromises();
+    const selected = wrapper.get(".trade-row[data-selected]").attributes("data-selected");
+
+    await wrapper.get(".trader-prices-trigger").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".trader-prices").isVisible()).toBe(true);
+    expect(wrapper.get(".trader-category-tabs").text()).toContain("Runes");
+    expect(wrapper.get(".trader-catalogue").text()).toContain("Glob of Ectoplasm");
+    expect(wrapper.get(".trader-price-detail").text()).toContain("20k");
+    expect(wrapper.findAll(".price-series").length).toBe(2);
+
+    await wrapper.get(".trader-back").trigger("click");
+    await nextTick();
+    expect(wrapper.get(".trade-ledger").isVisible()).toBe(true);
+    expect(wrapper.get(".trade-search input[type=search]").element).toHaveProperty("value", "arms");
+    expect(wrapper.get(".trade-row[data-selected]").attributes("data-selected")).toBe(selected);
+    wrapper.unmount();
+  });
+
+  it("searches trader items across categories and exposes rune professions", async () => {
+    const wrapper = await ledger();
+    await wrapper.get(".trader-prices-trigger").trigger("click");
+    await flushPromises();
+    await wrapper.get(".trader-item-search input").setValue("vigor");
+    expect(wrapper.get(".trader-catalogue").text()).toContain("Rune of Superior Vigor");
+    await wrapper.get(".trader-category-tabs [role=tab]:nth-child(3)").trigger("click");
+    expect(wrapper.findAll(".trader-professions button")).toHaveLength(11);
+    wrapper.unmount();
+  });
+
   it("switches isolated sources and applies intent filters", async () => {
     const wrapper = await ledger();
     expect(wrapper.text()).toContain("Tyria Cartographer");
@@ -114,6 +150,7 @@ describe("TradeChatApp", () => {
     }));
     const events: { publish: ((event: TradeEvent) => void) | null } = { publish: null };
     const host: TradeHost = {
+      ...createDemoTradeHost(),
       async subscribe(source) {
         return { source, status: "live", messages };
       },

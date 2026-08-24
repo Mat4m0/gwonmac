@@ -79,6 +79,28 @@ test("reveals row actions without moving the ledger columns", async ({ page }) =
   expect(await message.boundingBox()).toEqual(before.message);
 });
 
+test("browses trader prices, zooms history, and returns to the ledger", async ({ page }) => {
+  const dialog = page.getByRole("dialog", { name: "Trade Chat" });
+  const firstMessage = await dialog.locator(".offer-cell").first().textContent();
+
+  await dialog.getByRole("button", { name: "Trader prices" }).click();
+  await expect(dialog.getByRole("heading", { name: "Trader Prices" })).toBeVisible();
+  await expect(dialog.getByRole("option", { name: /Glob of Ectoplasm/u })).toBeVisible();
+  await expect(dialog.getByRole("option", { name: /Glob of Ectoplasm/u }).locator("img"))
+    .not.toHaveAttribute("src", /kamadan\.gwtoolbox\.com/u);
+  await expect(dialog.locator(".price-series-buy")).toBeVisible();
+  await expect(dialog.locator(".price-series-sell")).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Zoom in" }).click();
+  await expect(dialog.getByRole("button", { name: "Reset view" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Reset view" }).click();
+  await expect(dialog.getByRole("button", { name: "Reset view" })).toHaveCount(0);
+
+  await dialog.getByRole("button", { name: "Back to listings" }).click();
+  await expect(dialog.getByRole("heading", { name: "Kamadan Trade" })).toBeVisible();
+  await expect(dialog.locator(".offer-cell").first()).toHaveText(firstMessage ?? "");
+});
+
 test("filters selling and buying without relying on chip colour", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Trade Chat" });
   await dialog.getByRole("button", { name: "Buying" }).click();

@@ -8,7 +8,8 @@ Trade Chat window in GWonMac.
 ## Product decision
 
 Trade helps a player find a recent, relevant Kamadan or Pre-Searing Ascalon
-Trade message and contact its author without leaving Guild Wars.
+Trade message and contact its author without leaving Guild Wars. It also shows
+observed Kamadan NPC trader quotes and quote history for commonly traded items.
 
 It is a read-only discovery tool. It is not a marketplace, listing manager, or
 chat client. A player creates a listing by posting to Trade chat in Guild Wars,
@@ -34,6 +35,8 @@ The first release includes:
 - a readable message detail view;
 - relative and exact message times;
 - an explicit action to copy the character name;
+- a searchable catalogue of common materials, rare materials, runes, and dyes;
+- observed NPC trader buy and sell quotes with bounded price history;
 - connection, stale-data, empty, and failure states; and
 - a link and attribution to the selected public source.
 
@@ -43,7 +46,8 @@ The first release does not include:
 - sending, repeating, or automating chat messages;
 - automatic whispers or trade actions;
 - a GWonMac marketplace, account, database, or backend;
-- price estimation, price history, item recognition, or inventory integration;
+- player-market price estimation, item recognition from game state, or inventory
+  integration;
 - saved searches, notifications, alerts, notes, tags, or ignored players;
 - regular expressions or a query language;
 - importing remote messages into the Guild Wars chat panel.
@@ -103,6 +107,7 @@ Do not copy these Toolbox++ implementation choices:
 | P0 | use Trade at narrow and wide window sizes | keep it useful beside the game |
 | P0 | use the complete flow with a keyboard | avoid switching repeatedly between input methods |
 | P0 | save an offer or follow a player | keep useful leads and recognize their new listings |
+| P0 | inspect current NPC trader quotes and history | compare buy and sell movement without leaving the game |
 | Later | prepare an empty whisper to the selected character | shorten contact after the client action is certified |
 | Later | save a useful search | repeat a proven search when actual use justifies persistence |
 
@@ -286,6 +291,15 @@ The core Trade feature must not depend on this enhancement.
 4. The player selects **Back to results** or **Back to offers**.
 5. The prior ledger returns at its previous position.
 
+### Inspect trader prices
+
+1. The player selects **Trader prices** in the Trade Chat toolbar.
+2. The player browses Common, Rare, Runes, or Dyes, or searches the complete
+   catalogue.
+3. The player selects an item to compare the current buy and sell quotes.
+4. The player changes the chart range or moves to the previous or next item.
+5. The player selects **Back to listings** and returns to the preserved ledger.
+
 ## States and recovery
 
 | State | Required behavior |
@@ -301,6 +315,8 @@ The core Trade feature must not depend on this enhancement.
 | No selection | Prompt the player to select a message; do not fill the pane with help text |
 | Narrow detail | Show **Back to results** and preserve list state |
 | Player listings | Keep Back available during loading, empty, and failure states |
+| Trader prices | Preserve the ledger, show quote freshness, and keep Back available |
+| Price history failure | Keep current quotes visible and offer **Retry** for the chart |
 
 The feed does not use an empty-state illustration. The interface should feel
 like a compact working tool, consistent with Hero/Build management.
@@ -328,8 +344,10 @@ keeps normal pointer and keyboard input everywhere else.
 ## Data and architecture
 
 The public Kamadan and Ascalon services remain the only sources of truth for
-trade messages. GWonMac does not persist their history. It stores only offers
-the player explicitly saves and player names the player explicitly follows.
+trade messages. Kamadan remains the source of truth for NPC trader quotes and
+quote history. GWonMac does not persist public feed or price history. It stores
+only offers the player explicitly saves and player names the player explicitly
+follows.
 
 Main owns one `TradeChatService` for the app process:
 
@@ -345,6 +363,8 @@ Main owns one `TradeChatService` for the app process:
 - live messages, history, pending arrivals, replacements, and searches remain
   separate by source;
 - the canonical message key contains the source and upstream timestamp;
+- trader quote and price-history requests use fixed Kamadan routes, bounded
+  responses, short-lived in-memory caches, and the same renderer isolation;
 - TLS certificate validation remains enabled;
 - response size, message size, fragment count, queue length, and timeouts are
   bounded;
@@ -405,8 +425,12 @@ The feature is ready when all of these statements are true:
 - Switching between Kamadan and Pre-Searing replaces the complete source view
   and never mixes their messages.
 - A player can submit a plain-text search and return to the live feed.
-- Search keeps every distinct matching message, including messages from the same character.
-- Selecting a character shows that character's recent listings and returns to the preserved ledger.
+- Search keeps every distinct matching message, including messages from the
+  same character.
+- Selecting a character shows that character's recent listings and returns to
+  the preserved ledger.
+- Trader prices shows the four supported categories, current buy and sell
+  quotes, and selectable history ranges without discarding the ledger.
 - **Selling** and **Buying** apply the defined `WTS` and `WTB` rules.
 - Results remain readable and stable while new live messages arrive.
 - Selecting a result shows the complete original message and exact age.

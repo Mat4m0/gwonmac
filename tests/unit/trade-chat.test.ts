@@ -11,6 +11,9 @@ import {
   parseTradePayload,
   parseTradeSavedState,
   parseTradeSearchRequest,
+  parseTraderPriceHistoryPayload,
+  parseTraderPriceHistoryRequest,
+  parseTraderQuotePayload,
 } from "../../src/shared/trade-chat.js";
 
 describe("trade chat contracts", () => {
@@ -91,6 +94,36 @@ describe("trade chat contracts", () => {
     }));
   });
 
+  it("normalizes bounded trader quotes and price history", () => {
+    assert.deepEqual(parseTraderQuotePayload({
+      buy: { ecto: { t: 1_787_597_866, p: 20_000, m: "0b03a2" } },
+      sell: { ecto: { t: 1_787_597_875, p: 15_000, m: "0b03a2", s: 1 } },
+      updated_at: 1_787_597_875,
+    }), {
+      updatedAt: 1_787_597_875_000,
+      quotes: [
+        { modelId: "0b03a2", side: "buy", price: 20_000, timestamp: 1_787_597_866_000 },
+        { modelId: "0b03a2", side: "sell", price: 15_000, timestamp: 1_787_597_875_000 },
+      ],
+    });
+    const request = parseTraderPriceHistoryRequest({
+      modelId: "0b03a2",
+      from: 1_787_500_000_000,
+      to: 1_787_600_000_000,
+    });
+    assert.equal(request.modelId, "0b03a2");
+    assert.deepEqual(parseTraderPriceHistoryPayload("0b03a2", [
+      { t: 1_787_597_875, p: 15_000, m: "0b03a2", s: 1 },
+      { t: 1_787_597_866, p: 20_000, m: "0b03a2" },
+      { t: 0, p: 1, m: "0b03a2" },
+    ]).map((point) => point.side), ["buy", "sell"]);
+    assert.throws(() => parseTraderPriceHistoryRequest({
+      modelId: "../bad",
+      from: 1,
+      to: 2,
+    }));
+  });
+
   it("persists saved trade state in one private atomic document", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "gwonmac-trade-saved-"));
     try {
@@ -150,6 +183,38 @@ class FakeTradeSocket extends EventEmitter {
 }
 
 describe("trade chat service", () => {
+  it("fetches and caches current quotes while requesting exact history ranges", async () => {
+    const urls: string[] = [];
+    const service = new TradeChatService({
+      fetch: (async (input) => {
+        const url = String(input);
+        urls.push(url);
+        const body = url.includes("pricing_history")
+          ? [{ t: 1_787_597_866, p: 20_000, m: "0b03a2" }]
+          : {
+              buy: { ecto: { t: 1_787_597_866, p: 20_000, m: "0b03a2" } },
+              sell: {},
+              updated_at: 1_787_597_866,
+            };
+        return new Response(JSON.stringify(body));
+      }) as typeof fetch,
+    });
+    const first = await service.getTraderQuotes();
+    const second = await service.getTraderQuotes();
+    assert.equal(first, second);
+    assert.equal(urls.filter((url) => url.endsWith("/trader_quotes")).length, 1);
+    const request = {
+      modelId: "0b03a2",
+      from: 1_787_500_000_000,
+      to: 1_787_600_000_000,
+    };
+    assert.equal((await service.getTraderPriceHistory(request))[0]?.price, 20_000);
+    assert.ok(urls.at(-1)?.endsWith(
+      "/pricing_history/0b03a2/1787500000000/1787600000000",
+    ));
+    service.dispose();
+  });
+
   it("shares one connection and coalesces semantic offer and player searches", async () => {
     const socket = new FakeTradeSocket();
     const service = serviceWith([socket]);

@@ -27,6 +27,7 @@ import {
 } from "./trade-ledger";
 import { useFloatingWindow } from "./use-floating-window";
 import TradeIcon from "./TradeIcon.vue";
+import TraderPrices from "./components/TraderPrices.vue";
 
 const props = defineProps<{
   host: TradeHost;
@@ -54,6 +55,8 @@ type PlayerReturnState = {
 };
 
 const source = ref<TradeSource>("kamadan");
+const view = ref<"listings" | "prices">("listings");
+const pricesOpened = ref(false);
 const intent = ref<TradeIntent>("all");
 const query = ref("");
 const submittedQuery = ref("");
@@ -71,6 +74,7 @@ const savedTab = ref<"offers" | "players">("offers");
 const saved = ref<TradeSavedState>({ offers: [], players: [] });
 const savedReady = ref(false);
 const savedButton = ref<HTMLButtonElement | null>(null);
+const pricesButton = ref<HTMLButtonElement | null>(null);
 const savedClose = ref<HTMLButtonElement | null>(null);
 const visibleLimit = ref(25);
 const searchInput = ref<HTMLInputElement | null>(null);
@@ -433,6 +437,8 @@ function onWindowKeydown(event: KeyboardEvent): void {
     return;
   }
   if (
+    view.value === "listings"
+    &&
     event.key === "/"
     && !(event.target instanceof HTMLInputElement)
     && !(event.target instanceof HTMLTextAreaElement)
@@ -440,6 +446,18 @@ function onWindowKeydown(event: KeyboardEvent): void {
     event.preventDefault();
     searchInput.value?.focus();
   }
+}
+
+function openPrices(): void {
+  pricesOpened.value = true;
+  savedOpen.value = false;
+  detailOpen.value = false;
+  view.value = "prices";
+}
+
+function closePrices(): void {
+  view.value = "listings";
+  void nextTick(() => pricesButton.value?.focus());
 }
 
 watch(source, (next) => {
@@ -551,12 +569,15 @@ function exactTime(timestamp: number): string {
       data-design-contract="trade-ledger-v1"
     >
       <header class="ui-panel-head ui-window-head window-bar" @pointerdown="startDrag">
-        <div class="window-brand trade-brand" aria-hidden="true">T</div>
-        <div class="window-identity">
-          <h1 class="ui-panel-title">{{ sourceLabel }} Trade</h1>
-          <p class="ui-field-hint">Public trade feed · listings are posted in Guild Wars</p>
+        <div class="window-brand trade-brand" aria-hidden="true">
+          <TradeIcon v-if="view === 'prices'" name="market" />
+          <template v-else>T</template>
         </div>
-        <span class="trade-status" :data-state="current.status" role="status">
+        <div class="window-identity">
+          <h1 class="ui-panel-title">{{ view === "prices" ? "Trader Prices" : `${sourceLabel} Trade` }}</h1>
+          <p class="ui-field-hint">{{ view === "prices" ? "Current Guild Wars trader quotes · history from Kamadan" : "Public trade feed · listings are posted in Guild Wars" }}</p>
+        </div>
+        <span v-if="view === 'listings'" class="trade-status" :data-state="current.status" role="status">
           <i aria-hidden="true" />{{ statusLabel }}
         </span>
         <button
@@ -568,7 +589,15 @@ function exactTime(timestamp: number): string {
         >×</button>
       </header>
 
-      <div class="trade-toolbar">
+      <TraderPrices
+        v-if="pricesOpened"
+        v-show="view === 'prices'"
+        :host="host"
+        :visible="visible && view === 'prices'"
+        @back="closePrices"
+      />
+
+      <div v-show="view === 'listings'" class="trade-toolbar">
         <div class="ui-segment source-segment" data-fill aria-label="Trade source">
           <button :aria-pressed="source === 'kamadan'" @click="source = 'kamadan'">Kamadan</button>
           <button :aria-pressed="source === 'pre-searing'" @click="source = 'pre-searing'">Pre-Searing</button>
@@ -606,10 +635,13 @@ function exactTime(timestamp: number): string {
             :disabled="!savedReady"
             @click="savedOpen ? closeSaved() : openSaved()"
           ><TradeIcon name="star" :filled="savedCount > 0" /> Saved <span class="saved-count">{{ savedCount }}</span></button>
+          <button ref="pricesButton" class="ui-button trader-prices-trigger" type="button" @click="openPrices">
+            <TradeIcon name="market" /> Trader prices
+          </button>
         </div>
       </div>
 
-      <div class="trade-summary" aria-live="polite">
+      <div v-show="view === 'listings'" class="trade-summary" aria-live="polite">
         <span v-if="!playerName">
           {{ submittedQuery ? `Results for “${submittedQuery}”` : "Latest messages" }}
         </span>
@@ -625,7 +657,7 @@ function exactTime(timestamp: number): string {
         </span>
       </div>
 
-      <div class="trade-ledger ui-well">
+      <div v-show="view === 'listings'" class="trade-ledger ui-well">
         <div class="trade-columns" aria-hidden="true">
           <span>Intent</span><span>Character</span><span>Message</span><span>Age</span>
         </div>
@@ -728,7 +760,7 @@ function exactTime(timestamp: number): string {
         </div>
       </div>
 
-      <section class="trade-inspector ui-raised ui-scroll" :aria-label="selected ? `Offer from ${selected.sender}` : 'Offer detail'">
+      <section v-show="view === 'listings'" class="trade-inspector ui-raised ui-scroll" :aria-label="selected ? `Offer from ${selected.sender}` : 'Offer detail'">
         <button class="ui-button mobile-back" @click="detailOpen = false">
           {{ playerName ? `Back to ${playerName}` : "Back to offers" }}
         </button>
@@ -772,7 +804,7 @@ function exactTime(timestamp: number): string {
 
       <Transition name="saved-drawer">
         <aside
-          v-if="savedOpen"
+          v-if="savedOpen && view === 'listings'"
           id="trade-saved-drawer"
           class="trade-saved-drawer ui-drawer ui-raised"
           role="complementary"

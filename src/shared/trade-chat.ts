@@ -18,7 +18,38 @@ export const TRADE_LIMITS = Object.freeze({
   savedOffers: 100,
   savedPlayers: 100,
   payloadBytes: 1024 * 1024,
+  pricePayloadBytes: 4 * 1024 * 1024,
+  priceHistoryPoints: 5_000,
+  priceHistoryDays: 366,
 });
+
+export const TRADER_PRICE_CATEGORIES = [
+  "common-materials",
+  "rare-materials",
+  "runes",
+  "dyes",
+] as const;
+export type TraderPriceCategory = (typeof TRADER_PRICE_CATEGORIES)[number];
+
+export type TraderQuote = Readonly<{
+  modelId: string;
+  side: "buy" | "sell";
+  price: number;
+  timestamp: number;
+}>;
+
+export type TraderQuoteSnapshot = Readonly<{
+  updatedAt: number;
+  quotes: readonly TraderQuote[];
+}>;
+
+export type TraderPriceHistoryRequest = Readonly<{
+  modelId: string;
+  from: number;
+  to: number;
+}>;
+
+export type TraderPricePoint = TraderQuote;
 
 export const TRADE_SOURCE_URLS: Readonly<
   Record<TradeSource, { readonly websocket: string; readonly website: string }>
@@ -112,6 +143,61 @@ export function parseTradeSearchRequest(value: unknown): TradeSearchRequest {
     throw new TypeError("invalid trade query");
   }
   return Object.freeze({ source, query, scope: value.scope });
+}
+
+export function parseTraderQuotePayload(value: unknown): TraderQuoteSnapshot {
+  if (!isRecord(value) || !isRecord(value.buy) || !isRecord(value.sell)) {
+    throw new TypeError("invalid trader quote payload");
+  }
+  const quotes = [
+    ...parseQuoteRecord(value.buy, "buy"),
+    ...parseQuoteRecord(value.sell, "sell"),
+  ];
+  const updatedAt = parseRemoteTimestamp(value.updated_at)
+    ?? Math.max(0, ...quotes.map((quote) => quote.timestamp));
+  if (updatedAt === 0 || quotes.length === 0) {
+    throw new TypeError("empty trader quote payload");
+  }
+  return Object.freeze({ updatedAt, quotes: Object.freeze(quotes) });
+}
+
+export function parseTraderPriceHistoryRequest(value: unknown): TraderPriceHistoryRequest {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["modelId", "from", "to"])) {
+    throw new TypeError("invalid trader price history request");
+  }
+  if (!isTraderModelId(value.modelId)) {
+    throw new TypeError("invalid trader model id");
+  }
+  if (
+    !Number.isSafeInteger(value.from)
+    || !Number.isSafeInteger(value.to)
+    || (value.from as number) <= 0
+    || (value.to as number) <= (value.from as number)
+    || (value.to as number) - (value.from as number)
+      > TRADE_LIMITS.priceHistoryDays * 24 * 60 * 60 * 1_000
+  ) throw new TypeError("invalid trader price history range");
+  return Object.freeze({
+    modelId: value.modelId,
+    from: value.from as number,
+    to: value.to as number,
+  });
+}
+
+export function parseTraderPriceHistoryPayload(
+  modelId: string,
+  value: unknown,
+): readonly TraderPricePoint[] {
+  if (!isTraderModelId(modelId) || !Array.isArray(value)) {
+    throw new TypeError("invalid trader price history payload");
+  }
+  const points: TraderPricePoint[] = [];
+  for (const candidate of value.slice(0, TRADE_LIMITS.priceHistoryPoints)) {
+    const point = parseRemoteQuote(candidate, candidate && isRecord(candidate) && candidate.s
+      ? "sell"
+      : "buy");
+    if (point && point.modelId === modelId) points.push(point);
+  }
+  return Object.freeze(points.sort((left, right) => left.timestamp - right.timestamp));
 }
 
 export function parseTradeSavedState(value: unknown): TradeSavedState {
@@ -211,6 +297,48 @@ function parseTimestamp(value: unknown): number | null {
       ? Number(value)
       : Number.NaN;
   return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
+function parseQuoteRecord(
+  value: Record<string, unknown>,
+  side: TraderQuote["side"],
+): TraderQuote[] {
+  const quotes: TraderQuote[] = [];
+  for (const candidate of Object.values(value)) {
+    const quote = parseRemoteQuote(candidate, side);
+    if (quote) quotes.push(quote);
+  }
+  return quotes;
+}
+
+function parseRemoteQuote(value: unknown, side: TraderQuote["side"]): TraderQuote | null {
+  if (!isRecord(value)) return null;
+  const modelId = value.model_id ?? value.m;
+  const price = value.price ?? value.p;
+  const timestamp = parseRemoteTimestamp(value.timestamp ?? value.t);
+  if (
+    !isTraderModelId(modelId)
+    || typeof price !== "number"
+    || !Number.isSafeInteger(price)
+    || price <= 0
+    || timestamp === null
+  ) return null;
+  return Object.freeze({ modelId, side, price, timestamp });
+}
+
+function parseRemoteTimestamp(value: unknown): number | null {
+  const numeric = typeof value === "number"
+    ? value
+    : typeof value === "string" && /^[0-9]+$/u.test(value)
+      ? Number(value)
+      : Number.NaN;
+  if (!Number.isSafeInteger(numeric) || numeric <= 0) return null;
+  const milliseconds = numeric < 10_000_000_000 ? numeric * 1_000 : numeric;
+  return Number.isSafeInteger(milliseconds) ? milliseconds : null;
+}
+
+function isTraderModelId(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{6,24}$/u.test(value);
 }
 
 function parseSavedOffer(value: unknown): TradeSavedOffer | null {
