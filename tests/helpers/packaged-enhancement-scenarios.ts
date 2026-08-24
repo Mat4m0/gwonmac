@@ -35,11 +35,20 @@ async function installTargetReadout(
   moduleBytes: Uint8Array,
   capabilities = TARGET_ONLY,
 ) {
-  return page.evaluate(async ({ bytes, tableSize, capabilities, snapshotAbi }: {
+  return page.evaluate(async ({
+    bytes,
+    tableSize,
+    capabilities,
+    snapshotAbi,
+    playRegionAbi,
+    playRegionBytes,
+  }: {
     bytes: number[];
     tableSize: number;
     capabilities: typeof TARGET_ONLY;
     snapshotAbi: number;
+    playRegionAbi: number;
+    playRegionBytes: number;
   }) => {
     const memory = new WebAssembly.Memory({ initial: 256 });
     const table = new WebAssembly.Table({
@@ -86,6 +95,39 @@ async function installTargetReadout(
       "target-observer",
     );
     if (!runtime) throw new Error("target readout did not install");
+
+    // This scenario exercises the target presentation lifecycle, not native
+    // play-region discovery (the Toolbox scenario proves that separately).
+    // Publish an explicit certified-shape PvE policy snapshot so the PvE-only
+    // target consumer starts from the same region precondition as a live tick.
+    const playRegionPointer = allocations[3]?.pointer;
+    if (playRegionPointer === undefined) {
+      throw new Error("target readout play-region allocation is missing");
+    }
+    const region = new DataView(
+      memory.buffer,
+      playRegionPointer,
+      playRegionBytes,
+    );
+    region.setUint32(8, 1, true);
+    region.setUint32(0, 0x5250_5747, true);
+    region.setUint16(4, playRegionAbi, true);
+    region.setUint16(6, playRegionBytes, true);
+    region.setUint32(12, 1, true);
+    region.setUint32(16, 133, true);
+    region.setUint32(20, 0, true);
+    region.setUint32(24, 1, true);
+    region.setUint32(8, 2, true);
+    await new Promise<void>((resolve, reject) => {
+      const deadline = performance.now() + 2_000;
+      const observe = () => {
+        if (runtime.readout !== null) resolve();
+        else if (performance.now() >= deadline) {
+          reject(new Error("target readout did not activate in PvE"));
+        } else requestAnimationFrame(observe);
+      };
+      requestAnimationFrame(observe);
+    });
 
     let sequence = 0;
     const publish = ({
@@ -142,6 +184,8 @@ async function installTargetReadout(
     tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     capabilities,
     snapshotAbi: COMPANION_ABI.snapshot.abi,
+    playRegionAbi: COMPANION_ABI.playRegion.abi,
+    playRegionBytes: COMPANION_PLAY_REGION_BYTES,
   });
 }
 
