@@ -3,6 +3,12 @@
  * preload and renderer. Keeping this separate prevents the general IPC
  * contract from becoming the accidental home of the transform ABI.
  */
+import {
+  ENHANCEMENT_CONFIG_FIELDS,
+  ENHANCEMENT_CONFIG_WORD_COUNT,
+  type EnhancementConfigOwner,
+} from "./enhancement-config.js";
+
 export const ENHANCEMENTS = ["nativeCursor", "tools"] as const;
 
 export type Enhancement = (typeof ENHANCEMENTS)[number];
@@ -19,29 +25,106 @@ export const ENHANCEMENT_PROGRAMS = [
 
 export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
 
-/**
- * Profile-mask bit order. Reordering or inserting fields changes every profile
- * identity and requires an Enhancement transform ABI change.
- */
-export const ENHANCEMENT_CAPABILITY_FIELDS = Object.freeze([
-  "nativeCursor",
-  "targetObservation",
-  "partyObservation",
-  "teamApply",
-  "travelAction",
-  "xunlaiAction",
-  "chatAliases",
-  "skillSlotGeometry",
-  "skillCooldownObservation",
-] as const);
+type EnhancementHook = "cursor" | "ui";
 
-export type EnhancementCapability = (typeof ENHANCEMENT_CAPABILITY_FIELDS)[number];
+/**
+ * Compile-time capability registry and profile-mask bit order. Reordering or
+ * inserting entries changes every profile identity and requires an Enhancement
+ * transform ABI change. Dependencies describe proof/runtime requirements; they
+ * never select addresses or dynamically install code.
+ */
+const CAPABILITY_DEFINITIONS = Object.freeze([
+  {
+    id: "nativeCursor",
+    requiresAll: [],
+    requiresAny: [],
+    configOwners: ["cursor"],
+    hooks: ["cursor"],
+  },
+  {
+    id: "targetObservation",
+    requiresAll: [],
+    requiresAny: [],
+    configOwners: ["observation", "target"],
+    hooks: [],
+  },
+  {
+    id: "partyObservation",
+    requiresAll: [],
+    requiresAny: [],
+    configOwners: ["observation", "party"],
+    hooks: ["ui"],
+  },
+  {
+    id: "teamApply",
+    requiresAll: ["partyObservation"],
+    requiresAny: [],
+    configOwners: [],
+    hooks: [],
+  },
+  {
+    id: "travelAction",
+    requiresAll: [],
+    requiresAny: [],
+    configOwners: [],
+    hooks: [],
+  },
+  {
+    id: "xunlaiAction",
+    requiresAll: [],
+    requiresAny: [],
+    configOwners: ["observation", "storage"],
+    hooks: [],
+  },
+  {
+    id: "chatAliases",
+    requiresAll: [],
+    requiresAny: ["travelAction", "xunlaiAction"],
+    configOwners: [],
+    hooks: [],
+  },
+  {
+    id: "skillSlotGeometry",
+    requiresAll: ["partyObservation"],
+    requiresAny: [],
+    configOwners: ["skill-slots"],
+    hooks: [],
+  },
+  {
+    id: "skillCooldownObservation",
+    requiresAll: ["partyObservation"],
+    requiresAny: [],
+    configOwners: ["skill-cooldown"],
+    hooks: [],
+  },
+] as const);
+for (const contract of CAPABILITY_DEFINITIONS) {
+  Object.freeze(contract.requiresAll);
+  Object.freeze(contract.requiresAny);
+  Object.freeze(contract.configOwners);
+  Object.freeze(contract.hooks);
+  Object.freeze(contract);
+}
+
+export type EnhancementCapability = (typeof CAPABILITY_DEFINITIONS)[number]["id"];
+export type EnhancementCapabilityContract = Readonly<{
+  id: EnhancementCapability;
+  requiresAll: readonly EnhancementCapability[];
+  requiresAny: readonly EnhancementCapability[];
+  configOwners: readonly EnhancementConfigOwner[];
+  hooks: readonly EnhancementHook[];
+}>;
+export const ENHANCEMENT_CAPABILITY_CONTRACTS:
+readonly EnhancementCapabilityContract[] = CAPABILITY_DEFINITIONS;
+export const ENHANCEMENT_CAPABILITY_FIELDS = Object.freeze(
+  CAPABILITY_DEFINITIONS.map(({ id }) => id),
+);
 export type EnhancementCapabilities = Readonly<Record<EnhancementCapability, boolean>>;
 
 const MAX_CAPABILITY_MASK = (1 << ENHANCEMENT_CAPABILITY_FIELDS.length) - 1;
 const CAPABILITY_PROFILE = /^features-([0-9a-f]{2,3})$/;
 
-/** A compact transform identity; the two hex digits are the eight capability bits. */
+/** A compact transform identity whose hex mask follows the registry order. */
 export type EnhancementCapabilityProfile = `features-${string}`;
 
 function capabilitiesFromMask(mask: number): EnhancementCapabilities {
@@ -165,10 +248,6 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   all: capabilitiesFromMask(0x1ff),
 });
 
-import {
-  ENHANCEMENT_CONFIG_FIELDS,
-  ENHANCEMENT_CONFIG_WORD_COUNT,
-} from "./enhancement-config.js";
 export {
   ENHANCEMENT_CONFIG_WORD_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
@@ -184,26 +263,15 @@ export function enhancementConfigWordActive(
     return false;
   }
   const owner = ENHANCEMENT_CONFIG_FIELDS[index]?.owner;
-  if (owner === "target") {
-    return capabilities.targetObservation;
-  }
-  if (owner === "observation") {
-    return capabilities.targetObservation
-      || capabilities.partyObservation
-      || capabilities.xunlaiAction;
-  }
-  if (owner === "cursor") return capabilities.nativeCursor;
-  if (owner === "party") return capabilities.partyObservation;
-  if (owner === "skill-slots") return capabilities.skillSlotGeometry;
-  if (owner === "skill-cooldown") return capabilities.skillCooldownObservation;
-  return owner === "storage" && capabilities.xunlaiAction;
+  return owner !== undefined && ENHANCEMENT_CAPABILITY_CONTRACTS.some(
+    (contract) => capabilities[contract.id]
+      && contract.configOwners.includes(owner),
+  );
 }
 
-export type EnhancementHooks = Readonly<{
-  tick: boolean;
-  cursor: boolean;
-  ui: boolean;
-}>;
+export type EnhancementHooks = Readonly<
+  { tick: boolean } & Record<EnhancementHook, boolean>
+>;
 
 export function enhancementCapabilitiesFor(
   selection: EnhancementSelection,
@@ -229,8 +297,12 @@ export function enhancementHooksFor(
 ): EnhancementHooks {
   return Object.freeze({
     tick: enhancementCapabilitiesRequested(capabilities),
-    cursor: capabilities.nativeCursor,
-    ui: capabilities.partyObservation,
+    cursor: ENHANCEMENT_CAPABILITY_CONTRACTS.some(
+      (contract) => capabilities[contract.id] && contract.hooks.includes("cursor"),
+    ),
+    ui: ENHANCEMENT_CAPABILITY_CONTRACTS.some(
+      (contract) => capabilities[contract.id] && contract.hooks.includes("ui"),
+    ),
   });
 }
 
@@ -240,16 +312,25 @@ export function enhancementCapabilitiesRequested(
   return ENHANCEMENT_CAPABILITY_FIELDS.some((field) => capabilities[field]);
 }
 
-/** Team Apply alone requires the party observer; local actions do not. */
+function capabilityDependenciesSatisfied(
+  contract: EnhancementCapabilityContract,
+  capabilities: EnhancementCapabilities,
+): boolean {
+  return contract.requiresAll.every((dependency) => capabilities[dependency])
+    && (
+      contract.requiresAny.length === 0
+      || contract.requiresAny.some((dependency) => capabilities[dependency])
+    );
+}
+
+/** Every enabled capability must carry the dependencies in its contract. */
 export function validEnhancementCapabilities(
   capabilities: EnhancementCapabilities,
 ): boolean {
-  return (!capabilities.teamApply || capabilities.partyObservation)
-    && (!capabilities.skillSlotGeometry || capabilities.partyObservation)
-    && (!capabilities.skillCooldownObservation || capabilities.partyObservation)
-    && (!capabilities.chatAliases
-      || capabilities.travelAction
-      || capabilities.xunlaiAction);
+  return ENHANCEMENT_CAPABILITY_CONTRACTS.every(
+    (contract) => !capabilities[contract.id]
+      || capabilityDependenciesSatisfied(contract, capabilities),
+  );
 }
 
 /** The exact requested subset that one build's optional certificate groups support. */
@@ -257,22 +338,18 @@ export function intersectEnhancementCapabilities(
   requested: EnhancementCapabilities,
   supported: EnhancementCapabilities,
 ): EnhancementCapabilities {
-  const partyObservation = requested.partyObservation && supported.partyObservation;
-  const travelAction = requested.travelAction && supported.travelAction;
-  const xunlaiAction = requested.xunlaiAction && supported.xunlaiAction;
-  return Object.freeze({
-    nativeCursor: requested.nativeCursor && supported.nativeCursor,
-    targetObservation:
-      requested.targetObservation && supported.targetObservation,
-    partyObservation,
-    teamApply: requested.teamApply && supported.teamApply && partyObservation,
-    travelAction,
-    xunlaiAction,
-    chatAliases: requested.chatAliases && supported.chatAliases
-      && (travelAction || xunlaiAction),
-    skillSlotGeometry: requested.skillSlotGeometry && supported.skillSlotGeometry
-      && partyObservation,
-    skillCooldownObservation: requested.skillCooldownObservation
-      && supported.skillCooldownObservation && partyObservation,
-  });
+  const enabled = Object.fromEntries(ENHANCEMENT_CAPABILITY_FIELDS.map(
+    (field) => [field, requested[field] && supported[field]],
+  )) as Record<EnhancementCapability, boolean>;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const contract of ENHANCEMENT_CAPABILITY_CONTRACTS) {
+      if (enabled[contract.id] && !capabilityDependenciesSatisfied(contract, enabled)) {
+        enabled[contract.id] = false;
+        changed = true;
+      }
+    }
+  }
+  return Object.freeze(enabled);
 }

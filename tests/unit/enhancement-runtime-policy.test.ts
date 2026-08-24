@@ -6,11 +6,13 @@ import {
 } from "../../src/renderer/enhancement-runtime-policy.js";
 
 const off = Object.freeze({
-  enabled: false,
+  gwonmacTools: false,
   targetReadout: false,
   teamManagement: false,
   xunlaiStorage: false,
   travelPalette: false,
+  skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
+  skillCooldownOverlayEnabled: false,
 });
 
 test("developer programs replace saved optional-tool selection in PvE", () => {
@@ -54,11 +56,13 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
 
 test("runtime-gated commands fail closed while storage keeps its refusal reason", () => {
   const on = Object.freeze({
-    enabled: true,
+    gwonmacTools: true,
     targetReadout: true,
     teamManagement: true,
     xunlaiStorage: true,
     travelPalette: true,
+    skillKeyBindings: off.skillKeyBindings,
+    skillCooldownOverlayEnabled: false,
   });
   for (const region of ["unknown", "pvp"] as const) {
     assert.equal(enhancementRuntimePolicy("toolbox-commands", on, region).teamManagement, false);
@@ -79,11 +83,12 @@ test("a snapshot remains authoritative when party evidence disagrees", () => {
 
 test("product tool settings remain live once the capability is present", () => {
   assert.deepEqual(enhancementRuntimePolicy("none", {
-    enabled: true,
+    gwonmacTools: true,
     targetReadout: false,
     teamManagement: true,
     xunlaiStorage: false,
     travelPalette: true,
+    skillKeyBindings: off.skillKeyBindings,
     skillCooldownOverlayEnabled: true,
   }, "pve"), {
     tools: true,
@@ -94,6 +99,36 @@ test("product tool settings remain live once the capability is present", () => {
     skillSlotGeometry: true,
     skillCooldownOverlay: true,
   });
+});
+
+test("skill geometry runs only for configured labels or enabled cooldowns", () => {
+  const empty = enhancementRuntimePolicy("none", {
+    ...off,
+    gwonmacTools: true,
+    skillKeyBindings: [null, null, null, null, null, null, null, null],
+    skillCooldownOverlayEnabled: false,
+  }, "pve");
+  assert.equal(empty.skillSlotGeometry, false);
+  const labels = enhancementRuntimePolicy("none", {
+    ...off,
+    gwonmacTools: true,
+    skillKeyBindings: [
+      {
+        input: { kind: "keyboard", code: "KeyC" },
+        modifiers: { control: false, option: false, shift: false, command: false },
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ],
+    skillCooldownOverlayEnabled: false,
+  }, "pve");
+  assert.equal(labels.skillSlotGeometry, true);
+  assert.equal(labels.skillCooldownOverlay, false);
 });
 
 test("local Tools availability never depends on a live-game safety gate", () => {
@@ -113,7 +148,8 @@ test("local Tools availability never depends on a live-game safety gate", () => 
           for (const targetReadout of [false, true]) {
             for (const xunlaiStorage of [false, true]) {
               const policy = enhancementRuntimePolicy(program, {
-                enabled,
+                ...off,
+                gwonmacTools: enabled,
                 teamManagement,
                 xunlaiStorage,
                 targetReadout,

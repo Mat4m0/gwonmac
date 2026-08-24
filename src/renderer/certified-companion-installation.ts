@@ -653,10 +653,10 @@ export async function installCertifiedCompanion(
     let optionalSettings = window.gwToolsSettings();
     skills.mount(document.body, optionalSettings);
     const configureTradeAlias = () => {
-      configureTradeToggle?.(optionalSettings.enabled ? 1 : 0);
+      configureTradeToggle?.(optionalSettings.gwonmacTools ? 1 : 0);
     };
     const pollTradeAlias = () => {
-      if (takeTradeToggle?.() === 1 && optionalSettings.enabled) {
+      if (takeTradeToggle?.() === 1 && optionalSettings.gwonmacTools) {
         window.dispatchEvent(new CustomEvent("gw:trade-toggle"));
       }
     };

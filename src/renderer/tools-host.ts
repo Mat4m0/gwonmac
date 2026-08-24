@@ -220,7 +220,7 @@ export function mountHostOnlyTools(
     // The saved Build/Team library is the Tools surface. Apply team is only
     // one live-game action inside it, so turning Apply off must not remove the
     // library or its keyboard shortcut.
-    lifecycle.setEnabled(settings.enabled);
+    lifecycle.setEnabled(settings.gwonmacTools);
   };
   window.addEventListener("gw:tools-settings", syncEnabled);
   syncEnabled();

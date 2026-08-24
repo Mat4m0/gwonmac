@@ -488,7 +488,7 @@ const emptySkillKeyBindings:
   import('../shared/contracts.js').AppSettings['skillKeyBindings'] =
     [null, null, null, null, null, null, null, null];
 window.gwToolsSettings = () => Object.freeze({
-  enabled: appSettings?.gwonmacTools ?? false,
+  gwonmacTools: appSettings?.gwonmacTools ?? false,
   teamManagement: appSettings?.teamManagement ?? true,
   xunlaiStorage: appSettings?.xunlaiStorage ?? false,
   travelPalette: appSettings?.travelPalette ?? false,
