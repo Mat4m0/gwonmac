@@ -1284,10 +1284,10 @@ export async function assertRollbackAfterTablePublication() {
         { pointer: rollbackPlayRegionPointer, size: COMPANION_PLAY_REGION_BYTES },
       ],
       freed: [
-        rollbackToolboxPointer,
         rollbackPartyPointer,
-        rollbackPlayRegionPointer,
+        rollbackToolboxPointer,
         rollbackCursorPointer,
+        rollbackPlayRegionPointer,
         rollbackConfigPointer,
         0x1000,
       ],
@@ -1300,7 +1300,7 @@ export async function assertRollbackAfterTablePublication() {
         cause: "intentional post-table failure",
         errors: [
           "intentional post-table failure",
-          "Companion cleanup failed during Toolbox allocation release",
+          "Companion cleanup failed during core observer memory release",
         ],
       },
       replacementCursorStatePreserved: true,

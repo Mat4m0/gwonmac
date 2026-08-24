@@ -26,17 +26,11 @@ import {
 } from "./cursor-refresh.js";
 import { createToolboxLifecycle } from "./toolbox-foundation.js";
 import {
-  COMPANION_CURSOR_BYTES,
-  COMPANION_SNAPSHOT_BYTES,
-  COMPANION_TOOLBOX_BYTES,
-  COMPANION_PARTY_BYTES,
   type CompanionSnapshot,
 } from "./companion-snapshot.js";
 import { createPlayRegionObservationInstallation } from "./play-region-state-installation.js";
 import { createSkillOverlaysInstallation } from "./skill-overlays-installation.js";
 import {
-  COMPANION_KERNEL_RUNTIME_ALIGN,
-  COMPANION_KERNEL_RUNTIME_BYTES,
   validateCompanionOwnedRegions,
 } from "./companion-owned-regions.js";
 import {
@@ -61,13 +55,13 @@ import {
   COMPANION_FEATURE_BITS,
 } from "../shared/companion-abi.js";
 import { installCompanionKernel } from "./companion-kernel-loader.js";
+import { allocateCompanionCoreMemory } from "./companion-core-memory-installation.js";
 import {
   enhancementRuntimePolicy,
   type RuntimePlayRegion,
 } from "./enhancement-runtime-policy.js";
 import {
   createProfessionCommandTrace,
-  PROFESSION_COMMAND_TRACE_BYTES,
   type ProfessionCommandTraceReader,
 } from "./profession-command-trace.js";
 
@@ -201,8 +195,8 @@ export async function installCertifiedCompanion(
     throw new Error("the aliases profile derived a module with no Trade Chat toggle");
   }
   // The guard above proves `free` is callable, but WebAssembly exports are typed
-  // as the bare `Function`, so the kernel's ABI has to be named here or the five
-  // call sites below stop checking what they pass.
+  // as the bare `Function`. Name its ABI before handing it to the allocation
+  // owners and the cleanup transaction.
   const free = exports.free as (pointer: number) => void;
   if (manifest.tableSlot >= table.length) {
     throw new Error(`Enhancement table slot ${manifest.tableSlot} is out of bounds`);
@@ -220,16 +214,7 @@ export async function installCertifiedCompanion(
     throw new Error("Enhancement hook global is immutable");
   }
 
-  let snapshotPointer = 0;
-  let configPointer = 0;
-  let cursorPointer = 0;
-  let toolboxPointer = 0;
-  let partyPointer = 0;
-  let payloadPointer = 0;
-  let professionTracePointer = 0;
-  // What malloc returned, which is what free must be given. The aligned base
-  // used by the module lives inside it and is not a valid argument to free.
-  let runtimeAllocation = 0;
+  let coreMemory: ReturnType<typeof allocateCompanionCoreMemory> | null = null;
   let stopObserver = () => {};
   let disposeCursor = () => {};
   let disposeReadout = () => {};
@@ -310,40 +295,18 @@ export async function installCertifiedCompanion(
     });
     if (callbackWithdrawn) {
       if (observerStopped) {
-        attempt("Toolbox allocation release", () => {
-          if (toolboxPointer) free(toolboxPointer);
-        });
-        attempt("party allocation release", () => {
-          if (partyPointer) free(partyPointer);
+        attempt("core observer memory release", () => {
+          coreMemory?.releaseObserverMemory();
         });
         attempt("skill-slot allocation release", () => skillSlotGeometry.release(free));
         attempt("skill cooldown allocation release", () => skillCooldowns.release(free));
         attempt("play-region allocation release", () => playRegions.release(free));
       }
-      attempt("command payload release", () => {
-        if (payloadPointer) free(payloadPointer);
-      });
       attempt("storage disposal", () => storageInstallation?.dispose(free));
       attempt("Travel disposal", () => travelInstallation?.dispose(free));
-      if (observerStopped) {
-        attempt("profession trace allocation release", () => {
-          if (professionTracePointer) free(professionTracePointer);
-        });
-        attempt("cursor allocation release", () => {
-          if (cursorPointer) free(cursorPointer);
-        });
-      }
-      attempt("configuration allocation release", () => {
-        if (configPointer) free(configPointer);
-      });
-      if (observerStopped) {
-        attempt("snapshot allocation release", () => {
-          if (snapshotPointer) free(snapshotPointer);
-        });
-      }
       if (cursorRefreshDisposed) {
-        attempt("runtime allocation release", () => {
-          if (runtimeAllocation) free(runtimeAllocation);
+        attempt("core callback memory release", () => {
+          coreMemory?.releaseCallbackMemory();
         });
       }
     }
@@ -385,148 +348,60 @@ export async function installCertifiedCompanion(
     }
   };
   try {
-    runtimeAllocation = Number(
-      exports.malloc(
-        COMPANION_KERNEL_RUNTIME_BYTES + COMPANION_KERNEL_RUNTIME_ALIGN - 1,
-      ),
-    );
-    // Rounded with arithmetic rather than a bitmask: pointers reach past what
-    // a 32-bit bitwise operation can represent as the heap grows.
-    const runtimePointer = runtimeAllocation === 0
-      ? 0
-      : Math.ceil(runtimeAllocation / COMPANION_KERNEL_RUNTIME_ALIGN)
-        * COMPANION_KERNEL_RUNTIME_ALIGN;
-    if (observeState) {
-      snapshotPointer = Number(exports.malloc(COMPANION_SNAPSHOT_BYTES));
-    }
-    const configBytes = manifest.configWords.length * Uint32Array.BYTES_PER_ELEMENT;
-    configPointer = Number(exports.malloc(configBytes));
-    if (capabilities.nativeCursor) {
-      cursorPointer = Number(exports.malloc(COMPANION_CURSOR_BYTES));
-    }
-    if (foundation) {
-      toolboxPointer = Number(exports.malloc(COMPANION_TOOLBOX_BYTES));
-      partyPointer = Number(exports.malloc(COMPANION_PARTY_BYTES));
-    }
+    coreMemory = allocateCompanionCoreMemory({
+      memory,
+      malloc: exports.malloc as (bytes: number) => unknown,
+      free,
+      configWords: manifest.configWords,
+      needs: {
+        snapshot: observeState,
+        cursor: capabilities.nativeCursor,
+        toolbox: foundation,
+        commandPayloadBytes: capabilities.teamApply
+          ? teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES
+          : 0,
+        professionTrace:
+          capabilities.teamApply && window.gwNative.init.development,
+      },
+    });
+    const core = coreMemory;
     skillSlotGeometry.allocate(exports.malloc as (bytes: number) => unknown);
     skillCooldowns.allocate(exports.malloc as (bytes: number) => unknown);
     playRegions.allocate(exports.malloc as (bytes: number) => unknown);
-    if (capabilities.teamApply) {
-      payloadPointer = Number(
-        exports.malloc(teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES),
-      );
-      if (window.gwNative.init.development) {
-        professionTracePointer = Number(
-          exports.malloc(PROFESSION_COMMAND_TRACE_BYTES),
-        );
-      }
-    }
     storageInstallation?.allocate(exports.malloc as (bytes: number) => unknown);
     travelInstallation?.allocate(exports.malloc as (bytes: number) => unknown);
     if (
-      !runtimeAllocation
-      || !configPointer
-      || (observeState && !snapshotPointer)
-      || (capabilities.nativeCursor && !cursorPointer)
-      || (foundation && !toolboxPointer)
-      || (foundation && !partyPointer)
-      || !skillSlotGeometry.allocated
+      !skillSlotGeometry.allocated
       || !skillCooldowns.allocated
       || !playRegions.allocated
-      || (capabilities.teamApply && !payloadPointer)
       || (storageInstallation !== null && !storageInstallation.region().pointer)
       || (travelInstallation !== null && !travelInstallation.region().pointer)
-      || (
-        capabilities.teamApply
-        && window.gwNative.init.development
-        && !professionTracePointer
-      )
     ) {
       throw new Error("Companion allocation failed");
     }
     const ownedRegions = [
-      {
-        name: "runtime",
-        pointer: runtimePointer,
-        size: COMPANION_KERNEL_RUNTIME_BYTES,
-        align: COMPANION_KERNEL_RUNTIME_ALIGN,
-      },
-      ...(observeState
-        ? [{ name: "snapshot", pointer: snapshotPointer, size: COMPANION_SNAPSHOT_BYTES, align: 4 }]
-        : []),
-      { name: "config", pointer: configPointer, size: configBytes, align: 4 },
-      ...(capabilities.nativeCursor
-        ? [{ name: "cursor", pointer: cursorPointer, size: COMPANION_CURSOR_BYTES, align: 4 }]
-        : []),
-      ...(foundation
-        ? [
-            { name: "toolbox", pointer: toolboxPointer, size: COMPANION_TOOLBOX_BYTES, align: 4 },
-            { name: "party", pointer: partyPointer, size: COMPANION_PARTY_BYTES, align: 4 },
-          ]
-        : []),
+      ...core.regions,
       ...(skillSlotGeometry.region === null ? [] : [skillSlotGeometry.region]),
       ...(skillCooldowns.region === null ? [] : [skillCooldowns.region]),
       ...(playRegions.region === null ? [] : [playRegions.region]),
-      ...(capabilities.teamApply
-        ? [
-            {
-              name: "command payload",
-              pointer: payloadPointer,
-              size: teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES,
-              align: 4,
-            },
-            ...(professionTracePointer
-              ? [{
-                  name: "profession trace",
-                  pointer: professionTracePointer,
-                  size: PROFESSION_COMMAND_TRACE_BYTES,
-                  align: 4,
-                }]
-              : []),
-          ]
-        : []),
       ...(storageInstallation === null ? [] : [storageInstallation.region()]),
       ...(travelInstallation === null ? [] : [travelInstallation.region()]),
     ];
     validateCompanionOwnedRegions(ownedRegions, memory.buffer.byteLength);
-    // A side module is normally loaded by Emscripten's dynamic linker, which
-    // supplies zeroed BSS. We are the loader here, so establish that invariant
-    // for this whole private block before its active data segment is applied.
-    new Uint8Array(
-      memory.buffer,
-      runtimePointer,
-      COMPANION_KERNEL_RUNTIME_BYTES,
-    ).fill(0);
-    new Uint32Array(
-      memory.buffer,
-      configPointer,
-      manifest.configWords.length,
-    ).set(manifest.configWords);
+    core.initialize();
     storageInstallation?.initialize(memory);
     travelInstallation?.initialize();
 
     const kernel = await installCompanionKernel({
       memory,
-      runtimePointer,
+      runtimePointer: core.runtimePointer,
       featureFlags,
       regions: {
-        snapshot: {
-          pointer: snapshotPointer,
-          bytes: observeState ? COMPANION_SNAPSHOT_BYTES : 0,
-        },
-        config: { pointer: configPointer, bytes: configBytes },
-        cursor: {
-          pointer: cursorPointer,
-          bytes: capabilities.nativeCursor ? COMPANION_CURSOR_BYTES : 0,
-        },
-        toolbox: {
-          pointer: toolboxPointer,
-          bytes: foundation ? COMPANION_TOOLBOX_BYTES : 0,
-        },
-        party: {
-          pointer: partyPointer,
-          bytes: foundation ? COMPANION_PARTY_BYTES : 0,
-        },
+        snapshot: core.snapshot,
+        config: core.config,
+        cursor: core.cursor,
+        toolbox: core.toolbox,
+        party: core.party,
         skillSlots: {
           pointer: skillSlotGeometry.pointer,
           bytes: skillSlotGeometry.bytes,
@@ -566,7 +441,7 @@ export async function installCertifiedCompanion(
       cursor = createCursorConsumer({
         element,
         memory,
-        cursorPointer,
+        cursorPointer: core.cursor.pointer,
         // The empty string hands the canvas back to the stylesheet theme.
         fallback: "",
         // Hold the last art through a click-armed transition: the hide is a
@@ -679,7 +554,7 @@ export async function installCertifiedCompanion(
     };
     const commands = commandEnqueue === null ? null : teamCommands!.createTeamApplyCommands({
       memory,
-      payloadPointer,
+      payloadPointer: core.commandPayloadPointer,
       send: commandEnqueue,
       development: window.gwNative.init.development,
       ready: () => {
@@ -735,10 +610,10 @@ export async function installCertifiedCompanion(
             ),
         })
       : null;
-    if (professionTracePointer !== 0 && professionTraceReader !== null) {
+    if (core.professionTracePointer !== 0 && professionTraceReader !== null) {
       professionTrace = createProfessionCommandTrace(
         memory,
-        professionTracePointer,
+        core.professionTracePointer,
         professionTraceReader,
       );
     }
@@ -794,9 +669,9 @@ export async function installCertifiedCompanion(
     installedCallback = kernelDispatch;
     const observerRuntime = {
       memory,
-      snapshotPointer,
-      toolboxPointer,
-      partyPointer,
+      snapshotPointer: core.snapshot.pointer,
+      toolboxPointer: core.toolbox.pointer,
+      partyPointer: core.party.pointer,
       skillSlotPointer: skillSlotGeometry.pointer,
       skillCooldownPointer: skillCooldowns.pointer,
       playRegionPointer: playRegions.pointer,
