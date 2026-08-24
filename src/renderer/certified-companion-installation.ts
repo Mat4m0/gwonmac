@@ -286,6 +286,13 @@ export async function installCertifiedCompanion(
         return false;
       }
     };
+    // Withdraw policy inputs before disposing any surface. Region withdrawal
+    // notifies subscribers synchronously; leaving this subscription live could
+    // recreate a readout or overlay during the same teardown transaction.
+    attempt("Tools settings listener disposal", disposeToolSettings);
+    attempt("play-region subscription disposal", () => {
+      disposePlayRegionSubscription();
+    });
     const cursorStateWithdrawn = attempt("cursor state withdrawal", () => {
       if (
         installedCursorState !== null
@@ -305,10 +312,6 @@ export async function installCertifiedCompanion(
       attempt("skill cooldown feed disposal", skillCooldowns.dispose);
       attempt("play-region feed disposal", playRegions.dispose);
     }
-    attempt("Tools settings listener disposal", disposeToolSettings);
-    attempt("play-region subscription disposal", () => {
-      disposePlayRegionSubscription();
-    });
     attempt("Trade alias disable", () => { configureTradeToggle?.(0); });
     if (observerStopped) {
       attempt("profession trace disposal", () => professionTrace?.dispose());
