@@ -14,6 +14,7 @@ it("withdraws a cooldown publication whose sequence stops advancing", () => {
     cancel: () => { scheduled = null; },
     staleAfterMs: 500,
   });
+  installation.setActive(true);
   installation.sink?.update(Object.freeze({
     status: "ready",
     sequence: 2,
