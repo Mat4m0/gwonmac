@@ -59,7 +59,10 @@ Kamadan does not publish dye images, so the dye vial PNGs come from the
 [Guild Wars Wiki dye icon gallery](https://wiki.guildwars.com/wiki/Category:Dye_icons).
 These images depict ArenaNet game content. They remain the property of ArenaNet
 or their respective owners, are not covered by this project's GPL license, and
-must not be reused separately.
+must not be reused separately. They are included under ArenaNet's current
+[Content Terms of Use](https://www.arena.net/en/legal/content-terms-of-use) for
+this independent fan project; those terms, not this repository's GPL license,
+govern their use.
 
 `src/native/gw-dat/vendor/` is a source port from
 [GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), which distributes it
