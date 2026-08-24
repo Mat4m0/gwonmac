@@ -193,6 +193,11 @@ const api = {
     capture: () => ipcRenderer.invoke(IPC.shortcutCapture),
     cancelCapture: () => ipcRenderer.invoke(IPC.shortcutCaptureCancel),
   },
+  skillKeys: {
+    capture: () => ipcRenderer.invoke(IPC.skillKeyCapture),
+    submitPointer: (binding) => ipcRenderer.invoke(IPC.skillKeyCapturePointer, binding),
+    cancelCapture: () => ipcRenderer.invoke(IPC.skillKeyCaptureCancel),
+  },
   buildLibrary: {
     get: () => ipcRenderer.invoke(IPC.buildLibraryGet),
     set: (value) => ipcRenderer.invoke(IPC.buildLibrarySet, value),

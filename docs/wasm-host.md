@@ -157,6 +157,9 @@ After that restart, these choices update during the session:
   the master Tools setting is on.
 - **Target distance and range** controls the shipped Test readout and its target
   observation.
+- Saved **Skill key labels** select only renderer-owned labels over the
+  certified skill-slot rectangles. The companion publishes geometry, not
+  bindings, and the renderer never turns a label into game input.
 
 Disabled optional observers stop their domain reads. Core cursor observation
 stays active. A small map-policy projection remains active so the app can remove

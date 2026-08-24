@@ -31,6 +31,7 @@ export const ENHANCEMENT_CAPABILITY_FIELDS = Object.freeze([
   "travelAction",
   "xunlaiAction",
   "chatAliases",
+  "skillSlotGeometry",
 ] as const);
 
 export type EnhancementCapability = (typeof ENHANCEMENT_CAPABILITY_FIELDS)[number];
@@ -39,7 +40,7 @@ export type EnhancementCapabilities = Readonly<Record<EnhancementCapability, boo
 const MAX_CAPABILITY_MASK = (1 << ENHANCEMENT_CAPABILITY_FIELDS.length) - 1;
 const CAPABILITY_PROFILE = /^features-([0-9a-f]{2})$/;
 
-/** A compact transform identity; the two hex digits are the seven capability bits. */
+/** A compact transform identity; the two hex digits are the eight capability bits. */
 export type EnhancementCapabilityProfile = `features-${string}`;
 
 function capabilitiesFromMask(mask: number): EnhancementCapabilities {
@@ -96,6 +97,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  skillSlotGeometry: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -127,6 +129,7 @@ export function parseEnhancementCapabilities(
     travelAction: value.travelAction,
     xunlaiAction: value.xunlaiAction,
     chatAliases: value.chatAliases,
+    skillSlotGeometry: value.skillSlotGeometry,
   });
 }
 
@@ -152,11 +155,11 @@ export function enhancementCapabilityProfile(
 export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursor: capabilitiesFromMask(0x01),
   target: capabilitiesFromMask(0x02),
-  party: capabilitiesFromMask(0x04),
-  cursorParty: capabilitiesFromMask(0x05),
+  party: capabilitiesFromMask(0x84),
+  cursorParty: capabilitiesFromMask(0x85),
   storage: capabilitiesFromMask(0x70),
-  partyCommandsStorage: capabilitiesFromMask(0x7c),
-  all: capabilitiesFromMask(0x7f),
+  partyCommandsStorage: capabilitiesFromMask(0xfc),
+  all: capabilitiesFromMask(0xff),
 });
 
 import {
@@ -188,6 +191,7 @@ export function enhancementConfigWordActive(
   }
   if (owner === "cursor") return capabilities.nativeCursor;
   if (owner === "party") return capabilities.partyObservation;
+  if (owner === "skill-slots") return capabilities.skillSlotGeometry;
   return owner === "storage" && capabilities.xunlaiAction;
 }
 
@@ -237,6 +241,7 @@ export function validEnhancementCapabilities(
   capabilities: EnhancementCapabilities,
 ): boolean {
   return (!capabilities.teamApply || capabilities.partyObservation)
+    && (!capabilities.skillSlotGeometry || capabilities.partyObservation)
     && (!capabilities.chatAliases
       || capabilities.travelAction
       || capabilities.xunlaiAction);
@@ -260,5 +265,7 @@ export function intersectEnhancementCapabilities(
     xunlaiAction,
     chatAliases: requested.chatAliases && supported.chatAliases
       && (travelAction || xunlaiAction),
+    skillSlotGeometry: requested.skillSlotGeometry && supported.skillSlotGeometry
+      && partyObservation,
   });
 }

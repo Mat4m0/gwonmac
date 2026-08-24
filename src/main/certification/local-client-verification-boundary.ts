@@ -33,6 +33,7 @@ import {
   type TemplateVerificationReason,
 } from "./local-client-verification-contract.js";
 import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
+import { isSkillSlotGeometryProof } from "./enhancement-skill-slot-geometry-proof.js";
 import {
   BRIDGE_KINDS,
   TEMPLATE_SAVE_BUILDS,
@@ -109,6 +110,10 @@ function featureFailuresFromVerdicts(
   const travelAction = refusalForFeature("travelAction", verdicts.travelAction);
   const xunlaiAction = refusalForFeature("xunlaiAction", verdicts.xunlaiAction);
   const chatAliases = refusalForFeature("chatAliases", verdicts.chatAliases);
+  const skillSlotGeometry = refusalForFeature(
+    "skillSlotGeometry",
+    verdicts.skillSlotGeometry,
+  );
   if (
     nativeCursor === null
     || targetObservation === null
@@ -117,6 +122,7 @@ function featureFailuresFromVerdicts(
     || travelAction === null
     || xunlaiAction === null
     || chatAliases === null
+    || skillSlotGeometry === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -126,6 +132,7 @@ function featureFailuresFromVerdicts(
     ...(travelAction ? { travelAction } : {}),
     ...(xunlaiAction ? { xunlaiAction } : {}),
     ...(chatAliases ? { chatAliases } : {}),
+    ...(skillSlotGeometry ? { skillSlotGeometry } : {}),
   });
 }
 
@@ -406,6 +413,11 @@ function matchesPartyObservation(
     && isDeepStrictEqual(candidate.layout, expected.layout);
 }
 
+function matchesSkillSlotGeometry(build: SemanticBuild): boolean {
+  return build.skillSlotGeometry === undefined
+    || isSkillSlotGeometryProof(build.skillSlotGeometry);
+}
+
 function matchesTeamApply(
   build: SemanticBuild,
   baseline: KnownEnhancementBuild,
@@ -463,14 +475,16 @@ function isAutomaticSemanticBuild(
   const hasAliases = build.chatAliases !== undefined;
   const hasParty = build.partyObservation !== undefined;
   const hasTeam = build.teamApply !== undefined;
+  const hasSkillSlotGeometry = build.skillSlotGeometry !== undefined;
   if (!hasCursor && !hasTarget && !hasTravel && !hasXunlai && !hasAliases
-    && !hasParty && !hasTeam) return false;
+    && !hasParty && !hasTeam && !hasSkillSlotGeometry) return false;
   if (
     Object.keys(build.outputSha256).length === 0
     || !Object.values(build.outputSha256).every(isDigest)
     || (hasTarget && !hasObservation)
     || (hasXunlai && !hasObservation)
     || (hasParty && (!hasObservation || build.uiDispatcher === undefined))
+    || (hasSkillSlotGeometry && !hasParty)
     || (hasTeam && (!hasParty || build.gameThread === undefined))
     || ((hasTravel || hasXunlai) && build.gameThread === undefined)
     || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
@@ -503,6 +517,7 @@ function isAutomaticSemanticBuild(
     && matchesChatAliases(build, baseline)
     && matchesPartyObservation(build, baseline)
     && matchesTeamApply(build, baseline)
+    && matchesSkillSlotGeometry(build)
   );
 }
 

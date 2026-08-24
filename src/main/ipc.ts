@@ -63,6 +63,10 @@ import {
 import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import {
+  isSkillKeyBinding,
+  type SkillKeyBinding,
+} from "../shared/skill-key-bindings.js";
+import {
   AllowlistError,
   errorCode,
   ValidationError,
@@ -114,7 +118,10 @@ import { isQuitting } from "./lifecycle.js";
 import { windowRegistry, type WindowRegistry } from "./window-registry.js";
 import {
   cancelWindowShortcutCapture,
+  cancelWindowSkillKeyCapture,
   captureWindowShortcut,
+  captureWindowSkillKey,
+  captureWindowSkillKeyPointer,
 } from "./window-shortcuts.js";
 import {
   applySettingsChange,
@@ -231,6 +238,12 @@ const parseSocketId = (value: unknown): number => {
   return value as number;
 };
 const asSocketId = one(parseSocketId);
+const asSkillKeyPointerBinding = one((value: unknown): SkillKeyBinding => {
+  if (!isSkillKeyBinding(value) || value.input.kind === "keyboard") {
+    throw new ValidationError("skill key pointer binding is invalid");
+  }
+  return value;
+});
 
 const asClientHealthToken = one((value: unknown): ClientHealthToken => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -585,6 +598,12 @@ export function registerIpcHandlers(ctx: IpcContext): {
     shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
     shortcutCaptureCancel: channel(nothing, (win) => {
       cancelWindowShortcutCapture(win);
+    }),
+    skillKeyCapture: channel(nothing, (win) => captureWindowSkillKey(win)),
+    skillKeyCapturePointer: channel(asSkillKeyPointerBinding, (win, binding) =>
+      captureWindowSkillKeyPointer(win, binding)),
+    skillKeyCaptureCancel: channel(nothing, (win) => {
+      cancelWindowSkillKeyCapture(win);
     }),
 
     credentialsLoad: channel(nothing, async (win) => {

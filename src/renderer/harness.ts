@@ -484,12 +484,16 @@ let applyAppearance:
 let inputHost: GameInputController | null = null;
 let inputTrace: InputTrace | null = null;
 let gamepadTrace: import('./gamepad-trace.js').GamepadTraceController | null = null;
+const emptySkillKeyBindings:
+  import('../shared/contracts.js').AppSettings['skillKeyBindings'] =
+    [null, null, null, null, null, null, null, null];
 window.gwToolsSettings = () => Object.freeze({
   enabled: appSettings?.gwonmacTools ?? false,
   teamManagement: appSettings?.teamManagement ?? true,
   xunlaiStorage: appSettings?.xunlaiStorage ?? false,
   travelPalette: appSettings?.travelPalette ?? false,
   targetReadout: appSettings?.targetReadout ?? false,
+  skillKeyBindings: appSettings?.skillKeyBindings ?? emptySkillKeyBindings,
 });
 window.gwApplySettings = (next) => {
   const previousScale = appSettings?.renderScale;

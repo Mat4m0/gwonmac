@@ -373,6 +373,35 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 #settings-form #settings-tool-features label.settings-check { margin: 0; }
 .settings-shortcuts { display: grid; gap: var(--ui-space-2); }
 .settings-shortcuts > .settings-note { margin: 0; }
+.settings-skill-keys { display: grid; gap: var(--ui-space-2); }
+.settings-skill-keys > .settings-note { margin: 0; }
+.settings-skill-key-grid { display: grid; gap: var(--ui-space-1); }
+.settings-skill-key-row {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) minmax(112px, auto) auto auto;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-height: 40px;
+  padding-block: var(--ui-space-1);
+  border-bottom: 1px solid var(--ui-line-soft);
+}
+.settings-skill-key-preview {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 112px;
+  min-height: 32px;
+}
+.settings-skill-key-preview:has(.skill-key-plate:not([hidden])) .settings-skill-key-empty { display: none; }
+.settings-skill-key-empty { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
+.settings-skill-key-message {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--ui-warning);
+  font-size: var(--ui-font-size-sm);
+}
+.settings-skill-key-clear:disabled { visibility: hidden; }
+#settings-skill-keys-clear { justify-self: start; }
 .settings-shortcut-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -557,6 +586,12 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   #settings-form .settings-rtab { min-height: 44px; }
   .settings-shortcut-row {
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .settings-skill-key-row {
+    grid-template-columns: minmax(64px, 1fr) minmax(92px, auto) auto;
+  }
+  .settings-skill-key-row > .settings-skill-key-clear {
+    grid-column: 3;
   }
   .settings-shortcut-name { grid-column: 1 / -1; }
 }

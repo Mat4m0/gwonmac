@@ -12,6 +12,7 @@ import {
 import { SEMANTIC_VERIFIER_ABI } from "../../src/main/certification/semantic-proof.js";
 import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save-compat.js";
 import type { EnhancementCapabilities } from "../../src/shared/enhancement-contracts.js";
+import { enhancementCapabilityProfile } from "../../src/shared/enhancement-contracts.js";
 
 const ENHANCEMENT = ENHANCEMENT_BUILDS[0]!;
 const TEMPLATE = TEMPLATE_SAVE_BUILDS.find(
@@ -25,6 +26,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+    skillSlotGeometry: false,
 });
 const ALL: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -35,6 +37,7 @@ const ALL: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+    skillSlotGeometry: false,
 });
 const CURSOR: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -49,11 +52,17 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+    skillSlotGeometry: false,
 });
 const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   ...NONE,
   partyObservation: true,
   teamApply: true,
+});
+const SKILL_SLOTS: EnhancementCapabilities = Object.freeze({
+  ...NONE,
+  partyObservation: true,
+  skillSlotGeometry: true,
 });
 type ProvedVerification = Extract<LocalClientVerification, { status: "proved" }>;
 
@@ -243,9 +252,54 @@ function automaticPartyTeam(): ProvedVerification {
   );
 }
 
+function automaticSkillSlots(): ProvedVerification {
+  const party = automaticPartyTeam();
+  const profile = enhancementCapabilityProfile(SKILL_SLOTS)!;
+  const partyBuild = { ...party.enhancementBuild! };
+  delete partyBuild.teamApply;
+  return verificationFor({
+    ...partyBuild,
+    outputSha256: { [profile]: "7".repeat(64) },
+    skillSlotGeometry: {
+      initializer: {
+        functionIndex: 4_201,
+        params: ["i32", "i32"],
+        results: [],
+        bodySha256:
+          "e4b1af23a4efcbb7fd1c484c4168553c91df5df7e1e40a65ff31bb4ca10790e1",
+        constructorCallOperand: 1_337,
+      },
+      constructor: {
+        functionIndex: 4_202,
+        params: ["i32", "i32", "i32", "i32", "i32", "i32"],
+        results: ["i32"],
+        bodySha256:
+          "a29fca1d30e5fa7dea1ca30f6453acbb8a099e4423c1f05ee43b01cfc3045c41",
+      },
+      labelAddress: 5_700_000,
+      layout: {
+        frameArray: 5_906_396,
+        frameCount: 5_906_404,
+        frameBytes: 0x1c8,
+        frameChildOffsetId: 0xb8,
+        frameId: 0xbc,
+        framePositionFlags: 0xd8,
+        frameViewportWidth: 0x104,
+        frameViewportHeight: 0x108,
+        frameScreenLeft: 0x10c,
+        frameScreenBottom: 0x110,
+        frameScreenRight: 0x114,
+        frameScreenTop: 0x118,
+        frameRelation: 0x128,
+        frameState: 0x18c,
+      },
+    },
+  }, SKILL_SLOTS);
+}
+
 describe("local client verification boundary", () => {
   it("accepts the verifier's complete baseline proof", () => {
-    assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256, ALL), true);
   });
 
   it("rejects an exact authored row that did not cross semantic proof", () => {
@@ -260,7 +314,7 @@ describe("local client verification boundary", () => {
 
   it("rejects a proof for any other official client", () => {
     assert.equal(
-      isLocalClientVerification(valid(), "0".repeat(64)),
+      isLocalClientVerification(valid(), "0".repeat(64), ALL),
       false,
     );
   });
@@ -277,7 +331,7 @@ describe("local client verification boundary", () => {
           },
         },
       },
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, ALL), false);
   });
 
   it("accepts a relocated hook but rejects an incompatible signature", () => {
@@ -289,14 +343,14 @@ describe("local client verification boundary", () => {
       },
       ALL,
     );
-    assert.equal(isLocalClientVerification(relocated, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(relocated, TEMPLATE.sha256, ALL), true);
     assert.equal(isLocalClientVerification({
       ...relocated,
       enhancementBuild: {
         ...relocated.enhancementBuild,
         hookParams: ["i64"],
       },
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, ALL), false);
   });
 
   it("accepts a structurally derived cursor proof and rejects malformed layouts", () => {
@@ -390,6 +444,58 @@ describe("local client verification boundary", () => {
     }, TEMPLATE.sha256, PARTY_TEAM), false);
   });
 
+  it("validates the complete skill-slot geometry proof at the process boundary", () => {
+    const derived = automaticSkillSlots();
+    assert.equal(
+      isLocalClientVerification(derived, TEMPLATE.sha256, SKILL_SLOTS),
+      true,
+    );
+
+    type MutableSkillSlotProof = Record<string, unknown> & {
+      initializer: Record<string, unknown>;
+      constructor: Record<string, unknown>;
+      labelAddress: number;
+      layout: Record<string, number>;
+    };
+    const mutations: readonly ((proof: MutableSkillSlotProof) => void)[] = [
+      (proof) => { proof.unexpected = 1; },
+      (proof) => { proof.initializer.functionIndex = -1; },
+      (proof) => { proof.initializer.constructorCallOperand = -1; },
+      (proof) => { proof.initializer.params = ["i64", "i32"]; },
+      (proof) => { proof.initializer.results = ["i32"]; },
+      (proof) => { proof.initializer.bodySha256 = "0".repeat(64); },
+      (proof) => { proof.constructor.functionIndex = -1; },
+      (proof) => { proof.constructor.params = ["i32"]; },
+      (proof) => { proof.constructor.results = []; },
+      (proof) => { proof.constructor.bodySha256 = "0".repeat(64); },
+      (proof) => { proof.labelAddress = 0; },
+      (proof) => { proof.layout.frameArray = Number(proof.layout.frameArray) + 4; },
+      (proof) => { proof.layout.frameCount = Number(proof.layout.frameCount) + 4; },
+      (proof) => { proof.layout.frameBytes = Number(proof.layout.frameBytes) + 4; },
+      (proof) => { proof.layout.frameChildOffsetId = Number(proof.layout.frameChildOffsetId) + 4; },
+      (proof) => { proof.layout.frameId = Number(proof.layout.frameId) + 4; },
+      (proof) => { proof.layout.framePositionFlags = Number(proof.layout.framePositionFlags) + 4; },
+      (proof) => { proof.layout.frameViewportWidth = Number(proof.layout.frameViewportWidth) + 4; },
+      (proof) => { proof.layout.frameViewportHeight = Number(proof.layout.frameViewportHeight) + 4; },
+      (proof) => { proof.layout.frameScreenLeft = Number(proof.layout.frameScreenLeft) + 4; },
+      (proof) => { proof.layout.frameScreenBottom = Number(proof.layout.frameScreenBottom) + 4; },
+      (proof) => { proof.layout.frameScreenRight = Number(proof.layout.frameScreenRight) + 4; },
+      (proof) => { proof.layout.frameScreenTop = Number(proof.layout.frameScreenTop) + 4; },
+      (proof) => { proof.layout.frameRelation = Number(proof.layout.frameRelation) + 4; },
+      (proof) => { proof.layout.frameState = Number(proof.layout.frameState) + 4; },
+    ];
+    for (const mutate of mutations) {
+      const invalid = structuredClone(derived);
+      mutate(
+        invalid.enhancementBuild!.skillSlotGeometry as unknown as MutableSkillSlotProof,
+      );
+      assert.equal(
+        isLocalClientVerification(invalid, TEMPLATE.sha256, SKILL_SLOTS),
+        false,
+      );
+    }
+  });
+
   it("accepts a template-only proof and requires no enhancement behind failure", () => {
     const templateOnly: LocalClientVerification = {
       status: "enhancement-refused",
@@ -405,14 +511,14 @@ describe("local client verification boundary", () => {
       reasons: ["enhancement-layout-changed"],
     };
     assert.equal(
-      isLocalClientVerification(templateOnly, TEMPLATE.sha256),
+      isLocalClientVerification(templateOnly, TEMPLATE.sha256, ALL),
       true,
     );
     assert.equal(isLocalClientVerification({
       ...templateOnly,
       templateSaveBuild: null,
       enhancementBuild: ENHANCEMENT,
-    }, TEMPLATE.sha256), false);
+    }, TEMPLATE.sha256, ALL), false);
   });
 
   it("represents an unrequested enhancement as a proved template, not a refusal", () => {
@@ -523,14 +629,14 @@ describe("local client verification boundary", () => {
       verifierAbi: SEMANTIC_VERIFIER_ABI,
     });
     const received: unknown = JSON.parse(JSON.stringify(refusal));
-    assert.equal(isLocalClientVerification(received, TEMPLATE.sha256), true);
+    assert.equal(isLocalClientVerification(received, TEMPLATE.sha256, ALL), true);
 
     const invalidCandidates = structuredClone(refusal) as unknown as {
       featureVerdicts: { nativeCursor: { candidates: number } };
     };
     invalidCandidates.featureVerdicts.nativeCursor.candidates = 1;
     assert.equal(
-      isLocalClientVerification(invalidCandidates, TEMPLATE.sha256),
+      isLocalClientVerification(invalidCandidates, TEMPLATE.sha256, ALL),
       false,
     );
 
@@ -540,7 +646,7 @@ describe("local client verification boundary", () => {
     invalidInvariant.featureVerdicts.nativeCursor.invariant =
       "nativeCursor-structure-changed";
     assert.equal(
-      isLocalClientVerification(invalidInvariant, TEMPLATE.sha256),
+      isLocalClientVerification(invalidInvariant, TEMPLATE.sha256, ALL),
       false,
     );
   });

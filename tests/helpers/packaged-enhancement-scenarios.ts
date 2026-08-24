@@ -368,6 +368,7 @@ export async function assertCleanupSafetyGates() {
             xunlaiStorage: true,
             travelPalette: true,
             targetReadout: false,
+            skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
           });
         });
       }
@@ -708,6 +709,7 @@ export async function assertToolboxFoundationLifecycle() {
       xunlaiStorage: true,
       travelPalette: true,
         targetReadout: false,
+        skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
       });
       const runtime = await installCertifiedCompanion(
         {
@@ -1150,6 +1152,7 @@ export async function assertRollbackAfterTablePublication() {
       xunlaiStorage: true,
       travelPalette: true,
           targetReadout: false,
+          skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
         });
         globalThis.requestAnimationFrame = () => {
           installedCursorStatePublished = typeof window.gwCursorState === "function";

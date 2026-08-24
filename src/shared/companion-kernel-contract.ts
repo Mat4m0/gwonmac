@@ -23,6 +23,7 @@ export const COMPANION_KERNEL_SIGNATURES: readonly Readonly<{
   { name: "companion_cursor_bytes", typeIndex: 2 },
   { name: "companion_toolbox_bytes", typeIndex: 2 },
   { name: "companion_party_bytes", typeIndex: 2 },
+  { name: "companion_skill_slot_bytes", typeIndex: 2 },
 ]);
 
 export const COMPANION_KERNEL_EXPORTS = Object.freeze(
@@ -68,8 +69,8 @@ function encodeSection(id: number, payload: number[]): number[] {
  */
 export function companionKernelSignatureBytes(): Uint8Array<ArrayBuffer> {
   const types = [
-    // Five region pointer/size pairs and the feature word.
-    i32FunctionType(11, true),
+    // Six region pointer/size pairs and the feature word.
+    i32FunctionType(13, true),
     i32FunctionType(6, false),
     i32FunctionType(0, true),
   ];

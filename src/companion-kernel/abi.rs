@@ -30,9 +30,15 @@ pub(crate) const FEATURE_NATIVE_CURSOR: u32 = 1 << 0;
 pub(crate) const FEATURE_GAME_SNAPSHOT: u32 = 1 << 1;
 pub(crate) const FEATURE_TOOLBOX_FOUNDATION: u32 = 1 << 2;
 pub(crate) const FEATURE_TARGET_OBSERVATION: u32 = 1 << 3;
+pub(crate) const FEATURE_SKILL_SLOT_GEOMETRY: u32 = 1 << 4;
 pub(crate) const KNOWN_FEATURES: u32 =
     FEATURE_NATIVE_CURSOR | FEATURE_GAME_SNAPSHOT | FEATURE_TOOLBOX_FOUNDATION
-        | FEATURE_TARGET_OBSERVATION;
+        | FEATURE_TARGET_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY;
+
+pub(crate) const SKILL_SLOT_BYTES: u32 = size_of::<SkillSlotSnapshot>() as u32;
+pub(crate) const SKILL_SLOT_MAGIC: u32 = 0x534b_5747;
+pub(crate) const SKILL_SLOT_ABI_AND_SIZE: u32 = (SKILL_SLOT_BYTES << 16) | 1;
+pub(crate) const FLAG_SKILL_SLOTS_READY: u32 = 1 << 0;
 
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
 pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
@@ -234,6 +240,20 @@ pub(crate) struct Layout {
     pub(crate) player_record_access_flags: u32,
     pub(crate) player_record_number: u32,
     pub(crate) area_info_type: u32,
+    pub(crate) frame_array: u32,
+    pub(crate) frame_count: u32,
+    pub(crate) frame_bytes: u32,
+    pub(crate) frame_child_offset_id: u32,
+    pub(crate) frame_id: u32,
+    pub(crate) frame_position_flags: u32,
+    pub(crate) frame_viewport_width: u32,
+    pub(crate) frame_viewport_height: u32,
+    pub(crate) frame_screen_left: u32,
+    pub(crate) frame_screen_bottom: u32,
+    pub(crate) frame_screen_right: u32,
+    pub(crate) frame_screen_top: u32,
+    pub(crate) frame_relation: u32,
+    pub(crate) frame_state: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -325,6 +345,20 @@ impl Layout {
         player_record_access_flags: 0,
         player_record_number: 0,
         area_info_type: 0,
+        frame_array: 0,
+        frame_count: 0,
+        frame_bytes: 0,
+        frame_child_offset_id: 0,
+        frame_id: 0,
+        frame_position_flags: 0,
+        frame_viewport_width: 0,
+        frame_viewport_height: 0,
+        frame_screen_left: 0,
+        frame_screen_bottom: 0,
+        frame_screen_right: 0,
+        frame_screen_top: 0,
+        frame_relation: 0,
+        frame_state: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -382,6 +416,27 @@ pub(crate) struct ToolboxSnapshot {
     pub(crate) first_hero_id: u32,
     pub(crate) first_hero_agent_id: u32,
     pub(crate) reserved: [u32; 7],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct SkillSlotRect {
+    pub(crate) left: f32,
+    pub(crate) bottom: f32,
+    pub(crate) right: f32,
+    pub(crate) top: f32,
+}
+
+#[repr(C)]
+pub(crate) struct SkillSlotSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) frame_id: u32,
+    pub(crate) viewport_width: f32,
+    pub(crate) viewport_height: f32,
+    pub(crate) slots: [SkillSlotRect; SKILL_SLOTS],
 }
 
 /// One party position, as much of it as has been read.
@@ -448,9 +503,11 @@ pub(crate) struct PartySnapshot {
     pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 384] = [(); size_of::<Layout>()];
+const _: [(); 440] = [(); size_of::<Layout>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
 const _: [(); 1560] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
+const _: [(); 16] = [(); size_of::<SkillSlotRect>()];
+const _: [(); 156] = [(); size_of::<SkillSlotSnapshot>()];

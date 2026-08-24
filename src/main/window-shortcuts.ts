@@ -13,6 +13,11 @@ import {
   type ShortcutOverrides,
 } from "../shared/keyboard-shortcuts.js";
 import { recordMainInput } from './input-trace.js';
+import {
+  isSkillKeyKeyboardCode,
+  type SkillKeyBinding,
+  type SkillKeyCaptureResult,
+} from "../shared/skill-key-bindings.js";
 
 const tracedKey = (key: string) => {
   if (["Meta", "Control", "Shift", "Alt"].includes(key)) return 'modifier' as const;
@@ -28,13 +33,16 @@ interface ShortcutActions {
   edit(command: GameTextEditCommand): void;
 }
 
-type ClaimedKey = 'capture' | 'shortcut' | GameTextEditCommand;
+type ClaimedKey = 'capture' | 'skill-capture' | 'shortcut' | GameTextEditCommand;
 
 const claimedDecision = (claim: ClaimedKey): 'capture' | 'shortcut' =>
-  claim === 'capture' ? 'capture' : 'shortcut';
+  claim === 'capture' || claim === 'skill-capture' ? 'capture' : 'shortcut';
 
 const isTextEditClaim = (claim: ClaimedKey): claim is GameTextEditCommand =>
-  claim !== 'capture' && claim !== 'shortcut';
+  claim !== 'capture' && claim !== 'skill-capture' && claim !== 'shortcut';
+
+const isModifierCode = (code: string): boolean =>
+  /^(?:Meta|Control|Shift|Alt)(?:Left|Right)$/u.test(code);
 
 const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
   if (!input.meta || input.control || input.shift || input.alt) return null;
@@ -49,6 +57,7 @@ class WindowShortcuts {
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({});
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
+  #skillCapture: ((result: SkillKeyCaptureResult) => void) | null = null;
   #claimedCodes = new Map<string, ClaimedKey>();
 
   constructor(win: BrowserWindow, actions: ShortcutActions) {
@@ -120,6 +129,30 @@ class WindowShortcuts {
           : { status: "invalid" });
         return;
       }
+      if (this.#skillCapture) {
+        event.preventDefault();
+        recordMainInput(win, {
+          source: 'main', kind: 'native-key', phase: 'down',
+          key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'capture',
+        });
+        this.#claimedCodes.set(input.code, 'skill-capture');
+        if (isModifierCode(input.code) || input.isAutoRepeat) return;
+        this.#finishSkillCapture(isSkillKeyKeyboardCode(input.code)
+          ? {
+              status: "captured",
+              binding: {
+                input: { kind: "keyboard", code: input.code },
+                modifiers: {
+                  control: input.control,
+                  option: input.alt,
+                  shift: input.shift,
+                  command: input.meta,
+                },
+              },
+            }
+          : { status: "invalid" });
+        return;
+      }
       const edit = textEditCommand(input);
       if (edit) {
         event.preventDefault();
@@ -166,9 +199,30 @@ class WindowShortcuts {
     });
   }
 
+  captureSkillKey(): Promise<SkillKeyCaptureResult> {
+    this.cancelCapture();
+    return new Promise((resolve) => {
+      this.#skillCapture = resolve;
+    });
+  }
+
   cancelCapture(): void {
     this.#claimedCodes.clear();
     this.#finish({ status: "cancelled" });
+    this.#finishSkillCapture({ status: "cancelled" });
+  }
+
+  cancelSkillCapture(): void {
+    // Keep already claimed physical codes until their key-up arrives. A mouse
+    // or wheel can win the renderer race while modifiers are still held, and
+    // leaking those releases into Guild Wars would create an unmatched edge.
+    this.#finishSkillCapture({ status: "cancelled" });
+  }
+
+  captureSkillPointer(binding: SkillKeyBinding): boolean {
+    if (!this.#skillCapture) return false;
+    this.#finishSkillCapture({ status: "captured", binding });
+    return true;
   }
 
   release(code: string): void {
@@ -179,6 +233,14 @@ class WindowShortcuts {
     const resolve = this.#capture;
     if (!resolve) return;
     this.#capture = null;
+    resolve(result);
+  }
+
+
+  #finishSkillCapture(result: SkillKeyCaptureResult): void {
+    const resolve = this.#skillCapture;
+    if (!resolve) return;
+    this.#skillCapture = null;
     resolve(result);
   }
 }
@@ -210,6 +272,26 @@ export function captureWindowShortcut(
 
 export function cancelWindowShortcutCapture(win: BrowserWindow): void {
   controllers.get(win)?.cancelCapture();
+}
+
+export function captureWindowSkillKey(
+  win: BrowserWindow,
+): Promise<SkillKeyCaptureResult> {
+  const controller = controllers.get(win);
+  return controller
+    ? controller.captureSkillKey()
+    : Promise.resolve({ status: "cancelled" });
+}
+
+export function captureWindowSkillKeyPointer(
+  win: BrowserWindow,
+  binding: SkillKeyBinding,
+): boolean {
+  return controllers.get(win)?.captureSkillPointer(binding) ?? false;
+}
+
+export function cancelWindowSkillKeyCapture(win: BrowserWindow): void {
+  controllers.get(win)?.cancelSkillCapture();
 }
 
 /** Forget a release that AppKit consumed before `before-input-event`. */

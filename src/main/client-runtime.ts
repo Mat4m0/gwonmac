@@ -397,6 +397,12 @@ export class ClientRuntime {
           supported.chatAliases,
           preparationFailed,
         ),
+        skillSlotGeometry: optionalFeatureStatus(
+          requested.skillSlotGeometry,
+          effective.skillSlotGeometry,
+          supported.skillSlotGeometry,
+          preparationFailed,
+        ),
       },
     };
     gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");
@@ -407,6 +413,7 @@ export class ClientRuntime {
     gauge("enhancement.effectiveTravelAction", effective.travelAction);
     gauge("enhancement.effectiveXunlaiAction", effective.xunlaiAction);
     gauge("enhancement.effectiveChatAliases", effective.chatAliases);
+    gauge("enhancement.effectiveSkillSlotGeometry", effective.skillSlotGeometry);
 
     if (prepared.failure?.stage === "template-save") {
       logEvent({ k: "wasm.templateSavePrepareFailed",

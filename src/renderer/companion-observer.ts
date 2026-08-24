@@ -21,12 +21,17 @@ import {
   readCompanionSnapshot,
   sameCompanionToolboxState,
 } from "./companion-snapshot.js";
+import {
+  type CompanionSkillSlotState,
+  readCompanionSkillSlots,
+} from "./companion-skill-snapshot.js";
 
 type SnapshotObserverTarget = {
   memory: WebAssembly.Memory;
   snapshotPointer: number;
   toolboxPointer: number;
   partyPointer: number;
+  skillSlotPointer?: number;
   snapshotReads: number;
   rejectedSnapshots: number;
   hertz: number;
@@ -36,6 +41,10 @@ type SnapshotObserverTarget = {
 
 type StateConsumer = {
   update(state: CompanionSnapshot): void;
+};
+
+type SkillSlotConsumer = {
+  update(state: CompanionSkillSlotState): void;
 };
 
 /**
@@ -72,6 +81,7 @@ export function observeCompanion(
   toolbox: ToolboxConsumer | null,
   observeState: boolean,
   publishState: boolean,
+  skillSlots: SkillSlotConsumer | null = null,
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -146,6 +156,12 @@ export function observeCompanion(
         // roster region was read", and a key holding nothing says the opposite.
         toolbox.update(party === null ? state : { ...state, party });
       }
+    }
+    if (skillSlots) {
+      skillSlots.update(readCompanionSkillSlots(
+        runtime.memory.buffer,
+        runtime.skillSlotPointer ?? 0,
+      ));
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.
     cursor?.poll();

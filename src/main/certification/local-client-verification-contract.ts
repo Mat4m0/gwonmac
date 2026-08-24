@@ -93,6 +93,11 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "local.ui-dispatcher",
     "chat.alias-parser-anchor",
   ] as const),
+  skillSlotGeometry: Object.freeze([
+    ...SHARED_FEATURE_INVARIANTS,
+    "skill-slots.frame-constructor",
+    "skill-slots.frame-layout",
+  ] as const),
 } as const satisfies Readonly<
   Record<LocalClientFeature, readonly string[]>
 >);
@@ -161,6 +166,8 @@ export interface LocalFeatureCertificateMap {
   }> & RequiredBuildFact<"observationBase" | "uiDispatcher" | "gameThread">;
   readonly chatAliases: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"uiDispatcher" | "chatAliases">;
+  readonly skillSlotGeometry: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"skillSlotGeometry">;
 }
 
 export type LocalFeatureVerdict<Feature extends LocalClientFeature> =
@@ -337,6 +344,9 @@ export function localFeatureVerdictsForBuild(
         chatAliases: build.chatAliases,
       })
     : null;
+  const skillSlotGeometry = core !== null && build?.skillSlotGeometry !== undefined
+    ? Object.freeze({ core, skillSlotGeometry: build.skillSlotGeometry })
+    : null;
   return Object.freeze({
     nativeCursor: featureVerdict<"nativeCursor">(
       inputSha256,
@@ -386,6 +396,13 @@ export function localFeatureVerdictsForBuild(
       chatAliases,
       failures.chatAliases,
       "chat.alias-parser-anchor",
+    ),
+    skillSlotGeometry: featureVerdict<"skillSlotGeometry">(
+      inputSha256,
+      requested.skillSlotGeometry,
+      skillSlotGeometry,
+      failures.skillSlotGeometry,
+      "skill-slots.frame-constructor",
     ),
   });
 }

@@ -173,6 +173,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     travelAction: true,
     xunlaiAction: true,
     chatAliases: true,
+    skillSlotGeometry: true,
   });
 
   // If this is a statically shipped build, the shape locator must still
@@ -279,6 +280,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.deepEqual(capabilitiesOf(addressDecision), {
     nativeCursor: true, targetObservation: false, partyObservation: false,
     teamApply: false, travelAction: true, xunlaiAction: false, chatAliases: true,
+    skillSlotGeometry: false,
   });
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;

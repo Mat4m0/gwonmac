@@ -92,8 +92,8 @@ function fixture(options: FixtureOptions = {}): Uint8Array<ArrayBuffer> {
   );
   const startFunction = signatures.length;
   const types = [
-    // companion_init: five region pointer/size pairs plus the feature word.
-    functionType(11, true),
+    // companion_init: six region pointer/size pairs plus the feature word.
+    functionType(13, true),
     functionType(6, false),
     functionType(0, true),
     functionType(0, false),
@@ -188,6 +188,7 @@ describe("companion kernel build contract", () => {
       { name: "companion_cursor_bytes", typeIndex: 2 },
       { name: "companion_toolbox_bytes", typeIndex: 2 },
       { name: "companion_party_bytes", typeIndex: 2 },
+      { name: "companion_skill_slot_bytes", typeIndex: 2 },
     ]);
   });
 
@@ -251,6 +252,7 @@ describe("companion kernel build contract", () => {
       companion_cursor_bytes: COMPANION_CURSOR_BYTES,
       companion_toolbox_bytes: COMPANION_TOOLBOX_BYTES,
       companion_party_bytes: COMPANION_PARTY_BYTES,
+      companion_skill_slot_bytes: COMPANION_KERNEL_EXPORT_VALUES.companion_skill_slot_bytes,
     });
     // One export per value, so a region added to the kernel cannot be left
     // unverified by forgetting to state its size.

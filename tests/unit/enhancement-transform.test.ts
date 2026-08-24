@@ -42,6 +42,7 @@ const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+    skillSlotGeometry: false,
 });
 
 describe("targeted Enhancement WebAssembly transform", () => {
@@ -292,6 +293,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
           travelAction: false,
           xunlaiAction: false,
           chatAliases: false,
+    skillSlotGeometry: false,
         },
       ),
       /capability profile is not certified/,

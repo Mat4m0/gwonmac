@@ -1,7 +1,6 @@
 /**
- * The decoders for the three fixed-layout records the companion kernel
- * publishes into shared memory: the game snapshot, the cursor, and the toolbox
- * state.
+ * Decoders for the companion kernel's general game, cursor, toolbox, and party
+ * records. Feature-specific records live beside their owning capability.
  *
  * Shared memory is untrusted input here. Every record is checked against its
  * magic, its ABI and its declared size, and each field is re-validated against

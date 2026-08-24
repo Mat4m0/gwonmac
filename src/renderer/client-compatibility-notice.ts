@@ -32,6 +32,7 @@ const FEATURE_NAMES: Readonly<Record<Feature, string>> = Object.freeze({
   travelAction: 'Travel',
   xunlaiAction: 'Xunlai storage',
   chatAliases: 'chat aliases',
+  skillSlotGeometry: 'skill key overlay',
 });
 
 function unavailableFeatures(compatibility: ClientCompatibility): Feature[] {

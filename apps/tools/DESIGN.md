@@ -97,6 +97,8 @@ density, or behavior.
 - Use container width to change panel layout.
 - Keep the skill bar usable with pointer, touch, and keyboard input.
 - Do not show drag behavior on a read-only skill bar.
+- Anchor a skill-key label to the slot's bottom-right corner. Add modifiers to
+  the left without moving that corner or crossing into another slot.
 - Keep exported text visible after copy succeeds or fails.
 - Remove nonessential motion when reduced motion is active.
 

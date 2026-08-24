@@ -156,6 +156,11 @@ window and return the keyboard to Guild Wars. If a confirmation dialog is open,
 Escape closes the confirmation first.
 - **Target distance and range** (Test) shows the selected target's distance and
 range band.
+- **Skill key labels** mirror custom Guild Wars keyboard or mouse bindings over
+  the eight skill slots. Choose **Change**, then press a key, mouse button, or
+  move the wheel. Control, Option, Shift, and Command become part of the label.
+  **Clear** restores the native number for that slot. Labels do not change the
+  Guild Wars controls.
 
 The same pane lists **Keyboard shortcuts**. Choose **Change**, then press a
 Command shortcut to replace the default. Letter and number shortcuts use their
@@ -187,6 +192,9 @@ Live observation, storage opening, Travel, and Apply stop in PvP, guild halls,
 transitions, and unknown regions. The saved Build and Team library stays
 available. Apply checks policy before each step and stops when the state
 changes.
+
+Skill key labels also stop outside a confirmed PvE region. Their saved display
+bindings remain in Settings.
 
 The saved library still works when live client integration is unavailable. You
 can edit, import, and export. Live party data, storage opening, Travel, and Apply remain

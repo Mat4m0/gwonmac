@@ -64,6 +64,7 @@ import {
   type LocalFeatureInvariant,
 } from "./local-client-verification-contract.js";
 import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
+import { deriveSkillSlotGeometry } from "./enhancement-skill-slot-geometry-proof.js";
 
 export { isLocalClientVerification } from "./local-client-verification-boundary.js";
 export {
@@ -148,6 +149,9 @@ function failuresForRequested(
       : {}),
     ...(requested.chatAliases
       ? { chatAliases: changedFeature("chatAliases", invariant) }
+      : {}),
+    ...(requested.skillSlotGeometry
+      ? { skillSlotGeometry: changedFeature("skillSlotGeometry", invariant) }
       : {}),
   });
 }
@@ -299,6 +303,7 @@ function diagnoseFeatureFailures(
   locatedCursor: AutomaticCursorLocation | null,
   locatedTarget: AutomaticTargetLocation | null,
   locatedLocal: AutomaticLocalActionsLocation | null,
+  locatedSkillSlotGeometry: ReturnType<typeof deriveSkillSlotGeometry>,
   context: EnhancementProofContext,
 ): LocalFeatureFailures {
   const needsLocalEvidence = (requested.partyObservation
@@ -307,9 +312,12 @@ function diagnoseFeatureFailures(
     || (requested.travelAction && !locatedLocal?.travelAction)
     || (requested.xunlaiAction && !locatedLocal?.xunlaiAction)
     || (requested.chatAliases && !locatedLocal?.chatAliases);
+  const needsSkillEvidence = requested.skillSlotGeometry
+    && locatedSkillSlotGeometry === null;
   const needsEvidence = (requested.nativeCursor && !locatedCursor)
     || (requested.targetObservation && !locatedTarget)
-    || needsLocalEvidence;
+    || needsLocalEvidence
+    || needsSkillEvidence;
   const evidence = needsEvidence ? structuralEvidence(input, context) : null;
   const roles = needsLocalEvidence
     ? inspectLocalActionRoleCandidates(input, ENHANCEMENT_BUILDS, context)
@@ -323,6 +331,7 @@ function diagnoseFeatureFailures(
   const travelShared = sharedEvidenceFailure("travelAction", evidence);
   const xunlaiShared = sharedEvidenceFailure("xunlaiAction", evidence);
   const aliasesShared = sharedEvidenceFailure("chatAliases", evidence);
+  const skillShared = sharedEvidenceFailure("skillSlotGeometry", evidence);
   return Object.freeze({
     ...(requested.nativeCursor && !locatedCursor
       ? { nativeCursor: cursorFailure(evidence) }
@@ -478,6 +487,15 @@ function diagnoseFeatureFailures(
               : changedFeature("chatAliases", "chat.alias-parser-anchor")),
         }
       : {}),
+    ...(needsSkillEvidence
+      ? {
+          skillSlotGeometry: skillShared
+            ?? changedFeature(
+              "skillSlotGeometry",
+              "skill-slots.frame-constructor",
+            ),
+        }
+      : {}),
   });
 }
 
@@ -527,6 +545,9 @@ function deriveEnhancementBuild(
         locatedTarget?.observationLayout,
       )
     : null;
+  const locatedSkillSlotGeometry = requestedCapabilities.skillSlotGeometry
+    ? deriveSkillSlotGeometry(context)
+    : null;
   const cursor = locatedCursor?.baseline.cursorEvent;
   const includeCursor = locatedCursor !== null && cursor !== undefined;
   const includeTarget = locatedTarget !== null;
@@ -550,12 +571,16 @@ function deriveEnhancementBuild(
   const includeAliases = requestedCapabilities.chatAliases
     && locatedLocal?.uiDispatcher != null
     && locatedLocal.chatAliases != null;
+  const includeSkillSlotGeometry = requestedCapabilities.skillSlotGeometry
+    && includeParty
+    && locatedSkillSlotGeometry !== null;
   const failures = diagnoseFeatureFailures(
     templateOutput,
     requestedCapabilities,
     locatedCursor,
     locatedTarget,
     locatedLocal,
+    locatedSkillSlotGeometry,
     context,
   );
   const localContributes = includeParty || includeTeam || includeTravel
@@ -657,6 +682,9 @@ function deriveEnhancementBuild(
       partyObservation: locatedLocal.partyObservation,
     } : {}),
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
+    ...(includeSkillSlotGeometry
+      ? { skillSlotGeometry: locatedSkillSlotGeometry }
+      : {}),
   });
   const maximum: EnhancementCapabilities = Object.freeze({
     nativeCursor: includeCursor,
@@ -666,6 +694,7 @@ function deriveEnhancementBuild(
     travelAction: includeTravel,
     xunlaiAction: includeXunlai,
     chatAliases: includeAliases,
+    skillSlotGeometry: includeSkillSlotGeometry,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

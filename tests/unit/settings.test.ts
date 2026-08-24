@@ -30,6 +30,7 @@ describe("settings", () => {
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
+      skillKeyBindings: [null, null, null, null, null, null, null, null],
       extendedMemoryEnabled: false,
       showDiagnostics: false,
       dataStrategy: "full",
@@ -72,6 +73,7 @@ describe("settings", () => {
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
+      skillKeyBindings: [null, null, null, null, null, null, null, null],
       extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",
@@ -182,6 +184,21 @@ describe("settings", () => {
     }), AppError);
   });
 
+  it("accepts exactly eight display-only skill bindings", () => {
+    const binding = {
+      input: { kind: "keyboard" as const, code: "KeyC" },
+      modifiers: { control: true, option: true, shift: true, command: true },
+    };
+    const skillKeyBindings = [null, null, null, null, null, null, null, binding];
+    assert.deepEqual(parseSettings({ skillKeyBindings }).skillKeyBindings, skillKeyBindings);
+    assert.deepEqual(parseSettingsPatch({ skillKeyBindings }), { skillKeyBindings });
+    assert.throws(() => parseSettings({ skillKeyBindings: skillKeyBindings.slice(1) }), AppError);
+    assert.throws(() => parseSettings({
+      skillKeyBindings: [{ ...binding, input: { kind: "keyboard", code: "Unknown" } },
+        ...skillKeyBindings.slice(1)],
+    }), AppError);
+  });
+
   it("takes the acknowledged client build only as a client hash", () => {
     const hash = "b0319704f3072d6948a66026a35af5eb0af12b48d70986783c293e7c77e98483";
     assert.equal(
@@ -287,6 +304,7 @@ describe("settings", () => {
       "renderScale",
       "shortcutOverrides",
       "showDiagnostics",
+      "skillKeyBindings",
       "targetReadout",
       "teamManagement",
       "travelPalette",
@@ -335,6 +353,7 @@ describe("settings", () => {
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
+      skillKeyBindings: [null, null, null, null, null, null, null, null],
       extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",

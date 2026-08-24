@@ -25,6 +25,7 @@ import {
   type EnhancementCursorLayout,
   type EnhancementObservationBaseLayout,
   type EnhancementPartyLayout,
+  type EnhancementSkillSlotGeometryLayout,
   type EnhancementStorageLayout,
   type EnhancementTargetLayout,
 } from "../../shared/enhancement-config.js";
@@ -109,7 +110,9 @@ export function enhancementConfigWords(
             ? build.cursorEvent?.layout[field.key]
             : field.owner === "party"
               ? build.partyObservation?.layout[field.key]
-              : build.xunlaiAction?.accessProof?.layout[field.key];
+              : field.owner === "storage"
+                ? build.xunlaiAction?.accessProof?.layout[field.key]
+                : build.skillSlotGeometry?.layout[field.key];
       if (field.owner === "storage" && build.xunlaiAction === undefined) {
         return 0;
       }
@@ -274,6 +277,24 @@ export interface KnownEnhancementBuild {
     nearbyPlayerMessageProducers: readonly [number, number];
     layout: EnhancementPartyLayout;
   }>;
+  /** Certified capture site and read-only frame layout for all skill-slot HUDs. */
+  skillSlotGeometry?: Readonly<{
+    initializer: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly [];
+      bodySha256: string;
+      constructorCallOperand: number;
+    }>;
+    constructor: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32", "i32", "i32", "i32", "i32"];
+      results: readonly ["i32"];
+      bodySha256: string;
+    }>;
+    labelAddress: number;
+    layout: EnhancementSkillSlotGeometryLayout;
+  }>;
 }
 
 export function supportedEnhancementCapabilities(
@@ -297,6 +318,7 @@ export function supportedEnhancementCapabilities(
     travelAction,
     xunlaiAction,
     chatAliases: build.uiDispatcher !== undefined && build.chatAliases !== undefined,
+    skillSlotGeometry: build.skillSlotGeometry !== undefined,
   });
 }
 
@@ -365,6 +387,9 @@ export function hasValidEnhancementProfileHashes(
     build.chatAliases !== undefined
     && build.uiDispatcher === undefined
   ) return false;
+  if (build.skillSlotGeometry !== undefined && build.skillSlotGeometry.labelAddress === 0) {
+    return false;
+  }
   const actual = Object.entries(build.outputSha256);
   if (actual.length === 0) return false;
   const supported = supportedEnhancementCapabilities(build);

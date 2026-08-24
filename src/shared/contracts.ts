@@ -42,6 +42,11 @@ import type {
   ShortcutCaptureResult,
   ShortcutOverrides,
 } from "./keyboard-shortcuts.js";
+import type {
+  SkillKeyBinding,
+  SkillKeyBindings,
+  SkillKeyCaptureResult,
+} from "./skill-key-bindings.js";
 import {
   DEFAULT_STORED_TRAVEL_SHORTCUTS,
   type StoredTravelShortcuts,
@@ -362,6 +367,8 @@ export interface AppSettings {
   targetReadout: boolean;
   /** Player changes to the app-owned shortcuts; missing entries use defaults. */
   shortcutOverrides: ShortcutOverrides;
+  /** Display-only labels that mirror the player's eight Guild Wars bindings. */
+  skillKeyBindings: SkillKeyBindings;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
   showDiagnostics: boolean;
@@ -434,6 +441,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   travelShortcuts: DEFAULT_STORED_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
+  skillKeyBindings: [null, null, null, null, null, null, null, null],
   extendedMemoryEnabled: false,
   showDiagnostics: false,
   dataStrategy: "full",
@@ -609,6 +617,7 @@ export interface ClientCompatibility {
     travelAction: OptionalFeatureStatus;
     xunlaiAction: OptionalFeatureStatus;
     chatAliases: OptionalFeatureStatus;
+    skillSlotGeometry: OptionalFeatureStatus;
   }>;
 }
 
@@ -818,6 +827,9 @@ export const IPC = {
   travelPreferencesSet: "gw:travelPreferences:set",
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
+  skillKeyCapture: "gw:skillKeys:capture",
+  skillKeyCapturePointer: "gw:skillKeys:capturePointer",
+  skillKeyCaptureCancel: "gw:skillKeys:captureCancel",
   buildLibraryGet: "gw:buildLibrary:get",
   buildLibrarySet: "gw:buildLibrary:set",
   credentialsLoad: "gw:credentials:load",
@@ -973,6 +985,11 @@ export interface GwNativeApi {
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;
+    cancelCapture(): Promise<void>;
+  };
+  skillKeys: {
+    capture(): Promise<SkillKeyCaptureResult>;
+    submitPointer(binding: SkillKeyBinding): Promise<boolean>;
     cancelCapture(): Promise<void>;
   };
   buildLibrary: {

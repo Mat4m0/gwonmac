@@ -61,6 +61,7 @@ test.describe("sandbox boundary", () => {
           "progress",
           "settings",
           "shortcuts",
+          "skillKeys",
           "snapshot",
           "sockets",
           "steam",

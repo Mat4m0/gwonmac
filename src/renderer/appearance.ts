@@ -39,6 +39,11 @@ function loadGuildWarsFont(generation: string): Promise<boolean> {
   return pending;
 }
 
+/** Load the client-derived face for game-adjacent HUD furniture even when the
+ * player chose Inter for ordinary GWonMac panels. */
+export const ensureGuildWarsFont = (): Promise<boolean> =>
+  loadGuildWarsFont(activeGeneration);
+
 export const appearanceVariables = (
   settings: AppSettings,
 ): Readonly<Record<string, string>> => ({

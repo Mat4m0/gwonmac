@@ -20,6 +20,10 @@ import {
   readCompanionParty,
 } from "../../src/renderer/companion-snapshot.ts";
 import {
+  readCompanionSkillSlots,
+  COMPANION_SKILL_SLOT_BYTES,
+} from "../../src/renderer/companion-skill-snapshot.ts";
+import {
   ENHANCEMENT_CONFIG_WORD_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
 } from "../../src/shared/enhancement-contracts.ts";
@@ -99,6 +103,8 @@ export const FEATURE_TOOLBOX_FOUNDATION =
   COMPANION_FEATURE_BITS.toolboxFoundation;
 export const FEATURE_TARGET_OBSERVATION =
   COMPANION_FEATURE_BITS.targetObservation;
+export const FEATURE_SKILL_SLOT_GEOMETRY =
+  COMPANION_FEATURE_BITS.skillSlotGeometry;
 export const ALL_FEATURES = FEATURE_NATIVE_CURSOR
   | FEATURE_GAME_SNAPSHOT
   | FEATURE_TARGET_OBSERVATION;
@@ -265,6 +271,7 @@ export const ADDRESSES = Object.freeze({
   texture: 0x8400,
   toolbox: 0x9000,
   party: 0xa800,
+  skillSlots: 0xc000,
   partyContext: 0xa000,
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
@@ -279,6 +286,10 @@ export const ADDRESSES = Object.freeze({
   attributeBuffer: 0x1_4000,
   playerRecordBuffer: 0x1_5000,
   areaInfo: 0x20_0000,
+  frameArrayGlobal: 0x21_0000,
+  frameCountGlobal: 0x21_0004,
+  frameTable: 0x21_1000,
+  frameBuffer: 0x21_2000,
   companionRuntime: 0x30_0000,
 });
 
@@ -336,6 +347,7 @@ export const DETAIL_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("heroLevel"
 export const POLICY_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("areaInfo");
 export const PLAYER_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldProfessionStates");
 export const XUNLAI_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldPlayers");
+export const SKILL_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("frameArray");
 export const PLAYER_RECORD_INDEX = 42;
 export const PLAYER_RECORD_ADDRESS =
   ADDRESSES.playerRecordBuffer + PLAYER_RECORD_INDEX * DETAIL.playerStride;
@@ -355,6 +367,8 @@ export interface KernelOverrides {
   toolboxPointer?: number;
   partyPointer?: number;
   partySize?: number;
+  skillSlotPointer?: number;
+  skillKeySize?: number;
   toolboxSize?: number;
 }
 
@@ -377,6 +391,8 @@ export type KernelInit = (
   toolboxSize: number,
   partyPointer: number,
   partySize: number,
+  skillSlotPointer: number,
+  skillKeySize: number,
   features: number,
 ) => number;
 export type KernelDispatch = (
@@ -478,6 +494,11 @@ export async function createKernel(
     DETAIL.players, DETAIL.playerStride, DETAIL.playerAgentId,
     DETAIL.playerAccessFlags, DETAIL.playerNumber, DETAIL.areaInfoType,
   ], XUNLAI_CONFIG_START);
+  config.set([
+    ADDRESSES.frameArrayGlobal, ADDRESSES.frameCountGlobal,
+    0x1c8, 0xb8, 0xbc, 0xd8, 0x104, 0x108,
+    0x10c, 0x110, 0x114, 0x118, 0x128, 0x18c,
+  ], SKILL_CONFIG_START);
   // Placed at the boundary rather than appended to the literal above. Written
   // as one flat list, the messages sat directly after the party chain — and
   // when the layout grew they silently stayed there, a full detail block short of
@@ -526,13 +547,21 @@ export async function createKernel(
           ?? ((features & FEATURE_TOOLBOX_FOUNDATION) !== 0
             ? COMPANION_PARTY_BYTES
             : 0),
+        overrides.skillSlotPointer
+          ?? ((features & FEATURE_SKILL_SLOT_GEOMETRY) !== 0
+            ? ADDRESSES.skillSlots
+            : 0),
+        overrides.skillKeySize
+          ?? ((features & FEATURE_SKILL_SLOT_GEOMETRY) !== 0
+            ? COMPANION_SKILL_SLOT_BYTES
+            : 0),
         features,
       );
     },
-    tick: () => exports.dispatch(
+    tick: (skillBarFrameId = 0) => exports.dispatch(
       COMPANION_DISPATCH_KINDS.tick,
       123,
-      0,
+      skillBarFrameId,
       0,
       0,
       0,
@@ -566,6 +595,7 @@ export async function createKernel(
       ),
     toolbox: () => readCompanionToolbox(memory.buffer, ADDRESSES.toolbox),
     party: () => readCompanionParty(memory.buffer, ADDRESSES.party),
+    skillSlots: () => readCompanionSkillSlots(memory.buffer, ADDRESSES.skillSlots),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
     published: () => readCompanionCursorPixels(memory.buffer, ADDRESSES.cursor),
@@ -647,6 +677,55 @@ export function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.heroBuffer + 0x18, 88, true);
   view.setUint32(ADDRESSES.heroBuffer + 0x1c, 99, true);
   view.setUint32(ADDRESSES.heroBuffer + 0x20, 2, true);
+}
+
+/** Install one visible SkillBar parent and its eight visible slot children. */
+export function installSkillBarGraph(view: DataView, parentId = 1) {
+  const frameBytes = 0x1c8;
+  const frame = (id: number) => ADDRESSES.frameBuffer + id * frameBytes;
+  view.setUint32(ADDRESSES.frameArrayGlobal, ADDRESSES.frameTable, true);
+  view.setUint32(ADDRESSES.frameCountGlobal, 10, true);
+  for (let id = 1; id <= 9; id += 1) {
+    view.setUint32(ADDRESSES.frameTable + id * 4, frame(id), true);
+    view.setUint32(frame(id) + 0xbc, id, true);
+    view.setUint32(frame(id) + 0x18c, 0x4, true);
+  }
+  for (let slot = 0; slot < 8; slot += 1) {
+    const child = frame(slot + 2);
+    const left = 100 + slot * 52;
+    view.setUint32(child + 0xb8, slot, true);
+    view.setUint32(child + 0x128, frame(parentId) + 0x128, true);
+    view.setFloat32(child + 0x104, 800, true);
+    view.setFloat32(child + 0x108, 600, true);
+    view.setFloat32(child + 0x10c, left, true);
+    view.setFloat32(child + 0x110, 20, true);
+    view.setFloat32(child + 0x114, left + 48, true);
+    view.setFloat32(child + 0x118, 68, true);
+  }
+}
+
+/** Add a second visible frame that claims slot zero of the installed bar. */
+export function installDuplicateSkillSlot(
+  view: DataView,
+  parentId = 1,
+  visible = true,
+) {
+  const id = 10;
+  const frameBytes = 0x1c8;
+  const frame = (frameId: number) => ADDRESSES.frameBuffer + frameId * frameBytes;
+  const duplicate = frame(id);
+  view.setUint32(ADDRESSES.frameCountGlobal, id + 1, true);
+  view.setUint32(ADDRESSES.frameTable + id * 4, duplicate, true);
+  view.setUint32(duplicate + 0xbc, id, true);
+  view.setUint32(duplicate + 0x18c, visible ? 0x4 : 0x204, true);
+  view.setUint32(duplicate + 0xb8, 0, true);
+  view.setUint32(duplicate + 0x128, frame(parentId) + 0x128, true);
+  view.setFloat32(duplicate + 0x104, 800, true);
+  view.setFloat32(duplicate + 0x108, 600, true);
+  view.setFloat32(duplicate + 0x10c, 100, true);
+  view.setFloat32(duplicate + 0x110, 20, true);
+  view.setFloat32(duplicate + 0x114, 148, true);
+  view.setFloat32(duplicate + 0x118, 68, true);
 }
 
 /**
