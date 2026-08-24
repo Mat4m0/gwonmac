@@ -186,6 +186,9 @@
   <span id="capture-label">Performance capture · 00:00</span>
   <span id="capture-marker" hidden>Problem marked ✓</span>
 </output>
+<output id="diagnostic-profile-banner" hidden>
+  Diagnostic profile active: <strong id="diagnostic-profile-name"></strong>
+</output>
 <!-- A transient host-drawn line over the client's login screen: the one place
      a failed Steam sign-in can be explained without drawing over the game. -->
 <output id="login-status" role="status" aria-live="polite" hidden></output>
@@ -655,6 +658,17 @@
                  aria-labelledby="settings-tab-advanced">
           <h3 id="settings-advanced-title" class="settings-pane-title">Advanced</h3>
           <p class="settings-pane-intro">Diagnostics and recovery options for troubleshooting GWonMac.</p>
+          <label class="settings-field">
+            <span>Graphics diagnostic profile</span>
+            <select name="diagnosticProfile">
+              <option value="standard">Standard</option>
+              <option value="no-gl-overrides">No GL overrides</option>
+              <option value="official-baseline">Untouched official client</option>
+              <option value="direct-canvas">Untouched official client, direct canvas</option>
+            </select>
+          </label>
+          <p class="settings-note">Support may ask you to select a profile to isolate the client, GWonMac transforms, and frame presentation. Nonstandard profiles disable some features. Restart after changing it.</p>
+          <div class="settings-divider" aria-hidden="true"></div>
           <section class="settings-task settings-memory-task"
                    aria-labelledby="settings-memory-title">
             <div class="settings-setting-head">

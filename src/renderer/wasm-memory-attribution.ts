@@ -239,12 +239,14 @@ export function installWasmMemoryAttribution({
   imports,
   module,
   recordGrowth,
+  observeTextures = true,
   captureStack = () => new Error("WASM heap growth").stack ?? "",
   log,
 }: {
   imports: AttributionImports;
   module: ClientMemory;
   recordGrowth: (fields: GrowthFields) => void;
+  observeTextures?: boolean;
   captureStack?: () => string;
   log: (...values: unknown[]) => void;
 }) {
@@ -344,6 +346,7 @@ export function installWasmMemoryAttribution({
     knownTextureBytes += bytes - previous;
   };
 
+  const installTextureObservers = () => {
   const bindTexture = env.glBindTexture;
   if (typeof bindTexture === "function") {
     env.glBindTexture = function (this: unknown, target, texture) {
@@ -535,6 +538,9 @@ export function installWasmMemoryAttribution({
       return result;
     };
   }
+  };
+
+  if (observeTextures) installTextureObservers();
 
   const textureSnapshot = (): TextureMemorySnapshot => ({
     generatedTextures,

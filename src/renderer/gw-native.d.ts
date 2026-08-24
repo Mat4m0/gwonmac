@@ -13,6 +13,10 @@ import type {
   GwNativeApi,
 } from "../shared/contracts.js";
 import type {
+  VisualCaptureFailure,
+  VisualCaptureMetadata,
+} from "../shared/visual-capture.js";
+import type {
   RendererEventName,
   RendererMetrics,
   TextureMemorySnapshot,
@@ -108,7 +112,7 @@ declare global {
     captureStarted(level: 1 | 2): void;
     captureStopped(): void;
     problemMarked(): void;
-    visualProblem(): Promise<void>;
+    visualProblem(token?: string): Promise<void>;
     event(name: RendererEventName, value?: unknown): void;
     snapshot(
       durationUs: number,
@@ -134,6 +138,21 @@ declare global {
       presented?: boolean,
     ): void;
     flush(): Promise<void>;
+  }
+
+  interface VisualCaptureLease {
+    webglPng: Uint8Array;
+    offscreenPng: Uint8Array;
+    metadata: VisualCaptureMetadata;
+    release(): void;
+  }
+
+  interface VisualCaptureError extends Error {
+    readonly visualCaptureFailure: VisualCaptureFailure;
+  }
+
+  interface VisualCaptureController {
+    capture(): Promise<VisualCaptureLease>;
   }
 
   interface CompanionDeveloperRuntime {
@@ -208,6 +227,7 @@ declare global {
     }>;
     gwLoading: LoadingController;
     gwDiagnostics: RendererDiagnostics;
+    gwVisualCapture?: VisualCaptureController;
     gwSnapshotState?(): Partial<RendererMetrics>;
     /** Current WASM linear-memory size; present once the client is hosted. */
     gwWasmHeapBytes?(): number;

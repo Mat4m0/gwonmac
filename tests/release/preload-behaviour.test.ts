@@ -340,6 +340,33 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.diagnosticsRendererMilestone,
   },
   { path: "diagnostics.current", args: [], channel: IPC.diagnosticsCurrent },
+  {
+    path: "diagnostics.submitVisualCapture",
+    args: [{
+      token: "visual-capture-token",
+      status: "captured",
+      webglPng: PACKET,
+      offscreenPng: PACKET,
+      metadata: {
+        frameSequence: 42,
+        capturedAtRendererMs: 1_234,
+        canvasBounds: { x: 0, y: 0, width: 800, height: 600 },
+        canvasWidth: 800,
+        canvasHeight: 600,
+        offscreenWidth: 800,
+        offscreenHeight: 600,
+        drawingBufferWidth: 800,
+        drawingBufferHeight: 600,
+        devicePixelRatio: 2,
+      },
+    }],
+    channel: IPC.diagnosticsVisualSubmit,
+  },
+  {
+    path: "diagnostics.setProfile",
+    args: ["official-baseline"],
+    channel: IPC.diagnosticsProfileSet,
+  },
   { path: "app.openExternal", args: ["bugReport"], channel: IPC.appOpenExternal },
   { path: "app.reveal", args: ["gameData"], channel: IPC.appRevealPath },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
@@ -645,6 +672,7 @@ test("the launch configuration is read from argv, and defaults to production", (
     development: false,
     enhancementProgram: "none",
     enhancementSelection: { nativeCursor: false, tools: false },
+    diagnosticProfile: "standard",
     templateFsTrace: false,
   });
   assert.deepEqual(
@@ -657,6 +685,7 @@ test("the launch configuration is read from argv, and defaults to production", (
             enhancementSelection: {
               nativeCursor: true,
             },
+            diagnosticProfile: "direct-canvas",
             templateFsTrace: true,
           }),
       ]).api.init,
@@ -665,6 +694,7 @@ test("the launch configuration is read from argv, and defaults to production", (
       development: true,
       enhancementProgram: "none",
       enhancementSelection: { nativeCursor: true, tools: false },
+      diagnosticProfile: "direct-canvas",
       templateFsTrace: true,
     },
   );
@@ -683,6 +713,7 @@ test("the launch configuration is read from argv, and defaults to production", (
       development: false,
       enhancementProgram: "none",
       enhancementSelection: { nativeCursor: false, tools: false },
+      diagnosticProfile: "standard",
       templateFsTrace: false,
     },
   );
@@ -698,6 +729,7 @@ test("the launch configuration is read from argv, and defaults to production", (
         development: false,
         enhancementProgram: "none",
         enhancementSelection: { nativeCursor: false, tools: false },
+        diagnosticProfile: "standard",
         templateFsTrace: false,
       },
       malformed,

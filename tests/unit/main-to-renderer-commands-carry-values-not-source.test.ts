@@ -188,6 +188,7 @@ const INIT: RendererInit = {
     nativeCursor: false,
     tools: false,
   },
+  diagnosticProfile: "standard",
   templateFsTrace: true,
 };
 const ARGV = ["electron", `${RENDERER_INIT_ARGUMENT}${JSON.stringify(INIT)}`];
@@ -208,6 +209,7 @@ test("a renderer with no readable init argument gets the production posture", ()
       nativeCursor: false,
       tools: false,
     },
+    diagnosticProfile: "standard",
     templateFsTrace: false,
   };
   assert.deepEqual(plainInit(harness([]).api.init), missing);

@@ -22,6 +22,160 @@ const clickMenu = (app: ElectronApplication, id: string) =>
   }, id);
 
 test.describe("visual problem report", () => {
+  test("binds each capture token to one window and consumes it once", async () => {
+    const fixture = await launchOffline("gw-visual-token-e2e-");
+    try {
+      const result = await fixture.app.evaluate(
+        async ({ BrowserWindow }, modulePath) => {
+          const load = process.getBuiltinModule("node:module").createRequire(modulePath);
+          const visual = load(modulePath);
+          const owner = BrowserWindow.getAllWindows()[0];
+          if (!owner) throw new Error("owner window is unavailable");
+          const intruder = new BrowserWindow({ show: false });
+          try {
+            const token = visual.beginVisualCapture(owner);
+            let duplicate = "accepted";
+            try {
+              visual.beginVisualCapture(owner);
+            } catch {
+              duplicate = "rejected";
+            }
+            let wrongOwner = "accepted";
+            try {
+              await visual.submitVisualCapture(intruder, {
+                token,
+                status: "failed",
+                reason: "context-lost",
+              });
+            } catch {
+              wrongOwner = "rejected";
+            }
+            await visual.submitVisualCapture(owner, {
+              token,
+              status: "failed",
+              reason: "context-lost",
+            });
+            let replay = "accepted";
+            try {
+              await visual.submitVisualCapture(owner, {
+                token,
+                status: "failed",
+                reason: "context-lost",
+              });
+            } catch {
+              replay = "rejected";
+            }
+            const evidence = visual.takeVisualCapture(token);
+            return {
+              duplicate,
+              wrongOwner,
+              replay,
+              missing: evidence?.missing,
+              consumed: visual.takeVisualCapture(token) === null,
+            };
+          } finally {
+            intruder.destroy();
+          }
+        },
+        path.join(root, "build/main/visual-capture.js"),
+      );
+      expect(result).toEqual({
+        duplicate: "rejected",
+        wrongOwner: "rejected",
+        replay: "rejected",
+        missing: {
+          webgl: "context-lost",
+          offscreen: "context-lost",
+          canvas: "context-lost",
+          window: "context-lost",
+        },
+        consumed: true,
+      });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("captures the same submitted frame before and after off-screen transfer", async () => {
+    const fixture = await launchOffline("gw-visual-frame-capture-e2e-");
+    try {
+      const result = await fixture.page.evaluate(async () => {
+        const importRenderer = async <T>(specifier: string): Promise<T> =>
+          import(specifier);
+        const { installGraphics } = await importRenderer<
+          typeof import("../../src/renderer/graphics.js")
+        >("./graphics.js");
+        const { createVisualFrameCapture } = await importRenderer<
+          typeof import("../../src/renderer/visual-frame-capture.js")
+        >("./visual-frame-capture.js");
+        const canvas: HTMLCanvasElement & { offscreen?: OffscreenCanvas } =
+          document.createElement("canvas");
+        canvas.width = 4;
+        canvas.height = 4;
+        const module: ArenaNetGraphicsModule = { canvas };
+        const env: ArenaNetEglImports = {
+          eglCreateContext: () => module.canvas.getContext("webgl"),
+          eglSwapBuffers: () => 1,
+        };
+        installGraphics({
+          env,
+          module,
+          renderScale: () => 1,
+          firstFrame: () => undefined,
+          log: () => undefined,
+        });
+        env.eglCreateContext();
+        const gl = canvas.offscreen?.getContext("webgl");
+        if (!gl) throw new Error("off-screen WebGL is unavailable");
+        gl.clearColor(1, 0, 1, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        const capture = window.gwVisualCapture;
+        if (!capture) throw new Error("visual capture controller is unavailable");
+        const pending = capture.capture();
+        env.eglSwapBuffers();
+        const lease = await pending;
+
+        const firstPixel = async (bytes: Uint8Array) => {
+          const copy = Uint8Array.from(bytes);
+          const bitmap = await createImageBitmap(new Blob([copy.buffer]));
+          const decoded = new OffscreenCanvas(bitmap.width, bitmap.height);
+          const context = decoded.getContext("2d");
+          if (!context) throw new Error("2D decode context is unavailable");
+          context.drawImage(bitmap, 0, 0);
+          bitmap.close();
+          return [...context.getImageData(0, 0, 1, 1).data];
+        };
+        const webgl = await firstPixel(lease.webglPng);
+        const offscreen = await firstPixel(lease.offscreenPng);
+        const metadata = lease.metadata;
+        lease.release();
+
+        let directFailure = "unknown";
+        try {
+          await createVisualFrameCapture("direct").capture();
+        } catch (error) {
+          directFailure = error instanceof Error
+            && "visualCaptureFailure" in error
+            ? String(error.visualCaptureFailure)
+            : "untyped";
+        }
+        return { webgl, offscreen, metadata, directFailure };
+      });
+
+      expect(result.webgl).toEqual([255, 0, 255, 255]);
+      expect(result.offscreen).toEqual([255, 0, 255, 255]);
+      expect(result.metadata).toMatchObject({
+        offscreenWidth: 4,
+        offscreenHeight: 4,
+        drawingBufferWidth: 4,
+        drawingBufferHeight: 4,
+      });
+      expect(result.directFailure).toBe("unsupported");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("refuses visual screenshot bytes without consent before export", async () => {
     const fixture = await launchOffline("gw-visual-consent-boundary-e2e-");
     const saveRoot = await mkdtemp(path.join(tmpdir(), "gw-visual-consent-"));
@@ -51,9 +205,12 @@ test.describe("visual problem report", () => {
                 rendererOutcome: "completed",
                 gameWindowCount: 1,
                 screenshotRequested: false,
-                screenshotPng: Uint8Array.from([
-                  137, 80, 78, 71, 13, 10, 26, 10,
-                ]),
+                evidence: {
+                  metadata: {},
+                  images: { webgl: Uint8Array.from([137]) },
+                  missing: {},
+                  dimensions: {},
+                },
               },
             });
             return { accepted: true, message: null };
@@ -73,7 +230,7 @@ test.describe("visual problem report", () => {
       );
       expect(outcome).toEqual({
         accepted: false,
-        message: "visual-problem screenshot requires explicit consent",
+        message: "visual capture evidence requires explicit consent",
       });
       expect(await stat(target).catch(() => null)).toBeNull();
     } finally {
@@ -104,11 +261,40 @@ test.describe("visual problem report", () => {
         };
         dialog.showSaveDialog = async () => ({ canceled: false, filePath });
       }, target);
-      await page.evaluate(() => {
+      await page.evaluate(async () => {
         window.__diagnosticExportReleasedInput = false;
         window.addEventListener("gw:input-reset", () => {
           window.__diagnosticExportReleasedInput = true;
         });
+        const proof = new OffscreenCanvas(1, 1);
+        const context = proof.getContext("2d");
+        if (!context) throw new Error("test 2D canvas is unavailable");
+        context.fillStyle = "#ff00ff";
+        context.fillRect(0, 0, 1, 1);
+        const png = new Uint8Array(
+          await (await proof.convertToBlob({ type: "image/png" })).arrayBuffer(),
+        );
+        window.gwVisualCapture = {
+          async capture() {
+            return {
+              webglPng: png,
+              offscreenPng: png,
+              metadata: {
+                frameSequence: 1,
+                capturedAtRendererMs: performance.now(),
+                canvasBounds: { x: 0, y: 0, width: 32, height: 32 },
+                canvasWidth: 32,
+                canvasHeight: 32,
+                offscreenWidth: 1,
+                offscreenHeight: 1,
+                drawingBufferWidth: 1,
+                drawingBufferHeight: 1,
+                devicePixelRatio: 1,
+              },
+              release() {},
+            };
+          },
+        };
       });
 
       await clickMenu(app, "report-visual-problem");
@@ -126,12 +312,15 @@ test.describe("visual problem report", () => {
         rendererOutcome: "completed",
         gameWindowCount: 1,
         screenshotRequested: true,
-        screenshotIncluded: true,
+        includedStages: ["webgl", "offscreen", "canvas", "window"],
+        missingStages: {},
         screenshotPrivacy: "player-consented-unscanned",
       });
-      expect(manifest.includedFiles).toContain("visual-problem.png");
+      expect(manifest.formatVersion).toBe(3);
+      expect(manifest.includedFiles).toContain("visual-webgl.png");
+      expect(manifest.includedFiles).toContain("runtime-state.json");
       const screenshot = await readFile(
-        path.join(extracted, "visual-problem.png"),
+        path.join(extracted, "visual-webgl.png"),
       );
       expect([...screenshot.subarray(0, 8)]).toEqual([
         137, 80, 78, 71, 13, 10, 26, 10,
@@ -145,6 +334,22 @@ test.describe("visual problem report", () => {
         target,
       ]);
       expect(validated.stdout).toContain("valid capture");
+      const analysisRoot = path.join(saveRoot, "analysis");
+      const analyzed = await execFileAsync(process.execPath, [
+        path.join(root, "build/tools/diagnostics/visual.js"),
+        target,
+        analysisRoot,
+      ]);
+      expect(analyzed.stdout).toContain("webgl -> offscreen: 0.0000% mismatched");
+      const analysis = JSON.parse(
+        await readFile(path.join(analysisRoot, "visual-analysis.json"), "utf8"),
+      );
+      expect(analysis.comparisons[0].material).toBe(false);
+      expect(analysis.arenaNetAttributionReady).toBe(false);
+      expect(analysis.humanReviewRequired).toBe(true);
+      expect(
+        await stat(path.join(analysisRoot, "arenanet-report.md")).catch(() => null),
+      ).toBeNull();
     } finally {
       await closeOffline(fixture);
       await rm(saveRoot, { recursive: true, force: true });

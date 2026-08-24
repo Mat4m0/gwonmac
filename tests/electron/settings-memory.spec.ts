@@ -1,14 +1,51 @@
 import { expect, test } from "@playwright/test";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   closeOffline,
   launchCachedClient,
+  launchOffline,
   launchOfflineAt,
   type OfflineFixture,
 } from "./fixtures.mjs";
 
 test.describe("extended memory settings", () => {
+  test("persists the graphics profile outside ordinary settings until restart", async () => {
+    const fixture = await launchOffline("gw-settings-graphics-profile-e2e-");
+    let relaunched: OfflineFixture | null = null;
+    try {
+      const { page } = fixture;
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-advanced").click();
+      const profile = page.locator('select[name="diagnosticProfile"]');
+      await profile.selectOption("no-gl-overrides");
+      await expect(page.locator("#settings-feedback")).toContainText(
+        "Restart GWonMac",
+      );
+      await expect(profile).toHaveValue("no-gl-overrides");
+
+      // A normal Settings render must not replace the separately persisted
+      // restart-required selection with this session's launch value.
+      await page.locator('input[name="showDiagnostics"]').click();
+      await expect(profile).toHaveValue("no-gl-overrides");
+      await expect.poll(async () => JSON.parse(
+        await readFile(path.join(fixture.userData, "diagnostic-profile.json"), "utf8"),
+      )).toEqual({ formatVersion: 1, profile: "no-gl-overrides" });
+
+      await fixture.app.close();
+      relaunched = await launchOfflineAt(fixture.userData);
+      await expect.poll(() => relaunched!.page.evaluate(
+        () => window.gwNative.init.diagnosticProfile,
+      )).toBe("no-gl-overrides");
+      await expect(relaunched.page.locator("#diagnostic-profile-banner"))
+        .toBeVisible();
+    } finally {
+      await closeOffline(relaunched ?? fixture);
+    }
+  });
+
   test("shows requested and effective memory modes without blocking an unsupported launch", async () => {
     test.setTimeout(60_000);
     let relaunched: OfflineFixture | null = null;

@@ -209,6 +209,17 @@ async function escalateRepeatedCrash(): Promise<void> {
 let disposeSocketHost = () => {};
 let disposeHostOnlyTools = () => {};
 const native = () => window.gwNative;
+const diagnosticProfile = native().init.diagnosticProfile;
+const glOverridesEnabled = diagnosticProfile === 'standard';
+const presentationPath = diagnosticProfile === 'direct-canvas'
+  ? 'direct'
+  : 'offscreen';
+if (diagnosticProfile !== 'standard') {
+  const banner = document.getElementById('diagnostic-profile-banner');
+  const name = document.getElementById('diagnostic-profile-name');
+  if (banner) banner.hidden = false;
+  if (name) name.textContent = diagnosticProfile;
+}
 const milestone = <
   N extends import('../shared/diagnostics.js').RendererMilestone,
 >(
@@ -612,6 +623,7 @@ Module = {
       imports,
       module: Module,
       recordGrowth: (fields) => milestone('wasm.growthRequested', fields),
+      observeTextures: glOverridesEnabled,
       log,
     });
     milestone('wasm.memoryProbe', {
@@ -661,6 +673,7 @@ Module = {
       env: imports.env,
       module: Module,
       renderScale: currentRenderScale,
+      presentationPath,
       firstFrame: () => {
         performance.mark('gw.frame.first-submit');
         milestone('frame.firstSubmit');
@@ -673,7 +686,9 @@ Module = {
       },
       log,
     });
-    host.installGlProgramCache({ imports, module: Module, log });
+    if (glOverridesEnabled) {
+      host.installGlProgramCache({ imports, module: Module, log });
+    }
     const gamepadImports = [
       'emscripten_sample_gamepad_data',
       'emscripten_set_gamepadconnected_callback_on_thread',

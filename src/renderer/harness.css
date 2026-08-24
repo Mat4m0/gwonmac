@@ -56,6 +56,23 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 }
 #capture-status[hidden] { display: none; }
 
+#diagnostic-profile-banner {
+  position: fixed;
+  z-index: 45;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 190, 65, 0.75);
+  border-radius: 6px;
+  background: rgba(24, 18, 8, 0.92);
+  color: #ffd98b;
+  font: 12px/1.3 system-ui, sans-serif;
+  pointer-events: none;
+}
+
+#diagnostic-profile-banner[hidden] { display: none; }
+
 /* The memory warning. Top-centred over the running game, translucent so the
    game reads through it, and never scrimmed — it is a message running beside
    play, not a dialog that stops it. */

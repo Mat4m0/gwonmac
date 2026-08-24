@@ -33,6 +33,7 @@ test.describe("sandbox boundary", () => {
             nativeCursor: true,
             tools: false,
           },
+          diagnosticProfile: "standard",
           templateFsTrace: false,
         },
         enhancementSelectionFrozen: true,
@@ -80,6 +81,8 @@ test.describe("sandbox boundary", () => {
           "recordRendererFrames",
           "recordRendererMetrics",
           "recordRendererMilestone",
+          "setProfile",
+          "submitVisualCapture",
         ],
         requireType: "undefined",
         processType: "undefined",
@@ -229,6 +232,7 @@ test.describe("sandbox boundary", () => {
           nativeCursor: true,
           tools: false,
         },
+        diagnosticProfile: "standard",
         templateFsTrace: false,
       });
       await expect(fixture.page.locator("#enhancement")).toHaveCount(0);
@@ -252,6 +256,7 @@ test.describe("sandbox boundary", () => {
           nativeCursor: true,
           tools: false,
         },
+        diagnosticProfile: "standard",
         templateFsTrace: true,
       });
       await expect(fixture.page.locator("#enhancement")).toHaveCount(0);

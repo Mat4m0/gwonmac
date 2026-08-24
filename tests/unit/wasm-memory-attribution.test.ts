@@ -12,6 +12,31 @@ const GL_RGBA8 = 0x8058;
 const GL_UNSIGNED_BYTE = 0x1401;
 
 describe("WASM growth provenance", () => {
+  it("can retain heap evidence without intercepting GL calls", () => {
+    const resize = (requestedBytes: number) => {
+      void requestedBytes;
+      return true;
+    };
+    const bind = () => 7;
+    const imports = { env: {
+      emscripten_resize_heap: resize,
+      glBindTexture: bind,
+    } };
+    const observations: Array<Record<string, unknown>> = [];
+    installWasmMemoryAttribution({
+      imports,
+      module: { HEAPU8: new Uint8Array(64) },
+      recordGrowth: (fields) => observations.push(fields),
+      observeTextures: false,
+      captureStack: () => "",
+      log: () => {},
+    });
+    assert.equal(imports.env.glBindTexture, bind);
+    assert.notEqual(imports.env.emscripten_resize_heap, resize);
+    assert.equal(imports.env.emscripten_resize_heap(128), true);
+    assert.equal(observations.length, 1);
+  });
+
   it("keeps only the first four numeric WASM frames", () => {
     assert.deepEqual(
       parseWasmStack([

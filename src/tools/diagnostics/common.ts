@@ -28,9 +28,18 @@ import type {
   DiagnosticSummary,
 } from "../../shared/diagnostics.js";
 import {
+  DIAGNOSTIC_PROFILES,
   RENDERER_COMMAND_OUTCOMES,
+  type RuntimeDiagnosticState,
   type VisualProblemManifest,
 } from "../../shared/contracts.js";
+import {
+  VISUAL_CAPTURE_FAILURES,
+  VISUAL_CAPTURE_STAGES,
+  type VisualCaptureFailure,
+  type VisualCaptureMetadata,
+  type VisualCaptureStage,
+} from "../../shared/visual-capture.js";
 export type { DiagnosticReport } from "../../shared/diagnostics.js";
 export type { RedactionResult } from "../../main/diagnostics/detector.js";
 
@@ -72,7 +81,15 @@ interface ManifestFields {
     stride: 7;
     fields: string[];
   };
-  visualProblem?: VisualProblemManifest;
+  visualProblem?: VisualProblemManifest | LegacyVisualProblemManifest;
+}
+
+interface LegacyVisualProblemManifest {
+  rendererOutcome: VisualProblemManifest["rendererOutcome"];
+  gameWindowCount: number;
+  screenshotRequested: boolean;
+  screenshotIncluded: boolean;
+  screenshotPrivacy: "player-consented-unscanned";
 }
 
 /**
@@ -86,7 +103,7 @@ export type LegacyCaptureManifest = ManifestFields & {
 };
 
 export type CurrentCaptureManifest = ManifestFields & {
-  formatVersion: 2;
+  formatVersion: 2 | 3;
   redaction: RedactionResult;
 };
 
@@ -103,6 +120,15 @@ export interface Capture {
   frames?: FrameAnalysis;
   frameError?: string;
   visualProblemScreenshot?: Uint8Array;
+  visualStages?: Partial<Record<VisualCaptureStage, Uint8Array>>;
+  visualCapture?: unknown;
+  runtimeState?: unknown;
+}
+
+export interface VisualCaptureDocument {
+    metadata: VisualCaptureMetadata | null;
+    dimensions: Partial<Record<VisualCaptureStage, { width: number; height: number }>>;
+    missing: Partial<Record<VisualCaptureStage, VisualCaptureFailure>>;
 }
 
 export interface FrameAnalysis {
@@ -124,20 +150,71 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+export function isRuntimeDiagnosticState(
+  value: unknown,
+): value is RuntimeDiagnosticState {
+  if (!isRecord(value)) return false;
+  if (
+    !DIAGNOSTIC_PROFILES.includes(
+      value.diagnosticProfile as RuntimeDiagnosticState["diagnosticProfile"],
+    )
+    || typeof value.extendedMemoryRequested !== "boolean"
+    || !isRecord(value.enhancementCapabilitiesRequested)
+  ) return false;
+  if (value.status === "preparing") return true;
+  return value.status === "active"
+    && Number.isSafeInteger(value.generation)
+    && (value.presentationPath === "direct-canvas"
+      || value.presentationPath === "offscreen-imagebitmap")
+    && (value.artifactKind === "official" || value.artifactKind === "derived")
+    && isRecord(value.extendedMemoryEffective)
+    && isRecord(value.transforms)
+    && isRecord(value.observers)
+    && isRecord(value.snapshot);
+}
+
+function isVisualCaptureDocument(value: unknown): value is VisualCaptureDocument {
+  if (!isRecord(value) || !isRecord(value.dimensions) || !isRecord(value.missing)) {
+    return false;
+  }
+  if (value.metadata !== null && !isRecord(value.metadata)) return false;
+  return Object.entries(value.dimensions).every(([stage, dimensions]) =>
+    VISUAL_CAPTURE_STAGES.includes(stage as VisualCaptureStage)
+    && isRecord(dimensions)
+    && Number.isSafeInteger(dimensions.width)
+    && Number(dimensions.width) > 0
+    && Number.isSafeInteger(dimensions.height)
+    && Number(dimensions.height) > 0)
+    && Object.entries(value.missing).every(([stage, reason]) =>
+      VISUAL_CAPTURE_STAGES.includes(stage as VisualCaptureStage)
+      && VISUAL_CAPTURE_FAILURES.includes(reason as VisualCaptureFailure));
+}
+
 function isVisualProblemManifest(
   value: unknown,
 ): value is NonNullable<ManifestFields["visualProblem"]> {
-  return isRecord(value)
-    && Object.keys(value).length === 5
-    && typeof value.rendererOutcome === "string"
+  if (!isRecord(value)) return false;
+  const base = typeof value.rendererOutcome === "string"
     && RENDERER_COMMAND_OUTCOMES.includes(
       value.rendererOutcome as VisualProblemManifest["rendererOutcome"],
     )
     && Number.isSafeInteger(value.gameWindowCount)
     && Number(value.gameWindowCount) >= 1
     && typeof value.screenshotRequested === "boolean"
-    && typeof value.screenshotIncluded === "boolean"
     && value.screenshotPrivacy === "player-consented-unscanned";
+  if (!base) return false;
+  if (typeof value.screenshotIncluded === "boolean") return true;
+  return Array.isArray(value.includedStages)
+    && new Set(value.includedStages).size === value.includedStages.length
+    && value.includedStages.every((stage) =>
+      typeof stage === "string"
+      && VISUAL_CAPTURE_STAGES.includes(
+        stage as (typeof VISUAL_CAPTURE_STAGES)[number],
+      ))
+    && isRecord(value.missingStages)
+    && Object.entries(value.missingStages).every(([stage, reason]) =>
+      VISUAL_CAPTURE_STAGES.includes(stage as (typeof VISUAL_CAPTURE_STAGES)[number])
+      && VISUAL_CAPTURE_FAILURES.includes(reason as (typeof VISUAL_CAPTURE_FAILURES)[number]));
 }
 
 export function isDiagnosticReport(value: unknown): value is DiagnosticReport {
@@ -285,6 +362,23 @@ export async function withCapture<T>(
     } catch (error) {
       if (!isRecord(error) || error.code !== "ENOENT") throw error;
     }
+    for (const stage of VISUAL_CAPTURE_STAGES) {
+      const name = `visual-${stage}.png`;
+      try {
+        capture.visualStages ??= {};
+        capture.visualStages[stage] = new Uint8Array(
+          await readFile(path.join(root, name)),
+        );
+      } catch (error) {
+        if (!isRecord(error) || error.code !== "ENOENT") throw error;
+      }
+    }
+    if (capture.manifest.includedFiles.includes("visual-capture.json")) {
+      capture.visualCapture = await parseJson(path.join(root, "visual-capture.json"));
+    }
+    if (capture.manifest.includedFiles.includes("runtime-state.json")) {
+      capture.runtimeState = await parseJson(path.join(root, "runtime-state.json"));
+    }
     return await action(capture, root);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -339,7 +433,11 @@ function redactionErrors(capture: Capture): string[] {
 
 export function validateCapture(capture: Capture): string[] {
   const errors: string[] = [];
-  if (capture.manifest.formatVersion !== 1 && capture.manifest.formatVersion !== 2) {
+  if (
+    capture.manifest.formatVersion !== 1
+    && capture.manifest.formatVersion !== 2
+    && capture.manifest.formatVersion !== 3
+  ) {
     errors.push("unsupported formatVersion");
   }
   if (!capture.manifest.sessionId) errors.push("manifest sessionId is missing");
@@ -362,6 +460,12 @@ export function validateCapture(capture: Capture): string[] {
   if (visualProblemValue !== undefined && !visualProblem) {
     errors.push("visual-problem manifest declaration is invalid");
   }
+  if (capture.manifest.formatVersion === 3 && !visualProblem) {
+    errors.push("format 3 requires a visual-problem manifest declaration");
+  }
+  const visualCapture = isVisualCaptureDocument(capture.visualCapture)
+    ? capture.visualCapture
+    : null;
   const screenshotDeclared = capture.manifest.includedFiles.includes(
     "visual-problem.png",
   );
@@ -372,7 +476,7 @@ export function validateCapture(capture: Capture): string[] {
   if (screenshotDeclared && !visualProblem) {
     errors.push("visual-problem screenshot has no manifest declaration");
   }
-  if (visualProblem) {
+  if (visualProblem && "screenshotIncluded" in visualProblem) {
     if (visualProblem.screenshotIncluded !== screenshotDeclared) {
       errors.push("visual-problem screenshot declaration is inconsistent");
     }
@@ -382,6 +486,86 @@ export function validateCapture(capture: Capture): string[] {
     ) {
       errors.push("visual-problem screenshot was included without consent");
     }
+  }
+  if (visualProblem && "includedStages" in visualProblem) {
+    for (const stage of visualProblem.includedStages) {
+      if (!capture.manifest.includedFiles.includes(`visual-${stage}.png`)) {
+        errors.push(`visual ${stage} declaration is inconsistent`);
+      }
+    }
+    if (!visualProblem.screenshotRequested && visualProblem.includedStages.length) {
+      errors.push("visual images were included without consent");
+    }
+    for (const stage of VISUAL_CAPTURE_STAGES) {
+      const present = capture.visualStages?.[stage];
+      const declared = visualProblem.includedStages.includes(stage);
+      if (Boolean(present) !== declared) {
+        errors.push(`visual ${stage} file presence is inconsistent`);
+      }
+      if (present) {
+        const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+        if (signature.some((byte, index) => present[index] !== byte)) {
+          errors.push(`visual ${stage} image is not a PNG`);
+        }
+      }
+      if (declared && stage in visualProblem.missingStages) {
+        errors.push(`visual ${stage} cannot be both included and missing`);
+      }
+      if (
+        visualProblem.screenshotRequested
+        && !declared
+        && !(stage in visualProblem.missingStages)
+      ) {
+        errors.push(`visual ${stage} is neither included nor marked missing`);
+      }
+    }
+    const captureDocumentDeclared = capture.manifest.includedFiles.includes(
+      "visual-capture.json",
+    );
+    if (visualProblem.screenshotRequested !== captureDocumentDeclared) {
+      errors.push("visual-capture.json declaration is inconsistent");
+    }
+    if (captureDocumentDeclared && !visualCapture) {
+      errors.push("visual-capture.json could not be read");
+    }
+    for (const stage of VISUAL_CAPTURE_STAGES) {
+      if (
+        visualCapture
+        && visualCapture.missing[stage]
+          !== visualProblem.missingStages[stage]
+      ) {
+        errors.push(`visual ${stage} missing reason differs from the manifest`);
+      }
+      const png = capture.visualStages?.[stage];
+      const recorded = visualCapture?.dimensions[stage];
+      if (png && visualCapture && !recorded) {
+        errors.push(`visual ${stage} has no recorded dimensions`);
+      }
+      if (!png && recorded) {
+        errors.push(`visual ${stage} records dimensions without an image`);
+      }
+      if (!png || !recorded || png.byteLength < 24) continue;
+      const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
+      if (
+        view.getUint32(16) !== recorded.width
+        || view.getUint32(20) !== recorded.height
+      ) {
+        errors.push(`visual ${stage} recorded dimensions differ from its PNG`);
+      }
+    }
+  }
+  if (
+    capture.manifest.formatVersion === 3
+    && capture.manifest.visualProblem
+    && !capture.manifest.includedFiles.includes("runtime-state.json")
+  ) {
+    errors.push("visual report has no runtime-state.json");
+  }
+  if (
+    capture.manifest.includedFiles.includes("runtime-state.json")
+    && !isRuntimeDiagnosticState(capture.runtimeState)
+  ) {
+    errors.push("runtime-state.json could not be read");
   }
   if (capture.visualProblemScreenshot !== undefined) {
     const png = capture.visualProblemScreenshot;

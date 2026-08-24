@@ -26,11 +26,17 @@ import type { ErrorCode } from "./errors.js";
 import {
   ENHANCEMENT_CAPABILITY_FIELDS,
   type EnhancementCapability,
+  type EnhancementCapabilities,
 } from "./enhancement-contracts.js";
 import type { BuildLibrary } from "./builds/library.js";
 import type { ProfileId } from "./multiple-accounts.js";
 import type { TemplateExportEntry } from "./template-contracts.js";
 import type { MainInputTraceEntry } from "./input-trace.js";
+import type {
+  VisualCaptureFailure,
+  VisualCaptureStage,
+  VisualCaptureSubmission,
+} from "./visual-capture.js";
 import type {
   AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
@@ -348,6 +354,13 @@ export const CONTROLLER_PROMPT_STYLES = ["game-default", "playstation"] as const
 export type ControllerPromptStyle = (typeof CONTROLLER_PROMPT_STYLES)[number];
 export const RENDER_SCALES = [1, 1.5, 2] as const;
 export type RenderScale = (typeof RENDER_SCALES)[number];
+export const DIAGNOSTIC_PROFILES = [
+  "standard",
+  "no-gl-overrides",
+  "official-baseline",
+  "direct-canvas",
+] as const;
+export type DiagnosticProfile = (typeof DIAGNOSTIC_PROFILES)[number];
 export const UI_PANEL_OPACITY_MIN = 65;
 export const UI_PANEL_OPACITY_MAX = 100;
 export const LAST_UPDATE_CHECK_AT_MAX = 8_640_000_000_000_000;
@@ -667,7 +680,50 @@ export type ExtendedMemoryRuntimeStatus =
       requestedAtLaunch: true;
       status: "unavailable";
       effectiveCapBytes: typeof WASM_HEAP_CAP_BYTES;
-      fallbackReason: "unsupported-client" | "preparation-failed";
+      fallbackReason:
+        | "unsupported-client"
+        | "preparation-failed"
+        | "diagnostic-profile";
+    }>;
+
+export type ClientTransforms = Readonly<{
+  templateSave: boolean;
+  nativeDoubleClick: boolean;
+}>;
+
+/** Effective launch state written into diagnostics without renderer inference. */
+export type RuntimeDiagnosticState =
+  | Readonly<{
+      status: "preparing";
+      diagnosticProfile: DiagnosticProfile;
+      extendedMemoryRequested: boolean;
+      enhancementCapabilitiesRequested: EnhancementCapabilities;
+    }>
+  | Readonly<{
+      status: "active";
+      generation: number;
+      diagnosticProfile: DiagnosticProfile;
+      presentationPath: "direct-canvas" | "offscreen-imagebitmap";
+      artifactKind: "official" | "derived";
+      officialWasmSha256: string | null;
+      officialJsSha256: string | null;
+      selectedWasmSha256: string | null;
+      selectedJsSha256: string | null;
+      extendedMemoryRequested: boolean;
+      extendedMemoryEffective: ExtendedMemoryRuntimeStatus;
+      enhancementCapabilitiesRequested: EnhancementCapabilities;
+      enhancementFeaturesEffective: ClientCompatibility["features"] | null;
+      transforms: ClientTransforms;
+      observers: Readonly<{
+        heapGrowth: true;
+        textureCalls: boolean;
+        glProgramCache: boolean;
+      }>;
+      snapshot: Readonly<{
+        size: number;
+        chunkSize: number;
+        chunkCount: number;
+      }>;
     }>;
 
 /**
@@ -717,6 +773,8 @@ export interface RendererInit {
   enhancementProgram: EnhancementProgram;
   /** The independently selected Enhancement tools for this launch. */
   enhancementSelection: EnhancementSelection;
+  /** Effective restart-required isolation profile for this renderer. */
+  diagnosticProfile: DiagnosticProfile;
   /** Template filesystem syscall trace. Unpackaged builds only. */
   templateFsTrace: boolean;
 }
@@ -773,6 +831,7 @@ export type RendererCommand =
   | { type: "filesystem.sync" }
   | { type: "input.trace"; enabled: boolean }
   | { type: "diagnostics.toggle" }
+  | { type: "diagnostics.visual"; token: string }
   | {
       type: "diagnostics.capture";
       action:
@@ -806,7 +865,8 @@ export interface VisualProblemManifest {
   rendererOutcome: RendererCommandOutcome;
   gameWindowCount: number;
   screenshotRequested: boolean;
-  screenshotIncluded: boolean;
+  includedStages: readonly VisualCaptureStage[];
+  missingStages: Readonly<Partial<Record<VisualCaptureStage, VisualCaptureFailure>>>;
   screenshotPrivacy: "player-consented-unscanned";
 }
 
@@ -872,6 +932,8 @@ export const IPC = {
   diagnosticsRendererMetrics: "gw:diagnostics:rendererMetrics",
   diagnosticsRendererFrames: "gw:diagnostics:rendererFrames",
   diagnosticsRendererMilestone: "gw:diagnostics:rendererMilestone",
+  diagnosticsVisualSubmit: "gw:diagnostics:visualSubmit",
+  diagnosticsProfileSet: "gw:diagnostics:profileSet",
   diagnosticsCurrent: "gw:diagnostics:current",
   appOpenExternal: "gw:app:openExternal",
   appRevealPath: "gw:app:revealPath",
@@ -1078,6 +1140,8 @@ export interface GwNativeApi {
       fields?: RendererMilestoneFields,
     ): Promise<void>;
     current(): Promise<DiagnosticSummary>;
+    submitVisualCapture(value: VisualCaptureSubmission): Promise<void>;
+    setProfile(value: DiagnosticProfile): Promise<DiagnosticProfile>;
   };
   app: {
     openExternal(kind: ExternalLinkKind): Promise<void>;

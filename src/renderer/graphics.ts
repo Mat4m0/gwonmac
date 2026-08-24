@@ -1,10 +1,15 @@
 /**
  * ArenaNet's EGL adapter. The generated client owns context creation and canvas
- * sizing; this module only supplies the OffscreenCanvas presentation path and
- * the selected render density.
+ * sizing; this module supplies the selected presentation path and render
+ * density. The capture lifecycle lives in visual-frame-capture.ts.
  */
+import {
+  createVisualFrameCapture,
+  visualCaptureError,
+} from './visual-frame-capture.js';
 
 let diagnosticsFrame = 0;
+let visualFrameSequence = 0;
 
 interface StaticContextFacts {
   renderer: string;
@@ -20,6 +25,7 @@ const staticContextFacts = new WeakMap<
   WebGLRenderingContext | WebGL2RenderingContext,
   StaticContextFacts
 >();
+const directContextListeners = new WeakSet<HTMLCanvasElement>();
 
 function contextFacts(
   gl: WebGLRenderingContext | WebGL2RenderingContext,
@@ -43,7 +49,7 @@ function contextFacts(
   return facts;
 }
 
-function forgetContextFacts(canvas: OffscreenCanvas) {
+function forgetContextFacts(canvas: OffscreenCanvas | HTMLCanvasElement) {
   const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
   if (gl) staticContextFacts.delete(gl);
 }
@@ -61,7 +67,7 @@ interface PresentationCanvas extends HTMLCanvasElement {
 
 function scheduleDiagnostics(
   visible: HTMLCanvasElement,
-  offscreen: OffscreenCanvas,
+  offscreen: OffscreenCanvas | HTMLCanvasElement,
   renderScale: 1 | 1.5 | 2,
   log: (...values: unknown[]) => void,
 ) {
@@ -88,8 +94,8 @@ function scheduleDiagnostics(
           !/swiftshader|llvmpipe|software/i.test(renderer),
         canvasWidth: visible.width,
         canvasHeight: visible.height,
-        offscreenWidth: offscreen.width,
-        offscreenHeight: offscreen.height,
+        offscreenWidth: offscreen instanceof OffscreenCanvas ? offscreen.width : 0,
+        offscreenHeight: offscreen instanceof OffscreenCanvas ? offscreen.height : 0,
         drawingBufferWidth: gl?.drawingBufferWidth || 0,
         drawingBufferHeight: gl?.drawingBufferHeight || 0,
         devicePixelRatio: window.devicePixelRatio || 1,
@@ -111,10 +117,18 @@ export const installGraphics = (options: {
   env: ArenaNetEglImports;
   module: ArenaNetGraphicsModule;
   renderScale: () => 1 | 1.5 | 2;
+  presentationPath?: 'offscreen' | 'direct';
   firstFrame: () => void;
   log: (...values: unknown[]) => void;
 }) => {
-  const { env, module, renderScale, firstFrame, log } = options;
+  const {
+    env,
+    module,
+    renderScale,
+    presentationPath = 'offscreen',
+    firstFrame,
+    log,
+  } = options;
   if (!env || typeof env.eglCreateContext !== 'function') {
     log('[warn] no eglCreateContext import — nothing will be presented');
     return;
@@ -123,6 +137,8 @@ export const installGraphics = (options: {
   const createContext = env.eglCreateContext;
   let visibleCanvas: PresentationCanvas | null = null;
   let presentationFailureReported = false;
+  const visualCapture = createVisualFrameCapture(presentationPath);
+  window.gwVisualCapture = visualCapture;
   env.eglCreateContext = (...args) => {
     const candidate = module.canvas;
     if (!(candidate instanceof globalThis.HTMLCanvasElement)) {
@@ -130,6 +146,29 @@ export const installGraphics = (options: {
     }
     const visible: PresentationCanvas = candidate;
     visibleCanvas = visible;
+    if (presentationPath === 'direct') {
+      if (!directContextListeners.has(visible)) {
+        directContextListeners.add(visible);
+        visible.addEventListener('webglcontextlost', (event) => {
+          event.preventDefault();
+          forgetContextFacts(visible);
+          window.dispatchEvent(new globalThis.Event('gw:graphics-context-reset'));
+          window.gwDiagnostics?.event('graphics.contextLost');
+          void window.gwDiagnostics?.flush();
+        });
+        visible.addEventListener('webglcontextrestored', () => {
+          forgetContextFacts(visible);
+          window.dispatchEvent(new globalThis.Event('gw:graphics-context-reset'));
+          window.gwDiagnostics?.event('graphics.contextRestored');
+          void window.gwDiagnostics?.flush();
+        });
+      }
+      const context = createContext(...args);
+      if (!context) throw new Error('EGL could not create a WebGL context');
+      log(`egl context on direct canvas ${visible.width}x${visible.height}`);
+      scheduleDiagnostics(visible, visible, renderScale(), log);
+      return context;
+    }
     if (!visible.offscreen) {
       visible.offscreen = new OffscreenCanvas(visible.width, visible.height);
       visible.offscreen.addEventListener('webglcontextlost', (event) => {
@@ -183,17 +222,63 @@ export const installGraphics = (options: {
     let bitmapOutUs = 0;
     let bitmapPresentUs = 0;
     let presented = false;
-    if (ok && visibleCanvas?.offscreen && visibleCanvas.context) {
+    if (ok && presentationPath === 'direct') presented = true;
+    if (
+      ok
+      && !visualCapture.held
+      && visibleCanvas?.offscreen
+      && visibleCanvas.context
+    ) {
       let bitmap: ImageBitmap | null = null;
       try {
+        const captureRequested = visualCapture.requested;
+        const gl = captureRequested
+          ? visibleCanvas.offscreen.getContext('webgl2')
+            ?? visibleCanvas.offscreen.getContext('webgl')
+          : null;
+        let framebuffer = null;
+        if (captureRequested) {
+          if (!gl) throw visualCaptureError('no-context', 'WebGL context is unavailable');
+          if (gl.isContextLost()) {
+            throw visualCaptureError('context-lost', 'WebGL context is lost');
+          }
+          framebuffer = visualCapture.read(gl);
+        }
         const outStarted = performance.now();
         bitmap = visibleCanvas.offscreen.transferToImageBitmap();
         const outEnded = performance.now();
+        if (captureRequested && gl && framebuffer) {
+          const bounds = visibleCanvas.getBoundingClientRect();
+          visualCapture.complete(
+            framebuffer,
+            bitmap,
+            visibleCanvas.offscreen.width,
+            visibleCanvas.offscreen.height,
+            {
+              frameSequence: ++visualFrameSequence,
+              capturedAtRendererMs: performance.now(),
+              canvasBounds: {
+                x: bounds.x,
+                y: bounds.y,
+                width: bounds.width,
+                height: bounds.height,
+              },
+              canvasWidth: visibleCanvas.width,
+              canvasHeight: visibleCanvas.height,
+              offscreenWidth: visibleCanvas.offscreen.width,
+              offscreenHeight: visibleCanvas.offscreen.height,
+              drawingBufferWidth: gl.drawingBufferWidth,
+              drawingBufferHeight: gl.drawingBufferHeight,
+              devicePixelRatio: window.devicePixelRatio || 1,
+            },
+          );
+        }
         visibleCanvas.context.transferFromImageBitmap(bitmap);
         bitmapOutUs = (outEnded - outStarted) * 1000;
         bitmapPresentUs = (performance.now() - outEnded) * 1000;
         presented = true;
       } catch (error) {
+        visualCapture.fail(error);
         if (!presentationFailureReported) {
           presentationFailureReported = true;
           window.gwDiagnostics?.event('graphics.presentationFailed', error);
@@ -210,7 +295,7 @@ export const installGraphics = (options: {
       (swapEnded - swapStarted) * 1000,
       bitmapOutUs,
       bitmapPresentUs,
-      presented,
+      presented || visualCapture.held,
     );
     if (waitingForFirstFrame && presented) {
       waitingForFirstFrame = false;

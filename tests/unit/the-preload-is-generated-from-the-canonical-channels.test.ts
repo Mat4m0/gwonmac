@@ -162,6 +162,7 @@ test("the launch argument prefix comes from the contracts too", () => {
       development: false,
       enhancementProgram: "none",
       enhancementSelection: { nativeCursor: false, tools: false },
+      diagnosticProfile: "standard",
       templateFsTrace: false,
     },
   );
@@ -213,6 +214,7 @@ test("a contracts export the body needs but does not have fails the build", () =
     "RENDERER_INIT_ARGUMENT",
     "ENHANCEMENTS",
     "ENHANCEMENT_PROGRAMS",
+    "DIAGNOSTIC_PROFILES",
     "WASM_BRIDGE_MARKERS",
   ]);
 });

@@ -17,6 +17,7 @@ import type {
   AppSettings,
   AppSettingsPatch,
   DownloadProgress,
+  DiagnosticProfile,
   RendererInit,
 } from "../shared/contracts.js";
 import { RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
@@ -62,6 +63,7 @@ export interface WindowHost {
   enhancementSelection: EnhancementSelection;
   /** Developer-only feature program; never inferred from automation. */
   enhancementProgram: EnhancementProgram;
+  diagnosticProfile: DiagnosticProfile;
   getProgress: () => DownloadProgress;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (value: AppSettingsPatch) => Promise<AppSettings>;
@@ -355,11 +357,13 @@ export const RENDERER_URL = "gw://app/";
 export function rendererInitArgument(options: {
   enhancementSelection: EnhancementSelection;
   enhancementProgram: EnhancementProgram;
+  diagnosticProfile: DiagnosticProfile;
 }): string {
   const init: RendererInit = {
     development: !app.isPackaged,
     enhancementProgram: options.enhancementProgram,
     enhancementSelection: options.enhancementSelection,
+    diagnosticProfile: options.diagnosticProfile,
     templateFsTrace:
       !app.isPackaged && process.env.GW_TEMPLATE_FS_TRACE === "1",
   };

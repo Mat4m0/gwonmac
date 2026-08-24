@@ -28,6 +28,7 @@ interface Pending {
 const pending = new Map<number, Pending>();
 let lastCommandId = 0;
 export const RENDERER_COMMAND_TIMEOUT_MS = 5_000;
+export const VISUAL_CAPTURE_COMMAND_TIMEOUT_MS = 60_000;
 
 ipcMain.on(IPC.rendererCommandDone, (event, id: unknown, outcome: unknown) => {
   if (
@@ -81,9 +82,12 @@ export function sendRendererCommand(
   const id = (lastCommandId += 1);
   return new Promise<RendererCommandOutcome>((resolve) => {
     let settled = false;
+    const timeoutMs = command.type === "diagnostics.visual"
+      ? VISUAL_CAPTURE_COMMAND_TIMEOUT_MS
+      : RENDERER_COMMAND_TIMEOUT_MS;
     const timer = setTimeout(
       () => settle("timed-out"),
-      RENDERER_COMMAND_TIMEOUT_MS,
+      timeoutMs,
     );
     const settle = (outcome: RendererCommandOutcome): void => {
       if (settled) return;
