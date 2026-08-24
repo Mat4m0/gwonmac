@@ -21,30 +21,30 @@ export function enhancementRuntimePolicy(
   settings: OptionalToolSettings,
   playRegion: RuntimePlayRegion,
 ): RuntimeFeaturePolicy {
-  const requested = (id: FeatureId) =>
-    featureActivationRequested(id, settings)
-      && featureRegionAllowsRequest(id, playRegion);
   const developerToolbox = program === "toolbox-foundation"
     || program === "toolbox-commands"
     || program === "xunlai-storage";
   const developerTeam = program === "toolbox-commands";
   const developerStorage = program === "toolbox-commands"
     || program === "xunlai-storage";
+  const selected = (id: FeatureId, developerSelected = false) =>
+    featureRegionAllowsRequest(id, playRegion)
+      && (developerSelected || featureActivationRequested(id, settings));
   return Object.freeze({
-    // The saved Build/Team library is local UI. It remains reachable at the
-    // login screen, in PvP, and while live game observations are unavailable.
-    tools: developerToolbox || requested("tools"),
-    targetReadout: program === "target-observer"
-      || requested("targetReadout"),
-    teamApply: featureRegionAllowsRequest("teamApply", playRegion)
-      && (developerTeam || requested("teamApply")),
+    // The local Tools host remains reachable without a live observation, but
+    // follows Toolbox++ by withdrawing in positively identified PvP maps and
+    // guild halls.
+    tools: selected("tools", developerToolbox),
+    targetReadout: selected(
+      "targetReadout",
+      program === "target-observer",
+    ),
+    teamApply: selected("teamApply", developerTeam),
     // The storage controller owns live access refusal and its user-facing
     // reason. This value means requested, not currently available.
-    xunlaiStorage:
-      developerStorage || requested("xunlaiStorage"),
-    travel: featureRegionAllowsRequest("travel", playRegion)
-      && (developerStorage || requested("travel")),
-    skillKeyLabels: requested("skillKeyLabels"),
-    skillCooldowns: requested("skillCooldowns"),
+    xunlaiStorage: selected("xunlaiStorage", developerStorage),
+    travel: selected("travel", developerStorage),
+    skillKeyLabels: selected("skillKeyLabels"),
+    skillCooldowns: selected("skillCooldowns"),
   } satisfies Record<FeatureId, boolean>);
 }

@@ -192,10 +192,16 @@ button and shortcut explain that storage is unavailable. The slash commands
 remain with Guild Wars while access is unconfirmed or refused. Party roster
 observation does not control storage, and `/tp` remains independent.
 
-Live observation, storage opening, Travel, and Apply stop in PvP, guild halls,
-transitions, and unknown regions. The saved Build and Team library stays
-available. Apply checks policy before each step and stops when the state
+The complete Tools surface, including Builds and Teams and Trade Chat, closes
+in positively identified PvP maps and guild halls. Xunlai storage also stops,
+its shortcut reports that it is unavailable, and `/chest` and `/xunlai` remain
+with Guild Wars. Apply checks policy before each step and stops when the state
 changes.
+
+At login, during loading, or when the region cannot be identified, the saved
+Build and Team library and Trade Chat remain available. Live observation,
+storage opening, Travel, and Apply stay unavailable until their stronger live
+requirements pass.
 
 Skill key labels and cooldown numbers also stop outside a confirmed PvE region.
 Their saved display settings remain in Settings.

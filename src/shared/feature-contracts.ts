@@ -34,7 +34,7 @@ type FeatureActivation =
 
 type FeatureSelectionPolicy = Readonly<{
   activation: FeatureActivation;
-  region: "any" | "pve";
+  region: "any" | "non-pvp" | "pve";
 }>;
 
 function defineFeatureSelectionPolicies<
@@ -52,7 +52,7 @@ function defineFeatureSelectionPolicies<
 export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
   tools: {
     activation: { kind: "master", setting: "gwonmacTools" },
-    region: "any",
+    region: "non-pvp",
   },
   targetReadout: {
     activation: {
@@ -76,9 +76,10 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
       setting: "xunlaiStorage",
       master: "gwonmacTools",
     },
-    // The storage controller owns the stronger, fresh access gate; this
-    // selector therefore makes no region claim of its own.
-    region: "any",
+    // The storage controller still owns the stronger, fresh access gate.
+    // This coarse rule matches Toolbox++ by withdrawing the complete feature
+    // in positively identified PvP maps and guild halls.
+    region: "non-pvp",
   },
   travel: {
     activation: {
@@ -131,5 +132,8 @@ export function featureRegionAllowsRequest(
   id: FeatureId,
   region: "pve" | "pvp" | "unknown",
 ): boolean {
-  return FEATURE_SELECTION_POLICIES[id].region !== "pve" || region === "pve";
+  const policy = FEATURE_SELECTION_POLICIES[id].region;
+  if (policy === "any") return true;
+  if (policy === "non-pvp") return region !== "pvp";
+  return region === "pve";
 }

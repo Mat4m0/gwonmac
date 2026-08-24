@@ -78,13 +78,13 @@
         // case on a launch that did not ask for the capability.
         if (!dispatch('gw:tools-toggle')) {
           throw new Error(
-            'Tools is not available in this launch: the Toolbox capability is not installed.',
+            'Tools is not available right now.',
           );
         }
         break;
       case 'trade.toggle':
         if (!dispatch('gw:trade-toggle')) {
-          throw new Error('Trade Chat is not available in this launch.');
+          throw new Error('Trade Chat is not available right now.');
         }
         break;
       case 'storage.open': {

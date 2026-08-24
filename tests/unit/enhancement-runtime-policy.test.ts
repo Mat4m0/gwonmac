@@ -54,7 +54,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
   });
 });
 
-test("runtime-gated commands fail closed while storage keeps its refusal reason", () => {
+test("unknown regions keep local Tools while live PvE features fail closed", () => {
   const on = Object.freeze({
     gwonmacTools: true,
     targetReadout: true,
@@ -64,13 +64,51 @@ test("runtime-gated commands fail closed while storage keeps its refusal reason"
     skillKeyBindings: off.skillKeyBindings,
     skillCooldownOverlayEnabled: false,
   });
-  for (const region of ["unknown", "pvp"] as const) {
-    assert.equal(enhancementRuntimePolicy("toolbox-commands", on, region).teamApply, false);
-    assert.equal(enhancementRuntimePolicy("none", on, region).teamApply, false);
-    assert.equal(enhancementRuntimePolicy("none", on, region).xunlaiStorage, true);
-    assert.equal(enhancementRuntimePolicy("none", on, region).travel, false);
-    assert.equal(enhancementRuntimePolicy("none", on, region).targetReadout, false);
-    assert.equal(enhancementRuntimePolicy("none", on, region).tools, true);
+  assert.deepEqual(enhancementRuntimePolicy("none", on, "unknown"), {
+    tools: true,
+    targetReadout: false,
+    teamApply: false,
+    xunlaiStorage: true,
+    travel: false,
+    skillKeyLabels: false,
+    skillCooldowns: false,
+  });
+});
+
+test("confirmed PvP and guild halls disable every product and developer tool", () => {
+  const on = Object.freeze({
+    gwonmacTools: true,
+    targetReadout: true,
+    teamManagement: true,
+    xunlaiStorage: true,
+    travelPalette: true,
+    skillKeyBindings: [{
+      input: { kind: "keyboard" as const, code: "KeyC" },
+      modifiers: {
+        control: false,
+        option: false,
+        shift: false,
+        command: false,
+      },
+    }, null, null, null, null, null, null, null] as const,
+    skillCooldownOverlayEnabled: true,
+  });
+  for (const program of [
+    "none",
+    "target-observer",
+    "toolbox-foundation",
+    "toolbox-commands",
+    "xunlai-storage",
+  ] as const) {
+    assert.deepEqual(enhancementRuntimePolicy(program, on, "pvp"), {
+      tools: false,
+      targetReadout: false,
+      teamApply: false,
+      xunlaiStorage: false,
+      travel: false,
+      skillKeyLabels: false,
+      skillCooldowns: false,
+    }, program);
   }
 });
 
@@ -132,7 +170,7 @@ test("runtime policy projects every registered feature exactly once", () => {
   );
 });
 
-test("local Tools availability never depends on a live-game safety gate", () => {
+test("local Tools require their setting or developer program and only confirmed PvP blocks them", () => {
   const regions = ["pve", "pvp", "unknown"] as const;
   const programs = [
     "none",
@@ -157,10 +195,12 @@ test("local Tools availability never depends on a live-game safety gate", () => 
               }, playRegion);
               assert.equal(
                 policy.tools,
-                enabled
-                  || program === "toolbox-foundation"
-                  || program === "toolbox-commands"
-                  || program === "xunlai-storage",
+                playRegion !== "pvp" && (
+                  enabled
+                    || program === "toolbox-foundation"
+                    || program === "toolbox-commands"
+                    || program === "xunlai-storage"
+                ),
                 `${program}/${playRegion} coupled local Tools to a live feature`,
               );
             }

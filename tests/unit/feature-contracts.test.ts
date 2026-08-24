@@ -223,6 +223,8 @@ test("shared activation and area policy cover required, setting, and content fea
   }), true);
   assert.equal(featureRegionAllowsRequest("travel", "pve"), true);
   assert.equal(featureRegionAllowsRequest("travel", "unknown"), false);
-  assert.equal(featureRegionAllowsRequest("tools", "pvp"), true);
+  assert.equal(featureRegionAllowsRequest("tools", "unknown"), true);
+  assert.equal(featureRegionAllowsRequest("tools", "pvp"), false);
   assert.equal(featureRegionAllowsRequest("xunlaiStorage", "unknown"), true);
+  assert.equal(featureRegionAllowsRequest("xunlaiStorage", "pvp"), false);
 });
