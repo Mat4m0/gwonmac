@@ -361,6 +361,12 @@ export class ClientRuntime {
           supported.nativeCursor,
           preparationFailed,
         ),
+        playRegionObservation: optionalFeatureStatus(
+          requested.playRegionObservation,
+          effective.playRegionObservation,
+          supported.playRegionObservation,
+          preparationFailed,
+        ),
         targetObservation: optionalFeatureStatus(
           requested.targetObservation,
           effective.targetObservation,

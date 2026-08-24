@@ -21,6 +21,7 @@ const FEATURE_NAMES = Object.freeze({
   targetObservation: "FEATURE_TARGET_OBSERVATION",
   skillSlotGeometry: "FEATURE_SKILL_SLOT_GEOMETRY",
   skillCooldownObservation: "FEATURE_SKILL_COOLDOWN_OBSERVATION",
+  playRegionObservation: "FEATURE_PLAY_REGION_OBSERVATION",
 } as const);
 
 const DISPATCH_NAMES = Object.freeze({

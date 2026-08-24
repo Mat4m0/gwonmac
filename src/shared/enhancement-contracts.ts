@@ -43,14 +43,14 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
   },
   {
     id: "targetObservation",
-    requiresAll: [],
+    requiresAll: ["playRegionObservation"],
     requiresAny: [],
     configOwners: ["observation", "target"],
     hooks: [],
   },
   {
     id: "partyObservation",
-    requiresAll: [],
+    requiresAll: ["playRegionObservation"],
     requiresAny: [],
     configOwners: ["observation", "party"],
     hooks: ["ui"],
@@ -64,14 +64,14 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
   },
   {
     id: "travelAction",
-    requiresAll: [],
+    requiresAll: ["playRegionObservation"],
     requiresAny: [],
     configOwners: [],
     hooks: [],
   },
   {
     id: "xunlaiAction",
-    requiresAll: [],
+    requiresAll: ["playRegionObservation"],
     requiresAny: [],
     configOwners: ["observation", "storage"],
     hooks: [],
@@ -85,7 +85,7 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
   },
   {
     id: "skillSlotGeometry",
-    requiresAll: ["partyObservation"],
+    requiresAll: ["playRegionObservation"],
     requiresAny: [],
     configOwners: ["skill-slots"],
     hooks: [],
@@ -95,6 +95,13 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     requiresAll: ["partyObservation"],
     requiresAny: [],
     configOwners: ["skill-cooldown"],
+    hooks: [],
+  },
+  {
+    id: "playRegionObservation",
+    requiresAll: [],
+    requiresAny: [],
+    configOwners: ["play-region"],
     hooks: [],
   },
 ] as const);
@@ -183,6 +190,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   chatAliases: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playRegionObservation: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -216,6 +224,7 @@ export function parseEnhancementCapabilities(
     chatAliases: value.chatAliases,
     skillSlotGeometry: value.skillSlotGeometry,
     skillCooldownObservation: value.skillCooldownObservation,
+    playRegionObservation: value.playRegionObservation,
   });
 }
 
@@ -240,12 +249,13 @@ export function enhancementCapabilityProfile(
 /** Named product/developer choices. Certificates and caches use only bit identities. */
 export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursor: capabilitiesFromMask(0x01),
-  target: capabilitiesFromMask(0x02),
-  party: capabilitiesFromMask(0x84),
-  cursorParty: capabilitiesFromMask(0x85),
-  storage: capabilitiesFromMask(0x70),
-  partyCommandsStorage: capabilitiesFromMask(0xfc),
-  all: capabilitiesFromMask(0x1ff),
+  region: capabilitiesFromMask(0x200),
+  target: capabilitiesFromMask(0x202),
+  party: capabilitiesFromMask(0x284),
+  cursorParty: capabilitiesFromMask(0x285),
+  storage: capabilitiesFromMask(0x270),
+  partyCommandsStorage: capabilitiesFromMask(0x2fc),
+  all: capabilitiesFromMask(0x3ff),
 });
 
 export {
@@ -253,7 +263,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 40;
+export const ENHANCEMENT_TRANSFORM_ABI = 41;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,

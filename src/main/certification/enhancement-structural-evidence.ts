@@ -9,6 +9,7 @@ export { inspectEnhancementStructuralEvidence } from "./enhancement-structural-r
 export { locateAutomaticCursor } from "./enhancement-cursor-proof.js";
 export {
   inspectTargetRoleCandidates,
+  locateAutomaticPlayRegion,
   locateAutomaticTarget,
   type TargetRoleCandidateDiagnostic,
 } from "./enhancement-target-proof.js";
@@ -19,6 +20,7 @@ export type { EnhancementProofContext } from "./enhancement-wasm-proof-context.j
 export type {
   AutomaticCursorLocation,
   AutomaticLocalActionsLocation,
+  AutomaticPlayRegionLocation,
   AutomaticTargetLocation,
   CursorConsideration,
   CursorEvidenceReport,

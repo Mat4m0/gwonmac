@@ -32,10 +32,17 @@ pub(crate) const FEATURE_TOOLBOX_FOUNDATION: u32 = 1 << 2;
 pub(crate) const FEATURE_TARGET_OBSERVATION: u32 = 1 << 3;
 pub(crate) const FEATURE_SKILL_SLOT_GEOMETRY: u32 = 1 << 4;
 pub(crate) const FEATURE_SKILL_COOLDOWN_OBSERVATION: u32 = 1 << 5;
+pub(crate) const FEATURE_PLAY_REGION_OBSERVATION: u32 = 1 << 6;
 pub(crate) const KNOWN_FEATURES: u32 =
     FEATURE_NATIVE_CURSOR | FEATURE_GAME_SNAPSHOT | FEATURE_TOOLBOX_FOUNDATION
         | FEATURE_TARGET_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY
-        | FEATURE_SKILL_COOLDOWN_OBSERVATION;
+        | FEATURE_SKILL_COOLDOWN_OBSERVATION | FEATURE_PLAY_REGION_OBSERVATION;
+
+pub(crate) const PLAY_REGION_BYTES: u32 = size_of::<PlayRegionSnapshot>() as u32;
+pub(crate) const PLAY_REGION_MAGIC: u32 = 0x5250_5747;
+pub(crate) const PLAY_REGION_ABI_AND_SIZE: u32 = (PLAY_REGION_BYTES << 16) | 1;
+pub(crate) const FLAG_PLAY_REGION_READY: u32 = 1 << 0;
+pub(crate) const FLAG_PLAY_REGION_LOADING: u32 = 1 << 1;
 
 pub(crate) const SKILL_SLOT_BYTES: u32 = size_of::<SkillSlotSnapshot>() as u32;
 pub(crate) const SKILL_SLOT_MAGIC: u32 = 0x534b_5747;
@@ -400,6 +407,17 @@ pub(crate) struct Snapshot {
 }
 
 #[repr(C)]
+pub(crate) struct PlayRegionSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) map_id: u32,
+    pub(crate) instance_type: u32,
+    pub(crate) play_region: u32,
+}
+
+#[repr(C)]
 pub(crate) struct CursorSnapshot {
     pub(crate) magic: u32,
     pub(crate) abi_and_size: u32,
@@ -535,3 +553,4 @@ const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
 const _: [(); 16] = [(); size_of::<SkillSlotRect>()];
 const _: [(); 156] = [(); size_of::<SkillSlotSnapshot>()];
 const _: [(); 60] = [(); size_of::<SkillCooldownSnapshot>()];
+const _: [(); 28] = [(); size_of::<PlayRegionSnapshot>()];

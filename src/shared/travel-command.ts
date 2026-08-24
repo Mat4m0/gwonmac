@@ -5,7 +5,7 @@
 import type { TravelRequest } from "./travel.js";
 
 export const TRAVEL_WAITING_REASONS = [
-  "game", "loading", "memory", "writing", "snapshot", "corrupt", "cursor",
+  "game", "loading", "memory", "writing", "snapshot", "corrupt", "cursor", "stale",
 ] as const;
 export type TravelWaitingReason = (typeof TRAVEL_WAITING_REASONS)[number];
 export type TravelGameState =

@@ -6,18 +6,22 @@ import {
   decoded,
   DETAIL,
   FEATURE_GAME_SNAPSHOT,
+  FEATURE_PLAY_REGION_OBSERVATION,
   installGameGraph,
   PLAYER_RECORD_ADDRESS,
   readCompanionSnapshot,
   XUNLAI_CONFIG_START,
 } from "../fixtures/enhancements.ts";
 
+const XUNLAI_FEATURES =
+  FEATURE_GAME_SNAPSHOT | FEATURE_PLAY_REGION_OBSERVATION;
+
 describe("Companion Xunlai access kernel", () => {
   it("publishes access from the player record without a party", async () => {
     const kernel = await createKernel({ partyDetail: true });
     installGameGraph(kernel.view);
     kernel.view.setUint32(ADDRESSES.game + 0x4c, 0, true);
-    assert.equal(kernel.init({ features: FEATURE_GAME_SNAPSHOT }), 1);
+    assert.equal(kernel.init({ features: XUNLAI_FEATURES }), 1);
 
     kernel.tick();
     const storageOnly = decoded(
@@ -84,7 +88,7 @@ describe("Companion Xunlai access kernel", () => {
   it("revokes access on corrupt records and character transitions", async () => {
     const kernel = await createKernel({ partyDetail: true });
     installGameGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_GAME_SNAPSHOT }), 1);
+    assert.equal(kernel.init({ features: XUNLAI_FEATURES }), 1);
     const access = () =>
       decoded(readCompanionSnapshot(kernel.memory.buffer, ADDRESSES.snapshot))
         .xunlaiAccess;
@@ -136,7 +140,7 @@ describe("Companion Xunlai access kernel", () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
     kernel.config.fill(0, XUNLAI_CONFIG_START, XUNLAI_CONFIG_START + 6);
-    assert.equal(kernel.init({ features: FEATURE_GAME_SNAPSHOT }), 1);
+    assert.equal(kernel.init({ features: XUNLAI_FEATURES }), 1);
 
     kernel.tick();
     assert.equal(

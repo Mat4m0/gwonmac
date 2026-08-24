@@ -11,6 +11,7 @@ import {
 import { TEAM_COMMAND_PAYLOAD_BYTES } from "../../src/renderer/enhancement-team-commands.ts";
 import { STORAGE_DATA_WINDOW_BYTES } from "../../src/renderer/enhancement-storage-command.ts";
 import { TRAVEL_PAYLOAD_BYTES } from "../../src/renderer/enhancement-travel-command.ts";
+import { COMPANION_PLAY_REGION_BYTES } from "../../src/renderer/companion-play-region-snapshot.ts";
 import { COMPANION_ABI } from "../../src/shared/companion-abi.ts";
 import {
   closePackaged,
@@ -171,6 +172,7 @@ export async function assertTargetReadoutLifecycle() {
           65_551,
           64,
           CONFIG_BYTES,
+          COMPANION_ABI.playRegion.bytes,
         ],
         globalRuntimeIsRuntime: true,
         hook: ENHANCEMENT_BUILD.tableSlot + 1,
@@ -251,7 +253,8 @@ export async function assertTargetReadoutLifecycle() {
       "pagehide did not dispose the target readout",
     );
     assert.deepEqual(disposed, {
-      freed: [0x1000, 0x11_010, 0x11_050],
+      // Runtime allocation, target snapshot, config, and policy region.
+      freed: [0x1000, 0x11_010, 0x11_050, 0x11_210],
       hook: 0,
       // Cleanup withdraws the published runtime by writing null over it.
       runtime: null,
@@ -301,7 +304,7 @@ export async function assertTargetReadoutLifecycle() {
         {
           name: "enhancement.installed",
           companionAbi: COMPANION_ABI.kernel,
-          capabilityProfile: "features-02",
+          capabilityProfile: "features-202",
           installation: 1,
         },
         {
@@ -894,7 +897,8 @@ export async function assertToolboxFoundationLifecycle() {
     const cursorPointer = (configPointer + CONFIG_BYTES + 7) & ~7;
     const statePointer = (cursorPointer + COMPANION_CURSOR_BYTES + 7) & ~7;
     const partyPointer = statePointer + COMPANION_TOOLBOX_BYTES;
-    const commandPointer = partyPointer + COMPANION_PARTY_BYTES;
+    const playRegionPointer = partyPointer + COMPANION_PARTY_BYTES;
+    const commandPointer = (playRegionPointer + COMPANION_PLAY_REGION_BYTES + 7) & ~7;
     const storagePointer = commandPointer + TEAM_COMMAND_PAYLOAD_BYTES;
     const travelPointer = (storagePointer + STORAGE_DATA_WINDOW_BYTES + 7) & ~7;
     assert.deepEqual(result.before.allocations, [
@@ -918,6 +922,10 @@ export async function assertToolboxFoundationLifecycle() {
       {
         pointer: partyPointer,
         size: COMPANION_PARTY_BYTES,
+      },
+      {
+        pointer: playRegionPointer,
+        size: COMPANION_PLAY_REGION_BYTES,
       },
       {
         pointer: commandPointer,
@@ -1012,6 +1020,7 @@ export async function assertToolboxFoundationLifecycle() {
     assert.deepEqual(result.after.freed, [
       statePointer,
       partyPointer,
+      playRegionPointer,
       commandPointer,
       storagePointer,
       travelPointer,
@@ -1227,6 +1236,8 @@ export async function assertRollbackAfterTablePublication() {
       (rollbackCursorPointer + COMPANION_CURSOR_BYTES + 7) & ~7;
     const rollbackPartyPointer =
       rollbackToolboxPointer + COMPANION_TOOLBOX_BYTES;
+    const rollbackPlayRegionPointer =
+      rollbackPartyPointer + COMPANION_PARTY_BYTES;
     assert.deepEqual(result, {
       allocations: [
         { pointer: 0x1000, size: 65_551 },
@@ -1237,10 +1248,12 @@ export async function assertRollbackAfterTablePublication() {
         { pointer: rollbackCursorPointer, size: COMPANION_CURSOR_BYTES },
         { pointer: rollbackToolboxPointer, size: COMPANION_TOOLBOX_BYTES },
         { pointer: rollbackPartyPointer, size: COMPANION_PARTY_BYTES },
+        { pointer: rollbackPlayRegionPointer, size: COMPANION_PLAY_REGION_BYTES },
       ],
       freed: [
         rollbackToolboxPointer,
         rollbackPartyPointer,
+        rollbackPlayRegionPointer,
         rollbackCursorPointer,
         rollbackConfigPointer,
         0x1000,

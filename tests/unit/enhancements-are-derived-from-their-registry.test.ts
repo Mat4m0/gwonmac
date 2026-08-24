@@ -97,7 +97,7 @@ test("one capability plan derives hooks without losing feature identity", () => 
   );
   // No user selection reaches cursor + target any more; it stays certified
   // developer-side vocabulary with the same hook plan as cursor-only.
-  const cursorTarget = enhancementCapabilitiesForProfile("features-03");
+  const cursorTarget = enhancementCapabilitiesForProfile("features-203");
   assert.ok(cursorTarget);
   assert.notDeepEqual(cursorOnly, cursorTarget);
   assert.deepEqual(enhancementHooksFor(cursorOnly), {
@@ -118,26 +118,26 @@ test("one capability plan derives hooks without losing feature identity", () => 
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
-      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false },
+      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "target-observer"),
-      { nativeCursor: false, targetObservation: true, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false },
+      { nativeCursor: false, targetObservation: true, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-foundation"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: true, skillCooldownObservation: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true },
     );
     // The read foundation and the write program differ by exactly this bit,
     // and no saved setting reaches the second: choosing the panel can never
     // carry the ability to send a packet in with it.
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-commands"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: true, skillCooldownObservation: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "xunlai-storage"),
-      { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: false, skillCooldownObservation: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true },
     );
   }
 });
@@ -145,11 +145,11 @@ test("one capability plan derives hooks without losing feature identity", () => 
 test("launch intent resolves to the canonical frozen capability profiles", () => {
   const cases = [
     [{ nativeCursor: true, tools: false }, "none", "features-01"],
-    [{ nativeCursor: true, tools: true }, "none", "features-1ff"],
+    [{ nativeCursor: true, tools: true }, "none", "features-3ff"],
     [{ nativeCursor: false, tools: false }, "cursor-observer", "features-01"],
-    [{ nativeCursor: true, tools: false }, "target-observer", "features-02"],
-    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "features-84"],
-    [{ nativeCursor: false, tools: false }, "xunlai-storage", "features-70"],
+    [{ nativeCursor: true, tools: false }, "target-observer", "features-202"],
+    [{ nativeCursor: false, tools: false }, "toolbox-foundation", "features-284"],
+    [{ nativeCursor: false, tools: false }, "xunlai-storage", "features-270"],
   ] as const;
   for (const [selection, program, profile] of cases) {
     const resolved = enhancementCapabilitiesFor(selection, program);
@@ -158,11 +158,11 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
     assert.equal(Object.isFrozen(resolved), true);
   }
   // Cursor + target keeps its identity even though no launch path selects it.
-  const cursorTarget = enhancementCapabilitiesForProfile("features-03");
+  const cursorTarget = enhancementCapabilitiesForProfile("features-203");
   assert.ok(cursorTarget);
   assert.equal(
     enhancementCapabilityProfile(cursorTarget),
-    "features-03",
+    "features-203",
   );
   assert.equal(
     enhancementCapabilityProfile(enhancementCapabilitiesFor(
@@ -184,6 +184,7 @@ test("the capability wire contract is exact and has one empty value", () => {
     chatAliases: true,
     skillSlotGeometry: true,
     skillCooldownObservation: true,
+    playRegionObservation: true,
   });
   assert.ok(all);
   assert.equal(Object.isFrozen(all), true);
@@ -211,6 +212,7 @@ test("the capability wire contract is exact and has one empty value", () => {
     chatAliases: false,
     skillSlotGeometry: false,
     skillCooldownObservation: false,
+    playRegionObservation: false,
   });
 
   assert.equal(parseEnhancementCapabilities({ ...all, extra: false }), null);
@@ -274,6 +276,7 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
         gameFileSaving: available,
         nativeCursor: available,
         targetObservation: available,
+        playRegionObservation: available,
         partyObservation: available,
         teamApply: unavailable,
         travelAction: unavailable,
@@ -283,5 +286,5 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
         skillCooldownObservation: { status: "off" },
       },
     },
-  }), enhancementCapabilitiesForProfile("features-07"));
+  }), enhancementCapabilitiesForProfile("features-207"));
 });

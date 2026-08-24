@@ -28,6 +28,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
   chatAliases: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playRegionObservation: false,
 });
 const ALL: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -38,19 +39,26 @@ const ALL: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
-  skillSlotGeometry: false,
-  skillCooldownObservation: false,
+  skillSlotGeometry: true,
+  skillCooldownObservation: true,
+  playRegionObservation: true,
 });
 const CURSOR: EnhancementCapabilities = Object.freeze({
   ...NONE,
   nativeCursor: true,
 });
+const REGION: EnhancementCapabilities = Object.freeze({
+  ...NONE,
+  playRegionObservation: true,
+});
 const TARGET: EnhancementCapabilities = Object.freeze({
   ...NONE,
+  playRegionObservation: true,
   targetObservation: true,
 });
 const STORAGE: EnhancementCapabilities = Object.freeze({
   ...NONE,
+  playRegionObservation: true,
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
@@ -59,12 +67,13 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
 });
 const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   ...NONE,
+  playRegionObservation: true,
   partyObservation: true,
   teamApply: true,
 });
 const SKILL_SLOTS: EnhancementCapabilities = Object.freeze({
   ...NONE,
-  partyObservation: true,
+  playRegionObservation: true,
   skillSlotGeometry: true,
 });
 type ProvedVerification = Extract<LocalClientVerification, { status: "proved" }>;
@@ -92,7 +101,7 @@ function valid(): ProvedVerification {
   return verificationFor({
     ...ENHANCEMENT,
     outputSha256: {
-      "features-7f": ENHANCEMENT.outputSha256["features-7f"]!,
+      "features-3ff": ENHANCEMENT.outputSha256["features-3ff"]!,
     },
   }, ALL);
 }
@@ -134,12 +143,13 @@ function automaticCursor(): ProvedVerification {
 
 function automaticTarget(): ProvedVerification {
   const observation = ENHANCEMENT.observationBase!.layout;
+  const playRegion = ENHANCEMENT.playRegionObservation!.layout;
   const target = ENHANCEMENT.targetObservation!.layout;
   const delta = -112;
   return verificationFor(
     {
       sha256: ENHANCEMENT.sha256,
-      outputSha256: { "features-02": "5".repeat(64) },
+      outputSha256: { "features-202": "5".repeat(64) },
       programId: ENHANCEMENT.programId,
       buildId: ENHANCEMENT.buildId + 1,
       hookFunction: ENHANCEMENT.hookFunction + 1,
@@ -153,6 +163,13 @@ function automaticTarget(): ProvedVerification {
           contextRoot: observation.contextRoot + delta,
           agentArray: observation.agentArray + delta,
           areaInfo: observation.areaInfo + delta,
+        },
+      },
+      playRegionObservation: {
+        layout: {
+          ...playRegion,
+          contextRoot: playRegion.contextRoot + delta,
+          areaInfo: playRegion.areaInfo + delta,
         },
       },
       targetObservation: {
@@ -173,7 +190,7 @@ function automaticLocalActions(): ProvedVerification {
   return verificationFor(
     {
       ...target.enhancementBuild!,
-      outputSha256: { "features-70": "7".repeat(64) },
+      outputSha256: { "features-270": "7".repeat(64) },
       uiDispatcher: {
         ...ENHANCEMENT.uiDispatcher!,
         bodySha256: "e".repeat(64),
@@ -225,7 +242,7 @@ function automaticPartyTeam(): ProvedVerification {
   return verificationFor(
     {
       ...localActions.enhancementBuild!,
-      outputSha256: { "features-0c": "b".repeat(64) },
+      outputSha256: { "features-20c": "b".repeat(64) },
       partyObservation: {
         ...party,
         playerChatProducer: party.playerChatProducer + 1,
@@ -301,6 +318,21 @@ function automaticSkillSlots(): ProvedVerification {
 }
 
 describe("local client verification boundary", () => {
+  it("certifies play region directly from the exact observation base", () => {
+    const verdicts = localFeatureVerdictsForBuild(
+      TEMPLATE.outputSha256,
+      REGION,
+      ENHANCEMENT,
+    );
+    assert.equal(verdicts.playRegionObservation.status, "proved");
+    if (verdicts.playRegionObservation.status !== "proved") return;
+    assert.equal(
+      verdicts.playRegionObservation.value.playRegionObservation,
+      ENHANCEMENT.playRegionObservation,
+    );
+    assert.equal(verdicts.targetObservation.status, "not-requested");
+    assert.equal(verdicts.partyObservation.status, "not-requested");
+  });
   it("accepts the verifier's complete baseline proof", () => {
     assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256, ALL), true);
   });
@@ -308,7 +340,13 @@ describe("local client verification boundary", () => {
   it("rejects an exact authored row that did not cross semantic proof", () => {
     assert.equal(
       isLocalClientVerification(
-        verificationFor(ENHANCEMENT, ALL),
+        verificationFor({
+          ...ENHANCEMENT,
+          outputSha256: {
+            ...ENHANCEMENT.outputSha256,
+            "features-01": "f".repeat(64),
+          },
+        }, ALL),
         TEMPLATE.sha256,
       ),
       false,
@@ -341,7 +379,7 @@ describe("local client verification boundary", () => {
     const relocated = verificationFor(
       {
         ...ENHANCEMENT,
-        outputSha256: { "features-7f": ENHANCEMENT.outputSha256["features-7f"]! },
+        outputSha256: { "features-3ff": ENHANCEMENT.outputSha256["features-3ff"]! },
         hookFunction: ENHANCEMENT.hookFunction + 1,
       },
       ALL,
@@ -396,6 +434,14 @@ describe("local client verification boundary", () => {
   it("accepts independent local-action proofs and rejects one bad Xunlai field", () => {
     const derived = automaticLocalActions();
     assert.equal(isLocalClientVerification(derived, TEMPLATE.sha256, STORAGE), true);
+    const travelVerdict = derived.featureVerdicts.travelAction;
+    assert.equal(travelVerdict.status, "proved");
+    if (travelVerdict.status === "proved") {
+      assert.equal(
+        travelVerdict.value.playRegionObservation,
+        derived.enhancementBuild!.playRegionObservation,
+      );
+    }
     assert.equal(isLocalClientVerification({
       ...derived,
       enhancementBuild: {
@@ -453,6 +499,14 @@ describe("local client verification boundary", () => {
       isLocalClientVerification(derived, TEMPLATE.sha256, SKILL_SLOTS),
       true,
     );
+    const geometryVerdict = derived.featureVerdicts.skillSlotGeometry;
+    assert.equal(geometryVerdict.status, "proved");
+    if (geometryVerdict.status === "proved") {
+      assert.equal(
+        geometryVerdict.value.playRegionObservation,
+        derived.enhancementBuild!.playRegionObservation,
+      );
+    }
 
     type MutableSkillSlotProof = Record<string, unknown> & {
       initializer: Record<string, unknown>;

@@ -32,10 +32,12 @@ test("the storage controller owns policy, events, deduplication, and teardown", 
 
     controller.update({
       enabled: true,
+      playRegion: "pve",
       state: accessible,
     });
     controller.update({
       enabled: true,
+      playRegion: "pve",
       state: accessible,
     });
     assert.deepEqual(configurations, [[256, 0], [256, 1]]);
@@ -47,6 +49,7 @@ test("the storage controller owns policy, events, deduplication, and teardown", 
 
     controller.update({
       enabled: false,
+      playRegion: "pve",
       state: accessible,
     });
     const refusedDetail: { error?: Error } = {};
@@ -89,15 +92,32 @@ test("storage fails closed without a confirmed character access proof", () => {
       { status: "waiting" as const },
       { status: "ready" as const, xunlaiAccess: null },
       { status: "ready" as const, xunlaiAccess: false },
-    ]) controller.update({ enabled: true, state });
+    ]) controller.update({ enabled: true, playRegion: "pve", state });
     assert.deepEqual(configurations, [[512, 0]]);
 
-    controller.update({ enabled: true, state: accessible });
+    controller.update({ enabled: true, playRegion: "pve", state: accessible });
     controller.update({
       enabled: true,
+      playRegion: "unknown",
+      state: accessible,
+    });
+    controller.update({
+      enabled: true,
+      playRegion: "pvp",
+      state: accessible,
+    });
+    controller.update({
+      enabled: true,
+      playRegion: "pve",
       state: { ...accessible, xunlaiAccess: false },
     });
-    assert.deepEqual(configurations, [[512, 0], [512, 1], [512, 0]]);
+    assert.deepEqual(configurations, [
+      [512, 0],
+      [512, 1],
+      [512, 0],
+      [512, 1],
+      [512, 0],
+    ]);
     controller.dispose();
   } finally {
     Object.defineProperty(globalThis, "window", {
@@ -126,10 +146,12 @@ test("storage development traces identify the live refusal without account data"
     );
     controller.update({
       enabled: true,
+      playRegion: "pve",
       state: { status: "ready", xunlaiAccess: false },
     });
     controller.update({
       enabled: true,
+      playRegion: "pve",
       state: { status: "ready", xunlaiAccess: false },
     });
     eventTarget.dispatchEvent(new CustomEvent("gw:storage-open", {

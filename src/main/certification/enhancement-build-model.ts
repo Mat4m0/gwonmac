@@ -24,6 +24,7 @@ import {
   ENHANCEMENT_CONFIG_FIELDS,
   type EnhancementCursorLayout,
   type EnhancementObservationBaseLayout,
+  type EnhancementPlayRegionLayout,
   type EnhancementPartyLayout,
   type EnhancementSkillCooldownLayout,
   type EnhancementSkillSlotGeometryLayout,
@@ -103,19 +104,21 @@ export function enhancementConfigWords(
   return ENHANCEMENT_CONFIG_FIELDS.map((field, index) => {
     if (!enhancementConfigWordActive(capabilities, index)) return 0;
     if (field.source === "layout") {
-      const value = field.owner === "observation"
-        ? build.observationBase?.layout[field.key]
-        : field.owner === "target"
-          ? build.targetObservation?.layout[field.key]
-          : field.owner === "cursor"
-            ? build.cursorEvent?.layout[field.key]
-            : field.owner === "party"
-              ? build.partyObservation?.layout[field.key]
-              : field.owner === "storage"
-                ? build.xunlaiAction?.accessProof?.layout[field.key]
-                : field.owner === "skill-slots"
-                  ? build.skillSlotGeometry?.layout[field.key]
-                  : build.skillCooldownObservation?.layout[field.key];
+      const value = field.owner === "play-region"
+        ? build.playRegionObservation?.layout[field.key]
+        : field.owner === "observation"
+          ? build.observationBase?.layout[field.key]
+          : field.owner === "target"
+            ? build.targetObservation?.layout[field.key]
+            : field.owner === "cursor"
+              ? build.cursorEvent?.layout[field.key]
+              : field.owner === "party"
+                ? build.partyObservation?.layout[field.key]
+                : field.owner === "storage"
+                  ? build.xunlaiAction?.accessProof?.layout[field.key]
+                  : field.owner === "skill-slots"
+                    ? build.skillSlotGeometry?.layout[field.key]
+                    : build.skillCooldownObservation?.layout[field.key];
       if (field.owner === "storage" && build.xunlaiAction === undefined) {
         return 0;
       }
@@ -149,6 +152,8 @@ export interface KnownEnhancementBuild {
   tableSlot: number;
   /** Memory facts shared by target and party observation. */
   observationBase?: Readonly<{ layout: EnhancementObservationBaseLayout }>;
+  /** Minimal memory facts used only to determine loading and PvE/PvP policy. */
+  playRegionObservation?: Readonly<{ layout: EnhancementPlayRegionLayout }>;
   /** Exact UI dispatcher shared by party observation and local Travel. */
   uiDispatcher?: Readonly<{
     functionIndex: number;
@@ -320,13 +325,14 @@ export interface KnownEnhancementBuild {
 export function supportedEnhancementCapabilities(
   build: KnownEnhancementBuild,
 ): EnhancementCapabilities {
-  const observationBase = build.observationBase !== undefined;
+  const playRegionObservation = build.playRegionObservation !== undefined;
+  const observationBase = playRegionObservation && build.observationBase !== undefined;
   const targetObservation = observationBase && build.targetObservation !== undefined;
   const partyObservation = observationBase
     && build.uiDispatcher !== undefined
     && build.partyObservation !== undefined;
   const gameThread = build.gameThread !== undefined;
-  const travelAction = build.uiDispatcher !== undefined
+  const travelAction = playRegionObservation && build.uiDispatcher !== undefined
     && gameThread && build.travelAction !== undefined;
   const xunlaiAction = observationBase && build.uiDispatcher !== undefined
     && gameThread && build.xunlaiAction?.accessProof !== undefined;
@@ -338,9 +344,10 @@ export function supportedEnhancementCapabilities(
     travelAction,
     xunlaiAction,
     chatAliases: build.uiDispatcher !== undefined && build.chatAliases !== undefined,
-    skillSlotGeometry: build.skillSlotGeometry !== undefined,
+    skillSlotGeometry: playRegionObservation && build.skillSlotGeometry !== undefined,
     skillCooldownObservation: partyObservation
       && build.skillCooldownObservation !== undefined,
+    playRegionObservation,
   });
 }
 
@@ -370,12 +377,15 @@ export function hasValidEnhancementProfileHashes(
   const storageAccessReaderIndices = storageReaders === undefined
     ? null
     : new Set(Object.values(storageReaders).map(({ functionIndex }) => functionIndex));
-  const hasObservation = build.targetObservation !== undefined
+  const hasPlayRegion = build.playRegionObservation !== undefined;
+  const hasObservation = build.observationBase !== undefined
+    || build.targetObservation !== undefined
     || build.partyObservation !== undefined
     || build.xunlaiAction !== undefined;
   if (hasObservation && build.observationBase === undefined) {
     return false;
   }
+  if (hasObservation && !hasPlayRegion) return false;
   if (build.partyObservation !== undefined && build.uiDispatcher === undefined) {
     return false;
   }

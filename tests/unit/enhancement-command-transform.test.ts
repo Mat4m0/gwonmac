@@ -217,6 +217,7 @@ describe("Enhancement command transform", () => {
     const build = manifest(input);
     const aliasesOnly = {
       nativeCursor: false,
+      playRegionObservation: false,
       targetObservation: false,
       partyObservation: false,
       teamApply: false,
@@ -236,7 +237,11 @@ describe("Enhancement command transform", () => {
     );
 
     for (const action of ["travelAction", "xunlaiAction"] as const) {
-      const capabilities = { ...aliasesOnly, [action]: true };
+      const capabilities = {
+        ...aliasesOnly,
+        playRegionObservation: true,
+        [action]: true,
+      };
       const effective = intersectEnhancementCapabilities(capabilities, capabilities);
       assert.equal(effective.chatAliases, true, action);
       const output = transformEnhancementWasm(input, build, effective);

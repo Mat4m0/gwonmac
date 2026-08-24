@@ -14,6 +14,7 @@ import {
 
 export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: true,
   targetObservation: true,
   partyObservation: true,
   teamApply: false,
@@ -25,6 +26,7 @@ export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.free
 });
 export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: false,
   targetObservation: false,
   partyObservation: false,
   teamApply: false,
@@ -36,6 +38,7 @@ export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
 });
 export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: true,
   targetObservation: true,
   partyObservation: false,
   teamApply: false,
@@ -47,6 +50,7 @@ export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
 });
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
+  playRegionObservation: true,
   targetObservation: true,
   partyObservation: false,
   teamApply: false,
@@ -58,6 +62,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
 });
 export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
+  playRegionObservation: true,
   targetObservation: false,
   partyObservation: false,
   teamApply: false,
@@ -69,6 +74,7 @@ export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
 });
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: true,
   targetObservation: false,
   partyObservation: true,
   teamApply: false,
@@ -80,6 +86,7 @@ export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
 });
 export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
+  playRegionObservation: false,
   targetObservation: false,
   partyObservation: false,
   teamApply: false,
@@ -91,6 +98,7 @@ export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
 });
 export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: true,
   targetObservation: false,
   partyObservation: true,
   teamApply: true,
@@ -102,6 +110,7 @@ export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
 });
 export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: true,
   targetObservation: true,
   partyObservation: true,
   teamApply: true,
@@ -113,6 +122,7 @@ export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.fr
 });
 export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: true,
   targetObservation: false,
   partyObservation: true,
   teamApply: false,
@@ -137,25 +147,25 @@ export const PARTY_DIRTY_MESSAGES = Object.freeze([
 
 const PLACEHOLDER_OUTPUTS: EnhancementOutputHashes = Object.freeze({
   "features-01": "0".repeat(64),
-  "features-02": "0".repeat(64),
-  "features-03": "0".repeat(64),
-  "features-04": "0".repeat(64),
-  "features-05": "0".repeat(64),
-  "features-06": "0".repeat(64),
-  "features-07": "0".repeat(64),
-  "features-0c": "0".repeat(64),
-  "features-0d": "0".repeat(64),
-  "features-0e": "0".repeat(64),
-  "features-0f": "0".repeat(64),
-  "features-70": "0".repeat(64),
-  "features-74": "0".repeat(64),
-  "features-75": "0".repeat(64),
-  "features-76": "0".repeat(64),
-  "features-77": "0".repeat(64),
-  "features-7c": "0".repeat(64),
-  "features-7d": "0".repeat(64),
-  "features-7e": "0".repeat(64),
-  "features-7f": "0".repeat(64),
+  "features-202": "0".repeat(64),
+  "features-203": "0".repeat(64),
+  "features-204": "0".repeat(64),
+  "features-205": "0".repeat(64),
+  "features-206": "0".repeat(64),
+  "features-207": "0".repeat(64),
+  "features-20c": "0".repeat(64),
+  "features-20d": "0".repeat(64),
+  "features-20e": "0".repeat(64),
+  "features-20f": "0".repeat(64),
+  "features-270": "0".repeat(64),
+  "features-274": "0".repeat(64),
+  "features-275": "0".repeat(64),
+  "features-276": "0".repeat(64),
+  "features-277": "0".repeat(64),
+  "features-27c": "0".repeat(64),
+  "features-27d": "0".repeat(64),
+  "features-27e": "0".repeat(64),
+  "features-27f": "0".repeat(64),
 });
 
 function uleb(value: number): number[] {
@@ -456,6 +466,12 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       agentId: 10, agentX: 11, agentY: 12, agentType: 13,
       agentPlayerNumber: 14, agentModelType: 15,
       worldContext: 46,
+      areaInfo: 72, areaInfoCount: 73, areaInfoStride: 74, areaInfoFlags: 75,
+    } },
+    playRegionObservation: { layout: {
+      contextRoot: 1, gameContextSlot: 6, characterContext: 4,
+      mapId: 5, isExplorable: 6, currentMapId: 7,
+      currentInstanceType: 8, playerNumber: 9,
       areaInfo: 72, areaInfoCount: 73, areaInfoStride: 74, areaInfoFlags: 75,
     } },
     targetObservation: { layout: {

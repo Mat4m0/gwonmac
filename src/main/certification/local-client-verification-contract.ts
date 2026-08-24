@@ -58,6 +58,10 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "cursor.active-table-relation",
     "cursor.event-family-layout-anchors",
   ] as const),
+  playRegionObservation: Object.freeze([
+    ...SHARED_FEATURE_INVARIANTS,
+    "play-region.observation-base",
+  ] as const),
   targetObservation: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
     "target.observation-selection-anchors",
@@ -151,6 +155,8 @@ type CertifiedXunlaiAction = Readonly<
 export interface LocalFeatureCertificateMap {
   readonly nativeCursor: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"cursorEvent">;
+  readonly playRegionObservation: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"playRegionObservation">;
   readonly targetObservation: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"observationBase" | "targetObservation">;
   readonly partyObservation: Readonly<{ core: EnhancementProofCore }>
@@ -164,7 +170,9 @@ export interface LocalFeatureCertificateMap {
       | "teamApply"
     >;
   readonly travelAction: Readonly<{ core: EnhancementProofCore }>
-    & RequiredBuildFact<"uiDispatcher" | "gameThread" | "travelAction">;
+    & RequiredBuildFact<
+      "playRegionObservation" | "uiDispatcher" | "gameThread" | "travelAction"
+    >;
   readonly xunlaiAction: Readonly<{
     core: EnhancementProofCore;
     xunlaiAction: CertifiedXunlaiAction;
@@ -172,7 +180,7 @@ export interface LocalFeatureCertificateMap {
   readonly chatAliases: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"uiDispatcher" | "chatAliases">;
   readonly skillSlotGeometry: Readonly<{ core: EnhancementProofCore }>
-    & RequiredBuildFact<"skillSlotGeometry">;
+    & RequiredBuildFact<"playRegionObservation" | "skillSlotGeometry">;
   readonly skillCooldownObservation: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<
       "observationBase" | "partyObservation" | "skillCooldownObservation"
@@ -282,6 +290,10 @@ export function localFeatureVerdictsForBuild(
   const nativeCursor = core !== null && build?.cursorEvent !== undefined
     ? Object.freeze({ core, cursorEvent: build.cursorEvent })
     : null;
+  const playRegionObservation = core !== null
+      && build?.playRegionObservation !== undefined
+    ? Object.freeze({ core, playRegionObservation: build.playRegionObservation })
+    : null;
   const targetObservation = core !== null
       && build?.observationBase !== undefined
       && build.targetObservation !== undefined
@@ -318,11 +330,13 @@ export function localFeatureVerdictsForBuild(
       })
     : null;
   const travelAction = core !== null
-      && build?.uiDispatcher !== undefined
+      && build?.playRegionObservation !== undefined
+      && build.uiDispatcher !== undefined
       && build.gameThread !== undefined
       && build.travelAction !== undefined
     ? Object.freeze({
         core,
+        playRegionObservation: build.playRegionObservation,
         uiDispatcher: build.uiDispatcher,
         gameThread: build.gameThread,
         travelAction: build.travelAction,
@@ -353,8 +367,14 @@ export function localFeatureVerdictsForBuild(
         chatAliases: build.chatAliases,
       })
     : null;
-  const skillSlotGeometry = core !== null && build?.skillSlotGeometry !== undefined
-    ? Object.freeze({ core, skillSlotGeometry: build.skillSlotGeometry })
+  const skillSlotGeometry = core !== null
+      && build?.playRegionObservation !== undefined
+      && build.skillSlotGeometry !== undefined
+    ? Object.freeze({
+        core,
+        playRegionObservation: build.playRegionObservation,
+        skillSlotGeometry: build.skillSlotGeometry,
+      })
     : null;
   const skillCooldownObservation = core !== null
       && build?.observationBase !== undefined
@@ -374,6 +394,13 @@ export function localFeatureVerdictsForBuild(
       nativeCursor,
       failures.nativeCursor,
       "cursor.event-family-layout-anchors",
+    ),
+    playRegionObservation: featureVerdict<"playRegionObservation">(
+      inputSha256,
+      requested.playRegionObservation,
+      playRegionObservation,
+      failures.playRegionObservation,
+      "play-region.observation-base",
     ),
     targetObservation: featureVerdict<"targetObservation">(
       inputSha256,

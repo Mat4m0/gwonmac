@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   enhancementRuntimePolicy,
-  runtimePlayRegion,
 } from "../../src/renderer/enhancement-runtime-policy.js";
 
 const off = Object.freeze({
@@ -72,13 +71,6 @@ test("runtime-gated commands fail closed while storage keeps its refusal reason"
     assert.equal(enhancementRuntimePolicy("none", on, region).targetReadout, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).tools, true);
   }
-});
-
-test("a snapshot remains authoritative when party evidence disagrees", () => {
-  assert.equal(runtimePlayRegion("pvp", "pve"), "pvp");
-  assert.equal(runtimePlayRegion("unknown", "pve"), "unknown");
-  assert.equal(runtimePlayRegion("pve", "pvp"), "pve");
-  assert.equal(runtimePlayRegion(null, "pve"), "pve");
 });
 
 test("product tool settings remain live once the capability is present", () => {

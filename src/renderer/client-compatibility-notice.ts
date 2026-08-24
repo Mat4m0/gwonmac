@@ -22,8 +22,9 @@ export type CompatibilityReport = {
 };
 
 type Feature = keyof ClientCompatibility['features'];
+type VisibleFeature = Exclude<Feature, 'playRegionObservation'>;
 
-const FEATURE_NAMES: Readonly<Record<Feature, string>> = Object.freeze({
+const FEATURE_NAMES: Readonly<Record<VisibleFeature, string>> = Object.freeze({
   gameFileSaving: 'Guild Wars file saving',
   nativeCursor: 'Guild Wars cursor',
   targetObservation: 'target distance',
@@ -36,13 +37,15 @@ const FEATURE_NAMES: Readonly<Record<Feature, string>> = Object.freeze({
   skillCooldownObservation: 'skill cooldown observation',
 });
 
-function unavailableFeatures(compatibility: ClientCompatibility): Feature[] {
-  return (Object.keys(compatibility.features) as Feature[]).filter(
+function unavailableFeatures(compatibility: ClientCompatibility): VisibleFeature[] {
+  // Area detection is an internal substrate. Its dependants already carry the
+  // player-facing refusal, so listing it would report one proof failure twice.
+  return (Object.keys(FEATURE_NAMES) as VisibleFeature[]).filter(
     (feature) => compatibility.features[feature].status === 'unavailable',
   );
 }
 
-function unavailableNames(features: readonly Feature[]): string {
+function unavailableNames(features: readonly VisibleFeature[]): string {
   return features.map((feature) => FEATURE_NAMES[feature]).join(', ');
 }
 
@@ -222,7 +225,7 @@ export function renderClientCompatibility(
 
   const report = compatibilityReport(session.compatibility);
   settingsAvailability.open = report.degraded;
-  for (const feature of Object.keys(session.compatibility.features) as Feature[]) {
+  for (const feature of Object.keys(FEATURE_NAMES) as VisibleFeature[]) {
     const status = feature === 'skillCooldownObservation'
       ? cooldownPresentationStatus(session.compatibility.features)
       : session.compatibility.features[feature];

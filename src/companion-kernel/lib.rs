@@ -42,6 +42,7 @@ mod abi;
 mod cursor;
 mod memory;
 mod party;
+mod play_region;
 mod skill_cooldowns;
 mod skill_slots;
 mod toolbox;
@@ -683,16 +684,23 @@ pub unsafe extern "C" fn companion_init(
     skill_slot_size: u32,
     skill_cooldown_ptr: u32,
     skill_cooldown_size: u32,
+    play_region_ptr: u32,
+    play_region_size: u32,
     features: u32,
 ) -> u32 {
     if features == 0
         || features & !KNOWN_FEATURES != 0
+        || features & FEATURE_GAME_SNAPSHOT != 0
+            && features & FEATURE_PLAY_REGION_OBSERVATION == 0
+        || features & FEATURE_TOOLBOX_FOUNDATION != 0
+            && features & FEATURE_PLAY_REGION_OBSERVATION == 0
         || features & FEATURE_TARGET_OBSERVATION != 0
             && features & FEATURE_GAME_SNAPSHOT == 0
         || features & FEATURE_SKILL_SLOT_GEOMETRY != 0
-            && features & FEATURE_TOOLBOX_FOUNDATION == 0
+            && features & FEATURE_PLAY_REGION_OBSERVATION == 0
         || features & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0
-            && features & FEATURE_TOOLBOX_FOUNDATION == 0
+            && (features & FEATURE_TOOLBOX_FOUNDATION == 0
+                || features & FEATURE_PLAY_REGION_OBSERVATION == 0)
         || config_size != CONFIG_BYTES
         || config_ptr & 3 != 0
         || !contains(config_ptr, config_size)
@@ -736,6 +744,12 @@ pub unsafe extern "C" fn companion_init(
             skill_cooldown_size,
             SKILL_COOLDOWN_BYTES,
         )
+        || !valid_region(
+            features & FEATURE_PLAY_REGION_OBSERVATION != 0,
+            play_region_ptr,
+            play_region_size,
+            PLAY_REGION_BYTES,
+        )
     {
         return 0;
     }
@@ -777,6 +791,9 @@ pub unsafe extern "C" fn companion_init(
         if features & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0 {
             skill_cooldowns::initialize(skill_cooldown_ptr);
         }
+        if features & FEATURE_PLAY_REGION_OBSERVATION != 0 {
+            play_region::initialize(play_region_ptr);
+        }
     }
     1
 }
@@ -813,6 +830,9 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
             if active & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0 {
                 unsafe { skill_cooldowns::tick(layout, c) };
             }
+            if active & FEATURE_PLAY_REGION_OBSERVATION != 0 {
+                unsafe { play_region::tick(layout) };
+            }
         }
         DISPATCH_CURSOR => {
             if unsafe { INITIALIZED } && unsafe { FEATURES } & FEATURE_NATIVE_CURSOR != 0 {
@@ -842,10 +862,15 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
             let available = unsafe { FEATURES };
             if a & !available != 0
                 || a & FEATURE_NATIVE_CURSOR != available & FEATURE_NATIVE_CURSOR
+                || a & FEATURE_PLAY_REGION_OBSERVATION
+                    != available & FEATURE_PLAY_REGION_OBSERVATION
+                || a & FEATURE_TOOLBOX_FOUNDATION != 0
+                    && a & FEATURE_PLAY_REGION_OBSERVATION == 0
                 || a & FEATURE_SKILL_SLOT_GEOMETRY != 0
-                    && a & FEATURE_TOOLBOX_FOUNDATION == 0
+                    && a & FEATURE_PLAY_REGION_OBSERVATION == 0
                 || a & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0
-                    && a & FEATURE_TOOLBOX_FOUNDATION == 0
+                    && (a & FEATURE_TOOLBOX_FOUNDATION == 0
+                        || a & FEATURE_PLAY_REGION_OBSERVATION == 0)
             {
                 return;
             }
@@ -864,7 +889,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    16
+    17
 }
 
 #[no_mangle]
@@ -900,6 +925,11 @@ pub extern "C" fn companion_skill_slot_bytes() -> u32 {
 #[no_mangle]
 pub extern "C" fn companion_skill_cooldown_bytes() -> u32 {
     SKILL_COOLDOWN_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_play_region_bytes() -> u32 {
+    PLAY_REGION_BYTES
 }
 
 #[no_mangle]

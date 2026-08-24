@@ -91,9 +91,10 @@ interface PreparedWasmClientModule {
   readonly nativeDoubleClick: boolean;
 }
 
-function capabilityCount(capabilities: EnhancementCapabilities): number {
+function productCapabilityCount(capabilities: EnhancementCapabilities): number {
   return ENHANCEMENT_CAPABILITY_FIELDS.reduce(
-    (count, field) => count + Number(capabilities[field]),
+    (count, field) => count
+      + Number(field !== "playRegionObservation" && capabilities[field]),
     0,
   );
 }
@@ -116,7 +117,7 @@ function enhancementCandidates(
       enhancementCapabilitiesCover(maximum, candidate)
       && enhancementOutputSha256(build, candidate) !== null)
     .sort((left, right) =>
-      capabilityCount(right) - capabilityCount(left)
+      productCapabilityCount(right) - productCapabilityCount(left)
       || Number(left.teamApply) - Number(right.teamApply));
 }
 
@@ -187,6 +188,7 @@ function enhancementCache(
     chatAliases: capabilities.chatAliases,
     skillSlotGeometry: capabilities.skillSlotGeometry,
     skillCooldownObservation: capabilities.skillCooldownObservation,
+    playRegionObservation: capabilities.playRegionObservation,
   };
   return {
     inputSha256: build.sha256,

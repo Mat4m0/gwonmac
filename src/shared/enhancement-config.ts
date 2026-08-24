@@ -103,13 +103,16 @@ export interface EnhancementLayout {
   frameState: number;
 }
 
-export type EnhancementObservationBaseLayout = Pick<EnhancementLayout,
+export type EnhancementPlayRegionLayout = Pick<EnhancementLayout,
   | "contextRoot" | "gameContextSlot" | "characterContext" | "mapId"
   | "isExplorable" | "currentMapId" | "currentInstanceType" | "playerNumber"
+  | "areaInfo" | "areaInfoCount" | "areaInfoStride" | "areaInfoFlags"
+>;
+export type EnhancementObservationBaseLayout = EnhancementPlayRegionLayout & Pick<
+  EnhancementLayout,
   | "agentArray" | "agentId" | "agentX" | "agentY" | "agentType"
   | "agentPlayerNumber" | "agentModelType"
-  | "worldContext" | "areaInfo" | "areaInfoCount" | "areaInfoStride"
-  | "areaInfoFlags"
+  | "worldContext"
 >;
 export type EnhancementTargetLayout = Pick<EnhancementLayout,
   | "manualTargetAgentId" | "automaticTargetAgentId"
@@ -140,9 +143,14 @@ export type EnhancementPartyLayout = Omit<EnhancementLayout,
   | keyof EnhancementSkillCooldownLayout
 >;
 
-type Owner = "observation" | "target" | "cursor" | "party" | "storage"
+type Owner = "play-region" | "observation" | "target" | "cursor" | "party" | "storage"
   | "skill-slots" | "skill-cooldown";
 type ConfigField =
+  | Readonly<{
+    source: "layout";
+    owner: "play-region";
+    key: keyof EnhancementPlayRegionLayout;
+  }>
   | Readonly<{
     source: "layout";
     owner: "observation";
@@ -172,6 +180,11 @@ type ConfigField =
 const observation = (
   ...keys: readonly (keyof EnhancementObservationBaseLayout)[]
 ): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "observation" }));
+const playRegion = (
+  ...keys: readonly (keyof EnhancementPlayRegionLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({
+  source: "layout", key, owner: "play-region",
+}));
 const target = (
   ...keys: readonly (keyof EnhancementTargetLayout)[]
 ): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "target" }));
@@ -196,16 +209,21 @@ const skillCooldown = (
 }));
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
-  ...observation("contextRoot", "agentArray"),
+  ...playRegion("contextRoot"),
+  ...observation("agentArray"),
   ...target("manualTargetAgentId", "automaticTargetAgentId"),
-  ...observation("gameContextSlot", "characterContext", "mapId", "isExplorable", "currentMapId", "currentInstanceType", "playerNumber", "agentId"),
+  ...playRegion(
+    "gameContextSlot", "characterContext", "mapId", "isExplorable",
+    "currentMapId", "currentInstanceType", "playerNumber",
+  ),
+  ...observation("agentId"),
   ...observation("agentX", "agentY", "agentType"),
   ...observation("agentPlayerNumber", "agentModelType"),
   ...cursor("cursorActiveArt", "cursorSoftwareModel", "cursorShowCount", "cursorColorBuffer", "cursorArtHotspot", "cursorArtTexture", "cursorHandleKey", "cursorHandleObject", "cursorViewTexture", "cursorTextureType", "cursorTextureWidth", "cursorTextureHeight"),
   ...party("partyContext", "playerParty", "partyHeroes", "heroMemberStride", "heroAgentId", "heroOwnerPlayerId", "heroId", "heroLevel", "partyPlayers", "partyHenchmen", "partyFlag", "accountContextSlot", "accountUnlockedSkills"),
   ...observation("worldContext"),
   ...party("worldHeroFlags", "heroFlagStride", "flagHeroId", "flagAgentId", "flagBehavior", "worldHeroInfo", "heroInfoStride", "infoHeroId", "infoAgentId", "infoLevel", "infoPrimary", "infoSecondary", "infoAppearanceBitmap", "worldSkillbars", "skillbarStride", "skillbarAgentId", "skillbarSkills", "skillSlotStride", "skillSlotId", "skillbarDisabled", "worldAttributes", "attributeStride", "attributeAgentId", "attributeEntries", "attributeEntryStride", "attributeEntryId", "attributeEntryRank"),
-  ...observation("areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags"),
+  ...playRegion("areaInfo", "areaInfoCount", "areaInfoStride", "areaInfoFlags"),
   ...party("worldProfessionStates", "professionStateStride", "worldCharacterSkills"),
   ...storage("worldPlayers", "playerRecordStride", "playerRecordAgentId", "playerRecordAccessFlags", "playerRecordNumber", "areaInfoType"),
   ...skillSlots(

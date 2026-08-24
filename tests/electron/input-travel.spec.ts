@@ -37,6 +37,7 @@ test.describe("renderer Travel input", () => {
           playRegion: "pve",
           state: { status: "ready", mapId: 133 },
         });
+        installation.poll();
       });
 
       await expect(page.getByRole("dialog", { name: "Quick Travel" })).toBeVisible();

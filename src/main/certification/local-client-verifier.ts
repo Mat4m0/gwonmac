@@ -34,9 +34,11 @@ import {
   inspectTargetRoleCandidates,
   locateAutomaticCursor,
   locateAutomaticLocalActions,
+  locateAutomaticPlayRegion,
   locateAutomaticTarget,
   type AutomaticCursorLocation,
   type AutomaticLocalActionsLocation,
+  type AutomaticPlayRegionLocation,
   type AutomaticTargetLocation,
   type EnhancementStructuralEvidenceReport,
 } from "./enhancement-structural-evidence.js";
@@ -132,6 +134,14 @@ function failuresForRequested(
   return Object.freeze({
     ...(requested.nativeCursor
       ? { nativeCursor: changedFeature("nativeCursor", invariant) }
+      : {}),
+    ...(requested.playRegionObservation
+      ? {
+          playRegionObservation: changedFeature(
+            "playRegionObservation",
+            invariant,
+          ),
+        }
       : {}),
     ...(requested.targetObservation
       ? { targetObservation: changedFeature("targetObservation", invariant) }
@@ -310,6 +320,7 @@ function diagnoseFeatureFailures(
   input: Uint8Array,
   requested: EnhancementCapabilities,
   locatedCursor: AutomaticCursorLocation | null,
+  locatedPlayRegion: AutomaticPlayRegionLocation | null,
   locatedTarget: AutomaticTargetLocation | null,
   locatedLocal: AutomaticLocalActionsLocation | null,
   locatedSkillSlotGeometry: ReturnType<typeof deriveSkillSlotGeometry>,
@@ -327,6 +338,7 @@ function diagnoseFeatureFailures(
   const needsCooldownEvidence = requested.skillCooldownObservation
     && locatedSkillCooldown === null;
   const needsEvidence = (requested.nativeCursor && !locatedCursor)
+    || (requested.playRegionObservation && !locatedPlayRegion)
     || (requested.targetObservation && !locatedTarget)
     || needsLocalEvidence
     || needsSkillEvidence
@@ -339,6 +351,10 @@ function diagnoseFeatureFailures(
     ? inspectTargetRoleCandidates(input, context)
     : null;
   const targetShared = sharedEvidenceFailure("targetObservation", evidence);
+  const playRegionShared = sharedEvidenceFailure(
+    "playRegionObservation",
+    evidence,
+  );
   const partyUi = uiFailure("partyObservation", evidence);
   const teamUi = uiFailure("teamApply", evidence);
   const travelShared = sharedEvidenceFailure("travelAction", evidence);
@@ -352,6 +368,15 @@ function diagnoseFeatureFailures(
   return Object.freeze({
     ...(requested.nativeCursor && !locatedCursor
       ? { nativeCursor: cursorFailure(evidence) }
+      : {}),
+    ...(requested.playRegionObservation && !locatedPlayRegion
+      ? {
+          playRegionObservation: playRegionShared
+            ?? changedFeature(
+              "playRegionObservation",
+              "play-region.observation-base",
+            ),
+        }
       : {}),
     ...(requested.targetObservation && !locatedTarget
       ? {
@@ -555,6 +580,9 @@ function deriveEnhancementBuild(
   const locatedCursor = requestedCapabilities.nativeCursor
     ? locateAutomaticCursor(templateOutput, ENHANCEMENT_BUILDS, context)
     : null;
+  const locatedPlayRegion = requestedCapabilities.playRegionObservation
+    ? locateAutomaticPlayRegion(templateOutput, ENHANCEMENT_BUILDS, context)
+    : null;
   const locatedTarget = requestedCapabilities.targetObservation
     ? locateAutomaticTarget(templateOutput, ENHANCEMENT_BUILDS, context)
     : null;
@@ -578,6 +606,8 @@ function deriveEnhancementBuild(
   const cursor = locatedCursor?.baseline.cursorEvent;
   const includeCursor = locatedCursor !== null && cursor !== undefined;
   const includeTarget = locatedTarget !== null;
+  const includePlayRegion = requestedCapabilities.playRegionObservation
+    && locatedPlayRegion !== null;
   const includeParty = requestedCapabilities.partyObservation
     && locatedLocal?.observationLayout != null
     && locatedLocal.uiDispatcher != null
@@ -599,7 +629,7 @@ function deriveEnhancementBuild(
     && locatedLocal?.uiDispatcher != null
     && locatedLocal.chatAliases != null;
   const includeSkillSlotGeometry = requestedCapabilities.skillSlotGeometry
-    && includeParty
+    && includePlayRegion
     && locatedSkillSlotGeometry !== null;
   const locatedSkillCooldown = requestedCapabilities.skillCooldownObservation
     ? deriveSkillCooldownObservation(
@@ -614,6 +644,7 @@ function deriveEnhancementBuild(
     templateOutput,
     requestedCapabilities,
     locatedCursor,
+    locatedPlayRegion,
     locatedTarget,
     locatedLocal,
     locatedSkillSlotGeometry,
@@ -624,20 +655,33 @@ function deriveEnhancementBuild(
     || includeXunlai || includeAliases;
   const source = includeCursor
     ? locatedCursor
-    : includeTarget
-      ? locatedTarget
-      : localContributes
-        ? locatedLocal
-        : null;
+    : includePlayRegion
+      ? locatedPlayRegion
+      : includeTarget
+        ? locatedTarget
+        : localContributes
+          ? locatedLocal
+          : null;
   if (source === null || !report.table || report.table.max === null) {
     return Object.freeze({ build: null, failures });
   }
+  const observationLayout = includeTarget
+    ? locatedTarget.observationLayout
+    : includeParty || includeXunlai
+      ? locatedLocal!.observationLayout!
+      : null;
   if (
-    includeTarget
-    && (includeParty || includeXunlai)
-    && !isDeepStrictEqual(
-      locatedTarget.observationLayout,
-      locatedLocal?.observationLayout,
+    includePlayRegion
+    && observationLayout !== null
+    && Object.entries(locatedPlayRegion.playRegionLayout).some(
+      ([key, value]) =>
+        observationLayout[key as keyof typeof observationLayout] !== value,
+    )
+    || [
+      includeTarget ? locatedTarget.observationLayout : null,
+      includeParty || includeXunlai ? locatedLocal?.observationLayout ?? null : null,
+    ].filter((layout) => layout !== null).some(
+      (layout, _index, layouts) => !isDeepStrictEqual(layout, layouts[0]),
     )
   ) {
     return Object.freeze({
@@ -649,6 +693,14 @@ function deriveEnhancementBuild(
               targetObservation: changedFeature(
                 "targetObservation",
                 "target.shared-observation-layout",
+              ),
+            }
+          : {}),
+        ...(requestedCapabilities.playRegionObservation
+          ? {
+              playRegionObservation: changedFeature(
+                "playRegionObservation",
+                "play-region.observation-base",
               ),
             }
           : {}),
@@ -672,11 +724,6 @@ function deriveEnhancementBuild(
     });
   }
   const baseline = source.baseline;
-  const observationLayout = includeTarget
-    ? locatedTarget.observationLayout
-    : includeParty || includeXunlai
-      ? locatedLocal!.observationLayout!
-      : null;
   const provisional: KnownEnhancementBuild = Object.freeze({
     sha256: report.sha256,
     outputSha256: Object.freeze({}),
@@ -704,6 +751,11 @@ function deriveEnhancementBuild(
     } : {}),
     ...(observationLayout ? {
       observationBase: Object.freeze({ layout: observationLayout }),
+    } : {}),
+    ...(includePlayRegion ? {
+      playRegionObservation: Object.freeze({
+        layout: locatedPlayRegion.playRegionLayout,
+      }),
     } : {}),
     ...(includeTarget ? {
       targetObservation: Object.freeze({ layout: locatedTarget.targetLayout }),
@@ -736,6 +788,7 @@ function deriveEnhancementBuild(
     chatAliases: includeAliases,
     skillSlotGeometry: includeSkillSlotGeometry,
     skillCooldownObservation: includeSkillCooldown,
+    playRegionObservation: includePlayRegion,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

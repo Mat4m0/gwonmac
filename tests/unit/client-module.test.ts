@@ -57,6 +57,7 @@ const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   chatAliases: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playRegionObservation: true,
 });
 const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -68,6 +69,7 @@ const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   chatAliases: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playRegionObservation: false,
 });
 const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -79,6 +81,7 @@ const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   chatAliases: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playRegionObservation: true,
 });
 const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -90,6 +93,7 @@ const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   chatAliases: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playRegionObservation: false,
 });
 
 const scratchDirs: string[] = [];
@@ -234,11 +238,11 @@ function certifyTemplate(input: Uint8Array): KnownTemplateSaveBuild {
 
 function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
   const fixtureProfiles = Object.freeze([
-    "features-01", "features-02", "features-03", "features-04",
-    "features-05", "features-06", "features-07", "features-0c",
-    "features-0d", "features-0e", "features-0f", "features-70",
-    "features-74", "features-75", "features-76", "features-77",
-    "features-7c", "features-7d", "features-7e", "features-7f",
+    "features-01", "features-202", "features-203", "features-204",
+    "features-205", "features-206", "features-207", "features-20c",
+    "features-20d", "features-20e", "features-20f", "features-270",
+    "features-274", "features-275", "features-276", "features-277",
+    "features-27c", "features-27d", "features-27e", "features-27f",
   ] satisfies readonly EnhancementCapabilityProfile[]);
   const draft: KnownEnhancementBuild = {
     sha256: sha256(input),
@@ -260,6 +264,12 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       agentX: 11, agentY: 12, agentType: 13,
       worldContext: 46, areaInfo: 72, areaInfoCount: 73,
       areaInfoStride: 74, areaInfoFlags: 75,
+    } },
+    playRegionObservation: { layout: {
+      contextRoot: 1, gameContextSlot: 6, characterContext: 4,
+      mapId: 5, isExplorable: 6, currentMapId: 7,
+      currentInstanceType: 8, playerNumber: 9, areaInfo: 72,
+      areaInfoCount: 73, areaInfoStride: 74, areaInfoFlags: 75,
     } },
     xunlaiAction: {
         openExport: "enhancement_open_storage",
@@ -918,7 +928,7 @@ describe("client module preparation", () => {
     assert.equal(rebuilt.failure, null);
     assert.equal(
       sha256(await readFile(rebuilt.wasmPath)),
-      value.enhancementBuild.outputSha256["features-05"],
+      value.enhancementBuild.outputSha256["features-205"],
     );
   });
 
@@ -929,7 +939,7 @@ describe("client module preparation", () => {
       ...value.enhancementBuild,
       outputSha256: {
         ...complete,
-        "features-05": "0".repeat(64),
+        "features-205": "0".repeat(64),
       } satisfies EnhancementOutputHashes,
     };
 

@@ -5,6 +5,7 @@ import {
   ALL_FEATURES,
   COMPANION_CURSOR_BYTES,
   COMPANION_PARTY_BYTES,
+  COMPANION_PLAY_REGION_BYTES,
   COMPANION_TOOLBOX_BYTES,
   CONFIG_BYTES,
   createKernel,
@@ -13,6 +14,7 @@ import {
   DETAIL,
   FEATURE_NATIVE_CURSOR,
   FEATURE_GAME_SNAPSHOT,
+  FEATURE_PLAY_REGION_OBSERVATION,
   FEATURE_TOOLBOX_FOUNDATION,
   installCursorGraph,
   installGameGraph,
@@ -30,6 +32,15 @@ import {
   sameCompanionToolboxState,
 } from "../fixtures/enhancements.ts";
 
+const GAME_SNAPSHOT_FEATURES =
+  FEATURE_GAME_SNAPSHOT | FEATURE_PLAY_REGION_OBSERVATION;
+const TOOLBOX_FEATURES =
+  FEATURE_TOOLBOX_FOUNDATION | FEATURE_PLAY_REGION_OBSERVATION;
+const GAME_TOOLBOX_FEATURES =
+  FEATURE_GAME_SNAPSHOT
+  | FEATURE_TOOLBOX_FOUNDATION
+  | FEATURE_PLAY_REGION_OBSERVATION;
+
 describe("Companion kernel", () => {
   it("returns from adversarial callback scalars without panicking", async () => {
     const kernel = await createKernel();
@@ -40,8 +51,7 @@ describe("Companion kernel", () => {
       kernel.init({
         features:
           FEATURE_NATIVE_CURSOR
-          | FEATURE_GAME_SNAPSHOT
-          | FEATURE_TOOLBOX_FOUNDATION,
+          | GAME_TOOLBOX_FEATURES,
       }),
       1,
     );
@@ -169,7 +179,7 @@ describe("Companion kernel", () => {
     installCursorGraph(readoutOnly.view);
     paintCursor(readoutOnly.view, 2);
     assert.equal(
-      readoutOnly.init({ features: FEATURE_GAME_SNAPSHOT }),
+      readoutOnly.init({ features: GAME_SNAPSHOT_FEATURES }),
       1,
     );
     assert.equal(readoutOnly.field(CURSOR.magic), 0);
@@ -193,7 +203,9 @@ describe("Companion kernel", () => {
       9,
     );
 
-    kernel.activeFeatures(FEATURE_NATIVE_CURSOR);
+    kernel.activeFeatures(
+      FEATURE_NATIVE_CURSOR | FEATURE_PLAY_REGION_OBSERVATION,
+    );
     kernel.view.setUint32(ADDRESSES.agentBuffer + 9 * 4, 0xffff_fffc, true);
     kernel.tick();
     const policy = decoded(
@@ -211,19 +223,19 @@ describe("Companion kernel", () => {
 
     const readoutOnly = await createKernel();
     readoutOnly.config.fill(0, MESSAGE_CONFIG_START);
-    assert.equal(readoutOnly.init({ features: FEATURE_GAME_SNAPSHOT }), 1);
+    assert.equal(readoutOnly.init({ features: GAME_SNAPSHOT_FEATURES }), 1);
 
     const toolbox = await createKernel();
     toolbox.config.fill(0, MESSAGE_CONFIG_START);
     assert.equal(
-      toolbox.init({ features: FEATURE_TOOLBOX_FOUNDATION }),
+      toolbox.init({ features: TOOLBOX_FEATURES }),
       0,
     );
 
     const missingDirty = await createKernel();
     missingDirty.config[MESSAGE_CONFIG_START + 3] = 0;
     assert.equal(
-      missingDirty.init({ features: FEATURE_TOOLBOX_FOUNDATION }),
+      missingDirty.init({ features: TOOLBOX_FEATURES }),
       0,
     );
 
@@ -231,7 +243,7 @@ describe("Companion kernel", () => {
     duplicateDirty.config[MESSAGE_CONFIG_START + 4] =
       duplicateDirty.config[MESSAGE_CONFIG_START + 3]!;
     assert.equal(
-      duplicateDirty.init({ features: FEATURE_TOOLBOX_FOUNDATION }),
+      duplicateDirty.init({ features: TOOLBOX_FEATURES }),
       0,
     );
   });
@@ -239,7 +251,7 @@ describe("Companion kernel", () => {
   it("observes Toolbox heroes and the exact player agent", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
     const toolbox = readyToolbox(kernel.toolbox());
     assert.equal(toolbox.heroAvailable, true);
@@ -256,7 +268,7 @@ describe("Companion kernel", () => {
   it("publishes a roster whose unread fields admit they are unread", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
 
     const party = kernel.party();
@@ -290,7 +302,7 @@ describe("Companion kernel", () => {
   it("retracts the roster when the party cannot be read", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
     assert.equal(readyParty(kernel.party()).slotCount, 1);
 
@@ -313,7 +325,7 @@ describe("Companion kernel", () => {
     const kernel = await createKernel({ partyDetail: true });
     installGameGraph(kernel.view);
     installPartyDetailGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
 
     const party = readyParty(kernel.party());
@@ -428,7 +440,7 @@ describe("Companion kernel", () => {
       // certified bound makes that group reject without damaging the roster.
       kernel.view.setUint32(ADDRESSES.world + detail.offset + 4, 65, true);
       kernel.view.setUint32(ADDRESSES.world + detail.offset + 8, 65, true);
-      assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
       kernel.tick();
 
       const party = readyParty(kernel.party());
@@ -444,7 +456,7 @@ describe("Companion kernel", () => {
     const kernel = await createKernel({ partyDetail: true });
     installGameGraph(kernel.view);
     installPartyDetailGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
 
     const party = readyParty(kernel.party());
@@ -475,7 +487,7 @@ describe("Companion kernel", () => {
       4,
       true,
     );
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
 
     const party = readyParty(kernel.party());
@@ -512,7 +524,7 @@ describe("Companion kernel", () => {
       129,
       true,
     );
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
 
     const party = readyParty(kernel.party());
@@ -530,7 +542,7 @@ describe("Companion kernel", () => {
     const kernel = await createKernel({ partyDetail: true });
     installGameGraph(kernel.view);
     installPartyDetailGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
     assert.equal(readyParty(kernel.party()).inOutpost, true);
 
@@ -551,7 +563,7 @@ describe("Companion kernel", () => {
     const kernel = await createKernel({ partyDetail: true });
     installGameGraph(kernel.view);
     installPartyDetailGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
 
     // Exactly the three invested ranks. Air Magic (8) is what the padding at
@@ -581,7 +593,7 @@ describe("Companion kernel", () => {
   it("republishes the roster only when the roster changed", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
     const { sequence, generation } = readyParty(kernel.party());
 
@@ -609,7 +621,7 @@ describe("Companion kernel", () => {
   it("reads only the party header while its sequence is unchanged", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
 
     const first = readChangedCompanionParty(
@@ -639,7 +651,7 @@ describe("Companion kernel", () => {
   it("traverses party state only for the exact dirty-message set", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
     const ready = readyToolbox(kernel.toolbox());
     assert.equal(ready.heroAvailable, true);
@@ -705,7 +717,7 @@ describe("Companion kernel", () => {
     installGameGraph(kernel.view);
     assert.equal(
       kernel.init({
-        features: FEATURE_GAME_SNAPSHOT | FEATURE_TOOLBOX_FOUNDATION,
+        features: GAME_TOOLBOX_FEATURES,
       }),
       1,
     );
@@ -737,7 +749,7 @@ describe("Companion kernel", () => {
     // the target readout's 4,096-entry agent search.
     kernel.view.setUint32(ADDRESSES.agentArray + 4, 5_000, true);
     kernel.view.setUint32(ADDRESSES.agentArray + 8, 5_000, true);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
 
     kernel.tick();
     let state = readyToolbox(kernel.toolbox());
@@ -816,7 +828,7 @@ describe("Companion kernel", () => {
   it("compares Toolbox projections by decoded value", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
     const first = kernel.toolbox();
     assert.equal(sameCompanionToolboxState(null, first), false);
@@ -833,7 +845,7 @@ describe("Companion kernel", () => {
   it("reads only the Toolbox header while its generation is unchanged", async () => {
     const kernel = await createKernel();
     installGameGraph(kernel.view);
-    assert.equal(kernel.init({ features: FEATURE_TOOLBOX_FOUNDATION }), 1);
+    assert.equal(kernel.init({ features: TOOLBOX_FEATURES }), 1);
     kernel.tick();
 
     const first = readChangedCompanionToolbox(
@@ -870,8 +882,7 @@ describe("Companion kernel", () => {
     paintCursor(kernel.view, 7);
     assert.equal(kernel.init({
       features: FEATURE_NATIVE_CURSOR
-        | FEATURE_GAME_SNAPSHOT
-        | FEATURE_TOOLBOX_FOUNDATION,
+        | GAME_TOOLBOX_FEATURES,
     }), 1);
     const before = new Uint8Array(kernel.memory.buffer).slice();
 
@@ -887,6 +898,10 @@ describe("Companion kernel", () => {
       [ADDRESSES.cursor, ADDRESSES.cursor + COMPANION_CURSOR_BYTES],
       [ADDRESSES.toolbox, ADDRESSES.toolbox + COMPANION_TOOLBOX_BYTES],
       [ADDRESSES.party, ADDRESSES.party + COMPANION_PARTY_BYTES],
+      [
+        ADDRESSES.playRegion,
+        ADDRESSES.playRegion + COMPANION_PLAY_REGION_BYTES,
+      ],
       [ADDRESSES.companionRuntime, ADDRESSES.companionRuntime + 65_536],
     ] as const;
     const after = new Uint8Array(kernel.memory.buffer);
@@ -916,7 +931,7 @@ describe("Companion kernel", () => {
     );
     assert.equal(
       kernel.init({
-        features: FEATURE_GAME_SNAPSHOT,
+        features: GAME_SNAPSHOT_FEATURES,
         snapshotPointer: 0,
         snapshotSize: 0,
       }),
@@ -932,7 +947,7 @@ describe("Companion kernel", () => {
     );
     assert.equal(
       kernel.init({
-        features: FEATURE_GAME_SNAPSHOT,
+        features: GAME_SNAPSHOT_FEATURES,
         cursorPointer: ADDRESSES.cursor,
         cursorSize: COMPANION_CURSOR_BYTES,
       }),
