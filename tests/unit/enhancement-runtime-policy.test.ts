@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   enhancementRuntimePolicy,
 } from "../../src/renderer/enhancement-runtime-policy.js";
+import { FEATURE_SELECTION_POLICIES } from "../../src/shared/feature-contracts.js";
 
 const off = Object.freeze({
   gwonmacTools: false,
@@ -18,38 +19,38 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
   assert.deepEqual(enhancementRuntimePolicy("toolbox-foundation", off, "pve"), {
     tools: true,
     targetReadout: false,
-    teamManagement: false,
+    teamApply: false,
     xunlaiStorage: false,
-    travelPalette: false,
-    skillSlotGeometry: false,
-    skillCooldownOverlay: false,
+    travel: false,
+    skillKeyLabels: false,
+    skillCooldowns: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
     tools: true,
     targetReadout: false,
-    teamManagement: true,
+    teamApply: true,
     xunlaiStorage: true,
-    travelPalette: true,
-    skillSlotGeometry: false,
-    skillCooldownOverlay: false,
+    travel: true,
+    skillKeyLabels: false,
+    skillCooldowns: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
     tools: true,
     targetReadout: false,
-    teamManagement: false,
+    teamApply: false,
     xunlaiStorage: true,
-    travelPalette: true,
-    skillSlotGeometry: false,
-    skillCooldownOverlay: false,
+    travel: true,
+    skillKeyLabels: false,
+    skillCooldowns: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
     tools: false,
     targetReadout: true,
-    teamManagement: false,
+    teamApply: false,
     xunlaiStorage: false,
-    travelPalette: false,
-    skillSlotGeometry: false,
-    skillCooldownOverlay: false,
+    travel: false,
+    skillKeyLabels: false,
+    skillCooldowns: false,
   });
 });
 
@@ -64,10 +65,10 @@ test("runtime-gated commands fail closed while storage keeps its refusal reason"
     skillCooldownOverlayEnabled: false,
   });
   for (const region of ["unknown", "pvp"] as const) {
-    assert.equal(enhancementRuntimePolicy("toolbox-commands", on, region).teamManagement, false);
-    assert.equal(enhancementRuntimePolicy("none", on, region).teamManagement, false);
+    assert.equal(enhancementRuntimePolicy("toolbox-commands", on, region).teamApply, false);
+    assert.equal(enhancementRuntimePolicy("none", on, region).teamApply, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).xunlaiStorage, true);
-    assert.equal(enhancementRuntimePolicy("none", on, region).travelPalette, false);
+    assert.equal(enhancementRuntimePolicy("none", on, region).travel, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).targetReadout, false);
     assert.equal(enhancementRuntimePolicy("none", on, region).tools, true);
   }
@@ -85,22 +86,23 @@ test("product tool settings remain live once the capability is present", () => {
   }, "pve"), {
     tools: true,
     targetReadout: false,
-    teamManagement: true,
+    teamApply: true,
     xunlaiStorage: false,
-    travelPalette: true,
-    skillSlotGeometry: true,
-    skillCooldownOverlay: true,
+    travel: true,
+    skillKeyLabels: false,
+    skillCooldowns: true,
   });
 });
 
-test("skill geometry runs only for configured labels or enabled cooldowns", () => {
+test("skill feature selection distinguishes labels from cooldowns", () => {
   const empty = enhancementRuntimePolicy("none", {
     ...off,
     gwonmacTools: true,
     skillKeyBindings: [null, null, null, null, null, null, null, null],
     skillCooldownOverlayEnabled: false,
   }, "pve");
-  assert.equal(empty.skillSlotGeometry, false);
+  assert.equal(empty.skillKeyLabels, false);
+  assert.equal(empty.skillCooldowns, false);
   const labels = enhancementRuntimePolicy("none", {
     ...off,
     gwonmacTools: true,
@@ -119,8 +121,15 @@ test("skill geometry runs only for configured labels or enabled cooldowns", () =
     ],
     skillCooldownOverlayEnabled: false,
   }, "pve");
-  assert.equal(labels.skillSlotGeometry, true);
-  assert.equal(labels.skillCooldownOverlay, false);
+  assert.equal(labels.skillKeyLabels, true);
+  assert.equal(labels.skillCooldowns, false);
+});
+
+test("runtime policy projects every registered feature exactly once", () => {
+  assert.deepEqual(
+    Object.keys(enhancementRuntimePolicy("none", off, "unknown")).sort(),
+    Object.keys(FEATURE_SELECTION_POLICIES).sort(),
+  );
 });
 
 test("local Tools availability never depends on a live-game safety gate", () => {

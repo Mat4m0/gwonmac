@@ -483,7 +483,7 @@ export async function installCertifiedCompanion(
         program,
         playRegion: playRegion(),
         nativeCursor: capabilities.nativeCursor,
-        teamManagement: active.teamManagement,
+        teamManagement: active.teamApply,
         xunlaiStorage: active.xunlaiStorage,
         targetReadout: active.targetReadout,
         commands: commands !== null,
@@ -494,6 +494,8 @@ export async function installCertifiedCompanion(
       console.debug(`[tools:dev] policy ${JSON.stringify({ reason, ...summary })}`);
     };
     const targetEnabled = () => policy().targetReadout;
+    const skillGeometryEnabled = () =>
+      policy().skillKeyLabels || policy().skillCooldowns;
     const setTargetEnabled = () => {
       if (!observeState) return;
       if (targetEnabled()) readout ??= createTargetReadout(document.body);
@@ -504,8 +506,8 @@ export async function installCertifiedCompanion(
     };
     const syncSkillOverlays = () => skills.sync(
       policySnapshot().settings,
-      policy().skillSlotGeometry,
-      policy().skillCooldownOverlay,
+      skillGeometryEnabled(),
+      policy().skillCooldowns,
     );
     setTargetEnabled();
     syncSkillOverlays();
@@ -518,7 +520,7 @@ export async function installCertifiedCompanion(
     // live permission gates and supplies fresh game and party observations.
     let toolboxObservation: ToolboxObservation | null = null;
     let companionState: CompanionSnapshot | null = null;
-    const teamEnabled = () => policy().teamManagement;
+    const teamEnabled = () => policy().teamApply;
     const syncActiveObservers = () => {
       const active =
         (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
@@ -534,8 +536,8 @@ export async function installCertifiedCompanion(
         | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0)
         | skills.activeFeatureFlags(
           policySnapshot().settings,
-          policy().skillSlotGeometry,
-          policy().skillCooldownOverlay,
+          skillGeometryEnabled(),
+          policy().skillCooldowns,
         );
       kernelDispatch(
         COMPANION_DISPATCH_KINDS.activeFeatures,
@@ -584,7 +586,7 @@ export async function installCertifiedCompanion(
     };
     const syncTravelPolicy = () => {
       travelInstallation?.update({
-        enabled: policy().travelPalette,
+        enabled: policy().travel,
         playRegion: playRegion(),
         state: travelGameState(policySnapshot().playRegionState),
       });
