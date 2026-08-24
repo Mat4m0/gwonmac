@@ -18,7 +18,38 @@ export const TRADE_LIMITS = Object.freeze({
   savedOffers: 100,
   savedPlayers: 100,
   payloadBytes: 1024 * 1024,
+  pricePayloadBytes: 4 * 1024 * 1024,
+  priceHistoryPoints: 5_000,
+  priceHistoryDays: 366,
 });
+
+export type TraderQuote = Readonly<{
+  modelId: string;
+  side: "buy" | "sell";
+  price: number;
+  timestamp: number;
+}>;
+
+export type TraderQuoteSnapshot = Readonly<{
+  updatedAt: number;
+  quotes: readonly TraderQuote[];
+}>;
+
+export type TraderPriceHistoryRequest = Readonly<{
+  modelId: string;
+  from: number;
+  to: number;
+}>;
+
+export type TraderPriceHistoryProblem =
+  | "rate-limited"
+  | "timeout"
+  | "invalid-response"
+  | "unavailable";
+
+export type TraderPriceHistoryResult =
+  | Readonly<{ status: "ok"; points: readonly TraderQuote[] }>
+  | Readonly<{ status: "error"; problem: TraderPriceHistoryProblem }>;
 
 export const TRADE_SOURCE_URLS: Readonly<
   Record<TradeSource, { readonly websocket: string; readonly website: string }>
@@ -56,17 +87,13 @@ export type TradeSnapshot = Readonly<{
 export type TradeSearchRequest = Readonly<{
   source: TradeSource;
   query: string;
-}>;
-
-export type TradeSearchMatch = Readonly<{
-  message: TradeMessage;
-  postCount: number;
+  scope: "all" | "player";
 }>;
 
 export type TradeSearchResult = Readonly<{
   source: TradeSource;
   query: string;
-  matches: readonly TradeSearchMatch[];
+  messages: readonly TradeMessage[];
 }>;
 
 export type TradeSavedOffer = TradeMessage & Readonly<{ savedAt: number }>;
@@ -103,16 +130,73 @@ export function parseTradeSource(value: unknown): TradeSource {
 }
 
 export function parseTradeSearchRequest(value: unknown): TradeSearchRequest {
-  if (!isRecord(value) || !hasOnlyKeys(value, ["source", "query"])) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["source", "query", "scope"])) {
     throw new TypeError("invalid trade search request");
   }
   const source = parseTradeSource(value.source);
+  if (value.scope !== "all" && value.scope !== "player") {
+    throw new TypeError("invalid trade search scope");
+  }
   if (typeof value.query !== "string") throw new TypeError("invalid trade query");
   const query = value.query.trim();
   if (query.length === 0 || countCharacters(query) > TRADE_LIMITS.queryCharacters) {
     throw new TypeError("invalid trade query");
   }
-  return Object.freeze({ source, query });
+  return Object.freeze({ source, query, scope: value.scope });
+}
+
+export function parseTraderQuotePayload(value: unknown): TraderQuoteSnapshot {
+  if (!isRecord(value) || !isRecord(value.buy) || !isRecord(value.sell)) {
+    throw new TypeError("invalid trader quote payload");
+  }
+  const quotes = [
+    ...parseQuoteRecord(value.buy, "buy"),
+    ...parseQuoteRecord(value.sell, "sell"),
+  ];
+  const updatedAt = parseRemoteTimestamp(value.updated_at)
+    ?? Math.max(0, ...quotes.map((quote) => quote.timestamp));
+  if (updatedAt === 0 || quotes.length === 0) {
+    throw new TypeError("empty trader quote payload");
+  }
+  return Object.freeze({ updatedAt, quotes: Object.freeze(quotes) });
+}
+
+export function parseTraderPriceHistoryRequest(value: unknown): TraderPriceHistoryRequest {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["modelId", "from", "to"])) {
+    throw new TypeError("invalid trader price history request");
+  }
+  if (!isTraderModelId(value.modelId)) {
+    throw new TypeError("invalid trader model id");
+  }
+  const { from, to } = value;
+  if (
+    typeof from !== "number"
+    || typeof to !== "number"
+    || !Number.isSafeInteger(from)
+    || !Number.isSafeInteger(to)
+    || from <= 0
+    || to <= from
+    || to - from
+      > TRADE_LIMITS.priceHistoryDays * 24 * 60 * 60 * 1_000
+  ) throw new TypeError("invalid trader price history range");
+  return Object.freeze({ modelId: value.modelId, from, to });
+}
+
+export function parseTraderPriceHistoryPayload(
+  modelId: string,
+  value: unknown,
+): readonly TraderQuote[] {
+  if (!isTraderModelId(modelId) || !Array.isArray(value)) {
+    throw new TypeError("invalid trader price history payload");
+  }
+  const points: TraderQuote[] = [];
+  for (const candidate of value.slice(0, TRADE_LIMITS.priceHistoryPoints)) {
+    const point = parseRemoteQuote(candidate, candidate && isRecord(candidate) && candidate.s
+      ? "sell"
+      : "buy");
+    if (point && point.modelId === modelId) points.push(point);
+  }
+  return Object.freeze(points.sort((left, right) => left.timestamp - right.timestamp));
 }
 
 export function parseTradeSavedState(value: unknown): TradeSavedState {
@@ -212,6 +296,48 @@ function parseTimestamp(value: unknown): number | null {
       ? Number(value)
       : Number.NaN;
   return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
+function parseQuoteRecord(
+  value: Record<string, unknown>,
+  side: TraderQuote["side"],
+): TraderQuote[] {
+  const quotes: TraderQuote[] = [];
+  for (const candidate of Object.values(value)) {
+    const quote = parseRemoteQuote(candidate, side);
+    if (quote) quotes.push(quote);
+  }
+  return quotes;
+}
+
+function parseRemoteQuote(value: unknown, side: TraderQuote["side"]): TraderQuote | null {
+  if (!isRecord(value)) return null;
+  const modelId = value.model_id ?? value.m;
+  const price = value.price ?? value.p;
+  const timestamp = parseRemoteTimestamp(value.timestamp ?? value.t);
+  if (
+    !isTraderModelId(modelId)
+    || typeof price !== "number"
+    || !Number.isSafeInteger(price)
+    || price <= 0
+    || timestamp === null
+  ) return null;
+  return Object.freeze({ modelId, side, price, timestamp });
+}
+
+function parseRemoteTimestamp(value: unknown): number | null {
+  const numeric = typeof value === "number"
+    ? value
+    : typeof value === "string" && /^[0-9]+$/u.test(value)
+      ? Number(value)
+      : Number.NaN;
+  if (!Number.isSafeInteger(numeric) || numeric <= 0) return null;
+  const milliseconds = numeric < 10_000_000_000 ? numeric * 1_000 : numeric;
+  return Number.isSafeInteger(milliseconds) ? milliseconds : null;
+}
+
+function isTraderModelId(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{6,24}$/u.test(value);
 }
 
 function parseSavedOffer(value: unknown): TradeSavedOffer | null {

@@ -1,4 +1,5 @@
 import { flushPromises, mount } from "@vue/test-utils";
+import { nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import TradeChatApp from "./TradeChatApp.vue";
 import { createDemoTradeHost, type TradeHost } from "./trade-host";
@@ -8,11 +9,11 @@ import type {
   TradeSavedState,
 } from "../../../src/shared/trade-chat";
 
-async function ledger() {
+async function ledger(host: TradeHost = createDemoTradeHost()) {
   const wrapper = mount(TradeChatApp, {
     attachTo: document.body,
     props: {
-      host: createDemoTradeHost(),
+      host,
       mode: "standalone",
       visible: true,
       active: true,
@@ -23,6 +24,94 @@ async function ledger() {
 }
 
 describe("TradeChatApp", () => {
+  it("opens trader prices and returns without losing the listing state", async () => {
+    const wrapper = await ledger();
+    await wrapper.get("input[type=search]").setValue("arms");
+    await wrapper.get(".trade-search").trigger("submit");
+    await flushPromises();
+    const selected = wrapper.get(".trade-row[data-selected]").attributes("data-selected");
+
+    await wrapper.get(".trader-prices-trigger").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".trader-prices").isVisible()).toBe(true);
+    expect(wrapper.get(".trader-category-tabs").text()).toContain("Runes");
+    expect(wrapper.get(".trader-catalogue").text()).toContain("Glob of Ectoplasm");
+    expect(wrapper.get(".trader-price-detail").text()).toContain("20k");
+    expect(wrapper.findAll(".price-series").length).toBe(2);
+
+    await wrapper.get(".trader-back").trigger("click");
+    await nextTick();
+    expect(wrapper.get(".trade-ledger").isVisible()).toBe(true);
+    expect(wrapper.get(".trade-search input[type=search]").element).toHaveProperty("value", "arms");
+    expect(wrapper.get(".trade-row[data-selected]").attributes("data-selected")).toBe(selected);
+    wrapper.unmount();
+  });
+
+  it("searches trader items across categories and exposes rune professions", async () => {
+    const wrapper = await ledger();
+    await wrapper.get(".trader-prices-trigger").trigger("click");
+    await flushPromises();
+    await wrapper.get(".trader-item-search input").setValue("vigor");
+    expect(wrapper.get(".trader-catalogue").text()).toContain("Rune of Superior Vigor");
+    await wrapper.get(".trader-category-tabs [role=tab]:nth-child(3)").trigger("click");
+    expect(wrapper.findAll(".trader-professions button")).toHaveLength(11);
+    wrapper.unmount();
+  });
+
+  it("debounces rapid trader navigation to the final history request", async () => {
+    let calls = 0;
+    const demo = createDemoTradeHost();
+    const host: TradeHost = Object.freeze({
+      ...demo,
+      async getTraderPriceHistory(request) {
+        calls += 1;
+        return demo.getTraderPriceHistory(request);
+      },
+    });
+    const wrapper = await ledger(host);
+    await wrapper.get(".trader-prices-trigger").trigger("click");
+    await flushPromises();
+    expect(calls).toBe(1);
+
+    vi.useFakeTimers();
+    const rows = wrapper.findAll(".trader-item-row");
+    await rows[1]!.trigger("click");
+    await rows[2]!.trigger("click");
+    await rows[1]!.trigger("click");
+    await vi.advanceTimersByTimeAsync(149);
+    expect(calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+    expect(calls).toBe(2);
+    vi.useRealTimers();
+    wrapper.unmount();
+  });
+
+  it("explains a history rate limit and retries without an empty chart state", async () => {
+    let calls = 0;
+    const demo = createDemoTradeHost();
+    const host: TradeHost = Object.freeze({
+      ...demo,
+      async getTraderPriceHistory(request) {
+        calls += 1;
+        if (calls === 1) return { status: "error", problem: "rate-limited" };
+        return demo.getTraderPriceHistory(request);
+      },
+    });
+    const wrapper = await ledger(host);
+    await wrapper.get(".trader-prices-trigger").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Kamadan is receiving too many requests");
+    expect(wrapper.text()).not.toContain("No price history");
+    await wrapper.get(".trader-history-error button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".trader-history-error").exists()).toBe(false);
+    expect(wrapper.findAll(".price-series")).toHaveLength(2);
+    wrapper.unmount();
+  });
+
   it("switches isolated sources and applies intent filters", async () => {
     const wrapper = await ledger();
     expect(wrapper.text()).toContain("Tyria Cartographer");
@@ -52,7 +141,7 @@ describe("TradeChatApp", () => {
     wrapper.unmount();
   });
 
-  it("searches player names through the upstream user query", async () => {
+  it("shows every matching listing instead of grouping by player", async () => {
     const wrapper = await ledger();
     await wrapper.get("input[type=search]").setValue("Tyria Cartographer");
     await wrapper.get(".trade-search").trigger("submit");
@@ -60,10 +149,37 @@ describe("TradeChatApp", () => {
 
     expect(wrapper.text()).toContain("Tyria Cartographer");
     expect(wrapper.text()).not.toContain("Silver Wayfarer");
-    expect(wrapper.findAll(".trade-row")).toHaveLength(1);
-    expect(wrapper.get(".group-count").text()).toBe("2 posts");
-    expect(wrapper.get(".trade-row").text()).toContain("WTS arms 29e each");
-    expect(wrapper.get(".trade-row").text()).not.toContain("Earlier trade listing");
+    expect(wrapper.findAll(".trade-row")).toHaveLength(2);
+    expect(wrapper.findAll(".trade-row")[0]!.text()).toContain("WTS arms 29e each");
+    expect(wrapper.findAll(".trade-row")[1]!.text()).toContain("Earlier trade listing");
+    expect(wrapper.get(".trade-summary").text()).toContain("2 offers");
+    wrapper.unmount();
+  });
+
+  it("opens exact player listings and returns to the preserved ledger", async () => {
+    const wrapper = await ledger();
+    const list = wrapper.get(".trade-list");
+    Object.defineProperty(list.element, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 64,
+    });
+    const originalSelection = wrapper.findAll(".trade-row")[0]!.attributes("data-selected");
+
+    await wrapper.findAll(".character-cell")[0]!.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".player-summary").text()).toContain("Tyria Cartographer");
+    expect(wrapper.findAll(".trade-row")).toHaveLength(2);
+    expect(wrapper.findAll(".trade-row").every(
+      (row) => row.text().includes("Tyria Cartographer"),
+    )).toBe(true);
+
+    await wrapper.get(".player-summary .ui-link").trigger("click");
+    await flushPromises();
+    expect(wrapper.findAll(".trade-row")).toHaveLength(7);
+    expect(wrapper.findAll(".trade-row")[0]!.attributes("data-selected")).toBe(originalSelection);
+    expect((wrapper.get(".trade-list").element as HTMLElement).scrollTop).toBe(64);
     wrapper.unmount();
   });
 
@@ -87,6 +203,7 @@ describe("TradeChatApp", () => {
     }));
     const events: { publish: ((event: TradeEvent) => void) | null } = { publish: null };
     const host: TradeHost = {
+      ...createDemoTradeHost(),
       async subscribe(source) {
         return { source, status: "live", messages };
       },
@@ -94,7 +211,7 @@ describe("TradeChatApp", () => {
       async search(request) {
         return {
           ...request,
-          matches: messages.map((message) => ({ message, postCount: 1 })),
+          messages,
         };
       },
       async retry() {},

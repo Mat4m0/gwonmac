@@ -53,6 +53,17 @@ their bounded public WebSocket protocol and links back to the selected source.
 Release remains conditional on confirming the service owner's permission or
 published compatibility expectations.
 
+The Trader prices catalogue includes the small item and profession PNGs that
+the Kamadan price interface publishes inline or from its fixed image routes.
+Kamadan does not publish dye images, so the dye vial PNGs come from the
+[Guild Wars Wiki dye icon gallery](https://wiki.guildwars.com/wiki/Category:Dye_icons).
+These images depict ArenaNet game content. They remain the property of ArenaNet
+or their respective owners, are not covered by this project's GPL license, and
+must not be reused separately. They are included under ArenaNet's current
+[Content Terms of Use](https://www.arena.net/en/legal/content-terms-of-use) for
+this independent fan project; those terms, not this repository's GPL license,
+govern their use.
+
 `src/native/gw-dat/vendor/` is a source port from
 [GWToolbox++](https://github.com/gwdevhub/GWToolboxpp), which distributes it
 under the MIT License and identifies it as derived from
@@ -67,9 +78,9 @@ This is decoding machinery, not game content. Every fact the build editor shows
 — each skill's name, description, icon, profession, attribute and costs — is
 read at runtime out of the Guild Wars installation on the player's own machine
 and cached there. The original Latin UI font is also read from that local game
-archive and converted to a browser font in memory. As with the game cursor
-described above, none of this game content is copied into this repository, the
-packaged application, or any release artifact.
+archive and converted to a browser font in memory. Apart from the explicitly
+identified Trader prices artwork above, this game content is not copied into
+the repository, packaged application, or a release artifact.
 
 ## ws
 

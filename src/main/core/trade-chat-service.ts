@@ -6,21 +6,32 @@
  * shared contract and no message text is ever written to diagnostics.
  */
 import WebSocket, { type ClientOptions, type RawData } from "ws";
+import { AppError } from "../../shared/errors.js";
 import {
   TRADE_LIMITS,
   TRADE_SOURCES,
   TRADE_SOURCE_URLS,
   parseTradePayload,
+  parseTraderPriceHistoryPayload,
+  parseTraderQuotePayload,
   type TradeConnectionState,
   type TradeEvent,
   type TradeMessage,
-  type TradeSearchMatch,
   type TradeSearchResult,
   type TradeSnapshot,
   type TradeSource,
+  type TraderPriceHistoryRequest,
+  type TraderPriceHistoryProblem,
+  type TraderPriceHistoryResult,
+  type TraderQuoteSnapshot,
 } from "../../shared/trade-chat.js";
+import { readBoundedResponse } from "./bounded-response.js";
 
 const CONNECT_TIMEOUT_MS = 10_000;
+const PRICE_TIMEOUT_MS = 10_000;
+const PRICE_CACHE_MS = 60_000;
+const HISTORY_CACHE_MS = 60_000;
+const HISTORY_RANGE_BUCKET_MS = 60_000;
 const SEARCH_TIMEOUT_MS = 8_000;
 const PING_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 10_000;
@@ -35,6 +46,7 @@ type TradeServiceTiming = Readonly<{
 
 export type TradeChatServiceOptions = Readonly<{
   createSocket?: (url: string, options: ClientOptions) => WebSocket;
+  fetch?: typeof fetch;
   random?: () => number;
   timing?: Partial<TradeServiceTiming>;
 }>;
@@ -68,12 +80,22 @@ export class TradeChatService {
   );
   readonly #subscriptions = new Map<number, TradeSource>();
   readonly #createSocket: (url: string, options: ClientOptions) => WebSocket;
+  readonly #fetch: typeof fetch;
   readonly #random: () => number;
   readonly #timing: TradeServiceTiming;
+  #quoteCache: { value: TraderQuoteSnapshot; expiresAt: number } | null = null;
+  #quoteRequest: Promise<TraderQuoteSnapshot> | null = null;
+  readonly #historyCache = new Map<
+    string,
+    { value: TraderPriceHistoryResult; expiresAt: number }
+  >();
+  readonly #historyRequests = new Map<string, Promise<TraderPriceHistoryResult>>();
+  readonly #priceRequests = new Set<AbortController>();
 
   constructor(options: TradeChatServiceOptions = {}) {
     this.#createSocket = options.createSocket ?? ((url, socketOptions) =>
       new WebSocket(url, socketOptions));
+    this.#fetch = options.fetch ?? fetch;
     this.#random = options.random ?? Math.random;
     this.#timing = {
       searchTimeoutMs: options.timing?.searchTimeoutMs ?? SEARCH_TIMEOUT_MS,
@@ -81,6 +103,64 @@ export class TradeChatService {
       pongTimeoutMs: options.timing?.pongTimeoutMs ?? PONG_TIMEOUT_MS,
       reconnectDelaysMs: options.timing?.reconnectDelaysMs ?? RECONNECT_DELAYS_MS,
     };
+  }
+
+  getTraderQuotes(): Promise<TraderQuoteSnapshot> {
+    const now = Date.now();
+    if (this.#quoteCache && this.#quoteCache.expiresAt > now) {
+      return Promise.resolve(this.#quoteCache.value);
+    }
+    if (this.#quoteRequest) return this.#quoteRequest;
+    this.#quoteRequest = this.#getJson("/trader_quotes")
+      .then(parseTraderQuotePayload)
+      .then((value) => {
+        this.#quoteCache = { value, expiresAt: Date.now() + PRICE_CACHE_MS };
+        return value;
+      })
+      .finally(() => { this.#quoteRequest = null; });
+    return this.#quoteRequest;
+  }
+
+  getTraderPriceHistory(
+    request: TraderPriceHistoryRequest,
+  ): Promise<TraderPriceHistoryResult> {
+    const normalized = normalizeHistoryRequest(request);
+    const key = `${normalized.modelId}:${normalized.from}:${normalized.to}`;
+    const cached = this.#historyCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
+    const active = this.#historyRequests.get(key);
+    if (active) return active;
+
+    const pending = this.#fetchTraderPriceHistory(normalized, key)
+      .finally(() => { this.#historyRequests.delete(key); });
+    this.#historyRequests.set(key, pending);
+    return pending;
+  }
+
+  async #fetchTraderPriceHistory(
+    request: TraderPriceHistoryRequest,
+    key: string,
+  ): Promise<TraderPriceHistoryResult> {
+    try {
+      const points = parseTraderPriceHistoryPayload(
+        request.modelId,
+        await this.#getJson(
+          `/pricing_history/${request.modelId}/${request.from}/${request.to}`,
+        ),
+      );
+      const value = Object.freeze({ status: "ok" as const, points });
+      this.#historyCache.set(key, { value, expiresAt: Date.now() + HISTORY_CACHE_MS });
+      if (this.#historyCache.size > 24) {
+        const oldest = this.#historyCache.keys().next().value;
+        if (oldest) this.#historyCache.delete(oldest);
+      }
+      return value;
+    } catch (error) {
+      const problem = error instanceof TraderPriceRequestError
+        ? error.problem
+        : "invalid-response";
+      return Object.freeze({ status: "error", problem });
+    }
   }
 
   subscribe(id: number, source: TradeSource, listener: Listener): TradeSnapshot {
@@ -105,13 +185,21 @@ export class TradeChatService {
     if (feed.subscribers.size === 0) this.#stop(feed);
   }
 
-  search(id: number, source: TradeSource, query: string): Promise<TradeSearchResult> {
+  search(
+    id: number,
+    source: TradeSource,
+    query: string,
+    scope: "all" | "player",
+  ): Promise<TradeSearchResult> {
     if (this.#subscriptions.get(id) !== source) {
       return Promise.reject(new Error("trade source is not subscribed"));
     }
     const playerQuery = `user:${query}`;
-    const queries = [query];
-    if ([...playerQuery].length <= TRADE_LIMITS.queryCharacters) queries.push(playerQuery);
+    const queries = scope === "player" ? [playerQuery] : [query];
+    if (
+      scope === "all"
+      && [...playerQuery].length <= TRADE_LIMITS.queryCharacters
+    ) queries.push(playerQuery);
     return Promise.allSettled(queries.map((candidate) => this.#query(source, candidate)))
       .then((results) => {
         const messages = results.flatMap((result) => result.status === "fulfilled"
@@ -120,7 +208,7 @@ export class TradeChatService {
         if (messages.length === 0 && results.every((result) => result.status === "rejected")) {
           throw new Error("trade search failed");
         }
-        return Object.freeze({ source, query, matches: groupSearchMatches(messages) });
+        return Object.freeze({ source, query, messages: mergeSearchMessages(messages) });
       });
   }
 
@@ -171,6 +259,46 @@ export class TradeChatService {
     for (const feed of this.#feeds.values()) {
       feed.subscribers.clear();
       this.#stop(feed);
+    }
+    this.#historyCache.clear();
+    this.#historyRequests.clear();
+    for (const controller of this.#priceRequests) controller.abort();
+    this.#priceRequests.clear();
+  }
+
+  async #getJson(path: string): Promise<unknown> {
+    const controller = new AbortController();
+    this.#priceRequests.add(controller);
+    const timer = setTimeout(() => controller.abort(), PRICE_TIMEOUT_MS);
+    try {
+      const response = await this.#fetch(
+        new URL(path, TRADE_SOURCE_URLS.kamadan.website).toString(),
+        {
+          headers: { "User-Agent": "GWonMac Trader Prices" },
+          redirect: "error",
+          signal: controller.signal,
+        },
+      );
+      if (response.status === 429) throw new TraderPriceRequestError("rate-limited");
+      if (!response.ok) throw new TraderPriceRequestError("unavailable");
+      const bytes = await readBoundedResponse(response, TRADE_LIMITS.pricePayloadBytes);
+      try {
+        const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        return JSON.parse(text) as unknown;
+      } catch {
+        throw new TraderPriceRequestError("invalid-response");
+      }
+    } catch (error) {
+      if (error instanceof TraderPriceRequestError) throw error;
+      if (error instanceof AppError && error.code === "response_too_large") {
+        throw new TraderPriceRequestError("invalid-response");
+      }
+      throw new TraderPriceRequestError(
+        controller.signal.aborted ? "timeout" : "unavailable",
+      );
+    } finally {
+      clearTimeout(timer);
+      this.#priceRequests.delete(controller);
     }
   }
 
@@ -336,19 +464,30 @@ export class TradeChatService {
   }
 }
 
-function groupSearchMatches(messages: readonly TradeMessage[]): readonly TradeSearchMatch[] {
+class TraderPriceRequestError extends Error {
+  readonly problem: TraderPriceHistoryProblem;
+
+  constructor(problem: TraderPriceHistoryProblem) {
+    super(problem);
+    this.problem = problem;
+  }
+}
+
+function normalizeHistoryRequest(
+  request: TraderPriceHistoryRequest,
+): TraderPriceHistoryRequest {
+  const duration = request.to - request.from;
+  const to = Math.floor(request.to / HISTORY_RANGE_BUCKET_MS) * HISTORY_RANGE_BUCKET_MS;
+  return Object.freeze({ modelId: request.modelId, from: to - duration, to });
+}
+
+function mergeSearchMessages(messages: readonly TradeMessage[]): readonly TradeMessage[] {
   const unique = new Map<number, TradeMessage>();
   for (const message of messages) unique.set(message.timestamp, message);
-  const groups = new Map<string, { message: TradeMessage; postCount: number }>();
-  for (const message of [...unique.values()].sort((a, b) => b.timestamp - a.timestamp)) {
-    const key = message.sender.toLocaleLowerCase();
-    const group = groups.get(key);
-    if (group) group.postCount += 1;
-    else groups.set(key, { message, postCount: 1 });
-  }
-  return Object.freeze([...groups.values()]
+  return Object.freeze([...unique.values()]
+    .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, TRADE_LIMITS.searchResults)
-    .map((match) => Object.freeze(match)));
+    .map((message) => Object.freeze(message)));
 }
 
 function createFeed(source: TradeSource): Feed {

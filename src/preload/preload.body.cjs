@@ -183,6 +183,8 @@ const api = {
     retry: (source) => ipcRenderer.invoke(IPC.tradeRetry, source),
     getSaved: () => ipcRenderer.invoke(IPC.tradeSavedGet),
     setSaved: (value) => ipcRenderer.invoke(IPC.tradeSavedSet, value),
+    getTraderQuotes: () => ipcRenderer.invoke(IPC.traderQuotesGet),
+    getTraderPriceHistory: (request) => ipcRenderer.invoke(IPC.traderPriceHistoryGet, request),
     onEvent: (callback) => listen(IPC.tradeEvent, callback),
   },
   travelPreferences: {

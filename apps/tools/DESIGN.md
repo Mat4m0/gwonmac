@@ -81,9 +81,15 @@ density, or behavior.
 - Search offer text and the upstream `user:` character index together, then
   merge results by message timestamp. Clearing the field returns immediately
   to the live ledger.
-- Collapse repeated search matches from one character to their newest matching
-  post and show the group count. Keep the live ledger chronological and
-  ungrouped.
+- Keep every timestamp-distinct search result, including multiple posts from
+  one character. Keep search results and the live ledger chronological.
+- Open Trader prices inside the Trade Chat window and preserve the ledger DOM
+  while it is hidden. Back returns to the previous ledger state and position.
+- Use a master-detail price layout at wide widths and one navigable pane at
+  narrow widths. Keep category, search, selected item, and chart range intact
+  while moving between the list and detail.
+- Distinguish observed buy and sell history with both labels and stable colors.
+  Charts must expose exact values without depending on color or pointer hover.
 - Keep saved offers and followed players in one right-anchored Saved drawer.
   It is non-modal at wide widths and an in-window sheet when narrow. Its entry
   and exit share the right edge, focus returns to its trigger, and reduced

@@ -8,6 +8,10 @@ import {
   type TradeSavedState,
   type TradeSnapshot,
   type TradeSource,
+  type TraderPriceHistoryRequest,
+  type TraderPriceHistoryResult,
+  type TraderQuote,
+  type TraderQuoteSnapshot,
 } from "../../../src/shared/trade-chat";
 import type { GwNativeApi } from "../../../src/shared/contracts";
 
@@ -21,6 +25,10 @@ export type TradeHost = Readonly<{
   openSource(source: TradeSource): Promise<void>;
   getSaved(): Promise<TradeSavedState>;
   setSaved(value: TradeSavedState): Promise<TradeSavedState>;
+  getTraderQuotes(): Promise<TraderQuoteSnapshot>;
+  getTraderPriceHistory(
+    request: TraderPriceHistoryRequest,
+  ): Promise<TraderPriceHistoryResult>;
 }>;
 
 type NativeTradeHostApi = Readonly<{
@@ -43,6 +51,8 @@ export function createNativeTradeHost(api: NativeTradeHostApi): TradeHost {
     getSaved: () => api.trade.getSaved(),
     // Vue state can contain proxies, which Electron cannot structured-clone.
     setSaved: (value) => api.trade.setSaved(parseTradeSavedState(value)),
+    getTraderQuotes: () => api.trade.getTraderQuotes(),
+    getTraderPriceHistory: (request) => api.trade.getTraderPriceHistory(request),
   });
 }
 
@@ -92,20 +102,16 @@ export function createDemoTradeHost(): TradeHost {
     async unsubscribe() {},
     async search(request) {
       const query = request.query.toLocaleLowerCase();
-      const groups = new Map<string, { message: TradeMessage; postCount: number }>();
-      for (const message of DEMO_MESSAGES.filter((candidate) =>
+      const messages = DEMO_MESSAGES.filter((candidate) =>
         candidate.source === request.source
-        && (candidate.message.toLocaleLowerCase().includes(query)
-          || candidate.sender.toLocaleLowerCase().includes(query))
-      ).sort((left, right) => right.timestamp - left.timestamp)) {
-        const key = message.sender.toLocaleLowerCase();
-        const group = groups.get(key);
-        if (group) group.postCount += 1;
-        else groups.set(key, { message, postCount: 1 });
-      }
+        && (request.scope === "player"
+          ? candidate.sender.toLocaleLowerCase() === query
+          : candidate.message.toLocaleLowerCase().includes(query)
+            || candidate.sender.toLocaleLowerCase().includes(query))
+      ).sort((left, right) => right.timestamp - left.timestamp);
       return {
         ...request,
-        matches: [...groups.values()],
+        messages,
       };
     },
     async retry(next) {
@@ -132,7 +138,52 @@ export function createDemoTradeHost(): TradeHost {
       saved = value;
       return saved;
     },
+    async getTraderQuotes() {
+      return demoTraderQuotes();
+    },
+    async getTraderPriceHistory(request) {
+      return Object.freeze({ status: "ok", points: demoTraderPriceHistory(request) });
+    },
   });
+}
+
+function demoTraderQuotes(): TraderQuoteSnapshot {
+  const updatedAt = Date.now() - 75_000;
+  const rows = [
+    ["0b03a2", 20_000, 15_000],
+    ["0b03b1", 6_500, 5_200],
+    ["0b039f", 900, 700],
+    ["0b03a6", 850, 650],
+    ["0b03b4", 210, 160],
+    ["0a009224d00a01", 8_600, 7_100],
+    ["0a009224d00c01", 3_200, 2_500],
+    ["0815af27ea02c2", 12_500, 9_800],
+    ["084ab9a53003c6", 4_200, 3_300],
+  ] as const;
+  return Object.freeze({
+    updatedAt,
+    quotes: Object.freeze(rows.flatMap(([modelId, buy, sell]) => [
+      Object.freeze({ modelId, side: "buy" as const, price: buy, timestamp: updatedAt }),
+      Object.freeze({ modelId, side: "sell" as const, price: sell, timestamp: updatedAt }),
+    ])),
+  });
+}
+
+function demoTraderPriceHistory(
+  request: TraderPriceHistoryRequest,
+): readonly TraderQuote[] {
+  const span = request.to - request.from;
+  const base = demoTraderQuotes().quotes.find((quote) =>
+    quote.modelId === request.modelId && quote.side === "buy")?.price ?? 1_000;
+  return Object.freeze(Array.from({ length: 42 }, (_, index) => {
+    const timestamp = request.from + span * index / 41;
+    const wave = Math.sin(index / 4.2) * 0.08 + index / 900;
+    const buy = Math.max(1, Math.round(base * (1 + wave)));
+    return [
+      Object.freeze({ modelId: request.modelId, side: "buy" as const, price: buy, timestamp }),
+      Object.freeze({ modelId: request.modelId, side: "sell" as const, price: Math.round(buy * 0.78), timestamp }),
+    ];
+  }).flat());
 }
 
 function fixture(

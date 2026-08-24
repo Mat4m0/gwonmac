@@ -66,11 +66,7 @@ import {
   isSkillKeyBinding,
   type SkillKeyBinding,
 } from "../shared/skill-key-bindings.js";
-import {
-  AllowlistError,
-  errorCode,
-  ValidationError,
-} from "../shared/errors.js";
+import { errorCode, ValidationError } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
 import { parseBuildLibrary } from "../shared/builds/parse-library.js";
 import type { BuildLibrary } from "../shared/builds/library.js";
@@ -138,16 +134,12 @@ import {
   type Parser,
 } from "./ipc-channel-registry.js";
 import {
-  parseTradeSearchRequest,
-  parseTradeSavedState,
-  parseTradeSource,
-  type TradeSearchRequest,
-  type TradeSource,
-  type TradeSavedState,
-} from "../shared/trade-chat.js";
-import type { TradeChatService } from "./core/trade-chat-service.js";
+  tradeChannelDefinitions,
+  type TradeInvokeChannel,
+  type TradeIpcContext,
+} from "./trade-ipc.js";
 
-export interface IpcContext {
+export interface IpcContext extends TradeIpcContext {
   sockets: SocketManager;
   windows: WindowRegistry;
   credentialsStoreFor: (win: BrowserWindow) => CredentialsStore;
@@ -167,9 +159,6 @@ export interface IpcContext {
   setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
-  tradeChat: TradeChatService;
-  getTradeSaved: () => Promise<TradeSavedState>;
-  setTradeSaved: (value: TradeSavedState) => Promise<TradeSavedState>;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
   stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
@@ -431,22 +420,6 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   return value;
 });
 
-const asTradeSource = one((value: unknown): TradeSource => {
-  try {
-    return parseTradeSource(value);
-  } catch {
-    throw new ValidationError("invalid trade source");
-  }
-});
-
-const asTradeSearchRequest = one((value: unknown): TradeSearchRequest => {
-  try {
-    return parseTradeSearchRequest(value);
-  } catch {
-    throw new ValidationError("invalid trade search request");
-  }
-});
-
 const asAccountsSetup = one(parseAccountsSetup);
 const asAccountProfileCreate = one(parseAccountProfileCreate);
 const asAccountProfileUpdate = one(parseAccountProfileUpdate);
@@ -459,12 +432,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
 } {
   const paths = gamePaths();
   const secretOperations = new Set<Promise<unknown>>();
-  const tradeCleanupInstalled = new Set<number>();
-  const requireTradeEnabled = async (): Promise<void> => {
-    if (!(await ctx.getSettings()).gwonmacTools) {
-      throw new AllowlistError("trade chat is disabled");
-    }
-  };
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
       return Promise.reject(new ValidationError("application is quitting"));
@@ -549,48 +516,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       return outcome;
     }),
 
-    tradeSubscribe: channel(asTradeSource, async (win, source) => {
-      await requireTradeEnabled();
-      const id = win.webContents.id;
-      if (!tradeCleanupInstalled.has(id)) {
-        tradeCleanupInstalled.add(id);
-        win.webContents.once("destroyed", () => {
-          tradeCleanupInstalled.delete(id);
-          ctx.tradeChat.unsubscribe(id);
-        });
-      }
-      return ctx.tradeChat.subscribe(id, source, (event) => {
-        sendIfLive(win, IPC.tradeEvent, event);
-      });
-    }),
-
-    tradeUnsubscribe: channel(nothing, (win) => {
-      ctx.tradeChat.unsubscribe(win.webContents.id);
-    }),
-
-    tradeSavedGet: channel(nothing, async () => {
-      await requireTradeEnabled();
-      return ctx.getTradeSaved();
-    }),
-
-    tradeSavedSet: channel(one(parseTradeSavedState), async (_win, value) => {
-      await requireTradeEnabled();
-      return ctx.setTradeSaved(value);
-    }),
-
-    tradeSearch: channel(asTradeSearchRequest, async (win, request) => {
-      await requireTradeEnabled();
-      return ctx.tradeChat.search(
-        win.webContents.id,
-        request.source,
-        request.query,
-      );
-    }),
-
-    tradeRetry: channel(asTradeSource, async (win, source) => {
-      await requireTradeEnabled();
-      ctx.tradeChat.retry(win.webContents.id, source);
-    }),
+    ...tradeChannelDefinitions(ctx),
 
     travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),
     travelPreferencesSet: channel(one(parseTravelUserPreferencesUpdate), (_win, update) =>
@@ -834,7 +760,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
       one(parseExportEntries),
       (win, entries) => ctx.saveAccountTemplates(win, entries),
     ),
-  } satisfies Record<Exclude<InvokeChannel, SteamInvokeChannel>, AnyChannelDef>;
+  } satisfies Record<
+    Exclude<InvokeChannel, SteamInvokeChannel | TradeInvokeChannel>,
+    AnyChannelDef
+  > & Record<TradeInvokeChannel, AnyChannelDef>;
 
   registerChannelDefinitions(ctx.windows, handlers);
   const steamSettled = registerSteamIpcHandlers(

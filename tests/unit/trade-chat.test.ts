@@ -8,9 +8,13 @@ import WebSocket from "ws";
 import { TradeChatService } from "../../src/main/core/trade-chat-service.js";
 import { TradeSavedStore } from "../../src/main/core/trade-saved-store.js";
 import {
+  TRADE_LIMITS,
   parseTradePayload,
   parseTradeSavedState,
   parseTradeSearchRequest,
+  parseTraderPriceHistoryPayload,
+  parseTraderPriceHistoryRequest,
+  parseTraderQuotePayload,
 } from "../../src/shared/trade-chat.js";
 
 describe("trade chat contracts", () => {
@@ -53,11 +57,19 @@ describe("trade chat contracts", () => {
   it("rejects malformed payloads and invalid searches", () => {
     assert.equal(parseTradePayload("kamadan", { t: 1, s: "", m: "WTS" }), null);
     assert.equal(parseTradePayload("kamadan", { t: -1, s: "A", m: "WTS" }), null);
-    assert.throws(() => parseTradeSearchRequest({ source: "both", query: "ecto" }));
-    assert.throws(() => parseTradeSearchRequest({ source: "kamadan", query: " " }));
+    assert.throws(() => parseTradeSearchRequest({
+      source: "both", query: "ecto", scope: "all",
+    }));
+    assert.throws(() => parseTradeSearchRequest({
+      source: "kamadan", query: " ", scope: "all",
+    }));
+    assert.throws(() => parseTradeSearchRequest({
+      source: "kamadan", query: "ecto", scope: "sender",
+    }));
     assert.throws(() => parseTradeSearchRequest({
       source: "kamadan",
       query: "x".repeat(129),
+      scope: "all",
     }));
   });
 
@@ -80,6 +92,36 @@ describe("trade chat contracts", () => {
         { sender: "Angel Trader", savedAt: 20 },
         { sender: "angel trader", savedAt: 21 },
       ],
+    }));
+  });
+
+  it("normalizes bounded trader quotes and price history", () => {
+    assert.deepEqual(parseTraderQuotePayload({
+      buy: { ecto: { t: 1_787_597_866, p: 20_000, m: "0b03a2" } },
+      sell: { ecto: { t: 1_787_597_875, p: 15_000, m: "0b03a2", s: 1 } },
+      updated_at: 1_787_597_875,
+    }), {
+      updatedAt: 1_787_597_875_000,
+      quotes: [
+        { modelId: "0b03a2", side: "buy", price: 20_000, timestamp: 1_787_597_866_000 },
+        { modelId: "0b03a2", side: "sell", price: 15_000, timestamp: 1_787_597_875_000 },
+      ],
+    });
+    const request = parseTraderPriceHistoryRequest({
+      modelId: "0b03a2",
+      from: 1_787_500_000_000,
+      to: 1_787_600_000_000,
+    });
+    assert.equal(request.modelId, "0b03a2");
+    assert.deepEqual(parseTraderPriceHistoryPayload("0b03a2", [
+      { t: 1_787_597_875, p: 15_000, m: "0b03a2", s: 1 },
+      { t: 1_787_597_866, p: 20_000, m: "0b03a2" },
+      { t: 0, p: 1, m: "0b03a2" },
+    ]).map((point) => point.side), ["buy", "sell"]);
+    assert.throws(() => parseTraderPriceHistoryRequest({
+      modelId: "../bad",
+      from: 1,
+      to: 2,
     }));
   });
 
@@ -142,6 +184,108 @@ class FakeTradeSocket extends EventEmitter {
 }
 
 describe("trade chat service", () => {
+  it("fetches and caches current quotes while requesting exact history ranges", async () => {
+    const urls: string[] = [];
+    const service = new TradeChatService({
+      fetch: (async (input) => {
+        const url = String(input);
+        urls.push(url);
+        const body = url.includes("pricing_history")
+          ? [{ t: 1_787_597_866, p: 20_000, m: "0b03a2" }]
+          : {
+              buy: { ecto: { t: 1_787_597_866, p: 20_000, m: "0b03a2" } },
+              sell: {},
+              updated_at: 1_787_597_866,
+            };
+        return new Response(JSON.stringify(body));
+      }) as typeof fetch,
+    });
+    const first = await service.getTraderQuotes();
+    const second = await service.getTraderQuotes();
+    assert.equal(first, second);
+    assert.equal(urls.filter((url) => url.endsWith("/trader_quotes")).length, 1);
+    const request = {
+      modelId: "0b03a2",
+      from: 1_787_500_000_000,
+      to: 1_787_600_000_000,
+    };
+    const history = await service.getTraderPriceHistory(request);
+    assert.equal(history.status, "ok");
+    assert.equal(history.status === "ok" ? history.points[0]?.price : undefined, 20_000);
+    assert.ok(urls.at(-1)?.endsWith(
+      "/pricing_history/0b03a2/1787499980000/1787599980000",
+    ));
+    service.dispose();
+  });
+
+  it("coalesces in-flight history and caches nearby ranges by minute", async () => {
+    let calls = 0;
+    const service = new TradeChatService({
+      fetch: (async () => {
+        calls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return new Response(JSON.stringify([
+          { t: 1_787_597_866, p: 220, m: "0b039e" },
+        ]));
+      }) as typeof fetch,
+    });
+    const request = {
+      modelId: "0b039e",
+      from: 1_785_004_830_000,
+      to: 1_787_596_830_000,
+    };
+
+    const simultaneous = await Promise.all(Array.from(
+      { length: 10 },
+      () => service.getTraderPriceHistory(request),
+    ));
+    assert.equal(calls, 1);
+    assert.ok(simultaneous.every((result) => result === simultaneous[0]));
+
+    await service.getTraderPriceHistory({
+      ...request,
+      from: request.from + 10_000,
+      to: request.to + 10_000,
+    });
+    assert.equal(calls, 1);
+    service.dispose();
+  });
+
+  it("classifies an upstream history rate limit without throwing", async () => {
+    const service = new TradeChatService({
+      fetch: (async () => new Response("slow down", { status: 429 })) as typeof fetch,
+    });
+    assert.deepEqual(await service.getTraderPriceHistory({
+      modelId: "0b039e",
+      from: 1_785_004_800_000,
+      to: 1_787_596_800_000,
+    }), { status: "error", problem: "rate-limited" });
+    service.dispose();
+  });
+
+  it("rejects oversized trader history while the body is still streaming", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(TRADE_LIMITS.pricePayloadBytes + 1));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const service = new TradeChatService({
+      fetch: (async () => new Response(body)) as typeof fetch,
+    });
+
+    assert.deepEqual(await service.getTraderPriceHistory({
+      modelId: "0b039e",
+      from: 1_785_004_800_000,
+      to: 1_787_596_800_000,
+    }), { status: "error", problem: "invalid-response" });
+    assert.equal(cancelled, true);
+    service.dispose();
+  });
+
   it("shares one connection and coalesces semantic offer and player searches", async () => {
     const socket = new FakeTradeSocket();
     const service = serviceWith([socket]);
@@ -150,8 +294,8 @@ describe("trade chat service", () => {
     socket.open();
     assert.equal(socket.sent.length, 1);
 
-    const first = service.search(1, "kamadan", "dye");
-    const second = service.search(2, "kamadan", "dye");
+    const first = service.search(1, "kamadan", "dye", "all");
+    const second = service.search(2, "kamadan", "dye", "all");
     assert.deepEqual(socket.sent.slice(1).map(queryFrom), ["dye", "user:dye"]);
     socket.message({
       query: "dye",
@@ -167,9 +311,17 @@ describe("trade chat service", () => {
 
     const [a, b] = await Promise.all([first, second]);
     assert.deepEqual(a, b);
-    assert.equal(a.matches.length, 2);
-    assert.equal(a.matches[0]?.message.sender, "Spam Trader");
-    assert.equal(a.matches[0]?.postCount, 2);
+    assert.equal(a.messages.length, 3);
+    assert.equal(a.messages[0]?.sender, "Spam Trader");
+    assert.equal(a.messages[1]?.message, "WTS another dye");
+
+    const player = service.search(1, "kamadan", "Spam Trader", "player");
+    assert.equal(queryFrom(socket.sent.at(-1)!), "user:Spam Trader");
+    socket.message({
+      query: "user:Spam Trader",
+      results: [{ t: 4, s: "Spam Trader", m: "WTS one more dye" }],
+    });
+    assert.deepEqual((await player).messages.map((message) => message.timestamp), [4]);
     service.dispose();
   });
 
@@ -203,7 +355,7 @@ describe("trade chat service", () => {
     });
     service.subscribe(1, "kamadan", () => undefined);
     first.open();
-    await assert.rejects(service.search(1, "kamadan", "ecto"), /trade search failed/);
+    await assert.rejects(service.search(1, "kamadan", "ecto", "all"), /trade search failed/);
     first.close();
     await delay(10);
     assert.equal(second.listenerCount("open"), 1);

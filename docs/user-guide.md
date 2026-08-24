@@ -142,8 +142,18 @@ certified; the menu and shortcut do not depend on client certification.
 Trade Chat shows the public Kamadan and Pre-Searing Ascalon feeds. Choose one
 source, search for an item or character, and use **Selling** or **Buying** to
 filter whole-word `WTS` and `WTB` messages. Select a row to read the complete
-message and exact time, then copy the character name or message. The feature is
-read-only: publish listings and contact players through normal Guild Wars chat.
+message and exact time. Select a character name to see that character's recent
+listings, then use **Back to results** or **Back to offers** to return to the
+same ledger position. Copy the character name or message when you find a useful
+listing. The feature is read-only: publish listings and contact players through
+normal Guild Wars chat.
+
+Choose **Trader prices** to inspect observed Kamadan NPC trader prices. Browse
+Common, Rare, Runes, or Dyes, or search the complete item catalogue. Select an
+item to compare its current buy and sell quotes and view its history over 24
+hours, 7 days, 30 days, 90 days, or 1 year. Use the chart controls to zoom or
+reset the view. **Back to listings** returns to the same Trade Chat ledger.
+
 Feed history, searches, and copied character names are not saved automatically.
 Use **Save offer** to keep an exact local copy of a useful listing. Use
 **Follow player** to highlight that character's current and future listings.
