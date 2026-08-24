@@ -11,6 +11,7 @@ import {
 import { TEAM_COMMAND_PAYLOAD_BYTES } from "../../src/renderer/enhancement-team-commands.ts";
 import { STORAGE_DATA_WINDOW_BYTES } from "../../src/renderer/enhancement-storage-command.ts";
 import { TRAVEL_PAYLOAD_BYTES } from "../../src/renderer/enhancement-travel-command.ts";
+import { COMPANION_PLAY_REGION_BYTES } from "../../src/renderer/companion-play-region-snapshot.ts";
 import { COMPANION_ABI } from "../../src/shared/companion-abi.ts";
 import {
   closePackaged,
@@ -896,7 +897,8 @@ export async function assertToolboxFoundationLifecycle() {
     const cursorPointer = (configPointer + CONFIG_BYTES + 7) & ~7;
     const statePointer = (cursorPointer + COMPANION_CURSOR_BYTES + 7) & ~7;
     const partyPointer = statePointer + COMPANION_TOOLBOX_BYTES;
-    const commandPointer = partyPointer + COMPANION_PARTY_BYTES;
+    const playRegionPointer = partyPointer + COMPANION_PARTY_BYTES;
+    const commandPointer = (playRegionPointer + COMPANION_PLAY_REGION_BYTES + 7) & ~7;
     const storagePointer = commandPointer + TEAM_COMMAND_PAYLOAD_BYTES;
     const travelPointer = (storagePointer + STORAGE_DATA_WINDOW_BYTES + 7) & ~7;
     assert.deepEqual(result.before.allocations, [
@@ -920,6 +922,10 @@ export async function assertToolboxFoundationLifecycle() {
       {
         pointer: partyPointer,
         size: COMPANION_PARTY_BYTES,
+      },
+      {
+        pointer: playRegionPointer,
+        size: COMPANION_PLAY_REGION_BYTES,
       },
       {
         pointer: commandPointer,
