@@ -127,6 +127,7 @@ export const ENHANCEMENT_BUILD =
   ENHANCEMENT_BUILDS[0] ?? assert.fail("the canonical Enhancement build table is empty");
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
+  playRegionObservation: true,
   targetObservation: true,
   partyObservation: false,
   teamApply: false,
@@ -138,6 +139,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
 });
 export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: true,
   targetObservation: false,
   partyObservation: true,
   teamApply: false,
@@ -149,6 +151,7 @@ export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.free
 });
 export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: true,
   targetObservation: true,
   partyObservation: true,
   teamApply: true,
@@ -160,6 +163,7 @@ export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze
 });
 export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
+  playRegionObservation: true,
   targetObservation: false,
   partyObservation: true,
   teamApply: true,

@@ -38,7 +38,7 @@ describe("certified extended memory transform", () => {
   it("accepts only canonical valid runtime feature profiles", () => {
     assert.equal(isExtendedMemoryProfile("off"), true);
     assert.equal(isExtendedMemoryProfile("features-01"), true);
-    assert.equal(isExtendedMemoryProfile("features-7f"), true);
+    assert.equal(isExtendedMemoryProfile("features-27f"), true);
     assert.equal(isExtendedMemoryProfile("features-00"), false);
     assert.equal(isExtendedMemoryProfile("features-08"), false);
     assert.equal(isExtendedMemoryProfile("features-80"), false);
@@ -95,7 +95,7 @@ describe("certified extended memory transform", () => {
         k: "wasm.extendedMemory",
         mode: "active",
         requested: true,
-        profile: "features-05",
+        profile: "features-205",
         capBytes: EXTENDED_MEMORY_MAX_BYTES,
         fallbackReason: "none",
       }),
@@ -106,7 +106,7 @@ describe("certified extended memory transform", () => {
         fields: {
           mode: "active",
           requested: true,
-          profile: "features-05",
+          profile: "features-205",
           capBytes: EXTENDED_MEMORY_MAX_BYTES,
           fallbackReason: "none",
         },

@@ -355,6 +355,65 @@ export const TEMPLATE_SAVE_BUILDS: readonly KnownTemplateSaveBuild[] =
         }),
       ]),
     }),
+    Object.freeze({
+      sha256:
+        "b8cc509714b82b69fdfd79a26ba257aa4c9ef23d90bca9dfcbbd044e371cfb17",
+      outputSha256:
+        "26a71c3e2bf55ab992dce659c1192213858ee25799daa87841ed23a3ddbb601a",
+      importCount: 219,
+      carrierImport: 207,
+      bridges: Object.freeze([
+        Object.freeze({
+          kind: "ensureDirectory" as const,
+          stubFunction: 185,
+          stubBody: Object.freeze([0x00, 0x41, 0x02, 0x0b]),
+          callSites: Object.freeze([
+            Object.freeze({ localFunction: 9541, bodyOffset: 171 }),
+            Object.freeze({ localFunction: 11528, bodyOffset: 142 }),
+            Object.freeze({ localFunction: 12217, bodyOffset: 127 }),
+          ]),
+        }),
+        Object.freeze({
+          kind: "findFiles" as const,
+          stubFunction: 186,
+          stubBody: Object.freeze([0x00, 0x0b]),
+          callSites: Object.freeze([
+            Object.freeze({ localFunction: 9530, bodyOffset: 157 }),
+            Object.freeze({ localFunction: 9531, bodyOffset: 157 }),
+            Object.freeze({ localFunction: 11528, bodyOffset: 210 }),
+            Object.freeze({ localFunction: 12217, bodyOffset: 419 }),
+          ]),
+        }),
+        Object.freeze({
+          kind: "fileBaseName" as const,
+          stubFunction: 197,
+          stubBody: Object.freeze([0x00, 0x41, 0x00, 0x0b]),
+          callSites: Object.freeze([
+            Object.freeze({ localFunction: 9530, bodyOffset: 276 }),
+            Object.freeze({ localFunction: 9531, bodyOffset: 278 }),
+          ]),
+        }),
+        Object.freeze({
+          kind: "deleteFile" as const,
+          stubFunction: 333,
+          stubBody: Object.freeze([
+            0x00, 0x41, 0xca, 0x87, 0xc5, 0x80, 0x00, 0x41,
+            0xa3, 0xbb, 0xc3, 0x80, 0x00, 0x41, 0xc8, 0x06,
+            0x10, 0xc2, 0x82, 0x80, 0x80, 0x00, 0x00, 0x0b,
+          ]),
+          callSites: Object.freeze([
+            Object.freeze({ localFunction: 459, bodyOffset: 201 }),
+          ]),
+        }),
+        Object.freeze({
+          kind: "fileExists" as const,
+          stubFunction: 552,
+          callSites: Object.freeze([
+            Object.freeze({ localFunction: 9541, bodyOffset: 201 }),
+          ]),
+        }),
+      ]),
+    }),
   ]);
 
 function fail(message: string): never {

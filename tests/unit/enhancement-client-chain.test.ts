@@ -18,6 +18,7 @@ import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save
 
 const NO_CAPABILITIES = Object.freeze({
   nativeCursor: false,
+  playRegionObservation: false,
   targetObservation: false,
   partyObservation: false,
   teamApply: false,
@@ -29,11 +30,11 @@ const NO_CAPABILITIES = Object.freeze({
 });
 describe("Enhancement client chain", () => {
   it("source-pins every executable capability profile", () => {
-    // Seven booleans have 127 non-empty combinations. Team Apply requires
-    // Party observation, and chat aliases require Travel or Xunlai to give
-    // them an action they can truthfully expose.
-    const profiles = Array.from({ length: 127 }, (_, index) => {
-      const profile = `features-${(index + 1).toString(16).padStart(2, "0")}` as
+    // Enumerate the complete ten-bit wire vocabulary. The registry rejects
+    // masks whose declared dependencies are absent.
+    const profiles = Array.from({ length: 1_023 }, (_, index) => {
+      const mask = index + 1;
+      const profile = `features-${mask.toString(16).padStart(mask < 0x100 ? 2 : 3, "0")}` as
         EnhancementCapabilityProfile;
       const capabilities = enhancementCapabilitiesForProfile(profile);
       return capabilities
@@ -43,10 +44,10 @@ describe("Enhancement client chain", () => {
           ]]
         : [];
     }).flat();
-    assert.equal(profiles.length, 83);
-    assert.equal(new Set(profiles.map(([, value]) => JSON.stringify(value))).size, 83);
+    assert.equal(profiles.length, 281);
+    assert.equal(new Set(profiles.map(([, value]) => JSON.stringify(value))).size, 281);
     const teamProfiles = profiles.filter(([, capabilities]) => capabilities.teamApply);
-    assert.equal(teamProfiles.length, 28);
+    assert.equal(teamProfiles.length, 112);
     assert.ok(teamProfiles.every(([, capabilities]) => capabilities.partyObservation));
     for (const [profile, capabilities] of profiles) {
       assert.equal(enhancementCapabilityProfile(capabilities), profile);
@@ -64,6 +65,7 @@ describe("Enhancement client chain", () => {
       // Commands without the Toolbox that would drive them are refused.
       {
         nativeCursor: false,
+        playRegionObservation: false,
         targetObservation: false,
         partyObservation: false,
         teamApply: true,
@@ -100,7 +102,7 @@ describe("Enhancement client chain", () => {
     const cursorOnly: KnownEnhancementBuild = {
       ...full,
       outputSha256: Object.freeze({
-        "features-01": full.outputSha256["features-01"]!,
+        "features-01": "a".repeat(64),
       }),
     };
     delete cursorOnly.targetObservation;
@@ -116,7 +118,7 @@ describe("Enhancement client chain", () => {
     const partyOnly: KnownEnhancementBuild = {
       ...full,
       outputSha256: Object.freeze({
-        "features-04": full.outputSha256["features-04"]!,
+        "features-204": "b".repeat(64),
       }),
     };
     delete partyOnly.cursorEvent;
@@ -126,7 +128,7 @@ describe("Enhancement client chain", () => {
     delete partyOnly.xunlaiAction;
     delete partyOnly.travelAction;
     delete partyOnly.chatAliases;
-    assert.deepEqual(enhancementProfilesForBuild(partyOnly), ["features-04"]);
+    assert.deepEqual(enhancementProfilesForBuild(partyOnly), ["features-204"]);
     assert.equal(hasValidEnhancementProfileHashes(partyOnly), true);
 
     const missingObservationBase = { ...partyOnly };
@@ -211,8 +213,8 @@ describe("Enhancement client chain", () => {
       hasValidEnhancementProfileHashes({
         ...cursorOnly,
         outputSha256: Object.freeze({
-          "features-01": full.outputSha256["features-01"]!,
-          "features-02": full.outputSha256["features-02"]!,
+          "features-01": "a".repeat(64),
+          "features-202": "c".repeat(64),
         }),
       }),
       false,

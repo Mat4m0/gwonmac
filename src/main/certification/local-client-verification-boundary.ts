@@ -98,6 +98,10 @@ function featureFailuresFromVerdicts(
   verdicts: LocalFeatureVerdicts,
 ): LocalFeatureFailures | null {
   const nativeCursor = refusalForFeature("nativeCursor", verdicts.nativeCursor);
+  const playRegionObservation = refusalForFeature(
+    "playRegionObservation",
+    verdicts.playRegionObservation,
+  );
   const targetObservation = refusalForFeature(
     "targetObservation",
     verdicts.targetObservation,
@@ -120,6 +124,7 @@ function featureFailuresFromVerdicts(
   );
   if (
     nativeCursor === null
+    || playRegionObservation === null
     || targetObservation === null
     || partyObservation === null
     || teamApply === null
@@ -131,6 +136,7 @@ function featureFailuresFromVerdicts(
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
+    ...(playRegionObservation ? { playRegionObservation } : {}),
     ...(targetObservation ? { targetObservation } : {}),
     ...(partyObservation ? { partyObservation } : {}),
     ...(teamApply ? { teamApply } : {}),
@@ -269,6 +275,31 @@ function matchesObservationBase(
     && Object.entries(expected).every(([key, value]) =>
       key === "contextRoot" || key === "agentArray" || key === "areaInfo"
         || candidate[key as keyof typeof candidate] === value);
+}
+
+function matchesPlayRegionObservation(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.playRegionObservation?.layout;
+  if (candidate === undefined) return true;
+  const expected = baseline.playRegionObservation?.layout;
+  if (
+    expected === undefined
+    || Object.keys(candidate).sort().join() !== Object.keys(expected).sort().join()
+    || !Object.values(candidate).every(isIndex)
+    || [
+      candidate.contextRoot - expected.contextRoot,
+      candidate.areaInfo - expected.areaInfo,
+    ].some((delta, _index, deltas) => delta !== deltas[0])
+    || Object.entries(expected).some(([key, value]) =>
+      key !== "contextRoot" && key !== "areaInfo"
+      && candidate[key as keyof typeof candidate] !== value)
+  ) return false;
+  const observation = build.observationBase?.layout;
+  return observation === undefined || Object.entries(candidate).every(
+    ([key, value]) => observation[key as keyof typeof observation] === value,
+  );
 }
 
 function matchesTargetObservation(
@@ -494,6 +525,7 @@ function isAutomaticSemanticBuild(
     || !isDigest(build.hookBodySha256)
   ) return false;
   const hasCursor = build.cursorEvent !== undefined;
+  const hasPlayRegion = build.playRegionObservation !== undefined;
   const hasObservation = build.observationBase !== undefined;
   const hasTarget = build.targetObservation !== undefined;
   const hasTravel = build.travelAction !== undefined;
@@ -503,17 +535,20 @@ function isAutomaticSemanticBuild(
   const hasTeam = build.teamApply !== undefined;
   const hasSkillSlotGeometry = build.skillSlotGeometry !== undefined;
   const hasSkillCooldown = build.skillCooldownObservation !== undefined;
-  if (!hasCursor && !hasTarget && !hasTravel && !hasXunlai && !hasAliases
+  if (!hasCursor && !hasPlayRegion && !hasObservation && !hasTarget
+    && !hasTravel && !hasXunlai && !hasAliases
     && !hasParty && !hasTeam && !hasSkillSlotGeometry && !hasSkillCooldown) {
     return false;
   }
   if (
     Object.keys(build.outputSha256).length === 0
     || !Object.values(build.outputSha256).every(isDigest)
-    || (hasTarget && !hasObservation)
-    || (hasXunlai && !hasObservation)
+    || (hasObservation && !hasPlayRegion)
+    || (hasTarget && (!hasPlayRegion || !hasObservation))
+    || (hasTravel && !hasPlayRegion)
+    || (hasXunlai && (!hasPlayRegion || !hasObservation))
     || (hasParty && (!hasObservation || build.uiDispatcher === undefined))
-    || (hasSkillSlotGeometry && !hasParty)
+    || (hasSkillSlotGeometry && !hasPlayRegion)
     || (hasSkillCooldown && (!hasObservation || !hasParty))
     || (hasTeam && (!hasParty || build.gameThread === undefined))
     || ((hasTravel || hasXunlai) && build.gameThread === undefined)
@@ -538,6 +573,7 @@ function isAutomaticSemanticBuild(
   return ENHANCEMENT_BUILDS.some((baseline) =>
     matchesCoreProof(build, baseline)
     && matchesCursorProof(build, baseline)
+    && matchesPlayRegionObservation(build, baseline)
     && matchesObservationBase(build, baseline)
     && matchesTargetObservation(build, baseline)
     && matchesUiDispatcher(build, baseline)

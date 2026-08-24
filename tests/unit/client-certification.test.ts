@@ -24,6 +24,7 @@ const ALL_CAPABILITIES = Object.freeze({
   chatAliases: true,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playRegionObservation: true,
 });
 
 function localVerification(

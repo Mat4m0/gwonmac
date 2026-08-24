@@ -36,6 +36,7 @@ import {
 
 const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
+  playRegionObservation: true,
   targetObservation: false,
   partyObservation: true,
   teamApply: false,
@@ -288,6 +289,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
         manifest(input),
         {
           nativeCursor: true,
+          playRegionObservation: false,
           targetObservation: true,
           partyObservation: false,
           teamApply: true,
@@ -563,7 +565,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     delete partyOnlyBuild.targetObservation;
     delete partyOnlyBuild.teamApply;
     partyOnlyBuild.outputSha256 = Object.freeze({
-      "features-04": build.outputSha256["features-04"]!,
+      "features-204": build.outputSha256["features-204"]!,
     });
     const transformed = transformEnhancementWasm(
       input,

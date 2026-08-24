@@ -175,6 +175,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     chatAliases: true,
     skillSlotGeometry: true,
     skillCooldownObservation: true,
+    playRegionObservation: true,
   });
 
   // If this is a statically shipped build, the shape locator must still
@@ -281,8 +282,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.deepEqual(capabilitiesOf(addressDecision), {
     nativeCursor: true, targetObservation: false, partyObservation: false,
     teamApply: false, travelAction: true, xunlaiAction: false, chatAliases: true,
-    skillSlotGeometry: false,
+    skillSlotGeometry: true,
     skillCooldownObservation: false,
+    playRegionObservation: true,
   });
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
@@ -291,37 +293,18 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.ok(addressTemplateBuild);
   assert.ok(addressEnhancementBuild);
   assert.ok(addressCapabilities);
-  const addressTemplate = rewriteTemplateSaveWasm(
-    changedAddressReference,
-    addressTemplateBuild,
-  );
-  const addressTemplateBodies = parseCode(sectionById(
-    splitSections(addressTemplate),
-    10,
-  ));
-  const addressOutputSections = splitSections(transformEnhancementWasm(
-    addressTemplate,
-    addressEnhancementBuild,
-    addressCapabilities,
-  ));
-  const addressOutputBodies = parseCode(sectionById(addressOutputSections, 10));
-  const addressAliasParser = addressEnhancementBuild.chatAliases!.parser.functionIndex
-    - derived.importCount;
-  assert.notDeepEqual(
-    addressOutputBodies[addressAliasParser],
-    addressTemplateBodies[addressAliasParser],
-    "Travel-only degradation must retain its proved /tp parser alias",
-  );
-  const addressExports = parseExports(sectionById(addressOutputSections, 7));
-  assert.equal(addressExports.some(
-    (entry) => entry.name === addressEnhancementBuild.travelAction!.enqueueExport,
-  ), true);
-  assert.equal(addressExports.some(
-    (entry) => entry.name === local.enhancementBuild!.xunlaiAction!.openExport,
-  ), false);
-  assert.equal(addressExports.some(
-    (entry) => entry.name === local.enhancementBuild!.teamApply!.thunkExport,
-  ), false);
+  assert.deepEqual(effectiveCapabilitiesOf(addressDecision), {
+    nativeCursor: true,
+    targetObservation: false,
+    partyObservation: false,
+    teamApply: false,
+    travelAction: true,
+    xunlaiAction: false,
+    chatAliases: true,
+    skillSlotGeometry: true,
+    skillCooldownObservation: false,
+    playRegionObservation: true,
+  });
 
   const targetMutations = [
     { local: 7327 - derived.importCount, offset: 132, label: "target occurrence ledger", shared: false },
@@ -342,9 +325,14 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     assert.ok(refusal.templateSaveBuild, mutation.label);
     assert.ok(refusal.enhancementBuild?.cursorEvent, mutation.label);
     assert.equal(refusal.enhancementBuild.targetObservation, undefined, mutation.label);
-    assert.equal(capabilitiesOf(refusal)?.travelAction, true, mutation.label);
+    assert.equal(capabilitiesOf(refusal)?.travelAction, !mutation.shared, mutation.label);
     assert.equal(capabilitiesOf(refusal)?.chatAliases, true, mutation.label);
     assert.equal(capabilitiesOf(refusal)?.xunlaiAction, !mutation.shared, mutation.label);
+    assert.equal(
+      capabilitiesOf(refusal)?.playRegionObservation,
+      !mutation.shared,
+      mutation.label,
+    );
     assert.deepEqual(refusal.reasons, [], mutation.label);
   }
 

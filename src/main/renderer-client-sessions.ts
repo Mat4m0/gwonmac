@@ -46,6 +46,7 @@ function projectCompatibility(
       chatAliases: status("chatAliases"),
       skillSlotGeometry: status("skillSlotGeometry"),
       skillCooldownObservation: status("skillCooldownObservation"),
+      playRegionObservation: status("playRegionObservation"),
     }),
   });
 }

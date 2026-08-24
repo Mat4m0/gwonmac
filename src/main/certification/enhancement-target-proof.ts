@@ -29,9 +29,11 @@ import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.j
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import type {
   EnhancementObservationBaseLayout,
+  EnhancementPlayRegionLayout,
   EnhancementTargetLayout,
 } from "../../shared/enhancement-config.js";
 import type {
+  AutomaticPlayRegionLocation,
   AutomaticTargetLocation,
   ModuleShape,
 } from "./enhancement-evidence-types.js";
@@ -242,47 +244,33 @@ export function inspectTargetRoleCandidates(
   }
 }
 
-export function deriveObservationLayout(
+/** Exact, agent-independent authority for loading and PvE/PvP policy. */
+export function derivePlayRegionLayout(
   module: ModuleShape,
-): EnhancementObservationBaseLayout | null {
+): EnhancementPlayRegionLayout | null {
   const contextFunction = uniqueRoleFunction(module, TARGET_CONTEXT_ROOT_ROLE);
-  const agentAccessorFunction = uniqueRoleFunction(module, AGENT_ARRAY_ACCESSOR_ROLE);
   const areaLookupFunction = uniqueRoleFunction(module, AREA_LOOKUP_ROLE);
-  const exact = Object.fromEntries(Object.entries(EXACT_TARGET_ROLES).map(
-    ([name, role]) => [name, exactTargetFunction(module, role)],
-  )) as Record<keyof typeof EXACT_TARGET_ROLES, number | null>;
+  const roles = [
+    "gameCharacter", "mapId", "mapState", "currentMap", "instanceType",
+    "playerNumber", "areaCount", "areaFlags",
+  ] as const satisfies readonly (keyof typeof EXACT_TARGET_ROLES)[];
+  const exact = Object.fromEntries(roles.map(
+    (name) => [name, exactTargetFunction(module, EXACT_TARGET_ROLES[name])],
+  )) as Record<(typeof roles)[number], number | null>;
   if (
-    contextFunction === null || agentAccessorFunction === null
-    || areaLookupFunction === null
+    contextFunction === null || areaLookupFunction === null
     || Object.values(exact).some((value) => value === null)
   ) return null;
 
   const context = valuesForRole(functionBody(module, contextFunction), TARGET_CONTEXT_ROOT_ROLE);
-  const accessor = valuesForRole(functionBody(module, agentAccessorFunction), AGENT_ARRAY_ACCESSOR_ROLE);
   const area = valuesForRole(functionBody(module, areaLookupFunction), AREA_LOOKUP_ROLE);
   const contextRoot = soleValue(context, "context.root");
-  const agentArray = soleValue(accessor, "agent-array.base");
-  const agentArraySize = soleValue(accessor, "agent-array.size");
-  const lifecycleMatches = roleFunctions(module, AGENT_ARRAY_LIFECYCLE_ROLE).filter(
-    (functionIndex) => {
-      const values = valuesForRole(
-        functionBody(module, functionIndex), AGENT_ARRAY_LIFECYCLE_ROLE,
-      );
-      return soleValue(values, "agent-array.base") === agentArray
-        && soleValue(values, "agent-array.size") === agentArraySize;
-    },
-  );
-  if (lifecycleMatches.length !== 1) return null;
   const areaInfo = soleValue(area, "area.table");
   if (
-    agentArraySize !== agentArray + 8
-    || codeOperandOccurrences(module, contextRoot) !== 6
-    || codeOperandOccurrences(module, agentArray) !== 41
-    || codeOperandOccurrences(module, agentArraySize) !== 41
+    codeOperandOccurrences(module, contextRoot) !== 6
     || codeOperandOccurrences(module, areaInfo) !== 1
     || commonRelocationDelta([
-      [contextRoot, 0x5a0ee0], [agentArray, 0x5a4e58],
-      [agentArraySize, 0x5a4e60], [areaInfo, 0x1cc630],
+      [contextRoot, 0x5a0ee0], [areaInfo, 0x1cc630],
     ]) === null
   ) return null;
 
@@ -291,13 +279,12 @@ export function deriveObservationLayout(
       !== TARGET_IMMUTABLE_HASHES.areaAssertion
   ) return null;
 
-  const body = (name: keyof typeof EXACT_TARGET_ROLES) =>
+  const body = (name: (typeof roles)[number]) =>
     functionBody(module, exact[name]!);
   const contextBody = functionBody(module, contextFunction);
   const areaBody = functionBody(module, areaLookupFunction);
-  const observation: EnhancementObservationBaseLayout = {
+  const observation: EnhancementPlayRegionLayout = {
     contextRoot,
-    agentArray,
     gameContextSlot: unsignedOperand(contextBody, 17),
     characterContext: unsignedOperand(body("gameCharacter"), 5),
     mapId: unsignedOperand(body("mapId"), 39),
@@ -305,22 +292,12 @@ export function deriveObservationLayout(
     currentMapId: unsignedOperand(body("currentMap"), 11),
     currentInstanceType: unsignedOperand(body("instanceType"), 5),
     playerNumber: unsignedOperand(body("playerNumber"), 11),
-    agentId: unsignedOperand(body("agentFields"), 899),
-    agentX: unsignedOperand(body("agentFields"), 395),
-    agentY: unsignedOperand(body("agentFields"), 367),
-    agentType: unsignedOperand(body("agentFields"), 99),
-    agentPlayerNumber: unsignedOperand(body("agentFields"), 927),
-    agentModelType: unsignedOperand(body("agentModel"), 393),
-    worldContext: unsignedOperand(body("worldContext"), 81),
     areaInfo,
     areaInfoCount: unsignedOperand(body("areaCount"), 36),
     areaInfoStride: unsignedOperand(areaBody, 36),
     areaInfoFlags: unsignedOperand(body("areaFlags"), 21),
   };
-  if (
-    unsignedOperand(body("agentModel"), 365) !== observation.agentPlayerNumber
-    || unsignedOperand(areaBody, 6) < observation.areaInfoCount
-  ) return null;
+  if (unsignedOperand(areaBody, 6) < observation.areaInfoCount) return null;
   const table = staticBytes(
     module,
     observation.areaInfo,
@@ -334,7 +311,6 @@ export function deriveObservationLayout(
 
   return verifyLayout(observation, {
     contextRoot: { sourceRole: "context-root-writer", expression: "relocated static store", occurrences: [11] },
-    agentArray: { sourceRole: "agent-array lifecycle+accessor", expression: "base static", occurrences: [9, 34, 27] },
     gameContextSlot: { sourceRole: "context-root-writer", expression: "context registration slot", occurrences: [17] },
     characterContext: { sourceRole: "game-context character reader", expression: "i32.load offset", occurrences: [5] },
     mapId: { sourceRole: "map-id reader", expression: "i32.load offset", occurrences: [39] },
@@ -342,18 +318,110 @@ export function deriveObservationLayout(
     currentMapId: { sourceRole: "character-context map reader", expression: "i32.load offset", occurrences: [11] },
     currentInstanceType: { sourceRole: "character-context instance reader", expression: "i32.load offset", occurrences: [5] },
     playerNumber: { sourceRole: "character-context player reader", expression: "i32.load offset", occurrences: [11] },
-    agentId: { sourceRole: "agent snapshot copier", expression: "i32.load offset", occurrences: [899] },
-    agentX: { sourceRole: "agent snapshot copier", expression: "f32.load offset", occurrences: [395] },
-    agentY: { sourceRole: "agent snapshot copier", expression: "f32.load offset", occurrences: [367] },
-    agentType: { sourceRole: "agent snapshot copier", expression: "i32.load offset", occurrences: [99] },
-    agentPlayerNumber: { sourceRole: "agent snapshot+model readers", expression: "u16 offset", occurrences: [927, 365] },
-    agentModelType: { sourceRole: "agent model reader", expression: "u16 offset", occurrences: [393] },
-    worldContext: { sourceRole: "world-context slot reader", expression: "slot 19 field load", occurrences: [81] },
     areaInfo: { sourceRole: "area lookup+static content", expression: "unique immutable table", occurrences: [40] },
     areaInfoCount: { sourceRole: "published-area bound", expression: "finite exact bound", occurrences: [36] },
     areaInfoStride: { sourceRole: "area lookup", expression: "index multiplier", occurrences: [36] },
     areaInfoFlags: { sourceRole: "area flags reader", expression: "post-lookup load", occurrences: [21] },
   }).layout;
+}
+
+export function deriveObservationLayout(
+  module: ModuleShape,
+): EnhancementObservationBaseLayout | null {
+  const playRegion = derivePlayRegionLayout(module);
+  const agentAccessorFunction = uniqueRoleFunction(module, AGENT_ARRAY_ACCESSOR_ROLE);
+  const agentFieldsFunction = exactTargetFunction(module, EXACT_TARGET_ROLES.agentFields);
+  const agentModelFunction = exactTargetFunction(module, EXACT_TARGET_ROLES.agentModel);
+  const worldContextFunction = exactTargetFunction(module, EXACT_TARGET_ROLES.worldContext);
+  if (
+    !playRegion || agentAccessorFunction === null || agentFieldsFunction === null
+    || agentModelFunction === null || worldContextFunction === null
+  ) return null;
+  const accessor = valuesForRole(
+    functionBody(module, agentAccessorFunction),
+    AGENT_ARRAY_ACCESSOR_ROLE,
+  );
+  const agentArray = soleValue(accessor, "agent-array.base");
+  const agentArraySize = soleValue(accessor, "agent-array.size");
+  const lifecycleMatches = roleFunctions(module, AGENT_ARRAY_LIFECYCLE_ROLE).filter(
+    (functionIndex) => {
+      const values = valuesForRole(
+        functionBody(module, functionIndex), AGENT_ARRAY_LIFECYCLE_ROLE,
+      );
+      return soleValue(values, "agent-array.base") === agentArray
+        && soleValue(values, "agent-array.size") === agentArraySize;
+    },
+  );
+  if (
+    lifecycleMatches.length !== 1 || agentArraySize !== agentArray + 8
+    || codeOperandOccurrences(module, agentArray) !== 41
+    || codeOperandOccurrences(module, agentArraySize) !== 41
+    || commonRelocationDelta([
+      [playRegion.contextRoot, 0x5a0ee0], [agentArray, 0x5a4e58],
+      [agentArraySize, 0x5a4e60], [playRegion.areaInfo, 0x1cc630],
+    ]) === null
+  ) return null;
+  const agentFields = functionBody(module, agentFieldsFunction);
+  const agentModel = functionBody(module, agentModelFunction);
+  const observation: EnhancementObservationBaseLayout = {
+    ...playRegion,
+    agentArray,
+    agentId: unsignedOperand(agentFields, 899),
+    agentX: unsignedOperand(agentFields, 395),
+    agentY: unsignedOperand(agentFields, 367),
+    agentType: unsignedOperand(agentFields, 99),
+    agentPlayerNumber: unsignedOperand(agentFields, 927),
+    agentModelType: unsignedOperand(agentModel, 393),
+    worldContext: unsignedOperand(functionBody(module, worldContextFunction), 81),
+  };
+  if (unsignedOperand(agentModel, 365) !== observation.agentPlayerNumber) return null;
+  return Object.freeze(observation);
+}
+
+/**
+ * Strict launch authority for the bounded play-region observation.
+ * Proves only the character/map and area-table facts policy consumes. Agent
+ * tables and target selectors belong to the broader observation proof.
+ */
+export function locateAutomaticPlayRegion(
+  input: Uint8Array,
+  baselines: readonly KnownEnhancementBuild[],
+  suppliedContext?: EnhancementProofContext,
+): AutomaticPlayRegionLocation | null {
+  if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
+  try {
+    const context = suppliedContext?.inputIdentity === input
+      ? suppliedContext
+      : enhancementProofContext(input);
+    if (!context) return null;
+    const { module } = context;
+    const tick = context.tick.candidate;
+    if (!tick) return null;
+    const tickBody = functionBody(module, tick.functionIndex);
+    if (!bodyMatchesRole(tickBody, CLIENT_TICK_ROLE)) return null;
+    const playRegionLayout = derivePlayRegionLayout(module);
+    if (!playRegionLayout) return null;
+    const matches = baselines.flatMap((baseline): AutomaticPlayRegionLocation[] =>
+      baseline.playRegionObservation
+      && signatureMatches(module, tick.functionIndex, baseline.hookParams, baseline.hookResults)
+        ? [{
+            baseline,
+            hookFunction: tick.functionIndex,
+            hookBodySha256: tick.bodySha256,
+            playRegionLayout,
+          }]
+        : []);
+    if (matches.length === 0) return null;
+    const identity = (value: AutomaticPlayRegionLocation) => JSON.stringify({
+      hookFunction: value.hookFunction,
+      playRegionLayout: value.playRegionLayout,
+    });
+    return matches.every((match) => identity(match) === identity(matches[0]!))
+      ? matches[0]!
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function deriveTargetLayout(

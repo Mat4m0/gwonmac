@@ -118,6 +118,10 @@ const PARTY_EXACT_ROLES = Object.freeze({
   ]), ["i32", "i32"], []) },
 } as const);
 
+// The exact mutable-static operand paired with the certified context root.
+// Their common relocation delta must agree on every candidate client.
+const PARTY_MAP_LIFECYCLE_STATIC_BASELINE = 1_447_000;
+
 type PartyFunctionRole = (typeof PARTY_EXACT_ROLES)[keyof typeof PARTY_EXACT_ROLES];
 
 const PARTY_DIRTY_ROLES = Object.freeze([
@@ -396,7 +400,10 @@ export function derivePartyObservation(
     || !exactStaticBytesHash(module, worldValues, "world.assert-a", 12, PARTY_IMMUTABLE_HASHES.worldAssertionA)
     || !exactStaticBytesHash(module, worldValues, "world.assert-b", 12, PARTY_IMMUTABLE_HASHES.worldAssertionB)
     || commonRelocationDelta([
-      [soleValue(mapValues, "map.lifecycle-static"), 1_447_112],
+      [
+        soleValue(mapValues, "map.lifecycle-static"),
+        PARTY_MAP_LIFECYCLE_STATIC_BASELINE,
+      ],
       [observation.contextRoot, baselineObservation.contextRoot],
     ]) === null
   ) return null;

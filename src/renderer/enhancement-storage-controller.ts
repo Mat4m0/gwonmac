@@ -5,6 +5,7 @@
  */
 import type { StorageCommand } from "../shared/storage-command.js";
 import type { CompanionSnapshot } from "./companion-snapshot.js";
+import type { RuntimePlayRegion } from "./enhancement-runtime-policy.js";
 import {
   createStorageCommand,
   initializeStorageDataWindow,
@@ -27,6 +28,7 @@ export type StorageGameState = ReadyStorageGameState | PendingStorageGameState;
 
 export interface StorageAvailability {
   readonly enabled: boolean;
+  readonly playRegion: RuntimePlayRegion;
   readonly state: StorageGameState | null;
 }
 
@@ -42,6 +44,9 @@ function unavailableReason(
 ): string | null {
   if (!active) return "Enhancement installation is no longer active";
   if (!availability.enabled) return "Xunlai storage is turned off in Settings";
+  if (availability.playRegion === "unknown") {
+    return "Storage is waiting to confirm the current region";
+  }
   const state = availability.state;
   if (state?.status !== "ready" || typeof state.xunlaiAccess !== "boolean") {
     return "Storage is waiting to confirm access for this character";
@@ -62,6 +67,7 @@ export function createStorageController(
   let active = true;
   let availability: StorageAvailability = {
     enabled: false,
+    playRegion: "unknown",
     state: null,
   };
   let configuredEnabled: boolean | null = null;
@@ -80,8 +86,9 @@ export function createStorageController(
     const result = configure(payloadPointer, enabled ? 1 : 0);
     configuredEnabled = enabled;
     trace("configured", {
-      enabled,
-      accepted: result === 1,
+        enabled,
+        playRegion: availability.playRegion,
+        accepted: result === 1,
       state: availability.state?.status ?? "missing",
       access: availability.state?.status === "ready"
         ? availability.state.xunlaiAccess
@@ -111,6 +118,7 @@ export function createStorageController(
         ...fields,
         reason: error instanceof Error ? error.message : "unknown storage error",
         enabled: availability.enabled,
+        playRegion: availability.playRegion,
       });
       if (event.detail !== null && typeof event.detail === "object") {
         (event.detail as { error?: unknown }).error = error;
@@ -126,6 +134,7 @@ export function createStorageController(
       availability = next;
       const fields = {
         enabled: next.enabled,
+        playRegion: next.playRegion,
         state: next.state?.status ?? "missing",
         access: next.state?.status === "ready" ? next.state.xunlaiAccess : "unknown",
       } as const;

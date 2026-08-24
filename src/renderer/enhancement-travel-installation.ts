@@ -22,6 +22,7 @@ export interface TravelInstallation {
   initialize(): void;
   mount(parent: HTMLElement): void;
   update(availability: TravelAvailability): void;
+  poll(): void;
   command(): TravelCommand | null;
   dispose(free: (pointer: number) => void): void;
 }
@@ -65,6 +66,8 @@ export function createTravelInstallation(
       controller?.update(availability);
       palette?.setEnabled(availability.enabled);
       if (availability.state !== null) palette?.update(availability.state);
+    },
+    poll() {
       if (takeToggle() === 1 && controller?.command.unavailable() === null) {
         window.dispatchEvent(new CustomEvent("gw:travel-toggle"));
       }

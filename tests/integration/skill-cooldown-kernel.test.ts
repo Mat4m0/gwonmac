@@ -8,6 +8,7 @@ import {
   COOLDOWN_CONFIG_START,
   createKernel,
   DETAIL,
+  FEATURE_PLAY_REGION_OBSERVATION,
   FEATURE_SKILL_COOLDOWN_OBSERVATION,
   FEATURE_TOOLBOX_FOUNDATION,
   installGameGraph,
@@ -30,7 +31,8 @@ describe("skill cooldown kernel", () => {
     }
     assert.equal(kernel.init({
       features:
-        FEATURE_TOOLBOX_FOUNDATION | FEATURE_SKILL_COOLDOWN_OBSERVATION,
+        FEATURE_TOOLBOX_FOUNDATION | FEATURE_PLAY_REGION_OBSERVATION
+          | FEATURE_SKILL_COOLDOWN_OBSERVATION,
     }), 1);
     kernel.tick(0, 10_000);
     const ready = kernel.skillCooldowns();

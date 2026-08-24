@@ -37,6 +37,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       chatAliases: selected(capabilities.chatAliases),
       skillSlotGeometry: selected(capabilities.skillSlotGeometry),
       skillCooldownObservation: selected(capabilities.skillCooldownObservation),
+      playRegionObservation: selected(capabilities.playRegionObservation),
     },
   };
   return {
@@ -49,7 +50,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
 
 describe("effective Enhancement capability boundary", () => {
   it("reproduces every served profile from Main's session, independent of request", () => {
-    for (let mask = 1; mask <= 0x7f; mask += 1) {
+    for (let mask = 1; mask <= 0x3ff; mask += 1) {
       const capabilities = enhancementCapabilitiesForProfile(
         `features-${mask.toString(16).padStart(2, "0")}`,
       );
@@ -59,7 +60,7 @@ describe("effective Enhancement capability boundary", () => {
   });
 
   it("does not revive off or unavailable features", () => {
-    const capabilities = enhancementCapabilitiesForProfile("features-0f");
+    const capabilities = enhancementCapabilitiesForProfile("features-20f");
     assert.ok(capabilities);
     const original = session(capabilities);
     const value: ClientSession = {
@@ -78,6 +79,7 @@ describe("effective Enhancement capability boundary", () => {
           chatAliases: off,
           skillSlotGeometry: off,
           skillCooldownObservation: off,
+          playRegionObservation: off,
         },
       },
     };
@@ -92,6 +94,7 @@ describe("effective Enhancement capability boundary", () => {
       chatAliases: false,
       skillSlotGeometry: false,
       skillCooldownObservation: false,
+      playRegionObservation: false,
     });
   });
 

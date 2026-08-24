@@ -8,6 +8,7 @@ import type { RelocationSpan } from "./semantic-proof.js";
 import type {
   EnhancementCursorLayout,
   EnhancementObservationBaseLayout,
+  EnhancementPlayRegionLayout,
   EnhancementTargetLayout,
 } from "../../shared/enhancement-config.js";
 
@@ -122,6 +123,14 @@ export interface AutomaticTargetLocation {
   readonly hookBodySha256: string;
   readonly observationLayout: EnhancementObservationBaseLayout;
   readonly targetLayout: EnhancementTargetLayout;
+}
+
+/** Exact main-loop and observation-base authority for play-region policy. */
+export interface AutomaticPlayRegionLocation {
+  readonly baseline: KnownEnhancementBuild;
+  readonly hookFunction: number;
+  readonly hookBodySha256: string;
+  readonly playRegionLayout: EnhancementPlayRegionLayout;
 }
 
 export interface AutomaticLocalActionsLocation {

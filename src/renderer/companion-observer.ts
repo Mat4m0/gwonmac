@@ -27,6 +27,10 @@ import {
   readCompanionSkillCooldowns,
   readCompanionSkillSlots,
 } from "./companion-skill-snapshot.js";
+import {
+  type CompanionPlayRegionState,
+  readCompanionPlayRegion,
+} from "./companion-play-region-snapshot.js";
 
 type SnapshotObserverTarget = {
   memory: WebAssembly.Memory;
@@ -35,6 +39,7 @@ type SnapshotObserverTarget = {
   partyPointer: number;
   skillSlotPointer?: number;
   skillCooldownPointer?: number;
+  playRegionPointer?: number;
   snapshotReads: number;
   rejectedSnapshots: number;
   hertz: number;
@@ -52,6 +57,10 @@ type SkillSlotConsumer = {
 
 type SkillCooldownConsumer = {
   update(state: CompanionSkillCooldownState): void;
+};
+
+type PlayRegionConsumer = {
+  update(state: CompanionPlayRegionState): void;
 };
 
 /**
@@ -83,13 +92,14 @@ export function recordCompanionLifecycle(state: PublishedCompanionState) {
 
 export function observeCompanion(
   runtime: SnapshotObserverTarget,
-  cursor: { poll(): void } | null,
+  pollers: readonly { poll(): void }[],
   readout: StateConsumer | null,
   toolbox: ToolboxConsumer | null,
   observeState: boolean,
   publishState: boolean,
   skillSlots: SkillSlotConsumer | null = null,
   skillCooldowns: SkillCooldownConsumer | null = null,
+  playRegion: PlayRegionConsumer | null = null,
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -100,6 +110,14 @@ export function observeCompanion(
   let partySequence: number | null = null;
   let publishedState: PublishedCompanionState | null = null;
   const observe = () => {
+    // Publish the sole policy fact before any dependent observation from the
+    // same animation frame reaches its consumer.
+    if (playRegion) {
+      playRegion.update(readCompanionPlayRegion(
+        runtime.memory.buffer,
+        runtime.playRegionPointer ?? 0,
+      ));
+    }
     if (observeState) {
       const started = performance.now();
       const state = readCompanionSnapshot(
@@ -178,7 +196,7 @@ export function observeCompanion(
       ));
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.
-    cursor?.poll();
+    for (const poller of pollers) poller.poll();
     frame = requestAnimationFrame(observe);
   };
   frame = requestAnimationFrame(observe);

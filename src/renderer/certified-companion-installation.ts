@@ -36,6 +36,8 @@ import {
   COMPANION_SKILL_COOLDOWN_BYTES,
   COMPANION_SKILL_SLOT_BYTES,
 } from "./companion-skill-snapshot.js";
+import { COMPANION_PLAY_REGION_BYTES } from "./companion-play-region-snapshot.js";
+import { createPlayRegionObservationInstallation } from "./play-region-state-installation.js";
 import { createSkillOverlaysInstallation } from "./skill-overlays-installation.js";
 import { validateCompanionOwnedRegions } from "./companion-owned-regions.js";
 import {
@@ -66,7 +68,6 @@ import {
 } from "../shared/companion-kernel-contract.js";
 import {
   enhancementRuntimePolicy,
-  runtimePlayRegion,
   type RuntimePlayRegion,
 } from "./enhancement-runtime-policy.js";
 import {
@@ -140,12 +141,18 @@ export async function installCertifiedCompanion(
   const skills = createSkillOverlaysInstallation(capabilities);
   const skillSlotGeometry = skills.geometry;
   const skillCooldowns = skills.cooldowns;
+  const playRegions = createPlayRegionObservationInstallation(
+    capabilities.playRegionObservation,
+  );
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const publishObserverState = program === "target-observer";
   const featureFlags =
     (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
     | (observeState ? COMPANION_FEATURE_BITS.gameSnapshot : 0)
     | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
+    | (capabilities.playRegionObservation
+      ? COMPANION_FEATURE_BITS.playRegionObservation
+      : 0)
     | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
     | skills.certifiedFeatureFlags;
   if (featureFlags === 0) return null;
@@ -251,6 +258,7 @@ export async function installCertifiedCompanion(
   let disposeReadout = () => {};
   let disposeToolbox = () => {};
   let disposeToolSettings = () => {};
+  let disposePlayRegionSubscription = () => false;
   let disposeCursorRefresh = () => {};
   let professionTrace: ReturnType<typeof createProfessionCommandTrace> | null = null;
   let installedCallback: CallableFunction | null = null;
@@ -295,8 +303,12 @@ export async function installCertifiedCompanion(
       attempt("skill overlay disposal", skills.disposePresentation);
       attempt("skill-slot feed disposal", skillSlotGeometry.dispose);
       attempt("skill cooldown feed disposal", skillCooldowns.dispose);
+      attempt("play-region feed disposal", playRegions.dispose);
     }
     attempt("Tools settings listener disposal", disposeToolSettings);
+    attempt("play-region subscription disposal", () => {
+      disposePlayRegionSubscription();
+    });
     attempt("Trade alias disable", () => { configureTradeToggle?.(0); });
     if (observerStopped) {
       attempt("profession trace disposal", () => professionTrace?.dispose());
@@ -319,6 +331,7 @@ export async function installCertifiedCompanion(
         });
         attempt("skill-slot allocation release", () => skillSlotGeometry.release(free));
         attempt("skill cooldown allocation release", () => skillCooldowns.release(free));
+        attempt("play-region allocation release", () => playRegions.release(free));
       }
       attempt("command payload release", () => {
         if (payloadPointer) free(payloadPointer);
@@ -406,6 +419,7 @@ export async function installCertifiedCompanion(
     }
     skillSlotGeometry.allocate(exports.malloc as (bytes: number) => unknown);
     skillCooldowns.allocate(exports.malloc as (bytes: number) => unknown);
+    playRegions.allocate(exports.malloc as (bytes: number) => unknown);
     if (capabilities.teamApply) {
       payloadPointer = Number(
         exports.malloc(teamCommands!.TEAM_COMMAND_PAYLOAD_BYTES),
@@ -427,6 +441,7 @@ export async function installCertifiedCompanion(
       || (foundation && !partyPointer)
       || !skillSlotGeometry.allocated
       || !skillCooldowns.allocated
+      || !playRegions.allocated
       || (capabilities.teamApply && !payloadPointer)
       || (storageInstallation !== null && !storageInstallation.region().pointer)
       || (travelInstallation !== null && !travelInstallation.region().pointer)
@@ -460,6 +475,7 @@ export async function installCertifiedCompanion(
         : []),
       ...(skillSlotGeometry.region === null ? [] : [skillSlotGeometry.region]),
       ...(skillCooldowns.region === null ? [] : [skillCooldowns.region]),
+      ...(playRegions.region === null ? [] : [playRegions.region]),
       ...(capabilities.teamApply
         ? [
             {
@@ -556,6 +572,8 @@ export async function installCertifiedCompanion(
       skillKeyBytes: number,
       skillCooldownPointer: number,
       skillCooldownBytes: number,
+      playRegionPointer: number,
+      playRegionBytes: number,
       featureFlags: number,
     ) => number;
     type KernelDispatch = (
@@ -579,6 +597,8 @@ export async function installCertifiedCompanion(
     const kernelSkillSlotBytes = kernel.exports.companion_skill_slot_bytes as KernelScalar;
     const kernelSkillCooldownBytes =
       kernel.exports.companion_skill_cooldown_bytes as KernelScalar;
+    const kernelPlayRegionBytes =
+      kernel.exports.companion_play_region_bytes as KernelScalar;
     if (
       kernelAbi() !== COMPANION_ABI
       || kernelConfigBytes() !== configBytes
@@ -588,6 +608,7 @@ export async function installCertifiedCompanion(
       || kernelPartyBytes() !== COMPANION_PARTY_BYTES
       || kernelSkillSlotBytes() !== COMPANION_SKILL_SLOT_BYTES
       || kernelSkillCooldownBytes() !== COMPANION_SKILL_COOLDOWN_BYTES
+      || kernelPlayRegionBytes() !== COMPANION_PLAY_REGION_BYTES
       || kernelInit(
         snapshotPointer,
         observeState ? COMPANION_SNAPSHOT_BYTES : 0,
@@ -603,6 +624,8 @@ export async function installCertifiedCompanion(
         skillSlotGeometry.bytes,
         skillCooldowns.pointer,
         skillCooldowns.bytes,
+        playRegions.pointer,
+        playRegions.bytes,
         featureFlags,
       ) !== 1
     ) {
@@ -660,17 +683,11 @@ export async function installCertifiedCompanion(
         window.dispatchEvent(new CustomEvent("gw:trade-toggle"));
       }
     };
-    let snapshotPlayRegion: RuntimePlayRegion | null = observeState
-      ? "unknown"
-      : null;
-    let partyPlayRegion: RuntimePlayRegion = foundation
-      ? "unknown"
-      : "pve";
     let readout: ReturnType<typeof createTargetReadout> | null = null;
-    const playRegion = () => runtimePlayRegion(
-      snapshotPlayRegion,
-      partyPlayRegion,
-    );
+    const playRegion = (): RuntimePlayRegion => {
+      const state = playRegions.state;
+      return state.status === "ready" ? state.playRegion : "unknown";
+    };
     const policy = () => enhancementRuntimePolicy(
       program,
       optionalSettings,
@@ -723,10 +740,15 @@ export async function installCertifiedCompanion(
     const syncActiveObservers = () => {
       const active =
         (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
-        // Keep the bounded policy observer alive even while optional UI and
-        // commands are denied. It is the only way an unknown region can later
-        // prove that it became PvE without restarting.
-        | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
+        | (foundation && policy().tools
+          ? COMPANION_FEATURE_BITS.toolboxFoundation
+          : 0)
+        // Keep only the bounded policy observer alive while optional UI and
+        // commands are denied. It lets unknown/loading recover without the
+        // heavier party observer or a restart.
+        | (capabilities.playRegionObservation
+          ? COMPANION_FEATURE_BITS.playRegionObservation
+          : 0)
         | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0)
         | skills.activeFeatureFlags(
           optionalSettings,
@@ -774,6 +796,7 @@ export async function installCertifiedCompanion(
     const syncStoragePolicy = () => {
       storageInstallation?.update({
         enabled: policy().xunlaiStorage,
+        playRegion: playRegion(),
         state: companionState,
       });
     };
@@ -781,7 +804,7 @@ export async function installCertifiedCompanion(
       travelInstallation?.update({
         enabled: policy().travelPalette,
         playRegion: playRegion(),
-        state: travelGameState(companionState),
+        state: travelGameState(playRegions.state),
       });
     };
     storageInstallation?.mount();
@@ -809,18 +832,20 @@ export async function installCertifiedCompanion(
     const syncToolboxAvailability = () => {
       toolbox?.setEnabled(policy().tools);
     };
-    tracePolicy("launch");
-    const onToolSettings = () => {
-      // The event is only a notification. The validated bridge remains the
-      // single source of truth even if page code dispatches a malformed event.
-      optionalSettings = window.gwToolsSettings();
-      tracePolicy("settings");
+    const syncPolicySurfaces = (reason: "launch" | "region" | "settings") => {
+      tracePolicy(reason);
       syncToolboxAvailability();
       setTargetEnabled();
       syncSkillOverlays();
       syncActiveObservers();
       syncStoragePolicy();
       syncTravelPolicy();
+    };
+    const onToolSettings = () => {
+      // The event is only a notification. The validated bridge remains the
+      // single source of truth even if page code dispatches a malformed event.
+      optionalSettings = window.gwToolsSettings();
+      syncPolicySurfaces("settings");
       configureTradeAlias();
     };
     window.addEventListener("gw:tools-settings", onToolSettings);
@@ -830,10 +855,23 @@ export async function installCertifiedCompanion(
       toolbox?.dispose();
     };
 
+    const playRegionProjection = () => {
+      const state = playRegions.state;
+      return state.status === "ready"
+        ? `ready:${state.playRegion}:${state.mapId}:${state.instanceType}`
+        : `waiting:${state.reason}`;
+    };
+    let previousPlayRegionProjection = playRegionProjection();
+    disposePlayRegionSubscription = playRegions.subscribe(() => {
+      const next = playRegionProjection();
+      if (next === previousPlayRegionProjection) return;
+      previousPlayRegionProjection = next;
+      syncPolicySurfaces("region");
+    });
+
     // Apply opt-in state before the callback becomes reachable from the game.
-    syncActiveObservers();
-    syncStoragePolicy();
-    syncTravelPolicy();
+    playRegions.setActive(true);
+    syncPolicySurfaces("launch");
     configureTradeAlias();
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;
@@ -844,6 +882,7 @@ export async function installCertifiedCompanion(
       partyPointer,
       skillSlotPointer: skillSlotGeometry.pointer,
       skillCooldownPointer: skillCooldowns.pointer,
+      playRegionPointer: playRegions.pointer,
       hertz: 0,
       lastRenderUs: 0,
       renderSamples: [] as number[],
@@ -939,24 +978,14 @@ export async function installCertifiedCompanion(
     };
     stopObserver = observeCompanion(
       observerRuntime,
-      polledCursor,
+      [polledCursor, travelInstallation].filter(
+        (poller): poller is { poll(): void } => poller !== null,
+      ),
       observeState
-        ? { update: (state) => {
+          ? { update: (state) => {
             companionState = state;
-            const next: RuntimePlayRegion = state.status === "ready"
-              && (state.playRegion === "pve" || state.playRegion === "pvp")
-              ? state.playRegion
-              : "unknown";
-            if (next !== snapshotPlayRegion) {
-              snapshotPlayRegion = next;
-              tracePolicy("region");
-              setTargetEnabled();
-              syncSkillOverlays();
-              syncActiveObservers();
-            }
             readout?.update(state);
             syncStoragePolicy();
-            syncTravelPolicy();
             pollTradeAlias();
           } }
         : null,
@@ -964,23 +993,6 @@ export async function installCertifiedCompanion(
         ? { update: (state) => {
             toolboxObservation = state;
             professionTrace?.poll(state);
-            const party = state.party;
-            const next: RuntimePlayRegion = state.status === "ready"
-              && party?.status === "ready"
-              && (party.playRegion === "pve" || party.playRegion === "pvp")
-              ? party.playRegion
-              : "unknown";
-            const previousRegion = playRegion();
-            if (next !== partyPlayRegion) {
-              partyPlayRegion = next;
-            }
-            if (playRegion() !== previousRegion) {
-              tracePolicy("region");
-              setTargetEnabled();
-              syncSkillOverlays();
-              syncActiveObservers();
-            }
-            syncTravelPolicy();
             pollTradeAlias();
             toolbox?.update(state);
           } }
@@ -989,6 +1001,7 @@ export async function installCertifiedCompanion(
       publishObserverState,
       skillSlotGeometry.sink,
       skillCooldowns.sink,
+      playRegions.sink,
     );
     companionInstallations = installation;
     if (program !== "none") window.gwCompanionRuntime = runtime;

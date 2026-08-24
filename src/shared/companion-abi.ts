@@ -3,7 +3,7 @@
  * Renderer, scripts, and tests derive their ABI constants from this descriptor.
  */
 export const COMPANION_ABI = Object.freeze({
-  kernel: 16,
+  kernel: 17,
   config: Object.freeze({ bytes: 444 }),
   snapshot: Object.freeze({ abi: 3, bytes: 64 }),
   cursor: Object.freeze({ abi: 1, bytes: 4_160 }),
@@ -11,6 +11,7 @@ export const COMPANION_ABI = Object.freeze({
   party: Object.freeze({ abi: 7, bytes: 1_560 }),
   skillSlots: Object.freeze({ abi: 1, bytes: 156 }),
   skillCooldowns: Object.freeze({ abi: 1, bytes: 60 }),
+  playRegion: Object.freeze({ abi: 1, bytes: 28 }),
 });
 
 export const COMPANION_FEATURE_BITS = Object.freeze({
@@ -20,6 +21,7 @@ export const COMPANION_FEATURE_BITS = Object.freeze({
   targetObservation: 1 << 3,
   skillSlotGeometry: 1 << 4,
   skillCooldownObservation: 1 << 5,
+  playRegionObservation: 1 << 6,
 });
 
 export const COMPANION_DISPATCH_KINDS = Object.freeze({

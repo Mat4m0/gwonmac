@@ -22,6 +22,7 @@ import {
   COMPANION_SNAPSHOT_BYTES,
   COMPANION_TOOLBOX_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
+import { COMPANION_PLAY_REGION_BYTES } from "../../src/renderer/companion-play-region-snapshot.ts";
 import { ENHANCEMENT_CONFIG_WORD_COUNT } from "../../src/shared/enhancement-contracts.ts";
 import {
   COMPANION_KERNEL_HASH_BINDING,
@@ -92,8 +93,8 @@ function fixture(options: FixtureOptions = {}): Uint8Array<ArrayBuffer> {
   );
   const startFunction = signatures.length;
   const types = [
-    // companion_init: seven region pointer/size pairs plus the feature word.
-    functionType(15, true),
+    // companion_init: eight region pointer/size pairs plus the feature word.
+    functionType(17, true),
     functionType(6, false),
     functionType(0, true),
     functionType(0, false),
@@ -190,6 +191,7 @@ describe("companion kernel build contract", () => {
       { name: "companion_party_bytes", typeIndex: 2 },
       { name: "companion_skill_slot_bytes", typeIndex: 2 },
       { name: "companion_skill_cooldown_bytes", typeIndex: 2 },
+      { name: "companion_play_region_bytes", typeIndex: 2 },
     ]);
   });
 
@@ -256,6 +258,7 @@ describe("companion kernel build contract", () => {
       companion_skill_slot_bytes: COMPANION_KERNEL_EXPORT_VALUES.companion_skill_slot_bytes,
       companion_skill_cooldown_bytes:
         COMPANION_KERNEL_EXPORT_VALUES.companion_skill_cooldown_bytes,
+      companion_play_region_bytes: COMPANION_PLAY_REGION_BYTES,
     });
     // One export per value, so a region added to the kernel cannot be left
     // unverified by forgetting to state its size.

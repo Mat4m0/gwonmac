@@ -18,6 +18,7 @@ const base: ClientSession = {
       chatAliases: { status: "available" },
       skillSlotGeometry: { status: "available" },
       skillCooldownObservation: { status: "off" },
+      playRegionObservation: { status: "off" },
     },
   },
   extendedMemory: {

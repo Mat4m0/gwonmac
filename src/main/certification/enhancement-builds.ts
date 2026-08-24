@@ -23,11 +23,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
   Object.freeze([
     Object.freeze({
       sha256:
-        "7d0ced840d3dc167b823ed0ad6ed411319faf97316345c8e37620e86d86f536e",
-      // Recomputed when the bounded `/tp` palette signal landed. All profiles move
-      // together whenever the manifest's bytes do, and the manifest carries the
-      // transform ABI and every config word -- so a command-only change also
-      // changes the output of profiles that do not expose commands.
+        "26a71c3e2bf55ab992dce659c1192213858ee25799daa87841ed23a3ddbb601a",
+      // Recomputed from the exact current JSPI artifact when the independent
+      // play-region capability landed. The retained output is the complete
+      // product profile proved by semantic verifier ABI 3.
       //
       // `pnpm check` cannot catch a stale value here. The transform input is a
       // derived game binary this repository does not contain, so nothing in the
@@ -36,65 +35,26 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // `transformEnhancementWasm` against the real derived module whenever
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
-        "features-01":
-          "e1122d8128c482bb70dd86ded6ca28d49256999899a2d492971f6e0173b4e758",
-        "features-02":
-          "e954703ee701260194dc677c10ae9dc7f0229ac4734beabdc7b34464f1591e36",
-        "features-03":
-          "2b6bfa11cbfc19a6dfb2f24de2fc9568d6ee3fcbd8e95c18fee576532e1aff1d",
-        "features-04":
-          "3710b2721f9758aad0c7158d86804f62818c7c5215ea0777c29ef2e2c6e9ee39",
-        "features-05":
-          "5540ea16565a2ed586a5e5556b58194b4f586337694c3f2c66bb63b01aec08f1",
-        "features-06":
-          "e60119e58bdeb87109dfc715935eeb2fbe33a3906173d05f74678f7cdcebe32a",
-        "features-07":
-          "4e880853ea9f37cebb923b008b30b6e5bd2da657c8976b5129dd39698f91f397",
-        "features-0c":
-          "ec8431fe028151439b8e09e8fe171facb01ab28842f9f0175c1739f26f8b185c",
-        "features-0d":
-          "28ec655aa68bc3fb5df4337be1421893715f4b7379bde8955b23a64ed922e6e6",
-        "features-0e":
-          "fc2a879e1cb2ec6020f72a96136442b7cdbedbf3891767a31ac8298cad79c98a",
-        "features-0f":
-          "52d1cca841a68be0179aeceab1f749c8873f51e7c056dfed354d2ededbdf306d",
-        "features-70":
-          "2e29d4af024f6e05bc017b6cdc2363b071e9fee9c6548be78623bc9f046a59b3",
-        "features-74":
-          "ed8eedf6d75878c77c99aca898d72931d9ff7e2f5d566d56e15fccc0bf03052c",
-        "features-75":
-          "d83360909ff5a1d30f204189be9e01c615f471714c500a1af3dc9f20b5d5a91d",
-        "features-76":
-          "bcc5ecb2ff83fcda0fc406b735328e34c3a9d72d16a0ed168ca8190e35b86c3a",
-        "features-77":
-          "829845f4c8aba0fd747ee8f2b9223a3da5c2769d73e2689c06943096339e3fe7",
-        "features-7c":
-          "37bb6d011d76c4070b39f980bdfaeeaac640a0ab33b63dcdf99c91eeaf364f82",
-        "features-7d":
-          "b5d8dc42e540a8fc0c39b3c22e2fecd7da213b0904108f8fa5bca72981cc006f",
-        "features-7e":
-          "1871c89305a5cdc14d83d6e0337c194549707c71599cd1543869bd2c7d50bf44",
-        "features-7f":
-          "5ec27d6b0ecdf928ff74113fcee052bcbc1b185e098c9d422528bb06e59e9511",
+        "features-3ff":
+          "9ae925f7eb1e314f8b6d4432363cf9082c6ea78d1b87a70947a1203dc24415cb",
       }),
       programId: 1,
-      // Function #477 returns 38,833 as a single i32 constant. The same function
-      // returned 38,797 in the preceding certified client; diagnostics must
-      // confirm that value again during the live patch-day run.
-      buildId: 38833,
+      // The verifier derives this bounded identity from the exact module; it is
+      // diagnostic metadata, never a nearest-build selector.
+      buildId: 3_100_397_719,
       hookFunction: 446,
       hookParams: Object.freeze(["i32"] as const),
       hookResults: Object.freeze([] as const),
       hookBodySha256:
-        "82841ec302481a8960cd7a03aa76732e9a4faf7ec3ea136411fdd86906ea6b05",
+        "a4f73b08ad78397b86ff050bfc25a26ab5a8794ae8f914a4b16399253fbf4635",
       // The input table is fixed at 4,683 entries. The transform extends both
       // limits once and owns only this new terminal entry; statically empty input
       // slot 0 is a game runtime sentinel and must remain untouched.
       tableSlot: 4683,
       observationBase: Object.freeze({
         layout: Object.freeze({
-          contextRoot: 0x5a0ee0,
-          agentArray: 0x5a4e58,
+          contextRoot: 0x5a0e70,
+          agentArray: 0x5a4de8,
           gameContextSlot: 6,
           characterContext: 0x44,
           mapId: 0x198,
@@ -112,7 +72,23 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           // Exact-build initialised `AreaInfo[mapId]`. Cross-checked against
           // GWToolbox++'s flags: Lion's Arch (55) is PvE, Random Arenas (188)
           // carries the PvP bit, and Isle of Wurms (529) the guild-hall bit.
-          areaInfo: 0x1cc630,
+          areaInfo: 0x1cc5c0,
+          areaInfoCount: 883,
+          areaInfoStride: 0x7c,
+          areaInfoFlags: 0x10,
+        }),
+      }),
+      playRegionObservation: Object.freeze({
+        layout: Object.freeze({
+          contextRoot: 0x5a0e70,
+          gameContextSlot: 6,
+          characterContext: 0x44,
+          mapId: 0x198,
+          isExplorable: 0x19c,
+          currentMapId: 0x234,
+          currentInstanceType: 0x23c,
+          playerNumber: 0x2ac,
+          areaInfo: 0x1cc5c0,
           areaInfoCount: 883,
           areaInfoStride: 0x7c,
           areaInfoFlags: 0x10,
@@ -135,18 +111,18 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         bodySha256:
           "f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2",
         producerBodySha256: Object.freeze([
-          "92df16acc44885ad89dac98578a833d2c5c84b8da8cd1f90367c46428685c05c",
-          "d51abe7893b1db5b4f1d212aab9b51901134157766e0c41ead4e1c2b41d08eef",
+          "deada48f4c9ce0b2046f7ab9d416f530c87d24ca0e3fb905f5874abad3e92c41",
+          "2988a05e1a39c1f32f564f5afecf9a4b172a27120c9a9a791ca980804a285100",
         ] as const),
         tableNeighbourBodySha256: Object.freeze([
           "f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2",
           "cb751dd998dc5591fb1a8d05d08d194a8a7e4670b1a9685816b9a2af8fab7980",
         ] as const),
         layout: Object.freeze({
-          cursorActiveArt: 0x5a16e0,
-          cursorSoftwareModel: 0x5a16e4,
-          cursorShowCount: 0x5a16e8,
-          cursorColorBuffer: 0x298e50,
+          cursorActiveArt: 0x5a1670,
+          cursorSoftwareModel: 0x5a1674,
+          cursorShowCount: 0x5a1678,
+          cursorColorBuffer: 0x298de0,
           cursorArtHotspot: 0x00,
           cursorArtTexture: 0x0c,
           cursorHandleKey: 0x08,
@@ -169,8 +145,8 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       //
       targetObservation: Object.freeze({
         layout: Object.freeze({
-          manualTargetAgentId: 0x5a394c,
-          automaticTargetAgentId: 0x5a3948,
+          manualTargetAgentId: 0x5a38dc,
+          automaticTargetAgentId: 0x5a38d8,
         }),
       }),
       uiDispatcher: Object.freeze({
@@ -186,7 +162,8 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       xunlaiAction: Object.freeze({
         openExport: "enhancement_open_storage",
         configureExport: "enhancement_configure_storage",
-        // Exact build-38,833 player access facts. The client readers below
+        // Originally measured on build 38,833 and re-verified against this
+        // exact current client. The readers below
         // independently prove WorldContext::players at +0x80c, Array size at
         // +8, 0x50-byte records, and the three fields used by the kernel.
         accessProof: Object.freeze({
@@ -204,14 +181,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
               params: Object.freeze(["i32"] as const),
               results: Object.freeze(["i32"] as const),
               bodySha256:
-                "2a4f5c421482aed52cffc3f58575622a7302492aea86012019b8b683de46cba4",
+                "9232ecf44778323dd0d1f922fbd1d39b3f75d7425886a44019df79f2cf87f93a",
             }),
             "access-flags": Object.freeze({
               functionIndex: 9196,
               params: Object.freeze(["i32"] as const),
               results: Object.freeze(["i32"] as const),
               bodySha256:
-                "620dd5c413423a797119e43a102ae7b2cbe3a633ca41f607bf6a2d7988d1412f",
+                "53fb1be960d2e79c441dd2c29276020cb9a834630fce5a3686035885ca508d29",
             }),
             "player-number": Object.freeze({
               functionIndex: 9205,
@@ -271,7 +248,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           params: Object.freeze(["i32", "i32"] as const),
           results: Object.freeze(["i32"] as const),
           bodySha256:
-            "156c4345c79e43c20b136fa37581d80a62fcf73cf290cabe308ac259387517df",
+            "fcff05250c935e92337fee53cd9f086b22d1ba02a4ff051bd94165f61833a713",
         }),
       }),
       gameThread: Object.freeze({
@@ -285,7 +262,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           results: Object.freeze([] as const),
           tableSlot: 1721,
           bodySha256:
-            "9fb1ca0dee40f5ceef3d0174846ef38af47a8366bfe76cb8da12e86419b40c41",
+            "a3bf3e37cc469f8a0b220fcbb857078fbf427c304f0c07496694d506f5c396d0",
         }),
       }),
       teamApply: Object.freeze({
@@ -300,7 +277,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
             params: Object.freeze(["i32", "i32", "i32"] as const),
             results: Object.freeze([] as const),
             bodySha256:
-              "d7f7c74b9cb14ba957ed8de7e74cc18167a3b688301d5f3d765ba04770a8b361",
+              "4746b06f47ce79df6a3879b0b55d6d6430b65544479f4109ca84a56a12738a36",
           }),
         }),
         entries: Object.freeze([
@@ -400,7 +377,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         nearbyPlayerMessages: Object.freeze([
           0x1000_007f, 0x1000_0080,
         ] as const),
-        nearbyPlayerMessageProducers: Object.freeze([8942, 8945] as const),
+        nearbyPlayerMessageProducers: Object.freeze([7880, 8945] as const),
         layout: Object.freeze({
           // GameContext -> PartyContext -> current PartyInfo -> heroes Array.
           // Only owned HeroID/AgentID pairs cross the companion ABI.
@@ -471,6 +448,42 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           worldProfessionStates: 0x6bc,
           professionStateStride: 0x14,
           worldCharacterSkills: 0x710,
+        }),
+      }),
+      skillSlotGeometry: Object.freeze({
+        initializer: Object.freeze({
+          functionIndex: 15744,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "e4b1af23a4efcbb7fd1c484c4168553c91df5df7e1e40a65ff31bb4ca10790e1",
+          constructorCallOperand: 2186,
+        }),
+        constructor: Object.freeze({
+          functionIndex: 6676,
+          params: Object.freeze([
+            "i32", "i32", "i32", "i32", "i32", "i32",
+          ] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256:
+            "a29fca1d30e5fa7dea1ca30f6453acbb8a099e4423c1f05ee43b01cfc3045c41",
+        }),
+        labelAddress: 0x186e1a,
+        layout: Object.freeze({
+          frameArray: 0x5a1fdc,
+          frameCount: 0x5a1fe4,
+          frameBytes: 0x1c8,
+          frameChildOffsetId: 0xb8,
+          frameId: 0xbc,
+          framePositionFlags: 0xd8,
+          frameViewportWidth: 0x104,
+          frameViewportHeight: 0x108,
+          frameScreenLeft: 0x10c,
+          frameScreenBottom: 0x110,
+          frameScreenRight: 0x114,
+          frameScreenTop: 0x118,
+          frameRelation: 0x128,
+          frameState: 0x18c,
         }),
       }),
       skillCooldownObservation: Object.freeze({

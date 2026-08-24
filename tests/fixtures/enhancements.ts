@@ -26,6 +26,10 @@ import {
   COMPANION_SKILL_SLOT_BYTES,
 } from "../../src/renderer/companion-skill-snapshot.ts";
 import {
+  COMPANION_PLAY_REGION_BYTES,
+  readCompanionPlayRegion,
+} from "../../src/renderer/companion-play-region-snapshot.ts";
+import {
   ENHANCEMENT_CONFIG_WORD_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
 } from "../../src/shared/enhancement-contracts.ts";
@@ -109,9 +113,13 @@ export const FEATURE_SKILL_SLOT_GEOMETRY =
   COMPANION_FEATURE_BITS.skillSlotGeometry;
 export const FEATURE_SKILL_COOLDOWN_OBSERVATION =
   COMPANION_FEATURE_BITS.skillCooldownObservation;
+export const FEATURE_PLAY_REGION_OBSERVATION =
+  COMPANION_FEATURE_BITS.playRegionObservation;
+export { COMPANION_PLAY_REGION_BYTES };
 export const ALL_FEATURES = FEATURE_NATIVE_CURSOR
   | FEATURE_GAME_SNAPSHOT
-  | FEATURE_TARGET_OBSERVATION;
+  | FEATURE_TARGET_OBSERVATION
+  | FEATURE_PLAY_REGION_OBSERVATION;
 
 export interface SnapshotOverrides {
   sequence?: number;
@@ -277,6 +285,7 @@ export const ADDRESSES = Object.freeze({
   party: 0xa800,
   skillSlots: 0xc000,
   skillCooldowns: 0xc100,
+  playRegion: 0xc200,
   partyContext: 0xa000,
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
@@ -379,6 +388,8 @@ export interface KernelOverrides {
   skillSlotSize?: number;
   skillCooldownPointer?: number;
   skillCooldownSize?: number;
+  playRegionPointer?: number;
+  playRegionSize?: number;
   toolboxSize?: number;
 }
 
@@ -405,6 +416,8 @@ export type KernelInit = (
   skillSlotSize: number,
   skillCooldownPointer: number,
   skillCooldownSize: number,
+  playRegionPointer: number,
+  playRegionSize: number,
   features: number,
 ) => number;
 export type KernelDispatch = (
@@ -575,6 +588,14 @@ export async function createKernel(
           ?? ((features & FEATURE_SKILL_COOLDOWN_OBSERVATION) !== 0
             ? COMPANION_SKILL_COOLDOWN_BYTES
             : 0),
+        overrides.playRegionPointer
+          ?? ((features & FEATURE_PLAY_REGION_OBSERVATION) !== 0
+            ? ADDRESSES.playRegion
+            : 0),
+        overrides.playRegionSize
+          ?? ((features & FEATURE_PLAY_REGION_OBSERVATION) !== 0
+            ? COMPANION_PLAY_REGION_BYTES
+            : 0),
         features,
       );
     },
@@ -618,6 +639,7 @@ export async function createKernel(
     skillSlots: () => readCompanionSkillSlots(memory.buffer, ADDRESSES.skillSlots),
     skillCooldowns: () =>
       readCompanionSkillCooldowns(memory.buffer, ADDRESSES.skillCooldowns),
+    playRegion: () => readCompanionPlayRegion(memory.buffer, ADDRESSES.playRegion),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
     published: () => readCompanionCursorPixels(memory.buffer, ADDRESSES.cursor),

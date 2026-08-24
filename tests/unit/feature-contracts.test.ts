@@ -27,14 +27,14 @@ test("the capability registry is the ordered wire vocabulary", () => {
     },
     {
       id: "targetObservation",
-      requiresAll: [],
+      requiresAll: ["playRegionObservation"],
       requiresAny: [],
       configOwners: ["observation", "target"],
       hooks: [],
     },
     {
       id: "partyObservation",
-      requiresAll: [],
+      requiresAll: ["playRegionObservation"],
       requiresAny: [],
       configOwners: ["observation", "party"],
       hooks: ["ui"],
@@ -48,14 +48,14 @@ test("the capability registry is the ordered wire vocabulary", () => {
     },
     {
       id: "travelAction",
-      requiresAll: [],
+      requiresAll: ["playRegionObservation"],
       requiresAny: [],
       configOwners: [],
       hooks: [],
     },
     {
       id: "xunlaiAction",
-      requiresAll: [],
+      requiresAll: ["playRegionObservation"],
       requiresAny: [],
       configOwners: ["observation", "storage"],
       hooks: [],
@@ -69,7 +69,7 @@ test("the capability registry is the ordered wire vocabulary", () => {
     },
     {
       id: "skillSlotGeometry",
-      requiresAll: ["partyObservation"],
+      requiresAll: ["playRegionObservation"],
       requiresAny: [],
       configOwners: ["skill-slots"],
       hooks: [],
@@ -81,12 +81,19 @@ test("the capability registry is the ordered wire vocabulary", () => {
       configOwners: ["skill-cooldown"],
       hooks: [],
     },
+    {
+      id: "playRegionObservation",
+      requiresAll: [],
+      requiresAny: [],
+      configOwners: ["play-region"],
+      hooks: [],
+    },
   ]);
   assert.deepEqual(
     ENHANCEMENT_CAPABILITY_CONTRACTS.map(({ id }) => id),
     ENHANCEMENT_CAPABILITY_FIELDS,
   );
-  assert.equal(new Set(ENHANCEMENT_CAPABILITY_FIELDS).size, 9);
+  assert.equal(new Set(ENHANCEMENT_CAPABILITY_FIELDS).size, 10);
   for (const contract of ENHANCEMENT_CAPABILITY_CONTRACTS) {
     assert.equal(Object.isFrozen(contract), true, contract.id);
     assert.equal(Object.isFrozen(contract.requiresAll), true, contract.id);

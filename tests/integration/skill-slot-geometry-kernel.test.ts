@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import {
   ADDRESSES,
   createKernel,
+  FEATURE_PLAY_REGION_OBSERVATION,
   FEATURE_SKILL_SLOT_GEOMETRY,
   FEATURE_TOOLBOX_FOUNDATION,
   installDuplicateSkillSlot,
@@ -18,7 +19,8 @@ describe("skill-slot geometry kernel", () => {
     installSkillBarGraph(kernel.view);
     assert.equal(kernel.init({ features: FEATURE_SKILL_SLOT_GEOMETRY }), 0);
     assert.equal(kernel.init({
-      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_SKILL_SLOT_GEOMETRY,
+      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_PLAY_REGION_OBSERVATION
+        | FEATURE_SKILL_SLOT_GEOMETRY,
     }), 1);
     kernel.tick(1);
     const ready = kernel.skillSlots();
@@ -44,7 +46,8 @@ describe("skill-slot geometry kernel", () => {
     installSkillBarGraph(kernel.view);
     installDuplicateSkillSlot(kernel.view);
     assert.equal(kernel.init({
-      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_SKILL_SLOT_GEOMETRY,
+      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_PLAY_REGION_OBSERVATION
+        | FEATURE_SKILL_SLOT_GEOMETRY,
     }), 1);
     kernel.tick(1);
     assert.deepEqual(kernel.skillSlots(), { status: "waiting", reason: "frame" });
@@ -55,7 +58,8 @@ describe("skill-slot geometry kernel", () => {
     installSkillBarGraph(kernel.view);
     installDuplicateSkillSlot(kernel.view, 1, false);
     assert.equal(kernel.init({
-      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_SKILL_SLOT_GEOMETRY,
+      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_PLAY_REGION_OBSERVATION
+        | FEATURE_SKILL_SLOT_GEOMETRY,
     }), 1);
     kernel.tick(1);
     assert.equal(kernel.skillSlots().status, "ready");

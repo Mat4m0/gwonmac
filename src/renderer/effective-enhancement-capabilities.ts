@@ -21,5 +21,7 @@ export function effectiveCapabilities(
     skillSlotGeometry: features.skillSlotGeometry.status === "available",
     skillCooldownObservation:
       features.skillCooldownObservation.status === "available",
+    playRegionObservation:
+      features.playRegionObservation.status === "available",
   });
 }

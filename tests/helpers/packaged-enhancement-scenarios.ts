@@ -301,7 +301,7 @@ export async function assertTargetReadoutLifecycle() {
         {
           name: "enhancement.installed",
           companionAbi: COMPANION_ABI.kernel,
-          capabilityProfile: "features-02",
+          capabilityProfile: "features-202",
           installation: 1,
         },
         {
