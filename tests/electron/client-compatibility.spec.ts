@@ -232,6 +232,7 @@ test.describe("client compatibility", () => {
               xunlaiAction: { status: "off" },
               chatAliases: { status: "off" },
               skillSlotGeometry: { status: "off" },
+              skillCooldownObservation: { status: "off" },
             },
           },
         );

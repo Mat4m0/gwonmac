@@ -25,6 +25,7 @@ import {
   type EnhancementCursorLayout,
   type EnhancementObservationBaseLayout,
   type EnhancementPartyLayout,
+  type EnhancementSkillCooldownLayout,
   type EnhancementSkillSlotGeometryLayout,
   type EnhancementStorageLayout,
   type EnhancementTargetLayout,
@@ -112,7 +113,9 @@ export function enhancementConfigWords(
               ? build.partyObservation?.layout[field.key]
               : field.owner === "storage"
                 ? build.xunlaiAction?.accessProof?.layout[field.key]
-                : build.skillSlotGeometry?.layout[field.key];
+                : field.owner === "skill-slots"
+                  ? build.skillSlotGeometry?.layout[field.key]
+                  : build.skillCooldownObservation?.layout[field.key];
       if (field.owner === "storage" && build.xunlaiAction === undefined) {
         return 0;
       }
@@ -295,6 +298,23 @@ export interface KnownEnhancementBuild {
     labelAddress: number;
     layout: EnhancementSkillSlotGeometryLayout;
   }>;
+  /** Exact reader and clock authority for player skill recharge timestamps. */
+  skillCooldownObservation?: Readonly<{
+    reader: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32", "i32"];
+      results: readonly ["i32"];
+      bodySha256: string;
+      timerCallOperand: number;
+    }>;
+    timer: Readonly<{
+      functionIndex: number;
+      params: readonly [];
+      results: readonly ["i32"];
+      bodySha256: string;
+    }>;
+    layout: EnhancementSkillCooldownLayout;
+  }>;
 }
 
 export function supportedEnhancementCapabilities(
@@ -319,6 +339,8 @@ export function supportedEnhancementCapabilities(
     xunlaiAction,
     chatAliases: build.uiDispatcher !== undefined && build.chatAliases !== undefined,
     skillSlotGeometry: build.skillSlotGeometry !== undefined,
+    skillCooldownObservation: partyObservation
+      && build.skillCooldownObservation !== undefined,
   });
 }
 

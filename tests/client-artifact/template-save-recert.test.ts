@@ -174,6 +174,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     xunlaiAction: true,
     chatAliases: true,
     skillSlotGeometry: true,
+    skillCooldownObservation: true,
   });
 
   // If this is a statically shipped build, the shape locator must still
@@ -281,6 +282,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     nativeCursor: true, targetObservation: false, partyObservation: false,
     teamApply: false, travelAction: true, xunlaiAction: false, chatAliases: true,
     skillSlotGeometry: false,
+    skillCooldownObservation: false,
   });
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
@@ -491,6 +493,31 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(dispatcherRefusal.chatAliases, false);
   assert.equal(dispatcherRefusal.partyObservation, false);
   assert.equal(dispatcherRefusal.teamApply, false);
+
+  const changedRechargeReader = rewriteCode(bytes, (bodies) => {
+    const body = bodies[8704 - derived.importCount]!;
+    body[137] = 9; // certified slot bound is exactly eight
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(changedRechargeReader)), true);
+  const rechargeRefusal = capabilitiesOf(
+    verifyLocalClientBytes(changedRechargeReader),
+  )!;
+  assert.equal(rechargeRefusal.partyObservation, true);
+  assert.equal(rechargeRefusal.skillSlotGeometry, true);
+  assert.equal(rechargeRefusal.skillCooldownObservation, false);
+
+  const changedSkillTimer = rewriteCode(bytes, (bodies) => {
+    const body = bodies[249 - derived.importCount]!;
+    const opcode = body.findIndex(
+      (byte, index) => byte === 0x41 && (body[index + 1] ?? 0x80) < 0x80,
+    );
+    assert.ok(opcode >= 0);
+    body[opcode + 1] = body[opcode + 1]! ^ 1;
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(changedSkillTimer)), true);
+  const timerRefusal = capabilitiesOf(verifyLocalClientBytes(changedSkillTimer))!;
+  assert.equal(timerRefusal.partyObservation, true);
+  assert.equal(timerRefusal.skillCooldownObservation, false);
 
   const reindexedLocalActions = rewriteCode(bytes, (bodies) => {
     swapDefinedFunctions(bodies, derived.importCount, 6842, 6840);

@@ -32,13 +32,14 @@ export const ENHANCEMENT_CAPABILITY_FIELDS = Object.freeze([
   "xunlaiAction",
   "chatAliases",
   "skillSlotGeometry",
+  "skillCooldownObservation",
 ] as const);
 
 export type EnhancementCapability = (typeof ENHANCEMENT_CAPABILITY_FIELDS)[number];
 export type EnhancementCapabilities = Readonly<Record<EnhancementCapability, boolean>>;
 
 const MAX_CAPABILITY_MASK = (1 << ENHANCEMENT_CAPABILITY_FIELDS.length) - 1;
-const CAPABILITY_PROFILE = /^features-([0-9a-f]{2})$/;
+const CAPABILITY_PROFILE = /^features-([0-9a-f]{2,3})$/;
 
 /** A compact transform identity; the two hex digits are the eight capability bits. */
 export type EnhancementCapabilityProfile = `features-${string}`;
@@ -98,6 +99,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   xunlaiAction: false,
   chatAliases: false,
   skillSlotGeometry: false,
+  skillCooldownObservation: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -130,6 +132,7 @@ export function parseEnhancementCapabilities(
     xunlaiAction: value.xunlaiAction,
     chatAliases: value.chatAliases,
     skillSlotGeometry: value.skillSlotGeometry,
+    skillCooldownObservation: value.skillCooldownObservation,
   });
 }
 
@@ -159,7 +162,7 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursorParty: capabilitiesFromMask(0x85),
   storage: capabilitiesFromMask(0x70),
   partyCommandsStorage: capabilitiesFromMask(0xfc),
-  all: capabilitiesFromMask(0xff),
+  all: capabilitiesFromMask(0x1ff),
 });
 
 import {
@@ -171,7 +174,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 39;
+export const ENHANCEMENT_TRANSFORM_ABI = 40;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
@@ -192,6 +195,7 @@ export function enhancementConfigWordActive(
   if (owner === "cursor") return capabilities.nativeCursor;
   if (owner === "party") return capabilities.partyObservation;
   if (owner === "skill-slots") return capabilities.skillSlotGeometry;
+  if (owner === "skill-cooldown") return capabilities.skillCooldownObservation;
   return owner === "storage" && capabilities.xunlaiAction;
 }
 
@@ -242,6 +246,7 @@ export function validEnhancementCapabilities(
 ): boolean {
   return (!capabilities.teamApply || capabilities.partyObservation)
     && (!capabilities.skillSlotGeometry || capabilities.partyObservation)
+    && (!capabilities.skillCooldownObservation || capabilities.partyObservation)
     && (!capabilities.chatAliases
       || capabilities.travelAction
       || capabilities.xunlaiAction);
@@ -267,5 +272,7 @@ export function intersectEnhancementCapabilities(
       && (travelAction || xunlaiAction),
     skillSlotGeometry: requested.skillSlotGeometry && supported.skillSlotGeometry
       && partyObservation,
+    skillCooldownObservation: requested.skillCooldownObservation
+      && supported.skillCooldownObservation && partyObservation,
   });
 }

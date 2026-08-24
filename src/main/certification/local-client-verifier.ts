@@ -65,6 +65,7 @@ import {
 } from "./local-client-verification-contract.js";
 import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
 import { deriveSkillSlotGeometry } from "./enhancement-skill-slot-geometry-proof.js";
+import { deriveSkillCooldownObservation } from "./enhancement-skill-cooldown-proof.js";
 
 export { isLocalClientVerification } from "./local-client-verification-boundary.js";
 export {
@@ -152,6 +153,14 @@ function failuresForRequested(
       : {}),
     ...(requested.skillSlotGeometry
       ? { skillSlotGeometry: changedFeature("skillSlotGeometry", invariant) }
+      : {}),
+    ...(requested.skillCooldownObservation
+      ? {
+          skillCooldownObservation: changedFeature(
+            "skillCooldownObservation",
+            invariant,
+          ),
+        }
       : {}),
   });
 }
@@ -304,6 +313,7 @@ function diagnoseFeatureFailures(
   locatedTarget: AutomaticTargetLocation | null,
   locatedLocal: AutomaticLocalActionsLocation | null,
   locatedSkillSlotGeometry: ReturnType<typeof deriveSkillSlotGeometry>,
+  locatedSkillCooldown: ReturnType<typeof deriveSkillCooldownObservation>,
   context: EnhancementProofContext,
 ): LocalFeatureFailures {
   const needsLocalEvidence = (requested.partyObservation
@@ -314,10 +324,13 @@ function diagnoseFeatureFailures(
     || (requested.chatAliases && !locatedLocal?.chatAliases);
   const needsSkillEvidence = requested.skillSlotGeometry
     && locatedSkillSlotGeometry === null;
+  const needsCooldownEvidence = requested.skillCooldownObservation
+    && locatedSkillCooldown === null;
   const needsEvidence = (requested.nativeCursor && !locatedCursor)
     || (requested.targetObservation && !locatedTarget)
     || needsLocalEvidence
-    || needsSkillEvidence;
+    || needsSkillEvidence
+    || needsCooldownEvidence;
   const evidence = needsEvidence ? structuralEvidence(input, context) : null;
   const roles = needsLocalEvidence
     ? inspectLocalActionRoleCandidates(input, ENHANCEMENT_BUILDS, context)
@@ -332,6 +345,10 @@ function diagnoseFeatureFailures(
   const xunlaiShared = sharedEvidenceFailure("xunlaiAction", evidence);
   const aliasesShared = sharedEvidenceFailure("chatAliases", evidence);
   const skillShared = sharedEvidenceFailure("skillSlotGeometry", evidence);
+  const cooldownShared = sharedEvidenceFailure(
+    "skillCooldownObservation",
+    evidence,
+  );
   return Object.freeze({
     ...(requested.nativeCursor && !locatedCursor
       ? { nativeCursor: cursorFailure(evidence) }
@@ -496,6 +513,15 @@ function diagnoseFeatureFailures(
             ),
         }
       : {}),
+    ...(needsCooldownEvidence
+      ? {
+          skillCooldownObservation: cooldownShared
+            ?? changedFeature(
+              "skillCooldownObservation",
+              "skill-cooldown.recharge-reader",
+            ),
+        }
+      : {}),
   });
 }
 
@@ -533,6 +559,7 @@ function deriveEnhancementBuild(
     ? locateAutomaticTarget(templateOutput, ENHANCEMENT_BUILDS, context)
     : null;
   const wantsLocal = requestedCapabilities.partyObservation
+    || requestedCapabilities.skillCooldownObservation
     || requestedCapabilities.teamApply
     || requestedCapabilities.travelAction
     || requestedCapabilities.xunlaiAction
@@ -574,6 +601,15 @@ function deriveEnhancementBuild(
   const includeSkillSlotGeometry = requestedCapabilities.skillSlotGeometry
     && includeParty
     && locatedSkillSlotGeometry !== null;
+  const locatedSkillCooldown = requestedCapabilities.skillCooldownObservation
+    ? deriveSkillCooldownObservation(
+        context,
+        locatedLocal?.partyObservation?.layout,
+      )
+    : null;
+  const includeSkillCooldown = requestedCapabilities.skillCooldownObservation
+    && includeParty
+    && locatedSkillCooldown !== null;
   const failures = diagnoseFeatureFailures(
     templateOutput,
     requestedCapabilities,
@@ -581,6 +617,7 @@ function deriveEnhancementBuild(
     locatedTarget,
     locatedLocal,
     locatedSkillSlotGeometry,
+    locatedSkillCooldown,
     context,
   );
   const localContributes = includeParty || includeTeam || includeTravel
@@ -685,6 +722,9 @@ function deriveEnhancementBuild(
     ...(includeSkillSlotGeometry
       ? { skillSlotGeometry: locatedSkillSlotGeometry }
       : {}),
+    ...(includeSkillCooldown
+      ? { skillCooldownObservation: locatedSkillCooldown }
+      : {}),
   });
   const maximum: EnhancementCapabilities = Object.freeze({
     nativeCursor: includeCursor,
@@ -695,6 +735,7 @@ function deriveEnhancementBuild(
     xunlaiAction: includeXunlai,
     chatAliases: includeAliases,
     skillSlotGeometry: includeSkillSlotGeometry,
+    skillCooldownObservation: includeSkillCooldown,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

@@ -65,6 +65,7 @@ export interface EnhancementLayout {
   skillbarSkills: number;
   skillSlotStride: number;
   skillSlotId: number;
+  skillSlotRecharge: number;
   skillbarDisabled: number;
   worldAttributes: number;
   attributeStride: number;
@@ -129,14 +130,18 @@ export type EnhancementSkillSlotGeometryLayout = Pick<EnhancementLayout,
   | "frameViewportHeight" | "frameScreenLeft" | "frameScreenBottom"
   | "frameScreenRight" | "frameScreenTop" | "frameRelation" | "frameState"
 >;
+export type EnhancementSkillCooldownLayout = Pick<EnhancementLayout,
+  | "skillSlotRecharge"
+>;
 export type EnhancementPartyLayout = Omit<EnhancementLayout,
   keyof EnhancementObservationBaseLayout | keyof EnhancementTargetLayout
   | keyof EnhancementCursorLayout | keyof EnhancementStorageLayout
   | keyof EnhancementSkillSlotGeometryLayout
+  | keyof EnhancementSkillCooldownLayout
 >;
 
 type Owner = "observation" | "target" | "cursor" | "party" | "storage"
-  | "skill-slots";
+  | "skill-slots" | "skill-cooldown";
 type ConfigField =
   | Readonly<{
     source: "layout";
@@ -151,6 +156,11 @@ type ConfigField =
     source: "layout";
     owner: "skill-slots";
     key: keyof EnhancementSkillSlotGeometryLayout;
+  }>
+  | Readonly<{
+    source: "layout";
+    owner: "skill-cooldown";
+    key: keyof EnhancementSkillCooldownLayout;
   }>
   | Readonly<{
     source: "dispatcher";
@@ -179,6 +189,11 @@ const skillSlots = (
 ): readonly ConfigField[] => keys.map((key) => ({
   source: "layout", key, owner: "skill-slots",
 }));
+const skillCooldown = (
+  ...keys: readonly (keyof EnhancementSkillCooldownLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({
+  source: "layout", key, owner: "skill-cooldown",
+}));
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...observation("contextRoot", "agentArray"),
@@ -199,6 +214,7 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
     "frameScreenLeft", "frameScreenBottom", "frameScreenRight", "frameScreenTop",
     "frameRelation", "frameState",
   ),
+  ...skillCooldown("skillSlotRecharge"),
   { source: "dispatcher", key: "playerChatMessage", owner: "party" },
   { source: "dispatcher", key: "hideHeroPanelMessage", owner: "party" },
   { source: "dispatcher", key: "showHeroPanelMessage", owner: "party" },

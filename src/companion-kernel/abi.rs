@@ -31,14 +31,22 @@ pub(crate) const FEATURE_GAME_SNAPSHOT: u32 = 1 << 1;
 pub(crate) const FEATURE_TOOLBOX_FOUNDATION: u32 = 1 << 2;
 pub(crate) const FEATURE_TARGET_OBSERVATION: u32 = 1 << 3;
 pub(crate) const FEATURE_SKILL_SLOT_GEOMETRY: u32 = 1 << 4;
+pub(crate) const FEATURE_SKILL_COOLDOWN_OBSERVATION: u32 = 1 << 5;
 pub(crate) const KNOWN_FEATURES: u32 =
     FEATURE_NATIVE_CURSOR | FEATURE_GAME_SNAPSHOT | FEATURE_TOOLBOX_FOUNDATION
-        | FEATURE_TARGET_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY;
+        | FEATURE_TARGET_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY
+        | FEATURE_SKILL_COOLDOWN_OBSERVATION;
 
 pub(crate) const SKILL_SLOT_BYTES: u32 = size_of::<SkillSlotSnapshot>() as u32;
 pub(crate) const SKILL_SLOT_MAGIC: u32 = 0x534b_5747;
 pub(crate) const SKILL_SLOT_ABI_AND_SIZE: u32 = (SKILL_SLOT_BYTES << 16) | 1;
 pub(crate) const FLAG_SKILL_SLOTS_READY: u32 = 1 << 0;
+
+pub(crate) const SKILL_COOLDOWN_BYTES: u32 = size_of::<SkillCooldownSnapshot>() as u32;
+pub(crate) const SKILL_COOLDOWN_MAGIC: u32 = 0x5343_5747;
+pub(crate) const SKILL_COOLDOWN_ABI_AND_SIZE: u32 = (SKILL_COOLDOWN_BYTES << 16) | 1;
+pub(crate) const FLAG_SKILL_COOLDOWNS_READY: u32 = 1 << 0;
+pub(crate) const FLAG_SKILL_COOLDOWNS_LOADING: u32 = 1 << 1;
 
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
 pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
@@ -254,6 +262,8 @@ pub(crate) struct Layout {
     pub(crate) frame_screen_top: u32,
     pub(crate) frame_relation: u32,
     pub(crate) frame_state: u32,
+    // Appended exact-client field used only by cooldown observation.
+    pub(crate) skill_slot_recharge: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -359,6 +369,7 @@ impl Layout {
         frame_screen_top: 0,
         frame_relation: 0,
         frame_state: 0,
+        skill_slot_recharge: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -439,6 +450,18 @@ pub(crate) struct SkillSlotSnapshot {
     pub(crate) slots: [SkillSlotRect; SKILL_SLOTS],
 }
 
+#[repr(C)]
+pub(crate) struct SkillCooldownSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) generation: u32,
+    pub(crate) game_timer: u32,
+    pub(crate) player_agent_id: u32,
+    pub(crate) recharge_timestamps: [u32; SKILL_SLOTS],
+}
+
 /// One party position, as much of it as has been read.
 ///
 /// Every field is paired with a bit in `flags` that says whether it was read.
@@ -503,7 +526,7 @@ pub(crate) struct PartySnapshot {
     pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 440] = [(); size_of::<Layout>()];
+const _: [(); 444] = [(); size_of::<Layout>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
 const _: [(); 1560] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
@@ -511,3 +534,4 @@ const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
 const _: [(); 16] = [(); size_of::<SkillSlotRect>()];
 const _: [(); 156] = [(); size_of::<SkillSlotSnapshot>()];
+const _: [(); 60] = [(); size_of::<SkillCooldownSnapshot>()];

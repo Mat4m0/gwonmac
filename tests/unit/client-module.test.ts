@@ -55,7 +55,8 @@ const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillSlotGeometry: false,
+  skillSlotGeometry: false,
+  skillCooldownObservation: false,
 });
 const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -65,7 +66,8 @@ const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillSlotGeometry: false,
+  skillSlotGeometry: false,
+  skillCooldownObservation: false,
 });
 const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -75,7 +77,8 @@ const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillSlotGeometry: false,
+  skillSlotGeometry: false,
+  skillCooldownObservation: false,
 });
 const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -85,7 +88,8 @@ const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
-    skillSlotGeometry: false,
+  skillSlotGeometry: false,
+  skillCooldownObservation: false,
 });
 
 const scratchDirs: string[] = [];

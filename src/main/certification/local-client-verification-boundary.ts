@@ -114,6 +114,10 @@ function featureFailuresFromVerdicts(
     "skillSlotGeometry",
     verdicts.skillSlotGeometry,
   );
+  const skillCooldownObservation = refusalForFeature(
+    "skillCooldownObservation",
+    verdicts.skillCooldownObservation,
+  );
   if (
     nativeCursor === null
     || targetObservation === null
@@ -123,6 +127,7 @@ function featureFailuresFromVerdicts(
     || xunlaiAction === null
     || chatAliases === null
     || skillSlotGeometry === null
+    || skillCooldownObservation === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -133,6 +138,7 @@ function featureFailuresFromVerdicts(
     ...(xunlaiAction ? { xunlaiAction } : {}),
     ...(chatAliases ? { chatAliases } : {}),
     ...(skillSlotGeometry ? { skillSlotGeometry } : {}),
+    ...(skillCooldownObservation ? { skillCooldownObservation } : {}),
   });
 }
 
@@ -451,6 +457,26 @@ function matchesTeamApply(
     });
 }
 
+function matchesSkillCooldownObservation(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.skillCooldownObservation;
+  if (candidate === undefined) return true;
+  const expected = baseline.skillCooldownObservation;
+  return expected !== undefined
+    && isIndex(candidate.reader.functionIndex)
+    && isIndex(candidate.reader.timerCallOperand)
+    && isDigest(candidate.reader.bodySha256)
+    && isDeepStrictEqual(candidate.reader.params, expected.reader.params)
+    && isDeepStrictEqual(candidate.reader.results, expected.reader.results)
+    && isIndex(candidate.timer.functionIndex)
+    && isDigest(candidate.timer.bodySha256)
+    && isDeepStrictEqual(candidate.timer.params, expected.timer.params)
+    && isDeepStrictEqual(candidate.timer.results, expected.timer.results)
+    && isDeepStrictEqual(candidate.layout, expected.layout);
+}
+
 function isAutomaticSemanticBuild(
   value: unknown,
   inputSha256: string,
@@ -476,8 +502,11 @@ function isAutomaticSemanticBuild(
   const hasParty = build.partyObservation !== undefined;
   const hasTeam = build.teamApply !== undefined;
   const hasSkillSlotGeometry = build.skillSlotGeometry !== undefined;
+  const hasSkillCooldown = build.skillCooldownObservation !== undefined;
   if (!hasCursor && !hasTarget && !hasTravel && !hasXunlai && !hasAliases
-    && !hasParty && !hasTeam && !hasSkillSlotGeometry) return false;
+    && !hasParty && !hasTeam && !hasSkillSlotGeometry && !hasSkillCooldown) {
+    return false;
+  }
   if (
     Object.keys(build.outputSha256).length === 0
     || !Object.values(build.outputSha256).every(isDigest)
@@ -485,6 +514,7 @@ function isAutomaticSemanticBuild(
     || (hasXunlai && !hasObservation)
     || (hasParty && (!hasObservation || build.uiDispatcher === undefined))
     || (hasSkillSlotGeometry && !hasParty)
+    || (hasSkillCooldown && (!hasObservation || !hasParty))
     || (hasTeam && (!hasParty || build.gameThread === undefined))
     || ((hasTravel || hasXunlai) && build.gameThread === undefined)
     || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
@@ -518,6 +548,7 @@ function isAutomaticSemanticBuild(
     && matchesPartyObservation(build, baseline)
     && matchesTeamApply(build, baseline)
     && matchesSkillSlotGeometry(build)
+    && matchesSkillCooldownObservation(build, baseline)
   );
 }
 
