@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { TraderPricePoint } from "../../../../src/shared/trade-chat";
+import type { TraderQuote } from "../../../../src/shared/trade-chat";
 
 const props = defineProps<{
-  points: readonly TraderPricePoint[];
+  points: readonly TraderQuote[];
   loading: boolean;
   itemName: string;
 }>();
@@ -84,7 +84,7 @@ const latest = computed(() => ({
   sell: props.points.filter((point) => point.side === "sell").at(-1),
 }));
 
-function linePath(points: readonly TraderPricePoint[]): string {
+function linePath(points: readonly TraderQuote[]): string {
   return points.map((point, index) => {
     const x = xFor(point.timestamp);
     const y = yFor(point.price);
@@ -93,12 +93,12 @@ function linePath(points: readonly TraderPricePoint[]): string {
   }).join(" ");
 }
 
-function thinSeries(points: readonly TraderPricePoint[]): readonly TraderPricePoint[] {
+function thinSeries(points: readonly TraderQuote[]): readonly TraderQuote[] {
   if (points.length <= MAX_RENDERED_POINTS) return points;
   const first = points[0]!;
   const last = points.at(-1)!;
   const duration = Math.max(1, last.timestamp - first.timestamp);
-  const buckets = new Map<number, TraderPricePoint>();
+  const buckets = new Map<number, TraderQuote>();
   for (const point of points) {
     const bucket = Math.min(
       MAX_RENDERED_POINTS - 1,
@@ -120,8 +120,8 @@ function yFor(price: number): number {
   return PLOT.top + (range.max - price) / (range.max - range.min) * plotHeight;
 }
 
-function nearest(points: readonly TraderPricePoint[], timestamp: number): TraderPricePoint | null {
-  let result: TraderPricePoint | null = null;
+function nearest(points: readonly TraderQuote[], timestamp: number): TraderQuote | null {
+  let result: TraderQuote | null = null;
   let distance = Number.POSITIVE_INFINITY;
   for (const point of points) {
     const nextDistance = Math.abs(point.timestamp - timestamp);

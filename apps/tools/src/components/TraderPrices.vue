@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
-  TRADER_PRICE_CATEGORIES,
-  type TraderPriceCategory,
   type TraderPriceHistoryProblem,
-  type TraderPricePoint,
   type TraderQuote,
   type TraderQuoteSnapshot,
 } from "../../../../src/shared/trade-chat";
@@ -12,7 +9,9 @@ import type { TradeHost } from "../trade-host";
 import { traderProfessionIcon } from "../trader-assets";
 import {
   TRADER_ITEMS,
+  TRADER_PRICE_CATEGORIES,
   TRADER_PROFESSIONS,
+  type TraderPriceCategory,
   type TraderItem,
   type TraderProfession,
 } from "../trader-catalog";
@@ -63,7 +62,7 @@ const selectedId = ref<string | null>("0b03a2");
 const rangeDays = ref(30);
 const mobileDetail = ref(false);
 const quotes = ref<TraderQuoteSnapshot | null>(null);
-const history = ref<readonly TraderPricePoint[]>([]);
+const history = ref<readonly TraderQuote[]>([]);
 const quotesLoading = ref(false);
 const historyLoading = ref(false);
 const quoteProblem = ref<string | null>(null);
@@ -200,7 +199,9 @@ function moveSelection(direction: -1 | 1): void {
   const next = visibleItems.value[Math.max(0, Math.min(visibleItems.value.length - 1, index + direction))];
   if (!next) return;
   selectItem(next);
-  void nextTick(() => document.querySelector<HTMLElement>(`[data-trader-id="${next.modelId}"]`)?.focus());
+  void nextTick(() => pricesRoot.value
+    ?.querySelector<HTMLElement>(`[data-trader-id="${next.modelId}"]`)
+    ?.focus());
 }
 
 function formatPrice(price: number | undefined): string {

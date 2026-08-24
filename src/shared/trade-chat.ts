@@ -23,14 +23,6 @@ export const TRADE_LIMITS = Object.freeze({
   priceHistoryDays: 366,
 });
 
-export const TRADER_PRICE_CATEGORIES = [
-  "common-materials",
-  "rare-materials",
-  "runes",
-  "dyes",
-] as const;
-export type TraderPriceCategory = (typeof TRADER_PRICE_CATEGORIES)[number];
-
 export type TraderQuote = Readonly<{
   modelId: string;
   side: "buy" | "sell";
@@ -49,8 +41,6 @@ export type TraderPriceHistoryRequest = Readonly<{
   to: number;
 }>;
 
-export type TraderPricePoint = TraderQuote;
-
 export type TraderPriceHistoryProblem =
   | "rate-limited"
   | "timeout"
@@ -58,7 +48,7 @@ export type TraderPriceHistoryProblem =
   | "unavailable";
 
 export type TraderPriceHistoryResult =
-  | Readonly<{ status: "ok"; points: readonly TraderPricePoint[] }>
+  | Readonly<{ status: "ok"; points: readonly TraderQuote[] }>
   | Readonly<{ status: "error"; problem: TraderPriceHistoryProblem }>;
 
 export const TRADE_SOURCE_URLS: Readonly<
@@ -178,29 +168,28 @@ export function parseTraderPriceHistoryRequest(value: unknown): TraderPriceHisto
   if (!isTraderModelId(value.modelId)) {
     throw new TypeError("invalid trader model id");
   }
+  const { from, to } = value;
   if (
-    !Number.isSafeInteger(value.from)
-    || !Number.isSafeInteger(value.to)
-    || (value.from as number) <= 0
-    || (value.to as number) <= (value.from as number)
-    || (value.to as number) - (value.from as number)
+    typeof from !== "number"
+    || typeof to !== "number"
+    || !Number.isSafeInteger(from)
+    || !Number.isSafeInteger(to)
+    || from <= 0
+    || to <= from
+    || to - from
       > TRADE_LIMITS.priceHistoryDays * 24 * 60 * 60 * 1_000
   ) throw new TypeError("invalid trader price history range");
-  return Object.freeze({
-    modelId: value.modelId,
-    from: value.from as number,
-    to: value.to as number,
-  });
+  return Object.freeze({ modelId: value.modelId, from, to });
 }
 
 export function parseTraderPriceHistoryPayload(
   modelId: string,
   value: unknown,
-): readonly TraderPricePoint[] {
+): readonly TraderQuote[] {
   if (!isTraderModelId(modelId) || !Array.isArray(value)) {
     throw new TypeError("invalid trader price history payload");
   }
-  const points: TraderPricePoint[] = [];
+  const points: TraderQuote[] = [];
   for (const candidate of value.slice(0, TRADE_LIMITS.priceHistoryPoints)) {
     const point = parseRemoteQuote(candidate, candidate && isRecord(candidate) && candidate.s
       ? "sell"

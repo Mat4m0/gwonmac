@@ -1,4 +1,10 @@
-import type { TraderPriceCategory } from "../../../src/shared/trade-chat";
+export const TRADER_PRICE_CATEGORIES = [
+  "common-materials",
+  "rare-materials",
+  "runes",
+  "dyes",
+] as const;
+export type TraderPriceCategory = (typeof TRADER_PRICE_CATEGORIES)[number];
 
 export const TRADER_PROFESSIONS = [
   "general", "warrior", "ranger", "monk", "necromancer", "mesmer",

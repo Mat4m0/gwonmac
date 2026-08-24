@@ -10,7 +10,7 @@ import {
   type TradeSource,
   type TraderPriceHistoryRequest,
   type TraderPriceHistoryResult,
-  type TraderPricePoint,
+  type TraderQuote,
   type TraderQuoteSnapshot,
 } from "../../../src/shared/trade-chat";
 import type { GwNativeApi } from "../../../src/shared/contracts";
@@ -171,7 +171,7 @@ function demoTraderQuotes(): TraderQuoteSnapshot {
 
 function demoTraderPriceHistory(
   request: TraderPriceHistoryRequest,
-): readonly TraderPricePoint[] {
+): readonly TraderQuote[] {
   const span = request.to - request.from;
   const base = demoTraderQuotes().quotes.find((quote) =>
     quote.modelId === request.modelId && quote.side === "buy")?.price ?? 1_000;

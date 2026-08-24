@@ -1,11 +1,11 @@
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
-import type { TraderPricePoint } from "../../../../src/shared/trade-chat";
+import { describe, expect, it, vi } from "vitest";
+import type { TraderQuote } from "../../../../src/shared/trade-chat";
 import PriceHistoryChart from "./PriceHistoryChart.vue";
 
 const DAY = 24 * 60 * 60 * 1_000;
 const TO = 1_787_600_000_000;
-const POINTS: readonly TraderPricePoint[] = Object.freeze(Array.from(
+const POINTS: readonly TraderQuote[] = Object.freeze(Array.from(
   { length: 31 },
   (_, day) => Object.freeze({
     modelId: "0b039e",
@@ -17,6 +17,8 @@ const POINTS: readonly TraderPricePoint[] = Object.freeze(Array.from(
 
 describe("PriceHistoryChart", () => {
   it("uses smaller wheel zoom steps than the zoom buttons", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(TO);
     const wrapper = mount(PriceHistoryChart, {
       props: { points: POINTS, loading: false, itemName: "Bolt of Linen" },
     });
@@ -32,10 +34,7 @@ describe("PriceHistoryChart", () => {
       left: 0,
       toJSON: () => ({}),
     });
-    const state = wrapper.vm as unknown as {
-      visibleRange: Readonly<{ from: number; to: number }>;
-    };
-    const fullDuration = state.visibleRange.to - state.visibleRange.from;
+    expect(renderedBuyPoints(wrapper)).toBe(16);
 
     await chart.trigger("wheel", {
       clientX: 400,
@@ -44,12 +43,16 @@ describe("PriceHistoryChart", () => {
       deltaMode: WheelEvent.DOM_DELTA_PIXEL,
     });
 
-    const wheelDuration = state.visibleRange.to - state.visibleRange.from;
-    expect(wheelDuration / fullDuration).toBeCloseTo(Math.exp(-0.08), 5);
+    expect(renderedBuyPoints(wrapper)).toBe(14);
 
     await wrapper.get('button[aria-label="Zoom in"]').trigger("click");
-    const buttonDuration = state.visibleRange.to - state.visibleRange.from;
-    expect(buttonDuration / wheelDuration).toBeCloseTo(0.82, 5);
+    expect(renderedBuyPoints(wrapper)).toBe(12);
     wrapper.unmount();
+    vi.useRealTimers();
   });
 });
+
+function renderedBuyPoints(wrapper: ReturnType<typeof mount>): number {
+  const path = wrapper.get(".price-series-buy").attributes("d") ?? "";
+  return path.match(/[ML]/gu)?.length ?? 0;
+}
