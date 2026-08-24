@@ -252,7 +252,8 @@ export async function assertTargetReadoutLifecycle() {
       "pagehide did not dispose the target readout",
     );
     assert.deepEqual(disposed, {
-      freed: [0x1000, 0x11_010, 0x11_050],
+      // Runtime allocation, target snapshot, config, and policy region.
+      freed: [0x1000, 0x11_010, 0x11_050, 0x11_210],
       hook: 0,
       // Cleanup withdraws the published runtime by writing null over it.
       runtime: null,
