@@ -344,6 +344,8 @@ export const UI_STYLES = ["guild-wars", "obsidian"] as const;
 export type UiStyle = (typeof UI_STYLES)[number];
 export const UI_FONTS = ["guild-wars", "inter"] as const;
 export type UiFont = (typeof UI_FONTS)[number];
+export const CONTROLLER_PROMPT_STYLES = ["game-default", "playstation"] as const;
+export type ControllerPromptStyle = (typeof CONTROLLER_PROMPT_STYLES)[number];
 export const RENDER_SCALES = [1, 1.5, 2] as const;
 export type RenderScale = (typeof RENDER_SCALES)[number];
 export const UI_PANEL_OPACITY_MIN = 65;
@@ -356,6 +358,8 @@ export interface AppSettings {
   uiStyle: UiStyle;
   /** The typeface applied to every GWonMac panel. */
   uiFont: UiFont;
+  /** Visual style for Guild Wars' controller-button texture atlas. */
+  controllerPromptStyle: ControllerPromptStyle;
   /**
    * The application's Guild Wars panels stay translucent enough to see the
    * game behind them. This is presentation only and never reaches the game.
@@ -445,6 +449,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
   uiStyle: "guild-wars",
   uiFont: "guild-wars",
+  controllerPromptStyle: "game-default",
   uiPanelOpacity: 94,
   gwonmacTools: false,
   teamManagement: true,

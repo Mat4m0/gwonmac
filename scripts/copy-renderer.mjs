@@ -22,6 +22,7 @@ const ASSETS = [
   "images/hero-poster.jpg",
   "images/hero-video.webm",
   "images/logo.webp",
+  "images/playstation-controller-prompts.png",
   "index.html",
   "loading.css",
 ];

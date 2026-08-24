@@ -80,9 +80,9 @@ the action and restarts. It keeps the small official client files.
 ## Display and input
 
 Open **Settings → Display** to select render scale, interface style, interface
-font, and panel opacity. **Guild Wars Original** is converted locally from your
-installed game. **Inter** uses the modern font when it is installed and the
-closest system sans-serif otherwise.
+font, panel opacity, and controller button symbols. **Guild Wars Original** is
+converted locally from your installed game. **Inter** uses the modern font when
+it is installed and the closest system sans-serif otherwise.
 
 **Retina — 2×** is the image-quality default. Use 1.5× or 1× to reduce GPU work
 and memory. Settings shows the current backing resolution. The official web
@@ -99,6 +99,12 @@ input source. An old custom binding can need one manual rebind.
 
 The official client includes browser gamepad support. This project does not have
 a dedicated controller release test.
+
+**Controller button symbols** can keep Guild Wars' built-in symbols or show
+PlayStation-style symbols throughout the game. The setting changes only the
+prompt artwork: it does not remap buttons or change controller input. Restart
+GWonMac after changing it. If a Guild Wars update changes the exact prompt
+texture, GWonMac leaves the game's texture untouched instead of guessing.
 
 ## Game integration and optional Tools
 

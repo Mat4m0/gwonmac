@@ -29,6 +29,13 @@ test("Settings exposes the two independent interface fonts", async () => {
   assert.deepEqual(values, ["guild-wars", "inter"]);
 });
 
+test("Settings exposes the two controller prompt styles", async () => {
+  const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
+  const values = [...html.matchAll(/<input\b[^>]*\bname=["']controllerPromptStyle["'][^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
+    .map((match) => match[1]);
+  assert.deepEqual(values, ["game-default", "playstation"]);
+});
+
 test("panel opacity uses the canonical bounds", async () => {
   const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
   const input = /<input\b[^>]*\bname\s*=\s*["']uiPanelOpacity["'][^>]*>/iu.exec(html);

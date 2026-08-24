@@ -21,6 +21,9 @@ type GwClientImports = Parameters<
     typeof import('./wasm-memory-attribution.js').installWasmMemoryAttribution
   >[0]['imports'] &
   Parameters<
+    typeof import('./controller-prompt-texture.js').installControllerPromptTexture
+  >[0]['imports'] &
+  Parameters<
   typeof import('./gl-program-cache.js').installGlProgramCache
 >[0]['imports'] &
   Parameters<
@@ -517,6 +520,7 @@ window.gwApplySettings = (next) => {
 // before the glue loads and the source is constructed from it in boot().
 let imageSource: import('./image-source.js').ImageSource | null = null;
 let gamepadImportsAvailable = false;
+let controllerPrompts: import('./controller-prompt-texture.js').PreparedControllerPrompts | null = null;
 
 // The host's supporting modules. They are ESM; this bootstrap is not, because
 // the generated glue redeclares `var Module`. So boot() imports them and holds
@@ -535,7 +539,8 @@ let host: typeof import('./graphics.js') &
   typeof import('./text-editing.js') &
   typeof import('./gamepad-trace.js') &
   typeof import('./template-save-compatibility.js') &
-  typeof import('./template-filesystem-trace.js');
+  typeof import('./template-filesystem-trace.js') &
+  typeof import('./controller-prompt-texture.js');
 
 /**
  * The one HTTP shape the image source is given: a ranged read of the snapshot,
@@ -589,6 +594,11 @@ addEventListener('beforeunload', () => {
   imageSource?.stop();
   disposeHostOnlyTools();
   disposeSocketHost();
+  window.gwVirtualGamepad?.dispose();
+  controllerPrompts?.dispose();
+  controllerPrompts = null;
+  delete window.gwVirtualGamepad;
+  delete window.gwControllerPromptTextureStats;
 });
 
 Module = {
@@ -615,6 +625,15 @@ Module = {
       );
     } else {
       delete window.gwTextureStats;
+    }
+    if (controllerPrompts) {
+      const installedControllerPrompts = controllerPrompts.install({
+        imports,
+        module: Module,
+      });
+      if (installedControllerPrompts && window.gwNative.init.development) {
+        window.gwControllerPromptTextureStats = installedControllerPrompts.snapshot;
+      }
     }
     host.installClientExit({
       imports,
@@ -1195,6 +1214,8 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       clientHealth,
       appearance,
       proxyRoutes,
+      virtualGamepad,
+      controllerPromptTexture,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
@@ -1214,6 +1235,8 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       import('./client-health.js'),
       import('./appearance.js'),
       import('../shared/proxy-routes.js'),
+      import('./virtual-gamepad.js'),
+      import('./controller-prompt-texture.js'),
     ]);
     host = {
       ...clientExit,
@@ -1229,11 +1252,15 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       ...gamepadTraceModule,
       ...templateSaveCompatibility,
       ...templateFilesystemTrace,
+      ...controllerPromptTexture,
     };
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
     applyAppearance = appearance.applyAppearance;
     isProxyRouteLabel = proxyRoutes.isProxyRouteName;
+    if (window.gwNative.init.development) {
+      window.gwVirtualGamepad = virtualGamepad.installVirtualGamepad({ log });
+    }
     Object.assign(Module, unavailablePlatformCapabilities(log));
     const socketHost = createSocketHost({
       native: native().sockets,
@@ -1271,6 +1298,20 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       native().client.session(),
     ]);
     appSettings = settings;
+    if (settings.controllerPromptStyle === 'playstation') {
+      try {
+        controllerPrompts = await host.preparePlayStationControllerPrompts({
+          clientSha256: session.compatibility?.clientSha256 ?? null,
+          diagnostics: window.gwNative.init.development,
+          log,
+        });
+      } catch (error) {
+        log(
+          '[warn] PlayStation controller symbols could not be prepared; using game defaults:',
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
     templatePublishingAvailable =
       session.compatibility?.features.gameFileSaving.status === 'available';
     applyAppearance(

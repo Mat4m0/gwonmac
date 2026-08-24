@@ -94,3 +94,17 @@ QT Friz Quad is © 1992 QualiType and is distributed under the SIL Open Font
 License 1.1. The complete license is included as `COPYING-QUALITYPE` beside the
 font in source distributions and in the packaged application's Resources
 directory.
+
+## Kenney Input Prompts
+
+`src/renderer/images/playstation-controller-prompts.png` is composed from the
+PlayStation Series icons in [Kenney Input Prompts](https://kenney.nl/assets/input-prompts),
+version 1.1. The selected files came from the public
+[`tanuki-billie/kenney-input-prompts`](https://github.com/tanuki-billie/kenney-input-prompts)
+mirror, which retains Kenney's included `LICENSE.txt`. The source pack was
+created and distributed by Kenney and released under
+[Creative Commons Zero 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/).
+GWonMac adds the dark face-button plates and the L4, L5, R4, R5, L, and R label
+plates needed by Guild Wars' fixed controller atlas. PlayStation is a trademark
+of Sony Interactive Entertainment Inc.; GWonMac is not affiliated with or
+endorsed by Sony.
