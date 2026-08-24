@@ -33,6 +33,10 @@ import {
 } from "./enhancement-builds.js";
 import { applyFeatureContributions } from "./enhancement-transform-features.js";
 import {
+  resolveEnhancementSkillTransform,
+  rewriteSkillBarConstructorCapture,
+} from "./enhancement-skill-transform.js";
+import {
   PROFESSION_TRACE_WORDS,
   professionTraceGlobals,
   type ProfessionTraceGlobals,
@@ -47,7 +51,6 @@ import {
   parseIndexVector,
   parseExports,
   parseTypes,
-  paddedIndex,
   sectionById,
   sleb,
   splitSections,
@@ -257,8 +260,6 @@ function resolveEnhancementTransform(
     : null;
   const travelAction = build.travelAction!;
   const chatAliases = build.chatAliases!;
-  const skillSlotGeometry = build.skillSlotGeometry!;
-  const skillCooldown = build.skillCooldownObservation!;
   const hasActionQueue = capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction;
@@ -336,68 +337,16 @@ function resolveEnhancementTransform(
     if (!body) fail(`function ${functionIndex} has no body`);
     return createHash("sha256").update(body).digest("hex");
   };
-  const skillInitializer = capabilities.skillSlotGeometry
-    ? resolveHook(
-        "SkillBar initializer",
-        skillSlotGeometry.initializer.functionIndex,
-        skillSlotGeometry.initializer.params,
-        skillSlotGeometry.initializer.results,
-      )
-    : null;
-  const skillConstructor = capabilities.skillSlotGeometry
-    ? resolveHook(
-        "SkillBar frame constructor",
-        skillSlotGeometry.constructor.functionIndex,
-        skillSlotGeometry.constructor.params,
-        skillSlotGeometry.constructor.results,
-      )
-    : null;
-  const skillCooldownReader = capabilities.skillCooldownObservation
-    ? resolveHook(
-        "skill recharge reader",
-        skillCooldown.reader.functionIndex,
-        skillCooldown.reader.params,
-        skillCooldown.reader.results,
-      )
-    : null;
-  const skillTimer = capabilities.skillCooldownObservation
-    ? resolveHook(
-        "precise skill timer",
-        skillCooldown.timer.functionIndex,
-        skillCooldown.timer.params,
-        skillCooldown.timer.results,
-      )
-    : null;
-  if (skillInitializer && skillConstructor) {
-    if (
-      bodyHash(skillSlotGeometry.initializer.functionIndex)
-        !== skillSlotGeometry.initializer.bodySha256
-      || bodyHash(skillSlotGeometry.constructor.functionIndex)
-        !== skillSlotGeometry.constructor.bodySha256
-    ) fail("SkillBar frame capture bodies do not match their certificates");
-    const operand = skillSlotGeometry.initializer.constructorCallOperand;
-    const body = bodies[skillInitializer.localIndex]!;
-    const expected = paddedIndex(skillSlotGeometry.constructor.functionIndex);
-    if (
-      body[operand - 1] !== 0x10
-      || expected.some((byte, index) => body[operand + index] !== byte)
-    ) fail("SkillBar constructor call site does not match its certificate");
-  }
-  if (skillCooldownReader && skillTimer) {
-    if (
-      bodyHash(skillCooldown.reader.functionIndex)
-        !== skillCooldown.reader.bodySha256
-      || bodyHash(skillCooldown.timer.functionIndex)
-        !== skillCooldown.timer.bodySha256
-    ) fail("skill cooldown bodies do not match their certificates");
-    const operand = skillCooldown.reader.timerCallOperand;
-    const body = bodies[skillCooldownReader.localIndex]!;
-    const expected = paddedIndex(skillCooldown.timer.functionIndex);
-    if (
-      body[operand - 1] !== 0x10
-      || expected.some((byte, index) => body[operand + index] !== byte)
-    ) fail("skill timer call site does not match its certificate");
-  }
+  const skillResolution = resolveEnhancementSkillTransform({
+    build,
+    capabilities,
+    bodies,
+    importCount,
+    resolveFunction: resolveHook,
+    fail,
+  });
+  const skillInitializer = skillResolution.geometry?.initializer ?? null;
+  const skillConstructor = skillResolution.geometry?.constructor ?? null;
   if (bodyHash(build.hookFunction) !== build.hookBodySha256) {
     fail("tick body does not match its semantic fingerprint");
   }
@@ -703,10 +652,7 @@ function resolveEnhancementTransform(
     xunlaiAction,
     travelAction,
     chatAliases,
-    skillSlotGeometry,
-    skillCooldown,
-    skillInitializer,
-    skillConstructor,
+    skillResolution,
     commands,
     professionBuilder,
     skillBuilder,
@@ -743,9 +689,7 @@ function assembleEnhancementTransform(
     table,
     nextTableSize,
     hasActionQueue,
-    skillSlotGeometry,
-    skillInitializer,
-    skillConstructor,
+    skillResolution,
   } = resolution;
 
   const globals = vectorPayload(sectionById(sections, 6));
@@ -854,6 +798,8 @@ function assembleEnhancementTransform(
   };
   const selectedOriginalIndices = selected.map((hook) =>
     appendFunction(hook.typeIndex, bodies[hook.localIndex]!));
+  const skillTimerFunctionIndex = skillResolution.cooldown
+    ?.certificate.timer.functionIndex ?? null;
   const uiHookIndex = selected.findIndex((hook) =>
     hook.dispatchKind === COMPANION_DISPATCH_KINDS.ui);
   const uiOriginalIndex = selectedHooks.ui
@@ -872,35 +818,17 @@ function assembleEnhancementTransform(
         : null,
       capabilities.skillCooldownObservation
         && hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
-        ? resolution.skillCooldown.timer.functionIndex
+        ? skillTimerFunctionIndex
         : null,
     );
   });
 
-  if (skillInitializer && skillConstructor) {
-    const wrapperIndex = appendFunction(
-      skillConstructor.typeIndex,
-      concat(
-        // One i32 local holds the constructor result while it is published.
-        uleb(1), uleb(1), Uint8Array.of(0x7f),
-        ...Array.from({ length: 6 }, (_, index) =>
-          concat(Uint8Array.of(0x20), uleb(index))),
-        Uint8Array.of(0x10), uleb(skillSlotGeometry.constructor.functionIndex),
-        Uint8Array.of(0x22), uleb(6),
-        Uint8Array.of(0x24), uleb(skillBarFrameGlobalIndex),
-        Uint8Array.of(0x20), uleb(6),
-        Uint8Array.of(0x0b),
-      ),
-    );
-    const rewrittenInitializer = new Uint8Array(
-      nextBodies[skillInitializer.localIndex]!,
-    );
-    rewrittenInitializer.set(
-      paddedIndex(wrapperIndex),
-      skillSlotGeometry.initializer.constructorCallOperand,
-    );
-    nextBodies[skillInitializer.localIndex] = rewrittenInitializer;
-  }
+  rewriteSkillBarConstructorCapture({
+    resolution: skillResolution,
+    nextBodies,
+    skillBarFrameGlobalIndex,
+    appendFunction,
+  });
 
   const addedFunctionExports: Array<Readonly<{ name: string; index: number }>> = [];
   applyFeatureContributions(resolution, {
