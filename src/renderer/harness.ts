@@ -494,6 +494,9 @@ window.gwToolsSettings = () => Object.freeze({
   travelPalette: appSettings?.travelPalette ?? false,
   targetReadout: appSettings?.targetReadout ?? false,
   skillKeyBindings: appSettings?.skillKeyBindings ?? emptySkillKeyBindings,
+  skillCooldownOverlayEnabled: appSettings?.skillCooldownOverlayEnabled ?? true,
+  skillCooldownColor: appSettings?.skillCooldownColor
+    ?? Object.freeze({ kind: 'preset', preset: 'red' }),
 });
 window.gwApplySettings = (next) => {
   const previousScale = appSettings?.renderScale;

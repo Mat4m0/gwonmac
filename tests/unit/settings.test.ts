@@ -31,6 +31,8 @@ describe("settings", () => {
       targetReadout: false,
       shortcutOverrides: {},
       skillKeyBindings: [null, null, null, null, null, null, null, null],
+      skillCooldownOverlayEnabled: true,
+      skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       showDiagnostics: false,
       dataStrategy: "full",
@@ -74,6 +76,8 @@ describe("settings", () => {
       targetReadout: false,
       shortcutOverrides: {},
       skillKeyBindings: [null, null, null, null, null, null, null, null],
+      skillCooldownOverlayEnabled: true,
+      skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",
@@ -221,6 +225,19 @@ describe("settings", () => {
     );
   });
 
+  it("accepts one canonical cooldown switch and color", () => {
+    assert.equal(parseSettings({ skillCooldownOverlayEnabled: false }).skillCooldownOverlayEnabled, false);
+    assert.deepEqual(parseSettingsPatch({
+      skillCooldownColor: { kind: "custom", value: "#12aBcF" },
+    }), { skillCooldownColor: { kind: "custom", value: "#12aBcF" } });
+    for (const value of [
+      { kind: "custom", value: "#fff" },
+      { kind: "custom", value: "#12345g" },
+      { kind: "preset", preset: "green" },
+      { kind: "preset", preset: "red", extra: true },
+    ]) assert.throws(() => parseSettings({ skillCooldownColor: value }), AppError);
+  });
+
   it("validates patches without filling fields from defaults", () => {
     assert.throws(() => parseSettingsPatch({ nativeCursor: true }), AppError);
     assert.deepEqual(parseSettingsPatch({ lastUpdateCheckAt: 1_000 }), {
@@ -304,6 +321,8 @@ describe("settings", () => {
       "renderScale",
       "shortcutOverrides",
       "showDiagnostics",
+      "skillCooldownColor",
+      "skillCooldownOverlayEnabled",
       "skillKeyBindings",
       "targetReadout",
       "teamManagement",
@@ -354,6 +373,8 @@ describe("settings", () => {
       targetReadout: false,
       shortcutOverrides: {},
       skillKeyBindings: [null, null, null, null, null, null, null, null],
+      skillCooldownOverlayEnabled: true,
+      skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       showDiagnostics: true,
       dataStrategy: "full",

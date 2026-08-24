@@ -10,6 +10,7 @@ import {
   cloneSkillKeyBindings,
   type SkillKeyBindings,
 } from "../shared/skill-key-bindings.js";
+import { projectSkillSlots } from "./skill-slot-projection.js";
 
 export function createSkillKeyOverlayConsumer(
   parent: HTMLElement,
@@ -32,20 +33,18 @@ export function createSkillKeyOverlayConsumer(
       overlay.update({ status: "waiting" });
       return;
     }
-    const ready = state;
-    const canvasRect = canvas.getBoundingClientRect();
-    const scaleX = canvasRect.width / ready.viewportWidth;
-    const scaleY = canvasRect.height / ready.viewportHeight;
+    const projected = projectSkillSlots(state, canvas);
+    if (projected === null) {
+      overlay.update({ status: "waiting" });
+      return;
+    }
     overlay.update({
       status: "ready",
       slots: bindings.flatMap((binding, index) => {
         if (binding === null) return [];
-        const slot = ready.slots[index]!;
+        const slot = projected[index]!;
         return [{
-          x: canvasRect.left + slot.left * scaleX,
-          y: canvasRect.top + (ready.viewportHeight - slot.top) * scaleY,
-          width: (slot.right - slot.left) * scaleX,
-          height: (slot.top - slot.bottom) * scaleY,
+          ...slot,
           binding,
         }];
       }),

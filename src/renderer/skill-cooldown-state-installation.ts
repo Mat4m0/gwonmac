@@ -49,6 +49,9 @@ export function createSkillCooldownObservationInstallation(
     get sink() {
       return available ? feed : null;
     },
+    subscribe(listener: (state: CompanionSkillCooldownState) => void) {
+      return available ? feed.subscribe(listener) : () => false;
+    },
     allocate(malloc: Malloc) {
       if (available && pointer === 0) {
         pointer = Number(malloc(COMPANION_SKILL_COOLDOWN_BYTES));

@@ -201,6 +201,8 @@ declare global {
       travelPalette: boolean;
       targetReadout: boolean;
       skillKeyBindings: AppSettings['skillKeyBindings'];
+      skillCooldownOverlayEnabled: boolean;
+      skillCooldownColor: AppSettings['skillCooldownColor'];
     }>;
     gwLoading: LoadingController;
     gwDiagnostics: RendererDiagnostics;

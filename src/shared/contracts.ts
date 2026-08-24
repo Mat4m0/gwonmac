@@ -48,6 +48,10 @@ import type {
   SkillKeyCaptureResult,
 } from "./skill-key-bindings.js";
 import {
+  DEFAULT_SKILL_COOLDOWN_COLOR,
+  type SkillCooldownColor,
+} from "./skill-cooldowns.js";
+import {
   DEFAULT_STORED_TRAVEL_SHORTCUTS,
   type StoredTravelShortcuts,
   type TravelUserPreferences,
@@ -369,6 +373,10 @@ export interface AppSettings {
   shortcutOverrides: ShortcutOverrides;
   /** Display-only labels that mirror the player's eight Guild Wars bindings. */
   skillKeyBindings: SkillKeyBindings;
+  /** Show Guild Wars' observed recharge state as display-only countdowns. */
+  skillCooldownOverlayEnabled: boolean;
+  /** One curated or exact RGB color shared by all eight cooldown labels. */
+  skillCooldownColor: SkillCooldownColor;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
   showDiagnostics: boolean;
@@ -442,6 +450,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   targetReadout: false,
   shortcutOverrides: {},
   skillKeyBindings: [null, null, null, null, null, null, null, null],
+  skillCooldownOverlayEnabled: true,
+  skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,
   showDiagnostics: false,
   dataStrategy: "full",

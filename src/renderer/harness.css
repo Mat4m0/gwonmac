@@ -402,6 +402,62 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 }
 .settings-skill-key-clear:disabled { visibility: hidden; }
 #settings-skill-keys-clear { justify-self: start; }
+.settings-skill-cooldowns { display: grid; gap: var(--ui-space-2); }
+.settings-skill-cooldowns > .settings-note { margin: 0; }
+.settings-skill-cooldown-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  align-items: center;
+  gap: var(--ui-space-4);
+}
+.settings-skill-cooldown-colors { display: grid; gap: var(--ui-space-1); }
+.settings-skill-cooldown-colors > label {
+  display: grid;
+  grid-template-columns: auto 18px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+.settings-skill-cooldown-colors > label > [data-cooldown-swatch],
+.settings-skill-cooldown-colors > label > .settings-skill-cooldown-custom-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 50%;
+  background: var(--cooldown-swatch, currentColor);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 70%);
+}
+.settings-skill-cooldown-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  margin: var(--ui-space-1) 0 0 28px;
+}
+.settings-skill-cooldown-custom input[type="color"] { width: 38px; height: 30px; padding: 2px; }
+.settings-skill-cooldown-custom .ui-input { width: 7.5rem; }
+.settings-skill-cooldown-preview {
+  display: grid;
+  place-items: center;
+}
+.settings-skill-cooldown-preview-slot {
+  display: block;
+  position: relative;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border: 1px solid rgb(170 177 168 / 82%);
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 45% 38%, rgb(70 156 188 / 90%), transparent 38%),
+    linear-gradient(145deg, #173840, #7860a2 58%, #172120);
+  box-shadow: inset 0 0 16px rgb(0 0 0 / 72%);
+}
+.settings-skill-cooldown-preview-key {
+  --skill-key-edge: 21px;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  max-width: calc(100% - 4px);
+}
 .settings-shortcut-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

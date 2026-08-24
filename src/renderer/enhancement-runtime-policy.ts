@@ -10,6 +10,7 @@ export type OptionalToolSettings = Readonly<{
   teamManagement: boolean;
   xunlaiStorage: boolean;
   travelPalette?: boolean;
+  skillCooldownOverlayEnabled?: boolean;
 }>;
 
 export type RuntimePlayRegion = "pve" | "pvp" | "unknown";
@@ -57,5 +58,7 @@ export function enhancementRuntimePolicy(
       developerStorage || (settings.enabled && settings.travelPalette === true)
     ),
     skillSlotGeometry: settings.enabled && pve,
+    skillCooldownOverlay:
+      settings.enabled && settings.skillCooldownOverlayEnabled === true && pve,
   });
 }
