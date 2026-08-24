@@ -6,6 +6,7 @@
  * shared contract and no message text is ever written to diagnostics.
  */
 import WebSocket, { type ClientOptions, type RawData } from "ws";
+import { AppError } from "../../shared/errors.js";
 import {
   TRADE_LIMITS,
   TRADE_SOURCES,
@@ -24,6 +25,7 @@ import {
   type TraderPriceHistoryResult,
   type TraderQuoteSnapshot,
 } from "../../shared/trade-chat.js";
+import { readBoundedResponse } from "./bounded-response.js";
 
 const CONNECT_TIMEOUT_MS = 10_000;
 const PRICE_TIMEOUT_MS = 10_000;
@@ -88,6 +90,7 @@ export class TradeChatService {
     { value: TraderPriceHistoryResult; expiresAt: number }
   >();
   readonly #historyRequests = new Map<string, Promise<TraderPriceHistoryResult>>();
+  readonly #priceRequests = new Set<AbortController>();
 
   constructor(options: TradeChatServiceOptions = {}) {
     this.#createSocket = options.createSocket ?? ((url, socketOptions) =>
@@ -259,10 +262,13 @@ export class TradeChatService {
     }
     this.#historyCache.clear();
     this.#historyRequests.clear();
+    for (const controller of this.#priceRequests) controller.abort();
+    this.#priceRequests.clear();
   }
 
   async #getJson(path: string): Promise<unknown> {
     const controller = new AbortController();
+    this.#priceRequests.add(controller);
     const timer = setTimeout(() => controller.abort(), PRICE_TIMEOUT_MS);
     try {
       const response = await this.#fetch(
@@ -275,22 +281,24 @@ export class TradeChatService {
       );
       if (response.status === 429) throw new TraderPriceRequestError("rate-limited");
       if (!response.ok) throw new TraderPriceRequestError("unavailable");
-      const text = await response.text();
-      if (text.length > TRADE_LIMITS.pricePayloadBytes) {
-        throw new TraderPriceRequestError("invalid-response");
-      }
+      const bytes = await readBoundedResponse(response, TRADE_LIMITS.pricePayloadBytes);
       try {
+        const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
         return JSON.parse(text) as unknown;
       } catch {
         throw new TraderPriceRequestError("invalid-response");
       }
     } catch (error) {
       if (error instanceof TraderPriceRequestError) throw error;
+      if (error instanceof AppError && error.code === "response_too_large") {
+        throw new TraderPriceRequestError("invalid-response");
+      }
       throw new TraderPriceRequestError(
         controller.signal.aborted ? "timeout" : "unavailable",
       );
     } finally {
       clearTimeout(timer);
+      this.#priceRequests.delete(controller);
     }
   }
 

@@ -8,6 +8,7 @@ import WebSocket from "ws";
 import { TradeChatService } from "../../src/main/core/trade-chat-service.js";
 import { TradeSavedStore } from "../../src/main/core/trade-saved-store.js";
 import {
+  TRADE_LIMITS,
   parseTradePayload,
   parseTradeSavedState,
   parseTradeSearchRequest,
@@ -259,6 +260,29 @@ describe("trade chat service", () => {
       from: 1_785_004_800_000,
       to: 1_787_596_800_000,
     }), { status: "error", problem: "rate-limited" });
+    service.dispose();
+  });
+
+  it("rejects oversized trader history while the body is still streaming", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(TRADE_LIMITS.pricePayloadBytes + 1));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const service = new TradeChatService({
+      fetch: (async () => new Response(body)) as typeof fetch,
+    });
+
+    assert.deepEqual(await service.getTraderPriceHistory({
+      modelId: "0b039e",
+      from: 1_785_004_800_000,
+      to: 1_787_596_800_000,
+    }), { status: "error", problem: "invalid-response" });
+    assert.equal(cancelled, true);
     service.dispose();
   });
 

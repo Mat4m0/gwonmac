@@ -8,8 +8,8 @@ import {
 import {
   createBoundedPatchFetch,
   fetchPatchBytes,
-  readBoundedResponse,
 } from "../../src/main/core/patch-transport.ts";
+import { readBoundedResponse } from "../../src/main/core/bounded-response.ts";
 import { PATCH_REQUEST_HEADERS } from "../../src/main/core/access-key.ts";
 import { AppError, HttpStatusError } from "../../src/shared/errors.ts";
 
