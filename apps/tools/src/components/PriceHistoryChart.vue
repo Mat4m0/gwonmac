@@ -14,6 +14,9 @@ const PLOT = Object.freeze({ left: 58, right: 18, top: 22, bottom: 42 });
 const plotWidth = WIDTH - PLOT.left - PLOT.right;
 const plotHeight = HEIGHT - PLOT.top - PLOT.bottom;
 const MAX_RENDERED_POINTS = 360;
+const WHEEL_LINE_PIXELS = 16;
+const MAX_WHEEL_DELTA_PIXELS = 100;
+const WHEEL_ZOOM_RATE = 0.0008;
 
 const viewport = ref<{ from: number; to: number } | null>(null);
 const pointer = ref<{ x: number; y: number } | null>(null);
@@ -166,7 +169,21 @@ function zoom(event: WheelEvent): void {
   if (!props.points.length) return;
   event.preventDefault();
   const point = graphPoint(event);
-  zoomAt(event.deltaY > 0 ? 1.22 : 0.82, Math.max(0, Math.min(1, (point.x - PLOT.left) / plotWidth)));
+  const deltaPixels = event.deltaY * (
+    event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? WHEEL_LINE_PIXELS
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+        ? plotHeight
+        : 1
+  );
+  const boundedDelta = Math.max(
+    -MAX_WHEEL_DELTA_PIXELS,
+    Math.min(MAX_WHEEL_DELTA_PIXELS, deltaPixels),
+  );
+  zoomAt(
+    Math.exp(boundedDelta * WHEEL_ZOOM_RATE),
+    Math.max(0, Math.min(1, (point.x - PLOT.left) / plotWidth)),
+  );
 }
 
 function zoomAt(factor: number, anchor = 0.5): void {
