@@ -76,7 +76,7 @@ import type {
   TradeSnapshot,
   TradeSource,
   TraderPriceHistoryRequest,
-  TraderPricePoint,
+  TraderPriceHistoryResult,
   TraderQuoteSnapshot,
 } from "./trade-chat.js";
 
@@ -998,7 +998,7 @@ export interface GwNativeApi {
     getTraderQuotes(): Promise<TraderQuoteSnapshot>;
     getTraderPriceHistory(
       request: TraderPriceHistoryRequest,
-    ): Promise<readonly TraderPricePoint[]>;
+    ): Promise<TraderPriceHistoryResult>;
     onEvent(callback: (event: TradeEvent) => void): () => void;
   };
   travelPreferences: {

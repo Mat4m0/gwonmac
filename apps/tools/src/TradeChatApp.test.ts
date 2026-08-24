@@ -9,11 +9,11 @@ import type {
   TradeSavedState,
 } from "../../../src/shared/trade-chat";
 
-async function ledger() {
+async function ledger(host: TradeHost = createDemoTradeHost()) {
   const wrapper = mount(TradeChatApp, {
     attachTo: document.body,
     props: {
-      host: createDemoTradeHost(),
+      host,
       mode: "standalone",
       visible: true,
       active: true,
@@ -56,6 +56,59 @@ describe("TradeChatApp", () => {
     expect(wrapper.get(".trader-catalogue").text()).toContain("Rune of Superior Vigor");
     await wrapper.get(".trader-category-tabs [role=tab]:nth-child(3)").trigger("click");
     expect(wrapper.findAll(".trader-professions button")).toHaveLength(11);
+    wrapper.unmount();
+  });
+
+  it("debounces rapid trader navigation to the final history request", async () => {
+    let calls = 0;
+    const demo = createDemoTradeHost();
+    const host: TradeHost = Object.freeze({
+      ...demo,
+      async getTraderPriceHistory(request) {
+        calls += 1;
+        return demo.getTraderPriceHistory(request);
+      },
+    });
+    const wrapper = await ledger(host);
+    await wrapper.get(".trader-prices-trigger").trigger("click");
+    await flushPromises();
+    expect(calls).toBe(1);
+
+    vi.useFakeTimers();
+    const rows = wrapper.findAll(".trader-item-row");
+    await rows[1]!.trigger("click");
+    await rows[2]!.trigger("click");
+    await rows[1]!.trigger("click");
+    await vi.advanceTimersByTimeAsync(149);
+    expect(calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+    expect(calls).toBe(2);
+    vi.useRealTimers();
+    wrapper.unmount();
+  });
+
+  it("explains a history rate limit and retries without an empty chart state", async () => {
+    let calls = 0;
+    const demo = createDemoTradeHost();
+    const host: TradeHost = Object.freeze({
+      ...demo,
+      async getTraderPriceHistory(request) {
+        calls += 1;
+        if (calls === 1) return { status: "error", problem: "rate-limited" };
+        return demo.getTraderPriceHistory(request);
+      },
+    });
+    const wrapper = await ledger(host);
+    await wrapper.get(".trader-prices-trigger").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Kamadan is receiving too many requests");
+    expect(wrapper.text()).not.toContain("No price history");
+    await wrapper.get(".trader-history-error button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".trader-history-error").exists()).toBe(false);
+    expect(wrapper.findAll(".price-series")).toHaveLength(2);
     wrapper.unmount();
   });
 

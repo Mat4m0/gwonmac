@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import {
   TRADER_PRICE_CATEGORIES,
   type TraderPriceCategory,
+  type TraderPriceHistoryProblem,
   type TraderPricePoint,
   type TraderQuote,
   type TraderQuoteSnapshot,
@@ -47,6 +48,13 @@ const RANGES = [
   { days: 90, label: "90d" },
   { days: 365, label: "1y" },
 ] as const;
+const HISTORY_DEBOUNCE_MS = 150;
+const HISTORY_PROBLEM_MESSAGES: Readonly<Record<TraderPriceHistoryProblem, string>> = Object.freeze({
+  "rate-limited": "Kamadan is receiving too many requests. Wait a moment, then try again.",
+  timeout: "Kamadan took too long to respond. Try again.",
+  "invalid-response": "Kamadan returned price history we could not read. Try again later.",
+  unavailable: "Price history is temporarily unavailable. Try again.",
+});
 
 const category = ref<TraderPriceCategory>("rare-materials");
 const profession = ref<TraderProfession>("general");
@@ -59,11 +67,12 @@ const history = ref<readonly TraderPricePoint[]>([]);
 const quotesLoading = ref(false);
 const historyLoading = ref(false);
 const quoteProblem = ref<string | null>(null);
-const historyProblem = ref<string | null>(null);
+const historyProblem = ref<TraderPriceHistoryProblem | null>(null);
 const catalogue = ref<HTMLElement | null>(null);
 const pricesRoot = ref<HTMLElement | null>(null);
 const now = ref(Date.now());
 let historyRevision = 0;
+let historyTimer: ReturnType<typeof setTimeout> | null = null;
 let clock: ReturnType<typeof setInterval> | null = null;
 
 const quoteByItem = computed(() => {
@@ -101,7 +110,7 @@ watch(visibleItems, (items) => {
   if (!items.length) return;
   if (!items.some((item) => item.modelId === selectedId.value)) selectedId.value = items[0]!.modelId;
 });
-watch([selectedId, rangeDays], () => { void loadHistory(); });
+watch([selectedId, rangeDays], scheduleHistory);
 watch(() => props.visible, (visible) => {
   if (visible && !quotesLoading.value) void loadQuotes();
 });
@@ -110,7 +119,10 @@ onMounted(() => {
   if (props.visible) void loadQuotes();
   clock = setInterval(() => { now.value = Date.now(); }, 30_000);
 });
-onBeforeUnmount(() => { if (clock) clearInterval(clock); });
+onBeforeUnmount(() => {
+  if (clock) clearInterval(clock);
+  if (historyTimer) clearTimeout(historyTimer);
+});
 
 async function loadQuotes(): Promise<void> {
   if (!quotes.value) quotesLoading.value = true;
@@ -129,21 +141,41 @@ async function loadQuotes(): Promise<void> {
   }
 }
 
-async function loadHistory(): Promise<void> {
+function scheduleHistory(): void {
+  if (historyTimer) clearTimeout(historyTimer);
+  const revision = ++historyRevision;
+  historyLoading.value = true;
+  historyProblem.value = null;
+  historyTimer = setTimeout(() => {
+    historyTimer = null;
+    void loadHistory(revision);
+  }, HISTORY_DEBOUNCE_MS);
+}
+
+async function loadHistory(revision = ++historyRevision): Promise<void> {
   const item = selected.value;
   if (!item) return;
-  const revision = ++historyRevision;
+  if (historyTimer) {
+    clearTimeout(historyTimer);
+    historyTimer = null;
+  }
   historyLoading.value = true;
   historyProblem.value = null;
   const to = Date.now();
   const from = to - rangeDays.value * 24 * 60 * 60 * 1_000;
   try {
     const result = await props.host.getTraderPriceHistory({ modelId: item.modelId, from, to });
-    if (revision === historyRevision) history.value = result;
+    if (revision !== historyRevision) return;
+    if (result.status === "ok") {
+      history.value = result.points;
+    } else {
+      history.value = [];
+      historyProblem.value = result.problem;
+    }
   } catch {
     if (revision === historyRevision) {
       history.value = [];
-      historyProblem.value = "Price history is unavailable for this range. Try again.";
+      historyProblem.value = "unavailable";
     }
   } finally {
     if (revision === historyRevision) historyLoading.value = false;
@@ -281,8 +313,11 @@ function relativeAge(timestamp: number): string {
         <div class="ui-segment trader-range" data-fill aria-label="Price history range">
           <button v-for="range in RANGES" :key="range.days" :aria-pressed="rangeDays === range.days" @click="rangeDays = range.days">{{ range.label }}</button>
         </div>
-        <p v-if="historyProblem" class="trader-history-error" role="alert">{{ historyProblem }}</p>
-        <PriceHistoryChart :points="history" :loading="historyLoading" :item-name="selected.name" />
+        <div v-if="historyProblem" class="trader-history-error" role="alert">
+          <p>{{ HISTORY_PROBLEM_MESSAGES[historyProblem] }}</p>
+          <button class="ui-button" type="button" @click="loadHistory()">Try again</button>
+        </div>
+        <PriceHistoryChart v-else :points="history" :loading="historyLoading" :item-name="selected.name" />
         <p class="trader-price-source">Observed trader quotes from Kamadan. Prices can change in Guild Wars before the next update.</p>
       </section>
     </div>

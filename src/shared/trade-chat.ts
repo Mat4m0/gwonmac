@@ -51,6 +51,16 @@ export type TraderPriceHistoryRequest = Readonly<{
 
 export type TraderPricePoint = TraderQuote;
 
+export type TraderPriceHistoryProblem =
+  | "rate-limited"
+  | "timeout"
+  | "invalid-response"
+  | "unavailable";
+
+export type TraderPriceHistoryResult =
+  | Readonly<{ status: "ok"; points: readonly TraderPricePoint[] }>
+  | Readonly<{ status: "error"; problem: TraderPriceHistoryProblem }>;
+
 export const TRADE_SOURCE_URLS: Readonly<
   Record<TradeSource, { readonly websocket: string; readonly website: string }>
 > = Object.freeze({

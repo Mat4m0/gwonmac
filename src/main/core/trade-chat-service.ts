@@ -20,14 +20,16 @@ import {
   type TradeSnapshot,
   type TradeSource,
   type TraderPriceHistoryRequest,
-  type TraderPricePoint,
+  type TraderPriceHistoryProblem,
+  type TraderPriceHistoryResult,
   type TraderQuoteSnapshot,
 } from "../../shared/trade-chat.js";
 
 const CONNECT_TIMEOUT_MS = 10_000;
 const PRICE_TIMEOUT_MS = 10_000;
 const PRICE_CACHE_MS = 60_000;
-const HISTORY_CACHE_MS = 30_000;
+const HISTORY_CACHE_MS = 60_000;
+const HISTORY_RANGE_BUCKET_MS = 60_000;
 const SEARCH_TIMEOUT_MS = 8_000;
 const PING_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 10_000;
@@ -83,8 +85,9 @@ export class TradeChatService {
   #quoteRequest: Promise<TraderQuoteSnapshot> | null = null;
   readonly #historyCache = new Map<
     string,
-    { value: readonly TraderPricePoint[]; expiresAt: number }
+    { value: TraderPriceHistoryResult; expiresAt: number }
   >();
+  readonly #historyRequests = new Map<string, Promise<TraderPriceHistoryResult>>();
 
   constructor(options: TradeChatServiceOptions = {}) {
     this.#createSocket = options.createSocket ?? ((url, socketOptions) =>
@@ -115,24 +118,46 @@ export class TradeChatService {
     return this.#quoteRequest;
   }
 
-  async getTraderPriceHistory(
+  getTraderPriceHistory(
     request: TraderPriceHistoryRequest,
-  ): Promise<readonly TraderPricePoint[]> {
-    const key = `${request.modelId}:${request.from}:${request.to}`;
+  ): Promise<TraderPriceHistoryResult> {
+    const normalized = normalizeHistoryRequest(request);
+    const key = `${normalized.modelId}:${normalized.from}:${normalized.to}`;
     const cached = this.#historyCache.get(key);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
-    const value = parseTraderPriceHistoryPayload(
-      request.modelId,
-      await this.#getJson(
-        `/pricing_history/${request.modelId}/${request.from}/${request.to}`,
-      ),
-    );
-    this.#historyCache.set(key, { value, expiresAt: Date.now() + HISTORY_CACHE_MS });
-    if (this.#historyCache.size > 24) {
-      const oldest = this.#historyCache.keys().next().value;
-      if (oldest) this.#historyCache.delete(oldest);
+    if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
+    const active = this.#historyRequests.get(key);
+    if (active) return active;
+
+    const pending = this.#fetchTraderPriceHistory(normalized, key)
+      .finally(() => { this.#historyRequests.delete(key); });
+    this.#historyRequests.set(key, pending);
+    return pending;
+  }
+
+  async #fetchTraderPriceHistory(
+    request: TraderPriceHistoryRequest,
+    key: string,
+  ): Promise<TraderPriceHistoryResult> {
+    try {
+      const points = parseTraderPriceHistoryPayload(
+        request.modelId,
+        await this.#getJson(
+          `/pricing_history/${request.modelId}/${request.from}/${request.to}`,
+        ),
+      );
+      const value = Object.freeze({ status: "ok" as const, points });
+      this.#historyCache.set(key, { value, expiresAt: Date.now() + HISTORY_CACHE_MS });
+      if (this.#historyCache.size > 24) {
+        const oldest = this.#historyCache.keys().next().value;
+        if (oldest) this.#historyCache.delete(oldest);
+      }
+      return value;
+    } catch (error) {
+      const problem = error instanceof TraderPriceRequestError
+        ? error.problem
+        : "invalid-response";
+      return Object.freeze({ status: "error", problem });
     }
-    return value;
   }
 
   subscribe(id: number, source: TradeSource, listener: Listener): TradeSnapshot {
@@ -233,6 +258,7 @@ export class TradeChatService {
       this.#stop(feed);
     }
     this.#historyCache.clear();
+    this.#historyRequests.clear();
   }
 
   async #getJson(path: string): Promise<unknown> {
@@ -247,14 +273,22 @@ export class TradeChatService {
           signal: controller.signal,
         },
       );
-      if (!response.ok) throw new Error("trader prices request failed");
+      if (response.status === 429) throw new TraderPriceRequestError("rate-limited");
+      if (!response.ok) throw new TraderPriceRequestError("unavailable");
       const text = await response.text();
       if (text.length > TRADE_LIMITS.pricePayloadBytes) {
-        throw new Error("trader prices response was too large");
+        throw new TraderPriceRequestError("invalid-response");
       }
-      return JSON.parse(text) as unknown;
-    } catch {
-      throw new Error("trader prices are unavailable");
+      try {
+        return JSON.parse(text) as unknown;
+      } catch {
+        throw new TraderPriceRequestError("invalid-response");
+      }
+    } catch (error) {
+      if (error instanceof TraderPriceRequestError) throw error;
+      throw new TraderPriceRequestError(
+        controller.signal.aborted ? "timeout" : "unavailable",
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -420,6 +454,23 @@ export class TradeChatService {
   #feed(source: TradeSource): Feed {
     return this.#feeds.get(source)!;
   }
+}
+
+class TraderPriceRequestError extends Error {
+  readonly problem: TraderPriceHistoryProblem;
+
+  constructor(problem: TraderPriceHistoryProblem) {
+    super(problem);
+    this.problem = problem;
+  }
+}
+
+function normalizeHistoryRequest(
+  request: TraderPriceHistoryRequest,
+): TraderPriceHistoryRequest {
+  const duration = request.to - request.from;
+  const to = Math.floor(request.to / HISTORY_RANGE_BUCKET_MS) * HISTORY_RANGE_BUCKET_MS;
+  return Object.freeze({ modelId: request.modelId, from: to - duration, to });
 }
 
 function mergeSearchMessages(messages: readonly TradeMessage[]): readonly TradeMessage[] {

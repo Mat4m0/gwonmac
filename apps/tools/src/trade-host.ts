@@ -9,6 +9,7 @@ import {
   type TradeSnapshot,
   type TradeSource,
   type TraderPriceHistoryRequest,
+  type TraderPriceHistoryResult,
   type TraderPricePoint,
   type TraderQuoteSnapshot,
 } from "../../../src/shared/trade-chat";
@@ -27,7 +28,7 @@ export type TradeHost = Readonly<{
   getTraderQuotes(): Promise<TraderQuoteSnapshot>;
   getTraderPriceHistory(
     request: TraderPriceHistoryRequest,
-  ): Promise<readonly TraderPricePoint[]>;
+  ): Promise<TraderPriceHistoryResult>;
 }>;
 
 type NativeTradeHostApi = Readonly<{
@@ -141,7 +142,7 @@ export function createDemoTradeHost(): TradeHost {
       return demoTraderQuotes();
     },
     async getTraderPriceHistory(request) {
-      return demoTraderPriceHistory(request);
+      return Object.freeze({ status: "ok", points: demoTraderPriceHistory(request) });
     },
   });
 }

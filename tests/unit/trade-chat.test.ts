@@ -208,10 +208,57 @@ describe("trade chat service", () => {
       from: 1_787_500_000_000,
       to: 1_787_600_000_000,
     };
-    assert.equal((await service.getTraderPriceHistory(request))[0]?.price, 20_000);
+    const history = await service.getTraderPriceHistory(request);
+    assert.equal(history.status, "ok");
+    assert.equal(history.status === "ok" ? history.points[0]?.price : undefined, 20_000);
     assert.ok(urls.at(-1)?.endsWith(
-      "/pricing_history/0b03a2/1787500000000/1787600000000",
+      "/pricing_history/0b03a2/1787499980000/1787599980000",
     ));
+    service.dispose();
+  });
+
+  it("coalesces in-flight history and caches nearby ranges by minute", async () => {
+    let calls = 0;
+    const service = new TradeChatService({
+      fetch: (async () => {
+        calls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return new Response(JSON.stringify([
+          { t: 1_787_597_866, p: 220, m: "0b039e" },
+        ]));
+      }) as typeof fetch,
+    });
+    const request = {
+      modelId: "0b039e",
+      from: 1_785_004_830_000,
+      to: 1_787_596_830_000,
+    };
+
+    const simultaneous = await Promise.all(Array.from(
+      { length: 10 },
+      () => service.getTraderPriceHistory(request),
+    ));
+    assert.equal(calls, 1);
+    assert.ok(simultaneous.every((result) => result === simultaneous[0]));
+
+    await service.getTraderPriceHistory({
+      ...request,
+      from: request.from + 10_000,
+      to: request.to + 10_000,
+    });
+    assert.equal(calls, 1);
+    service.dispose();
+  });
+
+  it("classifies an upstream history rate limit without throwing", async () => {
+    const service = new TradeChatService({
+      fetch: (async () => new Response("slow down", { status: 429 })) as typeof fetch,
+    });
+    assert.deepEqual(await service.getTraderPriceHistory({
+      modelId: "0b039e",
+      from: 1_785_004_800_000,
+      to: 1_787_596_800_000,
+    }), { status: "error", problem: "rate-limited" });
     service.dispose();
   });
 

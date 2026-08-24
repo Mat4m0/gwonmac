@@ -621,7 +621,19 @@
 .trader-current-prices [data-side="buy"] strong { color: var(--ui-accent); }
 .trader-current-prices [data-side="sell"] strong { color: var(--ui-info); }
 .trader-range { width: auto; align-self: flex-end; margin-top: var(--ui-space-2); }
-.trader-history-error { margin: var(--ui-space-2) 0 0; color: var(--ui-danger); font-size: var(--ui-font-size-sm); }
+.trader-history-error {
+  display: flex;
+  min-height: 180px;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-3);
+  color: var(--ui-danger);
+  font-size: var(--ui-font-size-sm);
+  text-align: center;
+}
+.trader-history-error p { margin: 0; }
 .trader-price-source { margin: var(--ui-space-2) 0 0; color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
 
 .trader-item-icon {
