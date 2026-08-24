@@ -508,6 +508,39 @@ function matchesSkillCooldownObservation(
     && isDeepStrictEqual(candidate.layout, expected.layout);
 }
 
+function matchesPlayerSkillbarObservation(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.playerSkillbarObservation;
+  const expected = baseline.playerSkillbarObservation;
+  if (candidate === undefined) return true;
+  if (expected === undefined) return false;
+  const proof = (
+    value: Readonly<{
+      functionIndex: number;
+      bodySha256: string;
+      params: readonly string[];
+      results: readonly string[];
+    }>,
+    reference: Readonly<{
+      functionIndex: number;
+      bodySha256: string;
+      params: readonly string[];
+      results: readonly string[];
+    }>,
+  ) => isIndex(value.functionIndex)
+    && isDigest(value.bodySha256)
+    && isDeepStrictEqual(value.params, reference.params)
+    && isDeepStrictEqual(value.results, reference.results);
+  return proof(candidate.worldLifecycle, expected.worldLifecycle)
+    && proof(candidate.update, expected.update)
+    && proof(candidate.rowReader, expected.rowReader)
+    && proof(candidate.slotReader, expected.slotReader)
+    && isDeepStrictEqual(candidate.coreLayout, expected.coreLayout)
+    && isDeepStrictEqual(candidate.partyLayout, expected.partyLayout);
+}
+
 function isAutomaticSemanticBuild(
   value: unknown,
   inputSha256: string,
@@ -534,10 +567,12 @@ function isAutomaticSemanticBuild(
   const hasParty = build.partyObservation !== undefined;
   const hasTeam = build.teamApply !== undefined;
   const hasSkillSlotGeometry = build.skillSlotGeometry !== undefined;
+  const hasPlayerSkillbar = build.playerSkillbarObservation !== undefined;
   const hasSkillCooldown = build.skillCooldownObservation !== undefined;
   if (!hasCursor && !hasPlayRegion && !hasObservation && !hasTarget
     && !hasTravel && !hasXunlai && !hasAliases
-    && !hasParty && !hasTeam && !hasSkillSlotGeometry && !hasSkillCooldown) {
+    && !hasParty && !hasTeam && !hasSkillSlotGeometry
+    && !hasPlayerSkillbar && !hasSkillCooldown) {
     return false;
   }
   if (
@@ -547,9 +582,11 @@ function isAutomaticSemanticBuild(
     || (hasTarget && (!hasPlayRegion || !hasObservation))
     || (hasTravel && !hasPlayRegion)
     || (hasXunlai && (!hasPlayRegion || !hasObservation))
-    || (hasParty && (!hasObservation || build.uiDispatcher === undefined))
+    || (hasPlayerSkillbar && (!hasPlayRegion || !hasObservation))
+    || (hasParty && (!hasObservation || !hasPlayerSkillbar
+      || build.uiDispatcher === undefined))
     || (hasSkillSlotGeometry && !hasPlayRegion)
-    || (hasSkillCooldown && (!hasObservation || !hasParty))
+    || (hasSkillCooldown && (!hasPlayRegion || !hasObservation || !hasPlayerSkillbar))
     || (hasTeam && (!hasParty || build.gameThread === undefined))
     || ((hasTravel || hasXunlai) && build.gameThread === undefined)
     || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
@@ -582,6 +619,7 @@ function isAutomaticSemanticBuild(
     && matchesXunlaiAction(build, baseline)
     && matchesChatAliases(build, baseline)
     && matchesPartyObservation(build, baseline)
+    && matchesPlayerSkillbarObservation(build, baseline)
     && matchesTeamApply(build, baseline)
     && matchesSkillSlotGeometry(build)
     && matchesSkillCooldownObservation(build, baseline)

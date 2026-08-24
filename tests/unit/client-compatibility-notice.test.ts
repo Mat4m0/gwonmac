@@ -283,6 +283,33 @@ describe("client compatibility notice", () => {
     );
   });
 
+  it("keeps the complete cooldown presentation available without party observation", () => {
+    const dom = compatibilityDom();
+    renderClientCompatibility(dom.root, {
+      appVersion: "2026.7.0",
+      extendedMemory: STANDARD_MEMORY,
+      healthToken: null,
+      compatibility: compatibility({
+        playRegionObservation: available,
+        partyObservation: unavailable("game-update"),
+        skillSlotGeometry: available,
+        skillCooldownObservation: available,
+      }),
+    });
+    assert.equal(
+      dom.element("settings-feature-partyObservation").textContent,
+      "Unavailable",
+    );
+    assert.equal(
+      dom.element("settings-feature-skillSlotGeometry").textContent,
+      "Available",
+    );
+    assert.equal(
+      dom.element("settings-feature-skillCooldownObservation").textContent,
+      "Available",
+    );
+  });
+
   it("dismisses the launcher even when acknowledgement cannot persist", async () => {
     const dom = compatibilityDom();
     let acknowledgements = 0;

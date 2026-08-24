@@ -26,7 +26,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         "26a71c3e2bf55ab992dce659c1192213858ee25799daa87841ed23a3ddbb601a",
       // Recomputed from the exact current JSPI artifact when the independent
       // play-region capability landed. The retained output is the complete
-      // product profile proved by semantic verifier ABI 3.
+      // product profile proved by semantic verifier ABI 4.
       //
       // `pnpm check` cannot catch a stale value here. The transform input is a
       // derived game binary this repository does not contain, so nothing in the
@@ -36,7 +36,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-3ff":
-          "9ae925f7eb1e314f8b6d4432363cf9082c6ea78d1b87a70947a1203dc24415cb",
+          "03afee84b380d01f974c9949656beaa1d15b7f22ae771990c1c27f3ca92c68da",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is
@@ -93,6 +93,14 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           areaInfoStride: 0x7c,
           areaInfoFlags: 0x10,
         }),
+      }),
+      playerSkillbarObservation: Object.freeze({
+        worldLifecycle: Object.freeze({ functionIndex: 8812, params: ["i32"] as const, results: ["i32"] as const, bodySha256: "b0109c7c853a7d01586172aef66ab14f4d192fbe4f5ea7514553e0821d0dcb5a" }),
+        update: Object.freeze({ functionIndex: 8698, params: [] as const, results: [] as const, bodySha256: "c72cdcbdae22e520f42edbcf2fd56545bad7a014b078ed77ebd284181f523d61" }),
+        rowReader: Object.freeze({ functionIndex: 8701, params: ["i32", "i32", "i32"] as const, results: ["i32"] as const, bodySha256: "7b8b5c65a126fae2edfa517a4706244a0d2352c628fde208d049ecf82dfa4e72" }),
+        slotReader: Object.freeze({ functionIndex: 8702, params: ["i32", "i32", "i32"] as const, results: ["i32"] as const, bodySha256: "ee41be1f4dcaf8e5822fc024e41cbbad74cf293cdafb2b89a8691aeb680e68b5" }),
+        coreLayout: Object.freeze({ worldSkillbars: 0x6f0, skillbarStride: 0xbc, skillbarAgentId: 0, skillbarSkills: 4, skillSlotStride: 0x14 }),
+        partyLayout: Object.freeze({ skillSlotId: 0x0c, skillbarDisabled: 0xa4 }),
       }),
       cursorEvent: Object.freeze({
         functionIndex: 2469,
@@ -422,13 +430,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           // mercenary rule itself is untestable on an account that owns none, so
           // the kernel publishes mercenaries as *unknown* rather than guessing.
           infoAppearanceBitmap: 0x48,
-          worldSkillbars: 0x6f0,
-          skillbarStride: 0xbc,
-          skillbarAgentId: 0x00,
-          skillbarSkills: 0x04,
-          skillSlotStride: 0x14,
-          skillSlotId: 0x0c,
-          skillbarDisabled: 0xa4,
           // Certified live in the same outpost. The stride is proved outright: the
           // words at +0x43c from each row are the next row's agent id. Every real
           // entry satisfies `index == id`, and the set of entries present is each

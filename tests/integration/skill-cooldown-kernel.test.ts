@@ -3,37 +3,51 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { ENHANCEMENT_LAYOUT_FIELDS } from "../../src/shared/enhancement-config.ts";
 import {
   ADDRESSES,
-  COOLDOWN_CONFIG_START,
   createKernel,
   DETAIL,
   FEATURE_PLAY_REGION_OBSERVATION,
   FEATURE_SKILL_COOLDOWN_OBSERVATION,
-  FEATURE_TOOLBOX_FOUNDATION,
   installGameGraph,
-  installPartyDetailGraph,
+  installPlayerSkillbarConfig,
+  installPlayerSkillbarGraph,
 } from "../fixtures/enhancements.ts";
+
+const FEATURES = FEATURE_PLAY_REGION_OBSERVATION
+  | FEATURE_SKILL_COOLDOWN_OBSERVATION;
+
+function rechargeAddress(row: number, slot: number): number {
+  return row + DETAIL.skillbarSkills + slot * DETAIL.skillSlotStride + 0x08;
+}
+
+function installRechargeRow(
+  view: DataView,
+  row: number,
+  gameTimer = 10_000,
+): void {
+  for (let slot = 0; slot < 8; slot += 1) {
+    view.setUint32(
+      rechargeAddress(row, slot),
+      slot === 0 ? 0 : gameTimer + slot * 1_000,
+      true,
+    );
+  }
+}
 
 describe("skill cooldown kernel", () => {
   it("publishes only a complete, bounded player recharge row", async () => {
-    const kernel = await createKernel({ partyDetail: true });
+    const kernel = await createKernel();
     installGameGraph(kernel.view);
-    installPartyDetailGraph(kernel.view);
-    kernel.config[COOLDOWN_CONFIG_START] = 0x08;
-    const playerRow = ADDRESSES.skillbarBuffer + 2 * DETAIL.skillbarStride;
-    for (let slot = 0; slot < 8; slot += 1) {
-      kernel.view.setUint32(
-        playerRow + DETAIL.skillbarSkills + slot * DETAIL.skillSlotStride + 0x08,
-        slot === 0 ? 0 : 10_000 + slot * 1_000,
-        true,
-      );
+    installPlayerSkillbarConfig(kernel.config);
+    for (const key of ["partyContext", "skillSlotId", "skillbarDisabled"] as const) {
+      assert.equal(kernel.config[ENHANCEMENT_LAYOUT_FIELDS.indexOf(key)], 0);
     }
-    assert.equal(kernel.init({
-      features:
-        FEATURE_TOOLBOX_FOUNDATION | FEATURE_PLAY_REGION_OBSERVATION
-          | FEATURE_SKILL_COOLDOWN_OBSERVATION,
-    }), 1);
+    installPlayerSkillbarGraph(kernel.view);
+    const playerRow = ADDRESSES.skillbarBuffer;
+    installRechargeRow(kernel.view, playerRow);
+    assert.equal(kernel.init({ features: FEATURES }), 1);
     kernel.tick(0, 10_000);
     const ready = kernel.skillCooldowns();
     assert.equal(ready.status, "ready");
@@ -44,10 +58,70 @@ describe("skill cooldown kernel", () => {
     ]);
 
     kernel.view.setUint32(
-      playerRow + DETAIL.skillbarSkills + 3 * DETAIL.skillSlotStride + 0x08,
+      rechargeAddress(playerRow, 3),
       10_000 + 1_800_001,
       true,
     );
+    kernel.tick(0, 10_000);
+    assert.deepEqual(kernel.skillCooldowns(), {
+      status: "waiting",
+      reason: "game",
+    });
+  });
+
+  it("caches the validated row and rescans only after its identity fails", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    installPlayerSkillbarConfig(kernel.config);
+    installPlayerSkillbarGraph(kernel.view, [77, 88, 7]);
+    const playerRow = ADDRESSES.skillbarBuffer + 2 * DETAIL.skillbarStride;
+    installRechargeRow(kernel.view, playerRow);
+    assert.equal(kernel.init({ features: FEATURES }), 1);
+    kernel.tick(0, 10_000);
+    assert.equal(kernel.skillCooldowns().status, "ready");
+
+    kernel.view.setUint32(ADDRESSES.skillbarBuffer, 7, true);
+    kernel.view.setUint32(
+      ADDRESSES.skillbarBuffer + DETAIL.skillbarStride,
+      7,
+      true,
+    );
+    kernel.tick(0, 10_000);
+    assert.equal(
+      kernel.skillCooldowns().status,
+      "ready",
+      "ordinary ticks validate only the cached player row",
+    );
+
+    kernel.view.setUint32(playerRow, 99, true);
+    kernel.tick(0, 10_000);
+    assert.deepEqual(kernel.skillCooldowns(), {
+      status: "waiting",
+      reason: "game",
+    });
+  });
+
+  it("withdraws the whole record while loading or in PvP", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    installPlayerSkillbarConfig(kernel.config);
+    installPlayerSkillbarGraph(kernel.view);
+    installRechargeRow(kernel.view, ADDRESSES.skillbarBuffer);
+    assert.equal(kernel.init({ features: FEATURES }), 1);
+    kernel.tick(0, 10_000);
+    assert.equal(kernel.skillCooldowns().status, "ready");
+
+    kernel.view.setUint32(ADDRESSES.character + 0x23c, 2, true);
+    kernel.tick(0, 10_000);
+    assert.deepEqual(kernel.skillCooldowns(), {
+      status: "waiting",
+      reason: "loading",
+    });
+
+    kernel.view.setUint32(ADDRESSES.character + 0x23c, 0, true);
+    kernel.tick(0, 10_000);
+    assert.equal(kernel.skillCooldowns().status, "ready");
+    kernel.view.setUint32(ADDRESSES.areaInfo + 133 * 0x7c + 0x10, 1, true);
     kernel.tick(0, 10_000);
     assert.deepEqual(kernel.skillCooldowns(), {
       status: "waiting",

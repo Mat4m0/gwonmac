@@ -405,6 +405,29 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       hideHeroPanelMessage: 0x1000_01a3,
       showHeroPanelMessage: 0x1000_01a4,
     },
+    playerSkillbarObservation: {
+      worldLifecycle: {
+        functionIndex: 0, params: ["i32"], results: ["i32"],
+        bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[0]!),
+      },
+      update: {
+        functionIndex: 1, params: [], results: [],
+        bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[1]!),
+      },
+      rowReader: {
+        functionIndex: 2, params: ["i32", "i32", "i32"], results: ["i32"],
+        bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[2]!),
+      },
+      slotReader: {
+        functionIndex: 3, params: ["i32", "i32", "i32"], results: ["i32"],
+        bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[3]!),
+      },
+      coreLayout: {
+        worldSkillbars: 58, skillbarStride: 59, skillbarAgentId: 60,
+        skillbarSkills: 61, skillSlotStride: 62,
+      },
+      partyLayout: { skillSlotId: 63, skillbarDisabled: 64 },
+    },
     partyObservation: {
       partyDirtyMessages: [
         0x1000_0038,
@@ -449,13 +472,6 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       infoPrimary: 55,
       infoSecondary: 56,
       infoAppearanceBitmap: 57,
-      worldSkillbars: 58,
-      skillbarStride: 59,
-      skillbarAgentId: 60,
-      skillbarSkills: 61,
-      skillSlotStride: 62,
-      skillSlotId: 63,
-      skillbarDisabled: 64,
       worldAttributes: 65,
       attributeStride: 66,
       attributeAgentId: 67,

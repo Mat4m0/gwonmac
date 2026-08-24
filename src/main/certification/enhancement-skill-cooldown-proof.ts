@@ -4,7 +4,6 @@
  * already-certified skill-bar row layout, then requires one exact reader whose
  * control flow performs the bounded timestamp-minus-clock calculation.
  */
-import type { EnhancementPartyLayout } from "../../shared/enhancement-config.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
 import {
@@ -39,9 +38,10 @@ export type SkillCooldownObservationProof = NonNullable<
 
 export function deriveSkillCooldownObservation(
   context: EnhancementProofContext,
-  party: EnhancementPartyLayout | null | undefined,
+  playerSkillbar: KnownEnhancementBuild["playerSkillbarObservation"] | null | undefined,
 ): SkillCooldownObservationProof | null {
-  if (!party) return null;
+  if (!playerSkillbar) return null;
+  const skillbar = playerSkillbar.coreLayout;
   const reader = uniqueExactFunction(
     context.module,
     RECHARGE_READER.bodySha256,
@@ -61,19 +61,19 @@ export function deriveSkillCooldownObservation(
     body,
     READER_OPERANDS.rechargeOffsets[0],
   );
-  const rechargeOffset = totalRechargeOffset - party.skillbarSkills;
+  const rechargeOffset = totalRechargeOffset - skillbar.skillbarSkills;
   if (
     READER_OPERANDS.rowStrides.some(
-      (at) => unsignedOperand(body, at) !== party.skillbarStride,
+      (at) => unsignedOperand(body, at) !== skillbar.skillbarStride,
     )
     || unsignedOperand(body, READER_OPERANDS.slotBound) !== 8
-    || unsignedOperand(body, READER_OPERANDS.slotStride) !== party.skillSlotStride
+    || unsignedOperand(body, READER_OPERANDS.slotStride) !== skillbar.skillSlotStride
     || READER_OPERANDS.rechargeOffsets.some(
       (at) => unsignedOperand(body, at) !== totalRechargeOffset,
     )
     || unsignedOperand(body, READER_OPERANDS.timerCall) !== timer
     || rechargeOffset < 0
-    || rechargeOffset + 4 > party.skillSlotStride
+    || rechargeOffset + 4 > skillbar.skillSlotStride
   ) return null;
 
   return Object.freeze({

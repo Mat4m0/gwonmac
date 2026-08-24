@@ -486,6 +486,29 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       hideHeroPanelMessage: 0x1000_01a3,
       showHeroPanelMessage: 0x1000_01a4,
     },
+    playerSkillbarObservation: {
+      worldLifecycle: {
+        functionIndex: 0, params: ["i32"], results: ["i32"],
+        bodySha256: createHash("sha256").update(commandBody(bytes, 0)).digest("hex"),
+      },
+      update: {
+        functionIndex: 1, params: [], results: [],
+        bodySha256: createHash("sha256").update(commandBody(bytes, 1)).digest("hex"),
+      },
+      rowReader: {
+        functionIndex: 2, params: ["i32", "i32", "i32"], results: ["i32"],
+        bodySha256: createHash("sha256").update(commandBody(bytes, 2)).digest("hex"),
+      },
+      slotReader: {
+        functionIndex: 3, params: ["i32", "i32", "i32"], results: ["i32"],
+        bodySha256: createHash("sha256").update(commandBody(bytes, 3)).digest("hex"),
+      },
+      coreLayout: {
+        worldSkillbars: 58, skillbarStride: 59, skillbarAgentId: 60,
+        skillbarSkills: 61, skillSlotStride: 62,
+      },
+      partyLayout: { skillSlotId: 63, skillbarDisabled: 64 },
+    },
     partyObservation: {
       partyDirtyMessages: PARTY_DIRTY_MESSAGES,
       playerChatProducer: 5,
@@ -505,9 +528,6 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       worldHeroInfo: 52, heroInfoStride: 53, infoHeroId: 54,
       infoAgentId: 40, infoLevel: 41,
       infoPrimary: 55, infoSecondary: 56, infoAppearanceBitmap: 57,
-      worldSkillbars: 58, skillbarStride: 59, skillbarAgentId: 60,
-      skillbarSkills: 61, skillSlotStride: 62, skillSlotId: 63,
-      skillbarDisabled: 64,
       worldAttributes: 65,
       attributeStride: 66,
       attributeAgentId: 67,
