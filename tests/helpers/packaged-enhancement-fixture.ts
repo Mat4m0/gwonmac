@@ -194,6 +194,7 @@ export const DEVELOPER_RUNTIME_KEYS = Object.freeze([
   "readout",
   "rejectedSnapshots",
   "renderP95Us",
+  "skillCooldowns",
   "snapshotReads",
   "status",
   "toolbox",
