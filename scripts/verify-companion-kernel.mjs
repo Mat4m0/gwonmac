@@ -10,9 +10,9 @@ import {
 } from "./companion-kernel-contract.mjs";
 import {
   COMPANION_KERNEL_ARTIFACT,
-  COMPANION_RENDERER,
+  COMPANION_KERNEL_LOADER,
   companionKernelSha256,
-  verifySealedCompanionRenderer,
+  verifySealedCompanionLoader,
 } from "./seal-companion-kernel.mjs";
 
 const artifact = COMPANION_KERNEL_ARTIFACT;
@@ -36,8 +36,8 @@ assert.doesNotMatch(
 
 const bytes = readFileSync(artifact);
 const module = validateCompanionKernelContract(bytes);
-verifySealedCompanionRenderer(
-  readFileSync(COMPANION_RENDERER, "utf8"),
+verifySealedCompanionLoader(
+  readFileSync(COMPANION_KERNEL_LOADER, "utf8"),
   companionKernelSha256(bytes),
 );
 

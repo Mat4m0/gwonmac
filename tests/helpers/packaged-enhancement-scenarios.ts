@@ -349,7 +349,7 @@ export async function assertTargetReadoutLifecycle() {
 }
 
 export async function assertCleanupSafetyGates() {
-  for (const gate of ["observer", "callback", "hook"] as const) {
+  for (const gate of ["observer", "cursor-refresh", "callback", "hook"] as const) {
     const fixture = await launchPackaged(`gw-packaged-cleanup-${gate}-`, {});
     try {
       const pageErrors: string[] = [];
@@ -358,7 +358,7 @@ export async function assertCleanupSafetyGates() {
         const { Module } = globalThis as PageGlobals;
         return typeof Module?.socket?.connect === "function";
       });
-      if (gate === "hook") {
+      if (gate === "hook" || gate === "cursor-refresh") {
         await fixture.page.evaluate(async () => {
           const surfaceSpecifier = "./surface-controller.js";
           const { installSurfaceController }:
@@ -380,9 +380,13 @@ export async function assertCleanupSafetyGates() {
       await installTargetReadout(
         fixture.page,
         installableManifestModule(
-          gate === "hook" ? TOOLBOX_PROGRAM_CAPABILITIES : TARGET_ONLY,
+          gate === "hook" || gate === "cursor-refresh"
+            ? TOOLBOX_PROGRAM_CAPABILITIES
+            : TARGET_ONLY,
         ),
-        gate === "hook" ? TOOLBOX_PROGRAM_CAPABILITIES : TARGET_ONLY,
+        gate === "hook" || gate === "cursor-refresh"
+          ? TOOLBOX_PROGRAM_CAPABILITIES
+          : TARGET_ONLY,
       );
       const result = await fixture.page.evaluate((failureGate) => {
         const probe = (globalThis as ReadoutPageGlobals).__targetReadoutFixture;
@@ -400,6 +404,7 @@ export async function assertCleanupSafetyGates() {
           consoleError(message, detail);
         };
         const cancelFrame = globalThis.cancelAnimationFrame;
+        const removeEventListener = globalThis.removeEventListener;
         if (failureGate === "hook") {
           const globalValue = Object.getOwnPropertyDescriptor(
             WebAssembly.Global.prototype,
@@ -426,6 +431,17 @@ export async function assertCleanupSafetyGates() {
           globalThis.cancelAnimationFrame = () => {
             throw new Error("intentional observer stop failure");
           };
+        } else if (failureGate === "cursor-refresh") {
+          globalThis.removeEventListener = ((
+            type: string,
+            listener: EventListenerOrEventListenerObject,
+            options?: boolean | EventListenerOptions,
+          ) => {
+            if (type === "mousedown") {
+              throw new Error("intentional cursor refresh disposal failure");
+            }
+            removeEventListener.call(globalThis, type, listener, options);
+          }) as typeof globalThis.removeEventListener;
         } else {
           const setTable = probe.table.set.bind(probe.table);
           probe.table.set = ((index: number, value: CallableFunction | null) => {
@@ -439,6 +455,7 @@ export async function assertCleanupSafetyGates() {
           dispatchEvent(new Event("pagehide"));
         } finally {
           globalThis.cancelAnimationFrame = cancelFrame;
+          globalThis.removeEventListener = removeEventListener;
           console.error = consoleError;
         }
         return {
@@ -449,6 +466,7 @@ export async function assertCleanupSafetyGates() {
           reports,
           runtimeStatus: window.gwCompanionRuntime?.status ?? null,
           runtimeRetained: window.gwCompanionRuntime === probe.runtime,
+          runtimeMemoryFreed: probe.freed.includes(probe.allocations[0]!.pointer),
           tableEmpty: probe.table.get(probe.table.length - 1) === null,
           toolboxCount: document.querySelectorAll("#toolbox-foundation").length,
         };
@@ -463,9 +481,22 @@ export async function assertCleanupSafetyGates() {
           reports: [["Companion cleanup failed during observer disposal"]],
           runtimeStatus: null,
           runtimeRetained: false,
+          runtimeMemoryFreed: true,
           tableEmpty: true,
           toolboxCount: 0,
         });
+      } else if (gate === "cursor-refresh") {
+        assert.equal(result.cursorStatePublished, false);
+        assert.equal(result.hook, 0);
+        assert.equal(result.readoutCount, 0);
+        assert.deepEqual(result.reports, [[
+          "Companion cleanup failed during cursor refresh disposal",
+        ]]);
+        assert.equal(result.runtimeStatus, null);
+        assert.equal(result.runtimeRetained, false);
+        assert.equal(result.runtimeMemoryFreed, false);
+        assert.equal(result.tableEmpty, true);
+        assert.equal(result.toolboxCount, 0);
       } else if (gate === "callback") {
         assert.deepEqual(result, {
           cursorStatePublished: false,
@@ -475,6 +506,7 @@ export async function assertCleanupSafetyGates() {
           reports: [["Companion cleanup failed during callback withdrawal"]],
           runtimeStatus: null,
           runtimeRetained: false,
+          runtimeMemoryFreed: false,
           tableEmpty: false,
           toolboxCount: 0,
         });
@@ -487,6 +519,7 @@ export async function assertCleanupSafetyGates() {
           reports: [["Companion cleanup could not disable dispatch"]],
           runtimeStatus: "installed",
           runtimeRetained: true,
+          runtimeMemoryFreed: false,
           tableEmpty: false,
           toolboxCount: 1,
         });
