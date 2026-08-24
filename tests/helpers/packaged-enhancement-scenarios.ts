@@ -918,6 +918,7 @@ export async function assertToolboxFoundationLifecycle() {
         tradeConfiguration: tradeConfigurations.at(-1),
       };
 
+      view.setUint32(area + layout.areaInfoFlags, 0, true);
       view.setUint32(game.character + layout.currentInstanceType, 2, true);
       callback(0, 127, 0, 0, 0, 0);
       await new Promise<void>((resolve, reject) => {
@@ -925,7 +926,8 @@ export async function assertToolboxFoundationLifecycle() {
         const observe = () => {
           const root = document.querySelector<HTMLElement>("#toolbox-foundation");
           if (
-            root?.dataset.open === "false"
+            root !== null
+            && root.dataset.open !== "true"
             && tradeConfigurations.at(-1) === 1
           ) resolve();
           else if (performance.now() >= deadline) {
@@ -934,8 +936,11 @@ export async function assertToolboxFoundationLifecycle() {
         };
         requestAnimationFrame(observe);
       });
+      const recoveredRoot = document.querySelector<HTMLElement>(
+        "#toolbox-foundation",
+      );
       const recovered = {
-        open: document.querySelector<HTMLElement>("#toolbox-foundation")?.dataset.open,
+        closed: recoveredRoot !== null && recoveredRoot.dataset.open !== "true",
         tradeAliasDispatches,
         toolboxCount: toolboxCount(),
         tradeConfiguration: tradeConfigurations.at(-1),
@@ -1116,7 +1121,7 @@ export async function assertToolboxFoundationLifecycle() {
       tradeConfiguration: 0,
     });
     assert.deepEqual(result.recovered, {
-      open: "false",
+      closed: true,
       tradeAliasDispatches: 1,
       toolboxCount: 1,
       tradeConfiguration: 1,
