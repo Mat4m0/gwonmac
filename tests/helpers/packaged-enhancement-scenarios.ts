@@ -171,6 +171,7 @@ export async function assertTargetReadoutLifecycle() {
           65_551,
           64,
           CONFIG_BYTES,
+          COMPANION_ABI.playRegion.bytes,
         ],
         globalRuntimeIsRuntime: true,
         hook: ENHANCEMENT_BUILD.tableSlot + 1,
