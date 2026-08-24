@@ -56,10 +56,7 @@ import {
 } from "../shared/companion-abi.js";
 import { installCompanionKernel } from "./companion-kernel-loader.js";
 import { allocateCompanionCoreMemory } from "./companion-core-memory-installation.js";
-import {
-  enhancementRuntimePolicy,
-  type RuntimePlayRegion,
-} from "./enhancement-runtime-policy.js";
+import { createCompanionPolicySource } from "./companion-policy-source.js";
 import {
   createProfessionCommandTrace,
   type ProfessionCommandTraceReader,
@@ -219,8 +216,7 @@ export async function installCertifiedCompanion(
   let disposeCursor = () => {};
   let disposeReadout = () => {};
   let disposeToolbox = () => {};
-  let disposeToolSettings = () => {};
-  let disposePlayRegionSubscription = () => false;
+  let disposePolicySource = () => {};
   let disposeCursorRefresh = () => {};
   let professionTrace: ReturnType<typeof createProfessionCommandTrace> | null = null;
   let installedCallback: CallableFunction | null = null;
@@ -251,10 +247,7 @@ export async function installCertifiedCompanion(
     // Withdraw policy inputs before disposing any surface. Region withdrawal
     // notifies subscribers synchronously; leaving this subscription live could
     // recreate a readout or overlay during the same teardown transaction.
-    attempt("Tools settings listener disposal", disposeToolSettings);
-    attempt("play-region subscription disposal", () => {
-      disposePlayRegionSubscription();
-    });
+    attempt("policy source disposal", disposePolicySource);
     const cursorStateWithdrawn = attempt("cursor state withdrawal", () => {
       if (
         installedCursorState !== null
@@ -461,26 +454,27 @@ export async function installCertifiedCompanion(
       installedCursorState = () => cursor?.state ?? null;
       window.gwCursorState = installedCursorState;
     }
-    let optionalSettings = window.gwToolsSettings();
-    skills.mount(document.body, optionalSettings);
+    const policySource = createCompanionPolicySource({
+      program,
+      readSettings: window.gwToolsSettings,
+      settingsEvents: window,
+      readPlayRegion: () => playRegions.state,
+      subscribePlayRegion: playRegions.subscribe,
+    });
+    disposePolicySource = policySource.dispose;
+    const policySnapshot = () => policySource.snapshot;
+    skills.mount(document.body, policySnapshot().settings);
     const configureTradeAlias = () => {
-      configureTradeToggle?.(optionalSettings.gwonmacTools ? 1 : 0);
+      configureTradeToggle?.(policySnapshot().settings.gwonmacTools ? 1 : 0);
     };
     const pollTradeAlias = () => {
-      if (takeTradeToggle?.() === 1 && optionalSettings.gwonmacTools) {
+      if (takeTradeToggle?.() === 1 && policySnapshot().settings.gwonmacTools) {
         window.dispatchEvent(new CustomEvent("gw:trade-toggle"));
       }
     };
     let readout: ReturnType<typeof createTargetReadout> | null = null;
-    const playRegion = (): RuntimePlayRegion => {
-      const state = playRegions.state;
-      return state.status === "ready" ? state.playRegion : "unknown";
-    };
-    const policy = () => enhancementRuntimePolicy(
-      program,
-      optionalSettings,
-      playRegion(),
-    );
+    const playRegion = () => policySnapshot().playRegion;
+    const policy = () => policySnapshot().policy;
     let lastPolicyTrace = "";
     const tracePolicy = (reason: "launch" | "region" | "settings") => {
       if (!window.gwNative.init.development) return;
@@ -509,7 +503,7 @@ export async function installCertifiedCompanion(
       }
     };
     const syncSkillOverlays = () => skills.sync(
-      optionalSettings,
+      policySnapshot().settings,
       policy().skillSlotGeometry,
       policy().skillCooldownOverlay,
     );
@@ -539,7 +533,7 @@ export async function installCertifiedCompanion(
           : 0)
         | (targetEnabled() ? COMPANION_FEATURE_BITS.targetObservation : 0)
         | skills.activeFeatureFlags(
-          optionalSettings,
+          policySnapshot().settings,
           policy().skillSlotGeometry,
           policy().skillCooldownOverlay,
         );
@@ -592,7 +586,7 @@ export async function installCertifiedCompanion(
       travelInstallation?.update({
         enabled: policy().travelPalette,
         playRegion: playRegion(),
-        state: travelGameState(playRegions.state),
+        state: travelGameState(policySnapshot().playRegionState),
       });
     };
     storageInstallation?.mount();
@@ -632,39 +626,22 @@ export async function installCertifiedCompanion(
       syncToolboxAvailability();
       syncLivePolicyConsumers();
     };
-    const onToolSettings = () => {
-      // The event is only a notification. The validated bridge remains the
-      // single source of truth even if page code dispatches a malformed event.
-      optionalSettings = window.gwToolsSettings();
-      syncPolicySurfaces("settings");
-      configureTradeAlias();
-    };
-    window.addEventListener("gw:tools-settings", onToolSettings);
-    disposeToolSettings = () =>
-      window.removeEventListener("gw:tools-settings", onToolSettings);
     disposeToolbox = () => {
       toolbox?.dispose();
     };
 
-    const playRegionProjection = () => {
-      const state = playRegions.state;
-      return state.status === "ready"
-        ? `ready:${state.playRegion}:${state.mapId}:${state.instanceType}`
-        : `waiting:${state.reason}`;
-    };
-    let previousPlayRegionProjection = playRegionProjection();
-    disposePlayRegionSubscription = playRegions.subscribe(() => {
-      const next = playRegionProjection();
-      if (next === previousPlayRegionProjection) return;
-      previousPlayRegionProjection = next;
-      syncPolicySurfaces("region");
-    });
-
     // Apply opt-in state before the callback becomes reachable from the game.
     playRegions.setActive(true);
-    tracePolicy("launch");
-    syncLivePolicyConsumers();
-    configureTradeAlias();
+    policySource.subscribe(({ reason }) => {
+      if (reason === "launch") {
+        tracePolicy(reason);
+        syncLivePolicyConsumers();
+        configureTradeAlias();
+        return;
+      }
+      syncPolicySurfaces(reason);
+      if (reason === "settings") configureTradeAlias();
+    });
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;
     const observerRuntime = {
