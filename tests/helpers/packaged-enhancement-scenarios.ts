@@ -930,9 +930,9 @@ export async function assertToolboxFoundationLifecycle() {
     const cursorPointer = (configPointer + CONFIG_BYTES + 7) & ~7;
     const statePointer = (cursorPointer + COMPANION_CURSOR_BYTES + 7) & ~7;
     const partyPointer = statePointer + COMPANION_TOOLBOX_BYTES;
-    const playRegionPointer = partyPointer + COMPANION_PARTY_BYTES;
-    const commandPointer = (playRegionPointer + COMPANION_PLAY_REGION_BYTES + 7) & ~7;
-    const storagePointer = commandPointer + TEAM_COMMAND_PAYLOAD_BYTES;
+    const commandPointer = partyPointer + COMPANION_PARTY_BYTES;
+    const playRegionPointer = (commandPointer + TEAM_COMMAND_PAYLOAD_BYTES + 7) & ~7;
+    const storagePointer = (playRegionPointer + COMPANION_PLAY_REGION_BYTES + 7) & ~7;
     const travelPointer = (storagePointer + STORAGE_DATA_WINDOW_BYTES + 7) & ~7;
     assert.deepEqual(result.before.allocations, [
       { pointer: 0x1000, size: 65_551 },
@@ -957,12 +957,12 @@ export async function assertToolboxFoundationLifecycle() {
         size: COMPANION_PARTY_BYTES,
       },
       {
-        pointer: playRegionPointer,
-        size: COMPANION_PLAY_REGION_BYTES,
-      },
-      {
         pointer: commandPointer,
         size: TEAM_COMMAND_PAYLOAD_BYTES,
+      },
+      {
+        pointer: playRegionPointer,
+        size: COMPANION_PLAY_REGION_BYTES,
       },
       {
         pointer: storagePointer,
@@ -1051,22 +1051,22 @@ export async function assertToolboxFoundationLifecycle() {
     assert.equal(result.before.cursorStyle, "");
 
     assert.deepEqual(result.after.freed, [
-      statePointer,
       partyPointer,
+      statePointer,
+      cursorPointer,
+      snapshotPointer,
       playRegionPointer,
-      commandPointer,
       storagePointer,
       travelPointer,
-      cursorPointer,
+      commandPointer,
       configPointer,
-      snapshotPointer,
       0x1000,
     ]);
     assert.deepEqual(result.after.cleanupReports, [{
       message: "companion cleanup failed",
       aggregateMessage: "Companion cleanup was incomplete",
       failures: [
-        "Companion cleanup failed during Toolbox allocation release",
+        "Companion cleanup failed during core observer memory release",
         "Companion cleanup failed during storage disposal",
         "Companion cleanup failed during Travel disposal",
       ],
@@ -1284,10 +1284,10 @@ export async function assertRollbackAfterTablePublication() {
         { pointer: rollbackPlayRegionPointer, size: COMPANION_PLAY_REGION_BYTES },
       ],
       freed: [
-        rollbackToolboxPointer,
         rollbackPartyPointer,
-        rollbackPlayRegionPointer,
+        rollbackToolboxPointer,
         rollbackCursorPointer,
+        rollbackPlayRegionPointer,
         rollbackConfigPointer,
         0x1000,
       ],
@@ -1300,7 +1300,7 @@ export async function assertRollbackAfterTablePublication() {
         cause: "intentional post-table failure",
         errors: [
           "intentional post-table failure",
-          "Companion cleanup failed during Toolbox allocation release",
+          "Companion cleanup failed during core observer memory release",
         ],
       },
       replacementCursorStatePreserved: true,
