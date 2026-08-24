@@ -34,6 +34,9 @@ current optional features are:
 - **Skill key labels**: show player-authored keyboard, mouse-button, and wheel
   labels over certified skill-slot rectangles. The feature is display-only and
   never changes or forwards game input.
+- **Skill cooldown numbers**: show Guild Wars' existing recharge state over the
+  same certified player skill slots. The companion publishes bounded recharge
+  timestamps; the renderer owns formatting, color, and presentation.
 
 These features then change live. Live observers and commands stop when disabled
 or when map policy refuses them. Host-only authoring remains available without
@@ -148,6 +151,97 @@ For each field, observer, widget, or command:
 Do not add a renderer pointer chain, parallel JavaScript probe, general memory
 write, arbitrary game call, raw packet export, or renderer-side copy of the
 configuration order.
+
+## Internal feature extension contract
+
+Tools has a compile-time extension contract. It is plugin-shaped for
+contributors, but it is not a runtime plugin API. Features compose from small
+owners in this repository. GWonMac does not load third-party code, expose game
+memory, or let a feature register an arbitrary callback or command.
+
+Use only the layers the feature needs:
+
+| Concern | One owner | Reusable contract |
+| --- | --- | --- |
+| Saved player choice | [`AppSettings` and `DEFAULT_SETTINGS`](../src/shared/contracts.ts), plus [`parseSettings` and `parseSettingsPatch`](../src/main/core/settings.ts) | Add one shape, durable default, and strict full/patch parser only when the feature needs player configuration. |
+| Product activation and coarse region rule | [`FEATURE_SELECTION_POLICIES`](../src/shared/feature-contracts.ts) | Add one stable `FeatureId`. The runtime policy must project that exact ID. |
+| Certified client support | [`enhancement-contracts.ts`](../src/shared/enhancement-contracts.ts) and `src/main/certification/` | Add an independently provable capability. A product setting cannot grant native authority. |
+| Fixed native publication | [`createCompanionRegionInstallation`](../src/renderer/companion-region-installation.ts) | Own allocation, activation withdrawal, freshness, and disposal for one bounded region. |
+| Live settings and map policy | [`createCompanionPolicySource`](../src/renderer/companion-policy-source.ts) | Consume one immutable snapshot. Do not subscribe to Settings or classify play regions again. |
+| Domain behavior | A named renderer or command module | Own decoding, formatting, state transitions, and user-facing refusal in the feature domain. |
+| Composition and safety order | [`installCertifiedCompanion`](../src/renderer/certified-companion-installation.ts) | Allocate and validate first, enable the game hook last, disable it first, and tear down in explicit dependency-safe phases. |
+
+The feature registry and the live policy use the same IDs. Type checking and a
+runtime contract test fail when one side changes without the other. Derived
+shared substrates stay at their consumer boundary. For example, skill-slot
+geometry is active when either `skillKeyLabels` or `skillCooldowns` is active;
+it is not a second product feature or setting.
+
+Choose the smallest path:
+
+- A host-only feature needs Settings and a domain owner. It does not need a
+  native capability, companion region, or live play-region gate.
+- A display-only native feature adds a certified bounded observation and a
+  pointer-transparent presentation owner. It never needs a command surface.
+- A named command adds a separate certified action, fresh runtime preconditions,
+  bounded arguments, explicit refusal, and observed confirmation.
+- A feature that reuses an existing certified fact subscribes to that domain's
+  accepted state. It does not add another memory reader or snapshot.
+
+For a new bounded observation, keep this ownership sequence:
+
+1. Define one fixed ABI and strict decoder in the domain.
+2. Certify the exact current-client facts independently.
+3. Collect only bounded fields in the companion kernel.
+4. Allocate the region through a domain installation.
+5. Add its descriptor to the complete overlap check before initialization.
+6. Publish accepted state through one sequence/freshness feed.
+7. Join data with geometry or Settings only at the presentation boundary.
+8. Withdraw the complete feature on malformed, partial, stale, loading, or
+   policy-denied state.
+
+For lifecycle code, use these rules:
+
+- Construction installs cleanup ownership before later side effects. On
+  failure, it attempts every cleanup allowed by the current safety barriers,
+  reports combined failures, and never frees memory still reachable by a live
+  observer or callback.
+- Initialization must happen only after the complete owned-region layout is
+  valid.
+- `subscribe` gives the current accepted state synchronously and returns an
+  idempotent disposer.
+- `dispose` first makes callbacks and subscriptions inert. A memory-owning
+  installation exposes a separate `release` phase; the transaction root calls
+  it only after the matching observer or callback barrier. Each phase attempts
+  all cleanup it can safely reach and reports combined failures.
+- Policy inputs detach before surfaces. Observers stop before observer-owned
+  memory is freed. The game hook is disabled before callback-owned memory is
+  freed.
+- A capability absent from the certified profile allocates no domain memory and
+  exposes no sink. A certified capability can keep an inactive session region
+  while its player setting is off so it can activate without a restart.
+
+Do not create a common interface only because two modules use verbs such as
+`mount`, `update`, or `dispose`. Extract a shared primitive only when two real
+features have the same invariant and the extraction deletes duplicated safety
+logic. Keep domain-specific preconditions in the domain.
+
+Before adding a new registry, adapter, bridge method, cache, event bus, or
+state machine, state which acceptance criterion cannot be met by the contracts
+above. If there is none, do not add it.
+
+### Pull request boundary
+
+Split a large feature at proof and ownership boundaries:
+
+1. Product setting and static feature selection.
+2. Exact-client certification and bounded observation, inspectable without UI.
+3. Domain presentation or named command and its focused Settings UI.
+4. Cleanup or shared extraction only when the completed feature proves the
+   duplication is real.
+
+Each layer must build and fail closed on its own. Do not mix unrelated native
+proof, presentation polish, and architectural cleanup in one pull request.
 
 ## Snapshot and ABI rules
 
