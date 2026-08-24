@@ -55,11 +55,11 @@ describe("companion policy source", () => {
         policy: {
           tools: false,
           targetReadout: false,
-          teamManagement: false,
+          teamApply: false,
           xunlaiStorage: false,
-          travelPalette: false,
-          skillSlotGeometry: false,
-          skillCooldownOverlay: false,
+          travel: false,
+          skillKeyLabels: false,
+          skillCooldowns: false,
         },
       },
     });

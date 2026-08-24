@@ -7,19 +7,21 @@ import {
   featureActivationRequested,
   featureRegionAllowsRequest,
   type FeatureActivationSettings,
+  type FeatureId,
 } from "../shared/feature-contracts.js";
 
 export type OptionalToolSettings = FeatureActivationSettings;
 
 export type RuntimePlayRegion = "pve" | "pvp" | "unknown";
+type RuntimeFeaturePolicy = Readonly<Record<FeatureId, boolean>>;
 
 /** One fail-closed answer for optional observers, UI, and commands. */
 export function enhancementRuntimePolicy(
   program: EnhancementProgram,
   settings: OptionalToolSettings,
   playRegion: RuntimePlayRegion,
-) {
-  const requested = (id: Parameters<typeof featureActivationRequested>[0]) =>
+): RuntimeFeaturePolicy {
+  const requested = (id: FeatureId) =>
     featureActivationRequested(id, settings)
       && featureRegionAllowsRequest(id, playRegion);
   const developerToolbox = program === "toolbox-foundation"
@@ -34,16 +36,15 @@ export function enhancementRuntimePolicy(
     tools: developerToolbox || requested("tools"),
     targetReadout: program === "target-observer"
       || requested("targetReadout"),
-    teamManagement: featureRegionAllowsRequest("teamApply", playRegion)
+    teamApply: featureRegionAllowsRequest("teamApply", playRegion)
       && (developerTeam || requested("teamApply")),
     // The storage controller owns live access refusal and its user-facing
     // reason. This value means requested, not currently available.
     xunlaiStorage:
       developerStorage || requested("xunlaiStorage"),
-    travelPalette: featureRegionAllowsRequest("travel", playRegion)
+    travel: featureRegionAllowsRequest("travel", playRegion)
       && (developerStorage || requested("travel")),
-    skillSlotGeometry:
-      requested("skillKeyLabels") || requested("skillCooldowns"),
-    skillCooldownOverlay: requested("skillCooldowns"),
-  });
+    skillKeyLabels: requested("skillKeyLabels"),
+    skillCooldowns: requested("skillCooldowns"),
+  } satisfies Record<FeatureId, boolean>);
 }
