@@ -124,7 +124,7 @@
 .trade-columns,
 .trade-row {
   display: grid;
-  grid-template-columns: 104px minmax(150px, 0.8fr) minmax(280px, 2.3fr) 58px;
+  grid-template-columns: 104px minmax(150px, 0.8fr) minmax(280px, 2.3fr) 58px 68px;
   align-items: center;
   gap: var(--ui-space-3);
 }
@@ -159,26 +159,19 @@
   text-shadow: var(--ui-text-shadow);
 }
 
-.trade-row-shell:hover .trade-row,
-.trade-row-shell:focus-within .trade-row { padding-right: 132px; }
-
 .row-quick-actions {
-  position: absolute;
-  top: 50%;
-  right: 60px;
   display: flex;
+  justify-content: flex-end;
   gap: var(--ui-space-1);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-50%) translateX(5px);
-  transition: opacity 120ms var(--ui-ease-out), transform 160ms var(--ui-ease-out);
+  transition: opacity 120ms var(--ui-ease-out);
 }
 
 .trade-row-shell:hover .row-quick-actions,
 .trade-row-shell:focus-within .row-quick-actions {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(-50%);
 }
 
 .row-quick-action {
@@ -457,14 +450,12 @@
     gap: var(--ui-space-1) var(--ui-space-3);
     padding-block: var(--ui-space-3);
   }
-  .trade-row-shell:hover .trade-row,
-  .trade-row-shell:focus-within .trade-row { padding-right: var(--ui-space-3); }
   .row-quick-actions {
+    position: absolute;
     top: var(--ui-space-2);
     right: 48px;
     opacity: 1;
     pointer-events: auto;
-    transform: none;
   }
   .intent-cell { grid-column: 1; grid-row: 1; }
   .age-cell { grid-column: 2; grid-row: 1; }
@@ -524,6 +515,5 @@
 }
 
 @media (hover: none) {
-  .trade-row { padding-right: 132px; }
   .row-quick-actions { opacity: 1; pointer-events: auto; }
 }

@@ -700,24 +700,24 @@ function exactTime(timestamp: number): string {
                 @click="selectMessage(message)"
               ><bdi>{{ message.message }}</bdi></button>
               <time class="age-cell" :datetime="new Date(message.timestamp).toISOString()">{{ age(message.timestamp) }}</time>
-            </div>
-            <div class="row-quick-actions">
-              <button
-                class="row-quick-action"
-                :aria-label="`${offerSaved(message) ? 'Remove saved' : 'Save'} offer from ${message.sender}`"
-                :aria-pressed="offerSaved(message)"
-                :disabled="!savedReady"
-                :title="offerSaved(message) ? 'Remove saved offer' : 'Save offer'"
-                @click="toggleOffer(message)"
-              ><TradeIcon name="star" :filled="offerSaved(message)" /></button>
-              <button
-                class="row-quick-action"
-                :aria-label="`${playerSaved(message.sender) ? 'Unfollow' : 'Follow'} ${message.sender}`"
-                :aria-pressed="playerSaved(message.sender)"
-                :disabled="!savedReady"
-                :title="playerSaved(message.sender) ? 'Unfollow player' : 'Follow player'"
-                @click="togglePlayer(message.sender)"
-              ><TradeIcon name="player" :filled="playerSaved(message.sender)" /></button>
+              <div class="row-quick-actions">
+                <button
+                  class="row-quick-action"
+                  :aria-label="`${offerSaved(message) ? 'Remove saved' : 'Save'} offer from ${message.sender}`"
+                  :aria-pressed="offerSaved(message)"
+                  :disabled="!savedReady"
+                  :title="offerSaved(message) ? 'Remove saved offer' : 'Save offer'"
+                  @click="toggleOffer(message)"
+                ><TradeIcon name="star" :filled="offerSaved(message)" /></button>
+                <button
+                  class="row-quick-action"
+                  :aria-label="`${playerSaved(message.sender) ? 'Unfollow' : 'Follow'} ${message.sender}`"
+                  :aria-pressed="playerSaved(message.sender)"
+                  :disabled="!savedReady"
+                  :title="playerSaved(message.sender) ? 'Unfollow player' : 'Follow player'"
+                  @click="togglePlayer(message.sender)"
+                ><TradeIcon name="player" :filled="playerSaved(message.sender)" /></button>
+              </div>
             </div>
           </div>
           <button

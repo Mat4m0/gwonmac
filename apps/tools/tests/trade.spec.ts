@@ -62,6 +62,23 @@ test("opens a player's listings and returns to the prior results", async ({ page
   await expect(dialog.getByText("Results for “arms”", { exact: true })).toBeVisible();
 });
 
+test("reveals row actions without moving the ledger columns", async ({ page }) => {
+  const dialog = page.getByRole("dialog", { name: "Trade Chat" });
+  const row = dialog.locator(".trade-row").first();
+  const character = row.locator(".character-cell");
+  const message = row.locator(".offer-cell");
+  const before = {
+    character: await character.boundingBox(),
+    message: await message.boundingBox(),
+  };
+
+  await row.hover();
+  await expect(row.locator(".row-quick-actions")).toBeVisible();
+
+  expect(await character.boundingBox()).toEqual(before.character);
+  expect(await message.boundingBox()).toEqual(before.message);
+});
+
 test("filters selling and buying without relying on chip colour", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Trade Chat" });
   await dialog.getByRole("button", { name: "Buying" }).click();
