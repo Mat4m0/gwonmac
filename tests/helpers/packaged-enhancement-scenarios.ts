@@ -363,7 +363,7 @@ export async function assertCleanupSafetyGates() {
               await import(surfaceSpecifier);
           window.gwSurfaces = installSurfaceController(document);
           window.gwToolsSettings = () => Object.freeze({
-            enabled: true,
+            gwonmacTools: true,
             teamManagement: true,
             xunlaiStorage: true,
             travelPalette: true,
@@ -706,7 +706,7 @@ export async function assertToolboxFoundationLifecycle() {
           await import(snapshotSpecifier);
       globalThis.dispatchEvent(new Event("pagehide"));
       window.gwToolsSettings = () => Object.freeze({
-        enabled: true,
+        gwonmacTools: true,
         teamManagement: true,
       xunlaiStorage: true,
       travelPalette: true,
@@ -1151,7 +1151,7 @@ export async function assertRollbackAfterTablePublication() {
       try {
         globalThis.dispatchEvent(new Event("pagehide"));
         window.gwToolsSettings = () => Object.freeze({
-          enabled: true,
+          gwonmacTools: true,
           teamManagement: true,
       xunlaiStorage: true,
       travelPalette: true,

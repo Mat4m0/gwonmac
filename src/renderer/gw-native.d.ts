@@ -195,7 +195,7 @@ declare global {
     gwApplySettings?(settings: AppSettings): void;
     gwSurfaces: GwonmacSurfaceController;
     gwToolsSettings(): Readonly<{
-      enabled: boolean;
+      gwonmacTools: boolean;
       teamManagement: boolean;
       xunlaiStorage: boolean;
       travelPalette: boolean;

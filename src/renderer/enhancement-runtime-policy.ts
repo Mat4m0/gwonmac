@@ -3,15 +3,13 @@
  * Saved product settings and explicit developer programs meet only here.
  */
 import type { EnhancementProgram } from "../shared/enhancement-contracts.js";
+import {
+  featureActivationRequested,
+  featureRegionAllowsRequest,
+  type FeatureActivationSettings,
+} from "../shared/feature-contracts.js";
 
-export type OptionalToolSettings = Readonly<{
-  enabled: boolean;
-  targetReadout: boolean;
-  teamManagement: boolean;
-  xunlaiStorage: boolean;
-  travelPalette?: boolean;
-  skillCooldownOverlayEnabled?: boolean;
-}>;
+export type OptionalToolSettings = FeatureActivationSettings;
 
 export type RuntimePlayRegion = "pve" | "pvp" | "unknown";
 
@@ -34,7 +32,9 @@ export function enhancementRuntimePolicy(
   settings: OptionalToolSettings,
   playRegion: RuntimePlayRegion,
 ) {
-  const pve = playRegion === "pve";
+  const requested = (id: Parameters<typeof featureActivationRequested>[0]) =>
+    featureActivationRequested(id, settings)
+      && featureRegionAllowsRequest(id, playRegion);
   const developerToolbox = program === "toolbox-foundation"
     || program === "toolbox-commands"
     || program === "xunlai-storage";
@@ -44,21 +44,19 @@ export function enhancementRuntimePolicy(
   return Object.freeze({
     // The saved Build/Team library is local UI. It remains reachable at the
     // login screen, in PvP, and while live game observations are unavailable.
-    tools: developerToolbox || settings.enabled,
+    tools: developerToolbox || requested("tools"),
     targetReadout: program === "target-observer"
-      || (settings.enabled && settings.targetReadout && pve),
-    teamManagement: pve && (
-      developerTeam || (settings.enabled && settings.teamManagement)
-    ),
+      || requested("targetReadout"),
+    teamManagement: featureRegionAllowsRequest("teamApply", playRegion)
+      && (developerTeam || requested("teamApply")),
     // The storage controller owns live access refusal and its user-facing
     // reason. This value means requested, not currently available.
     xunlaiStorage:
-      developerStorage || (settings.enabled && settings.xunlaiStorage),
-    travelPalette: pve && (
-      developerStorage || (settings.enabled && settings.travelPalette === true)
-    ),
-    skillSlotGeometry: settings.enabled && pve,
-    skillCooldownOverlay:
-      settings.enabled && settings.skillCooldownOverlayEnabled === true && pve,
+      developerStorage || requested("xunlaiStorage"),
+    travelPalette: featureRegionAllowsRequest("travel", playRegion)
+      && (developerStorage || requested("travel")),
+    skillSlotGeometry:
+      requested("skillKeyLabels") || requested("skillCooldowns"),
+    skillCooldownOverlay: requested("skillCooldowns"),
   });
 }
