@@ -55,6 +55,8 @@ export function createSkillOverlaysInstallation(
       );
     },
     sync(settings: SkillSettings, geometryEnabled: boolean, cooldownEnabled: boolean) {
+      geometry.setActive(geometryEnabled && (hasKeyBindings(settings) || cooldownEnabled));
+      cooldowns.setActive(cooldownEnabled);
       keyConsumer?.setBindings(settings.skillKeyBindings);
       keyConsumer?.setEnabled(geometryEnabled && hasKeyBindings(settings));
       cooldownOverlay.sync(settings.skillCooldownColor, cooldownEnabled);
