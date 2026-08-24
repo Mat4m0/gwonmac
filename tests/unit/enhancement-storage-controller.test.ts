@@ -106,14 +106,18 @@ test("storage fails closed without a confirmed character access proof", () => {
       playRegion: "pvp",
       state: accessible,
     });
+    const refusedDetail: { error?: Error } = {};
+    window.dispatchEvent(new CustomEvent("gw:storage-open", {
+      cancelable: true,
+      detail: refusedDetail,
+    }));
+    assert.match(refusedDetail.error?.message ?? "", /PvP and guild halls/);
     controller.update({
       enabled: true,
       playRegion: "pve",
       state: { ...accessible, xunlaiAccess: false },
     });
     assert.deepEqual(configurations, [
-      [512, 0],
-      [512, 1],
       [512, 0],
       [512, 1],
       [512, 0],

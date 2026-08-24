@@ -106,6 +106,25 @@ describe("companion policy source", () => {
     ]);
   });
 
+  it("withdraws local Tools only for a positively identified PvP map", () => {
+    const test = fixture();
+    test.setSettings({ ...DEFAULT_SETTINGS, gwonmacTools: true });
+    test.settingsEvents.dispatchEvent(new Event("gw:tools-settings"));
+    const tools: boolean[] = [];
+    test.source.subscribe(({ snapshot }) => tools.push(snapshot.policy.tools));
+
+    test.publishRegion(Object.freeze({
+      status: "ready",
+      sequence: 2,
+      mapId: 188,
+      instanceType: 0,
+      playRegion: "pvp",
+    }));
+    test.publishRegion(Object.freeze({ status: "waiting", reason: "loading" }));
+
+    assert.deepEqual(tools, [true, false, true]);
+  });
+
   it("detaches both inputs and stops publication on disposal", () => {
     const test = fixture();
     let publications = 0;

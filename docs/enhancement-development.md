@@ -177,6 +177,11 @@ shared substrates stay at their consumer boundary. For example, skill-slot
 geometry is active when either `skillKeyLabels` or `skillCooldowns` is active;
 it is not a second product feature or setting.
 
+Region selection has three explicit strengths: `any`, `non-pvp`, and `pve`.
+`non-pvp` matches GWToolbox++: unknown or loading state remains eligible, but a
+positively identified PvP map or guild hall withdraws the feature. Developer
+programs can replace saved selection, never the registered region rule.
+
 Choose the smallest path:
 
 - A host-only feature needs Settings and a domain owner. It does not need a

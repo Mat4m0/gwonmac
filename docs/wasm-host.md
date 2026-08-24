@@ -154,7 +154,8 @@ After that restart, these choices update during the session:
 
 - **Apply teams in Guild Wars** controls only the fixed Team Apply operations.
   The local Tools panel and saved Build/Team library remain available whenever
-  the master Tools setting is on.
+  the master Tools setting is on, except in positively identified PvP maps and
+  guild halls.
 - **Target distance and range** controls the shipped Test readout and its target
   observation.
 - Saved **Skill key labels** select only renderer-owned labels over the
@@ -162,8 +163,9 @@ After that restart, these choices update during the session:
   bindings, and the renderer never turns a label into game input.
 
 Disabled optional observers stop their domain reads. Core cursor observation
-stays active. A small map-policy projection remains active so the app can remove
-optional behavior in PvP, guild halls, transitions, and unknown regions.
+stays active. A small map-policy projection remains active so the app can close
+the complete Tools surface and Xunlai storage in PvP and guild halls, while
+stricter live features also withdraw during transitions and unknown regions.
 
 If live integration is unavailable, the host can still mount the saved-library
 part of Tools. Players can edit, import, and export builds and teams. Live party

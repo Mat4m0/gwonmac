@@ -464,11 +464,15 @@ export async function installCertifiedCompanion(
     disposePolicySource = policySource.dispose;
     const policySnapshot = () => policySource.snapshot;
     skills.mount(document.body, policySnapshot().settings);
+    let tradeAliasEnabled: boolean | null = null;
     const configureTradeAlias = () => {
-      configureTradeToggle?.(policySnapshot().settings.gwonmacTools ? 1 : 0);
+      const enabled = policySnapshot().policy.tools;
+      if (enabled === tradeAliasEnabled) return;
+      configureTradeToggle?.(enabled ? 1 : 0);
+      tradeAliasEnabled = enabled;
     };
     const pollTradeAlias = () => {
-      if (takeTradeToggle?.() === 1 && policySnapshot().settings.gwonmacTools) {
+      if (takeTradeToggle?.() === 1 && policySnapshot().policy.tools) {
         window.dispatchEvent(new CustomEvent("gw:trade-toggle"));
       }
     };
@@ -620,6 +624,7 @@ export async function installCertifiedCompanion(
       tracePolicy(reason);
       syncToolboxAvailability();
       syncLivePolicyConsumers();
+      configureTradeAlias();
     };
     disposeToolbox = () => {
       toolbox?.dispose();
@@ -635,7 +640,6 @@ export async function installCertifiedCompanion(
         return;
       }
       syncPolicySurfaces(reason);
-      if (reason === "settings") configureTradeAlias();
     });
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;

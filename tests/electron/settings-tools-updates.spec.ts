@@ -693,7 +693,7 @@ test.describe("tools and update settings", () => {
         "Guild Wars cursor",
       );
       await expect(controls).toContainText(
-        "Your saved Builds and Teams stay available at login and in PvP",
+        "Tools close in PvP and guild halls; saved Builds and Teams stay available at login and when live integration is unavailable",
       );
       await expect(controls).toContainText("Apply teams in Guild Wars");
       await expect(page.locator('input[name="nativeCursor"]')).toHaveCount(0);

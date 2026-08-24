@@ -35,11 +35,20 @@ async function installTargetReadout(
   moduleBytes: Uint8Array,
   capabilities = TARGET_ONLY,
 ) {
-  return page.evaluate(async ({ bytes, tableSize, capabilities, snapshotAbi }: {
+  return page.evaluate(async ({
+    bytes,
+    tableSize,
+    capabilities,
+    snapshotAbi,
+    playRegionAbi,
+    playRegionBytes,
+  }: {
     bytes: number[];
     tableSize: number;
     capabilities: typeof TARGET_ONLY;
     snapshotAbi: number;
+    playRegionAbi: number;
+    playRegionBytes: number;
   }) => {
     const memory = new WebAssembly.Memory({ initial: 256 });
     const table = new WebAssembly.Table({
@@ -86,6 +95,41 @@ async function installTargetReadout(
       "target-observer",
     );
     if (!runtime) throw new Error("target readout did not install");
+
+    // This scenario exercises the target presentation lifecycle, not native
+    // play-region discovery (the Toolbox scenario proves that separately).
+    // Publish an explicit certified-shape PvE policy snapshot so the PvE-only
+    // target consumer starts from the same region precondition as a live tick.
+    const playRegionPointer = allocations[3]?.pointer;
+    if (playRegionPointer === undefined) {
+      throw new Error("target readout play-region allocation is missing");
+    }
+    const region = new DataView(
+      memory.buffer,
+      playRegionPointer,
+      playRegionBytes,
+    );
+    region.setUint32(8, 1, true);
+    region.setUint32(0, 0x5250_5747, true);
+    region.setUint16(4, playRegionAbi, true);
+    region.setUint16(6, playRegionBytes, true);
+    region.setUint32(12, 1, true);
+    region.setUint32(16, 133, true);
+    region.setUint32(20, 0, true);
+    region.setUint32(24, 1, true);
+    region.setUint32(8, 2, true);
+    if (capabilities.targetObservation) {
+      await new Promise<void>((resolve, reject) => {
+        const deadline = performance.now() + 2_000;
+        const observe = () => {
+          if (runtime.readout !== null) resolve();
+          else if (performance.now() >= deadline) {
+            reject(new Error("target readout did not activate in PvE"));
+          } else requestAnimationFrame(observe);
+        };
+        requestAnimationFrame(observe);
+      });
+    }
 
     let sequence = 0;
     const publish = ({
@@ -142,6 +186,8 @@ async function installTargetReadout(
     tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     capabilities,
     snapshotAbi: COMPANION_ABI.snapshot.abi,
+    playRegionAbi: COMPANION_ABI.playRegion.abi,
+    playRegionBytes: COMPANION_PLAY_REGION_BYTES,
   });
 }
 
@@ -560,6 +606,10 @@ export async function assertToolboxFoundationLifecycle() {
       const freed: number[] = [];
       const storageConfigurations: number[][] = [];
       const travelConfigurations: number[][] = [];
+      const tradeConfigurations: number[] = [];
+      let pendingTradeToggles = 0;
+      let tradeAliasDispatches = 0;
+      addEventListener("gw:trade-toggle", () => { tradeAliasDispatches += 1; });
       const cleanupReports: {
         message: string;
         aggregateMessage: string;
@@ -778,8 +828,15 @@ export async function assertToolboxFoundationLifecycle() {
               return 1;
             },
             enhancement_take_travel_toggle: () => 0,
-            enhancement_configure_trade_toggle: () => 1,
-            enhancement_take_trade_toggle: () => 0,
+            enhancement_configure_trade_toggle: (enabled: number) => {
+              tradeConfigurations.push(enabled);
+              return 1;
+            },
+            enhancement_take_trade_toggle: () => {
+              const pending = pendingTradeToggles;
+              pendingTradeToggles = 0;
+              return pending;
+            },
           },
         },
         module,
@@ -811,9 +868,89 @@ export async function assertToolboxFoundationLifecycle() {
         };
         requestAnimationFrame(observe);
       });
+
+      const toolsToggle = new CustomEvent("gw:tools-toggle", { cancelable: true });
+      dispatchEvent(toolsToggle);
+      pendingTradeToggles = 1;
+      callback(0, 125, 0, 0, 0, 0);
+      await new Promise<void>((resolve, reject) => {
+        const deadline = performance.now() + 2_000;
+        const observe = () => {
+          const trade = document.querySelector<HTMLElement>("#toolbox-trade");
+          if (
+            toolsToggle.defaultPrevented
+            && trade?.dataset.open === "true"
+            && tradeAliasDispatches === 1
+          ) resolve();
+          else if (performance.now() >= deadline) {
+            reject(new Error("Native Trade alias did not open Trade Chat"));
+          } else requestAnimationFrame(observe);
+        };
+        requestAnimationFrame(observe);
+      });
+
+      if (!toolsToggle.defaultPrevented) {
+        throw new Error("Tools command was not claimed before the PvP transition");
+      }
+
+      view.setUint32(area + layout.areaInfoFlags, 1, true);
+      pendingTradeToggles = 1;
+      callback(0, 126, 0, 0, 0, 0);
+      await new Promise<void>((resolve, reject) => {
+        const deadline = performance.now() + 2_000;
+        const observe = () => {
+          if (
+            toolboxCount() === 0
+            && tradeConfigurations.at(-1) === 0
+            && pendingTradeToggles === 0
+            && tradeAliasDispatches === 1
+          ) resolve();
+          else if (performance.now() >= deadline) {
+            reject(new Error("PvP policy did not withdraw Tools and Trade Chat"));
+          } else requestAnimationFrame(observe);
+        };
+        requestAnimationFrame(observe);
+      });
+      const pvp = {
+        pendingTradeToggles,
+        tradeAliasDispatches,
+        toolboxCount: toolboxCount(),
+        tradeConfiguration: tradeConfigurations.at(-1),
+      };
+
+      view.setUint32(area + layout.areaInfoFlags, 0, true);
+      view.setUint32(game.character + layout.currentInstanceType, 2, true);
+      callback(0, 127, 0, 0, 0, 0);
+      await new Promise<void>((resolve, reject) => {
+        const deadline = performance.now() + 2_000;
+        const observe = () => {
+          const root = document.querySelector<HTMLElement>("#toolbox-foundation");
+          if (
+            root !== null
+            && root.dataset.open !== "true"
+            && tradeConfigurations.at(-1) === 1
+          ) resolve();
+          else if (performance.now() >= deadline) {
+            reject(new Error("Tools did not recover closed after leaving PvP"));
+          } else requestAnimationFrame(observe);
+        };
+        requestAnimationFrame(observe);
+      });
+      const recoveredRoot = document.querySelector<HTMLElement>(
+        "#toolbox-foundation",
+      );
+      const recovered = {
+        closed: recoveredRoot !== null && recoveredRoot.dataset.open !== "true",
+        tradeAliasDispatches,
+        toolboxCount: toolboxCount(),
+        tradeConfiguration: tradeConfigurations.at(-1),
+      };
+      view.setUint32(game.character + layout.currentInstanceType, 0, true);
+      view.setUint32(area + layout.areaInfoFlags, 0, true);
+      callback(0, 128, 0, 0, 0, 0);
       callback(1, 1, 2, 3, 4, 5);
       callback(2, messages.playerChat, 0xdead_beef, 0x7fff_fffd, 0, 0);
-      callback(0, 124, 0, 0, 0, 0);
+      callback(0, 129, 0, 0, 0, 0);
 
       await new Promise<void>((resolve, reject) => {
         const deadline = performance.now() + 2_000;
@@ -908,7 +1045,7 @@ export async function assertToolboxFoundationLifecycle() {
         storageConfigurations: [...storageConfigurations],
         travelConfigurations: [...travelConfigurations],
       };
-      return { after, before };
+      return { after, before, pvp, recovered };
     }, {
       bytes: [...installableManifestModule(TARGET_OFF_PRODUCT_CAPABILITIES)],
       capabilities: TARGET_OFF_PRODUCT_CAPABILITIES,
@@ -977,6 +1114,18 @@ export async function assertToolboxFoundationLifecycle() {
       result.before.storageConfigurations.at(-1),
       [storagePointer, 0],
     );
+    assert.deepEqual(result.pvp, {
+      pendingTradeToggles: 0,
+      tradeAliasDispatches: 1,
+      toolboxCount: 0,
+      tradeConfiguration: 0,
+    });
+    assert.deepEqual(result.recovered, {
+      closed: true,
+      tradeAliasDispatches: 1,
+      toolboxCount: 1,
+      tradeConfiguration: 1,
+    });
     assert.deepEqual(result.before.travelConfigurations.at(-1), [travelPointer, 1]);
     assert.equal(result.before.companionStatePublished, false);
     assert.equal(result.before.cursorStatePublished, true);
