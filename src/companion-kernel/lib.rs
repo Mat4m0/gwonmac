@@ -699,8 +699,7 @@ pub unsafe extern "C" fn companion_init(
         || features & FEATURE_SKILL_SLOT_GEOMETRY != 0
             && features & FEATURE_PLAY_REGION_OBSERVATION == 0
         || features & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0
-            && (features & FEATURE_TOOLBOX_FOUNDATION == 0
-                || features & FEATURE_PLAY_REGION_OBSERVATION == 0)
+            && features & FEATURE_PLAY_REGION_OBSERVATION == 0
         || config_size != CONFIG_BYTES
         || config_ptr & 3 != 0
         || !contains(config_ptr, config_size)
@@ -869,8 +868,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
                 || a & FEATURE_SKILL_SLOT_GEOMETRY != 0
                     && a & FEATURE_PLAY_REGION_OBSERVATION == 0
                 || a & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0
-                    && (a & FEATURE_TOOLBOX_FOUNDATION == 0
-                        || a & FEATURE_PLAY_REGION_OBSERVATION == 0)
+                    && a & FEATURE_PLAY_REGION_OBSERVATION == 0
             {
                 return;
             }

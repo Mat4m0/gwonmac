@@ -33,7 +33,10 @@ import {
   ENHANCEMENT_CONFIG_WORD_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
 } from "../../src/shared/enhancement-contracts.ts";
-import { ENHANCEMENT_LAYOUT_FIELDS } from "../../src/shared/enhancement-config.ts";
+import {
+  ENHANCEMENT_CONFIG_FIELDS,
+  ENHANCEMENT_LAYOUT_FIELDS,
+} from "../../src/shared/enhancement-config.ts";
 
 // Every read returns a discriminated union: `reason` belongs to the members
 // that rejected the region, the decoded fields to the members that accepted
@@ -365,6 +368,49 @@ export const SKILL_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf("frameArray"
 export const COOLDOWN_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf(
   "skillSlotRecharge",
 );
+
+function setConfigField(
+  config: Uint32Array,
+  key: (typeof ENHANCEMENT_LAYOUT_FIELDS)[number],
+  value: number,
+): void {
+  const index = ENHANCEMENT_LAYOUT_FIELDS.indexOf(key);
+  if (index < 0) throw new Error(`unknown Enhancement config field ${key}`);
+  config[index] = value;
+}
+
+/** Installs only the observation and player-skillbar words cooldown owns. */
+export function installPlayerSkillbarConfig(config: Uint32Array): void {
+  const seeded = config.slice();
+  const owners = new Set([
+    "play-region", "observation", "player-skillbar", "skill-cooldown",
+  ]);
+  config.fill(0);
+  ENHANCEMENT_CONFIG_FIELDS.forEach((field, index) => {
+    if (owners.has(field.owner)) config[index] = seeded[index]!;
+  });
+  setConfigField(config, "worldContext", DETAIL.worldContext);
+  setConfigField(config, "worldSkillbars", DETAIL.skillbars);
+  setConfigField(config, "skillbarStride", DETAIL.skillbarStride);
+  setConfigField(config, "skillbarAgentId", DETAIL.skillbarAgentId);
+  setConfigField(config, "skillbarSkills", DETAIL.skillbarSkills);
+  setConfigField(config, "skillSlotStride", DETAIL.skillSlotStride);
+  setConfigField(config, "skillSlotRecharge", 0x08);
+}
+
+/** Installs a bounded skillbar array without any Party/detail tables. */
+export function installPlayerSkillbarGraph(
+  view: DataView,
+  agentIds: readonly number[] = [7],
+): void {
+  view.setUint32(ADDRESSES.world + DETAIL.skillbars, ADDRESSES.skillbarBuffer, true);
+  view.setUint32(ADDRESSES.world + DETAIL.skillbars + 4, agentIds.length, true);
+  view.setUint32(ADDRESSES.world + DETAIL.skillbars + 8, agentIds.length, true);
+  agentIds.forEach((agentId, index) => {
+    const row = ADDRESSES.skillbarBuffer + index * DETAIL.skillbarStride;
+    view.setUint32(row + DETAIL.skillbarAgentId, agentId, true);
+  });
+}
 export const PLAYER_RECORD_INDEX = 42;
 export const PLAYER_RECORD_ADDRESS =
   ADDRESSES.playerRecordBuffer + PLAYER_RECORD_INDEX * DETAIL.playerStride;

@@ -44,8 +44,8 @@ describe("Enhancement client chain", () => {
           ]]
         : [];
     }).flat();
-    assert.equal(profiles.length, 281);
-    assert.equal(new Set(profiles.map(([, value]) => JSON.stringify(value))).size, 281);
+    assert.equal(profiles.length, 337);
+    assert.equal(new Set(profiles.map(([, value]) => JSON.stringify(value))).size, 337);
     const teamProfiles = profiles.filter(([, capabilities]) => capabilities.teamApply);
     assert.equal(teamProfiles.length, 112);
     assert.ok(teamProfiles.every(([, capabilities]) => capabilities.partyObservation));
@@ -114,6 +114,15 @@ describe("Enhancement client chain", () => {
     delete cursorOnly.chatAliases;
     assert.deepEqual(enhancementProfilesForBuild(cursorOnly), ["features-01"]);
     assert.equal(hasValidEnhancementProfileHashes(cursorOnly), true);
+
+    const orphanSkillbar = { ...cursorOnly };
+    delete orphanSkillbar.playRegionObservation;
+    delete orphanSkillbar.observationBase;
+    assert.equal(
+      hasValidEnhancementProfileHashes(orphanSkillbar),
+      false,
+      "player-skillbar facts cannot carry unactionable memory authority",
+    );
 
     const partyOnly: KnownEnhancementBuild = {
       ...full,

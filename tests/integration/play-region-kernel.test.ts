@@ -9,6 +9,7 @@ import {
   FEATURE_SKILL_SLOT_GEOMETRY,
   FEATURE_TOOLBOX_FOUNDATION,
   installGameGraph,
+  installPlayerSkillbarConfig,
 } from "../fixtures/enhancements.ts";
 
 const AREA_133 = ADDRESSES.areaInfo + 133 * 0x7c;
@@ -83,7 +84,7 @@ describe("play-region kernel", () => {
     }
   });
 
-  it("decouples geometry from Toolbox while cooldowns retain their party dependency", async () => {
+  it("decouples both skill observations from Toolbox", async () => {
     const geometryWithoutRegion = await createKernel();
     assert.equal(geometryWithoutRegion.init({
       features: FEATURE_SKILL_SLOT_GEOMETRY,
@@ -94,22 +95,17 @@ describe("play-region kernel", () => {
       features: FEATURE_PLAY_REGION_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY,
     }), 1);
 
-    const cooldownWithoutRegion = await createKernel({ partyDetail: true });
+    const cooldownWithoutRegion = await createKernel();
+    installPlayerSkillbarConfig(cooldownWithoutRegion.config);
     assert.equal(cooldownWithoutRegion.init({
       features: FEATURE_SKILL_COOLDOWN_OBSERVATION,
     }), 0);
 
-    const cooldownWithoutParty = await createKernel({ partyDetail: true });
-    assert.equal(cooldownWithoutParty.init({
-      features:
-        FEATURE_PLAY_REGION_OBSERVATION | FEATURE_SKILL_COOLDOWN_OBSERVATION,
-    }), 0);
-
-    const cooldown = await createKernel({ partyDetail: true });
+    const cooldown = await createKernel();
+    installPlayerSkillbarConfig(cooldown.config);
     assert.equal(cooldown.init({
       features:
         FEATURE_PLAY_REGION_OBSERVATION
-        | FEATURE_TOOLBOX_FOUNDATION
         | FEATURE_SKILL_COOLDOWN_OBSERVATION,
     }), 1);
   });
@@ -121,8 +117,7 @@ describe("play-region kernel", () => {
       { name: "skill-slot geometry", feature: FEATURE_SKILL_SLOT_GEOMETRY },
       {
         name: "skill cooldowns",
-        feature:
-          FEATURE_TOOLBOX_FOUNDATION | FEATURE_SKILL_COOLDOWN_OBSERVATION,
+        feature: FEATURE_SKILL_COOLDOWN_OBSERVATION,
       },
     ] as const;
 
@@ -173,5 +168,32 @@ describe("play-region kernel", () => {
     assert.equal(enabled.status, "ready");
     if (enabled.status !== "ready") return;
     assert.notEqual(enabled.sequence, disabledSequence);
+
+    const cooldown = await createKernel({ partyDetail: true });
+    assert.equal(cooldown.init({
+      features:
+        FEATURE_PLAY_REGION_OBSERVATION | FEATURE_SKILL_COOLDOWN_OBSERVATION,
+    }), 1);
+    cooldown.activeFeatures(FEATURE_PLAY_REGION_OBSERVATION);
+    cooldown.tick();
+    const cooldownSequence = cooldown.view.getUint32(
+      ADDRESSES.skillCooldowns + 8,
+      true,
+    );
+    cooldown.activeFeatures(FEATURE_SKILL_COOLDOWN_OBSERVATION);
+    cooldown.tick();
+    assert.equal(
+      cooldown.view.getUint32(ADDRESSES.skillCooldowns + 8, true),
+      cooldownSequence,
+      "an invalid active mask must leave cooldown observation disabled",
+    );
+    cooldown.activeFeatures(
+      FEATURE_PLAY_REGION_OBSERVATION | FEATURE_SKILL_COOLDOWN_OBSERVATION,
+    );
+    cooldown.tick();
+    assert.notEqual(
+      cooldown.view.getUint32(ADDRESSES.skillCooldowns + 8, true),
+      cooldownSequence,
+    );
   });
 });

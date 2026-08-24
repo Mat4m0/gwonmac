@@ -48,6 +48,11 @@ import {
   type LocalActionRoleDiagnostics,
 } from "./enhancement-local-actions-proof.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
+import { deriveObservationLayout } from "./enhancement-target-proof.js";
+import {
+  derivePlayerSkillbarObservation,
+  playerSkillbarRoleCandidateCounts,
+} from "./enhancement-player-skillbar-proof.js";
 import {
   enhancementProofContext,
   type EnhancementProofContext,
@@ -324,6 +329,8 @@ function diagnoseFeatureFailures(
   locatedTarget: AutomaticTargetLocation | null,
   locatedLocal: AutomaticLocalActionsLocation | null,
   locatedSkillSlotGeometry: ReturnType<typeof deriveSkillSlotGeometry>,
+  cooldownObservationLayout: ReturnType<typeof deriveObservationLayout>,
+  locatedPlayerSkillbar: ReturnType<typeof derivePlayerSkillbarObservation>,
   locatedSkillCooldown: ReturnType<typeof deriveSkillCooldownObservation>,
   context: EnhancementProofContext,
 ): LocalFeatureFailures {
@@ -336,7 +343,9 @@ function diagnoseFeatureFailures(
   const needsSkillEvidence = requested.skillSlotGeometry
     && locatedSkillSlotGeometry === null;
   const needsCooldownEvidence = requested.skillCooldownObservation
-    && locatedSkillCooldown === null;
+    && (cooldownObservationLayout === null
+      || locatedPlayerSkillbar === null
+      || locatedSkillCooldown === null);
   const needsEvidence = (requested.nativeCursor && !locatedCursor)
     || (requested.playRegionObservation && !locatedPlayRegion)
     || (requested.targetObservation && !locatedTarget)
@@ -365,6 +374,10 @@ function diagnoseFeatureFailures(
     "skillCooldownObservation",
     evidence,
   );
+  const ambiguousSkillbarCandidates = needsCooldownEvidence
+      && locatedPlayerSkillbar === null
+    ? playerSkillbarRoleCandidateCounts(context.module).find((count) => count > 1)
+    : undefined;
   return Object.freeze({
     ...(requested.nativeCursor && !locatedCursor
       ? { nativeCursor: cursorFailure(evidence) }
@@ -541,9 +554,20 @@ function diagnoseFeatureFailures(
     ...(needsCooldownEvidence
       ? {
           skillCooldownObservation: cooldownShared
+            ?? (ambiguousSkillbarCandidates !== undefined
+              ? ambiguousFeature(
+                  "skillCooldownObservation",
+                  "skill-cooldown.player-skillbar",
+                  ambiguousSkillbarCandidates,
+                )
+              : null)
             ?? changedFeature(
               "skillCooldownObservation",
-              "skill-cooldown.recharge-reader",
+              cooldownObservationLayout === null
+                ? "skill-cooldown.observation-base"
+                : locatedPlayerSkillbar === null
+                  ? "skill-cooldown.player-skillbar"
+                  : "skill-cooldown.recharge-reader",
             ),
         }
       : {}),
@@ -586,8 +610,14 @@ function deriveEnhancementBuild(
   const locatedTarget = requestedCapabilities.targetObservation
     ? locateAutomaticTarget(templateOutput, ENHANCEMENT_BUILDS, context)
     : null;
+  const cooldownObservationLayout = requestedCapabilities.skillCooldownObservation
+    ? deriveObservationLayout(context.module)
+    : null;
+  const locatedPlayerSkillbar = requestedCapabilities.partyObservation
+      || requestedCapabilities.skillCooldownObservation
+    ? derivePlayerSkillbarObservation(context.module)
+    : null;
   const wantsLocal = requestedCapabilities.partyObservation
-    || requestedCapabilities.skillCooldownObservation
     || requestedCapabilities.teamApply
     || requestedCapabilities.travelAction
     || requestedCapabilities.xunlaiAction
@@ -598,6 +628,7 @@ function deriveEnhancementBuild(
         ENHANCEMENT_BUILDS,
         context,
         locatedTarget?.observationLayout,
+        locatedPlayerSkillbar,
       )
     : null;
   const locatedSkillSlotGeometry = requestedCapabilities.skillSlotGeometry
@@ -634,11 +665,13 @@ function deriveEnhancementBuild(
   const locatedSkillCooldown = requestedCapabilities.skillCooldownObservation
     ? deriveSkillCooldownObservation(
         context,
-        locatedLocal?.partyObservation?.layout,
+        locatedPlayerSkillbar,
       )
     : null;
   const includeSkillCooldown = requestedCapabilities.skillCooldownObservation
-    && includeParty
+    && includePlayRegion
+    && cooldownObservationLayout !== null
+    && locatedPlayerSkillbar !== null
     && locatedSkillCooldown !== null;
   const failures = diagnoseFeatureFailures(
     templateOutput,
@@ -648,6 +681,8 @@ function deriveEnhancementBuild(
     locatedTarget,
     locatedLocal,
     locatedSkillSlotGeometry,
+    cooldownObservationLayout,
+    locatedPlayerSkillbar,
     locatedSkillCooldown,
     context,
   );
@@ -669,7 +704,9 @@ function deriveEnhancementBuild(
     ? locatedTarget.observationLayout
     : includeParty || includeXunlai
       ? locatedLocal!.observationLayout!
-      : null;
+      : includeSkillCooldown
+        ? cooldownObservationLayout
+        : null;
   if (
     includePlayRegion
     && observationLayout !== null
@@ -769,6 +806,9 @@ function deriveEnhancementBuild(
     ...(includeAliases ? { chatAliases: locatedLocal!.chatAliases! } : {}),
     ...(includeParty ? {
       partyObservation: locatedLocal.partyObservation,
+    } : {}),
+    ...(includeParty || includeSkillCooldown ? {
+      playerSkillbarObservation: locatedPlayerSkillbar!,
     } : {}),
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
     ...(includeSkillSlotGeometry

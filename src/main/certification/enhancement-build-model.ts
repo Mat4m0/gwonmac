@@ -24,7 +24,9 @@ import {
   ENHANCEMENT_CONFIG_FIELDS,
   type EnhancementCursorLayout,
   type EnhancementObservationBaseLayout,
+  type EnhancementPartySkillbarLayout,
   type EnhancementPlayRegionLayout,
+  type EnhancementPlayerSkillbarLayout,
   type EnhancementPartyLayout,
   type EnhancementSkillCooldownLayout,
   type EnhancementSkillSlotGeometryLayout,
@@ -104,21 +106,43 @@ export function enhancementConfigWords(
   return ENHANCEMENT_CONFIG_FIELDS.map((field, index) => {
     if (!enhancementConfigWordActive(capabilities, index)) return 0;
     if (field.source === "layout") {
-      const value = field.owner === "play-region"
-        ? build.playRegionObservation?.layout[field.key]
-        : field.owner === "observation"
-          ? build.observationBase?.layout[field.key]
-          : field.owner === "target"
-            ? build.targetObservation?.layout[field.key]
-            : field.owner === "cursor"
-              ? build.cursorEvent?.layout[field.key]
-              : field.owner === "party"
-                ? build.partyObservation?.layout[field.key]
-                : field.owner === "storage"
-                  ? build.xunlaiAction?.accessProof?.layout[field.key]
-                  : field.owner === "skill-slots"
-                    ? build.skillSlotGeometry?.layout[field.key]
-                    : build.skillCooldownObservation?.layout[field.key];
+      let value: number | undefined;
+      switch (field.owner) {
+        case "play-region":
+          value = build.playRegionObservation?.layout[field.key];
+          break;
+        case "observation":
+          value = build.observationBase?.layout[field.key];
+          break;
+        case "target":
+          value = build.targetObservation?.layout[field.key];
+          break;
+        case "cursor":
+          value = build.cursorEvent?.layout[field.key];
+          break;
+        case "party":
+          value = build.partyObservation?.layout[field.key];
+          break;
+        case "player-skillbar":
+          value = build.playerSkillbarObservation?.coreLayout[field.key];
+          break;
+        case "party-skillbar":
+          value = build.playerSkillbarObservation?.partyLayout[field.key];
+          break;
+        case "storage":
+          value = build.xunlaiAction?.accessProof?.layout[field.key];
+          break;
+        case "skill-slots":
+          value = build.skillSlotGeometry?.layout[field.key];
+          break;
+        case "skill-cooldown":
+          value = build.skillCooldownObservation?.layout[field.key];
+          break;
+        default: {
+          const unreachable: never = field;
+          return unreachable;
+        }
+      }
       if (field.owner === "storage" && build.xunlaiAction === undefined) {
         return 0;
       }
@@ -154,6 +178,35 @@ export interface KnownEnhancementBuild {
   observationBase?: Readonly<{ layout: EnhancementObservationBaseLayout }>;
   /** Minimal memory facts used only to determine loading and PvE/PvP policy. */
   playRegionObservation?: Readonly<{ layout: EnhancementPlayRegionLayout }>;
+  /** Exact player skillbar row shared by Party projection and cooldown reads. */
+  playerSkillbarObservation?: Readonly<{
+    worldLifecycle: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32"];
+      results: readonly ["i32"];
+      bodySha256: string;
+    }>;
+    update: Readonly<{
+      functionIndex: number;
+      params: readonly [];
+      results: readonly [];
+      bodySha256: string;
+    }>;
+    rowReader: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32", "i32"];
+      results: readonly ["i32"];
+      bodySha256: string;
+    }>;
+    slotReader: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32", "i32"];
+      results: readonly ["i32"];
+      bodySha256: string;
+    }>;
+    coreLayout: EnhancementPlayerSkillbarLayout;
+    partyLayout: EnhancementPartySkillbarLayout;
+  }>;
   /** Exact UI dispatcher shared by party observation and local Travel. */
   uiDispatcher?: Readonly<{
     functionIndex: number;
@@ -327,8 +380,9 @@ export function supportedEnhancementCapabilities(
 ): EnhancementCapabilities {
   const playRegionObservation = build.playRegionObservation !== undefined;
   const observationBase = playRegionObservation && build.observationBase !== undefined;
+  const playerSkillbarObservation = build.playerSkillbarObservation !== undefined;
   const targetObservation = observationBase && build.targetObservation !== undefined;
-  const partyObservation = observationBase
+  const partyObservation = observationBase && playerSkillbarObservation
     && build.uiDispatcher !== undefined
     && build.partyObservation !== undefined;
   const gameThread = build.gameThread !== undefined;
@@ -345,7 +399,8 @@ export function supportedEnhancementCapabilities(
     xunlaiAction,
     chatAliases: build.uiDispatcher !== undefined && build.chatAliases !== undefined,
     skillSlotGeometry: playRegionObservation && build.skillSlotGeometry !== undefined,
-    skillCooldownObservation: partyObservation
+    skillCooldownObservation: playRegionObservation && observationBase
+      && playerSkillbarObservation
       && build.skillCooldownObservation !== undefined,
     playRegionObservation,
   });
@@ -378,14 +433,19 @@ export function hasValidEnhancementProfileHashes(
     ? null
     : new Set(Object.values(storageReaders).map(({ functionIndex }) => functionIndex));
   const hasPlayRegion = build.playRegionObservation !== undefined;
+  const hasPlayerSkillbar = build.playerSkillbarObservation !== undefined;
   const hasObservation = build.observationBase !== undefined
+    || build.playerSkillbarObservation !== undefined
     || build.targetObservation !== undefined
     || build.partyObservation !== undefined
+    || build.skillCooldownObservation !== undefined
     || build.xunlaiAction !== undefined;
   if (hasObservation && build.observationBase === undefined) {
     return false;
   }
   if (hasObservation && !hasPlayRegion) return false;
+  if (build.partyObservation !== undefined && !hasPlayerSkillbar) return false;
+  if (build.skillCooldownObservation !== undefined && !hasPlayerSkillbar) return false;
   if (build.partyObservation !== undefined && build.uiDispatcher === undefined) {
     return false;
   }

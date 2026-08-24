@@ -482,6 +482,52 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(dispatcherRefusal.partyObservation, false);
   assert.equal(dispatcherRefusal.teamApply, false);
 
+  for (const mutation of [
+    { functionIndex: 8812, operand: 983, label: "world lifecycle" },
+    { functionIndex: 8698, operand: 236, label: "skillbar update" },
+    { functionIndex: 8701, operand: 126, label: "skillbar row reader" },
+    { functionIndex: 8702, operand: 137, label: "skill slot reader" },
+  ] as const) {
+    const changedSkillbarProof = rewriteCode(bytes, (bodies) => {
+      const body = bodies[mutation.functionIndex - derived.importCount]!;
+      body[mutation.operand] = body[mutation.operand]! ^ 1;
+    });
+    assert.equal(
+      WebAssembly.validate(new Uint8Array(changedSkillbarProof)),
+      true,
+      mutation.label,
+    );
+    const refusal = capabilitiesOf(verifyLocalClientBytes(changedSkillbarProof))!;
+    assert.equal(refusal.partyObservation, false, mutation.label);
+    assert.equal(refusal.skillCooldownObservation, false, mutation.label);
+    assert.equal(refusal.targetObservation, true, mutation.label);
+    assert.equal(refusal.skillSlotGeometry, true, mutation.label);
+  }
+
+  const duplicateSkillbarReader = sameSignatureDestination(parsed, 8701);
+  const ambiguousSkillbar = rewriteCode(bytes, (bodies) => {
+    bodies[duplicateSkillbarReader - derived.importCount]
+      = bodies[8701 - derived.importCount]!.slice();
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(ambiguousSkillbar)), true);
+  const ambiguousSkillbarVerification = verifyLocalClientBytes(ambiguousSkillbar);
+  const ambiguousSkillbarVerdict = ambiguousSkillbarVerification
+    .featureVerdicts?.skillCooldownObservation;
+  assert.equal(ambiguousSkillbarVerdict?.status, "ambiguous");
+  if (ambiguousSkillbarVerdict?.status === "ambiguous") {
+    assert.equal(
+      ambiguousSkillbarVerdict.invariant,
+      "skill-cooldown.player-skillbar",
+    );
+    assert.equal(ambiguousSkillbarVerdict.candidates, 2);
+  }
+  const ambiguousSkillbarCapabilities = capabilitiesOf(
+    ambiguousSkillbarVerification,
+  )!;
+  assert.equal(ambiguousSkillbarCapabilities.partyObservation, false);
+  assert.equal(ambiguousSkillbarCapabilities.targetObservation, true);
+  assert.equal(ambiguousSkillbarCapabilities.skillSlotGeometry, true);
+
   const changedRechargeReader = rewriteCode(bytes, (bodies) => {
     const body = bodies[8704 - derived.importCount]!;
     body[137] = 9; // certified slot bound is exactly eight

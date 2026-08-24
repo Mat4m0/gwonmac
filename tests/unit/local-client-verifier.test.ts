@@ -76,6 +76,11 @@ const SKILL_SLOTS: EnhancementCapabilities = Object.freeze({
   playRegionObservation: true,
   skillSlotGeometry: true,
 });
+const COOLDOWN: EnhancementCapabilities = Object.freeze({
+  ...NONE,
+  playRegionObservation: true,
+  skillCooldownObservation: true,
+});
 type ProvedVerification = Extract<LocalClientVerification, { status: "proved" }>;
 
 function verificationFor(
@@ -243,6 +248,7 @@ function automaticPartyTeam(): ProvedVerification {
     {
       ...localActions.enhancementBuild!,
       outputSha256: { "features-20c": "b".repeat(64) },
+      playerSkillbarObservation: ENHANCEMENT.playerSkillbarObservation!,
       partyObservation: {
         ...party,
         playerChatProducer: party.playerChatProducer + 1,
@@ -315,6 +321,24 @@ function automaticSkillSlots(): ProvedVerification {
       },
     },
   }, SKILL_SLOTS);
+}
+
+function automaticCooldown(): ProvedVerification {
+  return verificationFor({
+    sha256: ENHANCEMENT.sha256,
+    outputSha256: { "features-300": "8".repeat(64) },
+    programId: ENHANCEMENT.programId,
+    buildId: ENHANCEMENT.buildId,
+    hookFunction: ENHANCEMENT.hookFunction,
+    hookParams: ENHANCEMENT.hookParams,
+    hookResults: ENHANCEMENT.hookResults,
+    hookBodySha256: ENHANCEMENT.hookBodySha256,
+    tableSlot: ENHANCEMENT.tableSlot,
+    playRegionObservation: ENHANCEMENT.playRegionObservation!,
+    observationBase: ENHANCEMENT.observationBase!,
+    playerSkillbarObservation: ENHANCEMENT.playerSkillbarObservation!,
+    skillCooldownObservation: ENHANCEMENT.skillCooldownObservation!,
+  }, COOLDOWN);
 }
 
 describe("local client verification boundary", () => {
@@ -551,6 +575,48 @@ describe("local client verification boundary", () => {
         false,
       );
     }
+  });
+
+  it("certifies cooldown from the player skillbar without Party or UI authority", () => {
+    const derived = automaticCooldown();
+    assert.equal(
+      isLocalClientVerification(derived, TEMPLATE.sha256, COOLDOWN),
+      true,
+    );
+    const build = derived.enhancementBuild!;
+    assert.equal(build.partyObservation, undefined);
+    assert.equal(build.uiDispatcher, undefined);
+    assert.equal(build.gameThread, undefined);
+    assert.equal(derived.featureVerdicts.partyObservation.status, "not-requested");
+    assert.equal(
+      derived.featureVerdicts.skillCooldownObservation.status,
+      "proved",
+    );
+
+    const withoutSkillbar = { ...build };
+    delete withoutSkillbar.playerSkillbarObservation;
+    assert.equal(isLocalClientVerification({
+      ...derived,
+      enhancementBuild: withoutSkillbar,
+      featureVerdicts: localFeatureVerdictsForBuild(
+        TEMPLATE.outputSha256,
+        COOLDOWN,
+        withoutSkillbar,
+      ),
+    }, TEMPLATE.sha256, COOLDOWN), false);
+
+    const orphanSkillbar = { ...build };
+    delete orphanSkillbar.playRegionObservation;
+    delete orphanSkillbar.observationBase;
+    assert.equal(isLocalClientVerification({
+      ...derived,
+      enhancementBuild: orphanSkillbar,
+      featureVerdicts: localFeatureVerdictsForBuild(
+        TEMPLATE.outputSha256,
+        COOLDOWN,
+        orphanSkillbar,
+      ),
+    }, TEMPLATE.sha256, COOLDOWN), false);
   });
 
   it("accepts a template-only proof and requires no enhancement behind failure", () => {

@@ -5,11 +5,20 @@ import {
   ENHANCEMENT_CAPABILITY_CONTRACTS,
   ENHANCEMENT_CAPABILITY_FIELDS,
   NO_ENHANCEMENT_CAPABILITIES,
+  enhancementCapabilitiesForProfile,
+  enhancementConfigWordActive,
   enhancementHooksFor,
   intersectEnhancementCapabilities,
   validEnhancementCapabilities,
   type EnhancementCapability,
 } from "../../src/shared/enhancement-contracts.ts";
+import {
+  ENHANCEMENT_CONFIG_FIELDS,
+  ENHANCEMENT_CONFIG_WORD_COUNT,
+  ENHANCEMENT_LAYOUT_FIELDS,
+  ENHANCEMENT_LAYOUT_OWNERSHIP_IS_EXHAUSTIVE,
+  ENHANCEMENT_LAYOUT_WORD_COUNT,
+} from "../../src/shared/enhancement-config.ts";
 import {
   FEATURE_SELECTION_POLICIES,
   featureActivationRequested,
@@ -36,7 +45,9 @@ test("the capability registry is the ordered wire vocabulary", () => {
       id: "partyObservation",
       requiresAll: ["playRegionObservation"],
       requiresAny: [],
-      configOwners: ["observation", "party"],
+      configOwners: [
+        "observation", "party", "player-skillbar", "party-skillbar",
+      ],
       hooks: ["ui"],
     },
     {
@@ -76,9 +87,9 @@ test("the capability registry is the ordered wire vocabulary", () => {
     },
     {
       id: "skillCooldownObservation",
-      requiresAll: ["partyObservation"],
+      requiresAll: ["playRegionObservation"],
       requiresAny: [],
-      configOwners: ["skill-cooldown"],
+      configOwners: ["observation", "player-skillbar", "skill-cooldown"],
       hooks: [],
     },
     {
@@ -143,6 +154,40 @@ test("dependency pruning is derived from capability contracts", () => {
       ui: contract.id === "partyObservation",
     }, contract.id);
   }
+});
+
+test("cooldown owns the reusable player skillbar core without Party", () => {
+  assert.equal(ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT, 444);
+  assert.equal(ENHANCEMENT_LAYOUT_WORD_COUNT, 98);
+  assert.equal(ENHANCEMENT_LAYOUT_OWNERSHIP_IS_EXHAUSTIVE, true);
+  assert.equal(
+    new Set(ENHANCEMENT_LAYOUT_FIELDS).size,
+    ENHANCEMENT_LAYOUT_FIELDS.length,
+    "every positional layout word has exactly one owner",
+  );
+
+  const cooldown = enhancementCapabilitiesForProfile("features-300");
+  assert.ok(cooldown);
+  const cooldownOwners = new Set([
+    "play-region", "observation", "player-skillbar", "skill-cooldown",
+  ]);
+  ENHANCEMENT_CONFIG_FIELDS.forEach((field, index) => {
+    assert.equal(
+      enhancementConfigWordActive(cooldown, index),
+      cooldownOwners.has(field.owner),
+      `${field.owner}:${"key" in field ? field.key : field.source}`,
+    );
+  });
+
+  const party = enhancementCapabilitiesForProfile("features-284");
+  assert.ok(party);
+  const activeOwners = new Set(
+    ENHANCEMENT_CONFIG_FIELDS.filter((_, index) =>
+      enhancementConfigWordActive(party, index)).map(({ owner }) => owner),
+  );
+  assert.equal(activeOwners.has("player-skillbar"), true);
+  assert.equal(activeOwners.has("party-skillbar"), true);
+  assert.equal(activeOwners.has("skill-cooldown"), false);
 });
 
 test("feature selection policies are deeply immutable", () => {

@@ -5,6 +5,7 @@
 import { verifyLayout } from "./semantic-proof.js";
 import { messageRelations } from "./enhancement-structural-report.js";
 import { derivePartyCalleeGraph } from "./enhancement-party-callee-proof.js";
+import { playerSkillbarRoleCandidateCounts } from "./enhancement-player-skillbar-proof.js";
 import {
   bodyMatchesRole,
   commonRelocationDelta,
@@ -17,7 +18,6 @@ import {
   signatureMatches,
   signedOperand,
   soleValue,
-  staticBytesHash,
   staticCStringHash,
   uniqueExactFunction,
   uniqueRoleFunction,
@@ -35,17 +35,6 @@ import type {
   PlayerChatUiEvidenceReport,
 } from "./enhancement-evidence-types.js";
 
-const PARTY_WORLD_LIFECYCLE_ROLE = semanticRole(
-  3_279,
-  "878f00dc4ea68f51e5a79f507e37b0a5df3c32b561ca6d35c966a888d0cd022b",
-  Object.freeze([
-    { start: 1_342, end: 1_347, role: "world.assert-a", addressClass: "immutable-data" },
-    { start: 1_395, end: 1_400, role: "world.assert-b", addressClass: "immutable-data" },
-  ]),
-  ["i32"],
-  ["i32"],
-);
-
 const PARTY_PLAYER_PARTY_ROLE = semanticRole(
   338,
   "99d85ceb2072d683b1933603fb195f6fef2a27c1b11d3f0a235e850441be1df5",
@@ -58,17 +47,6 @@ const PARTY_PLAYER_PARTY_ROLE = semanticRole(
     { start: 306, end: 311, role: "party.ui", addressClass: "function-index" },
   ]),
   ["i32", "i32", "i32", "i32"],
-  [],
-);
-
-const PARTY_SKILLBAR_UPDATE_ROLE = semanticRole(
-  468,
-  "5c17e22a87d68e79e2d258992d623f3ec83dca62d74a063d46e06f7fd426093c",
-  Object.freeze([
-    { start: 45, end: 50, role: "skillbar.assertion", addressClass: "immutable-data" },
-    { start: 450, end: 455, role: "party.ui", addressClass: "function-index" },
-  ]),
-  [],
   [],
 );
 
@@ -110,8 +88,6 @@ const PARTY_EXACT_ROLES = Object.freeze({
   professionPrimary: { bodySha256: "5b3490ae4c66dad083b8cbea456d2e47d41ff794e9c03aa15acdf2b6523915ec", params: ["i32", "i32"], results: ["i32"] },
   professionSecondary: { bodySha256: "92fe2aa71777d546d797a4f7850cb59b1693f3b2937021dd5cebc85933403e07", params: ["i32", "i32"], results: ["i32"] },
   professionUnlocked: { bodySha256: "7a1b17e51097a6599a036629fdcc630afa0850bacb0f2998d0ad8107d39ec9b5", params: ["i32", "i32"], results: ["i32"] },
-  skillbarReader: { bodySha256: "7b8b5c65a126fae2edfa517a4706244a0d2352c628fde208d049ecf82dfa4e72", params: ["i32", "i32", "i32"], results: ["i32"] },
-  skillSlotReader: { bodySha256: "ee41be1f4dcaf8e5822fc024e41cbbad74cf293cdafb2b89a8691aeb680e68b5", params: ["i32", "i32", "i32"], results: ["i32"] },
   characterUnlockReader: { semantic: semanticRole(128, "1d6008c169d1dacfa8cde21d77a071336d056d2fa14677c3d468154d8689532a", Object.freeze([
     { start: 23, end: 28, role: "unlocks.resolve", addressClass: "function-index" },
     { start: 111, end: 116, role: "unlocks.ui", addressClass: "function-index" },
@@ -160,9 +136,6 @@ const PARTY_DIRTY_ROLES = Object.freeze([
 
 const PARTY_IMMUTABLE_HASHES = Object.freeze({
   playerPartyAssertion: "11e293befd3a98a58c54d320146aab4746f2456cfe5fefd40eca2c48d28366bb",
-  skillbarAssertion: "f450663f1e90de4ae2e581b6dc777b81f6c9e019bff3e5d2e60665099862e3f0",
-  worldAssertionA: "435ae0e5b5663ba229fe0a312a2f3d83b4896302f9517b56d88f996ba7ea896d",
-  worldAssertionB: "f7d0c7a8263c7a799862d8a513123d901e4f1cc30bc1d86da870bf5f2ec5aad6",
 });
 
 const TEAM_SENDER_IMMUTABLE_HASHES = Object.freeze([
@@ -275,9 +248,8 @@ export function inspectPartyTeamRoleCandidates(
     ...Object.values(PARTY_EXACT_ROLES).map(
       (role) => exactPartyFunctionCount(module, role),
     ),
-    roleFunctions(module, PARTY_WORLD_LIFECYCLE_ROLE).length,
+    ...playerSkillbarRoleCandidateCounts(module),
     roleFunctions(module, PARTY_PLAYER_PARTY_ROLE).length,
-    roleFunctions(module, PARTY_SKILLBAR_UPDATE_ROLE).length,
     ...PARTY_DIRTY_ROLES.map((role) => roleFunctions(module, role).length),
   ]);
 
@@ -330,20 +302,11 @@ export function inspectPartyTeamRoleAmbiguities(
   });
 }
 
-function exactStaticBytesHash(
-  module: ModuleShape,
-  values: Map<string, number[]>,
-  role: string,
-  length: number,
-  expected: string,
-): boolean {
-  return staticBytesHash(module, soleValue(values, role), length) === expected;
-}
-
 export function derivePartyObservation(
   module: ModuleShape,
   baseline: KnownEnhancementBuild,
   observation: EnhancementObservationBaseLayout,
+  playerSkillbar: NonNullable<KnownEnhancementBuild["playerSkillbarObservation"]>,
   uiDispatcher: NonNullable<KnownEnhancementBuild["uiDispatcher"]>,
   uiEvidence: NonNullable<PlayerChatUiEvidenceReport["candidate"]>,
   suppliedDecoded?: readonly DecodedFunction[],
@@ -363,12 +326,9 @@ export function derivePartyObservation(
     exactPartyFunction(module, PARTY_EXACT_ROLES.professionSecondary),
     exactPartyFunction(module, PARTY_EXACT_ROLES.professionUnlocked),
   ];
-  const skillbarReaderFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.skillbarReader);
-  const skillSlotReaderFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.skillSlotReader);
   const characterUnlockFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.characterUnlockReader);
-  const worldFunction = uniqueRoleFunction(module, PARTY_WORLD_LIFECYCLE_ROLE);
+  const worldFunction = playerSkillbar.worldLifecycle.functionIndex;
   const playerPartyFunction = uniqueRoleFunction(module, PARTY_PLAYER_PARTY_ROLE);
-  const skillbarUpdateFunction = uniqueRoleFunction(module, PARTY_SKILLBAR_UPDATE_ROLE);
   const dirtyFunctions = PARTY_DIRTY_ROLES.map((role) => uniqueRoleFunction(module, role));
   const infoFunction = dirtyFunctions[1] ?? null;
   const mapLoadedFunction = dirtyFunctions[2] ?? null;
@@ -376,29 +336,19 @@ export function derivePartyObservation(
     partyInfoFunction === null || partyFlagFunction === null || accountFunction === null
     || flagFunction === null || infoFunction === null || attributesFunction === null
     || professionFunctions.some((value) => value === null)
-    || skillbarReaderFunction === null || skillSlotReaderFunction === null
-    || characterUnlockFunction === null || worldFunction === null
-    || playerPartyFunction === null || skillbarUpdateFunction === null
+    || characterUnlockFunction === null || playerPartyFunction === null
     || mapLoadedFunction === null || dirtyFunctions.some((value) => value === null)
   ) return null;
 
   const worldBody = functionBody(module, worldFunction);
   const playerPartyBody = functionBody(module, playerPartyFunction);
-  const skillbarUpdateBody = functionBody(module, skillbarUpdateFunction);
   const mapLoadedBody = functionBody(module, mapLoadedFunction);
-  const worldValues = valuesForRole(worldBody, PARTY_WORLD_LIFECYCLE_ROLE);
   const playerPartyValues = valuesForRole(playerPartyBody, PARTY_PLAYER_PARTY_ROLE);
-  const skillbarValues = valuesForRole(skillbarUpdateBody, PARTY_SKILLBAR_UPDATE_ROLE);
   const mapValues = valuesForRole(mapLoadedBody, PARTY_DIRTY_ROLES[2]);
   if (
     staticCStringHash(module, soleValue(playerPartyValues, "party.membership-assertion"))
       !== PARTY_IMMUTABLE_HASHES.playerPartyAssertion
     || soleValue(playerPartyValues, "party.ui") !== uiDispatcher.functionIndex
-    || staticCStringHash(module, soleValue(skillbarValues, "skillbar.assertion"))
-      !== PARTY_IMMUTABLE_HASHES.skillbarAssertion
-    || soleValue(skillbarValues, "party.ui") !== uiDispatcher.functionIndex
-    || !exactStaticBytesHash(module, worldValues, "world.assert-a", 12, PARTY_IMMUTABLE_HASHES.worldAssertionA)
-    || !exactStaticBytesHash(module, worldValues, "world.assert-b", 12, PARTY_IMMUTABLE_HASHES.worldAssertionB)
     || commonRelocationDelta([
       [
         soleValue(mapValues, "map.lifecycle-static"),
@@ -429,8 +379,6 @@ export function derivePartyObservation(
   const infoBody = functionBody(module, infoFunction);
   const attributesBody = functionBody(module, attributesFunction);
   const professionBodies = professionFunctions.map((value) => functionBody(module, value!));
-  const skillbarReaderBody = functionBody(module, skillbarReaderFunction);
-  const skillSlotReaderBody = functionBody(module, skillSlotReaderFunction);
   const characterUnlockBody = functionBody(module, characterUnlockFunction);
   const observedAttributeCalls = valuesForRole(
     attributesBody,
@@ -487,8 +435,6 @@ export function derivePartyObservation(
   ) return null;
 
   const heroMemberStride = signedOperand(heroAddBody, 142);
-  const skillbarSkills = unsignedOperand(skillbarUpdateBody, 352);
-  const slotTotalOffset = unsignedOperand(skillSlotReaderBody, 144);
   const professionStateStride = unsignedOperand(professionBodies[0]!, 18);
   const layout: EnhancementPartyLayout = {
     partyContext: unsignedOperand(heroAddBody, 30),
@@ -517,13 +463,6 @@ export function derivePartyObservation(
     infoPrimary: unsignedOperand(infoBody, 454),
     infoSecondary: unsignedOperand(infoBody, 447),
     infoAppearanceBitmap: unsignedOperand(infoBody, 412),
-    worldSkillbars: unsignedOperand(worldBody, 983),
-    skillbarStride: unsignedOperand(skillbarUpdateBody, 236),
-    skillbarAgentId: unsignedOperand(skillbarReaderBody, 126),
-    skillbarSkills,
-    skillSlotStride: unsignedOperand(skillSlotReaderBody, 137),
-    skillSlotId: slotTotalOffset - skillbarSkills,
-    skillbarDisabled: unsignedOperand(skillbarReaderBody, 136),
     worldAttributes: unsignedOperand(worldBody, 2_826),
     attributeStride: unsignedOperand(attributesBody, 35),
     attributeAgentId: 0,
@@ -541,12 +480,7 @@ export function derivePartyObservation(
     || unsignedOperand(flagBody, 103) !== layout.heroFlagStride
     || unsignedOperand(flagBody, 119) !== layout.flagAgentId
     || [1, 2, 3].some((index) => unsignedOperand(professionBodies[index]!, 18) !== professionStateStride)
-    || unsignedOperand(skillbarUpdateBody, 269) !== layout.skillbarStride
-    || unsignedOperand(skillbarUpdateBody, 323) !== layout.skillbarStride
-    || unsignedOperand(skillbarReaderBody, 18) !== layout.skillbarStride
-    || unsignedOperand(skillSlotReaderBody, 18) !== layout.skillbarStride
     || unsignedOperand(characterUnlockBody, 70) !== layout.worldCharacterSkills
-    || unsignedOperand(skillbarUpdateBody, 223) !== layout.worldSkillbars
   ) return null;
 
   const verified = verifyLayout(layout, {
@@ -576,13 +510,6 @@ export function derivePartyObservation(
     infoPrimary: { sourceRole: "HeroDataAdded", expression: "primary profession store", occurrences: [454] },
     infoSecondary: { sourceRole: "HeroDataAdded", expression: "secondary profession store", occurrences: [447] },
     infoAppearanceBitmap: { sourceRole: "HeroDataAdded", expression: "appearance bitmap store", occurrences: [412] },
-    worldSkillbars: { sourceRole: "WorldContext lifecycle+skillbar update", expression: "array field", occurrences: [983, 223] },
-    skillbarStride: { sourceRole: "skillbar update+readers", expression: "row multiplier", occurrences: [236, 269, 323, 18] },
-    skillbarAgentId: { sourceRole: "skillbar reader", expression: "first row key", occurrences: [126] },
-    skillbarSkills: { sourceRole: "skillbar update", expression: "first repeated slot field", occurrences: [352] },
-    skillSlotStride: { sourceRole: "skill slot reader", expression: "slot index multiplier", occurrences: [137] },
-    skillSlotId: { sourceRole: "skillbar update+slot reader", expression: "total id offset minus slot base", occurrences: [144, 352] },
-    skillbarDisabled: { sourceRole: "skillbar reader", expression: "disabled field load", occurrences: [136] },
     worldAttributes: { sourceRole: "WorldContext lifecycle", expression: "array clear field", occurrences: [2_826] },
     attributeStride: { sourceRole: "attribute writer", expression: "row multiplier", occurrences: [35, 68, 124] },
     attributeAgentId: { sourceRole: "attribute writer", expression: "first row key", occurrences: [0] },

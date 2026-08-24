@@ -104,6 +104,8 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
   ] as const),
   skillCooldownObservation: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
+    "skill-cooldown.observation-base",
+    "skill-cooldown.player-skillbar",
     "skill-cooldown.recharge-reader",
     "skill-cooldown.precise-timer",
   ] as const),
@@ -183,7 +185,8 @@ export interface LocalFeatureCertificateMap {
     & RequiredBuildFact<"playRegionObservation" | "skillSlotGeometry">;
   readonly skillCooldownObservation: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<
-      "observationBase" | "partyObservation" | "skillCooldownObservation"
+      | "playRegionObservation" | "observationBase"
+      | "playerSkillbarObservation" | "skillCooldownObservation"
     >;
 }
 
@@ -377,13 +380,15 @@ export function localFeatureVerdictsForBuild(
       })
     : null;
   const skillCooldownObservation = core !== null
-      && build?.observationBase !== undefined
-      && build.partyObservation !== undefined
+      && build?.playRegionObservation !== undefined
+      && build.observationBase !== undefined
+      && build.playerSkillbarObservation !== undefined
       && build.skillCooldownObservation !== undefined
     ? Object.freeze({
         core,
+        playRegionObservation: build.playRegionObservation,
         observationBase: build.observationBase,
-        partyObservation: build.partyObservation,
+        playerSkillbarObservation: build.playerSkillbarObservation,
         skillCooldownObservation: build.skillCooldownObservation,
       })
     : null;

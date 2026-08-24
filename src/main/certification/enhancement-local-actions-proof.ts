@@ -545,8 +545,9 @@ function deriveTravelContextResolver(
 export function locateAutomaticLocalActions(
   input: Uint8Array,
   baselines: readonly KnownEnhancementBuild[],
-  suppliedContext?: EnhancementProofContext,
-  suppliedObservationLayout?: EnhancementObservationBaseLayout,
+  suppliedContext: EnhancementProofContext | undefined,
+  suppliedObservationLayout: EnhancementObservationBaseLayout | undefined,
+  suppliedPlayerSkillbar: KnownEnhancementBuild["playerSkillbarObservation"] | null,
 ): AutomaticLocalActionsLocation | null {
   if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
   try {
@@ -677,9 +678,11 @@ export function locateAutomaticLocalActions(
       const chatAliases = uiDispatcher
         ? isolatedProof(() => deriveChatAliases(module, baseline, uiDispatcher))
         : null;
-      const partyObservation = party && uiDispatcher && observationLayout && uiEvidence
+      const partyObservation = suppliedPlayerSkillbar
+          && uiDispatcher && observationLayout && uiEvidence
         ? isolatedProof(() => derivePartyObservation(
-            module, baseline, observationLayout, uiDispatcher, uiEvidence, decoded,
+            module, baseline, observationLayout, suppliedPlayerSkillbar,
+            uiDispatcher, uiEvidence, decoded,
           ))
         : null;
       const teamApply = partyObservation && gameThread

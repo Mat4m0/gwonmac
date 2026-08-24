@@ -52,7 +52,9 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     id: "partyObservation",
     requiresAll: ["playRegionObservation"],
     requiresAny: [],
-    configOwners: ["observation", "party"],
+    configOwners: [
+      "observation", "party", "player-skillbar", "party-skillbar",
+    ],
     hooks: ["ui"],
   },
   {
@@ -92,9 +94,9 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
   },
   {
     id: "skillCooldownObservation",
-    requiresAll: ["partyObservation"],
+    requiresAll: ["playRegionObservation"],
     requiresAny: [],
-    configOwners: ["skill-cooldown"],
+    configOwners: ["observation", "player-skillbar", "skill-cooldown"],
     hooks: [],
   },
   {
@@ -263,7 +265,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 41;
+export const ENHANCEMENT_TRANSFORM_ABI = 42;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
