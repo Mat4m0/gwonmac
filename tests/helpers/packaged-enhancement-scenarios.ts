@@ -1067,6 +1067,8 @@ export async function assertToolboxFoundationLifecycle() {
       aggregateMessage: "Companion cleanup was incomplete",
       failures: [
         "Companion cleanup failed during core observer memory release",
+        "Companion cleanup failed during storage disposal",
+        "Companion cleanup failed during Travel disposal",
       ],
     }]);
     assert.deepEqual(result.after.storageConfigurations.at(-1), [0, 0]);
