@@ -52,8 +52,10 @@ The feature proof is owned by
 
 The exact build record is in
 [`enhancement-builds.ts`](../src/main/certification/enhancement-builds.ts), and
-the transformation checks are in
-[`enhancement-transform.ts`](../src/main/certification/enhancement-transform.ts).
+the skill-owned body and call-site checks are in
+[`enhancement-skill-transform.ts`](../src/main/certification/enhancement-skill-transform.ts).
+The root [`enhancement-transform.ts`](../src/main/certification/enhancement-transform.ts)
+still owns exact-input selection, cross-feature ordering, and assembly.
 Mutation tests independently alter the reader bound and timer operand and prove
 that cooldown certification withdraws while the other Tools capabilities stay
 available.
