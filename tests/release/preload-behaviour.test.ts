@@ -212,6 +212,16 @@ const INVOCATIONS: Invocation[] = [
     args: [{ offers: [], players: [] }],
     channel: IPC.tradeSavedSet,
   },
+  { path: "trade.getTraderQuotes", args: [], channel: IPC.traderQuotesGet },
+  {
+    path: "trade.getTraderPriceHistory",
+    args: [{
+      modelId: "0b039e",
+      from: 1_785_004_800_000,
+      to: 1_787_596_800_000,
+    }],
+    channel: IPC.traderPriceHistoryGet,
+  },
   { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {
     path: "accounts.setup",
