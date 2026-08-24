@@ -835,14 +835,17 @@ export async function installCertifiedCompanion(
     const syncToolboxAvailability = () => {
       toolbox?.setEnabled(policy().tools);
     };
-    const syncPolicySurfaces = (reason: "launch" | "region" | "settings") => {
-      tracePolicy(reason);
-      syncToolboxAvailability();
+    const syncLivePolicyConsumers = () => {
       setTargetEnabled();
       syncSkillOverlays();
       syncActiveObservers();
       syncStoragePolicy();
       syncTravelPolicy();
+    };
+    const syncPolicySurfaces = (reason: "region" | "settings") => {
+      tracePolicy(reason);
+      syncToolboxAvailability();
+      syncLivePolicyConsumers();
     };
     const onToolSettings = () => {
       // The event is only a notification. The validated bridge remains the
@@ -874,7 +877,8 @@ export async function installCertifiedCompanion(
 
     // Apply opt-in state before the callback becomes reachable from the game.
     playRegions.setActive(true);
-    syncPolicySurfaces("launch");
+    tracePolicy("launch");
+    syncLivePolicyConsumers();
     configureTradeAlias();
     table.set(manifest.tableSlot, kernelDispatch);
     installedCallback = kernelDispatch;
