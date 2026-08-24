@@ -62,10 +62,12 @@ available.
 
 [`skill_cooldowns.rs`](../src/companion-kernel/skill_cooldowns.rs) owns native
 collection. It resolves the certified player, selects exactly one matching bar,
-caches stable player/bar identity, reads exactly eight timestamps on ordinary
-ticks, rejects duplicates and invalid layouts, and refuses recharge values over
-1,800,000 ms. Loading, PvP, missing, ambiguous, wrapped, or malformed state
-publishes no cooldown data.
+caches stable player/bar identity, and reads exactly eight timestamps on
+ordinary ticks. A bounded full-table audit runs every 30 ticks, and every tick
+after ambiguity, so a duplicate row added after caching cannot stay hidden.
+The collector rejects duplicates and invalid layouts and refuses recharge
+values over 1,800,000 ms. Loading, PvP, missing, ambiguous, wrapped, or
+malformed state publishes no cooldown data.
 
 The shared record is fixed at 60 bytes and uses an odd/even publication
 sequence. The renderer reads the sequence before and after the payload and

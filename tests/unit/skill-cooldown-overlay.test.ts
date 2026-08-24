@@ -32,8 +32,23 @@ class FakeElement {
 }
 class FakeDocument {
   head = new FakeElement(this);
+  defaultView = new FakeWindow();
   createElement() { return new FakeElement(this); }
   getElementById(id: string) { return this.head.children.find((child) => child.id === id) ?? null; }
+}
+class FakeWindow {
+  private listeners = new Map<string, Set<() => void>>();
+  addEventListener(type: string, listener: () => void) {
+    const listeners = this.listeners.get(type) ?? new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+  removeEventListener(type: string, listener: () => void) {
+    this.listeners.get(type)?.delete(listener);
+  }
+  dispatch(type: string) {
+    for (const listener of this.listeners.get(type) ?? []) listener();
+  }
 }
 
 const textOf = (element: FakeElement): string =>
@@ -131,6 +146,49 @@ test("sub-frame timer changes that keep the same label cause no presentation upd
     { kind: "preset", preset: "red" },
   );
   assert.equal(overlay.state.signature, signature);
+});
+
+test("equal cooldown labels skip projection while resize refreshes it", () => {
+  const document = new FakeDocument();
+  const body = document.createElement();
+  let left = 10;
+  let reads = 0;
+  const consumer = createSkillCooldownOverlayConsumer(
+    body as unknown as HTMLElement,
+    {
+      getBoundingClientRect: () => {
+        reads += 1;
+        return { left, top: 20, width: 800, height: 600 };
+      },
+    } as HTMLCanvasElement,
+  );
+  consumer.sync({ kind: "preset", preset: "red" }, true);
+  consumer.update(geometry());
+  consumer.setCooldownState({
+    status: "ready",
+    sequence: 2,
+    generation: 1,
+    gameTimer: 10_000,
+    playerAgentId: 7,
+    rechargeTimestamps: [23_999, 0, 0, 0, 0, 0, 0, 0],
+  });
+  assert.equal(reads, 1);
+
+  consumer.setCooldownState({
+    status: "ready",
+    sequence: 4,
+    generation: 1,
+    gameTimer: 10_050,
+    playerAgentId: 7,
+    rechargeTimestamps: [23_999, 0, 0, 0, 0, 0, 0, 0],
+  });
+  assert.equal(reads, 1, "the still-visible 14-second label does not project again");
+
+  left = 30;
+  document.defaultView.dispatch("resize");
+  assert.equal(reads, 2);
+  assert.match(body.children[0]!.children[0]!.style.cssText, /left:130px/u);
+  consumer.dispose();
 });
 
 test("either accepted feed withdrawing hides the complete cooldown HUD", () => {

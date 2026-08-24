@@ -26,7 +26,8 @@ export type CompanionRegionDescriptor<State extends SequencedState> = Readonly<{
   align?: number;
   waiting: State;
   stale: State;
-  freshness: CompanionSequenceFeedOptions | null;
+  freshness: CompanionSequenceFeedOptions<State> | null;
+  sameReadyState?: (previous: State, next: State) => boolean;
 }>;
 
 export function createCompanionRegionInstallation<State extends SequencedState>(
@@ -40,6 +41,7 @@ export function createCompanionRegionInstallation<State extends SequencedState>(
     waiting,
     stale,
     freshness,
+    sameReadyState,
   } = descriptor;
   if (
     name.length === 0
@@ -56,7 +58,10 @@ export function createCompanionRegionInstallation<State extends SequencedState>(
   const feed = createCompanionSequenceFeed(
     waiting,
     stale,
-    freshness ?? { staleAfterMs: null },
+    {
+      ...(freshness ?? { staleAfterMs: null }),
+      ...(sameReadyState === undefined ? {} : { sameReadyState }),
+    },
   );
   let pointer = 0;
   let active = false;

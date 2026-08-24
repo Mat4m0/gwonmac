@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { COMPANION_FEATURE_BITS } from "../../src/shared/companion-abi.ts";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
 import { createSkillOverlaysInstallation } from "../../src/renderer/skill-overlays-installation.ts";
 
@@ -31,13 +32,18 @@ test("skill policy activates and withdraws only the observation regions it needs
     skillSlotGeometry: true,
     skillCooldownObservation: true,
   });
-  skills.sync(DEFAULT_SETTINGS, false, false);
+  skills.sync(DEFAULT_SETTINGS, { skillKeyLabels: false, skillCooldowns: false });
   assert.equal(skills.geometry.active, false);
   assert.equal(skills.cooldowns.active, false);
+  assert.equal(skills.activeFeatureFlags, 0);
 
-  skills.sync(withBinding, true, false);
+  skills.sync(withBinding, { skillKeyLabels: true, skillCooldowns: false });
   assert.equal(skills.geometry.active, true, "a key badge needs geometry");
   assert.equal(skills.cooldowns.active, false);
+  assert.equal(
+    skills.activeFeatureFlags,
+    COMPANION_FEATURE_BITS.skillSlotGeometry,
+  );
   skills.geometry.sink?.update({
     status: "ready",
     sequence: 2,
@@ -53,9 +59,9 @@ test("skill policy activates and withdraws only the observation regions it needs
   });
   assert.equal(skills.geometry.state.status, "ready");
 
-  skills.sync(DEFAULT_SETTINGS, false, false);
+  skills.sync(DEFAULT_SETTINGS, { skillKeyLabels: false, skillCooldowns: false });
   assert.deepEqual(skills.geometry.state, { status: "waiting", reason: "stale" });
-  skills.sync(withBinding, true, false);
+  skills.sync(withBinding, { skillKeyLabels: true, skillCooldowns: false });
   skills.geometry.sink?.update({
     status: "ready",
     sequence: 2,
@@ -89,9 +95,14 @@ test("skill policy activates and withdraws only the observation regions it needs
   });
   assert.equal(skills.geometry.state.status, "ready");
 
-  skills.sync(DEFAULT_SETTINGS, true, true);
+  skills.sync(DEFAULT_SETTINGS, { skillKeyLabels: false, skillCooldowns: true });
   assert.equal(skills.geometry.active, true, "cooldowns also need geometry");
   assert.equal(skills.cooldowns.active, true);
+  assert.equal(
+    skills.activeFeatureFlags,
+    COMPANION_FEATURE_BITS.skillSlotGeometry
+      | COMPANION_FEATURE_BITS.skillCooldownObservation,
+  );
   skills.disposePresentation();
   skills.geometry.dispose();
   skills.cooldowns.dispose();

@@ -1,7 +1,7 @@
 //! Bounded, read-only observation of the player's eight authoritative skill
-//! recharge timestamps. Stable player and skillbar identities are cached; a
-//! table scan happens only when either identity changes or bounded validation
-//! fails. Publication is all-or-nothing and sequence protected.
+//! recharge timestamps. Stable player and skillbar identities are cached; the
+//! bounded table is scanned when identity validation fails and periodically to
+//! detect new ambiguity. Publication is all-or-nothing and sequence protected.
 
 use core::ptr::write_volatile;
 
@@ -11,6 +11,10 @@ use crate::{find_player_agent, resolve_game, GameState};
 
 const MAX_RECHARGE_MS: u32 = 1_800_000;
 const MAX_SKILLBARS: u32 = 64;
+// The cached player row is validated every tick. Re-audit the complete bounded
+// table twice a second so a newly duplicated player row cannot remain hidden
+// behind an otherwise valid cache entry.
+const CACHE_AUDIT_TICKS: u32 = 30;
 
 static mut POINTER: u32 = 0;
 static mut SEQUENCE: u32 = 0;
@@ -20,6 +24,16 @@ static mut PLAYER_AGENT_ID: u32 = 0;
 static mut SKILLBAR_BUFFER: u32 = 0;
 static mut SKILLBAR_INDEX: u32 = u32::MAX;
 static mut SKILLBAR_SIZE: u32 = 0;
+static mut CACHE_AGE: u32 = CACHE_AUDIT_TICKS;
+
+unsafe fn invalidate_skillbar_cache() {
+    unsafe {
+        SKILLBAR_BUFFER = 0;
+        SKILLBAR_INDEX = u32::MAX;
+        SKILLBAR_SIZE = 0;
+        CACHE_AGE = CACHE_AUDIT_TICKS;
+    }
+}
 
 enum Collected {
     Ready(u32, [u32; SKILL_SLOTS]),
@@ -76,9 +90,7 @@ unsafe fn player_agent(layout: Layout, player_number: u32) -> Option<u32> {
     unsafe {
         PLAYER_NUMBER = player_number;
         PLAYER_AGENT_ID = found;
-        SKILLBAR_BUFFER = 0;
-        SKILLBAR_INDEX = u32::MAX;
-        SKILLBAR_SIZE = 0;
+        invalidate_skillbar_cache();
     }
     Some(found)
 }
@@ -127,9 +139,11 @@ unsafe fn row_for_player(
     if cached_buffer == buffer
         && unsafe { SKILLBAR_SIZE } == size
         && cached_index < size
+        && unsafe { CACHE_AGE } < CACHE_AUDIT_TICKS
     {
         let row = indexed(buffer, cached_index, layout.skillbar_stride)?;
         if unsafe { read_u32(offset(row, layout.skillbar_agent_id)?) } == Some(player_agent_id) {
+            unsafe { CACHE_AGE = CACHE_AGE.saturating_add(1) };
             return Some(row);
         }
     }
@@ -154,6 +168,7 @@ unsafe fn row_for_player(
         SKILLBAR_BUFFER = buffer;
         SKILLBAR_INDEX = found_index;
         SKILLBAR_SIZE = size;
+        CACHE_AGE = 0;
     }
     Some(row)
 }
@@ -173,6 +188,7 @@ unsafe fn collect(layout: Layout, game_timer: u32) -> Collected {
         return Collected::Unavailable;
     };
     let Some((buffer, size)) = (unsafe { skillbar_array(layout, game) }) else {
+        unsafe { invalidate_skillbar_cache() };
         return Collected::Unavailable;
     };
     let Some(row) = (unsafe { row_for_player(layout, buffer, size, player_agent_id) }) else {
@@ -228,9 +244,7 @@ pub(crate) unsafe fn initialize(pointer: u32) {
         GENERATION = 0;
         PLAYER_NUMBER = 0;
         PLAYER_AGENT_ID = 0;
-        SKILLBAR_BUFFER = 0;
-        SKILLBAR_INDEX = u32::MAX;
-        SKILLBAR_SIZE = 0;
+        invalidate_skillbar_cache();
     }
     for index in 0..SKILL_COOLDOWN_BYTES / 4 {
         unsafe { write_volatile((pointer + index * 4) as *mut u32, 0) };

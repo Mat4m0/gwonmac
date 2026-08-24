@@ -6,12 +6,16 @@
 import { COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import type { AppSettings } from "../shared/contracts.js";
 import type { EnhancementCapabilities } from "../shared/enhancement-contracts.js";
-import { createSkillCooldownOverlayInstallation } from "./skill-cooldown-overlay-installation.js";
+import { createSkillCooldownOverlayConsumer } from "./skill-cooldown-overlay-consumer.js";
 import { createSkillCooldownObservationInstallation } from "./skill-cooldown-state-installation.js";
 import { createSkillKeyOverlayConsumer } from "./skill-key-overlay-consumer.js";
 import { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
 
 type SkillSettings = Pick<AppSettings, "skillKeyBindings" | "skillCooldownColor">;
+type SkillFeaturePolicy = Readonly<{
+  skillKeyLabels: boolean;
+  skillCooldowns: boolean;
+}>;
 
 export function createSkillOverlaysInstallation(
   capabilities: Pick<EnhancementCapabilities, "skillSlotGeometry" | "skillCooldownObservation">,
@@ -20,14 +24,12 @@ export function createSkillOverlaysInstallation(
   const cooldowns = createSkillCooldownObservationInstallation(
     capabilities.skillCooldownObservation,
   );
-  const cooldownOverlay = createSkillCooldownOverlayInstallation(
-    capabilities.skillCooldownObservation && capabilities.skillSlotGeometry,
-  );
   let keyConsumer: ReturnType<typeof createSkillKeyOverlayConsumer> | null = null;
+  let cooldownConsumer: ReturnType<typeof createSkillCooldownOverlayConsumer> | null = null;
   let unsubscribeKeyGeometry: (() => void) | null = null;
-
-  const hasKeyBindings = (settings: SkillSettings) =>
-    settings.skillKeyBindings.some((binding) => binding !== null);
+  let unsubscribeCooldownGeometry: (() => void) | null = null;
+  let unsubscribeCooldownState: (() => void) | null = null;
+  let activeFeatureFlags = 0;
 
   return Object.freeze({
     geometry,
@@ -37,54 +39,59 @@ export function createSkillOverlaysInstallation(
       | (capabilities.skillCooldownObservation
         ? COMPANION_FEATURE_BITS.skillCooldownObservation
         : 0),
+    get activeFeatureFlags() { return activeFeatureFlags; },
     mount(parent: HTMLElement, settings: SkillSettings) {
-      if (capabilities.skillSlotGeometry) {
-        const canvas = parent.ownerDocument.getElementById("canvas");
-        if (!(canvas instanceof HTMLCanvasElement)) {
-          throw new Error("Enhancement skill overlay target is missing");
-        }
-        keyConsumer = createSkillKeyOverlayConsumer(parent, canvas);
-        unsubscribeKeyGeometry = geometry.subscribe(keyConsumer.update);
+      if (!capabilities.skillSlotGeometry || keyConsumer !== null) return;
+      const canvas = parent.ownerDocument.getElementById("canvas");
+      if (!(canvas instanceof HTMLCanvasElement)) {
+        throw new Error("Enhancement skill overlay target is missing");
       }
-      cooldownOverlay.mount(
-        parent,
-        settings.skillCooldownColor,
-        false,
-        geometry.subscribe,
-        cooldowns.subscribe,
-      );
+      keyConsumer = createSkillKeyOverlayConsumer(parent, canvas);
+      unsubscribeKeyGeometry = geometry.subscribe(keyConsumer.update);
+      if (!capabilities.skillCooldownObservation) return;
+      cooldownConsumer = createSkillCooldownOverlayConsumer(parent, canvas);
+      cooldownConsumer.sync(settings.skillCooldownColor, false);
+      unsubscribeCooldownGeometry = geometry.subscribe(cooldownConsumer.update);
+      unsubscribeCooldownState = cooldowns.subscribe(cooldownConsumer.setCooldownState);
     },
-    sync(settings: SkillSettings, geometryEnabled: boolean, cooldownEnabled: boolean) {
-      geometry.setActive(geometryEnabled && (hasKeyBindings(settings) || cooldownEnabled));
-      cooldowns.setActive(cooldownEnabled);
+    sync(settings: SkillSettings, policy: SkillFeaturePolicy) {
+      const geometryActive = policy.skillKeyLabels || policy.skillCooldowns;
+      geometry.setActive(geometryActive);
+      cooldowns.setActive(policy.skillCooldowns);
       keyConsumer?.setBindings(settings.skillKeyBindings);
-      keyConsumer?.setEnabled(geometryEnabled && hasKeyBindings(settings));
-      cooldownOverlay.sync(settings.skillCooldownColor, cooldownEnabled);
-    },
-    activeFeatureFlags(
-      settings: SkillSettings,
-      geometryEnabled: boolean,
-      cooldownEnabled: boolean,
-    ) {
-      return (
+      keyConsumer?.setEnabled(policy.skillKeyLabels);
+      cooldownConsumer?.sync(settings.skillCooldownColor, policy.skillCooldowns);
+      activeFeatureFlags = (
         capabilities.skillSlotGeometry
-          && geometryEnabled
-          && (hasKeyBindings(settings) || cooldownEnabled)
+          && geometryActive
           ? COMPANION_FEATURE_BITS.skillSlotGeometry
           : 0
       ) | (
-        capabilities.skillCooldownObservation && cooldownEnabled
+        capabilities.skillCooldownObservation && policy.skillCooldowns
           ? COMPANION_FEATURE_BITS.skillCooldownObservation
           : 0
       );
     },
     disposePresentation() {
       const failures: unknown[] = [];
-      try { unsubscribeKeyGeometry?.(); } catch (cause) { failures.push(cause); }
+      const attempt = (release: (() => void) | null) => {
+        try { release?.(); } catch (cause) { failures.push(cause); }
+      };
+      const keyToDispose = keyConsumer;
+      const cooldownToDispose = cooldownConsumer;
+      const releases = [
+        unsubscribeKeyGeometry,
+        unsubscribeCooldownGeometry,
+        unsubscribeCooldownState,
+        keyToDispose === null ? null : () => keyToDispose.dispose(),
+        cooldownToDispose === null ? null : () => cooldownToDispose.dispose(),
+      ];
       unsubscribeKeyGeometry = null;
-      try { keyConsumer?.dispose(); } catch (cause) { failures.push(cause); }
+      unsubscribeCooldownGeometry = null;
+      unsubscribeCooldownState = null;
       keyConsumer = null;
-      try { cooldownOverlay.dispose(); } catch (cause) { failures.push(cause); }
+      cooldownConsumer = null;
+      for (const release of releases) attempt(release);
       if (failures.length > 0) {
         throw new AggregateError(failures, "Skill overlay cleanup failed");
       }

@@ -7,7 +7,10 @@ import {
 } from "../../src/renderer/skill-key-overlay.js";
 import { createSkillKeyOverlayConsumer } from "../../src/renderer/skill-key-overlay-consumer.js";
 import { createCompanionSequenceFeed } from "../../src/renderer/companion-sequence-feed.js";
-import type { CompanionSkillSlotState } from "../../src/renderer/companion-skill-snapshot.js";
+import {
+  sameCompanionSkillSlotGeometry,
+  type CompanionSkillSlotState,
+} from "../../src/renderer/companion-skill-snapshot.js";
 
 class FakeElement {
   id = "";
@@ -59,6 +62,7 @@ class FakeElement {
 
 class FakeDocument {
   head: FakeElement;
+  defaultView = new FakeWindow();
 
   constructor() {
     this.head = new FakeElement(this);
@@ -74,6 +78,21 @@ class FakeDocument {
 
   getElementById(id: string) {
     return this.head.children.find((child) => child.id === id) ?? null;
+  }
+}
+
+class FakeWindow {
+  private listeners = new Map<string, Set<() => void>>();
+  addEventListener(type: string, listener: () => void) {
+    const listeners = this.listeners.get(type) ?? new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+  removeEventListener(type: string, listener: () => void) {
+    this.listeners.get(type)?.delete(listener);
+  }
+  dispatch(type: string) {
+    for (const listener of this.listeners.get(type) ?? []) listener();
   }
 }
 
@@ -167,9 +186,15 @@ test("the consumer maps only slot eight's custom C binding", () => {
     body as unknown as HTMLElement,
     canvas,
   );
+  const feed = createCompanionSequenceFeed<CompanionSkillSlotState>(
+    { status: "waiting", reason: "memory" },
+    { status: "waiting", reason: "stale" },
+    { staleAfterMs: null, sameReadyState: sameCompanionSkillSlotGeometry },
+  );
+  const unsubscribe = feed.subscribe(consumer.update);
   consumer.setBindings([null, null, null, null, null, null, null, slots()[0]!.binding]);
   consumer.setEnabled(true);
-  consumer.update({
+  const ready = {
     status: "ready",
     sequence: 2,
     frameId: 1,
@@ -181,29 +206,65 @@ test("the consumer maps only slot eight's custom C binding", () => {
       right: 148 + index * 52,
       top: 68,
     })),
-  });
+  } as const;
+  feed.update(ready);
   const root = body.children[0]!;
   assert.equal(textOf(root.children[0]!.children[0]!.children.at(-1)), "C");
   assert.match(root.children[0]!.style.cssText, /left:474px;top:552px/u);
   assert.match(root.children[1]!.style.cssText, /display:none/u);
   consumer.setEnabled(false);
   assert.equal(root.style.display, "none");
+  feed.update({ ...ready, sequence: 4 });
+  const accepted = feed.state;
+  assert.equal(accepted.status, "ready");
+  if (accepted.status !== "ready") assert.fail("the heartbeat was not accepted");
+  assert.equal(accepted.sequence, 4, "the shared feed accepts the heartbeat");
   consumer.setEnabled(true);
-  assert.equal(root.style.display, "none", "a re-enabled overlay waits for fresh geometry");
+  assert.equal(
+    root.style.display,
+    "block",
+    "re-enabling labels reuses geometry that another skill HUD kept fresh",
+  );
+  unsubscribe();
+  feed.dispose();
+  consumer.dispose();
+});
+
+test("a viewport resize refreshes projected key geometry", () => {
+  const document = new FakeDocument();
+  const body = document.createElement();
+  let width = 800;
+  let reads = 0;
+  const canvas = {
+    getBoundingClientRect: () => {
+      reads += 1;
+      return { left: 0, top: 0, width, height: 600 };
+    },
+  } as HTMLCanvasElement;
+  const consumer = createSkillKeyOverlayConsumer(body as unknown as HTMLElement, canvas);
+  consumer.setBindings([slots()[0]!.binding, null, null, null, null, null, null, null]);
+  consumer.setEnabled(true);
   consumer.update({
     status: "ready",
-    sequence: 4,
+    sequence: 2,
     frameId: 1,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Array.from({ length: 8 }, (_, index) => ({
-      left: 100 + index * 52,
+      left: 100 + index * 50,
       bottom: 20,
-      right: 148 + index * 52,
+      right: 148 + index * 50,
       top: 68,
     })),
   });
-  assert.equal(root.style.display, "block");
+  assert.match(body.children[0]!.children[0]!.style.cssText, /left:100px/u);
+  assert.equal(reads, 1);
+
+  width = 400;
+  document.defaultView.dispatch("resize");
+  assert.match(body.children[0]!.children[0]!.style.cssText, /left:50px/u);
+  assert.equal(reads, 2);
+  consumer.dispose();
 });
 
 test("the consumer withdraws geometry whose publisher stopped advancing", () => {

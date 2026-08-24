@@ -42,10 +42,11 @@ import type {
   ShortcutCaptureResult,
   ShortcutOverrides,
 } from "./keyboard-shortcuts.js";
-import type {
-  SkillKeyBinding,
-  SkillKeyBindings,
-  SkillKeyCaptureResult,
+import {
+  EMPTY_SKILL_KEY_BINDINGS,
+  type SkillKeyBinding,
+  type SkillKeyBindings,
+  type SkillKeyCaptureResult,
 } from "./skill-key-bindings.js";
 import {
   DEFAULT_SKILL_COOLDOWN_COLOR,
@@ -449,7 +450,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   travelShortcuts: DEFAULT_STORED_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
-  skillKeyBindings: [null, null, null, null, null, null, null, null],
+  skillKeyBindings: EMPTY_SKILL_KEY_BINDINGS,
   skillCooldownOverlayEnabled: true,
   skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,

@@ -39,7 +39,7 @@ export function bindSkillCooldownSettings(options: Readonly<{
     input: { kind: "keyboard", code: "KeyC" },
     modifiers: { control: true, option: true, shift: true, command: true },
   });
-  let customValue = "#e35a4f";
+  let customValue = SKILL_COOLDOWN_PRESET_COLORS.red;
 
   const selected = (): SkillCooldownColor | null => {
     const value = choices.find((choice) => choice.checked)?.value;
