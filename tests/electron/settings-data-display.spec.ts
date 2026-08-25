@@ -121,11 +121,7 @@ test.describe("data and display settings", () => {
       expect(interTypography.font).not.toContain("QTFrizQuad");
       expect(interTypography.textShadow).toBe("none");
       expect(interTypography.titleWeight).toBe("700");
-      expect(
-        await page.locator("#settings-dialog").evaluate((element) =>
-          globalThis.getComputedStyle(element)
-            .getPropertyValue("--ui-panel-opacity").trim()),
-      ).toBe("0.65");
+      await expectToken("--ui-panel-opacity", "0.94");
 
       await page.locator('select[name="controllerPromptStyle"]')
         .selectOption("playstation");
