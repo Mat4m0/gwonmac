@@ -199,13 +199,14 @@ export function moduleWithManifest(value: unknown): WebAssembly.Module {
 // otherwise.
 export function fixture(hookParamType = 0x7f): Uint8Array {
   const type = section(1, [
-    6,
+    7,
     0x60, 1, hookParamType, 0,
     0x60, 5, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0,
     0x60, 3, 0x7f, 0x7f, 0x7f, 0,
     0x60, 2, 0x7f, 0x7f, 0,
     0x60, 2, 0x7f, 0x7f, 1, 0x7f,
     0x60, 1, 0x7f, 1, 0x7f,
+    0x60, 0, 1, 0x7f,
   ]);
   const env = [3, 101, 110, 118];
   const imports = section(2, [
@@ -214,10 +215,10 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...env, 1, 99, 0, 1,
     ...env, 1, 117, 0, 2,
   ]);
-  // Fourteen defined functions: three hooks, three commands, the recurring
+  // Sixteen defined functions: three hooks, three commands, the recurring
   // game-thread callback, packet sender, DataWindow, slash parser, and Travel
   // producer, plus three exact-signature Xunlai fact readers.
-  const functions = section(3, [14, 0, 1, 2, 0, 2, 3, 3, 2, 0, 4, 1, 5, 5, 5]);
+  const functions = section(3, [16, 0, 1, 2, 0, 2, 3, 3, 2, 0, 4, 1, 5, 5, 5, 6, 5]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -283,8 +284,9 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
   const dataWindow = [0, 0x20, 0, 0x10, 0, 0x0b];
   const slash = [0, 0x20, 0, 0x10, 0, 0x41, 0, 0x0b];
   const reader = [0, 0x20, 0, 0x0b];
+  const unlockAccessor = [0, 0x41, ...sleb(256), 0x0b];
   const code = section(10, [
-    14,
+    16,
     ...uleb(tick.length), ...tick,
     ...uleb(cursor.length), ...cursor,
     ...uleb(ui.length), ...ui,
@@ -299,11 +301,23 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...uleb(reader.length), ...reader,
     ...uleb(reader.length), ...reader,
     ...uleb(reader.length), ...reader,
+    ...uleb(unlockAccessor.length), ...unlockAccessor,
+    ...uleb(reader.length), ...reader,
+  ]);
+  const unlockData = [
+    0x20, 0x01, 0, 0,
+    28, 0, 0, 0,
+    28, 0, 0, 0,
+    ...Array.from({ length: 28 * 4 }, () => 0xff),
+  ];
+  const data = section(11, [
+    1, 0, 0x41, ...sleb(256), 0x0b,
+    ...uleb(unlockData.length), ...unlockData,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
     ...type, ...imports, ...functions, ...table, ...memory, ...globals, ...exports,
-    ...elements, ...code,
+    ...elements, ...code, ...data,
   ]);
 }
 
@@ -352,6 +366,21 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       configureExport: "enhancement_configure_travel",
       toggleExport: "enhancement_take_travel_toggle",
       messageId: 0x1000_0183,
+      unlockProof: {
+        layout: { worldUnlockedMaps: 0x60c },
+        accessor: {
+          functionIndex: 17,
+          params: [],
+          results: ["i32"],
+          bodySha256: createHash("sha256").update(commandBody(bytes, 14)).digest("hex"),
+        },
+        consumer: {
+          functionIndex: 18,
+          params: ["i32"],
+          results: ["i32"],
+          bodySha256: createHash("sha256").update(commandBody(bytes, 15)).digest("hex"),
+        },
+      },
       producer: {
         functionIndex: 13,
         params: ["i32", "i32", "i32", "i32", "i32"],

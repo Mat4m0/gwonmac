@@ -13,6 +13,10 @@ import {
   travelDestination,
   travelShortcutsFromStored,
 } from "../../src/shared/travel.js";
+import {
+  isTravelMapUnlocked,
+  travelGameState,
+} from "../../src/shared/travel-command.js";
 
 describe("Travel", () => {
   it("contains the complete reviewed direct-travel catalogue", () => {
@@ -66,12 +70,28 @@ describe("Travel", () => {
     assert.equal(searchTravelDestinations("gate", 100).length <= 12, true);
   });
 
+  it("keeps unreadable unlock evidence unknown and tests observed map bits", () => {
+    const unknown = travelGameState({ status: "ready", mapId: 55 });
+    assert.equal(isTravelMapUnlocked(unknown, 81), null);
+
+    const words = Array.from({ length: 28 }, () => 0);
+    words[Math.floor(81 / 32)] = 1 << (81 % 32);
+    const observed = travelGameState({
+      status: "ready",
+      mapId: 55,
+      unlockedMapWords: words,
+    });
+    assert.equal(isTravelMapUnlocked(observed, 81), true);
+    assert.equal(isTravelMapUnlocked(observed, 85), false);
+    assert.equal(isTravelMapUnlocked(observed, 896), false);
+  });
+
   it("keeps the numbered shortcut list bounded and typed", () => {
     const slots = [
-      { mapId: 81 }, null, { mapId: 642 }, null, null, null, null, null, null,
+      { mapId: 81 }, null, { mapId: 642 }, null, null, null, null, null,
     ];
     assert.equal(isTravelShortcuts(slots), true);
-    assert.equal(isTravelShortcuts(Array.from({ length: 10 }, () => ({
+    assert.equal(isTravelShortcuts(Array.from({ length: 9 }, () => ({
       mapId: 81,
     }))), false);
     assert.equal(isTravelShortcuts([{ mapId: 81 }]), false);
@@ -88,12 +108,22 @@ describe("Travel", () => {
     assert.equal(isStoredTravelShortcuts(stored), true);
     const runtime = travelShortcutsFromStored(stored);
     assert.deepEqual(runtime, [
-      { mapId: 55 }, null, null, null, null, null, null, null, null,
+      { mapId: 55 }, null, null, null, null, null, null, null,
     ]);
     assert.deepEqual(storeTravelShortcuts(runtime, stored), [
       { mapId: 55, district: "europe-english", districtNumber: 2 },
-      null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null,
     ]);
+  });
+
+  it("reads a released ninth shortcut without keeping it in the active bar", () => {
+    const released = Array.from({ length: 9 }, (_, index) => index === 8
+      ? { mapId: 449, district: "international" as const, districtNumber: 0 }
+      : null);
+
+    assert.equal(isStoredTravelShortcuts(released), true);
+    assert.equal(travelShortcutsFromStored(released).length, 8);
+    assert.equal(travelShortcutsFromStored(released).some((entry) => entry?.mapId === 449), false);
   });
 
   it("resolves only catalogue map ids", () => {

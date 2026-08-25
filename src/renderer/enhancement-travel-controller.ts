@@ -13,6 +13,7 @@ import {
   type EnhancementTravelConfigure,
   type EnhancementTravelEnqueue,
 } from "./enhancement-travel-command.js";
+import { isTravelMapUnlocked } from "../shared/travel-command.js";
 
 export { TRAVEL_PAYLOAD_BYTES };
 
@@ -45,6 +46,9 @@ function unavailableReason(
       ? "Travel is unavailable while a map is loading"
       : "Travel is waiting for Guild Wars";
   }
+  if (availability.state.unlockedMapWords === null) {
+    return "Travel is waiting for unlocked destinations";
+  }
   return null;
 }
 
@@ -61,7 +65,12 @@ export function createTravelController(
   };
   let configuredEnabled: boolean | null = null;
   const unavailable = () => unavailableReason(active, availability);
-  const command = createTravelCommand(enqueue, unavailable);
+  const command = createTravelCommand(enqueue, unavailable, (mapId) =>
+    availability.state !== null
+      && isTravelMapUnlocked(availability.state, mapId) === true
+      ? null
+      : "This character has not unlocked that destination"
+  );
   const sync = () => {
     const enabled = unavailable() === null;
     if (enabled === configuredEnabled) return;

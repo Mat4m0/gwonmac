@@ -64,6 +64,7 @@ import {
   type TravelUserPreferences,
   type TravelUserPreferencesUpdate,
 } from "./travel.js";
+import type { TravelHistory } from "./travel-history.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -386,7 +387,7 @@ export interface AppSettings {
   xunlaiStorage: boolean;
   /** Allow the focused Travel palette and its explicit map command. */
   travelPalette: boolean;
-  /** Ordered destinations for the palette's direct 1–9 shortcuts. */
+  /** Ordered destinations for the palette's direct 1–8 shortcuts. */
   travelShortcuts: StoredTravelShortcuts;
   /** Experimental live target distance/range readout. */
   targetReadout: boolean;
@@ -908,6 +909,9 @@ export const IPC = {
   traderPriceHistoryGet: "gw:trader:priceHistory:get",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
+  travelHistoryGet: "gw:travelHistory:get",
+  travelHistoryRecord: "gw:travelHistory:record",
+  travelHistoryClear: "gw:travelHistory:clear",
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   skillKeyCapture: "gw:skillKeys:capture",
@@ -1071,6 +1075,11 @@ export interface GwNativeApi {
   travelPreferences: {
     get(): Promise<TravelUserPreferences>;
     set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
+  };
+  travelHistory: {
+    get(): Promise<TravelHistory>;
+    record(mapId: number): Promise<TravelHistory>;
+    clear(): Promise<TravelHistory>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;

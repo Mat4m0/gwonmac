@@ -222,6 +222,9 @@ const INVOCATIONS: Invocation[] = [
     }],
     channel: IPC.traderPriceHistoryGet,
   },
+  { path: "travelHistory.get", args: [], channel: IPC.travelHistoryGet },
+  { path: "travelHistory.record", args: [55], channel: IPC.travelHistoryRecord },
+  { path: "travelHistory.clear", args: [], channel: IPC.travelHistoryClear },
   { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {
     path: "accounts.setup",

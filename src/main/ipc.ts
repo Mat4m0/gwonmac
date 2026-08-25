@@ -49,9 +49,11 @@ import {
 import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
 import {
   parseTravelUserPreferencesUpdate,
+  travelDestination,
   type TravelUserPreferences,
   type TravelUserPreferencesUpdate,
 } from "../shared/travel.js";
+import type { TravelHistory } from "../shared/travel-history.js";
 import type {
   RendererFrameBatch,
   RendererMetrics,
@@ -162,6 +164,9 @@ export interface IpcContext extends TradeIpcContext {
   resetSettings: () => Promise<SettingsResetOutcome>;
   getTravelPreferences: () => Promise<TravelUserPreferences>;
   setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
+  getTravelHistory: () => Promise<TravelHistory>;
+  recordTravelVisit: (mapId: number) => Promise<TravelHistory>;
+  clearTravelHistory: () => Promise<TravelHistory>;
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
@@ -284,6 +289,13 @@ const asFiniteNumber = (what: string) =>
     }
     return value;
   });
+
+const asTravelMapId = one((value: unknown): number => {
+  if (!Number.isSafeInteger(value) || travelDestination(Number(value)) === null) {
+    throw new ValidationError("invalid Travel destination");
+  }
+  return Number(value);
+});
 
 const asSocketPayload: Parser<{ socketId: number; bytes: Uint8Array }> = (args) => {
   exact(args, 2);
@@ -526,6 +538,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
     travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),
     travelPreferencesSet: channel(one(parseTravelUserPreferencesUpdate), (_win, update) =>
       ctx.setTravelPreferences(update)),
+    travelHistoryGet: channel(nothing, () => ctx.getTravelHistory()),
+    travelHistoryRecord: channel(asTravelMapId, (_win, mapId) =>
+      ctx.recordTravelVisit(mapId)),
+    travelHistoryClear: channel(nothing, () => ctx.clearTravelHistory()),
     shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
     shortcutCaptureCancel: channel(nothing, (win) => {
       cancelWindowShortcutCapture(win);

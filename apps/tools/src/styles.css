@@ -9,11 +9,11 @@
  * remains available in the same frame without becoming the default view. */
 .travel-palette {
   position: fixed;
-  top: clamp(96px, 11vh, 132px);
+  top: clamp(160px, 23vh, 280px);
   left: 50%;
   display: flex;
   width: min(610px, calc(100vw - 48px));
-  max-height: min(620px, calc(100vh - 56px));
+  max-height: min(620px, calc(77vh - 24px));
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
@@ -159,26 +159,132 @@
 
 .travel-favorite-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--ui-space-2);
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: var(--ui-space-1);
+  padding: 2px;
 }
 
 .travel-favorite {
+  position: relative;
+  width: 100%;
+  height: 52px;
   min-width: 0;
-  min-height: 52px;
-  padding: var(--ui-space-2);
+  aspect-ratio: auto;
+  container-type: inline-size;
+  padding: var(--ui-space-1);
+  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  color: var(--ui-text-bright);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.travel-favorite:hover:not(:disabled) { background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box; filter: brightness(1.12); }
+.travel-favorite:active:not(:disabled) { filter: brightness(0.86); }
+.travel-favorite b {
+  position: absolute;
+  z-index: var(--ui-z-status);
+  right: 2px;
+  bottom: 2px;
+  display: grid;
+  min-width: clamp(15px, 25cqi, 18px);
+  height: clamp(14px, 23cqi, 17px);
+  padding-inline: 3px;
+  place-items: center;
+  border: 1px solid var(--ui-edge-strong);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-outline);
+  color: var(--ui-text-bright);
+  font: 700 clamp(9px, 15cqi, 10px) / 1 var(--ui-font-mono);
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--ui-shadow-inset);
+}
+.travel-favorite span {
+  position: relative;
+  z-index: var(--ui-z-readout);
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ui-text-bright);
+  font-size: clamp(11px, 20cqi, var(--ui-font-size));
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-shadow: var(--ui-text-shadow);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.travel-back {
+  display: grid;
+  min-width: 0;
+  min-height: 44px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-1) var(--ui-space-2);
+  border: 1px solid var(--ui-line-soft);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  color: var(--ui-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: filter var(--ui-duration) var(--ui-ease-out), transform 60ms linear;
+}
+
+.travel-back > svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.travel-back strong,
+.travel-back small { display: block; }
+.travel-back strong { overflow: hidden; color: var(--ui-text-bright); text-overflow: ellipsis; white-space: nowrap; }
+.travel-back small { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); line-height: 1.1; }
+.travel-back:hover:not(:disabled) { background: var(--ui-hover); }
+.travel-back:active:not(:disabled) { transform: translateY(1px); filter: brightness(0.86); }
+
+.travel-recent-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ui-space-1) var(--ui-space-2);
+}
+
+.travel-recent {
+  display: grid;
+  min-width: 0;
+  min-height: 42px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-1) var(--ui-space-2);
   border: 1px solid var(--ui-line-soft);
   border-radius: var(--ui-radius-sm);
   background: var(--ui-well-fill);
   color: var(--ui-text);
   font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
-.travel-favorite:hover:not(:disabled) { background: var(--ui-hover); }
-.travel-favorite:active:not(:disabled) { filter: brightness(0.86); }
-.travel-favorite b { display: block; color: var(--ui-accent-ink); font-variant-numeric: tabular-nums; }
-.travel-favorite span { display: block; margin-top: 3px; overflow: hidden; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.travel-recent:hover:not(:disabled) { background: var(--ui-hover); }
+.travel-recent:active:not(:disabled) { filter: brightness(0.86); }
+.travel-recent strong,
+.travel-recent small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.travel-recent strong { color: var(--ui-text-bright); }
+.travel-recent small { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
+.travel-recent svg { width: 16px; height: 16px; fill: none; stroke: var(--ui-text-muted); stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
+
+.travel-back:focus-visible,
+.travel-recent:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
 
 .travel-result {
   display: grid;
@@ -236,13 +342,14 @@
 
 .travel-customize-shortcuts {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: var(--ui-space-1);
 }
 
 .travel-customize-shortcuts .travel-favorite {
-  min-height: 46px;
-  padding: var(--ui-space-1) 2px;
+  width: 100%;
+  min-height: 0;
+  padding: var(--ui-space-1);
 }
 
 .travel-customize-shortcuts .travel-favorite span {
@@ -251,7 +358,6 @@
   white-space: nowrap;
 }
 
-.travel-customize-shortcuts .travel-favorite[data-empty="true"] { border-style: dashed; }
 .travel-customize-shortcuts .travel-favorite[aria-pressed="true"] { background: var(--ui-hover); box-shadow: var(--ui-shadow-selected); }
 
 .travel-shortcut-editor {
@@ -308,6 +414,19 @@
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
 }
+
+.travel-history-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+}
+
+.travel-history-settings > span { min-width: 0; }
+.travel-history-settings strong,
+.travel-history-settings small { display: block; }
+.travel-history-settings strong { color: var(--ui-text-bright); }
+.travel-history-settings small { margin-top: 2px; color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
 
 .travel-destination-picker {
   position: relative;
@@ -410,11 +529,13 @@
   .travel-mode,
   .travel-notice { margin-inline: var(--ui-space-3); }
   .travel-body { padding: var(--ui-space-3); }
-  .travel-favorite-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .travel-customize-shortcuts { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .travel-favorite-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .travel-recent-list { grid-template-columns: 1fr; }
+  .travel-customize-shortcuts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .travel-phrase-row,
   .travel-add-phrase { grid-template-columns: 1fr; }
   .travel-footer { align-items: flex-start; flex-direction: column; }
+  .travel-history-settings { align-items: stretch; flex-direction: column; }
   .travel-key-hints { justify-content: flex-start; }
 }
 

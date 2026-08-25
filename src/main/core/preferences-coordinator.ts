@@ -27,10 +27,17 @@ import {
   loadTravelPreferences,
   updateTravelPreferences,
 } from "./travel-preferences.js";
+import {
+  clearTravelHistory,
+  loadTravelHistory,
+  recordTravelVisit,
+} from "./travel-history.js";
+import type { TravelHistory } from "../../shared/travel-history.js";
 
 export type PreferencesPaths = Readonly<{
   settings: string;
   travelPreferences: string;
+  travelHistory: string;
 }>;
 
 function composeTravelPreferences(
@@ -243,6 +250,42 @@ export class PreferencesCoordinator {
           throw unconfirmedTravelWrite(error);
         }
         throw error;
+      }
+    });
+  }
+
+  getTravelHistory(): Promise<TravelHistory> {
+    return this.#lock.run(() => loadTravelHistory(this.#paths().travelHistory));
+  }
+
+  recordTravelVisit(mapId: number): Promise<TravelHistory> {
+    return this.#lock.run(async () => {
+      const path = this.#paths().travelHistory;
+      try {
+        return await recordTravelVisit(path, mapId);
+      } catch (error) {
+        if (!(error instanceof AtomicPublicationUnconfirmedError)) throw error;
+        // History is derived convenience data. Return the active bounded file
+        // after an ambiguous fsync instead of turning a successful map arrival
+        // into a player-facing Travel failure.
+        return loadTravelHistory(path);
+      }
+    });
+  }
+
+  clearTravelHistory(): Promise<TravelHistory> {
+    return this.#lock.run(async () => {
+      const path = this.#paths().travelHistory;
+      try {
+        return await clearTravelHistory(path);
+      } catch (error) {
+        if (!(error instanceof AtomicPublicationUnconfirmedError)) throw error;
+        const active = await loadTravelHistory(path);
+        if (active.length === 0) return active;
+        throw new Error(
+          "Travel history may not have been cleared; reload before retrying.",
+          { cause: error },
+        );
       }
     });
   }

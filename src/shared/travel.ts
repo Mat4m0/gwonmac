@@ -18,7 +18,8 @@ export {
   type TravelDestination,
 } from "./travel-destinations.js";
 
-export const TRAVEL_SHORTCUT_LIMIT = 9;
+export const TRAVEL_SHORTCUT_LIMIT = 8;
+const RELEASED_STORED_TRAVEL_SHORTCUT_LIMIT = 9;
 export * from "./travel-preferences.js";
 export * from "./travel-search.js";
 
@@ -84,7 +85,7 @@ export type TravelShortcut = TravelRequest | null;
 export type TravelShortcuts = readonly [
   TravelShortcut, TravelShortcut, TravelShortcut,
   TravelShortcut, TravelShortcut, TravelShortcut,
-  TravelShortcut, TravelShortcut, TravelShortcut,
+  TravelShortcut, TravelShortcut,
 ];
 
 /** The one renderer-facing view composed from both rollback-safe files. */
@@ -107,13 +108,13 @@ export type TravelUserPreferencesUpdate = Readonly<{
 }>;
 
 export const EMPTY_TRAVEL_SHORTCUTS: TravelShortcuts = Object.freeze([
-  null, null, null, null, null, null, null, null, null,
+  null, null, null, null, null, null, null, null,
 ]);
 
 export const DEFAULT_TRAVEL_SHORTCUTS: TravelShortcuts = Object.freeze([
   { mapId: 81 }, { mapId: 55 }, { mapId: 449 },
   { mapId: 194 }, { mapId: 642 }, { mapId: 857 },
-  null, null, null,
+  null, null,
 ]);
 
 export function isTravelRequest(value: unknown): value is TravelRequest {
@@ -205,7 +206,7 @@ export function sameTravelUserPreferences(
 
 export function isStoredTravelShortcuts(value: unknown): value is StoredTravelShortcuts {
   return Array.isArray(value)
-    && value.length <= TRAVEL_SHORTCUT_LIMIT
+    && value.length <= RELEASED_STORED_TRAVEL_SHORTCUT_LIMIT
     && value.every((entry) => {
       if (entry === null) return true;
       if (typeof entry !== "object" || Array.isArray(entry)) return false;
@@ -251,7 +252,7 @@ export function replaceTravelShortcut(
   replacement: TravelShortcut,
 ): TravelShortcuts {
   if (!Number.isInteger(slot) || slot < 0 || slot >= TRAVEL_SHORTCUT_LIMIT) {
-    throw new RangeError(`Travel shortcut slot ${slot} is outside 0–8`);
+    throw new RangeError(`Travel shortcut slot ${slot} is outside 0–7`);
   }
   const next: [...TravelShortcuts] = [...shortcuts];
   next[slot] = replacement;

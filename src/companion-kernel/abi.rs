@@ -15,7 +15,7 @@ use core::mem::size_of;
 pub(crate) const SNAPSHOT_BYTES: u32 = size_of::<Snapshot>() as u32;
 pub(crate) const CONFIG_BYTES: u32 = size_of::<Layout>() as u32;
 pub(crate) const MAGIC: u32 = 0x4254_5747;
-pub(crate) const ABI_AND_SIZE: u32 = (SNAPSHOT_BYTES << 16) | 3;
+pub(crate) const ABI_AND_SIZE: u32 = (SNAPSHOT_BYTES << 16) | 4;
 
 pub(crate) const FLAG_READY: u32 = 1 << 0;
 pub(crate) const FLAG_PLAYER_VALID: u32 = 1 << 1;
@@ -25,6 +25,8 @@ pub(crate) const FLAG_LOADING: u32 = 1 << 3;
 pub(crate) const FLAG_XUNLAI_ACCESS_OBSERVED: u32 = 1 << 4;
 /// Storage access is positively allowed. Meaningful only with the observed bit.
 pub(crate) const FLAG_XUNLAI_ACCESS_ALLOWED: u32 = 1 << 5;
+/// The current character's complete, bounded map-unlock bitset was read.
+pub(crate) const FLAG_TRAVEL_UNLOCKS_OBSERVED: u32 = 1 << 6;
 
 pub(crate) const FEATURE_NATIVE_CURSOR: u32 = 1 << 0;
 pub(crate) const FEATURE_GAME_SNAPSHOT: u32 = 1 << 1;
@@ -125,6 +127,8 @@ pub(crate) const SKILL_SLOTS: usize = 8;
 /// The official client currently publishes 70 words, covering skill ids
 /// 0..2239. A fixed bound keeps account data finite and the wire shape closed.
 pub(crate) const SKILL_UNLOCK_WORDS: usize = 70;
+/// Covers map ids 0..895, including every reviewed Quick Travel destination.
+pub(crate) const TRAVEL_UNLOCK_WORDS: usize = 28;
 
 /// The highest attribute id the client defines. The array is walked to here
 /// and no further: the reference struct pads to 54 entries and indices 51-53
@@ -271,6 +275,7 @@ pub(crate) struct Layout {
     pub(crate) frame_state: u32,
     // Appended exact-client field used only by cooldown observation.
     pub(crate) skill_slot_recharge: u32,
+    pub(crate) world_unlocked_maps: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -377,6 +382,7 @@ impl Layout {
         frame_relation: 0,
         frame_state: 0,
         skill_slot_recharge: 0,
+        world_unlocked_maps: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -404,6 +410,7 @@ pub(crate) struct Snapshot {
     pub(crate) target_y: f32,
     pub(crate) distance: f32,
     pub(crate) range_band: u32,
+    pub(crate) unlocked_maps: [u32; TRAVEL_UNLOCK_WORDS],
 }
 
 #[repr(C)]
@@ -544,10 +551,10 @@ pub(crate) struct PartySnapshot {
     pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 444] = [(); size_of::<Layout>()];
+const _: [(); 448] = [(); size_of::<Layout>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
 const _: [(); 1560] = [(); size_of::<PartySnapshot>()];
-const _: [(); 64] = [(); size_of::<Snapshot>()];
+const _: [(); 176] = [(); size_of::<Snapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
 const _: [(); 16] = [(); size_of::<SkillSlotRect>()];

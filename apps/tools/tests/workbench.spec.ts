@@ -50,15 +50,23 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   await expect(palette).toBeVisible();
   await expect(palette.locator('label[for="travel-search-input"] > span')).toHaveCount(0);
   await expect(palette.getByRole("status")).toHaveCount(0);
-  await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(95);
+  await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(160);
+  await expect(palette.getByRole("button", {
+    name: "Back to Kamadan, Jewel of Istan",
+  })).toBeVisible();
+  await expect(palette.locator(".travel-recent")).toHaveCount(3);
   await page.getByRole("combobox", { name: "Destination or search phrase" }).fill("kama");
   await expect(page.getByRole("option", { name: /Kamadan, Jewel of Istan/ })).toBeVisible();
-  await page.keyboard.press("Meta+9");
-  await expect(page.getByRole("status")).toContainText("shortcut 9");
+  await page.keyboard.press("Meta+8");
+  await expect(page.getByRole("status")).toContainText("shortcut 8");
   await page.getByRole("combobox", { name: "Destination or search phrase" }).fill("");
   await expect(page.getByRole("button", {
-    name: /Travel to Kamadan, Jewel of Istan, shortcut 9/,
+    name: /Travel to Kamadan, Jewel of Istan, shortcut 8/,
   })).toBeVisible();
+  await page.getByRole("tab", { name: "Customize" }).click();
+  await expect(palette.getByText("5 locally stored")).toBeVisible();
+  await palette.getByRole("button", { name: "Clear history" }).click();
+  await expect(palette.getByText("No destinations stored yet")).toBeVisible();
 });
 
 test("keeps map-only Travel controls and status visible in a short window", async ({ page }) => {
@@ -73,13 +81,13 @@ test("keeps map-only Travel controls and status visible in a short window", asyn
   await expect(page.getByRole("spinbutton", { name: "District number" })).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Customize" })).toBeVisible();
   const grid = page.locator(".travel-favorite-grid");
-  await expect(grid.locator(".travel-favorite")).toHaveCount(6);
+  await expect(grid.locator(".travel-favorite")).toHaveCount(8);
   await expect.poll(() => grid.evaluate((element) =>
     getComputedStyle(element).gridTemplateColumns.split(" ").length
-  )).toBe(3);
+  )).toBe(4);
 
   await page.getByRole("tab", { name: "Customize" }).click();
-  await expect(page.locator(".travel-customize-shortcuts .travel-favorite")).toHaveCount(9);
+  await expect(page.locator(".travel-customize-shortcuts .travel-favorite")).toHaveCount(8);
 });
 
 test("manages teams and finds builds without Electron or the game", async ({ page }) => {
