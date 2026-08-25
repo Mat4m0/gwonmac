@@ -743,7 +743,7 @@
   flex-direction: column;
   padding: var(--ui-space-2) 0;
   border-right: 1px solid var(--ui-line-soft);
-  background: var(--ui-well-fill);
+  background: var(--ui-region-fill);
 }
 
 /* A fixed 1px marker, deliberately not `--ui-border-width`: that preference is

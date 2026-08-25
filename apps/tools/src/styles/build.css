@@ -151,7 +151,7 @@
   min-height: 0;
   overflow: clip;
   border-radius: var(--ui-radius-sm);
-  background: var(--ui-well-fill);
+  background: var(--ui-region-fill);
   box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
 }
 

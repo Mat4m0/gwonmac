@@ -4,7 +4,7 @@
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--ui-radius-sm);
-  background: var(--ui-well-fill);
+  background: var(--ui-region-fill);
   box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
 }
 
@@ -13,7 +13,7 @@
   gap: var(--ui-space-2);
   padding: var(--ui-space-3);
   border-bottom: 1px solid var(--ui-line-soft);
-  background: color-mix(in srgb, var(--ui-well-fill) 72%, transparent);
+  background: color-mix(in srgb, var(--ui-hover) 36%, transparent);
 }
 
 .create-actions {

@@ -124,7 +124,12 @@
 
   /* Surfaces. */
   --ui-panel-opacity: 0.94;
-  --ui-panel-fill: rgb(var(--gw-panel-rgb) / var(--ui-panel-opacity));
+  --ui-effective-panel-opacity: var(--ui-panel-opacity);
+  --ui-panel-fill: rgb(var(--gw-panel-rgb) / var(--ui-effective-panel-opacity));
+  /* Primary layout regions sit inside an already-painted panel. Giving them
+   * another translucent black fill compounds opacity and makes the slider lie.
+   * Controls and true recesses keep using --ui-well-fill. */
+  --ui-region-fill: transparent;
   --ui-raised-fill: var(--gw-face-graphite);
   --ui-well: #090907;
   --ui-well-fill: var(--gw-sunk);
@@ -155,7 +160,7 @@
   --ui-ring-empty: linear-gradient(180deg, rgb(217 210 192 / 24%), rgb(0 0 0 / 50%));
   --ui-ring-mark: linear-gradient(180deg, rgb(255 255 255 / 50%), rgb(0 0 0 / 60%));
   --ui-row-fill: linear-gradient(180deg, rgb(255 255 255 / 4%), rgb(0 0 0 / 20%));
-  --ui-title-fill: linear-gradient(180deg, #5d5b54 0%, #434139 26%, #2b2a24 62%, #201f1a 88%, #403e37 100%);
+  --ui-title-fill: linear-gradient(180deg, rgb(244 239 226 / 12%), rgb(0 0 0 / 16%));
   --ui-title-shadow: 0 2px 6px rgb(0 0 0 / 72%), inset 0 0 0 1px rgb(0 0 0 / 45%);
   --ui-corner-swell: radial-gradient(58px 58px at 0 0, #fffdf6 22%, rgb(255 253 246 / 55%) 50%, transparent 78%), radial-gradient(58px 58px at 100% 0, #fffdf6 22%, rgb(255 253 246 / 55%) 50%, transparent 78%), radial-gradient(58px 58px at 0 100%, #f2ece0 22%, rgb(242 236 224 / 55%) 50%, transparent 78%), radial-gradient(58px 58px at 100% 100%, #f2ece0 22%, rgb(242 236 224 / 55%) 50%, transparent 78%);
   --ui-corner-shadow: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
@@ -249,7 +254,7 @@
   --ui-danger: oklch(0.71 0.17 27);
   --ui-success: oklch(0.74 0.12 145);
 
-  --ui-panel-fill: oklch(0.16 0.006 80 / var(--ui-panel-opacity));
+  --ui-panel-fill: oklch(0.16 0.006 80 / var(--ui-effective-panel-opacity));
   --ui-raised-fill: linear-gradient(oklch(0.24 0.009 78), oklch(0.24 0.009 78));
   --ui-well: oklch(0.105 0.004 80);
   --ui-well-fill: oklch(0.105 0.004 80 / 0.78);
@@ -279,7 +284,7 @@
   --ui-ring-empty: transparent;
   --ui-ring-mark: transparent;
   --ui-row-fill: linear-gradient(oklch(0.21 0.006 78 / 0.72), oklch(0.21 0.006 78 / 0.72));
-  --ui-title-fill: linear-gradient(oklch(0.2 0.008 78), oklch(0.2 0.008 78));
+  --ui-title-fill: linear-gradient(oklch(1 0 0 / 0.04), oklch(0 0 0 / 0.08));
   --ui-title-shadow: none;
   --ui-corner-swell: transparent;
   --ui-corner-shadow: none;
@@ -289,6 +294,12 @@
   --ui-scroll-track-shadow: none;
   --ui-scroll-thumb: oklch(0.42 0.018 78);
   --ui-accent-fill: linear-gradient(oklch(0.27 0.02 78), oklch(0.27 0.02 78));
+}
+
+/* Accessibility changes the rendered material, never the player's saved
+ * preference. Returning to the ordinary system setting restores their value. */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --ui-effective-panel-opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
