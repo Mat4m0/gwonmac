@@ -102,6 +102,9 @@ importers:
 
   apps/tools:
     dependencies:
+      reka-ui:
+        specifier: ^2.10.1
+        version: 2.10.1(vue@3.5.40(typescript@5.9.3))
       vue:
         specifier: ^3.5.40
         version: 3.5.40(typescript@5.9.3)

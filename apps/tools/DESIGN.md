@@ -5,12 +5,16 @@ dialogs, lists, and skill bars use one component system.
 
 ## Visual styles
 
-The system has two styles:
+The system has two built-in styles and one saved custom palette:
 
 - **Guild Wars** is the default. It uses ivory metal, parchment text,
   blue-black primary controls, graphite secondary controls, and gilt accents.
-- **Obsidian** uses warm-black layers, system sans-serif text, muted gilt
+- **Modern** uses flat warm-black layers, quiet one-pixel borders, muted gilt
   accents, and limited shadow.
+- **Custom** derives the complete system from a material style and semantic
+  window, title bar, raised surface, recess, selection, accent, text, muted
+  text, and border colours. Warning, danger, success, and profession colours
+  keep their fixed meaning.
 
 Both styles use the same information hierarchy, components, layout, and
 behavior. Profession colors keep their game meaning in both styles. Do not add
@@ -30,11 +34,33 @@ renderer.
 Consumer stylesheets own layout. They must not define a second color, material,
 corner, or layer system.
 
+## Token hierarchy
+
+Tokens have three layers and CSS variables are the only runtime source of
+truth:
+
+1. **Foundation** owns the 4px spacing ramp, fixed type roles, 34px ordinary
+   controls, 30px dense-row controls, radii, motion, shadows, and z-index.
+2. **Semantic** owns paired surface/foreground roles, text roles, borders,
+   selection, hover, pressed, focus, commands, feedback, and profession data.
+3. **Material** projects Classic or Modern paint, edge construction, radius,
+   and shadow onto those semantic roles. Material never changes layout,
+   density, typography, or behavior.
+
+The four typography roles are Display for identity, Interface for labels and
+controls, Reading for prose and messages, and Data for codes, shortcuts,
+timestamps, and counts. Guild Wars Original deliberately falls back to the
+readable sans face for Reading. Data always uses the monospace stack.
+
 ## Component rules
 
 - Use `.ui-frame` for a framed panel.
 - Use `.ui-well` for a recessed content surface.
 - Use `.ui-raised` for a pressable raised surface.
+- Do not add a generic Card. Panes, sidebars, toolbars, and sections are
+  transparent structural regions. Collections use flat rows. Repeated values
+  use a ledger. Tiles are reserved for spatial commands such as Travel
+  shortcuts and skill slots.
 - Combine `.ui-panel-head` with `.ui-window-head` for floating windows that
   carry a title and supporting line. The shared primitive owns normal and
   constrained-viewport padding; feature styles must not retune it.
@@ -45,10 +71,33 @@ corner, or layer system.
 - Give each interactive control visible hover, focus, active, selected,
   and disabled states.
 - Use the bright focus token. Focus must remain visible over game artwork.
+- Vue feature code imports complex behavior through `src/ui`, never from Reka
+  directly. Tabs and modal dialogs currently use these thin wrappers. Native
+  buttons, fields, checks, ranges, and simple selects stay native.
 
-The saved interface style is `guild-wars` or `obsidian`. Panel opacity is from
-65% through 100%. These preferences must not change component markup, layout
-density, or behavior.
+### Control states
+
+- A default button is a routine command such as Export, Copy, Open, or Browse.
+- A primary button is the single completion action for the current scope, such
+  as Save changes, Apply team, Search, or the confirming action in a dialog.
+- Selected and pressed are persistent states. They use `aria-selected` or
+  `aria-pressed`; do not simulate them with the primary variant.
+- Focus is keyboard position, not selection. It uses the focus ring only.
+- Danger is reserved for destructive actions and always names the consequence.
+- Classic gold is an inset selection marker or ornament, never the full
+  perimeter of a routine command. Focus has a separate two-pixel perimeter and
+  dark halo. It never reuses selection paint.
+- Hover is temporary tone, pressed is temporary depth/displacement, navigation
+  selection uses a leading rail or underline, and content selection includes a
+  persistent text or icon marker. Selected + hover has its own stronger tone.
+- Quiet controls are transparent at rest. They gain a surface only on hover or
+  focus.
+
+The saved interface style is `guild-wars`, `obsidian`, or `custom`. Font and
+panel opacity remain independent. Panel opacity is from 65% through 100%.
+These preferences must not change component markup, layout density, or
+behavior. Every player-facing Settings and Tools stylesheet consumes the
+shared tokens; local palette literals are not allowed.
 
 ## Window and interaction rules
 

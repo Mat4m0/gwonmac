@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {
   appearanceVariables,
   applyAppearance,
+  contrastRatio,
+  readableForeground,
+  readableSharedForeground,
 } from "../../src/renderer/appearance.js";
 import {
   DEFAULT_SETTINGS,
@@ -28,6 +31,7 @@ describe("appearance settings", () => {
         setProperty(name: string, value: string) {
           properties.set(name, value);
         },
+        removeProperty(name: string) { properties.delete(name); },
       },
     } as HTMLElement;
 
@@ -43,6 +47,43 @@ describe("appearance settings", () => {
     applyAppearance(DEFAULT_SETTINGS, root);
     assert.equal(root.dataset.uiStyle, undefined);
     assert.equal(root.dataset.uiFont, undefined);
+  });
+
+  it("derives readable custom tokens and removes them when switching away", () => {
+    const properties = new Map<string, string>();
+    const root = {
+      dataset: {} as DOMStringMap,
+      style: {
+        setProperty(name: string, value: string) { properties.set(name, value); },
+        removeProperty(name: string) { properties.delete(name); },
+      },
+    } as HTMLElement;
+    applyAppearance({ ...DEFAULT_SETTINGS, uiStyle: "custom" }, root);
+    assert.equal(root.dataset.uiStyle, undefined);
+    assert.equal(properties.get("--ui-custom-window"), "#0B0B0B");
+    assert.equal(properties.get("--ui-custom-window-rgb"), "11 11 11");
+    assert.equal(properties.get("--ui-custom-titlebar"), "#292927");
+    assert.equal(properties.get("--ui-custom-surface"), "#202225");
+    assert.equal(root.dataset.uiMaterial, undefined);
+    assert.equal(properties.get("--ui-custom-accent-ink"), "#171613");
+    assert.ok(contrastRatio("#0B0B0B", readableForeground("#0B0B0B")) >= 4.5);
+    assert.equal(readableForeground("#FFFFFF"), "#171613");
+    const shared = readableSharedForeground(["#000000", "#FFFFFF"]);
+    assert.ok(contrastRatio("#000000", shared) >= 4.5);
+    assert.ok(contrastRatio("#FFFFFF", shared) >= 4.5);
+
+    applyAppearance({
+      ...DEFAULT_SETTINGS,
+      uiStyle: "custom",
+      uiCustomTheme: { ...DEFAULT_SETTINGS.uiCustomTheme, accent: "#E6C883" },
+    }, root);
+    assert.equal(root.dataset.uiStyle, "custom");
+    assert.equal(root.dataset.uiMaterial, "classic");
+
+    applyAppearance({ ...DEFAULT_SETTINGS, uiStyle: "obsidian" }, root);
+    assert.equal(root.dataset.uiStyle, "obsidian");
+    assert.equal(root.dataset.uiMaterial, undefined);
+    assert.equal(properties.has("--ui-custom-window"), false);
   });
 
   it("activates a generation-keyed game font only after it loads", async () => {
@@ -69,8 +110,9 @@ describe("appearance settings", () => {
             void name;
             void value;
           },
+          removeProperty() { return ""; },
         },
-      } as HTMLElement;
+      } as unknown as HTMLElement;
       applyAppearance(DEFAULT_SETTINGS, root, "generation-a");
       assert.equal(root.dataset.uiFont, undefined);
       await new Promise<void>((resolve) => setImmediate(resolve));

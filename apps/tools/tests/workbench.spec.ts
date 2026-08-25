@@ -582,6 +582,48 @@ test("projects Obsidian through the shared system without layout drift", async (
   await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
 });
 
+test("projects a custom palette through the shared system without layout drift", async ({ page }) => {
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    root.dataset.uiStyle = "custom";
+    root.dataset.uiMaterial = "modern";
+    const variables = {
+      "--ui-custom-window": "#F4F4F4",
+      "--ui-custom-window-rgb": "244 244 244",
+      "--ui-custom-titlebar": "#FFFFFF",
+      "--ui-custom-surface": "#FFFFFF",
+      "--ui-custom-recessed": "#E5E7EB",
+      "--ui-custom-selected": "#123456",
+      "--ui-custom-accent": "#22C55E",
+      "--ui-custom-text": "#171717",
+      "--ui-custom-muted-text": "#666666",
+      "--ui-custom-border": "#D4D4D4",
+      "--ui-custom-selected-ink": "#F7F3E8",
+      "--ui-custom-title-fill": "linear-gradient(#FFFFFF, #FFFFFF)",
+      "--ui-panel-opacity": "0.65",
+    };
+    for (const [name, value] of Object.entries(variables)) {
+      root.style.setProperty(name, value);
+    }
+  });
+  await page.setViewportSize({ width: 360, height: 800 });
+  await openBuild(page);
+
+  const appearance = await page.evaluate(() => {
+    const primary = document.querySelector<HTMLElement>('.ui-button[data-variant="primary"]');
+    if (!primary || !document.scrollingElement) throw new Error("custom fixture is incomplete");
+    return {
+      selectedColor: getComputedStyle(primary).color,
+      selectedFill: getComputedStyle(primary).backgroundImage,
+      overflow: document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth,
+    };
+  });
+  expect(appearance.selectedColor).toBe("rgb(247, 243, 232)");
+  expect(appearance.selectedFill).not.toBe("none");
+  expect(appearance.overflow).toBeLessThanOrEqual(1);
+  await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
+});
+
 test("keeps critical team and skill feedback legible", async ({ page }) => {
   const contrast = async (selector: string) => page.locator(selector).first().evaluate((element) => {
     type Colour = [number, number, number, number];

@@ -13,6 +13,7 @@ import { mountTradeChat } from "./trade-mount";
 
 const target = document.getElementById("app");
 if (!target) throw new Error("Tools workbench mount is missing");
+document.body.dataset.toolsStandalone = "true";
 
 const params = new URLSearchParams(window.location.search);
 if (params.has("trade")) {

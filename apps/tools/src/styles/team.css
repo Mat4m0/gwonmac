@@ -6,7 +6,7 @@
   display: grid;
   margin: 0;
   padding: 0;
-  gap: var(--ui-space-1);
+  gap: 0;
   list-style: none;
 }
 
@@ -19,19 +19,17 @@
   align-items: start;
   gap: var(--ui-space-2);
   border: 1px solid transparent;
-  border-radius: var(--ui-radius-sm);
-  background: var(--ui-row-fill) padding-box, var(--ui-ring-quiet) border-box;
-  transition: background-color var(--ui-duration) var(--ui-ease-out),
-    filter var(--ui-duration) var(--ui-ease-out),
-    opacity var(--ui-duration) var(--ui-ease-out),
+  border-bottom-color: var(--ui-line-soft);
+  border-radius: 0;
+  background: transparent;
+  transition: opacity var(--ui-duration) var(--ui-ease-out),
     transform var(--ui-duration) var(--ui-ease-out);
 }
 
-.team-slots > li:hover { filter: brightness(1.12); }
+.team-slots > li:hover { background: var(--ui-hover); }
 .team-slots > li[data-invalid] {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--ui-danger) 10%, transparent) padding-box,
-    linear-gradient(var(--ui-danger), var(--ui-outline)) border-box;
+  border-left-color: var(--ui-danger);
+  background: color-mix(in srgb, var(--ui-danger) 10%, transparent);
 }
 .team-slot--empty { opacity: 0.72; }
 
@@ -47,9 +45,7 @@
   transform: scale(0.992);
 }
 .team-slots > li.team-slot--drop-target {
-  background: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-row-fill)) padding-box,
-    var(--ui-accent) border-box;
-  filter: brightness(1.14);
+  background: var(--ui-selection-hover-fill);
 }
 
 .team-slots > li.team-slot--drop-target::before {

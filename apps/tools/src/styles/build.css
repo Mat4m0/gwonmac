@@ -150,9 +150,9 @@
   min-width: 0;
   min-height: 0;
   overflow: clip;
-  border-radius: var(--ui-radius-sm);
+  border-radius: 0;
   background: var(--ui-region-fill);
-  box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
+  box-shadow: none;
 }
 
 .detail-view {
@@ -169,7 +169,7 @@
 .detail-header {
   padding: var(--ui-space-3) var(--ui-space-4);
   border-bottom: 1px solid var(--ui-line-soft);
-  background: var(--ui-raised-fill);
+  background: var(--ui-region-fill);
 }
 
 .detail-title-line {
@@ -270,7 +270,7 @@
 
 .authoring-header {
   padding-bottom: 0;
-  background: color-mix(in srgb, var(--ui-raised-fill) 94%, var(--ui-panel-fill));
+  background: var(--ui-region-fill);
 }
 
 .authoring-tabs {
@@ -310,7 +310,7 @@
   flex: 1;
   padding: var(--ui-space-4);
   overflow: auto;
-  background: color-mix(in srgb, var(--ui-panel-fill) 94%, var(--ui-outline));
+  background: var(--ui-region-fill);
 }
 
 .authoring-bar-section {
@@ -319,8 +319,8 @@
   top: calc(var(--ui-space-4) * -1);
   margin: calc(var(--ui-space-4) * -1) calc(var(--ui-space-4) * -1) 0;
   padding: var(--ui-space-4);
-  border-bottom: 1px solid var(--ui-line);
-  background: color-mix(in srgb, var(--ui-panel-fill) 97%, var(--ui-outline));
+  border-bottom: 1px solid var(--ui-line-soft);
+  background: var(--ui-panel-fill);
 }
 
 .workspace-heading {
@@ -589,8 +589,8 @@
 .action-row { justify-content: flex-end; }
 
 .detail-actions {
-  min-height: 52px;
-  padding: var(--ui-space-2) var(--ui-space-4);
+  min-height: 44px;
+  padding: var(--ui-space-1) var(--ui-space-3);
   border-top: 1px solid var(--ui-line-soft);
   background: var(--ui-raised-fill);
 }

@@ -35,21 +35,41 @@ const OPACITIES = [
   { name: "default", value: 0.94 },
   { name: "opaque", value: 1 },
 ];
-/** @type {Array<"guild-wars" | "obsidian">} */
-const STYLES = ["guild-wars", "obsidian"];
+/** @type {Array<"guild-wars" | "obsidian" | "custom">} */
+const STYLES = ["guild-wars", "obsidian", "custom"];
+const FONTS = ["guild-wars", "inter", "system", "avenir", "georgia", "palatino"];
 
 /**
  * Apply exactly what `src/renderer/appearance.ts` applies.
  * @param {import("@playwright/test").Page} page
- * @param {"guild-wars" | "obsidian"} style
+ * @param {"guild-wars" | "obsidian" | "custom"} style
  * @param {number} opacity
  */
 async function applyAppearance(page, style, opacity) {
   await page.evaluate(
     ({ style, opacity }) => {
       const root = document.documentElement;
-      if (style === "obsidian") root.dataset.uiStyle = "obsidian";
+      if (style === "obsidian" || style === "custom") root.dataset.uiStyle = style;
       else delete root.dataset.uiStyle;
+      if (style === "custom") {
+        root.dataset.uiMaterial = "classic";
+        const variables = {
+          "--ui-custom-window": "#0B0B0B",
+          "--ui-custom-window-rgb": "11 11 11",
+          "--ui-custom-titlebar": "#292927",
+          "--ui-custom-surface": "#202225",
+          "--ui-custom-recessed": "#080807",
+          "--ui-custom-selected": "#1B3554",
+          "--ui-custom-accent": "#E6C882",
+          "--ui-custom-text": "#F1EBDD",
+          "--ui-custom-muted-text": "#B7B09F",
+          "--ui-custom-border": "#D8D2BF",
+          "--ui-custom-selected-ink": "#F7F3E8",
+          "--ui-custom-accent-ink": "#171613",
+          "--ui-custom-title-fill": "linear-gradient(180deg, #3A3A37, #292927 38%, #171716)",
+        };
+        for (const [name, value] of Object.entries(variables)) root.style.setProperty(name, value);
+      } else delete root.dataset.uiMaterial;
       root.style.setProperty("--ui-panel-opacity", String(opacity));
       // The gallery draws its own controls; keep them honest so a screenshot
       // never captions itself with the values it is not showing.
@@ -144,7 +164,7 @@ async function audit(page, label) {
       ".ui-button, .ui-tab, .ui-segment label, .ui-segment button, .ui-rail button, .ui-chip",
     )) {
       const box = el.getBoundingClientRect();
-      if (box.height > 0 && box.height < 18) {
+      if (box.height > 0 && box.height < 24) {
         note("tiny-target", el, `${Math.round(box.height)}px tall`);
       }
     }
@@ -179,6 +199,11 @@ const findings = [];
  * @param {string} tag
  * @param {(page: import("@playwright/test").Page) => Promise<void>} [prepare]
  */
+/**
+ * @param {string} pageUrl
+ * @param {string} tag
+ * @param {((page: import("@playwright/test").Page) => Promise<void>) | undefined} [prepare]
+ */
 async function sweep(pageUrl, tag, prepare) {
   const page = await browser.newPage({
     viewport: { width: 1400, height: 1000 },
@@ -201,15 +226,53 @@ async function sweep(pageUrl, tag, prepare) {
   await page.close();
 }
 
+/** Font metrics get one focused pass at the default Classic material and
+ * opacity. Crossing every font with every palette would multiply identical
+ * screenshots without finding another class of layout fault. */
+/**
+ * @param {string} pageUrl
+ * @param {string} tag
+ * @param {((page: import("@playwright/test").Page) => Promise<void>) | undefined} [prepare]
+ */
+async function sweepFonts(pageUrl, tag, prepare) {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, colorScheme: "dark" });
+  await page.goto(pageUrl, { waitUntil: "networkidle" });
+  if (prepare) await prepare(page);
+  await applyAppearance(page, "guild-wars", 0.94);
+  for (const font of FONTS) {
+    await page.evaluate((value) => { document.documentElement.dataset.uiFont = value; }, font);
+    const label = `${tag}/font-${font}`;
+    findings.push(...(await audit(page, label)));
+    await page.screenshot({ path: path.join(outDir, `${label.replaceAll("/", "__")}.png`) });
+  }
+  await page.close();
+}
+
 await mkdir(outDir, { recursive: true });
 await sweep(galleryUrl, "gallery");
 await sweep(toolsUrl, "tools", async (page) => {
-  await page.waitForSelector("#app[data-ready=true]", { timeout: 15_000 });
+  await page.waitForSelector("#app[data-ready=true]", { state: "attached", timeout: 15_000 });
 });
 await sweep(toolsUrl, "tools-build", async (page) => {
-  await page.waitForSelector("#app[data-ready=true]", { timeout: 15_000 });
+  await page.waitForSelector("#app[data-ready=true]", { state: "attached", timeout: 15_000 });
   await page.getByRole("tab", { name: /Builds/ }).click();
   await page.getByRole("button", { name: /Word of Healing.*Mo\/Me/ }).first().click();
+});
+await sweep(`${toolsUrl}?trade`, "trade", async (page) => {
+  await page.waitForSelector("#app[data-ready=true]", { state: "attached", timeout: 15_000 });
+});
+await sweep(`${toolsUrl}?travel`, "travel", async (page) => {
+  await page.waitForSelector("#app[data-ready=true]", { state: "attached", timeout: 15_000 });
+});
+await sweepFonts(galleryUrl, "gallery-fonts");
+await sweepFonts(toolsUrl, "tools-fonts", async (page) => {
+  await page.waitForSelector("#app[data-ready=true]", { state: "attached", timeout: 15_000 });
+});
+await sweepFonts(`${toolsUrl}?trade`, "trade-fonts", async (page) => {
+  await page.waitForSelector("#app[data-ready=true]", { state: "attached", timeout: 15_000 });
+});
+await sweepFonts(`${toolsUrl}?travel`, "travel-fonts", async (page) => {
+  await page.waitForSelector("#app[data-ready=true]", { state: "attached", timeout: 15_000 });
 });
 
 await browser.close();

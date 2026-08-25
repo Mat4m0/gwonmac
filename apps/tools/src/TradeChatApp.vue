@@ -734,7 +734,9 @@ function exactTime(timestamp: number): string {
               <time class="age-cell" :datetime="new Date(message.timestamp).toISOString()">{{ age(message.timestamp) }}</time>
               <div class="row-quick-actions">
                 <button
-                  class="row-quick-action"
+                  class="ui-button row-quick-action"
+                  data-variant="quiet"
+                  data-icon
                   :aria-label="`${offerSaved(message) ? 'Remove saved' : 'Save'} offer from ${message.sender}`"
                   :aria-pressed="offerSaved(message)"
                   :disabled="!savedReady"
@@ -742,7 +744,9 @@ function exactTime(timestamp: number): string {
                   @click="toggleOffer(message)"
                 ><TradeIcon name="star" :filled="offerSaved(message)" /></button>
                 <button
-                  class="row-quick-action"
+                  class="ui-button row-quick-action"
+                  data-variant="quiet"
+                  data-icon
                   :aria-label="`${playerSaved(message.sender) ? 'Unfollow' : 'Follow'} ${message.sender}`"
                   :aria-pressed="playerSaved(message.sender)"
                   :disabled="!savedReady"
@@ -779,20 +783,22 @@ function exactTime(timestamp: number): string {
           <div class="inspector-actions">
             <button
               class="ui-button"
+              data-variant="quiet"
               :aria-pressed="offerSaved(selected)"
               :disabled="!savedReady"
               @click="toggleOffer(selected)"
             ><TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save" }}</button>
             <button
               class="ui-button"
+              data-variant="quiet"
               :aria-pressed="playerSaved(selected.sender)"
               :disabled="!savedReady"
               @click="togglePlayer(selected.sender)"
             ><TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow" }}</button>
-            <button class="ui-button" data-variant="primary" @click="copy(selected.sender, 'Character name')">
+            <button class="ui-button" data-variant="quiet" @click="copy(selected.sender, 'Character name')">
               Copy name
             </button>
-            <button class="ui-button" @click="copy(selected.message, 'Message')">Copy text</button>
+            <button class="ui-button" data-variant="quiet" @click="copy(selected.message, 'Message')">Copy text</button>
             <button class="ui-link" @click="props.host.openSource(source)">{{ sourceLabel }} feed ↗</button>
           </div>
         </template>

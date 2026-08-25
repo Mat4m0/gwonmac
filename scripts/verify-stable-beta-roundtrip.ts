@@ -41,6 +41,7 @@ import {
 import { parseSettings } from "../src/main/core/settings.ts";
 import { saveWindowState } from "../src/main/core/window-state.ts";
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.ts";
+import { DEFAULT_CUSTOM_UI_THEME } from "../src/shared/ui-theme.ts";
 import {
   compareReleaseVersions,
   parseReleaseVersion,
@@ -181,10 +182,8 @@ const candidateSettingsDomains = Array.from(
       renderScale: cycle(RENDER_SCALES, index),
       uiStyle: cycle(UI_STYLES, index),
       uiCustomTheme: {
-        window: index % 2 === 0 ? "#14120F" : "#FFFFFF",
-        recessed: "#070707",
-        selected: "#26374A",
-        accent: "#E6C882",
+        ...DEFAULT_CUSTOM_UI_THEME,
+        window: index % 2 === 0 ? "#0B0B0B" : "#FFFFFF",
         windowGradient: cycle(booleanValues, index),
       },
       uiFont: cycle(UI_FONTS, index),

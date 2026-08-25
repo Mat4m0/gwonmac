@@ -634,7 +634,7 @@ defineExpose({
         <small v-else-if="shareStatus" class="share-success" role="status">{{ shareStatus }}</small>
       </label>
       <button class="ui-button" @click="sharing = false">Done</button>
-      <button class="ui-button" data-variant="primary" @click="copyTeamCode">Copy code</button>
+      <button class="ui-button" @click="copyTeamCode">Copy code</button>
     </footer>
     <footer v-else class="detail-actions detail-actions--explain team-actions">
       <!--

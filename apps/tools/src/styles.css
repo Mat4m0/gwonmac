@@ -204,13 +204,19 @@
 
 .travel-result:active:not(:disabled) { filter: brightness(0.86); }
 
-.travel-result[aria-selected="true"] { box-shadow: var(--ui-shadow-row-selected); }
+.travel-result[aria-selected="true"] {
+  border-color: transparent;
+  background: var(--ui-selection-fill);
+  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
+  color: var(--ui-selection-ink);
+}
+.travel-result[aria-selected="true"]:hover { background: var(--ui-selection-hover-fill); }
 .travel-result mark { background: transparent; color: var(--ui-text-bright); text-decoration: underline; text-decoration-color: var(--ui-accent); text-underline-offset: 3px; }
 
 .travel-match {
   padding: 3px var(--ui-space-2);
   border-radius: var(--ui-radius-pill);
-  background: var(--ui-selected);
+  background: var(--ui-selection-fill);
   color: var(--ui-text-bright);
   font-size: var(--ui-font-size-sm);
   white-space: nowrap;
@@ -252,7 +258,7 @@
 }
 
 .travel-customize-shortcuts .travel-favorite[data-empty="true"] { border-style: dashed; }
-.travel-customize-shortcuts .travel-favorite[aria-pressed="true"] { background: var(--ui-hover); box-shadow: var(--ui-shadow-selected); }
+.travel-customize-shortcuts .travel-favorite[aria-pressed="true"] { background: var(--ui-selection-fill); box-shadow: inset 0 0 0 1px var(--ui-selection-marker); }
 
 .travel-shortcut-editor {
   display: grid;
@@ -367,7 +373,7 @@
   cursor: pointer;
 }
 .travel-destination-option:hover,
-.travel-destination-option[aria-selected="true"] { border-color: var(--ui-outline); background: var(--ui-hover); }
+.travel-destination-option[aria-selected="true"] { border-color: transparent; background: var(--ui-selection-fill); }
 .travel-destination-option strong,
 .travel-destination-option small { display: block; }
 .travel-destination-option small,
@@ -397,7 +403,7 @@
 .travel-key-hints { margin-left: auto; }
 
 .travel-palette button:disabled { cursor: default; opacity: 0.5; }
-.travel-palette ::selection { background: var(--ui-selected); color: var(--ui-text-bright); }
+.travel-palette ::selection { background: var(--ui-accent-strong); color: var(--ui-text-bright); }
 
 @keyframes travel-palette-enter {
   from { opacity: 0; filter: blur(2px); transform: translate(-50%, -6px); }

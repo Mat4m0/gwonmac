@@ -352,7 +352,7 @@ export interface ClockSyncResponse {
 
 export const UI_STYLES = ["guild-wars", "obsidian", "custom"] as const;
 export type UiStyle = (typeof UI_STYLES)[number];
-export const UI_FONTS = ["guild-wars", "inter"] as const;
+export const UI_FONTS = ["guild-wars", "inter", "system", "avenir", "georgia", "palatino"] as const;
 export type UiFont = (typeof UI_FONTS)[number];
 export const CONTROLLER_PROMPT_STYLES = ["game-default", "playstation"] as const;
 export type ControllerPromptStyle = (typeof CONTROLLER_PROMPT_STYLES)[number];

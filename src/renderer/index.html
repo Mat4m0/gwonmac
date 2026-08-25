@@ -177,8 +177,8 @@
     </details>
   </div>
   <div id="memory-notice-actions">
-    <button type="button" id="memory-notice-later"></button>
-    <button type="button" id="memory-notice-reload" class="primary"></button>
+    <button type="button" id="memory-notice-later" class="ui-button" data-variant="quiet"></button>
+    <button type="button" id="memory-notice-reload" class="ui-button" data-variant="primary"></button>
   </div>
 </div>
 <output id="capture-status" hidden aria-live="off">
@@ -279,7 +279,7 @@
               <h4 id="templates-export-title" class="settings-section-title">Export</h4>
               <p class="settings-note">Save every template as a .txt file that another Guild Wars installation can read.</p>
               <div class="settings-actions-row">
-                <button type="button" id="templates-export" class="ui-button" data-variant="primary">Export all templates…</button>
+                <button type="button" id="templates-export" class="ui-button">Export all templates…</button>
               </div>
             </section>
             <section class="settings-task" aria-labelledby="templates-import-title">
@@ -395,43 +395,187 @@
 
             <section class="settings-display-group" aria-labelledby="settings-interface-group-title">
               <h4 id="settings-interface-group-title" class="settings-display-group-title">App interface</h4>
-              <div class="settings-display-row">
-                <div class="settings-display-info">
-                  <h5 id="settings-style-label" class="settings-display-name">Interface style</h5>
-                  <p>Choose classic Guild Wars ornament or a quieter charcoal interface.</p>
+              <div class="settings-theme" aria-labelledby="settings-theme-label">
+                <div class="settings-display-info settings-theme-heading">
+                  <h5 id="settings-theme-label" class="settings-display-name">Theme</h5>
+                  <p>Choose a GWonMac theme or create your own palette.</p>
                 </div>
-                <div class="settings-display-control">
-                  <div class="settings-seg settings-style-seg ui-segment" data-fill
-                       role="radiogroup" aria-labelledby="settings-style-label">
-                    <label class="settings-radio">
+                <div class="settings-theme-tabs" role="tablist" aria-label="Theme editor">
+                  <button type="button" id="settings-theme-tab-builtins" class="settings-theme-tab"
+                          role="tab" aria-selected="true" aria-controls="settings-theme-builtins">
+                    GWonMac themes
+                  </button>
+                  <button type="button" id="settings-theme-tab-custom" class="settings-theme-tab"
+                          role="tab" aria-selected="false" aria-controls="settings-theme-custom" tabindex="-1">
+                    Custom theme
+                  </button>
+                </div>
+
+                <div id="settings-theme-builtins" class="settings-theme-panel" role="tabpanel"
+                     aria-labelledby="settings-theme-tab-builtins">
+                  <div class="settings-theme-options" role="radiogroup" aria-labelledby="settings-theme-label">
+                    <label class="settings-theme-option">
                       <input type="radio" name="uiStyle" value="guild-wars">
-                      <span>Guild Wars <small>Default</small></span>
+                      <span class="settings-theme-option-copy">
+                        <strong>Guild Wars Classic</strong><small>Dark glass, graphite chrome, pale metal, and navy controls</small>
+                      </span>
+                      <span class="settings-theme-palette" aria-hidden="true">
+                        <i style="--swatch:#080807"></i><i style="--swatch:#292927"></i><i style="--swatch:#1B3554"></i><i style="--swatch:#D8D2BF"></i><i style="--swatch:#E6C882"></i>
+                      </span>
                     </label>
-                    <label class="settings-radio">
+                    <label class="settings-theme-option">
                       <input type="radio" name="uiStyle" value="obsidian">
-                      <span>Obsidian</span>
+                      <span class="settings-theme-option-copy">
+                        <strong>Modern</strong><small>Flat charcoal surfaces, quiet borders, and restrained depth</small>
+                      </span>
+                      <span class="settings-theme-palette" aria-hidden="true">
+                        <i style="--swatch:#1B1A18"></i><i style="--swatch:#34302A"></i><i style="--swatch:#D5B86E"></i><i style="--swatch:#F4EFE5"></i>
+                      </span>
                     </label>
                   </div>
+                </div>
+
+                <div id="settings-theme-custom" class="settings-theme-panel" role="tabpanel"
+                     aria-labelledby="settings-theme-tab-custom" hidden>
+                  <div class="settings-theme-actions">
+                    <button type="button" id="settings-theme-use-custom" class="ui-button" data-variant="primary">Use custom theme</button>
+                    <button type="button" id="settings-theme-share" class="ui-button">Share</button>
+                    <button type="button" id="settings-theme-import" class="ui-button">Import…</button>
+                  </div>
+                  <label class="settings-theme-material">
+                    <span>Material style</span>
+                    <span class="settings-theme-material-control">
+                      <select name="uiThemeMaterial" class="ui-select">
+                        <option value="classic">Classic Guild Wars</option>
+                        <option value="modern">Modern flat</option>
+                      </select>
+                      <button id="settings-theme-reset" type="button" class="ui-button"
+                              data-icon aria-label="Reset custom theme to Classic Guild Wars defaults"
+                              title="Reset custom theme to Classic Guild Wars defaults">↺</button>
+                    </span>
+                  </label>
+                  <p class="settings-note">Material controls the frame, depth, and control shape. Colours stay fully editable.</p>
+
+                  <figure class="settings-theme-preview" aria-label="Live preview of the custom theme">
+                    <div class="settings-theme-preview-window ui-frame">
+                      <div class="settings-theme-preview-title">Builds &amp; Teams <span>Live preview</span></div>
+                      <div class="settings-theme-preview-body">
+                        <div class="settings-theme-preview-list" aria-hidden="true">
+                          <span>Teams</span>
+                          <strong>Saved party</strong>
+                          <span>Farming team</span>
+                        </div>
+                        <div class="settings-theme-preview-work">
+                          <strong>Saved party</strong>
+                          <span>4 of 8 slots configured</span>
+                          <label>Team name <input class="ui-input" value="Saved party" readonly></label>
+                          <div><button type="button" class="ui-button" tabindex="-1">Export</button><button type="button" class="ui-button" data-variant="primary" tabindex="-1">Apply team</button></div>
+                        </div>
+                      </div>
+                    </div>
+                    <figcaption>Representative window, selection, field, and command states.</figcaption>
+                  </figure>
+
+                  <fieldset class="settings-theme-color-group">
+                    <legend>Surfaces</legend>
+                    <div class="settings-theme-colors">
+                    <label class="settings-theme-color">
+                      <span>Window</span>
+                      <span class="settings-theme-color-control">
+                        <input type="color" data-theme-color="window" aria-label="Choose Window colour">
+                        <input type="text" name="uiThemeWindow" data-theme-hex="window" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Window hex colour">
+                      </span>
+                    </label>
+                    <label class="settings-theme-color">
+                      <span>Title bar</span>
+                      <span class="settings-theme-color-control">
+                        <input type="color" data-theme-color="titlebar" aria-label="Choose Title bar colour">
+                        <input type="text" name="uiThemeTitlebar" data-theme-hex="titlebar" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Title bar hex colour">
+                      </span>
+                    </label>
+                    <label class="settings-theme-color">
+                      <span>Raised surfaces</span>
+                      <span class="settings-theme-color-control">
+                        <input type="color" data-theme-color="surface" aria-label="Choose Raised surfaces colour">
+                        <input type="text" name="uiThemeSurface" data-theme-hex="surface" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Raised surfaces hex colour">
+                      </span>
+                    </label>
+                    <label class="settings-theme-color">
+                      <span>Recessed surfaces</span>
+                      <span class="settings-theme-color-control">
+                        <input type="color" data-theme-color="recessed" aria-label="Choose Recessed surfaces colour">
+                        <input type="text" name="uiThemeRecessed" data-theme-hex="recessed" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Recessed surfaces hex colour">
+                      </span>
+                    </label>
+                    </div>
+                  </fieldset>
+                  <fieldset class="settings-theme-color-group">
+                    <legend>Interaction</legend>
+                    <div class="settings-theme-colors">
+                    <label class="settings-theme-color">
+                      <span>Selected items</span>
+                      <span class="settings-theme-color-control">
+                        <input type="color" data-theme-color="selected" aria-label="Choose Selected items colour">
+                        <input type="text" name="uiThemeSelected" data-theme-hex="selected" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Selected items hex colour">
+                      </span>
+                    </label>
+                    <label class="settings-theme-color">
+                      <span>Accent</span>
+                      <span class="settings-theme-color-control">
+                        <input type="color" data-theme-color="accent" aria-label="Choose Accent colour">
+                        <input type="text" name="uiThemeAccent" data-theme-hex="accent" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Accent hex colour">
+                      </span>
+                    </label>
+                    </div>
+                  </fieldset>
+                  <fieldset class="settings-theme-color-group">
+                    <legend>Text and borders</legend>
+                    <div class="settings-theme-colors">
+                    <label class="settings-theme-color">
+                      <span>Text</span>
+                      <span class="settings-theme-color-control">
+                        <input type="color" data-theme-color="text" aria-label="Choose Text colour">
+                        <input type="text" name="uiThemeText" data-theme-hex="text" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Text hex colour">
+                      </span>
+                    </label>
+                    <label class="settings-theme-color">
+                      <span>Muted text</span>
+                      <span class="settings-theme-color-control">
+                        <input type="color" data-theme-color="mutedText" aria-label="Choose Muted text colour">
+                        <input type="text" name="uiThemeMutedText" data-theme-hex="mutedText" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Muted text hex colour">
+                      </span>
+                    </label>
+                    <label class="settings-theme-color">
+                      <span>Frame and borders</span>
+                      <span class="settings-theme-color-control">
+                        <input type="color" data-theme-color="border" aria-label="Choose Frame and borders colour">
+                        <input type="text" name="uiThemeBorder" data-theme-hex="border" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Frame and borders hex colour">
+                      </span>
+                    </label>
+                    </div>
+                  </fieldset>
+                  <label class="settings-theme-gradient ui-check">
+                    <input type="checkbox" name="uiThemeWindowGradient">
+                    <span>Window gradient</span>
+                  </label>
+                  <p class="settings-note">Adds a subtle accent glow to window headers.</p>
                 </div>
               </div>
 
               <div class="settings-display-row">
                 <div class="settings-display-info">
                   <h5 id="settings-font-label" class="settings-display-name">Interface font</h5>
-                  <p>Use lettering from your game files or a modern system font.</p>
+                  <p>Choose the original game lettering, a modern UI face, or a familiar serif.</p>
                 </div>
                 <div class="settings-display-control">
-                  <div class="settings-seg settings-style-seg ui-segment" data-fill
-                       role="radiogroup" aria-labelledby="settings-font-label">
-                    <label class="settings-radio">
-                      <input type="radio" name="uiFont" value="guild-wars">
-                      <span>Guild Wars Original <small>Default</small></span>
-                    </label>
-                    <label class="settings-radio">
-                      <input type="radio" name="uiFont" value="inter">
-                      <span>Inter</span>
-                    </label>
-                  </div>
+                  <select name="uiFont" class="ui-select" aria-labelledby="settings-font-label">
+                    <option value="guild-wars">Guild Wars Original (default)</option>
+                    <option value="inter">Inter</option>
+                    <option value="system">System</option>
+                    <option value="avenir">Avenir Next</option>
+                    <option value="georgia">Georgia</option>
+                    <option value="palatino">Palatino</option>
+                  </select>
                 </div>
               </div>
 
@@ -443,10 +587,16 @@
                 </div>
                 <div class="settings-display-control settings-opacity-control">
                   <output name="uiPanelOpacityValue" for="settings-panel-opacity">94%</output>
-                  <input id="settings-panel-opacity" type="range" class="ui-range"
-                         name="uiPanelOpacity" min="65" max="100" step="1"
-                         aria-labelledby="settings-opacity-label"
-                         aria-describedby="settings-opacity-help">
+                  <div class="settings-opacity-track">
+                    <input id="settings-panel-opacity" type="range" class="ui-range"
+                           name="uiPanelOpacity" min="65" max="100" step="1"
+                           aria-labelledby="settings-opacity-label"
+                           aria-describedby="settings-opacity-help settings-opacity-default">
+                    <button id="settings-opacity-default" type="button"
+                            title="Reset panel opacity to 94%">
+                      <span aria-hidden="true"></span>Default 94%
+                    </button>
+                  </div>
                   <span class="settings-range-ends" aria-hidden="true">
                     <small>More game visible</small>
                     <small>More solid</small>
@@ -767,6 +917,22 @@
          data-tone="neutral">Changes save automatically.</p>
     </footer>
     <button type="button" id="settings-resize" class="ui-resize-grip" aria-label="Resize Settings"></button>
+  </form>
+</dialog>
+
+<dialog id="settings-theme-import-dialog" class="ui-frame settings-theme-import-dialog"
+        aria-labelledby="settings-theme-import-title">
+  <form method="dialog" class="settings-theme-import-form">
+    <h2 id="settings-theme-import-title" class="ui-titlebar">Import custom theme</h2>
+    <label for="settings-theme-import-value">GWonMac theme string</label>
+    <textarea id="settings-theme-import-value" rows="4" autocomplete="off" spellcheck="false"
+              aria-describedby="settings-theme-import-help settings-theme-import-error"></textarea>
+    <p id="settings-theme-import-help" class="settings-note">Paste a complete <code>gwonmac-theme-v1</code> string.</p>
+    <p id="settings-theme-import-error" class="settings-theme-import-error" role="alert" hidden></p>
+    <div class="settings-theme-import-actions">
+      <button type="submit" value="cancel" class="ui-button">Cancel</button>
+      <button type="button" id="settings-theme-import-apply" class="ui-button" data-variant="primary">Import theme</button>
+    </div>
   </form>
 </dialog>
 

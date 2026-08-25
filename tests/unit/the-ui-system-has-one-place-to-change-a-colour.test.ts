@@ -29,6 +29,7 @@ const CONSUMERS = [
   "apps/tools/src/styles/build.css",
   "apps/tools/src/styles/catalogue.css",
   "apps/tools/src/styles/team.css",
+  "apps/tools/src/styles/trade.css",
 ];
 
 /**
@@ -137,10 +138,11 @@ test("no consumer invents a stacking order", () => {
   );
 });
 
-test("Obsidian is the only style projection and consumers do not branch", () => {
+test("style projections stay in tokens and consumers do not branch", () => {
   const selectors = [...code(tokens).matchAll(/:root\[data-ui-style="([^"]+)"\]/gu)]
     .map((match) => match[1]);
-  assert.deepEqual(selectors, ["obsidian"]);
+  assert.deepEqual(selectors, ["obsidian", "custom", "custom"]);
+  assert.match(code(tokens), /data-ui-style="custom"\]\[data-ui-material="modern"\]/u);
   for (const [, css] of consumers) {
     assert.doesNotMatch(code(css), /\[data-ui-(?:style|theme|density)=/u);
   }
@@ -161,8 +163,10 @@ test("persistent interaction states do not leak into neutral controls", () => {
   assert.doesNotMatch(rule(toolsShell, ".window-brand"), /--ui-shadow-selected/u);
   assert.match(
     rule(components, '.ui-tab[aria-selected="true"]'),
-    /inset 0 -2px 0 var\(--ui-accent\)/u,
+    /inset 0 -2px 0 var\(--ui-selection-marker\)/u,
   );
+  assert.match(rule(components, '.ui-button[data-variant="quiet"]'), /background: transparent/u);
+  assert.doesNotMatch(rule(components, '.ui-row'), /--ui-row-fill/u);
 });
 
 test("shared interaction feedback owns disabled, active, and error presentation", () => {
@@ -197,9 +201,10 @@ test("every token a stylesheet uses is actually declared", () => {
   const missing: string[] = [];
   for (const [path, css] of [...consumers, [TOKENS, tokens] as const]) {
     for (const name of referenced(css)) {
-      // `--ui-profession` and `--swatch` are set by a data attribute at the
-      // point of use, not declared as a theme value.
-      if (name === "--ui-profession") continue;
+      // Runtime custom-theme inputs are derived by appearance.ts from the
+      // validated settings contract. Declaring fallback values here would
+      // create a second default palette.
+      if (name === "--ui-profession" || name.startsWith("--ui-custom-")) continue;
       if (!declared.has(name)) missing.push(`${path}: ${name}`);
     }
   }

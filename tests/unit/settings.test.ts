@@ -121,6 +121,7 @@ describe("settings", () => {
 
   it("normalises and validates the permanent custom theme contract", () => {
     const custom = {
+      ...DEFAULT_CUSTOM_UI_THEME,
       window: "#abcdef",
       recessed: "#123456",
       selected: "#789abc",
@@ -128,6 +129,7 @@ describe("settings", () => {
       windowGradient: false,
     };
     assert.deepEqual(parseSettings({ uiCustomTheme: custom }).uiCustomTheme, {
+      ...DEFAULT_CUSTOM_UI_THEME,
       window: "#ABCDEF",
       recessed: "#123456",
       selected: "#789ABC",
@@ -139,9 +141,13 @@ describe("settings", () => {
     assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, windowGradient: "yes" } }), AppError);
   });
 
-  it("accepts only the two supported interface fonts", () => {
+  it("accepts only the supported interface fonts", () => {
     assert.equal(parseSettings({ uiFont: "guild-wars" }).uiFont, "guild-wars");
     assert.equal(parseSettings({ uiFont: "inter" }).uiFont, "inter");
+    assert.equal(parseSettings({ uiFont: "system" }).uiFont, "system");
+    assert.equal(parseSettings({ uiFont: "avenir" }).uiFont, "avenir");
+    assert.equal(parseSettings({ uiFont: "georgia" }).uiFont, "georgia");
+    assert.equal(parseSettings({ uiFont: "palatino" }).uiFont, "palatino");
     assert.throws(() => parseSettings({ uiFont: "papyrus" }), AppError);
     assert.throws(() => parseSettings({ uiFont: false }), AppError);
   });

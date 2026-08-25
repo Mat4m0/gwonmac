@@ -619,7 +619,7 @@ defineExpose({
         class="ui-field-hint"
         role="status"
       >{{ controller.publishUnavailable }}</small>
-      <button class="ui-button" data-variant="primary" @click="copyBuildCode">Copy code</button>
+      <button class="ui-button" @click="copyBuildCode">Copy code</button>
     </footer>
     <footer v-else class="detail-actions authoring-actions">
       <span class="save-state">
