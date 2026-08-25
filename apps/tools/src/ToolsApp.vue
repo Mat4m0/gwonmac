@@ -27,7 +27,7 @@ import BuildDetail from "./components/BuildDetail.vue";
 import LiveParty from "./components/LiveParty.vue";
 import SkillBar from "./components/SkillBar.vue";
 import TeamDetail from "./components/TeamDetail.vue";
-import ModalDialog from "./components/ModalDialog.vue";
+import UiDialog from "./ui/UiDialog.vue";
 import { navigateRows, navigateTabs } from "./tab-keyboard";
 import { useFloatingWindow } from "./use-floating-window";
 
@@ -570,7 +570,7 @@ onBeforeUnmount(() => {
         </div>
       </Transition>
 
-      <ModalDialog
+      <UiDialog
         :open="pendingNavigation !== null"
         class="leave-dialog"
         labelledby="leave-title"
@@ -593,9 +593,9 @@ onBeforeUnmount(() => {
           </button>
         </div>
         </section>
-      </ModalDialog>
+      </UiDialog>
 
-      <ModalDialog
+      <UiDialog
         :open="composer !== null"
         labelledby="composer-title"
         :initial-focus="composer === 'import-team' ? '.template-code' : '.ui-input'"
@@ -676,7 +676,7 @@ onBeforeUnmount(() => {
             </button>
           </footer>
         </form>
-      </ModalDialog>
+      </UiDialog>
       <button
         v-if="mode === 'embedded'"
         type="button"

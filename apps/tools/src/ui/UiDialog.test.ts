@@ -1,17 +1,17 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
-import ModalDialog from "./ModalDialog.vue";
+import UiDialog from "./UiDialog.vue";
 
 afterEach(() => document.body.replaceChildren());
 
-describe("ModalDialog", () => {
-  it("uses one labelled modal, focuses its requested control, and closes on Escape", async () => {
+describe("UiDialog", () => {
+  it("labels the modal, focuses its requested control, and closes on Escape", async () => {
     const invoker = document.createElement("button");
     invoker.textContent = "Open";
     document.body.append(invoker);
     invoker.focus();
 
-    const wrapper = mount(ModalDialog, {
+    const wrapper = mount(UiDialog, {
       attachTo: document.body,
       props: {
         open: false,
