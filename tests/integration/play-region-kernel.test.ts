@@ -32,6 +32,8 @@ describe("play-region kernel", () => {
       playRegion: "pve",
     });
 
+    // Guild halls and PvP outposts carry the PvP area flag, but an outpost is
+    // not active player-versus-player play and remains supported.
     kernel.view.setUint32(AREA_133 + 0x10, 1, true);
     kernel.tick();
     assert.deepEqual(kernel.playRegion(), {
@@ -39,6 +41,17 @@ describe("play-region kernel", () => {
       sequence: 6,
       mapId: 133,
       instanceType: 0,
+      playRegion: "pve",
+    });
+
+    kernel.view.setUint32(ADDRESSES.character + 0x19c, 1, true);
+    kernel.view.setUint32(ADDRESSES.character + 0x23c, 1, true);
+    kernel.tick();
+    assert.deepEqual(kernel.playRegion(), {
+      status: "ready",
+      sequence: 8,
+      mapId: 133,
+      instanceType: 1,
       playRegion: "pvp",
     });
   });

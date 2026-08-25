@@ -50,7 +50,7 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   await expect(palette).toBeVisible();
   await expect(palette.locator('label[for="travel-search-input"] > span')).toHaveCount(0);
   await expect(palette.getByRole("status")).toHaveCount(0);
-  await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(95);
+  await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(160);
   await page.getByRole("combobox", { name: "Destination or search phrase" }).fill("kama");
   await expect(page.getByRole("option", { name: /Kamadan, Jewel of Istan/ })).toBeVisible();
   await page.keyboard.press("Meta+9");
@@ -65,20 +65,22 @@ test("keeps map-only Travel controls and status visible in a short window", asyn
   await page.setViewportSize({ width: 480, height: 560 });
   await page.goto("/?travel=1");
 
-  await expect(page.getByRole("dialog", { name: "Quick Travel" })).toBeVisible();
+  const palette = page.getByRole("dialog", { name: "Quick Travel" });
+  await expect(palette).toBeVisible();
+  await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(96);
   await expect(page.locator(".travel-footer")).toBeInViewport();
   await expect(page.getByRole("combobox", {
     name: "Destination or search phrase",
   })).toBeInViewport();
   await expect(page.getByRole("spinbutton", { name: "District number" })).toHaveCount(0);
-  await expect(page.getByRole("tab", { name: "Customize" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Customize Travel" })).toBeVisible();
   const grid = page.locator(".travel-favorite-grid");
   await expect(grid.locator(".travel-favorite")).toHaveCount(6);
   await expect.poll(() => grid.evaluate((element) =>
     getComputedStyle(element).gridTemplateColumns.split(" ").length
   )).toBe(3);
 
-  await page.getByRole("tab", { name: "Customize" }).click();
+  await page.getByRole("button", { name: "Customize Travel" }).click();
   await expect(page.locator(".travel-customize-shortcuts .travel-favorite")).toHaveCount(9);
 });
 

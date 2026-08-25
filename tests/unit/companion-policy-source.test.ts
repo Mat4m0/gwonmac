@@ -106,7 +106,7 @@ describe("companion policy source", () => {
     ]);
   });
 
-  it("withdraws local Tools only for a positively identified PvP map", () => {
+  it("withdraws local Tools only for positively identified active PvP play", () => {
     const test = fixture();
     test.setSettings({ ...DEFAULT_SETTINGS, gwonmacTools: true });
     test.settingsEvents.dispatchEvent(new Event("gw:tools-settings"));

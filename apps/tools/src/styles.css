@@ -9,11 +9,11 @@
  * remains available in the same frame without becoming the default view. */
 .travel-palette {
   position: fixed;
-  top: clamp(96px, 11vh, 132px);
+  top: clamp(160px, 23vh, 280px);
   left: 50%;
   display: flex;
   width: min(610px, calc(100vw - 48px));
-  max-height: min(620px, calc(100vh - 56px));
+  max-height: min(620px, calc(77vh - 24px));
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
@@ -33,7 +33,7 @@
 .travel-search {
   display: grid;
   min-height: 56px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   flex: none;
   align-items: center;
   gap: var(--ui-space-3);
@@ -86,14 +86,6 @@
   stroke-linecap: round;
   stroke-width: 1.75;
 }
-
-.travel-mode.ui-segment[data-fill] {
-  width: auto;
-  margin: var(--ui-space-2) var(--ui-space-4) 0;
-  flex: none;
-}
-
-.travel-mode button { min-height: 36px; }
 
 .travel-notice {
   margin: var(--ui-space-2) var(--ui-space-4) 0;
@@ -413,7 +405,6 @@
 @media (max-width: 560px) {
   .travel-palette { top: 16px; max-height: calc(100vh - 32px); }
   .travel-search { min-height: 54px; padding-inline: var(--ui-space-3); }
-  .travel-mode,
   .travel-notice { margin-inline: var(--ui-space-3); }
   .travel-body { padding: var(--ui-space-3); }
   .travel-favorite-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -425,6 +416,9 @@
 }
 
 @media (max-height: 560px) {
-  .travel-palette { top: 12px; max-height: calc(100vh - 24px); }
+  .travel-palette {
+    top: clamp(96px, 23vh, 160px);
+    max-height: calc(100vh - clamp(96px, 23vh, 160px) - 12px);
+  }
   .travel-body { min-height: 120px; }
 }

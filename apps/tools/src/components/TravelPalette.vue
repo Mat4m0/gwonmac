@@ -27,8 +27,7 @@ const COMPACT_FAVORITE_LABELS: Readonly<Record<string, string>> = Object.freeze(
 
 const palette = ref<HTMLElement | null>(null);
 const input = ref<HTMLInputElement | null>(null);
-const travelTab = ref<HTMLButtonElement | null>(null);
-const customizeTab = ref<HTMLButtonElement | null>(null);
+const settingsButton = ref<HTMLButtonElement | null>(null);
 const query = ref("");
 const active = ref(0);
 const mode = ref<PaletteMode>("travel");
@@ -129,26 +128,21 @@ watch(() => props.host.attempt.value.status, (status) => {
   closeTimer = window.setTimeout(() => emit("close"), 350);
 });
 
-async function selectMode(next: PaletteMode, focus: "search" | "tab" = "search"): Promise<void> {
+async function selectMode(next: PaletteMode, focus: "search" | "settings" = "search"): Promise<void> {
   query.value = "";
   active.value = 0;
   mode.value = next;
   await nextTick();
-  if (focus === "tab") {
-    (next === "travel" ? travelTab.value : customizeTab.value)?.focus();
+  if (focus === "settings") {
+    settingsButton.value?.focus();
   } else if (next === "travel") {
     input.value?.focus();
   }
 }
 
-function onModeKeydown(event: KeyboardEvent): void {
-  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-  const next: PaletteMode = event.key === "ArrowLeft" || event.key === "Home"
-    ? "travel"
-    : "customize";
-  event.preventDefault();
-  if (next === "customize" && preferenceControlsDisabled.value) return;
-  void selectMode(next, "tab");
+function toggleCustomize(): void {
+  const next = mode.value === "customize" ? "travel" : "customize";
+  void selectMode(next, next === "customize" ? "settings" : "search");
 }
 
 async function travel(request: TravelRequest): Promise<void> {
@@ -349,13 +343,10 @@ onBeforeUnmount(() => window.clearTimeout(closeTimer));
     <div class="travel-search">
       <svg class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg>
       <label for="travel-search-input"><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination or search phrase" :aria-controls="hasQuery ? 'travel-results' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="activeDestination ? `travel-${activeDestination.mapId}` : undefined" :aria-expanded="results.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or phrases…"></label>
+      <button ref="settingsButton" type="button" class="ui-button travel-close" data-icon aria-label="Customize Travel" title="Customize Travel" :aria-pressed="mode === 'customize'" aria-controls="travel-customize-panel" :disabled="preferenceControlsDisabled" @click="toggleCustomize"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg></button>
       <button type="button" class="ui-button travel-close" data-icon aria-label="Close Quick Travel" @click="emit('close')"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>
     </div>
 
-    <div class="ui-segment travel-mode" data-fill role="tablist" aria-label="Quick Travel mode" @keydown="onModeKeydown">
-      <button id="travel-mode-tab" ref="travelTab" type="button" role="tab" :tabindex="mode === 'travel' ? 0 : -1" :aria-selected="mode === 'travel'" aria-controls="travel-panel" @click="selectMode('travel')">Travel</button>
-      <button id="travel-customize-mode-tab" ref="customizeTab" type="button" role="tab" :tabindex="mode === 'customize' ? 0 : -1" :aria-selected="mode === 'customize'" aria-controls="travel-customize-panel" :disabled="preferenceControlsDisabled" @click="selectMode('customize')">Customize</button>
-    </div>
     <div v-if="urgentNoticeVisible" class="travel-notice" :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</div>
 
     <section v-if="hasQuery" id="travel-results-panel" class="ui-scroll travel-body" role="region" aria-label="Travel search results">
@@ -366,17 +357,17 @@ onBeforeUnmount(() => window.clearTimeout(closeTimer));
       <div v-else class="ui-empty travel-empty"><strong>No destinations for “{{ query }}”</strong><p>Try a destination, campaign, official shortcut, or your own search phrase.</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>
     </section>
 
-    <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="tabpanel" aria-labelledby="travel-mode-tab">
+    <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="region" aria-label="Travel">
       <section class="travel-section travel-favorites" aria-labelledby="travel-favorites-title">
         <header class="travel-section-head"><h2 id="travel-favorites-title">Favorites</h2><span>Press 1–9</span></header>
         <div v-if="assignedShortcuts.length" class="travel-favorite-grid">
           <button v-for="row in assignedShortcuts" :key="row.index" type="button" class="travel-favorite" :title="row.destination?.name" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to ${row.destination?.name}, shortcut ${row.index + 1}`" @click="row.request && travel(row.request)"><b>{{ row.index + 1 }}</b><span>{{ row.destination && favoriteLabel(row.destination) }}</span></button>
         </div>
-        <div v-else class="ui-empty"><strong>No favorites yet</strong><p>Open Customize to assign destinations to number keys.</p></div>
+        <div v-else class="ui-empty"><strong>No favorites yet</strong><p>Use the cog button to assign destinations to number keys.</p></div>
       </section>
     </section>
 
-    <section v-else id="travel-customize-panel" class="ui-scroll travel-body travel-customize" role="tabpanel" aria-labelledby="travel-customize-mode-tab">
+    <section v-else id="travel-customize-panel" class="ui-scroll travel-body travel-customize" role="region" aria-label="Customize Travel">
       <section class="travel-customize-group" aria-labelledby="travel-shortcuts-title">
         <header class="travel-section-head"><h2 id="travel-shortcuts-title">Number shortcuts</h2><span>Press 1–9</span></header>
         <div class="travel-customize-shortcuts">

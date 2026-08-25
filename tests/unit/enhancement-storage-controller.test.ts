@@ -111,7 +111,7 @@ test("storage fails closed without a confirmed character access proof", () => {
       cancelable: true,
       detail: refusedDetail,
     }));
-    assert.match(refusedDetail.error?.message ?? "", /PvP and guild halls/);
+    assert.match(refusedDetail.error?.message ?? "", /during PvP play/);
     controller.update({
       enabled: true,
       playRegion: "pve",

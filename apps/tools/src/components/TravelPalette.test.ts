@@ -97,29 +97,29 @@ describe("TravelPalette", () => {
       "Search destinations or phrases…",
     );
     expect(wrapper.get('[aria-label="Close Quick Travel"]').element.closest("label")).toBeNull();
-    expect(wrapper.get('[aria-label="Quick Travel mode"] [aria-selected="true"]').text()).toBe(
-      "Travel",
-    );
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false);
+    expect(wrapper.get('[aria-label="Customize Travel"]').attributes("aria-pressed")).toBe("false");
     wrapper.unmount();
   });
 
-  it("supports roving Left and Right arrow navigation across the mode tabs", async () => {
+  it("keeps Travel as the default and reveals setup from the cog button", async () => {
     const { wrapper } = fixture({}, document.body);
     await flushPromises();
-    const tabs = wrapper.findAll('[aria-label="Quick Travel mode"] [role="tab"]');
+    const settings = wrapper.get('[aria-label="Customize Travel"]');
 
-    expect(tabs[0]?.attributes("tabindex")).toBe("0");
-    expect(tabs[1]?.attributes("tabindex")).toBe("-1");
-    await tabs[0]?.trigger("keydown", { key: "ArrowRight" });
+    expect(wrapper.find("#travel-panel").exists()).toBe(true);
+    expect(settings.attributes("aria-pressed")).toBe("false");
+    await settings.trigger("click");
     await flushPromises();
-    expect(tabs[0]?.attributes("tabindex")).toBe("-1");
-    expect(tabs[1]?.attributes("tabindex")).toBe("0");
-    expect(document.activeElement).toBe(tabs[1]?.element);
+    expect(wrapper.find("#travel-customize-panel").exists()).toBe(true);
+    expect(settings.attributes("aria-pressed")).toBe("true");
+    expect(document.activeElement).toBe(settings.element);
 
-    await tabs[1]?.trigger("keydown", { key: "ArrowLeft" });
+    await wrapper.get(".travel-palette").trigger("keydown", { key: "Escape" });
     await flushPromises();
-    expect(tabs[0]?.attributes("tabindex")).toBe("0");
-    expect(document.activeElement).toBe(tabs[0]?.element);
+    expect(wrapper.find("#travel-panel").exists()).toBe(true);
+    expect(settings.attributes("aria-pressed")).toBe("false");
+    expect(document.activeElement).toBe(wrapper.get("#travel-search-input").element);
     wrapper.unmount();
   });
 
@@ -136,18 +136,18 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("shows phrase search results from Customize and returns to setup through the tab", async () => {
+  it("shows phrase search results from customization and returns through the cog", async () => {
     const { wrapper } = fixture({ synonyms: [{ term: "daily run", mapId: 480 }] });
     await flushPromises();
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     await wrapper.get("#travel-search-input").setValue("daily");
 
     expect(wrapper.find("#travel-customize-panel").exists()).toBe(false);
     expect(wrapper.get("#travel-results-panel").text()).toContain("Ruins of Morah");
     expect(wrapper.get(".travel-match").text()).toBe("Search phrase");
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     expect(wrapper.find("#travel-results-panel").exists()).toBe(false);
     expect(wrapper.find("#travel-customize-panel").exists()).toBe(true);
     expect(wrapper.get("#travel-search-input").element).toHaveProperty("value", "");
@@ -195,7 +195,7 @@ describe("TravelPalette", () => {
     expect(wrapper.text()).toContain("Eye of the North is now shortcut 9");
 
     await wrapper.get('[role="combobox"]').setValue("");
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     await wrapper.get('[aria-label^="Change shortcut 9"]').trigger("click");
     wrapper.getComponent(TravelDestinationPicker).vm.$emit("update:modelValue", null);
     await flushPromises();
@@ -207,7 +207,7 @@ describe("TravelPalette", () => {
     const { wrapper, savePreferences } = fixture();
     await flushPromises();
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     await wrapper.get(".travel-customize-group:nth-of-type(2) .travel-section-head .ui-button").trigger("click");
     await wrapper.get("#travel-new-phrase").setValue("daily run");
     wrapper.getComponent(TravelDestinationPicker).vm.$emit("update:modelValue", 480);
@@ -220,14 +220,12 @@ describe("TravelPalette", () => {
     ]);
     expect(wrapper.text()).toContain("Search was verified");
     expect(wrapper.get('[role="combobox"]').element).toHaveProperty("value", "daily run");
-    expect(wrapper.get('[aria-label="Quick Travel mode"] [aria-selected="true"]').text()).toBe(
-      "Travel",
-    );
+    expect(wrapper.get('[aria-label="Customize Travel"]').attributes("aria-pressed")).toBe("false");
     expect(wrapper.findAll('[role="option"]')).toHaveLength(1);
     expect(wrapper.text()).toContain("Ruins of Morah");
     expect(wrapper.get(".travel-match").text()).toBe("Search phrase");
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     expect(wrapper.findAll(".travel-phrase-row")).toHaveLength(1);
 
     await wrapper.get(".travel-phrase-row .ui-input").setValue("nightfall daily");
@@ -250,7 +248,7 @@ describe("TravelPalette", () => {
       synonyms: Object.freeze([]),
     }));
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     await wrapper.get(".travel-customize-group:nth-of-type(2) .travel-section-head .ui-button").trigger("click");
     await wrapper.get("#travel-new-phrase").setValue("daily run");
     wrapper.getComponent(TravelDestinationPicker).vm.$emit("update:modelValue", 480);
@@ -259,9 +257,7 @@ describe("TravelPalette", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("did not confirm that phrase was saved");
-    expect(wrapper.get('[aria-label="Quick Travel mode"] [aria-selected="true"]').text()).toBe(
-      "Customize",
-    );
+    expect(wrapper.get('[aria-label="Customize Travel"]').attributes("aria-pressed")).toBe("true");
     expect(wrapper.findAll(".travel-phrase-row")).toHaveLength(0);
     expect(wrapper.text()).not.toContain("Search was verified");
     wrapper.unmount();
@@ -272,7 +268,7 @@ describe("TravelPalette", () => {
       synonyms: [{ term: "daily run", mapId: 480 }],
     });
     await flushPromises();
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
 
     savePreferences.mockRejectedValueOnce(new Error("private phrase failure"));
     const phraseInput = wrapper.get(".travel-phrase-row .ui-input");
