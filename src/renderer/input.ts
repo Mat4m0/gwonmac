@@ -44,6 +44,13 @@ const TRACED_MODIFIERS: Readonly<Record<string, 'ctrl' | 'shift' | 'alt'>> = {
   Alt: 'alt',
 };
 
+const REPEATED_ARROW_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+]);
+
 const isCommandKey = (code: string): boolean =>
   code === 'MetaLeft' || code === 'MetaRight';
 
@@ -499,6 +506,13 @@ export const installGameInput = ({
     const held = heldKeys.get(event.code);
     const key = clientKey(event, event.repeat ? held?.key : undefined);
     if (event.repeat && held) {
+      // Guild Wars treats arrows as transitions, not held-state updates. Its
+      // hidden proxy forwards the native repeat to the canvas, but the game
+      // ignores that keydown while the first press is still held. Restate the
+      // missing release before each AppKit repeat. The physical key remains in
+      // heldKeys, so interruption cleanup and the final trusted keyup still
+      // release it normally. AppKit remains the only repeat clock.
+      if (REPEATED_ARROW_KEYS.has(key)) dispatchKeyRelease(held);
       traceKey(event, 'down', 'observed');
       return;
     }

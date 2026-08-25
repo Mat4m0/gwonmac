@@ -1,9 +1,10 @@
 /**
  * Chromium hidden-proxy contract probe for physical repeats.
  *
- * It asserts every trusted browser edit instead of only the final value. The
- * native process policy and a live client check cover the AppKit boundary;
- * this test does not imitate the closed-source client's forwarding glue.
+ * It asserts every browser edit and arrow transition instead of only the final
+ * value. The native process policy and a live client check cover the AppKit
+ * boundary; this test does not imitate the closed-source client's forwarding
+ * glue.
  */
 import { expect, test } from '@playwright/test';
 import { closeOffline, launchCachedClient } from './fixtures.mjs';
@@ -27,9 +28,10 @@ type EditObservation = {
 type RepeatProbe = {
   keyboard: KeyboardObservation[];
   edits: EditObservation[];
+  arrowTransitions: string[];
 };
 
-test('Chromium preserves supplied repeat events in hidden-proxy editing', async () => {
+test('native repeat edits text and retriggers hidden-proxy arrows', async () => {
   const fixture = await launchCachedClient('gw-text-repeat-contract-');
   try {
     const { app, page } = fixture;
@@ -43,7 +45,8 @@ test('Chromium preserves supplied repeat events in hidden-proxy editing', async 
         throw new Error('OSK contract fixture is incomplete');
       }
       const host = window as typeof window & { __repeatProbe?: RepeatProbe };
-      host.__repeatProbe = { keyboard: [], edits: [] };
+      host.__repeatProbe = { keyboard: [], edits: [], arrowTransitions: [] };
+      const heldArrows = new Set<string>();
       const observeKeyboard = (event: KeyboardEvent) => {
         host.__repeatProbe?.keyboard.push({
           phase: event.type as 'keydown' | 'keyup',
@@ -51,6 +54,13 @@ test('Chromium preserves supplied repeat events in hidden-proxy editing', async 
           repeat: event.repeat,
           trusted: event.isTrusted,
         });
+        if (!event.key.startsWith('Arrow')) return;
+        if (event.type === 'keyup') {
+          heldArrows.delete(event.code);
+        } else if (!heldArrows.has(event.code)) {
+          heldArrows.add(event.code);
+          host.__repeatProbe?.arrowTransitions.push(event.key);
+        }
       };
       field.addEventListener('keydown', observeKeyboard);
       field.addEventListener('keyup', observeKeyboard);
@@ -109,6 +119,15 @@ test('Chromium preserves supplied repeat events in hidden-proxy editing', async 
       field.setSelectionRange(2, 2);
     });
     await held('Delete', 'Delete', 46);
+
+    for (const [code, keyValue, virtualKeyCode] of [
+      ['ArrowUp', 'ArrowUp', 38],
+      ['ArrowDown', 'ArrowDown', 40],
+      ['ArrowLeft', 'ArrowLeft', 37],
+      ['ArrowRight', 'ArrowRight', 39],
+    ] as const) {
+      await held(code, keyValue, virtualKeyCode);
+    }
     await page.evaluate(() => {
       const field = document.getElementById('osk-input-text') as HTMLInputElement;
       field.value = 'abcdef';
@@ -144,9 +163,22 @@ test('Chromium preserves supplied repeat events in hidden-proxy editing', async 
     const probe = await page.evaluate(() =>
       (window as typeof window & { __repeatProbe?: RepeatProbe }).__repeatProbe);
     expect(probe).toBeDefined();
-    expect(probe!.keyboard.every(({ trusted }) => trusted)).toBe(true);
+    expect(probe!.keyboard.filter(({ trusted }) => !trusted).map(({ phase, code }) => ({
+      phase, code,
+    }))).toEqual([
+      ...Array(2).fill({ phase: 'keyup', code: 'ArrowUp' }),
+      ...Array(2).fill({ phase: 'keyup', code: 'ArrowDown' }),
+      ...Array(2).fill({ phase: 'keyup', code: 'ArrowLeft' }),
+      ...Array(2).fill({ phase: 'keyup', code: 'ArrowRight' }),
+    ]);
     expect(probe!.keyboard.filter(({ phase, repeat }) => phase === 'keydown' && repeat))
-      .toHaveLength(12);
+      .toHaveLength(20);
+    expect(probe!.arrowTransitions).toEqual([
+      ...Array(3).fill('ArrowUp'),
+      ...Array(3).fill('ArrowDown'),
+      ...Array(3).fill('ArrowLeft'),
+      ...Array(3).fill('ArrowRight'),
+    ]);
 
     expect(probe!.edits.every(({ trusted }) => trusted)).toBe(true);
     expect(probe!.edits.map(({ phase, inputType, data }) => ({

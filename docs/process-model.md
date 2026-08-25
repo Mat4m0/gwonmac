@@ -194,8 +194,11 @@ Before the first window exists, Electron writes the bundle-specific persistent
 repeat keydowns to hidden text proxies for printable characters, Backspace,
 Delete, and navigation keys. It does not change the global macOS preference,
 create a timer, or synthesize repeat cadence. macOS remains the sole repeat
-clock. Automated tests prove how Chromium handles supplied repeat events. A
-packaged physical test proves that AppKit supplies them to the current client.
+clock. Guild Wars treats arrows as transitions, so the renderer puts a release
+before each native repeated arrow press. This lets chat history and cursor
+movement follow the native cadence. Automated tests prove how Chromium handles
+supplied repeat events. A packaged physical test proves that AppKit supplies
+them to the current client.
 
 Certified Core supplies native double-click and the Guild Wars cursor. Core is
 required behavior. It is not a saved player preference. If an ArenaNet build
