@@ -122,6 +122,10 @@ function featureFailuresFromVerdicts(
     "skillCooldownObservation",
     verdicts.skillCooldownObservation,
   );
+  const preGameControls = refusalForFeature(
+    "preGameControls",
+    verdicts.preGameControls,
+  );
   if (
     nativeCursor === null
     || playRegionObservation === null
@@ -133,6 +137,7 @@ function featureFailuresFromVerdicts(
     || chatAliases === null
     || skillSlotGeometry === null
     || skillCooldownObservation === null
+    || preGameControls === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -145,6 +150,7 @@ function featureFailuresFromVerdicts(
     ...(chatAliases ? { chatAliases } : {}),
     ...(skillSlotGeometry ? { skillSlotGeometry } : {}),
     ...(skillCooldownObservation ? { skillCooldownObservation } : {}),
+    ...(preGameControls ? { preGameControls } : {}),
   });
 }
 
@@ -508,6 +514,15 @@ function matchesSkillCooldownObservation(
     && isDeepStrictEqual(candidate.layout, expected.layout);
 }
 
+function matchesPreGameControls(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  return build.preGameControls === undefined
+    || (baseline.preGameControls !== undefined
+      && isDeepStrictEqual(build.preGameControls, baseline.preGameControls));
+}
+
 function matchesPlayerSkillbarObservation(
   build: SemanticBuild,
   baseline: KnownEnhancementBuild,
@@ -569,10 +584,11 @@ function isAutomaticSemanticBuild(
   const hasSkillSlotGeometry = build.skillSlotGeometry !== undefined;
   const hasPlayerSkillbar = build.playerSkillbarObservation !== undefined;
   const hasSkillCooldown = build.skillCooldownObservation !== undefined;
+  const hasPreGameControls = build.preGameControls !== undefined;
   if (!hasCursor && !hasPlayRegion && !hasObservation && !hasTarget
     && !hasTravel && !hasXunlai && !hasAliases
     && !hasParty && !hasTeam && !hasSkillSlotGeometry
-    && !hasPlayerSkillbar && !hasSkillCooldown) {
+    && !hasPlayerSkillbar && !hasSkillCooldown && !hasPreGameControls) {
     return false;
   }
   if (
@@ -623,6 +639,7 @@ function isAutomaticSemanticBuild(
     && matchesTeamApply(build, baseline)
     && matchesSkillSlotGeometry(build)
     && matchesSkillCooldownObservation(build, baseline)
+    && matchesPreGameControls(build, baseline)
   );
 }
 

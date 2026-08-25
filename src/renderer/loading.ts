@@ -235,7 +235,9 @@ window.gwLoading = (function (): LoadingController {
       // at which point this document can safely load it. An active client
       // instead asks main to relaunch and reports `starting`; reloading here
       // would unload the renderer while quit cleanup is still syncing IDBFS.
-      if (progress.phase === 'ready') window.location.reload();
+      if (progress.phase === 'ready') {
+        await window.gwNative.app.reloadGame('crash-retry');
+      }
     } catch {
       if (requestedRecovery === 'filesystem') {
         api.failFilesystem();
@@ -292,10 +294,12 @@ window.gwLoading = (function (): LoadingController {
       { describeLaunchFailure, describeNotice, failureDetail },
       { DownloadDetailLine },
       { launchGateDecision },
+      { launchProgressForSession },
     ] = await Promise.all([
       import('./failure-messages.js'),
       import('./progress-display.js'),
       import('./update-action.js'),
+      import('./client-launch-readiness.js'),
     ]);
 
     return new Promise<boolean>((resolve) => {
@@ -367,6 +371,7 @@ window.gwLoading = (function (): LoadingController {
       };
 
       const apply = (p: DownloadProgress) => {
+        if (settled) return;
         if (p.phase === 'error') {
           api.fail(describeLaunchFailure(p.errorCode), failureDetail(p.errorCode));
           finish(false);
@@ -398,7 +403,15 @@ window.gwLoading = (function (): LoadingController {
       };
 
       const unsub = window.gwNative.progress.onChange(apply);
-      void window.gwNative.progress.current().then(apply);
+      void Promise.all([
+        window.gwNative.progress.current(),
+        window.gwNative.client.session(),
+      ]).then(([progress, session]) => {
+        apply(launchProgressForSession(progress, session));
+      }).catch(() => {
+        // Live progress remains subscribed. A later ready or error event still
+        // settles the launcher if either snapshot read failed during reload.
+      });
     });
   }
 

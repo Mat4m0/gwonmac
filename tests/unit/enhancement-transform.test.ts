@@ -37,6 +37,7 @@ import {
 const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: true,
   teamApply: false,
@@ -290,6 +291,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
         {
           nativeCursor: true,
           playRegionObservation: false,
+    preGameControls: false,
           targetObservation: true,
           partyObservation: false,
           teamApply: true,

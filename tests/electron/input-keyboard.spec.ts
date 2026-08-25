@@ -208,6 +208,168 @@ test.describe("renderer keyboard input", () => {
     }
   });
 
+  test("submits login after its measured delay and certified pre-game input immediately", async () => {
+    const fixture = await launchCachedClient("gw-character-relog-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(async () => {
+        const moduleUrl: string = "gw://app/input.js";
+        const { installGameInput } = await import(moduleUrl) as
+          typeof import("../../src/renderer/input.js");
+        const canvas = document.createElement("canvas");
+        canvas.tabIndex = 0;
+        document.body.append(canvas);
+        const events: Array<{ trusted: boolean; type: string; afterMs: number }> = [];
+        const started = performance.now();
+        for (const type of ["keydown", "keyup"] as const) {
+          canvas.addEventListener(type, (event) => {
+            if (event.key === "Enter") {
+              events.push({
+                trusted: event.isTrusted,
+                type,
+                afterMs: performance.now() - started,
+              });
+            }
+          });
+        }
+        const input = installGameInput({ canvas, log: () => undefined });
+        canvas.focus();
+        input.submitSavedLogin();
+        Object.assign(window, {
+          __relogInput: input,
+          __relogCanvas: canvas,
+          __relogEvents: events,
+        });
+      });
+
+      await page.waitForTimeout(80);
+      expect(await page.evaluate(() =>
+        (window as typeof window & { __relogEvents?: unknown[] }).__relogEvents,
+      )).toEqual([]);
+      await expect.poll(() => page.evaluate(() =>
+        (window as typeof window & { __relogEvents?: unknown[] }).__relogEvents,
+      )).toHaveLength(2);
+      const automatic = await page.evaluate(() =>
+        (window as typeof window & {
+          __relogEvents?: Array<{ trusted: boolean; type: string; afterMs: number }>;
+        }).__relogEvents ?? [],
+      );
+      expect(automatic.map(({ trusted, type }) => ({ trusted, type }))).toEqual([
+        { trusted: false, type: "keydown" },
+        { trusted: false, type: "keyup" },
+      ]);
+      expect(automatic[0]?.afterMs).toBeGreaterThanOrEqual(140);
+
+      const activation = await page.evaluate(async () => {
+        const testWindow = window as typeof window & {
+          __relogInput?: GameInputController;
+          __relogCanvas?: HTMLCanvasElement;
+          __relogEvents?: unknown[];
+        };
+        testWindow.__relogEvents?.splice(0);
+        testWindow.__relogCanvas?.focus();
+        window.gwPreGameControls = { state: () => 'character-select', playable: () => null, diagnosticMask: () => 0 };
+        const started = performance.now();
+        const outcome = await testWindow.__relogInput
+          ?.playSelectedCharacter();
+        return { outcome, elapsedMs: performance.now() - started };
+      });
+      const restoration = await page.evaluate(() =>
+        (window as typeof window & {
+          __relogEvents?: Array<{ trusted: boolean; type: string; afterMs: number }>;
+        }).__relogEvents ?? [],
+      );
+      expect(restoration.map(({ trusted, type }) => ({ trusted, type }))).toEqual([
+        { trusted: false, type: "keydown" },
+        { trusted: false, type: "keyup" },
+      ]);
+      expect(activation.outcome).toBe('sent');
+      expect(activation.elapsedMs).toBeLessThan(20);
+
+      expect(await page.evaluate(async () => {
+        const testWindow = window as typeof window & {
+          __relogInput?: GameInputController;
+          __relogEvents?: unknown[];
+        };
+        testWindow.__relogEvents?.splice(0);
+        window.gwPreGameControls = { state: () => 'unknown', playable: () => null, diagnosticMask: () => 0 };
+        const outcome = await testWindow.__relogInput
+          ?.playSelectedCharacter();
+        return { outcome, events: testWindow.__relogEvents };
+      })).toEqual({ outcome: 'cancelled', events: [] });
+
+      expect(await page.evaluate(async () => {
+        const testWindow = window as typeof window & {
+          __relogInput?: GameInputController;
+          __relogEvents?: unknown[];
+        };
+        testWindow.__relogEvents?.splice(0);
+        window.gwPreGameControls = { state: () => 'reconnect', playable: () => null, diagnosticMask: () => 0 };
+        const outcome = await testWindow.__relogInput?.acceptReconnect();
+        return { outcome, events: testWindow.__relogEvents };
+      })).toEqual({
+        outcome: 'sent',
+        events: [
+          expect.objectContaining({ trusted: false, type: 'keydown' }),
+          expect.objectContaining({ trusted: false, type: 'keyup' }),
+        ],
+      });
+
+      expect(await page.evaluate(async () => {
+        const testWindow = window as typeof window & {
+          __relogInput?: GameInputController;
+          __relogEvents?: unknown[];
+        };
+        testWindow.__relogEvents?.splice(0);
+        window.gwPreGameControls = { state: () => 'loading', playable: () => null, diagnosticMask: () => 0 };
+        const outcome = await testWindow.__relogInput?.acceptReconnect();
+        return { outcome, events: testWindow.__relogEvents };
+      })).toEqual({ outcome: 'progressed', events: [] });
+
+      await page.evaluate(() => {
+        const testWindow = window as typeof window & {
+          __relogInput?: GameInputController;
+          __relogCanvas?: HTMLCanvasElement;
+          __relogEvents?: unknown[];
+        };
+        testWindow.__relogEvents?.splice(0);
+        testWindow.__relogCanvas?.focus();
+        testWindow.__relogInput?.submitSavedLogin();
+      });
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(260);
+      expect(await page.evaluate(() =>
+        (window as typeof window & {
+          __relogEvents?: Array<{ trusted: boolean; type: string }>;
+        }).__relogEvents?.map(({ trusted, type }) => ({ trusted, type })),
+      )).toEqual([
+        { trusted: true, type: "keydown" },
+        { trusted: true, type: "keyup" },
+      ]);
+
+      await page.evaluate(() => {
+        const testWindow = window as typeof window & {
+          __relogInput?: GameInputController;
+          __relogCanvas?: HTMLCanvasElement;
+          __relogEvents?: unknown[];
+        };
+        testWindow.__relogEvents?.splice(0);
+        testWindow.__relogCanvas?.focus();
+        testWindow.__relogInput?.expectCharacterSelection();
+      });
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(420);
+      expect(await page.evaluate(() =>
+        (window as typeof window & {
+          __relogEvents?: Array<{ trusted: boolean; type: string }>;
+        }).__relogEvents?.filter(({ trusted }) => !trusted),
+      )).toHaveLength(2);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("uses physical main-block keys without changing typed text", async () => {
     const fixture = await launchCachedClient("gw-physical-key-e2e-");
     try {

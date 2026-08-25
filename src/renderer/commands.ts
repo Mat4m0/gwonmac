@@ -116,7 +116,10 @@
         break;
       case 'filesystem.sync':
         await new Promise<void>((resolve, reject) => {
-          const fs = window.Module?.FS;
+          // ArenaNet's generated glue publishes FS on the global object.
+          // Module.FS is a throwing compatibility getter unless the client was
+          // built with FS in EXPORTED_RUNTIME_METHODS.
+          const fs = window.FS;
           if (!fs) {
             resolve();
             return;

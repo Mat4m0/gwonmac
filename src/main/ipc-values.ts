@@ -9,6 +9,9 @@ import type {
   WasmAbortReasonKind,
 } from "../shared/diagnostics.js";
 import {
+  RELOG_INPUT_OUTCOMES,
+  RELOG_INPUT_STAGES,
+  RELOG_TERMINAL_OUTCOMES,
   RENDERER_MILESTONES,
   WASM_ABORT_REASON_KINDS,
   WASM_GROWTH_OUTCOMES,
@@ -100,6 +103,36 @@ export function parseRendererMilestoneArgs(args: readonly unknown[]): ParsedMile
     milestoneFields = {
       programId: record.programId as string | number,
       buildId: record.buildId as string | number,
+    };
+  } else if (name === "relog.preGameProbe") {
+    const states = ["unknown", "character-select", "reconnect", "loading"];
+    const valid = recordIsObject && Object.keys(record).length === 2
+      && typeof record.state === "string" && states.includes(record.state)
+      && typeof record.mask === "number" && Number.isInteger(record.mask)
+      && record.mask >= 0 && record.mask <= 0xffff_ffff;
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      state: record.state as "unknown" | "character-select" | "reconnect" | "loading",
+      mask: record.mask as number,
+    };
+  } else if (name === "relog.inputSettled") {
+    const valid = recordIsObject && Object.keys(record).length === 2
+      && typeof record.stage === "string"
+      && (RELOG_INPUT_STAGES as readonly string[]).includes(record.stage)
+      && typeof record.outcome === "string"
+      && (RELOG_INPUT_OUTCOMES as readonly string[]).includes(record.outcome);
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      stage: record.stage as (typeof RELOG_INPUT_STAGES)[number],
+      outcome: record.outcome as (typeof RELOG_INPUT_OUTCOMES)[number],
+    };
+  } else if (name === "relog.finished") {
+    const valid = recordIsObject && Object.keys(record).length === 1
+      && typeof record.outcome === "string"
+      && (RELOG_TERMINAL_OUTCOMES as readonly string[]).includes(record.outcome);
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      outcome: record.outcome as (typeof RELOG_TERMINAL_OUTCOMES)[number],
     };
   } else if (name === "wasm.abort") {
     const valid = recordIsObject && Object.keys(record).length === 3

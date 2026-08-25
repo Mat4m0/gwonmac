@@ -17,6 +17,7 @@ export function projectLiveResult(
     const ready = state?.status === "ready" ? state : null;
     const runtime = window.gwCompanionRuntime;
     const diagnostics = await window.gwNative.diagnostics.current();
+    const clientSession = await window.gwNative.client.session();
     const settings = await window.gwNative.settings.get();
     const storage = await window.navigator.storage.estimate();
     const p95 = (metric: string) =>
@@ -32,6 +33,7 @@ export function projectLiveResult(
       Number(((Number(diagnostics.latest[metric]) || 0) / 1_000).toFixed(1));
     return {
       scenario: name,
+      appVersion: clientSession.appVersion,
       supported: runtime?.status === "installed",
       buildId: typeof runtime?.buildId === "number" ? runtime.buildId : null,
       companionAbi: numeric(runtime?.companionAbi),

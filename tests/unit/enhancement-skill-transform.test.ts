@@ -20,6 +20,7 @@ const capabilities: EnhancementCapabilities = Object.freeze({
   skillSlotGeometry: true,
   skillCooldownObservation: true,
   playRegionObservation: true,
+    preGameControls: false,
 });
 
 const hash = (body: Uint8Array) =>

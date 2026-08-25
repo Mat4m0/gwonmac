@@ -100,6 +100,14 @@ Wars produced no cursor event. It cannot originate a click. Team Apply acts
 only after an explicit player command. These actions do not permit autonomous
 play.
 
+After an explicit Reload command, the app may send one Return after saved login
+is restored and one only while the certified native Play control is visible.
+It sends a third Return only while the certified native reconnect dialog is
+visible. If Guild Wars has started loading the selected character, no third
+input is sent. This is bounded session restoration: it expires after 30
+seconds, cannot change the selected character, cannot repeat a step, and loses
+automatic pre-game input when the exact client build is not certified.
+
 ## Evidence standard
 
 Consequential privacy, data, release, update, and performance claims need

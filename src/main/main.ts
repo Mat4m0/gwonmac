@@ -94,6 +94,7 @@ import {
   flushWindowState,
   prepareWindowState,
   RENDERER_URL,
+  requestGameQuit,
   type WindowHost,
   updateLongRunningTaskFeedback,
 } from "./window.js";
@@ -138,6 +139,7 @@ import {
 } from "./accounts-window.js";
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { BuildLibraryCoordinator } from "./core/build-library-coordinator.js";
+import { GameReloader } from "./game-reload.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -367,6 +369,11 @@ function buildWindowHost(
   enhancementProgram: EnhancementProgram,
   diagnosticProfile: DiagnosticProfile,
 ): WindowHost {
+  const gameReloader = new GameReloader({
+    sockets,
+    getSettings: () => preferences.getSettings(),
+    rendererUrl: RENDERER_URL,
+  });
   return {
     sockets,
     enhancementSelection,
@@ -389,16 +396,9 @@ function buildWindowHost(
     markPerformanceProblem,
     startCapture: startDiagnosticCapture,
     stopCapture: stopDiagnosticCaptureForWindow,
-    reloadGame: (win) => {
-      void (async () => {
-        // A refused template generation specifically asks for a reload. The
-        // command reports that as `failed`; it never rejects, and navigation
-        // must still establish the next projection generation.
-        await sendRendererCommand(win, { type: "filesystem.sync" });
-        sockets.closeAll(win.webContents.id);
-        await win.loadURL(RENDERER_URL);
-      })();
-    },
+    reloadGame: (win, cause) => gameReloader.reload(win, cause),
+    claimRelogIntent: (win) => gameReloader.claimRelogIntent(win),
+    requestQuit: requestGameQuit,
     prepareRendererRecovery: async () => {
       await clientRuntime.recoverRendererCrash();
     },
@@ -786,7 +786,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     deleteAccount: (parent, profileId) => accounts.delete(parent, profileId),
     loadAccountTemplates: (win) => accounts.loadTemplates(win),
     saveAccountTemplates: (win, entries) => accounts.saveTemplates(win, entries),
-    requestQuit: (win) => accounts.requestQuit(win),
+    requestQuit: requestGameQuit,
+    reloadGame: (win, cause) => host.reloadGame(win, cause),
+    claimRelogIntent: (win) => host.claimRelogIntent(win),
     useSingleAccountMode: () => accounts.useSingleMode(),
   });
 

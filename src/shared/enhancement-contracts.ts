@@ -21,6 +21,7 @@ export const ENHANCEMENT_PROGRAMS = [
   "toolbox-foundation",
   "toolbox-commands",
   "xunlai-storage",
+  "reconnect-probe",
 ] as const;
 
 export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
@@ -104,6 +105,16 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     requiresAll: [],
     requiresAny: [],
     configOwners: ["play-region"],
+    hooks: [],
+  },
+  {
+    // Core reload automation observes only four exact native frames and
+    // publishes a closed pre-game state. It deliberately has no generic UI
+    // hook or frame command surface.
+    id: "preGameControls",
+    requiresAll: ["playRegionObservation"],
+    requiresAny: [],
+    configOwners: ["skill-slots"],
     hooks: [],
   },
 ] as const);
@@ -193,6 +204,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playRegionObservation: false,
+  preGameControls: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -227,6 +239,7 @@ export function parseEnhancementCapabilities(
     skillSlotGeometry: value.skillSlotGeometry,
     skillCooldownObservation: value.skillCooldownObservation,
     playRegionObservation: value.playRegionObservation,
+    preGameControls: value.preGameControls,
   });
 }
 
@@ -250,14 +263,14 @@ export function enhancementCapabilityProfile(
 
 /** Named product/developer choices. Certificates and caches use only bit identities. */
 export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
-  cursor: capabilitiesFromMask(0x01),
+  cursor: capabilitiesFromMask(0x601),
   region: capabilitiesFromMask(0x200),
   target: capabilitiesFromMask(0x202),
   party: capabilitiesFromMask(0x284),
   cursorParty: capabilitiesFromMask(0x285),
   storage: capabilitiesFromMask(0x270),
   partyCommandsStorage: capabilitiesFromMask(0x2fc),
-  all: capabilitiesFromMask(0x3ff),
+  all: capabilitiesFromMask(0x7ff),
 });
 
 export {
@@ -265,7 +278,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 42;
+export const ENHANCEMENT_TRANSFORM_ABI = 44;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
@@ -301,6 +314,9 @@ export function enhancementCapabilitiesFor(
     case "toolbox-foundation": return ENHANCEMENT_CAPABILITY_PRESETS.party;
     case "toolbox-commands": return ENHANCEMENT_CAPABILITY_PRESETS.partyCommandsStorage;
     case "xunlai-storage": return ENHANCEMENT_CAPABILITY_PRESETS.storage;
+    // The reload probe needs the same bounded pre-game and play-region readers
+    // that required Core installs in production.
+    case "reconnect-probe": return ENHANCEMENT_CAPABILITY_PRESETS.cursor;
   }
 }
 

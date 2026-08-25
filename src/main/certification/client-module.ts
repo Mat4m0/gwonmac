@@ -189,6 +189,7 @@ function enhancementCache(
     skillSlotGeometry: capabilities.skillSlotGeometry,
     skillCooldownObservation: capabilities.skillCooldownObservation,
     playRegionObservation: capabilities.playRegionObservation,
+    preGameControls: capabilities.preGameControls,
   };
   return {
     inputSha256: build.sha256,

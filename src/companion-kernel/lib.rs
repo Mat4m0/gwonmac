@@ -855,14 +855,14 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
             }
         }
         DISPATCH_UI => {
-            if !unsafe { INITIALIZED }
-                || unsafe { ACTIVE_FEATURES } & FEATURE_TOOLBOX_FOUNDATION == 0
-            {
+            if !unsafe { INITIALIZED } {
                 return;
             }
             unsafe {
                 let layout = LAYOUT;
-                toolbox::observe_ui(layout, a, b);
+                if ACTIVE_FEATURES & FEATURE_TOOLBOX_FOUNDATION != 0 {
+                    toolbox::observe_ui(layout, a, b);
+                }
             }
         }
         DISPATCH_ACTIVE_FEATURES => {

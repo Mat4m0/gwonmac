@@ -647,12 +647,18 @@ test.describe("tools and update settings", () => {
       });
       await page.evaluate(() => {
         window.Module ??= {};
-        window.Module.FS = {
-          syncfs: (_populate, callback) => {
+        Object.defineProperty(window.Module, "FS", {
+          configurable: true,
+          get() {
+            throw new Error("'FS' was not exported");
+          },
+        });
+        Object.assign(globalThis, { FS: {
+          syncfs: (_populate: boolean, callback: (error?: unknown) => void) => {
             document.documentElement.dataset.updateFsSynced = "yes";
             callback();
           },
-        };
+        } });
         globalThis.dispatchEvent(new globalThis.CustomEvent("gw:settings", {
           detail: { pane: "updates" },
         }));

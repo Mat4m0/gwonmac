@@ -26,7 +26,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         "26a71c3e2bf55ab992dce659c1192213858ee25799daa87841ed23a3ddbb601a",
       // Recomputed from the exact current JSPI artifact when the independent
       // play-region capability landed. The retained output is the complete
-      // product profile proved by semantic verifier ABI 4.
+      // product profile proved by semantic verifier ABI 6.
       //
       // `pnpm check` cannot catch a stale value here. The transform input is a
       // derived game binary this repository does not contain, so nothing in the
@@ -35,8 +35,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // `transformEnhancementWasm` against the real derived module whenever
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
-        "features-3ff":
-          "03afee84b380d01f974c9949656beaa1d15b7f22ae771990c1c27f3ca92c68da",
+        "features-601":
+          "d7be0111174e0c80d0095ce360756720eed9a02072d3dcb819d5c64e0b4572a0",
+        "features-7ff":
+          "fba87e066408647da3979ab65ee5d3863b58b713a73627c78e3201aa23243fba",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is
@@ -485,6 +487,48 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           frameScreenTop: 0x118,
           frameRelation: 0x128,
           frameState: 0x18c,
+        }),
+      }),
+      preGameControls: Object.freeze({
+        hashFunction: Object.freeze({
+          functionIndex: 365,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256:
+            "90e009c029d1a6fb53f0e7b92d72583497455266a64841d34ac56905289ac95b",
+        }),
+        relationInitializer: Object.freeze({
+          functionIndex: 6548,
+          params: Object.freeze(["i32", "i32", "i32", "i32"] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256:
+            "91bbf0aa603cb47b3b3a1c7ea2a7062730794600897f16cd94c41a6151214199",
+        }),
+        labels: Object.freeze({
+          play: 0x1765ea,
+          selector: 0x1766c8,
+          yes: 0x176972,
+          no: 0x176980,
+          reconnectDialog: 0x1769c4,
+        }),
+        labelHashes: Object.freeze({
+          play: 0x0b041d2a,
+          selector: 0x31616b12,
+          yes: 0x535d1967,
+          no: 0xd698c3c1,
+        }),
+        layout: Object.freeze({
+          frameArray: 0x5a1fdc,
+          frameCount: 0x5a1fe4,
+          frameBytes: 0x1c8,
+          frameId: 0xbc,
+          frameRelation: 0x128,
+          frameHashId: 0x134,
+          frameState: 0x18c,
+          contextRoot: 0x5a0e70,
+          gameContextSlot: 6,
+          characterContext: 0x44,
+          currentInstanceType: 0x23c,
         }),
       }),
       skillCooldownObservation: Object.freeze({

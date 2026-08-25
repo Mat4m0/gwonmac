@@ -188,6 +188,22 @@ export async function installCertifiedCompanion(
         ? exports.enhancement_take_trade_toggle as () => number
         : null)
     : null;
+  const preGameStateReader = capabilities.preGameControls
+    ? (typeof exports.enhancement_pre_game_state === "function"
+        ? exports.enhancement_pre_game_state as () => number
+        : null)
+    : null;
+  const preGameDiagnosticReader = capabilities.preGameControls
+    ? (typeof exports.enhancement_pre_game_diagnostic === "function"
+        ? exports.enhancement_pre_game_diagnostic as () => number
+        : null)
+    : null;
+  if (
+    capabilities.preGameControls
+    && (preGameStateReader === null || preGameDiagnosticReader === null)
+  ) {
+    throw new Error("the pre-game profile derived a module with incomplete readers");
+  }
   if (capabilities.chatAliases && (!configureTradeToggle || !takeTradeToggle)) {
     throw new Error("the aliases profile derived a module with no Trade Chat toggle");
   }
@@ -222,6 +238,7 @@ export async function installCertifiedCompanion(
   let installedCallback: CallableFunction | null = null;
   let installedCursorState: NonNullable<typeof window.gwCursorState> | null = null;
   let installedRuntime: object | null = null;
+  let installedPreGameControls: PreGameControls | null = null;
   let cleaned = false;
   let telemetryInstalled = false;
   const cleanup = (): readonly Error[] => {
@@ -306,6 +323,11 @@ export async function installCertifiedCompanion(
     const runtimeWithdrawn = attempt("runtime withdrawal", () => {
       if (window.gwCompanionRuntime === installedRuntime) {
         window.gwCompanionRuntime = null;
+      }
+    });
+    attempt("pre-game controls withdrawal", () => {
+      if (window.gwPreGameControls === installedPreGameControls) {
+        window.gwPreGameControls = null;
       }
     });
     // Only a completed installation records a withdrawal; a rollback after a
@@ -736,6 +758,35 @@ export async function installCertifiedCompanion(
         ? runtimeProjection
         : Object.assign(runtimeProjection, commands));
     installedRuntime = runtime;
+    if (preGameStateReader) {
+      installedPreGameControls = Object.freeze({
+        state(): PreGameState {
+          try {
+            switch (Number(preGameStateReader()) >>> 0) {
+              case 1: return "character-select";
+              case 2: return "reconnect";
+              case 3: return "loading";
+              default: return "unknown";
+            }
+          } catch {
+            return "unknown";
+          }
+        },
+        playable() {
+          const state = policySnapshot().playRegionState;
+          if (state.status !== "ready") return null;
+          return state.instanceType === 0 ? "outpost" : "explorable";
+        },
+        diagnosticMask(): number {
+          try {
+            return Number(preGameDiagnosticReader!()) >>> 0;
+          } catch {
+            return 0x8000_0000;
+          }
+        },
+      });
+      window.gwPreGameControls = installedPreGameControls;
+    }
     // The retry loop rides the observer's own cadence: it runs exactly when
     // the consumer polls, and pauses with it when the page is hidden.
     const polledCursor = cursor === null ? null : {

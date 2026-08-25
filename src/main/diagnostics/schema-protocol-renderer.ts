@@ -5,6 +5,9 @@
 import type { EventSpec } from "./schema-fields.js";
 import { ALLOWED_PORTS } from "../core/allowlists.js";
 import {
+  RELOG_INPUT_OUTCOMES,
+  RELOG_INPUT_STAGES,
+  RELOG_TERMINAL_OUTCOMES,
   WASM_ABORT_REASON_KINDS,
   WASM_GROWTH_OUTCOMES,
   WASM_MEMORY_PROBE_STATUSES,
@@ -19,6 +22,7 @@ import {
   closeReason,
   code,
   finiteNumber,
+  gameReloadCause,
   incompleteCommandOutcome,
   invokeChannel,
   isRendererFingerprint,
@@ -32,6 +36,7 @@ import {
   snapshotPriority,
   socketFailureCode,
   socketSendStatus,
+  uint32,
 } from "./schema-fields.js";
 
 export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
@@ -172,6 +177,78 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   },
 
   // Renderer recovery and renderer-originated fixed events.
+  "gameReload.requested": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: { cause: gameReloadCause },
+  },
+  "gameReload.syncIncomplete": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "warn",
+    fields: { outcome: incompleteCommandOutcome },
+  },
+  "gameReload.loaded": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: { cause: gameReloadCause },
+  },
+  "commandQ.shortcut": {
+    scope: "owner",
+    subsystem: "app",
+    level: "info",
+    fields: {
+      phase: literal(["claimed", "repeat-contained", "rearmed"] as const),
+      reason: literal([
+        "none",
+        "keyup",
+        "dialog-settled",
+        "appkit-release",
+        "error",
+      ] as const),
+    },
+  },
+  "quitReloadDialog.lifecycle": {
+    scope: "owner",
+    subsystem: "app",
+    level: "info",
+    fields: {
+      phase: literal(["requested", "opened", "settled"] as const),
+      action: literal(["pending", "reload", "quit", "cancel", "failed"] as const),
+      autoRelog: nullable(boolean),
+    },
+  },
+  "relog.inputSettled": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: {
+      stage: literal(RELOG_INPUT_STAGES),
+      outcome: literal(RELOG_INPUT_OUTCOMES),
+      clockSynchronized: boolean,
+    },
+  },
+  "relog.preGameProbe": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "debug",
+    fields: {
+      state: literal(["unknown", "character-select", "reconnect", "loading"] as const),
+      mask: uint32,
+      clockSynchronized: boolean,
+    },
+  },
+  "relog.finished": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: {
+      outcome: literal(RELOG_TERMINAL_OUTCOMES),
+      clockSynchronized: boolean,
+    },
+  },
   "renderer.processExitedDuringQuit": {
     scope: "owner",
     subsystem: "renderer",
@@ -359,6 +436,48 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     scope: "owner",
     subsystem: "renderer",
     level: "info",
+    fields: { clockSynchronized: boolean },
+  },
+  "relog.intentClaimed": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: { clockSynchronized: boolean },
+  },
+  "relog.savedCredentialsLoaded": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: { clockSynchronized: boolean },
+  },
+  "relog.loginSubmitted": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: { clockSynchronized: boolean },
+  },
+  "relog.tokenRequested": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: { clockSynchronized: boolean },
+  },
+  "relog.tokenAccepted": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: { clockSynchronized: boolean },
+  },
+  "relog.characterSubmitted": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: { clockSynchronized: boolean },
+  },
+  "relog.timedOut": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "warn",
     fields: { clockSynchronized: boolean },
   },
   "wasm.instantiate.begin": {

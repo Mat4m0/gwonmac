@@ -194,6 +194,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "targetReadout",
     "skillCooldownOverlayEnabled",
     "extendedMemoryEnabled",
+    "autoRelogAfterReload",
   ] as const) {
     if (setting in src) out[setting] = asBool(src[setting], setting);
   }

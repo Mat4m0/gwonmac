@@ -177,6 +177,10 @@
       <summary>Details</summary>
       <p id="memory-notice-explanation"></p>
     </details>
+    <label class="memory-notice-relog ui-check">
+      <input type="checkbox" id="memory-notice-auto-relog">
+      <span>Return to my character automatically</span>
+    </label>
   </div>
   <div id="memory-notice-actions">
     <button type="button" id="memory-notice-later" class="ui-button" data-variant="quiet"></button>
@@ -877,6 +881,15 @@
             </p>
             <p id="settings-memory-status" class="settings-memory-status"
                role="status" aria-live="polite"></p>
+          </section>
+          <section class="settings-task" aria-labelledby="settings-relog-title">
+            <label class="settings-check ui-check">
+              <input type="checkbox" name="autoRelogAfterReload">
+              <span id="settings-relog-title">Return to my character after reload</span>
+            </label>
+            <p class="settings-note">
+              After Guild Wars reloads, sign in and return to the selected character automatically when the client supports it. This applies to Command-Q, memory warnings, and Reload Game.
+            </p>
           </section>
           <div class="settings-divider" aria-hidden="true"></div>
           <label class="settings-check ui-check">

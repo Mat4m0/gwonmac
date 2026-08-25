@@ -176,6 +176,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillSlotGeometry: true,
     skillCooldownObservation: true,
     playRegionObservation: true,
+    preGameControls: true,
   });
 
   // If this is a statically shipped build, the shape locator must still
@@ -285,6 +286,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
+    preGameControls: true,
   });
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
@@ -304,6 +306,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
+    preGameControls: true,
   });
 
   const targetMutations = [
@@ -947,6 +950,19 @@ test("every certified runtime profile reproduces the real client chain", async (
   const template = rewriteTemplateSaveWasm(official, templateBuild);
   const enhancementBuild = verified.enhancementBuild;
   assert.ok(enhancementBuild, "the template output must pass Enhancement proof");
+  const authoredBuild = ENHANCEMENT_BUILDS.find(
+    (candidate) => candidate.sha256 === enhancementBuild.sha256,
+  );
+  assert.ok(authoredBuild, "the exact client must retain its authored build row");
+  for (const profile of enhancementProfilesForBuild(authoredBuild)) {
+    const capabilities = enhancementCapabilitiesForProfile(profile);
+    assert.ok(capabilities, `authored profile ${profile} must be valid`);
+    assert.equal(
+      sha256(transformEnhancementWasm(template, enhancementBuild, capabilities)),
+      enhancementOutputSha256(authoredBuild, capabilities),
+      `authored profile ${profile} must match the current transform ABI`,
+    );
+  }
 
   // The off profile and every optional capability profile feed the same two
   // downstream exact-hash transforms. Reproducing the complete chain here is

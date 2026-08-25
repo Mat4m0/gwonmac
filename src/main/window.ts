@@ -18,6 +18,7 @@ import type {
   AppSettingsPatch,
   DownloadProgress,
   DiagnosticProfile,
+  GameReloadCause,
   RendererInit,
 } from "../shared/contracts.js";
 import { RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
@@ -50,7 +51,10 @@ import {
   toggleTools,
   toggleTravel,
 } from "./renderer-commands.js";
-import { installApplicationMenu } from "./window-menu.js";
+import {
+  installApplicationMenu,
+  showQuitOrReloadGame,
+} from "./window-menu.js";
 import {
   installWindowShortcuts,
   updateWindowShortcuts,
@@ -72,7 +76,9 @@ export interface WindowHost {
   markPerformanceProblem: (win: BrowserWindow) => void;
   startCapture: (win: BrowserWindow, level: 1 | 2) => Promise<void>;
   stopCapture: (win: BrowserWindow) => Promise<void>;
-  reloadGame: (win: BrowserWindow) => void;
+  reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
+  claimRelogIntent: (win: BrowserWindow) => boolean;
+  requestQuit: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
   gameWindowClosed?: () => void;
 }
@@ -345,6 +351,13 @@ export function closeProfileWindow(win: BrowserWindow): Promise<void> {
   return operation;
 }
 
+/** Close one profile in Multi mode, or the application in Single mode. */
+export function requestGameQuit(win: BrowserWindow): void {
+  const context = windowRegistry.contextForWebContents(win.webContents.id);
+  if (context?.mode === "multi") void closeProfileWindow(win);
+  else app.quit();
+}
+
 /** The only renderer URL, and it carries no configuration. */
 export const RENDERER_URL = "gw://app/";
 
@@ -534,6 +547,12 @@ export function createMainWindow(
     },
     edit(command) {
       void editWindowText(win, command);
+    },
+    quitOrReload() {
+      return showQuitOrReloadGame(host, win);
+    },
+    recordCommandQ(phase, reason) {
+      logEvent({ k: "commandQ.shortcut", phase, reason }, diagnosticOwnerId);
     },
   });
   void host.getSettings().then((settings) => {

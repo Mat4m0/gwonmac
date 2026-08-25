@@ -190,6 +190,16 @@ export interface RendererFrameBatch {
 
 export const RENDERER_MILESTONES = [
   "renderer.loaded",
+  "relog.intentClaimed",
+  "relog.savedCredentialsLoaded",
+  "relog.loginSubmitted",
+  "relog.tokenRequested",
+  "relog.tokenAccepted",
+  "relog.characterSubmitted",
+  "relog.preGameProbe",
+  "relog.inputSettled",
+  "relog.finished",
+  "relog.timedOut",
   "wasm.instantiate.begin",
   "wasm.instantiate.end",
   "wasm.streamingFallback",
@@ -213,6 +223,27 @@ export const RENDERER_MILESTONES = [
 ] as const;
 
 export type RendererMilestone = (typeof RENDERER_MILESTONES)[number];
+
+export const RELOG_INPUT_STAGES = ["login", "character", "reconnect"] as const;
+export type RelogInputStage = (typeof RELOG_INPUT_STAGES)[number];
+
+export const RELOG_INPUT_OUTCOMES = [
+  "sent",
+  "physical",
+  "progressed",
+  "unfocused",
+  "cancelled",
+] as const;
+export type RelogInputOutcome = (typeof RELOG_INPUT_OUTCOMES)[number];
+
+export const RELOG_TERMINAL_OUTCOMES = [
+  "restored",
+  "outpost",
+  "manual",
+  "timed-out",
+  "unsupported",
+] as const;
+export type RelogTerminalOutcome = (typeof RELOG_TERMINAL_OUTCOMES)[number];
 
 /**
  * The closed vocabulary a WASM abort collapses into before crossing IPC. The
@@ -277,6 +308,15 @@ export type GraphicsVisualProblemFields = TextureMemorySnapshot & {
 };
 
 export interface RendererMilestoneFieldsByName {
+  "relog.preGameProbe": {
+    state: "unknown" | "character-select" | "reconnect" | "loading";
+    mask: number;
+  };
+  "relog.inputSettled": {
+    stage: RelogInputStage;
+    outcome: RelogInputOutcome;
+  };
+  "relog.finished": { outcome: RelogTerminalOutcome };
   "build.info": { programId: string | number; buildId: string | number };
   /**
    * `heapBytes` is the WASM linear-memory size at the moment of death. The

@@ -29,6 +29,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playRegionObservation: false,
+    preGameControls: false,
 });
 const ALL: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -42,6 +43,7 @@ const ALL: EnhancementCapabilities = Object.freeze({
   skillSlotGeometry: true,
   skillCooldownObservation: true,
   playRegionObservation: true,
+  preGameControls: true,
 });
 const CURSOR: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -50,15 +52,18 @@ const CURSOR: EnhancementCapabilities = Object.freeze({
 const REGION: EnhancementCapabilities = Object.freeze({
   ...NONE,
   playRegionObservation: true,
+    preGameControls: false,
 });
 const TARGET: EnhancementCapabilities = Object.freeze({
   ...NONE,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: true,
 });
 const STORAGE: EnhancementCapabilities = Object.freeze({
   ...NONE,
   playRegionObservation: true,
+    preGameControls: false,
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
@@ -68,17 +73,20 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
 const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   ...NONE,
   playRegionObservation: true,
+    preGameControls: false,
   partyObservation: true,
   teamApply: true,
 });
 const SKILL_SLOTS: EnhancementCapabilities = Object.freeze({
   ...NONE,
   playRegionObservation: true,
+    preGameControls: false,
   skillSlotGeometry: true,
 });
 const COOLDOWN: EnhancementCapabilities = Object.freeze({
   ...NONE,
   playRegionObservation: true,
+    preGameControls: false,
   skillCooldownObservation: true,
 });
 type ProvedVerification = Extract<LocalClientVerification, { status: "proved" }>;
@@ -106,7 +114,7 @@ function valid(): ProvedVerification {
   return verificationFor({
     ...ENHANCEMENT,
     outputSha256: {
-      "features-3ff": ENHANCEMENT.outputSha256["features-3ff"]!,
+      "features-7ff": ENHANCEMENT.outputSha256["features-7ff"]!,
     },
   }, ALL);
 }
@@ -403,7 +411,7 @@ describe("local client verification boundary", () => {
     const relocated = verificationFor(
       {
         ...ENHANCEMENT,
-        outputSha256: { "features-3ff": ENHANCEMENT.outputSha256["features-3ff"]! },
+        outputSha256: { "features-7ff": ENHANCEMENT.outputSha256["features-7ff"]! },
         hookFunction: ENHANCEMENT.hookFunction + 1,
       },
       ALL,

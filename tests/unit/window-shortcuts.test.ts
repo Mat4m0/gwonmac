@@ -34,9 +34,17 @@ describe("window shortcut input", () => {
     } as unknown as BrowserWindow;
     const actions: string[] = [];
     const edits: string[] = [];
+    let quitOrReload = 0;
+    const commandQ: string[] = [];
+    const settleQuitDialogs: Array<() => void> = [];
     installWindowShortcuts(win, {
       run: (action) => actions.push(action),
       edit: (command) => edits.push(command),
+      quitOrReload: () => {
+        quitOrReload += 1;
+        return new Promise<void>((resolve) => settleQuitDialogs.push(resolve));
+      },
+      recordCommandQ: (phase, reason) => commandQ.push(`${phase}:${reason}`),
     });
     updateWindowShortcuts(win, {});
 
@@ -102,6 +110,27 @@ describe("window shortcut input", () => {
     assert.deepEqual(edits, ["cut", "selectAll"]);
     releaseWindowShortcutKey(win, "KeyA");
     assert.deepEqual(edits, ["cut", "selectAll"]);
+
+    assert.equal(dispatch(keyDown("KeyQ", "q")), true);
+    assert.equal(dispatch(keyDown("KeyQ", "q", { isAutoRepeat: true })), true);
+    assert.equal(quitOrReload, 1);
+    settleQuitDialogs.shift()?.();
+    await Promise.resolve();
+    assert.deepEqual(commandQ, [
+      "claimed:none",
+      "repeat-contained:none",
+      "rearmed:dialog-settled",
+    ]);
+    // A native sheet consumes the first physical key-up. Settling Cancel must
+    // still re-arm Q for the very next press.
+    assert.equal(dispatch(keyDown("KeyQ", "q")), true);
+    assert.equal(quitOrReload, 2);
+    settleQuitDialogs.shift()?.();
+    await Promise.resolve();
+    assert.equal(commandQ.at(-1), "rearmed:dialog-settled");
+    assert.equal(dispatch({
+      ...keyDown("KeyQ", "q"), type: "keyUp", meta: false,
+    }), false);
 
     const capture = captureWindowShortcut(win);
     assert.equal(dispatch(keyDown("KeyK", "k", { shift: true })), true);

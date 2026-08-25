@@ -260,3 +260,25 @@ describe("the recorded visual problem", () => {
     );
   });
 });
+
+describe("the relog pre-game probe", () => {
+  it("preserves the complete uint32 diagnostic mask", () => {
+    const fields = { state: "reconnect", mask: 0xff00_4242 } as const;
+    assert.deepEqual(
+      parseRendererMilestoneArgs(["relog.preGameProbe", 12_000, fields]),
+      {
+        name: "relog.preGameProbe",
+        rendererTimestampUs: 12_000,
+        fields,
+      },
+    );
+    assert.throws(
+      () => parseRendererMilestoneArgs([
+        "relog.preGameProbe",
+        12_000,
+        { state: "reconnect", mask: 0x1_0000_0000 },
+      ]),
+      /invalid renderer milestone/,
+    );
+  });
+});

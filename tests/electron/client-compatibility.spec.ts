@@ -226,6 +226,7 @@ test.describe("client compatibility", () => {
               gameFileSaving: { status: "unavailable", reason: "game-update" },
               nativeCursor: { status: "unavailable", reason: "game-update" },
               playRegionObservation: { status: "off" },
+        preGameControls: { status: "off" },
               targetObservation: { status: "off" },
               partyObservation: { status: "off" },
               teamApply: { status: "off" },
