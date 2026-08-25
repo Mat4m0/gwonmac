@@ -156,7 +156,7 @@ test("persistent interaction states do not leak into neutral controls", () => {
     return source.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, "u"))?.[1] ?? "";
   };
 
-  assert.match(rule(components, ".ui-button"), /var\(--ui-raised-fill\)/u);
+  assert.match(rule(components, ".ui-button"), /var\(--ui-command-fill\)/u);
   assert.match(rule(components, '.ui-button[data-variant="primary"]'), /var\(--ui-primary-fill\)/u);
   assert.doesNotMatch(rule(components, ".ui-button[data-icon]"), /--ui-shadow-selected/u);
   assert.doesNotMatch(rule(components, ".ui-slot"), /--ui-shadow-selected/u);

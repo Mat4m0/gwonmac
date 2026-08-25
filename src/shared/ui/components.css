@@ -312,7 +312,7 @@
   padding: 0 var(--ui-space-3);
   border: var(--ui-border-width) solid transparent;
   border-radius: var(--ui-radius);
-  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  background: var(--ui-command-fill) padding-box, var(--ui-command-ring) border-box;
   box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
   color: var(--ui-text);
   font: var(--ui-type-body-size) / var(--ui-type-body-line) var(--ui-font-interface);

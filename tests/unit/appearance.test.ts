@@ -85,6 +85,16 @@ describe("appearance settings", () => {
     assert.equal(root.dataset.uiStyle, "obsidian");
     assert.equal(root.dataset.uiMaterial, undefined);
     assert.equal(properties.has("--ui-accent"), false);
+
+    applyAppearance({
+      ...DEFAULT_SETTINGS,
+      uiStyle: "custom",
+      uiCustomTheme: { ...DEFAULT_SETTINGS.uiCustomTheme, surface: "#202226" },
+    }, root);
+    assert.equal(
+      properties.get("--ui-command-fill"),
+      properties.get("--ui-raised-fill"),
+    );
   });
 
   it("activates a generation-keyed game font only after it loads", async () => {

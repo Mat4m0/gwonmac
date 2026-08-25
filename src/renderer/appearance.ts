@@ -21,6 +21,8 @@ const THEME_OVERRIDES = [
   "--ui-panel-fill",
   "--ui-title-fill",
   "--ui-raised-fill",
+  "--ui-command-fill",
+  "--ui-command-ring",
   "--ui-well",
   "--ui-well-fill",
   "--ui-hover",
@@ -223,9 +225,11 @@ export const appearanceVariables = (
       : `linear-gradient(${theme.titlebar}, ${theme.titlebar})`;
   }
   if (theme.surface !== baseline.surface) {
-    variables["--ui-raised-fill"] = theme.material === "modern"
+    const raisedFill = theme.material === "modern"
       ? `linear-gradient(${theme.surface}, ${theme.surface})`
       : `linear-gradient(color-mix(in srgb, ${theme.surface} 78%, ${theme.border}), ${theme.surface} 22%, color-mix(in srgb, ${theme.surface} 86%, ${theme.recessed}))`;
+    variables["--ui-raised-fill"] = raisedFill;
+    variables["--ui-command-fill"] = raisedFill;
   }
   if (theme.recessed !== baseline.recessed) {
     variables["--ui-well"] = theme.recessed;

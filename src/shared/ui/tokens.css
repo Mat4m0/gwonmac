@@ -38,6 +38,18 @@
     #152131 82%,
     #1e2124 100%
   );
+  /* Ordinary commands in the original client are recognisably blue before
+   * hover, but quieter than the action that advances the current task. */
+  --gw-face-navy-quiet: linear-gradient(
+    180deg,
+    #1c2025 0%,
+    #111923 8%,
+    #16283b 20%,
+    #20344a 44%,
+    #17283a 66%,
+    #111b28 90%,
+    #1c2025 100%
+  );
   --gw-face-graphite: linear-gradient(
     180deg,
     #232324 0%,
@@ -138,6 +150,8 @@
   --ui-primary-fill: var(--gw-face-navy);
   --ui-primary-ring: var(--ui-ring-gilt);
   --ui-primary-ink: var(--ui-text-bright);
+  --ui-command-fill: var(--gw-face-navy-quiet);
+  --ui-command-ring: var(--ui-ring-gilt);
   --ui-control-mark: var(--gw-bone);
   --ui-focus: #f6e3a8;
   --ui-focus-halo: #080807;
@@ -330,6 +344,8 @@
   --ui-primary-fill: linear-gradient(oklch(0.79 0.105 83), oklch(0.79 0.105 83));
   --ui-primary-ring: linear-gradient(oklch(0.56 0.02 82), oklch(0.56 0.02 82));
   --ui-primary-ink: var(--ui-accent-ink);
+  --ui-command-fill: var(--ui-raised-fill);
+  --ui-command-ring: transparent;
   --ui-control-mark: oklch(0.76 0.014 82);
   --ui-focus: oklch(0.9 0.105 88);
   --ui-focus-halo: oklch(0.08 0.004 80);
