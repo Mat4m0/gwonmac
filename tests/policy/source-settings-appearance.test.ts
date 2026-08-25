@@ -31,7 +31,9 @@ test("Settings exposes the two independent interface fonts", async () => {
 
 test("Settings exposes the two controller prompt styles", async () => {
   const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
-  const values = [...html.matchAll(/<input\b[^>]*\bname=["']controllerPromptStyle["'][^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
+  const select = /<select\b[^>]*\bname=["']controllerPromptStyle["'][^>]*>([\s\S]*?)<\/select>/iu
+    .exec(html)?.[1] ?? "";
+  const values = [...select.matchAll(/<option\b[^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
     .map((match) => match[1]);
   assert.deepEqual(values, ["game-default", "playstation"]);
 });

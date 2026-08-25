@@ -200,25 +200,31 @@
 <dialog id="settings-dialog" class="ui-frame" aria-labelledby="settings-title">
   <form method="dialog" id="settings-form" class="ui-panel">
     <header class="settings-header ui-panel-head">
-      <h2 id="settings-title" class="ui-panel-title">Settings</h2>
+      <div class="settings-title-group">
+        <span class="settings-title-context">Guild Wars Reforged</span>
+        <h2 id="settings-title" class="ui-panel-title">Settings</h2>
+      </div>
       <button value="done" id="settings-done" class="ui-button" data-icon aria-label="Close settings">&#10005;</button>
     </header>
 
     <div class="settings-body">
       <div class="settings-rail ui-rail" role="tablist" aria-label="Settings sections"
            aria-orientation="vertical">
+        <span class="settings-rail-label" role="presentation">Game files</span>
         <button type="button" class="settings-rtab" id="settings-tab-data"
                 role="tab" aria-selected="true" aria-controls="settings-pane-data"
                 data-pane="data">Game Data</button>
         <button type="button" class="settings-rtab" id="settings-tab-templates"
                 role="tab" aria-selected="false" aria-controls="settings-pane-templates"
                 data-pane="templates">Templates</button>
+        <span class="settings-rail-label" role="presentation">Experience</span>
         <button type="button" class="settings-rtab" id="settings-tab-display"
                 role="tab" aria-selected="false" aria-controls="settings-pane-display"
                 data-pane="display">Display</button>
         <button type="button" class="settings-rtab" id="settings-tab-controls"
                 role="tab" aria-selected="false" aria-controls="settings-pane-controls"
                 data-pane="controls">Tools</button>
+        <span class="settings-rail-label" role="presentation">Application</span>
         <button type="button" class="settings-rtab" id="settings-tab-updates"
                 role="tab" aria-selected="false" aria-controls="settings-pane-updates"
                 data-pane="updates">Updates</button>
@@ -233,8 +239,10 @@
       <div class="settings-panes" data-active="data">
         <section class="settings-pane" id="settings-pane-data" role="tabpanel"
                  aria-labelledby="settings-tab-data">
-          <h3 id="settings-data-title" class="settings-pane-title">Game data</h3>
-          <p class="settings-pane-intro">Guild Wars downloads the complete game in the background while you play.</p>
+          <header class="settings-pane-header">
+            <h3 id="settings-data-title" class="settings-pane-title">Game data</h3>
+            <p class="settings-pane-intro">See what Guild Wars has downloaded and manage the local game files.</p>
+          </header>
           <p id="settings-cache" class="settings-status" role="status" aria-live="polite">
             Checking downloaded game data…
           </p>
@@ -258,8 +266,10 @@
              has been confirmed. -->
         <section class="settings-pane" id="settings-pane-templates" role="tabpanel"
                  aria-labelledby="settings-tab-templates">
-          <h3 id="settings-templates-title" class="settings-pane-title">Build templates</h3>
-          <p class="settings-pane-intro">Move Guild Wars skill and equipment templates between this Mac and other installations.</p>
+          <header class="settings-pane-header">
+            <h3 id="settings-templates-title" class="settings-pane-title">Build templates</h3>
+            <p class="settings-pane-intro">Move skill and equipment templates between this Mac and other Guild Wars installations.</p>
+          </header>
           <p id="templates-status" class="settings-status" role="status" aria-live="polite">
             Checking your saved templates…
           </p>
@@ -342,123 +352,143 @@
 
         <section class="settings-pane" id="settings-pane-display" role="tabpanel"
                  aria-labelledby="settings-tab-display">
-          <h3 id="settings-display-title" class="settings-pane-title">Display</h3>
-          <p class="settings-pane-intro">Balance image quality, interface style, performance, and how much of the game remains visible behind GWonMac.</p>
-          <fieldset>
-            <legend>Graphics quality</legend>
-            <div class="settings-seg settings-quality-seg ui-segment" data-fill role="presentation">
-              <label class="settings-radio">
-                <input type="radio" name="renderScale" value="1">
-                <span class="render-scale-option">
-                  <span>Performance · 1×</span>
-                  <small data-render-scale="1">—</small>
-                </span>
-              </label>
-              <label class="settings-radio">
-                <input type="radio" name="renderScale" value="1.5">
-                <span class="render-scale-option">
-                  <span>Balanced · 1.5×</span>
-                  <small data-render-scale="1.5">—</small>
-                </span>
-              </label>
-              <label class="settings-radio">
-                <input type="radio" name="renderScale" value="2">
-                <span class="render-scale-option">
-                  <span>Retina · 2× (Default)</span>
-                  <small data-render-scale="2">—</small>
-                </span>
-              </label>
-            </div>
-          </fieldset>
-          <p class="settings-note">Retina is the clearest default. Choose Balanced or Performance if Guild Wars feels slow or uses too much GPU memory.</p>
+          <header class="settings-pane-header">
+            <h3 id="settings-display-title" class="settings-pane-title">Display</h3>
+            <p class="settings-pane-intro">Adjust image quality and how app panels look over the game.</p>
+          </header>
+          <div class="settings-display-groups">
+            <section class="settings-display-group" aria-labelledby="settings-rendering-group-title">
+              <h4 id="settings-rendering-group-title" class="settings-display-group-title">Game rendering</h4>
+              <div class="settings-display-row">
+                <div class="settings-display-info">
+                  <h5 id="settings-quality-label" class="settings-display-name">Graphics quality</h5>
+                  <p>Retina is clearest. Choose a lower scale if Guild Wars feels slow or uses too much GPU memory.</p>
+                </div>
+                <div class="settings-display-control">
+                  <div class="settings-seg settings-quality-seg ui-segment" data-fill
+                       role="radiogroup" aria-labelledby="settings-quality-label">
+                    <label class="settings-radio">
+                      <input type="radio" name="renderScale" value="1">
+                      <span class="render-scale-option">
+                        <span>Performance</span>
+                        <small data-render-scale="1">—</small>
+                      </span>
+                    </label>
+                    <label class="settings-radio">
+                      <input type="radio" name="renderScale" value="1.5">
+                      <span class="render-scale-option">
+                        <span>Balanced</span>
+                        <small data-render-scale="1.5">—</small>
+                      </span>
+                    </label>
+                    <label class="settings-radio">
+                      <input type="radio" name="renderScale" value="2">
+                      <span class="render-scale-option">
+                        <span>Retina <small>Default</small></span>
+                        <small data-render-scale="2">—</small>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
 
-          <fieldset>
-            <legend>Interface style</legend>
-            <div class="settings-seg settings-style-seg ui-segment" data-fill role="presentation">
-              <label class="settings-radio">
-                <input type="radio" name="uiStyle" value="guild-wars">
-                <span class="settings-style-option">
-                  <span>Guild Wars <small>Default</small></span>
-                  <small>Ornamental metal and classic game surfaces</small>
-                </span>
-              </label>
-              <label class="settings-radio">
-                <input type="radio" name="uiStyle" value="obsidian">
-                <span class="settings-style-option">
-                  <span>Obsidian</span>
-                  <small>Borderless charcoal and muted gilt</small>
-                </span>
-              </label>
-            </div>
-          </fieldset>
+            <section class="settings-display-group" aria-labelledby="settings-interface-group-title">
+              <h4 id="settings-interface-group-title" class="settings-display-group-title">App interface</h4>
+              <div class="settings-display-row">
+                <div class="settings-display-info">
+                  <h5 id="settings-style-label" class="settings-display-name">Interface style</h5>
+                  <p>Choose classic Guild Wars ornament or a quieter charcoal interface.</p>
+                </div>
+                <div class="settings-display-control">
+                  <div class="settings-seg settings-style-seg ui-segment" data-fill
+                       role="radiogroup" aria-labelledby="settings-style-label">
+                    <label class="settings-radio">
+                      <input type="radio" name="uiStyle" value="guild-wars">
+                      <span>Guild Wars <small>Default</small></span>
+                    </label>
+                    <label class="settings-radio">
+                      <input type="radio" name="uiStyle" value="obsidian">
+                      <span>Obsidian</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
 
-          <fieldset>
-            <legend>Interface font</legend>
-            <div class="settings-seg settings-style-seg ui-segment" data-fill role="presentation">
-              <label class="settings-radio">
-                <input type="radio" name="uiFont" value="guild-wars">
-                <span class="settings-style-option">
-                  <span>Guild Wars Original <small>Default</small></span>
-                  <small>Lettering converted locally from your game</small>
-                </span>
-              </label>
-              <label class="settings-radio">
-                <input type="radio" name="uiFont" value="inter">
-                <span class="settings-style-option">
-                  <span>Inter</span>
-                  <small>Clean modern lettering with a system fallback</small>
-                </span>
-              </label>
-            </div>
-          </fieldset>
+              <div class="settings-display-row">
+                <div class="settings-display-info">
+                  <h5 id="settings-font-label" class="settings-display-name">Interface font</h5>
+                  <p>Use lettering from your game files or a modern system font.</p>
+                </div>
+                <div class="settings-display-control">
+                  <div class="settings-seg settings-style-seg ui-segment" data-fill
+                       role="radiogroup" aria-labelledby="settings-font-label">
+                    <label class="settings-radio">
+                      <input type="radio" name="uiFont" value="guild-wars">
+                      <span>Guild Wars Original <small>Default</small></span>
+                    </label>
+                    <label class="settings-radio">
+                      <input type="radio" name="uiFont" value="inter">
+                      <span>Inter</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
 
-          <fieldset>
-            <legend>Controller button symbols</legend>
-            <div class="settings-seg settings-style-seg ui-segment" data-fill role="presentation">
-              <label class="settings-radio">
-                <input type="radio" name="controllerPromptStyle" value="game-default">
-                <span class="settings-style-option">
-                  <span>Game default <small>Default</small></span>
-                  <small>Use Guild Wars' built-in controller symbols</small>
-                </span>
-              </label>
-              <label class="settings-radio">
-                <input type="radio" name="controllerPromptStyle" value="playstation">
-                <span class="settings-style-option">
-                  <span>PlayStation</span>
-                  <small>Show familiar Cross, Circle, Square, and Triangle symbols</small>
-                </span>
-              </label>
-            </div>
-          </fieldset>
-          <p class="settings-note">This changes controller symbols throughout Guild Wars. It is visual only and takes effect after restarting GWonMac.</p>
+              <div class="settings-display-row">
+                <div class="settings-display-info">
+                  <label id="settings-opacity-label" class="settings-display-name"
+                         for="settings-panel-opacity">Panel opacity</label>
+                  <p id="settings-opacity-help">Change app panels without changing Guild Wars itself.</p>
+                </div>
+                <div class="settings-display-control settings-opacity-control">
+                  <output name="uiPanelOpacityValue" for="settings-panel-opacity">94%</output>
+                  <input id="settings-panel-opacity" type="range" class="ui-range"
+                         name="uiPanelOpacity" min="65" max="100" step="1"
+                         aria-labelledby="settings-opacity-label"
+                         aria-describedby="settings-opacity-help">
+                  <span class="settings-range-ends" aria-hidden="true">
+                    <small>More game visible</small>
+                    <small>More solid</small>
+                  </span>
+                </div>
+              </div>
+            </section>
 
-          <fieldset>
-            <legend>Panel visibility</legend>
-            <label class="ui-range-field settings-opacity-field">
-              <span>Panel opacity <output name="uiPanelOpacityValue">94%</output></span>
-              <input type="range" class="ui-range" name="uiPanelOpacity"
-                     min="65" max="100" step="1"
-                     aria-describedby="settings-opacity-help">
-              <span class="settings-range-ends" aria-hidden="true">
-                <small>More game visible</small>
-                <small>More solid</small>
-              </span>
-            </label>
-          </fieldset>
-          <p id="settings-opacity-help" class="settings-note">This changes GWonMac panels, not Guild Wars itself. Your font choice applies here and across every GWonMac interface.</p>
+            <section class="settings-display-group settings-display-secondary"
+                     aria-labelledby="settings-controller-group-title">
+              <h4 id="settings-controller-group-title" class="settings-display-group-title">Controller</h4>
+              <div class="settings-display-row">
+                <div class="settings-display-info">
+                  <label class="settings-display-name" for="settings-controller-symbols">Button symbols</label>
+                  <p id="settings-controller-help">Changes Guild Wars controller symbols after restarting the app.</p>
+                </div>
+                <div class="settings-display-control settings-controller-control">
+                  <select id="settings-controller-symbols" name="controllerPromptStyle"
+                          class="ui-select" aria-describedby="settings-controller-help">
+                    <option value="game-default">Game default</option>
+                    <option value="playstation">PlayStation</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+          </div>
         </section>
 
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
                  aria-labelledby="settings-tab-controls">
-          <h3 id="settings-controls-title" class="settings-pane-title">Tools</h3>
-          <p class="settings-pane-intro">Choose which optional GWonMac features are available while you play.</p>
-          <label class="settings-check ui-check">
-            <input type="checkbox" name="gwonmacTools" aria-describedby="settings-tools-help">
-            <span>Enable optional Tools Beta</span>
-          </label>
-          <p id="settings-tools-help" class="settings-note">The first enable needs one restart. After that, changes apply immediately. Tools close in PvP and guild halls; saved Builds and Teams stay available at login and when live integration is unavailable.</p>
-          <p id="settings-tools-off" class="settings-note">Enable Tools Beta to choose individual tools and keyboard shortcuts.</p>
+          <header class="settings-pane-header">
+            <h3 id="settings-controls-title" class="settings-pane-title">Tools</h3>
+            <p class="settings-pane-intro">Choose which optional features are available while you play.</p>
+          </header>
+          <section class="settings-feature-master" aria-labelledby="settings-tools-master-label">
+            <label class="settings-check ui-check">
+              <input type="checkbox" name="gwonmacTools" aria-describedby="settings-tools-help">
+              <span id="settings-tools-master-label">Enable optional Tools Beta</span>
+            </label>
+            <p id="settings-tools-help" class="settings-note">The first enable needs one restart. After that, changes apply immediately. Tools close in PvP and guild halls; saved Builds and Teams stay available at login and when live integration is unavailable.</p>
+            <p id="settings-tools-off" class="settings-note">Enable Tools Beta to choose individual tools. You can change keyboard shortcuts at any time.</p>
+          </section>
           <div id="settings-tools-config">
             <fieldset id="settings-tool-features" hidden>
               <legend>Optional tools</legend>
@@ -619,8 +649,10 @@
 
         <section class="settings-pane" id="settings-pane-updates" role="tabpanel"
                  aria-labelledby="settings-tab-updates">
-          <h3 id="settings-updates-title" class="settings-pane-title">Updates</h3>
-          <p class="settings-pane-intro">Keep GWonMac current without interrupting an active game connection.</p>
+          <header class="settings-pane-header">
+            <h3 id="settings-updates-title" class="settings-pane-title">Updates</h3>
+            <p class="settings-pane-intro">Keep the app current without interrupting an active game connection.</p>
+          </header>
           <p class="settings-status">
             Version <span id="settings-update-version">—</span>
             · <span id="settings-update-stage">Unversioned</span>
@@ -656,8 +688,10 @@
 
         <section class="settings-pane" id="settings-pane-advanced" role="tabpanel"
                  aria-labelledby="settings-tab-advanced">
-          <h3 id="settings-advanced-title" class="settings-pane-title">Advanced</h3>
-          <p class="settings-pane-intro">Diagnostics and recovery options for troubleshooting GWonMac.</p>
+          <header class="settings-pane-header">
+            <h3 id="settings-advanced-title" class="settings-pane-title">Advanced</h3>
+            <p class="settings-pane-intro">Diagnostics, memory, and recovery options for troubleshooting the app.</p>
+          </header>
           <label class="settings-field">
             <span>Graphics diagnostic profile</span>
             <select name="diagnosticProfile">
@@ -702,8 +736,10 @@
 
         <section class="settings-pane" id="settings-pane-accounts" role="tabpanel"
                  aria-labelledby="settings-tab-accounts">
-          <h3 class="settings-pane-title">Multiple Accounts</h3>
-          <p class="settings-pane-intro">Open several independent Guild Wars accounts, each in its own window.</p>
+          <header class="settings-pane-header">
+            <h3 class="settings-pane-title">Multiple Accounts</h3>
+            <p class="settings-pane-intro">Open several independent Guild Wars accounts, each in its own window.</p>
+          </header>
           <p id="accounts-mode-status" class="settings-status">Checking account mode…</p>
           <p class="settings-note">Your current window, saved login, settings, templates, and builds stay in Single Account mode. Multiple Accounts creates a separate workspace and asks you to sign in once for each account.</p>
           <div id="accounts-multi-active" hidden>

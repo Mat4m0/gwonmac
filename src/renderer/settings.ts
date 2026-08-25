@@ -28,7 +28,9 @@
   ) as RadioNodeList;
   const uiStyle = form.elements.namedItem('uiStyle') as RadioNodeList;
   const uiFont = form.elements.namedItem('uiFont') as RadioNodeList;
-  const controllerPromptStyle = form.elements.namedItem('controllerPromptStyle') as RadioNodeList;
+  const controllerPromptStyle = form.elements.namedItem(
+    'controllerPromptStyle',
+  ) as HTMLSelectElement;
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
   ) as HTMLInputElement;
@@ -134,7 +136,7 @@
 
   const settingsRail = form.querySelector<HTMLElement>('.settings-rail');
   if (!settingsRail) throw new Error('missing settings rail');
-  const compactSettings = window.matchMedia('(max-width: 560px)');
+  const compactSettings = window.matchMedia('(max-width: 640px)');
   const syncRailOrientation = () => {
     settingsRail.setAttribute(
       'aria-orientation',

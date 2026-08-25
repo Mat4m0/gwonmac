@@ -31,7 +31,7 @@ test.describe("data and display settings", () => {
     }
   });
 
-  test("interface style, font, and panel opacity apply live and survive", async () => {
+  test("display choices apply as intended and survive reopening", async () => {
     const fixture = await launchOffline("gw-settings-appearance-e2e-");
     try {
       const { page } = fixture;
@@ -125,6 +125,15 @@ test.describe("data and display settings", () => {
             .getPropertyValue("--ui-panel-opacity").trim()),
       ).toBe("0.97");
 
+      await page.locator('select[name="controllerPromptStyle"]')
+        .selectOption("playstation");
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).controllerPromptStyle,
+      )).toBe("playstation");
+      await expect(page.locator("#settings-feedback")).toContainText(
+        "Restart GWonMac to apply controller button symbols",
+      );
+
       // Nothing here may reach the game. The canvas is the game's surface, and
       // a presentation setting that resized or restyled it would be exactly the
       // leak `contracts.ts` promises does not exist.
@@ -149,6 +158,8 @@ test.describe("data and display settings", () => {
       await expect(root).toHaveAttribute("data-ui-font", "inter");
       await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue("65");
       await expect(page.locator('output[name="uiPanelOpacityValue"]')).toHaveText("65%");
+      await expect(page.locator('select[name="controllerPromptStyle"]'))
+        .toHaveValue("playstation");
     } finally {
       await closeOffline(fixture);
     }
@@ -201,7 +212,7 @@ test.describe("data and display settings", () => {
         `≈ ${dimensions.width * 2} × ${dimensions.height * 2}`,
       );
       await expect(page.locator("#settings-pane-display")).toContainText(
-        "Choose Balanced or Performance",
+        "Choose a lower scale if Guild Wars feels slow",
       );
 
       await page.locator('input[name="renderScale"][value="1.5"]').check();
