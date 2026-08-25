@@ -119,6 +119,11 @@
   --ui-font-weight-medium: 400;
   --ui-font-weight-semibold: 400;
   --ui-font-weight-bold: 400;
+  /* Never let Chromium invent a heavier outline. The Guild Wars faces contain
+   * one deliberate weight, while the other font choices provide real bold
+   * faces. Hierarchy remains semantic through type role, scale, colour, and
+   * spacing even when a selected fallback has no heavier face. */
+  font-synthesis-weight: none;
 
   /* Ink and state. */
   --ui-text: #ebe5d3;
@@ -239,9 +244,6 @@
     1px 1px 1px rgb(0 0 0 / 92%),
     0 2px 2px rgb(0 0 0 / 78%);
   --ui-display-letter-spacing: 0;
-  /* The local strike has one hand-tuned weight. Chromium's synthetic bold
-   * expands its pixel-shaped outline and makes small labels look blurry. */
-  font-synthesis-weight: none;
 }
 
 /* A player can keep either visual style while selecting modern system type. */

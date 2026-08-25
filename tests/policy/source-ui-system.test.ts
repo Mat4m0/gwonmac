@@ -54,3 +54,13 @@ test("shared motion transitions only transform or opacity", () => {
   }
   assert.deepEqual(offenders, []);
 });
+
+test("the single-weight Guild Wars face is never synthetically emboldened", () => {
+  const css = readFileSync("src/shared/ui/tokens.css", "utf8");
+  const root = css.match(/:root\s*\{([\s\S]*?)\n\}/u)?.[1] ?? "";
+  assert.match(root, /font-synthesis-weight:\s*none;/u);
+  assert.match(root, /--ui-font-weight-medium:\s*400;/u);
+  assert.match(root, /--ui-font-weight-semibold:\s*400;/u);
+  assert.match(root, /--ui-font-weight-bold:\s*400;/u);
+  assert.doesNotMatch(css, /font-synthesis-weight:\s*auto;/u);
+});

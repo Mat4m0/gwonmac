@@ -577,7 +577,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   width: fit-content;
   color: var(--ui-text-muted);
   cursor: pointer;
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-semibold);
 }
 .settings-availability summary:hover { color: var(--ui-text-bright); }
 .settings-availability summary:focus-visible {

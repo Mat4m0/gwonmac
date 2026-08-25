@@ -52,6 +52,14 @@ controls, Reading for prose and messages, and Data for codes, shortcuts,
 timestamps, and counts. Guild Wars Original deliberately falls back to the
 readable sans face for Reading. Data always uses the monospace stack.
 
+Guild Wars Original and its packaged fallback are single-weight faces. The
+system disables synthetic bold globally so Chromium cannot thicken and blur
+their outlines. In Classic typography, hierarchy comes from the Display,
+Interface, Reading, and Data roles, the fixed size ramp, brighter semantic
+text, and spacing. `strong` and headings remain semantic in markup but stay at
+the real 400 weight when Guild Wars Original is selected. Fonts with genuine
+weight families use the same semantic weight tokens at 500, 600, and 700.
+
 ## Component rules
 
 - Use `.ui-frame` for a framed panel.
