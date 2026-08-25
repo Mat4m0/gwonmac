@@ -204,6 +204,22 @@ function moveSelection(direction: -1 | 1): void {
     ?.focus());
 }
 
+function onCatalogueKeydown(event: KeyboardEvent): void {
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    moveSelection(event.key === "ArrowDown" ? 1 : -1);
+    return;
+  }
+  if (event.key !== "Home" && event.key !== "End") return;
+  event.preventDefault();
+  const item = event.key === "Home" ? visibleItems.value[0] : visibleItems.value.at(-1);
+  if (!item) return;
+  selectItem(item);
+  void nextTick(() => pricesRoot.value
+    ?.querySelector<HTMLElement>(`[data-trader-id="${item.modelId}"]`)
+    ?.focus());
+}
+
 function formatPrice(price: number | undefined): string {
   if (price === undefined) return "—";
   if (price >= 1_000) return `${(price / 1_000).toFixed(price >= 10_000 ? 0 : 1).replace(/\.0$/u, "")}k`;
@@ -222,12 +238,11 @@ function relativeAge(timestamp: number): string {
   <section ref="pricesRoot" class="trader-prices" :data-item-open="mobileDetail ? '' : undefined" aria-label="Trader Prices">
     <div class="trader-prices-toolbar">
       <button type="button" class="ui-link trader-back" @click="emit('back')">← Back to listings</button>
-      <div class="ui-segment trader-category-tabs" data-fill role="tablist" aria-label="Trader price category">
+      <div class="ui-segment trader-category-tabs" data-fill role="group" aria-label="Trader price category">
         <button
           v-for="entry in TRADER_PRICE_CATEGORIES"
           :key="entry"
-          role="tab"
-          :aria-selected="category === entry && !query"
+          :aria-pressed="category === entry && !query"
           @click="selectCategory(entry)"
         >{{ CATEGORY_LABELS[entry] }}</button>
       </div>
@@ -240,7 +255,7 @@ function relativeAge(timestamp: number): string {
       </span>
     </div>
 
-    <div v-if="category === 'runes' && !query" class="trader-professions" aria-label="Rune profession filter">
+    <div v-if="category === 'runes' && !query" class="trader-professions" role="group" aria-label="Rune profession filter">
       <button
         v-for="entry in TRADER_PROFESSIONS"
         :key="entry"
@@ -273,15 +288,16 @@ function relativeAge(timestamp: number): string {
           <strong>No matching prices</strong>
           <span>Try another item name or category.</span>
         </div>
-        <div v-else ref="catalogue" class="trader-catalogue-list ui-scroll" role="listbox" aria-label="Trader items">
+        <div v-else ref="catalogue" class="trader-catalogue-list ui-scroll" role="listbox" aria-label="Trader items" @keydown="onCatalogueKeydown">
           <button
             v-for="item in visibleItems"
             :key="item.modelId"
             type="button"
-            class="trader-item-row"
+            class="trader-item-row ui-row"
             role="option"
             :data-trader-id="item.modelId"
             :aria-selected="selected?.modelId === item.modelId"
+            :tabindex="selected?.modelId === item.modelId ? 0 : -1"
             @click="selectItem(item)"
           >
             <span class="trader-item-name">
@@ -303,8 +319,12 @@ function relativeAge(timestamp: number): string {
             <span>{{ CATEGORY_LABELS[selected.category] }} · Kamadan trader</span>
           </div>
           <div class="trader-item-navigation">
-            <button class="ui-button" data-icon type="button" aria-label="Previous item" :disabled="selectedIndex <= 0" @click="moveSelection(-1)">‹</button>
-            <button class="ui-button" data-icon type="button" aria-label="Next item" :disabled="selectedIndex >= visibleItems.length - 1" @click="moveSelection(1)">›</button>
+            <button class="ui-button" data-icon type="button" aria-label="Previous item" :disabled="selectedIndex <= 0" @click="moveSelection(-1)">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg>
+            </button>
+            <button class="ui-button" data-icon type="button" aria-label="Next item" :disabled="selectedIndex >= visibleItems.length - 1" @click="moveSelection(1)">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            </button>
           </div>
         </header>
         <div class="trader-current-prices">

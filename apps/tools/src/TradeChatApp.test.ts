@@ -54,7 +54,7 @@ describe("TradeChatApp", () => {
     await flushPromises();
     await wrapper.get(".trader-item-search input").setValue("vigor");
     expect(wrapper.get(".trader-catalogue").text()).toContain("Rune of Superior Vigor");
-    await wrapper.get(".trader-category-tabs [role=tab]:nth-child(3)").trigger("click");
+    await wrapper.get(".trader-category-tabs button:nth-child(3)").trigger("click");
     expect(wrapper.findAll(".trader-professions button")).toHaveLength(11);
     wrapper.unmount();
   });

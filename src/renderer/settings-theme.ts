@@ -229,6 +229,8 @@ export function bindThemeSettings(deps: ThemeSettingsDependencies) {
 
   openImport.addEventListener("click", () => {
     importValue.value = "";
+    importValue.removeAttribute("aria-invalid");
+    importError.textContent = "";
     importError.hidden = true;
     if (typeof importDialog.showModal === "function") importDialog.showModal();
     else importDialog.setAttribute("open", "");

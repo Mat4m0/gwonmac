@@ -145,6 +145,20 @@
   --ui-warning: #e3a94a;
   --ui-danger: #e0574e;
   --ui-success: #4ad84a;
+  --ui-overlay-fill: color-mix(in srgb, var(--ui-outline) 78%, transparent);
+  --ui-well-strong-fill: color-mix(in srgb, var(--ui-well-fill) 95%, var(--ui-outline));
+  --ui-well-overlay-fill: color-mix(in srgb, var(--ui-outline) 72%, var(--ui-well-fill));
+  --ui-accent-well-fill: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-well));
+  --ui-danger-soft-fill: color-mix(in srgb, var(--ui-danger) 10%, transparent);
+  --ui-danger-panel-fill: color-mix(in srgb, var(--ui-danger) 14%, var(--ui-panel-fill));
+  --ui-warning-panel-fill: color-mix(in srgb, var(--ui-warning) 10%, var(--ui-panel-fill));
+  --ui-warning-raised-fill: color-mix(in srgb, var(--ui-warning) 10%, var(--ui-raised-fill));
+  --ui-success-raised-fill: color-mix(in srgb, var(--ui-success) 10%, var(--ui-raised-fill));
+  --ui-danger-border: color-mix(in srgb, var(--ui-danger) 58%, var(--ui-line));
+  --ui-danger-ring: 0 0 0 1px color-mix(in srgb, var(--ui-danger) 16%, transparent);
+  --ui-warning-border: color-mix(in srgb, var(--ui-warning) 34%, var(--ui-edge));
+  --ui-danger-glow: 0 0 7px color-mix(in srgb, var(--ui-danger) 80%, transparent);
+  --ui-status-halo: 0 0 0 2px color-mix(in srgb, currentColor 16%, transparent);
 
   /* Surfaces. */
   --ui-panel-opacity: 0.94;
@@ -366,99 +380,6 @@
   --ui-scroll-track-shadow: none;
   --ui-scroll-thumb: oklch(0.42 0.018 78);
   --ui-accent-fill: linear-gradient(oklch(0.27 0.02 78), oklch(0.27 0.02 78));
-}
-
-/* Custom themes expose semantic material roles, not component internals.
- * Components still consume this one token vocabulary. */
-:root[data-ui-style="custom"] {
-  --ui-frame-width: 1px;
-  --ui-text: var(--ui-custom-text);
-  --ui-text-bright: var(--ui-custom-text);
-  --ui-text-muted: var(--ui-custom-muted-text);
-  --ui-text-faint: color-mix(in srgb, var(--ui-custom-muted-text) 72%, var(--ui-custom-window));
-  --ui-display-text: var(--ui-text-bright);
-  --ui-accent: var(--ui-custom-accent);
-  --ui-accent-hover: color-mix(in srgb, var(--ui-custom-accent) 82%, var(--ui-custom-text));
-  --ui-accent-strong: color-mix(in srgb, var(--ui-custom-accent) 70%, var(--ui-custom-window));
-  --ui-accent-ink: var(--ui-custom-accent-ink);
-  --ui-primary-fill: linear-gradient(var(--ui-custom-accent), var(--ui-custom-accent));
-  --ui-primary-ring: var(--ui-ring-gilt);
-  --ui-primary-ink: var(--ui-custom-accent-ink);
-  --ui-control-mark: var(--ui-custom-border);
-  --ui-focus: var(--ui-custom-accent);
-  --ui-focus-halo: var(--ui-custom-recessed);
-  --ui-panel-fill: rgb(var(--ui-custom-window-rgb) / var(--ui-effective-panel-opacity));
-  --ui-raised-fill: linear-gradient(
-    color-mix(in srgb, var(--ui-custom-surface) 78%, var(--ui-custom-border)),
-    var(--ui-custom-surface) 22%,
-    color-mix(in srgb, var(--ui-custom-surface) 86%, var(--ui-custom-recessed))
-  );
-  --ui-well: var(--ui-custom-recessed);
-  --ui-well-fill: color-mix(in srgb, var(--ui-custom-recessed) 88%, transparent);
-  --ui-hover: color-mix(in srgb, var(--ui-custom-accent) 13%, transparent);
-  --ui-selection-fill: linear-gradient(
-    color-mix(in srgb, var(--ui-custom-selected) 84%, transparent),
-    color-mix(in srgb, var(--ui-custom-selected) 70%, var(--ui-custom-recessed))
-  );
-  --ui-selection-hover-fill: linear-gradient(
-    color-mix(in srgb, var(--ui-custom-selected) 88%, var(--ui-custom-text)),
-    color-mix(in srgb, var(--ui-custom-selected) 82%, var(--ui-custom-recessed))
-  );
-  --ui-selection-ink: var(--ui-custom-selected-ink);
-  --ui-selection-marker: var(--ui-custom-accent);
-  --ui-pressed-layer: color-mix(in srgb, var(--ui-custom-recessed) 28%, transparent);
-  --ui-line: color-mix(in srgb, var(--ui-custom-border) 62%, var(--ui-custom-window));
-  --ui-line-soft: color-mix(in srgb, var(--ui-custom-border) 22%, transparent);
-  --ui-outline: color-mix(in srgb, var(--ui-custom-recessed) 78%, transparent);
-  --ui-edge: color-mix(in srgb, var(--ui-custom-border) 38%, transparent);
-  --ui-edge-strong: color-mix(in srgb, var(--ui-custom-border) 72%, transparent);
-  --ui-edge-inner: color-mix(in srgb, var(--ui-custom-border) 14%, transparent);
-  --ui-frame: linear-gradient(180deg, color-mix(in srgb, var(--ui-custom-border) 94%, white), var(--ui-custom-border) 48%, color-mix(in srgb, var(--ui-custom-border) 48%, black));
-  --ui-frame-top: var(--ui-custom-border);
-  --ui-ring-gilt: linear-gradient(180deg, color-mix(in srgb, var(--ui-custom-border) 82%, white), color-mix(in srgb, var(--ui-custom-border) 42%, black));
-  --ui-ring-gold: linear-gradient(var(--ui-custom-accent), var(--ui-custom-accent));
-  --ui-ring-quiet: linear-gradient(var(--ui-edge), var(--ui-edge));
-  --ui-ring-empty: linear-gradient(var(--ui-edge), var(--ui-edge));
-  --ui-ring-mark: linear-gradient(var(--ui-edge-strong), var(--ui-edge-strong));
-  --ui-title-fill: var(--ui-custom-title-fill);
-  --ui-corner-swell: transparent;
-  --ui-corner-shadow: none;
-  --ui-scroll-track-color: var(--ui-custom-recessed);
-  --ui-scroll-thumb-color: color-mix(in srgb, var(--ui-custom-selected) 76%, var(--ui-custom-border));
-  --ui-scroll-track: var(--ui-custom-recessed);
-  --ui-scroll-thumb: var(--ui-scroll-thumb-color);
-  --ui-accent-fill: linear-gradient(var(--ui-custom-selected), var(--ui-custom-selected));
-}
-
-/* The modern material is deliberately flat and quiet. It changes construction,
- * while the semantic palette above remains identical. */
-:root[data-ui-style="custom"][data-ui-material="modern"] {
-  --ui-border-width: 1px;
-  --ui-frame-width: 1px;
-  --ui-radius: 7px;
-  --ui-radius-sm: 5px;
-  --ui-radius-lg: 10px;
-  --ui-radius-swell: 10px;
-  --ui-raised-fill: linear-gradient(var(--ui-custom-surface), var(--ui-custom-surface));
-  --ui-outline: transparent;
-  --ui-frame: linear-gradient(var(--ui-custom-border), var(--ui-custom-border));
-  --ui-ring-gilt: linear-gradient(var(--ui-custom-border), var(--ui-custom-border));
-  --ui-ring-gold: linear-gradient(var(--ui-custom-accent), var(--ui-custom-accent));
-  --ui-ring-quiet: linear-gradient(var(--ui-edge), var(--ui-edge));
-  --ui-ring-empty: linear-gradient(var(--ui-edge), var(--ui-edge));
-  --ui-ring-mark: linear-gradient(var(--ui-edge-strong), var(--ui-edge-strong));
-  --ui-title-shadow: none;
-  --ui-corner-swell: transparent;
-  --ui-corner-shadow: none;
-  --ui-frame-inset: inset 0 0 0 transparent;
-  --ui-shadow: 0 18px 48px rgb(0 0 0 / 46%);
-  --ui-shadow-inset: inset 0 1px 2px rgb(0 0 0 / 38%);
-  --ui-shadow-inset-deep: inset 0 1px 3px rgb(0 0 0 / 46%);
-  --ui-shadow-raised: 0 1px 2px rgb(0 0 0 / 28%);
-  --ui-shadow-raised-soft: none;
-  --ui-shadow-selected: none;
-  --ui-text-shadow: none;
-  --ui-display-text-shadow: none;
 }
 
 /* Accessibility changes the rendered material, never the player's saved

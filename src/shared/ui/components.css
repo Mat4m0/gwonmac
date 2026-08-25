@@ -141,6 +141,32 @@
   box-shadow: 0 0 0 4px var(--ui-focus-halo);
 }
 
+/* Skill slots are domain controls, but active editing and validation still use
+ * the same focus and danger vocabulary as every other control. */
+.ui-slot[data-active] {
+  box-shadow: 0 0 0 2px var(--ui-focus), var(--ui-shadow-inset);
+}
+
+.ui-slot[data-invalid] {
+  box-shadow: inset 0 0 0 3px var(--ui-danger), var(--ui-shadow-inset);
+}
+
+.ui-slot[data-active][data-invalid] {
+  box-shadow:
+    0 0 0 2px var(--ui-focus),
+    inset 0 0 0 3px var(--ui-danger),
+    var(--ui-shadow-inset);
+}
+
+/* Feature controls still use native elements for simple behavior. Keep their
+ * focus contract automatic so a new tool cannot silently ship a browser-
+ * default ring just because it does not need a component wrapper. */
+.ui-frame :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--ui-focus-halo);
+}
+
 /* Inside a segment the ring has to sit within the shared border, or it paints
  * over the neighbouring segment. */
 .ui-segment label:has(input:focus-visible),
@@ -183,14 +209,14 @@
  * panel headers. Keep their breathing room in one primitive so every tool
  * window uses the same chrome instead of tuning title padding per feature. */
 .ui-window-head {
-  min-height: 46px;
+  min-height: 42px;
   gap: var(--ui-space-3);
   padding: 5px 9px;
 }
 
 @container (max-width: 480px) {
   .ui-window-head {
-    min-height: 42px;
+    min-height: 38px;
     gap: var(--ui-space-2);
     padding: var(--ui-space-1) var(--ui-space-2);
   }
@@ -198,7 +224,7 @@
 
 @media (max-height: 520px) {
   .ui-window-head {
-    min-height: 42px;
+    min-height: 38px;
     padding-block: var(--ui-space-1);
   }
 }
@@ -396,6 +422,16 @@
   box-shadow: var(--ui-shadow-raised-soft);
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-lg);
+}
+
+.ui-button[data-icon] > svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .ui-button[data-icon]:hover:not(:disabled):not([aria-disabled="true"]) {
@@ -860,17 +896,30 @@
 }
 
 .ui-row[aria-selected="true"],
+.ui-row[aria-pressed="true"],
 .ui-row[aria-current="page"] {
   border-color: transparent;
   background: var(--ui-selection-fill);
   box-shadow: inset 2px 0 0 var(--ui-selection-marker);
   color: var(--ui-selection-ink);
 }
-.ui-row:is([aria-selected="true"], [aria-current="page"]):hover {
+.ui-row:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]):hover {
   background: var(--ui-selection-hover-fill);
 }
-.ui-row:is([aria-selected="true"], [aria-current="page"]) .ui-row-title {
+.ui-row:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) .ui-row-title {
   color: currentColor;
+}
+
+/* Composite ledger rows are not one button, but they still need the same
+ * persistent selection hierarchy as list options. */
+.ui-selection-region[data-selected] {
+  background: var(--ui-selection-fill);
+  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
+  color: var(--ui-selection-ink);
+}
+
+.ui-selection-region[data-selected]:hover {
+  background: var(--ui-selection-hover-fill);
 }
 
 .ui-row-title {
@@ -882,6 +931,38 @@
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A form-backed, full-row choice. The native radio owns the value and
+ * keyboard behavior; the row owns the same selection and focus language as
+ * list options without turning a settings section into cards. */
+.ui-choice-row {
+  position: relative;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ui-text);
+  cursor: pointer;
+}
+
+.ui-choice-row:hover { background: var(--ui-hover); }
+
+.ui-choice-row:has(input:checked) {
+  background: var(--ui-selection-fill);
+  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
+  color: var(--ui-selection-ink);
+}
+
+.ui-choice-row:has(input:focus-visible) {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--ui-focus-halo);
+}
+
+.ui-choice-row > input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
 }
 
 /* An indented child row with a stem, for a variant under the build it forked
@@ -1127,7 +1208,7 @@ button.ui-chip[aria-disabled="true"] {
 .ui-scroll::-webkit-scrollbar-thumb {
   border-radius: var(--ui-radius-pill);
   background: var(--ui-scroll-thumb);
-  box-shadow: 0 0 0 1px var(--gw-gilt-fall);
+  box-shadow: 0 0 0 1px var(--ui-edge-strong);
 }
 
 .ui-scroll::-webkit-scrollbar-thumb:hover {

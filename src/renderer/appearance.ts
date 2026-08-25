@@ -10,27 +10,57 @@
  */
 import type { AppSettings } from "../shared/contracts.js";
 import {
-  customThemeBuiltin,
+  defaultCustomUiTheme,
   type UiThemeColor,
 } from "../shared/ui-theme.js";
 
 const fontChoices = new WeakMap<HTMLElement, AppSettings["uiFont"]>();
 const fontLoads = new Map<string, Promise<boolean>>();
 let activeGeneration = "active";
-const CUSTOM_VARIABLES = [
-  "--ui-custom-window",
-  "--ui-custom-window-rgb",
-  "--ui-custom-titlebar",
-  "--ui-custom-surface",
-  "--ui-custom-recessed",
-  "--ui-custom-selected",
-  "--ui-custom-accent",
-  "--ui-custom-text",
-  "--ui-custom-muted-text",
-  "--ui-custom-border",
-  "--ui-custom-selected-ink",
-  "--ui-custom-accent-ink",
-  "--ui-custom-title-fill",
+const THEME_OVERRIDES = [
+  "--ui-panel-fill",
+  "--ui-title-fill",
+  "--ui-raised-fill",
+  "--ui-well",
+  "--ui-well-fill",
+  "--ui-hover",
+  "--ui-selection-fill",
+  "--ui-selection-hover-fill",
+  "--ui-selection-ink",
+  "--ui-selection-marker",
+  "--ui-pressed-layer",
+  "--ui-text",
+  "--ui-text-bright",
+  "--ui-text-muted",
+  "--ui-text-faint",
+  "--ui-display-text",
+  "--ui-accent",
+  "--ui-accent-hover",
+  "--ui-accent-strong",
+  "--ui-accent-ink",
+  "--ui-primary-fill",
+  "--ui-primary-ink",
+  "--ui-control-mark",
+  "--ui-focus",
+  "--ui-focus-halo",
+  "--ui-line",
+  "--ui-line-soft",
+  "--ui-outline",
+  "--ui-edge",
+  "--ui-edge-strong",
+  "--ui-edge-inner",
+  "--ui-frame",
+  "--ui-frame-top",
+  "--ui-ring-gilt",
+  "--ui-ring-gold",
+  "--ui-ring-quiet",
+  "--ui-ring-empty",
+  "--ui-ring-mark",
+  "--ui-scroll-track-color",
+  "--ui-scroll-thumb-color",
+  "--ui-scroll-track",
+  "--ui-scroll-thumb",
+  "--ui-accent-fill",
 ] as const;
 
 const parseRgb = (color: UiThemeColor): readonly [number, number, number] => [
@@ -78,6 +108,51 @@ export function readableSharedForeground(
   return best;
 }
 
+function blendColor(
+  from: UiThemeColor,
+  to: UiThemeColor,
+  amount: number,
+): UiThemeColor {
+  const fromRgb = parseRgb(from);
+  const toRgb = parseRgb(to);
+  const channels = fromRgb.map((channel, index) =>
+    Math.round(channel + (toRgb[index]! - channel) * amount));
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0"))
+    .join("").toUpperCase()}` as UiThemeColor;
+}
+
+function compositeColor(
+  foreground: UiThemeColor,
+  background: UiThemeColor,
+  opacity: number,
+): UiThemeColor {
+  return blendColor(background, foreground, opacity);
+}
+
+/** Keep a player's chosen ink when it is readable. Otherwise move it by the
+ * smallest possible amount toward light or dark until every rendered surface
+ * reaches WCAG AA. This includes the bright-game worst case behind the window
+ * opacity, which opaque-palette checks miss. */
+export function accessibleForeground(
+  preferred: UiThemeColor,
+  backgrounds: readonly UiThemeColor[],
+  minimum = 4.5,
+): UiThemeColor {
+  if (backgrounds.every((background) => contrastRatio(background, preferred) >= minimum)) {
+    return preferred;
+  }
+  for (let step = 1; step <= 255; step += 1) {
+    const amount = step / 255;
+    for (const target of ["#F7F3E8", "#171613"] as const) {
+      const candidate = blendColor(preferred, target, amount);
+      if (backgrounds.every((background) => contrastRatio(background, candidate) >= minimum)) {
+        return candidate;
+      }
+    }
+  }
+  return readableSharedForeground(backgrounds);
+}
+
 function loadGuildWarsFont(generation: string): Promise<boolean> {
   const existing = fontLoads.get(generation);
   if (existing) return existing;
@@ -114,31 +189,100 @@ export const appearanceVariables = (
   const variables: Record<string, string> = {
     "--ui-panel-opacity": String(settings.uiPanelOpacity / 100),
   };
+  const theme = settings.uiStyle === "custom"
+    ? settings.uiCustomTheme
+    : defaultCustomUiTheme(settings.uiStyle === "obsidian" ? "modern" : "classic");
+  const baseline = defaultCustomUiTheme(theme.material);
+  const opacity = settings.uiPanelOpacity / 100;
+  const textBackgrounds = [
+    compositeColor(theme.window, "#FFFFFF", opacity),
+    compositeColor(theme.window, "#000000", opacity),
+    theme.titlebar,
+    theme.surface,
+    theme.recessed,
+  ];
+  const safeText = accessibleForeground(theme.text, textBackgrounds);
+  const safeMutedText = accessibleForeground(theme.mutedText, textBackgrounds);
+
+  /* At low panel opacity the game is part of the rendered background. Muted
+   * copy cannot stay dim over bright snow and still be readable, so the
+   * projector temporarily narrows the ink range without changing the saved
+   * opacity. Hierarchy still comes from type role and spacing. */
+  if (safeMutedText !== theme.mutedText) {
+    variables["--ui-text-muted"] = safeMutedText;
+    variables["--ui-text-faint"] = safeMutedText;
+  }
   if (settings.uiStyle !== "custom") return variables;
-  const theme = settings.uiCustomTheme;
-  const textBackgrounds = [theme.window, theme.titlebar, theme.surface, theme.recessed];
-  const safeText = Math.min(...textBackgrounds.map((background) =>
-    contrastRatio(background, theme.text))) >= 4.5
-    ? theme.text
-    : readableSharedForeground(textBackgrounds);
-  return {
-    ...variables,
-    "--ui-custom-window": theme.window,
-    "--ui-custom-window-rgb": parseRgb(theme.window).join(" "),
-    "--ui-custom-titlebar": theme.titlebar,
-    "--ui-custom-surface": theme.surface,
-    "--ui-custom-recessed": theme.recessed,
-    "--ui-custom-selected": theme.selected,
-    "--ui-custom-accent": theme.accent,
-    "--ui-custom-text": safeText,
-    "--ui-custom-muted-text": theme.mutedText,
-    "--ui-custom-border": theme.border,
-    "--ui-custom-selected-ink": readableForeground(theme.selected),
-    "--ui-custom-accent-ink": readableForeground(theme.accent),
-    "--ui-custom-title-fill": theme.windowGradient
+
+  if (theme.window !== baseline.window) {
+    variables["--ui-panel-fill"] = `rgb(${parseRgb(theme.window).join(" ")} / var(--ui-effective-panel-opacity))`;
+  }
+  if (theme.titlebar !== baseline.titlebar || theme.windowGradient !== baseline.windowGradient) {
+    variables["--ui-title-fill"] = theme.windowGradient
       ? `linear-gradient(180deg, color-mix(in srgb, ${theme.titlebar} 92%, ${theme.border}), ${theme.titlebar} 38%, color-mix(in srgb, ${theme.titlebar} 78%, ${theme.recessed}))`
-      : `linear-gradient(${theme.titlebar}, ${theme.titlebar})`,
-  };
+      : `linear-gradient(${theme.titlebar}, ${theme.titlebar})`;
+  }
+  if (theme.surface !== baseline.surface) {
+    variables["--ui-raised-fill"] = theme.material === "modern"
+      ? `linear-gradient(${theme.surface}, ${theme.surface})`
+      : `linear-gradient(color-mix(in srgb, ${theme.surface} 78%, ${theme.border}), ${theme.surface} 22%, color-mix(in srgb, ${theme.surface} 86%, ${theme.recessed}))`;
+  }
+  if (theme.recessed !== baseline.recessed) {
+    variables["--ui-well"] = theme.recessed;
+    variables["--ui-well-fill"] = `color-mix(in srgb, ${theme.recessed} 88%, transparent)`;
+    variables["--ui-pressed-layer"] = `color-mix(in srgb, ${theme.recessed} 28%, transparent)`;
+    variables["--ui-focus-halo"] = theme.recessed;
+    variables["--ui-scroll-track-color"] = theme.recessed;
+    variables["--ui-scroll-track"] = theme.recessed;
+  }
+  if (theme.selected !== baseline.selected) {
+    variables["--ui-selection-fill"] = `linear-gradient(color-mix(in srgb, ${theme.selected} 84%, transparent), color-mix(in srgb, ${theme.selected} 70%, ${theme.recessed}))`;
+    variables["--ui-selection-hover-fill"] = `linear-gradient(color-mix(in srgb, ${theme.selected} 88%, ${safeText}), color-mix(in srgb, ${theme.selected} 82%, ${theme.recessed}))`;
+    variables["--ui-selection-ink"] = readableForeground(theme.selected);
+    variables["--ui-scroll-thumb-color"] = `color-mix(in srgb, ${theme.selected} 76%, ${theme.border})`;
+    variables["--ui-scroll-thumb"] = "var(--ui-scroll-thumb-color)";
+    variables["--ui-accent-fill"] = `linear-gradient(${theme.selected}, ${theme.selected})`;
+  }
+  if (theme.accent !== baseline.accent) {
+    const accentInk = readableForeground(theme.accent);
+    variables["--ui-accent"] = theme.accent;
+    variables["--ui-accent-hover"] = `color-mix(in srgb, ${theme.accent} 82%, ${safeText})`;
+    variables["--ui-accent-strong"] = `color-mix(in srgb, ${theme.accent} 70%, ${theme.window})`;
+    variables["--ui-accent-ink"] = accentInk;
+    variables["--ui-primary-fill"] = `linear-gradient(${theme.accent}, ${theme.accent})`;
+    variables["--ui-primary-ink"] = accentInk;
+    variables["--ui-focus"] = theme.accent;
+    variables["--ui-selection-marker"] = theme.accent;
+    variables["--ui-ring-gold"] = `linear-gradient(${theme.accent}, ${theme.accent})`;
+  }
+  if (theme.text !== baseline.text || safeText !== theme.text) {
+    variables["--ui-text"] = safeText;
+    variables["--ui-text-bright"] = safeText;
+    variables["--ui-display-text"] = safeText;
+  }
+  if (theme.mutedText !== baseline.mutedText || safeMutedText !== theme.mutedText) {
+    variables["--ui-text-muted"] = safeMutedText;
+    variables["--ui-text-faint"] = safeMutedText;
+  }
+  if (theme.border !== baseline.border) {
+    variables["--ui-control-mark"] = theme.border;
+    variables["--ui-line"] = `color-mix(in srgb, ${theme.border} 62%, ${theme.window})`;
+    variables["--ui-line-soft"] = `color-mix(in srgb, ${theme.border} 22%, transparent)`;
+    variables["--ui-edge"] = `color-mix(in srgb, ${theme.border} 38%, transparent)`;
+    variables["--ui-edge-strong"] = `color-mix(in srgb, ${theme.border} 72%, transparent)`;
+    variables["--ui-edge-inner"] = `color-mix(in srgb, ${theme.border} 14%, transparent)`;
+    variables["--ui-frame"] = theme.material === "modern"
+      ? `linear-gradient(${theme.border}, ${theme.border})`
+      : `linear-gradient(180deg, color-mix(in srgb, ${theme.border} 94%, white), ${theme.border} 48%, color-mix(in srgb, ${theme.border} 48%, black))`;
+    variables["--ui-frame-top"] = theme.border;
+    variables["--ui-ring-gilt"] = theme.material === "modern"
+      ? `linear-gradient(${theme.border}, ${theme.border})`
+      : `linear-gradient(180deg, color-mix(in srgb, ${theme.border} 82%, white), color-mix(in srgb, ${theme.border} 42%, black))`;
+    variables["--ui-ring-quiet"] = "linear-gradient(var(--ui-edge), var(--ui-edge))";
+    variables["--ui-ring-empty"] = "linear-gradient(var(--ui-edge), var(--ui-edge))";
+    variables["--ui-ring-mark"] = "linear-gradient(var(--ui-edge-strong), var(--ui-edge-strong))";
+  }
+  return variables;
 };
 
 export function applyAppearance(
@@ -147,26 +291,22 @@ export function applyAppearance(
   generation = activeGeneration,
 ): void {
   activeGeneration = generation;
+  for (const name of THEME_OVERRIDES) root.style.removeProperty(name);
   for (const [name, value] of Object.entries(appearanceVariables(settings))) {
     root.style.setProperty(name, value);
   }
-  const customBuiltin = settings.uiStyle === "custom"
-    ? customThemeBuiltin(settings.uiCustomTheme)
-    : null;
-  if (settings.uiStyle === "obsidian" || customBuiltin === "obsidian") {
+  if (
+    settings.uiStyle === "obsidian"
+    || (settings.uiStyle === "custom" && settings.uiCustomTheme.material === "modern")
+  ) {
     root.dataset.uiStyle = "obsidian";
-  } else if (settings.uiStyle === "custom" && customBuiltin === null) {
-    root.dataset.uiStyle = "custom";
   } else {
     delete root.dataset.uiStyle;
   }
-  if (settings.uiStyle === "custom" && customBuiltin === null) {
+  if (settings.uiStyle === "custom") {
     root.dataset.uiMaterial = settings.uiCustomTheme.material;
   }
   else delete root.dataset.uiMaterial;
-  if (settings.uiStyle !== "custom") {
-    for (const name of CUSTOM_VARIABLES) root.style.removeProperty(name);
-  }
   if (settings.uiFont !== "guild-wars") {
     root.dataset.uiFont = settings.uiFont;
   } else {

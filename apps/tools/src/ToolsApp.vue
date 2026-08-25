@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
           aria-label="Close GWonMac Tools"
           @click="requestClose"
         >
-          ×
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg>
         </button>
       </header>
 
@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
               <kbd class="ui-kbd">/</kbd>
             </label>
 
-            <div class="tag-filters" aria-label="Filter by tag">
+            <div class="tag-filters" role="group" aria-label="Filter by tag">
               <button
                 class="ui-chip"
                 :aria-pressed="controller.tag.value === null"
@@ -414,9 +414,10 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <nav
+          <div
             id="library-items"
             class="library-list"
+            role="tabpanel"
             :aria-labelledby="controller.kind.value === 'team' ? 'teams-library-tab' : 'builds-library-tab'"
             @keydown="navigateRows"
           >
@@ -430,7 +431,9 @@ onBeforeUnmount(() => {
             >
               <span class="row-title">
                 <span class="ui-row-title">
-                  <i v-if="value.favourite" aria-label="Favourite">★</i>
+                  <svg v-if="value.favourite" class="favourite-mark" viewBox="0 0 20 20" aria-label="Favourite" role="img">
+                    <path d="m10 2.4 2.25 4.56 5.03.73-3.64 3.55.86 5.01L10 13.88l-4.5 2.37.86-5.01L2.72 7.69l5.03-.73Z" fill="currentColor"/>
+                  </svg>
                   {{ value.name }}
                 </span>
                 <em v-if="'mode' in value">{{ value.mode === "hard" ? "Hard" : value.mode === "normal" ? "Normal" : "Unspecified" }}</em>
@@ -494,7 +497,7 @@ onBeforeUnmount(() => {
                 Clear filters
               </button>
             </div>
-          </nav>
+          </div>
 
           <footer v-if="host.reset" class="library-footer">
             <button class="ui-link" @click="controller.reset">
@@ -563,7 +566,7 @@ onBeforeUnmount(() => {
             data-icon
             aria-label="Dismiss message"
             @click="controller.dismissNotice"
-          >×</button>
+          ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13"/></svg></button>
         </div>
       </Transition>
 
@@ -615,7 +618,9 @@ onBeforeUnmount(() => {
               </p>
               <p v-else>Start empty, then assign library builds to its eight slots.</p>
             </div>
-            <button type="button" class="ui-button" data-icon aria-label="Close" @click="composer = null">×</button>
+            <button type="button" class="ui-button" data-icon aria-label="Close" @click="composer = null">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13"/></svg>
+            </button>
           </header>
           <label v-if="composer !== 'import-team'">
             <span>Name <small>optional</small></span>

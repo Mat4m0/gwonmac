@@ -184,19 +184,6 @@
 .row-quick-action[aria-pressed="true"] { color: var(--ui-selection-ink); }
 
 .trade-row:hover { background: var(--ui-hover); }
-.trade-row[data-selected] {
-  background: var(--ui-selection-fill);
-  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
-}
-.trade-row[data-selected]:hover { background: var(--ui-selection-hover-fill); }
-.character-cell:focus-visible,
-.offer-cell:focus-visible {
-  position: relative;
-  z-index: 1;
-  outline: 2px solid var(--ui-focus);
-  outline-offset: 2px;
-}
-
 .intent-cell {
   display: flex;
   min-width: 0;
@@ -271,6 +258,7 @@
   text-align: center;
 }
 .trade-state p { max-width: 62ch; margin: 0; }
+.trade-state p { font-family: var(--ui-font-reading); }
 .trade-state strong { color: var(--ui-text-bright); font-size: var(--ui-font-size-lg); }
 
 .trade-skeleton {
@@ -327,7 +315,6 @@
   cursor: pointer;
 }
 .inspector-player:hover bdi { text-decoration: underline; text-underline-offset: 3px; }
-.inspector-player:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
 
 .inspector-actions {
   display: flex;
@@ -393,13 +380,6 @@
 .saved-card-main:active,
 .saved-remove:active,
 .saved-trigger:active { transform: scale(0.97); }
-.saved-card-main:focus-visible,
-.saved-remove:focus-visible {
-  position: relative;
-  z-index: 1;
-  outline: 2px solid var(--ui-focus);
-  outline-offset: -2px;
-}
 .saved-player-card .saved-card-main bdi { color: var(--ui-accent); }
 .saved-drawer-body .ui-empty { min-height: 180px; }
 
@@ -518,17 +498,6 @@
   cursor: pointer;
   text-align: left;
 }
-.trader-item-row:hover { background: var(--ui-hover); }
-.trader-item-row[aria-selected="true"] {
-  background: var(--ui-selection-fill);
-  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
-}
-.trader-item-row:focus-visible {
-  position: relative;
-  z-index: 1;
-  outline: 2px solid var(--ui-focus);
-  outline-offset: -2px;
-}
 
 .trader-item-name {
   display: flex;
@@ -639,10 +608,12 @@
 
 .price-chart {
   position: relative;
+  display: flex;
   min-height: 0;
   flex: 1;
+  flex-direction: column;
   margin: var(--ui-space-2) 0 0;
-  overflow: hidden;
+  overflow: auto;
 }
 .price-chart-legend {
   position: absolute;
@@ -683,6 +654,7 @@
   width: 100%;
   height: 100%;
   min-height: 270px;
+  flex: 1 0 270px;
   cursor: crosshair;
   touch-action: none;
   user-select: none;
@@ -723,6 +695,28 @@
 }
 .price-chart-tooltip time { color: var(--ui-text-faint); }
 .price-chart-tooltip strong { margin-left: auto; color: var(--ui-text-bright); }
+.price-chart-data {
+  flex: none;
+  margin-top: var(--ui-space-2);
+  border-top: 1px solid var(--ui-line-soft);
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-reading);
+  font-size: var(--ui-font-size-sm);
+}
+.price-chart-data summary {
+  width: max-content;
+  min-height: var(--ui-control-height);
+  padding-block: var(--ui-space-2);
+  color: var(--ui-text);
+  cursor: pointer;
+}
+.price-chart-table-wrap { max-height: 220px; overflow: auto; }
+.price-chart-data table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.price-chart-data :is(th, td) { padding: var(--ui-space-1) var(--ui-space-2); border-bottom: 1px solid var(--ui-line-soft); text-align: end; }
+.price-chart-data :is(th, td):first-child { text-align: start; }
+.price-chart-data thead th { position: sticky; top: 0; background: var(--ui-well); color: var(--ui-text-bright); }
+.price-chart-data tbody th { color: var(--ui-text-muted); font-weight: var(--ui-font-weight-medium); }
+.price-chart-data td { color: var(--ui-text-bright); font-family: var(--ui-font-data); }
 
 @keyframes trade-skeleton {
   from { opacity: 0.34; }

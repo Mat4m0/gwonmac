@@ -43,7 +43,7 @@ describe("ToolsApp shell and library", () => {
     await wrapper.findAll(".library-row")[1]!.trigger("click");
     expect(wrapper.text()).toContain("1 linked team");
     expect(wrapper.findAll(".workspace-switcher [role=tab]")[1]!.text()).toBe("Skill catalogue");
-    expect(wrapper.get(".favourite").text()).toBe("☆");
+    expect(wrapper.get(".favourite").attributes("aria-label")).toBe("Add to favourites");
     wrapper.unmount();
   });
 

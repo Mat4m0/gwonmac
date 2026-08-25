@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  accessibleForeground,
   appearanceVariables,
   applyAppearance,
   contrastRatio,
@@ -60,30 +61,30 @@ describe("appearance settings", () => {
     } as HTMLElement;
     applyAppearance({ ...DEFAULT_SETTINGS, uiStyle: "custom" }, root);
     assert.equal(root.dataset.uiStyle, undefined);
-    assert.equal(properties.get("--ui-custom-window"), "#0B0B0B");
-    assert.equal(properties.get("--ui-custom-window-rgb"), "11 11 11");
-    assert.equal(properties.get("--ui-custom-titlebar"), "#292927");
-    assert.equal(properties.get("--ui-custom-surface"), "#202225");
-    assert.equal(root.dataset.uiMaterial, undefined);
-    assert.equal(properties.get("--ui-custom-accent-ink"), "#171613");
+    assert.equal(root.dataset.uiMaterial, "classic");
+    assert.equal(properties.has("--ui-panel-fill"), false);
+    assert.equal(properties.has("--ui-title-fill"), false);
     assert.ok(contrastRatio("#0B0B0B", readableForeground("#0B0B0B")) >= 4.5);
     assert.equal(readableForeground("#FFFFFF"), "#171613");
     const shared = readableSharedForeground(["#000000", "#FFFFFF"]);
     assert.ok(contrastRatio("#000000", shared) >= 4.5);
     assert.ok(contrastRatio("#FFFFFF", shared) >= 4.5);
+    assert.ok(contrastRatio("#595959", accessibleForeground("#948E7E", ["#595959"])) >= 4.5);
 
     applyAppearance({
       ...DEFAULT_SETTINGS,
       uiStyle: "custom",
       uiCustomTheme: { ...DEFAULT_SETTINGS.uiCustomTheme, accent: "#E6C883" },
     }, root);
-    assert.equal(root.dataset.uiStyle, "custom");
+    assert.equal(root.dataset.uiStyle, undefined);
     assert.equal(root.dataset.uiMaterial, "classic");
+    assert.equal(properties.get("--ui-accent"), "#E6C883");
+    assert.equal(properties.has("--ui-panel-fill"), false);
 
     applyAppearance({ ...DEFAULT_SETTINGS, uiStyle: "obsidian" }, root);
     assert.equal(root.dataset.uiStyle, "obsidian");
     assert.equal(root.dataset.uiMaterial, undefined);
-    assert.equal(properties.has("--ui-custom-window"), false);
+    assert.equal(properties.has("--ui-accent"), false);
   });
 
   it("activates a generation-keyed game font only after it loads", async () => {

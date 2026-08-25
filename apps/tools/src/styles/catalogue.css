@@ -3,7 +3,7 @@
   padding: var(--ui-space-4);
   border: 1px solid var(--ui-line);
   border-radius: var(--ui-radius);
-  background: color-mix(in srgb, var(--ui-well-fill) 95%, var(--ui-outline));
+  background: var(--ui-well-strong-fill);
 }
 
 [data-catalogue-open] .authoring-scroll {
@@ -197,15 +197,10 @@
 }
 
 .skill-group-heading:hover {
-  background: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-well));
+  background: var(--ui-accent-well-fill);
   color: var(--ui-text-bright);
 }
 .skill-group-heading:active { filter: brightness(0.86); }
-.skill-group-heading:focus-visible {
-  outline: 2px solid var(--ui-focus);
-  outline-offset: -2px;
-}
-
 .skill-group-chevron {
   transform: rotate(-90deg);
   transform-origin: center;
@@ -238,29 +233,10 @@
   contain-intrinsic-size: auto 54px;
 }
 
-.skill-result:hover {
-  background: var(--ui-hover);
-}
-
-.skill-result[aria-pressed="true"] {
-  background: var(--ui-selection-fill);
-  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
-  color: var(--ui-selection-ink);
-}
-
-.skill-result:active:not([aria-disabled="true"]) {
-  filter: brightness(0.86);
-}
-
-.skill-result:focus-visible {
-  outline: 2px solid var(--ui-focus);
-  outline-offset: -2px;
-}
-
 .skill-result[data-unavailable] { opacity: 0.66; }
 .skill-result[data-unavailable]:hover,
 .skill-result[data-unavailable][aria-pressed="true"] {
-  background: color-mix(in srgb, var(--ui-danger) 9%, transparent);
+  background: var(--ui-danger-soft-fill);
 }
 
 .catalogue-drag-handle {

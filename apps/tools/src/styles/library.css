@@ -48,6 +48,7 @@
 .composer-dialog p {
   margin-top: var(--ui-space-1);
   color: var(--ui-text-muted);
+  font-family: var(--ui-font-reading);
 }
 
 .composer-dialog label {
@@ -138,6 +139,7 @@
 
 .library-help p {
   margin: var(--ui-space-1) 0 0;
+  font-family: var(--ui-font-reading);
   line-height: 1.45;
   text-wrap: pretty;
 }
@@ -170,10 +172,12 @@
   gap: var(--ui-space-2);
 }
 
-.row-title i {
+.favourite-mark {
+  width: 13px;
+  height: 13px;
   margin-right: 3px;
+  flex: 0 0 13px;
   color: var(--ui-accent);
-  font-style: normal;
 }
 
 .row-title em,

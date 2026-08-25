@@ -586,7 +586,7 @@ function exactTime(timestamp: number): string {
           data-icon
           aria-label="Close Trade Chat"
           @click="emit('close')"
-        >×</button>
+        ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13"/></svg></button>
       </header>
 
       <TraderPrices
@@ -598,7 +598,7 @@ function exactTime(timestamp: number): string {
       />
 
       <div v-show="view === 'listings'" class="trade-toolbar">
-        <div class="ui-segment source-segment" data-fill aria-label="Trade source">
+        <div class="ui-segment source-segment" data-fill role="group" aria-label="Trade source">
           <button :aria-pressed="source === 'kamadan'" @click="source = 'kamadan'">Kamadan</button>
           <button :aria-pressed="source === 'pre-searing'" @click="source = 'pre-searing'">Pre-Searing</button>
         </div>
@@ -622,7 +622,7 @@ function exactTime(timestamp: number): string {
           <button v-if="submittedQuery" type="button" class="ui-button" @click="clearSearch">Live feed</button>
         </form>
         <div class="trade-toolbar-actions">
-          <div class="ui-segment intent-segment" data-fill aria-label="Offer intent">
+          <div class="ui-segment intent-segment" data-fill role="group" aria-label="Offer intent">
             <button :aria-pressed="intent === 'all'" @click="intent = 'all'">All</button>
             <button :aria-pressed="intent === 'selling'" @click="intent = 'selling'">Selling</button>
             <button :aria-pressed="intent === 'buying'" @click="intent = 'buying'">Buying</button>
@@ -703,7 +703,7 @@ function exactTime(timestamp: number): string {
             role="listitem"
           >
             <div
-              class="trade-row"
+              class="trade-row ui-selection-region"
               :data-saved-offer="offerSaved(message) ? '' : undefined"
               :data-saved-player="playerSaved(message.sender) ? '' : undefined"
               :data-selected="current.selection === message.timestamp ? '' : undefined"
@@ -822,9 +822,9 @@ function exactTime(timestamp: number): string {
               <strong>Saved</strong>
               <span>{{ savedCount }} {{ savedCount === 1 ? "item" : "items" }}</span>
             </div>
-            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved">×</button>
+            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>
           </header>
-          <div class="ui-segment saved-tabs" data-fill aria-label="Saved item type">
+          <div class="ui-segment saved-tabs" data-fill role="group" aria-label="Saved item type">
             <button :aria-pressed="savedTab === 'offers'" @click="savedTab = 'offers'">Offers {{ saved.offers.length }}</button>
             <button :aria-pressed="savedTab === 'players'" @click="savedTab = 'players'">Players {{ saved.players.length }}</button>
           </div>

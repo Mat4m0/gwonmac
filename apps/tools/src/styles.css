@@ -169,7 +169,7 @@
 
 .travel-favorite:hover:not(:disabled) { background: var(--ui-hover); }
 .travel-favorite:active:not(:disabled) { filter: brightness(0.86); }
-.travel-favorite b { display: block; color: var(--ui-accent-ink); font-variant-numeric: tabular-nums; }
+.travel-favorite b { display: block; color: var(--ui-text-bright); font-variant-numeric: tabular-nums; }
 .travel-favorite span { display: block; margin-top: 3px; overflow: hidden; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 
 .travel-result {
@@ -188,21 +188,6 @@
   cursor: pointer;
 }
 
-.travel-result:hover:not(:disabled),
-.travel-result[aria-selected="true"] {
-  border-color: var(--ui-outline);
-  background: var(--ui-hover);
-}
-
-.travel-result:active:not(:disabled) { filter: brightness(0.86); }
-
-.travel-result[aria-selected="true"] {
-  border-color: transparent;
-  background: var(--ui-selection-fill);
-  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
-  color: var(--ui-selection-ink);
-}
-.travel-result[aria-selected="true"]:hover { background: var(--ui-selection-hover-fill); }
 .travel-result mark { background: transparent; color: var(--ui-text-bright); text-decoration: underline; text-decoration-color: var(--ui-accent); text-underline-offset: 3px; }
 
 .travel-match {
@@ -220,7 +205,7 @@
   font-size: var(--ui-font-size-sm);
 }
 
-.travel-result-heading strong { color: var(--ui-accent-ink); }
+.travel-result-heading strong { color: var(--ui-text-bright); }
 .travel-empty { padding-block: var(--ui-space-5); }
 
 .travel-customize { padding-top: var(--ui-space-3); }
@@ -250,7 +235,6 @@
 }
 
 .travel-customize-shortcuts .travel-favorite[data-empty="true"] { border-style: dashed; }
-.travel-customize-shortcuts .travel-favorite[aria-pressed="true"] { background: var(--ui-selection-fill); box-shadow: inset 0 0 0 1px var(--ui-selection-marker); }
 
 .travel-shortcut-editor {
   display: grid;
@@ -364,8 +348,6 @@
   text-align: left;
   cursor: pointer;
 }
-.travel-destination-option:hover,
-.travel-destination-option[aria-selected="true"] { border-color: transparent; background: var(--ui-selection-fill); }
 .travel-destination-option strong,
 .travel-destination-option small { display: block; }
 .travel-destination-option small,

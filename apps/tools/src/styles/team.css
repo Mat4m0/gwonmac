@@ -29,7 +29,7 @@
 .team-slots > li:hover { background: var(--ui-hover); }
 .team-slots > li[data-invalid] {
   border-left-color: var(--ui-danger);
-  background: color-mix(in srgb, var(--ui-danger) 10%, transparent);
+  background: var(--ui-danger-soft-fill);
 }
 .team-slot--empty { opacity: 0.72; }
 
@@ -225,7 +225,7 @@
   overflow: hidden;
   border: 1px solid var(--ui-warning);
   border-radius: var(--ui-radius);
-  background: color-mix(in srgb, var(--ui-warning) 10%, var(--ui-raised-fill));
+  background: var(--ui-warning-raised-fill);
 }
 
 .apply-readiness-heading {

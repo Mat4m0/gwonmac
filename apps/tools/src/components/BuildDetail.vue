@@ -293,17 +293,22 @@ defineExpose({
           :aria-label="build.favourite ? 'Remove from favourites' : 'Add to favourites'"
           :aria-pressed="build.favourite"
           @click="controller.toggleBuildFavourite(build.id)"
-        >{{ build.favourite ? "★" : "☆" }}</button>
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="m10 2.4 2.25 4.56 5.03.73-3.64 3.55.86 5.01L10 13.88l-4.5 2.37.86-5.01L2.72 7.69l5.03-.73Z" :fill="build.favourite ? 'currentColor' : 'none'"/>
+          </svg>
+        </button>
       </div>
 
       <div
-        class="authoring-tabs"
+        class="authoring-tabs ui-tabs"
         role="tablist"
         aria-label="Build view"
         @keydown="navigateTabs"
       >
         <button
           id="build-view-tab"
+          class="ui-tab"
           role="tab"
           aria-controls="build-view-panel"
           :aria-selected="view === 'build'"
@@ -312,6 +317,7 @@ defineExpose({
         >Build</button>
         <button
           id="build-details-tab"
+          class="ui-tab"
           role="tab"
           aria-controls="build-details-panel"
           :aria-selected="view === 'details'"

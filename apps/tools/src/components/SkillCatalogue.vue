@@ -389,7 +389,7 @@ function hideBrokenIcon(event: Event): void {
                 const index = visibleIndex.get(skill.id);
                 if (element && index !== undefined) resultButtons[index] = element as HTMLButtonElement;
               }"
-              class="skill-result"
+              class="skill-result ui-row"
               :aria-pressed="inspected?.id === skill.id"
               :tabindex="focusedResult === visibleIndex.get(skill.id)
                 || (focusedResult === null && visibleIndex.get(skill.id) === 0) ? 0 : -1"

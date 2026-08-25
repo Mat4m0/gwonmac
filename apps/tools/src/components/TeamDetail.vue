@@ -310,7 +310,9 @@ defineExpose({
             :aria-pressed="team.favourite"
             @click="controller.updateTeam(team.id, (draft) => ({ ...draft, favourite: !draft.favourite }), 'Favourite updated')"
           >
-            {{ team.favourite ? "★" : "☆" }}
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="m10 2.4 2.25 4.56 5.03.73-3.64 3.55.86 5.01L10 13.88l-4.5 2.37.86-5.01L2.72 7.69l5.03-.73Z" :fill="team.favourite ? 'currentColor' : 'none'"/>
+            </svg>
           </button>
         </div>
       </div>

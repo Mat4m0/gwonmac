@@ -163,7 +163,7 @@ body[data-tools-standalone="true"] {
   position: fixed;
   z-index: calc(var(--ui-z-toast) - 1);
   inset: 0;
-  background: color-mix(in srgb, var(--ui-outline) 76%, transparent);
+  background: var(--ui-overlay-fill);
 }
 
 .skill-recovery {
