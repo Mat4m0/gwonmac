@@ -80,8 +80,9 @@
 <div class="controls">
   <h1>UI system</h1>
   <p class="sub">
-    The shipped Guild Wars Classic, Modern, and default custom styles. This gallery
-    links production tokens and components directly.
+    The shipped Guild Wars Classic and Modern styles. This standalone gallery
+    links production tokens and components directly; custom projection is
+    covered by the Tools, Trade, and Travel workbenches.
   </p>
 
   <label class="ctl ui-field">
@@ -89,7 +90,6 @@
     <select class="ui-select" id="style">
       <option value="guild-wars">Guild Wars · Default</option>
       <option value="obsidian">Modern</option>
-      <option value="custom">Custom · Default palette</option>
     </select>
   </label>
 
@@ -336,27 +336,9 @@ const KNOBS = [
 
 function apply() {
   const style = document.getElementById("style").value;
-  if (style === "obsidian" || style === "custom") root.dataset.uiStyle = style;
+  if (style === "obsidian") root.dataset.uiStyle = style;
   else delete root.dataset.uiStyle;
-  if (style === "custom") {
-    root.dataset.uiMaterial = "classic";
-    const variables = {
-      "--ui-custom-window": "#0B0B0B",
-      "--ui-custom-window-rgb": "11 11 11",
-      "--ui-custom-titlebar": "#292927",
-      "--ui-custom-surface": "#202225",
-      "--ui-custom-recessed": "#080807",
-      "--ui-custom-selected": "#1B3554",
-      "--ui-custom-accent": "#E6C882",
-      "--ui-custom-text": "#F1EBDD",
-      "--ui-custom-muted-text": "#B7B09F",
-      "--ui-custom-border": "#D8D2BF",
-      "--ui-custom-selected-ink": "#F7F3E8",
-      "--ui-custom-accent-ink": "#171613",
-      "--ui-custom-title-fill": "linear-gradient(180deg, #3A3A37, #292927 38%, #171716)",
-    };
-    for (const [name, value] of Object.entries(variables)) root.style.setProperty(name, value);
-  } else delete root.dataset.uiMaterial;
+  delete root.dataset.uiMaterial;
   const font = document.getElementById("font").value;
   root.dataset.uiFont = font;
   for (const knob of KNOBS) {
@@ -372,15 +354,12 @@ for (const knob of KNOBS) {
 document.getElementById("style").addEventListener("change", apply);
 document.getElementById("font").addEventListener("change", apply);
 
-/* Pull the controls back into line with whatever is actually on `:root`.
- * `scripts/ui-visual-sweep.mjs` drives the tokens directly, the same way
- * Settings does, and a sidebar still claiming the defaults would put a wrong
- * caption on every screenshot it takes. */
+/* Pull the controls back into line with the built-in markers on `:root`.
+ * Custom projection lives in the real Tools fixture bridge; this standalone
+ * gallery intentionally owns no approximation of the renderer runtime. */
 window.gwSyncGalleryControls = () => {
   document.getElementById("style").value =
-    ["obsidian", "custom"].includes(root.dataset.uiStyle)
-      ? root.dataset.uiStyle
-      : "guild-wars";
+    root.dataset.uiStyle === "obsidian" ? "obsidian" : "guild-wars";
   document.getElementById("font").value = root.dataset.uiFont || "guild-wars";
   for (const knob of KNOBS) {
     const current = parseFloat(root.style.getPropertyValue(knob.token));

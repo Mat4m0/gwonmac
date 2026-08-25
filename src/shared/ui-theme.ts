@@ -5,19 +5,28 @@ export type UiThemeColor = `#${string}`;
 export const UI_THEME_MATERIALS = ["classic", "modern"] as const;
 export type UiThemeMaterial = (typeof UI_THEME_MATERIALS)[number];
 
-export type CustomUiTheme = Readonly<{
+export const UI_THEME_COLOR_FIELDS = [
+  "window",
+  "titlebar",
+  "surface",
+  "recessed",
+  "selected",
+  "accent",
+  "text",
+  "mutedText",
+  "border",
+] as const;
+export type UiThemeColorField = (typeof UI_THEME_COLOR_FIELDS)[number];
+
+export type CustomUiTheme = Readonly<Record<UiThemeColorField, UiThemeColor> & {
   material: UiThemeMaterial;
-  window: UiThemeColor;
-  titlebar: UiThemeColor;
-  surface: UiThemeColor;
-  recessed: UiThemeColor;
-  selected: UiThemeColor;
-  accent: UiThemeColor;
-  text: UiThemeColor;
-  mutedText: UiThemeColor;
-  border: UiThemeColor;
   windowGradient: boolean;
 }>;
+const UI_THEME_FIELDS = new Set<string>([
+  "material",
+  ...UI_THEME_COLOR_FIELDS,
+  "windowGradient",
+]);
 
 const CLASSIC_CUSTOM_UI_THEME: CustomUiTheme = Object.freeze({
   material: "classic",
@@ -55,36 +64,6 @@ export function defaultCustomUiTheme(material: UiThemeMaterial): CustomUiTheme {
   return material === "modern" ? MODERN_CUSTOM_UI_THEME : CLASSIC_CUSTOM_UI_THEME;
 }
 
-const THEME_FIELDS = [
-  "material",
-  "window",
-  "titlebar",
-  "surface",
-  "recessed",
-  "selected",
-  "accent",
-  "text",
-  "mutedText",
-  "border",
-  "windowGradient",
-] as const satisfies readonly (keyof CustomUiTheme)[];
-
-/** Reset palettes render through the built-in projector. This guarantees that
- * Reset is an exact visual restore instead of an approximation maintained by
- * a second set of component tokens. The moment one field changes, the custom
- * projector takes over. */
-export function customThemeBuiltin(
-  theme: CustomUiTheme,
-): "guild-wars" | "obsidian" | null {
-  for (const material of UI_THEME_MATERIALS) {
-    const builtIn = defaultCustomUiTheme(material);
-    if (THEME_FIELDS.every((field) => theme[field] === builtIn[field])) {
-      return material === "classic" ? "guild-wars" : "obsidian";
-    }
-  }
-  return null;
-}
-
 const COLOR = /^#[0-9a-f]{6}$/iu;
 const SHARE_PREFIX = "gwonmac-theme-v1";
 
@@ -98,46 +77,20 @@ export function normaliseCustomUiTheme(value: unknown): CustomUiTheme | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
   if (
-    Object.keys(source).some((key) => ![
-      "window",
-      "material",
-      "titlebar",
-      "surface",
-      "recessed",
-      "selected",
-      "accent",
-      "text",
-      "mutedText",
-      "border",
-      "windowGradient",
-    ].includes(key))
+    Object.keys(source).some((key) => !UI_THEME_FIELDS.has(key))
     || typeof source.windowGradient !== "boolean"
     || !UI_THEME_MATERIALS.includes(source.material as UiThemeMaterial)
   ) return null;
-  const window = normaliseUiThemeColor(source.window);
-  const titlebar = normaliseUiThemeColor(source.titlebar);
-  const surface = normaliseUiThemeColor(source.surface);
-  const recessed = normaliseUiThemeColor(source.recessed);
-  const selected = normaliseUiThemeColor(source.selected);
-  const accent = normaliseUiThemeColor(source.accent);
-  const text = normaliseUiThemeColor(source.text);
-  const mutedText = normaliseUiThemeColor(source.mutedText);
-  const border = normaliseUiThemeColor(source.border);
-  return window && titlebar && surface && recessed && selected && accent && text && mutedText && border
-    ? Object.freeze({
-      material: source.material as UiThemeMaterial,
-      window,
-      titlebar,
-      surface,
-      recessed,
-      selected,
-      accent,
-      text,
-      mutedText,
-      border,
-      windowGradient: source.windowGradient,
-    })
-    : null;
+  const colors = Object.fromEntries(UI_THEME_COLOR_FIELDS.map((field) => [
+    field,
+    normaliseUiThemeColor(source[field]),
+  ])) as Record<UiThemeColorField, UiThemeColor | null>;
+  if (UI_THEME_COLOR_FIELDS.some((field) => colors[field] === null)) return null;
+  return Object.freeze({
+    material: source.material as UiThemeMaterial,
+    ...(colors as Record<UiThemeColorField, UiThemeColor>),
+    windowGradient: source.windowGradient,
+  });
 }
 
 export function encodeCustomUiTheme(theme: CustomUiTheme): string {

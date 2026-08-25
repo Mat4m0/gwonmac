@@ -2,7 +2,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULT_CUSTOM_UI_THEME,
-  customThemeBuiltin,
   decodeCustomUiTheme,
   defaultCustomUiTheme,
   encodeCustomUiTheme,
@@ -42,15 +41,6 @@ describe("custom UI theme contract", () => {
       border: "#5F5A52",
       windowGradient: false,
     });
-  });
-
-  it("projects untouched reset palettes through the exact built-in material", () => {
-    assert.equal(customThemeBuiltin(defaultCustomUiTheme("classic")), "guild-wars");
-    assert.equal(customThemeBuiltin(defaultCustomUiTheme("modern")), "obsidian");
-    assert.equal(customThemeBuiltin({
-      ...defaultCustomUiTheme("classic"),
-      accent: "#E6C883",
-    }), null);
   });
 
   it("strictly parses and normalises six-digit colours", () => {

@@ -148,6 +148,32 @@ const booleanValues = [false, true] as const;
 const opacityValues = [UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX] as const;
 const updateCheckValues = [null, 0, LAST_UPDATE_CHECK_AT_MAX] as const;
 const compatibilityValues = [null, "a".repeat(64)] as const;
+const distinctModernCustomTheme = {
+  material: "modern",
+  window: "#18212B",
+  titlebar: "#263442",
+  surface: "#34495E",
+  recessed: "#0D141B",
+  selected: "#5B3F78",
+  accent: "#5FD6C5",
+  text: "#F5F7FA",
+  mutedText: "#A7B4C2",
+  border: "#71869A",
+  windowGradient: false,
+} as const satisfies AppSettings["uiCustomTheme"];
+const customThemeValues: readonly AppSettings["uiCustomTheme"][] = [
+  DEFAULT_CUSTOM_UI_THEME,
+  distinctModernCustomTheme,
+];
+for (const field of Object.keys(DEFAULT_CUSTOM_UI_THEME) as Array<
+  keyof AppSettings["uiCustomTheme"]
+>) {
+  assert.notEqual(
+    distinctModernCustomTheme[field],
+    DEFAULT_CUSTOM_UI_THEME[field],
+    `Modern custom-theme case must change durable field ${field}`,
+  );
+}
 const travelShortcutValues: readonly StoredTravelShortcuts[] = [
   DEFAULT_STORED_TRAVEL_SHORTCUTS,
   [],
@@ -173,6 +199,7 @@ const domainCaseCount = Math.max(
   UPDATE_TRACKS.length,
   updateCheckValues.length,
   compatibilityValues.length,
+  customThemeValues.length,
   travelShortcutValues.length,
 );
 const candidateSettingsDomains = Array.from(
@@ -181,11 +208,7 @@ const candidateSettingsDomains = Array.from(
     const settings: AppSettings = {
       renderScale: cycle(RENDER_SCALES, index),
       uiStyle: cycle(UI_STYLES, index),
-      uiCustomTheme: {
-        ...DEFAULT_CUSTOM_UI_THEME,
-        window: index % 2 === 0 ? "#0B0B0B" : "#FFFFFF",
-        windowGradient: cycle(booleanValues, index),
-      },
+      uiCustomTheme: cycle(customThemeValues, index),
       uiFont: cycle(UI_FONTS, index),
       controllerPromptStyle: cycle(CONTROLLER_PROMPT_STYLES, index),
       uiPanelOpacity: cycle(opacityValues, index),

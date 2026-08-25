@@ -37,47 +37,57 @@ const OPACITIES = [
 ];
 /** @type {Array<"guild-wars" | "obsidian" | "custom">} */
 const STYLES = ["guild-wars", "obsidian", "custom"];
+/** @type {Array<"guild-wars" | "obsidian">} */
+const GALLERY_STYLES = ["guild-wars", "obsidian"];
 const FONTS = ["guild-wars", "inter", "system", "avenir", "georgia", "palatino"];
+const CUSTOM_THEME = {
+  material: "modern",
+  window: "#F4F4F4",
+  titlebar: "#FFFFFF",
+  surface: "#FFFFFF",
+  recessed: "#E5E7EB",
+  selected: "#123456",
+  accent: "#22C55E",
+  text: "#171717",
+  mutedText: "#666666",
+  border: "#D4D4D4",
+  windowGradient: false,
+};
 
 /**
- * Apply exactly what `src/renderer/appearance.ts` applies.
+ * Tools exposes the real production projector. The standalone HTML gallery
+ * has no renderer bundle, so it intentionally covers built-in materials only.
  * @param {import("@playwright/test").Page} page
  * @param {"guild-wars" | "obsidian" | "custom"} style
  * @param {number} opacity
  */
 async function applyAppearance(page, style, opacity) {
   await page.evaluate(
-    ({ style, opacity }) => {
+    ({ style, opacity, customTheme }) => {
       const root = document.documentElement;
-      if (style === "obsidian" || style === "custom") root.dataset.uiStyle = style;
-      else delete root.dataset.uiStyle;
-      if (style === "custom") {
-        root.dataset.uiMaterial = "classic";
-        const variables = {
-          "--ui-custom-window": "#0B0B0B",
-          "--ui-custom-window-rgb": "11 11 11",
-          "--ui-custom-titlebar": "#292927",
-          "--ui-custom-surface": "#202225",
-          "--ui-custom-recessed": "#080807",
-          "--ui-custom-selected": "#1B3554",
-          "--ui-custom-accent": "#E6C882",
-          "--ui-custom-text": "#F1EBDD",
-          "--ui-custom-muted-text": "#B7B09F",
-          "--ui-custom-border": "#D8D2BF",
-          "--ui-custom-selected-ink": "#F7F3E8",
-          "--ui-custom-accent-ink": "#171613",
-          "--ui-custom-title-fill": "linear-gradient(180deg, #3A3A37, #292927 38%, #171716)",
-        };
-        for (const [name, value] of Object.entries(variables)) root.style.setProperty(name, value);
-      } else delete root.dataset.uiMaterial;
-      root.style.setProperty("--ui-panel-opacity", String(opacity));
+      const fixtureWindow = /** @type {{gwApplyFixtureAppearance?: (fixture: object) => void}} */ (
+        /** @type {unknown} */ (window)
+      );
+      if (fixtureWindow.gwApplyFixtureAppearance) {
+        fixtureWindow.gwApplyFixtureAppearance({
+          uiStyle: style,
+          uiPanelOpacity: Math.round(opacity * 100),
+          ...(style === "custom" ? { uiCustomTheme: customTheme } : {}),
+        });
+      } else {
+        if (style === "custom") throw new Error("Custom themes require the Tools fixture bridge");
+        if (style === "obsidian") root.dataset.uiStyle = "obsidian";
+        else delete root.dataset.uiStyle;
+        delete root.dataset.uiMaterial;
+        root.style.setProperty("--ui-panel-opacity", String(opacity));
+      }
       // The gallery draws its own controls; keep them honest so a screenshot
       // never captions itself with the values it is not showing.
       /** @type {{gwSyncGalleryControls?: () => void}} */ (
         /** @type {unknown} */ (window)
       ).gwSyncGalleryControls?.();
     },
-    { style, opacity },
+    { style, opacity, customTheme: CUSTOM_THEME },
   );
   await page.waitForTimeout(60);
 }
@@ -197,14 +207,10 @@ const findings = [];
 /**
  * @param {string} pageUrl
  * @param {string} tag
- * @param {(page: import("@playwright/test").Page) => Promise<void>} [prepare]
- */
-/**
- * @param {string} pageUrl
- * @param {string} tag
  * @param {((page: import("@playwright/test").Page) => Promise<void>) | undefined} [prepare]
+ * @param {readonly ("guild-wars" | "obsidian" | "custom")[]} [styles]
  */
-async function sweep(pageUrl, tag, prepare) {
+async function sweep(pageUrl, tag, prepare, styles = STYLES) {
   const page = await browser.newPage({
     viewport: { width: 1400, height: 1000 },
     colorScheme: "dark",
@@ -212,7 +218,7 @@ async function sweep(pageUrl, tag, prepare) {
   await page.goto(pageUrl, { waitUntil: "networkidle" });
   if (prepare) await prepare(page);
 
-  for (const style of STYLES) {
+  for (const style of styles) {
     for (const opacity of OPACITIES) {
       await applyAppearance(page, style, opacity.value);
       const label = `${tag}/${style}/${opacity.name}`;
@@ -249,7 +255,7 @@ async function sweepFonts(pageUrl, tag, prepare) {
 }
 
 await mkdir(outDir, { recursive: true });
-await sweep(galleryUrl, "gallery");
+await sweep(galleryUrl, "gallery", undefined, GALLERY_STYLES);
 await sweep(toolsUrl, "tools", async (page) => {
   await page.waitForSelector("#app[data-ready=true]", { state: "attached", timeout: 15_000 });
 });

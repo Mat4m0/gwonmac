@@ -187,19 +187,24 @@ test.describe("data and display settings", () => {
 
       await page.locator('[data-theme-hex="window"]').fill("#202830");
       await page.locator('[data-theme-hex="window"]').dispatchEvent("change");
-      await expect(root).toHaveAttribute("data-ui-style", "custom");
+      // Sharing reads the visible draft, even while the asynchronous settings
+      // write is still in flight.
+      await page.locator("#settings-theme-share").click();
+      await expect.poll(() => page.evaluate(() => window.gwNative.clipboard.readText()))
+        .toBe("gwonmac-theme-v1:classic:#202830:#292927:#202225:#080807:#1B3554:#E6C882:#F1EBDD:#B7B09F:#D8D2BF:1");
+      await expect(root).not.toHaveAttribute("data-ui-style");
+      await expect(root).toHaveAttribute("data-ui-material", "classic");
       await expect.poll(() => page.evaluate(async () =>
         (await window.gwNative.settings.get()).uiCustomTheme.window,
       )).toBe("#202830");
-      await expect(root).toHaveCSS("--ui-custom-window", "#202830");
+      await expect.poll(() => root.evaluate((element) =>
+        element.style.getPropertyValue("--ui-panel-fill"),
+      )).toContain("32 40 48");
 
       const beforeIndependent = await page.evaluate(async () => {
         const settings = await window.gwNative.settings.get();
         return { uiFont: settings.uiFont, uiPanelOpacity: settings.uiPanelOpacity };
       });
-      await page.locator("#settings-theme-share").click();
-      await expect.poll(() => page.evaluate(() => window.gwNative.clipboard.readText()))
-        .toBe("gwonmac-theme-v1:classic:#202830:#292927:#202225:#080807:#1B3554:#E6C882:#F1EBDD:#B7B09F:#D8D2BF:1");
 
       await page.locator("#settings-theme-import").click();
       await page.locator("#settings-theme-import-value").fill("not-a-theme");
@@ -229,7 +234,10 @@ test.describe("data and display settings", () => {
         border: "#D4D4D4",
         windowGradient: false,
       });
-      await expect(root).toHaveCSS("--ui-custom-text", "#171717");
+      await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect.poll(() => root.evaluate((element) =>
+        element.style.getPropertyValue("--ui-accent"),
+      )).toBe("#22C55E");
       await expect(root).toHaveAttribute("data-ui-material", "modern");
 
       await page.locator("#settings-theme-reset").click();
@@ -244,11 +252,12 @@ test.describe("data and display settings", () => {
       await page.locator('input[name="uiStyle"][value="obsidian"]').click();
       await expect(root).toHaveAttribute("data-ui-style", "obsidian");
       await expect.poll(() => root.evaluate((element) =>
-        element.style.getPropertyValue("--ui-custom-window"),
+        element.style.getPropertyValue("--ui-panel-fill"),
       )).toBe("");
       await page.locator("#settings-theme-tab-custom").click();
       await page.locator("#settings-theme-use-custom").click();
-      await expect(root).toHaveAttribute("data-ui-style", "custom");
+      await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(root).toHaveAttribute("data-ui-material", "modern");
 
       await expect.poll(() => page.evaluate(async () => {
         const settings = await window.gwNative.settings.get();
@@ -260,7 +269,8 @@ test.describe("data and display settings", () => {
         globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
       );
       await page.locator("#settings-tab-display").click();
-      await expect(root).toHaveAttribute("data-ui-style", "custom");
+      await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(root).toHaveAttribute("data-ui-material", "modern");
       await expect(page.locator('[data-theme-hex="window"]')).toHaveValue("#1B1A18");
     } finally {
       await closeOffline(fixture);

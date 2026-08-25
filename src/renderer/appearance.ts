@@ -16,54 +16,8 @@ import {
 
 const fontChoices = new WeakMap<HTMLElement, AppSettings["uiFont"]>();
 const fontLoads = new Map<string, Promise<boolean>>();
+const appliedThemeVariables = new WeakMap<HTMLElement, readonly string[]>();
 let activeGeneration = "active";
-const THEME_OVERRIDES = [
-  "--ui-panel-fill",
-  "--ui-title-fill",
-  "--ui-raised-fill",
-  "--ui-command-fill",
-  "--ui-command-ring",
-  "--ui-well",
-  "--ui-well-fill",
-  "--ui-hover",
-  "--ui-selection-fill",
-  "--ui-selection-hover-fill",
-  "--ui-selection-ink",
-  "--ui-selection-marker",
-  "--ui-pressed-layer",
-  "--ui-text",
-  "--ui-text-bright",
-  "--ui-text-muted",
-  "--ui-text-faint",
-  "--ui-display-text",
-  "--ui-accent",
-  "--ui-accent-hover",
-  "--ui-accent-strong",
-  "--ui-accent-ink",
-  "--ui-primary-fill",
-  "--ui-primary-ink",
-  "--ui-control-mark",
-  "--ui-focus",
-  "--ui-focus-halo",
-  "--ui-line",
-  "--ui-line-soft",
-  "--ui-outline",
-  "--ui-edge",
-  "--ui-edge-strong",
-  "--ui-edge-inner",
-  "--ui-frame",
-  "--ui-frame-top",
-  "--ui-ring-gilt",
-  "--ui-ring-gold",
-  "--ui-ring-quiet",
-  "--ui-ring-empty",
-  "--ui-ring-mark",
-  "--ui-scroll-track-color",
-  "--ui-scroll-thumb-color",
-  "--ui-scroll-track",
-  "--ui-scroll-thumb",
-  "--ui-accent-fill",
-] as const;
 
 const parseRgb = (color: UiThemeColor): readonly [number, number, number] => [
   Number.parseInt(color.slice(1, 3), 16),
@@ -295,10 +249,14 @@ export function applyAppearance(
   generation = activeGeneration,
 ): void {
   activeGeneration = generation;
-  for (const name of THEME_OVERRIDES) root.style.removeProperty(name);
-  for (const [name, value] of Object.entries(appearanceVariables(settings))) {
+  for (const name of appliedThemeVariables.get(root) ?? []) {
+    root.style.removeProperty(name);
+  }
+  const variables = appearanceVariables(settings);
+  for (const [name, value] of Object.entries(variables)) {
     root.style.setProperty(name, value);
   }
+  appliedThemeVariables.set(root, Object.keys(variables));
   if (
     settings.uiStyle === "obsidian"
     || (settings.uiStyle === "custom" && settings.uiCustomTheme.material === "modern")

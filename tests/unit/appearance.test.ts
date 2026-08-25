@@ -12,6 +12,7 @@ import {
   DEFAULT_SETTINGS,
   type AppSettings,
 } from "../../src/shared/contracts.js";
+import { defaultCustomUiTheme } from "../../src/shared/ui-theme.js";
 
 describe("appearance settings", () => {
   it("derives the complete public token override from canonical settings", () => {
@@ -22,6 +23,21 @@ describe("appearance settings", () => {
     assert.deepEqual(appearanceVariables(appearance), {
       "--ui-panel-opacity": "0.78",
     });
+  });
+
+  it("projects untouched custom palettes exactly like their built-in material", () => {
+    for (const [material, uiStyle] of [
+      ["classic", "guild-wars"],
+      ["modern", "obsidian"],
+    ] as const) {
+      const builtIn = appearanceVariables({ ...DEFAULT_SETTINGS, uiStyle });
+      const custom = appearanceVariables({
+        ...DEFAULT_SETTINGS,
+        uiStyle: "custom",
+        uiCustomTheme: defaultCustomUiTheme(material),
+      });
+      assert.deepEqual(custom, builtIn);
+    }
   });
 
   it("sets independent style and font markers and removes their defaults", () => {

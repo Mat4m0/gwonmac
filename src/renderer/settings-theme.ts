@@ -10,12 +10,14 @@ import {
   decodeCustomUiTheme,
   defaultCustomUiTheme,
   encodeCustomUiTheme,
+  normaliseCustomUiTheme,
   normaliseUiThemeColor,
+  UI_THEME_COLOR_FIELDS,
   type CustomUiTheme,
+  type UiThemeColorField,
 } from "../shared/ui-theme.js";
 import { applyAppearance } from "./appearance.js";
 
-type ThemeKey = Exclude<keyof CustomUiTheme, "material" | "windowGradient">;
 type FeedbackTone = "neutral" | "progress" | "success" | "warning" | "error";
 
 export interface ThemeSettingsDependencies {
@@ -26,18 +28,6 @@ export interface ThemeSettingsDependencies {
   feedback: (message: string, tone: FeedbackTone, resetAfter?: number) => void;
   copy: (text: string) => Promise<void>;
 }
-
-const THEME_KEYS = [
-  "window",
-  "titlebar",
-  "surface",
-  "recessed",
-  "selected",
-  "accent",
-  "text",
-  "mutedText",
-  "border",
-] as const;
 
 export function bindThemeSettings(deps: ThemeSettingsDependencies) {
   const tabs = [...deps.form.querySelectorAll<HTMLButtonElement>(".settings-theme-tab")];
@@ -63,9 +53,9 @@ export function bindThemeSettings(deps: ThemeSettingsDependencies) {
     if (settings) applyAppearance(settings);
   });
 
-  const colorInput = (key: ThemeKey) =>
+  const colorInput = (key: UiThemeColorField) =>
     deps.form.querySelector<HTMLInputElement>(`[data-theme-color="${key}"]`)!;
-  const hexInput = (key: ThemeKey) =>
+  const hexInput = (key: UiThemeColorField) =>
     deps.form.querySelector<HTMLInputElement>(`[data-theme-hex="${key}"]`)!;
 
   function selectTab(id: string, focus = false): void {
@@ -98,24 +88,14 @@ export function bindThemeSettings(deps: ThemeSettingsDependencies) {
   });
 
   function draftTheme(): CustomUiTheme | null {
-    const values = Object.fromEntries(THEME_KEYS.map((key) => [
-      key,
-      normaliseUiThemeColor(hexInput(key).value),
-    ]));
-    if (Object.values(values).some((value) => value === null)) return null;
-    return {
+    return normaliseCustomUiTheme({
       material: material.value === "modern" ? "modern" : "classic",
-      window: values.window!,
-      titlebar: values.titlebar!,
-      surface: values.surface!,
-      recessed: values.recessed!,
-      selected: values.selected!,
-      accent: values.accent!,
-      text: values.text!,
-      mutedText: values.mutedText!,
-      border: values.border!,
+      ...Object.fromEntries(UI_THEME_COLOR_FIELDS.map((key) => [
+        key,
+        hexInput(key).value,
+      ])),
       windowGradient: gradient.checked,
-    };
+    });
   }
 
   function preview(theme: CustomUiTheme): void {
@@ -125,7 +105,7 @@ export function bindThemeSettings(deps: ThemeSettingsDependencies) {
 
   function writeThemeFields(theme: CustomUiTheme): void {
     material.value = theme.material;
-    for (const key of THEME_KEYS) {
+    for (const key of UI_THEME_COLOR_FIELDS) {
       colorInput(key).value = theme[key];
       hexInput(key).value = theme[key];
       hexInput(key).removeAttribute("aria-invalid");
@@ -149,7 +129,7 @@ export function bindThemeSettings(deps: ThemeSettingsDependencies) {
     }
   }
 
-  for (const key of THEME_KEYS) {
+  for (const key of UI_THEME_COLOR_FIELDS) {
     const picker = colorInput(key);
     const hex = hexInput(key);
     picker.addEventListener("input", () => {
@@ -220,9 +200,12 @@ export function bindThemeSettings(deps: ThemeSettingsDependencies) {
   });
 
   share.addEventListener("click", () => {
-    const settings = deps.settings();
-    if (!settings) return;
-    void deps.copy(encodeCustomUiTheme(settings.uiCustomTheme))
+    const theme = draftTheme();
+    if (!theme) {
+      deps.feedback("Fix the invalid colour before sharing this theme.", "error");
+      return;
+    }
+    void deps.copy(encodeCustomUiTheme(theme))
       .then(() => deps.feedback("Theme copied.", "success", 2200))
       .catch(() => deps.feedback("The theme could not be copied.", "error"));
   });
