@@ -35,6 +35,8 @@ import {
   type EnhancementRuntimeFeature,
   type ExternalLinkKind,
   type FullDownloadOutcome,
+  GAME_RELOAD_CAUSES,
+  type GameReloadCause,
   type GraphicsDiagnostics,
   type InvokeChannel,
   type GameTextEditRequest,
@@ -193,6 +195,8 @@ export interface IpcContext extends TradeIpcContext {
   ) => Promise<AccountsState>;
   useSingleAccountMode: () => Promise<void>;
   requestQuit: (win: BrowserWindow) => void;
+  reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
+  claimRelogIntent: (win: BrowserWindow) => boolean;
   loadAccountTemplates: (win: BrowserWindow) => Promise<AccountTemplateLibrary | null>;
   saveAccountTemplates: (
     win: BrowserWindow,
@@ -220,6 +224,13 @@ const one =
     exact(args, 1);
     return parse(args[0]);
   };
+
+const asGameReloadCause = one((value: unknown): GameReloadCause => {
+  if (!GAME_RELOAD_CAUSES.includes(value as GameReloadCause)) {
+    throw new ValidationError("unknown game reload cause");
+  }
+  return value as GameReloadCause;
+});
 
 const asString = (what: string) =>
   one((value: unknown): string => {
@@ -667,6 +678,11 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     appRequestQuit: channel(nothing, (win) => ctx.requestQuit(win)),
+
+    appReloadGame: channel(asGameReloadCause, (win, cause) =>
+      ctx.reloadGame(win, cause)),
+
+    appClaimRelogIntent: channel(nothing, (win) => ctx.claimRelogIntent(win)),
 
     clipboardWriteText: channel(asClipboardText, (_win, text) => {
       clipboard.writeText(text);

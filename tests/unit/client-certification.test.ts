@@ -25,6 +25,7 @@ const ALL_CAPABILITIES = Object.freeze({
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playRegionObservation: true,
+    preGameControls: false,
 });
 
 function localVerification(

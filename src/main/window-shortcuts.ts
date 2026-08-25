@@ -31,6 +31,11 @@ const tracedKey = (key: string) => {
 interface ShortcutActions {
   run(action: ShortcutAction): void;
   edit(command: GameTextEditCommand): void;
+  quitOrReload(): void | Promise<void>;
+  recordCommandQ?(
+    phase: "claimed" | "repeat-contained" | "rearmed",
+    reason: "none" | "keyup" | "dialog-settled" | "appkit-release" | "error",
+  ): void;
 }
 
 type ClaimedKey = 'capture' | 'skill-capture' | 'shortcut' | GameTextEditCommand;
@@ -60,7 +65,10 @@ class WindowShortcuts {
   #skillCapture: ((result: SkillKeyCaptureResult) => void) | null = null;
   #claimedCodes = new Map<string, ClaimedKey>();
 
-  constructor(win: BrowserWindow, actions: ShortcutActions) {
+  constructor(
+    win: BrowserWindow,
+    actions: ShortcutActions,
+  ) {
     this.#actions = actions;
     win.webContents.on("before-input-event", (event, input) => {
       if (input.type === "keyUp") {
@@ -80,6 +88,7 @@ class WindowShortcuts {
         });
         if (decision) {
           this.#claimedCodes.delete(input.code);
+          if (input.code === "KeyQ") this.#recordCommandQ("rearmed", "keyup");
           event.preventDefault();
         }
         return;
@@ -104,6 +113,9 @@ class WindowShortcuts {
           decision: claimedDecision(claimed),
         });
         event.preventDefault();
+        if (input.code === "KeyQ") {
+          this.#recordCommandQ("repeat-contained", "none");
+        }
         return;
       }
       if (this.#capture) {
@@ -163,6 +175,46 @@ class WindowShortcuts {
         });
         this.#claimedCodes.set(input.code, edit);
         this.#actions.edit(edit);
+        return;
+      }
+      if (
+        input.meta &&
+        !input.control &&
+        !input.shift &&
+        !input.alt &&
+        input.code === "KeyQ"
+      ) {
+        event.preventDefault();
+        recordMainInput(win, {
+          source: 'main', kind: 'native-key', phase: 'down',
+          key: tracedKey(input.key), repeat: input.isAutoRepeat,
+          decision: 'shortcut',
+        });
+        this.#claimedCodes.set(input.code, 'shortcut');
+        this.#recordCommandQ("claimed", "none");
+        if (!input.isAutoRepeat) {
+          // AppKit gives the native sheet ownership before the physical Q-up
+          // reaches webContents. Keep repeats contained while the sheet is
+          // open, then re-arm Q when its operation settles instead of waiting
+          // for a release Electron may never deliver.
+          const rearm = (reason: "dialog-settled" | "error") => {
+            if (this.#claimedCodes.delete(input.code)) {
+              this.#recordCommandQ("rearmed", reason);
+            }
+          };
+          try {
+            void Promise.resolve(this.#actions.quitOrReload()).then(
+              () => rearm("dialog-settled"),
+              (error) => {
+                console.error('quit or reload shortcut failed', error);
+                rearm("error");
+              },
+            );
+          } catch (error) {
+            console.error('quit or reload shortcut failed', error);
+            rearm("error");
+          }
+        }
         return;
       }
       for (const [action, binding] of Object.entries(this.#shortcuts)) {
@@ -226,7 +278,21 @@ class WindowShortcuts {
   }
 
   release(code: string): void {
-    this.#claimedCodes.delete(code);
+    const claimed = this.#claimedCodes.delete(code);
+    if (claimed && code === "KeyQ") {
+      this.#recordCommandQ("rearmed", "appkit-release");
+    }
+  }
+
+  #recordCommandQ(
+    phase: "claimed" | "repeat-contained" | "rearmed",
+    reason: "none" | "keyup" | "dialog-settled" | "appkit-release" | "error",
+  ): void {
+    try {
+      this.#actions.recordCommandQ?.(phase, reason);
+    } catch {
+      // Observation must never alter shortcut containment or rearming.
+    }
   }
 
   #finish(result: ShortcutCaptureResult): void {

@@ -39,6 +39,22 @@ test("keeps an account open until an incomplete save is resolved explicitly", as
       [FIRST, SECOND] as const,
     );
     await expect.poll(() => fixture.app.windows().length).toBe(3);
+    await fixture.app.evaluate(async ({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows().find((candidate) =>
+        candidate.getTitle().endsWith("Primary"));
+      if (!win) throw new Error("Primary window not found");
+      await win.webContents.executeJavaScript(`
+        window.Module ??= {};
+        Object.defineProperty(window.Module, "FS", {
+          configurable: true,
+          get() { throw new Error("'FS' was not exported"); },
+        });
+        Object.assign(globalThis, {
+          FS: { syncfs: (_populate, callback) => callback() },
+        });
+        true;
+      `);
+    });
     await fixture.app.evaluate(({ BrowserWindow, dialog }) => {
       globalThis.__profileCloseDialogs = {
         parents: [],

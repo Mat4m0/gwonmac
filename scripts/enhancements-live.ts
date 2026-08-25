@@ -4,7 +4,7 @@ import path from "node:path";
 import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import type { Browser, Page } from "playwright";
+import type { Browser, BrowserContext, Page } from "playwright";
 // The sources, not `build/`. Importing the compiled copy made the contract a
 // second source of truth: a stale `build/` typechecked against a
 // `EnhancementDoctorReport` that no longer existed. `pnpm enhancements:live` loads this
@@ -142,6 +142,37 @@ function waitForExit(): Promise<Shutdown> {
   });
 }
 
+const GAME_RENDERER_URL = "gw://app/";
+
+/**
+ * Bind live automation to one account window, never the Multiple Accounts Hub.
+ * CDP page order is creation order, so `pages()[0]` is the Hub in Multi mode.
+ */
+async function waitForGamePage(context: BrowserContext): Promise<Page> {
+  const deadline = Date.now() + 30 * 60_000;
+  let checkpointWritten = false;
+  while (Date.now() < deadline) {
+    const games = context.pages().filter((candidate) =>
+      candidate.url() === GAME_RENDERER_URL
+    );
+    if (games.length === 1) return games[0]!;
+    if (games.length > 1) {
+      throw new Error(
+        "Enhancement live run requires exactly one open account window",
+      );
+    }
+    if (!checkpointWritten) {
+      console.log(JSON.stringify({
+        checkpoint: "waiting-for-account-window",
+        please: "open exactly one account from the Multiple Accounts Hub",
+      }));
+      checkpointWritten = true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("No Guild Wars account window opened within 30 minutes");
+}
+
 const endpoint = await debuggingEndpoint(stderr);
 
 let browser: Browser | undefined;
@@ -159,7 +190,7 @@ try {
   browser = await chromium.connectOverCDP(endpoint);
   const context = browser.contexts()[0];
   if (!context) throw new Error("Electron exposed no browser context");
-  const page = context.pages()[0] ?? await context.waitForEvent("page");
+  const page = await waitForGamePage(context);
   failurePage = page;
   const cdp = await context.newCDPSession(page);
   await cdp.send("Performance.enable");
@@ -291,6 +322,7 @@ try {
   // pixels on failure.
   if (
     plan.scenario.program !== "toolbox-foundation"
+    && plan.scenario.program !== "reconnect-probe"
     && failurePage
     && !failurePage.isClosed()
   ) {

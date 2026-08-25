@@ -223,6 +223,7 @@ const candidateSettingsDomains = Array.from(
       skillCooldownOverlayEnabled: cycle(booleanValues, index),
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: cycle(booleanValues, index + 1),
+      autoRelogAfterReload: cycle(booleanValues, index),
       showDiagnostics: cycle(booleanValues, index),
       dataStrategy: "full",
       autoCheckUpdates: false,

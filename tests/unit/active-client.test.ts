@@ -18,6 +18,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         gameFileSaving: supported ? available : unavailable,
         nativeCursor: supported ? available : unavailable,
         playRegionObservation: { status: "off" },
+        preGameControls: { status: "off" },
         targetObservation: { status: "off" },
         partyObservation: { status: "off" },
         teamApply: { status: "off" },

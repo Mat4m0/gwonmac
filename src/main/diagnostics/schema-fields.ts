@@ -8,11 +8,13 @@
  */
 import {
   EVENT_CHANNELS,
+  GAME_RELOAD_CAUSES,
   IPC,
   RENDERER_COMMAND_OUTCOMES,
   type AppUpdateErrorCode,
   type EventChannel,
   type InvokeChannel,
+  type GameReloadCause,
   type RendererCommand,
   type RendererCommandOutcome,
   type SocketCloseReason,
@@ -52,6 +54,11 @@ export interface EventSpec {
 
 export const finiteNumber: FieldGuard<number> = (value): value is number =>
   typeof value === "number" && Number.isFinite(value);
+export const uint32: FieldGuard<number> = (value): value is number =>
+  typeof value === "number"
+  && Number.isInteger(value)
+  && value >= 0
+  && value <= 0xffff_ffff;
 export const boolean: FieldGuard<boolean> = (value): value is boolean =>
   typeof value === "boolean";
 
@@ -142,6 +149,7 @@ export const captureAction = literal(RENDERER_CAPTURE_ACTIONS);
 export const incompleteCommandOutcome = literal(
   INCOMPLETE_RENDERER_COMMAND_OUTCOMES,
 );
+export const gameReloadCause = literal<GameReloadCause>(GAME_RELOAD_CAUSES);
 export const appUpdateErrorCode = literal([
   "rate-limited",
   "offline",

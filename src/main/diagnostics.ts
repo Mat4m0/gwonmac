@@ -19,6 +19,8 @@ import {
 import { recorder, sweepDiagnosticsDirectory } from "./diagnostics/recorder.js";
 import { startSampling, stopSampling } from "./diagnostics/samplers.js";
 import { windowRegistry } from "./window-registry.js";
+import { parseLogRecords } from "./diagnostics/report.js";
+import { formatRelogTranscript } from "./diagnostics/relog-transcript.js";
 
 export {
   count,
@@ -84,4 +86,15 @@ export async function stopDiagnostics(): Promise<void> {
   // A session that is never exported still bounds itself at quit rather than
   // waiting for the next launch to sweep.
   await discardTrace();
+}
+
+/** Copy surface input: a closed projection, not the recorder's raw JSONL. */
+export async function reloadTranscriptForWindow(win: BrowserWindow): Promise<string> {
+  const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
+  const exported = await recorder.exportedEvents(ownerId);
+  return formatRelogTranscript({
+    records: parseLogRecords(exported.text),
+    ownerId,
+    completeFromStart: exported.completeFromStart,
+  });
 }

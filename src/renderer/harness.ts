@@ -195,7 +195,7 @@ let crashRecorded = false;
 
 /**
  * How many client launches have crashed this app run. Main's flight recorder
- * owns the tally (it survives the location.reload() a Retry performs and
+ * owns the tally (it survives the account-local page reload a Retry performs and
  * dies with the process), so the renderer records the crash first and then
  * reads the count back — browser storage is deliberately not used anywhere
  * in this app. A count that cannot be read degrades to the first-crash
@@ -209,6 +209,9 @@ async function escalateRepeatedCrash(): Promise<void> {
 let disposeSocketHost = () => {};
 let disposeHostOnlyTools = () => {};
 const native = () => window.gwNative;
+let automaticCharacterReturn:
+  | import('./automatic-character-return.js').AutomaticCharacterReturn
+  | null = null;
 const diagnosticProfile = native().init.diagnosticProfile;
 const glOverridesEnabled = diagnosticProfile === 'standard';
 const presentationPath = diagnosticProfile === 'direct-canvas'
@@ -373,6 +376,7 @@ let heapWatch: import('./heap-pressure.js').HeapPressureWatch | null = null;
 let heapWarning:
   | import('./memory-warning.js').MemoryWarningPresenter
   | null = null;
+let disposeMemoryWarningSettings = () => {};
 let heapCapRequested = false;
 function requestHeapCap() {
   if (heapCapRequested) return;
@@ -382,7 +386,7 @@ function requestHeapCap() {
     import('./heap-pressure.js'),
     import('./memory-warning.js'),
   ])
-    .then(([
+    .then(async ([
       { WASM_HEAP_CAP_BYTES },
       { createHeapPressureWatch },
       { bindMemoryWarning },
@@ -390,11 +394,32 @@ function requestHeapCap() {
       const capBytes = Module.gwonmacHeapCapBytes ?? WASM_HEAP_CAP_BYTES;
       heapCapBytes = capBytes;
       heapWatch = createHeapPressureWatch({ capBytes });
+      const settings = await native().settings.get();
       heapWarning = bindMemoryWarning(
         document,
-        reloadClientSafely,
+        {
+          autoRelogAfterReload: settings.autoRelogAfterReload,
+          async saveAutoRelog(autoRelogAfterReload) {
+            await native().settings.set({ autoRelogAfterReload });
+          },
+          async reload() {
+            try {
+              await native().app.reloadGame('memory-warning');
+            } catch (error) {
+              log(
+                '[err] memory reload failed:',
+                error instanceof Error ? error.message : String(error),
+              );
+              throw error;
+            }
+          },
+        },
         window.gwSurfaces,
       );
+      disposeMemoryWarningSettings();
+      disposeMemoryWarningSettings = native().settings.onChange((updated) => {
+        heapWarning?.setAutoRelog(updated.autoRelogAfterReload);
+      });
     })
     // A failed load retries on the next tick rather than silencing the
     // warning for the whole session.
@@ -421,26 +446,6 @@ const crashTechnicalDetail = (reason: unknown, heapBytes: number): string => {
     `WASM heap at crash: ${Math.round(heapBytes / MIB)} MiB${cap}\n${text}`
   ).slice(0, 8192);
 };
-
-/**
- * Best-effort save sync, then the same page reload the crash overlay's Retry
- * performs; the beforeunload dispose closes this run's game sockets on the
- * way out. The quit path has shown the sync can fail, so the reload never
- * waits on it for more than a beat — IDBFS auto-persist has usually written
- * already.
- */
-function reloadClientSafely() {
-  let reloaded = false;
-  const reload = () => {
-    if (reloaded) return;
-    reloaded = true;
-    window.location.reload();
-  };
-  setTimeout(reload, 1_500);
-  const fs = window.Module?.FS;
-  if (fs) fs.syncfs(false, reload);
-  else reload();
-}
 
 setInterval(() => {
   if (crashRecorded) return;
@@ -582,6 +587,7 @@ async function fetchSnapshotRange(
 // interactive Steam sign-in produced no login. Transient and non-blocking —
 // the login screen itself stays entirely the client's.
 let loginStatusTimer: ReturnType<typeof setTimeout> | null = null;
+
 function showLoginStatus(
   reason: import('../shared/contracts.js').SteamRefusalReason,
 ): void {
@@ -590,11 +596,13 @@ function showLoginStatus(
     const text = describeSteamRefusal(reason);
     const status = document.getElementById('login-status');
     if (!text || !status) return;
+    automaticCharacterReturn?.clearStatus();
     status.textContent = text;
     status.hidden = false;
     if (loginStatusTimer) clearTimeout(loginStatusTimer);
     loginStatusTimer = setTimeout(() => {
       status.hidden = true;
+      loginStatusTimer = null;
     }, 12_000);
   })();
 }
@@ -608,6 +616,8 @@ addEventListener('beforeunload', () => {
   window.gwVirtualGamepad?.dispose();
   controllerPrompts?.dispose();
   controllerPrompts = null;
+  disposeMemoryWarningSettings();
+  automaticCharacterReturn?.dispose();
   delete window.gwVirtualGamepad;
   delete window.gwControllerPromptTextureStats;
 });
@@ -761,6 +771,7 @@ Module = {
         throw new Error('no stored credentials');
       }
       log('secureStorage: returning saved credentials');
+      automaticCharacterReturn?.savedCredentialsLoaded();
       return stored;
     },
     async storeCredentials(username, password) {
@@ -1075,6 +1086,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
         // including when the player chose not to save credentials.
         if (path === '/webgate/my_account/token.xml') {
           inputHost?.expectCharacterSelection();
+          automaticCharacterReturn?.tokenRequested(this);
         }
         return origOpen.call(this, method, rewritten, ...rest);
       }
@@ -1207,6 +1219,14 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     );
     return;
   }
+  const { installAutomaticCharacterReturn } = await import(
+    './automatic-character-return.js'
+  );
+  automaticCharacterReturn = installAutomaticCharacterReturn({
+    claimIntent: () => native().app.claimRelogIntent(),
+    input: () => inputHost,
+    record: milestone,
+  });
   milestone('renderer.loaded');
   let isProxyRouteLabel: (route: string) => boolean;
   try {

@@ -38,6 +38,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       skillSlotGeometry: selected(capabilities.skillSlotGeometry),
       skillCooldownObservation: selected(capabilities.skillCooldownObservation),
       playRegionObservation: selected(capabilities.playRegionObservation),
+      preGameControls: selected(capabilities.preGameControls),
     },
   };
   return {
@@ -80,6 +81,7 @@ describe("effective Enhancement capability boundary", () => {
           skillSlotGeometry: off,
           skillCooldownObservation: off,
           playRegionObservation: off,
+          preGameControls: off,
         },
       },
     };
@@ -95,6 +97,7 @@ describe("effective Enhancement capability boundary", () => {
       skillSlotGeometry: false,
       skillCooldownObservation: false,
       playRegionObservation: false,
+      preGameControls: false,
     });
   });
 

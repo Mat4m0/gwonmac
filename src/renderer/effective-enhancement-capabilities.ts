@@ -23,5 +23,6 @@ export function effectiveCapabilities(
       features.skillCooldownObservation.status === "available",
     playRegionObservation:
       features.playRegionObservation.status === "available",
+    preGameControls: features.preGameControls.status === "available",
   });
 }

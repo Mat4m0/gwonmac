@@ -260,6 +260,8 @@ const api = {
     openExternal: (kind) => ipcRenderer.invoke(IPC.appOpenExternal, kind),
     reveal: (kind) => ipcRenderer.invoke(IPC.appRevealPath, kind),
     requestQuit: () => ipcRenderer.invoke(IPC.appRequestQuit),
+    reloadGame: (cause) => ipcRenderer.invoke(IPC.appReloadGame, cause),
+    claimRelogIntent: () => ipcRenderer.invoke(IPC.appClaimRelogIntent),
   },
   clipboard: {
     writeText: (text) => ipcRenderer.invoke(IPC.clipboardWriteText, text),

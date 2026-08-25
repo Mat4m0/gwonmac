@@ -37,6 +37,11 @@ import {
   rewriteSkillBarConstructorCapture,
 } from "./enhancement-skill-transform.js";
 import {
+  preGameDiagnosticReader,
+  preGameStateReader,
+  resolveEnhancementPreGameTransform,
+} from "./enhancement-pre-game-transform.js";
+import {
   PROFESSION_TRACE_WORDS,
   professionTraceGlobals,
   type ProfessionTraceGlobals,
@@ -73,6 +78,8 @@ declare const WebAssembly: {
 };
 
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
+export const ENHANCEMENT_PRE_GAME_STATE_EXPORT = "enhancement_pre_game_state";
+export const ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT = "enhancement_pre_game_diagnostic";
 export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
 
 const DISPATCH_PARAMS = 6;
@@ -345,6 +352,13 @@ function resolveEnhancementTransform(
     resolveFunction: resolveHook,
     fail,
   });
+  const preGameResolution = resolveEnhancementPreGameTransform({
+    build,
+    enabled: capabilities.preGameControls,
+    resolveFunction: resolveHook,
+    bodyHash,
+    fail,
+  });
   const skillInitializer = skillResolution.geometry?.initializer ?? null;
   const skillConstructor = skillResolution.geometry?.constructor ?? null;
   if (bodyHash(build.hookFunction) !== build.hookBodySha256) {
@@ -588,6 +602,10 @@ function resolveEnhancementTransform(
       name: "SkillBar frame constructor",
       functionIndex: skillConstructor.localIndex + importCount,
     }] : []),
+    ...(preGameResolution ? [{
+      name: "pre-game label hash",
+      functionIndex: preGameResolution.hashFunction.localIndex + importCount,
+    }] : []),
   ];
   const roleByFunction = new Map<number, string>();
   for (const role of exclusiveRoles) {
@@ -653,6 +671,7 @@ function resolveEnhancementTransform(
     travelAction,
     chatAliases,
     skillResolution,
+    preGameResolution,
     commands,
     professionBuilder,
     skillBuilder,
@@ -690,6 +709,7 @@ function assembleEnhancementTransform(
     nextTableSize,
     hasActionQueue,
     skillResolution,
+    preGameResolution,
   } = resolution;
 
   const globals = vectorPayload(sectionById(sections, 6));
@@ -697,6 +717,9 @@ function assembleEnhancementTransform(
   const existingExports = parseExports(sectionById(sections, 7));
   const addedExportNames = [
     ENHANCEMENT_HOOK_EXPORT,
+    ...(capabilities.preGameControls
+      ? [ENHANCEMENT_PRE_GAME_STATE_EXPORT, ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT]
+      : []),
     ...(capabilities.teamApply
       ? [teamApply.thunkExport, teamApply.professionTrace.readerExport]
       : []),
@@ -787,6 +810,9 @@ function assembleEnhancementTransform(
   const tradeToggleTypeIndex = capabilities.chatAliases
     ? appendType({ params: [], results: [0x7f] })
     : null;
+  const preGameStateTypeIndex = capabilities.preGameControls
+    ? appendType({ params: [], results: [0x7f] })
+    : null;
 
   const nextFunctionTypes = [...functionTypes];
   const nextBodies = [...bodies];
@@ -831,6 +857,23 @@ function assembleEnhancementTransform(
   });
 
   const addedFunctionExports: Array<Readonly<{ name: string; index: number }>> = [];
+  if (preGameResolution) {
+    const diagnosticIndex = appendFunction(
+      preGameStateTypeIndex!,
+      preGameDiagnosticReader(preGameResolution.certificate),
+    );
+    addedFunctionExports.push({
+      name: ENHANCEMENT_PRE_GAME_STATE_EXPORT,
+      index: appendFunction(
+        preGameStateTypeIndex!,
+        preGameStateReader(preGameResolution.certificate, diagnosticIndex),
+      ),
+    });
+    addedFunctionExports.push({
+      name: ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT,
+      index: diagnosticIndex,
+    });
+  }
   applyFeatureContributions(resolution, {
     nextBodies,
     appendFunction,

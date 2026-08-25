@@ -20,6 +20,8 @@ class FakeElement {
   readonly attributes = new Map<string, string>();
   readonly listeners = new Map<string, Array<() => void>>();
   focused = false;
+  checked = false;
+  disabled = false;
   addEventListener(name: string, listener: () => void): void {
     const listeners = this.listeners.get(name) ?? [];
     listeners.push(listener);
@@ -27,6 +29,9 @@ class FakeElement {
   }
   click(): void {
     for (const listener of this.listeners.get("click") ?? []) listener();
+  }
+  change(): void {
+    for (const listener of this.listeners.get("change") ?? []) listener();
   }
   focus(): void { this.focused = true; }
   setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
@@ -42,6 +47,7 @@ function memoryDom(complete = true) {
     "memory-notice-details",
     "memory-notice-reload",
     "memory-notice-later",
+    "memory-notice-auto-relog",
     "canvas",
   ];
   const elements = new Map(ids.map((id) => [id, new FakeElement()]));
@@ -54,14 +60,26 @@ function memoryDom(complete = true) {
   };
 }
 
+const warningActions = (
+  autoRelogAfterReload = false,
+  reload: () => void | Promise<void> = () => {},
+) => ({
+  autoRelogAfterReload,
+  async saveAutoRelog() {},
+  reload,
+});
+
 describe("memory warning presenter", () => {
   it("does nothing when the single warning surface is incomplete", () => {
-    assert.equal(bindMemoryWarning(memoryDom(false).document, () => {}), null);
+    assert.equal(
+      bindMemoryWarning(memoryDom(false).document, warningActions()),
+      null,
+    );
   });
 
   it("keeps Low dismissed until Critical reopens the same notice", () => {
     const dom = memoryDom();
-    const presenter = bindMemoryWarning(dom.document, () => {});
+    const presenter = bindMemoryWarning(dom.document, warningActions());
     assert.ok(presenter);
     presenter.present("low", 2_147_483_648);
     assert.equal(dom.element("memory-notice").hidden, false);
@@ -79,13 +97,18 @@ describe("memory warning presenter", () => {
     assert.match(dom.element("memory-notice-explanation").textContent, /4 GB/);
   });
 
-  it("reloads without adding another warning state", () => {
+  it("reloads without adding another warning state", async () => {
     const dom = memoryDom();
     let reloads = 0;
-    const presenter = bindMemoryWarning(dom.document, () => { reloads += 1; });
+    const presenter = bindMemoryWarning(
+      dom.document,
+      warningActions(true, () => { reloads += 1; }),
+    );
     assert.ok(presenter);
     presenter.present("critical", 2_147_483_648);
     dom.element("memory-notice-reload").click();
+    await Promise.resolve();
+    await Promise.resolve();
     assert.equal(reloads, 1);
     assert.equal(dom.element("memory-notice").hidden, true);
   });
@@ -104,7 +127,7 @@ describe("memory warning presenter", () => {
         };
       },
     };
-    const presenter = bindMemoryWarning(dom.document, () => {}, surfaces);
+    const presenter = bindMemoryWarning(dom.document, warningActions(), surfaces);
     assert.ok(presenter);
 
     presenter.present("low", 2_147_483_648);
@@ -113,5 +136,33 @@ describe("memory warning presenter", () => {
     assert.equal(dom.element("memory-notice").hidden, true);
     assert.equal(dom.element("canvas").focused, true);
     assert.deepEqual(open, [true, false]);
+  });
+
+  it("shares and saves the automatic-return preference", async () => {
+    const dom = memoryDom();
+    const saved: boolean[] = [];
+    let reloads = 0;
+    const presenter = bindMemoryWarning(
+      dom.document,
+      {
+        autoRelogAfterReload: false,
+        async saveAutoRelog(enabled) { saved.push(enabled); },
+        reload() { reloads += 1; },
+      },
+    );
+    assert.ok(presenter);
+    const checkbox = dom.element("memory-notice-auto-relog");
+    checkbox.checked = true;
+    checkbox.change();
+    await Promise.resolve();
+    assert.deepEqual(saved, [true]);
+    presenter.setAutoRelog(true);
+    assert.equal(dom.element("memory-notice-auto-relog").checked, true);
+    presenter.present("low", 2_147_483_648);
+    dom.element("memory-notice-reload").click();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.deepEqual(saved, [true]);
+    assert.equal(reloads, 1);
   });
 });

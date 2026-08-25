@@ -57,7 +57,6 @@ import {
 } from "./protocol.js";
 import { applyPendingSessionStorageReset } from "./settings-actions.js";
 import {
-  closeProfileWindow,
   createMainWindow,
   prepareWindowState,
   resetRendererRecovery,
@@ -400,12 +399,6 @@ export class MultipleAccountsController {
           saveAccountTemplateLibrary(this.options.paths.multiSharedTemplates, library),
       });
     });
-  }
-
-  requestQuit(win: BrowserWindow): void {
-    const context = windowRegistry.contextForWebContents(win.webContents.id);
-    if (context?.mode === "multi") void closeProfileWindow(win);
-    else app.quit();
   }
 
   private activeWorkspace(): MultiWorkspace {

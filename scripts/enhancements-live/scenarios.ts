@@ -17,12 +17,15 @@
 // automation surface being present. That separation is the property this
 // module protects.
 import type { StdioOptions } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { CDPSession, Page } from "playwright";
 import type { AutomationCommand } from "../../src/shared/automation.js";
 import type { EnhancementProgram } from "../../src/shared/enhancement-contracts.js";
 import type { EnhancementDoctorReport } from "../../src/tools/enhancement-workspace.js";
 import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.js";
 import { runToolboxFoundation, runToolboxHeroPanel } from "./toolbox-scenarios.js";
+import { operatorCheckpoint } from "./scenario-checkpoint.js";
 
 export type LiveTier = "automation" | "observation" | "graphics-observation";
 export type LiveReadiness = "frontend" | "observer" | "toolbox" | "cursor" | "storage";
@@ -721,6 +724,39 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
         throw new Error(
           "Xunlai storage did not surrender world interaction after closing",
         );
+      }
+    },
+  }),
+  "reconnect-discovery": Object.freeze({
+    tier: "automation",
+    program: "reconnect-probe",
+    readiness: "frontend",
+    async run({ page }: AutomationContext) {
+      await operatorCheckpoint(
+        "Choose one run: (1) start in an outpost, or (2) start in an explorable area. "
+        + "Use Command-Q → Reload Guild Wars with automatic return enabled. Do not add input. "
+        + "When the character is playable, choose Help → Diagnostics → "
+        + "Copy Reload Trace, then return here.",
+      );
+      const transcript = await page.evaluate(() => window.gwNative.clipboard.readText());
+      const outputDirectory = path.join(
+        process.cwd(),
+        "test-results",
+        "enhancements-live",
+      );
+      await mkdir(outputDirectory, { recursive: true });
+      const output = path.join(outputDirectory, "reconnect-discovery.txt");
+      await writeFile(output, transcript, "utf8");
+      return Object.freeze({ transcript, output });
+    },
+    validate(result: { evidence?: { transcript: string; output: string } }) {
+      if (
+        !result.evidence?.transcript.startsWith("gwonmac reload trace —")
+        || !result.evidence.transcript.includes("gameReload.requested")
+        || !/relog\.finished outcome=(restored|outpost)/
+          .test(result.evidence.transcript)
+      ) {
+        throw new Error("relog qualification did not reach a certified terminal branch");
       }
     },
   }),

@@ -54,9 +54,20 @@ declare global {
 
   interface GameInputController {
     releaseAll(): void;
+    cancelAutomaticEnter(): void;
     setLoginProviderChooser(visible: boolean): void;
     expectCharacterSelection(): void;
+    submitSavedLogin(expiresAt?: number): Promise<AutomaticEnterOutcome>;
+    playSelectedCharacter(): Promise<AutomaticEnterOutcome>;
+    acceptReconnect(): Promise<AutomaticEnterOutcome>;
   }
+
+  type AutomaticEnterOutcome =
+    | "sent"
+    | "physical"
+    | "progressed"
+    | "unfocused"
+    | "cancelled";
 
   interface GwonmacSurfaceHandle {
     setOpen(open: boolean): void;
@@ -187,6 +198,14 @@ declare global {
     setHookEnabledForBenchmark(enabled: boolean): void;
   }
 
+  type PreGameState = "unknown" | "character-select" | "reconnect" | "loading";
+
+  interface PreGameControls {
+    state(): PreGameState;
+    playable(): "outpost" | "explorable" | null;
+    diagnosticMask(): number;
+  }
+
   interface EnhancementAutomation {
     set(stage: string): void;
     read(): Readonly<{
@@ -204,13 +223,13 @@ declare global {
 
   interface Window {
     readonly gwNative: GwNativeApi;
+    FS?: {
+      syncfs(
+        populate: boolean,
+        callback: (error?: unknown) => void,
+      ): void;
+    };
     Module?: {
-      FS?: {
-        syncfs(
-          populate: boolean,
-          callback: (error?: unknown) => void,
-        ): void;
-      };
       canvas?: HTMLCanvasElement & { offscreen?: OffscreenCanvas };
     };
     gwApplySettings?(settings: AppSettings): void;
@@ -246,6 +265,7 @@ declare global {
       buildId: number;
     }>;
     gwCompanionRuntime?: CompanionDeveloperRuntime | CompanionObserverRuntime | null;
+    gwPreGameControls?: PreGameControls | null;
     gwCompanionState?: PublishedCompanionState;
     /** The cursor's bounded presentation state; present once the nativeCursor enhancement installs. */
     gwCursorState?(): Readonly<{

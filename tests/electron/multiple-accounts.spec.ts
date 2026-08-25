@@ -475,7 +475,7 @@ test("renderer recovery stays with its account and a second crash needs attentio
   }
 });
 
-test("Multi starts at the Hub and isolates two profile windows from Single", async () => {
+test("Multi isolates profile windows and Copy Reload Trace", async () => {
   test.setTimeout(60_000);
   const fixture = await launchOffline("gw-multi-e2e-", {
     GW_BACKGROUND_LAUNCH: "0",
@@ -637,10 +637,26 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       credentials?.username === "first@example.test")?.game;
     if (!altGame || !nonTargetGame) throw new Error("profile pages not found");
 
+    await Promise.all([altGame, nonTargetGame].map((game) => game.evaluate(() => {
+      (window as typeof window & { __memoryReloadProof?: boolean })
+        .__memoryReloadProof = true;
+    })));
     await altGame.evaluate(async () => {
       const moduleUrl: string = "gw://app/memory-warning.js";
       const { bindMemoryWarning } = await import(moduleUrl) as MemoryWarningModule;
-      const presenter = bindMemoryWarning(document, () => undefined, window.gwSurfaces);
+      const presenter = bindMemoryWarning(
+        document,
+        {
+          autoRelogAfterReload: false,
+          async saveAutoRelog(autoRelogAfterReload) {
+            await window.gwNative.settings.set({ autoRelogAfterReload });
+          },
+          async reload() {
+            await window.gwNative.app.reloadGame("memory-warning");
+          },
+        },
+        window.gwSurfaces,
+      );
       if (!presenter) throw new Error("memory warning is unavailable");
       presenter.present("critical", 2_147_483_648);
     });
@@ -648,9 +664,22 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     await expect(altGame.locator("#memory-notice-label"))
       .toHaveText("Guild Wars is almost out of memory.");
     await expect(nonTargetGame.locator("#memory-notice")).toBeHidden();
-    await altGame.locator("#memory-notice-later").evaluate((button) => {
+    const memoryReloaded = altGame.waitForEvent("framenavigated", {
+      predicate: (frame) => frame === altGame.mainFrame(),
+    });
+    await altGame.locator("#memory-notice-reload").evaluate((button) => {
       (button as HTMLButtonElement).click();
     });
+    await memoryReloaded;
+    await altGame.waitForLoadState("domcontentloaded");
+    expect(await altGame.evaluate(() =>
+      (window as typeof window & { __memoryReloadProof?: boolean })
+        .__memoryReloadProof,
+    )).toBeUndefined();
+    expect(await nonTargetGame.evaluate(() =>
+      (window as typeof window & { __memoryReloadProof?: boolean })
+        .__memoryReloadProof,
+    )).toBe(true);
     await expect(altGame.locator("#memory-notice")).toBeHidden();
     await expect(nonTargetGame.locator("#memory-notice")).toBeHidden();
 
@@ -684,6 +713,31 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       if (!item?.click) throw new Error(`${request.id} menu item is unavailable`);
       item.click(item, win, {} as Electron.KeyboardEvent);
     }, { title, id });
+
+    await fixture.app.evaluate(({ BrowserWindow, dialog }) => {
+      Object.defineProperty(dialog, "showMessageBox", {
+        configurable: true,
+        value: async (first: unknown, second?: { buttons?: string[] }) => {
+          globalThis.__runtimeDialogParent = first instanceof BrowserWindow
+            ? first.getTitle()
+            : null;
+          return {
+            response: second?.buttons?.length === 2 ? 0 : 2,
+            checkboxChecked: true,
+          };
+        },
+      });
+      globalThis.__runtimeDialogParent = null;
+    });
+    await clickMenuForGame("Guild Wars Reforged — Alt", "quit-or-reload-game");
+    await expect.poll(() => altGame.evaluate(() =>
+      window.gwNative.settings.get().then((settings) => settings.autoRelogAfterReload),
+    )).toBe(true);
+    expect(await nonTargetGame.evaluate(() =>
+      window.gwNative.settings.get().then((settings) => settings.autoRelogAfterReload),
+    )).toBe(true);
+    expect(await fixture.app.evaluate(() => globalThis.__runtimeDialogParent))
+      .toBe("Guild Wars Reforged — Alt");
 
     await Promise.all([
       altGame.evaluate(() => {
@@ -722,11 +776,15 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
     await fixture.app.evaluate(({ BrowserWindow, dialog }) => {
       Object.defineProperty(dialog, "showMessageBox", {
         configurable: true,
-        value: async (first: unknown) => {
+        value: async (first: unknown, second?: { buttons?: string[] }) => {
           globalThis.__runtimeDialogParent = first instanceof BrowserWindow
             ? first.getTitle()
             : null;
-          return { response: 1, checkboxChecked: false };
+          const reload = second?.buttons?.[0] === "Reload Guild Wars";
+          return {
+            response: reload ? 0 : 1,
+            checkboxChecked: reload,
+          };
         },
       });
       globalThis.__runtimeDialogParent = null;
@@ -768,6 +826,35 @@ test("Multi starts at the Hub and isolates two profile windows from Single", asy
       (window as typeof window & { __reloadProof?: boolean }).__reloadProof,
     )).toBe(true);
     const reloadedGame = altGame;
+    await Promise.all([
+      reloadedGame.evaluate(() => window.gwNative.diagnostics.recordRendererMilestone(
+        "relog.preGameProbe",
+        performance.now() * 1_000,
+        {
+          state: "reconnect",
+          mask: 42_424,
+        },
+      )),
+      nonTargetGame.evaluate(() => window.gwNative.diagnostics.recordRendererMilestone(
+        "relog.preGameProbe",
+        performance.now() * 1_000,
+        {
+          state: "unknown",
+          mask: 43_434,
+        },
+      )),
+    ]);
+    await clickMenuForGame("Guild Wars Reforged — Alt", "copy-reload-trace");
+    await expect.poll(() => fixture.app.evaluate(({ clipboard }) => clipboard.readText()))
+      .toContain("gameReload.requested cause=menu");
+    const reloadTrace = await fixture.app.evaluate(({ clipboard }) => clipboard.readText());
+    expect(reloadTrace).toContain("relog.intentClaimed");
+    expect(reloadTrace).toContain("relog.preGameProbe state=reconnect");
+    expect(reloadTrace).not.toContain("relog.preGameProbe state=unknown");
+    await fixture.app.evaluate(
+      ({ clipboard }, text) => clipboard.writeText(text),
+      clipboardBeforeFocusedEdit,
+    );
     await reloadedGame.evaluate(() => window.gwNative.accounts.loadTemplates());
     await reloadedGame.evaluate(() => window.gwNative.accounts.saveTemplates([
       {

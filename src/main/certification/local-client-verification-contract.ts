@@ -109,6 +109,12 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "skill-cooldown.recharge-reader",
     "skill-cooldown.precise-timer",
   ] as const),
+  preGameControls: Object.freeze([
+    ...SHARED_FEATURE_INVARIANTS,
+    "pre-game.exact-frame-labels",
+    "pre-game.label-hash-function",
+    "pre-game.frame-layout",
+  ] as const),
 } as const satisfies Readonly<
   Record<LocalClientFeature, readonly string[]>
 >);
@@ -188,6 +194,8 @@ export interface LocalFeatureCertificateMap {
       | "playRegionObservation" | "observationBase"
       | "playerSkillbarObservation" | "skillCooldownObservation"
     >;
+  readonly preGameControls: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"preGameControls">;
 }
 
 export type LocalFeatureVerdict<Feature extends LocalClientFeature> =
@@ -392,6 +400,9 @@ export function localFeatureVerdictsForBuild(
         skillCooldownObservation: build.skillCooldownObservation,
       })
     : null;
+  const preGameControls = core !== null && build?.preGameControls !== undefined
+    ? Object.freeze({ core, preGameControls: build.preGameControls })
+    : null;
   return Object.freeze({
     nativeCursor: featureVerdict<"nativeCursor">(
       inputSha256,
@@ -462,6 +473,13 @@ export function localFeatureVerdictsForBuild(
       skillCooldownObservation,
       failures.skillCooldownObservation,
       "skill-cooldown.recharge-reader",
+    ),
+    preGameControls: featureVerdict<"preGameControls">(
+      inputSha256,
+      requested.preGameControls,
+      preGameControls,
+      failures.preGameControls,
+      "pre-game.exact-frame-labels",
     ),
   });
 }

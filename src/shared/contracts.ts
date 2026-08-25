@@ -406,6 +406,8 @@ export interface AppSettings {
   skillCooldownColor: SkillCooldownColor;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
   extendedMemoryEnabled: boolean;
+  /** Return toward the current character after an explicit game reload. */
+  autoRelogAfterReload: boolean;
   showDiagnostics: boolean;
   /**
    * Rollback-only storage field. Runtime behavior is always `full`; keeping
@@ -482,6 +484,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   skillCooldownOverlayEnabled: true,
   skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,
+  autoRelogAfterReload: false,
   showDiagnostics: false,
   dataStrategy: "full",
   autoCheckUpdates: true,
@@ -659,6 +662,7 @@ export interface ClientCompatibility {
     skillSlotGeometry: OptionalFeatureStatus;
     skillCooldownObservation: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;
+    preGameControls: OptionalFeatureStatus;
   }>;
 }
 
@@ -945,6 +949,8 @@ export const IPC = {
   appOpenExternal: "gw:app:openExternal",
   appRevealPath: "gw:app:revealPath",
   appRequestQuit: "gw:app:requestQuit",
+  appReloadGame: "gw:app:reloadGame",
+  appClaimRelogIntent: "gw:app:claimRelogIntent",
   clipboardWriteText: "gw:clipboard:writeText",
   clipboardReadText: "gw:clipboard:readText",
   clipboardEdit: "gw:clipboard:edit",
@@ -1011,6 +1017,14 @@ export type GameTextEditRequest =
   | { command: "selectAll" };
 
 export type GameTextEditCommand = GameTextEditRequest["command"];
+
+export const GAME_RELOAD_CAUSES = [
+  "memory-warning",
+  "menu",
+  "crash-retry",
+  "command-q",
+] as const;
+export type GameReloadCause = (typeof GAME_RELOAD_CAUSES)[number];
 
 // Far above any text a game field holds, low enough that a renderer gone
 // wrong cannot stuff megabytes into the OS pasteboard.
@@ -1155,6 +1169,8 @@ export interface GwNativeApi {
     /** Reveal a named app directory in Finder. */
     reveal(kind: RevealKind): Promise<void>;
     requestQuit(): Promise<void>;
+    reloadGame(cause: GameReloadCause): Promise<void>;
+    claimRelogIntent(): Promise<boolean>;
   };
   clipboard: {
     /**

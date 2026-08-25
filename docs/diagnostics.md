@@ -64,6 +64,40 @@ events because those ephemeral owners cannot be correlated safely after restart.
 Level 2 is refused while more than one game window is open because Electron's
 Chromium tracer is process-wide. Level 1 remains available per game window.
 
+## Reload feedback loop
+
+**Help → Diagnostics → Copy Reload Trace** copies one account's latest reload
+story. It comes from the main flight recorder, so it keeps Command-Q and native
+dialog rows from before navigation and joins them to the replacement renderer's
+login, character, and reconnect rows. Each row states the synchronized gap from
+the preceding row. A UI event has at most one observer-frame of receipt
+uncertainty.
+
+`outside-current` counts recorder events belonging to other reload attempts; only `omitted`
+means the clipboard size limit removed events from this trace.
+`relog.finished outcome=restored` means the exact reconnect dialog was observed
+and accepted once, followed by a certified playable explorable instance.
+`outcome=outpost` means the character reached a certified playable outpost.
+Loading is transition evidence only and can never complete the workflow.
+
+The trace contains only closed stages, outcomes, and bounded native-control
+state. It contains no Guild Wars UI text, dispatcher parameters, pointers,
+credentials, account identifiers, paths, coordinates, chat, packets, or
+pixels. Do not paste a full console or login-screen image as a substitute.
+
+For production relog qualification, compare two traces from the same exact
+client build with automatic return enabled and add no input:
+
+1. Start in a playable outpost. Reload with automatic return enabled, add no
+   input, wait until playable, then copy the trace. It must end in `outpost`.
+2. Start in an explorable area. Reload, add no input, wait until playable, then
+   copy the trace. It must end in `restored`.
+
+Production reload uses exact-build certificates for the native Play, Selector,
+Yes, and No labels. A probe row reports `hashed`, `matched`, and `visible`
+four-bit masks in that order. Production sends Return only after both exact
+controls for the current stage resolve as visible in the live frame table.
+
 ## Export contents
 
 A current ZIP contains a manifest, report, summary, current events,

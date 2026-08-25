@@ -54,6 +54,6 @@ export function requestedEnhancementCapabilities(
   if (program !== "none") {
     return enhancementCapabilitiesFor(enhancementSelectionFor(settings), program);
   }
-  if (!settings.gwonmacTools) return ENHANCEMENT_CAPABILITY_PRESETS.cursor;
+  if (!settings.gwonmacTools) return ENHANCEMENT_CAPABILITY_PRESETS.core;
   return ENHANCEMENT_CAPABILITY_PRESETS.all;
 }

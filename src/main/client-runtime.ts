@@ -411,6 +411,12 @@ export class ClientRuntime {
           supported.skillCooldownObservation,
           preparationFailed,
         ),
+        preGameControls: optionalFeatureStatus(
+          requested.preGameControls,
+          effective.preGameControls,
+          supported.preGameControls,
+          preparationFailed,
+        ),
       },
     };
     gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");

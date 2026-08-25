@@ -19,6 +19,7 @@ import { TEMPLATE_SAVE_BUILDS } from "../../src/main/certification/template-save
 const NO_CAPABILITIES = Object.freeze({
   nativeCursor: false,
   playRegionObservation: false,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: false,
   teamApply: false,
@@ -66,6 +67,7 @@ describe("Enhancement client chain", () => {
       {
         nativeCursor: false,
         playRegionObservation: false,
+    preGameControls: false,
         targetObservation: false,
         partyObservation: false,
         teamApply: true,

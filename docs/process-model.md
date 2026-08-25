@@ -170,6 +170,25 @@ blur Guild Wars. Settings, Tools, Travel, warnings, and game text fields remain
 part of the active game window, so they do not mute game audio. A real window
 blur still reaches Guild Wars and releases held input.
 
+Main owns one account-local reload workflow. Memory warnings, Command-R, crash
+retry, and Command-Q use it. The workflow closes only the owning renderer's
+sockets, gives its filesystem sync up to 1.5 seconds, and navigates only that
+window. An automatic-relog intent is bound to that `BrowserWindow` and consumed
+once by its replacement document. The replacement renderer uses the active
+client session as its launch gate; complete-game data may keep downloading in
+the background without making reload wait for that download to finish.
+
+Automatic relog follows certified observed boundaries. Returning saved
+credentials permits one Return to submit the login screen. A successful
+account-token request waits for the exact native Play and Selector controls
+before selecting the current character. It sends another Return only while the
+exact native reconnect controls are visible. Loading is transition evidence,
+not success: completion requires a fresh bounded play-region publication with
+a valid map, instance type, and player. Existing session progress or a physical
+Return cancels the related synthetic one. Losing focus pauses input. The
+renderer records each boundary and shows the current step; after 30 seconds it
+names where progress stopped.
+
 Right-drag uses pointer lock and a virtual cursor. The host bounds drag
 recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
@@ -216,6 +235,12 @@ clears the memory. The trace is not persisted, exported with diagnostics, or
 sent over the network. Copy keeps the newest complete rows that fit the same
 bounded clipboard contract used elsewhere and states how many older rows were
 omitted.
+
+Reload diagnostics are a separate, account-owned projection of the main flight
+recorder. **Copy Reload Trace** survives renderer replacement and joins
+Command-Q, the native sheet, reload, automatic-input outcomes, and the
+certified pre-game state probe. It never changes an input decision and
+does not make the renderer-memory input trace persistent.
 
 ### Packaged input qualification
 
@@ -333,6 +358,12 @@ Closing the Single Account game window quits the application. Closing one
 Multiple Accounts game window closes only that profile. Application quit saves
 all live renderer filesystems in parallel, closes sockets, stops background
 work, flushes diagnostics, and exits through one bounded cleanup path.
+
+Command-Q opens an account-owned native dialog while a game window is active.
+Reload and Quit Game affect that account only. The Account Picker keeps the
+ordinary application Quit command because it has no game account to reload.
+The physical Q claim lasts only until that dialog settles; Cancel re-arms the
+shortcut even when AppKit consumed the original key-up.
 
 Main-to-renderer events stop after the window or its `webContents` is destroyed.
 The app attempts renderer recovery only after unexpected renderer loss. It does

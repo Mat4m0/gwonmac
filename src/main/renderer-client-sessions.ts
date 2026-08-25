@@ -47,6 +47,7 @@ function projectCompatibility(
       skillSlotGeometry: status("skillSlotGeometry"),
       skillCooldownObservation: status("skillCooldownObservation"),
       playRegionObservation: status("playRegionObservation"),
+      preGameControls: status("preGameControls"),
     }),
   });
 }

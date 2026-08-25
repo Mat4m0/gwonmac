@@ -22,13 +22,14 @@ const unavailable = (reason: "game-update" | "preparation-failed") =>
 function compatibility(
   overrides: Partial<ClientCompatibility["features"]> = {},
 ): ClientCompatibility {
-  const { playRegionObservation = off, ...visibleOverrides } = overrides;
+  const { playRegionObservation = off, preGameControls = off, ...visibleOverrides } = overrides;
   return {
     clientSha256: "a".repeat(64),
     features: {
       gameFileSaving: available,
       nativeCursor: off,
       playRegionObservation,
+      preGameControls,
       targetObservation: off,
       partyObservation: off,
       teamApply: off,
@@ -200,6 +201,7 @@ describe("client compatibility notice", () => {
                       gameFileSaving,
                       nativeCursor,
                       playRegionObservation: off,
+                      preGameControls: off,
                       targetObservation,
                       partyObservation,
                       teamApply,

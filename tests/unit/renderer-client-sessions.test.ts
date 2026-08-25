@@ -19,6 +19,7 @@ const base: ClientSession = {
       skillSlotGeometry: { status: "available" },
       skillCooldownObservation: { status: "off" },
       playRegionObservation: { status: "off" },
+        preGameControls: { status: "off" },
     },
   },
   extendedMemory: {

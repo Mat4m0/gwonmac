@@ -60,6 +60,18 @@ can restore it or permanently delete it after a native confirmation.
 Every account window is independently controlled. The app does not broadcast
 keyboard, mouse, or controller input between windows.
 
+Press Command-Q in a game window to choose **Reload Guild Wars**, **Quit Game**,
+or **Cancel**. Both actions affect only that account. Select **Return to my
+character automatically** to keep the preference for every account and future
+app launches. The same option is available under **Settings → Advanced** and on the
+memory warning.
+The app submits the restored saved login, then selects the current character as
+soon as the certified Play control is ready. It accepts Guild Wars' default
+reconnect choice only when the certified reconnect dialog is present. Without
+one, it observes that Guild Wars started loading the selected character and
+sends no extra input. A status line shows each step. If it cannot advance
+within 30 seconds, the line says where it stopped.
+
 A local source build has a temporary identity. It does not share saved-login
 access with the published Release app.
 
@@ -291,9 +303,10 @@ If the current Guild Wars version does not support 4 GB mode, the app uses the
 ordinary 2 GB mode. The larger limit can delay a memory-related crash. It
 cannot stop memory that continues to grow.
 
-When the app warns about memory, choose **Reload Guild Wars**. Guild Wars
-normally reconnects. Reload in an outpost when you want the lowest gameplay
-risk.
+When the app warns about memory, choose whether to return to the selected
+character automatically, then choose **Reload Guild Wars**. This uses the same
+saved preference as Command-Q and **View → Reload Guild Wars**. Reload in an
+outpost when you want the lowest gameplay risk.
 
 ## Updates
 
@@ -387,6 +400,9 @@ opens its GitHub issue form immediately. GitHub issues are public.
   identifiers, and controller identifiers. Pointer rows say only whether the
   click belonged to the game canvas, a GWonMac surface, a text or secret field,
   or another element. Closing it discards the trace.
+- Use **Copy Reload Trace** after a reload or failed automatic return. It joins
+  Command-Q, the quit/reload dialog, reload, login, character selection, and
+  reconnect timing for this game window without copying account or UI text.
 - Holding a character, Backspace, Delete, Left Arrow, or Right Arrow in Guild
   Wars text fields follows the repeat delay and speed configured in macOS
   Keyboard settings. gwonmac stores an app-specific press-and-hold preference;

@@ -356,6 +356,34 @@ export interface KnownEnhancementBuild {
     labelAddress: number;
     layout: EnhancementSkillSlotGeometryLayout;
   }>;
+  /** Exact label-hash authority and frame layout used by reload automation. */
+  preGameControls?: Readonly<{
+    hashFunction: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly ["i32"];
+      bodySha256: string;
+    }>;
+    labels: Readonly<{
+      play: number;
+      selector: number;
+      yes: number;
+      no: number;
+      reconnectDialog: number;
+    }>;
+    labelHashes: Readonly<{
+      play: number;
+      selector: number;
+      yes: number;
+      no: number;
+      reconnectDialog: number;
+    }>;
+    layout: Pick<EnhancementSkillSlotGeometryLayout,
+      "frameArray" | "frameCount" | "frameBytes" | "frameId"
+      | "frameState"> & Pick<EnhancementPlayRegionLayout,
+      "contextRoot" | "gameContextSlot" | "characterContext"
+      | "currentInstanceType"> & Readonly<{ frameHashId: number }>;
+  }>;
   /** Exact reader and clock authority for player skill recharge timestamps. */
   skillCooldownObservation?: Readonly<{
     reader: Readonly<{
@@ -403,6 +431,7 @@ export function supportedEnhancementCapabilities(
       && playerSkillbarObservation
       && build.skillCooldownObservation !== undefined,
     playRegionObservation,
+    preGameControls: playRegionObservation && build.preGameControls !== undefined,
   });
 }
 

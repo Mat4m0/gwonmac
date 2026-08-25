@@ -120,6 +120,39 @@ first request through its final success, refusal, or timeout. Also record the
 visible map/outpost and whether the character should have Xunlai access. Do not
 paste the complete console or account/login screens.
 
+### Reconnect UI discovery
+
+Production reload uses the closed `preGameControls` capability. Its exact-build
+proof pins five internal label addresses, Guild Wars' label-hash function, and
+the live frame layout. The observer follows the same lookup boundary as
+GWCA `GetFrameByLabel`. Certification derives the five hashes from the exact
+client hash body. Runtime scans `frame_hash_id` in the bounded live frame table
+without calling back into game code. The renderer can read only `unknown`,
+`character-select`, `reconnect`, or `loading`; it cannot read frame pointers,
+hashes, arbitrary labels, or invoke a generic UI action.
+The same closed boundary can later support another explicit pre-game workflow,
+such as character switching, after that workflow defines its own bounded input
+authority.
+
+Run the unpackaged developer probe with:
+
+```sh
+GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario reconnect-discovery --leave-open
+```
+
+The `reconnect-probe` program selects the same bounded pre-game controls,
+play-region readers, and native cursor that required Core uses in production.
+It exposes no raw UI messages, frame pointers, labels, or generic input surface.
+A packaged build always refuses this developer program.
+
+Run the outpost and explorable procedures under [Reload feedback
+loop](diagnostics.md#reload-feedback-loop) separately. With automatic return
+enabled, add no input: the scenario now requires a certified terminal
+`outpost` or `restored` row. It gives an operator checkpoint, includes exact
+client/build evidence in its structured result, and writes the copied redacted transcript to
+`test-results/enhancements-live/reconnect-discovery.txt`. It takes no screenshot
+on failure and requires `--allow-update` before client data may be updated.
+
 For an input or Xunlai interaction failure, also open
 **Help → Diagnostics → Show Input Trace**. Clear it, then open Xunlai once,
 close the native storage window with Escape, click empty ground, hold both

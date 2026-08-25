@@ -371,6 +371,16 @@ const INVOCATIONS: Invocation[] = [
   { path: "app.reveal", args: ["gameData"], channel: IPC.appRevealPath },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
   {
+    path: "app.reloadGame",
+    args: ["memory-warning"],
+    channel: IPC.appReloadGame,
+  },
+  {
+    path: "app.claimRelogIntent",
+    args: [],
+    channel: IPC.appClaimRelogIntent,
+  },
+  {
     path: "clipboard.writeText",
     args: ["copied text"],
     channel: IPC.clipboardWriteText,

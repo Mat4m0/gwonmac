@@ -8,13 +8,20 @@ export type MemoryWarningLevel = "low" | "critical";
 
 export interface MemoryWarningPresenter {
   present(level: MemoryWarningLevel, capBytes: number): void;
+  setAutoRelog(enabled: boolean): void;
   hide(): void;
 }
+
+export type MemoryWarningActions = Readonly<{
+  autoRelogAfterReload: boolean;
+  saveAutoRelog(enabled: boolean): Promise<void>;
+  reload(): void | Promise<void>;
+}>;
 
 /** One non-modal warning surface. The estimator owns urgency; this owns DOM. */
 export function bindMemoryWarning(
   document: Document,
-  reload: () => void,
+  actions: MemoryWarningActions,
   surfaces: GwonmacSurfaceController | null = null,
 ): MemoryWarningPresenter | null {
   const root = document.getElementById("memory-notice");
@@ -27,10 +34,16 @@ export function bindMemoryWarning(
     | null;
   const reloadButton = document.getElementById("memory-notice-reload");
   const laterButton = document.getElementById("memory-notice-later");
+  const autoRelog = document.getElementById("memory-notice-auto-relog") as
+    | HTMLInputElement
+    | null;
   if (
     !root || !live || !label || !detail || !explanation || !details
-    || !reloadButton || !laterButton
+    || !reloadButton || !laterButton || !autoRelog
   ) return null;
+  let savedAutoRelog = actions.autoRelogAfterReload;
+  let pendingPreferenceSave = Promise.resolve();
+  autoRelog.checked = savedAutoRelog;
 
   let currentLevel: MemoryWarningLevel | null = null;
   let dismissedLevel: MemoryWarningLevel | null = null;
@@ -55,10 +68,27 @@ export function bindMemoryWarning(
     root.addEventListener(name, (event) => event.stopPropagation());
   }
 
+  autoRelog.addEventListener("change", () => {
+    const selected = autoRelog.checked;
+    pendingPreferenceSave = actions.saveAutoRelog(selected).then(() => {
+      savedAutoRelog = selected;
+    }).catch(() => {
+      if (autoRelog.checked === selected) autoRelog.checked = savedAutoRelog;
+      throw new Error("automatic return preference could not be saved");
+    });
+    void pendingPreferenceSave.catch(() => undefined);
+  });
+
   reloadButton.addEventListener("click", () => {
     root.hidden = true;
     dismissable?.setOpen(false);
-    reload();
+    (reloadButton as HTMLButtonElement).disabled = true;
+    void pendingPreferenceSave.then(() => actions.reload())
+      .catch(() => {
+        (reloadButton as HTMLButtonElement).disabled = false;
+        root.hidden = false;
+        dismissable?.setOpen(true);
+      });
   });
   laterButton.addEventListener("click", dismiss);
 
@@ -77,6 +107,10 @@ export function bindMemoryWarning(
       live.setAttribute("aria-live", level === "critical" ? "assertive" : "polite");
       root.hidden = false;
       dismissable?.setOpen(true);
+    },
+    setAutoRelog(enabled) {
+      savedAutoRelog = enabled;
+      autoRelog.checked = enabled;
     },
     hide() {
       root.hidden = true;

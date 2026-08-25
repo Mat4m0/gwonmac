@@ -128,6 +128,7 @@ export const ENHANCEMENT_BUILD =
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: true,
   partyObservation: false,
   teamApply: false,
@@ -140,6 +141,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
 export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: true,
   teamApply: false,
@@ -152,6 +154,7 @@ export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.free
 export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: true,
   partyObservation: true,
   teamApply: true,
@@ -164,6 +167,7 @@ export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze
 export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: true,
   teamApply: true,

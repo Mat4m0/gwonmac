@@ -84,7 +84,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   display: flex;
   align-items: center;
   gap: 16px;
-  max-width: min(92vw, 540px);
+  max-width: min(92vw, 600px);
   box-sizing: border-box;
   padding: 11px 13px;
   border: 1px solid var(--ui-warning-border);
@@ -114,7 +114,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   color: var(--ui-text-bright);
 }
 #memory-notice.critical #memory-notice-label { color: var(--ui-danger); }
-.memory-notice-copy { min-width: 0; }
+.memory-notice-copy { min-width: 250px; flex: 1; }
 #memory-notice-detail {
   font: var(--ui-font-size-sm)/1.5 var(--ui-font-readable);
   letter-spacing: .01em;
@@ -139,9 +139,16 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   color: var(--ui-text-muted);
   font: var(--ui-font-size-sm)/1.5 var(--ui-font-readable);
 }
+.memory-notice-relog {
+  width: fit-content;
+  margin-top: 8px;
+}
 #memory-notice-actions { display: flex; gap: 8px; flex-shrink: 0; }
 #memory-notice-actions button {
   flex: 0 0 auto;
+}
+#memory-notice-actions button:disabled {
+  cursor: wait;
 }
 
 /* Reduced motion keeps the feedback and drops the travel: a cross-fade in

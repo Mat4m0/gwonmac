@@ -15,6 +15,7 @@ import {
 export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: true,
   partyObservation: true,
   teamApply: false,
@@ -27,6 +28,7 @@ export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.free
 export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: false,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: false,
   teamApply: false,
@@ -39,6 +41,7 @@ export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
 export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: true,
   partyObservation: false,
   teamApply: false,
@@ -51,6 +54,7 @@ export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: true,
   partyObservation: false,
   teamApply: false,
@@ -63,6 +67,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
 export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: false,
   teamApply: false,
@@ -75,6 +80,7 @@ export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: true,
   teamApply: false,
@@ -87,6 +93,7 @@ export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
 export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
   playRegionObservation: false,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: false,
   teamApply: false,
@@ -99,6 +106,7 @@ export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
 export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: true,
   teamApply: true,
@@ -111,6 +119,7 @@ export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
 export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: true,
   partyObservation: true,
   teamApply: true,
@@ -123,6 +132,7 @@ export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.fr
 export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
   playRegionObservation: true,
+    preGameControls: false,
   targetObservation: false,
   partyObservation: true,
   teamApply: false,

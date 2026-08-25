@@ -37,6 +37,7 @@ describe("settings", () => {
       skillCooldownOverlayEnabled: true,
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
+      autoRelogAfterReload: false,
       showDiagnostics: false,
       dataStrategy: "full",
       // Automatic app-update checks remain a separate preference from the
@@ -84,6 +85,7 @@ describe("settings", () => {
       skillCooldownOverlayEnabled: true,
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
+      autoRelogAfterReload: false,
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
@@ -301,6 +303,9 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ extendedMemoryEnabled: true }), {
       extendedMemoryEnabled: true,
     });
+    assert.deepEqual(parseSettingsPatch({ autoRelogAfterReload: true }), {
+      autoRelogAfterReload: true,
+    });
     assert.deepEqual(parseSettingsPatch({ uiStyle: "obsidian" }), {
       uiStyle: "obsidian",
     });
@@ -351,6 +356,7 @@ describe("settings", () => {
     const saved = await saveSettings(path, {
       ...DEFAULT_SETTINGS,
       showDiagnostics: true,
+      autoRelogAfterReload: true,
       renderScale: 1.5,
       gwonmacTools: false,
       teamManagement: true,
@@ -360,9 +366,12 @@ describe("settings", () => {
       targetReadout: false,
     });
     assert.equal(saved.showDiagnostics, true);
+    assert.equal(saved.autoRelogAfterReload, true);
+    assert.equal((await loadSettings(path)).autoRelogAfterReload, true);
     const disk = JSON.parse(await readFile(path, "utf8"));
     assert.deepEqual(Object.keys(disk).sort(), [
       "autoCheckUpdates",
+      "autoRelogAfterReload",
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
@@ -431,6 +440,7 @@ describe("settings", () => {
       skillCooldownOverlayEnabled: true,
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
+      autoRelogAfterReload: false,
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately

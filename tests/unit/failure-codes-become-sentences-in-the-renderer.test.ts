@@ -216,9 +216,10 @@ describe("renderer failure messages", () => {
     assert.match(memoryWarningCopy("low", 4_294_901_760).explanation, /4 GB/);
   });
 
-  it("states measured recovery without overpromising", () => {
+  it("explains optional automatic return without overpromising", () => {
     const explanation = memoryWarningCopy("critical", 4_294_901_760).explanation;
-    assert.match(explanation, /puts you back where you were/);
+    assert.match(explanation, /With automatic return enabled/);
+    assert.match(explanation, /returns to the selected character/);
     assert.match(explanation, /cannot stop continued memory growth/);
     assert.doesNotMatch(explanation, /\b(guarantee\w*|never lose|always works?)\b/i);
   });

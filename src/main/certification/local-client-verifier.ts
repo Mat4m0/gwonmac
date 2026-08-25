@@ -72,6 +72,7 @@ import {
   localSkillbarBuildFragment,
   type LocalSkillbarProofs,
 } from "./local-client-skillbar-verifier.js";
+import { derivePreGameControls } from "./enhancement-pre-game-proof.js";
 
 export { isLocalClientVerification } from "./local-client-verification-boundary.js";
 export {
@@ -175,6 +176,9 @@ function failuresForRequested(
             invariant,
           ),
         }
+      : {}),
+    ...(requested.preGameControls
+      ? { preGameControls: changedFeature("preGameControls", invariant) }
       : {}),
   });
 }
@@ -576,6 +580,21 @@ function deriveEnhancementBuild(
     context,
     includePlayRegion,
   );
+  // Automatic input may use frame offsets only from this exact transformed
+  // client. Labels and function bodies can be re-derived on a future build,
+  // but they do not prove that the frame table and context layout stayed put.
+  const preGameBaseline = ENHANCEMENT_BUILDS.find(
+    (build) => build.sha256 === report.sha256,
+  ) ?? null;
+  const preGameControls = requestedCapabilities.preGameControls
+      && preGameBaseline?.preGameControls
+    ? derivePreGameControls(
+        context,
+        preGameBaseline.preGameControls.layout,
+      )
+    : null;
+  const includePreGame = requestedCapabilities.preGameControls
+    && preGameControls !== null;
   const wantsLocal = requestedCapabilities.partyObservation
     || requestedCapabilities.teamApply
     || requestedCapabilities.travelAction
@@ -623,6 +642,19 @@ function deriveEnhancementBuild(
     skillbar,
     context,
   );
+  const completeFailures: LocalFeatureFailures = Object.freeze({
+    ...failures,
+    ...(requestedCapabilities.preGameControls && !includePreGame
+      ? {
+          preGameControls: changedFeature(
+            "preGameControls",
+            preGameBaseline
+              ? "pre-game.exact-frame-labels"
+              : "pre-game.frame-layout",
+          ),
+        }
+      : {}),
+  });
   const localContributes = includeParty || includeTeam || includeTravel
     || includeXunlai || includeAliases;
   const source = includeCursor
@@ -633,9 +665,15 @@ function deriveEnhancementBuild(
         ? locatedTarget
         : localContributes
           ? locatedLocal
-          : null;
+          : includePreGame && preGameBaseline
+            ? Object.freeze({
+                baseline: preGameBaseline,
+                hookFunction: preGameBaseline.hookFunction,
+                hookBodySha256: preGameBaseline.hookBodySha256,
+              })
+            : null;
   if (source === null || !report.table || report.table.max === null) {
-    return Object.freeze({ build: null, failures });
+    return Object.freeze({ build: null, failures: completeFailures });
   }
   const observationLayout = includeTarget
     ? locatedTarget.observationLayout
@@ -748,6 +786,7 @@ function deriveEnhancementBuild(
     ...(includeParty ? {
       partyObservation: locatedLocal.partyObservation,
     } : {}),
+    ...(includePreGame ? { preGameControls: preGameControls! } : {}),
     ...skillbarBuild.beforeTeam,
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
     ...skillbarBuild.afterTeam,
@@ -763,6 +802,7 @@ function deriveEnhancementBuild(
     skillSlotGeometry: skillbar.includeGeometry,
     skillCooldownObservation: skillbar.includeCooldown,
     playRegionObservation: includePlayRegion,
+    preGameControls: includePreGame,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);
@@ -781,7 +821,7 @@ function deriveEnhancementBuild(
       ...provisional,
       outputSha256: Object.freeze(outputSha256),
     }),
-    failures,
+    failures: completeFailures,
   });
 }
 

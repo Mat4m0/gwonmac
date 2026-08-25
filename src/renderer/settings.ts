@@ -37,6 +37,9 @@
   const extendedMemoryEnabled = form.elements.namedItem(
     'extendedMemoryEnabled',
   ) as HTMLInputElement;
+  const autoRelogAfterReload = form.elements.namedItem(
+    'autoRelogAfterReload',
+  ) as HTMLInputElement;
   const diagnosticProfile = form.elements.namedItem(
     'diagnosticProfile',
   ) as HTMLSelectElement;
@@ -502,6 +505,10 @@
         return control instanceof globalThis.HTMLInputElement
           ? { extendedMemoryEnabled: control.checked }
           : null;
+      case 'autoRelogAfterReload':
+        return control instanceof globalThis.HTMLInputElement
+          ? { autoRelogAfterReload: control.checked }
+          : null;
       case 'gwonmacTools':
       case 'teamManagement':
       case 'xunlaiStorage':
@@ -544,6 +551,7 @@
     showAppearanceValues(settings);
     showDiagnostics.checked = settings.showDiagnostics;
     extendedMemoryEnabled.checked = settings.extendedMemoryEnabled;
+    autoRelogAfterReload.checked = settings.autoRelogAfterReload;
     diagnosticProfile.value = selectedDiagnosticProfile;
     gwonmacTools.checked = settings.gwonmacTools;
     teamManagement.checked = settings.teamManagement;

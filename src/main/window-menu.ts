@@ -10,6 +10,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   Menu,
   shell,
@@ -20,7 +21,8 @@ import {
   EXTERNAL_URLS,
   type GameTextEditCommand,
 } from "../shared/contracts.js";
-import { logEvent } from "./diagnostics.js";
+import { errorCode } from "../shared/errors.js";
+import { logEvent, reloadTranscriptForWindow } from "./diagnostics.js";
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import {
   editWindowText,
@@ -86,6 +88,197 @@ function withGameOwner(
   };
 }
 
+const activeQuitOrReloadDialogs = new WeakMap<BrowserWindow, Promise<void>>();
+const AUTO_RELOG_LABEL = "Return to my character automatically";
+
+async function readAutoRelogPreference(host: WindowHost): Promise<boolean | null> {
+  try {
+    return (await host.getSettings()).autoRelogAfterReload;
+  } catch (error) {
+    logEvent({ k: "settings.loadFailed", code: errorCode(error) });
+    return null;
+  }
+}
+
+async function saveAutoRelogPreference(
+  host: WindowHost,
+  previous: boolean | null,
+  next: boolean,
+): Promise<boolean> {
+  if (previous === next) return true;
+  try {
+    await host.updateSettings({ autoRelogAfterReload: next });
+    return true;
+  } catch (error) {
+    logEvent({ k: "settings.saveFailed", code: errorCode(error) });
+    return false;
+  }
+}
+
+async function showAutoRelogSettingsError(win: BrowserWindow): Promise<void> {
+  await dialog.showMessageBox(win, {
+    type: "error",
+    buttons: ["OK"],
+    message: "Reload setting is unavailable",
+    detail: "Guild Wars was not reloaded. Try again so automatic return matches your choice.",
+  });
+}
+
+async function reloadGameOrShowError(
+  host: WindowHost,
+  win: BrowserWindow,
+  cause: "menu" | "command-q",
+): Promise<void> {
+  try {
+    await host.reloadGame(win, cause);
+  } catch {
+    await dialog.showMessageBox(win, {
+      type: "error",
+      buttons: ["OK"],
+      message: "Guild Wars could not reload",
+      detail: "Your account stayed open. Try Reload Guild Wars again.",
+    });
+  }
+}
+
+function runExclusiveReloadDialog(
+  win: BrowserWindow,
+  show: () => Promise<void>,
+): Promise<void> {
+  const active = activeQuitOrReloadDialogs.get(win);
+  if (active) return active;
+  const operation = show().finally(() => {
+    if (activeQuitOrReloadDialogs.get(win) === operation) {
+      activeQuitOrReloadDialogs.delete(win);
+    }
+  });
+  activeQuitOrReloadDialogs.set(win, operation);
+  return operation;
+}
+
+/** The one Quit-or-Reload workflow used by the menu and physical Command-Q. */
+export function showQuitOrReloadGame(
+  host: WindowHost,
+  win: BrowserWindow,
+): Promise<void> {
+  return runExclusiveReloadDialog(
+    win,
+    () => showQuitOrReloadGameOnce(host, win),
+  );
+}
+
+function showReloadGame(host: WindowHost, win: BrowserWindow): Promise<void> {
+  return runExclusiveReloadDialog(win, async () => {
+    void resetGameInput(win);
+    const autoRelog = await readAutoRelogPreference(host);
+    const result = await dialog.showMessageBox(win, {
+      type: "none",
+      buttons: ["Reload Guild Wars", "Cancel"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+      message: "Reload Guild Wars?",
+      detail:
+        "This account restarts with fresh memory. Other accounts stay open.",
+      checkboxLabel: AUTO_RELOG_LABEL,
+      checkboxChecked: autoRelog ?? false,
+    });
+    if (result.response !== 0) return;
+    if (
+      autoRelog === null
+      || !await saveAutoRelogPreference(host, autoRelog, result.checkboxChecked)
+    ) {
+      await showAutoRelogSettingsError(win);
+      return;
+    }
+    await reloadGameOrShowError(host, win, "menu");
+  });
+}
+
+async function showQuitOrReloadGameOnce(
+  host: WindowHost,
+  win: BrowserWindow,
+): Promise<void> {
+  const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
+  const recordDialog = (
+    phase: "requested" | "opened" | "settled",
+    action: "pending" | "reload" | "quit" | "cancel" | "failed",
+    autoRelog: boolean | null,
+  ) => {
+    try {
+      logEvent({
+        k: "quitReloadDialog.lifecycle",
+        phase,
+        action,
+        autoRelog,
+      }, ownerId);
+    } catch {
+      // Diagnostics are passive: a recorder failure cannot trap the sheet.
+    }
+  };
+  recordDialog("requested", "pending", null);
+  // Sending the reset is synchronous; only its acknowledgement is async.
+  // A busy game renderer may take the full five-second command timeout to
+  // answer, but a native Command-Q dialog must never wait on the renderer it
+  // may be about to reload or quit.
+  void resetGameInput(win);
+  const autoRelogAfterReload = await readAutoRelogPreference(host);
+  recordDialog("opened", "pending", autoRelogAfterReload);
+  let result: Awaited<ReturnType<typeof dialog.showMessageBox>>;
+  try {
+    result = await dialog.showMessageBox(win, {
+      type: "none",
+      buttons: ["Reload Guild Wars", "Quit Game", "Cancel"],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+      message: "Quit or reload Guild Wars?",
+      detail:
+        "Reload restarts this account with fresh memory. Other accounts stay open.",
+      checkboxLabel: AUTO_RELOG_LABEL,
+      checkboxChecked: autoRelogAfterReload ?? false,
+    });
+  } catch (error) {
+    recordDialog("settled", "failed", autoRelogAfterReload);
+    throw error;
+  }
+  const action = result.response === 0
+    ? "reload"
+    : result.response === 1
+      ? "quit"
+      : "cancel";
+  recordDialog("settled", action, result.checkboxChecked);
+  if (result.response === 0) {
+    if (
+      autoRelogAfterReload === null
+      || !await saveAutoRelogPreference(
+        host,
+        autoRelogAfterReload,
+        result.checkboxChecked,
+      )
+    ) {
+      await showAutoRelogSettingsError(win);
+      return;
+    }
+    await reloadGameOrShowError(host, win, "command-q");
+  } else if (result.response === 1) {
+    if (autoRelogAfterReload !== null) {
+      await saveAutoRelogPreference(
+        host,
+        autoRelogAfterReload,
+        result.checkboxChecked,
+      );
+    }
+    host.requestQuit(win);
+  } else if (autoRelogAfterReload !== null) {
+    await saveAutoRelogPreference(
+      host,
+      autoRelogAfterReload,
+      result.checkboxChecked,
+    );
+  }
+}
+
 export function installApplicationMenu({
   host,
   resetWindowState,
@@ -125,7 +318,12 @@ export function installApplicationMenu({
               { role: "hideOthers" as const },
               { role: "unhide" as const },
               { type: "separator" as const },
-              { role: "quit" as const },
+              {
+                id: "quit-or-reload-game",
+                label: "Quit or Reload Game…",
+                accelerator: "CommandOrControl+Q",
+                click: withGameOwner((win) => showQuitOrReloadGame(host, win)),
+              },
             ],
           },
         ]
@@ -194,23 +392,9 @@ export function installApplicationMenu({
         },
         {
           id: "reload-game",
-          label: "Reload Game",
+          label: "Reload Guild Wars…",
           accelerator: "CmdOrCtrl+R",
-          click: withGameOwner(async (win) => {
-            await resetGameInput(win);
-            if (host.sockets.size(win.webContents.id) > 0) {
-              const { response } = await dialog.showMessageBox(win, {
-                type: "warning",
-                buttons: ["Reload", "Cancel"],
-                defaultId: 1,
-                cancelId: 1,
-                message: "Reload the game?",
-                detail: "Live game sockets are open and will be closed.",
-              });
-              if (response !== 0) return;
-            }
-            host.reloadGame(win);
-          }),
+          click: withGameOwner((win) => showReloadGame(host, win)),
         },
         ...(dev
           ? [
@@ -264,6 +448,14 @@ export function installApplicationMenu({
         {
           label: "Diagnostics",
           submenu: [
+            {
+              id: "copy-reload-trace",
+              label: "Copy Reload Trace",
+              click: withGameOwner(async (win) => {
+                clipboard.writeText(await reloadTranscriptForWindow(win));
+              }),
+            },
+            { type: "separator" },
             {
               id: "export-diagnostics",
               label: "Export Recent Diagnostics…",

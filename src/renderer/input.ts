@@ -175,6 +175,16 @@ export const installGameInput = ({
   let providerChooserVisible = false;
   let providerSelection = 0;
   let characterSelectionUntil = 0;
+  let automaticEnter: {
+    timer: ReturnType<typeof setTimeout>;
+    resolve(outcome: AutomaticEnterOutcome): void;
+  } | null = null;
+  const cancelAutomaticEnter = (outcome: AutomaticEnterOutcome = 'cancelled') => {
+    if (automaticEnter === null) return;
+    clearTimeout(automaticEnter.timer);
+    automaticEnter.resolve(outcome);
+    automaticEnter = null;
+  };
   let virtualCursor: { x: number; y: number } | null = null;
   let pointerWanted = false;
   let modeWatch: ReturnType<typeof setInterval> | null = null;
@@ -361,6 +371,7 @@ export const installGameInput = ({
     releasing = true;
     try {
       resetWheel();
+      cancelAutomaticEnter();
       releaseKeys();
       releaseButtons();
     } finally {
@@ -426,6 +437,41 @@ export const installGameInput = ({
     return true;
   };
 
+  const sendCharacterEnter = (init: KeyboardEventInit) => {
+    canvas.dispatchEvent(new globalThis.KeyboardEvent('keydown', init));
+    canvas.dispatchEvent(new globalThis.KeyboardEvent('keyup', init));
+  };
+
+  const scheduleAutomaticEnter = (
+    delayMs = CHARACTER_ENTER_DELAY_MS,
+    expiresAt = Number.POSITIVE_INFINITY,
+  ): Promise<AutomaticEnterOutcome> => {
+    if (automaticEnter !== null) return Promise.resolve('cancelled');
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        automaticEnter = null;
+        if (performance.now() > expiresAt) {
+          resolve('cancelled');
+          return;
+        }
+        if (!document.hasFocus()) {
+          resolve('unfocused');
+          return;
+        }
+        canvas.focus();
+        sendCharacterEnter({
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          key: 'Enter',
+          code: 'Enter',
+        });
+        resolve('sent');
+      }, delayMs);
+      automaticEnter = { timer, resolve };
+    });
+  };
+
   const sendBufferedCharacterEnter = (event: KeyboardEvent) => {
     const init: KeyboardEventInit = {
       bubbles: true,
@@ -435,10 +481,32 @@ export const installGameInput = ({
       code: event.code,
       location: event.location,
     };
-    setTimeout(() => {
-      canvas.dispatchEvent(new globalThis.KeyboardEvent('keydown', init));
-      canvas.dispatchEvent(new globalThis.KeyboardEvent('keyup', init));
-    }, CHARACTER_ENTER_DELAY_MS);
+    setTimeout(() => sendCharacterEnter(init), CHARACTER_ENTER_DELAY_MS);
+  };
+
+  const activatePreGameControl = (
+    expected: 'character-select' | 'reconnect',
+  ): Promise<AutomaticEnterOutcome> => {
+    providerChooserVisible = false;
+    characterSelectionUntil = 0;
+    if (automaticEnter !== null) return Promise.resolve('cancelled');
+    if (!document.hasFocus()) return Promise.resolve('unfocused');
+    canvas.focus();
+    const state = window.gwPreGameControls?.state() ?? 'unknown';
+    if (state !== expected) {
+      const progressed = expected === 'character-select'
+        ? state === 'reconnect' || state === 'loading'
+        : state === 'loading';
+      return Promise.resolve(progressed ? 'progressed' : 'cancelled');
+    }
+    sendCharacterEnter({
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      key: 'Enter',
+      code: 'Enter',
+    });
+    return Promise.resolve('sent');
   };
 
   const traceOwner = (target: EventTarget | null) => {
@@ -482,6 +550,14 @@ export const installGameInput = ({
     if (handleProviderKey(event)) {
       traceKey(event, 'down', 'suppressed');
       return;
+    }
+    if (
+      event.isTrusted &&
+      (event.target === canvas || textInputs.has(event.target)) &&
+      event.key === 'Enter' &&
+      automaticEnter !== null
+    ) {
+      cancelAutomaticEnter('physical');
     }
     if (
       event.target === canvas &&
@@ -859,6 +935,7 @@ export const installGameInput = ({
 
   return Object.freeze({
     releaseAll,
+    cancelAutomaticEnter,
     setLoginProviderChooser(visible: boolean) {
       providerChooserVisible = visible;
       if (!visible) return;
@@ -873,7 +950,22 @@ export const installGameInput = ({
     },
     expectCharacterSelection() {
       providerChooserVisible = false;
+      // Some saved sessions advance without needing our login-screen Enter.
+      // Cancel it as soon as the token request proves the client moved on, so
+      // it cannot land late on character selection or a reconnect prompt.
+      cancelAutomaticEnter('progressed');
       characterSelectionUntil = performance.now() + CHARACTER_SELECTION_WINDOW_MS;
+    },
+    submitSavedLogin(expiresAt?: number) {
+      providerChooserVisible = false;
+      characterSelectionUntil = 0;
+      return scheduleAutomaticEnter(CHARACTER_ENTER_DELAY_MS, expiresAt);
+    },
+    playSelectedCharacter() {
+      return activatePreGameControl('character-select');
+    },
+    acceptReconnect() {
+      return activatePreGameControl('reconnect');
     },
   });
 };

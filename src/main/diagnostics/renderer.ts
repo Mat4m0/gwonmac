@@ -19,6 +19,7 @@ import {
   type RendererMetrics,
   type RendererMilestone,
   type RendererMilestoneFields,
+  type RendererMilestoneFieldsByName,
   type TextureMemorySnapshot,
   type WasmMemoryProbeStatus,
 } from "../../shared/diagnostics.js";
@@ -365,6 +366,48 @@ export function recordRendererMilestone(
   if (name === "build.info" && fields && "programId" in fields) {
     recorder.setLatest("client.programId", fields.programId, ownerId);
     recorder.setLatest("client.buildId", fields.buildId, ownerId);
+  }
+  if (name === "relog.inputSettled") {
+    if (!fields || !("stage" in fields)) return;
+    recordEvent(
+      {
+        k: "relog.inputSettled",
+        clockSynchronized: state.clockSynchronized,
+        stage: fields.stage,
+        outcome: fields.outcome,
+      },
+      { timestampUs },
+      ownerId,
+    );
+    return;
+  }
+  if (name === "relog.preGameProbe") {
+    if (!fields || !("mask" in fields)) return;
+    recordEvent(
+      {
+        k: "relog.preGameProbe",
+        clockSynchronized: state.clockSynchronized,
+        state: fields.state,
+        mask: fields.mask,
+      },
+      { timestampUs },
+      ownerId,
+    );
+    return;
+  }
+  if (name === "relog.finished") {
+    if (!fields || !("outcome" in fields)) return;
+    const relogFields = fields as RendererMilestoneFieldsByName["relog.finished"];
+    recordEvent(
+      {
+        k: "relog.finished",
+        clockSynchronized: state.clockSynchronized,
+        outcome: relogFields.outcome,
+      },
+      { timestampUs },
+      ownerId,
+    );
+    return;
   }
   if (name === "wasm.abort") {
     // IPC validation guarantees these fields for this name; a call without
