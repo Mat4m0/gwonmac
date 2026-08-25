@@ -63,18 +63,6 @@
   synonyms-only document. Remove the storage-codec placeholders and this entry
   in the same change.
 
-## Ninth Travel shortcut retirement
-
-- Why: the Travel bar now follows Guild Wars' eight-slot skill-bar layout, but
-  released settings may still contain a ninth shortcut. The reader accepts that
-  released shape and projects only the first eight slots; the next shortcut edit
-  writes the new eight-slot shape.
-- Introduced: 2026-08-25 with the eight-slot Travel bar.
-- Depends on it: profiles that saved a ninth Travel shortcut before this change.
-- Remove when: the supported rollback window no longer contains a release that
-  can write nine Travel shortcuts and the Stable round-trip matrix passes after
-  `RELEASED_STORED_TRAVEL_SHORTCUT_LIMIT` is replaced by `TRAVEL_SHORTCUT_LIMIT`.
-
 ## Ginko consumer icon compatibility
 
 - Why: Ginko Docs 0.2.3 gives Nuxt Icon a pruned Lucide collection before it

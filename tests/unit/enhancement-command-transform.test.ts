@@ -347,14 +347,12 @@ describe("Enhancement command transform", () => {
     assert.deepEqual([...new Int32Array(memory.buffer, payload, 4)], [81, -2, 0, 0]);
     assert.deepEqual(dispatches, [[build.travelAction!.messageId, payload, 0]]);
 
-    const unlockWords = new Uint32Array(memory.buffer, 288, 28);
-    unlockWords[Math.floor(81 / 32)]! &= ~(1 << (81 % 32));
-    assert.equal(enqueue(81), 1, "a stale renderer may still queue the request");
+    assert.equal(enqueue(55), 1);
     frame(80, 800);
     assert.deepEqual(
       dispatches,
       [[build.travelAction!.messageId, payload, 0]],
-      "the game-thread boundary refuses a destination that became locked",
+      "an unresolved live district context must fail closed without dispatching",
     );
 
     for (const mapId of [0, 2_001, 266, 307] as const) {

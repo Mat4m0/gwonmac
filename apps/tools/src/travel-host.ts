@@ -17,11 +17,6 @@ import {
   type TravelUserPreferences,
   type TravelUserPreferencesPatch,
 } from "../../../src/shared/travel";
-import {
-  EMPTY_TRAVEL_HISTORY,
-  recordVisitedTravel,
-  type TravelHistory,
-} from "../../../src/shared/travel-history";
 
 export type TravelAttempt =
   | Readonly<{ status: "idle" }>
@@ -38,12 +33,9 @@ export interface TravelHost {
   readonly state: Ref<TravelGameState>;
   readonly attempt: Ref<TravelAttempt>;
   readonly notice: Ref<TravelNotice | null>;
-  readonly history: Ref<TravelHistory>;
   readonly unavailable: string | null;
   loadPreferences(): Promise<TravelPreferences>;
   savePreferences(patch: TravelPreferencePatch): Promise<TravelPreferences>;
-  loadHistory(): Promise<TravelHistory>;
-  clearHistory(): Promise<TravelHistory>;
   travel(request: TravelRequest): Promise<void>;
   updateGameState(state: TravelGameState): void;
   dispose(): void;
@@ -58,7 +50,6 @@ export function createNativeTravelHost(
   const state = ref<TravelGameState>({ status: "waiting", reason: "game" });
   const attempt = ref<TravelAttempt>({ status: "idle" });
   const notice = ref<TravelNotice | null>(null);
-  const history = ref<TravelHistory>(EMPTY_TRAVEL_HISTORY);
   let attemptTimer = 0;
   const clearAttempt = () => {
     window.clearTimeout(attemptTimer);
@@ -72,41 +63,10 @@ export function createNativeTravelHost(
   };
   const loadPreferences = async (): Promise<TravelPreferences> =>
     remember(await api.travelPreferences.get());
-  let historyTail: Promise<void> = Promise.resolve();
-  let lastObservedMapId: number | null = null;
-  let disposed = false;
-  const enqueueHistory = (
-    operation: () => Promise<TravelHistory>,
-  ): Promise<TravelHistory> => {
-    const result = historyTail.then(operation);
-    historyTail = result.then(() => undefined, () => undefined);
-    return result.then((next) => {
-      if (!disposed) history.value = next;
-      return next;
-    });
-  };
-  const observeMap = (next: TravelGameState): void => {
-    if (next.status === "waiting") {
-      if (next.reason === "loading") lastObservedMapId = null;
-      return;
-    }
-    if (next.mapId === lastObservedMapId) return;
-    lastObservedMapId = next.mapId;
-    if (travelDestination(next.mapId) === null) return;
-    void enqueueHistory(() => api.travelHistory.record(next.mapId)).catch((error) => {
-      if (development) {
-        console.debug(`[tools:dev] travel.history.refused ${JSON.stringify({
-          mapId: next.mapId,
-          reason: error instanceof Error ? error.message : "unknown history error",
-        })}`);
-      }
-    });
-  };
   return {
     state,
     attempt,
     notice,
-    history,
     get unavailable() {
       return command.unavailable();
     },
@@ -115,8 +75,6 @@ export function createNativeTravelHost(
       const expected = currentPreferences ?? await loadPreferences();
       return remember(await api.travelPreferences.set({ expected, patch }));
     },
-    loadHistory: () => enqueueHistory(() => api.travelHistory.get()),
-    clearHistory: () => enqueueHistory(() => api.travelHistory.clear()),
     async travel(request) {
       if (attempt.value.status !== "idle") return;
       attempt.value = { status: "queued", mapId: request.mapId };
@@ -154,7 +112,6 @@ export function createNativeTravelHost(
     },
     updateGameState(next) {
       state.value = next;
-      observeMap(next);
       const current = attempt.value;
       if (current.status === "idle") return;
       if (next.status === "waiting" && next.reason === "loading") {
@@ -184,7 +141,6 @@ export function createNativeTravelHost(
       if (next.mapId !== current.mapId) return;
     },
     dispose() {
-      disposed = true;
       clearAttempt();
     },
     traceSearch(query, resultMapIds) {
@@ -203,14 +159,9 @@ export function createNativeTravelHost(
 
 /** Standalone fixture host for visual and interaction development. */
 export function createDemoTravelHost(): TravelHost {
-  const state = ref<TravelGameState>({
-    status: "ready",
-    mapId: 55,
-    unlockedMapWords: Object.freeze(Array.from({ length: 28 }, () => 0xffff_ffff)),
-  });
+  const state = ref<TravelGameState>({ status: "ready", mapId: 55 });
   const attempt = ref<TravelAttempt>({ status: "idle" });
   const notice = ref<TravelNotice | null>(null);
-  const history = ref<TravelHistory>(Object.freeze([55, 449, 194, 642, 857]));
   let current: TravelPreferences = Object.freeze({
     shortcuts: DEFAULT_TRAVEL_SHORTCUTS,
     synonyms: Object.freeze([]),
@@ -226,7 +177,6 @@ export function createDemoTravelHost(): TravelHost {
     state,
     attempt,
     notice,
-    history,
     unavailable: null,
     async loadPreferences() {
       return current;
@@ -234,32 +184,17 @@ export function createDemoTravelHost(): TravelHost {
     async savePreferences(patch) {
       return save(patch);
     },
-    async loadHistory() {
-      return history.value;
-    },
-    async clearHistory() {
-      history.value = EMPTY_TRAVEL_HISTORY;
-      return history.value;
-    },
     async travel(request) {
       attempt.value = { status: "queued", mapId: request.mapId };
       state.value = { status: "waiting", reason: "loading" };
       attempt.value = { status: "loading", mapId: request.mapId };
       window.setTimeout(() => {
-        history.value = recordVisitedTravel(history.value, request.mapId);
-        state.value = {
-          status: "ready",
-          mapId: request.mapId,
-          unlockedMapWords: Object.freeze(Array.from({ length: 28 }, () => 0xffff_ffff)),
-        };
+        state.value = { status: "ready", mapId: request.mapId };
         attempt.value = { status: "idle" };
       }, 600);
     },
     updateGameState(next) {
       state.value = next;
-      if (next.status === "ready" && travelDestination(next.mapId) !== null) {
-        history.value = recordVisitedTravel(history.value, next.mapId);
-      }
     },
     dispose() {},
     traceSearch() {},

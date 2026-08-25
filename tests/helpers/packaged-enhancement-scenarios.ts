@@ -40,7 +40,6 @@ async function installTargetReadout(
     tableSize,
     capabilities,
     snapshotAbi,
-    snapshotBytes,
     playRegionAbi,
     playRegionBytes,
   }: {
@@ -48,7 +47,6 @@ async function installTargetReadout(
     tableSize: number;
     capabilities: typeof TARGET_ONLY;
     snapshotAbi: number;
-    snapshotBytes: number;
     playRegionAbi: number;
     playRegionBytes: number;
   }) => {
@@ -139,19 +137,16 @@ async function installTargetReadout(
       rangeBand = 1,
       target = true,
     }: { distance?: number; rangeBand?: number; target?: boolean } = {}) => {
-      const nextRegionSequence = region.getUint32(8, true) + 2;
-      region.setUint32(8, nextRegionSequence - 1, true);
-      region.setUint32(8, nextRegionSequence, true);
       sequence += 2;
       const snapshotPointer = allocations[1]?.pointer;
       if (snapshotPointer === undefined) {
         throw new Error("target readout snapshot allocation is missing");
       }
-      const view = new DataView(memory.buffer, snapshotPointer, snapshotBytes);
+      const view = new DataView(memory.buffer, snapshotPointer, 64);
       view.setUint32(8, sequence - 1, true);
       view.setUint32(0, 0x4254_5747, true);
       view.setUint16(4, snapshotAbi, true);
-      view.setUint16(6, snapshotBytes, true);
+      view.setUint16(6, 64, true);
       view.setUint32(12, target ? 7 : 3, true);
       view.setUint32(16, sequence, true);
       view.setUint32(20, 133, true);
@@ -191,7 +186,6 @@ async function installTargetReadout(
     tableSize: ENHANCEMENT_BUILD.tableSlot + 1,
     capabilities,
     snapshotAbi: COMPANION_ABI.snapshot.abi,
-    snapshotBytes: COMPANION_SNAPSHOT_BYTES,
     playRegionAbi: COMPANION_ABI.playRegion.abi,
     playRegionBytes: COMPANION_PLAY_REGION_BYTES,
   });
@@ -222,7 +216,7 @@ export async function assertTargetReadoutLifecycle() {
       {
         allocations: [
           65_551,
-          COMPANION_SNAPSHOT_BYTES,
+          64,
           CONFIG_BYTES,
           COMPANION_ABI.playRegion.bytes,
         ],
@@ -306,12 +300,7 @@ export async function assertTargetReadoutLifecycle() {
     );
     assert.deepEqual(disposed, {
       // Runtime allocation, target snapshot, config, and policy region.
-      freed: [
-        0x1000,
-        TOOLBOX_SNAPSHOT_POINTER,
-        TOOLBOX_SNAPSHOT_POINTER + COMPANION_SNAPSHOT_BYTES,
-        TOOLBOX_SNAPSHOT_POINTER + COMPANION_SNAPSHOT_BYTES + CONFIG_BYTES,
-      ],
+      freed: [0x1000, 0x11_010, 0x11_050, 0x11_210],
       hook: 0,
       // Cleanup withdraws the published runtime by writing null over it.
       runtime: null,
@@ -532,10 +521,7 @@ export async function assertCleanupSafetyGates() {
       if (gate === "observer") {
         assert.deepEqual(result, {
           cursorStatePublished: false,
-          freed: [
-            TOOLBOX_SNAPSHOT_POINTER + COMPANION_SNAPSHOT_BYTES,
-            0x1000,
-          ],
+          freed: [0x11_050, 0x1000],
           hook: 0,
           readoutCount: 1,
           reports: [["Companion cleanup failed during observer disposal"]],
@@ -604,7 +590,6 @@ export async function assertToolboxFoundationLifecycle() {
       messages,
       tableSize,
       capabilities,
-      travelUnlockWords,
     }) => {
       const memory = new WebAssembly.Memory({ initial: 256 });
       const view = new DataView(memory.buffer);
@@ -658,8 +643,6 @@ export async function assertToolboxFoundationLifecycle() {
         party: 0x70_3000,
         partyInfo: 0x70_4000,
         heroBuffer: 0x70_5000,
-        world: 0x70_6000,
-        unlockedMaps: 0x70_7000,
         agentBuffer: 0x71_0000,
         player: 0x71_1000,
       });
@@ -679,16 +662,6 @@ export async function assertToolboxFoundationLifecycle() {
       view.setUint32(game.character + layout.currentMapId, 133, true);
       view.setUint32(game.character + layout.currentInstanceType, 0, true);
       view.setUint32(game.character + layout.playerNumber, 42, true);
-      view.setUint32(game.game + layout.worldContext, game.world, true);
-      const unlockedMaps = game.world + layout.worldUnlockedMaps;
-      view.setUint32(unlockedMaps, game.unlockedMaps, true);
-      view.setUint32(unlockedMaps + 4, travelUnlockWords, true);
-      view.setUint32(unlockedMaps + 8, travelUnlockWords, true);
-      new Uint32Array(
-        memory.buffer,
-        game.unlockedMaps,
-        travelUnlockWords,
-      ).fill(0xffff_ffff);
       const area = layout.areaInfo + 133 * layout.areaInfoStride;
       view.setUint32(area + 0x00, 1, true);
       view.setUint32(area + 0x04, 0, true);
@@ -1079,13 +1052,11 @@ export async function assertToolboxFoundationLifecycle() {
     }, {
       bytes: [...installableManifestModule(TARGET_OFF_PRODUCT_CAPABILITIES)],
       capabilities: TARGET_OFF_PRODUCT_CAPABILITIES,
-      travelUnlockWords: COMPANION_ABI.travelUnlockWords,
       layout: {
         ...ENHANCEMENT_BUILD.observationBase!.layout,
         ...ENHANCEMENT_BUILD.cursorEvent!.layout,
         ...ENHANCEMENT_BUILD.partyObservation!.layout,
         ...ENHANCEMENT_BUILD.targetObservation!.layout,
-        ...ENHANCEMENT_BUILD.travelAction!.unlockProof.layout,
       },
       messages: {
         playerChat: ENHANCEMENT_BUILD.uiDispatcher!.playerChatMessage,

@@ -140,7 +140,6 @@ export interface SnapshotOverrides {
   targetY?: number;
   distance?: number;
   rangeBand?: number;
-  unlockedMapWords?: readonly number[];
 }
 
 export function snapshot(overrides: SnapshotOverrides = {}) {
@@ -170,9 +169,6 @@ export function snapshot(overrides: SnapshotOverrides = {}) {
   view.setFloat32(52, overrides.targetY ?? (hasTarget ? 34100 : 0), true);
   view.setFloat32(56, overrides.distance ?? (hasTarget ? 130.8 : 0), true);
   view.setUint32(60, overrides.rangeBand ?? (hasTarget ? 1 : 0), true);
-  overrides.unlockedMapWords?.forEach((word, index) => {
-    if (index < 28) view.setUint32(64 + index * 4, word, true);
-  });
   return buffer;
 }
 
@@ -595,9 +591,7 @@ export async function createKernel(
             ? ADDRESSES.snapshot
             : 0),
         overrides.snapshotSize
-          ?? ((features & FEATURE_GAME_SNAPSHOT) !== 0
-            ? COMPANION_SNAPSHOT_BYTES
-            : 0),
+          ?? ((features & FEATURE_GAME_SNAPSHOT) !== 0 ? 64 : 0),
         overrides.configPointer ?? ADDRESSES.config,
         overrides.configSize ?? CONFIG_BYTES,
         overrides.cursorPointer

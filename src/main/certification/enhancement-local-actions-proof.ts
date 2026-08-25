@@ -619,22 +619,6 @@ export function locateAutomaticLocalActions(
       const travelContextResolver = travelExpected
         ? deriveTravelContextResolver(module)
         : null;
-      const unlockAccessor = travelExpected
-        ? uniqueExactFunction(
-            module,
-            travelExpected.unlockProof.accessor.bodySha256,
-            travelExpected.unlockProof.accessor.params,
-            travelExpected.unlockProof.accessor.results,
-          )
-        : null;
-      const unlockConsumer = travelExpected
-        ? uniqueExactFunction(
-            module,
-            travelExpected.unlockProof.consumer.bodySha256,
-            travelExpected.unlockProof.consumer.params,
-            travelExpected.unlockProof.consumer.results,
-          )
-        : null;
       const travelAction = uiDispatcher && gameThread && travelExpected && travelBody
         && unsignedOperand(travelBody, 169) === travelExpected.messageId
         && travelValues !== null
@@ -657,8 +641,6 @@ export function locateAutomaticLocalActions(
         && signatureMatches(module, travelPrecheck, [], ["i32"])
         && signatureMatches(module, travelPostcheck, ["i32", "i32", "f32"], [])
         && travelContextResolver !== null
-        && unlockAccessor !== null
-        && unlockConsumer !== null
         ? Object.freeze({
             ...travelExpected,
             producer: Object.freeze({
@@ -667,17 +649,6 @@ export function locateAutomaticLocalActions(
               bodySha256: functionBodySha256(module, travelFunction!),
             }),
             contextResolver: travelContextResolver,
-            unlockProof: Object.freeze({
-              layout: travelExpected.unlockProof.layout,
-              accessor: Object.freeze({
-                ...travelExpected.unlockProof.accessor,
-                functionIndex: unlockAccessor,
-              }),
-              consumer: Object.freeze({
-                ...travelExpected.unlockProof.consumer,
-                functionIndex: unlockConsumer,
-              }),
-            }),
           })
         : null;
 
@@ -722,9 +693,7 @@ export function locateAutomaticLocalActions(
         baseline,
         hookFunction: tick.functionIndex,
         hookBodySha256: tick.bodySha256,
-        observationLayout: travelAction || xunlaiAction || partyObservation
-          ? observationLayout
-          : null,
+        observationLayout: xunlaiAction || partyObservation ? observationLayout : null,
         uiDispatcher,
         gameThread: travelAction || xunlaiAction || teamApply ? gameThread : null,
         travelAction,

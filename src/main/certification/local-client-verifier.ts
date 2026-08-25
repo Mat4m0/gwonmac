@@ -602,8 +602,7 @@ function deriveEnhancementBuild(
     && locatedLocal?.gameThread != null
     && locatedLocal.teamApply != null;
   const includeTravel = requestedCapabilities.travelAction
-    && locatedLocal?.observationLayout != null
-    && locatedLocal.uiDispatcher != null
+    && locatedLocal?.uiDispatcher != null
     && locatedLocal.gameThread != null
     && locatedLocal.travelAction != null;
   const includeXunlai = requestedCapabilities.xunlaiAction

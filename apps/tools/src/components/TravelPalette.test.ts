@@ -11,36 +11,20 @@ import type {
   TravelPreferencePatch,
   TravelPreferences,
 } from "../travel-host";
-import type { TravelHistory } from "../../../../src/shared/travel-history";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 import TravelPalette from "./TravelPalette.vue";
 
 function fixture(options: Readonly<{
   shortcuts?: TravelShortcuts;
   synonyms?: TravelSynonyms;
-  unlockedMapIds?: readonly number[];
-  recentMapIds?: TravelHistory;
 }> = {}, attachTo?: Element) {
-  const unlockedMapWords = options.unlockedMapIds === undefined
-    ? Array.from({ length: 28 }, () => 0xffff_ffff)
-    : Array.from({ length: 28 }, (_, word) => options.unlockedMapIds!.reduce(
-        (bits, mapId) => Math.floor(mapId / 32) === word
-          ? bits | (1 << (mapId % 32))
-          : bits,
-        0,
-      ) >>> 0);
-  const state = ref<TravelHost["state"]["value"]>({
-    status: "ready",
-    mapId: 55,
-    unlockedMapWords,
-  });
+  const state = ref<TravelHost["state"]["value"]>({ status: "ready", mapId: 55 });
   let preferences: TravelPreferences = Object.freeze({
     shortcuts: options.shortcuts ?? DEFAULT_TRAVEL_SHORTCUTS,
     synonyms: options.synonyms ?? Object.freeze([]),
   });
   const attempt = ref<TravelHost["attempt"]["value"]>({ status: "idle" });
   const notice = ref<TravelHost["notice"]["value"]>(null);
-  const history = ref<TravelHistory>(options.recentMapIds ?? Object.freeze([]));
   const travel = vi.fn<TravelHost["travel"]>(async (request) => {
     attempt.value = { status: "queued", mapId: request.mapId };
   });
@@ -58,15 +42,9 @@ function fixture(options: Readonly<{
     state,
     attempt,
     notice,
-    history,
     unavailable: null,
     async loadPreferences() { return preferences; },
     savePreferences,
-    async loadHistory() { return history.value; },
-    async clearHistory() {
-      history.value = Object.freeze([]);
-      return history.value;
-    },
     travel,
     updateGameState(next) {
       state.value = next;
@@ -92,7 +70,6 @@ function fixture(options: Readonly<{
     travel,
     savePreferences,
     traceSearch,
-    history,
   };
 }
 
@@ -101,17 +78,15 @@ describe("TravelPalette", () => {
     const { wrapper } = fixture();
     await flushPromises();
 
-    expect(wrapper.findAll(".travel-favorite")).toHaveLength(8);
+    expect(wrapper.findAll(".travel-favorite")).toHaveLength(6);
     expect(wrapper.text()).toContain("Lion's Arch");
     expect(wrapper.findAll(".travel-favorite").map((favorite) => favorite.text())).toEqual([
-      "Ascalon1",
-      "Lion's Arch2",
-      "Kamadan3",
-      "Kaineng4",
-      "Eye5",
-      "Embark6",
-      "7",
-      "8",
+      "1Ascalon",
+      "2Lion's Arch",
+      "3Kamadan",
+      "4Kaineng",
+      "5Eye",
+      "6Embark",
     ]);
     expect(wrapper.text()).not.toContain("Travel is the default");
     expect(wrapper.find('label[for="travel-search-input"] > span').exists()).toBe(false);
@@ -122,71 +97,29 @@ describe("TravelPalette", () => {
       "Search destinations or phrases…",
     );
     expect(wrapper.get('[aria-label="Close Quick Travel"]').element.closest("label")).toBeNull();
-    expect(wrapper.get('[aria-label="Quick Travel mode"] [aria-selected="true"]').text()).toBe(
-      "Travel",
-    );
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false);
+    expect(wrapper.get('[aria-label="Customize Travel"]').attributes("aria-pressed")).toBe("false");
     wrapper.unmount();
   });
 
-  it("offers Back and four more observed destinations without showing the current map", async () => {
-    const { wrapper, travel } = fixture({
-      recentMapIds: Object.freeze([55, 449, 194, 642, 857, 81]),
-    });
-    await flushPromises();
-
-    expect(wrapper.get(".travel-back").text()).toContain("BackKamadan, Jewel of Istan");
-    expect(wrapper.findAll(".travel-recent").map((row) => row.text())).toEqual([
-      "Kaineng CenterFactions",
-      "Eye of the NorthEye of the North",
-      "Embark BeachBattle Isles",
-      "Ascalon CityProphecies",
-    ]);
-    expect(wrapper.get(".travel-history").text()).not.toContain("Lion's Arch");
-
-    await wrapper.get(".travel-back").trigger("click");
-    expect(travel).toHaveBeenCalledWith({ mapId: 449 });
-    wrapper.unmount();
-  });
-
-  it("hides locked history entries and clears only history from Customize", async () => {
-    const { wrapper, history } = fixture({
-      recentMapIds: Object.freeze([55, 449, 194]),
-      unlockedMapIds: [55, 194],
-    });
-    await flushPromises();
-
-    expect(wrapper.get(".travel-back").text()).toContain("Kaineng Center");
-    expect(wrapper.text()).not.toContain("Back toKamadan");
-    expect(wrapper.findAll(".travel-favorite-grid .travel-favorite")).toHaveLength(8);
-    expect(wrapper.get(".travel-favorite-grid").text()).toContain("Lion's Arch2");
-    expect(wrapper.get(".travel-favorite-grid").text()).toContain("Kaineng4");
-    expect(wrapper.get(".travel-favorite-grid").text()).not.toContain("Kamadan");
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
-    expect(wrapper.get(".travel-history-settings").text()).toContain("3 locally stored");
-    await wrapper.get(".travel-history-settings .ui-button").trigger("click");
-    await flushPromises();
-    expect(history.value).toEqual([]);
-    expect(wrapper.text()).toContain("Recent destinations cleared");
-    wrapper.unmount();
-  });
-
-  it("supports roving Left and Right arrow navigation across the mode tabs", async () => {
+  it("keeps Travel as the default and reveals setup from the cog button", async () => {
     const { wrapper } = fixture({}, document.body);
     await flushPromises();
-    const tabs = wrapper.findAll('[aria-label="Quick Travel mode"] [role="tab"]');
+    const settings = wrapper.get('[aria-label="Customize Travel"]');
 
-    expect(tabs[0]?.attributes("tabindex")).toBe("0");
-    expect(tabs[1]?.attributes("tabindex")).toBe("-1");
-    await tabs[0]?.trigger("keydown", { key: "ArrowRight" });
+    expect(wrapper.find("#travel-panel").exists()).toBe(true);
+    expect(settings.attributes("aria-pressed")).toBe("false");
+    await settings.trigger("click");
     await flushPromises();
-    expect(tabs[0]?.attributes("tabindex")).toBe("-1");
-    expect(tabs[1]?.attributes("tabindex")).toBe("0");
-    expect(document.activeElement).toBe(tabs[1]?.element);
+    expect(wrapper.find("#travel-customize-panel").exists()).toBe(true);
+    expect(settings.attributes("aria-pressed")).toBe("true");
+    expect(document.activeElement).toBe(settings.element);
 
-    await tabs[1]?.trigger("keydown", { key: "ArrowLeft" });
+    await wrapper.get(".travel-palette").trigger("keydown", { key: "Escape" });
     await flushPromises();
-    expect(tabs[0]?.attributes("tabindex")).toBe("0");
-    expect(document.activeElement).toBe(tabs[0]?.element);
+    expect(wrapper.find("#travel-panel").exists()).toBe(true);
+    expect(settings.attributes("aria-pressed")).toBe("false");
+    expect(document.activeElement).toBe(wrapper.get("#travel-search-input").element);
     wrapper.unmount();
   });
 
@@ -203,18 +136,18 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("shows phrase search results from Customize and returns to setup through the tab", async () => {
+  it("shows phrase search results from customization and returns through the cog", async () => {
     const { wrapper } = fixture({ synonyms: [{ term: "daily run", mapId: 480 }] });
     await flushPromises();
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     await wrapper.get("#travel-search-input").setValue("daily");
 
     expect(wrapper.find("#travel-customize-panel").exists()).toBe(false);
     expect(wrapper.get("#travel-results-panel").text()).toContain("Ruins of Morah");
     expect(wrapper.get(".travel-match").text()).toBe("Search phrase");
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     expect(wrapper.find("#travel-results-panel").exists()).toBe(false);
     expect(wrapper.find("#travel-customize-panel").exists()).toBe(true);
     expect(wrapper.get("#travel-search-input").element).toHaveProperty("value", "");
@@ -233,39 +166,6 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("shows only unlocked matches and explains when every match is locked", async () => {
-    const oneUnlocked = fixture({ unlockedMapIds: [81] });
-    await flushPromises();
-    await oneUnlocked.wrapper.get('[role="combobox"]').setValue("asca");
-
-    expect(oneUnlocked.wrapper.findAll('[role="option"]')).toHaveLength(1);
-    expect(oneUnlocked.wrapper.text()).toContain("Ascalon City");
-    expect(oneUnlocked.traceSearch).toHaveBeenLastCalledWith("asca", [81]);
-    oneUnlocked.wrapper.unmount();
-
-    const noneUnlocked = fixture({ unlockedMapIds: [] });
-    await flushPromises();
-    await noneUnlocked.wrapper.get('[role="combobox"]').setValue("asca");
-
-    expect(noneUnlocked.wrapper.findAll('[role="option"]')).toHaveLength(0);
-    expect(noneUnlocked.wrapper.text()).toContain("No unlocked destinations for “asca”");
-    expect(noneUnlocked.wrapper.text()).toContain(
-      "This character has not unlocked the matching destinations.",
-    );
-    noneUnlocked.wrapper.unmount();
-  });
-
-  it("keeps unreadable unlock evidence distinct from a locked character", async () => {
-    const unknown = fixture();
-    unknown.state.value = { status: "ready", mapId: 55, unlockedMapWords: null };
-    await flushPromises();
-    await unknown.wrapper.get('[role="combobox"]').setValue("asca");
-
-    expect(unknown.wrapper.text()).toContain("Unlocked destinations unavailable");
-    expect(unknown.wrapper.text()).not.toContain("has not unlocked");
-    unknown.wrapper.unmount();
-  });
-
   it("uses bare number keys for Quick Travel", async () => {
     const { wrapper, travel } = fixture();
     await flushPromises();
@@ -282,24 +182,24 @@ describe("TravelPalette", () => {
     await wrapper.get('[role="combobox"]').setValue("eotn");
 
     await wrapper.get(".travel-palette").trigger("keydown", {
-      key: "8",
-      code: "Digit8",
+      key: "9",
+      code: "Digit9",
       metaKey: true,
     });
     await flushPromises();
 
     const saved = savePreferences.mock.calls[0]?.[0].shortcuts;
-    expect(saved).toHaveLength(8);
-    expect(saved?.[6]).toBeNull();
-    expect(saved?.[7]).toEqual({ mapId: 642 });
-    expect(wrapper.text()).toContain("Eye of the North is now shortcut 8");
+    expect(saved).toHaveLength(9);
+    expect(saved?.slice(6, 8)).toEqual([null, null]);
+    expect(saved?.[8]).toEqual({ mapId: 642 });
+    expect(wrapper.text()).toContain("Eye of the North is now shortcut 9");
 
     await wrapper.get('[role="combobox"]').setValue("");
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
-    await wrapper.get('[aria-label^="Change shortcut 8"]').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
+    await wrapper.get('[aria-label^="Change shortcut 9"]').trigger("click");
     wrapper.getComponent(TravelDestinationPicker).vm.$emit("update:modelValue", null);
     await flushPromises();
-    expect(savePreferences.mock.calls[1]?.[0].shortcuts?.[7]).toBeNull();
+    expect(savePreferences.mock.calls[1]?.[0].shortcuts?.[8]).toBeNull();
     wrapper.unmount();
   });
 
@@ -307,7 +207,7 @@ describe("TravelPalette", () => {
     const { wrapper, savePreferences } = fixture();
     await flushPromises();
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     await wrapper.get(".travel-customize-group:nth-of-type(2) .travel-section-head .ui-button").trigger("click");
     await wrapper.get("#travel-new-phrase").setValue("daily run");
     wrapper.getComponent(TravelDestinationPicker).vm.$emit("update:modelValue", 480);
@@ -320,14 +220,12 @@ describe("TravelPalette", () => {
     ]);
     expect(wrapper.text()).toContain("Search was verified");
     expect(wrapper.get('[role="combobox"]').element).toHaveProperty("value", "daily run");
-    expect(wrapper.get('[aria-label="Quick Travel mode"] [aria-selected="true"]').text()).toBe(
-      "Travel",
-    );
+    expect(wrapper.get('[aria-label="Customize Travel"]').attributes("aria-pressed")).toBe("false");
     expect(wrapper.findAll('[role="option"]')).toHaveLength(1);
     expect(wrapper.text()).toContain("Ruins of Morah");
     expect(wrapper.get(".travel-match").text()).toBe("Search phrase");
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     expect(wrapper.findAll(".travel-phrase-row")).toHaveLength(1);
 
     await wrapper.get(".travel-phrase-row .ui-input").setValue("nightfall daily");
@@ -350,7 +248,7 @@ describe("TravelPalette", () => {
       synonyms: Object.freeze([]),
     }));
 
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     await wrapper.get(".travel-customize-group:nth-of-type(2) .travel-section-head .ui-button").trigger("click");
     await wrapper.get("#travel-new-phrase").setValue("daily run");
     wrapper.getComponent(TravelDestinationPicker).vm.$emit("update:modelValue", 480);
@@ -359,9 +257,7 @@ describe("TravelPalette", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("did not confirm that phrase was saved");
-    expect(wrapper.get('[aria-label="Quick Travel mode"] [aria-selected="true"]').text()).toBe(
-      "Customize",
-    );
+    expect(wrapper.get('[aria-label="Customize Travel"]').attributes("aria-pressed")).toBe("true");
     expect(wrapper.findAll(".travel-phrase-row")).toHaveLength(0);
     expect(wrapper.text()).not.toContain("Search was verified");
     wrapper.unmount();
@@ -372,7 +268,7 @@ describe("TravelPalette", () => {
       synonyms: [{ term: "daily run", mapId: 480 }],
     });
     await flushPromises();
-    await wrapper.get('[aria-label="Quick Travel mode"] button:nth-child(2)').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
 
     savePreferences.mockRejectedValueOnce(new Error("private phrase failure"));
     const phraseInput = wrapper.get(".travel-phrase-row .ui-input");

@@ -275,35 +275,19 @@ remains usable; no party-state fallback is allowed.
 Travel accepts only one reviewed map ID from the renderer. The exact `/tp`
 command sets one named, one-shot palette toggle that the renderer takes and
 clears. Search text, aliases, destinations, and numbered shortcuts stay
-in the host-owned Vue interface. The companion publishes a fixed 28-word map
-unlock bitset only when the certified `WorldContext` array can be read completely;
-the separate observed flag keeps unreadable evidence unknown instead of treating
-it as every map locked. Search hides locked matches by default and locked
-shortcuts cannot execute. At the certified frame drain, the transform rechecks
-the reviewed map list and the live unlock bit, then invokes the independently proved client helper
+in the host-owned Vue interface. At the certified frame drain, the transform
+rechecks the reviewed map list, invokes the independently proved client helper
 that resolves the player's current region and language, validates those values,
 and writes the four-word Travel payload with district Any. It then calls the
-exact client Travel dispatcher with `kTravel`. An unknown or locked map,
-unreadable unlock array, unresolved live context, or changed helper stops only
-Travel without dispatching another client UI message. This second check protects
-against character or unlock state changing after the renderer drew its results.
+exact client Travel dispatcher with `kTravel`. An unknown map, unresolved live
+context, or changed helper stops only Travel without dispatching another client
+UI message.
 
 The Tools host owns one Travel attempt: `idle`, `queued`, or `loading`. A
 three-second start deadline and a separate thirty-second arrival deadline both
 return it to `idle`; disconnect, corrupt snapshot, and other non-loading states
 also end a loading attempt. The Vue component renders this state but does not
 interpret the game protocol or own its timers.
-
-Recent destinations do not depend on that attempt state. The Travel host
-observes every ready map published by the companion, including arrivals caused
-through the Guild Wars world map or another in-game path. A changed map is
-admitted only when it is in the reviewed direct-travel catalogue. Main then
-serializes a unique, most-recent-first list of at most ten map IDs in the
-separate atomic `travel-history.json` document. Repeated snapshots do not write,
-loading resets the arrival edge, and unreviewed explorable maps are ignored.
-The palette excludes the current map and destinations not positively unlocked
-for the current character. History never crosses the game-thread command
-boundary and cannot authorize travel.
 
 Shortcut slots remain in `settings.json` using the district-bearing shape the
 published Stable understands. The current runtime projects those records to
@@ -312,8 +296,6 @@ map IDs and ignores their old district values. Synonyms live in
 reads as an exact four-field shape. The current runtime projects only
 synonyms, atomically clears withdrawn history on first load, and writes disabled,
 empty compatibility placeholders so rollback remains safe.
-New observed history is deliberately stored separately, so it neither revives
-the withdrawn v1 fields nor changes the Stable-readable preference contract.
 
 Main exposes one composed Travel preference snapshot to every renderer. A save
 includes the snapshot the renderer edited. Main refuses the save if another

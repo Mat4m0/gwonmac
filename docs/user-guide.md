@@ -130,22 +130,14 @@ After that restart, these choices update immediately:
   shortcut, and the `/chest` and `/xunlai` chat commands in a supported PvE
   outpost, after the current character's storage access is confirmed.
 - **Quick Travel palette** (Beta) opens with Command-T or the `/tp` chat
-  command. It shows a customizable eight-slot Favorites bar. Press 1–8 to use a
-  saved destination, open **Customize** to replace or remove one, or press
-  Command-1 through Command-9 while a search result is selected. Type any of
-  the 199 reviewed direct-travel destinations,
+  command. It shows a customizable 3×3 Quick Travel grid. Press 1–9 to use a
+  saved destination, use the cog button to replace or remove one, or press
+  Command-1 through Command-9 while a search
+  result is selected. Type any of the 199 reviewed direct-travel destinations,
   an official alias such as `la`, `kama`, or `eotn`, or your own custom synonym,
-  then press Return. Search shows only destinations unlocked by the current
-  character, and Travel checks the unlock again immediately before the game
-  command runs. Travel keeps the current Guild Wars region and language and
-  uses district Any.
-
-  **Recent** is built from the locations Guild Wars actually reports, including
-  travel through the world map and other in-game paths. It keeps ten unique,
-  reviewed destinations locally. The palette offers **Back to** the latest
-  destination other than the current map and shows four more recent places.
-  Locked places are hidden for the active character. Use **Customize → Clear
-  history** to remove only this history; Favorites and search phrases remain.
+  then press Return. Locked destinations remain visible; Guild Wars decides
+  whether the current character can travel there. Travel keeps the current
+  Guild Wars region and language and uses district Any.
 
 Open **Trade Chat** from the View menu, with Command-Shift-B, or by typing the
 exact lowercase `/trade` command on a certified client. The Trade window is

@@ -29,10 +29,9 @@ current optional features are:
   has a separate Settings opt-in and requires a live snapshot that proves the
   current character can access storage. It does not depend on party observation.
 - **Quick Travel palette**: Command-T or `/tp` opens host-owned destination
-  autocomplete and 1–8 shortcuts. Search shows only destinations positively
-  observed in the current character's bounded unlock bitset. A named, bounded
-  Travel action rechecks the same certified bitset at the game-thread drain
-  before it can reach the client dispatcher. It has a separate Settings opt-in.
+  autocomplete and 1–9 shortcuts. A named, bounded Travel action reaches the
+  certified client dispatcher only from the game-thread drain. It has a separate
+  Settings opt-in.
 - **Skill key labels**: show player-authored keyboard, mouse-button, and wheel
   labels over certified skill-slot rectangles. The feature is display-only and
   never changes or forwards game input.
@@ -112,10 +111,9 @@ character names, account data, chat, packet bytes, or Travel search text.
 - Travel emits `travel.search` with query length, token count, catalogue size,
   result count, and bounded result map IDs. It never includes the query itself.
   `travel.queued` or `travel.refused` then identifies the named command result.
-  Search covers the reviewed 199-destination direct-travel catalogue and reports
-  only unlocked result IDs. A zero result can mean no catalogue match or that
-  every match is locked; the palette distinguishes those states. Passage-scroll
-  locations such as Urgoz's Warren and The Deep intentionally use their original UI.
+  Search covers the reviewed 199-destination direct-travel catalogue. A zero
+  result means the query did not match that catalogue; passage-scroll locations
+  such as Urgoz's Warren and The Deep intentionally use their original UI.
 
 For a report, reproduce one operation at a time and copy the lines from its
 first request through its final success, refusal, or timeout. Also record the
@@ -431,14 +429,6 @@ If that proof cannot be certified, omit it: the generated configuration then
 contains zero access words, Xunlai stays disabled, and the independently
 certified Travel action remains available. Never substitute party state or a
 guessed offset.
-
-For Travel unlocks, certify the exact official-client accessor for
-`WorldContext::unlocked_map` and an official consumer that proves its
-`mapId / 32`, `mapId % 32` bit semantics. The companion copies exactly 28 words
-(map IDs 0–895) and publishes a separate observed flag. Missing, torn, oversized,
-or unreadable array evidence is unknown, never a zero-filled locked claim. The
-injected game-thread command guard also bounds the array and refuses unless the
-requested bit is set immediately before dispatch.
 
 Run `pnpm enhancements:live xunlai-storage` from a supported outpost. The
 scenario records only the tri-state access result and two complete action
