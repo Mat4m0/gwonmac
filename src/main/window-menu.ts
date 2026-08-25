@@ -180,7 +180,7 @@ export function installApplicationMenu({
         },
         {
           id: "open-travel",
-          label: "Open Travel",
+          label: "Show or hide Quick Travel",
           click: withGameOwner((win) => toggleTravel(win)),
         },
         {

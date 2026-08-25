@@ -187,14 +187,14 @@ Command shortcut to replace the default. Letter and number shortcuts use their
 physical keyboard positions, so they stay stable when Option or the active
 keyboard layout changes. Control remains available to Guild Wars. Delete clears a shortcut, Escape
 cancels recording. **Show or hide GWonMac Tools** uses Command-B by default,
-and **Show or hide Trade Chat** uses Command-Shift-B. **Restore default
-shortcuts** also restores Command-Shift-C for Xunlai storage, Command-T for
-Travel, and Command-Shift-B for Trade Chat. Shortcuts work only while the
-Guild Wars window is active. GWonMac keeps normal editing and application
-shortcuts such as Command-C and Command-Q, plus Travel's Command-1 through
-Command-9 assignments, reserved.
+**Show or hide Trade Chat** uses Command-Shift-B, and **Show or hide Quick
+Travel** uses Command-T. Press the same interface shortcut again to close it.
+**Restore default shortcuts** also restores Command-Shift-C for Xunlai storage.
+Shortcuts work only while the Guild Wars window is active. GWonMac keeps normal
+editing and application shortcuts such as Command-C and Command-Q, plus
+Travel's Command-1 through Command-9 assignments, reserved.
 
-In a supported PvE outpost, turn on **Open Xunlai storage** in
+In a supported outpost, turn on **Open Xunlai storage** in
 **Settings → Tools**, then choose **Storage** in the Tools title bar or press
 Command-Shift-C. You can also type `/chest` or `/xunlai` in chat. GWonMac opens
 the normal Xunlai window locally. It does not
@@ -208,11 +208,10 @@ button and shortcut explain that storage is unavailable. The slash commands
 remain with Guild Wars while access is unconfirmed or refused. Party roster
 observation does not control storage, and `/tp` remains independent.
 
-The complete Tools surface, including Builds and Teams and Trade Chat, closes
-in positively identified PvP maps and guild halls. Xunlai storage also stops,
-its shortcut reports that it is unavailable, and `/chest` and `/xunlai` remain
-with Guild Wars. Apply checks policy before each step and stops when the state
-changes.
+The complete Tools surface works in PvE outposts, PvP outposts, and guild
+halls. During active PvP play, Tools and Xunlai storage close, their shortcuts
+report that they are unavailable, and `/chest` and `/xunlai` remain with Guild
+Wars. Apply checks policy before each step and stops when the state changes.
 
 At login, during loading, or when the region cannot be identified, the saved
 Build and Team library and Trade Chat remain available. Live observation,

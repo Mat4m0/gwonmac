@@ -33,8 +33,13 @@ function unavailableReason(
   availability: TravelAvailability,
 ): string | null {
   if (!active) return "Enhancement installation is no longer active";
+  if (availability.playRegion === "pvp") {
+    return "Travel is unavailable during PvP play";
+  }
   if (!availability.enabled) return "Travel is turned off in Settings";
-  if (availability.playRegion !== "pve") return "Travel is available in PvE";
+  if (availability.playRegion === "unknown") {
+    return "Travel is waiting to confirm the current region";
+  }
   if (availability.state?.status !== "ready") {
     return availability.state?.reason === "loading"
       ? "Travel is unavailable while a map is loading"

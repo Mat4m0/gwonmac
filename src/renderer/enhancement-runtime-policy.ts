@@ -32,8 +32,7 @@ export function enhancementRuntimePolicy(
       && (developerSelected || featureActivationRequested(id, settings));
   return Object.freeze({
     // The local Tools host remains reachable without a live observation, but
-    // follows Toolbox++ by withdrawing in positively identified PvP maps and
-    // guild halls.
+    // withdraws when the certified region reports active PvP play.
     tools: selected("tools", developerToolbox),
     targetReadout: selected(
       "targetReadout",

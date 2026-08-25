@@ -40,7 +40,7 @@ export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
     "tools.toggle": "Show or hide GWonMac Tools",
     "trade.toggle": "Show or hide Trade Chat",
     "storage.open": "Open Xunlai storage",
-    "travel.open": "Open Travel",
+    "travel.open": "Show or hide Quick Travel",
   });
 
 export interface ShortcutInput {

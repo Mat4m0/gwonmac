@@ -20,13 +20,14 @@ The first enable selects a Tools-capable module and requires a restart. The
 current optional features are:
 
 - **Apply teams in Guild Wars** (Beta): allow one explicit Apply action in a
-  certified PvE outpost. Build and Team authoring remains local and independent.
+  certified supported outpost. Build and Team authoring remains local and
+  independent.
 - **Target distance and range** (Test): show the selected target's distance and
   range band.
 - **Xunlai storage**: open the normal storage UI from the Tools title bar,
-  Command-Shift-C, `/chest`, or `/xunlai` in a certified PvE outpost. It has a
-  separate Settings opt-in and requires a live snapshot that proves the current
-  character can access storage. It does not depend on party observation.
+  Command-Shift-C, `/chest`, or `/xunlai` in a certified supported outpost. It
+  has a separate Settings opt-in and requires a live snapshot that proves the
+  current character can access storage. It does not depend on party observation.
 - **Quick Travel palette**: Command-T or `/tp` opens host-owned destination
   autocomplete and 1–9 shortcuts. A named, bounded Travel action reaches the
   certified client dispatcher only from the game-thread drain. It has a separate
@@ -178,9 +179,10 @@ geometry is active when either `skillKeyLabels` or `skillCooldowns` is active;
 it is not a second product feature or setting.
 
 Region selection has three explicit strengths: `any`, `non-pvp`, and `pve`.
-`non-pvp` matches GWToolbox++: unknown or loading state remains eligible, but a
-positively identified PvP map or guild hall withdraws the feature. Developer
-programs can replace saved selection, never the registered region rule.
+`non-pvp` keeps unknown or loading state eligible. A confirmed safe region
+includes PvE, guild halls, and PvP outposts. Only a PvP explorable instance is
+active PvP play and withdraws the feature. Developer programs can replace saved
+selection, never the registered region rule.
 
 Choose the smallest path:
 
@@ -428,7 +430,7 @@ contains zero access words, Xunlai stays disabled, and the independently
 certified Travel action remains available. Never substitute party state or a
 guessed offset.
 
-Run `pnpm enhancements:live xunlai-storage` from a supported PvE outpost. The
+Run `pnpm enhancements:live xunlai-storage` from a supported outpost. The
 scenario records only the tri-state access result and two complete action
 cycles from the same named action used by the button and shortcut. Each cycle
 opens storage, closes it with Escape, and proves that bounded two-button

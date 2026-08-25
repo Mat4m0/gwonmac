@@ -178,8 +178,17 @@ impl State {
     }
 }
 
-/** The client-owned map policy used by GWToolbox++ itself. */
-unsafe fn classify_play_region(layout: Layout, map_id: u32) -> u32 {
+/**
+ * The Tools safety region derived from the client-owned map policy.
+ *
+ * ArenaNet marks guild halls and PvP outposts as PvP maps too. They are safe
+ * outpost instances, so only a PvP explorable instance is active PvP play.
+ */
+unsafe fn classify_play_region(
+    layout: Layout,
+    map_id: u32,
+    instance_type: u32,
+) -> u32 {
     if layout.area_info == 0
         || layout.area_info_count == 0
         || layout.area_info_stride < 20
@@ -203,7 +212,7 @@ unsafe fn classify_play_region(layout: Layout, map_id: u32) -> u32 {
     else {
         return PLAY_REGION_UNKNOWN;
     };
-    if flags & (0x0004_0001 | 0x0080_0000) != 0 {
+    if flags & (0x0004_0001 | 0x0080_0000) != 0 && instance_type == 1 {
         PLAY_REGION_PVP
     } else {
         PLAY_REGION_PVE
@@ -400,7 +409,9 @@ pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
         map_id,
         instance_type,
         player_number,
-        play_region: unsafe { classify_play_region(layout, map_id) },
+        play_region: unsafe {
+            classify_play_region(layout, map_id, instance_type)
+        },
     }
 }
 

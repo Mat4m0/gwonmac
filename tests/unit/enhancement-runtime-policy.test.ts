@@ -75,7 +75,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
   });
 });
 
-test("confirmed PvP and guild halls disable every product and developer tool", () => {
+test("confirmed active PvP play disables every product and developer tool", () => {
   const on = Object.freeze({
     gwonmacTools: true,
     targetReadout: true,
@@ -170,7 +170,7 @@ test("runtime policy projects every registered feature exactly once", () => {
   );
 });
 
-test("local Tools require their setting or developer program and only confirmed PvP blocks them", () => {
+test("local Tools require their setting or developer program and only active PvP blocks them", () => {
   const regions = ["pve", "pvp", "unknown"] as const;
   const programs = [
     "none",
