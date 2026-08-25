@@ -25,6 +25,7 @@ const ASSETS = [
   "images/playstation-controller-prompts.png",
   "index.html",
   "loading.css",
+  "settings.css",
 ];
 
 // The design system lives in src/shared because the Tools application consumes

@@ -23,6 +23,7 @@ const TOKENS = "src/shared/ui/tokens.css";
  *  Settings dialog is: two surfaces of one product cannot each own a palette. */
 const CONSUMERS = [
   "src/shared/ui/components.css",
+  "src/renderer/settings.css",
   "apps/tools/src/styles.css",
   "apps/tools/src/styles/base-shell.css",
   "apps/tools/src/styles/library.css",
@@ -34,9 +35,8 @@ const CONSUMERS = [
 
 /**
  * Surfaces that belong on `CONSUMERS` and are not there yet, each with the
- * reason. The Settings dialog and the launcher chrome predate the token system
- * and still carry their own literals; re-pointing them is its own change,
- * because it is a visual one and has to be looked at rather than asserted.
+ * reason. The renderer/game overlays predate the token system and still carry
+ * literals; re-pointing them is its own visual change.
  *
  * The staleness test below is what stops this being a quiet exemption: the day
  * one of these files stops holding a literal, it fails here until it is moved
@@ -51,6 +51,20 @@ const consumers = CONSUMERS.map(
 
 /** Strip comments, so prose about `oklch(20% …)` is not read as a declaration. */
 const code = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+/** Settings includes deliberately literal Guild Wars swatches and icon art.
+ * Exempt only those marked fragments, never their surrounding layout. */
+const DOMAIN_ARTWORK =
+  /\/\* ui-policy-domain-artwork:start[^]*?ui-policy-domain-artwork:end \*\//gu;
+const paletteCode = (path: string, css: string): string => {
+  if (path !== "src/renderer/settings.css") return code(css);
+  const artwork = [...css.matchAll(DOMAIN_ARTWORK)];
+  if (artwork.length !== 2) {
+    throw new Error(`expected two Settings domain-artwork fragments, found ${artwork.length}`);
+  }
+  const withoutArtwork = css.replace(DOMAIN_ARTWORK, "");
+  return code(withoutArtwork);
+};
 
 /** Every `--ui-…` declared on the left of a colon in tokens.css. */
 function declaredTokens(): Set<string> {
@@ -73,7 +87,7 @@ function referenced(css: string): Set<string> {
 test("no component decides a colour for itself", () => {
   const offenders: string[] = [];
   for (const [path, css] of consumers) {
-    code(css)
+    paletteCode(path, css)
       .split("\n")
       .forEach((line, index) => {
         // Hex literals, functional colour notations, and local mixes all
@@ -95,7 +109,7 @@ test("no component decides a colour for itself", () => {
 test("no component decides a corner for itself", () => {
   const offenders: string[] = [];
   for (const [path, css] of consumers) {
-    code(css)
+    paletteCode(path, css)
       .split("\n")
       .forEach((line, index) => {
         // Every radius declaration on the line, not just the first: a rule
@@ -202,10 +216,7 @@ test("every token a stylesheet uses is actually declared", () => {
   const missing: string[] = [];
   for (const [path, css] of [...consumers, [TOKENS, tokens] as const]) {
     for (const name of referenced(css)) {
-      // Runtime custom-theme inputs are derived by appearance.ts from the
-      // validated settings contract. Declaring fallback values here would
-      // create a second default palette.
-      if (name === "--ui-profession" || name.startsWith("--ui-custom-")) continue;
+      if (name === "--ui-profession") continue;
       if (!declared.has(name)) missing.push(`${path}: ${name}`);
     }
   }

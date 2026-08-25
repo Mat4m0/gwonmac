@@ -49,6 +49,7 @@ function rendererCheckout(): string {
   write("src/renderer/favicon.png", "png");
   write("src/renderer/harness.css", "css");
   write("src/renderer/loading.css", "css");
+  write("src/renderer/settings.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
   write("src/renderer/images/logo.webp", "webp");
@@ -170,6 +171,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "images/playstation-controller-prompts.png",
       "index.html",
       "loading.css",
+      "settings.css",
       // Copied out of src/shared, and flattened to `ui/` so the renderer and
       // the Tools bundle load the one design system by the same href.
       "ui/components.css",
