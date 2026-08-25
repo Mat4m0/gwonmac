@@ -310,7 +310,7 @@ function relativeAge(timestamp: number): string {
         </div>
       </section>
 
-      <section v-if="selected" class="trader-price-detail ui-raised" :aria-label="`${selected.name} price history`">
+      <section v-if="selected" class="trader-price-detail ui-well" :aria-label="`${selected.name} price history`">
         <button type="button" class="ui-button trader-mobile-back" @click="mobileDetail = false">← Back to prices</button>
         <header class="trader-price-detail-head">
           <TraderItemIcon :item="selected" size="large" />

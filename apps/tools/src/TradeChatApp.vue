@@ -764,7 +764,7 @@ function exactTime(timestamp: number): string {
         </div>
       </div>
 
-      <section v-show="view === 'listings'" class="trade-inspector ui-raised ui-scroll" :aria-label="selected ? `Offer from ${selected.sender}` : 'Offer detail'">
+      <section v-show="view === 'listings'" class="trade-inspector ui-well ui-scroll" :aria-label="selected ? `Offer from ${selected.sender}` : 'Offer detail'">
         <button class="ui-button mobile-back" @click="detailOpen = false">
           {{ playerName ? `Back to ${playerName}` : "Back to offers" }}
         </button>
