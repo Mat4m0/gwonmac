@@ -7,6 +7,7 @@ import {
   DEFAULT_SETTINGS,
   LAST_UPDATE_CHECK_AT_MAX,
 } from "../../src/shared/contracts.js";
+import { DEFAULT_CUSTOM_UI_THEME } from "../../src/shared/ui-theme.js";
 import { AppError } from "../../src/shared/errors.js";
 import {
   loadSettings,
@@ -21,6 +22,7 @@ describe("settings", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
       uiStyle: "guild-wars",
+      uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       uiPanelOpacity: 94,
@@ -68,6 +70,7 @@ describe("settings", () => {
       uiPanelOpacity: 94,
       renderScale: 1,
       uiStyle: "guild-wars",
+      uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       gwonmacTools: false,
@@ -108,16 +111,43 @@ describe("settings", () => {
     assert.equal(parseSettings({ renderScale: 2 }).renderScale, 2);
   });
 
-  it("accepts only the two supported interface styles", () => {
+  it("accepts only supported interface styles", () => {
     assert.equal(parseSettings({ uiStyle: "guild-wars" }).uiStyle, "guild-wars");
     assert.equal(parseSettings({ uiStyle: "obsidian" }).uiStyle, "obsidian");
+    assert.equal(parseSettings({ uiStyle: "custom" }).uiStyle, "custom");
     assert.throws(() => parseSettings({ uiStyle: "jade" }), AppError);
     assert.throws(() => parseSettings({ uiStyle: true }), AppError);
   });
 
-  it("accepts only the two supported interface fonts", () => {
+  it("normalises and validates the permanent custom theme contract", () => {
+    const custom = {
+      ...DEFAULT_CUSTOM_UI_THEME,
+      window: "#abcdef",
+      recessed: "#123456",
+      selected: "#789abc",
+      accent: "#fedcba",
+      windowGradient: false,
+    };
+    assert.deepEqual(parseSettings({ uiCustomTheme: custom }).uiCustomTheme, {
+      ...DEFAULT_CUSTOM_UI_THEME,
+      window: "#ABCDEF",
+      recessed: "#123456",
+      selected: "#789ABC",
+      accent: "#FEDCBA",
+      windowGradient: false,
+    });
+    assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, accent: "#fff" } }), AppError);
+    assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, extra: true } }), AppError);
+    assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, windowGradient: "yes" } }), AppError);
+  });
+
+  it("accepts only the supported interface fonts", () => {
     assert.equal(parseSettings({ uiFont: "guild-wars" }).uiFont, "guild-wars");
     assert.equal(parseSettings({ uiFont: "inter" }).uiFont, "inter");
+    assert.equal(parseSettings({ uiFont: "system" }).uiFont, "system");
+    assert.equal(parseSettings({ uiFont: "avenir" }).uiFont, "avenir");
+    assert.equal(parseSettings({ uiFont: "georgia" }).uiFont, "georgia");
+    assert.equal(parseSettings({ uiFont: "palatino" }).uiFont, "palatino");
     assert.throws(() => parseSettings({ uiFont: "papyrus" }), AppError);
     assert.throws(() => parseSettings({ uiFont: false }), AppError);
   });
@@ -274,6 +304,9 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({ uiStyle: "obsidian" }), {
       uiStyle: "obsidian",
     });
+    assert.deepEqual(parseSettingsPatch({ uiCustomTheme: DEFAULT_CUSTOM_UI_THEME }), {
+      uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
+    });
     assert.deepEqual(parseSettingsPatch({ uiFont: "inter" }), {
       uiFont: "inter",
     });
@@ -347,6 +380,7 @@ describe("settings", () => {
       "teamManagement",
       "travelPalette",
       "travelShortcuts",
+      "uiCustomTheme",
       "uiFont",
       "uiPanelOpacity",
       "uiStyle",
@@ -383,6 +417,7 @@ describe("settings", () => {
       uiPanelOpacity: 94,
       renderScale: 1.5,
       uiStyle: "guild-wars",
+      uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       gwonmacTools: false,

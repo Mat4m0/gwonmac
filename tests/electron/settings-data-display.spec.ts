@@ -31,7 +31,7 @@ test.describe("data and display settings", () => {
     }
   });
 
-  test("interface style, font, and panel opacity apply live and survive", async () => {
+  test("display choices apply as intended and survive reopening", async () => {
     const fixture = await launchOffline("gw-settings-appearance-e2e-");
     try {
       const { page } = fixture;
@@ -46,9 +46,7 @@ test.describe("data and display settings", () => {
       await expect(
         page.locator('input[name="uiStyle"][value="guild-wars"]'),
       ).toBeChecked();
-      await expect(
-        page.locator('input[name="uiFont"][value="guild-wars"]'),
-      ).toBeChecked();
+      await expect(page.locator('select[name="uiFont"]')).toHaveValue("guild-wars");
       await expect(root).not.toHaveAttribute("data-ui-style");
       await expect(root).not.toHaveAttribute("data-ui-font");
       await expect(page.locator('select[name="uiTheme"]')).toHaveCount(0);
@@ -96,11 +94,15 @@ test.describe("data and display settings", () => {
         "data-tone",
         "success",
       );
+      await page.locator("#settings-opacity-default").click();
+      await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue("94");
+      await expect(page.locator('output[name="uiPanelOpacityValue"]')).toHaveText("94%");
+      await expectToken("--ui-panel-opacity", "0.94");
 
       await page.locator('input[name="uiStyle"][value="obsidian"]').click();
       await expect(root).toHaveAttribute("data-ui-style", "obsidian");
       await expect(root).not.toHaveAttribute("data-ui-font");
-      await page.locator('label:has(input[name="uiFont"][value="inter"])').click();
+      await page.locator('select[name="uiFont"]').selectOption("inter");
       await expect(root).toHaveAttribute("data-ui-font", "inter");
       await expect(page.locator("#settings-feedback")).toHaveText("Saved.");
       const interTypography = await page.locator("#settings-dialog").evaluate(
@@ -119,11 +121,16 @@ test.describe("data and display settings", () => {
       expect(interTypography.font).not.toContain("QTFrizQuad");
       expect(interTypography.textShadow).toBe("none");
       expect(interTypography.titleWeight).toBe("700");
-      expect(
-        await page.locator("#settings-dialog").evaluate((element) =>
-          globalThis.getComputedStyle(element)
-            .getPropertyValue("--ui-panel-opacity").trim()),
-      ).toBe("0.97");
+      await expectToken("--ui-panel-opacity", "0.94");
+
+      await page.locator('select[name="controllerPromptStyle"]')
+        .selectOption("playstation");
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).controllerPromptStyle,
+      )).toBe("playstation");
+      await expect(page.locator("#settings-feedback")).toContainText(
+        "Restart GWonMac to apply controller button symbols",
+      );
 
       // Nothing here may reach the game. The canvas is the game's surface, and
       // a presentation setting that resized or restyled it would be exactly the
@@ -143,12 +150,124 @@ test.describe("data and display settings", () => {
         page.locator('input[name="uiStyle"][value="obsidian"]'),
       ).toBeChecked();
       await expect(root).toHaveAttribute("data-ui-style", "obsidian");
-      await expect(
-        page.locator('input[name="uiFont"][value="inter"]'),
-      ).toBeChecked();
+      await expect(page.locator('select[name="uiFont"]')).toHaveValue("inter");
       await expect(root).toHaveAttribute("data-ui-font", "inter");
-      await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue("65");
-      await expect(page.locator('output[name="uiPanelOpacityValue"]')).toHaveText("65%");
+      await expect(page.locator('input[name="uiPanelOpacity"]')).toHaveValue("94");
+      await expect(page.locator('output[name="uiPanelOpacityValue"]')).toHaveText("94%");
+      await expect(page.locator('select[name="controllerPromptStyle"]'))
+        .toHaveValue("playstation");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("edits, shares, imports, and reactivates a custom theme", async () => {
+    const fixture = await launchOffline("gw-settings-custom-theme-e2e-");
+    try {
+      const { page } = fixture;
+      const root = page.locator("html");
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-display").click();
+
+      // Tabs navigate the editor. Merely viewing a saved palette must not
+      // change the active interface underneath the player.
+      await page.locator("#settings-theme-tab-custom").click();
+      await expect(page.locator("#settings-theme-custom")).toBeVisible();
+      await expect(root).not.toHaveAttribute("data-ui-style");
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).uiStyle,
+      )).toBe("guild-wars");
+      await expect(page.locator("#settings-theme-use-custom")).toBeVisible();
+
+      await page.locator('[data-theme-hex="window"]').fill("#202830");
+      await page.locator('[data-theme-hex="window"]').dispatchEvent("change");
+      // Sharing reads the visible draft, even while the asynchronous settings
+      // write is still in flight.
+      await page.locator("#settings-theme-share").click();
+      await expect.poll(() => page.evaluate(() => window.gwNative.clipboard.readText()))
+        .toBe("gwonmac-theme-v1:classic:#202830:#292927:#202225:#080807:#1B3554:#E6C882:#F1EBDD:#B7B09F:#D8D2BF:1");
+      await expect(root).not.toHaveAttribute("data-ui-style");
+      await expect(root).toHaveAttribute("data-ui-material", "classic");
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).uiCustomTheme.window,
+      )).toBe("#202830");
+      await expect.poll(() => root.evaluate((element) =>
+        element.style.getPropertyValue("--ui-panel-fill"),
+      )).toContain("32 40 48");
+
+      const beforeIndependent = await page.evaluate(async () => {
+        const settings = await window.gwNative.settings.get();
+        return { uiFont: settings.uiFont, uiPanelOpacity: settings.uiPanelOpacity };
+      });
+
+      await page.locator("#settings-theme-import").click();
+      await page.locator("#settings-theme-import-value").fill("not-a-theme");
+      await page.locator("#settings-theme-import-apply").click();
+      await expect(page.locator("#settings-theme-import-error")).toBeVisible();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).uiCustomTheme.window,
+      )).toBe("#202830");
+
+      await page.locator("#settings-theme-import-value").fill(
+        "gwonmac-theme-v1:modern:#F4F4F4:#FFFFFF:#FFFFFF:#E5E7EB:#123456:#22C55E:#171717:#666666:#D4D4D4:0",
+      );
+      await page.locator("#settings-theme-import-apply").click();
+      await expect(page.locator("#settings-theme-import-dialog")).not.toHaveAttribute("open", "");
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).uiCustomTheme,
+      )).toMatchObject({
+        window: "#F4F4F4",
+        material: "modern",
+        titlebar: "#FFFFFF",
+        surface: "#FFFFFF",
+        recessed: "#E5E7EB",
+        selected: "#123456",
+        accent: "#22C55E",
+        text: "#171717",
+        mutedText: "#666666",
+        border: "#D4D4D4",
+        windowGradient: false,
+      });
+      await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect.poll(() => root.evaluate((element) =>
+        element.style.getPropertyValue("--ui-accent"),
+      )).toBe("#22C55E");
+      await expect(root).toHaveAttribute("data-ui-material", "modern");
+
+      await page.locator("#settings-theme-reset").click();
+      await expect(page.locator('[data-theme-hex="window"]')).toHaveValue("#1B1A18");
+      await expect(page.locator('[data-theme-hex="selected"]')).toHaveValue("#3C3832");
+      await expect(page.locator('select[name="uiThemeMaterial"]')).toHaveValue("modern");
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).uiCustomTheme,
+      )).toMatchObject({ material: "modern", window: "#1B1A18", selected: "#3C3832" });
+
+      await page.locator("#settings-theme-tab-builtins").click();
+      await page.locator('input[name="uiStyle"][value="obsidian"]').click();
+      await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect.poll(() => root.evaluate((element) =>
+        element.style.getPropertyValue("--ui-panel-fill"),
+      )).toBe("");
+      await page.locator("#settings-theme-tab-custom").click();
+      await page.locator("#settings-theme-use-custom").click();
+      await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(root).toHaveAttribute("data-ui-material", "modern");
+
+      await expect.poll(() => page.evaluate(async () => {
+        const settings = await window.gwNative.settings.get();
+        return { uiFont: settings.uiFont, uiPanelOpacity: settings.uiPanelOpacity };
+      })).toEqual(beforeIndependent);
+
+      await page.locator("#settings-done").click();
+      await page.evaluate(() =>
+        globalThis.dispatchEvent(new globalThis.Event("gw:settings")),
+      );
+      await page.locator("#settings-tab-display").click();
+      await expect(root).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(root).toHaveAttribute("data-ui-material", "modern");
+      await expect(page.locator('[data-theme-hex="window"]')).toHaveValue("#1B1A18");
     } finally {
       await closeOffline(fixture);
     }
@@ -201,10 +320,17 @@ test.describe("data and display settings", () => {
         `≈ ${dimensions.width * 2} × ${dimensions.height * 2}`,
       );
       await expect(page.locator("#settings-pane-display")).toContainText(
-        "Choose Balanced or Performance",
+        "Choose a lower scale if Guild Wars feels slow",
       );
 
-      await page.locator('input[name="renderScale"][value="1.5"]').check();
+      // Segment radios intentionally cover their visible labels at zero
+      // opacity. Skip Chromium's paint-based actionability check, then wait
+      // for this save before starting the independent Diagnostics update.
+      await page.locator('input[name="renderScale"][value="1.5"]')
+        .check({ force: true });
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).renderScale,
+      )).toBe(1.5);
       await fixture.app.evaluate(({ Menu }) => {
         const view = Menu.getApplicationMenu()?.items.find(
           (item) => item.label === "View",
@@ -563,6 +689,15 @@ test.describe("data and display settings", () => {
       expect(
         await page.evaluate(() => window.gwNative.settings.get()),
       ).toMatchObject({ uiStyle: "guild-wars" });
+
+      await page.locator("#settings-theme-tab-custom").click();
+      await page.locator('[data-theme-hex="window"]').fill("#AABBCC");
+      await page.locator('[data-theme-hex="window"]').dispatchEvent("change");
+      await expect(page.locator("#settings-feedback")).toHaveText(
+        "The custom theme could not be saved. The last confirmed theme is active.",
+      );
+      await expect(page.locator('[data-theme-hex="window"]')).toHaveValue("#0B0B0B");
+      await expect(page.locator("html")).not.toHaveAttribute("data-ui-style");
     } finally {
       await closeOffline(fixture);
     }

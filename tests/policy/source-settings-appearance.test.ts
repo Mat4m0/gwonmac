@@ -1,5 +1,5 @@
-// Settings exposes one closed style choice and one bounded visibility control.
-// Retired free-form palette and geometry knobs must not quietly return.
+// Settings exposes one closed style choice, one semantic custom palette, and
+// one bounded visibility control. Geometry knobs must not quietly return.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -12,26 +12,36 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test("Settings exposes the two interface styles and no retired variants", async () => {
+test("Settings exposes two built-ins and one semantic custom theme", async () => {
   const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
-  for (const retired of ["uiTheme", "uiDensity", "uiBorderWidth", "uiRadius"]) {
+  for (const retired of ["uiDensity", "uiBorderWidth", "uiRadius"]) {
     assert.doesNotMatch(html, new RegExp(`name=["']${retired}["']`, "u"));
   }
   const values = [...html.matchAll(/<input\b[^>]*\bname=["']uiStyle["'][^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
     .map((match) => match[1]);
   assert.deepEqual(values, ["guild-wars", "obsidian"]);
+  for (const key of ["window", "recessed", "selected", "accent"]) {
+    assert.match(html, new RegExp(`data-theme-hex=["']${key}["']`, "u"));
+  }
+  assert.match(html, /name=["']uiThemeWindowGradient["']/u);
+  assert.match(html, /id=["']settings-theme-use-custom["']/u);
+  assert.doesNotMatch(html, /Surprise me/iu);
 });
 
-test("Settings exposes the two independent interface fonts", async () => {
+test("Settings exposes the independent interface fonts", async () => {
   const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
-  const values = [...html.matchAll(/<input\b[^>]*\bname=["']uiFont["'][^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
+  const select = /<select\b[^>]*\bname=["']uiFont["'][^>]*>([\s\S]*?)<\/select>/iu
+    .exec(html)?.[1] ?? "";
+  const values = [...select.matchAll(/<option\b[^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
     .map((match) => match[1]);
-  assert.deepEqual(values, ["guild-wars", "inter"]);
+  assert.deepEqual(values, ["guild-wars", "inter", "system", "avenir", "georgia", "palatino"]);
 });
 
 test("Settings exposes the two controller prompt styles", async () => {
   const html = await readFile(path.join(root, "src/renderer/index.html"), "utf8");
-  const values = [...html.matchAll(/<input\b[^>]*\bname=["']controllerPromptStyle["'][^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
+  const select = /<select\b[^>]*\bname=["']controllerPromptStyle["'][^>]*>([\s\S]*?)<\/select>/iu
+    .exec(html)?.[1] ?? "";
+  const values = [...select.matchAll(/<option\b[^>]*\bvalue=["']([^"']+)["'][^>]*>/giu)]
     .map((match) => match[1]);
   assert.deepEqual(values, ["game-default", "playstation"]);
 });

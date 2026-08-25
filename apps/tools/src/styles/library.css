@@ -3,9 +3,9 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border-radius: var(--ui-radius-sm);
-  background: var(--ui-well-fill);
-  box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
+  border-radius: 0;
+  background: var(--ui-region-fill);
+  border-right: 1px solid var(--ui-line-soft);
 }
 
 .library-toolbar {
@@ -13,7 +13,7 @@
   gap: var(--ui-space-2);
   padding: var(--ui-space-3);
   border-bottom: 1px solid var(--ui-line-soft);
-  background: color-mix(in srgb, var(--ui-well-fill) 72%, transparent);
+  background: transparent;
 }
 
 .create-actions {
@@ -48,6 +48,7 @@
 .composer-dialog p {
   margin-top: var(--ui-space-1);
   color: var(--ui-text-muted);
+  font-family: var(--ui-font-reading);
 }
 
 .composer-dialog label {
@@ -119,7 +120,7 @@
   padding: 0 var(--ui-space-3);
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
-  background: color-mix(in srgb, var(--ui-well-fill) 68%, transparent);
+  background: transparent;
 }
 
 .library-summary { border-bottom: 1px solid var(--ui-line-soft); }
@@ -138,6 +139,7 @@
 
 .library-help p {
   margin: var(--ui-space-1) 0 0;
+  font-family: var(--ui-font-reading);
   line-height: 1.45;
   text-wrap: pretty;
 }
@@ -145,7 +147,7 @@
 .library-list {
   min-height: 0;
   flex: 1;
-  padding: var(--ui-space-2);
+  padding: 0;
   overflow: auto;
 }
 
@@ -155,9 +157,9 @@
    scroll sideways. */
 .library-row {
   display: grid;
-  min-height: 66px;
-  margin-bottom: 3px;
-  padding: var(--ui-space-2);
+  min-height: 60px;
+  margin: 0;
+  padding: var(--ui-space-2) var(--ui-space-3);
   grid-template-columns: 1fr auto;
   gap: 7px;
 }
@@ -170,10 +172,12 @@
   gap: var(--ui-space-2);
 }
 
-.row-title i {
+.favourite-mark {
+  width: 13px;
+  height: 13px;
   margin-right: 3px;
+  flex: 0 0 13px;
   color: var(--ui-accent);
-  font-style: normal;
 }
 
 .row-title em,

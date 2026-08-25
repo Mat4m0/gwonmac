@@ -49,6 +49,7 @@ function rendererCheckout(): string {
   write("src/renderer/favicon.png", "png");
   write("src/renderer/harness.css", "css");
   write("src/renderer/loading.css", "css");
+  write("src/renderer/settings.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
   write("src/renderer/images/logo.webp", "webp");
@@ -62,6 +63,22 @@ function rendererCheckout(): string {
   // the Tools application reads it too, and apps/** may only reach src/shared.
   write("src/shared/ui/tokens.css", "tokens");
   write("src/shared/ui/components.css", "components");
+  write("node_modules/@fontsource-variable/inter/wght.css", "inter-css");
+  write("node_modules/@fontsource-variable/inter/LICENSE", "inter-licence");
+  for (const subset of [
+    "cyrillic-ext",
+    "cyrillic",
+    "greek-ext",
+    "greek",
+    "latin-ext",
+    "latin",
+    "vietnamese",
+  ]) {
+    write(
+      `node_modules/@fontsource-variable/inter/files/inter-${subset}-wght-normal.woff2`,
+      `inter-${subset}`,
+    );
+  }
   return root;
 }
 
@@ -135,8 +152,17 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "accounts.html",
       "favicon.ico",
       "favicon.png",
+      "fonts/COPYING-INTER",
       "fonts/COPYING-QUALITYPE",
       "fonts/QTFrizQuad.otf",
+      "fonts/files/inter-cyrillic-ext-wght-normal.woff2",
+      "fonts/files/inter-cyrillic-wght-normal.woff2",
+      "fonts/files/inter-greek-ext-wght-normal.woff2",
+      "fonts/files/inter-greek-wght-normal.woff2",
+      "fonts/files/inter-latin-ext-wght-normal.woff2",
+      "fonts/files/inter-latin-wght-normal.woff2",
+      "fonts/files/inter-vietnamese-wght-normal.woff2",
+      "fonts/inter.css",
       "harness.css",
       "images/bg-reforged.jpg",
       "images/hero-poster.jpg",
@@ -145,6 +171,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "images/playstation-controller-prompts.png",
       "index.html",
       "loading.css",
+      "settings.css",
       // Copied out of src/shared, and flattened to `ui/` so the renderer and
       // the Tools bundle load the one design system by the same href.
       "ui/components.css",

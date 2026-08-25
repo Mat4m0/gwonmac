@@ -41,6 +41,10 @@ import {
   isSkillCooldownColor,
 } from "../../shared/skill-cooldowns.js";
 import { isStoredTravelShortcuts } from "../../shared/travel.js";
+import {
+  DEFAULT_CUSTOM_UI_THEME,
+  normaliseCustomUiTheme,
+} from "../../shared/ui-theme.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
 
@@ -110,7 +114,10 @@ export function parseSettings(raw: unknown): AppSettings {
       `settings.formatVersion ${JSON.stringify(src.formatVersion)} is not readable`,
     );
   }
-  const out: AppSettings = { ...DEFAULT_SETTINGS };
+  const out: AppSettings = {
+    ...DEFAULT_SETTINGS,
+    uiCustomTheme: { ...DEFAULT_CUSTOM_UI_THEME },
+  };
 
   if ("renderScale" in src) {
     if (!RENDER_SCALE_VALUES.has(src.renderScale as AppSettings["renderScale"])) {
@@ -123,6 +130,13 @@ export function parseSettings(raw: unknown): AppSettings {
       throw new AppError("bad_settings", "settings.uiStyle has unknown value");
     }
     out.uiStyle = src.uiStyle as AppSettings["uiStyle"];
+  }
+  if ("uiCustomTheme" in src) {
+    const theme = normaliseCustomUiTheme(src.uiCustomTheme);
+    if (!theme) {
+      throw new AppError("bad_settings", "settings.uiCustomTheme is invalid");
+    }
+    out.uiCustomTheme = theme;
   }
   if ("uiFont" in src) {
     if (!UI_FONT_VALUES.has(src.uiFont as AppSettings["uiFont"])) {

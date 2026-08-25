@@ -113,7 +113,12 @@ export function bindSkillCooldownSettings(options: Readonly<{
       enabled.checked = settings.skillCooldownOverlayEnabled;
       enabled.disabled = !settings.gwonmacTools;
       const color = settings.skillCooldownColor;
-      if (color.kind === "custom") customValue = color.value;
+      // A radio save can resolve while the player is typing a custom value.
+      // Keep the active editor authoritative until its own change is saved,
+      // or the earlier response repaints the field with the previous color.
+      const activeElement = options.fieldset.ownerDocument.activeElement;
+      const editingCustom = activeElement === picker || activeElement === text;
+      if (color.kind === "custom" && !editingCustom) customValue = color.value;
       const value = color.kind === "custom" ? "custom" : color.preset;
       choices.forEach((choice) => { choice.checked = choice.value === value; });
       picker.value = customValue;

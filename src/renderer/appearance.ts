@@ -9,10 +9,105 @@
  * client renders, what it sends, or what it is permitted to do.
  */
 import type { AppSettings } from "../shared/contracts.js";
+import {
+  defaultCustomUiTheme,
+  type UiThemeColor,
+} from "../shared/ui-theme.js";
 
 const fontChoices = new WeakMap<HTMLElement, AppSettings["uiFont"]>();
 const fontLoads = new Map<string, Promise<boolean>>();
+const appliedThemeVariables = new WeakMap<HTMLElement, readonly string[]>();
 let activeGeneration = "active";
+
+const parseRgb = (color: UiThemeColor): readonly [number, number, number] => [
+  Number.parseInt(color.slice(1, 3), 16),
+  Number.parseInt(color.slice(3, 5), 16),
+  Number.parseInt(color.slice(5, 7), 16),
+];
+
+const luminance = (color: UiThemeColor): number => {
+  const channels = parseRgb(color).map((channel) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+};
+
+export function contrastRatio(a: UiThemeColor, b: UiThemeColor): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light! + 0.05) / (dark! + 0.05);
+}
+
+export function readableForeground(background: UiThemeColor): UiThemeColor {
+  const dark = "#171613" as UiThemeColor;
+  const light = "#F7F3E8" as UiThemeColor;
+  return contrastRatio(background, light) >= contrastRatio(background, dark) ? light : dark;
+}
+
+/** Find one neutral foreground that remains as readable as possible across
+ * structural and recessed surfaces, including deliberately opposing colors. */
+export function readableSharedForeground(
+  backgrounds: readonly UiThemeColor[],
+): UiThemeColor {
+  let best = "#F7F3E8" as UiThemeColor;
+  let bestMinimum = 0;
+  for (let channel = 0; channel <= 255; channel += 1) {
+    const hex = channel.toString(16).padStart(2, "0").toUpperCase();
+    const candidate = `#${hex}${hex}${hex}` as UiThemeColor;
+    const minimum = Math.min(...backgrounds.map((background) =>
+      contrastRatio(background, candidate)));
+    if (minimum > bestMinimum) {
+      best = candidate;
+      bestMinimum = minimum;
+    }
+  }
+  return best;
+}
+
+function blendColor(
+  from: UiThemeColor,
+  to: UiThemeColor,
+  amount: number,
+): UiThemeColor {
+  const fromRgb = parseRgb(from);
+  const toRgb = parseRgb(to);
+  const channels = fromRgb.map((channel, index) =>
+    Math.round(channel + (toRgb[index]! - channel) * amount));
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0"))
+    .join("").toUpperCase()}` as UiThemeColor;
+}
+
+function compositeColor(
+  foreground: UiThemeColor,
+  background: UiThemeColor,
+  opacity: number,
+): UiThemeColor {
+  return blendColor(background, foreground, opacity);
+}
+
+/** Keep a player's chosen ink when it is readable. Otherwise move it by the
+ * smallest possible amount toward light or dark until every rendered surface
+ * reaches WCAG AA. This includes the bright-game worst case behind the window
+ * opacity, which opaque-palette checks miss. */
+export function accessibleForeground(
+  preferred: UiThemeColor,
+  backgrounds: readonly UiThemeColor[],
+  minimum = 4.5,
+): UiThemeColor {
+  if (backgrounds.every((background) => contrastRatio(background, preferred) >= minimum)) {
+    return preferred;
+  }
+  for (let step = 1; step <= 255; step += 1) {
+    const amount = step / 255;
+    for (const target of ["#F7F3E8", "#171613"] as const) {
+      const candidate = blendColor(preferred, target, amount);
+      if (backgrounds.every((background) => contrastRatio(background, candidate) >= minimum)) {
+        return candidate;
+      }
+    }
+  }
+  return readableSharedForeground(backgrounds);
+}
 
 function loadGuildWarsFont(generation: string): Promise<boolean> {
   const existing = fontLoads.get(generation);
@@ -46,9 +141,107 @@ export const ensureGuildWarsFont = (): Promise<boolean> =>
 
 export const appearanceVariables = (
   settings: AppSettings,
-): Readonly<Record<string, string>> => ({
-  "--ui-panel-opacity": String(settings.uiPanelOpacity / 100),
-});
+): Readonly<Record<string, string>> => {
+  const variables: Record<string, string> = {
+    "--ui-panel-opacity": String(settings.uiPanelOpacity / 100),
+  };
+  const theme = settings.uiStyle === "custom"
+    ? settings.uiCustomTheme
+    : defaultCustomUiTheme(settings.uiStyle === "obsidian" ? "modern" : "classic");
+  const baseline = defaultCustomUiTheme(theme.material);
+  const opacity = settings.uiPanelOpacity / 100;
+  const textBackgrounds = [
+    compositeColor(theme.window, "#FFFFFF", opacity),
+    compositeColor(theme.window, "#000000", opacity),
+    theme.titlebar,
+    theme.surface,
+    theme.recessed,
+  ];
+  const safeText = accessibleForeground(theme.text, textBackgrounds);
+  const safeMutedText = accessibleForeground(theme.mutedText, textBackgrounds);
+
+  /* At low panel opacity the game is part of the rendered background. Muted
+   * copy cannot stay dim over bright snow and still be readable, so the
+   * projector temporarily narrows the ink range without changing the saved
+   * opacity. Hierarchy still comes from type role and spacing. */
+  if (safeMutedText !== theme.mutedText) {
+    variables["--ui-text-muted"] = safeMutedText;
+    variables["--ui-text-faint"] = safeMutedText;
+  }
+  if (settings.uiStyle !== "custom") return variables;
+
+  if (theme.window !== baseline.window) {
+    variables["--ui-panel-fill"] = `rgb(${parseRgb(theme.window).join(" ")} / var(--ui-effective-panel-opacity))`;
+  }
+  if (theme.titlebar !== baseline.titlebar || theme.windowGradient !== baseline.windowGradient) {
+    variables["--ui-title-fill"] = theme.windowGradient
+      ? `linear-gradient(180deg, color-mix(in srgb, ${theme.titlebar} 92%, ${theme.border}), ${theme.titlebar} 38%, color-mix(in srgb, ${theme.titlebar} 78%, ${theme.recessed}))`
+      : `linear-gradient(${theme.titlebar}, ${theme.titlebar})`;
+  }
+  if (theme.surface !== baseline.surface) {
+    const raisedFill = theme.material === "modern"
+      ? `linear-gradient(${theme.surface}, ${theme.surface})`
+      : `linear-gradient(color-mix(in srgb, ${theme.surface} 78%, ${theme.border}), ${theme.surface} 22%, color-mix(in srgb, ${theme.surface} 86%, ${theme.recessed}))`;
+    variables["--ui-raised-fill"] = raisedFill;
+    variables["--ui-command-fill"] = raisedFill;
+  }
+  if (theme.recessed !== baseline.recessed) {
+    variables["--ui-well"] = theme.recessed;
+    variables["--ui-well-fill"] = `color-mix(in srgb, ${theme.recessed} 88%, transparent)`;
+    variables["--ui-pressed-layer"] = `color-mix(in srgb, ${theme.recessed} 28%, transparent)`;
+    variables["--ui-focus-halo"] = theme.recessed;
+    variables["--ui-scroll-track-color"] = theme.recessed;
+    variables["--ui-scroll-track"] = theme.recessed;
+  }
+  if (theme.selected !== baseline.selected) {
+    variables["--ui-selection-fill"] = `linear-gradient(color-mix(in srgb, ${theme.selected} 84%, transparent), color-mix(in srgb, ${theme.selected} 70%, ${theme.recessed}))`;
+    variables["--ui-selection-hover-fill"] = `linear-gradient(color-mix(in srgb, ${theme.selected} 88%, ${safeText}), color-mix(in srgb, ${theme.selected} 82%, ${theme.recessed}))`;
+    variables["--ui-selection-ink"] = readableForeground(theme.selected);
+    variables["--ui-scroll-thumb-color"] = `color-mix(in srgb, ${theme.selected} 76%, ${theme.border})`;
+    variables["--ui-scroll-thumb"] = "var(--ui-scroll-thumb-color)";
+    variables["--ui-accent-fill"] = `linear-gradient(${theme.selected}, ${theme.selected})`;
+  }
+  if (theme.accent !== baseline.accent) {
+    const accentInk = readableForeground(theme.accent);
+    variables["--ui-accent"] = theme.accent;
+    variables["--ui-accent-hover"] = `color-mix(in srgb, ${theme.accent} 82%, ${safeText})`;
+    variables["--ui-accent-strong"] = `color-mix(in srgb, ${theme.accent} 70%, ${theme.window})`;
+    variables["--ui-accent-ink"] = accentInk;
+    variables["--ui-primary-fill"] = `linear-gradient(${theme.accent}, ${theme.accent})`;
+    variables["--ui-primary-ink"] = accentInk;
+    variables["--ui-focus"] = theme.accent;
+    variables["--ui-selection-marker"] = theme.accent;
+    variables["--ui-ring-gold"] = `linear-gradient(${theme.accent}, ${theme.accent})`;
+  }
+  if (theme.text !== baseline.text || safeText !== theme.text) {
+    variables["--ui-text"] = safeText;
+    variables["--ui-text-bright"] = safeText;
+    variables["--ui-display-text"] = safeText;
+  }
+  if (theme.mutedText !== baseline.mutedText || safeMutedText !== theme.mutedText) {
+    variables["--ui-text-muted"] = safeMutedText;
+    variables["--ui-text-faint"] = safeMutedText;
+  }
+  if (theme.border !== baseline.border) {
+    variables["--ui-control-mark"] = theme.border;
+    variables["--ui-line"] = `color-mix(in srgb, ${theme.border} 62%, ${theme.window})`;
+    variables["--ui-line-soft"] = `color-mix(in srgb, ${theme.border} 22%, transparent)`;
+    variables["--ui-edge"] = `color-mix(in srgb, ${theme.border} 38%, transparent)`;
+    variables["--ui-edge-strong"] = `color-mix(in srgb, ${theme.border} 72%, transparent)`;
+    variables["--ui-edge-inner"] = `color-mix(in srgb, ${theme.border} 14%, transparent)`;
+    variables["--ui-frame"] = theme.material === "modern"
+      ? `linear-gradient(${theme.border}, ${theme.border})`
+      : `linear-gradient(180deg, color-mix(in srgb, ${theme.border} 94%, white), ${theme.border} 48%, color-mix(in srgb, ${theme.border} 48%, black))`;
+    variables["--ui-frame-top"] = theme.border;
+    variables["--ui-ring-gilt"] = theme.material === "modern"
+      ? `linear-gradient(${theme.border}, ${theme.border})`
+      : `linear-gradient(180deg, color-mix(in srgb, ${theme.border} 82%, white), color-mix(in srgb, ${theme.border} 42%, black))`;
+    variables["--ui-ring-quiet"] = "linear-gradient(var(--ui-edge), var(--ui-edge))";
+    variables["--ui-ring-empty"] = "linear-gradient(var(--ui-edge), var(--ui-edge))";
+    variables["--ui-ring-mark"] = "linear-gradient(var(--ui-edge-strong), var(--ui-edge-strong))";
+  }
+  return variables;
+};
 
 export function applyAppearance(
   settings: AppSettings,
@@ -56,16 +249,28 @@ export function applyAppearance(
   generation = activeGeneration,
 ): void {
   activeGeneration = generation;
-  for (const [name, value] of Object.entries(appearanceVariables(settings))) {
+  for (const name of appliedThemeVariables.get(root) ?? []) {
+    root.style.removeProperty(name);
+  }
+  const variables = appearanceVariables(settings);
+  for (const [name, value] of Object.entries(variables)) {
     root.style.setProperty(name, value);
   }
-  if (settings.uiStyle === "obsidian") {
+  appliedThemeVariables.set(root, Object.keys(variables));
+  if (
+    settings.uiStyle === "obsidian"
+    || (settings.uiStyle === "custom" && settings.uiCustomTheme.material === "modern")
+  ) {
     root.dataset.uiStyle = "obsidian";
   } else {
     delete root.dataset.uiStyle;
   }
-  if (settings.uiFont === "inter") {
-    root.dataset.uiFont = "inter";
+  if (settings.uiStyle === "custom") {
+    root.dataset.uiMaterial = settings.uiCustomTheme.material;
+  }
+  else delete root.dataset.uiMaterial;
+  if (settings.uiFont !== "guild-wars") {
+    root.dataset.uiFont = settings.uiFont;
   } else {
     delete root.dataset.uiFont;
     void loadGuildWarsFont(generation).then((loaded) => {

@@ -2,8 +2,8 @@
  *
  * The vocabulary is taken from the original Guild Wars client: an ivory metal
  * ring, parchment text, blue-black selected faces, graphite controls,
- * and recessed black wells. Obsidian is the one optional projection of this
- * vocabulary: it changes tokens, never markup or component behaviour.
+ * and recessed black wells. Built-in and custom projections change tokens,
+ * never markup or component behaviour.
  *
  * Font and style are independent settings. `--ui-panel-opacity` controls
  * visibility of the game behind either style.
@@ -37,6 +37,18 @@
     #182a3e 58%,
     #152131 82%,
     #1e2124 100%
+  );
+  /* Ordinary commands in the original client are recognisably blue before
+   * hover, but quieter than the action that advances the current task. */
+  --gw-face-navy-quiet: linear-gradient(
+    180deg,
+    #1c2025 0%,
+    #111923 8%,
+    #16283b 20%,
+    #20344a 44%,
+    #17283a 66%,
+    #111b28 90%,
+    #1c2025 100%
   );
   --gw-face-graphite: linear-gradient(
     180deg,
@@ -77,31 +89,53 @@
   --ui-radius-swell: 14px;
   --ui-radius-pill: 999px;
   --ui-border-width: 2px;
+  --ui-frame-width: 1px;
   --ui-space-1: 4px;
   --ui-space-2: 8px;
   --ui-space-3: 12px;
   --ui-space-4: 16px;
   --ui-space-5: 24px;
-  --ui-control-height: 30px;
-  --ui-gap: 9px;
+  --ui-space-6: 32px;
+  --ui-control-height: 34px;
+  --ui-control-height-compact: 30px;
+  --ui-target-min: 24px;
+  --ui-gap: var(--ui-space-2);
 
   /* Dense utility typography, matching the supplied Guild Wars reference. */
   --ui-font-size: 14px;
   --ui-font-size-sm: 12px;
-  --ui-font-size-lg: 17px;
-  --ui-line-height: 1.4;
+  --ui-font-size-lg: 16px;
+  --ui-line-height: 20px;
+  --ui-type-caption-size: 12px;
+  --ui-type-caption-line: 16px;
+  --ui-type-body-size: 14px;
+  --ui-type-body-line: 20px;
+  --ui-type-subtitle-size: 16px;
+  --ui-type-subtitle-line: 22px;
+  --ui-type-title-size: 20px;
+  --ui-type-title-line: 26px;
+  --ui-type-window-size: 18px;
+  --ui-type-window-line: 24px;
   --ui-font: "QTFrizQuad", "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
   --ui-font-display: var(--ui-font);
-  --ui-font-readable: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+  --ui-font-readable: "Inter Variable", Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
   --ui-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ui-font-interface: var(--ui-font);
+  --ui-font-reading: var(--ui-font-readable);
+  --ui-font-data: var(--ui-font-mono);
   /* The game-derived and packaged fallback faces each contain one real
    * weight. Keep their strokes untouched; hierarchy comes from scale, colour,
    * and spacing. Inter restores its native weight range below. */
   --ui-font-weight-medium: 400;
   --ui-font-weight-semibold: 400;
   --ui-font-weight-bold: 400;
+  /* Never let Chromium invent a heavier outline. The Guild Wars faces contain
+   * one deliberate weight, while the other font choices provide real bold
+   * faces. Hierarchy remains semantic through type role, scale, colour, and
+   * spacing even when a selected fallback has no heavier face. */
+  font-synthesis-weight: none;
 
   /* Ink and state. */
   --ui-text: #ebe5d3;
@@ -112,24 +146,51 @@
   --ui-accent: #e6c882;
   --ui-accent-hover: var(--gw-gold-bright);
   --ui-accent-strong: #8a7433;
-  --ui-accent-ink: #f5f0e2;
-  --ui-primary-fill: var(--ui-accent-fill);
-  --ui-primary-ink: var(--ui-accent-ink);
+  --ui-accent-ink: #171613;
+  --ui-primary-fill: var(--gw-face-navy);
+  --ui-primary-ring: var(--ui-ring-gilt);
+  --ui-primary-ink: var(--ui-text-bright);
+  --ui-command-fill: var(--gw-face-navy-quiet);
+  --ui-command-ring: var(--ui-ring-gilt);
   --ui-control-mark: var(--gw-bone);
   --ui-focus: #f6e3a8;
+  --ui-focus-halo: #080807;
   --ui-info: #8cb6df;
   --ui-warning: #e3a94a;
   --ui-danger: #e0574e;
   --ui-success: #4ad84a;
+  --ui-overlay-fill: color-mix(in srgb, var(--ui-outline) 78%, transparent);
+  --ui-well-strong-fill: color-mix(in srgb, var(--ui-well-fill) 95%, var(--ui-outline));
+  --ui-well-overlay-fill: color-mix(in srgb, var(--ui-outline) 72%, var(--ui-well-fill));
+  --ui-accent-well-fill: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-well));
+  --ui-danger-soft-fill: color-mix(in srgb, var(--ui-danger) 10%, transparent);
+  --ui-danger-panel-fill: color-mix(in srgb, var(--ui-danger) 14%, var(--ui-panel-fill));
+  --ui-warning-panel-fill: color-mix(in srgb, var(--ui-warning) 10%, var(--ui-panel-fill));
+  --ui-warning-raised-fill: color-mix(in srgb, var(--ui-warning) 10%, var(--ui-raised-fill));
+  --ui-success-raised-fill: color-mix(in srgb, var(--ui-success) 10%, var(--ui-raised-fill));
+  --ui-danger-border: color-mix(in srgb, var(--ui-danger) 58%, var(--ui-line));
+  --ui-danger-ring: 0 0 0 1px color-mix(in srgb, var(--ui-danger) 16%, transparent);
+  --ui-warning-border: color-mix(in srgb, var(--ui-warning) 34%, var(--ui-edge));
+  --ui-danger-glow: 0 0 7px color-mix(in srgb, var(--ui-danger) 80%, transparent);
+  --ui-status-halo: 0 0 0 2px color-mix(in srgb, currentColor 16%, transparent);
 
   /* Surfaces. */
   --ui-panel-opacity: 0.94;
-  --ui-panel-fill: rgb(var(--gw-panel-rgb) / var(--ui-panel-opacity));
+  --ui-effective-panel-opacity: var(--ui-panel-opacity);
+  --ui-panel-fill: rgb(var(--gw-panel-rgb) / var(--ui-effective-panel-opacity));
+  /* Primary layout regions sit inside an already-painted panel. Giving them
+   * another translucent black fill compounds opacity and makes the slider lie.
+   * Controls and true recesses keep using --ui-well-fill. */
+  --ui-region-fill: transparent;
   --ui-raised-fill: var(--gw-face-graphite);
   --ui-well: #090907;
   --ui-well-fill: var(--gw-sunk);
   --ui-hover: rgb(230 200 130 / 9%);
-  --ui-selected: #26374a;
+  --ui-selection-fill: linear-gradient(rgb(38 55 74 / 62%), rgb(22 36 52 / 62%));
+  --ui-selection-hover-fill: linear-gradient(rgb(48 69 91 / 74%), rgb(28 45 64 / 74%));
+  --ui-selection-ink: var(--ui-text-bright);
+  --ui-selection-marker: var(--ui-accent);
+  --ui-pressed-layer: rgb(0 0 0 / 24%);
   --ui-line: #6f6959;
   --ui-line-soft: rgb(217 210 192 / 18%);
   --ui-outline: rgb(0 0 0 / 78%);
@@ -143,7 +204,6 @@
   --ui-shadow-raised: 0 2px 5px rgb(0 0 0 / 70%);
   --ui-shadow-raised-soft: 0 2px 5px rgb(0 0 0 / 60%);
   --ui-shadow-selected: 0 1px 3px rgb(0 0 0 / 70%);
-  --ui-shadow-row-selected: 0 1px 4px rgb(0 0 0 / 70%);
   --ui-text-shadow: 0 1px 1px #000, 0 2px 3px rgb(0 0 0 / 85%);
   --ui-display-text-shadow: var(--ui-text-shadow);
   --ui-display-letter-spacing: 0.045em;
@@ -154,10 +214,9 @@
   --ui-ring-quiet: linear-gradient(180deg, rgb(217 210 192 / 34%), rgb(0 0 0 / 50%));
   --ui-ring-empty: linear-gradient(180deg, rgb(217 210 192 / 24%), rgb(0 0 0 / 50%));
   --ui-ring-mark: linear-gradient(180deg, rgb(255 255 255 / 50%), rgb(0 0 0 / 60%));
-  --ui-row-fill: linear-gradient(180deg, rgb(255 255 255 / 4%), rgb(0 0 0 / 20%));
-  --ui-title-fill: linear-gradient(180deg, #5d5b54 0%, #434139 26%, #2b2a24 62%, #201f1a 88%, #403e37 100%);
+  --ui-title-fill: var(--gw-face-graphite);
   --ui-title-shadow: 0 2px 6px rgb(0 0 0 / 72%), inset 0 0 0 1px rgb(0 0 0 / 45%);
-  --ui-corner-swell: radial-gradient(58px 58px at 0 0, #fffdf6 22%, rgb(255 253 246 / 55%) 50%, transparent 78%), radial-gradient(58px 58px at 100% 0, #fffdf6 22%, rgb(255 253 246 / 55%) 50%, transparent 78%), radial-gradient(58px 58px at 0 100%, #f2ece0 22%, rgb(242 236 224 / 55%) 50%, transparent 78%), radial-gradient(58px 58px at 100% 100%, #f2ece0 22%, rgb(242 236 224 / 55%) 50%, transparent 78%);
+  --ui-corner-swell: radial-gradient(28px 28px at 0 0, rgb(255 253 246 / 78%) 8%, rgb(255 253 246 / 22%) 46%, transparent 72%), radial-gradient(28px 28px at 100% 0, rgb(255 253 246 / 78%) 8%, rgb(255 253 246 / 22%) 46%, transparent 72%), radial-gradient(28px 28px at 0 100%, rgb(242 236 224 / 68%) 8%, rgb(242 236 224 / 18%) 46%, transparent 72%), radial-gradient(28px 28px at 100% 100%, rgb(242 236 224 / 68%) 8%, rgb(242 236 224 / 18%) 46%, transparent 72%);
   --ui-corner-shadow: drop-shadow(0 1px 1px rgb(0 0 0 / 70%));
   --ui-scroll-track-color: #090907;
   --ui-scroll-thumb-color: #5a6d92;
@@ -204,6 +263,8 @@
   --ui-font-display: "Guild Wars Original Display", "Guild Wars Original",
     "QTFrizQuad", "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
+  --ui-font-interface: var(--ui-font);
+  --ui-font-reading: var(--ui-font-readable);
   --ui-display-text: #f2dfad;
   --ui-display-text-shadow:
     0 -0.5px 0 rgb(255 248 220 / 72%),
@@ -211,25 +272,65 @@
     1px 1px 1px rgb(0 0 0 / 92%),
     0 2px 2px rgb(0 0 0 / 78%);
   --ui-display-letter-spacing: 0;
-  /* The local strike has one hand-tuned weight. Chromium's synthetic bold
-   * expands its pixel-shaped outline and makes small labels look blurry. */
-  font-synthesis-weight: none;
 }
 
 /* A player can keep either visual style while selecting modern system type. */
 :root[data-ui-font="inter"] {
   --ui-font: var(--ui-font-readable);
   --ui-font-display: var(--ui-font);
+  --ui-font-interface: var(--ui-font);
+  --ui-font-reading: var(--ui-font);
   --ui-font-weight-medium: 500;
   --ui-font-weight-semibold: 600;
   --ui-font-weight-bold: 700;
 }
 
-/* Obsidian keeps the same hierarchy and components, then removes ornamental
+:root[data-ui-font="system"] {
+  --ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ui-font-display: var(--ui-font);
+  --ui-font-interface: var(--ui-font);
+  --ui-font-reading: var(--ui-font);
+  --ui-font-weight-medium: 500;
+  --ui-font-weight-semibold: 600;
+  --ui-font-weight-bold: 700;
+}
+
+:root[data-ui-font="georgia"] {
+  --ui-font: Georgia, "Times New Roman", serif;
+  --ui-font-display: var(--ui-font);
+  --ui-font-interface: var(--ui-font);
+  --ui-font-reading: var(--ui-font);
+  --ui-font-weight-medium: 400;
+  --ui-font-weight-semibold: 600;
+  --ui-font-weight-bold: 700;
+}
+
+:root[data-ui-font="avenir"] {
+  --ui-font: "Avenir Next", Avenir, "Helvetica Neue", sans-serif;
+  --ui-font-display: var(--ui-font);
+  --ui-font-interface: var(--ui-font);
+  --ui-font-reading: var(--ui-font);
+  --ui-font-weight-medium: 500;
+  --ui-font-weight-semibold: 600;
+  --ui-font-weight-bold: 700;
+}
+
+:root[data-ui-font="palatino"] {
+  --ui-font: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --ui-font-display: var(--ui-font);
+  --ui-font-interface: var(--ui-font);
+  --ui-font-reading: var(--ui-font);
+  --ui-font-weight-medium: 400;
+  --ui-font-weight-semibold: 600;
+  --ui-font-weight-bold: 700;
+}
+
+/* Modern keeps the same hierarchy and components, then removes ornamental
  * chrome in favour of warm-black tonal depth and quiet gilt.
  * The selector lives here—and only here—so every surface changes together. */
 :root[data-ui-style="obsidian"] {
   --ui-border-width: 0px;
+  --ui-frame-width: 0px;
 
   --ui-text: oklch(0.93 0.012 84);
   --ui-text-bright: oklch(0.97 0.01 84);
@@ -239,22 +340,30 @@
   --ui-accent: oklch(0.79 0.105 83);
   --ui-accent-hover: oklch(0.88 0.095 86);
   --ui-accent-strong: oklch(0.7 0.105 82);
-  --ui-accent-ink: oklch(0.94 0.012 84);
+  --ui-accent-ink: oklch(0.16 0.006 80);
   --ui-primary-fill: linear-gradient(oklch(0.79 0.105 83), oklch(0.79 0.105 83));
-  --ui-primary-ink: oklch(0.2 0.018 78);
+  --ui-primary-ring: linear-gradient(oklch(0.56 0.02 82), oklch(0.56 0.02 82));
+  --ui-primary-ink: var(--ui-accent-ink);
+  --ui-command-fill: var(--ui-raised-fill);
+  --ui-command-ring: transparent;
   --ui-control-mark: oklch(0.76 0.014 82);
   --ui-focus: oklch(0.9 0.105 88);
+  --ui-focus-halo: oklch(0.08 0.004 80);
   --ui-info: oklch(0.76 0.08 240);
   --ui-warning: oklch(0.79 0.12 75);
   --ui-danger: oklch(0.71 0.17 27);
   --ui-success: oklch(0.74 0.12 145);
 
-  --ui-panel-fill: oklch(0.16 0.006 80 / var(--ui-panel-opacity));
+  --ui-panel-fill: oklch(0.16 0.006 80 / var(--ui-effective-panel-opacity));
   --ui-raised-fill: linear-gradient(oklch(0.24 0.009 78), oklch(0.24 0.009 78));
   --ui-well: oklch(0.105 0.004 80);
   --ui-well-fill: oklch(0.105 0.004 80 / 0.78);
   --ui-hover: oklch(0.79 0.105 83 / 0.1);
-  --ui-selected: oklch(0.3 0.035 78);
+  --ui-selection-fill: linear-gradient(oklch(0.3 0.035 78 / 0.82), oklch(0.27 0.025 78 / 0.82));
+  --ui-selection-hover-fill: linear-gradient(oklch(0.35 0.04 78 / 0.9), oklch(0.3 0.03 78 / 0.9));
+  --ui-selection-ink: var(--ui-text-bright);
+  --ui-selection-marker: var(--ui-accent);
+  --ui-pressed-layer: oklch(0 0 0 / 0.22);
   --ui-line: oklch(0.48 0.025 78);
   --ui-line-soft: oklch(0.78 0.018 82 / 0.13);
   --ui-outline: transparent;
@@ -268,7 +377,6 @@
   --ui-shadow-raised: 0 1px 2px oklch(0 0 0 / 0.36);
   --ui-shadow-raised-soft: 0 0 transparent;
   --ui-shadow-selected: 0 1px 2px oklch(0 0 0 / 0.36);
-  --ui-shadow-row-selected: 0 1px 2px oklch(0 0 0 / 0.28);
   --ui-text-shadow: none;
   --ui-display-text-shadow: none;
   --ui-frame: transparent;
@@ -278,8 +386,7 @@
   --ui-ring-quiet: transparent;
   --ui-ring-empty: transparent;
   --ui-ring-mark: transparent;
-  --ui-row-fill: linear-gradient(oklch(0.21 0.006 78 / 0.72), oklch(0.21 0.006 78 / 0.72));
-  --ui-title-fill: linear-gradient(oklch(0.2 0.008 78), oklch(0.2 0.008 78));
+  --ui-title-fill: linear-gradient(oklch(1 0 0 / 0.04), oklch(0 0 0 / 0.08));
   --ui-title-shadow: none;
   --ui-corner-swell: transparent;
   --ui-corner-shadow: none;
@@ -291,6 +398,30 @@
   --ui-accent-fill: linear-gradient(oklch(0.27 0.02 78), oklch(0.27 0.02 78));
 }
 
+/* Accessibility changes the rendered material, never the player's saved
+ * preference. Returning to the ordinary system setting restores their value. */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --ui-effective-panel-opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root { --ui-duration: 0ms; }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --ui-line-soft: var(--ui-line);
+    --ui-edge: var(--ui-edge-strong);
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --ui-focus: Highlight;
+    --ui-focus-halo: Canvas;
+    --ui-selection-marker: Highlight;
+    --ui-selection-fill: linear-gradient(Highlight, Highlight);
+    --ui-selection-hover-fill: linear-gradient(Highlight, Highlight);
+    --ui-selection-ink: HighlightText;
+  }
 }

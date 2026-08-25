@@ -64,6 +64,10 @@ import {
   type TravelUserPreferences,
   type TravelUserPreferencesUpdate,
 } from "./travel.js";
+import {
+  DEFAULT_CUSTOM_UI_THEME,
+  type CustomUiTheme,
+} from "./ui-theme.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -346,9 +350,9 @@ export interface ClockSyncResponse {
   mainSendUs: number;
 }
 
-export const UI_STYLES = ["guild-wars", "obsidian"] as const;
+export const UI_STYLES = ["guild-wars", "obsidian", "custom"] as const;
 export type UiStyle = (typeof UI_STYLES)[number];
-export const UI_FONTS = ["guild-wars", "inter"] as const;
+export const UI_FONTS = ["guild-wars", "inter", "system", "avenir", "georgia", "palatino"] as const;
 export type UiFont = (typeof UI_FONTS)[number];
 export const CONTROLLER_PROMPT_STYLES = ["game-default", "playstation"] as const;
 export type ControllerPromptStyle = (typeof CONTROLLER_PROMPT_STYLES)[number];
@@ -369,6 +373,8 @@ export interface AppSettings {
   renderScale: RenderScale;
   /** The visual treatment applied to every GWonMac panel. */
   uiStyle: UiStyle;
+  /** The one saved player palette, retained even while a built-in style is active. */
+  uiCustomTheme: CustomUiTheme;
   /** The typeface applied to every GWonMac panel. */
   uiFont: UiFont;
   /** Visual style for Guild Wars' controller-button texture atlas. */
@@ -461,6 +467,7 @@ export type SettingsResetOutcome =
 export const DEFAULT_SETTINGS: AppSettings = {
   renderScale: 2,
   uiStyle: "guild-wars",
+  uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
   uiFont: "guild-wars",
   controllerPromptStyle: "game-default",
   uiPanelOpacity: 94,

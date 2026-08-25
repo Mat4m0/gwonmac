@@ -27,8 +27,10 @@
     'renderScale',
   ) as RadioNodeList;
   const uiStyle = form.elements.namedItem('uiStyle') as RadioNodeList;
-  const uiFont = form.elements.namedItem('uiFont') as RadioNodeList;
-  const controllerPromptStyle = form.elements.namedItem('controllerPromptStyle') as RadioNodeList;
+  const uiFont = form.elements.namedItem('uiFont') as HTMLSelectElement;
+  const controllerPromptStyle = form.elements.namedItem(
+    'controllerPromptStyle',
+  ) as HTMLSelectElement;
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
   ) as HTMLInputElement;
@@ -69,6 +71,7 @@
     form.elements.namedItem(name) as HTMLInputElement | null;
   const appearanceOutput = (name: string) =>
     form.elements.namedItem(`${name}Value`) as HTMLOutputElement | null;
+  const panelOpacityDefault = byId('settings-opacity-default') as HTMLButtonElement;
   let updateAction: UpdateAction | null = null;
   let templatePane: import('./template-pane.js').TemplatePane | null = null;
 
@@ -134,7 +137,7 @@
 
   const settingsRail = form.querySelector<HTMLElement>('.settings-rail');
   if (!settingsRail) throw new Error('missing settings rail');
-  const compactSettings = window.matchMedia('(max-width: 560px)');
+  const compactSettings = window.matchMedia('(max-width: 640px)');
   const syncRailOrientation = () => {
     settingsRail.setAttribute(
       'aria-orientation',
@@ -293,6 +296,15 @@
       persist: (patch) => persistSettings(patch),
       recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
       feedback: setFeedback,
+    }));
+  const themeSettings = import('./settings-theme.js').then((module) =>
+    module.bindThemeSettings({
+      form,
+      settings: () => currentSettings,
+      persist: persistSettings,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      feedback: setFeedback,
+      copy: (text) => window.gwNative.clipboard.writeText(text),
     }));
   void import('./settings-accounts.js').then((module) =>
     module.bindAccountSettings({
@@ -463,7 +475,12 @@
           ? { uiStyle: control.value }
           : null;
       case 'uiFont':
-        return control.value === 'guild-wars' || control.value === 'inter'
+        return control.value === 'guild-wars'
+          || control.value === 'inter'
+          || control.value === 'system'
+          || control.value === 'avenir'
+          || control.value === 'georgia'
+          || control.value === 'palatino'
           ? { uiFont: control.value }
           : null;
       case 'controllerPromptStyle':
@@ -536,6 +553,7 @@
     void shortcutSettings.then((binder) => binder.render(settings));
     void skillKeySettings.then((binder) => binder.render(settings));
     void skillCooldownSettings.then((binder) => binder.render(settings));
+    void themeSettings.then((binder) => binder.render(settings));
     toolFeatures.hidden = !settings.gwonmacTools;
     toolsOff.hidden = settings.gwonmacTools;
     teamManagement.disabled = !settings.gwonmacTools;
@@ -609,6 +627,14 @@
     if (!range) return;
     const output = appearanceOutput(range.name);
     if (output) output.value = `${control.value}${range.suffix}`;
+  });
+
+  panelOpacityDefault.addEventListener('click', () => {
+    const control = appearanceRange('uiPanelOpacity');
+    if (!control) return;
+    control.value = '94';
+    control.dispatchEvent(new globalThis.Event('input', { bubbles: true }));
+    control.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
   });
 
   form.addEventListener('change', (event) => {

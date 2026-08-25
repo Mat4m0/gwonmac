@@ -586,7 +586,7 @@ function exactTime(timestamp: number): string {
           data-icon
           aria-label="Close Trade Chat"
           @click="emit('close')"
-        >×</button>
+        ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13"/></svg></button>
       </header>
 
       <TraderPrices
@@ -598,7 +598,7 @@ function exactTime(timestamp: number): string {
       />
 
       <div v-show="view === 'listings'" class="trade-toolbar">
-        <div class="ui-segment source-segment" data-fill aria-label="Trade source">
+        <div class="ui-segment source-segment" data-fill role="group" aria-label="Trade source">
           <button :aria-pressed="source === 'kamadan'" @click="source = 'kamadan'">Kamadan</button>
           <button :aria-pressed="source === 'pre-searing'" @click="source = 'pre-searing'">Pre-Searing</button>
         </div>
@@ -622,7 +622,7 @@ function exactTime(timestamp: number): string {
           <button v-if="submittedQuery" type="button" class="ui-button" @click="clearSearch">Live feed</button>
         </form>
         <div class="trade-toolbar-actions">
-          <div class="ui-segment intent-segment" data-fill aria-label="Offer intent">
+          <div class="ui-segment intent-segment" data-fill role="group" aria-label="Offer intent">
             <button :aria-pressed="intent === 'all'" @click="intent = 'all'">All</button>
             <button :aria-pressed="intent === 'selling'" @click="intent = 'selling'">Selling</button>
             <button :aria-pressed="intent === 'buying'" @click="intent = 'buying'">Buying</button>
@@ -703,7 +703,7 @@ function exactTime(timestamp: number): string {
             role="listitem"
           >
             <div
-              class="trade-row"
+              class="trade-row ui-selection-region"
               :data-saved-offer="offerSaved(message) ? '' : undefined"
               :data-saved-player="playerSaved(message.sender) ? '' : undefined"
               :data-selected="current.selection === message.timestamp ? '' : undefined"
@@ -734,7 +734,9 @@ function exactTime(timestamp: number): string {
               <time class="age-cell" :datetime="new Date(message.timestamp).toISOString()">{{ age(message.timestamp) }}</time>
               <div class="row-quick-actions">
                 <button
-                  class="row-quick-action"
+                  class="ui-button row-quick-action"
+                  data-variant="quiet"
+                  data-icon
                   :aria-label="`${offerSaved(message) ? 'Remove saved' : 'Save'} offer from ${message.sender}`"
                   :aria-pressed="offerSaved(message)"
                   :disabled="!savedReady"
@@ -742,7 +744,9 @@ function exactTime(timestamp: number): string {
                   @click="toggleOffer(message)"
                 ><TradeIcon name="star" :filled="offerSaved(message)" /></button>
                 <button
-                  class="row-quick-action"
+                  class="ui-button row-quick-action"
+                  data-variant="quiet"
+                  data-icon
                   :aria-label="`${playerSaved(message.sender) ? 'Unfollow' : 'Follow'} ${message.sender}`"
                   :aria-pressed="playerSaved(message.sender)"
                   :disabled="!savedReady"
@@ -760,7 +764,7 @@ function exactTime(timestamp: number): string {
         </div>
       </div>
 
-      <section v-show="view === 'listings'" class="trade-inspector ui-raised ui-scroll" :aria-label="selected ? `Offer from ${selected.sender}` : 'Offer detail'">
+      <section v-show="view === 'listings'" class="trade-inspector ui-well ui-scroll" :aria-label="selected ? `Offer from ${selected.sender}` : 'Offer detail'">
         <button class="ui-button mobile-back" @click="detailOpen = false">
           {{ playerName ? `Back to ${playerName}` : "Back to offers" }}
         </button>
@@ -776,25 +780,29 @@ function exactTime(timestamp: number): string {
             </div>
             <p><bdi>{{ selected.message }}</bdi></p>
           </div>
-          <div class="inspector-actions">
-            <button
-              class="ui-button"
-              :aria-pressed="offerSaved(selected)"
-              :disabled="!savedReady"
-              @click="toggleOffer(selected)"
-            ><TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save" }}</button>
-            <button
-              class="ui-button"
-              :aria-pressed="playerSaved(selected.sender)"
-              :disabled="!savedReady"
-              @click="togglePlayer(selected.sender)"
-            ><TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow" }}</button>
-            <button class="ui-button" data-variant="primary" @click="copy(selected.sender, 'Character name')">
-              Copy name
-            </button>
-            <button class="ui-button" @click="copy(selected.message, 'Message')">Copy text</button>
-            <button class="ui-link" @click="props.host.openSource(source)">{{ sourceLabel }} feed ↗</button>
-          </div>
+          <footer class="inspector-actions">
+            <div class="inspector-action-group" role="group" aria-label="Offer actions">
+              <button
+                class="ui-button"
+                :aria-pressed="offerSaved(selected)"
+                :disabled="!savedReady"
+                @click="toggleOffer(selected)"
+              ><TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save offer" }}</button>
+              <button
+                class="ui-button"
+                :aria-pressed="playerSaved(selected.sender)"
+                :disabled="!savedReady"
+                @click="togglePlayer(selected.sender)"
+              ><TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow player" }}</button>
+            </div>
+            <div class="inspector-action-group" data-utility role="group" aria-label="Copy and source actions">
+              <button class="ui-button" data-variant="quiet" @click="copy(selected.sender, 'Character name')">
+                Copy name
+              </button>
+              <button class="ui-button" data-variant="quiet" @click="copy(selected.message, 'Message')">Copy offer</button>
+              <button class="ui-link" @click="props.host.openSource(source)">Open {{ sourceLabel }} feed ↗</button>
+            </div>
+          </footer>
         </template>
         <div v-else class="ui-empty">
           <strong>Choose an offer</strong>
@@ -816,9 +824,9 @@ function exactTime(timestamp: number): string {
               <strong>Saved</strong>
               <span>{{ savedCount }} {{ savedCount === 1 ? "item" : "items" }}</span>
             </div>
-            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved">×</button>
+            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>
           </header>
-          <div class="ui-segment saved-tabs" data-fill aria-label="Saved item type">
+          <div class="ui-segment saved-tabs" data-fill role="group" aria-label="Saved item type">
             <button :aria-pressed="savedTab === 'offers'" @click="savedTab = 'offers'">Offers {{ saved.offers.length }}</button>
             <button :aria-pressed="savedTab === 'players'" @click="savedTab = 'players'">Players {{ saved.players.length }}</button>
           </div>

@@ -41,7 +41,7 @@
   width: 100%;
   height: 100%;
   place-items: center;
-  background: color-mix(in srgb, var(--ui-outline) 72%, var(--ui-well-fill));
+  background: var(--ui-well-overlay-fill);
   color: var(--ui-text-bright);
   font: 700 10px var(--ui-font-mono);
   letter-spacing: 0.02em;
@@ -150,9 +150,9 @@
   min-width: 0;
   min-height: 0;
   overflow: clip;
-  border-radius: var(--ui-radius-sm);
-  background: var(--ui-well-fill);
-  box-shadow: var(--ui-shadow-inset-deep), 0 0 0 1px var(--ui-outline), inset 0 0 0 2px var(--ui-edge);
+  border-radius: 0;
+  background: var(--ui-region-fill);
+  box-shadow: none;
 }
 
 .detail-view {
@@ -169,7 +169,7 @@
 .detail-header {
   padding: var(--ui-space-3) var(--ui-space-4);
   border-bottom: 1px solid var(--ui-line-soft);
-  background: var(--ui-raised-fill);
+  background: var(--ui-region-fill);
 }
 
 .detail-title-line {
@@ -222,6 +222,7 @@
 }
 
 .favourite[aria-pressed="true"] { color: var(--ui-accent); }
+.favourite[aria-pressed="true"] svg path { fill: currentColor; }
 
 .detail-header .tag-row { margin-top: var(--ui-space-2); }
 
@@ -270,7 +271,7 @@
 
 .authoring-header {
   padding-bottom: 0;
-  background: color-mix(in srgb, var(--ui-raised-fill) 94%, var(--ui-panel-fill));
+  background: var(--ui-region-fill);
 }
 
 .authoring-tabs {
@@ -281,28 +282,6 @@
   gap: var(--ui-space-1);
 }
 
-.authoring-tabs > button {
-  min-height: 36px;
-  padding: 0 var(--ui-space-3);
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--ui-text-muted);
-  font: inherit;
-}
-
-.authoring-tabs > button[aria-selected="true"] {
-  border-bottom-color: var(--ui-accent);
-  color: var(--ui-text-bright);
-}
-
-.authoring-tabs > button:hover { background: var(--ui-hover); }
-.authoring-tabs > button:active { filter: brightness(0.86); }
-.authoring-tabs > button:focus-visible {
-  outline: 2px solid var(--ui-focus);
-  outline-offset: -2px;
-}
-
 .authoring-tabs .ui-chip { margin: 0 0 var(--ui-space-2) auto; }
 
 .authoring-scroll {
@@ -310,17 +289,15 @@
   flex: 1;
   padding: var(--ui-space-4);
   overflow: auto;
-  background: color-mix(in srgb, var(--ui-panel-fill) 94%, var(--ui-outline));
+  background: var(--ui-region-fill);
 }
 
 .authoring-bar-section {
-  position: sticky;
-  z-index: var(--ui-z-status);
-  top: calc(var(--ui-space-4) * -1);
+  position: relative;
   margin: calc(var(--ui-space-4) * -1) calc(var(--ui-space-4) * -1) 0;
   padding: var(--ui-space-4);
-  border-bottom: 1px solid var(--ui-line);
-  background: color-mix(in srgb, var(--ui-panel-fill) 97%, var(--ui-outline));
+  border-bottom: 1px solid var(--ui-line-soft);
+  background: var(--ui-region-fill);
 }
 
 .workspace-heading {
@@ -350,6 +327,7 @@
   max-width: 68ch;
   margin: var(--ui-space-1) 0 0;
   color: var(--ui-text-muted);
+  font-family: var(--ui-font-reading);
 }
 
 .authoring-bar {
@@ -372,30 +350,16 @@
   height: 16px;
   place-items: center;
   border-radius: var(--ui-radius-sm);
-  background: color-mix(in srgb, var(--ui-outline) 82%, transparent);
+  background: var(--ui-overlay-fill);
   color: var(--ui-text-bright);
   font: 9px var(--ui-font-mono);
-}
-
-.ui-slot[data-active] {
-  box-shadow: 0 0 0 2px var(--ui-focus), var(--ui-shadow-inset);
-}
-
-.ui-slot[data-invalid] {
-  box-shadow: inset 0 0 0 3px var(--ui-danger), var(--ui-shadow-inset);
-}
-
-.ui-slot[data-active][data-invalid] {
-  box-shadow:
-    0 0 0 2px var(--ui-focus),
-    inset 0 0 0 3px var(--ui-danger),
-    var(--ui-shadow-inset);
 }
 
 .bar-keyboard-hint,
 .workspace-note {
   margin: var(--ui-space-2) 0 0;
   color: var(--ui-text-faint);
+  font-family: var(--ui-font-reading);
   font-size: var(--ui-font-size-sm);
 }
 
@@ -423,7 +387,7 @@
   padding: var(--ui-space-3) var(--ui-space-4);
   gap: var(--ui-space-2);
   border-top: 1px solid var(--ui-warning);
-  background: color-mix(in srgb, var(--ui-warning) 10%, var(--ui-raised-fill));
+  background: var(--ui-warning-raised-fill);
 }
 
 .shared-commit-sheet h2,
@@ -434,7 +398,7 @@
   display: grid;
   padding: var(--ui-space-2) var(--ui-space-4);
   border-top: 1px solid var(--ui-success);
-  background: color-mix(in srgb, var(--ui-success) 10%, var(--ui-raised-fill));
+  background: var(--ui-success-raised-fill);
 }
 
 .publication-result span {
@@ -589,8 +553,8 @@
 .action-row { justify-content: flex-end; }
 
 .detail-actions {
-  min-height: 52px;
-  padding: var(--ui-space-2) var(--ui-space-4);
+  min-height: 44px;
+  padding: var(--ui-space-1) var(--ui-space-3);
   border-top: 1px solid var(--ui-line-soft);
   background: var(--ui-raised-fill);
 }

@@ -23,19 +23,20 @@ const TOKENS = "src/shared/ui/tokens.css";
  *  Settings dialog is: two surfaces of one product cannot each own a palette. */
 const CONSUMERS = [
   "src/shared/ui/components.css",
+  "src/renderer/settings.css",
   "apps/tools/src/styles.css",
   "apps/tools/src/styles/base-shell.css",
   "apps/tools/src/styles/library.css",
   "apps/tools/src/styles/build.css",
   "apps/tools/src/styles/catalogue.css",
   "apps/tools/src/styles/team.css",
+  "apps/tools/src/styles/trade.css",
 ];
 
 /**
  * Surfaces that belong on `CONSUMERS` and are not there yet, each with the
- * reason. The Settings dialog and the launcher chrome predate the token system
- * and still carry their own literals; re-pointing them is its own change,
- * because it is a visual one and has to be looked at rather than asserted.
+ * reason. The renderer/game overlays predate the token system and still carry
+ * literals; re-pointing them is its own visual change.
  *
  * The staleness test below is what stops this being a quiet exemption: the day
  * one of these files stops holding a literal, it fails here until it is moved
@@ -50,6 +51,20 @@ const consumers = CONSUMERS.map(
 
 /** Strip comments, so prose about `oklch(20% …)` is not read as a declaration. */
 const code = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+/** Settings includes deliberately literal Guild Wars swatches and icon art.
+ * Exempt only those marked fragments, never their surrounding layout. */
+const DOMAIN_ARTWORK =
+  /\/\* ui-policy-domain-artwork:start[^]*?ui-policy-domain-artwork:end \*\//gu;
+const paletteCode = (path: string, css: string): string => {
+  if (path !== "src/renderer/settings.css") return code(css);
+  const artwork = [...css.matchAll(DOMAIN_ARTWORK)];
+  if (artwork.length !== 2) {
+    throw new Error(`expected two Settings domain-artwork fragments, found ${artwork.length}`);
+  }
+  const withoutArtwork = css.replace(DOMAIN_ARTWORK, "");
+  return code(withoutArtwork);
+};
 
 /** Every `--ui-…` declared on the left of a colon in tokens.css. */
 function declaredTokens(): Set<string> {
@@ -72,15 +87,16 @@ function referenced(css: string): Set<string> {
 test("no component decides a colour for itself", () => {
   const offenders: string[] = [];
   for (const [path, css] of consumers) {
-    code(css)
+    paletteCode(path, css)
       .split("\n")
       .forEach((line, index) => {
-        // Hex literals, and the functional notations that would smuggle one
-        // past a hex check. `color-mix` is allowed because its arguments are
-        // themselves checked by this same sweep.
+        // Hex literals, functional colour notations, and local mixes all
+        // create feature-owned paint. Mixtures belong in the shared
+        // projection/component layer where every surface gets the same state.
         const hex = line.match(/#[0-9a-fA-F]{3,8}\b/);
         const fn = line.match(/\b(rgba?|hsla?|oklch|lab|lch)\(/);
-        if (hex || fn) offenders.push(`${path}:${index + 1}: ${line.trim()}`);
+        const mix = path !== "src/shared/ui/components.css" && line.match(/\bcolor-mix\(/);
+        if (hex || fn || mix) offenders.push(`${path}:${index + 1}: ${line.trim()}`);
       });
   }
   assert.deepEqual(
@@ -93,7 +109,7 @@ test("no component decides a colour for itself", () => {
 test("no component decides a corner for itself", () => {
   const offenders: string[] = [];
   for (const [path, css] of consumers) {
-    code(css)
+    paletteCode(path, css)
       .split("\n")
       .forEach((line, index) => {
         // Every radius declaration on the line, not just the first: a rule
@@ -137,7 +153,7 @@ test("no consumer invents a stacking order", () => {
   );
 });
 
-test("Obsidian is the only style projection and consumers do not branch", () => {
+test("style projections stay in tokens and consumers do not branch", () => {
   const selectors = [...code(tokens).matchAll(/:root\[data-ui-style="([^"]+)"\]/gu)]
     .map((match) => match[1]);
   assert.deepEqual(selectors, ["obsidian"]);
@@ -154,15 +170,17 @@ test("persistent interaction states do not leak into neutral controls", () => {
     return source.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, "u"))?.[1] ?? "";
   };
 
-  assert.match(rule(components, ".ui-button"), /var\(--ui-raised-fill\)/u);
+  assert.match(rule(components, ".ui-button"), /var\(--ui-command-fill\)/u);
   assert.match(rule(components, '.ui-button[data-variant="primary"]'), /var\(--ui-primary-fill\)/u);
   assert.doesNotMatch(rule(components, ".ui-button[data-icon]"), /--ui-shadow-selected/u);
   assert.doesNotMatch(rule(components, ".ui-slot"), /--ui-shadow-selected/u);
   assert.doesNotMatch(rule(toolsShell, ".window-brand"), /--ui-shadow-selected/u);
   assert.match(
     rule(components, '.ui-tab[aria-selected="true"]'),
-    /inset 0 -2px 0 var\(--ui-accent\)/u,
+    /inset 0 -2px 0 var\(--ui-selection-marker\)/u,
   );
+  assert.match(rule(components, '.ui-button[data-variant="quiet"]'), /background: transparent/u);
+  assert.doesNotMatch(rule(components, '.ui-row'), /--ui-row-fill/u);
 });
 
 test("shared interaction feedback owns disabled, active, and error presentation", () => {
@@ -189,7 +207,8 @@ test("shared interaction feedback owns disabled, active, and error presentation"
   }
   assert.match(components, /\.ui-field-error\s*\{/u);
   assert.doesNotMatch(catalogue, /\.field-error\s*\{/u);
-  assert.match(build, /\.authoring-tabs > button:focus-visible\s*\{/u);
+  assert.doesNotMatch(build, /\.authoring-tabs > button:focus-visible\s*\{/u);
+  assert.match(components, /\.ui-frame :where\([^}]*\):focus-visible\s*\{/u);
 });
 
 test("every token a stylesheet uses is actually declared", () => {
@@ -197,8 +216,6 @@ test("every token a stylesheet uses is actually declared", () => {
   const missing: string[] = [];
   for (const [path, css] of [...consumers, [TOKENS, tokens] as const]) {
     for (const name of referenced(css)) {
-      // `--ui-profession` and `--swatch` are set by a data attribute at the
-      // point of use, not declared as a theme value.
       if (name === "--ui-profession") continue;
       if (!declared.has(name)) missing.push(`${path}: ${name}`);
     }
@@ -211,6 +228,7 @@ test("every token declared is actually read", () => {
   // a promise to a reader that changing it will do something.
   const used = new Set([
     ...consumers.flatMap(([, css]) => [...referenced(css)]),
+    ...NOT_YET_TOKENISED.flatMap((path) => [...referenced(readFileSync(path, "utf8"))]),
     ...referenced(tokens),
   ]);
   const unused = [...declaredTokens()].filter((name) => !used.has(name));

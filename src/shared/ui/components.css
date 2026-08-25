@@ -70,7 +70,7 @@
 
 .ui-frame::before {
   inset: 0;
-  padding: var(--ui-border-width);
+  padding: var(--ui-frame-width);
   border-radius: inherit;
   background: var(--ui-frame);
   -webkit-mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
@@ -83,8 +83,8 @@
  * metal runs. This separate ring creates that corner swell without putting an
  * opaque material behind the translucent panel. */
 .ui-frame::after {
-  inset: -3px;
-  padding: 6px;
+  inset: -1px;
+  padding: 3px;
   border-radius: var(--ui-radius-swell);
   background: var(--ui-corner-swell);
   -webkit-mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
@@ -113,9 +113,9 @@
  * state is a meaning, not a shadow that every component can borrow. */
 .ui-raised[aria-selected="true"],
 .ui-raised[aria-pressed="true"] {
-  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  background: var(--ui-selection-fill) padding-box, var(--ui-ring-quiet) border-box;
   box-shadow: var(--ui-shadow-selected);
-  color: var(--ui-accent-ink);
+  color: var(--ui-selection-ink);
 }
 
 /* ============================================================== focus === */
@@ -138,6 +138,33 @@
 .ui-segment button:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--ui-focus-halo);
+}
+
+/* Skill slots are domain controls, but active editing and validation still use
+ * the same focus and danger vocabulary as every other control. */
+.ui-slot[data-active] {
+  box-shadow: 0 0 0 2px var(--ui-focus), var(--ui-shadow-inset);
+}
+
+.ui-slot[data-invalid] {
+  box-shadow: inset 0 0 0 3px var(--ui-danger), var(--ui-shadow-inset);
+}
+
+.ui-slot[data-active][data-invalid] {
+  box-shadow:
+    0 0 0 2px var(--ui-focus),
+    inset 0 0 0 3px var(--ui-danger),
+    var(--ui-shadow-inset);
+}
+
+/* Feature controls still use native elements for simple behavior. Keep their
+ * focus contract automatic so a new tool cannot silently ship a browser-
+ * default ring just because it does not need a component wrapper. */
+.ui-frame :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--ui-focus-halo);
 }
 
 /* Inside a segment the ring has to sit within the shared border, or it paints
@@ -158,7 +185,7 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  padding: 9px 10px 11px;
+  padding: 6px 7px 8px;
   overflow: hidden;
 }
 
@@ -168,9 +195,9 @@
   display: flex;
   align-items: center;
   gap: var(--ui-gap);
-  min-height: 38px;
-  padding: 5px 8px 5px 11px;
-  border: var(--ui-border-width) solid transparent;
+  min-height: 34px;
+  padding: 3px 7px 3px 9px;
+  border: var(--ui-frame-width) solid transparent;
   border-radius: var(--ui-radius);
   background:
     var(--ui-title-fill) padding-box,
@@ -182,14 +209,14 @@
  * panel headers. Keep their breathing room in one primitive so every tool
  * window uses the same chrome instead of tuning title padding per feature. */
 .ui-window-head {
-  min-height: 54px;
+  min-height: 42px;
   gap: var(--ui-space-3);
-  padding: var(--ui-space-2) var(--ui-space-3);
+  padding: 5px 9px;
 }
 
 @container (max-width: 480px) {
   .ui-window-head {
-    min-height: 42px;
+    min-height: 38px;
     gap: var(--ui-space-2);
     padding: var(--ui-space-1) var(--ui-space-2);
   }
@@ -197,7 +224,7 @@
 
 @media (max-height: 520px) {
   .ui-window-head {
-    min-height: 42px;
+    min-height: 38px;
     padding-block: var(--ui-space-1);
   }
 }
@@ -209,12 +236,26 @@
   overflow: hidden;
   color: var(--ui-display-text);
   font-family: var(--ui-font-display);
-  font-size: var(--ui-font-size-lg);
+  font-size: var(--ui-type-window-size);
+  line-height: var(--ui-type-window-line);
   font-weight: var(--ui-font-weight-bold);
   letter-spacing: var(--ui-display-letter-spacing);
   text-shadow: var(--ui-display-text-shadow);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ui-title {
+  margin: 0;
+  color: var(--ui-display-text);
+  font: var(--ui-type-title-size) / var(--ui-type-title-line) var(--ui-font-display);
+  text-shadow: var(--ui-display-text-shadow);
+}
+
+.ui-subtitle {
+  margin: 0;
+  color: var(--ui-text-bright);
+  font: var(--ui-type-subtitle-size) / var(--ui-type-subtitle-line) var(--ui-font-interface);
 }
 
 .ui-panel-body {
@@ -271,13 +312,13 @@
   padding: 0 var(--ui-space-3);
   border: var(--ui-border-width) solid transparent;
   border-radius: var(--ui-radius);
-  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
+  background: var(--ui-command-fill) padding-box, var(--ui-command-ring) border-box;
   box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
   color: var(--ui-text);
-  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+  font: var(--ui-type-body-size) / var(--ui-type-body-line) var(--ui-font-interface);
   /* A cursor promising text selection on a game overlay is a lie. */
   cursor: pointer;
-  transition: filter var(--ui-duration) var(--ui-ease-out), transform 60ms linear;
+  transition: transform var(--ui-duration) var(--ui-ease-out);
 }
 
 .ui-button:hover:not(:disabled):not([aria-disabled="true"]) {
@@ -296,7 +337,7 @@
 }
 
 .ui-button[data-variant="primary"] {
-  background: var(--ui-primary-fill) padding-box, var(--ui-ring-gold) border-box;
+  background: var(--ui-primary-fill) padding-box, var(--ui-primary-ring) border-box;
   box-shadow: var(--ui-shadow-raised), 0 0 0 1px var(--ui-outline);
   color: var(--ui-primary-ink);
   font-weight: var(--ui-font-weight-semibold);
@@ -306,9 +347,9 @@
  * starred Trade items and any future binary action; colour is never its only
  * signal because the button label changes with aria-pressed. */
 .ui-button[aria-pressed="true"] {
-  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
+  background: var(--ui-selection-fill) padding-box, var(--ui-ring-quiet) border-box;
   box-shadow: var(--ui-shadow-selected);
-  color: var(--ui-accent-ink);
+  color: var(--ui-selection-ink);
 }
 
 /* A non-modal parallel surface anchored to the control that opened it. The
@@ -344,14 +385,20 @@
 /* No box, no edge, until you go near it. For repeated row actions, where a
  * bordered button per row would out-shout the content it acts on. */
 .ui-button[data-variant="quiet"] {
-  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
-  box-shadow: var(--ui-shadow-raised-soft);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
   color: var(--ui-text-muted);
 }
 
 .ui-button[data-variant="quiet"]:hover:not(:disabled):not([aria-disabled="true"]) {
-  filter: brightness(1.18);
+  background: var(--ui-hover);
+  filter: none;
   color: var(--ui-text-bright);
+}
+
+.ui-button[data-variant="quiet"]:active:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ui-pressed-layer);
 }
 
 /* Destructive, and deliberately not loud: an outline rather than a fill, so a
@@ -377,6 +424,16 @@
   font-size: var(--ui-font-size-lg);
 }
 
+.ui-button[data-icon] > svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .ui-button[data-icon]:hover:not(:disabled):not([aria-disabled="true"]) {
   filter: brightness(1.2);
   color: var(--ui-text-bright);
@@ -394,7 +451,6 @@
   text-decoration: none;
   border-bottom: 1px solid color-mix(in srgb, var(--ui-accent) 30%, transparent);
   text-underline-offset: 3px;
-  transition: color var(--ui-duration) var(--ui-ease-out);
 }
 
 .ui-link:hover:not(:disabled) {
@@ -433,7 +489,7 @@
   background: var(--ui-well-fill);
   box-shadow: inset 0 0 0 1px var(--ui-edge), var(--ui-shadow-inset);
   color: var(--ui-text);
-  font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
+  font: var(--ui-type-body-size) / var(--ui-type-body-line) var(--ui-font-interface);
 }
 
 .ui-textarea {
@@ -519,7 +575,7 @@
 .ui-field-hint {
   max-width: 62ch;
   color: var(--ui-text-muted);
-  font-size: var(--ui-font-size-sm);
+  font: var(--ui-type-caption-size) / var(--ui-type-caption-line) var(--ui-font-reading);
   text-wrap: pretty;
 }
 
@@ -619,9 +675,6 @@
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
   cursor: pointer;
   white-space: nowrap;
-  transition:
-    background var(--ui-duration) var(--ui-ease-out),
-    color var(--ui-duration) var(--ui-ease-out);
 }
 
 .ui-segment label + label,
@@ -678,9 +731,9 @@
 .ui-segment label:has(input:checked),
 .ui-segment button[aria-selected="true"],
 .ui-segment button[aria-pressed="true"] {
-  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gilt) border-box;
+  background: var(--ui-selection-fill);
   box-shadow: var(--ui-shadow-selected);
-  color: var(--ui-accent-ink);
+  color: var(--ui-selection-ink);
 }
 
 /* An inline count or unit inside a segment, which must dim against both the
@@ -704,18 +757,16 @@
   padding: var(--ui-space-2) var(--ui-space-3);
   border: 1px solid transparent;
   /* Two flat corners is what makes a tab read as attached to its panel. */
-  border-radius: var(--ui-radius-sm) var(--ui-radius-sm) 0 0;
-  background: var(--ui-raised-fill) padding-box, var(--ui-ring-gilt) border-box;
-  box-shadow: var(--ui-shadow-raised-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--ui-text-muted);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
   cursor: pointer;
-  transition:
-    background var(--ui-duration) var(--ui-ease-out),
-    color var(--ui-duration) var(--ui-ease-out);
 }
 
 .ui-tab:hover {
+  background: var(--ui-hover);
   color: var(--ui-text-bright);
 }
 
@@ -729,9 +780,9 @@
 }
 
 .ui-tab[aria-selected="true"] {
-  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
-  box-shadow: var(--ui-shadow-selected), inset 0 -2px 0 var(--ui-accent);
-  color: var(--ui-accent-ink);
+  background: var(--ui-selection-fill);
+  box-shadow: inset 0 -2px 0 var(--ui-selection-marker);
+  color: var(--ui-selection-ink);
 }
 
 /* A vertical rail, for a dialog with more sections than a tab strip can hold.
@@ -743,7 +794,7 @@
   flex-direction: column;
   padding: var(--ui-space-2) 0;
   border-right: 1px solid var(--ui-line-soft);
-  background: var(--ui-well-fill);
+  background: var(--ui-region-fill);
 }
 
 /* A fixed 1px marker, deliberately not `--ui-border-width`: that preference is
@@ -760,9 +811,6 @@
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
   cursor: pointer;
   text-align: left;
-  transition:
-    background var(--ui-duration) var(--ui-ease-out),
-    color var(--ui-duration) var(--ui-ease-out);
 }
 
 /* One semantic status line for autosave, progress, and failure feedback.
@@ -798,9 +846,9 @@
 }
 
 .ui-rail button[aria-selected="true"] {
-  border-left-color: var(--ui-accent);
-  background: var(--ui-selected);
-  color: var(--ui-text-bright);
+  border-left-color: var(--ui-selection-marker);
+  background: var(--ui-selection-fill);
+  color: var(--ui-selection-ink);
 }
 
 /* =============================================================== lists == */
@@ -809,7 +857,7 @@
   display: flex;
   min-height: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   margin: 0;
   padding: var(--ui-space-2);
   list-style: none;
@@ -823,17 +871,19 @@
   gap: var(--ui-gap);
   padding: var(--ui-space-1) var(--ui-space-2);
   border: 1px solid transparent;
-  border-radius: var(--ui-radius-sm);
-  background: var(--ui-row-fill) padding-box, var(--ui-ring-quiet) border-box;
+  border-radius: 0;
+  background: transparent;
   color: var(--ui-text);
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
   cursor: pointer;
   text-align: left;
-  transition: background var(--ui-duration) var(--ui-ease-out);
 }
 
+.ui-row[data-density="compact"] { min-height: var(--ui-control-height-compact); }
+
 .ui-row:hover {
-  filter: brightness(1.25);
+  background: var(--ui-hover);
+  filter: none;
 }
 
 .ui-row:active:not([aria-disabled="true"]) {
@@ -846,11 +896,30 @@
 }
 
 .ui-row[aria-selected="true"],
+.ui-row[aria-pressed="true"],
 .ui-row[aria-current="page"] {
   border-color: transparent;
-  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
-  box-shadow: var(--ui-shadow-row-selected);
-  color: var(--ui-text-bright);
+  background: var(--ui-selection-fill);
+  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
+  color: var(--ui-selection-ink);
+}
+.ui-row:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]):hover {
+  background: var(--ui-selection-hover-fill);
+}
+.ui-row:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) .ui-row-title {
+  color: currentColor;
+}
+
+/* Composite ledger rows are not one button, but they still need the same
+ * persistent selection hierarchy as list options. */
+.ui-selection-region[data-selected] {
+  background: var(--ui-selection-fill);
+  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
+  color: var(--ui-selection-ink);
+}
+
+.ui-selection-region[data-selected]:hover {
+  background: var(--ui-selection-hover-fill);
 }
 
 .ui-row-title {
@@ -862,6 +931,38 @@
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A form-backed, full-row choice. The native radio owns the value and
+ * keyboard behavior; the row owns the same selection and focus language as
+ * list options without turning a settings section into cards. */
+.ui-choice-row {
+  position: relative;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ui-text);
+  cursor: pointer;
+}
+
+.ui-choice-row:hover { background: var(--ui-hover); }
+
+.ui-choice-row:has(input:checked) {
+  background: var(--ui-selection-fill);
+  box-shadow: inset 2px 0 0 var(--ui-selection-marker);
+  color: var(--ui-selection-ink);
+}
+
+.ui-choice-row:has(input:focus-visible) {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--ui-focus-halo);
+}
+
+.ui-choice-row > input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
 }
 
 /* An indented child row with a stem, for a variant under the build it forked
@@ -907,7 +1008,7 @@
  * click is a control, and needs a hit target even at compact density — where
  * the bare text height lands around 17px. */
 button.ui-chip {
-  min-height: calc(var(--ui-control-height) * 0.74);
+  min-height: var(--ui-target-min);
   cursor: pointer;
 }
 
@@ -927,8 +1028,8 @@ button.ui-chip[aria-disabled="true"] {
 
 .ui-chip[aria-pressed="true"] {
   border-color: transparent;
-  background: var(--ui-accent-fill) padding-box, var(--ui-ring-gold) border-box;
-  color: var(--ui-accent);
+  background: var(--ui-selection-fill);
+  color: var(--ui-selection-ink);
 }
 
 /* Status chips are tinted rather than filled, so a row of them does not turn
@@ -964,7 +1065,7 @@ button.ui-chip[aria-disabled="true"] {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-well-fill);
   color: var(--ui-text-faint);
-  font: var(--ui-font-size-sm) / 1.4 var(--ui-font-mono);
+  font: var(--ui-font-size-sm) / 1.4 var(--ui-font-data);
 }
 
 /* ========================================================= skill slots == */
@@ -1107,7 +1208,7 @@ button.ui-chip[aria-disabled="true"] {
 .ui-scroll::-webkit-scrollbar-thumb {
   border-radius: var(--ui-radius-pill);
   background: var(--ui-scroll-thumb);
-  box-shadow: 0 0 0 1px var(--gw-gilt-fall);
+  box-shadow: 0 0 0 1px var(--ui-edge-strong);
 }
 
 .ui-scroll::-webkit-scrollbar-thumb:hover {
@@ -1142,7 +1243,7 @@ button.ui-chip[aria-disabled="true"] {
 .ui-empty {
   display: grid;
   gap: var(--ui-space-2);
-  padding: var(--ui-space-5) var(--ui-space-4);
+  padding: var(--ui-space-6) var(--ui-space-4);
   place-items: center;
   color: var(--ui-text-muted);
   text-align: center;

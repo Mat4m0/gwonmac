@@ -14,6 +14,7 @@ class FakeStyle {
 
 class FakeDocument {
   readonly head = new FakeElement(this);
+  activeElement: FakeElement | null = null;
   createElement(): FakeElement { return new FakeElement(this); }
   createElementNS(): FakeElement { return new FakeElement(this); }
   getElementById(id: string): FakeElement | null {
@@ -99,7 +100,7 @@ function fixture(fail = false) {
     recoverAfterPersistFailure: async () => { recoveries += 1; },
     feedback: (message) => { feedback.push(message); },
   });
-  return { binder, fieldset, saved, feedback, recoveries: () => recoveries };
+  return { binder, document, fieldset, saved, feedback, recoveries: () => recoveries };
 }
 
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -155,4 +156,21 @@ test("cooldown settings recover the active state after a failed write", async ()
   await flush();
   assert.equal(view.recoveries(), 1);
   assert.deepEqual(view.feedback, ["Saving…"]);
+});
+
+test("cooldown settings do not repaint a custom color while it is being edited", () => {
+  const view = fixture();
+  const staleSettings = {
+    ...DEFAULT_SETTINGS,
+    gwonmacTools: true,
+    skillCooldownColor: { kind: "custom", value: "#e35a4f" } as const,
+  };
+  view.binder.render(staleSettings);
+  view.fieldset.text.value = "#123abc";
+  view.fieldset.text.dispatch("input");
+  view.document.activeElement = view.fieldset.text;
+
+  view.binder.render(staleSettings);
+
+  assert.equal(view.fieldset.text.value, "#123abc");
 });

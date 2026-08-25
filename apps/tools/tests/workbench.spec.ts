@@ -584,6 +584,51 @@ test("projects Obsidian through the shared system without layout drift", async (
   await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
 });
 
+test("projects a custom palette through the shared system without layout drift", async ({ page }) => {
+  await page.evaluate(() => {
+    if (!window.gwApplyFixtureAppearance) throw new Error("Appearance fixture bridge is missing");
+    window.gwApplyFixtureAppearance({
+      uiStyle: "custom",
+      uiPanelOpacity: 65,
+      uiCustomTheme: {
+        material: "modern",
+        window: "#F4F4F4",
+        titlebar: "#FFFFFF",
+        surface: "#FFFFFF",
+        recessed: "#E5E7EB",
+        selected: "#123456",
+        accent: "#22C55E",
+        text: "#171717",
+        mutedText: "#666666",
+        border: "#D4D4D4",
+        windowGradient: false,
+      },
+    });
+  });
+  await page.setViewportSize({ width: 360, height: 800 });
+  await openBuild(page);
+
+  const appearance = await page.evaluate(() => {
+    const primary = document.querySelector<HTMLElement>('.ui-button[data-variant="primary"]');
+    if (!primary || !document.scrollingElement) throw new Error("custom fixture is incomplete");
+    return {
+      material: document.documentElement.dataset.uiMaterial,
+      style: document.documentElement.dataset.uiStyle,
+      panelFill: document.documentElement.style.getPropertyValue("--ui-panel-fill"),
+      accent: document.documentElement.style.getPropertyValue("--ui-accent"),
+      primaryFill: getComputedStyle(primary).backgroundImage,
+      overflow: document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth,
+    };
+  });
+  expect(appearance.material).toBe("modern");
+  expect(appearance.style).toBe("obsidian");
+  expect(appearance.panelFill).toContain("244 244 244");
+  expect(appearance.accent).toBe("#22C55E");
+  expect(appearance.primaryFill).not.toBe("none");
+  expect(appearance.overflow).toBeLessThanOrEqual(1);
+  await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
+});
+
 test("keeps critical team and skill feedback legible", async ({ page }) => {
   const contrast = async (selector: string) => page.locator(selector).first().evaluate((element) => {
     type Colour = [number, number, number, number];

@@ -25,7 +25,8 @@
    wash: panel opacity is a real preference, and against a near-black backdrop
    every value from 65% to 100% looks identical, so the one control whose whole
    job is translucency would appear to do nothing. */
-body:has(.tools-stage[data-mode="standalone"]) {
+body:has(.tools-stage[data-mode="standalone"]),
+body[data-tools-standalone="true"] {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
@@ -142,20 +143,27 @@ body:has(.tools-stage[data-mode="standalone"]) {
 .window-close { font-size: var(--ui-font-size-lg); }
 
 .ui-modal {
+  position: fixed;
+  z-index: var(--ui-z-toast);
+  inset: 50% auto auto 50%;
   width: min(520px, calc(100vw - 2 * var(--ui-space-4)));
   max-width: none;
   max-height: calc(100vh - 2 * var(--ui-space-4));
-  margin: auto;
+  margin: 0;
   padding: 0;
   overflow: visible;
   border: 0;
   background: transparent;
   color: inherit;
   pointer-events: auto;
+  transform: translate(-50%, -50%);
 }
 
-.ui-modal::backdrop {
-  background: color-mix(in srgb, var(--ui-outline) 76%, transparent);
+.ui-modal-overlay {
+  position: fixed;
+  z-index: calc(var(--ui-z-toast) - 1);
+  inset: 0;
+  background: var(--ui-overlay-fill);
 }
 
 .skill-recovery {
@@ -171,8 +179,8 @@ body:has(.tools-stage[data-mode="standalone"]) {
   display: grid;
   min-height: 0;
   flex: 1;
-  gap: var(--ui-gap);
-  padding-top: var(--ui-gap);
+  gap: var(--ui-space-1);
+  padding-top: var(--ui-space-1);
   overflow: hidden;
   grid-template-columns: 310px minmax(0, 1fr);
 }

@@ -84,6 +84,16 @@ const latest = computed(() => ({
   sell: props.points.filter((point) => point.side === "sell").at(-1),
 }));
 
+const historyRows = computed(() => {
+  const rows = new Map<number, { timestamp: number; buy?: number; sell?: number }>();
+  for (const point of visiblePoints.value) {
+    const row = rows.get(point.timestamp) ?? { timestamp: point.timestamp };
+    row[point.side] = point.price;
+    rows.set(point.timestamp, row);
+  }
+  return [...rows.values()].sort((a, b) => b.timestamp - a.timestamp);
+});
+
 function linePath(points: readonly TraderQuote[]): string {
   return points.map((point, index) => {
     const x = xFor(point.timestamp);
@@ -233,6 +243,13 @@ function formatTooltipTime(timestamp: number): string {
     timeStyle: "short",
   }).format(timestamp);
 }
+
+function formatTableTime(timestamp: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(timestamp);
+}
 </script>
 
 <template>
@@ -304,5 +321,20 @@ function formatTooltipTime(timestamp: number): string {
       Latest sell price {{ latest.sell ? formatPrice(latest.sell.price) : "unavailable" }}.
       Scroll to zoom and drag to move through time.
     </figcaption>
+    <details v-if="points.length" class="price-chart-data">
+      <summary>View exact price history</summary>
+      <div class="price-chart-table-wrap ui-scroll">
+        <table>
+          <thead><tr><th scope="col">Observed</th><th scope="col">Buy</th><th scope="col">Sell</th></tr></thead>
+          <tbody>
+            <tr v-for="row in historyRows" :key="row.timestamp">
+              <th scope="row"><time :datetime="new Date(row.timestamp).toISOString()">{{ formatTableTime(row.timestamp) }}</time></th>
+              <td>{{ row.buy === undefined ? "—" : formatPrice(row.buy) }}</td>
+              <td>{{ row.sell === undefined ? "—" : formatPrice(row.sell) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
   </figure>
 </template>

@@ -25,6 +25,7 @@ const ASSETS = [
   "images/playstation-controller-prompts.png",
   "index.html",
   "loading.css",
+  "settings.css",
 ];
 
 // The design system lives in src/shared because the Tools application consumes
@@ -39,6 +40,22 @@ const SHARED_ASSETS = [
   // The website and Hub use one reviewed static painting. Keep it canonical in
   // the website package and copy it into the renderer at build time.
   ["apps/website/public/bg-reforged.jpg", "images/bg-reforged.jpg"],
+];
+
+// Inter is a pinned build dependency rather than a checked-in binary. Copy its
+// reviewed variable-weight CSS, language subsets, and OFL notice into the
+// renderer so the named preference is real and remains fully offline.
+/** @type {ReadonlyArray<readonly [source: string, destination: string]>} */
+const INTER_ASSETS = [
+  ["wght.css", "fonts/inter.css"],
+  ["LICENSE", "fonts/COPYING-INTER"],
+  ["files/inter-cyrillic-ext-wght-normal.woff2", "fonts/files/inter-cyrillic-ext-wght-normal.woff2"],
+  ["files/inter-cyrillic-wght-normal.woff2", "fonts/files/inter-cyrillic-wght-normal.woff2"],
+  ["files/inter-greek-ext-wght-normal.woff2", "fonts/files/inter-greek-ext-wght-normal.woff2"],
+  ["files/inter-greek-wght-normal.woff2", "fonts/files/inter-greek-wght-normal.woff2"],
+  ["files/inter-latin-ext-wght-normal.woff2", "fonts/files/inter-latin-ext-wght-normal.woff2"],
+  ["files/inter-latin-wght-normal.woff2", "fonts/files/inter-latin-wght-normal.woff2"],
+  ["files/inter-vietnamese-wght-normal.woff2", "fonts/files/inter-vietnamese-wght-normal.woff2"],
 ];
 
 const dest = path.resolve("build/renderer");
@@ -57,6 +74,9 @@ for (const relative of ASSETS) {
 }
 for (const [from, relative] of SHARED_ASSETS) {
   copy(path.resolve(from), relative);
+}
+for (const [from, relative] of INTER_ASSETS) {
+  copy(path.resolve("node_modules/@fontsource-variable/inter", from), relative);
 }
 
 console.log(`copied renderer -> ${dest}`);
