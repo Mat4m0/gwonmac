@@ -180,6 +180,13 @@ const candidateSettingsDomains = Array.from(
     const settings: AppSettings = {
       renderScale: cycle(RENDER_SCALES, index),
       uiStyle: cycle(UI_STYLES, index),
+      uiCustomTheme: {
+        window: index % 2 === 0 ? "#14120F" : "#FFFFFF",
+        recessed: "#070707",
+        selected: "#26374A",
+        accent: "#E6C882",
+        windowGradient: cycle(booleanValues, index),
+      },
       uiFont: cycle(UI_FONTS, index),
       controllerPromptStyle: cycle(CONTROLLER_PROMPT_STYLES, index),
       uiPanelOpacity: cycle(opacityValues, index),
