@@ -404,6 +404,127 @@ describe("capture validation, format 2", () => {
   });
 });
 
+function visualCapture(): Capture {
+  const capture = currentCapture([]);
+  const png = new Uint8Array(24);
+  png.set([137, 80, 78, 71, 13, 10, 26, 10]);
+  const view = new DataView(png.buffer);
+  view.setUint32(16, 1);
+  view.setUint32(20, 1);
+  capture.manifest.formatVersion = 3;
+  capture.manifest.visualProblem = {
+    rendererOutcome: "completed",
+    gameWindowCount: 1,
+    screenshotRequested: true,
+    includedStages: ["webgl", "offscreen", "canvas", "window"],
+    missingStages: {},
+    screenshotPrivacy: "player-consented-unscanned",
+  };
+  capture.manifest.includedFiles.push(
+    "visual-capture.json",
+    "visual-webgl.png",
+    "visual-offscreen.png",
+    "visual-canvas.png",
+    "visual-window.png",
+    "runtime-state.json",
+  );
+  capture.visualStages = {
+    webgl: png,
+    offscreen: png,
+    canvas: png,
+    window: png,
+  };
+  capture.visualCapture = {
+    metadata: {},
+    dimensions: {
+      webgl: { width: 1, height: 1 },
+      offscreen: { width: 1, height: 1 },
+      canvas: { width: 1, height: 1 },
+      window: { width: 1, height: 1 },
+    },
+    missing: {},
+  };
+  capture.runtimeState = {
+    status: "active",
+    diagnosticProfile: "official-baseline",
+    extendedMemoryRequested: true,
+    enhancementCapabilitiesRequested: {},
+    generation: 1,
+    presentationPath: "offscreen-imagebitmap",
+    artifactKind: "official",
+    extendedMemoryEffective: {},
+    transforms: {},
+    observers: {},
+    snapshot: {},
+  };
+  return capture;
+}
+
+describe("capture validation, format 3 visual evidence", () => {
+  it("accepts a complete self-consistent visual capture", () => {
+    assert.deepEqual(validateCapture(visualCapture()), []);
+  });
+
+  it("requires one unique declaration and dimension record per image", () => {
+    const duplicate = visualCapture();
+    if (!duplicate.manifest.visualProblem
+      || !("includedStages" in duplicate.manifest.visualProblem)) return;
+    duplicate.manifest.visualProblem.includedStages = [
+      ...duplicate.manifest.visualProblem.includedStages,
+      "webgl",
+    ];
+    assert.match(
+      validateCapture(duplicate).join("\n"),
+      /visual-problem manifest declaration is invalid/,
+    );
+
+    const missingDimensions = visualCapture();
+    const document = missingDimensions.visualCapture as {
+      dimensions: Record<string, unknown>;
+    };
+    delete document.dimensions.webgl;
+    assert.match(
+      validateCapture(missingDimensions).join("\n"),
+      /visual webgl has no recorded dimensions/,
+    );
+  });
+
+  it("rejects dimension mismatches and dimensions without an image", () => {
+    const mismatch = visualCapture();
+    const document = mismatch.visualCapture as {
+      dimensions: Record<string, { width: number; height: number }>;
+    };
+    document.dimensions.webgl = { width: 2, height: 1 };
+    assert.match(
+      validateCapture(mismatch).join("\n"),
+      /recorded dimensions differ/,
+    );
+
+    const absent = visualCapture();
+    delete absent.visualStages?.webgl;
+    assert.match(
+      validateCapture(absent).join("\n"),
+      /records dimensions without an image/,
+    );
+  });
+
+  it("requires valid runtime state and a visual declaration for format 3", () => {
+    const missingRuntime = visualCapture();
+    missingRuntime.runtimeState = undefined;
+    assert.match(
+      validateCapture(missingRuntime).join("\n"),
+      /runtime-state\.json could not be read/,
+    );
+
+    const noVisualDeclaration = visualCapture();
+    delete noVisualDeclaration.manifest.visualProblem;
+    assert.match(
+      validateCapture(noVisualDeclaration).join("\n"),
+      /format 3 requires a visual-problem manifest declaration/,
+    );
+  });
+});
+
 // Format 1 is the alpha's export, and 117 of them are in the wild. The
 // validator keeps reading it: `histograms.json` stays required there and
 // `redaction: "passed"` stays the only verdict it can offer, because nothing

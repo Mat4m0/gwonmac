@@ -564,6 +564,7 @@ export async function assertPackagedOffSession() {
           nativeCursor: true,
           tools: false,
         },
+        diagnosticProfile: "standard",
         templateFsTrace: false,
       },
     );

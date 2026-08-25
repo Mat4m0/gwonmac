@@ -19,6 +19,7 @@ import { clientGenerationPaths } from "./client-compatibility.js";
 export interface GamePaths {
   userData: string;
   settings: string;
+  diagnosticProfile: string;
   travelPreferences: string;
   tradeSaved: string;
   buildLibrary: string;
@@ -52,6 +53,7 @@ export function gamePaths(userData: string): GamePaths {
   return {
     userData,
     settings: path.join(userData, "settings.json"),
+    diagnosticProfile: path.join(userData, "diagnostic-profile.json"),
     travelPreferences: path.join(userData, "travel-preferences.json"),
     tradeSaved: path.join(userData, "trade-saved.json"),
     buildLibrary: path.join(userData, "build-library.json"),

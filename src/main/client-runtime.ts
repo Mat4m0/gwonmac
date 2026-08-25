@@ -28,11 +28,12 @@ import {
   type DownloadActivity,
   type DownloadFailure,
   type ExtendedMemoryRuntimeStatus,
-  type OptionalFeatureStatus,
   type DownloadProgress,
+  type DiagnosticProfile,
   type FullDownloadOutcome,
   type FullDownloadState,
   type NoticeCode,
+  type RuntimeDiagnosticState,
   type SnapshotMetadata,
 } from "../shared/contracts.js";
 import {
@@ -41,22 +42,16 @@ import {
   NO_ENHANCEMENT_CAPABILITIES,
   type EnhancementCapabilities,
 } from "../shared/enhancement-contracts.js";
-import { isDigest, type Digest } from "../shared/digest.js";
 import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
-import {
-  certificationFromLocalVerification,
-} from "./certification/client-certification.js";
+import { certificationFromLocalVerification } from "./certification/client-certification.js";
 import {
   PATCH_REQUEST_HEADERS,
   PATCH_REQUEST_TIMEOUT_MS,
   PATCH_ROOT,
   SNAPSHOT,
 } from "./core/access-key.js";
-import {
-  ActiveClientSlot,
-  type ActiveClient,
-} from "./active-client.js";
+import { ActiveClientSlot, type ActiveClient } from "./active-client.js";
 import { pruneUnreferencedChunks } from "./core/chunk-cache.js";
 import { readClientCacheInfo } from "./core/client-cache-info.js";
 import { encodedChunkLimit } from "./core/chunk-format.js";
@@ -103,33 +98,14 @@ import {
 } from "./certification/local-client-verifier-host.js";
 import { extendedMemoryRuntimeStatus } from "./extended-memory-runtime.js";
 import { supportedEnhancementCapabilities } from "./certification/enhancement-builds.js";
+import { readClientRuntimeDiagnosticState } from "./client-runtime-diagnostics.js";
+import { selectOfficialDiagnosticClient } from "./client-diagnostic-selection.js";
+import {
+  diagnosticDigest,
+  optionalFeatureStatus,
+} from "./client-runtime-values.js";
 
 export type { ActiveClient } from "./active-client.js";
-
-/**
- * Client fingerprints are parsed as 64-hex where they are read, so this only
- * types the crossing into the diagnostics schema. It fails closed to `null`
- * rather than throwing: a broken invariant must not take down an update.
- */
-function digestOrNull(value: string | null | undefined): Digest | null {
-  return typeof value === "string" && isDigest(value) ? value : null;
-}
-
-function optionalFeatureStatus(
-  requested: boolean,
-  effective: boolean,
-  supported: boolean,
-  preparationFailed: boolean,
-): OptionalFeatureStatus {
-  if (!requested) return { status: "off" };
-  if (effective) return { status: "available" };
-  return {
-    status: "unavailable",
-    reason: supported && preparationFailed
-      ? "preparation-failed"
-      : "game-update",
-  };
-}
 
 interface ClientRuntimeOptions {
   paths: GamePaths;
@@ -137,6 +113,7 @@ interface ClientRuntimeOptions {
   cachedOnly: boolean;
   enhancementCapabilities: EnhancementCapabilities;
   extendedMemoryEnabled: boolean;
+  diagnosticProfile: DiagnosticProfile;
   onProgress: (progress: DownloadProgress) => void;
 }
 
@@ -216,6 +193,16 @@ export class ClientRuntime {
     return this.fullDownload !== null;
   }
 
+  diagnosticState(): Promise<RuntimeDiagnosticState> {
+    return readClientRuntimeDiagnosticState({
+      active: this.activeSlot.current,
+      paths: this.options.paths,
+      diagnosticProfile: this.options.diagnosticProfile,
+      extendedMemoryEnabled: this.options.extendedMemoryEnabled,
+      enhancementCapabilities: this.options.enhancementCapabilities,
+    });
+  }
+
   async snapshotMetadata(): Promise<SnapshotMetadata> {
     const store = this.activeSlot.current?.store;
     if (!store) {
@@ -290,6 +277,7 @@ export class ClientRuntime {
     jsPath: string;
     compatibility: ClientCompatibility | null;
     extendedMemory: ExtendedMemoryRuntimeStatus;
+    transforms: ActiveClient["transforms"];
   }> {
     const officialWasm = clientArtifactPath(
       this.options.paths.artifacts,
@@ -315,8 +303,16 @@ export class ClientRuntime {
         jsPath: clientArtifactPath(this.options.paths.artifacts, "Gw.jspi.js"),
         compatibility: null,
         extendedMemory,
+        transforms: { templateSave: false, nativeDoubleClick: false },
       };
     }
+
+    const officialDiagnosticClient = selectOfficialDiagnosticClient({
+      paths: this.options.paths,
+      profile: this.options.diagnosticProfile,
+      extendedMemoryEnabled: this.options.extendedMemoryEnabled,
+    });
+    if (officialDiagnosticClient) return officialDiagnosticClient;
 
     let certification: ClientCertification = {
       templateSaveBuild: null,
@@ -494,6 +490,10 @@ export class ClientRuntime {
       jsPath: prepared.jsPath,
       compatibility,
       extendedMemory,
+      transforms: {
+        templateSave: prepared.gameFileSaving.status === "available",
+        nativeDoubleClick: prepared.nativeDoubleClick,
+      },
     };
   }
 
@@ -533,6 +533,7 @@ export class ClientRuntime {
       jsPath: enhancement.jsPath,
       compatibility: enhancement.compatibility,
       extendedMemory: enhancement.extendedMemory,
+      transforms: enhancement.transforms,
     });
     this.candidateHealthToken = candidateFingerprint
       ? Object.freeze({
@@ -688,7 +689,7 @@ export class ClientRuntime {
         if (rollback) {
           logEvent({
             k: "client.candidateRolledBack",
-            fingerprint: digestOrNull(rollback.fingerprint),
+            fingerprint: diagnosticDigest(rollback.fingerprint),
           });
         }
       }
@@ -699,7 +700,7 @@ export class ClientRuntime {
         if (migrated) {
           logEvent({
             k: "client.integrityMetadataReady",
-            fingerprint: digestOrNull(migrated.clientFingerprint),
+            fingerprint: diagnosticDigest(migrated.clientFingerprint),
           });
         }
       } catch (error) {
@@ -720,7 +721,7 @@ export class ClientRuntime {
         updateSpan.end({
           status: "rejectedCandidateSkipped",
           code: null,
-          fingerprint: digestOrNull(result.fingerprint),
+          fingerprint: diagnosticDigest(result.fingerprint),
         });
         return;
       }
@@ -733,7 +734,7 @@ export class ClientRuntime {
       updateSpan.end({
         status: result.candidate ? "candidate" : "ready",
         code: null,
-        fingerprint: digestOrNull(result.fingerprint),
+        fingerprint: diagnosticDigest(result.fingerprint),
       });
     } catch (error) {
       // Identify the failure by code, so comparing sessions does not depend on
@@ -936,7 +937,7 @@ export class ClientRuntime {
         await this.pruneChunkCache();
         logEvent({
           k: "client.candidatePromoted",
-          fingerprint: digestOrNull(fingerprint),
+          fingerprint: diagnosticDigest(fingerprint),
         });
       }
     });
@@ -980,7 +981,7 @@ export class ClientRuntime {
       await this.activatePublishedAndReady();
       logEvent({
         k: "client.candidateRolledBackAfterRendererCrash",
-        fingerprint: digestOrNull(rollback.fingerprint),
+        fingerprint: diagnosticDigest(rollback.fingerprint),
       });
     });
   }

@@ -61,6 +61,9 @@
       case 'input.reset':
         dispatch('gw:input-reset');
         break;
+      case 'diagnostics.visual':
+        await window.gwDiagnostics.visualProblem(command.token);
+        break;
       case 'input.release':
         dispatch('gw:input-release', command.code);
         break;

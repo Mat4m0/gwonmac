@@ -35,6 +35,9 @@
   const extendedMemoryEnabled = form.elements.namedItem(
     'extendedMemoryEnabled',
   ) as HTMLInputElement;
+  const diagnosticProfile = form.elements.namedItem(
+    'diagnosticProfile',
+  ) as HTMLSelectElement;
   const autoCheckUpdates = form.elements.namedItem(
     'autoCheckUpdates',
   ) as HTMLInputElement;
@@ -70,6 +73,7 @@
   let templatePane: import('./template-pane.js').TemplatePane | null = null;
 
   let currentSession: ClientSession | null = null;
+  let selectedDiagnosticProfile = window.gwNative.init.diagnosticProfile;
 
   let currentSettings: AppSettings | null = null;
   let settingsLoad: Promise<AppSettings> | null = null;
@@ -523,6 +527,7 @@
     showAppearanceValues(settings);
     showDiagnostics.checked = settings.showDiagnostics;
     extendedMemoryEnabled.checked = settings.extendedMemoryEnabled;
+    diagnosticProfile.value = selectedDiagnosticProfile;
     gwonmacTools.checked = settings.gwonmacTools;
     teamManagement.checked = settings.teamManagement;
     xunlaiStorage.checked = settings.xunlaiStorage;
@@ -612,6 +617,23 @@
       !(control instanceof globalThis.HTMLInputElement) &&
       !(control instanceof globalThis.HTMLSelectElement)
     ) return;
+    if (control.name === 'diagnosticProfile') {
+      // Every option is authored in index.html; main still validates the
+      // closed union before it writes anything.
+      const value = control.value as import('../shared/contracts.js').DiagnosticProfile;
+      const previous = selectedDiagnosticProfile;
+      selectedDiagnosticProfile = value;
+      setFeedback('Saving…', 'progress');
+      void window.gwNative.diagnostics.setProfile(value).then((saved) => {
+        selectedDiagnosticProfile = saved;
+        setFeedback('Saved. Restart GWonMac to apply the diagnostic profile.', 'success', 4500);
+      }).catch(() => {
+        selectedDiagnosticProfile = previous;
+        control.value = selectedDiagnosticProfile;
+        setFeedback('The diagnostic profile could not be saved.', 'error');
+      });
+      return;
+    }
     const patch = patchForControl(control);
     if (!patch) return;
     setFeedback('Saving…', 'progress');

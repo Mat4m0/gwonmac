@@ -8,9 +8,9 @@
 // here may start with the gw channel prefix — tests/policy asserts that.
 // `process` is declared here for the same reason the generated constants are: the
 // sandbox loader supplies it to this file's scope, and it is the only Node-ish
-// binding the preload may read. The five spliced constants are declared for the
+// binding the preload may read. The six spliced constants are declared for the
 // type checker in scripts/preload-injected-constants.mts.
-/* global IPC, RENDERER_INIT_ARGUMENT, ENHANCEMENTS, ENHANCEMENT_PROGRAMS, WASM_BRIDGE_MARKERS, process */
+/* global IPC, RENDERER_INIT_ARGUMENT, ENHANCEMENTS, ENHANCEMENT_PROGRAMS, DIAGNOSTIC_PROFILES, WASM_BRIDGE_MARKERS, process */
 const { contextBridge, ipcRenderer } = require("electron");
 const MAX_SOCKET_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -74,10 +74,21 @@ function rendererInit() {
         requestedProgram
       )
     : "none";
+  const requestedDiagnosticProfile = parsed.diagnosticProfile;
+  /** @type {import("../shared/contracts.js").DiagnosticProfile} */
+  const diagnosticProfile = typeof requestedDiagnosticProfile === "string"
+      && DIAGNOSTIC_PROFILES.some(
+        (profile) => profile === requestedDiagnosticProfile,
+      )
+    ? /** @type {import("../shared/contracts.js").DiagnosticProfile} */ (
+        requestedDiagnosticProfile
+      )
+    : "standard";
   return {
     development: parsed.development === true,
     enhancementProgram,
     enhancementSelection,
+    diagnosticProfile,
     templateFsTrace: parsed.templateFsTrace === true,
   };
 }
@@ -241,6 +252,9 @@ const api = {
         fields,
       ),
     current: () => ipcRenderer.invoke(IPC.diagnosticsCurrent),
+    submitVisualCapture: (value) =>
+      ipcRenderer.invoke(IPC.diagnosticsVisualSubmit, value),
+    setProfile: (value) => ipcRenderer.invoke(IPC.diagnosticsProfileSet, value),
   },
   app: {
     openExternal: (kind) => ipcRenderer.invoke(IPC.appOpenExternal, kind),

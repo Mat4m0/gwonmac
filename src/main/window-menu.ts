@@ -245,7 +245,7 @@ export function installApplicationMenu({
         },
         {
           id: "report-visual-problem",
-          label: "Report Visual Problem…",
+          label: "Capture Visual Corruption…",
           click: withGameOwner(async (win) => {
             await resetGameInput(win);
             await host.reportVisualProblem(win);

@@ -24,6 +24,7 @@ describe("resolved profile paths", () => {
     assert.deepEqual(gamePaths(root), {
       userData: root,
       settings: `${root}/settings.json`,
+      diagnosticProfile: `${root}/diagnostic-profile.json`,
       travelPreferences: `${root}/travel-preferences.json`,
       tradeSaved: `${root}/trade-saved.json`,
       buildLibrary: `${root}/build-library.json`,

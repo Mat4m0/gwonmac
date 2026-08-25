@@ -8,6 +8,7 @@
  * The slot records what is current and decides nothing about readiness.
  */
 import type {
+  ClientTransforms,
   ClientCompatibility,
   ExtendedMemoryRuntimeStatus,
 } from "../shared/contracts.js";
@@ -21,6 +22,7 @@ export interface ActiveClient {
   readonly jsPath: string;
   readonly compatibility: ClientCompatibility | null;
   readonly extendedMemory: ExtendedMemoryRuntimeStatus;
+  readonly transforms: ClientTransforms;
 }
 
 export type ClientGeneration = Omit<ActiveClient, "generation">;

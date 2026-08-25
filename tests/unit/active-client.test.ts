@@ -31,6 +31,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
     extendedMemory: supported
       ? { requestedAtLaunch: false, status: "standard", effectiveCapBytes: 2_147_483_648, fallbackReason: null }
       : { requestedAtLaunch: true, status: "active", effectiveCapBytes: 4_294_967_296, fallbackReason: null },
+    transforms: { templateSave: supported, nativeDoubleClick: supported },
   };
 }
 

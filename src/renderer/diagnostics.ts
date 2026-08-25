@@ -311,7 +311,7 @@
       if (marker) marker.hidden = false;
       announceCapture('Performance problem marked.');
     },
-    async visualProblem() {
+    async visualProblem(token) {
       while (flushing) await new Promise((resolve) => setTimeout(resolve, 0));
       const visible = document.getElementById('canvas');
       const canvas = visible instanceof globalThis.HTMLCanvasElement
@@ -354,6 +354,42 @@
         },
       );
       await flush();
+      if (!token) return;
+      const capture = window.gwVisualCapture;
+      if (!capture) {
+        await window.gwNative.diagnostics.submitVisualCapture({
+          token,
+          status: 'failed',
+          reason: 'unsupported',
+        });
+        return;
+      }
+      let lease: VisualCaptureLease;
+      try {
+        lease = await capture.capture();
+      } catch (error) {
+        const reason = error instanceof Error
+          && 'visualCaptureFailure' in error
+          ? (error as VisualCaptureError).visualCaptureFailure
+          : 'capture-failed';
+        await window.gwNative.diagnostics.submitVisualCapture({
+          token,
+          status: 'failed',
+          reason,
+        });
+        return;
+      }
+      try {
+        await window.gwNative.diagnostics.submitVisualCapture({
+          token,
+          status: 'captured',
+          webglPng: lease.webglPng,
+          offscreenPng: lease.offscreenPng,
+          metadata: lease.metadata,
+        });
+      } finally {
+        lease.release();
+      }
     },
     event: recordEvent,
     // This is per readAsync. The cache() counters below are per chunk, so

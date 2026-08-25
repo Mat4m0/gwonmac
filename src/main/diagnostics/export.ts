@@ -23,8 +23,14 @@ import { promisify } from "node:util";
 import { app, dialog, type BrowserWindow } from "electron";
 import type {
   AppSettings,
+  RuntimeDiagnosticState,
   VisualProblemManifest,
 } from "../../shared/contracts.js";
+import {
+  VISUAL_CAPTURE_STAGES,
+  type VisualCaptureFailure,
+  type VisualCaptureStage,
+} from "../../shared/visual-capture.js";
 import { gamePaths } from "../paths.js";
 import { windowRegistry } from "../window-registry.js";
 import {
@@ -42,6 +48,7 @@ import {
   redactDiagnosticText as redactText,
   redactTraceStream,
 } from "./text-scan.js";
+import type { VisualCaptureEvidence } from "../visual-capture.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -51,8 +58,12 @@ type VisualProblemExportBase = Pick<
 >;
 
 export type VisualProblemExport = VisualProblemExportBase & (
-  | { screenshotRequested: false; screenshotPng?: never }
-  | { screenshotRequested: true; screenshotPng?: Uint8Array }
+  | { screenshotRequested: false; evidence?: never }
+  | {
+      screenshotRequested: true;
+      evidence: VisualCaptureEvidence | null;
+      failureReason?: "capture-failed" | "timed-out" | "unsupported";
+    }
 );
 
 /**
@@ -96,14 +107,17 @@ export async function exportDiagnosticsZip(
     includePreviousSession: boolean;
     electronVersions: Record<string, string>;
     settings: AppSettings;
+    runtimeState?: RuntimeDiagnosticState;
     visualProblem?: VisualProblemExport;
   },
 ): Promise<string> {
   if (
-    extras.visualProblem?.screenshotPng?.byteLength
+    extras.visualProblem
     && extras.visualProblem.screenshotRequested !== true
+    && "evidence" in extras.visualProblem
+    && extras.visualProblem.evidence
   ) {
-    throw new Error("visual-problem screenshot requires explicit consent");
+    throw new Error("visual capture evidence requires explicit consent");
   }
   await recorder.flush();
   const dir = gamePaths().diagnostics;
@@ -142,10 +156,31 @@ export async function exportDiagnosticsZip(
       "environment.json",
       "settings-redacted.json",
     ];
+    if (extras.runtimeState) files.push("runtime-state.json");
     if (previous) files.push("previous-events.jsonl");
     if (capture) files.push("capture-summary.json");
-    const screenshot = extras.visualProblem?.screenshotPng;
-    if (screenshot?.byteLength) files.push("visual-problem.png");
+    const visualEvidence = extras.visualProblem?.screenshotRequested
+      ? extras.visualProblem.evidence
+      : null;
+    const visualImages = visualEvidence?.images ?? {};
+    const missingVisualStages: Partial<
+      Record<VisualCaptureStage, VisualCaptureFailure>
+    > = {};
+    if (extras.visualProblem?.screenshotRequested) {
+      for (const stage of VISUAL_CAPTURE_STAGES) {
+        if (!visualImages[stage]) {
+          missingVisualStages[stage] = visualEvidence?.missing[stage]
+            ?? extras.visualProblem.failureReason
+            ?? "capture-failed";
+        }
+      }
+    }
+    for (const stage of VISUAL_CAPTURE_STAGES) {
+      if (visualImages[stage]?.byteLength) files.push(`visual-${stage}.png`);
+    }
+    if (extras.visualProblem?.screenshotRequested) {
+      files.push("visual-capture.json");
+    }
     const framePath = recorder.framePath(extras.diagnosticOwnerId);
     if (framePath) {
       await copyFile(framePath, path.join(staging, "frames.bin"));
@@ -161,9 +196,9 @@ export async function exportDiagnosticsZip(
       files.push("chromium-trace.json");
     }
     const manifest = {
-      // 2 — `histograms.json` is gone (it duplicated `summary.json`) and
-      // `redaction` is the detector's result rather than the word "passed".
-      formatVersion: 2,
+      // 3 adds synchronized, original-resolution visual stages and their
+      // frame/dimension metadata. Version 2 remains readable by the tools.
+      formatVersion: extras.visualProblem ? 3 : 2,
       applicationVersion: extras.appVersion,
       sessionId: recorder.sessionId,
       captureLevel,
@@ -180,7 +215,9 @@ export async function exportDiagnosticsZip(
               rendererOutcome: extras.visualProblem.rendererOutcome,
               gameWindowCount: extras.visualProblem.gameWindowCount,
               screenshotRequested: extras.visualProblem.screenshotRequested,
-              screenshotIncluded: files.includes("visual-problem.png"),
+              includedStages: VISUAL_CAPTURE_STAGES
+                .filter((stage) => files.includes(`visual-${stage}.png`)),
+              missingStages: missingVisualStages,
               screenshotPrivacy: "player-consented-unscanned",
             } satisfies VisualProblemManifest,
           }
@@ -275,6 +312,18 @@ export async function exportDiagnosticsZip(
         2,
       ),
       "settings-redacted.json": JSON.stringify(extras.settings, null, 2),
+      ...(extras.runtimeState
+        ? { "runtime-state.json": JSON.stringify(extras.runtimeState, null, 2) }
+        : {}),
+      ...(extras.visualProblem?.screenshotRequested
+        ? {
+            "visual-capture.json": JSON.stringify({
+              metadata: visualEvidence?.metadata ?? null,
+              dimensions: visualEvidence?.dimensions ?? {},
+              missing: missingVisualStages,
+            }, null, 2),
+          }
+        : {}),
       ...(capture
         ? {
             "capture-summary.json": JSON.stringify(capture.summary, null, 2),
@@ -295,9 +344,10 @@ export async function exportDiagnosticsZip(
       await writeFile(file, text, { mode: 0o600 });
       await chmod(file, 0o600);
     }
-    if (screenshot?.byteLength) {
-      const file = path.join(staging, "visual-problem.png");
-      await writeFile(file, screenshot, { mode: 0o600 });
+    for (const [stage, image] of Object.entries(visualImages)) {
+      if (!image?.byteLength) continue;
+      const file = path.join(staging, `visual-${stage}.png`);
+      await writeFile(file, image, { mode: 0o600 });
       await chmod(file, 0o600);
     }
     await execFileAsync("ditto", ["-c", "-k", "--sequesterRsrc", staging, zipPart]);
@@ -317,7 +367,10 @@ export async function exportDiagnosticsZip(
 export async function exportDiagnosticsForWindow(
   win: BrowserWindow,
   readSettings: () => Promise<AppSettings>,
-  options: { visualProblem?: VisualProblemExport } = {},
+  options: {
+    visualProblem?: VisualProblemExport;
+    runtimeState?: RuntimeDiagnosticState;
+  } = {},
 ): Promise<string> {
   // `captureLevel` remains zero while reset and recorder setup are in flight.
   // The owner-bound stop also waits that starting operation, so export cannot
@@ -326,9 +379,9 @@ export async function exportDiagnosticsForWindow(
   // The report has always been a PKZIP archive; `.zip` is the name that lets
   // GitHub accept it as an attachment without a Finder round-trip.
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
-    title: options.visualProblem ? "Save Visual Problem Report" : "Export Diagnostics",
+    title: options.visualProblem ? "Save Visual Corruption Report" : "Export Diagnostics",
     defaultPath: options.visualProblem
-      ? "guild-wars-visual-problem.zip"
+      ? "guild-wars-visual-corruption.zip"
       : "guild-wars-diagnostics.zip",
     filters: [{ name: "Guild Wars diagnostics", extensions: ["zip"] }],
   });
@@ -344,6 +397,7 @@ export async function exportDiagnosticsForWindow(
     includePreviousSession: context?.mode === "single",
     electronVersions: runtimeVersions(),
     settings: await readSettings(),
+    ...(options.runtimeState ? { runtimeState: options.runtimeState } : {}),
     ...options,
   });
 }

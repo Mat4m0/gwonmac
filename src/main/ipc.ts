@@ -14,32 +14,37 @@
  * the workflow owner; it returns codes rather than inventing prose.
  */
 import { clipboard, shell, type BrowserWindow } from "electron";
-import type {
-  AppSettings,
-  AppSettingsPatch,
-  AccountsSetupRequest,
-  AccountProfileCreateRequest,
-  AccountProfileUpdateRequest,
-  AccountTemplateLibrary,
-  AccountsState,
-  AppUpdateState,
-  CacheInfo,
-  ClientHealthToken,
-  ClientSession,
-  DownloadProgress,
-  EnhancementRuntimeFeature,
-  ExternalLinkKind,
-  FullDownloadOutcome,
-  GraphicsDiagnostics,
-  InvokeChannel,
-  GameTextEditRequest,
-  RevealKind,
-  SocketEvent,
-  SettingsResetOutcome,
-  SnapshotMetadata,
-  SteamTokenResult,
-  StoredCredentials,
-  TemplateExportEntry,
+import {
+  CLIPBOARD_TEXT_CEILING,
+  ENHANCEMENT_RUNTIME_FEATURES,
+  EXTERNAL_URLS,
+  IPC,
+  type AppSettings,
+  type AppSettingsPatch,
+  type AccountsSetupRequest,
+  type AccountProfileCreateRequest,
+  type AccountProfileUpdateRequest,
+  type AccountTemplateLibrary,
+  type AccountsState,
+  type AppUpdateState,
+  type CacheInfo,
+  type ClientHealthToken,
+  type ClientSession,
+  type DownloadProgress,
+  type DiagnosticProfile,
+  type EnhancementRuntimeFeature,
+  type ExternalLinkKind,
+  type FullDownloadOutcome,
+  type GraphicsDiagnostics,
+  type InvokeChannel,
+  type GameTextEditRequest,
+  type RevealKind,
+  type SocketEvent,
+  type SettingsResetOutcome,
+  type SnapshotMetadata,
+  type SteamTokenResult,
+  type StoredCredentials,
+  type TemplateExportEntry,
 } from "../shared/contracts.js";
 import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
 import {
@@ -55,12 +60,6 @@ import {
   isRendererFrameBatch,
   isRendererMetrics,
 } from "../shared/diagnostics.js";
-import {
-  CLIPBOARD_TEXT_CEILING,
-  EXTERNAL_URLS,
-  IPC,
-} from "../shared/contracts.js";
-import { ENHANCEMENT_RUNTIME_FEATURES } from "../shared/contracts.js";
 import { isDigest } from "../shared/digest.js";
 import {
   isSkillKeyBinding,
@@ -138,6 +137,11 @@ import {
   type TradeInvokeChannel,
   type TradeIpcContext,
 } from "./trade-ipc.js";
+import {
+  parseVisualCaptureSubmission,
+  submitVisualCapture,
+} from "./visual-capture.js";
+import { parseDiagnosticProfile } from "./core/diagnostic-profile.js";
 
 export interface IpcContext extends TradeIpcContext {
   sockets: SocketManager;
@@ -154,6 +158,7 @@ export interface IpcContext extends TradeIpcContext {
   getCacheInfo: () => Promise<CacheInfo>;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
+  setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
   resetSettings: () => Promise<SettingsResetOutcome>;
   getTravelPreferences: () => Promise<TravelUserPreferences>;
   setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
@@ -645,6 +650,11 @@ export function registerIpcHandlers(ctx: IpcContext): {
     ),
 
     diagnosticsCurrent: channel(nothing, (win) => diagnosticSummary(win)),
+    diagnosticsVisualSubmit: channel(one(parseVisualCaptureSubmission), (win, value) =>
+      submitVisualCapture(win, value)),
+
+    diagnosticsProfileSet: channel(one(parseDiagnosticProfile), (_win, value) =>
+      ctx.setDiagnosticProfile(value)),
 
     appOpenExternal: channel(asExternalLinkKind, async (_win, kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);

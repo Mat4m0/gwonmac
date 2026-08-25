@@ -80,19 +80,21 @@ not hide an earlier fatal event.
 The app does not collect crash dumps. Renderer console text remains local and
 bounded.
 
-### Player visual-problem report
+### Player visual-corruption report
 
-**Help → Report Visual Problem…** creates one owner-bound report while the
-defect is visible. It records the current canvas and drawing-buffer sizes,
-WebGL context state, WASM heap size, bounded current-context texture allocation
-totals, and GL program totals. In Multiple Accounts mode, the renderer mark and optional
-screenshot both come from the window that opened the command.
+**Help → Capture Visual Corruption…** creates one owner-bound report while the
+defect is visible. With consent, it freezes one presented frame long enough to
+save four original-resolution PNGs: raw WebGL pixels, the OffscreenCanvas
+ImageBitmap, the presented canvas, and the complete window. In Multiple
+Accounts mode every stage belongs to the window that opened the command.
 
-The player must choose **Include Screenshot**, **Diagnostics Only**, or
-**Cancel**. A screenshot is never automatic. The manifest records the renderer
-command outcome, open game-window count, whether a screenshot was requested,
-whether one was captured, and its privacy class. The validator rejects an
-included screenshot without recorded consent or a valid PNG signature.
+The player must choose **Include Images**, **Diagnostics Only**, or
+**Cancel**. Images are never automatic. The manifest records the renderer
+command outcome, open game-window count, included and missing stages, and the
+privacy class. `visual-capture.json` records the frame sequence, original
+dimensions, device-pixel ratio, and capture geometry. `runtime-state.json`
+records the effective client hashes, 4 GB result, enhancements, diagnostic
+profile, presentation path, GL observers, and snapshot shape.
 
 This report can distinguish a lost WebGL context, a failed presentation path,
 incomplete texture tracking, unusual allocation growth, and a Multiple
@@ -151,11 +153,11 @@ The recorder does not collect these values:
 Do not add a general string log route. Add a typed outcome only when it is
 needed to decide or diagnose behavior.
 
-An explicitly consented `visual-problem.png` is a separate evidence class. It
-contains only the initiating game window as displayed. It can contain visible
-character, account, and chat text, so the consent dialog and documentation tell
-the player to inspect the ZIP before sharing it. Diagnostics-only reports keep
-the exclusion list above.
+The explicitly consented `visual-*.png` files are a separate evidence class.
+They can contain visible character, account, and chat text. The app never
+uploads them. After saving, it tells the player to inspect the ZIP, upload it
+manually to SwissTransfer, and send the resulting link. Diagnostics-only
+reports keep the exclusion list above.
 
 ## Validate and read an export
 
@@ -176,6 +178,28 @@ Compare clean captures with:
 ```bash
 pnpm diagnostics:compare <before.zip> <after.zip>
 ```
+
+Analyze synchronized visual stages with:
+
+```bash
+pnpm diagnostics:visual <capture.zip> [output-directory]
+```
+
+The analyzer writes exact metrics, lossless difference images, and a cautious
+classification. It never declares ArenaNet responsible automatically.
+
+### Diagnostic profiles
+
+Advanced settings provides restart-required profiles for long-session
+reproduction: Standard, No GL overrides, Untouched official client, and
+Untouched official client with direct canvas presentation. Nonstandard
+profiles remain selected across restarts and show a visible banner. They do
+not change the player's ordinary Tools or 4 GB preference. The untouched
+profiles intentionally run the official 2 GB client even when 4 GB is enabled,
+so support can compare that baseline with a Standard-profile 4 GB capture.
+Direct canvas is a presentation comparison and cannot produce synchronized
+stage images; its report records that limitation instead of substituting a
+different frame.
 
 Use a Level 1 capture to attribute visible frame gaps to composition loss, the
 main process, or the renderer:

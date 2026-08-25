@@ -373,10 +373,12 @@ opens its GitHub issue form immediately. GitHub issues are public.
 - Diagnostics are optional. To include them with a bug, use
   **Help → Diagnostics → Export Recent Diagnostics…** and attach the ZIP.
 - For missing, corrupted, or black textures, leave the problem visible and use
-  **Help → Report Visual Problem…**. Choose whether to include a screenshot,
-  save the ZIP, and attach it to the report. The screenshot can show your
-  character, account name, and visible chat; inspect it before sharing. The
-  diagnostics-only choice records graphics state without image pixels.
+  **Help → Capture Visual Corruption…**. Choose whether to include synchronized
+  images and save the ZIP. Inspect it because the images can show your
+  character, account name, and visible chat. Upload the ZIP manually to
+  SwissTransfer and send the download link with the bug report. The app never
+  uploads it automatically. Diagnostics Only records graphics and effective
+  runtime state without image pixels.
 - Use **Record Performance Problem** for stutter. Reproduce it, press
   **Command-Shift-M**, stop the capture, and export it when prompted.
 - Use **Show Input Trace** for keyboard, text, pointer, shortcut, or gamepad
@@ -394,9 +396,9 @@ opens its GitHub issue form immediately. GitHub issues are public.
 
 The diagnostics ZIP excludes saved login, account request bodies, game traffic,
 chat, and crash dumps. Other text is scanned for known secret and path patterns.
-An explicitly approved visual-problem screenshot is the only exception: it is
-not text-scanned because scanning would damage the image. Review the readable
-ZIP before attaching it to a bug issue.
+Explicitly approved visual-corruption images are the only exception: they are
+not text-scanned because scanning would damage them. Review the readable ZIP
+before sharing it.
 
 See [Diagnostics and performance](diagnostics.md) for technical details.
 

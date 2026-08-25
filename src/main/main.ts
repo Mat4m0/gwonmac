@@ -25,18 +25,25 @@ import {
   IPC,
   type AppSettings,
   type DownloadProgress,
+  type DiagnosticProfile,
   type UpdateTrack,
 } from "../shared/contracts.js";
-import type {
-  EnhancementProgram,
-  EnhancementSelection,
+import {
+  NO_ENHANCEMENT_CAPABILITIES,
+  type EnhancementProgram,
+  type EnhancementSelection,
 } from "../shared/enhancement-contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
+import { diagnosticProfilePolicy } from "../shared/diagnostic-profile.js";
 import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { RendererClientSessions } from "./renderer-client-sessions.js";
 import { loadSettings } from "./core/settings.js";
+import {
+  loadDiagnosticProfile,
+  saveDiagnosticProfile,
+} from "./core/diagnostic-profile.js";
 import { PreferencesCoordinator } from "./core/preferences-coordinator.js";
 import { SocketManager } from "./core/sockets.js";
 import { TradeChatService } from "./core/trade-chat-service.js";
@@ -358,18 +365,27 @@ function buildWindowHost(
   sockets: SocketManager,
   enhancementSelection: EnhancementSelection,
   enhancementProgram: EnhancementProgram,
+  diagnosticProfile: DiagnosticProfile,
 ): WindowHost {
   return {
     sockets,
     enhancementSelection,
     enhancementProgram,
+    diagnosticProfile,
     getProgress: () => clientRuntime.progress,
     getSettings: () => preferences.getSettings(),
     updateSettings: (patch) => preferences.updateSettings(patch),
     exportDiagnostics: (win) =>
-      exportDiagnosticsForWindow(win, () => preferences.getSettings()),
+      clientRuntime.diagnosticState().then((runtimeState) =>
+        exportDiagnosticsForWindow(win, () => preferences.getSettings(), {
+          runtimeState,
+        })),
     reportVisualProblem: (win) =>
-      reportVisualProblem(win, () => preferences.getSettings()),
+      reportVisualProblem(
+        win,
+        () => preferences.getSettings(),
+        () => clientRuntime.diagnosticState(),
+      ),
     markPerformanceProblem,
     startCapture: startDiagnosticCapture,
     stopCapture: stopDiagnosticCaptureForWindow,
@@ -559,12 +575,15 @@ if (primaryInstance) void app.whenReady().then(async () => {
         "The settings file was corrupt. Defaults were restored and a diagnostic copy was preserved.",
     });
   });
-  const enhancementSelection = enhancementSelectionFor(settings);
+  let diagnosticProfile = await loadDiagnosticProfile(paths.diagnosticProfile);
+  const diagnosticPolicy = diagnosticProfilePolicy(diagnosticProfile);
+  const enhancementSelection: EnhancementSelection = diagnosticPolicy.officialClient
+    ? Object.freeze({ nativeCursor: false, tools: false })
+    : enhancementSelectionFor(settings);
   const enhancementProgram = DEVELOPER_ENHANCEMENT_PROGRAM;
-  const enhancementCapabilities = requestedEnhancementCapabilities(
-    settings,
-    enhancementProgram,
-  );
+  const enhancementCapabilities = diagnosticPolicy.officialClient
+    ? NO_ENHANCEMENT_CAPABILITIES
+    : requestedEnhancementCapabilities(settings, enhancementProgram);
   if (activeAccountMode === "single") {
     await prepareWindowState(SINGLE_DIAGNOSTIC_OWNER_ID);
   }
@@ -581,6 +600,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     enhancementCapabilities,
     extendedMemoryEnabled: settings.extendedMemoryEnabled,
+    diagnosticProfile,
     onProgress: setProgress,
   });
   const sockets = buildSocketManager();
@@ -649,6 +669,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     sockets,
     enhancementSelection,
     enhancementProgram,
+    diagnosticProfile,
   );
   const accounts = new MultipleAccountsController({
     mode: activeAccountMode,
@@ -678,9 +699,16 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSettings: () => preferences.getSettings(),
     updateSettings: (patch) => preferences.updateSettings(patch),
     resetSettings: () => preferences.resetSettings(),
+    setDiagnosticProfile: async (profile) => {
+      diagnosticProfile = await saveDiagnosticProfile(
+        paths.diagnosticProfile,
+        profile,
+      );
+      return diagnosticProfile;
+    },
     getTravelPreferences: () => preferences.getTravelPreferences(),
     setTravelPreferences: (update) => preferences.updateTravelPreferences(update),
-    toolsEnabledAtLaunch: settings.gwonmacTools,
+    toolsEnabledAtLaunch: enhancementSelection.tools,
     tradeChat,
     getTradeSaved: () => tradeSaved.get(),
     setTradeSaved: (value) => tradeSaved.set(value),
