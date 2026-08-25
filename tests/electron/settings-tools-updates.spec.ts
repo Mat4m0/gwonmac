@@ -439,6 +439,9 @@ test.describe("tools and update settings", () => {
 
       await fieldset.locator('[name="skillCooldownColorChoice"][value="custom"]')
         .check();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).skillCooldownColor,
+      )).toEqual({ kind: "custom", value: "#e35a4f" });
       const customHex = fieldset.locator('[name="skillCooldownCustomHex"]');
       await customHex.fill("#123abc");
       await customHex.press("Tab");

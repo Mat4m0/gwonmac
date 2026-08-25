@@ -382,6 +382,27 @@ function matchesTravelAction(
     && isDeepStrictEqual(
       candidate.contextResolver.results,
       expected.contextResolver.results,
+    )
+    && isDeepStrictEqual(candidate.unlockProof.layout, expected.unlockProof.layout)
+    && isIndex(candidate.unlockProof.accessor.functionIndex)
+    && isDigest(candidate.unlockProof.accessor.bodySha256)
+    && isDeepStrictEqual(
+      candidate.unlockProof.accessor.params,
+      expected.unlockProof.accessor.params,
+    )
+    && isDeepStrictEqual(
+      candidate.unlockProof.accessor.results,
+      expected.unlockProof.accessor.results,
+    )
+    && isIndex(candidate.unlockProof.consumer.functionIndex)
+    && isDigest(candidate.unlockProof.consumer.bodySha256)
+    && isDeepStrictEqual(
+      candidate.unlockProof.consumer.params,
+      expected.unlockProof.consumer.params,
+    )
+    && isDeepStrictEqual(
+      candidate.unlockProof.consumer.results,
+      expected.unlockProof.consumer.results,
     );
 }
 

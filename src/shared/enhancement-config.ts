@@ -46,6 +46,7 @@ export interface EnhancementLayout {
   accountContextSlot: number;
   accountUnlockedSkills: number;
   worldContext: number;
+  worldUnlockedMaps: number;
   worldHeroFlags: number;
   heroFlagStride: number;
   flagHeroId: number;
@@ -127,6 +128,7 @@ export type EnhancementStorageLayout = Pick<EnhancementLayout,
   | "worldPlayers" | "playerRecordStride" | "playerRecordAgentId"
   | "playerRecordAccessFlags" | "playerRecordNumber" | "areaInfoType"
 >;
+export type EnhancementTravelLayout = Pick<EnhancementLayout, "worldUnlockedMaps">;
 export type EnhancementSkillSlotGeometryLayout = Pick<EnhancementLayout,
   | "frameArray" | "frameCount" | "frameBytes" | "frameChildOffsetId"
   | "frameId" | "framePositionFlags" | "frameViewportWidth"
@@ -158,7 +160,7 @@ export type EnhancementPartyLayout = Pick<EnhancementLayout,
 >;
 
 type Owner = "play-region" | "observation" | "target" | "cursor" | "party" | "storage"
-  | "player-skillbar" | "party-skillbar" | "skill-slots" | "skill-cooldown";
+  | "travel" | "player-skillbar" | "party-skillbar" | "skill-slots" | "skill-cooldown";
 type ConfigField =
   | Readonly<{
     source: "layout";
@@ -184,6 +186,7 @@ type ConfigField =
     key: keyof EnhancementPartySkillbarLayout;
   }>
   | Readonly<{ source: "layout"; owner: "storage"; key: keyof EnhancementStorageLayout }>
+  | Readonly<{ source: "layout"; owner: "travel"; key: keyof EnhancementTravelLayout }>
   | Readonly<{
     source: "layout";
     owner: "skill-slots";
@@ -241,6 +244,9 @@ const skillCooldown = (
 ): readonly ConfigField[] => keys.map((key) => ({
   source: "layout", key, owner: "skill-cooldown",
 }));
+const travel = (
+  ...keys: readonly (keyof EnhancementTravelLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "travel" }));
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...playRegion("contextRoot"),
@@ -273,6 +279,7 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
     "frameRelation", "frameState",
   ),
   ...skillCooldown("skillSlotRecharge"),
+  ...travel("worldUnlockedMaps"),
   { source: "dispatcher", key: "playerChatMessage", owner: "party" },
   { source: "dispatcher", key: "hideHeroPanelMessage", owner: "party" },
   { source: "dispatcher", key: "showHeroPanelMessage", owner: "party" },

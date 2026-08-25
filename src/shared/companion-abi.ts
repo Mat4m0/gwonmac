@@ -3,9 +3,10 @@
  * Renderer, scripts, and tests derive their ABI constants from this descriptor.
  */
 export const COMPANION_ABI = Object.freeze({
-  kernel: 17,
-  config: Object.freeze({ bytes: 444 }),
-  snapshot: Object.freeze({ abi: 3, bytes: 64 }),
+  kernel: 18,
+  config: Object.freeze({ bytes: 448 }),
+  snapshot: Object.freeze({ abi: 4, bytes: 176 }),
+  travelUnlockWords: 28,
   cursor: Object.freeze({ abi: 1, bytes: 4_160 }),
   toolbox: Object.freeze({ abi: 4, bytes: 64 }),
   party: Object.freeze({ abi: 7, bytes: 1_560 }),

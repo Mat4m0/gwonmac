@@ -202,6 +202,11 @@ const api = {
     get: () => ipcRenderer.invoke(IPC.travelPreferencesGet),
     set: (value) => ipcRenderer.invoke(IPC.travelPreferencesSet, value),
   },
+  travelHistory: {
+    get: () => ipcRenderer.invoke(IPC.travelHistoryGet),
+    record: (mapId) => ipcRenderer.invoke(IPC.travelHistoryRecord, mapId),
+    clear: () => ipcRenderer.invoke(IPC.travelHistoryClear),
+  },
   shortcuts: {
     capture: () => ipcRenderer.invoke(IPC.shortcutCapture),
     cancelCapture: () => ipcRenderer.invoke(IPC.shortcutCaptureCancel),

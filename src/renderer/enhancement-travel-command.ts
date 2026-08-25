@@ -21,11 +21,14 @@ export type EnhancementTravelToggleTake = () => number;
 export function createTravelCommand(
   send: EnhancementTravelEnqueue,
   unavailable: () => string | null,
+  destinationUnavailable: (mapId: number) => string | null = () => null,
 ): TravelCommand {
   return Object.freeze({
     travel(request: TravelRequest) {
       const refusal = unavailable();
       if (refusal !== null) throw new Error(refusal);
+      const destinationRefusal = destinationUnavailable(request.mapId);
+      if (destinationRefusal !== null) throw new Error(destinationRefusal);
       if (send(request.mapId) !== 1) {
         throw new Error("Guild Wars command queue is busy");
       }
