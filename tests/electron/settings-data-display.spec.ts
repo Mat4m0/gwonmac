@@ -323,7 +323,14 @@ test.describe("data and display settings", () => {
         "Choose a lower scale if Guild Wars feels slow",
       );
 
-      await page.locator('input[name="renderScale"][value="1.5"]').check();
+      // Segment radios intentionally cover their visible labels at zero
+      // opacity. Skip Chromium's paint-based actionability check, then wait
+      // for this save before starting the independent Diagnostics update.
+      await page.locator('input[name="renderScale"][value="1.5"]')
+        .check({ force: true });
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).renderScale,
+      )).toBe(1.5);
       await fixture.app.evaluate(({ Menu }) => {
         const view = Menu.getApplicationMenu()?.items.find(
           (item) => item.label === "View",
