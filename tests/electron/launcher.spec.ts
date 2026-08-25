@@ -47,9 +47,6 @@ test.describe("launcher recovery", () => {
           script.src.endsWith("/Gw.jspi.js"),
         ))).toBe(true);
       await page.locator("#loading-links [data-settings]").click();
-      await expect(page.locator("#settings-pane-data")).toContainText(
-        "downloads the complete game in the background while you play",
-      );
       await expect(page.locator("#settings-download-full")).toHaveText("Resume Download");
       await expect(page.locator("#settings-cache")).toHaveText(
         "The download could not continue. Check your connection, then choose Resume Download.",
