@@ -68,7 +68,7 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     id: "travelAction",
     requiresAll: ["playRegionObservation"],
     requiresAny: [],
-    configOwners: ["observation", "travel"],
+    configOwners: [],
     hooks: [],
   },
   {
@@ -265,7 +265,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 43;
+export const ENHANCEMENT_TRANSFORM_ABI = 42;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,

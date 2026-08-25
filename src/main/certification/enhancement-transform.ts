@@ -505,32 +505,6 @@ function resolveEnhancementTransform(
   ) {
     fail("travel context resolver body does not match its semantic fingerprint");
   }
-  const travelUnlockAccessor = capabilities.travelAction
-    ? resolveHook(
-        "travel unlock array accessor",
-        travelAction.unlockProof.accessor.functionIndex,
-        travelAction.unlockProof.accessor.params,
-        travelAction.unlockProof.accessor.results,
-      )
-    : null;
-  if (
-    travelUnlockAccessor
-    && bodyHash(travelAction.unlockProof.accessor.functionIndex)
-      !== travelAction.unlockProof.accessor.bodySha256
-  ) fail("travel unlock accessor body does not match its certified identity");
-  const travelUnlockConsumer = capabilities.travelAction
-    ? resolveHook(
-        "travel unlock bitset consumer",
-        travelAction.unlockProof.consumer.functionIndex,
-        travelAction.unlockProof.consumer.params,
-        travelAction.unlockProof.consumer.results,
-      )
-    : null;
-  if (
-    travelUnlockConsumer
-    && bodyHash(travelAction.unlockProof.consumer.functionIndex)
-      !== travelAction.unlockProof.consumer.bodySha256
-  ) fail("travel unlock consumer body does not match its certified identity");
   const packetSender = capabilities.teamApply
     ? resolveHook(
         "traced packet sender",

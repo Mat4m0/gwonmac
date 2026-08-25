@@ -35,11 +35,7 @@ test.describe("renderer Travel input", () => {
         installation.update({
           enabled: true,
           playRegion: "pve",
-          state: {
-            status: "ready",
-            mapId: 133,
-            unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
-          },
+          state: { status: "ready", mapId: 133 },
         });
         installation.poll();
       });
@@ -99,7 +95,7 @@ test.describe("renderer Travel input", () => {
       await expect(search).toHaveAccessibleName("Destination or search phrase");
       await expect(palette.getByRole("listbox")).toHaveCount(0);
       await expect(palette.getByRole("heading", { name: "Favorites" })).toBeVisible();
-      await expect(palette.locator(".travel-favorite-grid .travel-favorite")).toHaveCount(8);
+      await expect(palette.locator(".travel-favorite-grid .travel-favorite")).toHaveCount(6);
 
       // Every shortcut that shows a GWonMac interface is a toggle. A second
       // Travel request closes the same palette and returns focus to the game.

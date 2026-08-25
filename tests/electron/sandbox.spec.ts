@@ -68,7 +68,6 @@ test.describe("sandbox boundary", () => {
           "steam",
           "templates",
           "trade",
-          "travelHistory",
           "travelPreferences",
           "wasmBridgeMarkers",
         ],

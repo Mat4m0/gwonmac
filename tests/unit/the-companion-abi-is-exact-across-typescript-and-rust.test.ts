@@ -151,7 +151,7 @@ function replaced(source: string, from: string, to: string): string {
 
 test("the independent TypeScript and Rust companion contracts match exactly", () => {
   assertExactContract(rustSource);
-  assert.equal(typescriptConfigSlots().length, 112);
+  assert.equal(typescriptConfigSlots().length, 111);
 });
 
 test("same-size field swaps, bit drift, opcode drift, and new names are rejected", () => {

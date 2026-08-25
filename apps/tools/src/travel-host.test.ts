@@ -28,27 +28,14 @@ function fixture() {
     expect(expected).toEqual(travel);
     return save(patch);
   });
-  let history: readonly number[] = [];
-  const recordHistory = vi.fn(async (mapId: number) => {
-    history = [mapId, ...history.filter((candidate) => candidate !== mapId)].slice(0, 10);
-    return history;
-  });
   const api = {
     travelPreferences: {
       async get() { return travel; },
       set: setTravel,
     },
-    travelHistory: {
-      async get() { return history; },
-      record: recordHistory,
-      async clear() {
-        history = [];
-        return history;
-      },
-    },
   } as unknown as GwNativeApi;
   const command: TravelCommand = { travel: vi.fn(), unavailable: () => null };
-  return { host: createNativeTravelHost(api, command), setTravel, recordHistory };
+  return { host: createNativeTravelHost(api, command), setTravel };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -57,10 +44,10 @@ describe("native Travel host", () => {
   it("delegates shortcut mutations to Main", async () => {
     const { host, setTravel } = fixture();
     await host.loadPreferences();
-    const edited = replaceTravelShortcut(DEFAULT_TRAVEL_SHORTCUTS, 7, { mapId: 642 });
+    const edited = replaceTravelShortcut(DEFAULT_TRAVEL_SHORTCUTS, 8, { mapId: 642 });
 
     await host.savePreferences({ shortcuts: edited });
-    expect(setTravel.mock.calls[0]?.[0].patch.shortcuts?.[7]).toEqual({ mapId: 642 });
+    expect(setTravel.mock.calls[0]?.[0].patch.shortcuts?.[8]).toEqual({ mapId: 642 });
   });
 
   it("releases a travel attempt after Guild Wars confirms arrival", async () => {
@@ -69,30 +56,10 @@ describe("native Travel host", () => {
 
     await host.travel({ mapId: 449 });
     host.updateGameState({ status: "waiting", reason: "loading" });
-    host.updateGameState({
-      status: "ready",
-      mapId: 449,
-      unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
-    });
+    host.updateGameState({ status: "ready", mapId: 449 });
     await vi.runAllTimersAsync();
 
     expect(host.attempt.value).toEqual({ status: "idle" });
-  });
-
-  it("records every observed reviewed arrival, including travel outside the palette", async () => {
-    const { host, recordHistory } = fixture();
-    const unlockedMapWords = Array.from({ length: 28 }, () => 0xffff_ffff);
-
-    host.updateGameState({ status: "ready", mapId: 55, unlockedMapWords });
-    host.updateGameState({ status: "ready", mapId: 55, unlockedMapWords });
-    host.updateGameState({ status: "waiting", reason: "loading" });
-    host.updateGameState({ status: "ready", mapId: 449, unlockedMapWords });
-    host.updateGameState({ status: "ready", mapId: 2_000, unlockedMapWords });
-    host.updateGameState({ status: "ready", mapId: 194, unlockedMapWords });
-
-    await vi.waitFor(() => expect(recordHistory).toHaveBeenCalledTimes(3));
-    expect(recordHistory.mock.calls.map(([mapId]) => mapId)).toEqual([55, 449, 194]);
-    expect(host.history.value).toEqual([194, 449, 55]);
   });
 
   it("always releases a loading attempt after interruption or its arrival deadline", async () => {

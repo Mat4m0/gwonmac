@@ -248,10 +248,6 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   const targetDuplicateDestination = sameSignatureDestination(
     parsed,
     agentArrayAccessor!,
-    new Set([
-      local.enhancementBuild!.travelAction!.unlockProof.accessor.functionIndex,
-      local.enhancementBuild!.travelAction!.unlockProof.consumer.functionIndex,
-    ]),
   );
   const ambiguousTarget = rewriteCode(bytes, (bodies) => {
     bodies[targetDuplicateDestination - derived.importCount]
@@ -262,18 +258,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     status: "ambiguous",
     candidateCount: 2,
   });
-  const ambiguousTargetVerdict = verifyLocalClientBytes(ambiguousTarget, {
-    nativeCursor: false,
-    targetObservation: true,
-    partyObservation: false,
-    teamApply: false,
-    travelAction: false,
-    xunlaiAction: false,
-    chatAliases: false,
-    skillSlotGeometry: false,
-    skillCooldownObservation: false,
-    playRegionObservation: true,
-  })
+  const ambiguousTargetVerdict = verifyLocalClientBytes(ambiguousTarget)
     .featureVerdicts?.targetObservation;
   assert.equal(ambiguousTargetVerdict?.status, "ambiguous");
   if (ambiguousTargetVerdict?.status === "ambiguous") {
@@ -296,7 +281,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
   assert.deepEqual(capabilitiesOf(addressDecision), {
     nativeCursor: true, targetObservation: false, partyObservation: false,
-    teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: true,
+    teamApply: false, travelAction: true, xunlaiAction: false, chatAliases: true,
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
@@ -304,7 +289,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
   const addressEnhancementBuild = addressDecision.enhancementBuild;
-  const addressCapabilities = effectiveCapabilitiesOf(addressDecision);
+  const addressCapabilities = capabilitiesOf(addressDecision);
   assert.ok(addressTemplateBuild);
   assert.ok(addressEnhancementBuild);
   assert.ok(addressCapabilities);
@@ -313,32 +298,13 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     targetObservation: false,
     partyObservation: false,
     teamApply: false,
-    travelAction: false,
+    travelAction: true,
     xunlaiAction: false,
-    chatAliases: false,
+    chatAliases: true,
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
   });
-  const addressTemplate = rewriteTemplateSaveWasm(
-    changedAddressReference,
-    addressTemplateBuild,
-  );
-  const addressOutputSections = splitSections(transformEnhancementWasm(
-    addressTemplate,
-    addressEnhancementBuild,
-    addressCapabilities,
-  ));
-  const addressExports = parseExports(sectionById(addressOutputSections, 7));
-  assert.equal(addressExports.some(
-    (entry) => entry.name === local.enhancementBuild!.travelAction!.enqueueExport,
-  ), false, "Travel requires the missing observation base for unlock evidence");
-  assert.equal(addressExports.some(
-    (entry) => entry.name === local.enhancementBuild!.xunlaiAction!.openExport,
-  ), false);
-  assert.equal(addressExports.some(
-    (entry) => entry.name === local.enhancementBuild!.teamApply!.thunkExport,
-  ), false);
 
   const targetMutations = [
     { local: 7327 - derived.importCount, offset: 132, label: "target occurrence ledger", shared: false },

@@ -112,9 +112,7 @@ export async function installCertifiedCompanion(
   const playRegions = createPlayRegionObservationInstallation(
     capabilities.playRegionObservation,
   );
-  const observeState = capabilities.targetObservation
-    || capabilities.xunlaiAction
-    || capabilities.travelAction;
+  const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const publishObserverState = program === "target-observer";
   const featureFlags =
     (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
@@ -587,7 +585,7 @@ export async function installCertifiedCompanion(
       travelInstallation?.update({
         enabled: policy().travel,
         playRegion: playRegion(),
-        state: travelGameState(companionState),
+        state: travelGameState(policySnapshot().playRegionState),
       });
     };
     storageInstallation?.mount();
@@ -756,7 +754,6 @@ export async function installCertifiedCompanion(
             companionState = state;
             readout?.update(state);
             syncStoragePolicy();
-            syncTravelPolicy();
             pollTradeAlias();
           } }
         : null,

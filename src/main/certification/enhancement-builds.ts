@@ -229,24 +229,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         // writes its four scalar arguments to {map, region, language,
         // district} and sends this message through the certified dispatcher.
         messageId: 0x1000_0183,
-        // WorldContext::unlocked_map is not accepted from GWCA's struct.
-        // Accessor #9184 returns the exact Array<u32> at +0x60c, while the
-        // official map consumer #15978 proves word=map/32 and bit=map%32.
-        unlockProof: Object.freeze({
-          layout: Object.freeze({ worldUnlockedMaps: 0x60c }),
-          accessor: Object.freeze({
-            functionIndex: 9184,
-            params: Object.freeze([] as const),
-            results: Object.freeze(["i32"] as const),
-            bodySha256: "24579d9f602bc21a37c0dc8ca88c362a38493c64d101d42081ccd6ed5314f975",
-          }),
-          consumer: Object.freeze({
-            functionIndex: 15978,
-            params: Object.freeze(["i32"] as const),
-            results: Object.freeze(["i32"] as const),
-            bodySha256: "c462fd76a759a90c48dc9298223cf6f571dec8ef11c732177faa14ac4b49fb9f",
-          }),
-        }),
         producer: Object.freeze({
           functionIndex: 16199,
           params: Object.freeze([

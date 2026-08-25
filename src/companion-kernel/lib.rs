@@ -142,7 +142,6 @@ struct State {
     target: AgentState,
     distance: f32,
     band: u32,
-    unlocked_maps: [u32; TRAVEL_UNLOCK_WORDS],
 }
 
 #[derive(Clone, Copy)]
@@ -175,37 +174,8 @@ impl State {
             target: EMPTY_AGENT,
             distance: 0.0,
             band: 0,
-            unlocked_maps: [0; TRAVEL_UNLOCK_WORDS],
         }
     }
-}
-
-/** Reads the certified WorldContext Array<u32>; `None` publishes unknown. */
-unsafe fn observe_travel_unlocks(layout: Layout, game: u32) -> Option<[u32; TRAVEL_UNLOCK_WORDS]> {
-    if game == 0 || layout.world_context == 0 || layout.world_unlocked_maps == 0 {
-        return None;
-    }
-    let world_required = checked_add(layout.world_unlocked_maps, 12)?;
-    let world = offset(game, layout.world_context)
-        .and_then(|at| unsafe { pointer(at, world_required) })?;
-    let array = offset(world, layout.world_unlocked_maps)?;
-    let buffer = unsafe { read_u32(array) }?;
-    let capacity = offset(array, 4).and_then(|at| unsafe { read_u32(at) })?;
-    let size = offset(array, 8).and_then(|at| unsafe { read_u32(at) })?;
-    if buffer == 0
-        || buffer & 3 != 0
-        || size < TRAVEL_UNLOCK_WORDS as u32
-        || size > capacity
-        || capacity > 64
-        || !contains(buffer, checked_mul(size, 4)?)
-    {
-        return None;
-    }
-    let mut words = [0; TRAVEL_UNLOCK_WORDS];
-    for (index, word) in words.iter_mut().enumerate() {
-        *word = unsafe { read_u32(indexed(buffer, index as u32, 4)?)? };
-    }
-    Some(words)
 }
 
 /**
@@ -518,10 +488,6 @@ unsafe fn collect(layout: Layout, observe_target: bool) -> State {
         state.instance_type = instance_type;
         state.play_region = play_region;
         state.player = player;
-        if let Some(unlocked_maps) = unsafe { observe_travel_unlocks(layout, game) } {
-            state.flags |= FLAG_TRAVEL_UNLOCKS_OBSERVED;
-            state.unlocked_maps = unlocked_maps;
-        }
         if let Some(allowed) = unsafe {
             observe_xunlai_access(
                 layout,
@@ -708,9 +674,6 @@ unsafe fn publish(state: State) {
         write_volatile(&mut (*snapshot).target_y, state.target.y);
         write_volatile(&mut (*snapshot).distance, state.distance);
         write_volatile(&mut (*snapshot).range_band, state.band);
-        for (index, word) in state.unlocked_maps.iter().enumerate() {
-            write_volatile(&mut (*snapshot).unlocked_maps[index], *word);
-        }
         write_volatile(&mut (*snapshot).sequence, next);
         SEQUENCE = next;
     }
@@ -935,7 +898,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    18
+    17
 }
 
 #[no_mangle]

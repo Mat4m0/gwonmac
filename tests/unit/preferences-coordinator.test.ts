@@ -19,13 +19,11 @@ async function fixture(
   coordinator: PreferencesCoordinator;
   settings: string;
   travelPreferences: string;
-  travelHistory: string;
 }> {
   const dir = await mkdtemp(join(tmpdir(), "gw-preferences-owner-"));
   const paths = {
     settings: join(dir, "settings.json"),
     travelPreferences: join(dir, "travel-preferences.json"),
-    travelHistory: join(dir, "travel-history.json"),
   };
   return {
     coordinator: new PreferencesCoordinator(() => paths, undefined, publish),
@@ -82,18 +80,6 @@ async function seedNonDefaultPreferences(
 }
 
 describe("PreferencesCoordinator", () => {
-  it("serializes observed Travel history and clears it independently", async () => {
-    const { coordinator } = await fixture();
-
-    await coordinator.recordTravelVisit(55);
-    await coordinator.recordTravelVisit(449);
-    await coordinator.recordTravelVisit(55);
-    assert.deepEqual(await coordinator.getTravelHistory(), [55, 449]);
-
-    assert.deepEqual(await coordinator.clearTravelHistory(), []);
-    assert.deepEqual(await coordinator.getTravelHistory(), []);
-  });
-
   it("publishes shortcut commits and the active result of an ambiguous write", async () => {
     const published: AppSettings[] = [];
     const { coordinator, settings } = await fixture((value) => {
@@ -134,18 +120,18 @@ describe("PreferencesCoordinator", () => {
   it("keeps the released district-bearing shortcut shape", async () => {
     const { coordinator, settings } = await fixture();
     const current = await coordinator.getTravelPreferences();
-    const shortcuts = replaceTravelShortcut(current.shortcuts, 7, { mapId: 642 });
+    const shortcuts = replaceTravelShortcut(current.shortcuts, 8, { mapId: 642 });
 
     const saved = await coordinator.updateTravelPreferences({
       expected: current,
       patch: { shortcuts },
     });
 
-    assert.deepEqual(saved.shortcuts[7], { mapId: 642 });
+    assert.deepEqual(saved.shortcuts[8], { mapId: 642 });
     const disk = JSON.parse(await readFile(settings, "utf8")) as {
       travelShortcuts: unknown[];
     };
-    assert.deepEqual(disk.travelShortcuts[7], {
+    assert.deepEqual(disk.travelShortcuts[8], {
       mapId: 642,
       district: "international",
       districtNumber: 0,
@@ -177,7 +163,7 @@ describe("PreferencesCoordinator", () => {
   it("serializes ordinary settings writes with shortcut writes", async () => {
     const { coordinator } = await fixture();
     const current = await coordinator.getTravelPreferences();
-    const shortcuts = replaceTravelShortcut(current.shortcuts, 7, { mapId: 642 });
+    const shortcuts = replaceTravelShortcut(current.shortcuts, 8, { mapId: 642 });
 
     await Promise.all([
       coordinator.updateSettings({ showDiagnostics: true }),
@@ -186,7 +172,7 @@ describe("PreferencesCoordinator", () => {
 
     const settings = await coordinator.getSettings();
     assert.equal(settings.showDiagnostics, true);
-    assert.deepEqual(settings.travelShortcuts[7], {
+    assert.deepEqual(settings.travelShortcuts[8], {
       mapId: 642,
       district: "international",
       districtNumber: 0,
