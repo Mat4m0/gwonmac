@@ -77,6 +77,7 @@ const config: ForgeConfig = {
       "LICENSE",
       "THIRD-PARTY-NOTICES.md",
       "src/renderer/fonts/COPYING-QUALITYPE",
+      "build/renderer/fonts/COPYING-INTER",
       "src/native/gw-dat/vendor/COPYING-GWTOOLBOX",
       "src/native/gw-dat/vendor/COPYING-GUILDWARSMAPBROWSER",
     ],

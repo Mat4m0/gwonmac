@@ -95,6 +95,13 @@ License 1.1. The complete license is included as `COPYING-QUALITYPE` beside the
 font in source distributions and in the packaged application's Resources
 directory.
 
+## Inter
+
+Inter is © 2016 The Inter Project Authors and is distributed under the SIL
+Open Font License 1.1 through `@fontsource-variable/inter` 5.3.0. GWonMac
+ships the unmodified variable-weight language subsets. The complete license is
+included as `COPYING-INTER` in the packaged application's Resources directory.
+
 ## Kenney Input Prompts
 
 `src/renderer/images/playstation-controller-prompts.png` is composed from the

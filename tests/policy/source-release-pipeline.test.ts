@@ -89,6 +89,10 @@ test("packaged releases carry the project and third-party license notices", () =
     forge,
     /extraResource:[\s\S]*"src\/renderer\/fonts\/COPYING-QUALITYPE"/,
   );
+  assert.match(
+    forge,
+    /extraResource:[\s\S]*"build\/renderer\/fonts\/COPYING-INTER"/,
+  );
   const notices = read("THIRD-PARTY-NOTICES.md");
   assert.match(notices, /not relicensed under\s+GPL-3\.0-only/);
   assert.match(
@@ -96,6 +100,8 @@ test("packaged releases carry the project and third-party license notices", () =
     /Guild Wars Reforged application[\s\S]*Apple App Store[\s\S]*gwnative project/,
   );
   assert.match(notices, /QT Friz Quad[\s\S]*SIL Open Font\s+License 1\.1/);
+  assert.match(notices, /## Inter[\s\S]*?SIL\s+Open Font License 1\.1/);
+  assert.match(notices, /## Inter[\s\S]*?@fontsource-variable\/inter/);
 });
 
 // What the mapping produces is proved by executing it, in

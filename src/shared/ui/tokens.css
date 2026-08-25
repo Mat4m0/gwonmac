@@ -107,7 +107,7 @@
   --ui-font: "QTFrizQuad", "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
   --ui-font-display: var(--ui-font);
-  --ui-font-readable: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+  --ui-font-readable: "Inter Variable", Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
   --ui-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --ui-font-interface: var(--ui-font);
