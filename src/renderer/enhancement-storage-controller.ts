@@ -44,7 +44,7 @@ function unavailableReason(
 ): string | null {
   if (!active) return "Enhancement installation is no longer active";
   if (availability.playRegion === "pvp") {
-    return "Xunlai storage is unavailable in PvP and guild halls";
+    return "Xunlai storage is unavailable during PvP play";
   }
   if (!availability.enabled) return "Xunlai storage is turned off in Settings";
   if (availability.playRegion === "unknown") {

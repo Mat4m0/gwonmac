@@ -557,7 +557,7 @@ export async function installCertifiedCompanion(
         if (currentRegion !== "pve") {
           throw new Error(
             currentRegion === "pvp"
-              ? "GWonMac Tools are unavailable in PvP"
+              ? "GWonMac Tools are unavailable during PvP play"
               : "GWonMac Tools are unavailable while the region is unknown",
           );
         }
@@ -566,10 +566,10 @@ export async function installCertifiedCompanion(
           throw new Error("no party has been observed yet");
         }
         if (observed.party?.playRegion !== "pve") {
-          throw new Error("team commands require a confirmed PvE party");
+          throw new Error("team commands require a confirmed supported party");
         }
         if (observed.party?.inOutpost !== true) {
-          throw new Error("team commands require a confirmed PvE outpost");
+          throw new Error("team commands require a confirmed supported outpost");
         }
         return observed;
       },

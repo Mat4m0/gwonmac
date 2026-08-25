@@ -197,8 +197,7 @@ After that restart, these choices update during the session:
 
 - **Apply teams in Guild Wars** controls only the fixed Team Apply operations.
   The local Tools panel and saved Build/Team library remain available whenever
-  the master Tools setting is on, except in positively identified PvP maps and
-  guild halls.
+  the master Tools setting is on, except during active PvP play.
 - **Target distance and range** controls the shipped Test readout and its target
   observation.
 - Saved **Skill key labels** select only renderer-owned labels over the
@@ -206,9 +205,10 @@ After that restart, these choices update during the session:
   bindings, and the renderer never turns a label into game input.
 
 Disabled optional observers stop their domain reads. Core cursor observation
-stays active. A small map-policy projection remains active so the app can close
-the complete Tools surface and Xunlai storage in PvP and guild halls, while
-stricter live features also withdraw during transitions and unknown regions.
+stays active. A small map-policy projection combines ArenaNet's map flag with
+the instance type. Guild halls and PvP outposts remain supported; active PvP
+play closes Tools and Xunlai storage. Stricter live features also withdraw
+during transitions and unknown regions.
 
 If live integration is unavailable, the host can still mount the saved-library
 part of Tools. Players can edit, import, and export builds and teams. Live party
@@ -263,7 +263,7 @@ queues a fixed `{ agent: 0, type: 0, data: 3 }` DataWindow payload, then calls
 the certified client DataWindow handler at the existing game-thread drain. It
 does not send that payload to ArenaNet. The action is enabled only with its
 separate Tools setting and a fresh snapshot that proves the current player is
-in a supported PvE outpost and can access storage. Every snapshot update
+in a supported outpost and can access storage. Every snapshot update
 resynchronizes the action, so loading, character, account, and map transitions
 revoke stale access immediately.
 
@@ -312,8 +312,8 @@ running the reset again safely finishes it. Window-position cleanup is a
 separate best-effort action and cannot change that result.
 
 Team Apply requires enabled Tools and Apply teams in Guild Wars, a proved Team
-Apply capability, a positively classified PvE outpost, fresh party state, and
-an explicit player action.
+Apply capability, a positively classified supported outpost, fresh party state,
+and an explicit player action.
 
 The runner checks policy before each command and while it confirms results. A
 map transition or policy change stops the operation. A refusal is an explicit

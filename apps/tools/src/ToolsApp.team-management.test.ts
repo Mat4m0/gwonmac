@@ -787,7 +787,7 @@ describe("ToolsApp team management", () => {
       .find((button) => button.text().includes("Apply team"))!;
 
     expect(apply.attributes("disabled")).toBeDefined();
-    expect(wrapper.text()).toContain("Apply team is unavailable in PvP");
+    expect(wrapper.text()).toContain("Apply team is unavailable during PvP play");
     wrapper.unmount();
   });
 

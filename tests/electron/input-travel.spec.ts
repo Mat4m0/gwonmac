@@ -97,6 +97,24 @@ test.describe("renderer Travel input", () => {
       await expect(palette.getByRole("heading", { name: "Favorites" })).toBeVisible();
       await expect(palette.locator(".travel-favorite-grid .travel-favorite")).toHaveCount(6);
 
+      // Every shortcut that shows a GWonMac interface is a toggle. A second
+      // Travel request closes the same palette and returns focus to the game.
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:travel-toggle", {
+          cancelable: true,
+          detail: {},
+        }));
+      });
+      await expect(palette).toBeHidden();
+      await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:travel-toggle", {
+          cancelable: true,
+          detail: {},
+        }));
+      });
+      await expect(palette).toBeVisible();
+
       // Native modal work is above non-modal surfaces. The first Escape closes
       // Settings and restores Travel; the palette remains open underneath.
       await page.evaluate(() => {

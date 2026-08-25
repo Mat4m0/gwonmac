@@ -15,9 +15,9 @@ export function teamApplyRuntimePresentation(
   const guidance = (() => {
     switch (problem.rule) {
       case "party-unavailable": return "Enter the game on a character and wait for party observation.";
-      case "pvp": return "Travel to a PvE outpost. Your saved builds and teams remain available.";
-      case "region-unknown": return "Wait for the region check, or travel to a PvE outpost.";
-      case "not-outpost": return "Travel to any PvE outpost before applying.";
+      case "pvp": return "Leave the PvP match before applying. Your saved builds and teams remain available.";
+      case "region-unknown": return "Wait for the region check, or travel to an outpost.";
+      case "not-outpost": return "Travel to any outpost before applying.";
       case "outpost-unknown": return "Wait for the outpost check to finish.";
       case "partial-roster": return "Wait until every party member is visible to GWonMac.";
       case "mode-unobserved": return "Wait for Normal or Hard Mode to be observed.";
@@ -32,10 +32,10 @@ export function teamApplyRuntimePresentation(
   let message = "";
   switch (problem.rule) {
     case "party-unavailable": message = "Waiting for a playable character and party observation."; break;
-    case "pvp": message = "Apply team is unavailable in PvP and guild halls."; break;
+    case "pvp": message = "Apply team is unavailable during PvP play."; break;
     case "region-unknown": message = "Apply team is unavailable until GWonMac identifies the current region."; break;
-    case "not-outpost": message = "Enter a PvE outpost to apply this team."; break;
-    case "outpost-unknown": message = "Waiting to confirm that this is a PvE outpost."; break;
+    case "not-outpost": message = "Enter an outpost to apply this team."; break;
+    case "outpost-unknown": message = "Waiting to confirm that this is an outpost."; break;
     case "partial-roster": message = "Waiting until the complete party roster is observed."; break;
     case "mode-unobserved": message = "Waiting for the current Normal or Hard Mode observation."; break;
     case "player-unobserved": message = "Your own character has not been observed yet."; break;

@@ -98,8 +98,8 @@ async function installTargetReadout(
 
     // This scenario exercises the target presentation lifecycle, not native
     // play-region discovery (the Toolbox scenario proves that separately).
-    // Publish an explicit certified-shape PvE policy snapshot so the PvE-only
-    // target consumer starts from the same region precondition as a live tick.
+    // Publish an explicit certified-shape supported-region snapshot so the
+    // target consumer starts from the same precondition as a live tick.
     const playRegionPointer = allocations[3]?.pointer;
     if (playRegionPointer === undefined) {
       throw new Error("target readout play-region allocation is missing");
@@ -894,6 +894,8 @@ export async function assertToolboxFoundationLifecycle() {
       }
 
       view.setUint32(area + layout.areaInfoFlags, 1, true);
+      view.setUint32(game.character + layout.isExplorable, 1, true);
+      view.setUint32(game.character + layout.currentInstanceType, 1, true);
       pendingTradeToggles = 1;
       callback(0, 126, 0, 0, 0, 0);
       await new Promise<void>((resolve, reject) => {
@@ -946,6 +948,7 @@ export async function assertToolboxFoundationLifecycle() {
         tradeConfiguration: tradeConfigurations.at(-1),
       };
       view.setUint32(game.character + layout.currentInstanceType, 0, true);
+      view.setUint32(game.character + layout.isExplorable, 0, true);
       view.setUint32(area + layout.areaInfoFlags, 0, true);
       callback(0, 128, 0, 0, 0, 0);
       callback(1, 1, 2, 3, 4, 5);

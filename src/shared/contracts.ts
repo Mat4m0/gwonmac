@@ -382,7 +382,7 @@ export interface AppSettings {
   gwonmacTools: boolean;
   /** Allow explicit Apply team commands when live-game policy also permits. */
   teamManagement: boolean;
-  /** Allow the explicit local Xunlai window command in supported PvE outposts. */
+  /** Allow the explicit local Xunlai window command in supported outposts. */
   xunlaiStorage: boolean;
   /** Allow the focused Travel palette and its explicit map command. */
   travelPalette: boolean;

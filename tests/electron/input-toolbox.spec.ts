@@ -281,6 +281,14 @@ test.describe("renderer Tools input", () => {
       });
       await expect(trade).toBeVisible();
       await expect(tool).toBeVisible();
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:trade-toggle", { cancelable: true }));
+      });
+      await expect(trade).toBeHidden();
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:trade-toggle", { cancelable: true }));
+      });
+      await expect(trade).toBeVisible();
       await page.getByRole("button", { name: "Trade action" }).click();
       await expect(trade).toHaveAttribute("data-active", "true");
       await expect(tool).toHaveAttribute("data-active", "false");
