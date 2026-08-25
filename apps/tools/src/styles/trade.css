@@ -272,21 +272,25 @@
 .trade-skeleton:nth-child(3) { width: min(520px, 76%); }
 
 .trade-inspector {
-  display: grid;
-  min-height: 112px;
-  max-height: 148px;
+  display: flex;
+  min-height: 132px;
+  max-height: 180px;
   flex: 0 0 auto;
-  grid-template-columns: minmax(0, 1fr) auto;
+  flex-direction: column;
   gap: var(--ui-space-3);
   margin-top: var(--ui-gap);
   padding: var(--ui-space-3) var(--ui-space-4);
   overflow: auto;
 }
 
-.inspector-copy { min-width: 0; }
+.inspector-copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--ui-space-2);
+}
 .inspector-copy p {
   max-width: 75ch;
-  margin: var(--ui-space-2) 0 0;
+  margin: 0;
   color: var(--ui-text-bright);
   font-family: var(--ui-font-readable);
   line-height: 1.55;
@@ -318,13 +322,19 @@
 
 .inspector-actions {
   display: flex;
-  max-width: 520px;
-  flex-flow: row wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: var(--ui-space-4);
+}
+.inspector-action-group {
+  display: flex;
+  align-items: center;
   gap: var(--ui-space-2);
 }
-.inspector-actions .ui-button { min-height: 34px; gap: var(--ui-space-1); padding-inline: var(--ui-space-2); }
+.inspector-action-group[data-utility] {
+  justify-content: flex-end;
+}
+.inspector-actions .ui-button { min-height: 34px; gap: var(--ui-space-1); }
 .inspector-actions .ui-link { padding-inline: var(--ui-space-1); white-space: nowrap; }
 .trade-inspector .mobile-back { display: none; }
 
@@ -777,7 +787,13 @@
     display: inline-flex;
     align-self: flex-start;
   }
-  .inspector-actions { min-width: 0; flex-direction: row; flex-wrap: wrap; }
+  .inspector-actions {
+    min-width: 0;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .inspector-action-group { flex-wrap: wrap; }
+  .inspector-action-group[data-utility] { justify-content: flex-start; }
   .trade-saved-drawer {
     top: 68px;
     right: 10px;

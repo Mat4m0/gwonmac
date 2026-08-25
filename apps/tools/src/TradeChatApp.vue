@@ -780,27 +780,29 @@ function exactTime(timestamp: number): string {
             </div>
             <p><bdi>{{ selected.message }}</bdi></p>
           </div>
-          <div class="inspector-actions">
-            <button
-              class="ui-button"
-              data-variant="quiet"
-              :aria-pressed="offerSaved(selected)"
-              :disabled="!savedReady"
-              @click="toggleOffer(selected)"
-            ><TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save" }}</button>
-            <button
-              class="ui-button"
-              data-variant="quiet"
-              :aria-pressed="playerSaved(selected.sender)"
-              :disabled="!savedReady"
-              @click="togglePlayer(selected.sender)"
-            ><TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow" }}</button>
-            <button class="ui-button" data-variant="quiet" @click="copy(selected.sender, 'Character name')">
-              Copy name
-            </button>
-            <button class="ui-button" data-variant="quiet" @click="copy(selected.message, 'Message')">Copy text</button>
-            <button class="ui-link" @click="props.host.openSource(source)">{{ sourceLabel }} feed ↗</button>
-          </div>
+          <footer class="inspector-actions">
+            <div class="inspector-action-group" role="group" aria-label="Offer actions">
+              <button
+                class="ui-button"
+                :aria-pressed="offerSaved(selected)"
+                :disabled="!savedReady"
+                @click="toggleOffer(selected)"
+              ><TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save offer" }}</button>
+              <button
+                class="ui-button"
+                :aria-pressed="playerSaved(selected.sender)"
+                :disabled="!savedReady"
+                @click="togglePlayer(selected.sender)"
+              ><TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow player" }}</button>
+            </div>
+            <div class="inspector-action-group" data-utility role="group" aria-label="Copy and source actions">
+              <button class="ui-button" data-variant="quiet" @click="copy(selected.sender, 'Character name')">
+                Copy name
+              </button>
+              <button class="ui-button" data-variant="quiet" @click="copy(selected.message, 'Message')">Copy offer</button>
+              <button class="ui-link" @click="props.host.openSource(source)">Open {{ sourceLabel }} feed ↗</button>
+            </div>
+          </footer>
         </template>
         <div v-else class="ui-empty">
           <strong>Choose an offer</strong>
