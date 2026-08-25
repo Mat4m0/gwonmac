@@ -108,13 +108,13 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     hooks: [],
   },
   {
-    // Core reload automation observes only four exact native frames and
+    // Core reload automation observes only five exact native frames and
     // publishes a closed pre-game state. It deliberately has no generic UI
     // hook or frame command surface.
     id: "preGameControls",
     requiresAll: ["playRegionObservation"],
     requiresAny: [],
-    configOwners: ["skill-slots"],
+    configOwners: [],
     hooks: [],
   },
 ] as const);
@@ -263,7 +263,9 @@ export function enhancementCapabilityProfile(
 
 /** Named product/developer choices. Certificates and caches use only bit identities. */
 export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
-  cursor: capabilitiesFromMask(0x601),
+  cursor: capabilitiesFromMask(0x001),
+  core: capabilitiesFromMask(0x601),
+  reconnect: capabilitiesFromMask(0x601),
   region: capabilitiesFromMask(0x200),
   target: capabilitiesFromMask(0x202),
   party: capabilitiesFromMask(0x284),
@@ -278,7 +280,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 44;
+export const ENHANCEMENT_TRANSFORM_ABI = 45;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
@@ -307,7 +309,7 @@ export function enhancementCapabilitiesFor(
       return selection.tools
         ? ENHANCEMENT_CAPABILITY_PRESETS.all
         : selection.nativeCursor
-          ? ENHANCEMENT_CAPABILITY_PRESETS.cursor
+          ? ENHANCEMENT_CAPABILITY_PRESETS.core
           : NO_ENHANCEMENT_CAPABILITIES;
     case "cursor-observer": return ENHANCEMENT_CAPABILITY_PRESETS.cursor;
     case "target-observer": return ENHANCEMENT_CAPABILITY_PRESETS.target;
@@ -316,7 +318,7 @@ export function enhancementCapabilitiesFor(
     case "xunlai-storage": return ENHANCEMENT_CAPABILITY_PRESETS.storage;
     // The reload probe needs the same bounded pre-game and play-region readers
     // that required Core installs in production.
-    case "reconnect-probe": return ENHANCEMENT_CAPABILITY_PRESETS.cursor;
+    case "reconnect-probe": return ENHANCEMENT_CAPABILITY_PRESETS.reconnect;
   }
 }
 

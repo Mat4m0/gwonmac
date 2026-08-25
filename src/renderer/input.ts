@@ -179,6 +179,12 @@ export const installGameInput = ({
     timer: ReturnType<typeof setTimeout>;
     resolve(outcome: AutomaticEnterOutcome): void;
   } | null = null;
+  const cancelAutomaticEnter = (outcome: AutomaticEnterOutcome = 'cancelled') => {
+    if (automaticEnter === null) return;
+    clearTimeout(automaticEnter.timer);
+    automaticEnter.resolve(outcome);
+    automaticEnter = null;
+  };
   let virtualCursor: { x: number; y: number } | null = null;
   let pointerWanted = false;
   let modeWatch: ReturnType<typeof setInterval> | null = null;
@@ -365,11 +371,7 @@ export const installGameInput = ({
     releasing = true;
     try {
       resetWheel();
-      if (automaticEnter !== null) {
-        clearTimeout(automaticEnter.timer);
-        automaticEnter.resolve('cancelled');
-        automaticEnter = null;
-      }
+      cancelAutomaticEnter();
       releaseKeys();
       releaseButtons();
     } finally {
@@ -442,11 +444,16 @@ export const installGameInput = ({
 
   const scheduleAutomaticEnter = (
     delayMs = CHARACTER_ENTER_DELAY_MS,
+    expiresAt = Number.POSITIVE_INFINITY,
   ): Promise<AutomaticEnterOutcome> => {
     if (automaticEnter !== null) return Promise.resolve('cancelled');
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         automaticEnter = null;
+        if (performance.now() > expiresAt) {
+          resolve('cancelled');
+          return;
+        }
         if (!document.hasFocus()) {
           resolve('unfocused');
           return;
@@ -546,13 +553,11 @@ export const installGameInput = ({
     }
     if (
       event.isTrusted &&
-      event.target === canvas &&
+      (event.target === canvas || textInputs.has(event.target)) &&
       event.key === 'Enter' &&
       automaticEnter !== null
     ) {
-      clearTimeout(automaticEnter.timer);
-      automaticEnter.resolve('physical');
-      automaticEnter = null;
+      cancelAutomaticEnter('physical');
     }
     if (
       event.target === canvas &&
@@ -930,6 +935,7 @@ export const installGameInput = ({
 
   return Object.freeze({
     releaseAll,
+    cancelAutomaticEnter,
     setLoginProviderChooser(visible: boolean) {
       providerChooserVisible = visible;
       if (!visible) return;
@@ -947,17 +953,13 @@ export const installGameInput = ({
       // Some saved sessions advance without needing our login-screen Enter.
       // Cancel it as soon as the token request proves the client moved on, so
       // it cannot land late on character selection or a reconnect prompt.
-      if (automaticEnter !== null) {
-        clearTimeout(automaticEnter.timer);
-        automaticEnter.resolve('progressed');
-        automaticEnter = null;
-      }
+      cancelAutomaticEnter('progressed');
       characterSelectionUntil = performance.now() + CHARACTER_SELECTION_WINDOW_MS;
     },
-    submitSavedLogin() {
+    submitSavedLogin(expiresAt?: number) {
       providerChooserVisible = false;
       characterSelectionUntil = 0;
-      return scheduleAutomaticEnter();
+      return scheduleAutomaticEnter(CHARACTER_ENTER_DELAY_MS, expiresAt);
     },
     playSelectedCharacter() {
       return activatePreGameControl('character-select');

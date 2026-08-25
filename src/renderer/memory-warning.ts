@@ -42,6 +42,7 @@ export function bindMemoryWarning(
     || !reloadButton || !laterButton || !autoRelog
   ) return null;
   let savedAutoRelog = actions.autoRelogAfterReload;
+  let pendingPreferenceSave = Promise.resolve();
   autoRelog.checked = savedAutoRelog;
 
   let currentLevel: MemoryWarningLevel | null = null;
@@ -69,23 +70,24 @@ export function bindMemoryWarning(
 
   autoRelog.addEventListener("change", () => {
     const selected = autoRelog.checked;
-    void actions.saveAutoRelog(selected).then(() => {
+    pendingPreferenceSave = actions.saveAutoRelog(selected).then(() => {
       savedAutoRelog = selected;
     }).catch(() => {
       if (autoRelog.checked === selected) autoRelog.checked = savedAutoRelog;
+      throw new Error("automatic return preference could not be saved");
     });
+    void pendingPreferenceSave.catch(() => undefined);
   });
 
   reloadButton.addEventListener("click", () => {
     root.hidden = true;
     dismissable?.setOpen(false);
     (reloadButton as HTMLButtonElement).disabled = true;
-    void actions.saveAutoRelog(autoRelog.checked)
-      .then(() => actions.reload())
+    void pendingPreferenceSave.then(() => actions.reload())
       .catch(() => {
-      (reloadButton as HTMLButtonElement).disabled = false;
-      root.hidden = false;
-      dismissable?.setOpen(true);
+        (reloadButton as HTMLButtonElement).disabled = false;
+        root.hidden = false;
+        dismissable?.setOpen(true);
       });
   });
   laterButton.addEventListener("click", dismiss);

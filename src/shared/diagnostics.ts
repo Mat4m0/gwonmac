@@ -199,7 +199,6 @@ export const RENDERER_MILESTONES = [
   "relog.preGameProbe",
   "relog.inputSettled",
   "relog.finished",
-  "relog.timedOut",
   "wasm.instantiate.begin",
   "wasm.instantiate.end",
   "wasm.streamingFallback",
@@ -239,9 +238,7 @@ export type RelogInputOutcome = (typeof RELOG_INPUT_OUTCOMES)[number];
 export const RELOG_TERMINAL_OUTCOMES = [
   "restored",
   "outpost",
-  "manual",
   "timed-out",
-  "unsupported",
 ] as const;
 export type RelogTerminalOutcome = (typeof RELOG_TERMINAL_OUTCOMES)[number];
 

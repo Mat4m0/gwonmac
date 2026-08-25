@@ -580,7 +580,12 @@ function deriveEnhancementBuild(
     context,
     includePlayRegion,
   );
-  const preGameBaseline = ENHANCEMENT_BUILDS.at(-1) ?? null;
+  // Automatic input may use frame offsets only from this exact transformed
+  // client. Labels and function bodies can be re-derived on a future build,
+  // but they do not prove that the frame table and context layout stayed put.
+  const preGameBaseline = ENHANCEMENT_BUILDS.find(
+    (build) => build.sha256 === report.sha256,
+  ) ?? null;
   const preGameControls = requestedCapabilities.preGameControls
       && preGameBaseline?.preGameControls
     ? derivePreGameControls(
@@ -643,7 +648,9 @@ function deriveEnhancementBuild(
       ? {
           preGameControls: changedFeature(
             "preGameControls",
-            "pre-game.exact-frame-labels",
+            preGameBaseline
+              ? "pre-game.exact-frame-labels"
+              : "pre-game.frame-layout",
           ),
         }
       : {}),

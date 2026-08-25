@@ -1,9 +1,9 @@
 /**
- * Exact-build proof for the four native frames used by reload automation.
+ * Exact-build proof for the five native frames used by reload automation.
  *
  * The proof starts at unique UTF-16 labels and binds the game's exact label
- * hash and FrameRelation initializer. A translated caption, screen position,
- * or nearby generic Yes button grants no authority.
+ * hash implementation. A translated caption, screen position, or nearby
+ * generic Yes button grants no authority.
  */
 import { isDeepStrictEqual } from "node:util";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
@@ -18,8 +18,6 @@ import {
 
 const HASH_FUNCTION_SHA256 =
   "90e009c029d1a6fb53f0e7b92d72583497455266a64841d34ac56905289ac95b";
-const RELATION_INITIALIZER_SHA256 =
-  "91bbf0aa603cb47b3b3a1c7ea2a7062730794600897f16cd94c41a6151214199";
 const HASH_TABLE_ADDRESS = 1_249_776;
 
 const LABELS = Object.freeze({
@@ -107,25 +105,16 @@ export function derivePreGameControls(
     ["i32", "i32"],
     ["i32"],
   );
-  const relationInitializer = uniqueExactFunction(
-    context.module,
-    RELATION_INITIALIZER_SHA256,
-    ["i32", "i32", "i32", "i32"],
-    ["i32"],
-  );
-  if (hashFunction === null || relationInitializer === null
-    || !signatureMatches(context.module, hashFunction, ["i32", "i32"], ["i32"])
-    || !signatureMatches(
-      context.module,
-      relationInitializer,
-      ["i32", "i32", "i32", "i32"],
-      ["i32"],
-    )) return null;
+  if (hashFunction === null
+    || !signatureMatches(context.module, hashFunction, ["i32", "i32"], ["i32"])) {
+    return null;
+  }
   const labelHashes = {
     play: labelHash(context, LABELS.play),
     selector: labelHash(context, LABELS.selector),
     yes: labelHash(context, LABELS.yes),
     no: labelHash(context, LABELS.no),
+    reconnectDialog: labelHash(context, LABELS.reconnectDialog),
   };
   if (Object.values(labelHashes).some((hash) => hash === null || hash === 0)) {
     return null;
@@ -137,12 +126,6 @@ export function derivePreGameControls(
       params: Object.freeze(["i32", "i32"] as const),
       results: Object.freeze(["i32"] as const),
       bodySha256: functionBodySha256(context.module, hashFunction),
-    }),
-    relationInitializer: Object.freeze({
-      functionIndex: relationInitializer,
-      params: Object.freeze(["i32", "i32", "i32", "i32"] as const),
-      results: Object.freeze(["i32"] as const),
-      bodySha256: functionBodySha256(context.module, relationInitializer),
     }),
     labels: Object.freeze({
       play,
@@ -156,6 +139,7 @@ export function derivePreGameControls(
       selector: labelHashes.selector!,
       yes: labelHashes.yes!,
       no: labelHashes.no!,
+      reconnectDialog: labelHashes.reconnectDialog!,
     }),
     layout: Object.freeze({ ...frameLayout }),
   });

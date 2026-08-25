@@ -18,7 +18,6 @@ export type ResolvedPreGameFunction = Readonly<{
 export type EnhancementPreGameResolution = Readonly<{
   certificate: Certificate;
   hashFunction: ResolvedPreGameFunction;
-  relationInitializer: ResolvedPreGameFunction;
 }> | null;
 
 type ResolveFunction = (
@@ -44,18 +43,11 @@ export function resolveEnhancementPreGameTransform(options: Readonly<{
     certificate.hashFunction.params,
     certificate.hashFunction.results,
   );
-  const relationInitializer = options.resolveFunction(
-    "frame relation initializer",
-    certificate.relationInitializer.functionIndex,
-    certificate.relationInitializer.params,
-    certificate.relationInitializer.results,
-  );
-  for (const entry of [certificate.hashFunction, certificate.relationInitializer]) {
-    if (options.bodyHash(entry.functionIndex) !== entry.bodySha256) {
-      options.fail("pre-game frame bodies do not match their certificates");
-    }
+  if (options.bodyHash(certificate.hashFunction.functionIndex)
+    !== certificate.hashFunction.bodySha256) {
+    options.fail("pre-game frame body does not match its certificate");
   }
-  return { certificate, hashFunction, relationInitializer };
+  return { certificate, hashFunction };
 }
 
 function rejectWithMaskIf(condition: Uint8Array): Uint8Array {
@@ -82,11 +74,25 @@ function visibleFrame(frameLocal: number, frameState: number): Uint8Array {
   );
 }
 
+const PRE_GAME_LOCALS = Object.freeze({
+  mask: 0,
+  firstHash: 1,
+  count: 6,
+  array: 7,
+  index: 8,
+  frame: 9,
+  liveHash: 10,
+  frameState: 11,
+  memoryBytes: 12,
+});
+
 /** True when `pointer + bytes` would exceed a non-4-GiB memory. */
 function outsideMemory(pointerLocal: number, bytes: Uint8Array): Uint8Array {
   return concat(
-    Uint8Array.of(0x20), uleb(11), Uint8Array.of(0x45, 0x45),
-    Uint8Array.of(0x20), uleb(pointerLocal), Uint8Array.of(0x20), uleb(11),
+    Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.memoryBytes),
+    Uint8Array.of(0x45, 0x45),
+    Uint8Array.of(0x20), uleb(pointerLocal), Uint8Array.of(0x20),
+    uleb(PRE_GAME_LOCALS.memoryBytes),
     bytes, Uint8Array.of(0x6b, 0x4b, 0x71),
   );
 }
@@ -102,6 +108,8 @@ function outsideMemory(pointerLocal: number, bytes: Uint8Array): Uint8Array {
  * bit 12:     Yes and No are both visible
  * bit 13:     Play and Selector are both visible
  * bits 14..18: valid count, array, frame pointer, frame id, and live hash seen
+ * bits 19..21: DlgReconnect hash, live match, and visibility
+ * bit 22:     DlgReconnect, Yes, and No are all visible
  * bits 24..30: the Enhancement transform ABI that produced this reader
  */
 export function preGameDiagnosticReader(
@@ -113,70 +121,98 @@ export function preGameDiagnosticReader(
     certificate.labelHashes.selector,
     certificate.labelHashes.yes,
     certificate.labelHashes.no,
+    certificate.labelHashes.reconnectDialog,
   ] as const;
-  const matchOne = (hashLocal: number, bit: number): Uint8Array => concat(
-    Uint8Array.of(0x20), uleb(9), Uint8Array.of(0x20), uleb(hashLocal),
+  const matchOne = (
+    hashLocal: number,
+    matchedBit: number,
+    visibleBit: number,
+  ): Uint8Array => concat(
+    Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.liveHash),
+    Uint8Array.of(0x20), uleb(hashLocal),
     Uint8Array.of(0x46, 0x04, 0x40),
-    Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x41), sleb(1 << (bit + 4)),
-    Uint8Array.of(0x72, 0x21), uleb(0),
-    addBooleanBit(visibleFrame(8, layout.frameState), bit + 8),
+    Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.mask), Uint8Array.of(0x41),
+    sleb(1 << matchedBit), Uint8Array.of(0x72, 0x21),
+    uleb(PRE_GAME_LOCALS.mask),
+    addBooleanBit(
+      visibleFrame(PRE_GAME_LOCALS.frame, layout.frameState),
+      visibleBit,
+    ),
     Uint8Array.of(0x0b),
   );
   return concat(
-    // mask, four hashes, count, array, index, frame, hash, state, memory bytes.
-    uleb(1), uleb(12), Uint8Array.of(0x7f),
+    // mask, five hashes, count, array, index, frame, hash, state, memory bytes.
+    uleb(1), uleb(13), Uint8Array.of(0x7f),
     Uint8Array.of(0x41), sleb(ENHANCEMENT_TRANSFORM_ABI << 24),
-    Uint8Array.of(0x21), uleb(0),
+    Uint8Array.of(0x21), uleb(PRE_GAME_LOCALS.mask),
     Uint8Array.of(0x3f, 0x00, 0x41), sleb(65_536),
-    Uint8Array.of(0x6c, 0x21), uleb(11),
+    Uint8Array.of(0x6c, 0x21), uleb(PRE_GAME_LOCALS.memoryBytes),
     ...hashes.map((hash, index) => concat(
-      Uint8Array.of(0x41), sleb(hash), Uint8Array.of(0x21), uleb(index + 1),
+      Uint8Array.of(0x41), sleb(hash), Uint8Array.of(0x21),
+      uleb(PRE_GAME_LOCALS.firstHash + index),
       addBooleanBit(concat(
-        Uint8Array.of(0x20), uleb(index + 1), Uint8Array.of(0x45, 0x45),
-      ), index),
+        Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.firstHash + index),
+        Uint8Array.of(0x45, 0x45),
+      ), index < 4 ? index : 19),
     )),
     Uint8Array.of(0x41), sleb(layout.frameCount),
-    Uint8Array.of(0x28), uleb(2), uleb(0), Uint8Array.of(0x22), uleb(5),
+    Uint8Array.of(0x28), uleb(2), uleb(0), Uint8Array.of(0x22),
+    uleb(PRE_GAME_LOCALS.count),
     rejectWithMaskIf(Uint8Array.of(0x45)),
     rejectWithMaskIf(concat(
-      Uint8Array.of(0x20), uleb(5), Uint8Array.of(0x41), sleb(16_384),
+      Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.count),
+      Uint8Array.of(0x41), sleb(16_384),
       Uint8Array.of(0x4b),
     )),
     addBooleanBit(Uint8Array.of(0x41, 0x01), 14),
     Uint8Array.of(0x41), sleb(layout.frameArray),
-    Uint8Array.of(0x28), uleb(2), uleb(0), Uint8Array.of(0x22), uleb(6),
+    Uint8Array.of(0x28), uleb(2), uleb(0), Uint8Array.of(0x22),
+    uleb(PRE_GAME_LOCALS.array),
     rejectWithMaskIf(Uint8Array.of(0x45)),
-    rejectWithMaskIf(outsideMemory(6, concat(
-      Uint8Array.of(0x20), uleb(5), Uint8Array.of(0x41), sleb(4),
+    rejectWithMaskIf(outsideMemory(PRE_GAME_LOCALS.array, concat(
+      Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.count),
+      Uint8Array.of(0x41), sleb(4),
       Uint8Array.of(0x6c),
     ))),
     addBooleanBit(Uint8Array.of(0x41, 0x01), 15),
-    Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x21), uleb(7),
+    Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x21),
+    uleb(PRE_GAME_LOCALS.index),
     Uint8Array.of(0x02, 0x40, 0x03, 0x40),
-      Uint8Array.of(0x20), uleb(7), Uint8Array.of(0x20), uleb(5),
+      Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.index), Uint8Array.of(0x20),
+      uleb(PRE_GAME_LOCALS.count),
       Uint8Array.of(0x4f, 0x0d), uleb(1),
-      Uint8Array.of(0x20), uleb(6), Uint8Array.of(0x20), uleb(7),
+      Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.array), Uint8Array.of(0x20),
+      uleb(PRE_GAME_LOCALS.index),
       Uint8Array.of(0x41), sleb(4), Uint8Array.of(0x6c, 0x6a),
-      Uint8Array.of(0x28), uleb(2), uleb(0), Uint8Array.of(0x22), uleb(8),
+      Uint8Array.of(0x28), uleb(2), uleb(0), Uint8Array.of(0x22),
+      uleb(PRE_GAME_LOCALS.frame),
       Uint8Array.of(0x04, 0x40),
-        outsideMemory(8, concat(Uint8Array.of(0x41), sleb(layout.frameBytes))),
+        outsideMemory(PRE_GAME_LOCALS.frame, concat(
+          Uint8Array.of(0x41), sleb(layout.frameBytes),
+        )),
         Uint8Array.of(0x45, 0x04, 0x40),
           addBooleanBit(Uint8Array.of(0x41, 0x01), 16),
-          Uint8Array.of(0x20), uleb(8), Uint8Array.of(0x28), uleb(2),
-          uleb(layout.frameId), Uint8Array.of(0x20), uleb(7),
+          Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.frame),
+          Uint8Array.of(0x28), uleb(2), uleb(layout.frameId),
+          Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.index),
           Uint8Array.of(0x46, 0x04, 0x40),
             addBooleanBit(Uint8Array.of(0x41, 0x01), 17),
-            Uint8Array.of(0x20), uleb(8), Uint8Array.of(0x28), uleb(2),
-            uleb(layout.frameHashId), Uint8Array.of(0x21), uleb(9),
+            Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.frame),
+            Uint8Array.of(0x28), uleb(2), uleb(layout.frameHashId),
+            Uint8Array.of(0x21), uleb(PRE_GAME_LOCALS.liveHash),
             addBooleanBit(concat(
-              Uint8Array.of(0x20), uleb(9), Uint8Array.of(0x45, 0x45),
+              Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.liveHash),
+              Uint8Array.of(0x45, 0x45),
             ), 18),
-            matchOne(1, 0), matchOne(2, 1), matchOne(3, 2), matchOne(4, 3),
+            matchOne(1, 4, 8), matchOne(2, 5, 9),
+            matchOne(3, 6, 10), matchOne(4, 7, 11),
+            matchOne(5, 20, 21),
           Uint8Array.of(0x0b),
         Uint8Array.of(0x0b),
       Uint8Array.of(0x0b),
-      Uint8Array.of(0x20), uleb(7), Uint8Array.of(0x41), sleb(1),
-      Uint8Array.of(0x6a, 0x21), uleb(7), Uint8Array.of(0x0c), uleb(0),
+      Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.index),
+      Uint8Array.of(0x41), sleb(1), Uint8Array.of(0x6a, 0x21),
+      uleb(PRE_GAME_LOCALS.index), Uint8Array.of(0x0c), uleb(0),
     Uint8Array.of(0x0b, 0x0b),
     addBooleanBit(concat(
       Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x41), sleb(0x0c00),
@@ -186,6 +222,11 @@ export function preGameDiagnosticReader(
       Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x41), sleb(0x0300),
       Uint8Array.of(0x71, 0x41), sleb(0x0300), Uint8Array.of(0x46),
     ), 13),
+    addBooleanBit(concat(
+      Uint8Array.of(0x20), uleb(PRE_GAME_LOCALS.mask),
+      Uint8Array.of(0x41), sleb(0x20_0c00), Uint8Array.of(0x71, 0x41),
+      sleb(0x20_0c00), Uint8Array.of(0x46),
+    ), 22),
     Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x0b),
   );
 }
@@ -199,7 +240,7 @@ export function preGameStateReader(
     // local 0 = diagnostic mask; local 1 = context traversal scratch.
     uleb(1), uleb(2), Uint8Array.of(0x7f),
     Uint8Array.of(0x10), uleb(diagnosticReaderIndex), Uint8Array.of(0x21), uleb(0),
-    Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x41), sleb(1 << 12),
+    Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x41), sleb(1 << 22),
     Uint8Array.of(0x71, 0x04, 0x40, 0x41), sleb(2), Uint8Array.of(0x0f, 0x0b),
     Uint8Array.of(0x20), uleb(0), Uint8Array.of(0x41), sleb(1 << 13),
     Uint8Array.of(0x71, 0x04, 0x40, 0x41), sleb(1), Uint8Array.of(0x0f, 0x0b),

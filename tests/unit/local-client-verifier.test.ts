@@ -570,7 +570,6 @@ describe("local client verification boundary", () => {
       (proof) => { proof.layout.frameScreenBottom = Number(proof.layout.frameScreenBottom) + 4; },
       (proof) => { proof.layout.frameScreenRight = Number(proof.layout.frameScreenRight) + 4; },
       (proof) => { proof.layout.frameScreenTop = Number(proof.layout.frameScreenTop) + 4; },
-      (proof) => { proof.layout.frameRelation = Number(proof.layout.frameRelation) + 4; },
       (proof) => { proof.layout.frameState = Number(proof.layout.frameState) + 4; },
     ];
     for (const mutate of mutations) {

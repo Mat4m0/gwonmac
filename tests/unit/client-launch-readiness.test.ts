@@ -52,4 +52,8 @@ test("preparation and failure remain launch gates", () => {
   );
   const failure: DownloadProgress = { phase: "error", errorCode: "not_ready" };
   assert.equal(launchProgressForSession(failure, active), failure);
+  for (const phase of ["checking", "client"] as const) {
+    const preparation: DownloadProgress = { ...backgroundDownload, phase };
+    assert.equal(launchProgressForSession(preparation, active), preparation);
+  }
 });

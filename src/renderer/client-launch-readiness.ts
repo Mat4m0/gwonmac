@@ -15,11 +15,9 @@ export function launchProgressForSession(
   progress: DownloadProgress,
   session: ClientSession,
 ): DownloadProgress {
-  if (
-    session.extendedMemory === null ||
-    progress.phase === "ready" ||
-    progress.phase === "error"
-  ) return progress;
+  if (session.extendedMemory === null || progress.phase !== "image") {
+    return progress;
+  }
   return {
     ...progress,
     phase: "ready",

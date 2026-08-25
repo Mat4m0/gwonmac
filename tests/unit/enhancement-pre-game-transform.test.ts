@@ -16,13 +16,18 @@ import {
 
 const certificate = {
   labels: { play: 101, selector: 102, yes: 103, no: 104, reconnectDialog: 105 },
-  labelHashes: { play: 101, selector: 102, yes: 103, no: 104 },
+  labelHashes: {
+    play: 101,
+    selector: 102,
+    yes: 103,
+    no: 104,
+    reconnectDialog: 105,
+  },
   layout: {
     frameArray: 0,
     frameCount: 4,
     frameBytes: 0x80,
     frameId: 0x04,
-    frameRelation: 0x10,
     frameHashId: 0x1c,
     frameState: 0x20,
     contextRoot: 8,
@@ -83,11 +88,12 @@ test("pre-game state scans exact live label hashes and loading context", async (
   const abi = ENHANCEMENT_TRANSFORM_ABI << 24;
 
   view.setUint32(certificate.layout.frameArray, 32, true);
-  view.setUint32(certificate.layout.frameCount, 5, true);
-  const frames = [0, 128, 256, 384, 512];
+  view.setUint32(certificate.layout.frameCount, 6, true);
+  const frames = [0, 128, 256, 384, 512, 640];
   const hashes = [0, certificate.labels.play, certificate.labels.selector,
-    certificate.labels.yes, certificate.labels.no];
-  for (let id = 1; id <= 4; id += 1) {
+    certificate.labels.yes, certificate.labels.no,
+    certificate.labels.reconnectDialog];
+  for (let id = 1; id <= 5; id += 1) {
     const frame = frames[id]!;
     view.setUint32(32 + id * 4, frame, true);
     view.setUint32(frame + certificate.layout.frameId, id, true);
@@ -95,7 +101,7 @@ test("pre-game state scans exact live label hashes and loading context", async (
     view.setUint32(frame + certificate.layout.frameState, 0x204, true);
   }
 
-  assert.equal(diagnostic(), abi | 0x7c0ff);
+  assert.equal(diagnostic(), abi | 0x1fc0ff);
   assert.equal(state(), 0);
 
   view.setUint32(32 + 4 * 4, 70_000, true);
@@ -104,23 +110,26 @@ test("pre-game state scans exact live label hashes and loading context", async (
 
   view.setUint32(frames[1]! + certificate.layout.frameState, 4, true);
   view.setUint32(frames[2]! + certificate.layout.frameState, 4, true);
-  assert.equal(diagnostic(), abi | 0x7e3ff);
+  assert.equal(diagnostic(), abi | 0x1fe3ff);
   assert.equal(state(), 1);
 
   view.setUint32(frames[1]! + certificate.layout.frameState, 0x204, true);
   view.setUint32(frames[2]! + certificate.layout.frameState, 0x204, true);
   view.setUint32(frames[3]! + certificate.layout.frameState, 4, true);
   view.setUint32(frames[4]! + certificate.layout.frameState, 4, true);
-  assert.equal(diagnostic(), abi | 0x7dcff);
+  assert.equal(diagnostic(), abi | 0x1fdcff);
+  assert.equal(state(), 0, "generic Yes/No buttons are not reconnect authority");
+  view.setUint32(frames[5]! + certificate.layout.frameState, 4, true);
+  assert.equal(diagnostic(), abi | 0x7fdcff);
   assert.equal(state(), 2);
 
   // A stale table slot is rejected even if its hash and visible state match.
   view.setUint32(frames[3]! + certificate.layout.frameId, 99, true);
-  assert.equal(diagnostic(), abi | 0x7c8bf);
+  assert.equal(diagnostic(), abi | 0x3fc8bf);
   assert.equal(state(), 0);
   view.setUint32(frames[3]! + certificate.layout.frameId, 3, true);
 
-  for (let id = 1; id <= 4; id += 1) {
+  for (let id = 1; id <= 5; id += 1) {
     view.setUint32(frames[id]! + certificate.layout.frameState, 0x204, true);
   }
   view.setUint32(certificate.layout.contextRoot, 700, true);

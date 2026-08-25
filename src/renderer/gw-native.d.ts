@@ -54,9 +54,10 @@ declare global {
 
   interface GameInputController {
     releaseAll(): void;
+    cancelAutomaticEnter(): void;
     setLoginProviderChooser(visible: boolean): void;
     expectCharacterSelection(): void;
-    submitSavedLogin(): Promise<AutomaticEnterOutcome>;
+    submitSavedLogin(expiresAt?: number): Promise<AutomaticEnterOutcome>;
     playSelectedCharacter(): Promise<AutomaticEnterOutcome>;
     acceptReconnect(): Promise<AutomaticEnterOutcome>;
   }

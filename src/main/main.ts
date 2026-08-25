@@ -372,6 +372,11 @@ function buildWindowHost(
   const gameReloader = new GameReloader({
     sockets,
     getSettings: () => preferences.getSettings(),
+    diagnosticOwner: (win) =>
+      windowRegistry.requireDiagnosticOwnerForWindow(win),
+    record: logEvent,
+    sync: (win) => sendRendererCommand(win, { type: "filesystem.sync" }),
+    load: (win, url) => win.loadURL(url),
     rendererUrl: RENDERER_URL,
   });
   return {

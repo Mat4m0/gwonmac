@@ -364,12 +364,6 @@ export interface KnownEnhancementBuild {
       results: readonly ["i32"];
       bodySha256: string;
     }>;
-    relationInitializer: Readonly<{
-      functionIndex: number;
-      params: readonly ["i32", "i32", "i32", "i32"];
-      results: readonly ["i32"];
-      bodySha256: string;
-    }>;
     labels: Readonly<{
       play: number;
       selector: number;
@@ -382,10 +376,11 @@ export interface KnownEnhancementBuild {
       selector: number;
       yes: number;
       no: number;
+      reconnectDialog: number;
     }>;
     layout: Pick<EnhancementSkillSlotGeometryLayout,
       "frameArray" | "frameCount" | "frameBytes" | "frameId"
-      | "frameRelation" | "frameState"> & Pick<EnhancementPlayRegionLayout,
+      | "frameState"> & Pick<EnhancementPlayRegionLayout,
       "contextRoot" | "gameContextSlot" | "characterContext"
       | "currentInstanceType"> & Readonly<{ frameHashId: number }>;
   }>;

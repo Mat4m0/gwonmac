@@ -103,7 +103,7 @@ test("the capability registry is the ordered wire vocabulary", () => {
       id: "preGameControls",
       requiresAll: ["playRegionObservation"],
       requiresAny: [],
-      configOwners: ["skill-slots"],
+      configOwners: [],
       hooks: [],
     },
   ]);

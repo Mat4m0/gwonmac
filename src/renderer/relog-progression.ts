@@ -16,19 +16,3 @@ export function relogOutcomeForPlayable(
   if (playable === null) return null;
   return playable === "explorable" ? "restored" : "outpost";
 }
-
-export function observeRelogPlayableTransition(
-  observedNonPlayable: boolean,
-  playable: "outpost" | "explorable" | null,
-): Readonly<{
-  observedNonPlayable: boolean;
-  outcome: "outpost" | "restored" | null;
-}> {
-  if (playable === null) {
-    return { observedNonPlayable: true, outcome: null };
-  }
-  return {
-    observedNonPlayable,
-    outcome: observedNonPlayable ? relogOutcomeForPlayable(playable) : null,
-  };
-}

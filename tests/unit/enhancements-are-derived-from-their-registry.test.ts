@@ -118,7 +118,7 @@ test("one capability plan derives hooks without losing feature identity", () => 
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
-      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: true },
+      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: false, preGameControls: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "target-observer"),
@@ -146,7 +146,7 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
   const cases = [
     [{ nativeCursor: true, tools: false }, "none", "features-601"],
     [{ nativeCursor: true, tools: true }, "none", "features-7ff"],
-    [{ nativeCursor: false, tools: false }, "cursor-observer", "features-601"],
+    [{ nativeCursor: false, tools: false }, "cursor-observer", "features-01"],
     [{ nativeCursor: true, tools: false }, "target-observer", "features-202"],
     [{ nativeCursor: false, tools: false }, "toolbox-foundation", "features-284"],
     [{ nativeCursor: false, tools: false }, "xunlai-storage", "features-270"],

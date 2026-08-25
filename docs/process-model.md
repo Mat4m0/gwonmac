@@ -239,7 +239,7 @@ omitted.
 Reload diagnostics are a separate, account-owned projection of the main flight
 recorder. **Copy Reload Trace** survives renderer replacement and joins
 Command-Q, the native sheet, reload, automatic-input outcomes, and the
-developer-only bounded UI-message probe. It never changes an input decision and
+certified pre-game state probe. It never changes an input decision and
 does not make the renderer-memory input trace persistent.
 
 ### Packaged input qualification

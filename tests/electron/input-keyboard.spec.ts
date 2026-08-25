@@ -219,26 +219,34 @@ test.describe("renderer keyboard input", () => {
           typeof import("../../src/renderer/input.js");
         const canvas = document.createElement("canvas");
         canvas.tabIndex = 0;
-        document.body.append(canvas);
+        const loginField = document.createElement("input");
+        document.body.append(canvas, loginField);
         const events: Array<{ trusted: boolean; type: string; afterMs: number }> = [];
         const started = performance.now();
         for (const type of ["keydown", "keyup"] as const) {
-          canvas.addEventListener(type, (event) => {
-            if (event.key === "Enter") {
-              events.push({
-                trusted: event.isTrusted,
-                type,
-                afterMs: performance.now() - started,
-              });
-            }
-          });
+          for (const target of [canvas, loginField]) {
+            target.addEventListener(type, (event) => {
+              if (event instanceof KeyboardEvent && event.key === "Enter") {
+                events.push({
+                  trusted: event.isTrusted,
+                  type,
+                  afterMs: performance.now() - started,
+                });
+              }
+            });
+          }
         }
-        const input = installGameInput({ canvas, log: () => undefined });
+        const input = installGameInput({
+          canvas,
+          textInputs: new Set([loginField]),
+          log: () => undefined,
+        });
         canvas.focus();
         input.submitSavedLogin();
         Object.assign(window, {
           __relogInput: input,
           __relogCanvas: canvas,
+          __relogInputField: loginField,
           __relogEvents: events,
         });
       });
@@ -265,6 +273,7 @@ test.describe("renderer keyboard input", () => {
         const testWindow = window as typeof window & {
           __relogInput?: GameInputController;
           __relogCanvas?: HTMLCanvasElement;
+          __relogInputField?: HTMLInputElement;
           __relogEvents?: unknown[];
         };
         testWindow.__relogEvents?.splice(0);
@@ -331,10 +340,11 @@ test.describe("renderer keyboard input", () => {
         const testWindow = window as typeof window & {
           __relogInput?: GameInputController;
           __relogCanvas?: HTMLCanvasElement;
+          __relogInputField?: HTMLInputElement;
           __relogEvents?: unknown[];
         };
         testWindow.__relogEvents?.splice(0);
-        testWindow.__relogCanvas?.focus();
+        testWindow.__relogInputField?.focus();
         testWindow.__relogInput?.submitSavedLogin();
       });
       await page.keyboard.press("Enter");

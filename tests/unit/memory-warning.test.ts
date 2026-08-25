@@ -162,7 +162,7 @@ describe("memory warning presenter", () => {
     dom.element("memory-notice-reload").click();
     await Promise.resolve();
     await Promise.resolve();
-    assert.deepEqual(saved, [true, true]);
+    assert.deepEqual(saved, [true]);
     assert.equal(reloads, 1);
   });
 });

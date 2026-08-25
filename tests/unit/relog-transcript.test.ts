@@ -15,6 +15,7 @@ function event(
     wallTime: "2026-08-25T00:00:00.000Z",
     level: "info",
     subsystem: name.startsWith("commandQ") || name.startsWith("quitReload")
+      || name.startsWith("gameReload")
       ? "app" : "renderer",
     name,
     ...(ownerId === undefined ? {} : { ownerId }),
@@ -72,6 +73,24 @@ describe("reload transcript", () => {
       records: [event(1, 1, "renderer.loaded")],
     });
     assert.match(absent, /no reload boundary/);
+  });
+
+  it("starts a menu trace at its own reload after an older Command-Q run", () => {
+    const text = formatRelogTranscript({
+      ownerId: 1,
+      completeFromStart: true,
+      records: [
+        event(1, 1, "commandQ.shortcut", { phase: "claimed", reason: "none" }),
+        event(2, 1, "gameReload.requested", { cause: "command-q" }),
+        event(3, 1, "relog.finished", { outcome: "restored" }),
+        event(4, 1, "gameReload.requested", { cause: "menu" }),
+        event(5, 1, "relog.finished", { outcome: "outpost" }),
+      ],
+    });
+    assert.doesNotMatch(text, /commandQ\.shortcut/);
+    assert.doesNotMatch(text, /outcome=restored/);
+    assert.match(text, /gameReload\.requested cause=menu/);
+    assert.match(text, /relog\.finished outcome=outpost/);
   });
 
   it("stays below the clipboard ceiling by retaining newest complete rows", () => {

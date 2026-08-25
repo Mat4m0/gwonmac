@@ -20,10 +20,9 @@ const RELOG_EVENTS = new Set([
   "relog.preGameProbe",
   "relog.inputSettled",
   "relog.finished",
-  "relog.timedOut",
 ]);
 
-const TERMINAL_EVENTS = new Set(["relog.finished", "relog.timedOut"]);
+const TERMINAL_EVENTS = new Set(["relog.finished"]);
 
 function scalar(fields: LogRecord["fields"], key: string): string | null {
   const value = fields[key];
@@ -63,6 +62,8 @@ function details(
         + `visible=0x${((mask >>> 8) & 0x0f).toString(16)} `
         + `characterPair=${Boolean(mask & 0x2000)} `
         + `reconnectPair=${Boolean(mask & 0x1000)} `
+        + `reconnectDialog=${Boolean(mask & 0x20_0000)} `
+        + `reconnectExact=${Boolean(mask & 0x40_0000)} `
         + `table=${Boolean(mask & 0x4000)}/${Boolean(mask & 0x8000)} `
         + `frames=${Boolean(mask & 0x10000)}/${Boolean(mask & 0x20000)} `
         + `liveHash=${Boolean(mask & 0x40000)}`;
@@ -83,8 +84,13 @@ function traceStart(records: readonly LogRecord[]): number {
     }
   }
   if (reload >= 0) {
+    if (records[reload]!.fields.cause !== "command-q") return reload;
     for (let index = reload; index >= 0; index -= 1) {
       const record = records[index]!;
+      if (index < reload && (
+        record.name === "gameReload.requested"
+        || TERMINAL_EVENTS.has(record.name)
+      )) break;
       if (
         record.name === "commandQ.shortcut"
         && record.fields.phase === "claimed"

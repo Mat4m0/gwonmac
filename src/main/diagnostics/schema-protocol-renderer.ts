@@ -179,19 +179,19 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
   // Renderer recovery and renderer-originated fixed events.
   "gameReload.requested": {
     scope: "owner",
-    subsystem: "renderer",
+    subsystem: "app",
     level: "info",
     fields: { cause: gameReloadCause },
   },
   "gameReload.syncIncomplete": {
     scope: "owner",
-    subsystem: "renderer",
+    subsystem: "app",
     level: "warn",
     fields: { outcome: incompleteCommandOutcome },
   },
   "gameReload.loaded": {
     scope: "owner",
-    subsystem: "renderer",
+    subsystem: "app",
     level: "info",
     fields: { cause: gameReloadCause },
   },
@@ -472,12 +472,6 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     scope: "owner",
     subsystem: "renderer",
     level: "info",
-    fields: { clockSynchronized: boolean },
-  },
-  "relog.timedOut": {
-    scope: "owner",
-    subsystem: "renderer",
-    level: "warn",
     fields: { clockSynchronized: boolean },
   },
   "wasm.instantiate.begin": {

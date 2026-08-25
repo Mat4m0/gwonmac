@@ -602,16 +602,10 @@ function resolveEnhancementTransform(
       name: "SkillBar frame constructor",
       functionIndex: skillConstructor.localIndex + importCount,
     }] : []),
-    ...(preGameResolution ? [
-      {
-        name: "pre-game label hash",
-        functionIndex: preGameResolution.hashFunction.localIndex + importCount,
-      },
-      {
-        name: "frame relation initializer",
-        functionIndex: preGameResolution.relationInitializer.localIndex + importCount,
-      },
-    ] : []),
+    ...(preGameResolution ? [{
+      name: "pre-game label hash",
+      functionIndex: preGameResolution.hashFunction.localIndex + importCount,
+    }] : []),
   ];
   const roleByFunction = new Map<number, string>();
   for (const role of exclusiveRoles) {

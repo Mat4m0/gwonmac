@@ -13,23 +13,34 @@ import type {
   RendererCommandOutcome,
 } from "../shared/contracts.js";
 import type { SocketManager } from "./core/sockets.js";
-import { logEvent } from "./diagnostics.js";
-import { sendRendererCommand } from "./renderer-commands.js";
-import { windowRegistry } from "./window-registry.js";
+import type { logEvent } from "./diagnostics.js";
 
 const RELOAD_SYNC_BUDGET_MS = 1_500;
+const RELOG_INTENT_BUDGET_MS = 5 * 60_000;
+
+type RelogIntent = Readonly<{
+  expiresAt: number;
+  sourceDocumentId: number;
+}>;
 
 export interface GameReloadDependencies {
-  sockets: SocketManager;
+  sockets: Pick<SocketManager, "closeAll">;
   getSettings(): Promise<AppSettings>;
+  diagnosticOwner(win: BrowserWindow): number;
+  record: typeof logEvent;
+  sync(win: BrowserWindow): Promise<RendererCommandOutcome>;
+  load(win: BrowserWindow, url: string): Promise<void>;
   rendererUrl: string;
 }
 
 export class GameReloader {
   private readonly active = new WeakMap<BrowserWindow, Promise<void>>();
-  private readonly relogIntents = new WeakSet<BrowserWindow>();
+  private readonly relogIntents = new WeakMap<BrowserWindow, RelogIntent>();
+  private readonly dependencies: GameReloadDependencies;
 
-  constructor(private readonly dependencies: GameReloadDependencies) {}
+  constructor(dependencies: GameReloadDependencies) {
+    this.dependencies = dependencies;
+  }
 
   reload(win: BrowserWindow, cause: GameReloadCause): Promise<void> {
     const current = this.active.get(win);
@@ -43,7 +54,15 @@ export class GameReloader {
   }
 
   claimRelogIntent(win: BrowserWindow): boolean {
-    if (!this.relogIntents.has(win)) return false;
+    const intent = this.relogIntents.get(win);
+    if (!intent) return false;
+    if (
+      Date.now() > intent.expiresAt
+      || win.webContents.mainFrame.routingId === intent.sourceDocumentId
+    ) {
+      if (Date.now() > intent.expiresAt) this.relogIntents.delete(win);
+      return false;
+    }
     this.relogIntents.delete(win);
     return true;
   }
@@ -53,19 +72,27 @@ export class GameReloader {
     cause: GameReloadCause,
   ): Promise<void> {
     if (win.isDestroyed() || win.webContents.isDestroyed()) return;
-    const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
-    const autoRelogAfterReload = await this.dependencies.getSettings()
-      .then((settings) => settings.autoRelogAfterReload)
-      .catch(() => false);
-    if (autoRelogAfterReload) this.relogIntents.add(win);
+    const ownerId = this.dependencies.diagnosticOwner(win);
+    const autoRelogAfterReload = (
+      await this.dependencies.getSettings()
+    ).autoRelogAfterReload;
+    if (autoRelogAfterReload) {
+      this.relogIntents.set(win, {
+        expiresAt: Date.now() + RELOG_INTENT_BUDGET_MS,
+        sourceDocumentId: win.webContents.mainFrame.routingId,
+      });
+    }
     else this.relogIntents.delete(win);
 
-    logEvent({ k: "gameReload.requested", cause }, ownerId);
-    const sync = sendRendererCommand(win, { type: "filesystem.sync" });
+    this.dependencies.record({ k: "gameReload.requested", cause }, ownerId);
+    const sync = this.dependencies.sync(win);
     this.dependencies.sockets.closeAll(win.webContents.id);
     const syncOutcome = await boundedSync(sync);
     if (syncOutcome !== "completed") {
-      logEvent({ k: "gameReload.syncIncomplete", outcome: syncOutcome }, ownerId);
+      this.dependencies.record(
+        { k: "gameReload.syncIncomplete", outcome: syncOutcome },
+        ownerId,
+      );
     }
 
     if (win.isDestroyed() || win.webContents.isDestroyed()) {
@@ -73,8 +100,8 @@ export class GameReloader {
       return;
     }
     try {
-      await win.loadURL(this.dependencies.rendererUrl);
-      logEvent({ k: "gameReload.loaded", cause }, ownerId);
+      await this.dependencies.load(win, this.dependencies.rendererUrl);
+      this.dependencies.record({ k: "gameReload.loaded", cause }, ownerId);
     } catch (error) {
       this.relogIntents.delete(win);
       throw error;

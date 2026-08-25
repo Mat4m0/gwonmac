@@ -91,25 +91,53 @@ function withGameOwner(
 const activeQuitOrReloadDialogs = new WeakMap<BrowserWindow, Promise<void>>();
 const AUTO_RELOG_LABEL = "Return to my character automatically";
 
-async function readAutoRelogPreference(host: WindowHost): Promise<boolean> {
+async function readAutoRelogPreference(host: WindowHost): Promise<boolean | null> {
   try {
     return (await host.getSettings()).autoRelogAfterReload;
   } catch (error) {
     logEvent({ k: "settings.loadFailed", code: errorCode(error) });
-    return false;
+    return null;
   }
 }
 
 async function saveAutoRelogPreference(
   host: WindowHost,
-  previous: boolean,
+  previous: boolean | null,
   next: boolean,
-): Promise<void> {
-  if (previous === next) return;
+): Promise<boolean> {
+  if (previous === next) return true;
   try {
     await host.updateSettings({ autoRelogAfterReload: next });
+    return true;
   } catch (error) {
     logEvent({ k: "settings.saveFailed", code: errorCode(error) });
+    return false;
+  }
+}
+
+async function showAutoRelogSettingsError(win: BrowserWindow): Promise<void> {
+  await dialog.showMessageBox(win, {
+    type: "error",
+    buttons: ["OK"],
+    message: "Reload setting is unavailable",
+    detail: "Guild Wars was not reloaded. Try again so automatic return matches your choice.",
+  });
+}
+
+async function reloadGameOrShowError(
+  host: WindowHost,
+  win: BrowserWindow,
+  cause: "menu" | "command-q",
+): Promise<void> {
+  try {
+    await host.reloadGame(win, cause);
+  } catch {
+    await dialog.showMessageBox(win, {
+      type: "error",
+      buttons: ["OK"],
+      message: "Guild Wars could not reload",
+      detail: "Your account stayed open. Try Reload Guild Wars again.",
+    });
   }
 }
 
@@ -153,10 +181,17 @@ function showReloadGame(host: WindowHost, win: BrowserWindow): Promise<void> {
       detail:
         "This account restarts with fresh memory. Other accounts stay open.",
       checkboxLabel: AUTO_RELOG_LABEL,
-      checkboxChecked: autoRelog,
+      checkboxChecked: autoRelog ?? false,
     });
-    await saveAutoRelogPreference(host, autoRelog, result.checkboxChecked);
-    if (result.response === 0) await host.reloadGame(win, "menu");
+    if (result.response !== 0) return;
+    if (
+      autoRelog === null
+      || !await saveAutoRelogPreference(host, autoRelog, result.checkboxChecked)
+    ) {
+      await showAutoRelogSettingsError(win);
+      return;
+    }
+    await reloadGameOrShowError(host, win, "menu");
   });
 }
 
@@ -201,7 +236,7 @@ async function showQuitOrReloadGameOnce(
       detail:
         "Reload restarts this account with fresh memory. Other accounts stay open.",
       checkboxLabel: AUTO_RELOG_LABEL,
-      checkboxChecked: autoRelogAfterReload,
+      checkboxChecked: autoRelogAfterReload ?? false,
     });
   } catch (error) {
     recordDialog("settled", "failed", autoRelogAfterReload);
@@ -213,15 +248,34 @@ async function showQuitOrReloadGameOnce(
       ? "quit"
       : "cancel";
   recordDialog("settled", action, result.checkboxChecked);
-  await saveAutoRelogPreference(
-    host,
-    autoRelogAfterReload,
-    result.checkboxChecked,
-  );
   if (result.response === 0) {
-    await host.reloadGame(win, "command-q");
+    if (
+      autoRelogAfterReload === null
+      || !await saveAutoRelogPreference(
+        host,
+        autoRelogAfterReload,
+        result.checkboxChecked,
+      )
+    ) {
+      await showAutoRelogSettingsError(win);
+      return;
+    }
+    await reloadGameOrShowError(host, win, "command-q");
   } else if (result.response === 1) {
+    if (autoRelogAfterReload !== null) {
+      await saveAutoRelogPreference(
+        host,
+        autoRelogAfterReload,
+        result.checkboxChecked,
+      );
+    }
     host.requestQuit(win);
+  } else if (autoRelogAfterReload !== null) {
+    await saveAutoRelogPreference(
+      host,
+      autoRelogAfterReload,
+      result.checkboxChecked,
+    );
   }
 }
 

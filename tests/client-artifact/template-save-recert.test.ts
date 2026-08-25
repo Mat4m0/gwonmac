@@ -286,7 +286,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
-    preGameControls: true,
+    preGameControls: false,
   });
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
@@ -306,7 +306,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
-    preGameControls: true,
+    preGameControls: false,
   });
 
   const targetMutations = [

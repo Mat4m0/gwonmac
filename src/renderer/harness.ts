@@ -209,12 +209,9 @@ async function escalateRepeatedCrash(): Promise<void> {
 let disposeSocketHost = () => {};
 let disposeHostOnlyTools = () => {};
 const native = () => window.gwNative;
-let relogIntent: Promise<boolean> = Promise.resolve(false);
-let relogIntentExpiresAt = 0;
-let relogIntentConsumed = false;
-let relogLoginSubmissionStarted = false;
-let relogDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
-let relogLastStep = 'waiting for saved login';
+let automaticCharacterReturn:
+  | import('./automatic-character-return.js').AutomaticCharacterReturn
+  | null = null;
 const diagnosticProfile = native().init.diagnosticProfile;
 const glOverridesEnabled = diagnosticProfile === 'standard';
 const presentationPath = diagnosticProfile === 'direct-canvas'
@@ -590,25 +587,6 @@ async function fetchSnapshotRange(
 // interactive Steam sign-in produced no login. Transient and non-blocking —
 // the login screen itself stays entirely the client's.
 let loginStatusTimer: ReturnType<typeof setTimeout> | null = null;
-let relogStatusRevealTimer: ReturnType<typeof setTimeout> | null = null;
-let relogStatusVisible = false;
-const RELOG_STATUS_REVEAL_DELAY_MS = 350;
-
-function cancelRelogStatusReveal(): void {
-  if (relogStatusRevealTimer === null) return;
-  clearTimeout(relogStatusRevealTimer);
-  relogStatusRevealTimer = null;
-}
-
-function clearRelogStatus(): void {
-  cancelRelogStatusReveal();
-  if (!relogStatusVisible) return;
-  if (loginStatusTimer) clearTimeout(loginStatusTimer);
-  loginStatusTimer = null;
-  relogStatusVisible = false;
-  const status = document.getElementById('login-status');
-  if (status) status.hidden = true;
-}
 
 function showLoginStatus(
   reason: import('../shared/contracts.js').SteamRefusalReason,
@@ -618,8 +596,7 @@ function showLoginStatus(
     const text = describeSteamRefusal(reason);
     const status = document.getElementById('login-status');
     if (!text || !status) return;
-    cancelRelogStatusReveal();
-    relogStatusVisible = false;
+    automaticCharacterReturn?.clearStatus();
     status.textContent = text;
     status.hidden = false;
     if (loginStatusTimer) clearTimeout(loginStatusTimer);
@@ -628,184 +605,6 @@ function showLoginStatus(
       loginStatusTimer = null;
     }, 12_000);
   })();
-}
-
-function showRelogStatus(text: string, hideAfterMs?: number): void {
-  cancelRelogStatusReveal();
-  const status = document.getElementById('login-status');
-  if (!status) return;
-  relogStatusVisible = true;
-  status.textContent = text;
-  status.hidden = false;
-  if (loginStatusTimer) clearTimeout(loginStatusTimer);
-  loginStatusTimer = hideAfterMs === undefined ? null : setTimeout(() => {
-    status.hidden = true;
-    relogStatusVisible = false;
-    loginStatusTimer = null;
-  }, hideAfterMs);
-}
-
-function deferRelogStatus(text: string): void {
-  clearRelogStatus();
-  relogStatusRevealTimer = setTimeout(() => {
-    relogStatusRevealTimer = null;
-    showRelogStatus(text);
-  }, RELOG_STATUS_REVEAL_DELAY_MS);
-}
-
-function recordRelogStep(
-  name: Extract<
-    import('../shared/diagnostics.js').RendererMilestone,
-    `relog.${string}`
-  >,
-  step: string,
-  status: string,
-): void {
-  relogLastStep = step;
-  milestone(name);
-  deferRelogStatus(status);
-}
-
-function beginRelogFeedback(): void {
-  recordRelogStep(
-    'relog.intentClaimed',
-    'waiting for saved login',
-    'Reloaded. Waiting for saved login…',
-  );
-  relogDeadlineTimer = setTimeout(() => {
-    milestone('relog.timedOut');
-    milestone('relog.finished', { outcome: 'timed-out' });
-    showRelogStatus(
-      `Automatic return stopped while ${relogLastStep}. Press Return to continue.`,
-    );
-  }, 30_000);
-}
-
-function recordRelogInput(
-  stage: import('../shared/diagnostics.js').RelogInputStage,
-  outcome: AutomaticEnterOutcome,
-): void {
-  milestone('relog.inputSettled', { stage, outcome });
-}
-
-function finishRelogFeedback(outcome: 'restored' | 'outpost'): void {
-  if (relogDeadlineTimer !== null) clearTimeout(relogDeadlineTimer);
-  relogDeadlineTimer = null;
-  clearRelogStatus();
-  milestone('relog.finished', { outcome });
-}
-
-const afterClientPaint = (): Promise<void> => new Promise((resolve) => {
-  requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-});
-
-async function waitForPreGameState(
-  accepted: (state: PreGameState) => boolean,
-): Promise<PreGameState | null> {
-  let previousProbe = "";
-  while (performance.now() <= relogIntentExpiresAt) {
-    const controls = window.gwPreGameControls;
-    const state = controls?.state() ?? 'unknown';
-    const mask = controls?.diagnosticMask() ?? 0;
-    const probe = `${state}:${mask}`;
-    if (probe !== previousProbe) {
-      previousProbe = probe;
-      milestone('relog.preGameProbe', { state, mask });
-    }
-    if (accepted(state)) return state;
-    await new Promise<void>((resolve) => {
-      if (document.visibilityState === 'visible') {
-        requestAnimationFrame(() => resolve());
-      } else {
-        setTimeout(resolve, 25);
-      }
-    });
-  }
-  return null;
-}
-
-async function waitForPlayableRelogState(): Promise<'outpost' | 'explorable' | null> {
-  const { observeRelogPlayableTransition } = await import('./relog-progression.js');
-  let observedNonPlayable = false;
-  while (performance.now() <= relogIntentExpiresAt) {
-    const playable = window.gwPreGameControls?.playable() ?? null;
-    const observation = observeRelogPlayableTransition(
-      observedNonPlayable,
-      playable,
-    );
-    observedNonPlayable = observation.observedNonPlayable;
-    if (observation.outcome !== null) return playable;
-    await new Promise<void>((resolve) => {
-      if (document.visibilityState === 'visible') {
-        requestAnimationFrame(() => resolve());
-      } else {
-        setTimeout(resolve, 25);
-      }
-    });
-  }
-  return null;
-}
-
-const waitForDocumentFocus = (): Promise<boolean> => {
-  if (document.hasFocus()) return Promise.resolve(true);
-  const remaining = relogIntentExpiresAt - performance.now();
-  if (remaining <= 0) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    const focused = () => settle(true);
-    const timer = setTimeout(() => settle(false), remaining);
-    const settle = (value: boolean) => {
-      clearTimeout(timer);
-      window.removeEventListener('focus', focused);
-      resolve(value);
-    };
-    window.addEventListener('focus', focused, { once: true });
-  });
-};
-
-async function sendRelogEnterWhenFocused(
-  send: () => Promise<AutomaticEnterOutcome>,
-): Promise<AutomaticEnterOutcome> {
-  while (performance.now() <= relogIntentExpiresAt) {
-    if (!await waitForDocumentFocus()) return 'unfocused';
-    const outcome = await send();
-    if (outcome !== 'unfocused' && (outcome !== 'cancelled' || document.hasFocus())) {
-      return outcome;
-    }
-  }
-  return 'unfocused';
-}
-
-async function submitSavedLoginForRelog(): Promise<void> {
-  const armed = await relogIntent;
-  if (
-    !armed ||
-    relogIntentConsumed ||
-    relogLoginSubmissionStarted ||
-    performance.now() > relogIntentExpiresAt
-  ) return;
-  relogLoginSubmissionStarted = true;
-  recordRelogStep(
-    'relog.savedCredentialsLoaded',
-    'preparing the login screen',
-    'Saved login loaded. Signing in…',
-  );
-  await afterClientPaint();
-  const loginInput = inputHost;
-  const outcome = loginInput
-    ? await sendRelogEnterWhenFocused(() => loginInput.submitSavedLogin())
-    : 'cancelled';
-  recordRelogInput('login', outcome);
-  if (outcome === 'sent' || outcome === 'physical' || outcome === 'progressed') {
-    recordRelogStep(
-      'relog.loginSubmitted',
-      'waiting for sign-in',
-      'Sign-in submitted. Waiting for Guild Wars…',
-    );
-  } else {
-    relogLastStep = outcome === 'unfocused'
-      ? 'waiting for the game window to regain focus'
-      : 'waiting at the login screen';
-  }
 }
 
 addEventListener('beforeunload', () => {
@@ -818,7 +617,7 @@ addEventListener('beforeunload', () => {
   controllerPrompts?.dispose();
   controllerPrompts = null;
   disposeMemoryWarningSettings();
-  if (relogDeadlineTimer !== null) clearTimeout(relogDeadlineTimer);
+  automaticCharacterReturn?.dispose();
   delete window.gwVirtualGamepad;
   delete window.gwControllerPromptTextureStats;
 });
@@ -972,7 +771,7 @@ Module = {
         throw new Error('no stored credentials');
       }
       log('secureStorage: returning saved credentials');
-      void submitSavedLoginForRelog();
+      automaticCharacterReturn?.savedCredentialsLoaded();
       return stored;
     },
     async storeCredentials(username, password) {
@@ -1287,100 +1086,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
         // including when the player chose not to save credentials.
         if (path === '/webgate/my_account/token.xml') {
           inputHost?.expectCharacterSelection();
-          void relogIntent.then((armed) => {
-            if (!armed || relogIntentConsumed) return;
-            recordRelogStep(
-              'relog.tokenRequested',
-              'waiting for sign-in to finish',
-              'Guild Wars is signing in…',
-            );
-          });
-          this.addEventListener('loadend', () => {
-            void relogIntent.then((armed) => {
-              if (
-                !armed ||
-                relogIntentConsumed ||
-                performance.now() > relogIntentExpiresAt ||
-                this.status < 200 ||
-                this.status >= 300
-              ) return;
-              relogIntentConsumed = true;
-              recordRelogStep(
-                'relog.tokenAccepted',
-                'preparing character selection',
-                'Signed in. Returning to your character…',
-              );
-              void (async () => {
-                const {
-                  isRelogCharacterEntryState,
-                  isRelogPostCharacterState,
-                  relogOutcomeForPlayable,
-                } = await import('./relog-progression.js');
-                const characterState = await waitForPreGameState(
-                  isRelogCharacterEntryState,
-                );
-                if (characterState === null) {
-                  relogLastStep = 'waiting for certified character selection';
-                  return;
-                }
-                const characterInput = inputHost;
-                const outcome: AutomaticEnterOutcome = characterState === 'reconnect'
-                  ? 'progressed'
-                  : characterInput
-                    ? await sendRelogEnterWhenFocused(
-                      () => characterInput.playSelectedCharacter(),
-                    )
-                    : 'cancelled';
-                recordRelogInput('character', outcome);
-                if (
-                  outcome !== 'sent'
-                  && outcome !== 'physical'
-                  && outcome !== 'progressed'
-                ) {
-                  relogLastStep = outcome === 'unfocused'
-                    ? 'waiting for the game window to regain focus'
-                    : 'waiting at character selection';
-                  return;
-                }
-                milestone('relog.characterSubmitted');
-                relogLastStep = 'checking for a previous session';
-                deferRelogStatus('Character selected. Restoring your session…');
-                const branch = characterState === 'reconnect'
-                  ? 'reconnect'
-                  : await waitForPreGameState(isRelogPostCharacterState);
-                if (branch === null) {
-                  relogLastStep = 'waiting for a certified reconnect or loading state';
-                  return;
-                }
-                // Only the exact certified reconnect frame receives a second
-                // Return. Loading is a transition, never terminal evidence.
-                const restoreOutcome: AutomaticEnterOutcome = branch === 'loading'
-                  ? 'progressed'
-                  : characterInput
-                    ? await sendRelogEnterWhenFocused(
-                      () => characterInput.acceptReconnect(),
-                    )
-                    : 'cancelled';
-                recordRelogInput('reconnect', restoreOutcome);
-                if (
-                  restoreOutcome !== 'sent'
-                  && restoreOutcome !== 'physical'
-                  && restoreOutcome !== 'progressed'
-                ) {
-                  relogLastStep = restoreOutcome === 'unfocused'
-                    ? 'the reconnect window lost focus'
-                    : 'waiting for session restoration';
-                  return;
-                }
-                relogLastStep = 'waiting for the character to become playable';
-                deferRelogStatus('Guild Wars is loading your character…');
-                const playable = await waitForPlayableRelogState();
-                if (playable === null) return;
-                const finalOutcome = relogOutcomeForPlayable(playable);
-                if (finalOutcome !== null) finishRelogFeedback(finalOutcome);
-              })();
-            });
-          }, { once: true });
+          automaticCharacterReturn?.tokenRequested(this);
         }
         return origOpen.call(this, method, rewritten, ...rest);
       }
@@ -1513,15 +1219,14 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     );
     return;
   }
-  relogIntent = native().app.claimRelogIntent()
-    .then((armed) => {
-      // Expiry can only withdraw an explicit one-shot intent. It never grants
-      // authority to send input, so slow or manual login safely falls back.
-      relogIntentExpiresAt = armed ? performance.now() + 30_000 : 0;
-      if (armed) beginRelogFeedback();
-      return armed;
-    })
-    .catch(() => false);
+  const { installAutomaticCharacterReturn } = await import(
+    './automatic-character-return.js'
+  );
+  automaticCharacterReturn = installAutomaticCharacterReturn({
+    claimIntent: () => native().app.claimRelogIntent(),
+    input: () => inputHost,
+    record: milestone,
+  });
   milestone('renderer.loaded');
   let isProxyRouteLabel: (route: string) => boolean;
   try {
