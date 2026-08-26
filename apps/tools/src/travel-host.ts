@@ -65,11 +65,33 @@ export function createNativeTravelHost(
   );
   let attemptTimer = 0;
   let unidentifiedOriginMapId: number | null = null;
+  let settledAttempt: Readonly<{
+    mapId: number;
+    phase: "queued" | "loading";
+  }> | null = null;
   const clearAttempt = () => {
     window.clearTimeout(attemptTimer);
     attemptTimer = 0;
     unidentifiedOriginMapId = null;
     attempt.value = { status: "idle" };
+  };
+  const settleAttempt = (mapId: number, phase: "queued" | "loading") => {
+    clearAttempt();
+    settledAttempt = { mapId, phase };
+  };
+  const beginLoading = (mapId: number) => {
+    window.clearTimeout(attemptTimer);
+    settledAttempt = null;
+    attempt.value = { status: "loading", mapId };
+    notice.value = { message: "Travel started.", level: "success" };
+    attemptTimer = window.setTimeout(() => {
+      if (attempt.value.status !== "loading" || attempt.value.mapId !== mapId) return;
+      settleAttempt(mapId, "loading");
+      notice.value = {
+        message: "Guild Wars did not confirm arrival. Travel is ready to try again.",
+        level: "warning",
+      };
+    }, 30_000);
   };
   let currentPreferences: TravelPreferences | null = null;
   const remember = (next: TravelPreferences): TravelPreferences => {
@@ -94,6 +116,7 @@ export function createNativeTravelHost(
     loadHistory: historyObservation.load,
     async travel(request) {
       if (attempt.value.status !== "idle") return;
+      settledAttempt = null;
       unidentifiedOriginMapId = state.value.status === "ready"
         && state.value.characterKey === null
         ? state.value.mapId
@@ -107,7 +130,7 @@ export function createNativeTravelHost(
         command.travel(request);
         attemptTimer = window.setTimeout(() => {
           if (attempt.value.status !== "queued" || attempt.value.mapId !== request.mapId) return;
-          clearAttempt();
+          settleAttempt(request.mapId, "queued");
           notice.value = {
             message: "Travel did not start. Check that this destination is unlocked, then try again.",
             level: "warning",
@@ -146,36 +169,41 @@ export function createNativeTravelHost(
         });
       }
       historyObservation.update(next);
-      if (current.status === "idle") return;
+      if (current.status === "idle") {
+        const settled = settledAttempt;
+        if (settled === null) return;
+        if (next.status === "ready" && next.mapId === settled.mapId) {
+          settledAttempt = null;
+          notice.value = null;
+        } else if (
+          settled.phase === "queued"
+          && next.status === "waiting"
+          && next.reason === "loading"
+        ) {
+          beginLoading(settled.mapId);
+        }
+        return;
+      }
       if (arrived) {
         clearAttempt();
+        settledAttempt = null;
         notice.value = null;
         return;
       }
       if (next.status === "waiting" && next.reason === "loading") {
-        window.clearTimeout(attemptTimer);
-        attempt.value = { status: "loading", mapId: current.mapId };
-        notice.value = { message: "Travel started.", level: "success" };
-        attemptTimer = window.setTimeout(() => {
-          if (attempt.value.status !== "loading") return;
-          clearAttempt();
-          notice.value = {
-            message: "Guild Wars did not confirm arrival. Travel is ready to try again.",
-            level: "warning",
-          };
-        }, 30_000);
+        beginLoading(current.mapId);
         return;
       }
       if (current.status !== "loading") return;
       if (next.status === "waiting") {
-        clearAttempt();
+        settleAttempt(current.mapId, "loading");
         notice.value = {
           message: "Travel was interrupted. Travel is ready to try again.",
           level: "warning",
         };
         return;
       }
-      clearAttempt();
+      settleAttempt(current.mapId, "loading");
       notice.value = {
         message: "Guild Wars did not confirm arrival. Travel is ready to try again.",
         level: "warning",
@@ -184,6 +212,7 @@ export function createNativeTravelHost(
     dispose() {
       historyObservation.dispose();
       clearAttempt();
+      settledAttempt = null;
       notice.value = null;
     },
     traceSearch(query, resultMapIds) {
