@@ -51,7 +51,22 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   await expect(palette.locator('label[for="travel-search-input"] > span')).toHaveCount(0);
   await expect(palette.getByRole("status")).toHaveCount(0);
   await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(160);
-  await page.getByRole("combobox", { name: "Destination or search phrase" }).fill("kama");
+  const search = page.getByRole("combobox", { name: "Destination or search phrase" });
+  const header = palette.locator(".travel-search");
+  const searchControl = palette.locator('label[for="travel-search-input"]');
+  await expect(header).toHaveCSS("box-shadow", "none");
+  await expect(searchControl).not.toHaveCSS("box-shadow", "none");
+  await expect(search).toHaveCSS("outline-style", "none");
+  await expect(search).toHaveCSS("box-shadow", "none");
+  const focusedSearchShadow = await searchControl.evaluate((element) =>
+    getComputedStyle(element).boxShadow
+  );
+  await page.getByRole("button", { name: "Customize Travel" }).focus();
+  await expect(header).toHaveCSS("box-shadow", "none");
+  await expect.poll(() => searchControl.evaluate((element) =>
+    getComputedStyle(element).boxShadow
+  )).not.toBe(focusedSearchShadow);
+  await search.fill("kama");
   await expect(page.getByRole("option", { name: /Kamadan, Jewel of Istan/ })).toBeVisible();
   await page.keyboard.press("Meta+9");
   await expect(page.getByRole("status")).toContainText("shortcut 9");

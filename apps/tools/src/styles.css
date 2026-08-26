@@ -33,16 +33,12 @@
 .travel-search {
   display: grid;
   min-height: 56px;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   flex: none;
   align-items: center;
-  gap: var(--ui-space-3);
-  padding: 0 var(--ui-space-4);
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-2) var(--ui-space-3);
   border-bottom: 1px solid var(--ui-line);
-}
-
-.travel-search:focus-within {
-  box-shadow: inset 0 0 0 2px var(--ui-focus);
 }
 
 .travel-search-icon {
@@ -54,7 +50,29 @@
   stroke-width: 1.5;
 }
 
-.travel-search label { display: grid; min-width: 0; }
+.travel-search label {
+  display: grid;
+  min-width: 0;
+  min-height: 40px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding-inline: var(--ui-space-2);
+  border: 1px solid var(--ui-outline);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-well-fill);
+  box-shadow: inset 0 0 0 1px var(--ui-edge), var(--ui-shadow-inset);
+}
+
+/* The search well owns one focus ring. Header buttons remain independent, so
+ * focus never paints a second frame around the complete palette header. */
+.travel-search label:has(input:focus-visible) {
+  box-shadow: var(--ui-shadow-inset), 0 0 0 2px var(--ui-focus);
+}
+
+.travel-search:has(input:focus-visible) .travel-search-icon {
+  stroke: var(--ui-focus);
+}
 
 .travel-search input {
   width: 100%;
@@ -71,11 +89,25 @@
 
 .travel-search input::placeholder { color: var(--ui-text-faint); }
 
-.travel-close {
+/* This input is one part of the composite search well. The well above owns
+ * its focus ring; the generic native-control rule must not paint another. */
+.travel-search label input:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+
+.travel-search .travel-close {
   width: 34px;
   min-width: 34px;
   min-height: 34px;
   padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.travel-search .travel-close:hover:not(:disabled) {
+  background: var(--ui-hover);
 }
 
 .travel-close svg {
