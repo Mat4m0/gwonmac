@@ -174,6 +174,20 @@ export interface DecodedFunction {
   readonly calls: ReadonlyMap<number, number>;
   readonly callSites: ReadonlyMap<number, readonly DirectCallSite[]>;
   readonly messageSites: Readonly<Record<number, number>>;
+  readonly constantSites: readonly InstructionOperandSite[];
+  readonly memorySites: readonly MemoryOperandSite[];
+}
+
+export interface InstructionOperandSite {
+  readonly opcode: number;
+  readonly offset: number;
+  readonly operandStart: number;
+  readonly operandEnd: number;
+  readonly value: number;
+}
+
+export interface MemoryOperandSite extends InstructionOperandSite {
+  readonly alignment: number;
 }
 
 export interface DirectCallSite {

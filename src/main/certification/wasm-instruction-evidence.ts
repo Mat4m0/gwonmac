@@ -6,6 +6,8 @@ import { readUleb } from "../core/wasm-binary.js";
 import type {
   DecodedFunction,
   DirectCallSite,
+  InstructionOperandSite,
+  MemoryOperandSite,
   ModuleShape,
 } from "./enhancement-evidence-types.js";
 import { EvidenceError } from "./wasm-evidence-error.js";
@@ -16,12 +18,15 @@ const MAX_FUNCTIONS = 100_000;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_INSTRUCTIONS = 25_000_000;
 const MAX_CALL_SITES = 250_000;
+const MAX_OPERAND_SITES = 2_000_000;
 
 type RawDecodedFunction = Readonly<{
   functionIndex: number;
   calls: ReadonlyMap<number, number>;
   callSites: ReadonlyMap<number, readonly DirectCallSite[]>;
   constants: Int32Array;
+  constantSites: readonly InstructionOperandSite[];
+  memorySites: readonly MemoryOperandSite[];
 }>;
 
 const decodedCache = new WeakMap<ModuleShape, readonly RawDecodedFunction[]>();
@@ -57,6 +62,7 @@ function canonicalDecode(module: ModuleShape): readonly RawDecodedFunction[] {
   if (cached) return cached;
   let instructionCount = 0;
   let callSiteCount = 0;
+  let operandSiteCount = 0;
   const decoded: RawDecodedFunction[] = [];
   for (let localIndex = 0; localIndex < module.bodies.length; localIndex += 1) {
     const body = module.bodies[localIndex]!;
@@ -77,6 +83,8 @@ function canonicalDecode(module: ModuleShape): readonly RawDecodedFunction[] {
     const mutableCallSites = new Map<number, DirectCallSite[]>();
     let constants = new Int32Array(64);
     let constantCount = 0;
+    const constantSites: InstructionOperandSite[] = [];
+    const memorySites: MemoryOperandSite[] = [];
     while (cursor.offset < body.byteLength) {
       if (++instructionCount > MAX_INSTRUCTIONS) {
         throw new EvidenceError("analysis-limit-exceeded");
@@ -117,7 +125,19 @@ function canonicalDecode(module: ModuleShape): readonly RawDecodedFunction[] {
         continue;
       }
       if (opcode === 0x41) {
+        const offset = cursor.offset - 1;
+        const operandStart = cursor.offset;
         const value = signed(body, cursor, 5);
+        if (++operandSiteCount > MAX_OPERAND_SITES) {
+          throw new EvidenceError("analysis-limit-exceeded");
+        }
+        constantSites.push(Object.freeze({
+          opcode,
+          offset,
+          operandStart,
+          operandEnd: cursor.offset,
+          value,
+        }));
         if (constantCount === constants.length) {
           const grown = new Int32Array(constants.length * 2);
           grown.set(constants);
@@ -139,8 +159,21 @@ function canonicalDecode(module: ModuleShape): readonly RawDecodedFunction[] {
         continue;
       }
       if (opcode >= 0x28 && opcode <= 0x3e) {
+        const offset = cursor.offset - 1;
         const alignment = unsigned(body, cursor);
-        unsigned(body, cursor);
+        const operandStart = cursor.offset;
+        const value = unsigned(body, cursor);
+        if (++operandSiteCount > MAX_OPERAND_SITES) {
+          throw new EvidenceError("analysis-limit-exceeded");
+        }
+        memorySites.push(Object.freeze({
+          opcode,
+          offset,
+          operandStart,
+          operandEnd: cursor.offset,
+          value,
+          alignment,
+        }));
         if ((alignment & 0x40) !== 0) unsigned(body, cursor);
         continue;
       }
@@ -188,6 +221,8 @@ function canonicalDecode(module: ModuleShape): readonly RawDecodedFunction[] {
       calls: readonlyMapView(calls),
       callSites: readonlyMapView(callSites),
       constants: constants.slice(0, constantCount),
+      constantSites: Object.freeze(constantSites),
+      memorySites: Object.freeze(memorySites),
     }));
   }
   const result = Object.freeze(decoded);
@@ -213,6 +248,8 @@ export function decodeFunctions(
       calls: raw.calls,
       callSites: raw.callSites,
       messageSites: Object.freeze(messageSites),
+      constantSites: raw.constantSites,
+      memorySites: raw.memorySites,
     });
   });
 }

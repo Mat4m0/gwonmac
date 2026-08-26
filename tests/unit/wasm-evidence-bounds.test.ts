@@ -40,6 +40,34 @@ test("direct-call evidence refuses before its allocation ceiling is crossed", ()
   );
 });
 
+test("instruction evidence exposes immutable bounded constant and memory operands", () => {
+  const body = Uint8Array.of(
+    0,
+    0x41, 0x2a,
+    0x28, 0x02, ...uleb(300),
+    0x0b,
+  );
+  const [decoded] = decodeFunctions(moduleWithBody(body), []);
+  assert.deepEqual(decoded?.constantSites, [{
+    opcode: 0x41,
+    offset: 1,
+    operandStart: 2,
+    operandEnd: 3,
+    value: 42,
+  }]);
+  assert.deepEqual(decoded?.memorySites, [{
+    opcode: 0x28,
+    offset: 3,
+    operandStart: 5,
+    operandEnd: 7,
+    value: 300,
+    alignment: 2,
+  }]);
+  assert.equal(Object.isFrozen(decoded?.constantSites), true);
+  assert.equal(Object.isFrozen(decoded?.memorySites), true);
+  assert.equal(Object.isFrozen(decoded?.memorySites[0]), true);
+});
+
 test("active-table evidence refuses excessive entries and unsupported forms", () => {
   const excessiveEntries = concat(
     uleb(1),

@@ -81,6 +81,10 @@ export class TemplateSaveModuleView {
       .map((site) => site.offset);
   }
 
+  instructions(local: number): DecodedFunction {
+    return this.decoded[local] ?? fail(`function ${local} is out of range`);
+  }
+
   encodedCallCount(functionIndex: number, width: number): number {
     return this.decoded.reduce((total, body) => total
       + (body.callSites.get(functionIndex) ?? [])
