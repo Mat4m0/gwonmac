@@ -282,7 +282,7 @@ test("the Stable rollback proof establishes its write generation before saving",
     'console.log("stable/beta compatibility: latest Stable creates canonical state")',
   );
   const baselineRead = roundTrip.indexOf(
-    "await readCanonical(running.page)",
+    "await readToolsCanonical(running.page)",
     stableCreation,
   );
   const firstLibraryWrite = roundTrip.indexOf(
@@ -293,7 +293,7 @@ test("the Stable rollback proof establishes its write generation before saving",
   assert.ok(stableCreation >= 0);
   assert.ok(baselineRead > stableCreation);
   assert.ok(firstLibraryWrite > baselineRead);
-  assert.match(roundTrip, /saveWindowState\(windowStatePath/);
+  assert.match(roundTrip, /saveWindowState\(cohort\.windowStatePath/);
   assert.doesNotMatch(
     roundTrip,
     /Browser\.getWindowForTarget|Browser\.setWindowBounds/,
