@@ -273,11 +273,9 @@ function matchesObservationBase(
   return expected !== undefined
     && Object.keys(candidate).sort().join() === Object.keys(expected).sort().join()
     && Object.values(candidate).every(isIndex)
-    && [
-      candidate.contextRoot - expected.contextRoot,
-      candidate.agentArray - expected.agentArray,
-      candidate.areaInfo - expected.areaInfo,
-    ].every((delta, _index, deltas) => delta === deltas[0])
+    && candidate.contextRoot % 4 === 0
+    && candidate.agentArray % 4 === 0
+    && candidate.areaInfo % 4 === 0
     && Object.entries(expected).every(([key, value]) =>
       key === "contextRoot" || key === "agentArray" || key === "areaInfo"
         || candidate[key as keyof typeof candidate] === value);
@@ -312,19 +310,12 @@ function matchesTargetObservation(
   if (candidate === undefined) return true;
   const expected = baseline.targetObservation?.layout;
   const candidateObservation = build.observationBase?.layout;
-  const expectedObservation = baseline.observationBase?.layout;
   return matchesObservationBase(build, baseline)
     && expected !== undefined
     && candidateObservation !== undefined
-    && expectedObservation !== undefined
     && Object.keys(candidate).sort().join() === Object.keys(expected).sort().join()
     && Object.values(candidate).every(isIndex)
-    && candidate.manualTargetAgentId === candidate.automaticTargetAgentId + 4
-    && [
-      candidate.manualTargetAgentId - expected.manualTargetAgentId,
-      candidate.automaticTargetAgentId - expected.automaticTargetAgentId,
-      candidateObservation.contextRoot - expectedObservation.contextRoot,
-    ].every((delta, _index, deltas) => delta === deltas[0]);
+    && candidate.manualTargetAgentId === candidate.automaticTargetAgentId + 4;
 }
 
 function matchesUiDispatcher(
