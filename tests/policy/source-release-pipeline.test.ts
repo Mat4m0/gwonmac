@@ -300,6 +300,23 @@ test("the Stable rollback proof establishes its write generation before saving",
   );
 });
 
+test("the Stable domain proof writes through the candidate rollback serializer", () => {
+  const roundTrip = read("scripts/verify-stable-beta-roundtrip.ts");
+  const domainProof = roundTrip.slice(
+    roundTrip.indexOf("async function proveStableAcceptsCandidateSettingDomains"),
+    roundTrip.indexOf("const sortedKeys"),
+  );
+
+  assert.match(
+    domainProof,
+    /await saveSettings\(path\.join\(cohort\.userData, "settings\.json"\), settings\)/,
+  );
+  assert.doesNotMatch(
+    domainProof,
+    /JSON\.stringify\(\{ formatVersion: 1, \.\.\.settings \}\)/,
+  );
+});
+
 test("application verification routes conservatively through one required result", () => {
   const workflow = read(".github/workflows/pr-package.yml");
   const classifier = read("scripts/ci-impact.ts");

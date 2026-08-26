@@ -39,7 +39,7 @@ import {
   TOOL_NATIVE_NAMESPACES,
   type AppSettings,
 } from "../src/shared/contracts.ts";
-import { parseSettings } from "../src/main/core/settings.ts";
+import { parseSettings, saveSettings } from "../src/main/core/settings.ts";
 import { saveWindowState } from "../src/main/core/window-state.ts";
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.ts";
 import { DEFAULT_CUSTOM_UI_THEME } from "../src/shared/ui-theme.ts";
@@ -280,11 +280,7 @@ async function proveStableAcceptsCandidateSettingDomains(
   stablePath: string,
 ): Promise<void> {
   for (const [index, settings] of candidateSettingsDomains.entries()) {
-    await writeFile(
-      path.join(cohort.userData, "settings.json"),
-      JSON.stringify({ formatVersion: 1, ...settings }),
-      { mode: 0o600 },
-    );
+    await saveSettings(path.join(cohort.userData, "settings.json"), settings);
     await withPackagedApp(cohort, stablePath, async (stable) => {
       const read = await stable.page.evaluate(() => window.gwNative.settings.get());
       assert.deepEqual(
