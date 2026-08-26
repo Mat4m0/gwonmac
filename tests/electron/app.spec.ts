@@ -294,6 +294,12 @@ test.describe("Electron application", () => {
         formatVersion: 1,
         bounds: normalBounds,
         mode: "fullscreen",
+        displayWorkArea: {
+          x: expect.any(Number),
+          y: expect.any(Number),
+          width: expect.any(Number),
+          height: expect.any(Number),
+        },
       });
       expect((await stat(statePath)).mode & 0o777).toBe(0o600);
 
@@ -337,26 +343,35 @@ test.describe("Electron application", () => {
         )
         .not.toBeNull();
       const resetHasSettled = async () => {
-        const bounds = await app.evaluate(({ BrowserWindow }) => {
+        const placement = await app.evaluate(({ BrowserWindow, screen }) => {
           const win = BrowserWindow.getAllWindows()[0];
           if (!win) throw new Error("window missing");
-          return win.getBounds();
+          const bounds = win.getBounds();
+          return {
+            bounds,
+            displayWorkArea: { ...screen.getDisplayMatching(bounds).workArea },
+          };
         });
         const saved = JSON.parse(await readFile(statePath, "utf8")) as {
           formatVersion?: unknown;
-          bounds?: Partial<typeof bounds>;
+          bounds?: Partial<typeof placement.bounds>;
+          displayWorkArea?: Partial<typeof placement.displayWorkArea>;
           mode?: unknown;
         };
         return {
-          bounds,
+          ...placement,
           saved,
           converged:
             saved.formatVersion === 1
             && saved.mode === "normal"
-            && saved.bounds?.x === bounds.x
-            && saved.bounds?.y === bounds.y
-            && saved.bounds?.width === bounds.width
-            && saved.bounds?.height === bounds.height,
+            && saved.bounds?.x === placement.bounds.x
+            && saved.bounds?.y === placement.bounds.y
+            && saved.bounds?.width === placement.bounds.width
+            && saved.bounds?.height === placement.bounds.height
+            && saved.displayWorkArea?.x === placement.displayWorkArea.x
+            && saved.displayWorkArea?.y === placement.displayWorkArea.y
+            && saved.displayWorkArea?.width === placement.displayWorkArea.width
+            && saved.displayWorkArea?.height === placement.displayWorkArea.height,
         };
       };
       await expect
@@ -364,7 +379,7 @@ test.describe("Electron application", () => {
           timeout: 15_000,
         })
         .toBe(true);
-      const { bounds: actualReset, saved: savedReset } =
+      const { bounds: actualReset, displayWorkArea, saved: savedReset } =
         await resetHasSettled();
       expect(
         await app.evaluate(({ screen }, bounds) =>
@@ -379,6 +394,7 @@ test.describe("Electron application", () => {
         formatVersion: 1,
         bounds: actualReset,
         mode: "normal",
+        displayWorkArea,
       });
       await closeCleanly(app);
     } finally {
