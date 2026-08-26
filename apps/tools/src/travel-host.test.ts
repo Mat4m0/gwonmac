@@ -4,6 +4,7 @@ import {
 } from "../../../src/shared/contracts";
 import type { TravelCommand } from "../../../src/shared/travel-command";
 import { DEFAULT_TRAVEL_SHORTCUTS, replaceTravelShortcut } from "../../../src/shared/travel";
+import { travelCharacterKey } from "../../../src/shared/travel-history";
 import {
   createNativeTravelHost,
   type TravelHost,
@@ -29,32 +30,42 @@ function fixture() {
     return save(patch);
   });
   const histories = new Map<string, readonly number[]>();
+  let nextHistoryFailure: Error | null = null;
   const recordHistory = vi.fn(async ({ characterKey, mapId }: {
     characterKey: string; mapId: number;
   }) => {
+    if (nextHistoryFailure !== null) {
+      const failure = nextHistoryFailure;
+      nextHistoryFailure = null;
+      throw failure;
+    }
     const current = histories.get(characterKey) ?? [];
     const next = [mapId, ...current.filter((candidate) => candidate !== mapId)].slice(0, 10);
     histories.set(characterKey, next);
     return next;
   });
+  const getHistory = vi.fn(async ({ characterKey }: { characterKey: string }) =>
+    histories.get(characterKey) ?? []);
   const api = {
     travelPreferences: {
       async get() { return travel; },
       set: setTravel,
     },
     travelHistory: {
-      async get({ characterKey }: { characterKey: string }) {
-        return histories.get(characterKey) ?? [];
-      },
+      get: getHistory,
       record: recordHistory,
-      async clear({ characterKey }: { characterKey: string }) {
-        histories.delete(characterKey);
-        return [];
-      },
     },
   } as unknown as GwNativeApi;
   const command: TravelCommand = { travel: vi.fn(), unavailable: () => null };
-  return { host: createNativeTravelHost(api, command), setTravel, recordHistory };
+  return {
+    host: createNativeTravelHost(api, command),
+    setTravel,
+    recordHistory,
+    getHistory,
+    failNextHistoryWrite(error = new Error("history unavailable")) {
+      nextHistoryFailure = error;
+    },
+  };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -75,7 +86,9 @@ describe("native Travel host", () => {
 
     await host.travel({ mapId: 449 });
     host.updateGameState({ status: "waiting", reason: "loading" });
-    host.updateGameState({ status: "ready", mapId: 449 });
+    host.updateGameState({
+      status: "ready", mapId: 449, characterKey: null, unlockedMapWords: null,
+    });
     await vi.runAllTimersAsync();
 
     expect(host.attempt.value).toEqual({ status: "idle" });
@@ -98,16 +111,18 @@ describe("native Travel host", () => {
   });
 
   it("records observed destinations independently for each character", async () => {
-    const { host, recordHistory } = fixture();
+    const { host, recordHistory, getHistory } = fixture();
     const unlockedMapWords = Array.from({ length: 28 }, () => 0xffff_ffff);
+    const characterA = travelCharacterKey("0123456789abcdef");
+    const characterB = travelCharacterKey("fedcba9876543210");
     host.updateGameState({
-      status: "ready", mapId: 55, characterKey: "0123456789abcdef", unlockedMapWords,
+      status: "ready", mapId: 55, characterKey: characterA, unlockedMapWords,
     });
     host.updateGameState({
-      status: "ready", mapId: 449, characterKey: "0123456789abcdef", unlockedMapWords,
+      status: "ready", mapId: 449, characterKey: characterA, unlockedMapWords,
     });
     host.updateGameState({
-      status: "ready", mapId: 81, characterKey: "fedcba9876543210", unlockedMapWords,
+      status: "ready", mapId: 81, characterKey: characterB, unlockedMapWords,
     });
 
     await vi.waitFor(() => expect(recordHistory).toHaveBeenCalledTimes(3));
@@ -117,5 +132,49 @@ describe("native Travel host", () => {
       { characterKey: "fedcba9876543210", mapId: 81 },
     ]);
     expect(host.history.value).toEqual([81]);
+    expect(getHistory).not.toHaveBeenCalled();
+  });
+
+  it("switches histories when characters share the same map and hides unidentified history", async () => {
+    const { host, recordHistory } = fixture();
+    const characterA = travelCharacterKey("0123456789abcdef");
+    const characterB = travelCharacterKey("fedcba9876543210");
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0xffff_ffff);
+    host.updateGameState({
+      status: "ready", mapId: 55, characterKey: characterA, unlockedMapWords,
+    });
+    await vi.waitFor(() => expect(host.history.value).toEqual([55]));
+
+    host.updateGameState({ status: "waiting", reason: "loading" });
+    expect(host.history.value).toEqual([]);
+    host.updateGameState({
+      status: "ready", mapId: 55, characterKey: null, unlockedMapWords,
+    });
+    expect(host.history.value).toEqual([]);
+    host.updateGameState({
+      status: "ready", mapId: 55, characterKey: characterB, unlockedMapWords,
+    });
+
+    await vi.waitFor(() => expect(host.history.value).toEqual([55]));
+    expect(recordHistory.mock.calls.map(([value]) => value.characterKey)).toEqual([
+      characterA,
+      characterB,
+    ]);
+  });
+
+  it("contains background history failures and retries when history is requested", async () => {
+    const test = fixture();
+    const characterKey = travelCharacterKey("0123456789abcdef");
+    test.failNextHistoryWrite();
+    test.host.updateGameState({
+      status: "ready",
+      mapId: 55,
+      characterKey,
+      unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+    });
+    await vi.waitFor(() => expect(test.recordHistory).toHaveBeenCalledTimes(1));
+
+    await expect(test.host.loadHistory()).resolves.toEqual([55]);
+    expect(test.recordHistory).toHaveBeenCalledTimes(2);
   });
 });

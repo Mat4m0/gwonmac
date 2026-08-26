@@ -94,6 +94,8 @@ describe("companion policy source", () => {
       mapId: 42,
       instanceType: 0,
       playRegion: "pve" as const,
+      characterKey: null,
+      unlockedMapWords: null,
     });
     test.publishRegion(pve);
     test.publishRegion({ ...pve, sequence: 4 });
@@ -104,6 +106,44 @@ describe("companion policy source", () => {
       { reason: "region", region: "pve" },
       { reason: "region", region: "unknown" },
     ]);
+  });
+
+  it("publishes same-map character and unlock changes", () => {
+    const test = fixture();
+    const keys: Array<string | null> = [];
+    const unlocks: Array<number | null> = [];
+    test.source.subscribe(({ snapshot }) => {
+      if (snapshot.playRegionState.status !== "ready") return;
+      keys.push(snapshot.playRegionState.characterKey);
+      unlocks.push(snapshot.playRegionState.unlockedMapWords?.[1] ?? null);
+    });
+    const ready = {
+      status: "ready" as const,
+      mapId: 55,
+      instanceType: 0,
+      playRegion: "pve" as const,
+    };
+    test.publishRegion(Object.freeze({
+      ...ready,
+      sequence: 2,
+      characterKey: "0123456789abcdef",
+      unlockedMapWords: Object.freeze([0, 1]),
+    }));
+    test.publishRegion(Object.freeze({
+      ...ready,
+      sequence: 4,
+      characterKey: "fedcba9876543210",
+      unlockedMapWords: Object.freeze([0, 1]),
+    }));
+    test.publishRegion(Object.freeze({
+      ...ready,
+      sequence: 6,
+      characterKey: "fedcba9876543210",
+      unlockedMapWords: Object.freeze([0, 3]),
+    }));
+
+    assert.deepEqual(keys, ["0123456789abcdef", "fedcba9876543210", "fedcba9876543210"]);
+    assert.deepEqual(unlocks, [1, 1, 3]);
   });
 
   it("withdraws local Tools only for positively identified active PvP play", () => {
@@ -119,6 +159,8 @@ describe("companion policy source", () => {
       mapId: 188,
       instanceType: 0,
       playRegion: "pvp",
+      characterKey: null,
+      unlockedMapWords: null,
     }));
     test.publishRegion(Object.freeze({ status: "waiting", reason: "loading" }));
 
@@ -139,6 +181,8 @@ describe("companion policy source", () => {
       mapId: 42,
       instanceType: 0,
       playRegion: "pve",
+      characterKey: null,
+      unlockedMapWords: null,
     }));
 
     assert.equal(publications, 1);

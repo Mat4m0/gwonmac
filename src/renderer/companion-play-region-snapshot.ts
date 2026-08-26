@@ -91,13 +91,4 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
 
 export type CompanionPlayRegionState =
   | ReturnType<typeof readCompanionPlayRegion>
-  | Readonly<{
-    status: "ready";
-    sequence: number;
-    mapId: number;
-    instanceType: number;
-    playRegion: "pve" | "pvp";
-    characterKey?: string | null;
-    unlockedMapWords?: readonly number[] | null;
-  }>
   | Readonly<{ status: "waiting"; reason: "stale" }>;

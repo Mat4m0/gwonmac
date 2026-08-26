@@ -7,8 +7,8 @@
 use core::ptr::write_volatile;
 
 use crate::abi::*;
-use crate::memory::{checked_add, contains, offset, pointer, read_u32};
-use crate::{observe_travel_unlocks, resolve_game, GameState};
+use crate::memory::{checked_add, checked_mul, contains, indexed, offset, pointer, read_u32};
+use crate::{resolve_game, GameState};
 
 static mut POINTER: u32 = 0;
 static mut SEQUENCE: u32 = 0;
@@ -55,13 +55,41 @@ pub(crate) unsafe fn initialize(pointer: u32) {
     unsafe { publish(0, 0, 0, 0, 0, [0; TRAVEL_UNLOCK_WORDS]) };
 }
 
+/** Reads the certified WorldContext Array<u32>; `None` publishes unknown. */
+unsafe fn observe_travel_unlocks(layout: Layout, game: u32) -> Option<[u32; TRAVEL_UNLOCK_WORDS]> {
+    if game == 0 || layout.world_context == 0 || layout.world_unlocked_maps == 0 {
+        return None;
+    }
+    let world_required = checked_add(layout.world_unlocked_maps, 12)?;
+    let world =
+        offset(game, layout.world_context).and_then(|at| unsafe { pointer(at, world_required) })?;
+    let array = offset(world, layout.world_unlocked_maps)?;
+    let buffer = unsafe { read_u32(array) }?;
+    let capacity = offset(array, 4).and_then(|at| unsafe { read_u32(at) })?;
+    let size = offset(array, 8).and_then(|at| unsafe { read_u32(at) })?;
+    if buffer == 0
+        || buffer & 3 != 0
+        || size < TRAVEL_UNLOCK_WORDS as u32
+        || size > capacity
+        || capacity > 64
+        || !contains(buffer, checked_mul(size, 4)?)
+    {
+        return None;
+    }
+    let mut words = [0; TRAVEL_UNLOCK_WORDS];
+    for (index, word) in words.iter_mut().enumerate() {
+        *word = unsafe { read_u32(indexed(buffer, index as u32, 4)?)? };
+    }
+    Some(words)
+}
+
 unsafe fn character_key(layout: Layout, game: u32) -> Option<u64> {
     if layout.character_uuid == 0 {
         return None;
     }
     let required = checked_add(layout.character_uuid, 16)?;
-    let character = offset(game, layout.character_context)
-        .and_then(|at| unsafe { pointer(at, required) })?;
+    let character =
+        offset(game, layout.character_context).and_then(|at| unsafe { pointer(at, required) })?;
     let uuid = offset(character, layout.character_uuid)?;
     if !contains(uuid, 16) {
         return None;

@@ -13,14 +13,19 @@ import type {
 } from "../travel-host";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 import TravelPalette from "./TravelPalette.vue";
-import { EMPTY_TRAVEL_HISTORY } from "../../../../src/shared/travel-history";
+import {
+  EMPTY_TRAVEL_HISTORY,
+  travelCharacterKey,
+} from "../../../../src/shared/travel-history";
 
 function fixture(options: Readonly<{
   shortcuts?: TravelShortcuts;
   synonyms?: TravelSynonyms;
   history?: readonly number[];
 }> = {}, attachTo?: Element) {
-  const state = ref<TravelHost["state"]["value"]>({ status: "ready", mapId: 55 });
+  const state = ref<TravelHost["state"]["value"]>({
+    status: "ready", mapId: 55, characterKey: null, unlockedMapWords: null,
+  });
   let preferences: TravelPreferences = Object.freeze({
     shortcuts: options.shortcuts ?? DEFAULT_TRAVEL_SHORTCUTS,
     synonyms: options.synonyms ?? Object.freeze([]),
@@ -155,7 +160,10 @@ describe("TravelPalette", () => {
     const unlockedMapWords = Array.from({ length: 28 }, () => 0);
     unlockedMapWords[Math.floor(55 / 32)] = 1 << (55 % 32);
     state.value = {
-      status: "ready", mapId: 55, characterKey: "0123456789abcdef", unlockedMapWords,
+      status: "ready",
+      mapId: 55,
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords,
     };
     await wrapper.get("#travel-search-input").setValue("Kamadan");
     expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
