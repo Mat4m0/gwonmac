@@ -108,6 +108,9 @@ const openTemplates = async (
     );
   });
   await expect(page.locator("#settings-pane-templates")).toBeVisible();
+  await expect(page.locator("#templates-status")).not.toHaveText(
+    "Checking your saved templates…",
+  );
 };
 
 test.describe("build templates", () => {
