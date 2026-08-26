@@ -92,8 +92,7 @@ export function resetRendererRecovery(statePath: string): void {
 interface WindowStateOwner {
   readonly path: string;
   readonly diagnosticOwnerId: number;
-  restored: WindowState | null;
-  lastNormalBounds: WindowBounds | null;
+  lastNormalPlacement: Pick<WindowState, "bounds" | "displayWorkArea"> | null;
   timer: ReturnType<typeof setTimeout> | null;
   write: Promise<void>;
   reset: Promise<void>;
@@ -177,17 +176,19 @@ function currentWindowState(win: BrowserWindow, owner: WindowStateOwner): Window
       ? "maximized"
       : "normal";
   if (mode === "normal") {
-    owner.lastNormalBounds = { ...win.getBounds() };
+    const bounds = { ...win.getBounds() };
+    owner.lastNormalPlacement = {
+      bounds,
+      displayWorkArea: displayWorkAreaFor(bounds),
+    };
   }
-  const bounds = owner.lastNormalBounds ?? fitWindowStateToDisplays(
-    defaultWindowState(primaryWorkArea()),
-    workAreas(),
+  const placement = owner.lastNormalPlacement ?? defaultWindowState(
     primaryWorkArea(),
-  ).bounds;
+  );
   return {
-    bounds,
+    bounds: placement.bounds,
     mode,
-    displayWorkArea: displayWorkAreaFor(bounds),
+    displayWorkArea: placement.displayWorkArea,
   };
 }
 
@@ -195,7 +196,6 @@ async function persistWindowState(win: BrowserWindow): Promise<void> {
   const owner = windowStateOwners.get(win);
   if (win.isDestroyed() || !owner) return;
   const state = currentWindowState(win, owner);
-  owner.restored = state;
   const write = owner.write.then(() =>
     saveWindowState(owner.path, state),
   );
@@ -284,8 +284,10 @@ export function resetWindowState(win: BrowserWindow): Promise<void> {
           displayWorkArea: displayWorkAreaFor(win.getBounds()),
         };
       }
-      owner.restored = settled;
-      owner.lastNormalBounds = settled.bounds;
+      owner.lastNormalPlacement = {
+        bounds: settled.bounds,
+        displayWorkArea: settled.displayWorkArea,
+      };
       const write = owner.write.then(() =>
         saveWindowState(owner.path, settled),
       );
@@ -445,8 +447,12 @@ export function createMainWindow(
   const stateOwner: WindowStateOwner = {
     path: statePath,
     diagnosticOwnerId: options.diagnosticOwnerId,
-    restored: initialState,
-    lastNormalBounds: initialState?.bounds ?? null,
+    lastNormalPlacement: initialState
+      ? {
+          bounds: initialState.bounds,
+          displayWorkArea: initialState.displayWorkArea,
+        }
+      : null,
     timer: null,
     write: Promise.resolve(),
     reset: Promise.resolve(),
@@ -481,7 +487,11 @@ export function createMainWindow(
       win.isFullScreen() ||
       win.isMaximized()
     ) return;
-    stateOwner.lastNormalBounds = { ...win.getBounds() };
+    const bounds = { ...win.getBounds() };
+    stateOwner.lastNormalPlacement = {
+      bounds,
+      displayWorkArea: displayWorkAreaFor(bounds),
+    };
     scheduleWindowStateSave(win);
   };
   win.on("move", rememberNormalBounds);
