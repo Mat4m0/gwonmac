@@ -75,22 +75,22 @@ function ownCapture(win: BrowserWindow): CaptureOwner {
 
 /** The level a capture is running at right now, `0` when none is. */
 export function activeCaptureLevel(): 0 | 1 | 2 {
-  return captureLevel;
+  return captureLevel === 2 && traceGuard === null ? 0 : captureLevel;
 }
 
 /** A renderer only observes the capture that it owns. */
 export function captureLevelForWindow(win: BrowserWindow): 0 | 1 | 2 {
-  return captureOwner?.win === win ? captureLevel : 0;
+  return captureOwner?.win === win ? activeCaptureLevel() : 0;
 }
 
 /** Whether window-local evidence belongs in the active capture. */
 export function captureOwnsWebContents(id: number): boolean {
-  return captureOwner?.contents.id === id && captureLevel !== 0;
+  return captureOwner?.contents.id === id && activeCaptureLevel() !== 0;
 }
 
 /** Whether account-local evidence belongs in the active capture. */
 export function captureOwnsDiagnosticOwner(ownerId: number): boolean {
-  return captureOwner?.diagnosticOwnerId === ownerId && captureLevel !== 0;
+  return captureOwner?.diagnosticOwnerId === ownerId && activeCaptureLevel() !== 0;
 }
 
 /** The level an export declares: the last capture's, not the live one's. */

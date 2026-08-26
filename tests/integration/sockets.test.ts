@@ -12,6 +12,11 @@ type RecordedEvent = SocketEvent & { ownerId: number };
 
 describe("integration: native sockets", () => {
   const events: RecordedEvent[] = [];
+  const eventWaiters: Array<{
+    type: SocketEvent["type"];
+    socketId: number;
+    resolve: (event: RecordedEvent) => void;
+  }> = [];
   const counters = new Map<string, number>();
   const observations: { name: string; value: number }[] = [];
   const server = net.createServer((socket) => {
@@ -19,7 +24,18 @@ describe("integration: native sockets", () => {
   });
   let fixturePort = 0;
   const manager = new SocketManager(
-    (ownerId, event) => events.push({ ownerId, ...event }),
+    (ownerId, event) => {
+      const recorded = { ownerId, ...event } as RecordedEvent;
+      events.push(recorded);
+      for (let index = eventWaiters.length - 1; index >= 0; index -= 1) {
+        const waiter = eventWaiters[index]!;
+        if (waiter.type !== recorded.type || waiter.socketId !== recorded.socketId) {
+          continue;
+        }
+        eventWaiters.splice(index, 1);
+        waiter.resolve(recorded);
+      }
+    },
     {
       count: (name, value = 1) =>
         counters.set(name, (counters.get(name) ?? 0) + value),
@@ -51,16 +67,20 @@ describe("integration: native sockets", () => {
     type: Type,
     socketId: number,
   ): Promise<Extract<RecordedEvent, { type: Type }>> {
-    const deadline = Date.now() + 2_000;
-    while (Date.now() < deadline) {
-      const found = events.find(
-        (candidate): candidate is Extract<RecordedEvent, { type: Type }> =>
-          candidate.type === type && candidate.socketId === socketId,
-      );
-      if (found) return found;
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-    throw new Error(`socket ${socketId} did not emit ${type}`);
+    const found = events.find(
+      (candidate): candidate is Extract<RecordedEvent, { type: Type }> =>
+        candidate.type === type && candidate.socketId === socketId,
+    );
+    if (found) return found;
+    return new Promise((resolve) => {
+      eventWaiters.push({
+        type,
+        socketId,
+        resolve: (recorded) => resolve(
+          recorded as Extract<RecordedEvent, { type: Type }>,
+        ),
+      });
+    });
   }
 
   it("delivers open, exact binary data, metrics, ownership, and one close", async () => {

@@ -451,16 +451,6 @@ test.describe("renderer Tools input", () => {
       await startGameInput(page);
       await page.evaluate(async () => {
         globalThis.document.getElementById("loading")?.classList.add("gone");
-        const foundationSpecifier = "./toolbox-foundation.js";
-        const hostSpecifier = "./tools-host.js";
-        const [foundation, toolsHost] = await Promise.all([
-          import(foundationSpecifier) as Promise<
-            typeof import("../../src/renderer/toolbox-foundation.js")
-          >,
-          import(hostSpecifier) as Promise<
-            typeof import("../../src/renderer/tools-host.js")
-          >,
-        ]);
         const canvas = document.getElementById("canvas");
         if (!(canvas instanceof HTMLCanvasElement)) {
           throw new Error("#canvas is missing");
@@ -511,15 +501,6 @@ test.describe("renderer Tools input", () => {
             Number(document.body.dataset.canvasPressesAfterStorage ?? "0") + 1,
           );
         });
-        if (!document.getElementById("toolbox-foundation")) {
-          foundation.createToolboxFoundation(document.body, {
-            mountTool: (host, onVisibilityChange) =>
-              toolsHost.mountToolsInto(host, onVisibilityChange, null, {
-                open: openStorage,
-                unavailable: () => null,
-              }, true),
-          });
-        }
       });
 
       const root = page.locator("#toolbox-foundation");
@@ -538,6 +519,7 @@ test.describe("renderer Tools input", () => {
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         }));
       };
+      await expect(root).toHaveCount(1);
       await toggleTools();
       await expect(root).toHaveAttribute("data-open", "true");
       await expect(page.locator("#toolbox-builds")).toHaveAttribute("data-ready", "true");

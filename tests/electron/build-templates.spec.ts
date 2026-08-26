@@ -108,6 +108,9 @@ const openTemplates = async (
     );
   });
   await expect(page.locator("#settings-pane-templates")).toBeVisible();
+  await expect(page.locator("#templates-status")).not.toHaveText(
+    "Checking your saved templates…",
+  );
 };
 
 test.describe("build templates", () => {
@@ -261,8 +264,8 @@ test.describe("build templates", () => {
         await page.evaluate(() => Object.keys(globalThis.__templateFiles)),
       ).toEqual(["/app:/Templates/Skills/Shockaxe.txt"]);
     } finally {
-      await rm(source, { recursive: true, force: true });
       await closeOffline(fixture);
+      await rm(source, { recursive: true, force: true });
     }
   });
 
@@ -309,9 +312,20 @@ test.describe("build templates", () => {
           "Guild Wars Build Templates",
           "Guild Wars Build Templates 2",
         ]);
+      const second = path.join(destination, "Guild Wars Build Templates 2");
+      await expect.poll(async () => {
+        try {
+          return await Promise.all([
+            readFile(path.join(second, "Skills/Warrior/Shockaxe.txt"), "utf8"),
+            readFile(path.join(second, "Equipment/PvP Set.txt"), "utf8"),
+          ]);
+        } catch {
+          return null;
+        }
+      }).toEqual([SKILLS, EQUIPMENT]);
     } finally {
-      await rm(destination, { recursive: true, force: true });
       await closeOffline(fixture);
+      await rm(destination, { recursive: true, force: true });
     }
   });
 

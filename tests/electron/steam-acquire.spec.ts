@@ -443,11 +443,12 @@ test.describe("acquiring a Steam token", () => {
 
     await beginAcquire(fixture.app, configFor(server));
     await waitForSignInWindow(fixture.app);
-    await expect
-      .poll(() => recordedEvents(fixture.app), { timeout: 15_000 })
-      .toContainEqual({ k: "blocked", what: "download" });
+    await expect.poll(() => server.hits.map((hit) => hit.path), {
+      timeout: 15_000,
+    }).toContain("/download");
     await closeSignInWindow(fixture.app);
-    await settleAcquire(fixture.app);
+    const run = await settleAcquire(fixture.app);
+    expect(run.events).toContainEqual({ k: "blocked", what: "download" });
   });
 
   test("reports a sign-in page that will not load", async () => {

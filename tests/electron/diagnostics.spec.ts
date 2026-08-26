@@ -119,6 +119,13 @@ test.describe("diagnostics", () => {
           checkboxChecked: false,
         });
       });
+      const stopCapture = async () => {
+        await clickMenu(app, "stop-capture");
+        await expect.poll(() => page.evaluate(async () =>
+          (await window.gwNative.diagnostics.current()).captureLevel,
+        ), { timeout: 30_000 }).toBe(0);
+        await expect(page.locator("#capture-status")).toBeHidden();
+      };
       await clickMenu(app, "start-performance-capture");
       await expect(page.locator("#capture-status")).toBeVisible();
       await expect(page.locator("#capture-label")).toContainText(
@@ -129,13 +136,11 @@ test.describe("diagnostics", () => {
         window.gwDiagnostics.swap(200, 50, 25);
         await window.gwDiagnostics.flush();
       });
-      await clickMenu(app, "stop-capture");
-      await expect(page.locator("#capture-status")).toBeHidden();
+      await stopCapture();
 
       await clickMenu(app, "start-performance-capture");
       await expect(page.locator("#capture-status")).toBeVisible();
-      await clickMenu(app, "stop-capture");
-      await expect(page.locator("#capture-status")).toBeHidden();
+      await stopCapture();
       expect(
         await page.evaluate(async () =>
           (await window.gwNative.diagnostics.current()).captureLevel,
@@ -146,7 +151,9 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#capture-label")).toContainText(
         "Chromium trace",
       );
-      await page.waitForTimeout(500);
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.diagnostics.current()).captureLevel,
+      )).toBe(2);
       await page.evaluate(async () => {
         window.gwDiagnostics.snapshot(100, 4096, "memory");
         window.gwDiagnostics.swap(100, 50, 25);
@@ -171,8 +178,7 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#capture-marker")).toHaveText(
         "Problem marked ✓",
       );
-      await clickMenu(app, "stop-capture");
-      await expect(page.locator("#capture-status")).toBeHidden();
+      await stopCapture();
       const diagnosticsDirectory = path.join(fixture.userData, "diagnostics");
       const traceName = (await readdir(diagnosticsDirectory)).find((name) =>
         name.startsWith("chromium-") && name.endsWith(".json"));
@@ -385,8 +391,8 @@ test.describe("diagnostics", () => {
       ]);
       expect(validated.stdout).toContain("valid capture");
     } finally {
-      await rm(diagnosticRoot, { recursive: true, force: true });
       await closeOffline(fixture);
+      await rm(diagnosticRoot, { recursive: true, force: true });
     }
   });
 
@@ -951,8 +957,8 @@ test.describe("diagnostics", () => {
       ]);
       expect(validated.stdout).toContain("valid capture");
     } finally {
-      await rm(diagnosticRoot, { recursive: true, force: true });
       await closeOffline(fixture);
+      await rm(diagnosticRoot, { recursive: true, force: true });
     }
   });
 

@@ -29,20 +29,45 @@ test.describe("renderer camera input", () => {
     try {
       const { app, page } = fixture;
       await startGameInput(page);
-      await app.evaluate(({ app: electronApp, BrowserWindow }) => {
-        electronApp.focus({ steal: true });
-        BrowserWindow.getAllWindows()[0]?.focus();
-      });
-      await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
       await page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
         const loading = globalThis.document.getElementById("loading");
         if (!canvas || !loading) throw new Error("the renderer shell is missing");
         loading.classList.add("gone");
+        // This test owns Chromium's real permission boundary. Cursor-mode
+        // gating is covered below with a controlled readout, so leave that
+        // optional readout unavailable and exercise the immediate fallback.
+        window.gwCursorState = () => null;
         canvas.focus();
       });
       const canvas = page.locator("#canvas");
       const box = await boxOf(canvas);
+      await app.evaluate(async ({ app: electronApp, BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (!win) throw new Error("game window is missing");
+        if (!win.isFocused()) {
+          const focused = new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              win.removeListener("focus", onFocus);
+              reject(new Error("game window did not receive focus"));
+            }, 5_000);
+            const onFocus = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            win.once("focus", onFocus);
+          });
+          win.show();
+          electronApp.focus({ steal: true });
+          win.focus();
+          await focused;
+        }
+      });
+      await canvas.focus();
+      await expect.poll(() => page.evaluate(() => ({
+        active: document.activeElement?.id,
+        focused: document.hasFocus(),
+      }))).toEqual({ active: "canvas", focused: true });
       await page.mouse.move(box.x + 100, box.y + 100);
       await page.mouse.down({ button: "right" });
       await expect

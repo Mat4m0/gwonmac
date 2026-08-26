@@ -13,16 +13,23 @@ function hashOf(data: Uint8Array): string {
   return createHash("md5").update(data).digest("hex");
 }
 
-async function waitFor(
-  condition: () => boolean,
-  message: string,
-  timeoutMs = 2_000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!condition() && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  assert.equal(condition(), true, message);
+function conditionSignals() {
+  const waiters = new Set<{ condition: () => boolean; resolve: () => void }>();
+  return {
+    changed() {
+      for (const waiter of waiters) {
+        if (!waiter.condition()) continue;
+        waiters.delete(waiter);
+        waiter.resolve();
+      }
+    },
+    waitFor(condition: () => boolean): Promise<void> {
+      if (condition()) return Promise.resolve();
+      return new Promise((resolve) => {
+        waiters.add({ condition, resolve });
+      });
+    },
+  };
 }
 
 describe("chunk-store", () => {
@@ -344,6 +351,7 @@ describe("chunk-store", () => {
     const started: string[] = [];
     const releases = new Map<string, () => void>();
     const gauges = new Map<string, number>();
+    const scheduling = conditionSignals();
     let active = 0;
     let peak = 0;
     const store = new ChunkStore({
@@ -354,13 +362,17 @@ describe("chunk-store", () => {
       metrics: {
         count: () => undefined,
         observe: () => undefined,
-        gauge: (name, value) => gauges.set(name, value),
+        gauge: (name, value) => {
+          gauges.set(name, value);
+          scheduling.changed();
+        },
       },
       fetch: (hash) =>
         new Promise((resolve) => {
           started.push(hash);
           active += 1;
           peak = Math.max(peak, active);
+          scheduling.changed();
           releases.set(hash, () => {
             active -= 1;
             resolve(new Uint8Array(payloads[hashes.indexOf(hash)]!));
@@ -379,11 +391,10 @@ describe("chunk-store", () => {
     // waited out its two-second deadline for a slot the demand was never going
     // to get. The scheduler was never wrong; the precondition was never
     // established.
-    await waitFor(
+    await scheduling.waitFor(
       () =>
         started.length === 8 &&
         gauges.get("snapshot.native.queuedPrefetch") === 2,
-      "eight fetches did not start with two queued behind them",
     );
     assert.equal(started.length, 8);
     const queued = hashes.filter((hash) => !started.includes(hash));
@@ -394,9 +405,8 @@ describe("chunk-store", () => {
     const firstRelease = releases.get(activeHash)!;
     releases.delete(activeHash);
     firstRelease();
-    await waitFor(
+    await scheduling.waitFor(
       () => started[8] === promoted,
-      "demand did not start before queued prefetch",
     );
     assert.equal(started[8], promoted);
     assert.equal(started.includes(queued[1]!), false);
@@ -500,14 +510,27 @@ describe("chunk-store", () => {
     const hashes = payloads.map(hashOf);
     const started: string[] = [];
     const releases = new Map<string, () => void>();
+    const scheduling = conditionSignals();
+    let queuedPrefetch = 0;
     const store = new ChunkStore({
       chunksDir: root,
       size: CHUNK * payloads.length,
       chunkSize: CHUNK,
       chunkHashes: hashes,
+      metrics: {
+        count: () => undefined,
+        observe: () => undefined,
+        gauge: (name, value) => {
+          if (name === "snapshot.native.queuedPrefetch") {
+            queuedPrefetch = value;
+          }
+          scheduling.changed();
+        },
+      },
       fetch: (hash) =>
         new Promise((resolve) => {
           started.push(hash);
+          scheduling.changed();
           releases.set(hash, () =>
             resolve(new Uint8Array(payloads[hashes.indexOf(hash)]!)),
           );
@@ -517,7 +540,7 @@ describe("chunk-store", () => {
       store.ensureChunk(index, "prefetch"),
     );
     const settledBackground = Promise.allSettled(background);
-    await waitFor(() => started.length === 8, "eight fetches did not start");
+    await scheduling.waitFor(() => started.length === 8 && queuedPrefetch === 1);
     assert.equal(started.length, 8);
     const stoppedIndex = hashes.findIndex((hash) => !started.includes(hash));
     assert.notEqual(stoppedIndex, -1);
@@ -527,9 +550,8 @@ describe("chunk-store", () => {
     const firstRelease = releases.get(activeHash)!;
     releases.delete(activeHash);
     firstRelease();
-    await waitFor(
+    await scheduling.waitFor(
       () => started.includes(hashes[stoppedIndex]!),
-      "demand did not start after stopping queued prefetch",
     );
     assert.equal(started.includes(hashes[stoppedIndex]!), true);
     for (const release of releases.values()) release();
