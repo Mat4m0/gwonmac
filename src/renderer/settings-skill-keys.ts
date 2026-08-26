@@ -129,7 +129,8 @@ export function bindSkillKeySettings(options: Readonly<{
   }
 
   function draw(settings: AppSettings): void {
-    options.fieldset.hidden = !settings.gwonmacTools;
+    options.fieldset.hidden = !settings.gwonmacTools
+      || !settings.skillKeyLabelsEnabled;
     rows.forEach((_row, slot) => {
       const binding = settings.skillKeyBindings[slot] ?? null;
       const { change, clear, message } = rowParts(slot);

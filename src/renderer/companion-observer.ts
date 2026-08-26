@@ -16,23 +16,18 @@ import {
   type CompanionSnapshot,
   type CompanionToolboxState,
   type PublishedCompanionState,
-  readChangedCompanionParty,
-  readChangedCompanionToolbox,
-  readCompanionSnapshot,
-  sameCompanionToolboxState,
 } from "./companion-snapshot.js";
 import {
   type CompanionSkillCooldownState,
   type CompanionSkillSlotState,
-  readCompanionSkillCooldowns,
-  readCompanionSkillSlots,
 } from "./companion-skill-snapshot.js";
 import {
   type CompanionPlayRegionState,
   readCompanionPlayRegion,
 } from "./companion-play-region-snapshot.js";
+import type * as OptionalObserverReadersModule from "./companion-tools-observer-readers.js";
 
-type SnapshotObserverTarget = {
+export type SnapshotObserverTarget = {
   memory: WebAssembly.Memory;
   snapshotPointer: number;
   toolboxPointer: number;
@@ -47,21 +42,26 @@ type SnapshotObserverTarget = {
   renderSamples: number[];
 };
 
-type StateConsumer = {
+export type StateConsumer = {
+  enabled?(): boolean;
   update(state: CompanionSnapshot): void;
 };
 
-type SkillSlotConsumer = {
+export type SkillSlotConsumer = {
+  enabled?(): boolean;
   update(state: CompanionSkillSlotState): void;
 };
 
-type SkillCooldownConsumer = {
+export type SkillCooldownConsumer = {
+  enabled?(): boolean;
   update(state: CompanionSkillCooldownState): void;
 };
 
-type PlayRegionConsumer = {
+export type PlayRegionConsumer = {
   update(state: CompanionPlayRegionState): void;
 };
+
+export type OptionalObserverReaders = typeof OptionalObserverReadersModule;
 
 /**
  * The two party regions arrive as one projection.
@@ -72,7 +72,8 @@ type PlayRegionConsumer = {
  * from another. Merging here, at the only place that reads either, means the
  * interface never sees them disagree.
  */
-type ToolboxConsumer = {
+export type ToolboxConsumer = {
+  enabled?(): boolean;
   update(state: CompanionToolboxState & {
     party?: CompanionPartyState;
   }): void;
@@ -92,7 +93,7 @@ export function recordCompanionLifecycle(state: PublishedCompanionState) {
 
 export function observeCompanion(
   runtime: SnapshotObserverTarget,
-  pollers: readonly { poll(): void }[],
+  pollers: readonly { poll(): void; enabled?(): boolean }[],
   readout: StateConsumer | null,
   toolbox: ToolboxConsumer | null,
   observeState: boolean,
@@ -100,6 +101,7 @@ export function observeCompanion(
   skillSlots: SkillSlotConsumer | null = null,
   skillCooldowns: SkillCooldownConsumer | null = null,
   playRegion: PlayRegionConsumer | null = null,
+  readers: OptionalObserverReaders | null = null,
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -118,9 +120,10 @@ export function observeCompanion(
         runtime.playRegionPointer ?? 0,
       ));
     }
-    if (observeState) {
+    if (observeState && readout?.enabled?.() !== false) {
+      if (!readers) throw new Error("Tools snapshot readers are unavailable");
       const started = performance.now();
-      const state = readCompanionSnapshot(
+      const state = readers.readCompanionSnapshot(
         runtime.memory.buffer,
         runtime.snapshotPointer,
       );
@@ -148,19 +151,20 @@ export function observeCompanion(
       if (runtime.renderSamples.length > 240) runtime.renderSamples.shift();
       readout?.update(state);
     }
-    if (toolbox) {
+    if (toolbox && toolbox.enabled?.() !== false) {
+      if (!readers) throw new Error("Tools party readers are unavailable");
       // Both regions are watched, because each carries facts the other does
       // not. The toolbox summary moves when a hero joins or the panel opens;
       // the roster moves when a skill on a bar changes, which is invisible in
       // every scalar the summary holds. Watching only the summary is why the
       // panel — and capture with it — kept serving the bar from before an edit.
-      const change = readChangedCompanionToolbox(
+      const change = readers.readChangedCompanionToolbox(
         runtime.memory.buffer,
         runtime.toolboxPointer,
         toolboxSequence,
       );
       if (change.changed) toolboxSequence = change.sequence;
-      const partyChange = readChangedCompanionParty(
+      const partyChange = readers.readChangedCompanionParty(
         runtime.memory.buffer,
         runtime.partyPointer,
         partySequence,
@@ -174,7 +178,7 @@ export function observeCompanion(
       // region has no such promise and keeps its own.
       if (
         state !== null
-        && (partyChange.changed || !sameCompanionToolboxState(previousToolbox, state))
+        && (partyChange.changed || !readers.sameCompanionToolboxState(previousToolbox, state))
       ) {
         previousToolbox = state;
         previousParty = party;
@@ -183,20 +187,24 @@ export function observeCompanion(
         toolbox.update(party === null ? state : { ...state, party });
       }
     }
-    if (skillSlots) {
-      skillSlots.update(readCompanionSkillSlots(
+    if (skillSlots && skillSlots.enabled?.() !== false) {
+      if (!readers) throw new Error("Tools skill readers are unavailable");
+      skillSlots.update(readers.readCompanionSkillSlots(
         runtime.memory.buffer,
         runtime.skillSlotPointer ?? 0,
       ));
     }
-    if (skillCooldowns) {
-      skillCooldowns.update(readCompanionSkillCooldowns(
+    if (skillCooldowns && skillCooldowns.enabled?.() !== false) {
+      if (!readers) throw new Error("Tools skill readers are unavailable");
+      skillCooldowns.update(readers.readCompanionSkillCooldowns(
         runtime.memory.buffer,
         runtime.skillCooldownPointer ?? 0,
       ));
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.
-    for (const poller of pollers) poller.poll();
+    for (const poller of pollers) {
+      if (poller.enabled?.() !== false) poller.poll();
+    }
     frame = requestAnimationFrame(observe);
   };
   frame = requestAnimationFrame(observe);

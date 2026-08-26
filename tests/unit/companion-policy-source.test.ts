@@ -54,6 +54,8 @@ describe("companion policy source", () => {
         playRegionState: { status: "waiting", reason: "memory" },
         policy: {
           tools: false,
+          buildLibrary: false,
+          tradeChat: false,
           targetReadout: false,
           teamApply: false,
           xunlaiStorage: false,

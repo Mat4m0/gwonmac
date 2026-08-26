@@ -4,7 +4,6 @@
  * Trade lifecycle cleanup remains beside subscription registration so a
  * destroyed renderer cannot retain a process-wide feed subscription.
  */
-import type { AppSettings } from "../shared/contracts.js";
 import { IPC } from "../shared/contracts.js";
 import { AllowlistError, ValidationError } from "../shared/errors.js";
 import {
@@ -34,7 +33,7 @@ export type TradeInvokeChannel =
 
 export interface TradeIpcContext {
   tradeChat: TradeChatService;
-  getSettings: () => Promise<AppSettings>;
+  isFeatureEnabled(feature: "tradeChat"): boolean;
   getTradeSaved: () => Promise<TradeSavedState>;
   setTradeSaved: (value: TradeSavedState) => Promise<TradeSavedState>;
 }
@@ -63,8 +62,8 @@ export function tradeChannelDefinitions(
   ctx: TradeIpcContext,
 ): Record<TradeInvokeChannel, AnyChannelDef> {
   const cleanupInstalled = new Set<number>();
-  const requireEnabled = async (): Promise<void> => {
-    if (!(await ctx.getSettings()).gwonmacTools) {
+  const requireEnabled = (): void => {
+    if (!ctx.isFeatureEnabled("tradeChat")) {
       throw new AllowlistError("trade chat is disabled");
     }
   };
@@ -72,7 +71,7 @@ export function tradeChannelDefinitions(
 
   return {
     tradeSubscribe: channel(asTradeSource, async (win, source) => {
-      await requireEnabled();
+      requireEnabled();
       const id = win.webContents.id;
       if (!cleanupInstalled.has(id)) {
         cleanupInstalled.add(id);
@@ -91,24 +90,24 @@ export function tradeChannelDefinitions(
     }),
 
     tradeSavedGet: channel(nothing, async () => {
-      await requireEnabled();
+      requireEnabled();
       return ctx.getTradeSaved();
     }),
 
     tradeSavedSet: channel(validated(parseTradeSavedState, "invalid trade saved state"), async (_win, value) => {
-      await requireEnabled();
+      requireEnabled();
       return ctx.setTradeSaved(value);
     }),
 
     traderQuotesGet: channel(nothing, async () => {
-      await requireEnabled();
+      requireEnabled();
       return ctx.tradeChat.getTraderQuotes();
     }),
 
     traderPriceHistoryGet: channel(
       validated(parseTraderPriceHistoryRequest, "invalid trader price history request"),
       async (_win, request) => {
-        await requireEnabled();
+        requireEnabled();
         return ctx.tradeChat.getTraderPriceHistory(request);
       },
     ),
@@ -116,7 +115,7 @@ export function tradeChannelDefinitions(
     tradeSearch: channel(
       validated(parseTradeSearchRequest, "invalid trade search request"),
       async (win, request) => {
-        await requireEnabled();
+        requireEnabled();
         return ctx.tradeChat.search(
           win.webContents.id,
           request.source,
@@ -127,7 +126,7 @@ export function tradeChannelDefinitions(
     ),
 
     tradeRetry: channel(asTradeSource, async (win, source) => {
-      await requireEnabled();
+      requireEnabled();
       ctx.tradeChat.retry(win.webContents.id, source);
     }),
   };

@@ -124,8 +124,10 @@ async function readCanonical(page: Page): Promise<{
   recovered: boolean;
 }> {
   return page.evaluate(async () => {
-    const settings = await window.gwNative.settings.get();
-    const library = await window.gwNative.buildLibrary.get();
+    const api = window.gwNative;
+    if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+    const settings = await api.settings.get();
+    const library = await api.buildLibrary.get();
     return { settings, ...library };
   });
 }
@@ -213,13 +215,15 @@ const candidateSettingsDomains = Array.from(
       controllerPromptStyle: cycle(CONTROLLER_PROMPT_STYLES, index),
       uiPanelOpacity: cycle(opacityValues, index),
       gwonmacTools: cycle(booleanValues, index),
-      teamManagement: cycle(booleanValues, index + 1),
+      buildLibrary: cycle(booleanValues, index + 1),
+      tradeChat: cycle(booleanValues, index),
       xunlaiStorage: cycle(booleanValues, index),
       travelPalette: cycle(booleanValues, index + 1),
       travelShortcuts: cycle(travelShortcutValues, index),
       targetReadout: cycle(booleanValues, index),
       shortcutOverrides: {},
       skillKeyBindings: [null, null, null, null, null, null, null, null],
+      skillKeyLabelsEnabled: cycle(booleanValues, index + 1),
       skillCooldownOverlayEnabled: cycle(booleanValues, index),
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: cycle(booleanValues, index + 1),
@@ -435,7 +439,11 @@ try {
   );
   assert.equal(stableSettings.updateTrack, "beta", "latest Stable lacks the Beta enabler");
   assert.deepEqual(
-    await running.page.evaluate((library) => window.gwNative.buildLibrary.set(library), initialLibrary),
+    await running.page.evaluate((library) => {
+      const api = window.gwNative;
+      if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+      return api.buildLibrary.set(library);
+    }, initialLibrary),
     initialLibrary,
   );
   await roundTripProfileStore(running.page, null, "stable-template");
@@ -461,8 +469,10 @@ try {
   await roundTripProfileStore(running.page, "stable-template", "candidate-template");
   await running.page.evaluate(
     async ({ settings, library }) => {
-      await window.gwNative.settings.set(settings);
-      await window.gwNative.buildLibrary.set(library);
+      const api = window.gwNative;
+      if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+      await api.settings.set(settings);
+      await api.buildLibrary.set(library);
     },
     {
       settings: {
@@ -503,8 +513,10 @@ try {
   await roundTripProfileStore(running.page, "candidate-template", "stable-return-template");
   await running.page.evaluate(
     async ({ settings, library }) => {
-      await window.gwNative.settings.set(settings);
-      await window.gwNative.buildLibrary.set(library);
+      const api = window.gwNative;
+      if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+      await api.settings.set(settings);
+      await api.buildLibrary.set(library);
     },
     {
       settings: {

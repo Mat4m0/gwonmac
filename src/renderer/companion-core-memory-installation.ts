@@ -3,28 +3,28 @@
  * Feature-specific region installations stay separate; the transaction root
  * combines all descriptors before any pointer reaches the side module.
  */
-import {
-  COMPANION_CURSOR_BYTES,
-  COMPANION_PARTY_BYTES,
-  COMPANION_SNAPSHOT_BYTES,
-  COMPANION_TOOLBOX_BYTES,
-} from "./companion-snapshot.js";
+import { COMPANION_ABI } from "../shared/companion-abi.js";
 import {
   COMPANION_KERNEL_RUNTIME_ALIGN,
   COMPANION_KERNEL_RUNTIME_BYTES,
   type CompanionOwnedRegion,
   validateCompanionOwnedRegions,
 } from "./companion-owned-regions.js";
-import { PROFESSION_COMMAND_TRACE_BYTES } from "./profession-command-trace.js";
+
+const COMPANION_CURSOR_BYTES = COMPANION_ABI.cursor.bytes;
+const COMPANION_PARTY_BYTES = COMPANION_ABI.party.bytes;
+const COMPANION_SNAPSHOT_BYTES = COMPANION_ABI.snapshot.bytes;
+const COMPANION_TOOLBOX_BYTES = COMPANION_ABI.toolbox.bytes;
 
 type KernelRegion = Readonly<{ pointer: number; bytes: number }>;
 
-type CompanionCoreMemoryNeeds = Readonly<{
+export type CompanionCoreMemoryNeeds = Readonly<{
   snapshot: boolean;
   cursor: boolean;
   toolbox: boolean;
   commandPayloadBytes: number;
   professionTrace: boolean;
+  professionTraceBytes: number;
 }>;
 
 type Allocation = Readonly<{
@@ -61,7 +61,11 @@ export function allocateCompanionCoreMemory(input: Readonly<{
     configWords.length === 0
     || !Number.isSafeInteger(needs.commandPayloadBytes)
     || needs.commandPayloadBytes < 0
-    || (needs.professionTrace && needs.commandPayloadBytes === 0)
+    || (needs.professionTrace && (
+      needs.commandPayloadBytes === 0
+      || !Number.isSafeInteger(needs.professionTraceBytes)
+      || needs.professionTraceBytes <= 0
+    ))
   ) {
     throw new Error("Companion core memory request is invalid");
   }
@@ -111,7 +115,7 @@ export function allocateCompanionCoreMemory(input: Readonly<{
       ? take("command payload", needs.commandPayloadBytes, "callback")
       : 0;
     const professionTracePointer = needs.professionTrace
-      ? take("profession trace", PROFESSION_COMMAND_TRACE_BYTES, "observer")
+      ? take("profession trace", needs.professionTraceBytes, "observer")
       : 0;
 
     const region = (
@@ -151,7 +155,7 @@ export function allocateCompanionCoreMemory(input: Readonly<{
         ? [region(
             "profession trace",
             professionTracePointer,
-            PROFESSION_COMMAND_TRACE_BYTES,
+            needs.professionTraceBytes,
           )]
         : []),
     ]);

@@ -172,6 +172,12 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.skillKeyBindings = cloneSkillKeyBindings(src.skillKeyBindings);
   }
+  // Before labels had their own switch, configuring any label enabled the
+  // overlay. Preserve that expressed choice for existing profiles while a
+  // new profile with no labels keeps the feature off.
+  if (!("skillKeyLabelsEnabled" in src)) {
+    out.skillKeyLabelsEnabled = out.skillKeyBindings.some((binding) => binding !== null);
+  }
   if ("skillCooldownColor" in src) {
     if (!isSkillCooldownColor(src.skillCooldownColor)) {
       throw new AppError("bad_settings", "settings.skillCooldownColor has an invalid color");
@@ -188,10 +194,12 @@ export function parseSettings(raw: unknown): AppSettings {
   }
   for (const setting of [
     "gwonmacTools",
-    "teamManagement",
+    "buildLibrary",
+    "tradeChat",
     "xunlaiStorage",
     "travelPalette",
     "targetReadout",
+    "skillKeyLabelsEnabled",
     "skillCooldownOverlayEnabled",
     "extendedMemoryEnabled",
     "autoRelogAfterReload",

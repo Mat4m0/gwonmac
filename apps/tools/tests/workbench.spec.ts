@@ -100,7 +100,7 @@ test("keeps map-only Travel controls and status visible in a short window", asyn
 });
 
 test("manages teams and finds builds without Electron or the game", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Build Library" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Team composition" })).toBeVisible();
   await expect(page.locator(".team-slots > li")).toHaveCount(8);
 

@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   closeOffline,
   isDomActiveElement,
@@ -8,7 +10,14 @@ import { startGameInput } from "./input-helpers.js";
 
 test.describe("renderer Travel input", () => {
   test("opens from the certified one-shot chat request", async () => {
-    const fixture = await launchCachedClient("gw-travel-chat-e2e-");
+    const fixture = await launchCachedClient(
+      "gw-travel-chat-e2e-",
+      {},
+      (userData) => writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({ gwonmacTools: true, travelPalette: true }),
+      ),
+    );
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -52,7 +61,14 @@ test.describe("renderer Travel input", () => {
   });
 
   test("stays open over game interaction and closes from every focus state", async () => {
-    const fixture = await launchCachedClient("gw-travel-input-e2e-");
+    const fixture = await launchCachedClient(
+      "gw-travel-input-e2e-",
+      {},
+      (userData) => writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({ gwonmacTools: true, travelPalette: true }),
+      ),
+    );
     try {
       const { page } = fixture;
       await startGameInput(page);

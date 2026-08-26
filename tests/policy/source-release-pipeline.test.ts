@@ -286,7 +286,7 @@ test("the Stable rollback proof establishes its write generation before saving",
     stableCreation,
   );
   const firstLibraryWrite = roundTrip.indexOf(
-    "window.gwNative.buildLibrary.set(library)",
+    "api.buildLibrary.set(library)",
     stableCreation,
   );
 

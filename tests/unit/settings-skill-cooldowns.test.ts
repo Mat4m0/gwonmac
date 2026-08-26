@@ -93,6 +93,7 @@ function fixture(fail = false) {
   let recoveries = 0;
   const binder = bindSkillCooldownSettings({
     fieldset: fieldset as unknown as HTMLFieldSetElement,
+    enabled: fieldset.enabled as unknown as HTMLInputElement,
     persist: async ({ skillCooldownColor }) => {
       if (fail) throw new Error("disk full");
       saved.push(skillCooldownColor);

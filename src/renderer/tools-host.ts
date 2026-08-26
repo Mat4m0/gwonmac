@@ -36,6 +36,8 @@ import {
   templateFilesystem,
 } from "./template-store.js";
 import { sanitiseTemplateName } from "./template-format.js";
+import { ensureToolsStylesheet } from "./tools-stylesheet.js";
+import { requireToolsApi } from "./tools-native-api.js";
 
 /**
  * Writes one build where the game's own template dialog will find it.
@@ -117,11 +119,13 @@ export function mountToolsInto(
   /** Whether this session's client can discover templates written to IDBFS. */
   templatePublishingAvailable: boolean,
 ): Promise<MountedTool | null> {
+  const native = requireToolsApi();
+  ensureToolsStylesheet(host.ownerDocument);
   // A build artifact, not a source module: vite writes it beside this emit at
   // package time. The specifier goes through a variable so the compiler does
   // not try to resolve a file that only exists after the build step.
   const specifier = "./tools/tools-app.js";
-  return Promise.all([import(specifier), window.gwNative.client.session()])
+  return Promise.all([import(specifier), native.client.session()])
     .then(([bundle, session]: [EmbeddedToolsBundle<HTMLElement>, Awaited<ReturnType<typeof window.gwNative.client.session>>]) => {
       const applyStatus = session.compatibility?.features.teamApply;
       const applyUnavailable = commands === null
@@ -138,6 +142,7 @@ export function mountToolsInto(
           : 'Live game information is temporarily unavailable. Saved builds and teams still work.'
         : null;
       const app = bundle.mountToolsApp(host, {
+        nativeApi: native,
         initiallyVisible: false,
         onVisibilityChange,
         publishTemplate: templatePublishingAvailable ? publishTemplate : null,
@@ -170,14 +175,17 @@ export function mountTradeInto(
   host: HTMLElement,
   onVisibilityChange: (visible: boolean) => void,
 ): Promise<MountedTool | null> {
+  const native = requireToolsApi();
+  ensureToolsStylesheet(host.ownerDocument);
   const specifier = "./tools/tools-app.js";
   return import(specifier)
     .then((bundle: EmbeddedToolsBundle<HTMLElement>) => {
       const app = bundle.mountTradeChat(host, {
+        nativeApi: native,
         initiallyVisible: false,
         onVisibilityChange,
         mode: "embedded",
-        development: window.gwNative.init.development,
+        development: native.init.development,
       });
       return {
         setVisible: (visible: boolean) => visible ? app.show() : app.hide(),
@@ -217,10 +225,11 @@ export function mountHostOnlyTools(
   });
   const syncEnabled = () => {
     const settings = window.gwToolsSettings();
-    // The saved Build/Team library is the Tools surface. Apply team is only
-    // one live-game action inside it, so turning Apply off must not remove the
-    // library or its keyboard shortcut.
     lifecycle.setEnabled(settings.gwonmacTools);
+    lifecycle.setAvailable({
+      builds: settings.gwonmacTools && settings.buildLibrary,
+      trade: settings.gwonmacTools && settings.tradeChat,
+    });
   };
   window.addEventListener("gw:tools-settings", syncEnabled);
   syncEnabled();

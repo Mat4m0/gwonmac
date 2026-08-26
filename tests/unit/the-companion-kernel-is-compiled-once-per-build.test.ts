@@ -132,7 +132,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
     );
     // Not the preload: scripts/generate-preload.ts owns that output, splices
     // the canonical channel constants in and is the only producer of
-    // build/preload/preload.cjs.
+    // the generated preload artifacts.
     assert.equal(existsSync(path.join(root, "build/preload")), false);
   });
 

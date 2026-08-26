@@ -50,3 +50,47 @@ test("frame pollers run on every observer frame without an observation change", 
     globalThis.cancelAnimationFrame = previousCancel;
   }
 });
+
+test("a disabled optional poller stops before touching its implementation", () => {
+  const previousRequest = globalThis.requestAnimationFrame;
+  const previousCancel = globalThis.cancelAnimationFrame;
+  const scheduled: FrameRequestCallback[] = [];
+  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    scheduled.push(callback);
+    return 9;
+  }) as typeof requestAnimationFrame;
+  globalThis.cancelAnimationFrame = (() => undefined) as typeof cancelAnimationFrame;
+
+  try {
+    let enabled = true;
+    let polls = 0;
+    const stop = observeCompanion(
+      {
+        memory: new WebAssembly.Memory({ initial: 1 }),
+        snapshotPointer: 0,
+        toolboxPointer: 0,
+        partyPointer: 0,
+        snapshotReads: 0,
+        rejectedSnapshots: 0,
+        hertz: 0,
+        lastRenderUs: 0,
+        renderSamples: [],
+      },
+      [{ enabled: () => enabled, poll: () => { polls += 1; } }],
+      null,
+      null,
+      false,
+      false,
+    );
+
+    scheduled.shift()?.(0);
+    enabled = false;
+    scheduled.shift()?.(16);
+    scheduled.shift()?.(32);
+    assert.equal(polls, 1);
+    stop();
+  } finally {
+    globalThis.requestAnimationFrame = previousRequest;
+    globalThis.cancelAnimationFrame = previousCancel;
+  }
+});

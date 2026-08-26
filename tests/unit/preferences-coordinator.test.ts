@@ -153,8 +153,9 @@ describe("PreferencesCoordinator", () => {
       patch: { synonyms: [{ term: "home", mapId: 55 }] },
     });
 
+    const secondRefusal = assert.rejects(second, /changed in another window/u);
     await first;
-    await assert.rejects(second, /changed in another window/u);
+    await secondRefusal;
     const current = await coordinator.getTravelPreferences();
     assert.deepEqual(current.shortcuts, shortcuts);
     assert.deepEqual(current.synonyms, []);
@@ -291,6 +292,7 @@ describe("PreferencesCoordinator", () => {
     assert.equal(refused, true);
     assert.ok(outcome);
     assert.equal(outcome.status, "complete");
+    assert.ok(outcome.travelPreferences);
     assert.deepEqual(outcome.travelPreferences.synonyms, []);
   });
 
@@ -343,6 +345,7 @@ describe("PreferencesCoordinator", () => {
 
     const retried = await coordinator.resetSettings();
     assert.equal(retried.status, "complete");
+    assert.ok(retried.travelPreferences);
     assert.deepEqual(retried.travelPreferences.synonyms, []);
   });
 

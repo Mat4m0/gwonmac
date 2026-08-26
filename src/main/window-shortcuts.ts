@@ -3,14 +3,14 @@
  * Settings stay durable elsewhere; this controller owns only the live input state.
  */
 import type { BrowserWindow } from "electron";
-import type { GameTextEditCommand } from "../shared/contracts.js";
+import type { AppSettings, GameTextEditCommand } from "../shared/contracts.js";
+import { featureActivationRequested } from "../shared/feature-contracts.js";
 import {
   resolveShortcuts,
   shortcutFromInput,
   shortcutMatches,
   type ShortcutAction,
   type ShortcutCaptureResult,
-  type ShortcutOverrides,
 } from "../shared/keyboard-shortcuts.js";
 import { recordMainInput } from './input-trace.js';
 import {
@@ -60,7 +60,12 @@ const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
 
 class WindowShortcuts {
   readonly #actions: ShortcutActions;
-  #shortcuts = resolveShortcuts({});
+  #shortcuts = resolveShortcuts({
+    "tools.toggle": null,
+    "trade.toggle": null,
+    "storage.open": null,
+    "travel.open": null,
+  });
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
   #skillCapture: ((result: SkillKeyCaptureResult) => void) | null = null;
   #claimedCodes = new Map<string, ClaimedKey>();
@@ -240,8 +245,30 @@ class WindowShortcuts {
     win.on("closed", () => this.cancelCapture());
   }
 
-  update(overrides: ShortcutOverrides): void {
-    this.#shortcuts = resolveShortcuts(overrides);
+  update(settings: Pick<
+    AppSettings,
+    | "gwonmacTools"
+    | "buildLibrary"
+    | "tradeChat"
+    | "xunlaiStorage"
+    | "travelPalette"
+    | "shortcutOverrides"
+  >): void {
+    const resolved = resolveShortcuts(settings.shortcutOverrides);
+    this.#shortcuts = {
+      "tools.toggle": featureActivationRequested("buildLibrary", settings)
+        ? resolved["tools.toggle"]
+        : null,
+      "trade.toggle": featureActivationRequested("tradeChat", settings)
+        ? resolved["trade.toggle"]
+        : null,
+      "storage.open": featureActivationRequested("xunlaiStorage", settings)
+        ? resolved["storage.open"]
+        : null,
+      "travel.open": featureActivationRequested("travel", settings)
+        ? resolved["travel.open"]
+        : null,
+    };
   }
 
   capture(): Promise<ShortcutCaptureResult> {
@@ -322,9 +349,9 @@ export function installWindowShortcuts(
 
 export function updateWindowShortcuts(
   win: BrowserWindow,
-  overrides: ShortcutOverrides,
+  settings: AppSettings,
 ): void {
-  controllers.get(win)?.update(overrides);
+  controllers.get(win)?.update(settings);
 }
 
 export function captureWindowShortcut(

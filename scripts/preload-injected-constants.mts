@@ -1,7 +1,7 @@
 // What generate-preload.ts splices above the preload body.
 //
 // `PRELOAD_CONSTANTS` names six canonical exports and the generator emits one
-// `const` per name at the top of build/preload/preload.cjs, so the body reads
+// `const` per name at the top of each generated preload, so the body reads
 // them as ordinary file-scope bindings it must never declare — a second
 // declaration would be a redeclaration SyntaxError in the generated file.
 // Declaring them here is what lets src/preload/preload.body.cjs be type-checked

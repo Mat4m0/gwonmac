@@ -5,6 +5,7 @@ import {
   COMPANION_KERNEL_RUNTIME_BYTES,
   validateCompanionOwnedRegions,
 } from "../../src/renderer/companion-owned-regions.ts";
+import { PROFESSION_COMMAND_TRACE_BYTES } from "../../src/renderer/profession-command-trace.ts";
 
 const CONFIG = Object.freeze([0x1122_3344, 0xaabb_ccdd, 7]);
 
@@ -47,6 +48,7 @@ function allocate(
       toolbox: true,
       commandPayloadBytes: 128,
       professionTrace: true,
+      professionTraceBytes: PROFESSION_COMMAND_TRACE_BYTES,
     },
   });
   core.initialize();
@@ -104,6 +106,7 @@ describe("companion core memory installation", () => {
         toolbox: false,
         commandPayloadBytes: 0,
         professionTrace: false,
+        professionTraceBytes: 0,
       },
     });
     core.initialize();
@@ -136,6 +139,7 @@ describe("companion core memory installation", () => {
             toolbox: true,
             commandPayloadBytes: 128,
             professionTrace: true,
+            professionTraceBytes: PROFESSION_COMMAND_TRACE_BYTES,
           },
         }),
         /allocation failed/,
@@ -162,6 +166,7 @@ describe("companion core memory installation", () => {
           toolbox: true,
           commandPayloadBytes: 128,
           professionTrace: true,
+          professionTraceBytes: PROFESSION_COMMAND_TRACE_BYTES,
         },
       }),
       /ends past the heap/,
@@ -187,6 +192,7 @@ describe("companion core memory installation", () => {
         toolbox: false,
         commandPayloadBytes: 0,
         professionTrace: false,
+        professionTraceBytes: 0,
       },
     });
 
@@ -230,6 +236,7 @@ describe("companion core memory installation", () => {
           toolbox: false,
           commandPayloadBytes: 0,
           professionTrace: false,
+          professionTraceBytes: 0,
         },
       }),
       /reused a live pointer/,
@@ -256,6 +263,7 @@ describe("companion core memory installation", () => {
           toolbox: true,
           commandPayloadBytes: 128,
           professionTrace: true,
+          professionTraceBytes: PROFESSION_COMMAND_TRACE_BYTES,
         },
       }),
       (error) => {
@@ -308,6 +316,7 @@ describe("companion core memory installation", () => {
             toolbox: false,
             commandPayloadBytes: 0,
             professionTrace: false,
+            professionTraceBytes: 0,
           },
         });
         if (initializedBeforeRelease) core.initialize();

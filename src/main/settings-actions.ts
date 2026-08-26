@@ -23,7 +23,7 @@ import { resetGameInput } from "./renderer-commands.js";
 import { resetWindowState } from "./window.js";
 import { windowRegistry } from "./window-registry.js";
 
-type RelaunchAction = "capabilityEnable" | "cacheClear" | "gameStorageReset";
+type RelaunchAction = "capabilityEnable" | "capabilityUnload" | "cacheClear" | "gameStorageReset";
 
 async function confirmAction(
   win: BrowserWindow,
@@ -43,6 +43,17 @@ async function confirmAction(
     detail: copy.detail,
   });
   return response === 0;
+}
+
+export async function requestToolsUnloadRestart(win: BrowserWindow): Promise<boolean> {
+  if (!(await confirmAction(win, {
+    confirmLabel: "Restart GWonMac",
+    message: "Restart to unload Tools Beta?",
+    detail:
+      "This closes Guild Wars. GWonMac will reopen in Core mode without optional Tools code loaded.",
+  }))) return false;
+  requestRelaunch(win, "capabilityUnload");
+  return true;
 }
 
 /** The durable action already succeeded; relaunch failure cannot undo it. */
@@ -88,7 +99,7 @@ export async function applySettingsChange(
       restartForCapability
       && !(await confirmAction(win, {
         confirmLabel: "Enable and Restart",
-        message: "Restart to enable optional Tools?",
+        message: "Restart to enable Tools Beta?",
         detail:
           "GWonMac prepares every certified Tools capability together. Restart once to use the saved change. This closes Guild Wars if it is running.",
       }))

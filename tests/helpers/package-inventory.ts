@@ -8,7 +8,12 @@ type PackageInventory = ReadonlySet<string>;
 
 type PackagerIgnore = NonNullable<ForgeConfig["packagerConfig"]>["ignore"];
 
-export const PRELOAD_ENTRY = "/build/preload/preload.cjs";
+export const CORE_PRELOAD_ENTRY = "/build/preload/preload-core.cjs";
+export const TOOLS_PRELOAD_ENTRY = "/build/preload/preload-tools.cjs";
+export const PRELOAD_ENTRIES = Object.freeze([
+  CORE_PRELOAD_ENTRY,
+  TOOLS_PRELOAD_ENTRY,
+]);
 
 export const REQUIRED_PACKAGE_FILES = Object.freeze([
   "/build/native/host.node",
@@ -22,7 +27,7 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
   "/build/main/certification/enhancement-builds.js",
   "/build/main/certification/enhancement-policy.js",
   "/build/main/main.js",
-  PRELOAD_ENTRY,
+  ...PRELOAD_ENTRIES,
   "/build/renderer/index.html",
   "/build/renderer/images/hero-poster.jpg",
   "/build/renderer/images/hero-video.webm",

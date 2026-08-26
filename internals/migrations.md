@@ -1,5 +1,18 @@
 # Active migrations
 
+## Skill-label enablement inference
+
+- Why: releases before the individual Tools refactor treated any configured
+  skill-key label as the feature opt-in. Those profiles have bindings but no
+  `skillKeyLabelsEnabled` field, so the reader infers `true` once instead of
+  silently hiding an existing overlay.
+- Introduced: 2026-08-26 with the individual Tools settings refactor.
+- Depends on it: players who configured a skill-key label before the separate
+  feature switch existed and have not saved settings with the new release.
+- Remove when: the oldest supported profile and rollback release both write
+  `skillKeyLabelsEnabled`. Remove the missing-field inference, its parser test,
+  and this entry together.
+
 ## Retired game-data strategy field
 
 - Why: Stable v2026.8.9 expects `settings.json` to contain `dataStrategy` and

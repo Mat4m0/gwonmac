@@ -12,7 +12,7 @@
 import {
   readCompanionCursorHeader,
   readCompanionCursorPixels,
-} from "./companion-snapshot.js";
+} from "./companion-cursor-snapshot.js";
 
 const EDGE = 32;
 const RETINA_EDGE = EDGE * 2;

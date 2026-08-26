@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { BrowserWindow } from "electron";
+import { DEFAULT_SETTINGS } from "../../src/shared/contracts.js";
 import {
   captureWindowShortcut,
   captureWindowSkillKey,
@@ -46,7 +47,7 @@ describe("window shortcut input", () => {
       },
       recordCommandQ: (phase, reason) => commandQ.push(`${phase}:${reason}`),
     });
-    updateWindowShortcuts(win, {});
+    updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true });
 
     const dispatch = (input: ShortcutInput) => {
       let prevented = false;
@@ -226,5 +227,13 @@ describe("window shortcut input", () => {
       }),
       type: "keyUp",
     }), true);
+
+    updateWindowShortcuts(win, {
+      ...DEFAULT_SETTINGS,
+      gwonmacTools: true,
+      buildLibrary: false,
+    });
+    assert.equal(dispatch(keyDown("KeyB", "b")), false);
+    assert.deepEqual(actions, ["tools.toggle"]);
   });
 });

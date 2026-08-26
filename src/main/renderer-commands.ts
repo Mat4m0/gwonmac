@@ -140,7 +140,7 @@ export async function editWindowText(
 }
 
 /**
- * Show or hide the Tools overlay.
+ * Show or hide the Build Library.
  *
  * One function for the two ways a player asks. The menu item and the keyboard
  * shortcut are different routes to the same intent, and a second copy of "send
@@ -164,12 +164,16 @@ export async function toggleTools(win: BrowserWindow): Promise<void> {
       { k: "tools.toggleRefused", outcome },
       ownerId,
     );
+    await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
   }
 }
 
 /** Show or hide the independent read-only Trade Chat surface. */
 export async function toggleTrade(win: BrowserWindow): Promise<void> {
-  await sendRendererCommand(win, { type: "trade.toggle" });
+  if (await sendRendererCommand(win, { type: "trade.toggle" }) === "completed") {
+    return;
+  }
+  await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
 }
 
 /**

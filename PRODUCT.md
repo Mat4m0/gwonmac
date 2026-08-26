@@ -43,6 +43,17 @@ separate windows. The normal Single Account mode stays the default.
 
 Required template compatibility and Core cursor support run when their exact
 client proofs permit them. Optional **gwonmac Tools Beta** is off by default.
+Every player-facing tool has its own switch beneath that master opt-in. Turning
+the master off disables all tool surfaces, shortcuts, and chat aliases without
+deleting saved tool data or preferences. If Tools were prepared for the current
+launch, Settings then offers a restart to unload their code completely.
+
+A Core launch does not import, evaluate, instantiate, subscribe, or expose
+optional Tools implementation. It uses the Core preload and retains only the
+required cursor, input, play-region, pre-game relog, and ordinary Settings
+behavior. A Tools launch prepares one optional runtime; individual tool switches
+then control behavior immediately. Packaged Tools files and shared setting names
+may exist on disk in Core mode, but they are not part of the running module graph.
 
 Tools provides Build and Team authoring, party capture, team-code exchange,
 read-only Trade Chat discovery, Target Distance, local Xunlai storage opening,
@@ -59,9 +70,10 @@ Command-Shift-C default shortcut, or by
 typing `/chest` or `/xunlai` in supported PvE outposts. Team Apply is a bounded
 configuration action. It checks fresh game state after each step.
 
-Build and Team authoring belongs to the host. Live observations, storage
-opening, and Team Apply require exact client capabilities. An unknown client
-can therefore keep host authoring while live integration refuses.
+Build and Team authoring belongs to the host. When Tools Beta and Build Library
+are enabled, an unknown client can keep host authoring while live integration
+refuses. Live observations, storage opening, and Team Apply require exact
+client capabilities.
 
 **Tools Beta** describes feature maturity. It is not the application Beta
 update track.

@@ -130,18 +130,29 @@ app never substitutes touch events.
 The cursor has no player switch. The app does not ship or download cursor
 artwork.
 
-**Enable optional Tools Beta** is off by default. Its first enable asks for one
+**Enable Tools Beta** is off by default. Its first enable asks for one
 restart because the app selects the Tools-capable mode before Guild Wars
-starts.
+starts. Every tool has its own switch. Turning Tools Beta off disables all tool
+surfaces, shortcuts, and chat commands without deleting saved tool data. It does
+not close Guild Wars or force a restart. Settings shows **Tools are disabled.
+Restart GWonMac to unload Tools code completely** until you restart or turn the
+master back on. **Restart now…** is optional and warns before closing Guild Wars.
+
+With Tools Beta off at launch, GWonMac loads only its required Core integration.
+It does not load the Build Library, Trade, Travel, Xunlai, Target, Apply Team,
+skill-label, or cooldown implementation. Enabling Tools from that Core launch
+therefore saves only after confirmation and restarts immediately.
 
 After that restart, these choices update immediately:
 
-- **Apply teams in Guild Wars** (Beta) allows an explicit Apply action in a PvE
-  outpost. The saved Build and Team library does not depend on this switch.
-- **Open Xunlai storage** (Beta) allows the Storage button, Command-Shift-C
+- **Build Library** (Beta) opens with Command-B. It saves, organizes, and
+  applies builds and teams. Apply Team is available automatically in supported
+  PvE outposts.
+- **Trade Chat** (Beta) opens with Command-K or `/trade`.
+- **Xunlai Storage** (Beta) allows the Storage button, Command-Shift-C
   shortcut, and the `/chest` and `/xunlai` chat commands in a supported PvE
   outpost, after the current character's storage access is confirmed.
-- **Quick Travel palette** (Beta) opens with Command-T or the `/tp` chat
+- **Travel** (Beta) opens with Command-T or the `/tp` chat
   command. It shows a customizable 3×3 Quick Travel grid. Press 1–9 to use a
   saved destination, use the cog button to replace or remove one, or press
   Command-1 through Command-9 while a search
@@ -157,11 +168,11 @@ After that restart, these choices update immediately:
   per character across game and app restarts, hides the current map, and shows
   the five newest destinations that character can still travel to.
 
-Open **Trade Chat** from the View menu, with Command-Shift-B, or by typing the
+Open **Trade Chat** from the View menu, with Command-K, or by typing the
 exact lowercase `/trade` command on a certified client. The Trade window is
-independent from Builds and teams, so both can stay open. `/trade` passes
+independent from Build Library, so both can stay open. `/trade` passes
 through to Guild Wars when Tools is disabled or the current parser is not
-certified; the menu and shortcut do not depend on client certification.
+certified.
 
 Trade Chat shows the public Kamadan and Pre-Searing Ascalon feeds. Choose one
 source, search for an item or character, and use **Selling** or **Buying** to
@@ -190,23 +201,26 @@ window and return the keyboard to Guild Wars. If a confirmation dialog is open,
 Escape closes the confirmation first.
 - **Target distance and range** (Test) shows the selected target's distance and
 range band.
-- **Skill key labels** mirror custom Guild Wars keyboard or mouse bindings over
+- **Skill Key Labels** must be enabled before you configure the eight labels.
+  They mirror custom Guild Wars keyboard or mouse bindings over
   the eight skill slots. Choose **Change**, then press a key, mouse button, or
   move the wheel. Control, Option, Shift, and Command become part of the label.
   **Clear** restores the native number for that slot. Labels do not change the
   Guild Wars controls.
-- **Skill cooldowns** show the remaining recharge time over each unavailable
-  skill. In **Settings → Tools**, you can turn the numbers off and choose Guild
+- **Skill Cooldowns** must be enabled before you configure their colour. They
+  show the remaining recharge time over each unavailable skill. In
+  **Settings → Tools**, choose Guild
   Wars red, native cream, warm gold, icy blue, or a custom color. This display
   reads the game's existing recharge state; it does not activate skills.
 
-The same pane lists **Keyboard shortcuts**. Choose **Change**, then press a
-Command shortcut to replace the default. Letter and number shortcuts use their
+An enabled tool shows its shortcut beside its other settings. Choose
+**Change**, then press a Command shortcut to replace the default. Letter and
+number shortcuts use their
 physical keyboard positions, so they stay stable when Option or the active
 keyboard layout changes. Control remains available to Guild Wars. Delete clears a shortcut, Escape
-cancels recording. **Show or hide GWonMac Tools** uses Command-B by default,
-**Show or hide Trade Chat** uses Command-Shift-B, and **Show or hide Quick
-Travel** uses Command-T. Press the same interface shortcut again to close it.
+cancels recording. **Build Library** uses Command-B by default, **Trade Chat**
+uses Command-K, and **Travel** uses Command-T. Press the same interface
+shortcut again to close it.
 **Restore default shortcuts** also restores Command-Shift-C for Xunlai storage.
 Shortcuts work only while the Guild Wars window is active. GWonMac keeps normal
 editing and application shortcuts such as Command-C and Command-Q, plus
@@ -231,9 +245,9 @@ halls. During active PvP play, Tools and Xunlai storage close, their shortcuts
 report that they are unavailable, and `/chest` and `/xunlai` remain with Guild
 Wars. Apply checks policy before each step and stops when the state changes.
 
-At login, during loading, or when the region cannot be identified, the saved
-Build and Team library and Trade Chat remain available. Live observation,
-storage opening, Travel, and Apply stay unavailable until their stronger live
+At login, during loading, or when the region cannot be identified, enabled
+Build Library and Trade Chat remain available. Live observation, storage
+opening, Travel, and Apply stay unavailable until their stronger live
 requirements pass.
 
 Skill key labels and cooldown numbers also stop outside a confirmed PvE region.

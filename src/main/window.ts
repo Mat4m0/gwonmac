@@ -54,6 +54,7 @@ import {
 import {
   installApplicationMenu,
   showQuitOrReloadGame,
+  updateToolsMenuItems,
 } from "./window-menu.js";
 import {
   installWindowShortcuts,
@@ -426,7 +427,7 @@ export function createMainWindow(
     title: options.title ?? "Guild Wars Reforged",
     show: false,
     webPreferences: {
-      preload: preloadPath(),
+      preload: preloadPath(host.enhancementSelection.tools),
       additionalArguments: [rendererInitArgument(host)],
       // Guild Wars advances its Emscripten main loop on animation frames.
       // Keep game simulation, network delivery, and enabled background audio
@@ -575,7 +576,8 @@ export function createMainWindow(
   });
   void host.getSettings().then((settings) => {
     if (!win.isDestroyed()) {
-      updateWindowShortcuts(win, settings.shortcutOverrides);
+      updateWindowShortcuts(win, settings);
+      updateToolsMenuItems(settings);
     }
   }).catch((error) => {
     logEvent({ k: "settings.loadFailed", code: errorCode(error) });

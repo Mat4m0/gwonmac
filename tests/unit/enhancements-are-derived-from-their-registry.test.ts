@@ -246,9 +246,9 @@ test("the capability wire contract is exact and has one empty value", () => {
 
 test("Tools prepares every certified capability independent of child toggles", () => {
   for (const settings of [
-    { teamManagement: false, xunlaiStorage: false, targetReadout: false },
-    { teamManagement: false, xunlaiStorage: true, targetReadout: false },
-    { teamManagement: true, xunlaiStorage: true, targetReadout: true },
+    { buildLibrary: false, xunlaiStorage: false, targetReadout: false },
+    { buildLibrary: false, xunlaiStorage: true, targetReadout: false },
+    { buildLibrary: true, xunlaiStorage: true, targetReadout: true },
   ]) {
     assert.equal(requestedEnhancementCapabilities({
       ...DEFAULT_SETTINGS,

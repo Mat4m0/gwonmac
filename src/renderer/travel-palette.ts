@@ -10,11 +10,14 @@ import type {
   EmbeddedToolsBundle,
   TravelPaletteHandle,
 } from "../shared/tools-bundle-contracts.js";
+import { ensureToolsStylesheet } from "./tools-stylesheet.js";
+import { requireToolsApi } from "./tools-native-api.js";
 
 export function createTravelPalette(
   parent: HTMLElement,
   command: TravelCommand,
 ) {
+  const native = requireToolsApi();
   const canvas = parent.ownerDocument.getElementById("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) {
     throw new Error("Travel game canvas is missing");
@@ -55,10 +58,12 @@ export function createTravelPalette(
     }
     if (next && !requested) {
       requested = true;
+      ensureToolsStylesheet(parent.ownerDocument);
       const specifier = "./tools/tools-app.js";
       void import(specifier).then((bundle: EmbeddedToolsBundle<HTMLElement>) => {
         if (disposed) return;
         app = bundle.mountTravelPalette(host, {
+          nativeApi: native,
           command,
           development: window.gwNative.init.development,
           initiallyVisible: open,

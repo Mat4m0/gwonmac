@@ -255,13 +255,13 @@ onBeforeUnmount(() => {
       ref="panel"
       class="ui-frame ui-panel tools-window"
       :style="panelStyle"
-      aria-label="GWonMac Tools"
+      aria-label="Build Library"
       role="dialog"
     >
       <header class="ui-panel-head ui-window-head window-bar" @pointerdown="startDrag">
         <div class="window-brand" aria-hidden="true">GW</div>
         <div class="window-identity">
-          <h1 class="ui-panel-title">GWonMac Tools</h1>
+          <h1 class="ui-panel-title">Build Library</h1>
           <p class="ui-field-hint">{{ host.label }}</p>
         </div>
         <span v-if="controller.saving.value" class="ui-chip" data-level="warn" role="status">Saving…</span>
@@ -276,7 +276,7 @@ onBeforeUnmount(() => {
           v-if="mode === 'embedded'"
           class="ui-button window-close"
           data-icon
-          aria-label="Close GWonMac Tools"
+          aria-label="Close Build Library"
           @click="requestClose"
         >
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg>
@@ -681,7 +681,7 @@ onBeforeUnmount(() => {
         v-if="mode === 'embedded'"
         type="button"
         class="ui-resize-grip"
-        aria-label="Resize GWonMac Tools"
+        aria-label="Resize Build Library"
         ref="resizeGrip"
       />
     </section>

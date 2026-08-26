@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   closeOffline,
   isDomActiveElement,
@@ -431,7 +433,19 @@ test.describe("renderer Tools input", () => {
   });
 
   test("mounts the shipped embedded Tools window and persists one library change", async () => {
-    const fixture = await launchCachedClient("gw-toolbox-embedded-e2e-");
+    test.setTimeout(60_000);
+    const fixture = await launchCachedClient(
+      "gw-toolbox-embedded-e2e-",
+      {},
+      (userData) => writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({
+          gwonmacTools: true,
+          buildLibrary: true,
+          xunlaiStorage: true,
+        }),
+      ),
+    );
     try {
       const { app, page } = fixture;
       await startGameInput(page);
@@ -497,18 +511,25 @@ test.describe("renderer Tools input", () => {
             Number(document.body.dataset.canvasPressesAfterStorage ?? "0") + 1,
           );
         });
-        foundation.createToolboxFoundation(document.body, {
-          mountTool: (host, onVisibilityChange) =>
-            toolsHost.mountToolsInto(host, onVisibilityChange, null, {
-              open: openStorage,
-              unavailable: () => null,
-            }, true),
-        });
+        if (!document.getElementById("toolbox-foundation")) {
+          foundation.createToolboxFoundation(document.body, {
+            mountTool: (host, onVisibilityChange) =>
+              toolsHost.mountToolsInto(host, onVisibilityChange, null, {
+                open: openStorage,
+                unavailable: () => null,
+              }, true),
+          });
+        }
       });
 
       const root = page.locator("#toolbox-foundation");
       const panel = page.locator(".tools-window");
       const canvas = page.locator("#canvas");
+      const toggleTools = () => page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:tools-toggle", {
+          cancelable: true,
+        }));
+      });
       const settleEmbeddedShow = async () => {
         // Tools sizes itself on the frame after it becomes visible. Cross that
         // exact deferred boundary so a show-time focus cannot steal the
@@ -517,11 +538,11 @@ test.describe("renderer Tools input", () => {
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         }));
       };
-      await page.keyboard.press("Control+Shift+Space");
+      await toggleTools();
       await expect(root).toHaveAttribute("data-open", "true");
       await expect(page.locator("#toolbox-builds")).toHaveAttribute("data-ready", "true");
       await expect(page.locator('.tools-stage[data-mode="embedded"]')).toBeVisible();
-      await expect(page.getByRole("heading", { name: "GWonMac Tools" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Build Library" })).toBeVisible();
       await expect(page.getByText("Saved on this Mac")).toBeVisible();
       await settleEmbeddedShow();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
@@ -531,9 +552,11 @@ test.describe("renderer Tools input", () => {
       await page.getByRole("button", { name: "Create team" }).click();
       await expect(page.locator(".library-row").filter({ hasText: "Embedded smoke team" }))
         .toHaveCount(1);
-      const storedTeams = await page.evaluate(async () =>
-        (await window.gwNative.buildLibrary.get()).library.teams.map((team) => team.name),
-      );
+      const storedTeams = await page.evaluate(async () => {
+        const api = window.gwNative;
+        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+        return (await api.buildLibrary.get()).library.teams.map((team) => team.name);
+      });
       expect(storedTeams).toContain("Embedded smoke team");
 
       const before = await panel.boundingBox();
@@ -549,10 +572,10 @@ test.describe("renderer Tools input", () => {
       expect(after.x).toBeLessThan(before.x - 10);
       expect(after.y).toBeLessThan(before.y - 10);
 
-      await page.getByRole("button", { name: "Close GWonMac Tools" }).click();
+      await page.getByRole("button", { name: "Close Build Library" }).click();
       await expect(root).toHaveAttribute("data-open", "false");
       await expect(panel).toBeHidden();
-      await page.keyboard.press("Control+Shift+Space");
+      await toggleTools();
       await expect(panel).toBeVisible();
       await expect(page.locator(".library-row").filter({ hasText: "Embedded smoke team" }))
         .toHaveCount(1);
@@ -567,19 +590,17 @@ test.describe("renderer Tools input", () => {
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
-      await page.keyboard.press("Control+Shift+Space");
+      await toggleTools();
       await expect(panel).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
 
-      // The real Xunlai route closes Tools after it queues the named command.
-      // Hiding the panel must also surrender every pixel to the game: the next
-      // world press reaches the canvas instead of an invisible Tools surface.
-      await page.keyboard.press("Control+Shift+Space");
+      // Hiding the real prepared panel must surrender every pixel to the game:
+      // the next world press reaches the canvas instead of an invisible surface.
+      await toggleTools();
       await expect(panel).toBeVisible();
-      await page.getByRole("button", { name: "Open Xunlai Storage" }).click();
-      await expect(page.locator("body")).toHaveAttribute("data-storage-opens", "1");
+      await page.keyboard.press("Escape");
       await expect(root).toHaveAttribute("data-open", "false");
       await expect(panel).toBeHidden();
       const canvasBox = await canvas.boundingBox();

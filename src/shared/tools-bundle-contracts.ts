@@ -7,6 +7,7 @@ import type { ToolboxObservation } from "./builds/live-party.js";
 import type { TeamApplyCommands } from "./builds/team-apply-runner.js";
 import type { StorageCommand } from "./storage-command.js";
 import type { TravelCommand, TravelGameState } from "./travel-command.js";
+import type { ToolsGwNativeApi } from "./contracts.js";
 
 export type PublishedTemplate = Readonly<{
   fileName: string;
@@ -74,14 +75,14 @@ export type TradeChatMountOptions = Readonly<{
 export type EmbeddedToolsBundle<Target> = Readonly<{
   mountToolsApp: (
     target: Target,
-    options: ToolsAppMountOptions,
+    options: ToolsAppMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi }>,
   ) => ToolsAppHandle;
   mountTravelPalette: (
     target: Target,
-    options: TravelPaletteMountOptions,
+    options: TravelPaletteMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi }>,
   ) => TravelPaletteHandle;
   mountTradeChat: (
     target: Target,
-    options: TradeChatMountOptions,
+    options: TradeChatMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi }>,
   ) => TradeChatHandle;
 }>;

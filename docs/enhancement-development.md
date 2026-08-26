@@ -19,30 +19,54 @@ Core is required and has no player switch. Optional Tools are off by default.
 The first enable selects a Tools-capable module and requires a restart. The
 current optional features are:
 
-- **Apply teams in Guild Wars** (Beta): allow one explicit Apply action in a
-  certified supported outpost. Build and Team authoring remains local and
-  independent.
+- **Build Library** (Beta): host-owned build and team authoring. Command-B
+  opens it when both Tools Beta and Build Library are enabled, and its Apply
+  Team action is available automatically in supported PvE outposts.
+- **Trade Chat** (Beta): read-only public listing and trader-price discovery.
+  Command-K or `/trade` opens it when both Tools Beta and Trade Chat are
+  enabled.
 - **Target distance and range** (Test): show the selected target's distance and
   range band.
 - **Xunlai storage**: open the normal storage UI from the Tools title bar,
   Command-Shift-C, `/chest`, or `/xunlai` in a certified supported outpost. It
   has a separate Settings opt-in and requires a live snapshot that proves the
   current character can access storage. It does not depend on party observation.
-- **Quick Travel palette**: Command-T or `/tp` opens host-owned destination
+- **Travel**: Command-T or `/tp` opens host-owned destination
   autocomplete and 1–9 shortcuts. Search filters positively locked maps from
   the current character's bounded unlock set, and Recent persists certified map
   observations per privacy-safe character key. A named, bounded Travel action
   rechecks the unlock at the game-thread drain. It has a separate Settings opt-in.
-- **Skill key labels**: show player-authored keyboard, mouse-button, and wheel
+- **Skill Key Labels**: show player-authored keyboard, mouse-button, and wheel
   labels over certified skill-slot rectangles. The feature is display-only and
   never changes or forwards game input.
-- **Skill cooldown numbers**: show Guild Wars' existing recharge state over the
+- **Skill Cooldowns**: show Guild Wars' existing recharge state over the
   same certified player skill slots. The companion publishes bounded recharge
   timestamps; the renderer owns formatting, color, and presentation.
 
 These features then change live. Live observers and commands stop when disabled
 or when map policy refuses them. Host-only authoring remains available without
 observation or command authority.
+
+## Launch boundary invariant
+
+Core and Tools are launch modes, not two saved settings. `gwonmacTools` is the
+requested next-launch mode; `RendererInit.enhancementSelection.tools` is the
+single source of truth for the current process. Do not add another runtime flag.
+
+A Core static import graph must not reach optional snapshot readers, overlays,
+commands, aliases, Tools UI, tool stores, tool IPC, or Trade networking. Core
+uses the Core preload, whose bridge contains no tool namespace or channel.
+Required cursor and input behavior, play-region observation, automatic relog,
+Settings metadata, disabled menu labels, validation, and fixed ABI sizes remain
+Core. The optional renderer entry and `ToolsRuntime` are dynamic imports that
+run only for a Tools-capable launch.
+
+Within Tools mode, child switches are live policy. Every new tool must enter the
+Tools IPC subset, the dynamic renderer entry, and `ToolsRuntime` ownership as
+applicable. Disabling it must stop its listeners, observers, timers, requests,
+sockets, commands, surfaces, and storage work. Disabling the master applies the
+same shutdown to every child while preserving settings and saved data. Complete
+module unloading happens on the next Core launch.
 
 ## Use the cheapest proof
 
@@ -509,6 +533,7 @@ A Core or Tools change is done when all applicable statements are true:
 - every client-local fact has one typed semantic witness;
 - invalid and loading state cannot publish stale data;
 - disabled behavior stops its observer or command path;
+- Core static import graphs and the Core preload contain no optional Tools implementation;
 - no raw pointer, packet, secret, or memory view crosses IPC;
 - cached startup performs no transform or network request;
 - the required offline layers pass;
