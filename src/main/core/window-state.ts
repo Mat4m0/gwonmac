@@ -1,6 +1,8 @@
 /**
  * The persisted window placement: what counts as a valid one, and how a stored
- * one is fitted back onto the displays that exist right now.
+ * one is fitted back onto the displays that exist right now. The saved display
+ * work area keeps the window's relative size and position when that display's
+ * resolution or usable area changes.
  *
  * `mode` is three values and minimized is not among them — a window is never
  * restored into a state the player cannot see. Placement is re-validated
@@ -24,10 +26,20 @@ export interface WindowBounds {
   height: number;
 }
 
+type WindowMode = "normal" | "maximized" | "fullscreen";
+
 export interface WindowState {
   bounds: WindowBounds;
-  mode: "normal" | "maximized" | "fullscreen";
+  mode: WindowMode;
+  displayWorkArea: WindowBounds;
 }
+
+export interface LegacyWindowState {
+  bounds: WindowBounds;
+  mode: WindowMode;
+}
+
+export type RestorableWindowState = WindowState | LegacyWindowState;
 
 export const DEFAULT_WINDOW_SIZE = {
   width: 1280,
@@ -37,66 +49,81 @@ export const DEFAULT_WINDOW_SIZE = {
 const DEFAULT_WINDOW_MARGIN = 64;
 const WINDOW_STATE_FORMAT = 1;
 
-const MODES = new Set<WindowState["mode"]>([
-  "normal",
-  "maximized",
-  "fullscreen",
-]);
-
 function integer(value: unknown, name: string): number {
-  if (!Number.isSafeInteger(value)) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
     throw new AppError("bad_window_state", `windowState.${name} must be an integer`);
   }
-  return value as number;
+  return value;
+}
+
+function parseMode(value: unknown): WindowMode {
+  if (value === "normal" || value === "maximized" || value === "fullscreen") {
+    return value;
+  }
+  throw new AppError("bad_window_state", "window state mode is invalid");
+}
+
+function parseBounds(value: unknown, name: string): WindowBounds {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new AppError("bad_window_state", `windowState.${name} is invalid`);
+  }
+  const bounds = value as Record<string, unknown>;
+  const parsed = {
+    x: integer(bounds.x, `${name}.x`),
+    y: integer(bounds.y, `${name}.y`),
+    width: integer(bounds.width, `${name}.width`),
+    height: integer(bounds.height, `${name}.height`),
+  };
+  if (
+    parsed.width < 1 ||
+    parsed.height < 1 ||
+    parsed.width > 32_768 ||
+    parsed.height > 32_768
+  ) {
+    throw new AppError("bad_window_state", `windowState.${name} values are invalid`);
+  }
+  return parsed;
 }
 
 /**
- * A file with no `formatVersion` is what the public alpha wrote: v0 and v1 are
- * the same `{ bounds, mode }` shape, so an alpha window comes back where the
- * player left it. A version this build does not know is refused, and
- * `loadWindowState` falls back to a default window rather than placing one
- * from a shape it cannot read.
+ * A file with no `formatVersion` is what the public alpha wrote. Early version
+ * 1 files also contain only `{ bounds, mode }`. Both restore in absolute pixels
+ * once and gain their display work area on the next save. The additive field
+ * keeps the document readable by the supported Stable rollback baseline.
  */
-export function parseWindowState(value: unknown): WindowState {
+export function parseWindowState(value: unknown): RestorableWindowState {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new AppError("bad_window_state", "window state must be an object");
   }
   const record = value as Record<string, unknown>;
-  if (
-    record.formatVersion !== undefined &&
-    record.formatVersion !== WINDOW_STATE_FORMAT
-  ) {
+  const version = record.formatVersion;
+  if (version !== undefined && version !== WINDOW_STATE_FORMAT) {
     throw new AppError(
       "bad_window_state",
       `windowState.formatVersion ${JSON.stringify(record.formatVersion)} is not readable`,
     );
   }
-  if (!record.bounds || typeof record.bounds !== "object" || Array.isArray(record.bounds)) {
-    throw new AppError("bad_window_state", "window state bounds are invalid");
-  }
-  const bounds = record.bounds as Record<string, unknown>;
-  const parsed: WindowBounds = {
-    x: integer(bounds.x, "bounds.x"),
-    y: integer(bounds.y, "bounds.y"),
-    width: integer(bounds.width, "bounds.width"),
-    height: integer(bounds.height, "bounds.height"),
-  };
-  if (
-    parsed.width < 320 ||
-    parsed.height < 240 ||
-    parsed.width > 32_768 ||
-    parsed.height > 32_768 ||
-    !MODES.has(record.mode as WindowState["mode"])
-  ) {
+  const parsed = parseBounds(record.bounds, "bounds");
+  if (parsed.width < 320 || parsed.height < 240) {
     throw new AppError("bad_window_state", "window state values are invalid");
   }
-  return { bounds: parsed, mode: record.mode as WindowState["mode"] };
+  const state: LegacyWindowState = {
+    bounds: parsed,
+    mode: parseMode(record.mode),
+  };
+  if (record.displayWorkArea !== undefined) {
+    return {
+      ...state,
+      displayWorkArea: parseBounds(record.displayWorkArea, "displayWorkArea"),
+    };
+  }
+  return state;
 }
 
 export async function loadWindowState(
   path: string,
   onInvalid?: () => void | Promise<void>,
-): Promise<WindowState | null> {
+): Promise<RestorableWindowState | null> {
   let text: string;
   try {
     text = await readFile(path, "utf8");
@@ -117,9 +144,13 @@ export async function saveWindowState(
   path: string,
   value: WindowState,
 ): Promise<void> {
+  const parsed = parseWindowState({
+    formatVersion: WINDOW_STATE_FORMAT,
+    ...value,
+  });
   await writeAtomicJson(
     path,
-    { formatVersion: WINDOW_STATE_FORMAT, ...parseWindowState(value) },
+    { formatVersion: WINDOW_STATE_FORMAT, ...parsed },
     0o600,
   );
 }
@@ -148,27 +179,77 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function scaledSize(
+  bounds: WindowBounds,
+  savedArea: WindowBounds,
+  currentArea: WindowBounds,
+): Pick<WindowBounds, "width" | "height"> {
+  const requestedWidth = Math.round(bounds.width / savedArea.width * currentArea.width);
+  const requestedHeight = Math.round(bounds.height / savedArea.height * currentArea.height);
+  return {
+    width: Math.min(Math.max(800, requestedWidth), currentArea.width),
+    height: Math.min(Math.max(600, requestedHeight), currentArea.height),
+  };
+}
+
+function restoreBounds(
+  bounds: WindowBounds,
+  savedArea: WindowBounds,
+  currentArea: WindowBounds,
+): WindowBounds {
+  const size = scaledSize(bounds, savedArea, currentArea);
+  const savedHorizontalRange = savedArea.width - bounds.width;
+  const savedVerticalRange = savedArea.height - bounds.height;
+  const horizontalRatio = savedHorizontalRange > 0
+    ? clamp((bounds.x - savedArea.x) / savedHorizontalRange, 0, 1)
+    : 0;
+  const verticalRatio = savedVerticalRange > 0
+    ? clamp((bounds.y - savedArea.y) / savedVerticalRange, 0, 1)
+    : 0;
+  return {
+    x: currentArea.x + Math.round(
+      horizontalRatio * (currentArea.width - size.width),
+    ),
+    y: currentArea.y + Math.round(
+      verticalRatio * (currentArea.height - size.height),
+    ),
+    ...size,
+  };
+}
+
+function centeredBounds(
+  size: Pick<WindowBounds, "width" | "height">,
+  area: WindowBounds,
+): WindowBounds {
+  return {
+    x: Math.round(area.x + (area.width - size.width) / 2),
+    y: Math.round(area.y + (area.height - size.height) / 2),
+    ...size,
+  };
+}
+
 export function fitWindowStateToDisplays(
-  state: WindowState,
+  state: RestorableWindowState,
   workAreas: WindowBounds[],
   primaryWorkArea: WindowBounds,
 ): WindowState {
+  const savedArea = "displayWorkArea" in state
+    ? state.displayWorkArea
+    : null;
+  const reference = savedArea ?? state.bounds;
   const target = workAreas
-    .map((area) => ({ area, overlap: intersectionArea(state.bounds, area) }))
+    .map((area) => ({ area, overlap: intersectionArea(reference, area) }))
     .sort((a, b) => b.overlap - a.overlap)[0];
-  const area = target && target.overlap > 0 ? target.area : primaryWorkArea;
-  const width = Math.min(Math.max(800, state.bounds.width), area.width);
-  const height = Math.min(Math.max(600, state.bounds.height), area.height);
-  const hasVisibleIntersection = !!target && target.overlap > 0;
-  const x = hasVisibleIntersection
-    ? clamp(state.bounds.x, area.x, area.x + area.width - width)
-    : Math.round(area.x + (area.width - width) / 2);
-  const y = hasVisibleIntersection
-    ? clamp(state.bounds.y, area.y, area.y + area.height - height)
-    : Math.round(area.y + (area.height - height) / 2);
+  const hasTarget = !!target && target.overlap > 0;
+  const area = hasTarget ? target.area : primaryWorkArea;
+  const sourceArea = savedArea ?? area;
+  const bounds = hasTarget
+    ? restoreBounds(state.bounds, sourceArea, area)
+    : centeredBounds(scaledSize(state.bounds, sourceArea, area), area);
   return {
-    bounds: { x, y, width, height },
+    bounds,
     mode: state.mode,
+    displayWorkArea: area,
   };
 }
 
@@ -195,6 +276,7 @@ export function defaultWindowState(primaryWorkArea: WindowBounds): WindowState {
       height,
     },
     mode: "normal",
+    displayWorkArea: primaryWorkArea,
   };
 }
 

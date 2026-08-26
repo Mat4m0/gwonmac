@@ -295,6 +295,11 @@ The main process owns these native stores:
 - Single Account and profile-scoped saved-login items in Apple's Data
   Protection Keychain.
 
+Each game window stores its normal bounds, mode, and display work area in its
+window-state document. Restore keeps the window's relative size and position
+when display resolution, scaling, or usable space changes. A missing display
+falls back to the primary display. Restore never opens a window off-screen.
+
 Each game renderer owns one Guild Wars IDBFS mount under its isolated
 `gw://app` session. The mount contains game preferences, templates,
 screenshots, and chat logs. Two renderers do not mount the same browser store.

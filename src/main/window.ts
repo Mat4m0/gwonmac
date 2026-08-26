@@ -135,6 +135,10 @@ function primaryWorkArea(): WindowBounds {
   return { ...screen.getPrimaryDisplay().workArea };
 }
 
+function displayWorkAreaFor(bounds: WindowBounds): WindowBounds {
+  return { ...screen.getDisplayMatching(bounds).workArea };
+}
+
 export async function prepareWindowState(
   diagnosticOwnerId: number,
   statePath = gamePaths().windowState,
@@ -175,15 +179,15 @@ function currentWindowState(win: BrowserWindow, owner: WindowStateOwner): Window
   if (mode === "normal") {
     owner.lastNormalBounds = { ...win.getBounds() };
   }
+  const bounds = owner.lastNormalBounds ?? fitWindowStateToDisplays(
+    defaultWindowState(primaryWorkArea()),
+    workAreas(),
+    primaryWorkArea(),
+  ).bounds;
   return {
-    bounds:
-      owner.lastNormalBounds ??
-      fitWindowStateToDisplays(
-        defaultWindowState(primaryWorkArea()),
-        workAreas(),
-        primaryWorkArea(),
-      ).bounds,
+    bounds,
     mode,
+    displayWorkArea: displayWorkAreaFor(bounds),
   };
 }
 
@@ -274,7 +278,11 @@ export function resetWindowState(win: BrowserWindow): Promise<void> {
           });
         }
         win.setBounds(requested.bounds);
-        settled = { bounds: { ...win.getBounds() }, mode: "normal" };
+        settled = {
+          bounds: { ...win.getBounds() },
+          mode: "normal",
+          displayWorkArea: displayWorkAreaFor(win.getBounds()),
+        };
       }
       owner.restored = settled;
       owner.lastNormalBounds = settled.bounds;
