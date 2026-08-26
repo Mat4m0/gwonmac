@@ -26,6 +26,7 @@ named in the file that contains them.
 | [upstream-keyboard-labels.md](upstream-keyboard-labels.md) | Self-contained ArenaNet report and local investigation | Printable key labels render one character too high. Input remains correct. No local transform is justified. |
 | [client-internals.md](client-internals.md) | Exact-build reference | Template layouts, call sites, and costly Enhancement foundation measurements. |
 | [host-bridge.md](host-bridge.md) | Implemented workaround record | The template transform and renderer bridge fail closed and keep the official module canonical. |
+| [client-generation-ledger.md](client-generation-ledger.md) | Generation and evidence index | Records examined generations, exact content identities, outcomes, and durable/private evidence boundaries without granting runtime authority. |
 | [recertify.md](recertify.md) | Maintainer recovery procedure | First test whether the workaround can be deleted. Re-derive semantics when automated proof refuses. |
 | [investigation-log.md](investigation-log.md) | Wrong-turn archive | Real input shapes and live measurements resolved the template, cursor, modifier, and timer failures. |
 | [memory-exhaustion-log.md](memory-exhaustion-log.md) | Long-session memory evidence | The examined client has a 2 GiB WebAssembly maximum and can exhaust it during normal long runs. A larger maximum buys time but does not fix growth. |

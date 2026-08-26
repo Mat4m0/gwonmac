@@ -79,6 +79,12 @@ Complete this checklist:
 - [ ] The version stage matches Stable, Beta, or RC intent.
 - [ ] The release workflow's exact ArenaNet qualification is green. A recent
       scheduled canary is useful evidence but is not the release gate.
+- [ ] The current code generation matches the latest signed privacy-safe
+      `generation.json` record. Review its exact JS/WASM hashes, verifier ABI,
+      per-feature verdicts, transform digests, native double-click result, and
+      supported memory-profile results.
+- [ ] Any refused generation has a complete private investigation bundle whose
+      opaque reference is recorded on the canonical open refusal issue.
 - [ ] CI for the release commit is green.
 - [ ] Release notes use short player language. Internal refactors need no long
       explanation.
@@ -102,6 +108,12 @@ making the draft public. Any generation change stops the release.
 
 A dry run does not create a tag, draft release, public release, or attestation.
 It can create normal private GitHub Actions logs and artifacts.
+
+The scheduled recertification artifact is deliberately smaller than the
+private investigation bundle. It retains only privacy-safe `generation.json`
+and `carry-forward.md` for 90 days; its attestation and closed proved issue or
+open refusal issue provide the durable index. It never replaces the exact
+release qualification or human live QA.
 
 Treat a dry-run failure as a release blocker. Fix the cause and run it again.
 Do not change secrets or add another signing path to bypass the failure.
