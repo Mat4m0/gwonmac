@@ -149,6 +149,7 @@ export function createNativeTravelHost(
       if (current.status === "idle") return;
       if (arrived) {
         clearAttempt();
+        notice.value = null;
         return;
       }
       if (next.status === "waiting" && next.reason === "loading") {
@@ -175,10 +176,15 @@ export function createNativeTravelHost(
         return;
       }
       clearAttempt();
+      notice.value = {
+        message: "Guild Wars did not confirm arrival. Travel is ready to try again.",
+        level: "warning",
+      };
     },
     dispose() {
       historyObservation.dispose();
       clearAttempt();
+      notice.value = null;
     },
     traceSearch(query, resultMapIds) {
       if (!development) return;

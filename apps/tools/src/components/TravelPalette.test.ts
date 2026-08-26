@@ -76,6 +76,7 @@ function fixture(options: Readonly<{
   return {
     wrapper,
     host,
+    notice,
     state,
     travel,
     savePreferences,
@@ -374,6 +375,14 @@ describe("TravelPalette", () => {
   it("shows a rejected trip without leaking private host details", async () => {
     const rejected = fixture();
     await flushPromises();
+    await rejected.wrapper.get('[role="combobox"]').setValue("eotn");
+    await rejected.wrapper.get(".travel-palette").trigger("keydown", {
+      key: "9",
+      code: "Digit9",
+      metaKey: true,
+    });
+    await flushPromises();
+    expect(rejected.wrapper.text()).toContain("is now shortcut 9");
     rejected.travel.mockImplementationOnce(async () => {
       rejected.host.notice.value = {
         message: "Travel could not start. Check Guild Wars, then try again.",
@@ -387,9 +396,27 @@ describe("TravelPalette", () => {
     expect(rejected.wrapper.text()).toContain(
       "Travel could not start. Check Guild Wars, then try again.",
     );
+    expect(rejected.wrapper.text()).not.toContain("is now shortcut 9");
     expect(rejected.wrapper.emitted("close")).toBeUndefined();
     rejected.wrapper.unmount();
 
+  });
+
+  it("keeps a delayed host failure visible when Travel reopens", async () => {
+    const { wrapper, notice } = fixture();
+    await flushPromises();
+    await wrapper.setProps({ visible: false });
+
+    notice.value = {
+      message: "Guild Wars did not confirm arrival. Travel is ready to try again.",
+      level: "warning",
+    };
+    await wrapper.setProps({ visible: true });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("did not confirm arrival");
+    expect(wrapper.get(".travel-notice").attributes("data-level")).toBe("warning");
+    wrapper.unmount();
   });
 
   it("preserves the previous shortcut and explains a failed save", async () => {

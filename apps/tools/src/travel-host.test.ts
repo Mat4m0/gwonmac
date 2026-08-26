@@ -59,6 +59,7 @@ function fixture() {
   const command: TravelCommand = { travel: vi.fn(), unavailable: () => null };
   return {
     host: createNativeTravelHost(api, command),
+    command,
     setTravel,
     recordHistory,
     getHistory,
@@ -91,7 +92,36 @@ describe("native Travel host", () => {
     await vi.runAllTimersAsync();
 
     expect(host.attempt.value).toEqual({ status: "idle" });
-    expect(host.notice.value?.message).not.toContain("did not start");
+    expect(host.notice.value).toBeNull();
+  });
+
+  it("keeps delayed queued failure feedback until another attempt replaces it", async () => {
+    vi.useFakeTimers();
+    const { host } = fixture();
+
+    await host.travel({ mapId: 449 });
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(host.attempt.value).toEqual({ status: "idle" });
+    expect(host.notice.value).toMatchObject({ level: "warning" });
+    expect(host.notice.value?.message).toContain("did not start");
+
+    await host.travel({ mapId: 55 });
+    expect(host.notice.value).toMatchObject({ level: "info" });
+    expect(host.notice.value?.message).toContain("Travelling to");
+  });
+
+  it("publishes immediate refusal and clears command feedback on disposal", async () => {
+    const { host, command } = fixture();
+    vi.mocked(command.travel).mockImplementationOnce(() => {
+      throw new Error("private refusal");
+    });
+
+    await expect(host.travel({ mapId: 449 })).rejects.toThrow("private refusal");
+    expect(host.attempt.value).toEqual({ status: "idle" });
+    expect(host.notice.value).toMatchObject({ level: "danger" });
+
+    host.dispose();
+    expect(host.notice.value).toBeNull();
   });
 
   it("always releases a loading attempt after interruption or its arrival deadline", async () => {
@@ -101,6 +131,7 @@ describe("native Travel host", () => {
     interrupted.updateGameState({ status: "waiting", reason: "loading" });
     interrupted.updateGameState({ status: "waiting", reason: "game" });
     expect(interrupted.attempt.value).toEqual({ status: "idle" });
+    expect(interrupted.notice.value?.message).toContain("interrupted");
 
     const expired = fixture().host;
     await expired.travel({ mapId: 449 });
@@ -108,6 +139,23 @@ describe("native Travel host", () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(expired.attempt.value).toEqual({ status: "idle" });
     expect(expired.notice.value?.message).toContain("ready to try again");
+  });
+
+  it("reports an unconfirmed arrival when loading ends on another map", async () => {
+    vi.useFakeTimers();
+    const { host } = fixture();
+    await host.travel({ mapId: 449 });
+    host.updateGameState({ status: "waiting", reason: "loading" });
+
+    host.updateGameState({
+      status: "ready", mapId: 55, characterKey: null, unlockedMapWords: null,
+    });
+
+    expect(host.attempt.value).toEqual({ status: "idle" });
+    expect(host.notice.value).toMatchObject({ level: "warning" });
+    expect(host.notice.value?.message).toContain("did not confirm arrival");
+    await vi.runAllTimersAsync();
+    expect(host.notice.value?.message).toContain("did not confirm arrival");
   });
 
   it("records observed destinations independently for each character", async () => {

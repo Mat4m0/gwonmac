@@ -76,10 +76,16 @@ const recentDestinations = computed(() => props.host.history.value
   .filter((destination): destination is TravelDestination => destination !== null)
   .slice(0, TRAVEL_HISTORY_VISIBLE_LIMIT));
 const activeDestination = computed(() => results.value[active.value] ?? null);
-const statusText = computed(() => feedback.value || props.host.unavailable || "");
+const statusText = computed(() =>
+  feedback.value
+  || props.host.notice.value?.message
+  || props.host.unavailable
+  || ""
+);
 const statusLevel = computed(() => feedback.value
   ? feedbackLevel.value
-  : props.host.unavailable === null ? undefined : "warning"
+  : props.host.notice.value?.level
+    ?? (props.host.unavailable === null ? undefined : "warning")
 );
 const urgentNoticeVisible = computed(() => statusLevel.value === "warning" || statusLevel.value === "danger");
 
@@ -138,10 +144,6 @@ watch(() => props.visible, async (visible) => {
   input.value?.focus({ preventScroll: true });
 }, { immediate: true, flush: "post" });
 
-watch(() => props.host.notice.value, (notice) => {
-  if (!notice) return;
-  setFeedback(notice.message, notice.level);
-});
 async function selectMode(next: PaletteMode, focus: "search" | "settings" = "search"): Promise<void> {
   query.value = "";
   active.value = 0;
@@ -161,6 +163,7 @@ function toggleCustomize(): void {
 
 async function travel(request: TravelRequest): Promise<void> {
   if (travelPending.value || !isTravelRequest(request)) return;
+  feedback.value = "";
   try {
     await props.host.travel(request);
     emit("close");
