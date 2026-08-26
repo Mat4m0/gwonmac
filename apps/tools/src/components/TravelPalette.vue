@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import {
   TRAVEL_SEARCH_QUERY_LIMIT,
   TRAVEL_SHORTCUT_LIMIT,
@@ -47,7 +47,6 @@ const {
   pending: preferenceWritePending,
   disabled: preferenceControlsDisabled,
 } = travelPreferences;
-let closeTimer = 0;
 let visibilityLoad = 0;
 
 const hasQuery = computed(() => normaliseTravelTerm(query.value).length > 0);
@@ -143,12 +142,6 @@ watch(() => props.host.notice.value, (notice) => {
   if (!notice) return;
   setFeedback(notice.message, notice.level);
 });
-watch(() => props.host.attempt.value.status, (status) => {
-  if (status !== "loading") return;
-  window.clearTimeout(closeTimer);
-  closeTimer = window.setTimeout(() => emit("close"), 350);
-});
-
 async function selectMode(next: PaletteMode, focus: "search" | "settings" = "search"): Promise<void> {
   query.value = "";
   active.value = 0;
@@ -170,6 +163,7 @@ async function travel(request: TravelRequest): Promise<void> {
   if (travelPending.value || !isTravelRequest(request)) return;
   try {
     await props.host.travel(request);
+    emit("close");
   } catch { /* The host owns the refusal notice and resets its transaction. */ }
 }
 
@@ -356,7 +350,6 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
-onBeforeUnmount(() => window.clearTimeout(closeTimer));
 </script>
 
 <template>

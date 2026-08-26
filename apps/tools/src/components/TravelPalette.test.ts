@@ -146,6 +146,18 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
+  it("closes after submitting a destination", async () => {
+    const { wrapper } = fixture({ synonyms: [{ term: "daily run", mapId: 480 }] });
+    await flushPromises();
+
+    await wrapper.get("#travel-search-input").setValue("daily");
+    await wrapper.get('[role="option"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.emitted("close")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
   it("shows at most six per-character recents without repeating the current map", async () => {
     const { wrapper } = fixture({ history: [55, 449, 81, 194, 642, 857, 248, 15] });
     await flushPromises();
