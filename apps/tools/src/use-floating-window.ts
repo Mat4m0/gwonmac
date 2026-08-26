@@ -25,11 +25,14 @@ export function useFloatingWindow(options: {
   const panel = ref<HTMLElement | null>(null);
   const resizeGrip = ref<HTMLButtonElement | null>(null);
   const margin = options.viewportMargin ?? 0;
+  const storageKey = options.mode === "embedded"
+    ? options.placementStorageKey
+    : undefined;
   const viewport = () => ({ width: window.innerWidth, height: window.innerHeight, margin });
   let serialized: string | null = null;
-  if (options.mode === "embedded" && options.placementStorageKey) {
+  if (storageKey) {
     try {
-      serialized = window.localStorage.getItem(options.placementStorageKey);
+      serialized = window.localStorage.getItem(storageKey);
     } catch {
       // Browser storage refusal leaves the window at its ordinary default.
     }
@@ -108,11 +111,7 @@ export function useFloatingWindow(options: {
   let disposeResize: (() => void) | null = null;
   let persistTimer: ReturnType<typeof setTimeout> | null = null;
   const persistPlacement = () => {
-    if (
-      options.mode !== "embedded"
-      || !options.placementStorageKey
-      || !panel.value
-    ) return;
+    if (!storageKey || !panel.value) return;
     const value = serializeFloatingWindowPlacement({
       ...position.value,
       width: size.value?.width ?? panel.value.offsetWidth,
@@ -120,24 +119,25 @@ export function useFloatingWindow(options: {
     }, viewport());
     if (value === null) return;
     try {
-      window.localStorage.setItem(options.placementStorageKey, value);
+      window.localStorage.setItem(storageKey, value);
     } catch {
       // A UI preference must not make the surface unusable when storage fails.
     }
   };
   const schedulePersistence = () => {
-    if (!options.placementStorageKey || options.mode !== "embedded") return;
     if (persistTimer) clearTimeout(persistTimer);
     persistTimer = setTimeout(() => {
       persistTimer = null;
       persistPlacement();
     }, 150);
   };
-  watch(position, schedulePersistence);
-  watch(size, schedulePersistence);
+  if (storageKey) {
+    watch(position, schedulePersistence);
+    watch(size, schedulePersistence);
+  }
   onMounted(() => {
     window.addEventListener("resize", fitToViewport);
-    window.addEventListener("pagehide", persistPlacement);
+    if (storageKey) window.addEventListener("pagehide", persistPlacement);
     requestAnimationFrame(fitToViewport);
     if (options.mode !== "embedded" || !panel.value || !resizeGrip.value) return;
     disposeResize = installResizeGrip(resizeGrip.value, {
@@ -161,9 +161,11 @@ export function useFloatingWindow(options: {
   });
   onBeforeUnmount(() => {
     window.removeEventListener("resize", fitToViewport);
-    window.removeEventListener("pagehide", persistPlacement);
-    if (persistTimer) clearTimeout(persistTimer);
-    persistPlacement();
+    if (storageKey) {
+      window.removeEventListener("pagehide", persistPlacement);
+      if (persistTimer) clearTimeout(persistTimer);
+      persistPlacement();
+    }
     disposeResize?.();
   });
   watch(options.visible, (visible) => {

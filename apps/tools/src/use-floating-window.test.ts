@@ -80,10 +80,10 @@ describe("useFloatingWindow", () => {
       pointerId: 1,
     }));
     header.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1 }));
+    expect(localStorage.getItem(storageKey)).toBeNull();
     window.dispatchEvent(new PageTransitionEvent("pagehide"));
-    wrapper.unmount();
-
     expect(localStorage.getItem(storageKey)).not.toBeNull();
+    wrapper.unmount();
 
     const restored = mountWindow();
     expect(restored.get("section").attributes("style")).toContain("left: 200px");

@@ -47,7 +47,7 @@ export function restoreFloatingWindowPlacement(
     return null;
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const stored = value as Partial<StoredFloatingWindowPlacement>;
+  const stored = value as Record<string, unknown>;
   if (
     stored.formatVersion !== 1
     || !ratio(stored.left)
