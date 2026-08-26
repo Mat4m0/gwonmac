@@ -26,8 +26,12 @@ export const DEFAULT_TRAVEL_HISTORY: TravelHistoryDocument = Object.freeze({
   characters: Object.freeze({}) as Readonly<Record<TravelCharacterKey, TravelHistory>>,
 });
 
+export function isTravelCharacterKey(value: unknown): value is TravelCharacterKey {
+  return typeof value === "string" && CHARACTER_KEY_PATTERN.test(value);
+}
+
 export function travelCharacterKey(value: unknown): TravelCharacterKey {
-  if (typeof value !== "string" || !CHARACTER_KEY_PATTERN.test(value)) {
+  if (!isTravelCharacterKey(value)) {
     throw new TypeError("Travel character key is invalid");
   }
   return value as TravelCharacterKey;

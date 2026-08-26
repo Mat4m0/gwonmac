@@ -8,6 +8,8 @@ const ready = (sequence: number, mapId = 81) => Object.freeze({
   mapId,
   instanceType: 0,
   playRegion: "pve" as const,
+  characterKey: null,
+  unlockedMapWords: null,
 });
 
 test("play-region authority withdraws on staleness and requires a newer publication to recover", (context) => {

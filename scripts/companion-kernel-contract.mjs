@@ -38,7 +38,7 @@ export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  // Memory footprint 2209 bytes (0xa1 0x11 as LEB128). Documented moves:
+  // Memory footprint 2212 bytes (0xa4 0x11 as LEB128). Documented moves:
   //   309 ->  310  the Toolbox observer gained PARTY_OBSERVED, the byte that
   //                separates "you have no heroes" from "nobody read the party";
   //   310 ->  410  Layout grew by the 25 party-detail address words, at 4 bytes
@@ -84,10 +84,12 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   //   2201 -> 2209 Travel adds one character-key layout word and bounded
   //                play-region publication state; its larger record remains
   //                in host-owned memory outside this footprint.
+  //   2209 -> 2212 the Travel unlock observer moves beside its play-region
+  //                publisher, keeping feature-specific memory reads together.
   // This constant exists so a kernel whose footprint moves cannot ship without
   // someone saying why. One page is still the ceiling, and this remains far
   // under it.
-  0x01, 0x05, 0xa1, 0x11, 0x02, 0x00, 0x00,
+  0x01, 0x05, 0xa4, 0x11, 0x02, 0x00, 0x00,
 ]);
 
 const WASM_PAGE_BYTES = 65_536;

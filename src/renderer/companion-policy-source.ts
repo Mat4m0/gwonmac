@@ -28,9 +28,15 @@ type PolicyUpdate<Settings extends OptionalToolSettings> = Readonly<{
 }>;
 
 function projectPlayRegion(state: CompanionPlayRegionState): string {
-  return state.status === "ready"
-    ? `ready:${state.playRegion}:${state.mapId}:${state.instanceType}`
-    : `waiting:${state.reason}`;
+  if (state.status !== "ready") return `waiting:${state.reason}`;
+  return [
+    "ready",
+    state.playRegion,
+    state.mapId,
+    state.instanceType,
+    state.characterKey ?? "unknown-character",
+    state.unlockedMapWords?.join(",") ?? "unknown-unlocks",
+  ].join(":");
 }
 
 export function createCompanionPolicySource<Settings extends OptionalToolSettings>(

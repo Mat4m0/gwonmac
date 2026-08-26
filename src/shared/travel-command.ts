@@ -3,6 +3,10 @@
  * destination request and exposes availability; no generic UI message crosses.
  */
 import type { TravelRequest } from "./travel.js";
+import {
+  isTravelCharacterKey,
+  type TravelCharacterKey,
+} from "./travel-history.js";
 
 export const TRAVEL_WAITING_REASONS = [
   "game", "loading", "memory", "writing", "snapshot", "corrupt", "cursor", "stale",
@@ -13,8 +17,8 @@ export type TravelGameState =
   | Readonly<{
     status: "ready";
     mapId: number;
-    characterKey?: string | null;
-    unlockedMapWords?: readonly number[] | null;
+    characterKey: TravelCharacterKey | null;
+    unlockedMapWords: readonly number[] | null;
   }>;
 
 export const TRAVEL_UNLOCK_WORDS = 28;
@@ -39,10 +43,7 @@ export function travelGameState(value: unknown): TravelGameState {
       return Object.freeze({
         status: "ready",
         mapId: Number(input.mapId),
-        characterKey: typeof input.characterKey === "string"
-          && /^[0-9a-f]{16}$/u.test(input.characterKey)
-          ? input.characterKey
-          : null,
+        characterKey: isTravelCharacterKey(input.characterKey) ? input.characterKey : null,
         unlockedMapWords,
       });
     }
