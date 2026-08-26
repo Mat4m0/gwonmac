@@ -135,6 +135,28 @@ describe("native Travel host", () => {
     expect(getHistory).not.toHaveBeenCalled();
   });
 
+  it("records the unidentified starting map after the first confirmed travel", async () => {
+    const { host, recordHistory } = fixture();
+    const characterKey = travelCharacterKey("0123456789abcdef");
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0xffff_ffff);
+    host.updateGameState({
+      status: "ready", mapId: 55, characterKey: null, unlockedMapWords,
+    });
+
+    await host.travel({ mapId: 449 });
+    host.updateGameState({ status: "waiting", reason: "loading" });
+    host.updateGameState({
+      status: "ready", mapId: 449, characterKey, unlockedMapWords,
+    });
+
+    await vi.waitFor(() => expect(recordHistory).toHaveBeenCalledTimes(2));
+    expect(recordHistory.mock.calls.map(([value]) => value)).toEqual([
+      { characterKey, mapId: 55 },
+      { characterKey, mapId: 449 },
+    ]);
+    expect(host.history.value).toEqual([449, 55]);
+  });
+
   it("switches histories when characters share the same map and hides unidentified history", async () => {
     const { host, recordHistory } = fixture();
     const characterA = travelCharacterKey("0123456789abcdef");

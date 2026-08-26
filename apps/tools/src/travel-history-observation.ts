@@ -82,6 +82,9 @@ export function createTravelHistoryObservation(
 
   return Object.freeze({
     history,
+    record(next: Observation): void {
+      void synchronize(next).catch((error: unknown) => reportFailure(next, error));
+    },
     load(): Promise<TravelHistory> {
       const current = observation(state.value);
       if (current === null) return Promise.resolve(EMPTY_TRAVEL_HISTORY);
