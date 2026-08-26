@@ -6,10 +6,14 @@
  * values; the process-boundary module validates values received over IPC.
  */
 import {
+  intersectEnhancementCapabilities,
   type EnhancementCapability,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
-import type { KnownEnhancementBuild } from "./enhancement-builds.js";
+import {
+  supportedEnhancementCapabilities,
+  type KnownEnhancementBuild,
+} from "./enhancement-builds.js";
 import type { KnownTemplateSaveBuild } from "./template-save-compat.js";
 import {
   SEMANTIC_VERIFIER_ABI,
@@ -321,14 +325,21 @@ export function localFeatureVerdictsForBuild(
   failures: LocalFeatureFailures = Object.freeze({}),
 ): LocalFeatureVerdicts {
   const core = build === null ? null : enhancementProofCore(build);
-  const nativeCursor = core !== null && build?.cursorEvent !== undefined
+  const effective = build === null
+    ? null
+    : intersectEnhancementCapabilities(
+        requested,
+        supportedEnhancementCapabilities(build),
+      );
+  const nativeCursor = effective?.nativeCursor
+      && core !== null && build?.cursorEvent !== undefined
     ? Object.freeze({ core, cursorEvent: build.cursorEvent })
     : null;
-  const playRegionObservation = core !== null
+  const playRegionObservation = effective?.playRegionObservation && core !== null
       && build?.playRegionObservation !== undefined
     ? Object.freeze({ core, playRegionObservation: build.playRegionObservation })
     : null;
-  const targetObservation = core !== null
+  const targetObservation = effective?.targetObservation && core !== null
       && build?.observationBase !== undefined
       && build.targetObservation !== undefined
     ? Object.freeze({
@@ -337,7 +348,7 @@ export function localFeatureVerdictsForBuild(
         targetObservation: build.targetObservation,
       })
     : null;
-  const partyObservation = core !== null
+  const partyObservation = effective?.partyObservation && core !== null
       && build?.observationBase !== undefined
       && build.uiDispatcher !== undefined
       && build.partyObservation !== undefined
@@ -348,7 +359,7 @@ export function localFeatureVerdictsForBuild(
         partyObservation: build.partyObservation,
       })
     : null;
-  const teamApply = core !== null
+  const teamApply = effective?.teamApply && core !== null
       && build?.observationBase !== undefined
       && build.uiDispatcher !== undefined
       && build.partyObservation !== undefined
@@ -363,7 +374,7 @@ export function localFeatureVerdictsForBuild(
         teamApply: build.teamApply,
       })
     : null;
-  const travelAction = core !== null
+  const travelAction = effective?.travelAction && core !== null
       && build?.playRegionObservation !== undefined
       && build.uiDispatcher !== undefined
       && build.gameThread !== undefined
@@ -376,7 +387,7 @@ export function localFeatureVerdictsForBuild(
         travelAction: build.travelAction,
       })
     : null;
-  const xunlaiAction = core !== null
+  const xunlaiAction = effective?.xunlaiAction && core !== null
       && build?.observationBase !== undefined
       && build.uiDispatcher !== undefined
       && build.gameThread !== undefined
@@ -392,7 +403,7 @@ export function localFeatureVerdictsForBuild(
         }),
       })
     : null;
-  const chatAliases = core !== null
+  const chatAliases = effective?.chatAliases && core !== null
       && build?.uiDispatcher !== undefined
       && build.chatAliases !== undefined
     ? Object.freeze({
@@ -401,7 +412,7 @@ export function localFeatureVerdictsForBuild(
         chatAliases: build.chatAliases,
       })
     : null;
-  const skillSlotGeometry = core !== null
+  const skillSlotGeometry = effective?.skillSlotGeometry && core !== null
       && build?.playRegionObservation !== undefined
       && build.skillSlotGeometry !== undefined
     ? Object.freeze({
@@ -410,7 +421,7 @@ export function localFeatureVerdictsForBuild(
         skillSlotGeometry: build.skillSlotGeometry,
       })
     : null;
-  const skillCooldownObservation = core !== null
+  const skillCooldownObservation = effective?.skillCooldownObservation && core !== null
       && build?.playRegionObservation !== undefined
       && build.observationBase !== undefined
       && build.playerSkillbarObservation !== undefined
@@ -423,7 +434,8 @@ export function localFeatureVerdictsForBuild(
         skillCooldownObservation: build.skillCooldownObservation,
       })
     : null;
-  const preGameControls = core !== null && build?.preGameControls !== undefined
+  const preGameControls = effective?.preGameControls
+      && core !== null && build?.preGameControls !== undefined
     ? Object.freeze({ core, preGameControls: build.preGameControls })
     : null;
   return Object.freeze({

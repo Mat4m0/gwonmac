@@ -378,6 +378,34 @@ describe("local client verification boundary", () => {
     assert.equal(verdicts.targetObservation.status, "not-requested");
     assert.equal(verdicts.partyObservation.status, "not-requested");
   });
+
+  it("closes proved feature verdicts through the capability registry", () => {
+    const withoutPlayRegion = {
+      ...ENHANCEMENT,
+      outputSha256: { "features-01": "7".repeat(64) },
+    };
+    delete withoutPlayRegion.playRegionObservation;
+    const verification = verificationFor(withoutPlayRegion, ALL);
+
+    assert.equal(verification.featureVerdicts.nativeCursor.status, "proved");
+    for (const feature of [
+      "targetObservation",
+      "partyObservation",
+      "teamApply",
+      "travelAction",
+      "xunlaiAction",
+      "chatAliases",
+      "skillSlotGeometry",
+      "skillCooldownObservation",
+      "preGameControls",
+    ] as const) {
+      assert.equal(verification.featureVerdicts[feature].status, "changed", feature);
+    }
+    assert.equal(
+      isLocalClientVerification(verification, TEMPLATE.sha256, ALL),
+      true,
+    );
+  });
   it("accepts the verifier's complete baseline proof", () => {
     assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256, ALL), true);
   });

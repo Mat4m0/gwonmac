@@ -649,15 +649,13 @@ function isAutomaticSemanticBuild(
   if (
     Object.keys(build.outputSha256).length === 0
     || !Object.values(build.outputSha256).every(isDigest)
-    || (hasObservation && !hasPlayRegion)
-    || (hasTarget && (!hasPlayRegion || !hasObservation))
-    || (hasTravel && !hasPlayRegion)
-    || (hasXunlai && (!hasPlayRegion || !hasObservation))
-    || (hasPlayerSkillbar && (!hasPlayRegion || !hasObservation))
+    || (hasTarget && !hasObservation)
+    || (hasTravel && !hasObservation)
+    || (hasXunlai && !hasObservation)
+    || (hasPlayerSkillbar && !hasObservation)
     || (hasParty && (!hasObservation || !hasPlayerSkillbar
       || build.uiDispatcher === undefined))
-    || (hasSkillSlotGeometry && !hasPlayRegion)
-    || (hasSkillCooldown && (!hasPlayRegion || !hasObservation || !hasPlayerSkillbar))
+    || (hasSkillCooldown && (!hasObservation || !hasPlayerSkillbar))
     || (hasTeam && (!hasParty || build.gameThread === undefined))
     || ((hasTravel || hasXunlai) && build.gameThread === undefined)
     || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
