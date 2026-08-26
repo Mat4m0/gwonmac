@@ -183,7 +183,10 @@ For an input or Xunlai interaction failure, also open
 **Help → Diagnostics → Show Input Trace**. Clear it, then open Xunlai once,
 close the native storage window with Escape, click empty ground, hold both
 mouse buttons briefly, and interact with one merchant. Pause and copy the
-trace. Pointer rows name only `canvas`, `surface`, `text`, `secret`, or `other`.
+trace. The pause row names any physical canvas keys that remain held. A
+normalized release reports `released` when it found the matching held key and
+`missing` when it did not. Pointer rows name only `canvas`, `surface`, `text`,
+`secret`, or `other`.
 `canvas` proves the event reached Guild Wars; it does not prove the client
 accepted the world action. This distinction separates a hidden GWonMac surface
 from a stuck native game UI state without copying coordinates or UI text.

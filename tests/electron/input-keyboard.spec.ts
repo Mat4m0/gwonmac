@@ -635,6 +635,60 @@ test.describe("renderer keyboard input", () => {
     }
   });
 
+  test("ends canvas movement when Guild Wars opens a text proxy", async () => {
+    const fixture = await launchCachedClient("gw-chat-movement-release-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const canvas = document.getElementById("canvas");
+        if (!(canvas instanceof HTMLCanvasElement)) throw new Error("canvas is missing");
+        const testWindow = window as KeyboardInputWindow;
+        testWindow.__gameKeys = [];
+        for (const type of ["keydown", "keyup"] as const) {
+          canvas.addEventListener(type, (event) => {
+            testWindow.__gameKeys.push(`${event.type}:${event.code}`);
+          });
+        }
+        canvas.focus();
+      });
+
+      const cdp = await fixture.app.context().newCDPSession(page);
+      const sendKeyDown = (code: string, key: string, virtualKeyCode: number) =>
+        cdp.send("Input.dispatchKeyEvent", {
+          type: "keyDown",
+          key,
+          code,
+          windowsVirtualKeyCode: virtualKeyCode,
+          nativeVirtualKeyCode: virtualKeyCode,
+        });
+      await sendKeyDown("KeyA", "a", 65);
+      await sendKeyDown("KeyD", "d", 68);
+      await sendKeyDown("KeyX", "x", 88);
+
+      await page.evaluate(() => {
+        const text = document.getElementById("osk-input-text");
+        if (!(text instanceof HTMLInputElement)) throw new Error("text input is missing");
+        const gameModule = window.Module as OskModuleHost | undefined;
+        if (!gameModule) throw new Error("window.Module is not installed");
+        gameModule.oskActiveInput = text;
+        text.focus();
+      });
+
+      expect(await page.evaluate(() => (
+        window as KeyboardInputWindow
+      ).__gameKeys)).toEqual([
+        "keydown:KeyA",
+        "keydown:KeyD",
+        "keydown:KeyX",
+        "keyup:KeyA",
+        "keyup:KeyD",
+      ]);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("forgets a surface-claimed key after its Command-held release", async () => {
     const fixture = await launchCachedClient("gw-command-surface-release-e2e-");
     try {

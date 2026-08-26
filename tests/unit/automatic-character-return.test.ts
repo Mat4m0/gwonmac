@@ -43,6 +43,7 @@ test("transient loading cannot skip character selection", async () => {
 
   const input: GameInputController = {
     releaseAll() {},
+    traceState() {},
     cancelAutomaticEnter() {},
     setLoginProviderChooser() {},
     expectCharacterSelection() {},

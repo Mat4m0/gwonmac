@@ -1117,6 +1117,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   inputTrace = host.createInputTrace(
     document.body,
     (text) => native().clipboard.writeText(text),
+    () => inputHost?.traceState(),
   );
   gamepadTrace = host.installGamepadTrace(inputTrace);
   // Install before game input so a key claimed by the topmost GWonMac surface

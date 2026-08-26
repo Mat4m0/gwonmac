@@ -15,6 +15,7 @@
 #include <exception>
 #include <new>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace {
@@ -25,6 +26,9 @@ struct CommandKeyUpMonitor {
   napi_async_context async_context = nullptr;
   id token = nil;
   bool active = false;
+  bool commandHeld = false;
+  std::unordered_set<unsigned short> downKeys;
+  std::unordered_set<unsigned short> commandKeys;
 };
 
 CommandKeyUpMonitor *gCommandKeyUpMonitor = nullptr;
@@ -86,6 +90,34 @@ bool DispatchCommandKeyUp(CommandKeyUpMonitor *monitor, unsigned short keyCode) 
   return handled;
 }
 
+bool IsCommandOwnedKeyUp(CommandKeyUpMonitor *monitor, NSEvent *event,
+                         bool commandHeld) {
+  if (event.type == NSEventTypeFlagsChanged) {
+    if (commandHeld && !monitor->commandHeld) {
+      monitor->commandKeys.insert(monitor->downKeys.begin(),
+                                  monitor->downKeys.end());
+    }
+    monitor->commandHeld = commandHeld;
+    return false;
+  }
+  if (event.type == NSEventTypeKeyDown) {
+    if (!event.isARepeat) {
+      monitor->downKeys.insert(event.keyCode);
+      monitor->commandKeys.erase(event.keyCode);
+    }
+    if (commandHeld) {
+      monitor->commandKeys.insert(event.keyCode);
+    }
+    monitor->commandHeld = commandHeld;
+    return false;
+  }
+  monitor->downKeys.erase(event.keyCode);
+  const bool commandOwned =
+      commandHeld || monitor->commandKeys.erase(event.keyCode) != 0;
+  monitor->commandHeld = commandHeld;
+  return commandOwned;
+}
+
 napi_value StopCommandKeyUpsCallback(napi_env env, napi_callback_info info) {
   size_t argc = 0;
   void *data = nullptr;
@@ -142,15 +174,22 @@ napi_value MonitorCommandKeyUpsCallback(napi_env env, napi_callback_info info) {
   monitor->active = true;
   gCommandKeyUpMonitor = monitor;
   monitor->token = [NSEvent
-      addLocalMonitorForEventsMatchingMask:NSEventMaskKeyUp
+      addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown |
+                                            NSEventMaskKeyUp |
+                                            NSEventMaskFlagsChanged
                                   handler:^NSEvent *(NSEvent *event) {
     const NSEventModifierFlags modifiers =
         event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
-    if (!monitor->active ||
-        (modifiers & NSEventModifierFlagCommand) == 0) {
+    if (!monitor->active) {
       return event;
     }
-    return DispatchCommandKeyUp(monitor, event.keyCode) ? nil : event;
+    const bool commandHeld =
+        (modifiers & NSEventModifierFlagCommand) != 0;
+    if (!IsCommandOwnedKeyUp(monitor, event, commandHeld)) {
+      return event;
+    }
+    const bool handled = DispatchCommandKeyUp(monitor, event.keyCode);
+    return commandHeld && handled ? nil : event;
   }];
   if (monitor->token == nil) {
     StopCommandKeyUps(monitor);

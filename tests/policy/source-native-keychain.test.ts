@@ -31,9 +31,17 @@ test("the native boundary uses only ABI-stable Node-API", () => {
 
 test("Command-held releases use one app-local macOS monitor", () => {
   assert.match(source, /#import <AppKit\/AppKit\.h>/u);
-  assert.match(source, /addLocalMonitorForEventsMatchingMask:NSEventMaskKeyUp/u);
+  assert.match(source, /addLocalMonitorForEventsMatchingMask:/u);
+  assert.match(source, /NSEventMaskKeyUp/u);
+  assert.match(source, /NSEventMaskKeyDown/u);
+  assert.match(source, /NSEventMaskFlagsChanged/u);
   assert.match(source, /NSEventModifierFlagCommand/u);
-  assert.match(source, /DispatchCommandKeyUp\(monitor, event\.keyCode\) \? nil : event/u);
+  assert.match(source, /commandKeys\.insert\(monitor->downKeys\.begin\(\)/u);
+  assert.match(source, /const bool commandOwned =\s+commandHeld \|\|/u);
+  assert.match(
+    source,
+    /return commandHeld && handled \? nil : event/u,
+  );
   assert.doesNotMatch(source, /CGEventTap|IOHID|AXIsProcessTrusted/u);
 });
 
