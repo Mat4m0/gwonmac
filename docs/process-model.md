@@ -160,10 +160,19 @@ On macOS, AppKit consumes ordinary key-up events while Command remains down.
 The app-local native monitor forwards that physical key position to the focused
 game renderer. The renderer releases only the matching entry from its existing
 held-key map and clears that physical code from renderer-owned suppression.
+The monitor remembers each physical key that crosses a Command transition.
+It forwards that key's release even when the release no longer reports Command,
+without consuming the native event. If Chromium delivers the release too, the
+renderer lets it reach the client because key-up is idempotent.
 Bare Command transitions stay outside Guild Wars, which has no
 Command modifier, so pressing or releasing Command cannot interrupt another
 key that is still physically held. A real focus loss remains the final cleanup
 for interrupted input.
+
+When Guild Wars moves focus from the canvas into one of its hidden text proxies,
+the renderer releases canvas-owned W, A, S, and D at that boundary. This keeps
+movement state out of chat without changing later text input or releasing any
+other game key.
 
 Moving focus from the game canvas into a control in the same renderer does not
 blur Guild Wars. Settings, Tools, Travel, warnings, and game text fields remain

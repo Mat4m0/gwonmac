@@ -28,6 +28,13 @@ export type InputTraceInputType =
   | 'other'
   | 'none';
 export type InputTraceModifier = 'ctrl' | 'shift' | 'alt' | 'cmd';
+export type InputTraceKeyKind =
+  | 'movement'
+  | 'modifier'
+  | 'navigation'
+  | 'editing'
+  | 'printable'
+  | 'other';
 export type InputTraceEntry =
   | {
       source: 'appkit' | 'main';
@@ -46,6 +53,42 @@ export type InputTraceEntry =
       repeat: boolean;
       trusted: boolean;
       decision: 'observed' | 'held' | 'released' | 'suppressed' | 'command';
+    }
+  | {
+      source: 'renderer';
+      kind: 'normalized-release';
+      owner: 'canvas';
+      code: string;
+      key: InputTraceKeyKind;
+      released: true;
+    }
+  | {
+      source: 'renderer';
+      kind: 'normalized-release';
+      owner: Exclude<InputTraceOwner, 'canvas'>;
+      code?: never;
+      key: InputTraceKeyKind;
+      released: true;
+    }
+  | {
+      source: 'renderer';
+      kind: 'normalized-release';
+      owner?: never;
+      code?: never;
+      key: InputTraceKeyKind;
+      released: false;
+    }
+  | {
+      source: 'renderer';
+      kind: 'held-state';
+      owner: 'canvas';
+      code: string;
+    }
+  | {
+      source: 'renderer';
+      kind: 'held-state';
+      owner: Exclude<InputTraceOwner, 'canvas'> | 'none';
+      code?: never;
     }
   | {
       source: 'renderer';

@@ -2,6 +2,11 @@
  * Renderer-owned game input. The Emscripten host installs this once before its
  * glue loads; native interruptions all converge on releaseAll().
  */
+import {
+  dispatchHeldKeyRelease,
+  HeldKeys,
+  isMovementKey,
+} from './held-keys.js';
 
 // Canvases a held drag may wander from the one it started on. The client keeps
 // integrating mouse moves whose coordinates fall outside the canvas, so a drag
@@ -78,25 +83,6 @@ const physicalKey = (code: string, fallback: string): string => {
 };
 
 /**
- * What a trusted press recorded, so the synthetic release can restate it
- * exactly. `target` is the node the press reached, which is where its release
- * has to be dispatched.
- */
-type HeldKey = {
-  target: EventTarget | null;
-  key: string;
-  code: string;
-  location: number;
-  charCode: number;
-  keyCode: number;
-  which: number;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-  altKey: boolean;
-  metaKey: boolean;
-};
-
-/**
  * The same for a held mouse button. The coordinates and modifiers are updated
  * by every trusted mousemove, so a release lands where the pointer now is.
  */
@@ -169,7 +155,19 @@ export const installGameInput = ({
   clientCursorHidden,
   log,
 }: GameInputOptions): GameInputController => {
-  const heldKeys = new Map<string, HeldKey>();
+  const traceOwner = (target: EventTarget | null) => {
+    if (target === canvas) return 'canvas' as const;
+    if (textInputs.has(target)) {
+      return target instanceof HTMLInputElement &&
+        (target.type === 'password' || target.type === 'email')
+        ? 'secret' as const
+        : 'text' as const;
+    }
+    return target instanceof Element && target.closest('[data-gwonmac-surface]')
+      ? 'surface' as const
+      : 'other' as const;
+  };
+  const heldKeys = new HeldKeys(trace, traceOwner);
   const heldButtons = new Map<number, HeldButton>();
   const suppressedKeyUps = new Set<string>();
   let providerChooserVisible = false;
@@ -305,35 +303,6 @@ export const installGameInput = ({
     if (document.pointerLockElement === canvas) document.exitPointerLock();
   }
 
-  function dispatchKeyRelease(input: HeldKey) {
-    const release = new globalThis.KeyboardEvent('keyup', {
-      bubbles: true,
-      cancelable: true,
-      key: input.key,
-      code: input.code,
-      location: input.location,
-      ctrlKey: input.ctrlKey,
-      shiftKey: input.shiftKey,
-      altKey: input.altKey,
-      metaKey: input.metaKey,
-    });
-    // KeyboardEvent's legacy numeric fields are read-only constructor
-    // outputs. ArenaNet's Emscripten bridge still marshals them, so shadow
-    // the prototype getters with the exact values from the trusted press.
-    Object.defineProperties(release, {
-      charCode: { value: input.charCode },
-      keyCode: { value: input.keyCode },
-      which: { value: input.which },
-    });
-    input.target?.dispatchEvent(release);
-  }
-
-  function releaseKeys(matches: (code: string) => boolean = () => true) {
-    const inputs = [...heldKeys.entries()].filter(([code]) => matches(code));
-    for (const [code] of inputs) heldKeys.delete(code);
-    for (const [, input] of inputs) dispatchKeyRelease(input);
-  }
-
   function dispatchButtonRelease(input: HeldButton, buttons: number) {
     input.target?.dispatchEvent(new MouseEvent('mouseup', {
       bubbles: true,
@@ -372,7 +341,7 @@ export const installGameInput = ({
     try {
       resetWheel();
       cancelAutomaticEnter();
-      releaseKeys();
+      heldKeys.release();
       releaseButtons();
     } finally {
       releasing = false;
@@ -509,19 +478,6 @@ export const installGameInput = ({
     return Promise.resolve('sent');
   };
 
-  const traceOwner = (target: EventTarget | null) => {
-    if (target === canvas) return 'canvas' as const;
-    if (textInputs.has(target)) {
-      return target instanceof HTMLInputElement &&
-        (target.type === 'password' || target.type === 'email')
-        ? 'secret' as const
-        : 'text' as const;
-    }
-    return target instanceof Element && target.closest('[data-gwonmac-surface]')
-      ? 'surface' as const
-      : 'other' as const;
-  };
-
   const traceKey = (
     event: KeyboardEvent,
     phase: 'down' | 'up',
@@ -586,9 +542,9 @@ export const installGameInput = ({
       // hidden proxy forwards the native repeat to the canvas, but the game
       // ignores that keydown while the first press is still held. Restate the
       // missing release before each AppKit repeat. The physical key remains in
-      // heldKeys, so interruption cleanup and the final trusted keyup still
+      // the ledger, so interruption cleanup and the final trusted keyup still
       // release it normally. AppKit remains the only repeat clock.
-      if (REPEATED_ARROW_KEYS.has(key)) dispatchKeyRelease(held);
+      if (REPEATED_ARROW_KEYS.has(key)) dispatchHeldKeyRelease(held);
       traceKey(event, 'down', 'observed');
       return;
     }
@@ -596,7 +552,7 @@ export const installGameInput = ({
     if (modifier) trace?.record({
       source: 'renderer', kind: 'modifier', key: modifier, down: true,
     });
-    heldKeys.set(event.code, {
+    heldKeys.hold({
       target: event.target,
       key,
       code: event.code,
@@ -624,20 +580,19 @@ export const installGameInput = ({
       event.stopImmediatePropagation();
       return;
     }
-    const held = heldKeys.get(event.code);
+    const held = heldKeys.take(event.code);
     const key = clientKey(event, held?.key);
     const modifier = TRACED_MODIFIERS[key];
     if (modifier) trace?.record({
       source: 'renderer', kind: 'modifier', key: modifier, down: false,
     });
-    heldKeys.delete(event.code);
     traceKey(event, 'up', 'released');
     // A release landing on renderer UI (the Tools palette) never bubbles back
     // to the client's canvas listeners, so a press the canvas received would
     // stay held forever. Replay exactly those releases at the press target;
     // presses the UI itself received stay inside its event boundary.
     if (held && held.target === canvas && event.target !== canvas) {
-      dispatchKeyRelease(held);
+      dispatchHeldKeyRelease(held);
     }
   }, true);
   window.addEventListener('mousedown', (event) => {
@@ -703,11 +658,23 @@ export const installGameInput = ({
     }
   }, true);
 
+  // Guild Wars moves keyboard focus from the canvas into a hidden proxy when
+  // chat opens. A movement key released after that boundary may update the
+  // proxy without clearing the canvas state that started the movement. End
+  // only movement presses owned by the canvas at the boundary; subsequent
+  // W/A/S/D presses belong to the text field and type normally.
+  for (const input of textInputs) {
+    input?.addEventListener('focus', () => {
+      heldKeys.release((code, held) =>
+        held.target === canvas && isMovementKey(code));
+    });
+  }
+
   const releaseFor = (cause: 'blur' | 'hidden' | 'command' | 'pagehide') => () => {
     // Only the causes are named, not a new reason to release: every one of
     // these already released everything, and the trace exists to say which
     // native interruption ended a drag the player thought they still had.
-    if (heldKeys.size || heldButtons.size) {
+    if (heldKeys.hasInputs || heldButtons.size) {
       trace?.record({ source: 'renderer', kind: 'release-all', cause });
     }
     suppressedKeyUps.clear();
@@ -719,7 +686,7 @@ export const installGameInput = ({
   window.addEventListener('gw:input-release', (event) => {
     if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return;
     suppressedKeyUps.delete(event.detail);
-    releaseKeys((code) => code === event.detail);
+    heldKeys.releaseNormalized(event.detail);
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') releaseFor('hidden')();
@@ -935,6 +902,7 @@ export const installGameInput = ({
 
   return Object.freeze({
     releaseAll,
+    traceState: () => heldKeys.traceState(),
     cancelAutomaticEnter,
     setLoginProviderChooser(visible: boolean) {
       providerChooserVisible = visible;

@@ -63,6 +63,20 @@ const label = (record: InputTraceRecord): { text: string; tone: string } => {
           + `${record.repeat ? ' repeat' : ''}`
           + ` trusted=${record.trusted} → ${record.decision}`,
       };
+    case 'normalized-release':
+      return {
+        tone: record.released ? 'decision' : 'refused',
+        text: `${prefix} normalized ${record.key} release`
+          + `${record.owner ? ` ${record.owner}` : ''}`
+          + `${record.code ? ` ${record.code}` : ''}`
+          + ` → ${record.released ? 'released' : 'missing'}`,
+      };
+    case 'held-state':
+      return {
+        tone: record.owner === 'none' ? 'event' : 'refused',
+        text: `${prefix} held-state ${record.owner}`
+          + `${record.code ? ` ${record.code}` : ''}`,
+      };
     case 'text':
       return {
         tone: 'event',
@@ -103,6 +117,7 @@ const label = (record: InputTraceRecord): { text: string; tone: string } => {
 export function createInputTrace(
   parent: HTMLElement,
   writeText: (text: string) => Promise<void>,
+  snapshot: () => void = () => undefined,
 ): InputTrace {
   const style = document.createElement('style');
   style.textContent = OVERLAY_CSS;
@@ -207,11 +222,13 @@ export function createInputTrace(
   };
 
   pauseButton.addEventListener('click', () => {
+    if (!isPaused) snapshot();
     isPaused = !isPaused;
     pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
   });
   clearButton.addEventListener('click', clear);
   copyButton.addEventListener('click', () => {
+    snapshot();
     void writeText(inputTraceTranscript(entries)).then(
       () => { copyButton.textContent = 'Copied'; },
       () => { copyButton.textContent = 'Copy failed'; },

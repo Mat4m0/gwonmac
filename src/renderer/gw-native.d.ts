@@ -54,6 +54,7 @@ declare global {
 
   interface GameInputController {
     releaseAll(): void;
+    traceState(): void;
     cancelAutomaticEnter(): void;
     setLoginProviderChooser(visible: boolean): void;
     expectCharacterSelection(): void;

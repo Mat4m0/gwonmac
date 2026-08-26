@@ -6,6 +6,10 @@ import {
 import { closeOffline, launchCachedClient } from "./fixtures.mjs";
 import { boxOf, startGameInput } from "./input-helpers.js";
 
+type OskModuleHost = NonNullable<Window["Module"]> & {
+  oskActiveInput?: EventTarget | null;
+};
+
 /**
  * The trace is the instrument a bug report is built from, so what it must be
  * proved to do is: cost nothing until it is switched on, name the decision
@@ -49,6 +53,74 @@ const announceLock = (page: import("@playwright/test").Page, locked: boolean) =>
   }, locked);
 
 test.describe("input trace", () => {
+  test("keeps a real release after a normalized text-to-canvas release", async () => {
+    const fixture = await launchCachedClient("gw-input-trace-held-keys-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await toggleTrace(page);
+      await page.evaluate(() => {
+        const text = document.getElementById("osk-input-text");
+        if (!(text instanceof HTMLInputElement)) throw new Error("text input is missing");
+        const gameModule = window.Module as OskModuleHost | undefined;
+        if (!gameModule) throw new Error("window.Module is not installed");
+        gameModule.oskActiveInput = text;
+        text.focus();
+      });
+
+      const cdp = await fixture.app.context().newCDPSession(page);
+      const keyDown = () => cdp.send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "w",
+        code: "KeyW",
+        windowsVirtualKeyCode: 87,
+        nativeVirtualKeyCode: 87,
+        modifiers: 4,
+      });
+
+      await keyDown();
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:input-release", { detail: "KeyW" }),
+      ));
+      await page.evaluate(() => {
+        const canvas = document.getElementById("canvas");
+        if (!(canvas instanceof HTMLCanvasElement)) throw new Error("canvas is missing");
+        const gameModule = window.Module as OskModuleHost | undefined;
+        if (!gameModule) throw new Error("window.Module is not installed");
+        gameModule.oskActiveInput = null;
+        canvas.focus();
+      });
+      await cdp.send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "w",
+        code: "KeyW",
+        windowsVirtualKeyCode: 87,
+        nativeVirtualKeyCode: 87,
+        modifiers: 0,
+      });
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:input-release", { detail: "KeyW" }),
+      ));
+      await expectTrace(page).toContain(
+        "normalized movement release text → released",
+      );
+      await expectTrace(page).toContain(
+        "normalized movement release → missing",
+      );
+      await expectTrace(page).toContain(
+        "key up canvas KeyW trusted=true → released",
+      );
+
+      await keyDown();
+      await page.locator('#input-trace [data-role="pause"]').evaluate((button) => {
+        (button as HTMLButtonElement).click();
+      });
+      await expectTrace(page).toContain("held-state canvas KeyW");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("stays dormant, names double-click decisions, and copies no coordinates", async () => {
     const fixture = await launchCachedClient("gw-input-trace-on-");
     try {

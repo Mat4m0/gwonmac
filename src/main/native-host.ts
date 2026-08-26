@@ -11,9 +11,9 @@ import { unpackedPath, type BundleLayout } from "./core/paths.js";
 
 export interface NativeHost extends NativeKeychain {
   /**
-   * Observe app-local key releases that AppKit consumes while Command stays
-   * down. Returning true consumes that native release after the renderer owns
-   * its replacement.
+   * Observe app-local key releases owned by a Command chord. Returning true
+   * consumes that release only while Command remains down, after the renderer
+   * owns its replacement.
    */
   monitorCommandKeyUps(handler: (keyCode: number) => boolean): () => void;
 }

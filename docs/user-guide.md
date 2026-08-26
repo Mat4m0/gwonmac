@@ -416,10 +416,12 @@ opens its GitHub issue form immediately. GitHub issues are public.
 - Use **Show Input Trace** for keyboard, text, pointer, shortcut, or gamepad
   problems. Drag its header to move it away from the Guild Wars control you
   need to test. Reproduce the problem, pause the bounded timeline, then copy
-  it into the issue. It omits text, secrets, field lengths, coordinates, account
-  identifiers, and controller identifiers. Pointer rows say only whether the
-  click belonged to the game canvas, a GWonMac surface, a text or secret field,
-  or another element. Closing it discards the trace.
+  it into the issue. Pausing records which physical game-canvas keys remain
+  held. A normalized release says whether the renderer released its matching
+  key or found no held key. The trace omits text, secrets, field lengths,
+  coordinates, account identifiers, and controller identifiers. Pointer rows
+  say only whether the click belonged to the game canvas, a GWonMac surface, a
+  text or secret field, or another element. Closing it discards the trace.
 - Use **Copy Reload Trace** after a reload or failed automatic return. It joins
   Command-Q, the quit/reload dialog, reload, login, character selection, and
   reconnect timing for this game window without copying account or UI text.
