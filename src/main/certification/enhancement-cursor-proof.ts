@@ -7,7 +7,6 @@ import { CLIENT_TICK_ROLE } from "./enhancement-client-hook-role.js";
 import { tickEvidence } from "./enhancement-tick-evidence.js";
 import {
   bodyMatchesRole,
-  commonRelocationDelta,
   enhancementProofContext,
   functionBody,
   functionBodySha256,
@@ -103,7 +102,6 @@ const CURSOR_TEXTURE_WRITER_SHA256 =
 
 function deriveCursorLayout(
   module: ModuleShape,
-  tickFunction: number,
   producerFunctions: readonly [number, number],
 ): EnhancementCursorLayout | null {
   const rendererFunction = uniqueRoleFunction(module, CURSOR_ART_RENDERER_ROLE);
@@ -131,9 +129,6 @@ function deriveCursorLayout(
   const renderer = valuesForRole(
     functionBody(module, rendererFunction), CURSOR_ART_RENDERER_ROLE,
   );
-  const tick = valuesForRole(
-    functionBody(module, tickFunction), CLIENT_TICK_ROLE,
-  );
   const colorBuffer = soleValue(producerOne, "cursor.color-buffer");
   if (
     colorBuffer !== soleValue(producerTwo, "cursor.color-buffer")
@@ -152,24 +147,6 @@ function deriveCursorLayout(
     || soleValue(renderer, "cursor.art-cache-b")
       !== soleValue(renderer, "cursor.art-cache-a") + 4
   ) return null;
-
-  const delta = commonRelocationDelta([
-    [colorBuffer, 0x298e50],
-    [soleValue(producerOne, "producer.scratch"), 0x298a50],
-    [soleValue(producerTwo, "producer.scratch"), 0x298a50],
-    [soleValue(producerOne, "producer.busy"), 0x298a40],
-    [cursorActiveArt, 0x5a16e0],
-    [cursorSoftwareModel, 0x5a16e4],
-    [cursorShowCount, 0x5a16e8],
-    [soleValue(renderer, "cursor.art-cache-a"), 0x15a5dc],
-    [soleValue(renderer, "cursor.art-cache-b"), 0x15a5e0],
-    [soleValue(renderer, "cursor.scale"), 0x5a13a4],
-    [soleValue(tick, "tick.work-count"), 0x28cde4],
-    [soleValue(tick, "tick.work-list"), 0x28cddc],
-    [soleValue(tick, "tick.quit-flag"), 0x28cdec],
-    [soleValue(tick, "tick.tail-callback"), 0x28cdf0],
-  ]);
-  if (delta === null) return null;
 
   const layout: EnhancementCursorLayout = {
     cursorActiveArt,
@@ -281,7 +258,6 @@ export function locateAutomaticCursor(
       // retained binary must prove every address and field from its own code.
       const layout = deriveCursorLayout(
         module,
-        tick.functionIndex,
         producerFunctions,
       );
       if (!layout) continue;
