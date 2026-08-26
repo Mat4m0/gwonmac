@@ -115,7 +115,7 @@ const entryFor = (
   callbackParams: [],
   callbackResults: ["i32"],
   callbackBodySha256: sha256(body),
-  callbackFingerprint: sha256(body),
+  routeSemanticSha256: "fixture",
   // After the locals declaration and `i32.const 7; drop`, which is where the
   // record store goes in the real callback: before the enqueue and after the
   // fields it fills.
@@ -151,18 +151,10 @@ test("appends one exported mutable global and writes it into the record", () => 
   );
 });
 
-test("locates an unchanged callback without a predecessor hash", () => {
+test("refuses callback-only evidence without the downstream route", () => {
   const { bytes, body } = buildModule();
   const baseline = entryFor(body);
-  const located = deriveNativeDoubleClickBuild(bytes, [baseline]);
-  assert.ok(located);
-  assert.equal(located.callbackFunctionIndex, baseline.callbackFunctionIndex);
-  assert.equal(located.callbackTableSlot, baseline.callbackTableSlot);
-  assert.match(located.derivations[sha256(bytes)] ?? "", /^[0-9a-f]{64}$/);
-  assert.equal(
-    isDerivedNativeDoubleClickBuild(located, sha256(bytes), [baseline]),
-    true,
-  );
+  assert.equal(deriveNativeDoubleClickBuild(bytes, [baseline]), null);
   assert.equal(deriveNativeDoubleClickBuild(bytes, [baseline, baseline]), null);
 });
 
@@ -183,9 +175,13 @@ test("refuses malformed input and ambiguous callback candidates", () => {
 test("rejects malformed or over-broad isolated verifier records", () => {
   const { bytes, body } = buildModule();
   const inputSha256 = sha256(bytes);
-  const baseline = entryFor(body);
-  const located = deriveNativeDoubleClickBuild(bytes, [baseline]);
-  assert.ok(located);
+  const baseline = entryFor(body, {
+    routeSemanticSha256: NATIVE_DOUBLE_CLICK_BUILDS[0]!.routeSemanticSha256,
+  });
+  const located: NativeDoubleClickBuild = {
+    ...baseline,
+    derivations: { [inputSha256]: sha256(rewriteWithBuild(bytes, baseline)) },
+  };
   assert.equal(isDerivedNativeDoubleClickBuild(located, inputSha256, [baseline]), true);
   assert.equal(isDerivedNativeDoubleClickBuild({
     ...located,
@@ -277,15 +273,13 @@ test("refuses a module that already carries the flag export", () => {
   );
 });
 
-test("the shipped baseline owns the complete route without predecessor pairs", () => {
+test("the shipped baseline states semantic offsets without predecessor products", () => {
   assert.equal(NATIVE_DOUBLE_CLICK_BUILDS.length, 1);
   for (const build of NATIVE_DOUBLE_CLICK_BUILDS) {
     assert.match(build.callbackBodySha256, /^[0-9a-f]{64}$/);
-    assert.deepEqual(build.derivations, {});
-    assert.ok(build.route);
-    for (const role of Object.values(build.route)) {
-      assert.match(role.bodySha256, /^[0-9a-f]{64}$/);
-    }
+    const pairs = Object.entries(build.derivations);
+    assert.deepEqual(pairs, []);
+    assert.match(build.routeSemanticSha256, /^[0-9a-f]{64}$/);
     assert.ok(build.flagStoreOffset > 0);
     // The record base sits eight bytes above the frame pointer and the flag is
     // the fifth word of the record, so the store lands at frame+24. A different

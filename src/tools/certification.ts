@@ -35,17 +35,12 @@ import {
 import { transformEnhancementWasm } from "../main/certification/enhancement-transform.js";
 import {
   deriveNativeDoubleClickBuild,
-  rewriteWithBuild,
 } from "../main/certification/native-double-click.js";
 import { preparePostTemplateSaveModule } from "../main/certification/template-save-verifier.js";
 import {
   isLocalClientVerification,
   verifyLocalClientBytes,
 } from "../main/certification/local-client-verifier.js";
-import {
-  findTemplateSaveBuild,
-  rewriteTemplateSaveWasm,
-} from "../main/certification/template-save-compat.js";
 import {
   ENHANCEMENT_CAPABILITY_PRESETS,
   ENHANCEMENT_CAPABILITY_FIELDS,
@@ -80,7 +75,7 @@ const USAGE =
   + "  template [PATH/Gw.jspi.wasm] [--emit-ts] [--write] [--expect-certified]\n"
   + "                                       re-derive the template-save build entry\n"
   + "  transform INPUT.wasm OUTPUT.wasm     write the derived Enhancement module\n"
-  + "  double-click [PATH/Gw.jspi.wasm]     re-derive the native double-click table\n";
+  + "  double-click [PATH/Gw.jspi.wasm]     prove the native double-click route\n";
 
 /**
  * The one fixed profile the command line emits. The other certified profiles
@@ -320,14 +315,9 @@ async function transform(argv: readonly string[]): Promise<void> {
 }
 
 /**
- * Re-derives the native double-click table by running the whole chain from the
- * official bytes: template-save, then each certified Enhancement profile, then
- * this transform against every one of those outputs.
- *
- * It reads nothing from the shipped table except the structural entry — the
- * callback's slot, index, body hash and offsets — so a disagreement between
- * what it prints and what is checked in is a real change in the client rather
- * than a restatement of the constant being checked.
+ * Proves the native double-click route against each output of the whole chain.
+ * Each result is one exact input/output transaction; there is no Cartesian
+ * predecessor table to update when an unrelated capability profile changes.
  */
 async function doubleClick(argv: readonly string[]): Promise<void> {
   const [filename] = positionalArguments(argv);
@@ -335,11 +325,9 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
     await readFile(filename ?? installedClientArtifact()),
   );
   const officialSha256 = createHash("sha256").update(official).digest("hex");
-  const templateBuild = findTemplateSaveBuild(officialSha256);
-  if (!templateBuild) {
-    throw new Error(`unsupported official WASM hash ${officialSha256}`);
-  }
-  const templateSave = rewriteTemplateSaveWasm(official, templateBuild);
+  const preparedTemplate = preparePostTemplateSaveModule(official);
+  if (!preparedTemplate) throw new Error("template-save semantic proof failed");
+  const templateSave = preparedTemplate.bytes;
   const predecessors: Array<[string, Uint8Array]> = [
     ["template-save", templateSave],
   ];
@@ -356,26 +344,28 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
       ]);
     }
   }
-  const derivations: Record<string, string> = {};
+  const chains: Array<{
+    profile: string;
+    inputSha256: string;
+    outputSha256: string;
+  }> = [];
   let completeRouteProved = true;
-  for (const [, bytes] of predecessors) {
-    const input = createHash("sha256").update(bytes).digest("hex");
+  for (const [profile, bytes] of predecessors) {
+    const inputSha256 = createHash("sha256").update(bytes).digest("hex");
     const build = deriveNativeDoubleClickBuild(bytes);
-    if (!build?.route) {
+    const outputSha256 = build?.derivations[inputSha256];
+    if (!outputSha256) {
       completeRouteProved = false;
       continue;
     }
-    derivations[input] = createHash("sha256")
-      .update(rewriteWithBuild(bytes, build))
-      .digest("hex");
+    chains.push({ profile, inputSha256, outputSha256 });
   }
   process.stdout.write(`${JSON.stringify({
     officialSha256,
-    predecessors: predecessors.map(([name]) => name),
-    derivations,
+    chains,
     completeRouteProved,
   }, null, 2)}\n`);
-  if (!completeRouteProved || Object.keys(derivations).length !== predecessors.length) {
+  if (!completeRouteProved || chains.length !== predecessors.length) {
     process.stderr.write(
       "certification double-click: complete native input route did not prove\n",
     );
