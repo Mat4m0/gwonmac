@@ -667,7 +667,7 @@ function deriveEnhancementBuild(
   }
   const observationLayout = includeTarget
     ? locatedTarget.observationLayout
-    : includeParty || includeXunlai
+    : includeParty || includeTravel || includeXunlai
       ? locatedLocal!.observationLayout!
       : skillbar.includeCooldown
         ? skillbar.cooldownObservationLayout

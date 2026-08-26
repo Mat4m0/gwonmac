@@ -8,7 +8,6 @@ import { CLIENT_TICK_ROLE } from "./enhancement-client-hook-role.js";
 import {
   bodyMatchesRole,
   codeOperandOccurrences,
-  commonRelocationDelta,
   enhancementProofContext,
   functionBody,
   functionBodySha256,
@@ -55,10 +54,18 @@ const TARGET_CONTEXT_ROOT_ROLE = semanticRole(
 
 const TARGET_SELECTOR_ROLE = semanticRole(
   726,
-  "b288186a735fa6f304715f330643f3cd71d0520579ee2dbfd559313c9dba148b",
+  "a6bc6ed7f164a3cccbb9cc851d32b281a466125053792e0a20389d6cf2b9dc1b",
   Object.freeze([
     { start: 38, end: 43, role: "target.assert-manual", addressClass: "immutable-data" },
+    { start: 44, end: 49, role: "target.assert-file", addressClass: "immutable-data" },
     { start: 77, end: 82, role: "target.assert-automatic", addressClass: "immutable-data" },
+    { start: 83, end: 88, role: "target.assert-file", addressClass: "immutable-data" },
+    ...[214, 266, 528, 580].map((start) => ({
+      start, end: start + 5, role: "target.message", addressClass: "immutable-data" as const,
+    })),
+    ...[220, 272, 534, 586].map((start) => ({
+      start, end: start + 5, role: "target.assert-file", addressClass: "immutable-data" as const,
+    })),
     ...mutableSpans([
       [111, 116, "target.related-0"],
       [132, 137, "target.manual"], [147, 152, "target.automatic"],
@@ -92,13 +99,17 @@ const TARGET_RESET_ROLE = semanticRole(
 
 const TARGET_CALLER_ROLE = semanticRole(
   214,
-  "7d1f1ffe2fe47663ddf06a6ad4940dd26fcb64958578b9f7027c20facfefd25e",
-  mutableSpans([
-    [9, 14, "target.automatic"], [23, 28, "target.manual"],
-    [40, 45, "target.manual"], [60, 65, "target.manual"],
-    [76, 81, "target.automatic"], [93, 98, "target.automatic"],
-    [111, 116, "target.related-3"], [136, 141, "target.related-3"],
-    [198, 203, "target.related-3"],
+  "e3e9e34cfb66d34f16319b1b2bd78918df2589a7b6d0428991f6b85fce1d75e5",
+  Object.freeze([
+    ...mutableSpans([
+      [9, 14, "target.automatic"], [23, 28, "target.manual"],
+      [40, 45, "target.manual"], [60, 65, "target.manual"],
+      [76, 81, "target.automatic"], [93, 98, "target.automatic"],
+      [111, 116, "target.related-3"], [136, 141, "target.related-3"],
+      [198, 203, "target.related-3"],
+    ]),
+    { start: 161, end: 166, role: "target.message", addressClass: "immutable-data" },
+    { start: 167, end: 172, role: "target.assert-file", addressClass: "immutable-data" },
   ]),
   ["i32"],
   [],
@@ -213,6 +224,8 @@ const TARGET_IMMUTABLE_HASHES = Object.freeze({
   manualAssertion: "d78c3ee557d2b4d2c335ea85a1c6e7088d894236e0225360d92942da98c54b7d",
   automaticAssertion: "ee8a8e207854674610e42099c03590270b556c9cd482de0bfca76959939d74c6",
   areaAssertion: "bbba85bc88debef8198061f3c1c86cf0c7051c7cb0752f8ca670bcace10d03fe",
+  assertionFile: "0f8d017301e3b92b3d23377d064d8550cec12abd8ea16c1a0c5d588f0868a957",
+  targetMessage: "a68e6c1f3f95630025c0436d3cd10923c341215659fd4f76ff3a54a8158ae618",
 });
 
 function uniqueCString(
@@ -255,6 +268,10 @@ function areaLookup(
       : [{ functionIndex, certificate: AREA_TABLE_CERTIFICATES[index]! }];
   });
   return matches.length === 1 ? matches[0]! : null;
+}
+
+export function deriveAreaLookupFunction(module: ModuleShape): number | null {
+  return areaLookup(module)?.functionIndex ?? null;
 }
 
 export type TargetRoleCandidateDiagnostic = Readonly<{
@@ -502,10 +519,6 @@ export function deriveObservationLayout(
     lifecycleMatches.length !== 1 || agentArraySize !== agentArray + 8
     || codeOperandOccurrences(module, agentArray) !== 41
     || codeOperandOccurrences(module, agentArraySize) !== 41
-    || commonRelocationDelta([
-      [playRegion.contextRoot, 0x5a0ee0], [agentArray, 0x5a4e58],
-      [agentArraySize, 0x5a4e60], [playRegion.areaInfo, 0x1cc630],
-    ]) === null
   ) return null;
   const agentFields = functionBody(module, agentFieldsFunction);
   const agentModel = functionBody(module, agentModelFunction);
@@ -599,6 +612,14 @@ function deriveTargetLayout(
       !== TARGET_IMMUTABLE_HASHES.manualAssertion
     || staticCStringHash(module, soleValue(selectorImmutable, "target.assert-automatic"))
       !== TARGET_IMMUTABLE_HASHES.automaticAssertion
+    || staticCStringHash(module, soleValue(selectorImmutable, "target.assert-file"))
+      !== TARGET_IMMUTABLE_HASHES.assertionFile
+    || staticCStringHash(module, soleValue(selectorImmutable, "target.message"))
+      !== TARGET_IMMUTABLE_HASHES.targetMessage
+    || soleValue(caller, "target.assert-file")
+      !== soleValue(selectorImmutable, "target.assert-file")
+    || soleValue(caller, "target.message")
+      !== soleValue(selectorImmutable, "target.message")
   ) return null;
   const target = verifyLayout({ manualTargetAgentId, automaticTargetAgentId }, {
     manualTargetAgentId: { sourceRole: "target selector+reset+caller", expression: "manual target static", occurrences: [132, 312, 636, 7, 23, 40, 60] },
