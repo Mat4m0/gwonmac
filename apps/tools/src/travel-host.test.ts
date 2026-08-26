@@ -28,14 +28,33 @@ function fixture() {
     expect(expected).toEqual(travel);
     return save(patch);
   });
+  const histories = new Map<string, readonly number[]>();
+  const recordHistory = vi.fn(async ({ characterKey, mapId }: {
+    characterKey: string; mapId: number;
+  }) => {
+    const current = histories.get(characterKey) ?? [];
+    const next = [mapId, ...current.filter((candidate) => candidate !== mapId)].slice(0, 10);
+    histories.set(characterKey, next);
+    return next;
+  });
   const api = {
     travelPreferences: {
       async get() { return travel; },
       set: setTravel,
     },
+    travelHistory: {
+      async get({ characterKey }: { characterKey: string }) {
+        return histories.get(characterKey) ?? [];
+      },
+      record: recordHistory,
+      async clear({ characterKey }: { characterKey: string }) {
+        histories.delete(characterKey);
+        return [];
+      },
+    },
   } as unknown as GwNativeApi;
   const command: TravelCommand = { travel: vi.fn(), unavailable: () => null };
-  return { host: createNativeTravelHost(api, command), setTravel };
+  return { host: createNativeTravelHost(api, command), setTravel, recordHistory };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -76,5 +95,27 @@ describe("native Travel host", () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(expired.attempt.value).toEqual({ status: "idle" });
     expect(expired.notice.value?.message).toContain("ready to try again");
+  });
+
+  it("records observed destinations independently for each character", async () => {
+    const { host, recordHistory } = fixture();
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0xffff_ffff);
+    host.updateGameState({
+      status: "ready", mapId: 55, characterKey: "0123456789abcdef", unlockedMapWords,
+    });
+    host.updateGameState({
+      status: "ready", mapId: 449, characterKey: "0123456789abcdef", unlockedMapWords,
+    });
+    host.updateGameState({
+      status: "ready", mapId: 81, characterKey: "fedcba9876543210", unlockedMapWords,
+    });
+
+    await vi.waitFor(() => expect(recordHistory).toHaveBeenCalledTimes(3));
+    expect(recordHistory.mock.calls.map(([value]) => value)).toEqual([
+      { characterKey: "0123456789abcdef", mapId: 55 },
+      { characterKey: "0123456789abcdef", mapId: 449 },
+      { characterKey: "fedcba9876543210", mapId: 81 },
+    ]);
+    expect(host.history.value).toEqual([81]);
   });
 });

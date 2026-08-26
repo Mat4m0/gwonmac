@@ -8,7 +8,8 @@ export const COMPANION_PLAY_REGION_ABI = COMPANION_ABI.playRegion.abi;
 export const COMPANION_PLAY_REGION_BYTES = COMPANION_ABI.playRegion.bytes;
 
 const MAGIC = 0x5250_5747;
-const FLAGS = Object.freeze({ ready: 1, loading: 2 });
+const FLAGS = Object.freeze({ ready: 1, loading: 2, character: 4, unlocks: 8 });
+const UNLOCK_WORDS = COMPANION_ABI.travelUnlockWords;
 
 export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
   if (
@@ -30,6 +31,12 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
   const mapId = view.getUint32(16, true);
   const instanceType = view.getUint32(20, true);
   const encodedRegion = view.getUint32(24, true);
+  const characterLow = view.getUint32(28, true);
+  const characterHigh = view.getUint32(32, true);
+  const unlockedMapWords = Object.freeze(Array.from(
+    { length: UNLOCK_WORDS },
+    (_, index) => view.getUint32(36 + index * 4, true),
+  ));
   const secondSequence = view.getUint32(8, true);
   if (
     magic !== MAGIC
@@ -37,17 +44,22 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
     || bytes !== COMPANION_PLAY_REGION_BYTES
     || firstSequence !== secondSequence
     || (secondSequence & 1) !== 0
-    || (flags & ~(FLAGS.ready | FLAGS.loading)) !== 0
-    || flags === (FLAGS.ready | FLAGS.loading)
+    || (flags & ~(FLAGS.ready | FLAGS.loading | FLAGS.character | FLAGS.unlocks)) !== 0
+    || (flags & FLAGS.loading) !== 0 && flags !== FLAGS.loading
+    || (flags & (FLAGS.character | FLAGS.unlocks)) !== 0 && (flags & FLAGS.ready) === 0
   ) return Object.freeze({ status: "waiting", reason: "snapshot" } as const);
 
   if ((flags & FLAGS.loading) !== 0) {
     return mapId === 0 && instanceType === 0 && encodedRegion === 0
+      && characterLow === 0 && characterHigh === 0
+      && unlockedMapWords.every((word) => word === 0)
       ? Object.freeze({ status: "waiting", reason: "loading" } as const)
       : Object.freeze({ status: "waiting", reason: "corrupt" } as const);
   }
   if ((flags & FLAGS.ready) === 0) {
     return mapId === 0 && instanceType === 0 && encodedRegion === 0
+      && characterLow === 0 && characterHigh === 0
+      && unlockedMapWords.every((word) => word === 0)
       ? Object.freeze({ status: "waiting", reason: "game" } as const)
       : Object.freeze({ status: "waiting", reason: "corrupt" } as const);
   }
@@ -57,6 +69,12 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
     || instanceType > 1
     || (encodedRegion !== 1 && encodedRegion !== 2)
   ) return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
+  const hasCharacter = (flags & FLAGS.character) !== 0;
+  const hasUnlocks = (flags & FLAGS.unlocks) !== 0;
+  if (
+    hasCharacter !== (characterLow !== 0 || characterHigh !== 0)
+    || (!hasUnlocks && unlockedMapWords.some((word) => word !== 0))
+  ) return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
 
   return Object.freeze({
     status: "ready" as const,
@@ -64,9 +82,22 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
     mapId,
     instanceType,
     playRegion: encodedRegion === 1 ? "pve" as const : "pvp" as const,
+    characterKey: hasCharacter
+      ? `${characterHigh.toString(16).padStart(8, "0")}${characterLow.toString(16).padStart(8, "0")}`
+      : null,
+    unlockedMapWords: hasUnlocks ? unlockedMapWords : null,
   });
 }
 
 export type CompanionPlayRegionState =
   | ReturnType<typeof readCompanionPlayRegion>
+  | Readonly<{
+    status: "ready";
+    sequence: number;
+    mapId: number;
+    instanceType: number;
+    playRegion: "pve" | "pvp";
+    characterKey?: string | null;
+    unlockedMapWords?: readonly number[] | null;
+  }>
   | Readonly<{ status: "waiting"; reason: "stale" }>;

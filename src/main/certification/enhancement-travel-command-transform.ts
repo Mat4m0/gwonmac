@@ -17,10 +17,51 @@ const VALID_TRAVEL_LANGUAGES = [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 17] as const;
 export type TravelDrainConfig = Readonly<{
   dispatcherFunctionIndex: number;
   contextResolverFunctionIndex: number;
+  unlockAccessorFunctionIndex: number;
   messageId: number;
   payloadGlobalIndex: number;
   reviewedMapIds: readonly number[];
 }>;
+
+const TRAVEL_UNLOCK_WORD_LIMIT = 28;
+
+function refuseLockedMap(travel: TravelDrainConfig, mapGlobalIndex: number): Uint8Array {
+  const payload = () => concat(Uint8Array.of(0x23), uleb(travel.payloadGlobalIndex));
+  const array = () => concat(payload(), Uint8Array.of(0x28), uleb(2), uleb(4));
+  const map = () => concat(Uint8Array.of(0x23), uleb(mapGlobalIndex));
+  const word = () => concat(map(), Uint8Array.of(0x41), sleb(5), Uint8Array.of(0x76));
+  const memoryBytes = () => concat(
+    Uint8Array.of(0x3f, 0x00, 0x41), sleb(16), Uint8Array.of(0x74),
+  );
+  const buffer = () => concat(array(), Uint8Array.of(0x28), uleb(2), uleb(0));
+  const wordAddress = () => concat(
+    buffer(), word(), Uint8Array.of(0x41), sleb(2), Uint8Array.of(0x74, 0x6a),
+  );
+  return concat(
+    // The official accessor returns Array<u32>{buffer, capacity, size}.
+    payload(), Uint8Array.of(0x10), uleb(travel.unlockAccessorFunctionIndex),
+    Uint8Array.of(0x36), uleb(2), uleb(4),
+    refuseUnless(concat(array(), Uint8Array.of(0x45, 0x45))),
+    refuseUnless(concat(
+      array(), memoryBytes(), Uint8Array.of(0x41), sleb(12), Uint8Array.of(0x6b, 0x4d),
+    )),
+    refuseUnless(concat(buffer(), Uint8Array.of(0x45, 0x45))),
+    refuseUnless(concat(wordAddress(), buffer(), Uint8Array.of(0x4f))),
+    refuseUnless(concat(
+      wordAddress(), memoryBytes(), Uint8Array.of(0x41), sleb(4), Uint8Array.of(0x6b, 0x4d),
+    )),
+    refuseUnless(concat(
+      array(), Uint8Array.of(0x28), uleb(2), uleb(8),
+      word(), Uint8Array.of(0x4b),
+      array(), Uint8Array.of(0x28), uleb(2), uleb(8),
+      Uint8Array.of(0x41), sleb(TRAVEL_UNLOCK_WORD_LIMIT), Uint8Array.of(0x4d),
+      wordAddress(), Uint8Array.of(0x28), uleb(2), uleb(0),
+      map(), Uint8Array.of(0x76, 0x41), sleb(1), Uint8Array.of(0x71),
+      // The size bound and map bit must both be true.
+      Uint8Array.of(0x71, 0x71),
+    )),
+  );
+}
 
 function valueIsOneOf(load: () => Uint8Array, values: readonly number[]): Uint8Array {
   return concat(...values.map((value, index) => concat(
@@ -129,6 +170,7 @@ export function travelDrain(
     Uint8Array.of(0x41), sleb(TRAVEL_COMMAND), Uint8Array.of(0x46, 0x04, 0x40),
     Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x24), uleb(pendingGlobalIndex),
     refuseUnless(globalValueIsOneOf(argumentGlobalBase, travel.reviewedMapIds)),
+    refuseLockedMap(travel, argumentGlobalBase),
     Uint8Array.of(0x23), uleb(travel.payloadGlobalIndex),
     Uint8Array.of(0x23), uleb(argumentGlobalBase),
     Uint8Array.of(0x36), uleb(2), uleb(TRAVEL_MAP_OFFSET),

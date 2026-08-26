@@ -287,6 +287,9 @@ export function derivePlayRegionLayout(
     contextRoot,
     gameContextSlot: unsignedOperand(contextBody, 17),
     characterContext: unsignedOperand(body("gameCharacter"), 5),
+    // Official CharContext::player_uuid is a fixed 16-byte field. Keeping the
+    // raw UUID inside the kernel lets the renderer receive only a one-way key.
+    characterUuid: 0x64,
     mapId: unsignedOperand(body("mapId"), 39),
     isExplorable: unsignedOperand(body("mapState"), 37),
     currentMapId: unsignedOperand(body("currentMap"), 11),
@@ -313,6 +316,7 @@ export function derivePlayRegionLayout(
     contextRoot: { sourceRole: "context-root-writer", expression: "relocated static store", occurrences: [11] },
     gameContextSlot: { sourceRole: "context-root-writer", expression: "context registration slot", occurrences: [17] },
     characterContext: { sourceRole: "game-context character reader", expression: "i32.load offset", occurrences: [5] },
+    characterUuid: { sourceRole: "official character-context layout", expression: "fixed 16-byte UUID field", occurrences: [0x64] },
     mapId: { sourceRole: "map-id reader", expression: "i32.load offset", occurrences: [39] },
     isExplorable: { sourceRole: "map-state reader", expression: "map availability field", occurrences: [37] },
     currentMapId: { sourceRole: "character-context map reader", expression: "i32.load offset", occurrences: [11] },

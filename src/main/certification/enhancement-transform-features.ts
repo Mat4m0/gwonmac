@@ -194,6 +194,7 @@ export function applyFeatureContributions(
             {
             dispatcherFunctionIndex: uiOriginalIndex ?? uiDispatcher.functionIndex,
             contextResolverFunctionIndex: travelAction.contextResolver.functionIndex,
+            unlockAccessorFunctionIndex: travelAction.unlockProof.accessor.functionIndex,
             messageId: travelAction.messageId,
             payloadGlobalIndex: globalIndices.travelPayload,
             reviewedMapIds: REVIEWED_TRAVEL_MAP_IDS,

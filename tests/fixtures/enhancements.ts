@@ -302,6 +302,7 @@ export const ADDRESSES = Object.freeze({
   skillbarBuffer: 0x1_3000,
   attributeBuffer: 0x1_4000,
   playerRecordBuffer: 0x1_5000,
+  travelUnlockBuffer: 0x1_6000,
   areaInfo: 0x20_0000,
   frameArrayGlobal: 0x21_0000,
   frameCountGlobal: 0x21_0004,
@@ -570,6 +571,8 @@ export async function createKernel(
     0x1c8, 0xb8, 0xbc, 0xd8, 0x104, 0x108,
     0x10c, 0x110, 0x114, 0x118, 0x128, 0x18c,
   ], SKILL_CONFIG_START);
+  config[ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldUnlockedMaps")] = 0x60c;
+  config[ENHANCEMENT_LAYOUT_FIELDS.indexOf("characterUuid")] = 0x64;
   // Placed at the boundary rather than appended to the literal above. Written
   // as one flat list, the messages sat directly after the party chain — and
   // when the layout grew they silently stayed there, a full detail block short of
@@ -713,6 +716,10 @@ export function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.character + 0x234, 133, true);
   view.setUint32(ADDRESSES.character + 0x23c, 0, true);
   view.setUint32(ADDRESSES.character + 0x2ac, 42, true);
+  view.setUint32(ADDRESSES.character + 0x64, 0x0403_0201, true);
+  view.setUint32(ADDRESSES.character + 0x68, 0x0807_0605, true);
+  view.setUint32(ADDRESSES.character + 0x6c, 0x0c0b_0a09, true);
+  view.setUint32(ADDRESSES.character + 0x70, 0x100f_0e0d, true);
   const area = ADDRESSES.areaInfo + 133 * 0x7c;
   view.setUint32(area + 0x00, 1, true);
   view.setUint32(area + 0x04, 0, true);
@@ -739,6 +746,14 @@ export function installGameGraph(view: DataView) {
   view.setUint32(ADDRESSES.manualTargetId, 9, true);
   view.setUint32(ADDRESSES.game + 0x4c, ADDRESSES.partyContext, true);
   view.setUint32(ADDRESSES.game + DETAIL.worldContext, ADDRESSES.world, true);
+  view.setUint32(ADDRESSES.world + 0x60c, ADDRESSES.travelUnlockBuffer, true);
+  view.setUint32(ADDRESSES.world + 0x610, 28, true);
+  view.setUint32(ADDRESSES.world + 0x614, 28, true);
+  view.setUint32(
+    ADDRESSES.travelUnlockBuffer + Math.floor(133 / 32) * 4,
+    1 << (133 % 32),
+    true,
+  );
   view.setUint32(ADDRESSES.world + DETAIL.players, ADDRESSES.playerRecordBuffer, true);
   view.setUint32(ADDRESSES.world + DETAIL.players + 4, 64, true);
   view.setUint32(ADDRESSES.world + DETAIL.players + 8, PLAYER_RECORD_INDEX + 1, true);

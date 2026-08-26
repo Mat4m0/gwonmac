@@ -198,6 +198,16 @@ const INVOCATIONS: Invocation[] = [
     }],
     channel: IPC.travelPreferencesSet,
   },
+  {
+    path: "travelHistory.get",
+    args: [{ characterKey: "0123456789abcdef" }],
+    channel: IPC.travelHistoryGet,
+  },
+  {
+    path: "travelHistory.record",
+    args: [{ characterKey: "0123456789abcdef", mapId: 55 }],
+    channel: IPC.travelHistoryRecord,
+  },
   { path: "trade.subscribe", args: ["kamadan"], channel: IPC.tradeSubscribe },
   { path: "trade.unsubscribe", args: [], channel: IPC.tradeUnsubscribe },
   {

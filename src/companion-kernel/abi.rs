@@ -33,16 +33,21 @@ pub(crate) const FEATURE_TARGET_OBSERVATION: u32 = 1 << 3;
 pub(crate) const FEATURE_SKILL_SLOT_GEOMETRY: u32 = 1 << 4;
 pub(crate) const FEATURE_SKILL_COOLDOWN_OBSERVATION: u32 = 1 << 5;
 pub(crate) const FEATURE_PLAY_REGION_OBSERVATION: u32 = 1 << 6;
-pub(crate) const KNOWN_FEATURES: u32 =
-    FEATURE_NATIVE_CURSOR | FEATURE_GAME_SNAPSHOT | FEATURE_TOOLBOX_FOUNDATION
-        | FEATURE_TARGET_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY
-        | FEATURE_SKILL_COOLDOWN_OBSERVATION | FEATURE_PLAY_REGION_OBSERVATION;
+pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
+    | FEATURE_GAME_SNAPSHOT
+    | FEATURE_TOOLBOX_FOUNDATION
+    | FEATURE_TARGET_OBSERVATION
+    | FEATURE_SKILL_SLOT_GEOMETRY
+    | FEATURE_SKILL_COOLDOWN_OBSERVATION
+    | FEATURE_PLAY_REGION_OBSERVATION;
 
 pub(crate) const PLAY_REGION_BYTES: u32 = size_of::<PlayRegionSnapshot>() as u32;
 pub(crate) const PLAY_REGION_MAGIC: u32 = 0x5250_5747;
-pub(crate) const PLAY_REGION_ABI_AND_SIZE: u32 = (PLAY_REGION_BYTES << 16) | 1;
+pub(crate) const PLAY_REGION_ABI_AND_SIZE: u32 = (PLAY_REGION_BYTES << 16) | 2;
 pub(crate) const FLAG_PLAY_REGION_READY: u32 = 1 << 0;
 pub(crate) const FLAG_PLAY_REGION_LOADING: u32 = 1 << 1;
+pub(crate) const FLAG_PLAY_REGION_CHARACTER: u32 = 1 << 2;
+pub(crate) const FLAG_PLAY_REGION_UNLOCKS: u32 = 1 << 3;
 
 pub(crate) const SKILL_SLOT_BYTES: u32 = size_of::<SkillSlotSnapshot>() as u32;
 pub(crate) const SKILL_SLOT_MAGIC: u32 = 0x534b_5747;
@@ -125,6 +130,8 @@ pub(crate) const SKILL_SLOTS: usize = 8;
 /// The official client currently publishes 70 words, covering skill ids
 /// 0..2239. A fixed bound keeps account data finite and the wire shape closed.
 pub(crate) const SKILL_UNLOCK_WORDS: usize = 70;
+/// Covers map ids 0..895, including every reviewed Quick Travel destination.
+pub(crate) const TRAVEL_UNLOCK_WORDS: usize = 28;
 
 /// The highest attribute id the client defines. The array is walked to here
 /// and no further: the reference struct pads to 54 entries and indices 51-53
@@ -271,6 +278,8 @@ pub(crate) struct Layout {
     pub(crate) frame_state: u32,
     // Appended exact-client field used only by cooldown observation.
     pub(crate) skill_slot_recharge: u32,
+    pub(crate) world_unlocked_maps: u32,
+    pub(crate) character_uuid: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -377,6 +386,8 @@ impl Layout {
         frame_relation: 0,
         frame_state: 0,
         skill_slot_recharge: 0,
+        world_unlocked_maps: 0,
+        character_uuid: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -415,6 +426,9 @@ pub(crate) struct PlayRegionSnapshot {
     pub(crate) map_id: u32,
     pub(crate) instance_type: u32,
     pub(crate) play_region: u32,
+    pub(crate) character_key_low: u32,
+    pub(crate) character_key_high: u32,
+    pub(crate) unlocked_maps: [u32; TRAVEL_UNLOCK_WORDS],
 }
 
 #[repr(C)]
@@ -544,13 +558,13 @@ pub(crate) struct PartySnapshot {
     pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 444] = [(); size_of::<Layout>()];
+const _: [(); 452] = [(); size_of::<Layout>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
 const _: [(); 1560] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];
+const _: [(); 148] = [(); size_of::<PlayRegionSnapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
 const _: [(); 16] = [(); size_of::<SkillSlotRect>()];
 const _: [(); 156] = [(); size_of::<SkillSlotSnapshot>()];
 const _: [(); 60] = [(); size_of::<SkillCooldownSnapshot>()];
-const _: [(); 28] = [(); size_of::<PlayRegionSnapshot>()];

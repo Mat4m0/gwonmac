@@ -178,6 +178,37 @@ impl State {
     }
 }
 
+/** Reads the certified WorldContext Array<u32>; `None` publishes unknown. */
+pub(crate) unsafe fn observe_travel_unlocks(
+    layout: Layout,
+    game: u32,
+) -> Option<[u32; TRAVEL_UNLOCK_WORDS]> {
+    if game == 0 || layout.world_context == 0 || layout.world_unlocked_maps == 0 {
+        return None;
+    }
+    let world_required = checked_add(layout.world_unlocked_maps, 12)?;
+    let world =
+        offset(game, layout.world_context).and_then(|at| unsafe { pointer(at, world_required) })?;
+    let array = offset(world, layout.world_unlocked_maps)?;
+    let buffer = unsafe { read_u32(array) }?;
+    let capacity = offset(array, 4).and_then(|at| unsafe { read_u32(at) })?;
+    let size = offset(array, 8).and_then(|at| unsafe { read_u32(at) })?;
+    if buffer == 0
+        || buffer & 3 != 0
+        || size < TRAVEL_UNLOCK_WORDS as u32
+        || size > capacity
+        || capacity > 64
+        || !contains(buffer, checked_mul(size, 4)?)
+    {
+        return None;
+    }
+    let mut words = [0; TRAVEL_UNLOCK_WORDS];
+    for (index, word) in words.iter_mut().enumerate() {
+        *word = unsafe { read_u32(indexed(buffer, index as u32, 4)?)? };
+    }
+    Some(words)
+}
+
 /**
  * The Tools safety region derived from the client-owned map policy.
  *
@@ -898,7 +929,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    17
+    18
 }
 
 #[no_mangle]

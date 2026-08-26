@@ -61,7 +61,7 @@ test("the capability registry is the ordered wire vocabulary", () => {
       id: "travelAction",
       requiresAll: ["playRegionObservation"],
       requiresAny: [],
-      configOwners: [],
+      configOwners: ["observation", "travel"],
       hooks: [],
     },
     {
@@ -164,8 +164,8 @@ test("dependency pruning is derived from capability contracts", () => {
 });
 
 test("cooldown owns the reusable player skillbar core without Party", () => {
-  assert.equal(ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT, 444);
-  assert.equal(ENHANCEMENT_LAYOUT_WORD_COUNT, 98);
+  assert.equal(ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT, 452);
+  assert.equal(ENHANCEMENT_LAYOUT_WORD_COUNT, 100);
   assert.equal(ENHANCEMENT_LAYOUT_OWNERSHIP_IS_EXHAUSTIVE, true);
   assert.equal(
     new Set(ENHANCEMENT_LAYOUT_FIELDS).size,

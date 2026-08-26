@@ -147,9 +147,15 @@ After that restart, these choices update immediately:
   Command-1 through Command-9 while a search
   result is selected. Type any of the 199 reviewed direct-travel destinations,
   an official alias such as `la`, `kama`, or `eotn`, or your own custom synonym,
-  then press Return. Locked destinations remain visible; Guild Wars decides
-  whether the current character can travel there. Travel keeps the current
+  then press Return. Once Guild Wars publishes the active character's unlock
+  data, locked destinations are hidden; the command checks the unlock again
+  immediately before travel. Travel keeps the current
   Guild Wars region and language and uses district Any.
+
+  **Recent** comes from locations Guild Wars actually reports, including world
+  map travel and other in-game paths. It keeps up to ten unique reviewed places
+  per character across game and app restarts, hides the current map, and shows
+  the five newest destinations that character can still travel to.
 
 Open **Trade Chat** from the View menu, with Command-Shift-B, or by typing the
 exact lowercase `/trade` command on a certified client. The Trade window is

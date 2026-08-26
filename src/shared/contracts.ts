@@ -919,6 +919,8 @@ export const IPC = {
   traderPriceHistoryGet: "gw:trader:priceHistory:get",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
+  travelHistoryGet: "gw:travelHistory:get",
+  travelHistoryRecord: "gw:travelHistory:record",
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   skillKeyCapture: "gw:skillKeys:capture",
@@ -1092,6 +1094,10 @@ export interface GwNativeApi {
   travelPreferences: {
     get(): Promise<TravelUserPreferences>;
     set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
+  };
+  travelHistory: {
+    get(value: { characterKey: string }): Promise<readonly number[]>;
+    record(value: { characterKey: string; mapId: number }): Promise<readonly number[]>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;

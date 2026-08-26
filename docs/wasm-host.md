@@ -275,19 +275,30 @@ remains usable; no party-state fallback is allowed.
 Travel accepts only one reviewed map ID from the renderer. The exact `/tp`
 command sets one named, one-shot palette toggle that the renderer takes and
 clears. Search text, aliases, destinations, and numbered shortcuts stay
-in the host-owned Vue interface. At the certified frame drain, the transform
-rechecks the reviewed map list, invokes the independently proved client helper
+in the host-owned Vue interface. The play-region snapshot publishes a fixed
+28-word map-unlock bitset only after the certified `WorldContext` array is read
+completely; unknown evidence stays unknown instead of looking like every map is
+locked. At the certified frame drain, the transform rechecks the reviewed map
+list and live unlock bit, then invokes the independently proved client helper
 that resolves the player's current region and language, validates those values,
 and writes the four-word Travel payload with district Any. It then calls the
-exact client Travel dispatcher with `kTravel`. An unknown map, unresolved live
-context, or changed helper stops only Travel without dispatching another client
-UI message.
+exact client Travel dispatcher with `kTravel`. An unknown or locked map,
+unreadable unlock array, unresolved live context, or changed helper stops only
+Travel without dispatching another client UI message.
 
 The Tools host owns one Travel attempt: `idle`, `queued`, or `loading`. A
 three-second start deadline and a separate thirty-second arrival deadline both
 return it to `idle`; disconnect, corrupt snapshot, and other non-loading states
 also end a loading attempt. The Vue component renders this state but does not
 interpret the game protocol or own its timers.
+
+Recent destinations are independent of attempt state. The host records every
+changed ready map that belongs to the reviewed direct-travel catalogue,
+including arrivals outside the palette. Main serializes at most ten unique map
+IDs per character in atomic `travel-history.json`. The companion hashes the
+official 128-bit character UUID before publication; raw UUIDs and names never
+cross the boundary or reach disk. The palette excludes the current map and any
+positively locked destination. History cannot authorize travel.
 
 Shortcut slots remain in `settings.json` using the district-bearing shape the
 published Stable understands. The current runtime projects those records to

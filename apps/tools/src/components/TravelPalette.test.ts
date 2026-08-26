@@ -13,10 +13,12 @@ import type {
 } from "../travel-host";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 import TravelPalette from "./TravelPalette.vue";
+import { EMPTY_TRAVEL_HISTORY } from "../../../../src/shared/travel-history";
 
 function fixture(options: Readonly<{
   shortcuts?: TravelShortcuts;
   synonyms?: TravelSynonyms;
+  history?: readonly number[];
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({ status: "ready", mapId: 55 });
   let preferences: TravelPreferences = Object.freeze({
@@ -25,6 +27,7 @@ function fixture(options: Readonly<{
   });
   const attempt = ref<TravelHost["attempt"]["value"]>({ status: "idle" });
   const notice = ref<TravelHost["notice"]["value"]>(null);
+  const history = ref(options.history ?? EMPTY_TRAVEL_HISTORY);
   const travel = vi.fn<TravelHost["travel"]>(async (request) => {
     attempt.value = { status: "queued", mapId: request.mapId };
   });
@@ -42,9 +45,11 @@ function fixture(options: Readonly<{
     state,
     attempt,
     notice,
+    history,
     unavailable: null,
     async loadPreferences() { return preferences; },
     savePreferences,
+    async loadHistory() { return history.value; },
     travel,
     updateGameState(next) {
       state.value = next;
@@ -133,6 +138,29 @@ describe("TravelPalette", () => {
     expect(wrapper.get(".travel-match").text()).toBe("Search phrase");
     await wrapper.get('[role="option"]').trigger("click");
     expect(travel).toHaveBeenCalledWith({ mapId: 480 });
+    wrapper.unmount();
+  });
+
+  it("shows per-character recents without repeating the current map", async () => {
+    const { wrapper } = fixture({ history: [55, 449, 81] });
+    await flushPromises();
+    expect(wrapper.get(".travel-history").text()).toContain("Kamadan");
+    expect(wrapper.get(".travel-history").text()).toContain("Ascalon City");
+    expect(wrapper.get(".travel-history").text()).not.toContain("Lion's Arch");
+    wrapper.unmount();
+  });
+
+  it("filters positively locked destinations while unlock observation is available", async () => {
+    const { wrapper, state } = fixture();
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0);
+    unlockedMapWords[Math.floor(55 / 32)] = 1 << (55 % 32);
+    state.value = {
+      status: "ready", mapId: 55, characterKey: "0123456789abcdef", unlockedMapWords,
+    };
+    await wrapper.get("#travel-search-input").setValue("Kamadan");
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
+    await wrapper.get("#travel-search-input").setValue("Lion's Arch");
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(1);
     wrapper.unmount();
   });
 

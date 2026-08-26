@@ -48,6 +48,7 @@ import { PreferencesCoordinator } from "./core/preferences-coordinator.js";
 import { SocketManager } from "./core/sockets.js";
 import { TradeChatService } from "./core/trade-chat-service.js";
 import { TradeSavedStore } from "./core/trade-saved-store.js";
+import { TravelHistoryStore } from "./core/travel-history.js";
 import {
   count,
   exportDiagnosticsForWindow,
@@ -611,6 +612,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const sockets = buildSocketManager();
   const tradeChat = new TradeChatService();
   const tradeSaved = new TradeSavedStore(paths.tradeSaved);
+  const travelHistory = new TravelHistoryStore(paths.travelHistory);
   appUpdaterController = new AppUpdater({
     currentVersion: HOST_VERSION,
     capable: distribution.automaticUpdates,
@@ -713,6 +715,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     },
     getTravelPreferences: () => preferences.getTravelPreferences(),
     setTravelPreferences: (update) => preferences.updateTravelPreferences(update),
+    getTravelHistory: (characterKey) => travelHistory.get(characterKey),
+    recordTravelHistory: (characterKey, mapId) => travelHistory.record(characterKey, mapId),
     toolsEnabledAtLaunch: enhancementSelection.tools,
     tradeChat,
     getTradeSaved: () => tradeSaved.get(),

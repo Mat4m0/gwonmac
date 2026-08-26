@@ -36,9 +36,9 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-601":
-          "200341f7bbeb50ab2ab9125a869c7fa61d7b1569d9c760e98acbe026f94ba6bb",
+          "cfdc58bd7a024fe6cdc4ae631e6edfcb23cb54a8885d3f264243c0fcc2ba64cf",
         "features-7ff":
-          "c4b31ca957bf5b8d74e97eb8bd8f816cf448bca5d0b8d56f1037bc7a96c4d638",
+          "74b75630edff0cb9e9b68cc719a43d496b72c1b1aa9720afb40d7c1ed9aac0f5",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is
@@ -59,6 +59,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           agentArray: 0x5a4de8,
           gameContextSlot: 6,
           characterContext: 0x44,
+          characterUuid: 0x64,
           mapId: 0x198,
           isExplorable: 0x19c,
           currentMapId: 0x234,
@@ -85,6 +86,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           contextRoot: 0x5a0e70,
           gameContextSlot: 6,
           characterContext: 0x44,
+          characterUuid: 0x64,
           mapId: 0x198,
           isExplorable: 0x19c,
           currentMapId: 0x234,
@@ -231,6 +233,24 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         // writes its four scalar arguments to {map, region, language,
         // district} and sends this message through the certified dispatcher.
         messageId: 0x1000_0183,
+        // WorldContext::unlocked_map is not accepted from GWCA's struct.
+        // Accessor #9184 returns the exact Array<u32> at +0x60c, while the
+        // official map consumer #15978 proves word=map/32 and bit=map%32.
+        unlockProof: Object.freeze({
+          layout: Object.freeze({ worldUnlockedMaps: 0x60c }),
+          accessor: Object.freeze({
+            functionIndex: 9184,
+            params: Object.freeze([] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "24579d9f602bc21a37c0dc8ca88c362a38493c64d101d42081ccd6ed5314f975",
+          }),
+          consumer: Object.freeze({
+            functionIndex: 15978,
+            params: Object.freeze(["i32"] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "c462fd76a759a90c48dc9298223cf6f571dec8ef11c732177faa14ac4b49fb9f",
+          }),
+        }),
         producer: Object.freeze({
           functionIndex: 16199,
           params: Object.freeze([
@@ -521,6 +541,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           contextRoot: 0x5a0e70,
           gameContextSlot: 6,
           characterContext: 0x44,
+          characterUuid: 0x64,
           currentInstanceType: 0x23c,
         }),
       }),
