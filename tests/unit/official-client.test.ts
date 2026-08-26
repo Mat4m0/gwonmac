@@ -176,4 +176,10 @@ describe("the recorded client generation", () => {
     assert.equal(record.formatVersion, 1);
     assert.match(record.codeGeneration, /^[a-f0-9]{64}$/u);
   });
+
+  it("binds downloaded bytes to the manifest returned by their update", async () => {
+    const source = await readFile(path.join(root, "scripts/official-client.ts"), "utf8");
+    assert.match(source, /\? \(await client\.update\(\)\)\.manifest/);
+    assert.doesNotMatch(source, /const manifest = await client\.fetchManifest\(\)[\s\S]*client\.update\(\)/);
+  });
 });

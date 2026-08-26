@@ -77,7 +77,8 @@ Complete this checklist:
 - [ ] The release commit is on `main`.
 - [ ] `package.json` contains the intended new version.
 - [ ] The version stage matches Stable, Beta, or RC intent.
-- [ ] The current ArenaNet client canary passed within the workflow age limit.
+- [ ] The release workflow's exact ArenaNet qualification is green. A recent
+      scheduled canary is useful evidence but is not the release gate.
 - [ ] CI for the release commit is green.
 - [ ] Release notes use short player language. Internal refactors need no long
       explanation.
@@ -91,6 +92,13 @@ Manually run **Versioned release** on `main` with `dry_run` set to `true`.
 
 This path runs the real verification, build, signing, notarization, stapling,
 and package checks. It skips the GitHub mutation jobs.
+
+Immediately before packaging, the workflow downloads the current verified
+ArenaNet JS/WASM pair. It runs the runtime feature verifier, every transform
+profile, native double-click, the adversarial client-artifact suite, the
+production cache planner, and the safe 4 GB/2 GB pair checks. It reads the
+published generation again after qualification and again immediately before
+making the draft public. Any generation change stops the release.
 
 A dry run does not create a tag, draft release, public release, or attestation.
 It can create normal private GitHub Actions logs and artifacts.
