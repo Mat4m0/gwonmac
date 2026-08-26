@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { WASM_HEADER } from "../../src/main/core/wasm-binary.js";
+import { verifyLocalClientBytes } from
+  "../../src/main/certification/local-client-verifier.js";
 import {
   createCarryForwardReport,
   formatCarryForwardMarkdown,
@@ -18,7 +20,9 @@ describe("patch-day carry-forward report", () => {
       WASM_HEADER,
       currentMessageAnchors(),
     );
+    const verification = verifyLocalClientBytes(WASM_HEADER);
     const report = createCarryForwardReport(
+      verification,
       template,
       enhancement,
       "not-located",
@@ -26,17 +30,17 @@ describe("patch-day carry-forward report", () => {
     );
 
     assert.deepEqual(report.capabilities, {
-      gameFileSaving: "not-located",
+      gameFileSaving: "changed",
       nativeDoubleClick: "not-located",
-      nativeCursor: "not-located",
-      targetObservation: "not-located",
-      partyObservation: "not-located",
-      teamApply: "not-located",
-      xunlaiStorage: "not-located",
+      nativeCursor: "changed",
+      targetObservation: "changed",
+      partyObservation: "changed",
+      teamApply: "changed",
+      xunlaiStorage: "changed",
     });
     assert.equal("canonicalCertificate" in report, false);
-    assert.match(formatCarryForwardMarkdown(report), /Apply team \| not-located/);
-    assert.match(formatCarryForwardMarkdown(report), /Xunlai storage \| not-located/);
+    assert.match(formatCarryForwardMarkdown(report), /Apply team \| changed/);
+    assert.match(formatCarryForwardMarkdown(report), /Xunlai storage \| changed/);
     assert.match(
       formatCarryForwardMarkdown(report),
       /does not authorize memory reads or Apply team/,

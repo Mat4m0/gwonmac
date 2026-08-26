@@ -183,6 +183,10 @@ async function compare(argv: readonly string[]): Promise<void> {
     return;
   }
   const official = new Uint8Array(await readFile(filename));
+  const verification = verifyLocalClientBytes(official);
+  if (!isLocalClientVerification(verification, verification.officialSha256)) {
+    throw new Error("runtime feature verifier produced an invalid boundary result");
+  }
   const templateSave = inspectTemplateSaveCandidate(official);
   const enhancement = recertifyEnhancementBytes(
     official,
@@ -194,6 +198,7 @@ async function compare(argv: readonly string[]): Promise<void> {
     ? "exact" as const
     : "not-located" as const;
   const report = createCarryForwardReport(
+    verification,
     templateSave,
     enhancement,
     doubleClick,
@@ -333,8 +338,15 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
   const selectedInput = templateBuild
     ? rewriteTemplateSaveWasm(official, templateBuild)
     : official;
-  const predecessors: Array<[string, Uint8Array]> = [
-    [templateBuild ? "file-compatible" : "official", selectedInput],
+  const enhancementInputSha256 = createHash("sha256")
+    .update(selectedInput)
+    .digest("hex");
+  const predecessors: Array<Readonly<{
+    profile: string;
+    bytes: Uint8Array;
+    enhancementInputSha256?: string;
+  }>> = [
+    { profile: templateBuild ? "file-compatible" : "official", bytes: selectedInput },
   ];
   for (const [launch, capabilities] of Object.entries(
     RELEASE_ENHANCEMENT_CAPABILITIES,
@@ -343,18 +355,21 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
     if (!profile) throw new Error(`invalid ${launch} release capability set`);
     const profileBuild = verifyLocalClientBytes(official, capabilities).enhancementBuild;
     if (!profileBuild) throw new Error(`semantic verification refused profile ${profile}`);
-    predecessors.push([
+    predecessors.push({
       profile,
-      transformEnhancementWasm(selectedInput, profileBuild, capabilities),
-    ]);
+      bytes: transformEnhancementWasm(selectedInput, profileBuild, capabilities),
+      enhancementInputSha256,
+    });
   }
   const chains: Array<Readonly<{
     profile: string;
     inputSha256: string;
     outputSha256: string;
+    enhancementInputSha256?: string;
   }>> = [];
   let completeRouteProved = true;
-  for (const [profile, bytes] of predecessors) {
+  for (const predecessor of predecessors) {
+    const { profile, bytes } = predecessor;
     const inputSha256 = createHash("sha256").update(bytes).digest("hex");
     const build = deriveNativeDoubleClickBuild(bytes);
     const outputSha256 = build?.derivations[inputSha256];
@@ -366,6 +381,9 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
       profile,
       inputSha256,
       outputSha256,
+      ...(predecessor.enhancementInputSha256 === undefined
+        ? {}
+        : { enhancementInputSha256: predecessor.enhancementInputSha256 }),
     }));
   }
   process.stdout.write(`${JSON.stringify({

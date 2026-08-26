@@ -6,6 +6,10 @@
  */
 import type { EnhancementRecertificationReport } from "./enhancement-recert.js";
 import type { inspectTemplateSaveCandidate } from "./template-save-recert.js";
+import type {
+  LocalClientVerification,
+  LocalFeatureVerdict,
+} from "../main/certification/local-client-verifier.js";
 
 export type CarryForwardStatus =
   | "exact"
@@ -32,52 +36,48 @@ export interface CarryForwardReport {
   readonly enhancement: EnhancementRecertificationReport;
 }
 
-function evidenceStatus(
-  enhancement: EnhancementRecertificationReport,
-  feature: "cursor" | "target" | "party" | "commands" | "storage",
+function verdictStatus(
+  verdict: LocalFeatureVerdict<keyof NonNullable<
+    LocalClientVerification["featureVerdicts"]
+  >>,
 ): CarryForwardStatus {
-  if (enhancement.bundleVerified) return "exact";
-  if (!enhancement.candidateInspected) return "not-located";
-
-  const evidence = enhancement.structuralEvidence;
-  if (feature === "cursor") {
-    if (evidence.cursor.status === "ambiguous") return "ambiguous";
-    return evidence.cursor.status === "candidate" ? "changed" : "not-located";
+  switch (verdict.status) {
+    case "proved": return "exact";
+    case "changed": return "changed";
+    case "ambiguous": return "ambiguous";
+    case "not-requested": return "not-located";
   }
-  if (feature === "party") {
-    if (evidence.playerChatUi.status === "ambiguous") return "ambiguous";
-    return evidence.playerChatUi.status === "candidate"
-      ? "changed"
-      : "not-located";
-  }
-
-  // No locator exists for these facts yet. Inspectability is not location.
-  return "not-located";
 }
 
 export function createCarryForwardReport(
+  verification: LocalClientVerification,
   templateSave: TemplateSaveReport,
   enhancement: EnhancementRecertificationReport,
   nativeDoubleClick: CarryForwardStatus = "not-located",
   generatedAt = new Date().toISOString(),
 ): CarryForwardReport {
-  const gameFileSaving: CarryForwardStatus =
-    templateSave.status === "certified" || templateSave.status === "derived"
-      ? "exact"
-      : "not-located";
+  const gameFileSaving: CarryForwardStatus = verification.fileVerdict === null
+    ? "not-located"
+    : verification.fileVerdict.status === "proved" ? "exact" : "changed";
+  const features = verification.featureVerdicts;
+  const feature = (
+    name: keyof NonNullable<LocalClientVerification["featureVerdicts"]>,
+  ): CarryForwardStatus => features === null
+    ? "not-located"
+    : verdictStatus(features[name]);
 
   return {
     schemaVersion: 1,
-    officialSha256: enhancement.officialSha256,
+    officialSha256: verification.officialSha256,
     generatedAt,
     capabilities: {
       gameFileSaving,
       nativeDoubleClick,
-      nativeCursor: evidenceStatus(enhancement, "cursor"),
-      targetObservation: evidenceStatus(enhancement, "target"),
-      partyObservation: evidenceStatus(enhancement, "party"),
-      teamApply: evidenceStatus(enhancement, "commands"),
-      xunlaiStorage: evidenceStatus(enhancement, "storage"),
+      nativeCursor: feature("nativeCursor"),
+      targetObservation: feature("targetObservation"),
+      partyObservation: feature("partyObservation"),
+      teamApply: feature("teamApply"),
+      xunlaiStorage: feature("xunlaiAction"),
     },
     templateSave,
     enhancement,
