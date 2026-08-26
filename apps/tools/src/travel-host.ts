@@ -183,7 +183,7 @@ export function createDemoTravelHost(): TravelHost {
   });
   const attempt = ref<TravelAttempt>({ status: "idle" });
   const notice = ref<TravelNotice | null>(null);
-  const history = ref<TravelHistory>(Object.freeze([55, 449, 194, 642, 857]));
+  const history = ref<TravelHistory>(Object.freeze([449, 194, 642, 857, 81, 248]));
   let current: TravelPreferences = Object.freeze({
     shortcuts: DEFAULT_TRAVEL_SHORTCUTS,
     synonyms: Object.freeze([]),

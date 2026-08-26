@@ -6,7 +6,7 @@ import { travelDestination } from "./travel-destinations.js";
 
 export const TRAVEL_HISTORY_FORMAT = 2;
 export const TRAVEL_HISTORY_LIMIT = 10;
-export const TRAVEL_HISTORY_VISIBLE_LIMIT = 5;
+export const TRAVEL_HISTORY_VISIBLE_LIMIT = 6;
 export const TRAVEL_HISTORY_CHARACTER_LIMIT = 32;
 
 declare const TRAVEL_CHARACTER_KEY: unique symbol;

@@ -379,7 +379,7 @@ onBeforeUnmount(() => window.clearTimeout(closeTimer));
 
     <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="region" aria-label="Travel">
       <section v-if="recentDestinations.length" class="travel-section travel-history" aria-labelledby="travel-history-title">
-        <header class="travel-section-head"><h2 id="travel-history-title">Recent</h2><span>Observed in Guild Wars</span></header>
+        <header class="travel-section-head"><h2 id="travel-history-title">Recent</h2></header>
         <div class="travel-recent-grid">
           <button v-for="destination in recentDestinations" :key="destination.mapId" type="button" class="travel-recent ui-row" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to recent destination ${destination.name}`" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></button>
         </div>
