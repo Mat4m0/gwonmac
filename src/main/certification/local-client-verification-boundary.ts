@@ -694,11 +694,46 @@ export function isLocalClientVerification(
     return false;
   }
   if (result.templateSaveBuild === null) {
-    return result.status === "template-refused"
-      && result.enhancementBuild === null
-      && result.featureVerdicts === null
-      && result.reasons.length === 1
-      && isTemplateReason(result.reasons[0]);
+    const featureVerdicts = result.featureVerdicts;
+    if (featureVerdicts === null || featureVerdicts === undefined) {
+      return result.status === "template-refused"
+        && result.enhancementBuild === null
+        && result.reasons.length === 1
+        && result.reasons[0] === "invalid-wasm";
+    }
+    const enhancementBuild = result.enhancementBuild;
+    if (
+      enhancementBuild !== null
+      && !isAutomaticSemanticBuild(
+        enhancementBuild,
+        officialSha256,
+        requestedCapabilities,
+      )
+    ) return false;
+    const featureFailures = featureFailuresFromVerdicts(featureVerdicts);
+    if (
+      featureFailures === null
+      || !isDeepStrictEqual(
+        featureVerdicts,
+        localFeatureVerdictsForBuild(
+          officialSha256,
+          requestedCapabilities,
+          enhancementBuild,
+          featureFailures,
+        ),
+      )
+    ) return false;
+    if (!enhancementCapabilitiesRequested(requestedCapabilities)) {
+      return result.status === "template-refused"
+        && enhancementBuild === null
+        && result.reasons.length === 1
+        && isTemplateReason(result.reasons[0]);
+    }
+    return enhancementBuild === null
+      ? result.status === "enhancement-refused"
+        && result.reasons.length === 1
+        && isEnhancementReason(result.reasons[0])
+      : result.status === "proved" && result.reasons.length === 0;
   }
   if (!isTemplateSaveBuild(result.templateSaveBuild, officialSha256)) {
     return false;

@@ -651,6 +651,30 @@ describe("local client verification boundary", () => {
     }, TEMPLATE.sha256, ALL), false);
   });
 
+  it("accepts independent feature proof directly against official bytes", () => {
+    const officialBuild: KnownEnhancementBuild = {
+      ...valid().enhancementBuild,
+      sha256: TEMPLATE.sha256,
+    };
+    const independent: LocalClientVerification = {
+      status: "proved",
+      officialSha256: TEMPLATE.sha256,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
+      templateSaveBuild: null,
+      enhancementBuild: officialBuild,
+      featureVerdicts: localFeatureVerdictsForBuild(
+        TEMPLATE.sha256,
+        ALL,
+        officialBuild,
+      ),
+      reasons: [],
+    };
+    assert.equal(
+      isLocalClientVerification(independent, TEMPLATE.sha256, ALL),
+      true,
+    );
+  });
+
   it("represents an unrequested enhancement as a proved template, not a refusal", () => {
     const templateOnly: LocalClientVerification = {
       status: "template-proved",

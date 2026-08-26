@@ -215,13 +215,16 @@ interface LocalVerificationBase {
   readonly verifierAbi: typeof SEMANTIC_VERIFIER_ABI;
 }
 
-/** Invalid combinations are excluded before a result can cross the process boundary. */
+/**
+ * Product-shaped verification result. File and feature proof may succeed or
+ * refuse independently; only invalid WASM has no feature verdicts.
+ */
 export type LocalClientVerification =
   | (LocalVerificationBase & Readonly<{
       status: "template-refused";
       templateSaveBuild: null;
       enhancementBuild: null;
-      featureVerdicts: null;
+      featureVerdicts: LocalFeatureVerdicts | null;
       reasons: readonly [TemplateVerificationReason];
     }>)
   | (LocalVerificationBase & Readonly<{
@@ -233,14 +236,14 @@ export type LocalClientVerification =
     }>)
   | (LocalVerificationBase & Readonly<{
       status: "enhancement-refused";
-      templateSaveBuild: KnownTemplateSaveBuild;
+      templateSaveBuild: KnownTemplateSaveBuild | null;
       enhancementBuild: null;
       featureVerdicts: LocalFeatureVerdicts;
       reasons: readonly [EnhancementVerificationReason];
     }>)
   | (LocalVerificationBase & Readonly<{
       status: "proved";
-      templateSaveBuild: KnownTemplateSaveBuild;
+      templateSaveBuild: KnownTemplateSaveBuild | null;
       enhancementBuild: KnownEnhancementBuild;
       featureVerdicts: LocalFeatureVerdicts;
       reasons: readonly [];

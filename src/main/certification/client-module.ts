@@ -43,6 +43,7 @@ import {
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
+import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
 import {
   nativeDoubleClickOutputSha256,
   NATIVE_DOUBLE_CLICK_TRANSFORM_ABI,
@@ -164,7 +165,7 @@ function templateSaveCache(
     inputSha256: build.sha256,
     cacheRoot,
     transformAbi: TEMPLATE_SAVE_TRANSFORM_ABI,
-    buildFingerprint: buildFingerprint(build),
+    buildFingerprint: buildFingerprint({ verifierAbi: SEMANTIC_VERIFIER_ABI, build }),
     expectedOutputSha256: build.outputSha256,
   };
 }
@@ -198,7 +199,11 @@ function enhancementCache(
     // One cache root owns one derivative. Capabilities are the identity, not
     // their derived hooks: cursor-only and cursor+target use the same entry
     // points but must never share config or a manifest.
-    buildFingerprint: buildFingerprint({ build, capabilities: capabilityIdentity }),
+    buildFingerprint: buildFingerprint({
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
+      build,
+      capabilities: capabilityIdentity,
+    }),
     expectedOutputSha256,
   };
 }
@@ -385,82 +390,58 @@ async function prepareCertifiedChain(
 
   const requestedCapabilities = enhancementCapabilities;
   const templateSaveBuild = certification.templateSaveBuild;
+  let enhancementInputPath = officialWasmPath;
+  let enhancementInputSha256 = officialSha256;
+  let gameFileSaving: PreparedWasmClientModule["gameFileSaving"] = {
+    status: "unavailable",
+    reason: "game-update",
+  };
+  let fileFailure: PreparedWasmClientModule["failure"] = null;
   if (templateSaveBuild === null) {
-    return {
-      wasmPath: officialWasmPath,
-      wasmSha256: officialSha256,
-      gameFileSaving: { status: "unavailable", reason: "game-update" },
-      enhancementBuild: null,
-      requestedCapabilities,
-      effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
-      nativeDoubleClick: false,
-      failure: await discardUnsupportedCaches(
-        compatibilityCacheRoot,
-        enhancementCacheRoot,
-      ),
+    await discardDerivedWasm(compatibilityCacheRoot).catch(() => undefined);
+  } else if (templateSaveBuild.sha256 !== officialSha256) {
+    await discardDerivedWasm(compatibilityCacheRoot).catch(() => undefined);
+    fileFailure = {
+      stage: "template-save",
+      error: new Error("template-save certification does not match client hash"),
     };
-  }
-
-  if (templateSaveBuild.sha256 !== officialSha256) {
-    await discardUnsupportedCaches(compatibilityCacheRoot, enhancementCacheRoot);
-    return {
-      wasmPath: officialWasmPath,
-      wasmSha256: officialSha256,
-      gameFileSaving: { status: "unavailable", reason: "preparation-failed" },
-      enhancementBuild: null,
-      requestedCapabilities,
-      effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
-      nativeDoubleClick: false,
-      failure: {
-        stage: "template-save",
-        error: new Error("template-save certification does not match client hash"),
-      },
-    };
-  }
-
-  let templateSaveWasm: string;
-  try {
-    templateSaveWasm = await prepareDerivedWasm(
-      officialWasmPath,
-      templateSaveCache(templateSaveBuild, compatibilityCacheRoot),
-      (base) => rewriteTemplateSaveWasm(base, templateSaveBuild),
-    );
-  } catch (error) {
-    // The Enhancement input cannot exist if its required floor failed. Keep the
-    // compatibility cache's last good entry, but remove every Enhancement entry.
-    await discardDerivedWasm(enhancementCacheRoot).catch(() => undefined);
-    return {
-      wasmPath: officialWasmPath,
-      wasmSha256: officialSha256,
-      gameFileSaving: { status: "unavailable", reason: "preparation-failed" },
-      enhancementBuild: null,
-      requestedCapabilities,
-      effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
-      nativeDoubleClick: false,
-      failure: { stage: "template-save", error },
-    };
+    gameFileSaving = { status: "unavailable", reason: "preparation-failed" };
+  } else {
+    try {
+      enhancementInputPath = await prepareDerivedWasm(
+        officialWasmPath,
+        templateSaveCache(templateSaveBuild, compatibilityCacheRoot),
+        (base) => rewriteTemplateSaveWasm(base, templateSaveBuild),
+      );
+      enhancementInputSha256 = templateSaveBuild.outputSha256;
+      gameFileSaving = { status: "available" };
+    } catch (error) {
+      fileFailure = { stage: "template-save", error };
+      gameFileSaving = { status: "unavailable", reason: "preparation-failed" };
+    }
   }
 
   const enhancementBuild = certification.enhancementBuild;
   if (enhancementBuild === null) {
+    const cleanupFailure = await discardEnhancementCache(enhancementCacheRoot);
     return {
-      wasmPath: templateSaveWasm,
-      wasmSha256: templateSaveBuild.outputSha256,
-      gameFileSaving: { status: "available" },
+      wasmPath: enhancementInputPath,
+      wasmSha256: enhancementInputSha256,
+      gameFileSaving,
       enhancementBuild: null,
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       nativeDoubleClick: false,
-      failure: await discardEnhancementCache(enhancementCacheRoot),
+      failure: fileFailure ?? cleanupFailure,
     };
   }
 
-  if (enhancementBuild.sha256 !== templateSaveBuild.outputSha256) {
+  if (enhancementBuild.sha256 !== enhancementInputSha256) {
     await discardDerivedWasm(enhancementCacheRoot).catch(() => undefined);
     return {
-      wasmPath: templateSaveWasm,
-      wasmSha256: templateSaveBuild.outputSha256,
-      gameFileSaving: { status: "available" },
+      wasmPath: enhancementInputPath,
+      wasmSha256: enhancementInputSha256,
+      gameFileSaving,
       enhancementBuild: null,
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
@@ -474,9 +455,9 @@ async function prepareCertifiedChain(
 
   if (!enhancementCapabilitiesRequested(enhancementCapabilities)) {
     return {
-      wasmPath: templateSaveWasm,
-      wasmSha256: templateSaveBuild.outputSha256,
-      gameFileSaving: { status: "available" },
+      wasmPath: enhancementInputPath,
+      wasmSha256: enhancementInputSha256,
+      gameFileSaving,
       enhancementBuild: null,
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
@@ -494,18 +475,18 @@ async function prepareCertifiedChain(
       const cache = enhancementCache(enhancementBuild, candidate, enhancementCacheRoot);
       return {
         wasmPath: await prepareDerivedWasm(
-          templateSaveWasm,
+          enhancementInputPath,
           cache,
           (base) => transformEnhancementWasm(base, enhancementBuild, candidate),
         ),
         wasmSha256: cache.expectedOutputSha256,
-        gameFileSaving: { status: "available" },
+        gameFileSaving,
         enhancementBuild,
         requestedCapabilities,
         effectiveCapabilities: candidate,
         nativeDoubleClick: false,
         failure: firstFailure === null
-          ? null
+          ? fileFailure
           : { stage: "enhancement", error: firstFailure },
       };
     } catch (error) {
@@ -513,9 +494,9 @@ async function prepareCertifiedChain(
     }
   }
   return {
-    wasmPath: templateSaveWasm,
-    wasmSha256: templateSaveBuild.outputSha256,
-    gameFileSaving: { status: "available" },
+    wasmPath: enhancementInputPath,
+    wasmSha256: enhancementInputSha256,
+    gameFileSaving,
     enhancementBuild,
     requestedCapabilities,
     effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,

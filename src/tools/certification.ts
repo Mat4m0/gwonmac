@@ -147,10 +147,11 @@ async function verify(argv: readonly string[]): Promise<void> {
   const capabilities = result.enhancementBuild
     ? supportedEnhancementCapabilities(result.enhancementBuild)
     : null;
-  const features = result.featureVerdicts === null
+  const featureVerdicts = result.featureVerdicts;
+  const features = featureVerdicts === null
     ? null
     : Object.fromEntries(ENHANCEMENT_CAPABILITY_FIELDS.map((feature) => {
-        const verdict = result.featureVerdicts[feature];
+        const verdict = featureVerdicts[feature];
         return [feature, verdict.status === "ambiguous"
           ? {
               status: verdict.status,

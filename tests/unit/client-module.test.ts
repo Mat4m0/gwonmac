@@ -761,6 +761,26 @@ describe("client module preparation", () => {
     ]);
   });
 
+  it("serves independently certified enhancements when file proof refuses", async () => {
+    const value = await fixture();
+    const directEnhancement = enhancementBuild(value.official);
+    const prepared = await prepareClientModule(
+      options(
+        value,
+        { templateSaveBuild: null, enhancementBuild: directEnhancement },
+        CURSOR_TOOLBOX,
+      ),
+    );
+
+    assert.deepEqual(prepared.gameFileSaving, {
+      status: "unavailable",
+      reason: "game-update",
+    });
+    assert.equal(prepared.enhancementBuild?.sha256, value.officialSha256);
+    assert.notEqual(prepared.wasmPath, value.officialWasmPath);
+    assert.equal(prepared.failure, null);
+  });
+
   it("closes native double-click preparation when its input disappears", async () => {
     const value = await fixture();
     const missingWasmPath = join(value.root, "missing.wasm");

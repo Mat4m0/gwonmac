@@ -850,40 +850,39 @@ export function verifyLocalClientBytes(
     };
   }
 
-  let postTemplate: PostTemplateSaveModule | null;
+  let postTemplate: PostTemplateSaveModule | null = null;
+  let templateFailure: "template-shape-changed" | "template-transform-failed" | null = null;
   try {
     postTemplate = preparePostTemplateSaveModule(official);
   } catch {
-    return {
-      ...base,
-      status: "template-refused",
-      templateSaveBuild: null,
-      enhancementBuild: null,
-      featureVerdicts: null,
-      reasons: ["template-transform-failed"],
-    };
+    templateFailure = "template-transform-failed";
   }
-  if (!postTemplate) {
-    return {
-      ...base,
-      status: "template-refused",
-      templateSaveBuild: null,
-      enhancementBuild: null,
-      featureVerdicts: null,
-      reasons: ["template-shape-changed"],
-    };
+  if (!postTemplate && templateFailure === null) {
+    templateFailure = "template-shape-changed";
   }
 
-  const templateSaveBuild = postTemplate.build;
-  const templateOutput = postTemplate.bytes;
+  const templateSaveBuild = postTemplate?.build ?? null;
+  const enhancementInput = postTemplate?.bytes ?? official;
+  const enhancementInputSha256 = sha256(enhancementInput);
   if (!enhancementCapabilitiesRequested(requestedCapabilities)) {
-    return {
+    return templateSaveBuild === null ? {
+      ...base,
+      status: "template-refused",
+      templateSaveBuild: null,
+      enhancementBuild: null,
+      featureVerdicts: localFeatureVerdictsForBuild(
+        enhancementInputSha256,
+        requestedCapabilities,
+        null,
+      ),
+      reasons: [templateFailure!],
+    } : {
       ...base,
       status: "template-proved",
       templateSaveBuild,
       enhancementBuild: null,
       featureVerdicts: localFeatureVerdictsForBuild(
-        templateSaveBuild.outputSha256,
+        enhancementInputSha256,
         requestedCapabilities,
         null,
       ),
@@ -902,7 +901,7 @@ export function verifyLocalClientBytes(
   try {
     derivation = deriveEnhancementBuild(
       official,
-      templateOutput,
+      enhancementInput,
       requestedCapabilities,
     );
   } catch {
@@ -910,7 +909,7 @@ export function verifyLocalClientBytes(
   }
   const enhancementBuild = derivation.build;
   const featureVerdicts = localFeatureVerdictsForBuild(
-    templateSaveBuild.outputSha256,
+    enhancementInputSha256,
     requestedCapabilities,
     enhancementBuild,
     derivation.failures,
