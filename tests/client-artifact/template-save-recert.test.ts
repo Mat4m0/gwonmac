@@ -296,7 +296,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
   assert.deepEqual(capabilitiesOf(addressDecision), {
     nativeCursor: true, targetObservation: false, partyObservation: false,
-    teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: true,
+    teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false,
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
@@ -350,7 +350,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     assert.ok(refusal.enhancementBuild?.cursorEvent, mutation.label);
     assert.equal(refusal.enhancementBuild.targetObservation, undefined, mutation.label);
     assert.equal(capabilitiesOf(refusal)?.travelAction, !mutation.shared, mutation.label);
-    assert.equal(capabilitiesOf(refusal)?.chatAliases, true, mutation.label);
+    assert.equal(capabilitiesOf(refusal)?.chatAliases, !mutation.shared, mutation.label);
     assert.equal(capabilitiesOf(refusal)?.xunlaiAction, !mutation.shared, mutation.label);
     assert.equal(
       capabilitiesOf(refusal)?.playRegionObservation,
@@ -447,7 +447,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   const drainRefusal = capabilitiesOf(changedDrainDecision)!;
   assert.equal(drainRefusal.travelAction, false);
   assert.equal(drainRefusal.xunlaiAction, false);
-  assert.equal(drainRefusal.chatAliases, true, "the parser proof remains available");
+  assert.equal(drainRefusal.chatAliases, false);
   const drainEffective = effectiveCapabilitiesOf(changedDrainDecision)!;
   assert.equal(
     drainEffective.chatAliases,
