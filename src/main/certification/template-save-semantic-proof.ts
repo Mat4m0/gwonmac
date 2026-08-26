@@ -1,4 +1,7 @@
-/** Feature-owned semantic proof for the complete Template-saving rewrite path. */
+/**
+ * Feature-owned semantic proof for the complete Template-saving rewrite path.
+ * It refuses incomplete or ambiguous call, storage, and bridge relationships.
+ */
 import { createHash } from "node:crypto";
 import { readSleb, readUleb } from "../core/wasm-binary.js";
 import type { BridgeKind, KnownTemplateSaveBuild } from "./template-save-compat.js";
