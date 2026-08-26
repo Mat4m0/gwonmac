@@ -12,6 +12,8 @@ import {
   type TravelRequest,
 } from "../../../../src/shared/travel";
 import type { TravelHost } from "../travel-host";
+import { isTravelMapUnlocked } from "../../../../src/shared/travel-command";
+import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-history";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
@@ -50,15 +52,30 @@ let visibilityLoad = 0;
 
 const hasQuery = computed(() => normaliseTravelTerm(query.value).length > 0);
 const travelPending = computed(() => props.host.attempt.value.status !== "idle");
-const results = computed(() => hasQuery.value
+const catalogueResults = computed(() => hasQuery.value
   ? searchTravelDestinations(query.value, synonyms.value)
   : []
 );
+const isAvailable = (mapId: number) =>
+  isTravelMapUnlocked(props.host.state.value, mapId) !== false;
+const results = computed(() => catalogueResults.value.filter(
+  (destination) => isAvailable(destination.mapId),
+));
 const shortcutRows = computed(() => Array.from({ length: TRAVEL_SHORTCUT_LIMIT }, (_, index) => {
   const request = shortcuts.value[index] ?? null;
   return { index, request, destination: request === null ? null : travelDestination(request.mapId) };
 }));
-const assignedShortcuts = computed(() => shortcutRows.value.filter((row) => row.destination !== null));
+const assignedShortcuts = computed(() => shortcutRows.value.filter(
+  (row) => row.destination !== null && row.request !== null && isAvailable(row.request.mapId),
+));
+const currentMapId = computed(() =>
+  props.host.state.value.status === "ready" ? props.host.state.value.mapId : null
+);
+const recentDestinations = computed(() => props.host.history.value
+  .filter((mapId) => mapId !== currentMapId.value && isAvailable(mapId))
+  .map((mapId) => travelDestination(mapId))
+  .filter((destination): destination is TravelDestination => destination !== null)
+  .slice(0, TRAVEL_HISTORY_VISIBLE_LIMIT));
 const activeDestination = computed(() => results.value[active.value] ?? null);
 const statusText = computed(() => feedback.value || props.host.unavailable || "");
 const statusLevel = computed(() => feedback.value
@@ -110,7 +127,11 @@ watch(() => props.visible, async (visible) => {
   feedback.value = "";
   phraseError.value = "";
   try {
-    if (!await travelPreferences.load() || load !== visibilityLoad) return;
+    const [preferencesLoaded] = await Promise.all([
+      travelPreferences.load(),
+      props.host.loadHistory(),
+    ]);
+    if (!preferencesLoaded || load !== visibilityLoad) return;
   } catch {
     setFeedback("Travel preferences could not be loaded. Reopen Travel to try again.", "danger");
   }
@@ -330,7 +351,7 @@ function onKeydown(event: KeyboardEvent): void {
     event.preventDefault();
     const slot = Number(event.code.slice(5)) - 1;
     const shortcut = shortcuts.value[slot];
-    if (shortcut) void travel(shortcut);
+    if (shortcut && isAvailable(shortcut.mapId)) void travel(shortcut);
     else void openShortcutManager(slot);
   }
 }
@@ -357,6 +378,12 @@ onBeforeUnmount(() => window.clearTimeout(closeTimer));
     </section>
 
     <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="region" aria-label="Travel">
+      <section v-if="recentDestinations.length" class="travel-section travel-history" aria-labelledby="travel-history-title">
+        <header class="travel-section-head"><h2 id="travel-history-title">Recent</h2><span>Observed in Guild Wars</span></header>
+        <div class="travel-recent-grid">
+          <button v-for="destination in recentDestinations" :key="destination.mapId" type="button" class="travel-recent ui-row" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to recent destination ${destination.name}`" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></button>
+        </div>
+      </section>
       <section class="travel-section travel-favorites" aria-labelledby="travel-favorites-title">
         <header class="travel-section-head"><h2 id="travel-favorites-title">Favorites</h2><span>Press 1–9</span></header>
         <div v-if="assignedShortcuts.length" class="travel-favorite-grid">

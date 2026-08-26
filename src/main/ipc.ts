@@ -144,6 +144,12 @@ import {
   submitVisualCapture,
 } from "./visual-capture.js";
 import { parseDiagnosticProfile } from "./core/diagnostic-profile.js";
+import {
+  parseTravelHistoryCharacter,
+  parseTravelHistoryRecord,
+  type TravelCharacterKey,
+  type TravelHistory,
+} from "../shared/travel-history.js";
 
 export interface IpcContext extends TradeIpcContext {
   sockets: SocketManager;
@@ -164,6 +170,8 @@ export interface IpcContext extends TradeIpcContext {
   resetSettings: () => Promise<SettingsResetOutcome>;
   getTravelPreferences: () => Promise<TravelUserPreferences>;
   setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
+  getTravelHistory: (characterKey: TravelCharacterKey) => Promise<TravelHistory>;
+  recordTravelHistory: (characterKey: TravelCharacterKey, mapId: number) => Promise<TravelHistory>;
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
@@ -537,6 +545,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
     travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),
     travelPreferencesSet: channel(one(parseTravelUserPreferencesUpdate), (_win, update) =>
       ctx.setTravelPreferences(update)),
+    travelHistoryGet: channel(one(parseTravelHistoryCharacter), (_win, value) =>
+      ctx.getTravelHistory(value.characterKey)),
+    travelHistoryRecord: channel(one(parseTravelHistoryRecord), (_win, value) =>
+      ctx.recordTravelHistory(value.characterKey, value.mapId)),
     shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
     shortcutCaptureCancel: channel(nothing, (win) => {
       cancelWindowShortcutCapture(win);

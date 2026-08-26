@@ -142,7 +142,7 @@ const CALL_OFFSET = 5;
  */
 function officialFixture(): Uint8Array {
   const types = section(1, [
-    7,
+    8,
     0x60, 2, 0x7f, 0x7f, 1, 0x7f,
     0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 1, 0x7f,
     0x60, 1, 0x7f, 0,
@@ -150,9 +150,10 @@ function officialFixture(): Uint8Array {
     0x60, 3, 0x7f, 0x7f, 0x7f, 0,
     0x60, 2, 0x7f, 0x7f, 0,
     0x60, 1, 0x7f, 1, 0x7f,
+    0x60, 0, 1, 0x7f,
   ]);
   const imports = section(2, [1, 1, 109, 1, 97, 0, 1]);
-  const functions = section(3, [15, 0, 0, 2, 3, 4, 5, 5, 4, 4, 2, 0, 3, 6, 6, 6]);
+  const functions = section(3, [17, 0, 0, 2, 3, 4, 5, 5, 4, 4, 2, 0, 3, 6, 6, 6, 7, 6]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -184,8 +185,9 @@ function officialFixture(): Uint8Array {
   const loop = [1, 2, 0x7f, 0x0b];
   const slashParser = [0, 0x41, 0, 0x0b];
   const reader = [0, 0x20, 0, 0x0b];
+  const unlockAccessor = [0, 0x41, ...uleb(256), 0x0b];
   const code = section(10, [
-    15,
+    17,
     ...uleb(STUB_BODY.length), ...STUB_BODY,
     ...uleb(caller.length), ...caller,
     ...uleb(loop.length), ...loop,
@@ -201,6 +203,18 @@ function officialFixture(): Uint8Array {
     ...uleb(reader.length), ...reader,
     ...uleb(reader.length), ...reader,
     ...uleb(reader.length), ...reader,
+    ...uleb(unlockAccessor.length), ...unlockAccessor,
+    ...uleb(reader.length), ...reader,
+  ]);
+  const unlockData = [
+    0x20, 0x01, 0, 0,
+    28, 0, 0, 0,
+    28, 0, 0, 0,
+    ...Array.from({ length: 28 * 4 }, () => 0xff),
+  ];
+  const data = section(11, [
+    1, 0, 0x41, ...uleb(256), 0x0b,
+    ...uleb(unlockData.length), ...unlockData,
   ]);
   return Uint8Array.from([
     0, 97, 115, 109, 1, 0, 0, 0,
@@ -213,6 +227,7 @@ function officialFixture(): Uint8Array {
     ...exports,
     ...elements,
     ...code,
+    ...data,
   ]);
 }
 
@@ -262,7 +277,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
     tableSlot: 5,
     observationBase: { layout: {
       contextRoot: 1, agentArray: 2, gameContextSlot: 6,
-      characterContext: 4, mapId: 5, isExplorable: 6,
+      characterContext: 4, characterUuid: 0x64, mapId: 5, isExplorable: 6,
       currentMapId: 7, currentInstanceType: 8, playerNumber: 9,
       agentId: 10, agentPlayerNumber: 14, agentModelType: 15,
       agentX: 11, agentY: 12, agentType: 13,
@@ -270,7 +285,7 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       areaInfoStride: 74, areaInfoFlags: 75,
     } },
     playRegionObservation: { layout: {
-      contextRoot: 1, gameContextSlot: 6, characterContext: 4,
+      contextRoot: 1, gameContextSlot: 6, characterContext: 4, characterUuid: 0x64,
       mapId: 5, isExplorable: 6, currentMapId: 7,
       currentInstanceType: 8, playerNumber: 9, areaInfo: 72,
       areaInfoCount: 73, areaInfoStride: 74, areaInfoFlags: 75,
@@ -307,6 +322,17 @@ function enhancementBuild(input: Uint8Array): KnownEnhancementBuild {
       configureExport: "enhancement_configure_travel",
       toggleExport: "enhancement_take_travel_toggle",
       messageId: 0x1000_0183,
+      unlockProof: {
+        layout: { worldUnlockedMaps: 0x60c },
+        accessor: {
+          functionIndex: 16, params: [], results: ["i32"],
+          bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[15]!),
+        },
+        consumer: {
+          functionIndex: 17, params: ["i32"], results: ["i32"],
+          bodySha256: sha256(parseCode(sectionById(splitSections(input), 10))[16]!),
+        },
+      },
       producer: {
         functionIndex: 12,
         params: ["i32", "i32", "i32", "i32", "i32"],

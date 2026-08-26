@@ -35,7 +35,11 @@ test.describe("renderer Travel input", () => {
         installation.update({
           enabled: true,
           playRegion: "pve",
-          state: { status: "ready", mapId: 133 },
+          state: {
+            status: "ready",
+            mapId: 133,
+            unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+          },
         });
         installation.poll();
       });

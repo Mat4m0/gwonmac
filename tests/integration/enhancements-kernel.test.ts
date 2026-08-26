@@ -216,6 +216,23 @@ describe("Companion kernel", () => {
     assert.equal(policy.targetValid, false);
   });
 
+  it("publishes a privacy-safe character key and the bounded Travel unlock set", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    assert.equal(kernel.init({ features: FEATURE_PLAY_REGION_OBSERVATION }), 1);
+    kernel.tick();
+
+    const state = kernel.playRegion();
+    assert.equal(state.status, "ready");
+    if (state.status !== "ready") return;
+    assert.equal(state.characterKey, "e7ecfb4f6e006495");
+    assert.equal(state.unlockedMapWords?.length, 28);
+    assert.equal(
+      (state.unlockedMapWords?.[Math.floor(133 / 32)] ?? 0) >>> (133 % 32) & 1,
+      1,
+    );
+  });
+
   it("requires UI message configuration only for the Toolbox capability", async () => {
     const cursorOnly = await createKernel();
     cursorOnly.config.fill(0, MESSAGE_CONFIG_START);

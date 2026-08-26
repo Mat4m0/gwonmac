@@ -32,6 +32,7 @@ import {
   type EnhancementSkillSlotGeometryLayout,
   type EnhancementStorageLayout,
   type EnhancementTargetLayout,
+  type EnhancementTravelLayout,
 } from "../../shared/enhancement-config.js";
 export {
   ENHANCEMENT_LAYOUT_FIELDS,
@@ -131,6 +132,9 @@ export function enhancementConfigWords(
           break;
         case "storage":
           value = build.xunlaiAction?.accessProof?.layout[field.key];
+          break;
+        case "travel":
+          value = build.travelAction?.unlockProof.layout[field.key];
           break;
         case "skill-slots":
           value = build.skillSlotGeometry?.layout[field.key];
@@ -306,6 +310,22 @@ export interface KnownEnhancementBuild {
     configureExport: string;
     toggleExport: string;
     messageId: number;
+    /** Certified client array and official bit-test consumer. */
+    unlockProof: Readonly<{
+      layout: EnhancementTravelLayout;
+      accessor: Readonly<{
+        functionIndex: number;
+        params: readonly [];
+        results: readonly ["i32"];
+        bodySha256: string;
+      }>;
+      consumer: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32"];
+        results: readonly ["i32"];
+        bodySha256: string;
+      }>;
+    }>;
     /** Exact producer that constructs {map, region, language, district}. */
     producer: Readonly<{
       functionIndex: number;
@@ -414,7 +434,7 @@ export function supportedEnhancementCapabilities(
     && build.uiDispatcher !== undefined
     && build.partyObservation !== undefined;
   const gameThread = build.gameThread !== undefined;
-  const travelAction = playRegionObservation && build.uiDispatcher !== undefined
+  const travelAction = observationBase && build.uiDispatcher !== undefined
     && gameThread && build.travelAction !== undefined;
   const xunlaiAction = observationBase && build.uiDispatcher !== undefined
     && gameThread && build.xunlaiAction?.accessProof !== undefined;

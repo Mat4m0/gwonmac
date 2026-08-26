@@ -13,6 +13,10 @@ import {
 } from "../fixtures/enhancements.ts";
 
 const AREA_133 = ADDRESSES.areaInfo + 133 * 0x7c;
+const OBSERVED_CHARACTER = Object.freeze({
+  characterKey: "e7ecfb4f6e006495",
+  unlockedMapWords: null,
+});
 
 describe("play-region kernel", () => {
   it("publishes the bounded area policy without traversing the agent array", async () => {
@@ -30,6 +34,7 @@ describe("play-region kernel", () => {
       mapId: 133,
       instanceType: 0,
       playRegion: "pve",
+      ...OBSERVED_CHARACTER,
     });
 
     // Guild halls and PvP outposts carry the PvP area flag, but an outpost is
@@ -42,6 +47,7 @@ describe("play-region kernel", () => {
       mapId: 133,
       instanceType: 0,
       playRegion: "pve",
+      ...OBSERVED_CHARACTER,
     });
 
     kernel.view.setUint32(ADDRESSES.character + 0x19c, 1, true);
@@ -53,6 +59,7 @@ describe("play-region kernel", () => {
       mapId: 133,
       instanceType: 1,
       playRegion: "pvp",
+      ...OBSERVED_CHARACTER,
     });
   });
 
