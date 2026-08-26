@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { prepareClientModule } from
+import { prepareClientModule, type PreparedClientModule } from
   "../../src/main/certification/client-module.js";
 import {
   enhancementOutputSha256,
@@ -75,7 +75,7 @@ test("every shipped runtime profile reproduces the real client chain", async () 
     rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(enhanced));
 
     const cacheRoot = await mkdtemp(join(tmpdir(), `gwonmac-${launch}-chain-`));
-    const prepare = async () => prepareClientModule({
+    const prepare = async (): Promise<PreparedClientModule> => prepareClientModule({
       officialWasmPath: artifact,
       officialJsPath: glue,
       officialSha256: sha256(official),
