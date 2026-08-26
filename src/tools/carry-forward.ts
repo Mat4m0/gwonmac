@@ -4,10 +4,6 @@
  * This is evidence, not authority. In particular, an `exact` memory or
  * command result never changes the shipped certificate by itself.
  */
-import {
-  findEnhancementBuild,
-  type KnownEnhancementBuild,
-} from "../main/certification/enhancement-builds.js";
 import type { EnhancementRecertificationReport } from "./enhancement-recert.js";
 import type { inspectTemplateSaveCandidate } from "./template-save-recert.js";
 
@@ -34,8 +30,6 @@ export interface CarryForwardReport {
   };
   readonly templateSave: TemplateSaveReport;
   readonly enhancement: EnhancementRecertificationReport;
-  /** Canonical facts are embedded only for an already certified exact build. */
-  readonly canonicalCertificate: KnownEnhancementBuild | null;
 }
 
 function evidenceStatus(
@@ -67,9 +61,6 @@ export function createCarryForwardReport(
   nativeDoubleClick: CarryForwardStatus = "not-located",
   generatedAt = new Date().toISOString(),
 ): CarryForwardReport {
-  const canonicalCertificate = enhancement.candidateInspected
-    ? findEnhancementBuild(enhancement.sha256)
-    : null;
   const gameFileSaving: CarryForwardStatus =
     templateSave.status === "certified" || templateSave.status === "derived"
       ? "exact"
@@ -90,7 +81,6 @@ export function createCarryForwardReport(
     },
     templateSave,
     enhancement,
-    canonicalCertificate,
   };
 }
 

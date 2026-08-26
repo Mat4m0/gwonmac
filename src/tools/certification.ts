@@ -354,11 +354,11 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
       ]);
     }
   }
-  const chains: Array<{
+  const chains: Array<Readonly<{
     profile: string;
     inputSha256: string;
     outputSha256: string;
-  }> = [];
+  }>> = [];
   let completeRouteProved = true;
   for (const [profile, bytes] of predecessors) {
     const inputSha256 = createHash("sha256").update(bytes).digest("hex");
@@ -368,7 +368,11 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
       completeRouteProved = false;
       continue;
     }
-    chains.push({ profile, inputSha256, outputSha256 });
+    chains.push(Object.freeze({
+      profile,
+      inputSha256,
+      outputSha256,
+    }));
   }
   process.stdout.write(`${JSON.stringify({
     officialSha256,

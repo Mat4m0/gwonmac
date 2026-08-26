@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The frequent unchanged path reads one manifest and installs nothing.
+  # The frequent indexed path reads one manifest and installs nothing.
   detect:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -25,7 +25,7 @@ jobs:
       contents: read
       issues: write
     outputs:
-      changed: ${{ steps.unreported.outputs.changed }}
+      needed: ${{ steps.unreported.outputs.needed }}
       fingerprint: ${{ steps.published.outputs.fingerprint }}
       recorded: ${{ steps.published.outputs.recorded }}
       verifier_abi: ${{ steps.published.outputs.verifier_abi }}
@@ -42,31 +42,26 @@ jobs:
       - name: Skip a generation that already has durable evidence
         id: unreported
         env:
-          CHANGED: ${{ steps.published.outputs.changed }}
           FINGERPRINT: ${{ steps.published.outputs.fingerprint }}
           GH_TOKEN: ${{ github.token }}
           VERIFIER_ABI: ${{ steps.published.outputs.verifier_abi }}
         run: |
-          if [ "$CHANGED" != "true" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           short="${FINGERPRINT:0:12}"
           if [ -n "$(gh issue list --state open --label client-recertification \
             --search "$short v$VERIFIER_ABI in:title" --json number --jq '.[].number')" ]; then
             echo "Generation $short already has an open tracking issue."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
           elif [ -n "$(gh issue list --state all --label client-recertification-proved \
             --search "$short v$VERIFIER_ABI in:title" --json number --jq '.[].number')" ]; then
             echo "Generation $short already has a signed successful report."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "needed=true" >> "$GITHUB_OUTPUT"
           fi
 
   derive:
     needs: detect
-    if: needs.detect.outputs.changed == 'true'
+    if: needs.detect.outputs.needed == 'true'
     runs-on: macos-15
     timeout-minutes: 45
     permissions:
@@ -74,9 +69,9 @@ jobs:
       contents: read
       id-token: write
     outputs:
-      outcome: ${{ steps.derive.outputs.outcome }}
-      summary: ${{ steps.derive.outputs.summary }}
-      build: ${{ steps.derive.outputs.build }}
+      outcome: ${{ steps.record.outputs.outcome }}
+      summary: ${{ steps.record.outputs.summary }}
+      build: ${{ steps.record.outputs.build }}
       fingerprint: ${{ steps.official.outputs.fingerprint }}
     steps:
       - name: Name the evidence directory
@@ -123,14 +118,51 @@ jobs:
             > "$EVIDENCE/client-artifact.json"
           exit "$qualification_exit"
 
+      - name: Qualify native input and memory profiles
+        id: transforms
+        if: always()
+        continue-on-error: true
+        env:
+          JS: ${{ steps.official.outputs.js }}
+          WASM: ${{ steps.official.outputs.wasm }}
+        run: |
+          mkdir -p "$EVIDENCE"
+          set +e
+          node build/tools/certification.js double-click "$WASM" \
+            > "$RUNNER_TEMP/double-click.raw.json" \
+            2> "$RUNNER_TEMP/double-click.txt"
+          double_click_exit=$?
+          node --import ./scripts/ts-hook.mjs scripts/qualify-extended-memory.ts \
+            "$JS" "$WASM" > "$RUNNER_TEMP/extended-memory.raw.json" \
+            2> "$RUNNER_TEMP/extended-memory.txt"
+          extended_memory_exit=$?
+          set -e
+          if [ "$double_click_exit" -eq 0 ]; then
+            jq '. + {status: "proved", exitCode: 0}' \
+              "$RUNNER_TEMP/double-click.raw.json" \
+              > "$EVIDENCE/double-click.json"
+          else
+            jq -n --argjson exitCode "$double_click_exit" \
+              '{status: "refused", exitCode: $exitCode}' \
+              > "$EVIDENCE/double-click.json"
+          fi
+          if [ "$extended_memory_exit" -eq 0 ]; then
+            jq '. + {status: "proved", exitCode: 0}' \
+              "$RUNNER_TEMP/extended-memory.raw.json" \
+              > "$EVIDENCE/extended-memory.json"
+          else
+            jq -n --argjson exitCode "$extended_memory_exit" \
+              '{status: "refused", exitCode: $exitCode}' \
+              > "$EVIDENCE/extended-memory.json"
+          fi
       # Both commands inspect the same original bytes. Neither writes source.
       # `recertify` composes template preparation and Enhancement analysis in
       # one process, so an Enhancement verdict cannot outlive a refused
       # template predicate or a newly generated exact table row.
       - name: Verify what the published build proves
-        id: derive
+        if: always()
+        continue-on-error: true
         env:
-          QUALIFICATION_OUTCOME: ${{ steps.qualification.outcome }}
           WASM: ${{ steps.official.outputs.wasm }}
         run: |
           mkdir -p "$EVIDENCE"
@@ -142,24 +174,27 @@ jobs:
           node build/tools/certification.js verify "$WASM" \
             > "$EVIDENCE/runtime-verdicts.json" 2> "$EVIDENCE/runtime-verdicts.txt"
           set -e
-          build="$(jq -er '.sha256' "$EVIDENCE/template-save.json")"
-          if [ "$QUALIFICATION_OUTCOME" != "success" ]; then
-            outcome=investigation
-            summary="the real-client qualification suite refused the exact downloaded artifact"
-          elif jq -e '.templateSaving and (.features != null) and (.features | to_entries | all(.value.status == "proved"))' \
-            "$EVIDENCE/runtime-verdicts.json" >/dev/null; then
-            outcome=ready
-            summary="the runtime semantic verifier proved every protected feature and exact-artifact qualification passed"
-          else
-            outcome=investigation
-            summary="$(jq -cr '{templateSaving, verifierAbi, features, reasons}' \
-              "$EVIDENCE/runtime-verdicts.json" 2>/dev/null \
-              || printf '%s' 'the runtime semantic verifier refused the client')"
-          fi
+
+      - name: Build the durable generation record
+        id: record
+        if: always()
+        env:
+          GENERATION: ${{ steps.official.outputs.fingerprint }}
+          JS: ${{ steps.official.outputs.js }}
+          WASM: ${{ steps.official.outputs.wasm }}
+        run: |
+          node --import ./scripts/ts-hook.mjs \
+            scripts/client-recertification-evidence.ts \
+            "$GENERATION" "$WASM" "$JS" \
+            "$EVIDENCE/runtime-verdicts.json" \
+            "$EVIDENCE/client-artifact.json" \
+            "$EVIDENCE/double-click.json" \
+            "$EVIDENCE/extended-memory.json" \
+            > "$EVIDENCE/generation.json"
           {
-            echo "outcome=$outcome"
-            echo "summary=$summary"
-            echo "build=$build"
+            echo "outcome=$(jq -er '.outcome.status' "$EVIDENCE/generation.json")"
+            echo "summary=$(jq -er '.outcome.reason' "$EVIDENCE/generation.json")"
+            echo "build=$(jq -er '.artifacts.wasm.sha256' "$EVIDENCE/generation.json")"
           } >> "$GITHUB_OUTPUT"
 
       - name: Collect semantic comparison evidence
@@ -182,29 +217,31 @@ jobs:
               > "$EVIDENCE/carry-forward.json"
           fi
 
-      # Official client artifacts remain in the runner temporary directory and
-      # are never uploaded. Only machine-readable and human-readable evidence
-      # is retained.
+      # Official client artifacts and detailed locator output remain in the
+      # runner temporary directory. The upload allowlist contains no client
+      # bytes, local paths, function indices, offsets, or raw addresses.
       - name: Publish the verification evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: client-recertification-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/evidence
-          retention-days: 30
+          path: |
+            ${{ runner.temp }}/evidence/generation.json
+            ${{ runner.temp }}/evidence/carry-forward.md
+          retention-days: 90
           if-no-files-found: error
 
       # The artifact is convenient for review but expires. This custom
-      # attestation binds the machine-readable verdicts to the exact official
-      # WASM digest and remains queryable through GitHub's attestations API.
-      - name: Sign the runtime semantic report
-        if: always() && steps.derive.outputs.build != ''
+      # attestation preserves the complete bounded generation record and binds
+      # it to the exact official WASM digest.
+      - name: Sign the generation record
+        if: always() && steps.record.outputs.build != ''
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: Gw.jspi.wasm
-          subject-digest: sha256:${{ steps.derive.outputs.build }}
+          subject-digest: sha256:${{ steps.record.outputs.build }}
           predicate-type: https://gwonmac.com/attestations/client-verification/v1
-          predicate-path: ${{ runner.temp }}/evidence/runtime-verdicts.json
+          predicate-path: ${{ runner.temp }}/evidence/generation.json
 
   # Reporting has no source-writing permission. A tracking issue records a
   # refused invariant for investigation; it is never launch authority.
@@ -221,6 +258,7 @@ jobs:
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Receive the verification evidence
+        id: evidence
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -236,7 +274,9 @@ jobs:
               > evidence/carry-forward.md
           fi
       - name: Record a proved generation
+        id: proved
         if: needs.derive.result == 'success' && needs.derive.outputs.outcome == 'ready'
+        continue-on-error: true
         env:
           BUILD: ${{ needs.derive.outputs.build }}
           FINGERPRINT: ${{ needs.derive.outputs.fingerprint }}
@@ -247,14 +287,16 @@ jobs:
           gh label create client-recertification-proved --force --color 0e8a16 \
             --description "An ArenaNet client generation proved by the runtime verifier"
           {
+            # shellcheck disable=SC2016
             printf 'Published client generation `%s`, WASM `%s`.\n\n' "$short" "$BUILD"
             printf '%s\n' '- outcome: every protected feature proved independently and exact-artifact qualification passed'
             printf '%s\n' '- authority: evidence only; the shipped runtime verifier remains sole launch authority'
-            printf '%s\n' '- qualification evidence: `client-artifact.json` and `client-artifact.txt` in that run artifact'
-            printf '%s\n' "- signed report: $RUN_URL"
+            # shellcheck disable=SC2016
+            printf '%s\n' '- retained evidence: privacy-safe `generation.json` and `carry-forward.md`'
+            printf '%s\n' "- signed generation record: $RUN_URL"
             echo
             printf '%s\n' '```json'
-            jq -c . evidence/runtime-verdicts.json
+            jq -c . evidence/generation.json
             printf '%s\n' '```'
           } > proved.md
           issue="$(gh issue create --label client-recertification-proved \
@@ -262,12 +304,15 @@ jobs:
             --body-file proved.md)"
           gh issue close "$issue" --reason completed
       - name: Open the tracking issue
-        if: always() && needs.derive.outputs.outcome != 'ready'
+        if: always() && (needs.derive.result != 'success' || needs.derive.outputs.outcome != 'ready' || steps.evidence.outcome != 'success' || steps.proved.outcome == 'failure')
         env:
           BUILD: ${{ needs.derive.outputs.build }}
+          DERIVE_OUTCOME: ${{ needs.derive.outputs.outcome }}
           DERIVE_RESULT: ${{ needs.derive.result }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
           FINGERPRINT: ${{ needs.derive.outputs.fingerprint || needs.detect.outputs.fingerprint }}
           GH_TOKEN: ${{ github.token }}
+          PROVED_OUTCOME: ${{ steps.proved.outcome }}
           SUMMARY: ${{ needs.derive.outputs.summary }}
           VERIFIER_ABI: ${{ needs.detect.outputs.verifier_abi }}
         run: |
@@ -279,19 +324,31 @@ jobs:
           if [ -z "$SUMMARY" ]; then
             SUMMARY="evidence collection ended with status $DERIVE_RESULT"
           fi
+          if [ "$DERIVE_RESULT" = success ] && [ "$DERIVE_OUTCOME" = ready ] && \
+            { [ "$EVIDENCE_OUTCOME" != success ] || [ "$PROVED_OUTCOME" = failure ]; }; then
+            SUMMARY="semantic proof completed, but evidence publication failed; review workflow"
+            title="ArenaNet client $short v$VERIFIER_ABI: evidence publication failed"
+          else
+            title="ArenaNet client $short v$VERIFIER_ABI: invariant refused, investigation needed"
+          fi
           gh label create client-recertification --force --color 1d76db \
             --description "An ArenaNet client build requiring semantic verification"
-          title="ArenaNet client $short v$VERIFIER_ABI: invariant refused, investigation needed"
           {
+            # shellcheck disable=SC2016
             printf 'Published client generation `%s`, WASM `%s`.\n\n' "$short" "$BUILD"
             printf '%s\n' "- outcome: $SUMMARY"
             printf '%s\n' '- source branch: none; this workflow cannot grant capabilities'
             printf '%s\n' "- evidence: $RUN_URL"
-            printf '%s\n' '- exact-artifact qualification: `client-artifact.json` and `client-artifact.txt` in that run artifact'
-            printf '%s\n' '- semantic verdicts: `runtime-verdicts.json` in that run artifact'
+            if [ -s evidence/generation.json ]; then
+              # shellcheck disable=SC2016
+              printf '%s\n' '- retained evidence: privacy-safe `generation.json` and `carry-forward.md`'
+            else
+              printf '%s\n' '- retained evidence: generation record unavailable; review the failed workflow steps'
+            fi
             echo
             cat evidence/carry-forward.md
             echo
+            # shellcheck disable=SC2016
             printf '%s\n' '`internal/upstream/recertify.md` owns any investigation.'
             printf '%s\n' 'Keep the official client playable and restore only the feature whose invariant failed.'
           } > tracking.md

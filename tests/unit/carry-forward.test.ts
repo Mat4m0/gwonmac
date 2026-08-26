@@ -34,7 +34,7 @@ describe("patch-day carry-forward report", () => {
       teamApply: "not-located",
       xunlaiStorage: "not-located",
     });
-    assert.equal(report.canonicalCertificate, null);
+    assert.equal("canonicalCertificate" in report, false);
     assert.match(formatCarryForwardMarkdown(report), /Apply team \| not-located/);
     assert.match(formatCarryForwardMarkdown(report), /Xunlai storage \| not-located/);
     assert.match(
