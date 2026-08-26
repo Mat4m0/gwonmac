@@ -289,6 +289,9 @@ const publishWindowSize = (width: number, height: number): Promise<void> =>
   saveWindowState(windowStatePath, {
     bounds: { x: 100, y: 100, width, height },
     mode: "normal",
+    // The rollback Stable ignores this additive field. The candidate requires
+    // it whenever it writes the same format-1 document.
+    displayWorkArea: { x: 0, y: 0, width: 1_920, height: 1_080 },
   });
 
 async function windowSize(page: Page): Promise<{ width: number; height: number }> {
