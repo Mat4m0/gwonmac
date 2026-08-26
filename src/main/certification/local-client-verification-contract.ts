@@ -215,6 +215,22 @@ interface LocalVerificationBase {
   readonly verifierAbi: typeof SEMANTIC_VERIFIER_ABI;
 }
 
+/** File compatibility is independent from every optional client feature. */
+export type LocalFileVerdict = Readonly<
+  | {
+      status: "proved";
+      inputSha256: string;
+      outputSha256: string;
+      verifierAbi: typeof SEMANTIC_VERIFIER_ABI;
+    }
+  | {
+      status: "refused";
+      inputSha256: string;
+      verifierAbi: typeof SEMANTIC_VERIFIER_ABI;
+      reason: Exclude<TemplateVerificationReason, "invalid-wasm">;
+    }
+>;
+
 /**
  * Product-shaped verification result. File and feature proof may succeed or
  * refuse independently; only invalid WASM has no feature verdicts.
@@ -222,6 +238,7 @@ interface LocalVerificationBase {
 export type LocalClientVerification =
   | (LocalVerificationBase & Readonly<{
       status: "template-refused";
+      fileVerdict: LocalFileVerdict | null;
       templateSaveBuild: null;
       enhancementBuild: null;
       featureVerdicts: LocalFeatureVerdicts | null;
@@ -229,6 +246,7 @@ export type LocalClientVerification =
     }>)
   | (LocalVerificationBase & Readonly<{
       status: "template-proved";
+      fileVerdict: LocalFileVerdict;
       templateSaveBuild: KnownTemplateSaveBuild;
       enhancementBuild: null;
       featureVerdicts: LocalFeatureVerdicts;
@@ -236,6 +254,7 @@ export type LocalClientVerification =
     }>)
   | (LocalVerificationBase & Readonly<{
       status: "enhancement-refused";
+      fileVerdict: LocalFileVerdict;
       templateSaveBuild: KnownTemplateSaveBuild | null;
       enhancementBuild: null;
       featureVerdicts: LocalFeatureVerdicts;
@@ -243,6 +262,7 @@ export type LocalClientVerification =
     }>)
   | (LocalVerificationBase & Readonly<{
       status: "proved";
+      fileVerdict: LocalFileVerdict;
       templateSaveBuild: KnownTemplateSaveBuild | null;
       enhancementBuild: KnownEnhancementBuild;
       featureVerdicts: LocalFeatureVerdicts;

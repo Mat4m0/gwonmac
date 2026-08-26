@@ -89,6 +89,18 @@ const COOLDOWN: EnhancementCapabilities = Object.freeze({
     preGameControls: false,
   skillCooldownObservation: true,
 });
+const PROVED_FILE = Object.freeze({
+  status: "proved" as const,
+  inputSha256: TEMPLATE.sha256,
+  outputSha256: TEMPLATE.outputSha256,
+  verifierAbi: SEMANTIC_VERIFIER_ABI,
+});
+const REFUSED_FILE = Object.freeze({
+  status: "refused" as const,
+  inputSha256: TEMPLATE.sha256,
+  verifierAbi: SEMANTIC_VERIFIER_ABI,
+  reason: "template-shape-changed" as const,
+});
 type ProvedVerification = Extract<LocalClientVerification, { status: "proved" }>;
 
 function verificationFor(
@@ -97,6 +109,7 @@ function verificationFor(
 ): ProvedVerification {
   return {
     status: "proved",
+    fileVerdict: PROVED_FILE,
     officialSha256: TEMPLATE.sha256,
     verifierAbi: SEMANTIC_VERIFIER_ABI,
     templateSaveBuild: TEMPLATE,
@@ -629,6 +642,7 @@ describe("local client verification boundary", () => {
   it("accepts a template-only proof and requires no enhancement behind failure", () => {
     const templateOnly: LocalClientVerification = {
       status: "enhancement-refused",
+      fileVerdict: PROVED_FILE,
       officialSha256: TEMPLATE.sha256,
       verifierAbi: SEMANTIC_VERIFIER_ABI,
       templateSaveBuild: TEMPLATE,
@@ -658,6 +672,7 @@ describe("local client verification boundary", () => {
     };
     const independent: LocalClientVerification = {
       status: "proved",
+      fileVerdict: REFUSED_FILE,
       officialSha256: TEMPLATE.sha256,
       verifierAbi: SEMANTIC_VERIFIER_ABI,
       templateSaveBuild: null,
@@ -678,6 +693,7 @@ describe("local client verification boundary", () => {
   it("represents an unrequested enhancement as a proved template, not a refusal", () => {
     const templateOnly: LocalClientVerification = {
       status: "template-proved",
+      fileVerdict: PROVED_FILE,
       officialSha256: TEMPLATE.sha256,
       verifierAbi: SEMANTIC_VERIFIER_ABI,
       templateSaveBuild: TEMPLATE,
@@ -701,6 +717,22 @@ describe("local client verification boundary", () => {
     assert.equal(isLocalClientVerification({
       ...proof,
       verifierAbi: SEMANTIC_VERIFIER_ABI + 1,
+    }, TEMPLATE.sha256), false);
+    assert.equal(isLocalClientVerification({
+      ...proof,
+      fileVerdict: {
+        ...proof.fileVerdict,
+        inputSha256: ENHANCEMENT.sha256,
+      },
+    }, TEMPLATE.sha256), false);
+    assert.equal(isLocalClientVerification({
+      ...proof,
+      fileVerdict: null,
+    }, TEMPLATE.sha256), false);
+    assert.equal(isLocalClientVerification({
+      ...proof,
+      templateSaveBuild: null,
+      fileVerdict: PROVED_FILE,
     }, TEMPLATE.sha256), false);
     assert.equal(isLocalClientVerification({
       ...proof,
@@ -762,6 +794,7 @@ describe("local client verification boundary", () => {
     );
     const refusal: LocalClientVerification = {
       status: "enhancement-refused",
+      fileVerdict: PROVED_FILE,
       officialSha256: TEMPLATE.sha256,
       verifierAbi: SEMANTIC_VERIFIER_ABI,
       templateSaveBuild: TEMPLATE,

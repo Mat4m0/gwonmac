@@ -25,6 +25,7 @@ import {
   type EnhancementVerificationReason,
   type LocalClientFeature,
   type LocalClientVerification,
+  type LocalFileVerdict,
   type LocalFeatureFailure,
   type LocalFeatureFailures,
   type LocalFeatureInvariant,
@@ -64,6 +65,33 @@ function isTemplateReason(value: unknown): value is TemplateVerificationReason {
 function isEnhancementReason(value: unknown): value is EnhancementVerificationReason {
   return value === "enhancement-layout-changed"
     || value === "enhancement-transform-failed";
+}
+
+function isLocalFileVerdict(
+  value: unknown,
+  officialSha256: string,
+  templateSaveBuild: KnownTemplateSaveBuild | null,
+): value is LocalFileVerdict {
+  if (!value || typeof value !== "object") return false;
+  const verdict = value as Partial<LocalFileVerdict>;
+  if (
+    verdict.inputSha256 !== officialSha256
+    || verdict.verifierAbi !== SEMANTIC_VERIFIER_ABI
+  ) return false;
+  if (verdict.status === "proved") {
+    return hasExactOwnKeys(value as Readonly<Record<string, unknown>>, [
+      "status", "inputSha256", "outputSha256", "verifierAbi",
+    ])
+      && templateSaveBuild !== null
+      && verdict.outputSha256 === templateSaveBuild.outputSha256;
+  }
+  return verdict.status === "refused"
+    && hasExactOwnKeys(value as Readonly<Record<string, unknown>>, [
+      "status", "inputSha256", "verifierAbi", "reason",
+    ])
+    && templateSaveBuild === null
+    && (verdict.reason === "template-shape-changed"
+      || verdict.reason === "template-transform-failed");
 }
 
 function isLocalFeatureInvariant<Feature extends LocalClientFeature>(
@@ -683,6 +711,7 @@ export function isLocalClientVerification(
       "status",
       "officialSha256",
       "verifierAbi",
+      "fileVerdict",
       "templateSaveBuild",
       "enhancementBuild",
       "featureVerdicts",
@@ -703,9 +732,13 @@ export function isLocalClientVerification(
     const featureVerdicts = result.featureVerdicts;
     if (featureVerdicts === null || featureVerdicts === undefined) {
       return result.status === "template-refused"
+        && result.fileVerdict === null
         && result.enhancementBuild === null
         && result.reasons.length === 1
         && result.reasons[0] === "invalid-wasm";
+    }
+    if (!isLocalFileVerdict(result.fileVerdict, officialSha256, null)) {
+      return false;
     }
     const enhancementBuild = result.enhancementBuild;
     if (
@@ -744,6 +777,11 @@ export function isLocalClientVerification(
   if (!isTemplateSaveBuild(result.templateSaveBuild, officialSha256)) {
     return false;
   }
+  if (!isLocalFileVerdict(
+    result.fileVerdict,
+    officialSha256,
+    result.templateSaveBuild,
+  )) return false;
   const inputSha256 = result.templateSaveBuild.outputSha256;
   const enhancementBuild = result.enhancementBuild;
   if (

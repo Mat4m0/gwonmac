@@ -43,6 +43,16 @@ export const nativeDoubleClickFlagForPress = (event: Pick<MouseEvent,
   return event.button === 0 && event.detail % 2 === 0 ? 1 : 0;
 };
 
+export function applyNativeDoubleClickPress(
+  event: Pick<MouseEvent, 'isTrusted' | 'button' | 'detail'>,
+  global: FlagGlobal | null,
+): boolean {
+  const value = nativeDoubleClickFlagForPress(event);
+  if (value === null) return false;
+  if (global) global.value = value;
+  return true;
+}
+
 export const installNativeDoubleClick = ({
   flag,
   trace,
@@ -53,11 +63,9 @@ export const installNativeDoubleClick = ({
   // callback reads it. Registered here rather than on the canvas for the same
   // reason: capture descends from the root, so an ancestor always precedes it.
   window.addEventListener('mousedown', (event) => {
-    const value = nativeDoubleClickFlagForPress(event);
-    if (value === null) return;
     const global = flag();
-    const doubleClick = value === 1;
-    if (global) global.value = value;
+    const doubleClick = event.button === 0 && event.detail % 2 === 0;
+    if (!applyNativeDoubleClickPress(event, global)) return;
     // Recorded even when there is nothing to write to. A double-click that
     // the client cannot be told about is the report worth having, and the
     // absent row would otherwise look like the press never happened.

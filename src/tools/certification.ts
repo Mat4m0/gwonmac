@@ -27,6 +27,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeAtomic } from "../main/core/atomic-file.js";
 import {
+  ENHANCEMENT_BUILDS,
   enhancementOutputSha256,
   enhancementProfilesForBuild,
   findEnhancementBuild,
@@ -41,6 +42,8 @@ import {
   isLocalClientVerification,
   verifyLocalClientBytes,
 } from "../main/certification/local-client-verifier.js";
+import { rewriteTemplateSaveWasm } from
+  "../main/certification/template-save-compat.js";
 import {
   ENHANCEMENT_CAPABILITY_PRESETS,
   ENHANCEMENT_CAPABILITY_FIELDS,
@@ -157,6 +160,7 @@ async function verify(argv: readonly string[]): Promise<void> {
       }));
   process.stdout.write(`${JSON.stringify({
     officialSha256: result.officialSha256,
+    fileVerdict: result.fileVerdict,
     templateSaving: result.templateSaveBuild !== null,
     verifierAbi: result.verifierAbi,
     features: featureStatuses,
@@ -186,8 +190,8 @@ async function compare(argv: readonly string[]): Promise<void> {
     currentMessageAnchors(),
   );
   const postTemplate = preparePostTemplateSaveModule(official);
-  const doubleClick = postTemplate
-    && deriveNativeDoubleClickBuild(postTemplate.bytes)
+  const selectedInput = postTemplate?.bytes ?? official;
+  const doubleClick = deriveNativeDoubleClickBuild(selectedInput)
     ? "exact" as const
     : "not-located" as const;
   const report = createCarryForwardReport(
@@ -325,22 +329,28 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
     await readFile(filename ?? installedClientArtifact()),
   );
   const officialSha256 = createHash("sha256").update(official).digest("hex");
-  const preparedTemplate = preparePostTemplateSaveModule(official);
-  if (!preparedTemplate) throw new Error("template-save semantic proof failed");
-  const templateSave = preparedTemplate.bytes;
+  const verification = verifyLocalClientBytes(official);
+  const templateBuild = verification.templateSaveBuild;
+  const selectedInput = templateBuild
+    ? rewriteTemplateSaveWasm(official, templateBuild)
+    : official;
   const predecessors: Array<[string, Uint8Array]> = [
-    ["template-save", templateSave],
+    [templateBuild ? "file-compatible" : "official", selectedInput],
   ];
-  const enhancementBuild = findEnhancementBuild(
-    createHash("sha256").update(templateSave).digest("hex"),
-  );
+  const enhancementBuild = verification.enhancementBuild;
   if (enhancementBuild) {
-    for (const profile of enhancementProfilesForBuild(enhancementBuild)) {
+    const authoredBuild = ENHANCEMENT_BUILDS.find(
+      (candidate) => candidate.sha256 === enhancementBuild.sha256,
+    );
+    if (!authoredBuild) throw new Error("verified Enhancement build has no authored profile row");
+    for (const profile of enhancementProfilesForBuild(authoredBuild)) {
       const capabilities = enhancementCapabilitiesForProfile(profile);
       if (!capabilities) throw new Error(`invalid certified profile ${profile}`);
+      const profileBuild = verifyLocalClientBytes(official, capabilities).enhancementBuild;
+      if (!profileBuild) throw new Error(`semantic verification refused profile ${profile}`);
       predecessors.push([
         profile,
-        transformEnhancementWasm(templateSave, enhancementBuild, capabilities),
+        transformEnhancementWasm(selectedInput, profileBuild, capabilities),
       ]);
     }
   }

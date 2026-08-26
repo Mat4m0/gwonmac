@@ -40,6 +40,12 @@ function localVerification(
     return {
       ...base,
       status: "template-refused",
+      fileVerdict: {
+        status: "refused",
+        inputSha256: OFFICIAL.sha256,
+        verifierAbi: SEMANTIC_VERIFIER_ABI,
+        reason: "template-shape-changed",
+      },
       templateSaveBuild: null,
       enhancementBuild: null,
       featureVerdicts: null,
@@ -56,6 +62,12 @@ function localVerification(
     ? {
         ...base,
         status: "enhancement-refused",
+        fileVerdict: {
+          status: "proved",
+          inputSha256: OFFICIAL.sha256,
+          outputSha256: OFFICIAL.outputSha256,
+          verifierAbi: SEMANTIC_VERIFIER_ABI,
+        },
         templateSaveBuild: OFFICIAL,
         enhancementBuild: null,
         featureVerdicts,
@@ -64,6 +76,12 @@ function localVerification(
     : {
         ...base,
         status: "proved",
+        fileVerdict: {
+          status: "proved",
+          inputSha256: OFFICIAL.sha256,
+          outputSha256: OFFICIAL.outputSha256,
+          verifierAbi: SEMANTIC_VERIFIER_ABI,
+        },
         templateSaveBuild: OFFICIAL,
         enhancementBuild,
         featureVerdicts,

@@ -31,6 +31,7 @@ import {
 import {
   enhancementCapabilitiesForProfile,
   NO_ENHANCEMENT_CAPABILITIES,
+  type EnhancementCapabilities,
 } from "../src/shared/enhancement-contracts.js";
 import {
   certificationFromLocalVerification,
@@ -81,7 +82,9 @@ function withNativeDoubleClick(input: Uint8Array): Uint8Array {
 
 const predecessors = new Map<string, Uint8Array>();
 predecessors.set("off", withNativeDoubleClick(templateWasm));
-const profileBaseline = ENHANCEMENT_BUILDS.at(-1);
+const profileBaseline = ENHANCEMENT_BUILDS.find(
+  (candidate) => candidate.sha256 === enhancementBuild.sha256,
+);
 if (!profileBaseline) throw new Error("Enhancement profile fixture is missing");
 for (const profile of enhancementProfilesForBuild(profileBaseline)) {
   const capabilities = enhancementCapabilitiesForProfile(profile);
@@ -176,26 +179,42 @@ try {
   const officialJsPath = jsPath;
   const officialWasmPath = wasmPath;
   const officialSha256 = sha256(officialWasm);
-  const selected = await prepareClientModule({
-    officialJsPath,
-    officialWasmPath,
-    officialSha256,
-    certification: certificationFromLocalVerification(verification),
-    enhancementCapabilities: NO_ENHANCEMENT_CAPABILITIES,
-    compatibilityCacheRoot: join(selectionScratch, "compatibility"),
-    enhancementCacheRoot: join(selectionScratch, "enhancements"),
-    nativeDoubleClickCacheRoot: join(selectionScratch, "double-click"),
-    extendedMemoryCacheRoot: join(selectionScratch, "extended-memory"),
-    extendedMemoryEnabled: true,
-  }, async ({ wasmPath: candidatePath }) =>
-    deriveNativeDoubleClickBuild(await readFile(candidatePath)), verifyExtendedMemory);
-  if (
-    selected.extendedMemory.status !== "active"
-    || selected.extendedMemory.profile !== "off"
-    || sha256(await readFile(selected.jsPath)) !== jsOutputSha256
-    || sha256(await readFile(selected.wasmPath))
-      !== offOutputSha256
-  ) throw new Error("production client selection did not publish the certified pair");
+  const selections: Array<readonly [string, EnhancementCapabilities]> = [
+    ["off", NO_ENHANCEMENT_CAPABILITIES],
+  ];
+  for (const profile of enhancementProfilesForBuild(profileBaseline)) {
+    const capabilities = enhancementCapabilitiesForProfile(profile);
+    if (!capabilities) throw new Error(`invalid certified profile ${profile}`);
+    selections.push([profile, capabilities]);
+  }
+  for (const [profile, capabilities] of selections) {
+    const profileVerification = verifyLocalClientBytes(officialWasm, capabilities);
+    const profileRoot = join(selectionScratch, profile);
+    const selected = await prepareClientModule({
+      officialJsPath,
+      officialWasmPath,
+      officialSha256,
+      certification: certificationFromLocalVerification(profileVerification),
+      enhancementCapabilities: capabilities,
+      compatibilityCacheRoot: join(profileRoot, "compatibility"),
+      enhancementCacheRoot: join(profileRoot, "enhancements"),
+      nativeDoubleClickCacheRoot: join(profileRoot, "double-click"),
+      extendedMemoryCacheRoot: join(profileRoot, "extended-memory"),
+      extendedMemoryEnabled: true,
+    }, async ({ wasmPath: candidatePath }) =>
+      deriveNativeDoubleClickBuild(await readFile(candidatePath)), verifyExtendedMemory);
+    const predecessor = predecessors.get(profile);
+    if (
+      !predecessor
+      || selected.extendedMemory.status !== "active"
+      || selected.extendedMemory.profile !== profile
+      || JSON.stringify(selected.effectiveCapabilities) !== JSON.stringify(capabilities)
+      || !selected.nativeDoubleClick
+      || sha256(await readFile(selected.jsPath)) !== jsOutputSha256
+      || sha256(await readFile(selected.wasmPath))
+        !== sha256(rewriteExtendedMemoryWasm(predecessor))
+    ) throw new Error(`production client selection refused profile ${profile}`);
+  }
 } finally {
   await rm(selectionScratch, { recursive: true, force: true });
 }

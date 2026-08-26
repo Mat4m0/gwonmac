@@ -832,6 +832,7 @@ export function verifyLocalClientBytes(
     return {
       ...base,
       status: "template-refused",
+      fileVerdict: null,
       templateSaveBuild: null,
       enhancementBuild: null,
       featureVerdicts: null,
@@ -851,12 +852,26 @@ export function verifyLocalClientBytes(
   }
 
   const templateSaveBuild = postTemplate?.build ?? null;
+  const fileVerdict = templateSaveBuild === null
+    ? Object.freeze({
+        status: "refused" as const,
+        inputSha256: officialSha256,
+        verifierAbi: SEMANTIC_VERIFIER_ABI,
+        reason: templateFailure!,
+      })
+    : Object.freeze({
+        status: "proved" as const,
+        inputSha256: officialSha256,
+        outputSha256: templateSaveBuild.outputSha256,
+        verifierAbi: SEMANTIC_VERIFIER_ABI,
+      });
   const enhancementInput = postTemplate?.bytes ?? official;
   const enhancementInputSha256 = sha256(enhancementInput);
   if (!enhancementCapabilitiesRequested(requestedCapabilities)) {
     return templateSaveBuild === null ? {
       ...base,
       status: "template-refused",
+      fileVerdict,
       templateSaveBuild: null,
       enhancementBuild: null,
       featureVerdicts: localFeatureVerdictsForBuild(
@@ -868,6 +883,7 @@ export function verifyLocalClientBytes(
     } : {
       ...base,
       status: "template-proved",
+      fileVerdict,
       templateSaveBuild,
       enhancementBuild: null,
       featureVerdicts: localFeatureVerdictsForBuild(
@@ -907,6 +923,7 @@ export function verifyLocalClientBytes(
     return {
       ...base,
       status: "enhancement-refused",
+      fileVerdict,
       templateSaveBuild,
       enhancementBuild: null,
       featureVerdicts,
@@ -916,6 +933,7 @@ export function verifyLocalClientBytes(
   return {
     ...base,
     status: "proved",
+    fileVerdict,
     templateSaveBuild,
     enhancementBuild,
     featureVerdicts,

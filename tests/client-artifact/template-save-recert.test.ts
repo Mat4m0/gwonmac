@@ -34,16 +34,10 @@ import {
 import {
   ENHANCEMENT_BUILDS,
   enhancementProfilesForBuild,
-  enhancementOutputSha256,
   supportedEnhancementCapabilities,
 } from "../../src/main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../../src/main/certification/enhancement-transform.js";
-import {
-  deriveNativeDoubleClickBuild,
-  isDerivedNativeDoubleClickBuild,
-  rewriteNativeDoubleClickWasm,
-} from "../../src/main/certification/native-double-click.js";
-import { rewriteExtendedMemoryWasm } from "../../src/main/certification/extended-memory.js";
+import { deriveNativeDoubleClickBuild } from "../../src/main/certification/native-double-click.js";
 import {
   mutableSpans,
   decodeFunctions,
@@ -202,6 +196,12 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   const isolatedFileFailure = verifyLocalClientBytes(changedCaller);
   assert.equal(isolatedFileFailure.templateSaveBuild, null);
   assert.equal(isolatedFileFailure.status, "proved");
+  assert.deepEqual(isolatedFileFailure.fileVerdict, {
+    status: "refused",
+    inputSha256: sha256(changedCaller),
+    verifierAbi: isolatedFileFailure.verifierAbi,
+    reason: "template-shape-changed",
+  });
   assert.equal(isolatedFileFailure.officialSha256, sha256(changedCaller));
   assert.deepEqual(isolatedFileFailure.reasons, []);
   assert.deepEqual(capabilitiesOf(isolatedFileFailure), capabilitiesOf(local));
@@ -948,12 +948,9 @@ test("template-save static relocation anchors reject coherent wrong values", {
   assert.equal(deriveEquivalentTemplateSaveBuild(wrongScreenshotDirectory), null);
 });
 
-test("every certified runtime profile reproduces the real client chain", async () => {
+test("native double-click refuses a broken downstream route", async () => {
   const artifact = process.env.GW_CLIENT_WASM;
-  assert.ok(
-    artifact,
-    "GW_CLIENT_WASM must explicitly name the real Gw.jspi.wasm artifact",
-  );
+  assert.ok(artifact, "GW_CLIENT_WASM must name the real Gw.jspi.wasm artifact");
   const official = new Uint8Array(await readFile(artifact));
   const verified = verifyLocalClientBytes(official);
   assert.equal(
@@ -1000,40 +997,17 @@ test("every certified runtime profile reproduces the real client chain", async (
     new Set(Object.values(route).map((role) => role.functionIndex)),
   );
   const brokenPump = rewriteCode(template, (bodies) => {
-    const body = bodies[route.pump.functionIndex - doubleClickModule.functionImportCount]!;
+    const body = bodies[
+      route.pump.functionIndex - doubleClickModule.functionImportCount
+    ]!;
     const source = paddedIndex(route.translator.functionIndex);
     const replacement = paddedIndex(wrongTranslator);
     const operand = body.findIndex((byte, offset) =>
       byte === 0x10
       && source.every((value, index) => body[offset + 1 + index] === value),
     );
-    assert.notEqual(operand, -1, "pump must directly call its translator");
+    assert.notEqual(operand, -1);
     body.set(replacement, operand + 1);
   });
-  assert.equal(
-    deriveNativeDoubleClickBuild(brokenPump),
-    null,
-    "an unchanged callback cannot hide a broken downstream route",
-  );
-  rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(template));
-  for (const profile of enhancementProfilesForBuild(enhancementBuild)) {
-    const capabilities = enhancementCapabilitiesForProfile(profile);
-    assert.ok(capabilities, `certified profile ${profile} must be valid`);
-    const enhanced = transformEnhancementWasm(
-      template,
-      enhancementBuild,
-      capabilities,
-    );
-    assert.equal(
-      sha256(enhanced),
-      enhancementOutputSha256(enhancementBuild, capabilities),
-    );
-    const derivedDoubleClick = deriveNativeDoubleClickBuild(enhanced);
-    assert.equal(
-      isDerivedNativeDoubleClickBuild(derivedDoubleClick, sha256(enhanced)),
-      true,
-      `profile ${profile} must independently cross semantic proof`,
-    );
-    rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(enhanced));
-  }
+  assert.equal(deriveNativeDoubleClickBuild(brokenPump), null);
 });
