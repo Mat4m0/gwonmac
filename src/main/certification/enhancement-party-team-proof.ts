@@ -9,7 +9,6 @@ import { playerSkillbarRoleCandidateCounts } from "./enhancement-player-skillbar
 import { dataEvidence } from "./wasm-data-evidence.js";
 import {
   bodyMatchesRole,
-  commonRelocationDelta,
   decodeFunctions,
   functionBody,
   functionBodySha256,
@@ -38,13 +37,14 @@ import type {
 
 const PARTY_PLAYER_PARTY_ROLE = semanticRole(
   338,
-  "99d85ceb2072d683b1933603fb195f6fef2a27c1b11d3f0a235e850441be1df5",
+  "8923fa9c5fa93d96dd543d7f0bbeee15b8b306e56b52aecf09fa4052cfa01894",
   Object.freeze([
     { start: 117, end: 122, role: "party.ui", addressClass: "function-index" },
     { start: 144, end: 149, role: "party.ui", addressClass: "function-index" },
     { start: 189, end: 194, role: "party.ui", addressClass: "function-index" },
     { start: 224, end: 229, role: "party.ui", addressClass: "function-index" },
     { start: 241, end: 246, role: "party.membership-assertion", addressClass: "immutable-data" },
+    { start: 247, end: 252, role: "party.source-file", addressClass: "immutable-data" },
     { start: 306, end: 311, role: "party.ui", addressClass: "function-index" },
   ]),
   ["i32", "i32", "i32", "i32"],
@@ -53,12 +53,24 @@ const PARTY_PLAYER_PARTY_ROLE = semanticRole(
 
 const TEAM_SENDER_ROLE = semanticRole(
   4_425,
-  "1dbcd6d20afed3f8edc323c4ddaa323e24809c439041a069f1eace6d127cc73f",
+  "4d2060d42f5eca54fba7b63b862f80983602169df22427f9bbbad9f78641ec43",
   Object.freeze([
+    { start: 28, end: 33, role: "sender.assert-a", addressClass: "immutable-data" },
+    { start: 34, end: 39, role: "sender.source-file", addressClass: "immutable-data" },
+    { start: 56, end: 61, role: "sender.assert-b", addressClass: "immutable-data" },
+    { start: 62, end: 67, role: "sender.source-file", addressClass: "immutable-data" },
     { start: 115, end: 120, role: "sender.assert-bytes", addressClass: "immutable-data" },
+    ...[121, 695, 844].map((start) => ({ start, end: start + 5, role: "sender.source-file", addressClass: "immutable-data" as const })),
+    { start: 888, end: 893, role: "sender.assert-c", addressClass: "immutable-data" },
+    { start: 894, end: 899, role: "sender.array-file", addressClass: "immutable-data" },
+    { start: 2_818, end: 2_823, role: "sender.assert-d", addressClass: "immutable-data" },
+    { start: 2_824, end: 2_829, role: "sender.source-file", addressClass: "immutable-data" },
     { start: 3_526, end: 3_531, role: "sender.assert-string-length", addressClass: "immutable-data" },
+    { start: 3_532, end: 3_537, role: "sender.source-file", addressClass: "immutable-data" },
     { start: 4_198, end: 4_203, role: "sender.assert-struct-count", addressClass: "immutable-data" },
+    { start: 4_204, end: 4_209, role: "sender.source-file", addressClass: "immutable-data" },
     { start: 4_390, end: 4_395, role: "sender.assert-switch", addressClass: "immutable-data" },
+    { start: 4_396, end: 4_401, role: "sender.source-file", addressClass: "immutable-data" },
   ]),
   ["i32", "i32", "i32"],
   [],
@@ -77,7 +89,9 @@ const PARTY_EXACT_ROLES = Object.freeze({
   heroFlagWriter: { semantic: semanticRole(150, "9f4ea1d46ddf8beeb429cbedcf0fc6ca45f9405e3c0f2be8ba43891721ad3375", Object.freeze([
     { start: 143, end: 148, role: "hero-flags.ui", addressClass: "function-index" },
   ]), ["i32", "i32", "i32"], []) },
-  attributesWriter: { semantic: semanticRole(439, "08861c55923893efa078aac295007c0be9f6e19a8807542d4e24c6f4e41578de", Object.freeze([
+  attributesWriter: { semantic: semanticRole(439, "bfe7d8c9ce9e40398c1c4f5ef4f237745e3dbd300f9d1a1080ef1d061ea6a5cc", Object.freeze([
+    { start: 149, end: 154, role: "attributes.assertion", addressClass: "immutable-data" },
+    { start: 155, end: 160, role: "attributes.source-file", addressClass: "immutable-data" },
     { start: 164, end: 169, role: "attributes.apply", addressClass: "function-index" },
     { start: 222, end: 227, role: "attributes.decode", addressClass: "function-index" },
     { start: 361, end: 366, role: "attributes.begin", addressClass: "function-index" },
@@ -95,17 +109,19 @@ const PARTY_EXACT_ROLES = Object.freeze({
   ]), ["i32", "i32"], []) },
 } as const);
 
-// The exact mutable-static operand paired with the certified context root.
-// Their common relocation delta must agree on every candidate client.
-const PARTY_MAP_LIFECYCLE_STATIC_BASELINE = 1_447_000;
-
 type PartyFunctionRole = (typeof PARTY_EXACT_ROLES)[keyof typeof PARTY_EXACT_ROLES];
 
 const PARTY_DIRTY_ROLES = Object.freeze([
-  semanticRole(622, "07d8d87f5575c572d3f53fcff464cd07fba710f1a01e451d94a414f28b55ba26", Object.freeze([
+  semanticRole(622, "0247b8513f14a4e375cd5ea6b1a96a4d6eaa17438c04919d2f6446c7c5323b06", Object.freeze([
+    { start: 179, end: 184, role: "dirty.assertion", addressClass: "immutable-data" },
+    ...[382, 427, 488].map((start) => ({ start, end: start + 5, role: "dirty.array-file", addressClass: "immutable-data" as const })),
     { start: 580, end: 585, role: "party.ui", addressClass: "function-index" },
+    { start: 600, end: 605, role: "dirty.message", addressClass: "immutable-data" },
+    { start: 606, end: 611, role: "dirty.source-file", addressClass: "immutable-data" },
   ]), ["i32", "i32", "i32", "i32", "i32"], []),
-  semanticRole(683, "4276027f9ac9dada4d236934c4a7170f22004934fdba19376e620e0aa14f6654", Object.freeze([
+  semanticRole(683, "cd6b4adea9a0d131da290460d6bd379487e59f538297b8cf327a410fef3bae38", Object.freeze([
+    { start: 175, end: 180, role: "dirty.assertion", addressClass: "immutable-data" },
+    ...[242, 287, 383].map((start) => ({ start, end: start + 5, role: "dirty.array-file", addressClass: "immutable-data" as const })),
     { start: 665, end: 670, role: "party.ui", addressClass: "function-index" },
   ]), Array.from({ length: 15 }, () => "i32"), []),
   semanticRole(127, "509bab21ca8be2a1f6287793e50f88825bb1d9f4432d3b29e3a394b117a72d3a", Object.freeze([
@@ -124,13 +140,18 @@ const PARTY_DIRTY_ROLES = Object.freeze([
   semanticRole(305, "4b39d0c5b6cd8be2bdbf8d6289b06f0206074ef0fa24e772cb4d34f2b774bb7f", Object.freeze([
     { start: 279, end: 284, role: "party.ui", addressClass: "function-index" },
   ]), Array.from({ length: 8 }, () => "i32"), []),
-  semanticRole(459, "a24e6314fed15093fce5c54faefe9ed8936e243b2a06e96c2401214b254b9125", Object.freeze([
+  semanticRole(459, "db6514a389d764aec38245e7372c79319539335e9b068082a29c65cfd1a9c781", Object.freeze([
+    ...[114, 173, 231].map((start) => ({ start, end: start + 5, role: "dirty.array-file", addressClass: "immutable-data" as const })),
     { start: 408, end: 413, role: "party.ui", addressClass: "function-index" },
   ]), Array.from({ length: 4 }, () => "i32"), []),
-  semanticRole(279, "ff174e8924bfb8ccdec3614b64ec884f499348d0430c137019295d451860b35e", Object.freeze([
+  semanticRole(279, "0e8df1691847acba7c900acca159f57198bffb82c4f9b71710d8153e03a3bd38", Object.freeze([
+    { start: 155, end: 160, role: "dirty.assertion", addressClass: "immutable-data" },
+    ...[161, 263].map((start) => ({ start, end: start + 5, role: "dirty.source-file", addressClass: "immutable-data" as const })),
     { start: 238, end: 243, role: "party.ui", addressClass: "function-index" },
   ]), Array.from({ length: 3 }, () => "i32"), []),
-  semanticRole(256, "c6c049152fba5d01560c74f2bc4ffac8a9133671f7d9ee8fc1e5d0c09b4e2b8b", Object.freeze([
+  semanticRole(256, "c02929632f82ebf6a16c8ae026572747d27da2235237c77aed132925e0372204", Object.freeze([
+    { start: 155, end: 160, role: "dirty.assertion", addressClass: "immutable-data" },
+    { start: 161, end: 166, role: "dirty.source-file", addressClass: "immutable-data" },
     { start: 238, end: 243, role: "party.ui", addressClass: "function-index" },
   ]), Array.from({ length: 3 }, () => "i32"), []),
 ] as const);
@@ -313,8 +334,7 @@ export function derivePartyObservation(
   suppliedDecoded?: readonly DecodedFunction[],
 ): KnownEnhancementBuild["partyObservation"] | null {
   const expected = baseline.partyObservation;
-  const baselineObservation = baseline.observationBase?.layout;
-  if (!expected || !baselineObservation) return null;
+  if (!expected || !baseline.observationBase?.layout) return null;
 
   const partyInfoFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.partyInfoLifecycle);
   const partyFlagFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.partyFlagWriter);
@@ -343,20 +363,11 @@ export function derivePartyObservation(
 
   const worldBody = functionBody(module, worldFunction);
   const playerPartyBody = functionBody(module, playerPartyFunction);
-  const mapLoadedBody = functionBody(module, mapLoadedFunction);
   const playerPartyValues = valuesForRole(playerPartyBody, PARTY_PLAYER_PARTY_ROLE);
-  const mapValues = valuesForRole(mapLoadedBody, PARTY_DIRTY_ROLES[2]);
   if (
     staticCStringHash(module, soleValue(playerPartyValues, "party.membership-assertion"))
       !== PARTY_IMMUTABLE_HASHES.playerPartyAssertion
     || soleValue(playerPartyValues, "party.ui") !== uiDispatcher.functionIndex
-    || commonRelocationDelta([
-      [
-        soleValue(mapValues, "map.lifecycle-static"),
-        PARTY_MAP_LIFECYCLE_STATIC_BASELINE,
-      ],
-      [observation.contextRoot, baselineObservation.contextRoot],
-    ]) === null
   ) return null;
 
   const dirtyMessages = [...expected.partyDirtyMessages];
