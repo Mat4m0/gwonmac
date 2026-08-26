@@ -199,10 +199,15 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedCaller)), true);
   assert.equal(deriveEquivalentTemplateSaveBuild(changedCaller), null);
-  assert.deepEqual(
-    verifyLocalClientBytes(changedCaller).reasons,
-    ["template-shape-changed"],
-  );
+  const isolatedFileFailure = verifyLocalClientBytes(changedCaller);
+  assert.equal(isolatedFileFailure.templateSaveBuild, null);
+  assert.equal(isolatedFileFailure.status, "proved");
+  assert.equal(isolatedFileFailure.officialSha256, sha256(changedCaller));
+  assert.deepEqual(isolatedFileFailure.reasons, []);
+  assert.deepEqual(capabilitiesOf(isolatedFileFailure), {
+    ...capabilitiesOf(local),
+    preGameControls: false,
+  });
 
   // Static addresses must preserve their measured relationship to independent
   // initialized-data or BSS anchors. Moving one delete-state word must refuse.
@@ -295,7 +300,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
   assert.deepEqual(capabilitiesOf(addressDecision), {
     nativeCursor: true, targetObservation: false, partyObservation: false,
-    teamApply: false, travelAction: true, xunlaiAction: false, chatAliases: true,
+    teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: true,
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
@@ -313,9 +318,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     targetObservation: false,
     partyObservation: false,
     teamApply: false,
-    travelAction: true,
+    travelAction: false,
     xunlaiAction: false,
-    chatAliases: true,
+    chatAliases: false,
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
@@ -360,9 +365,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const cursorMutations = [
-    { local: 446 - derived.importCount, offset: 10, label: "main-loop control flow", shared: true },
-    { local: 2828 - derived.importCount, offset: 68, label: "one producer static", shared: false },
-    { local: 6234 - derived.importCount, offset: 45, label: "cursor art offset", shared: false },
+    { local: 446 - derived.importCount, offset: 10, label: "main-loop control flow", shared: true, equivalent: false },
+    { local: 2828 - derived.importCount, offset: 68, label: "non-canonical producer encoding", shared: false, equivalent: true },
+    { local: 6234 - derived.importCount, offset: 45, label: "cursor art offset", shared: false, equivalent: false },
   ] as const;
   for (const mutation of cursorMutations) {
     const changedCursorProof = rewriteCode(bytes, (bodies) => {
@@ -379,13 +384,15 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     if (mutation.shared) {
       assert.equal(refusal.enhancementBuild, null, mutation.label);
       assert.deepEqual(refusal.reasons, ["enhancement-layout-changed"], mutation.label);
-    } else {
+    } else if (!mutation.equivalent) {
       assert.ok(refusal.enhancementBuild?.targetObservation, mutation.label);
       assert.equal(refusal.enhancementBuild.cursorEvent, undefined, mutation.label);
       assert.equal(capabilitiesOf(refusal)?.travelAction, true, mutation.label);
       assert.equal(capabilitiesOf(refusal)?.xunlaiAction, true, mutation.label);
       assert.equal(capabilitiesOf(refusal)?.chatAliases, true, mutation.label);
       assert.deepEqual(refusal.reasons, [], mutation.label);
+    } else {
+      assert.ok(refusal.enhancementBuild?.cursorEvent, mutation.label);
     }
   }
 

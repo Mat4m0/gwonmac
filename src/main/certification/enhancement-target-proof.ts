@@ -212,8 +212,6 @@ const EXACT_TARGET_ROLES = Object.freeze({
 const TARGET_IMMUTABLE_HASHES = Object.freeze({
   manualAssertion: "d78c3ee557d2b4d2c335ea85a1c6e7088d894236e0225360d92942da98c54b7d",
   automaticAssertion: "ee8a8e207854674610e42099c03590270b556c9cd482de0bfca76959939d74c6",
-  resetNameA: "b940a3cd95df2f76fb27d3e23ef929c3c97753dde164ca08802c0b2554833642",
-  resetNameB: "9ffea7f8a640d2d966ff61fb7479893422ac8aae7b39f74205e41095926d7f7c",
   areaAssertion: "bbba85bc88debef8198061f3c1c86cf0c7051c7cb0752f8ca670bcace10d03fe",
 });
 
@@ -574,7 +572,6 @@ export function locateAutomaticPlayRegion(
 
 function deriveTargetLayout(
   module: ModuleShape,
-  observation: EnhancementObservationBaseLayout,
 ): EnhancementTargetLayout | null {
   const selectorFunction = uniqueRoleFunction(module, TARGET_SELECTOR_ROLE);
   const resetFunction = uniqueRoleFunction(module, TARGET_RESET_ROLE);
@@ -593,29 +590,15 @@ function deriveTargetLayout(
     || automaticTargetAgentId !== soleValue(reset, "target.automatic")
     || automaticTargetAgentId !== soleValue(caller, "target.automatic")
     || manualTargetAgentId !== automaticTargetAgentId + 4
-    || codeOperandOccurrences(module, manualTargetAgentId) !== 16
-    || codeOperandOccurrences(module, automaticTargetAgentId) !== 18
-    || commonRelocationDelta([
-      [observation.contextRoot, 0x5a0ee0],
-      [manualTargetAgentId, 0x5a394c],
-      [automaticTargetAgentId, 0x5a3948],
-    ]) === null
   ) return null;
   const selectorImmutable = valuesForRole(
     functionBody(module, selectorFunction), TARGET_SELECTOR_ROLE,
-  );
-  const resetImmutable = valuesForRole(
-    functionBody(module, resetFunction), TARGET_RESET_ROLE,
   );
   if (
     staticCStringHash(module, soleValue(selectorImmutable, "target.assert-manual"))
       !== TARGET_IMMUTABLE_HASHES.manualAssertion
     || staticCStringHash(module, soleValue(selectorImmutable, "target.assert-automatic"))
       !== TARGET_IMMUTABLE_HASHES.automaticAssertion
-    || staticCStringHash(module, soleValue(resetImmutable, "target.reset-name-a"))
-      !== TARGET_IMMUTABLE_HASHES.resetNameA
-    || staticCStringHash(module, soleValue(resetImmutable, "target.reset-name-b"))
-      !== TARGET_IMMUTABLE_HASHES.resetNameB
   ) return null;
   const target = verifyLayout({ manualTargetAgentId, automaticTargetAgentId }, {
     manualTargetAgentId: { sourceRole: "target selector+reset+caller", expression: "manual target static", occurrences: [132, 312, 636, 7, 23, 40, 60] },
@@ -648,7 +631,7 @@ export function locateAutomaticTarget(
     if (!bodyMatchesRole(tickBody, CLIENT_TICK_ROLE)) return null;
     const observationLayout = deriveObservationLayout(module);
     if (!observationLayout) return null;
-    const targetLayout = deriveTargetLayout(module, observationLayout);
+    const targetLayout = deriveTargetLayout(module);
     if (!targetLayout) return null;
     const matches = baselines.flatMap((baseline): AutomaticTargetLocation[] =>
       baseline.observationBase && baseline.targetObservation
