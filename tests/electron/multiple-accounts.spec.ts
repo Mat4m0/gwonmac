@@ -844,10 +844,12 @@ test("Multi isolates profile windows and Copy Reload Trace", async () => {
         },
       )),
     ]);
-    await clickMenuForGame("Guild Wars Reforged — Alt", "copy-reload-trace");
-    await expect.poll(() => fixture.app.evaluate(({ clipboard }) => clipboard.readText()))
-      .toContain("gameReload.requested cause=menu");
+    await expect.poll(async () => {
+      await clickMenuForGame("Guild Wars Reforged — Alt", "copy-reload-trace");
+      return fixture.app.evaluate(({ clipboard }) => clipboard.readText());
+    }).toContain("relog.intentClaimed");
     const reloadTrace = await fixture.app.evaluate(({ clipboard }) => clipboard.readText());
+    expect(reloadTrace).toContain("gameReload.requested cause=menu");
     expect(reloadTrace).toContain("relog.intentClaimed");
     expect(reloadTrace).toContain("relog.preGameProbe state=reconnect");
     expect(reloadTrace).not.toContain("relog.preGameProbe state=unknown");
