@@ -24,14 +24,9 @@
 import { createHash } from "node:crypto";
 import {
   concat,
-  countFunctionImports,
   encodeCode,
   encodeSection,
-  parseCode,
   parseExports,
-  parseIndexVector,
-  parseTypes,
-  readUleb,
   sectionById,
   splitSections,
   uleb,
@@ -39,6 +34,12 @@ import {
   WASM_HEADER,
   type Section,
 } from "../core/wasm-binary.js";
+import {
+  activeTableEvidence,
+  functionBody,
+  signatureMatches,
+  wasmEvidence,
+} from "./wasm-evidence.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
@@ -209,37 +210,32 @@ export function deriveNativeDoubleClickBuild(
   input: Uint8Array,
   baselines: readonly NativeDoubleClickBuild[] = NATIVE_DOUBLE_CLICK_BUILDS,
 ): NativeDoubleClickBuild | null {
-  if (!WebAssembly.validate(input)) return null;
   try {
-    const sections = splitSections(input);
-    const bodies = parseCode(sectionById(sections, 10));
-    const importCount = countFunctionImports(sectionById(sections, 2));
-    const functionTypes = parseIndexVector(sectionById(sections, 3));
-    const types = parseTypes(sectionById(sections, 1));
-    const slots = tableSlotFunctions(sectionById(sections, 9));
-    const inputSha256 = sha256(input);
+    const evidence = wasmEvidence(input);
+    if (!evidence) return null;
+    const module = evidence.moduleView();
+    const table = activeTableEvidence(module.elementSection);
+    if (table.overwrittenSlots.length > 0) return null;
+    const tableRelations = table.relations;
+    const inputSha256 = evidence.inputSha256;
     const matches: NativeDoubleClickBuild[] = [];
     for (const baseline of baselines) {
-      const candidates = bodies.flatMap((body, localIndex) =>
+      const candidates = module.bodies.flatMap((body, localIndex) =>
         sha256(body) === baseline.callbackBodySha256
-          ? [localIndex + importCount]
+          ? [localIndex + module.functionImportCount]
           : [],
       );
       if (candidates.length !== 1) continue;
       const callbackFunctionIndex = candidates[0]!;
-      const callbackSlots = [...slots]
-        .filter(([, functionIndex]) => functionIndex === callbackFunctionIndex)
-        .map(([slot]) => slot);
-      const type = types[functionTypes[callbackFunctionIndex - importCount]!];
+      const callbackSlots = tableRelations.get(callbackFunctionIndex) ?? [];
       if (
         callbackSlots.length !== 1 ||
-        !type ||
-        type.params
-          .map((value) => (value === 0x7f ? "i32" : "other"))
-          .join() !== baseline.callbackParams.join() ||
-        type.results
-          .map((value) => (value === 0x7f ? "i32" : "other"))
-          .join() !== baseline.callbackResults.join()
+        !signatureMatches(
+          module,
+          callbackFunctionIndex,
+          baseline.callbackParams,
+          baseline.callbackResults,
+        )
       )
         continue;
       const candidate: NativeDoubleClickBuild = {
@@ -258,32 +254,6 @@ export function deriveNativeDoubleClickBuild(
   } catch {
     return null;
   }
-}
-
-/**
- * Every active table slot mapped to the function it holds. Only slot-zero
- * segments with a constant offset appear in this module; anything else is
- * refused rather than approximated, because a mislocated callback would
- * rewrite an unrelated function.
- */
-function tableSlotFunctions(body: Uint8Array): Map<number, number> {
-  const slots = new Map<number, number>();
-  const cursor = { offset: 0 };
-  const count = readUleb(body, cursor);
-  for (let segment = 0; segment < count; segment += 1) {
-    if (readUleb(body, cursor) !== 0) fail("unsupported element segment flags");
-    if (body[cursor.offset++] !== 0x41) fail("expected element i32.const");
-    const base = readUleb(body, cursor);
-    if (body[cursor.offset++] !== 0x0b) fail("malformed element offset");
-    const entries = readUleb(body, cursor);
-    for (let i = 0; i < entries; i += 1) {
-      const slot = base + i;
-      if (slots.has(slot)) fail(`duplicate active table slot ${slot}`);
-      slots.set(slot, readUleb(body, cursor));
-    }
-  }
-  if (cursor.offset !== body.byteLength) fail("malformed element section");
-  return slots;
 }
 
 /**
@@ -324,28 +294,34 @@ export function rewriteWithBuild(
   build: NativeDoubleClickBuild,
 ): Uint8Array {
   const sections = splitSections(input);
-  const slots = tableSlotFunctions(sectionById(sections, 9));
-  const held = slots.get(build.callbackTableSlot);
-  if (held !== build.callbackFunctionIndex) {
+  const evidence = wasmEvidence(input);
+  if (!evidence) fail("invalid or unsupported input module");
+  const module = evidence.moduleView();
+  const table = activeTableEvidence(module.elementSection);
+  if (table.overwrittenSlots.length > 0) {
+    fail(`duplicate active table slot ${table.overwrittenSlots[0]}`);
+  }
+  const callbackSlots = table.relations.get(build.callbackFunctionIndex) ?? [];
+  if (!callbackSlots.includes(build.callbackTableSlot)) {
+    const held = [...table.relations].find(([, slots]) =>
+      slots.includes(build.callbackTableSlot))?.[0];
     fail(
-      `table slot ${build.callbackTableSlot} holds function ${held}, ` +
-        `not ${build.callbackFunctionIndex}`,
+      `table slot ${build.callbackTableSlot} holds function ${held}, `
+        + `not ${build.callbackFunctionIndex}`,
     );
   }
 
-  const bodies = parseCode(sectionById(sections, 10));
-  const importCount = countFunctionImports(sectionById(sections, 2));
-  const localIndex = build.callbackFunctionIndex - importCount;
-  const body = bodies[localIndex];
+  const bodies = module.bodies;
+  const localIndex = build.callbackFunctionIndex - module.functionImportCount;
+  const body = functionBody(module, build.callbackFunctionIndex);
   if (!body) fail(`function ${build.callbackFunctionIndex} has no body`);
-  const functionTypes = parseIndexVector(sectionById(sections, 3));
-  const type = parseTypes(sectionById(sections, 1))[functionTypes[localIndex]!];
   if (
-    !type
-    || type.params.some((value) => value !== 0x7f)
-    || type.results.some((value) => value !== 0x7f)
-    || !sameStrings(type.params.map(() => "i32"), build.callbackParams)
-    || !sameStrings(type.results.map(() => "i32"), build.callbackResults)
+    !signatureMatches(
+      module,
+      build.callbackFunctionIndex,
+      build.callbackParams,
+      build.callbackResults,
+    )
   ) fail("the mousedown callback does not have the certified signature");
   if (sha256(body) !== build.callbackBodySha256) {
     fail("the mousedown callback is not the certified body");

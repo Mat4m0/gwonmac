@@ -4,6 +4,7 @@
  */
 import { verifyLayout } from "./semantic-proof.js";
 import { CLIENT_TICK_ROLE } from "./enhancement-client-hook-role.js";
+import { tickEvidence } from "./enhancement-tick-evidence.js";
 import {
   bodyMatchesRole,
   commonRelocationDelta,
@@ -12,14 +13,15 @@ import {
   functionBodySha256,
   functionHasSignature,
   MAX_INPUT_BYTES,
+  matchesEvidenceInput,
   mutableSpans,
   signatureEvidence,
   uniqueExactFunction,
   uniqueRoleFunction,
   valuesForRole,
   soleValue,
-} from "./enhancement-wasm-proof-context.js";
-import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
+import type { EnhancementProofContext } from "./wasm-evidence.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import type { EnhancementCursorLayout } from "../../shared/enhancement-config.js";
 import type {
@@ -211,12 +213,12 @@ export function locateAutomaticCursor(
 ): AutomaticCursorLocation | null {
   if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
   try {
-    const context = suppliedContext?.inputIdentity === input
+    const context = matchesEvidenceInput(suppliedContext, input)
       ? suppliedContext
       : enhancementProofContext(input);
     if (!context) return null;
-    const { module } = context;
-    const tick = context.tick.candidate;
+    const module = context.moduleView();
+    const tick = tickEvidence(module).candidate;
     if (!tick) return null;
     const relations = context.tableRelations;
     const matches: AutomaticCursorLocation[] = [];

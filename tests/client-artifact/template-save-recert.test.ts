@@ -48,12 +48,13 @@ import {
   mutableSpans,
   decodeFunctions,
   parseActiveTableRelations,
-  parseModule,
   semanticRole,
   signatureMatches,
   signatureEvidence,
   uniqueRoleFunction,
-} from "../../src/main/certification/enhancement-wasm-proof-context.js";
+  wasmEvidence,
+} from "../../src/main/certification/wasm-evidence.js";
+import type { ModuleShape } from "../../src/main/certification/enhancement-evidence-types.js";
 import {
   rewriteTemplateSaveWasm,
 } from "../../src/main/certification/template-save-compat.js";
@@ -118,7 +119,7 @@ function swapDefinedFunctions(
 }
 
 function sameSignatureDestination(
-  module: ReturnType<typeof parseModule>,
+  module: ModuleShape,
   sourceFunction: number,
   excluded: ReadonlySet<number> = new Set(),
 ): number {
@@ -228,7 +229,8 @@ test("the template-save verifier makes a fail-closed decision for a real client"
 
   const observationBase = local.enhancementBuild?.observationBase;
   assert.ok(observationBase, "the real client must prove its observation base");
-  const parsed = parseModule(bytes);
+  const parsed = wasmEvidence(bytes)?.moduleView();
+  assert.ok(parsed);
   const cursorLocation = locateAutomaticCursor(bytes, ENHANCEMENT_BUILDS);
   assert.ok(cursorLocation, "the real client must structurally derive Cursor");
   assert.deepEqual(

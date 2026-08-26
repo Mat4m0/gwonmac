@@ -441,7 +441,7 @@ test("the WASM section codec has exactly one home", async () => {
   // those transforms without parsing a second time, so it deliberately has no
   // codec dependency of its own.
   const sharers: ReadonlyArray<readonly [file: string, specifier: string]> = [
-    ["src/main/certification/enhancement-wasm-proof-context.ts", '../core/wasm-binary.js'],
+    ["src/main/certification/wasm-evidence.ts", '../core/wasm-binary.js'],
     ["src/main/certification/enhancement-transform.ts", '../core/wasm-binary.js'],
     ["src/main/certification/template-save-compat.ts", '../core/wasm-binary.js'],
     ["src/main/certification/template-save-verifier.ts", '../core/wasm-binary.js'],

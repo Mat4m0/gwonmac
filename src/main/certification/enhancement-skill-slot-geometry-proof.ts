@@ -17,8 +17,8 @@ import {
   staticBytes,
   uniqueExactFunction,
   unsignedOperand,
-} from "./enhancement-wasm-proof-context.js";
-import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
+import type { EnhancementProofContext } from "./wasm-evidence.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import { indexOfBytes } from "../core/wasm-binary.js";
 import { isDeepStrictEqual } from "node:util";
@@ -72,16 +72,7 @@ function uniqueStaticAddress(
   context: EnhancementProofContext,
   needle: Uint8Array,
 ): number | null {
-  const matches: number[] = [];
-  for (const segment of context.module.dataSegments) {
-    for (let at = segment.bytes.indexOf(needle[0]!); at >= 0;) {
-      if (
-        at + needle.byteLength <= segment.bytes.byteLength
-        && needle.every((byte, index) => segment.bytes[at + index] === byte)
-      ) matches.push(segment.base + at);
-      at = segment.bytes.indexOf(needle[0]!, at + 1);
-    }
-  }
+  const matches = context.data.addresses(needle);
   return matches.length === 1 ? matches[0]! : null;
 }
 
@@ -129,7 +120,7 @@ export function isSkillSlotGeometryProof(
 export function deriveSkillSlotGeometry(
   context: EnhancementProofContext,
 ): SkillSlotGeometryProof | null {
-  const { module } = context;
+  const module = context.moduleView();
   const label = utf16Le("SkillBar");
   const labelAddress = uniqueStaticAddress(context, label);
   if (

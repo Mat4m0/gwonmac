@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import { CLIENT_TICK_ROLE } from "./enhancement-client-hook-role.js";
 import { deriveObservationLayout } from "./enhancement-target-proof.js";
+import { dataEvidence } from "./wasm-data-evidence.js";
 import {
   derivePartyObservation,
   deriveTeamApply,
@@ -19,6 +20,7 @@ import {
   functionBodySha256,
   isolatedProof,
   MAX_INPUT_BYTES,
+  matchesEvidenceInput,
   mutableSpans,
   parseActiveTableRelations,
   roleFunctions,
@@ -32,8 +34,9 @@ import {
   uniqueRoleFunction,
   unsignedOperand,
   valuesForRole,
-} from "./enhancement-wasm-proof-context.js";
-import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
+import type { EnhancementProofContext } from "./wasm-evidence.js";
+import { tickEvidence } from "./enhancement-tick-evidence.js";
 import { verifyLayout } from "./semantic-proof.js";
 import {
   ENHANCEMENT_BUILDS,
@@ -252,11 +255,11 @@ export function inspectLocalActionRoleCandidates(
 ): LocalActionRoleDiagnostics | null {
   if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
   try {
-    const context = suppliedContext?.inputIdentity === input
+    const context = matchesEvidenceInput(suppliedContext, input)
       ? suppliedContext
       : enhancementProofContext(input);
     if (!context) return null;
-    const { module } = context;
+    const module = context.moduleView();
     const partyTeam = baselines.map((baseline) =>
       inspectPartyTeamRoleCandidates(module, baseline));
     return Object.freeze({
@@ -314,10 +317,7 @@ function deriveChatAliases(
   const state = soleValue(values, "aliases.state");
   const buffer = soleValue(values, "aliases.buffer");
   const table = staticBytes(module, buffer, 104);
-  const initializedDataEnd = module.dataSegments.reduce(
-    (highest, segment) => Math.max(highest, segment.base + segment.bytes.byteLength),
-    0,
-  );
+  const { initializedDataEnd } = dataEvidence(module);
   if (
     !table
     || state < initializedDataEnd
@@ -551,12 +551,12 @@ export function locateAutomaticLocalActions(
 ): AutomaticLocalActionsLocation | null {
   if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
   try {
-    const context = suppliedContext?.inputIdentity === input
+    const context = matchesEvidenceInput(suppliedContext, input)
       ? suppliedContext
       : enhancementProofContext(input);
     if (!context) return null;
-    const { module } = context;
-    const tick = context.tick.candidate;
+    const module = context.moduleView();
+    const tick = tickEvidence(module).candidate;
     if (!tick || !bodyMatchesRole(functionBody(module, tick.functionIndex), CLIENT_TICK_ROLE)) {
       return null;
     }

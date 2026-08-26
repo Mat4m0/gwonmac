@@ -11,8 +11,9 @@ import {
   uniqueExactFunction,
   uniqueRoleFunction,
   valuesForRole,
-} from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
 import type { ModuleShape, SemanticRole } from "./enhancement-evidence-types.js";
+import { dataEvidence } from "./wasm-data-evidence.js";
 
 const span = (
   start: number,
@@ -202,9 +203,7 @@ export function derivePartyCalleeGraph(
     values(module, finishStateFunction, LEAF_ROLES.finishState),
     "finish.state",
   );
-  const initializedDataEnd = module.dataSegments.reduce(
-    (highest, segment) => Math.max(highest, segment.base + segment.bytes.byteLength), 0,
-  );
+  const { initializedDataEnd } = dataEvidence(module);
 
   if (
     observed.unlockResolver !== semantic.unlockResolver

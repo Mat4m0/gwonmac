@@ -2,7 +2,7 @@
  * Semantic role of the client main-loop hook shared by feature proofs.
  * It grants no feature by itself.
  */
-import { mutableSpans } from "./enhancement-wasm-proof-context.js";
+import { mutableSpans } from "./wasm-evidence.js";
 import type { SemanticRole } from "./enhancement-evidence-types.js";
 
 export const CLIENT_TICK_ROLE: SemanticRole = Object.freeze({

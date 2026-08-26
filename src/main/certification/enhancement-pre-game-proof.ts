@@ -7,6 +7,8 @@
  */
 import { isDeepStrictEqual } from "node:util";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
+import type { ModuleShape } from "./enhancement-evidence-types.js";
+import type { WasmDataEvidence } from "./wasm-data-evidence.js";
 import {
   codeOperandOccurrences,
   functionBodySha256,
@@ -14,7 +16,7 @@ import {
   staticBytes,
   uniqueExactFunction,
   type EnhancementProofContext,
-} from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
 
 const HASH_FUNCTION_SHA256 =
   "90e009c029d1a6fb53f0e7b92d72583497455266a64841d34ac56905289ac95b";
@@ -40,8 +42,8 @@ function utf16Le(value: string): Uint8Array {
 }
 
 /** Exact, side-effect-free translation of the certified client hash body. */
-function labelHash(context: EnhancementProofContext, value: string): number | null {
-  const bytes = staticBytes(context.module, HASH_TABLE_ADDRESS, 16 * 4);
+function labelHash(module: ModuleShape, value: string): number | null {
+  const bytes = staticBytes(module, HASH_TABLE_ADDRESS, 16 * 4);
   if (!bytes) return null;
   const table = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let result = 844_963_502;
@@ -58,32 +60,24 @@ function labelHash(context: EnhancementProofContext, value: string): number | nu
 }
 
 function uniqueStaticAddress(
-  context: EnhancementProofContext,
+  data: WasmDataEvidence,
   needle: Uint8Array,
 ): number | null {
-  const matches: number[] = [];
-  for (const segment of context.module.dataSegments) {
-    for (let at = segment.bytes.indexOf(needle[0]!); at >= 0;) {
-      if (
-        at + needle.byteLength <= segment.bytes.byteLength
-        && needle.every((byte, index) => segment.bytes[at + index] === byte)
-      ) matches.push(segment.base + at);
-      at = segment.bytes.indexOf(needle[0]!, at + 1);
-    }
-  }
+  const matches = data.addresses(needle);
   return matches.length === 1 ? matches[0]! : null;
 }
 
 function exactLabel(
-  context: EnhancementProofContext,
+  module: ModuleShape,
+  data: WasmDataEvidence,
   value: string,
 ): number | null {
   const encoded = utf16Le(value);
-  const address = uniqueStaticAddress(context, encoded);
+  const address = uniqueStaticAddress(data, encoded);
   if (
     address === null
-    || codeOperandOccurrences(context.module, address) !== 1
-    || !isDeepStrictEqual(staticBytes(context.module, address, encoded.length), encoded)
+    || codeOperandOccurrences(module, address) !== 1
+    || !isDeepStrictEqual(staticBytes(module, address, encoded.length), encoded)
   ) return null;
   return address;
 }
@@ -92,29 +86,31 @@ export function derivePreGameControls(
   context: EnhancementProofContext,
   frameLayout: Proof["layout"],
 ): Proof | null {
-  const play = exactLabel(context, LABELS.play);
-  const selector = exactLabel(context, LABELS.selector);
-  const yes = exactLabel(context, LABELS.yes);
-  const no = exactLabel(context, LABELS.no);
-  const reconnectDialog = exactLabel(context, LABELS.reconnectDialog);
+  const module = context.moduleView();
+  const { data } = context;
+  const play = exactLabel(module, data, LABELS.play);
+  const selector = exactLabel(module, data, LABELS.selector);
+  const yes = exactLabel(module, data, LABELS.yes);
+  const no = exactLabel(module, data, LABELS.no);
+  const reconnectDialog = exactLabel(module, data, LABELS.reconnectDialog);
   if (play === null || selector === null || yes === null || no === null
     || reconnectDialog === null) return null;
   const hashFunction = uniqueExactFunction(
-    context.module,
+    module,
     HASH_FUNCTION_SHA256,
     ["i32", "i32"],
     ["i32"],
   );
   if (hashFunction === null
-    || !signatureMatches(context.module, hashFunction, ["i32", "i32"], ["i32"])) {
+    || !signatureMatches(module, hashFunction, ["i32", "i32"], ["i32"])) {
     return null;
   }
   const labelHashes = {
-    play: labelHash(context, LABELS.play),
-    selector: labelHash(context, LABELS.selector),
-    yes: labelHash(context, LABELS.yes),
-    no: labelHash(context, LABELS.no),
-    reconnectDialog: labelHash(context, LABELS.reconnectDialog),
+    play: labelHash(module, LABELS.play),
+    selector: labelHash(module, LABELS.selector),
+    yes: labelHash(module, LABELS.yes),
+    no: labelHash(module, LABELS.no),
+    reconnectDialog: labelHash(module, LABELS.reconnectDialog),
   };
   if (Object.values(labelHashes).some((hash) => hash === null || hash === 0)) {
     return null;
@@ -125,7 +121,7 @@ export function derivePreGameControls(
       functionIndex: hashFunction,
       params: Object.freeze(["i32", "i32"] as const),
       results: Object.freeze(["i32"] as const),
-      bodySha256: functionBodySha256(context.module, hashFunction),
+      bodySha256: functionBodySha256(module, hashFunction),
     }),
     labels: Object.freeze({
       play,

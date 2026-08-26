@@ -16,7 +16,7 @@ import {
   uniqueRoleFunction,
   unsignedOperand,
   valuesForRole,
-} from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
 import type { ModuleShape } from "./enhancement-evidence-types.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 

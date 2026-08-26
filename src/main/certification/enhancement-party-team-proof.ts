@@ -6,6 +6,7 @@ import { verifyLayout } from "./semantic-proof.js";
 import { messageRelations } from "./enhancement-structural-report.js";
 import { derivePartyCalleeGraph } from "./enhancement-party-callee-proof.js";
 import { playerSkillbarRoleCandidateCounts } from "./enhancement-player-skillbar-proof.js";
+import { dataEvidence } from "./wasm-data-evidence.js";
 import {
   bodyMatchesRole,
   commonRelocationDelta,
@@ -23,7 +24,7 @@ import {
   uniqueRoleFunction,
   unsignedOperand,
   valuesForRole,
-} from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import type {
   EnhancementObservationBaseLayout,
@@ -609,10 +610,7 @@ export function deriveTeamApply(
     || constructorHubs[0]!.functionIndex !== packetConstructor
     || mostCallSites < TEAM_BUILDER_ROLES.length
   ) return null;
-  const initializedDataEnd = module.dataSegments.reduce(
-    (highest, segment) => Math.max(highest, segment.base + segment.bytes.byteLength),
-    0,
-  );
+  const { initializedDataEnd } = dataEvidence(module);
   const packetFactory = soleValue(
     valuesForRole(constructorBody, TEAM_PACKET_CONSTRUCTOR_ROLE),
     "packet.factory",

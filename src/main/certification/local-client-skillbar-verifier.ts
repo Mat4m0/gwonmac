@@ -18,7 +18,7 @@ import type {
   LocalFeatureFailure,
   LocalFeatureFailures,
 } from "./local-client-verification-contract.js";
-import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
+import type { EnhancementProofContext } from "./wasm-evidence.js";
 
 type SkillbarBuildFragment = Partial<Pick<KnownEnhancementBuild,
   | "playerSkillbarObservation"
@@ -54,12 +54,13 @@ export function deriveLocalSkillbarProofs(
   context: EnhancementProofContext,
   playRegionAvailable: boolean,
 ): LocalSkillbarProofs {
+  const module = context.moduleView();
   const playerSkillbar = requested.partyObservation
       || requested.skillCooldownObservation
-    ? derivePlayerSkillbarObservation(context.module)
+    ? derivePlayerSkillbarObservation(module)
     : null;
   const cooldownObservationLayout = requested.skillCooldownObservation
-    ? deriveObservationLayout(context.module)
+    ? deriveObservationLayout(module)
     : null;
   const geometry = requested.skillSlotGeometry
     ? deriveSkillSlotGeometry(context)
@@ -82,7 +83,7 @@ export function deriveLocalSkillbarProofs(
       || cooldown === null);
   const ambiguousPlayerSkillbarCandidates = needsCooldownEvidence
       && playerSkillbar === null
-    ? playerSkillbarRoleCandidateCounts(context.module).find((count) => count > 1)
+    ? playerSkillbarRoleCandidateCounts(module).find((count) => count > 1)
     : undefined;
   return Object.freeze({
     requestedGeometry: requested.skillSlotGeometry,

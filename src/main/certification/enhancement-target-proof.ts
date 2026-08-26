@@ -13,6 +13,7 @@ import {
   functionBody,
   functionBodySha256,
   MAX_INPUT_BYTES,
+  matchesEvidenceInput,
   mutableSpans,
   semanticRole,
   signatureMatches,
@@ -24,8 +25,9 @@ import {
   roleFunctions,
   unsignedOperand,
   valuesForRole,
-} from "./enhancement-wasm-proof-context.js";
-import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
+import type { EnhancementProofContext } from "./wasm-evidence.js";
+import { tickEvidence } from "./enhancement-tick-evidence.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import type {
   EnhancementObservationBaseLayout,
@@ -192,11 +194,11 @@ export function inspectTargetRoleCandidates(
 ): TargetRoleCandidateDiagnostic | null {
   if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
   try {
-    const context = suppliedContext?.inputIdentity === input
+    const context = matchesEvidenceInput(suppliedContext, input)
       ? suppliedContext
       : enhancementProofContext(input);
     if (!context) return null;
-    const { module } = context;
+    const module = context.moduleView();
     const accessorMatches = roleFunctions(module, AGENT_ARRAY_ACCESSOR_ROLE);
     const lifecycleCount = accessorMatches.length === 1
       ? (() => {
@@ -394,12 +396,12 @@ export function locateAutomaticPlayRegion(
 ): AutomaticPlayRegionLocation | null {
   if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
   try {
-    const context = suppliedContext?.inputIdentity === input
+    const context = matchesEvidenceInput(suppliedContext, input)
       ? suppliedContext
       : enhancementProofContext(input);
     if (!context) return null;
-    const { module } = context;
-    const tick = context.tick.candidate;
+    const module = context.moduleView();
+    const tick = tickEvidence(module).candidate;
     if (!tick) return null;
     const tickBody = functionBody(module, tick.functionIndex);
     if (!bodyMatchesRole(tickBody, CLIENT_TICK_ROLE)) return null;
@@ -493,12 +495,12 @@ export function locateAutomaticTarget(
 ): AutomaticTargetLocation | null {
   if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
   try {
-    const context = suppliedContext?.inputIdentity === input
+    const context = matchesEvidenceInput(suppliedContext, input)
       ? suppliedContext
       : enhancementProofContext(input);
     if (!context) return null;
-    const { module } = context;
-    const tick = context.tick.candidate;
+    const module = context.moduleView();
+    const tick = tickEvidence(module).candidate;
     if (!tick) return null;
     const tickBody = functionBody(module, tick.functionIndex);
     if (!bodyMatchesRole(tickBody, CLIENT_TICK_ROLE)) return null;

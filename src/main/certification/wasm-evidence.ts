@@ -4,7 +4,6 @@
  */
 import { createHash } from "node:crypto";
 import {
-  indexOfBytes,
   parseCode,
   parseIndexVector,
   parseTypes,
@@ -18,14 +17,17 @@ import {
 import { relocationAwareFingerprint, type RelocationSpan } from "./semantic-proof.js";
 import type {
   DecodedFunction,
-  EnhancementEvidenceFailure,
   FunctionSignatureEvidence,
   ModuleShape,
-  PlayerChatMessageAnchors,
   SemanticRole,
-  TickEvidenceReport,
   WasmExport,
 } from "./enhancement-evidence-types.js";
+import { decodeFunctions } from "./wasm-instruction-evidence.js";
+export { decodeFunctions } from "./wasm-instruction-evidence.js";
+import { EvidenceError } from "./wasm-evidence-error.js";
+import { dataEvidence, type WasmDataEvidence } from "./wasm-data-evidence.js";
+import { readonlyMapView } from "./readonly-map-view.js";
+export { EvidenceError } from "./wasm-evidence-error.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
@@ -34,38 +36,54 @@ declare const WebAssembly: {
 export const MAX_INPUT_BYTES = 64 * 1024 * 1024;
 const MAX_TYPES = 100_000;
 const MAX_FUNCTIONS = 100_000;
-const MAX_BODY_BYTES = 8 * 1024 * 1024;
-const MAX_INSTRUCTIONS = 25_000_000;
 export const MAX_CONSIDERED = 4_096;
 
-export interface EnhancementProofContext {
+export interface WasmEvidence {
   readonly inputIdentity: Uint8Array;
   readonly inputSha256: string;
-  readonly module: ModuleShape;
-  readonly tick: TickEvidenceReport;
-  readonly tableRelations: Map<number, number[]>;
+  readonly moduleView: () => ModuleShape;
+  readonly tableRelations: ReadonlyMap<number, readonly number[]>;
+  readonly data: WasmDataEvidence;
   readonly decodeFunctions: (
-    messageAnchors: PlayerChatMessageAnchors | readonly number[],
+    trackedConstants: readonly number[],
   ) => DecodedFunction[];
 }
 
-const proofContexts = new WeakMap<Uint8Array, EnhancementProofContext>();
+/** Compatibility name while feature-owned locators migrate independently. */
+export type EnhancementProofContext = WasmEvidence;
+
+const proofContexts = new WeakMap<Uint8Array, WasmEvidence>();
 
 const I32 = 0x7f;
+
+function copyBytes(bytes: Uint8Array | null): Uint8Array | null {
+  return bytes?.slice() ?? null;
+}
+
+function cloneModuleShape(module: ModuleShape): ModuleShape {
+  return {
+    types: module.types.map((type) => ({
+      params: [...type.params],
+      results: [...type.results],
+    })),
+    functionTypeIndices: [...module.functionTypeIndices],
+    functionImportCount: module.functionImportCount,
+    bodies: module.bodies.map((body) => body.slice()),
+    exports: module.exports.map((entry) => ({ ...entry })),
+    importSection: copyBytes(module.importSection),
+    memorySection: copyBytes(module.memorySection),
+    tableSection: copyBytes(module.tableSection),
+    elementSection: copyBytes(module.elementSection),
+    dataSegments: module.dataSegments.map((segment) => ({
+      base: segment.base,
+      bytes: segment.bytes.slice(),
+    })),
+  };
+}
 
 interface Offset {
   value: number;
 }
-
-export class EvidenceError extends Error {
-  readonly code: EnhancementEvidenceFailure;
-
-  constructor(code: EnhancementEvidenceFailure) {
-    super(code);
-    this.code = code;
-  }
-}
-
 
 function readUnsigned(
   bytes: Uint8Array,
@@ -220,7 +238,7 @@ function requiredSection(
     })();
 }
 
-export function parseModule(input: Uint8Array): ModuleShape {
+function parseModule(input: Uint8Array): ModuleShape {
   let sections: Section[];
   try {
     sections = splitSections(input);
@@ -259,8 +277,10 @@ export function parseModule(input: Uint8Array): ModuleShape {
     functionTypeIndices,
     functionImportCount: importedTypeIndices.length,
     bodies,
-    bodySha256: new Array<string | undefined>(bodies.length),
     exports: parseExports(optionalSection(sections, 7)),
+    importSection: optionalSection(sections, 2),
+    memorySection: optionalSection(sections, 5),
+    tableSection: optionalSection(sections, 4),
     elementSection: optionalSection(sections, 9),
     dataSegments: parseStaticData(optionalSection(sections, 11)),
   };
@@ -271,29 +291,31 @@ export function parseModule(input: Uint8Array): ModuleShape {
  * digest. Expensive facts are lazy so requesting one feature does no work for
  * unrelated features; all requested proofs share the same parse and decode.
  */
-export function enhancementProofContext(
+export function wasmEvidence(
   input: Uint8Array,
-): EnhancementProofContext | null {
+): WasmEvidence | null {
   if (input.byteLength > MAX_INPUT_BYTES || !WebAssembly.validate(input)) return null;
   const inputSha256 = createHash("sha256").update(input).digest("hex");
   const cached = proofContexts.get(input);
   if (cached?.inputSha256 === inputSha256) return cached;
   try {
     const module = parseModule(input);
-    let tick: TickEvidenceReport | undefined;
-    let tableRelations: Map<number, number[]> | undefined;
+    let tableRelations: ReadonlyMap<number, readonly number[]> | undefined;
+    let data: WasmDataEvidence | undefined;
     const context = Object.freeze({
       inputIdentity: input,
       inputSha256,
-      module,
-      get tick() {
-        return tick ??= tickEvidence(module);
+      moduleView() {
+        return cloneModuleShape(module);
+      },
+      get data() {
+        return data ??= dataEvidence(module);
       },
       get tableRelations() {
         return tableRelations ??= parseActiveTableRelations(module.elementSection);
       },
-      decodeFunctions(messageAnchors: PlayerChatMessageAnchors | readonly number[]) {
-        return decodeFunctions(module, messageAnchors);
+      decodeFunctions(trackedConstants: readonly number[]) {
+        return decodeFunctions(module, trackedConstants);
       },
     });
     proofContexts.set(input, context);
@@ -301,6 +323,16 @@ export function enhancementProofContext(
   } catch {
     return null;
   }
+}
+
+export const enhancementProofContext = wasmEvidence;
+
+export function matchesEvidenceInput(
+  evidence: WasmEvidence | null | undefined,
+  input: Uint8Array,
+): evidence is WasmEvidence {
+  return evidence?.inputIdentity === input
+    && evidence.inputSha256 === createHash("sha256").update(input).digest("hex");
 }
 
 function parseStaticData(
@@ -374,261 +406,30 @@ export function functionHasSignature(
   );
 }
 
+const bodyHashCache = new WeakMap<ModuleShape, (string | undefined)[]>();
+
 export function functionBodySha256(module: ModuleShape, functionIndex: number): string {
   const localIndex = functionIndex - module.functionImportCount;
   const body = module.bodies[localIndex];
   if (!body) throw new EvidenceError("module-shape-unsupported");
-  const cached = module.bodySha256[localIndex];
+  const hashes = bodyHashCache.get(module) ?? new Array<string | undefined>(module.bodies.length);
+  bodyHashCache.set(module, hashes);
+  const cached = hashes[localIndex];
   if (cached) return cached;
   const digest = createHash("sha256").update(body).digest("hex");
-  module.bodySha256[localIndex] = digest;
+  hashes[localIndex] = digest;
   return digest;
 }
 
-export function tickEvidence(module: ModuleShape): TickEvidenceReport {
-  const exports = module.exports.filter(
-    (entry) => entry.name === "EmscriptenExeThreadMainLoop",
-  );
-  const considered = exports.map((entry) => ({
-    functionIndex: entry.index,
-    signature: entry.kind === 0
-      ? signatureEvidence(module, entry.index)
-      : null,
-  }));
-  const exact = exports.filter(
-    (entry) => entry.kind === 0 && functionHasSignature(module, entry.index, 1),
-  );
-  if (exports.length === 1 && exact.length === 1) {
-    const functionIndex = exact[0]!.index;
-    return {
-      status: "candidate",
-      exportCount: 1,
-      considered,
-      candidate: {
-        functionIndex,
-        signature: signatureEvidence(module, functionIndex)!,
-        bodySha256: functionBodySha256(module, functionIndex),
-      },
-    };
-  }
-  return {
-    status: exact.length > 1 ? "ambiguous" : "unavailable",
-    exportCount: exports.length,
-    considered,
-    candidate: null,
-  };
-}
-
-function readInstructionUnsigned(bytes: Uint8Array, cursor: Offset): number {
-  try {
-    return readUnsigned(bytes, cursor);
-  } catch (error) {
-    if (
-      error instanceof EvidenceError
-      && error.code === "module-shape-unsupported"
-    ) {
-      throw new EvidenceError("instruction-set-unsupported");
-    }
-    throw error;
-  }
-}
-
-const decodedFunctionCache = new WeakMap<
-  ModuleShape,
-  Map<string, DecodedFunction[]>
->();
-
-function trackedMessageValues(
-  messageAnchors: PlayerChatMessageAnchors | readonly number[],
-): number[] {
-  return [...new Set("playerChatMessage" in messageAnchors
-    ? [messageAnchors.playerChatMessage, ...messageAnchors.nearbyPlayerMessages]
-    : messageAnchors)].sort((left, right) => left - right);
-}
-
-export function decodeFunctions(
-  module: ModuleShape,
-  messageAnchors: PlayerChatMessageAnchors | readonly number[],
-): DecodedFunction[] {
-  const trackedMessages = new Set(trackedMessageValues(messageAnchors));
-  const cacheKey = [...trackedMessages].join(",");
-  const moduleCache = decodedFunctionCache.get(module) ?? new Map();
-  decodedFunctionCache.set(module, moduleCache);
-  const cached = moduleCache.get(cacheKey);
-  if (cached) return cached;
-  let instructionCount = 0;
-  const decoded: DecodedFunction[] = [];
-  for (let localIndex = 0; localIndex < module.bodies.length; localIndex += 1) {
-    const body = module.bodies[localIndex]!;
-    if (body.byteLength > MAX_BODY_BYTES) {
-      throw new EvidenceError("analysis-limit-exceeded");
-    }
-    const cursor = { value: 0 };
-    const localGroups = readInstructionUnsigned(body, cursor);
-    if (localGroups > MAX_FUNCTIONS) {
-      throw new EvidenceError("analysis-limit-exceeded");
-    }
-    for (let group = 0; group < localGroups; group += 1) {
-      readInstructionUnsigned(body, cursor);
-      if (cursor.value >= body.byteLength) {
-        throw new EvidenceError("instruction-set-unsupported");
-      }
-      cursor.value += 1;
-    }
-    const calls = new Map<number, number>();
-    const messageSites: Record<number, number> = {};
-    while (cursor.value < body.byteLength) {
-      instructionCount += 1;
-      if (instructionCount > MAX_INSTRUCTIONS) {
-        throw new EvidenceError("analysis-limit-exceeded");
-      }
-      const opcode = body[cursor.value++]!;
-      if (
-        opcode === 0x00
-        || opcode === 0x01
-        || opcode === 0x05
-        || opcode === 0x0b
-        || opcode === 0x0f
-        || opcode === 0x1a
-        || opcode === 0x1b
-        || opcode === 0xd1
-        || (opcode >= 0x45 && opcode <= 0xc4)
-      ) {
-        continue;
-      }
-      if (opcode >= 0x02 && opcode <= 0x04) {
-        if (cursor.value >= body.byteLength) {
-          throw new EvidenceError("instruction-set-unsupported");
-        }
-        const next = body[cursor.value]!;
-        if (
-          next === 0x40
-          || next === 0x7f
-          || next === 0x7e
-          || next === 0x7d
-          || next === 0x7c
-          || next === 0x7b
-          || next === 0x70
-          || next === 0x6f
-        ) {
-          cursor.value += 1;
-        } else {
-          readSigned(body, cursor, 5);
-        }
-        continue;
-      }
-      if (opcode === 0x0e) {
-        const targetCount = readInstructionUnsigned(body, cursor);
-        if (targetCount > MAX_FUNCTIONS) {
-          throw new EvidenceError("analysis-limit-exceeded");
-        }
-        for (let index = 0; index <= targetCount; index += 1) {
-          readInstructionUnsigned(body, cursor);
-        }
-        continue;
-      }
-      if (opcode === 0x11) {
-        readInstructionUnsigned(body, cursor);
-        readInstructionUnsigned(body, cursor);
-        continue;
-      }
-      if (opcode === 0x1c) {
-        const count = readInstructionUnsigned(body, cursor);
-        if (count > MAX_TYPES) {
-          throw new EvidenceError("analysis-limit-exceeded");
-        }
-        if (cursor.value + count > body.byteLength) {
-          throw new EvidenceError("instruction-set-unsupported");
-        }
-        cursor.value += count;
-        continue;
-      }
-      if (opcode === 0x41) {
-        const value = readSigned(body, cursor, 5);
-        if (trackedMessages.has(value)) {
-          messageSites[value] = (messageSites[value] ?? 0) + 1;
-        }
-        continue;
-      }
-      if (opcode === 0x42) {
-        readSigned(body, cursor, 10);
-        continue;
-      }
-      if (opcode === 0x43 || opcode === 0x44) {
-        const width = opcode === 0x43 ? 4 : 8;
-        if (cursor.value + width > body.byteLength) {
-          throw new EvidenceError("instruction-set-unsupported");
-        }
-        cursor.value += width;
-        continue;
-      }
-      if (opcode >= 0x28 && opcode <= 0x3e) {
-        const alignment = readInstructionUnsigned(body, cursor);
-        readInstructionUnsigned(body, cursor);
-        if ((alignment & 0x40) !== 0) readInstructionUnsigned(body, cursor);
-        continue;
-      }
-      if (opcode === 0x10) {
-        const target = readInstructionUnsigned(body, cursor);
-        calls.set(target, (calls.get(target) ?? 0) + 1);
-        continue;
-      }
-      if (
-        opcode === 0x0c
-        || opcode === 0x0d
-        || (opcode >= 0x20 && opcode <= 0x26)
-        || opcode === 0x3f
-        || opcode === 0x40
-        || opcode === 0xd2
-      ) {
-        readInstructionUnsigned(body, cursor);
-        continue;
-      }
-      if (opcode === 0xd0) {
-        readSigned(body, cursor, 5);
-        continue;
-      }
-      if (opcode === 0xfc) {
-        const subopcode = readInstructionUnsigned(body, cursor);
-        let immediateCount: number;
-        if (subopcode <= 7) immediateCount = 0;
-        else if (subopcode === 8 || subopcode === 10 || subopcode === 12 || subopcode === 14) {
-          immediateCount = 2;
-        } else if (
-          subopcode === 9
-          || subopcode === 11
-          || subopcode === 13
-          || subopcode === 15
-          || subopcode === 16
-          || subopcode === 17
-        ) {
-          immediateCount = 1;
-        } else {
-          throw new EvidenceError("instruction-set-unsupported");
-        }
-        for (let index = 0; index < immediateCount; index += 1) {
-          readInstructionUnsigned(body, cursor);
-        }
-        continue;
-      }
-      throw new EvidenceError("instruction-set-unsupported");
-    }
-    decoded.push({
-      functionIndex: module.functionImportCount + localIndex,
-      calls,
-      messageSites,
-    });
-  }
-  moduleCache.set(cacheKey, decoded);
-  return decoded;
-}
-
-
-export function parseActiveTableRelations(
+export function activeTableEvidence(
   bytes: Uint8Array | null,
-): Map<number, number[]> {
-  if (!bytes) return new Map();
+): Readonly<{
+  relations: ReadonlyMap<number, readonly number[]>;
+  overwrittenSlots: readonly number[];
+}> {
+  if (!bytes) return { relations: new Map(), overwrittenSlots: [] };
   const cursor = { value: 0 };
+  const overwrittenSlots: number[] = [];
   let segments: number;
   try {
     segments = readUnsigned(bytes, cursor);
@@ -676,6 +477,7 @@ export function parseActiveTableRelations(
             throw new EvidenceError("active-table-unsupported");
           }
           // Later active segments overwrite earlier ones during instantiation.
+          if (slots.has(slot)) overwrittenSlots.push(slot);
           slots.set(slot, functionIndex);
         }
       }
@@ -698,7 +500,19 @@ export function parseActiveTableRelations(
     values.push(slot);
     byFunction.set(functionIndex, values);
   }
-  return byFunction;
+  for (const [functionIndex, values] of byFunction) {
+    byFunction.set(functionIndex, Object.freeze(values) as number[]);
+  }
+  return {
+    relations: readonlyMapView(byFunction),
+    overwrittenSlots: Object.freeze(overwrittenSlots),
+  };
+}
+
+export function parseActiveTableRelations(
+  bytes: Uint8Array | null,
+): ReadonlyMap<number, readonly number[]> {
+  return activeTableEvidence(bytes).relations;
 }
 
 
@@ -752,10 +566,10 @@ export function uniqueRoleFunction(module: ModuleShape, role: SemanticRole): num
 
 const roleFunctionCache = new WeakMap<
   ModuleShape,
-  WeakMap<SemanticRole, number[]>
+  WeakMap<SemanticRole, readonly number[]>
 >();
 
-export function roleFunctions(module: ModuleShape, role: SemanticRole): number[] {
+export function roleFunctions(module: ModuleShape, role: SemanticRole): readonly number[] {
   const moduleCache = roleFunctionCache.get(module) ?? new WeakMap();
   roleFunctionCache.set(module, moduleCache);
   const cached = moduleCache.get(role);
@@ -773,8 +587,9 @@ export function roleFunctions(module: ModuleShape, role: SemanticRole): number[]
       && bodyMatchesRole(body, role)
     ) matches.push(functionIndex);
   }
-  moduleCache.set(role, matches);
-  return matches;
+  const immutableMatches = Object.freeze(matches);
+  moduleCache.set(role, immutableMatches);
+  return immutableMatches;
 }
 
 export function uniqueExactFunction(
@@ -851,29 +666,14 @@ export function staticBytes(
   address: number,
   length: number,
 ): Uint8Array | null {
-  if (!Number.isSafeInteger(address) || !Number.isSafeInteger(length) || length < 0) {
-    return null;
-  }
-  for (const segment of module.dataSegments) {
-    const offset = address - segment.base;
-    if (offset >= 0 && offset + length <= segment.bytes.byteLength) {
-      return segment.bytes.subarray(offset, offset + length);
-    }
-  }
-  return null;
+  return dataEvidence(module).readBytes(address, length);
 }
 
 export function staticCStringHash(module: ModuleShape, address: number): string | null {
-  for (const segment of module.dataSegments) {
-    const offset = address - segment.base;
-    if (offset < 0 || offset >= segment.bytes.byteLength) continue;
-    const end = segment.bytes.indexOf(0, offset);
-    if (end < 0 || end - offset > 4_096) return null;
-    return createHash("sha256")
-      .update(segment.bytes.subarray(offset, end + 1))
-      .digest("hex");
-  }
-  return null;
+  const value = dataEvidence(module).readCString(address);
+  return value === null
+    ? null
+    : createHash("sha256").update(`${value}\0`).digest("hex");
 }
 
 export function staticBytesHash(
@@ -886,14 +686,7 @@ export function staticBytesHash(
 }
 
 export function staticBytesOccurrenceCount(module: ModuleShape, needle: Uint8Array): number {
-  let count = 0;
-  for (const segment of module.dataSegments) {
-    for (let offset = indexOfBytes(segment.bytes, needle, 0); offset >= 0;) {
-      count += 1;
-      offset = indexOfBytes(segment.bytes, needle, offset + 1);
-    }
-  }
-  return count;
+  return dataEvidence(module).addresses(needle).length;
 }
 
 export function valuesForRole(body: Uint8Array, role: SemanticRole): Map<string, number[]> {

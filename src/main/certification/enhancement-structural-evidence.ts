@@ -14,8 +14,8 @@ export {
   type TargetRoleCandidateDiagnostic,
 } from "./enhancement-target-proof.js";
 export { locateAutomaticLocalActions } from "./enhancement-local-actions-proof.js";
-export { enhancementProofContext } from "./enhancement-wasm-proof-context.js";
-export type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
+export { enhancementProofContext } from "./wasm-evidence.js";
+export type { EnhancementProofContext } from "./wasm-evidence.js";
 
 export type {
   AutomaticCursorLocation,

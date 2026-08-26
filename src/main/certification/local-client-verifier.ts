@@ -51,7 +51,7 @@ import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
   enhancementProofContext,
   type EnhancementProofContext,
-} from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
 import {
   preparePostTemplateSaveModule,
   type PostTemplateSaveModule,

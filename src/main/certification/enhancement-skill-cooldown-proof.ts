@@ -5,12 +5,12 @@
  * control flow performs the bounded timestamp-minus-clock calculation.
  */
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
-import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
+import type { EnhancementProofContext } from "./wasm-evidence.js";
 import {
   functionBody,
   uniqueExactFunction,
   unsignedOperand,
-} from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
 
 const RECHARGE_READER = Object.freeze({
   bodySha256: "de894c4032f9c9cf7a50a8f36ad1174446ead7246bf9ae830f43d8e45eb0d697",
@@ -41,22 +41,23 @@ export function deriveSkillCooldownObservation(
   playerSkillbar: KnownEnhancementBuild["playerSkillbarObservation"] | null | undefined,
 ): SkillCooldownObservationProof | null {
   if (!playerSkillbar) return null;
+  const module = context.moduleView();
   const skillbar = playerSkillbar.coreLayout;
   const reader = uniqueExactFunction(
-    context.module,
+    module,
     RECHARGE_READER.bodySha256,
     RECHARGE_READER.params,
     RECHARGE_READER.results,
   );
   const timer = uniqueExactFunction(
-    context.module,
+    module,
     PRECISE_SKILL_TIMER.bodySha256,
     PRECISE_SKILL_TIMER.params,
     PRECISE_SKILL_TIMER.results,
   );
   if (reader === null || timer === null) return null;
 
-  const body = functionBody(context.module, reader);
+  const body = functionBody(module, reader);
   const totalRechargeOffset = unsignedOperand(
     body,
     READER_OPERANDS.rechargeOffsets[0],
