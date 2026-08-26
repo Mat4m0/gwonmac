@@ -233,6 +233,42 @@ describe("Companion kernel", () => {
     );
   });
 
+  it("treats missing words in a shorter Travel unlock set as locked", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    kernel.view.setUint32(ADDRESSES.world + 0x614, 5, true);
+    kernel.view.setUint32(
+      ADDRESSES.travelUnlockBuffer + 5 * 4,
+      0xffff_ffff,
+      true,
+    );
+    assert.equal(kernel.init({ features: FEATURE_PLAY_REGION_OBSERVATION }), 1);
+    kernel.tick();
+
+    const state = kernel.playRegion();
+    assert.equal(state.status, "ready");
+    if (state.status !== "ready") return;
+    assert.equal(state.unlockedMapWords?.length, 28);
+    assert.equal(
+      (state.unlockedMapWords?.[Math.floor(133 / 32)] ?? 0) >>> (133 % 32) & 1,
+      1,
+    );
+    assert.deepEqual(state.unlockedMapWords?.slice(5), Array(23).fill(0));
+  });
+
+  it("rejects a Travel unlock set whose size exceeds its capacity", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view);
+    kernel.view.setUint32(ADDRESSES.world + 0x614, 29, true);
+    assert.equal(kernel.init({ features: FEATURE_PLAY_REGION_OBSERVATION }), 1);
+    kernel.tick();
+
+    const state = kernel.playRegion();
+    assert.equal(state.status, "ready");
+    if (state.status !== "ready") return;
+    assert.equal(state.unlockedMapWords, null);
+  });
+
   it("requires UI message configuration only for the Toolbox capability", async () => {
     const cursorOnly = await createKernel();
     cursorOnly.config.fill(0, MESSAGE_CONFIG_START);

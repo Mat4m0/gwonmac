@@ -69,7 +69,6 @@ unsafe fn observe_travel_unlocks(layout: Layout, game: u32) -> Option<[u32; TRAV
     let size = offset(array, 8).and_then(|at| unsafe { read_u32(at) })?;
     if buffer == 0
         || buffer & 3 != 0
-        || size < TRAVEL_UNLOCK_WORDS as u32
         || size > capacity
         || capacity > 64
         || !contains(buffer, checked_mul(size, 4)?)
@@ -77,7 +76,12 @@ unsafe fn observe_travel_unlocks(layout: Layout, game: u32) -> Option<[u32; TRAV
         return None;
     }
     let mut words = [0; TRAVEL_UNLOCK_WORDS];
-    for (index, word) in words.iter_mut().enumerate() {
+    // Native arrays may be shorter on new accounts. Missing words mean locked.
+    for (index, word) in words
+        .iter_mut()
+        .take(core::cmp::min(size as usize, TRAVEL_UNLOCK_WORDS))
+        .enumerate()
+    {
         *word = unsafe { read_u32(indexed(buffer, index as u32, 4)?)? };
     }
     Some(words)
