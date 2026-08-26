@@ -146,12 +146,15 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("shows per-character recents without repeating the current map", async () => {
-    const { wrapper } = fixture({ history: [55, 449, 81] });
+  it("shows at most six per-character recents without repeating the current map", async () => {
+    const { wrapper } = fixture({ history: [55, 449, 81, 194, 642, 857, 248, 15] });
     await flushPromises();
+    expect(wrapper.findAll(".travel-recent")).toHaveLength(6);
     expect(wrapper.get(".travel-history").text()).toContain("Kamadan");
     expect(wrapper.get(".travel-history").text()).toContain("Ascalon City");
     expect(wrapper.get(".travel-history").text()).not.toContain("Lion's Arch");
+    expect(wrapper.get(".travel-history").text()).toContain("Great Temple of Balthazar");
+    expect(wrapper.get(".travel-history").text()).not.toContain("D'Alessio Seaboard");
     wrapper.unmount();
   });
 
