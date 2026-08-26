@@ -64,9 +64,11 @@ export function createNativeTravelHost(
     development,
   );
   let attemptTimer = 0;
+  let unidentifiedOriginMapId: number | null = null;
   const clearAttempt = () => {
     window.clearTimeout(attemptTimer);
     attemptTimer = 0;
+    unidentifiedOriginMapId = null;
     attempt.value = { status: "idle" };
   };
   let currentPreferences: TravelPreferences | null = null;
@@ -92,6 +94,10 @@ export function createNativeTravelHost(
     loadHistory: historyObservation.load,
     async travel(request) {
       if (attempt.value.status !== "idle") return;
+      unidentifiedOriginMapId = state.value.status === "ready"
+        && state.value.characterKey === null
+        ? state.value.mapId
+        : null;
       attempt.value = { status: "queued", mapId: request.mapId };
       notice.value = {
         message: `Travelling to ${travelDestination(request.mapId)?.name ?? "destination"}…`,
@@ -127,8 +133,18 @@ export function createNativeTravelHost(
     },
     updateGameState(next) {
       state.value = next;
-      historyObservation.update(next);
       const current = attempt.value;
+      if (current.status === "loading"
+        && next.status === "ready"
+        && next.mapId === current.mapId
+        && next.characterKey !== null
+        && unidentifiedOriginMapId !== null) {
+        historyObservation.record({
+          characterKey: next.characterKey,
+          mapId: unidentifiedOriginMapId,
+        });
+      }
+      historyObservation.update(next);
       if (current.status === "idle") return;
       if (next.status === "waiting" && next.reason === "loading") {
         window.clearTimeout(attemptTimer);
