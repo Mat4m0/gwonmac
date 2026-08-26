@@ -424,6 +424,10 @@ describe("settings", () => {
       buildLibrary: true,
       teamManagement: false,
     }).buildLibrary, true, "the canonical key must win");
+    assert.equal(parseSettings({
+      buildLibrary: false,
+      teamManagement: "malformed legacy shadow",
+    }).buildLibrary, false, "the canonical key must bypass the legacy shadow");
     assert.throws(
       () => parseSettings({ teamManagement: "false" }),
       /settings\.teamManagement must be a boolean/u,

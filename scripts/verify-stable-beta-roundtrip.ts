@@ -56,6 +56,10 @@ import {
   launchPackagedApp,
   type RunningPackagedApp,
 } from "../tests/helpers/packaged-app.ts";
+import {
+  canonicalizeStableSettings,
+  validateCandidateSettings,
+} from "./release-settings-compatibility.ts";
 
 const stableApp = process.env.GW_STABLE_APP_PATH;
 const stableVersion = process.env.GW_STABLE_VERSION;
@@ -284,20 +288,21 @@ async function proveStableAcceptsCandidateSettingDomains(
     await withPackagedApp(cohort, stablePath, async (stable) => {
       const read = await stable.page.evaluate(() => window.gwNative.settings.get());
       assert.deepEqual(
-        canonicalizeRollbackSettings(read),
+        canonicalizeStableSettings(read, { disk: false }),
         settings,
         `latest Stable refused candidate settings-domain case ${index + 1}`,
       );
       assert.deepEqual(
-        canonicalizeRollbackSettings(
+        canonicalizeStableSettings(
           await stable.page.evaluate(() => window.gwNative.settings.set({})),
+          { disk: false },
         ),
         settings,
         `latest Stable could not rewrite candidate settings-domain case ${index + 1}`,
       );
     });
     assert.deepEqual(
-      canonicalizeRollbackSettings(await readSettingsDocument(cohort)),
+      canonicalizeStableSettings(await readSettingsDocument(cohort), { disk: true }),
       settings,
       `latest Stable changed candidate settings-domain case ${index + 1}`,
     );
@@ -313,27 +318,6 @@ async function proveStableAcceptsCandidateSettingDomains(
 const sortedKeys = (value: Record<string, unknown>): string[] =>
   Object.keys(value).sort();
 
-function canonicalizeRollbackSettings(raw: unknown): Record<string, unknown> {
-  assert.ok(
-    typeof raw === "object" && raw !== null && !Array.isArray(raw),
-    "cross-version settings are not an object",
-  );
-  const { formatVersion, teamManagement, ...settings } = raw as Record<string, unknown>;
-  if (formatVersion !== undefined) {
-    assert.equal(formatVersion, 1, "settings.json formatVersion changed");
-  }
-  if (teamManagement !== undefined && "buildLibrary" in settings) {
-    assert.equal(
-      teamManagement,
-      settings.buildLibrary,
-      "rollback teamManagement projection differs from buildLibrary",
-    );
-  } else if (teamManagement !== undefined) {
-    settings.buildLibrary = teamManagement;
-  }
-  return settings;
-}
-
 async function readCoreCanonical(page: Page): Promise<{
   settings: Record<string, unknown>;
   toolNamespaces: readonly string[];
@@ -343,7 +327,7 @@ async function readCoreCanonical(page: Page): Promise<{
     toolNamespaces: toolNamespaces.filter((name) => name in window.gwNative),
   }), TOOL_NATIVE_NAMESPACES);
   return {
-    settings: canonicalizeRollbackSettings(value.settings),
+    settings: validateCandidateSettings(value.settings, { disk: false }),
     toolNamespaces: value.toolNamespaces,
   };
 }
@@ -359,7 +343,7 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
     }));
     await roundTripProfileStore(core.page, null, "stable-core-template");
     assert.deepEqual(await windowSize(core.page), { width: 1_000, height: 700 });
-    return canonicalizeRollbackSettings(settings);
+    return canonicalizeStableSettings(settings, { disk: false });
   });
   await assertDiskSentinel(cohort);
   await withPackagedApp(cohort, candidateApp!, async (core) => {
@@ -367,8 +351,9 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
     assert.deepEqual(initial.toolNamespaces, [], "candidate Core launch exposed a Tools namespace");
     assert.deepEqual(initial.settings, stableSettings, "candidate changed Stable-owned Core settings");
     assert.equal(initial.settings.buildLibrary, false, "candidate lost the legacy Apply-Team opt-out");
-    const changed = canonicalizeRollbackSettings(
+    const changed = validateCandidateSettings(
       await core.page.evaluate(() => window.gwNative.settings.set({ showDiagnostics: true })),
+      { disk: false },
     );
     assert.deepEqual(changed, { ...stableSettings, showDiagnostics: true });
     await roundTripProfileStore(core.page, "stable-core-template", "candidate-core-template");
@@ -376,8 +361,9 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
   });
   await assertDiskSentinel(cohort);
   await withPackagedApp(cohort, stableApp!, async (core) => {
-    const returned = canonicalizeRollbackSettings(
+    const returned = canonicalizeStableSettings(
       await core.page.evaluate(() => window.gwNative.settings.get()),
+      { disk: false },
     );
     assert.equal(returned.buildLibrary, false, "rollback Stable lost the Apply-Team opt-out");
     assert.deepEqual(returned, { ...stableSettings, showDiagnostics: true });
@@ -508,7 +494,11 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   await proveStableAcceptsCandidateSettingDomains(toolsCohort, stablePath);
   await writeFile(
     path.join(toolsCohort.userData, "settings.json"),
-    JSON.stringify({ autoCheckUpdates: false, gwonmacTools: true }),
+    JSON.stringify({
+      autoCheckUpdates: false,
+      gwonmacTools: true,
+      teamManagement: false,
+    }),
     { mode: 0o600 },
   );
 
@@ -519,6 +509,11 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   await publishWindowSize(toolsCohort, 1_000, 700);
   await withPackagedApp(toolsCohort, stablePath, async (running) => {
     const stableInitial = await readToolsCanonical(running.page);
+    assert.equal(
+      canonicalizeStableSettings(stableInitial.settings, { disk: false }).buildLibrary,
+      false,
+      "latest Stable lost the legacy Apply-Team opt-out before upgrade",
+    );
     assert.equal(
       stableInitial.recovered,
       false,
@@ -532,7 +527,7 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       stableVersion,
       "the downloaded latest-Stable ZIP launched a different version",
     );
-    const stableSettings = canonicalizeRollbackSettings(await running.page.evaluate(() =>
+    const stableSettings = canonicalizeStableSettings(await running.page.evaluate(() =>
       window.gwNative.settings.set({
         autoCheckUpdates: false,
         gwonmacTools: true,
@@ -541,8 +536,9 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
         uiPanelOpacity: 88,
         updateTrack: "beta",
       })
-    ));
+    ), { disk: false });
     assert.equal(stableSettings.updateTrack, "beta", "latest Stable lacks the Beta enabler");
+    assert.equal(stableSettings.buildLibrary, false, "latest Stable enabled Apply Team while saving");
     assert.deepEqual(
       await running.page.evaluate((library) => {
         const api = window.gwNative;
@@ -565,10 +561,14 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       "the signed candidate app launched a different version",
     );
     const candidateInitial = await readToolsCanonical(running.page);
-    const candidateInitialSettings = canonicalizeRollbackSettings(candidateInitial.settings);
+    const candidateInitialSettings = validateCandidateSettings(
+      candidateInitial.settings,
+      { disk: false },
+    );
     assert.equal(candidateInitial.recovered, false);
     assert.equal(candidateInitialSettings.updateTrack, "beta");
     assert.equal(candidateInitialSettings.uiPanelOpacity, 88);
+    assert.equal(candidateInitialSettings.buildLibrary, false);
     assert.deepEqual(candidateInitial.library, initialLibrary);
     assert.deepEqual(await windowSize(running.page), { width: 1_000, height: 700 });
     await roundTripProfileStore(running.page, "stable-template", "candidate-template");
@@ -591,14 +591,14 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   await publishWindowSize(toolsCohort, 960, 680);
   const candidateSettingsDocument = await readSettingsDocument(toolsCohort);
   assert.deepEqual(
-    sortedKeys(canonicalizeRollbackSettings(candidateSettingsDocument)),
-    sortedKeys(canonicalizeRollbackSettings(stableSettingsDocument)),
+    sortedKeys(validateCandidateSettings(candidateSettingsDocument, { disk: true })),
+    sortedKeys(canonicalizeStableSettings(stableSettingsDocument, { disk: true })),
     "candidate introduced or removed a durable settings key; ship the schema expansion in Stable before the beta/RC uses it",
   );
 
   console.log("stable/beta compatibility: the same Stable reads and writes again");
   const expectedFinalSettings: Record<string, unknown> = {
-    ...canonicalizeRollbackSettings(candidateSettingsDocument),
+    ...validateCandidateSettings(candidateSettingsDocument, { disk: true }),
     showDiagnostics: false,
     updateTrack: "stable",
   };
@@ -611,10 +611,12 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       "the return launch did not use the exact Stable baseline",
     );
     const returned = await readToolsCanonical(running.page);
+    const returnedSettings = canonicalizeStableSettings(returned.settings, { disk: false });
     assert.equal(returned.recovered, false);
+    assert.equal(returnedSettings.buildLibrary, false, "rollback Stable enabled Apply Team");
     assert.deepEqual(
-      canonicalizeRollbackSettings(returned.settings),
-      canonicalizeRollbackSettings(candidateSettingsDocument),
+      returnedSettings,
+      validateCandidateSettings(candidateSettingsDocument, { disk: true }),
       "Stable did not read every candidate-written settings value",
     );
     assert.deepEqual(returned.library, candidateLibrary);
@@ -636,8 +638,10 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       },
     );
     const final = await readToolsCanonical(running.page);
+    const finalSettings = canonicalizeStableSettings(final.settings, { disk: false });
+    assert.equal(finalSettings.buildLibrary, false, "Stable save enabled Apply Team");
     assert.deepEqual(
-      canonicalizeRollbackSettings(final.settings),
+      finalSettings,
       expectedFinalSettings,
       "Stable lost candidate-written settings while saving its own patch",
     );
@@ -656,11 +660,10 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
     "Stable quarantined the candidate-written Build library",
   );
   const diskSettings = await readSettingsDocument(toolsCohort);
-  assert.deepEqual(diskSettings, {
-    formatVersion: 1,
-    ...expectedFinalSettings,
-    teamManagement: expectedFinalSettings.buildLibrary,
-  });
+  assert.deepEqual(
+    canonicalizeStableSettings(diskSettings, { disk: true }),
+    expectedFinalSettings,
+  );
   const diskLibrary = JSON.parse(await readFile(
     path.join(toolsCohort.userData, "build-library.json"),
     "utf8",
