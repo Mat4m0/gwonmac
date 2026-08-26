@@ -1,5 +1,20 @@
 # Active migrations
 
+## Apply-Team rollback projection
+
+- Why: the supported rollback Stable still reads `teamManagement`, so the
+  candidate temporarily writes that derived alias beside canonical
+  `buildLibrary`. The parser also retains a permanent read alias for dormant
+  profiles that may keep the released legacy shape indefinitely.
+- Introduced: 2026-08-26 with the hard Core/Tools launch boundary follow-up.
+- Depends on it: the supported rollback Stable that reads and writes
+  `teamManagement` instead of `buildLibrary`.
+- Remove when: that Stable is outside the supported rollback window and the
+  signed Stable/Beta gate accepts settings without `teamManagement`. Remove
+  only the serializer projection, its rollback tests, and this entry. Keep the
+  parser fallback and parser test for dormant profiles; `AppSettings` must
+  remain free of `teamManagement`.
+
 ## Skill-label enablement inference
 
 - Why: releases before the individual Tools refactor treated any configured

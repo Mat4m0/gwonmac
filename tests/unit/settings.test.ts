@@ -396,6 +396,7 @@ describe("settings", () => {
       "skillKeyBindings",
       "skillKeyLabelsEnabled",
       "targetReadout",
+      "teamManagement",
       "tradeChat",
       "travelPalette",
       "travelShortcuts",
@@ -407,6 +408,39 @@ describe("settings", () => {
       "xunlaiStorage",
     ]);
     assert.equal(disk.formatVersion, 1);
+    assert.equal(disk.teamManagement, saved.buildLibrary);
+  });
+
+  it("preserves the legacy Apply Team opt-out without restoring a second setting", () => {
+    assert.equal(parseSettings({
+      gwonmacTools: true,
+      teamManagement: false,
+    }).buildLibrary, false);
+    assert.equal(parseSettings({
+      gwonmacTools: true,
+      teamManagement: true,
+    }).buildLibrary, true);
+    assert.equal(parseSettings({
+      buildLibrary: true,
+      teamManagement: false,
+    }).buildLibrary, true, "the canonical key must win");
+    assert.throws(
+      () => parseSettings({ teamManagement: "false" }),
+      /settings\.teamManagement must be a boolean/u,
+    );
+  });
+
+  it("writes the legacy Apply Team projection for Stable rollback", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
+    const path = join(dir, "settings.json");
+    const settings = { ...DEFAULT_SETTINGS, gwonmacTools: true, buildLibrary: false };
+
+    assert.deepEqual(await saveSettings(path, settings), settings);
+    const disk = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    assert.equal(disk.buildLibrary, false);
+    assert.equal(disk.teamManagement, false);
+    assert.equal("teamManagement" in await loadSettings(path), false);
+    assert.equal((await loadSettings(path)).buildLibrary, false);
   });
 
   it("loads an alpha-written bare-JSON file with every value intact", async () => {
@@ -476,6 +510,7 @@ describe("settings", () => {
     assert.deepEqual(rewritten, {
       formatVersion: 1,
       ...loaded,
+      teamManagement: loaded.buildLibrary,
     });
     assert.equal("touchMode" in rewritten, false);
     assert.deepEqual(await loadSettings(path), loaded);
