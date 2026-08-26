@@ -294,10 +294,6 @@ function matchesPlayRegionObservation(
     expected === undefined
     || Object.keys(candidate).sort().join() !== Object.keys(expected).sort().join()
     || !Object.values(candidate).every(isIndex)
-    || [
-      candidate.contextRoot - expected.contextRoot,
-      candidate.areaInfo - expected.areaInfo,
-    ].some((delta, _index, deltas) => delta !== deltas[0])
     || Object.entries(expected).some(([key, value]) =>
       key !== "contextRoot" && key !== "areaInfo"
       && candidate[key as keyof typeof candidate] !== value)
@@ -539,9 +535,28 @@ function matchesPreGameControls(
   build: SemanticBuild,
   baseline: KnownEnhancementBuild,
 ): boolean {
-  return build.preGameControls === undefined
-    || (baseline.preGameControls !== undefined
-      && isDeepStrictEqual(build.preGameControls, baseline.preGameControls));
+  const candidate = build.preGameControls;
+  if (candidate === undefined) return true;
+  const expected = baseline.preGameControls;
+  return expected !== undefined
+    && isIndex(candidate.hashFunction.functionIndex)
+    && isDigest(candidate.hashFunction.bodySha256)
+    && isDeepStrictEqual(candidate.hashFunction.params, expected.hashFunction.params)
+    && isDeepStrictEqual(candidate.hashFunction.results, expected.hashFunction.results)
+    && Object.values(candidate.labels).every(isIndex)
+    && isDeepStrictEqual(candidate.labelHashes, expected.labelHashes)
+    && Object.keys(candidate.layout).sort().join()
+      === Object.keys(expected.layout).sort().join()
+    && candidate.layout.frameCount === candidate.layout.frameArray + 8
+    && candidate.layout.frameBytes === expected.layout.frameBytes
+    && candidate.layout.frameId === expected.layout.frameId
+    && candidate.layout.frameHashId === expected.layout.frameHashId
+    && candidate.layout.frameState === expected.layout.frameState
+    && candidate.layout.gameContextSlot === expected.layout.gameContextSlot
+    && candidate.layout.characterContext === expected.layout.characterContext
+    && candidate.layout.characterUuid === expected.layout.characterUuid
+    && candidate.layout.currentInstanceType === expected.layout.currentInstanceType
+    && isIndex(candidate.layout.contextRoot);
 }
 
 function matchesPlayerSkillbarObservation(

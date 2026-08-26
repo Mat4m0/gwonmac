@@ -25,7 +25,6 @@ import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import type { EnhancementCursorLayout } from "../../shared/enhancement-config.js";
 import type {
   AutomaticCursorLocation,
-  ModuleShape,
   SemanticRole,
 } from "./enhancement-evidence-types.js";
 
@@ -36,14 +35,19 @@ declare const WebAssembly: {
 const CURSOR_PRODUCER_ROLES: readonly [SemanticRole, SemanticRole] = Object.freeze([
   Object.freeze({
     bodyLength: 1_099,
-    fingerprint: "a9d848f87b08aba9b6eb08cbca0bb89208004df8fbdb83b8f8505001e6c4b91b",
-    spans: mutableSpans([
-      [68, 73, "producer.busy"], [104, 109, "producer.busy"],
-      [688, 693, "producer.scratch"], [712, 717, "cursor.color-buffer"],
-      [742, 747, "producer.scratch"], [761, 766, "cursor.color-buffer"],
-      [772, 777, "producer.scratch-plus-one"],
-      [798, 803, "cursor.color-buffer"], [829, 834, "cursor.color-buffer"],
-      [835, 840, "producer.scratch"], [1075, 1080, "producer.busy"],
+    fingerprint: "aa5940ad3b732088ba52c01622933fca7ae1127e81f413112153ea674d38a0ff",
+    spans: Object.freeze([
+      ...mutableSpans([
+        [68, 73, "producer.busy"], [104, 109, "producer.busy"],
+        [688, 693, "producer.scratch"], [712, 717, "cursor.color-buffer"],
+        [742, 747, "producer.scratch"], [761, 766, "cursor.color-buffer"],
+        [772, 777, "producer.scratch-plus-one"],
+        [798, 803, "cursor.color-buffer"], [829, 834, "cursor.color-buffer"],
+        [835, 840, "producer.scratch"], [1075, 1080, "producer.busy"],
+      ]),
+      { start: 77, end: 82, role: "producer.updating-assert", addressClass: "immutable-data" as const },
+      { start: 83, end: 88, role: "producer.source-file", addressClass: "immutable-data" as const },
+      { start: 580, end: 585, role: "producer.array-source", addressClass: "immutable-data" as const },
     ]),
     params: Object.freeze(["i32", "i32"]),
     results: Object.freeze(["i32"]),
@@ -65,11 +69,15 @@ const CURSOR_PRODUCER_ROLES: readonly [SemanticRole, SemanticRole] = Object.free
 
 const CURSOR_ART_RENDERER_ROLE: SemanticRole = Object.freeze({
   bodyLength: 277,
-  fingerprint: "a4a80470eeec29fe6a691a8da454ec80b478046343b5f8422ef3382d9e9780e6",
-  spans: mutableSpans([
-    [84, 89, "cursor.art-cache-a"],
-    [90, 95, "cursor.art-cache-b"],
-    [148, 153, "cursor.scale"],
+  fingerprint: "539c4f2f58df94f79a13441626ba0847181d55070e601c89245c052b7ac7cb40",
+  spans: Object.freeze([
+    ...mutableSpans([
+      [84, 89, "cursor.art-cache-a"],
+      [90, 95, "cursor.art-cache-b"],
+      [148, 153, "cursor.scale"],
+    ]),
+    { start: 32, end: 37, role: "renderer.texture-assert", addressClass: "immutable-data" as const },
+    { start: 38, end: 43, role: "renderer.source-file", addressClass: "immutable-data" as const },
   ]),
   params: Object.freeze(["i32", "i32"]),
   results: Object.freeze([]),
@@ -77,11 +85,15 @@ const CURSOR_ART_RENDERER_ROLE: SemanticRole = Object.freeze({
 
 const CURSOR_STATE_READER_ROLE: SemanticRole = Object.freeze({
   bodyLength: 102,
-  fingerprint: "39a2f1f0bdb8526c7de7616c6fb4da03c746c5debd78c29cc81006b2f65a4804",
-  spans: mutableSpans([
-    [9, 14, "cursor.software-model"],
-    [20, 25, "cursor.show-count"],
-    [36, 41, "cursor.active-art"],
+  fingerprint: "31bd16b381bde0d9be77a421877194b870e95014ae46764982fa335d07dacb9a",
+  spans: Object.freeze([
+    ...mutableSpans([
+      [9, 14, "cursor.software-model"],
+      [20, 25, "cursor.show-count"],
+      [36, 41, "cursor.active-art"],
+    ]),
+    { start: 49, end: 54, role: "state.texture-assert", addressClass: "immutable-data" as const },
+    { start: 55, end: 60, role: "state.source-file", addressClass: "immutable-data" as const },
   ]),
   params: Object.freeze([]),
   results: Object.freeze([]),
@@ -101,9 +113,10 @@ const CURSOR_TEXTURE_WRITER_SHA256 =
   "f1d4d25243aeb652707797683ed6118569f606e9e3a69040eaa3789f737dcc7a";
 
 function deriveCursorLayout(
-  module: ModuleShape,
+  context: EnhancementProofContext,
   producerFunctions: readonly [number, number],
 ): EnhancementCursorLayout | null {
+  const module = context.moduleView();
   const rendererFunction = uniqueRoleFunction(module, CURSOR_ART_RENDERER_ROLE);
   const stateReaderFunction = uniqueRoleFunction(module, CURSOR_STATE_READER_ROLE);
   const handleReaderFunction = uniqueExactFunction(
@@ -129,6 +142,21 @@ function deriveCursorLayout(
   const renderer = valuesForRole(
     functionBody(module, rendererFunction), CURSOR_ART_RENDERER_ROLE,
   );
+  const uniqueCString = (values: Map<string, number[]>, role: string, expected: string) => {
+    const address = soleValue(values, role);
+    const encoded = new TextEncoder().encode(`${expected}\0`);
+    return context.data.readCString(address) === expected
+      && context.data.addresses(encoded).length === 1;
+  };
+  if (
+    !uniqueCString(producerOne, "producer.updating-assert", "!s_updating")
+    || !uniqueCString(producerOne, "producer.source-file", "../../../../Engine/Gr/Gles3/GlDev.cpp")
+    || !uniqueCString(producerOne, "producer.array-source", "../../../../Base\\rtl\\Array.h")
+    || !uniqueCString(renderer, "renderer.texture-assert", "m_texture")
+    || !uniqueCString(renderer, "renderer.source-file", "../../../../Engine/Frame/FrCursor.cpp")
+    || !uniqueCString(state, "state.texture-assert", "m_texture")
+    || !uniqueCString(state, "state.source-file", "../../../../Engine/Frame/FrCursor.cpp")
+  ) return null;
   const colorBuffer = soleValue(producerOne, "cursor.color-buffer");
   if (
     colorBuffer !== soleValue(producerTwo, "cursor.color-buffer")
@@ -257,7 +285,7 @@ export function locateAutomaticCursor(
       // Exact rows are regression evidence, never layout authority. Even a
       // retained binary must prove every address and field from its own code.
       const layout = deriveCursorLayout(
-        module,
+        context,
         producerFunctions,
       );
       if (!layout) continue;

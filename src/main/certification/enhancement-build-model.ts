@@ -402,7 +402,8 @@ export interface KnownEnhancementBuild {
       "frameArray" | "frameCount" | "frameBytes" | "frameId"
       | "frameState"> & Pick<EnhancementPlayRegionLayout,
       "contextRoot" | "gameContextSlot" | "characterContext"
-      | "currentInstanceType"> & Readonly<{ frameHashId: number }>;
+      | "characterUuid" | "currentInstanceType">
+      & Readonly<{ frameHashId: number }>;
   }>;
   /** Exact reader and clock authority for player skill recharge timestamps. */
   skillCooldownObservation?: Readonly<{

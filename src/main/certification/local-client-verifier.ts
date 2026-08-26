@@ -568,6 +568,7 @@ function deriveEnhancementBuild(
     ? locateAutomaticCursor(templateOutput, ENHANCEMENT_BUILDS, context)
     : null;
   const locatedPlayRegion = requestedCapabilities.playRegionObservation
+      || requestedCapabilities.preGameControls
     ? locateAutomaticPlayRegion(templateOutput, ENHANCEMENT_BUILDS, context)
     : null;
   const locatedTarget = requestedCapabilities.targetObservation
@@ -580,17 +581,11 @@ function deriveEnhancementBuild(
     context,
     includePlayRegion,
   );
-  // Automatic input may use frame offsets only from this exact transformed
-  // client. Labels and function bodies can be re-derived on a future build,
-  // but they do not prove that the frame table and context layout stayed put.
-  const preGameBaseline = ENHANCEMENT_BUILDS.find(
-    (build) => build.sha256 === report.sha256,
-  ) ?? null;
   const preGameControls = requestedCapabilities.preGameControls
-      && preGameBaseline?.preGameControls
+      && locatedPlayRegion !== null
     ? derivePreGameControls(
         context,
-        preGameBaseline.preGameControls.layout,
+        locatedPlayRegion.playRegionLayout,
       )
     : null;
   const includePreGame = requestedCapabilities.preGameControls
@@ -649,9 +644,7 @@ function deriveEnhancementBuild(
       ? {
           preGameControls: changedFeature(
             "preGameControls",
-            preGameBaseline
-              ? "pre-game.exact-frame-labels"
-              : "pre-game.frame-layout",
+            "pre-game.frame-layout",
           ),
         }
       : {}),
@@ -666,12 +659,8 @@ function deriveEnhancementBuild(
         ? locatedTarget
         : localContributes
           ? locatedLocal
-          : includePreGame && preGameBaseline
-            ? Object.freeze({
-                baseline: preGameBaseline,
-                hookFunction: preGameBaseline.hookFunction,
-                hookBodySha256: preGameBaseline.hookBodySha256,
-              })
+          : includePreGame && locatedPlayRegion
+            ? locatedPlayRegion
             : null;
   if (source === null || !report.table || report.table.max === null) {
     return Object.freeze({ build: null, failures: completeFailures });

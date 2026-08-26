@@ -63,6 +63,7 @@ import { inspectLocalActionRoleCandidates } from "../../src/main/certification/e
 import {
   inspectTargetRoleCandidates,
   locateAutomaticCursor,
+  locateAutomaticPlayRegion,
 } from "../../src/main/certification/enhancement-structural-evidence.js";
 
 const sha256 = (bytes: Uint8Array): string =>
@@ -238,6 +239,16 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     local.enhancementBuild?.cursorEvent?.layout,
     "the shipped Cursor layout must be the structurally derived layout",
   );
+  const playRegionLocation = locateAutomaticPlayRegion(bytes, ENHANCEMENT_BUILDS);
+  assert.ok(playRegionLocation, "the real client must derive play-region state");
+  assert.deepEqual(
+    playRegionLocation.playRegionLayout,
+    local.enhancementBuild?.playRegionObservation?.layout,
+  );
+  assert.ok(
+    local.enhancementBuild?.preGameControls,
+    "the real client must derive pre-game frame controls",
+  );
   const agentArrayAccessor = uniqueRoleFunction(parsed, semanticRole(
     47,
     "e2d3a0903dd7eb7595e118466ce74d0e90f9f38c81068c8cd2fd1f8ab0570338",
@@ -311,10 +322,17 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     preGameControls: false,
   });
 
+  const areaInfo = playRegionLocation.playRegionLayout.areaInfo;
+  const areaLookupLocal = parsed.bodies.findIndex((body) =>
+    body.byteLength === 47
+    && body.includes(paddedIndex(areaInfo)[0]!)
+    && paddedIndex(areaInfo).every((byte, index) => body[40 + index] === byte),
+  );
+  assert.notEqual(areaLookupLocal, -1);
   const targetMutations = [
     { local: 7327 - derived.importCount, offset: 132, label: "target occurrence ledger", shared: false },
     { local: 5109 - derived.importCount, offset: 39, label: "map field offset", shared: true },
-    { local: 17524 - derived.importCount, offset: 36, label: "area table stride", shared: true },
+    { local: areaLookupLocal, offset: 36, label: "area table stride", shared: true },
   ] as const;
   for (const mutation of targetMutations) {
     const changedTargetProof = rewriteCode(bytes, (bodies) => {

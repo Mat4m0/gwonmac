@@ -27,6 +27,7 @@ import {
   valuesForRole,
 } from "./wasm-evidence.js";
 import type { EnhancementProofContext } from "./wasm-evidence.js";
+import { dataEvidence } from "./wasm-data-evidence.js";
 import { tickEvidence } from "./enhancement-tick-evidence.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 import type {
@@ -124,16 +125,69 @@ const AGENT_ARRAY_ACCESSOR_ROLE = semanticRole(
   ["i32"],
 );
 
-const AREA_LOOKUP_ROLE = semanticRole(
+const AREA_LOOKUP_SPANS = Object.freeze([
+  { start: 12, end: 17, role: "area.assert-name", addressClass: "immutable-data" as const },
+  { start: 18, end: 23, role: "area.source-file", addressClass: "immutable-data" as const },
+  { start: 24, end: 26, role: "area.source-line", addressClass: "immutable-data" as const },
+  { start: 40, end: 45, role: "area.table", addressClass: "immutable-data" as const },
+]);
+
+/** Reviewed semantic table generations. These are content certificates, not build hashes. */
+const AREA_TABLE_CERTIFICATES = Object.freeze([
+  Object.freeze({
+    capacity: 888,
+    sentinelRows: 585,
+    lookupFingerprint: "60c62c20f1c8a33ac6af4a3850cbe2c78346f9058de11cedaafe313b00154d69",
+    normalizedTableSha256: "97fc2684bd161b183f0833d3aef8246ea9074f0e08de0ca2bb37f1506f2b5a1c",
+  }),
+  Object.freeze({
+    capacity: 897,
+    sentinelRows: 594,
+    lookupFingerprint: "d4b96fb929317c6da37fc8f9d3c2842fd8dec4ad0d50bd1d993ef28d12a452ae",
+    normalizedTableSha256: "b0030b14d2f9ad706b048ec73468beb435f83c0555d42e0a04c967d2c4c8ad7c",
+  }),
+]);
+
+const AREA_LOOKUP_ROLES = AREA_TABLE_CERTIFICATES.map((certificate) => semanticRole(
   47,
-  "40dbe1dc1bc07cc9115aa44d89cd64673246c6f6c04a46e646fa1939e49dcf6f",
-  Object.freeze([
-    { start: 12, end: 17, role: "area.assert-name", addressClass: "immutable-data" },
-    { start: 40, end: 45, role: "area.table", addressClass: "immutable-data" },
-  ]),
+  certificate.lookupFingerprint,
+  AREA_LOOKUP_SPANS,
   ["i32"],
   ["i32"],
-);
+));
+
+const PLAY_REGION_SEMANTIC_ROLES = Object.freeze({
+  mapState: semanticRole(
+    318,
+    "ab27a71f3fdf9ff46fa4f73b57be6b464048f70adc627f9c8d123a58d43909f0",
+    Object.freeze([
+      { start: 10, end: 15, role: "map-state.assert", addressClass: "immutable-data" },
+      { start: 16, end: 21, role: "map-state.source-file", addressClass: "immutable-data" },
+    ]),
+    ["i32", "i32"],
+    [],
+  ),
+  areaCount: semanticRole(
+    137,
+    "bcb52eb689d92cf731bedeec30cc3472e83b2cce588c347514f63429b5fd0323",
+    Object.freeze([
+      { start: 24, end: 29, role: "area-count.assert", addressClass: "immutable-data" },
+      { start: 30, end: 35, role: "area-count.source-file", addressClass: "immutable-data" },
+      { start: 121, end: 126, role: "area-count.source-file", addressClass: "immutable-data" },
+    ]),
+    ["i32", "i32", "i32"],
+    ["i32"],
+  ),
+  areaFlags: semanticRole(
+    23,
+    "8305e1f87589f1f5e6fa8848bb910df49d7982a90f47f48626525a8517d62243",
+    Object.freeze([
+      { start: 14, end: 19, role: "area-flags.lookup", addressClass: "function-index" },
+    ]),
+    [],
+    ["i32"],
+  ),
+});
 
 type ExactTargetRole = Readonly<{
   bodySha256: string;
@@ -161,14 +215,48 @@ const TARGET_IMMUTABLE_HASHES = Object.freeze({
   resetNameA: "b940a3cd95df2f76fb27d3e23ef929c3c97753dde164ca08802c0b2554833642",
   resetNameB: "9ffea7f8a640d2d966ff61fb7479893422ac8aae7b39f74205e41095926d7f7c",
   areaAssertion: "bbba85bc88debef8198061f3c1c86cf0c7051c7cb0752f8ca670bcace10d03fe",
-  areaTable: "3a4564fe4b92b8e2a4e048000ccd924d1f1ee68d15e24a63dd6e05a9683a88bc",
 });
+
+function uniqueCString(
+  module: ModuleShape,
+  address: number,
+  expected: string,
+): boolean {
+  const data = dataEvidence(module);
+  return data.readCString(address) === expected
+    && data.addresses(new TextEncoder().encode(`${expected}\0`)).length === 1;
+}
 
 function exactTargetFunction(
   module: ModuleShape,
   role: ExactTargetRole,
 ): number | null {
   return uniqueExactFunction(module, role.bodySha256, role.params, role.results);
+}
+
+function playRegionFunction(
+  module: ModuleShape,
+  name: keyof typeof EXACT_TARGET_ROLES,
+): number | null {
+  if (name in PLAY_REGION_SEMANTIC_ROLES) {
+    return uniqueRoleFunction(
+      module,
+      PLAY_REGION_SEMANTIC_ROLES[name as keyof typeof PLAY_REGION_SEMANTIC_ROLES],
+    );
+  }
+  return exactTargetFunction(module, EXACT_TARGET_ROLES[name]);
+}
+
+function areaLookup(
+  module: ModuleShape,
+): { functionIndex: number; certificate: (typeof AREA_TABLE_CERTIFICATES)[number] } | null {
+  const matches = AREA_LOOKUP_ROLES.flatMap((role, index) => {
+    const functionIndex = uniqueRoleFunction(module, role);
+    return functionIndex === null
+      ? []
+      : [{ functionIndex, certificate: AREA_TABLE_CERTIFICATES[index]! }];
+  });
+  return matches.length === 1 ? matches[0]! : null;
 }
 
 export type TargetRoleCandidateDiagnostic = Readonly<{
@@ -224,11 +312,17 @@ export function inspectTargetRoleCandidates(
       roleFunctions(module, TARGET_CONTEXT_ROOT_ROLE).length,
       lifecycleCount,
       accessorMatches.length,
-      roleFunctions(module, AREA_LOOKUP_ROLE).length,
+      areaLookup(module) === null ? 0 : 1,
       roleFunctions(module, TARGET_SELECTOR_ROLE).length,
       roleFunctions(module, TARGET_RESET_ROLE).length,
       roleFunctions(module, TARGET_CALLER_ROLE).length,
-      ...Object.values(EXACT_TARGET_ROLES).map((role) => {
+      ...Object.entries(EXACT_TARGET_ROLES).map(([name, role]) => {
+        if (name in PLAY_REGION_SEMANTIC_ROLES) {
+          return roleFunctions(
+            module,
+            PLAY_REGION_SEMANTIC_ROLES[name as keyof typeof PLAY_REGION_SEMANTIC_ROLES],
+          ).length;
+        }
         const exact = exactTargetFunction(module, role);
         if (exact !== null) return 1;
         // A null unique lookup means either zero or multiple. Count explicitly
@@ -251,40 +345,73 @@ export function derivePlayRegionLayout(
   module: ModuleShape,
 ): EnhancementPlayRegionLayout | null {
   const contextFunction = uniqueRoleFunction(module, TARGET_CONTEXT_ROOT_ROLE);
-  const areaLookupFunction = uniqueRoleFunction(module, AREA_LOOKUP_ROLE);
+  const lookup = areaLookup(module);
   const roles = [
     "gameCharacter", "mapId", "mapState", "currentMap", "instanceType",
     "playerNumber", "areaCount", "areaFlags",
   ] as const satisfies readonly (keyof typeof EXACT_TARGET_ROLES)[];
   const exact = Object.fromEntries(roles.map(
-    (name) => [name, exactTargetFunction(module, EXACT_TARGET_ROLES[name])],
+    (name) => [name, playRegionFunction(module, name)],
   )) as Record<(typeof roles)[number], number | null>;
   if (
-    contextFunction === null || areaLookupFunction === null
+    contextFunction === null || lookup === null
     || Object.values(exact).some((value) => value === null)
   ) return null;
+  const areaLookupFunction = lookup.functionIndex;
+  const areaLookupRole = AREA_LOOKUP_ROLES[
+    AREA_TABLE_CERTIFICATES.indexOf(lookup.certificate)
+  ]!;
 
   const context = valuesForRole(functionBody(module, contextFunction), TARGET_CONTEXT_ROOT_ROLE);
-  const area = valuesForRole(functionBody(module, areaLookupFunction), AREA_LOOKUP_ROLE);
+  const area = valuesForRole(functionBody(module, areaLookupFunction), areaLookupRole);
   const contextRoot = soleValue(context, "context.root");
   const areaInfo = soleValue(area, "area.table");
   if (
     codeOperandOccurrences(module, contextRoot) !== 6
     || codeOperandOccurrences(module, areaInfo) !== 1
-    || commonRelocationDelta([
-      [contextRoot, 0x5a0ee0], [areaInfo, 0x1cc630],
-    ]) === null
   ) return null;
 
   if (
     staticCStringHash(module, soleValue(area, "area.assert-name"))
       !== TARGET_IMMUTABLE_HASHES.areaAssertion
+    || !uniqueCString(
+      module,
+      soleValue(area, "area.assert-name"),
+      "index < arrsize(s_missionClientData)",
+    )
   ) return null;
 
   const body = (name: (typeof roles)[number]) =>
     functionBody(module, exact[name]!);
   const contextBody = functionBody(module, contextFunction);
   const areaBody = functionBody(module, areaLookupFunction);
+  const mapStateEvidence = valuesForRole(
+    body("mapState"), PLAY_REGION_SEMANTIC_ROLES.mapState,
+  );
+  const areaCountEvidence = valuesForRole(
+    body("areaCount"), PLAY_REGION_SEMANTIC_ROLES.areaCount,
+  );
+  if (
+    !uniqueCString(
+      module,
+      soleValue(area, "area.source-file"),
+      "../../../../Gw/Const/ConstMission.cpp",
+    )
+    || !uniqueCString(module, soleValue(mapStateEvidence, "map-state.assert"), "props")
+    || !uniqueCString(
+      module,
+      soleValue(mapStateEvidence, "map-state.source-file"),
+      "../../../../Engine/Map/Props/PrApi.cpp",
+    )
+    || !uniqueCString(module, soleValue(areaCountEvidence, "area-count.assert"), "iModel")
+    || !uniqueCString(
+      module,
+      soleValue(areaCountEvidence, "area-count.source-file"),
+      "../../../../Engine/Model/MdlSeq.cpp",
+    )
+    || unsignedOperand(areaBody, 6) !== lookup.certificate.capacity
+    || unsignedOperand(body("areaFlags"), 14) !== areaLookupFunction
+  ) return null;
   const observation: EnhancementPlayRegionLayout = {
     contextRoot,
     gameContextSlot: unsignedOperand(contextBody, 17),
@@ -302,16 +429,31 @@ export function derivePlayRegionLayout(
     areaInfoStride: unsignedOperand(areaBody, 36),
     areaInfoFlags: unsignedOperand(body("areaFlags"), 21),
   };
-  if (unsignedOperand(areaBody, 6) < observation.areaInfoCount) return null;
+  if (lookup.certificate.capacity < observation.areaInfoCount) return null;
   const table = staticBytes(
     module,
     observation.areaInfo,
-    unsignedOperand(areaBody, 6) * observation.areaInfoStride,
+    lookup.certificate.capacity * observation.areaInfoStride,
   );
+  if (!table) return null;
+  const normalizedTable = table.slice();
+  const tableView = new DataView(
+    normalizedTable.buffer,
+    normalizedTable.byteOffset,
+    normalizedTable.byteLength,
+  );
+  let sentinelRows = 0;
+  for (let row = 0; row < lookup.certificate.capacity; row += 1) {
+    const offset = row * observation.areaInfoStride + 60;
+    if (tableView.getUint32(offset, true) === lookup.certificate.capacity) {
+      tableView.setUint32(offset, 0, true);
+      sentinelRows += 1;
+    }
+  }
   if (
-    !table
-    || createHash("sha256").update(table).digest("hex")
-      !== TARGET_IMMUTABLE_HASHES.areaTable
+    sentinelRows !== lookup.certificate.sentinelRows
+    || createHash("sha256").update(normalizedTable).digest("hex")
+      !== lookup.certificate.normalizedTableSha256
   ) return null;
 
   return verifyLayout(observation, {
