@@ -22,8 +22,9 @@ import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 
 export const PLAYER_SKILLBAR_WORLD_ROLE = semanticRole(
   3_279,
-  "878f00dc4ea68f51e5a79f507e37b0a5df3c32b561ca6d35c966a888d0cd022b",
+  "b19d00a9029e6e1c16f5afe2c4e4559483e764908ed1970cd7c3332a4d1f16bb",
   Object.freeze([
+    { start: 41, end: 46, role: "world.release", addressClass: "function-index" },
     { start: 1_342, end: 1_347, role: "world.assert-a", addressClass: "immutable-data" },
     { start: 1_395, end: 1_400, role: "world.assert-b", addressClass: "immutable-data" },
   ]),
@@ -33,9 +34,12 @@ export const PLAYER_SKILLBAR_WORLD_ROLE = semanticRole(
 
 export const PLAYER_SKILLBAR_UPDATE_ROLE = semanticRole(
   468,
-  "5c17e22a87d68e79e2d258992d623f3ec83dca62d74a063d46e06f7fd426093c",
+  "231e2acfb02c205e75392f9226e4ce9e26a04dacef11fee45498ae1829cbab65",
   Object.freeze([
     { start: 45, end: 50, role: "skillbar.assertion", addressClass: "immutable-data" },
+    { start: 51, end: 56, role: "skillbar.assertion-file", addressClass: "immutable-data" },
+    { start: 98, end: 103, role: "skillbar.array-file", addressClass: "immutable-data" },
+    { start: 140, end: 145, role: "skillbar.array-file", addressClass: "immutable-data" },
     { start: 450, end: 455, role: "party.ui", addressClass: "function-index" },
   ]),
   [],
@@ -56,6 +60,8 @@ const IMMUTABLE = Object.freeze({
   skillbar: "f450663f1e90de4ae2e581b6dc777b81f6c9e019bff3e5d2e60665099862e3f0",
   worldA: "435ae0e5b5663ba229fe0a312a2f3d83b4896302f9517b56d88f996ba7ea896d",
   worldB: "f7d0c7a8263c7a799862d8a513123d901e4f1cc30bc1d86da870bf5f2ec5aad6",
+  assertionFile: "1d36d5bd2d905fd9a1baef7c625097a144e3ba04829a3a2697c5afcc9e4f4d2b",
+  arrayFile: "47d3990810bf698e496109cd7d900538167fa8ee92f01099aad6bde4e5046357",
 });
 
 export function playerSkillbarRoleCandidateCounts(module: ModuleShape): readonly number[] {
@@ -108,6 +114,10 @@ export function derivePlayerSkillbarObservation(
   if (
     staticCStringHash(module, soleValue(updateValues, "skillbar.assertion"))
       !== IMMUTABLE.skillbar
+    || staticCStringHash(module, soleValue(updateValues, "skillbar.assertion-file"))
+      !== IMMUTABLE.assertionFile
+    || staticCStringHash(module, soleValue(updateValues, "skillbar.array-file"))
+      !== IMMUTABLE.arrayFile
     || staticBytesHash(module, soleValue(worldValues, "world.assert-a"), 12)
       !== IMMUTABLE.worldA
     || staticBytesHash(module, soleValue(worldValues, "world.assert-b"), 12)
