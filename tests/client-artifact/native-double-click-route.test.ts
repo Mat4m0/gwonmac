@@ -7,6 +7,7 @@ import {
   concat,
   encodeCode,
   encodeSection,
+  functionImportIndex,
   paddedIndex,
   parseCode,
   readUleb,
@@ -195,6 +196,92 @@ test("route proof survives reindexing and table relocation, but refuses broken e
   });
   assert.equal(WebAssembly.validate(wrongTranslatorField), true);
   assert.equal(locateNativeDoubleClickRoute(wrongTranslatorField), null);
+
+  const evidence = wasmEvidence(bytes);
+  assert.ok(evidence);
+  const module = evidence.moduleView();
+  const decoded = new Map(
+    evidence.decodeFunctions([]).map((entry) => [entry.functionIndex, entry]),
+  );
+
+  const dispatchDecoy = destinationFor(
+    bytes,
+    route.messageDispatchFunctionIndex,
+    routeFunctions,
+  );
+  const translator = decoded.get(route.translatorFunctionIndex);
+  assert.ok(translator);
+  const dispatchCalls = translator.callSites.get(route.messageDispatchFunctionIndex);
+  assert.ok(dispatchCalls);
+  const retargetedTranslator = rewriteCode(bytes, (bodies, imports) => {
+    const body = bodies[route.translatorFunctionIndex - imports]!;
+    for (const call of dispatchCalls) {
+      body.set(paddedIndex(dispatchDecoy), call.offset + 1);
+    }
+  });
+  assert.equal(WebAssembly.validate(retargetedTranslator), true);
+  assert.equal(locateNativeDoubleClickRoute(retargetedTranslator), null);
+
+  const enqueue = decoded.get(route.enqueueFunctionIndex);
+  assert.ok(enqueue);
+  const queueSite = enqueue.memorySites.find((site) => site.offset === 223);
+  assert.ok(queueSite);
+  const usedOperands = new Set(
+    [...decoded.values()].flatMap((entry) =>
+      [...entry.constantSites, ...entry.memorySites].map((site) => site.value)
+    ),
+  );
+  let movedQueueStorage = queueSite.value + 4;
+  while (usedOperands.has(movedQueueStorage)) movedQueueStorage += 4;
+  assert.ok(movedQueueStorage < evidence.data.initialMemoryBytes);
+  const splitQueueStorage = rewriteCode(bytes, (bodies, imports) => {
+    const body = bodies[route.enqueueFunctionIndex - imports]!;
+    for (const site of [...enqueue.constantSites, ...enqueue.memorySites]) {
+      if (site.value === queueSite.value) {
+        body.set(paddedIndex(movedQueueStorage), site.operandStart);
+      }
+    }
+  });
+  assert.equal(WebAssembly.validate(splitQueueStorage), true);
+  assert.equal(locateNativeDoubleClickRoute(splitQueueStorage), null);
+
+  const mousedownImport = functionImportIndex(
+    module.importSection!,
+    "emscripten_set_mousedown_callback_on_thread",
+  );
+  assert.notEqual(mousedownImport, null);
+  const registration = evidence.decodeFunctions([]).find(
+    ({ functionIndex }) => functionIndex === route.registrationFunctionIndex,
+  );
+  assert.ok(registration);
+  const registrationCall = registration.callSites.get(mousedownImport!)?.[0];
+  assert.ok(registrationCall);
+  const registeredSlot = registration.constantSites
+    .filter((site) => site.offset < registrationCall.offset)
+    .slice(-3)[1];
+  assert.equal(registeredSlot?.value, route.callbackTableSlot);
+  const wrongRegisteredSlot = rewriteCode(bytes, (bodies, imports) => {
+    bodies[route.registrationFunctionIndex - imports]!.set(
+      paddedIndex(route.callbackTableSlot + 1),
+      registeredSlot!.operandStart,
+    );
+  });
+  assert.equal(WebAssembly.validate(wrongRegisteredSlot), true);
+  assert.equal(locateNativeDoubleClickRoute(wrongRegisteredSlot), null);
+
+  const mousemoveImport = functionImportIndex(
+    module.importSection!,
+    "emscripten_set_mousemove_callback_on_thread",
+  );
+  assert.notEqual(mousemoveImport, null);
+  const wrongBrowserCallback = rewriteCode(bytes, (bodies, imports) => {
+    bodies[route.registrationFunctionIndex - imports]!.set(
+      paddedIndex(mousemoveImport!),
+      registrationCall.offset + 1,
+    );
+  });
+  assert.equal(WebAssembly.validate(wrongBrowserCallback), true);
+  assert.equal(locateNativeDoubleClickRoute(wrongBrowserCallback), null);
 
   const wrongDispatchField = rewriteCode(bytes, (bodies, imports) => {
     bodies[route.dispatcherFunctionIndex - imports]![234] = 8;

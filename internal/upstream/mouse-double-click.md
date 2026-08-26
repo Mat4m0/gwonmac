@@ -251,8 +251,10 @@ i32.store offset=24  ;; record+16, the word #829 copies into msg[4]
 ```
 
 It adds no function, moves no function index, and touches no table entry. The
-guard proves the full route: registered callback, 24-byte enqueue/dequeue copy,
-frame pump, `rec[16]` to message payload `[4]`, message 30 table binding,
+guard proves the full route: the named browser mousedown import receives the
+unique callback's active table slot, followed by the 24-byte enqueue/dequeue
+copy with complete shared-storage ledgers, frame pump, `rec[16]` to message
+payload `[4]`, the uniquely proved translator dispatch target, message 30 table binding,
 `payload[4] & 1`, and the `FrMouse` consumer that ORs flag 1. Function indices,
 active table slots, initialized data, and mutable storage may relocate without
 granting authority. Initialized operands require exact content and occurrence

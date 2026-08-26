@@ -3,6 +3,7 @@
  * It locates the bounded callback-to-consumer graph without build-local indexes.
  */
 import { createHash } from "node:crypto";
+import { functionImportIndex } from "../core/wasm-binary.js";
 import type {
   DecodedFunction,
   InstructionOperandSite,
@@ -29,6 +30,7 @@ type RouteRole =
   | "dequeue"
   | "pump"
   | "translator"
+  | "messageDispatch"
   | "binder"
   | "dispatcher"
   | "consumer";
@@ -46,6 +48,7 @@ const ROLE_SPECS: Readonly<Record<RouteRole, RoleSpec>> = Object.freeze({
   dequeue: { bodyLength: 252, params: ["i32"], results: ["i32"], fingerprint: "3bd3f3e538169fe6cd1a4992234cc374d9fae74003a58a89187cb94950353705" },
   pump: { bodyLength: 418, params: ["i32"], results: [], fingerprint: "4e9aed54e81c18176f0ac24e62beea80f46f85c1d80f0572758de02231f7a113" },
   translator: { bodyLength: 4_340, params: ["i32", "i32"], results: [], fingerprint: "aa0e634a824f0ff1e999991d8bf16f0faff111bb76442e6d585720fbe1dd4559" },
+  messageDispatch: { bodyLength: 31, params: ["i32", "i32", "i32", "i32"], results: ["i32"], fingerprint: "c4020b3f7349f1c683f5a074555ab56508dbed7c47d28af95afd66c60290ad1f" },
   binder: { bodyLength: 1_211, params: ["i32"], results: [], fingerprint: "f6cc7260c311b838ea50342a6751a2269f038292c6425260a446b7593169089a" },
   dispatcher: { bodyLength: 246, params: ["i32", "i32"], results: [], fingerprint: "19ac2957d4e308345fbc6ae7d965154ff7fcab9e6b07d917619dd24e3d0d750b" },
   consumer: { bodyLength: 1_051, params: ["i32", "i32", "i32"], results: [], fingerprint: "b420eabcffdbf8a6e580ecaaa81e2b299a36f0a4330f50363de632612939ba52" },
@@ -55,18 +58,33 @@ const MESSAGE_REGISTRATIONS = Object.freeze([
   1, 2, 3, 5, 10, 17, 16, 18, 19, 20, 21, 22, 23, 24, 26, 27, 30,
   31, 32, 29, 33, 34, 36, 37, 38, 40, 11, 12, 13, 14, 15, 43, 44, 45, 46,
 ]);
+const MOUSEDOWN_REGISTRATION_IMPORT =
+  "emscripten_set_mousedown_callback_on_thread";
+const TRANSLATOR_DISPATCH_CALLS = Object.freeze([
+  190, 208, 226, 270, 534, 593, 670, 771, 822, 1_183, 1_419, 1_739,
+  1_757, 1_910, 2_174, 2_288, 2_316, 2_521, 2_539, 2_847, 3_046,
+  3_109, 3_196, 3_287, 3_339, 3_373, 3_442, 3_525, 3_569, 3_744,
+  3_990, 4_137, 4_320,
+]);
+const QUEUE_STORAGE_LEDGERS = Object.freeze([
+  { enqueueOffsets: [223, 246], dequeueOffsets: [14], occurrences: 3 },
+  { enqueueOffsets: [272, 306], dequeueOffsets: [55, 151, 191], occurrences: 9 },
+  { enqueueOffsets: [253, 340], dequeueOffsets: [102], occurrences: 6 },
+]);
 
 /** The exact roles selected by the complete route proof. */
 export interface NativeDoubleClickRoute {
   readonly semanticSha256: string;
   readonly callbackFunctionIndex: number;
   readonly callbackTableSlot: number;
+  readonly registrationFunctionIndex: number;
   readonly flagStoreOffset: number;
   readonly flagStoreFrameOffset: number;
   readonly enqueueFunctionIndex: number;
   readonly dequeueFunctionIndex: number;
   readonly pumpFunctionIndex: number;
   readonly translatorFunctionIndex: number;
+  readonly messageDispatchFunctionIndex: number;
   readonly binderFunctionIndex: number;
   readonly dispatcherFunctionIndex: number;
   readonly consumerFunctionIndex: number;
@@ -75,7 +93,7 @@ export interface NativeDoubleClickRoute {
 export const NATIVE_DOUBLE_CLICK_ROUTE_SHA256 = sha256(text.encode(JSON.stringify({
   roles: ROLE_SPECS,
   messageRegistrations: MESSAGE_REGISTRATIONS,
-  routeContract: "record16-message4-mask1-consumer1-v1",
+  routeContract: "browser-mousedown-queue-ledger-dispatch-record16-message4-mask1-consumer1-v3",
 })));
 
 interface ProofView {
@@ -269,6 +287,58 @@ function callTargetAt(decoded: DecodedFunction, offset: number): number | null {
   return match?.[0] ?? null;
 }
 
+function mousedownRegistrationOwner(
+  view: ProofView,
+  callbackTableSlot: number,
+): number | null {
+  const imports = view.module.importSection;
+  if (!imports) return null;
+  const registrationImport = functionImportIndex(
+    imports,
+    MOUSEDOWN_REGISTRATION_IMPORT,
+  );
+  if (registrationImport === null) return null;
+  const matches = [...view.decoded.values()].filter((decoded) => {
+    const calls = decoded.callSites.get(registrationImport) ?? [];
+    if (calls.length !== 1) return false;
+    const argumentsBeforeCall = decoded.constantSites
+      .filter((site) => site.offset < calls[0]!.offset)
+      .slice(-3);
+    return argumentsBeforeCall.length === 3
+      && argumentsBeforeCall[0]!.value === 0
+      && argumentsBeforeCall[1]!.value === callbackTableSlot
+      && argumentsBeforeCall[2]!.value === 2;
+  });
+  return matches.length === 1 ? matches[0]!.functionIndex : null;
+}
+
+function queueStorageProves(
+  view: ProofView,
+  enqueue: DecodedFunction,
+  dequeue: DecodedFunction,
+): boolean {
+  const sites = (decoded: DecodedFunction): readonly InstructionOperandSite[] =>
+    [...decoded.constantSites, ...decoded.memorySites];
+  const allSites = [...view.decoded.values()].flatMap((decoded) => sites(decoded));
+  return QUEUE_STORAGE_LEDGERS.every((ledger) => {
+    const enqueueSites = sites(enqueue).filter((site) =>
+      ledger.enqueueOffsets.includes(site.offset)
+    );
+    const dequeueSites = sites(dequeue).filter((site) =>
+      ledger.dequeueOffsets.includes(site.offset)
+    );
+    if (
+      enqueueSites.length !== ledger.enqueueOffsets.length
+      || dequeueSites.length !== ledger.dequeueOffsets.length
+    ) return false;
+    const value = enqueueSites[0]!.value;
+    return value >= view.evidence.data.zeroInitializedBase
+      && value < view.evidence.data.initialMemoryBytes
+      && [...enqueueSites, ...dequeueSites].every((site) => site.value === value)
+      && allSites.filter((site) => site.value === value).length === ledger.occurrences;
+  });
+}
+
 function proveRoute(view: ProofView): NativeDoubleClickRoute | null {
   const roles = Object.fromEntries(
     (Object.keys(ROLE_SPECS) as RouteRole[]).map((role) => [role, uniqueRole(view, role)]),
@@ -285,8 +355,13 @@ function proveRoute(view: ProofView): NativeDoubleClickRoute | null {
   const consumer = view.decoded.get(located.consumer)!;
 
   const callbackSlots = view.evidence.tableRelations.get(located.callback) ?? [];
+  const callbackTableSlot = callbackSlots.length === 1 ? callbackSlots[0]! : null;
+  const registrationFunction = callbackTableSlot === null
+    ? null
+    : mousedownRegistrationOwner(view, callbackTableSlot);
   if (
-    callbackSlots.length !== 1
+    callbackTableSlot === null
+    || registrationFunction === null
     || !callsAt(callback, located.enqueue, [106])
     || !exactSites(callback.constantSites, [[0x41, 41, 8], [0x41, 44, 24], [0x41, 54, 18], [0x41, 103, 8]])
     || !exactSites(callback.memorySites, [[0x36, 56, 8], [0x36, 72, 12], [0x36, 88, 16], [0x36, 98, 20]])
@@ -304,6 +379,7 @@ function proveRoute(view: ProofView): NativeDoubleClickRoute | null {
     ])
     || !exactSites(enqueue.constantSites, [[0x41, 355, 24]])
     || !exactSites(dequeue.constantSites, [[0x41, 112, 24], [0x41, 131, 24]])
+    || !queueStorageProves(view, enqueue, dequeue)
   ) return null;
   const queueCopy = callTargetAt(enqueue, 357);
   if (queueCopy === null || callTargetAt(dequeue, 114) !== queueCopy) return null;
@@ -318,7 +394,7 @@ function proveRoute(view: ProofView): NativeDoubleClickRoute | null {
   if (
     !exactSites(translator.memorySites, [[0x28, 2122, 16], [0x36, 2125, 12]])
     || !exactSites(translator.constantSites, [[0x41, 2165, 30], [0x41, 2167, 24], [0x41, 2171, 8]])
-    || callTargetAt(translator, 2174) === null
+    || !callsAt(translator, located.messageDispatch, TRANSLATOR_DISPATCH_CALLS)
   ) return null;
 
   const registrations = binderRegistrations(binder);
@@ -345,13 +421,15 @@ function proveRoute(view: ProofView): NativeDoubleClickRoute | null {
   return Object.freeze({
     semanticSha256: NATIVE_DOUBLE_CLICK_ROUTE_SHA256,
     callbackFunctionIndex: located.callback,
-    callbackTableSlot: callbackSlots[0]!,
+    callbackTableSlot,
+    registrationFunctionIndex: registrationFunction,
     flagStoreOffset: 101,
     flagStoreFrameOffset: 24,
     enqueueFunctionIndex: located.enqueue,
     dequeueFunctionIndex: located.dequeue,
     pumpFunctionIndex: located.pump,
     translatorFunctionIndex: located.translator,
+    messageDispatchFunctionIndex: located.messageDispatch,
     binderFunctionIndex: located.binder,
     dispatcherFunctionIndex: located.dispatcher,
     consumerFunctionIndex: located.consumer,
