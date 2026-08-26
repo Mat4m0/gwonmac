@@ -771,6 +771,11 @@ test("client recertification reports evidence but cannot grant authority", () =>
   );
   assert.match(derive, /client-artifact\.json/);
   assert.match(derive, /client-artifact\.txt/);
+  assert.match(
+    derive,
+    /official_sha256="\$\(shasum -a 256 "\$GW_CLIENT_WASM" \| awk '\{print \$1\}'\)"/,
+  );
+  assert.match(derive, /officialSha256: \$officialSha256/);
   assert.match(derive, /certification\.js template "\$WASM" --emit-ts/);
   assert.match(derive, /certification\.js recertify "\$WASM"/);
   assert.match(derive, /certification\.js verify "\$WASM"/);

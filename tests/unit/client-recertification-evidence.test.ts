@@ -49,10 +49,12 @@ test("retains bounded generation evidence without paths or raw addresses", async
       profile: "features-601",
       inputSha256: feature601Input,
       outputSha256: feature601DoubleClick,
+      enhancementInputSha256: fileOutputDigest,
     }, {
       profile: "features-7ff",
       inputSha256: feature7ffInput,
       outputSha256: feature7ffDoubleClick,
+      enhancementInputSha256: fileOutputDigest,
     }],
     completeRouteProved: true,
     callbackFunctionIndex: 2448,
@@ -130,6 +132,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
       writeFile(files.qualification, JSON.stringify({
         status: "proved",
         exitCode: 0,
+        officialSha256: wasmDigest,
         log: "must not survive",
       })),
       writeFile(files.doubleClick, JSON.stringify(doubleClick)),
@@ -179,6 +182,16 @@ test("retains bounded generation evidence without paths or raw addresses", async
       doubleClick: {
         ...doubleClick,
         chains: doubleClick.chains.map((chain) =>
+          chain.profile === "features-601"
+            ? { ...chain, enhancementInputSha256: sha256("wrong-enhancement-input") }
+            : chain),
+      },
+      extendedMemory,
+      reason: "enhancement-input-mismatch",
+    }, {
+      doubleClick: {
+        ...doubleClick,
+        chains: doubleClick.chains.map((chain) =>
           chain.profile === "file-compatible"
             ? { ...chain, inputSha256: sha256("wrong-selected-input") }
             : chain),
@@ -197,6 +210,73 @@ test("retains bounded generation evidence without paths or raw addresses", async
         reason: refusal.reason,
       });
     }
+    for (const invalidDoubleClick of [{
+      ...doubleClick,
+      chains: doubleClick.chains.map((chain) =>
+        chain.profile === "features-601"
+          ? {
+              profile: chain.profile,
+              inputSha256: chain.inputSha256,
+              outputSha256: chain.outputSha256,
+            }
+          : chain),
+    }, {
+      ...doubleClick,
+      chains: doubleClick.chains.map((chain) =>
+        chain.profile === "file-compatible"
+          ? { ...chain, enhancementInputSha256: fileOutputDigest }
+          : chain),
+    }]) {
+      await Promise.all([
+        writeFile(files.doubleClick, JSON.stringify(invalidDoubleClick)),
+        writeFile(files.extendedMemory, JSON.stringify(extendedMemory)),
+      ]);
+      const rejected = await createClientRecertificationEvidence(args, environment);
+      assert.deepEqual(rejected.nativeDoubleClick, {
+        status: "unavailable",
+        reason: "evidence-collection-failed",
+      });
+      assert.deepEqual(rejected.outcome, {
+        status: "investigation",
+        reason: "evidence-collection-failed",
+      });
+    }
+    await Promise.all([
+      writeFile(files.doubleClick, JSON.stringify(doubleClick)),
+      writeFile(files.qualification, JSON.stringify({
+        status: "proved",
+        exitCode: 0,
+      })),
+    ]);
+    const unboundQualification = await createClientRecertificationEvidence(
+      args,
+      environment,
+    );
+    assert.deepEqual(unboundQualification.qualification, {
+      status: "unavailable",
+      reason: "evidence-collection-failed",
+    });
+    assert.deepEqual(unboundQualification.outcome, {
+      status: "investigation",
+      reason: "evidence-collection-failed",
+    });
+    await Promise.all([
+      writeFile(files.doubleClick, JSON.stringify(doubleClick)),
+      writeFile(files.qualification, JSON.stringify({
+        status: "proved",
+        exitCode: 0,
+        officialSha256: sha256("wrong-official-artifact"),
+      })),
+    ]);
+    await assert.rejects(
+      createClientRecertificationEvidence(args, environment),
+      /evidence files do not describe the supplied official artifacts/u,
+    );
+    await writeFile(files.qualification, JSON.stringify({
+      status: "proved",
+      exitCode: 0,
+      officialSha256: wasmDigest,
+    }));
     for (const fileVerdict of [{
       status: "refused",
       inputSha256: wasmDigest,
@@ -283,7 +363,11 @@ test("rejects poison strings and contradictory proved states", async () => {
         ),
         reasons: [],
       })),
-      writeFile(files.qualification, JSON.stringify({ status: "proved", exitCode: 1 })),
+      writeFile(files.qualification, JSON.stringify({
+        status: "proved",
+        exitCode: 1,
+        officialSha256: wasmDigest,
+      })),
       writeFile(files.doubleClick, JSON.stringify({
         status: "proved",
         exitCode: 0,

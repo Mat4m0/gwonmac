@@ -260,6 +260,10 @@ function qualificationEvidence(value: JsonRecord): JsonRecord {
   return Object.freeze({
     status,
     exitCode,
+    officialSha256: digest(
+      value.officialSha256,
+      "qualification.officialSha256",
+    ),
   });
 }
 
@@ -287,10 +291,20 @@ function doubleClickEvidence(value: JsonRecord): JsonRecord {
       && !isEnhancementCapabilityProfile(profile)) {
       throw new Error("doubleClick chain profile is not closed");
     }
+    const isFeatureChain = isEnhancementCapabilityProfile(profile);
+    if (!isFeatureChain && chain.enhancementInputSha256 !== undefined) {
+      throw new Error("doubleClick base chain has an enhancement input");
+    }
     return Object.freeze({
       profile,
       inputSha256: digest(chain.inputSha256, "doubleClick chain input"),
       outputSha256: digest(chain.outputSha256, "doubleClick chain output"),
+      ...(isFeatureChain ? {
+        enhancementInputSha256: digest(
+          chain.enhancementInputSha256,
+          "doubleClick chain enhancement input",
+        ),
+      } : {}),
     });
   });
   if (new Set(chains.map(({ profile }) => profile)).size !== chains.length
@@ -415,6 +429,11 @@ function generationOutcome(
   if (baseInput !== fileVerdict.outputSha256) {
     return Object.freeze({ status: "investigation", reason: "selected-input-mismatch" });
   }
+  if (doubleClickChains.some((chain) =>
+    isEnhancementCapabilityProfile(chain.profile)
+      && chain.enhancementInputSha256 !== baseInput)) {
+    return Object.freeze({ status: "investigation", reason: "enhancement-input-mismatch" });
+  }
   const doubleClickProfiles = doubleClickChains
     .map((chain) => chain.profile)
     .filter(isEnhancementCapabilityProfile)
@@ -480,6 +499,8 @@ export async function createClientRecertificationEvidence(
     ]);
   if ((safeRuntime.status !== "unavailable"
       && safeRuntime.officialSha256 !== wasm.sha256)
+    || (safeQualification.status !== "unavailable"
+      && safeQualification.officialSha256 !== wasm.sha256)
     || (safeDoubleClick.status === "proved"
       && safeDoubleClick.officialSha256 !== wasm.sha256)
     || (safeExtendedMemory.status === "proved"

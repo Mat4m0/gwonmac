@@ -104,6 +104,7 @@ jobs:
           GW_CLIENT_WASM: ${{ steps.official.outputs.wasm }}
         run: |
           mkdir -p "$EVIDENCE"
+          official_sha256="$(shasum -a 256 "$GW_CLIENT_WASM" | awk '{print $1}')"
           set +e
           pnpm test:client-artifact > "$EVIDENCE/client-artifact.txt" 2>&1
           qualification_exit=$?
@@ -115,7 +116,8 @@ jobs:
           fi
           jq -n --arg status "$qualification_status" \
             --argjson exitCode "$qualification_exit" \
-            '{status: $status, exitCode: $exitCode}' \
+            --arg officialSha256 "$official_sha256" \
+            '{status: $status, exitCode: $exitCode, officialSha256: $officialSha256}' \
             > "$EVIDENCE/client-artifact.json"
           exit "$qualification_exit"
 
