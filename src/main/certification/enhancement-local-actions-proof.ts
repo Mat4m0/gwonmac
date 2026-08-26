@@ -4,7 +4,10 @@
  */
 import { createHash } from "node:crypto";
 import { CLIENT_TICK_ROLE } from "./enhancement-client-hook-role.js";
-import { deriveObservationLayout } from "./enhancement-target-proof.js";
+import {
+  deriveAreaLookupFunction,
+  deriveObservationLayout,
+} from "./enhancement-target-proof.js";
 import { dataEvidence } from "./wasm-data-evidence.js";
 import {
   derivePartyObservation,
@@ -232,6 +235,14 @@ const XUNLAI_PLAYER_READER_ROLE = semanticRole(
   ["i32"],
 );
 
+const XUNLAI_AREA_TYPE_READER_ROLE = semanticRole(
+  362,
+  "d0b03173d5989872e8e0b0ceddcb950e99d9c2cc5e73fa663c0ccac5c4757edf",
+  [{ start: 6, end: 11, role: "area.lookup", addressClass: "function-index" }],
+  ["i32"],
+  ["i32"],
+);
+
 const TRAVEL_UNLOCK_CONSUMER_ROLE = semanticRole(
   360,
   "fdee88e92cd73fc576aedfa4f232b2b0e63a363433bb8a874c2893477650cf5c",
@@ -248,7 +259,6 @@ const TRAVEL_UNLOCK_CONSUMER_ROLE = semanticRole(
 );
 
 const LOCAL_ACTION_HASHES = Object.freeze({
-  areaTypeReader: "9786e68238b6a2559646f8e0594b3d4ee808003f11ec775a475e337e7dd9aa90",
   frameAssertion: "1db4beca1a3d246ce3f4df09cfdd2a3e60c5cef5564d0361474f7f9cb3c95026",
   frameParameterName: "a3a3f2f40f9a261466c73f8d5ccb6cde62cfe5adce83bbb88bb8582e6b45e222",
   frameAssertionFile: "ae09386d3c010580726df6fd3ebda81021733a84674bf912c72adfd8ad07429b",
@@ -458,8 +468,9 @@ export function deriveXunlaiAccess(
   const agentFunction = uniqueRoleFunction(module, XUNLAI_AGENT_READER_ROLE);
   const accessFunction = uniqueRoleFunction(module, XUNLAI_ACCESS_READER_ROLE);
   const playerFunction = uniqueRoleFunction(module, XUNLAI_PLAYER_READER_ROLE);
-  const areaTypeFunction = uniqueExactFunction(
-    module, LOCAL_ACTION_HASHES.areaTypeReader, ["i32"], ["i32"],
+  const areaTypeFunction = uniqueRoleFunction(
+    module,
+    XUNLAI_AREA_TYPE_READER_ROLE,
   );
   if (
     agentFunction === null || accessFunction === null
@@ -471,6 +482,10 @@ export function deriveXunlaiAccess(
   const agentValues = valuesForRole(agentBody, XUNLAI_AGENT_READER_ROLE);
   const accessValues = valuesForRole(accessBody, XUNLAI_ACCESS_READER_ROLE);
   const playerValues = valuesForRole(playerBody, XUNLAI_PLAYER_READER_ROLE);
+  const areaTypeValues = valuesForRole(
+    functionBody(module, areaTypeFunction),
+    XUNLAI_AREA_TYPE_READER_ROLE,
+  );
   const agentLine = soleValue(agentValues, "xunlai.source-line");
   const accessLine = soleValue(accessValues, "xunlai.source-line");
   if (
@@ -487,6 +502,8 @@ export function deriveXunlaiAccess(
     || staticCStringHash(module, soleValue(playerValues, "player.array-file"))
       !== LOCAL_ACTION_HASHES.arrayFile
     || agentLine - 4_822 !== accessLine - 4_850
+    || soleValue(areaTypeValues, "area.lookup")
+      !== deriveAreaLookupFunction(module)
   ) return null;
   const worldPlayers = unsignedOperand(agentBody, 49);
   const playerRecordStride = unsignedOperand(agentBody, 146);
@@ -793,6 +810,7 @@ export function locateAutomaticLocalActions(
               consumer: Object.freeze({
                 ...travelExpected.unlockProof.consumer,
                 functionIndex: unlockConsumer,
+                bodySha256: functionBodySha256(module, unlockConsumer),
               }),
             }),
           })
