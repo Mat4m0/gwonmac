@@ -205,14 +205,18 @@ export class PreferencesCoordinator {
    * because the player reset ordinary application preferences.
    */
   async resetCoreSettings(): Promise<SettingsResetOutcome> {
-    const outcome = await this.#lock.run(async () => Object.freeze({
-      status: "complete" as const,
-      settings: await saveSettingsAndReconcile(
-        this.#paths().settings,
-        { ...DEFAULT_SETTINGS },
-      ),
-      travelPreferences: null,
-    }));
+    const outcome = await this.#lock.run(async () => {
+      const settingsPath = this.#paths().settings;
+      const current = await loadSettings(settingsPath);
+      return Object.freeze({
+        status: "complete" as const,
+        settings: await saveSettingsAndReconcile(settingsPath, {
+          ...DEFAULT_SETTINGS,
+          travelShortcuts: current.travelShortcuts,
+        }),
+        travelPreferences: null,
+      });
+    });
     await this.#publish(outcome.settings);
     return outcome;
   }

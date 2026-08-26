@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import { PreferencesCoordinator } from "../../src/main/core/preferences-coordinator.js";
 import { DEFAULT_SETTINGS, type AppSettings } from "../../src/shared/contracts.js";
 import {
+  DEFAULT_TRAVEL_SHORTCUTS,
   replaceTravelShortcut,
 } from "../../src/shared/travel.js";
 
@@ -73,6 +74,12 @@ async function seedNonDefaultPreferences(
   const current = await coordinator.getTravelPreferences();
   await coordinator.updateTravelPreferences({
     expected: current,
+    patch: {
+      shortcuts: replaceTravelShortcut(current.shortcuts, 0, { mapId: 55 }),
+    },
+  });
+  await coordinator.updateTravelPreferences({
+    expected: await coordinator.getTravelPreferences(),
     patch: {
       synonyms: [{ term: "home", mapId: 55 }],
     },
@@ -237,6 +244,34 @@ describe("PreferencesCoordinator", () => {
     assert.deepEqual(outcome.travelPreferences, {
       shortcuts: (await coordinator.getTravelPreferences()).shortcuts,
       synonyms: [],
+    });
+    assert.deepEqual(outcome.travelPreferences.shortcuts, DEFAULT_TRAVEL_SHORTCUTS);
+  });
+
+  it("resets Core without importing or deleting stored Travel choices", async () => {
+    const { coordinator } = await fixture();
+    const before = await coordinator.getTravelPreferences();
+    const shortcuts = replaceTravelShortcut(before.shortcuts, 0, { mapId: 55 });
+    await coordinator.updateTravelPreferences({
+      expected: before,
+      patch: { shortcuts },
+    });
+    await coordinator.updateTravelPreferences({
+      expected: await coordinator.getTravelPreferences(),
+      patch: { synonyms: [{ term: "home", mapId: 55 }] },
+    });
+    await coordinator.updateSettings({ showDiagnostics: true });
+
+    const outcome = await coordinator.resetCoreSettings();
+
+    assert.equal(outcome.status, "complete");
+    assert.deepEqual(outcome.settings, {
+      ...DEFAULT_SETTINGS,
+      travelShortcuts: (await coordinator.getSettings()).travelShortcuts,
+    });
+    assert.deepEqual(await coordinator.getTravelPreferences(), {
+      shortcuts,
+      synonyms: [{ term: "home", mapId: 55 }],
     });
   });
 

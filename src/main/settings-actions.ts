@@ -115,8 +115,15 @@ export async function applySettingsChange(
   }
 }
 
+export function settingsResetDetail(toolsEnabledAtLaunch: boolean): string {
+  return toolsEnabledAtLaunch
+    ? "Display, tools, Travel shortcuts, custom search phrases, window size and position, and diagnostics return to their defaults. Downloaded game data and your saved login stay untouched."
+    : "Core-owned settings, including Tools switches, window size and position, and diagnostics return to their defaults. Stored Build Library and Travel shortcuts and search phrases remain. Downloaded game data and your saved login stay untouched.";
+}
+
 export async function confirmSettingsReset(
   win: BrowserWindow,
+  toolsEnabledAtLaunch: boolean,
   reset: () => Promise<SettingsResetOutcome>,
 ): Promise<SettingsResetOutcome | null> {
   const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
@@ -124,8 +131,7 @@ export async function confirmSettingsReset(
     !(await confirmAction(win, {
       confirmLabel: "Reset GWonMac Settings",
       message: "Reset GWonMac settings?",
-      detail:
-        "Display, tools, Travel shortcuts, custom search phrases, window size and position, and diagnostics return to their defaults. Downloaded game data and your saved login stay untouched.",
+      detail: settingsResetDetail(toolsEnabledAtLaunch),
     }))
   ) {
     return null;
