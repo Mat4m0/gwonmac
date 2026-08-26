@@ -12,23 +12,19 @@ type BooleanSetting = {
 }[keyof AppSettings];
 type FeatureBooleanSetting = BooleanSetting & (
   | "gwonmacTools"
+  | "buildLibrary"
+  | "tradeChat"
   | "targetReadout"
-  | "teamManagement"
   | "xunlaiStorage"
   | "travelPalette"
+  | "skillKeyLabelsEnabled"
   | "skillCooldownOverlayEnabled"
 );
-type ContentSetting = "skillKeyBindings";
 type FeatureActivation =
   | Readonly<{ kind: "master"; setting: FeatureBooleanSetting }>
   | Readonly<{
       kind: "setting";
       setting: FeatureBooleanSetting;
-      master: FeatureBooleanSetting;
-    }>
-  | Readonly<{
-      kind: "configured-content";
-      setting: ContentSetting;
       master: FeatureBooleanSetting;
     }>;
 
@@ -54,6 +50,22 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
     activation: { kind: "master", setting: "gwonmacTools" },
     region: "non-pvp",
   },
+  buildLibrary: {
+    activation: {
+      kind: "setting",
+      setting: "buildLibrary",
+      master: "gwonmacTools",
+    },
+    region: "non-pvp",
+  },
+  tradeChat: {
+    activation: {
+      kind: "setting",
+      setting: "tradeChat",
+      master: "gwonmacTools",
+    },
+    region: "non-pvp",
+  },
   targetReadout: {
     activation: {
       kind: "setting",
@@ -65,7 +77,7 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
   teamApply: {
     activation: {
       kind: "setting",
-      setting: "teamManagement",
+      setting: "buildLibrary",
       master: "gwonmacTools",
     },
     region: "pve",
@@ -90,8 +102,8 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
   },
   skillKeyLabels: {
     activation: {
-      kind: "configured-content",
-      setting: "skillKeyBindings",
+      kind: "setting",
+      setting: "skillKeyLabelsEnabled",
       master: "gwonmacTools",
     },
     region: "pve",
@@ -109,18 +121,17 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
 export type FeatureId = keyof typeof FEATURE_SELECTION_POLICIES;
 export type FeatureActivationSettings = Pick<
   AppSettings,
-  FeatureBooleanSetting | ContentSetting
+  FeatureBooleanSetting
 >;
 
 export function featureActivationRequested(
   id: FeatureId,
-  settings: FeatureActivationSettings,
+  settings: Partial<FeatureActivationSettings>,
 ): boolean {
   const activation = FEATURE_SELECTION_POLICIES[id].activation;
-  if (activation.kind === "master") return settings[activation.setting];
+  if (activation.kind === "master") return settings[activation.setting] === true;
   if (!settings[activation.master]) return false;
-  if (activation.kind === "setting") return settings[activation.setting];
-  return settings[activation.setting].some((value) => value !== null);
+  return settings[activation.setting] === true;
 }
 
 /**

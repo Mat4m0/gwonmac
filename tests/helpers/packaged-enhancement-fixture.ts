@@ -666,7 +666,6 @@ export async function assertPackagedOffSession() {
       ),
       [
         "gw://app/enhancement-cursor.js",
-        "gw://app/enhancement-readout.js",
         "gw://app/enhancement-manifest.js",
       ],
       "required Core did not stop at the unproved module manifest",
@@ -747,18 +746,6 @@ export async function assertPackagedHostOnlyToolsSession() {
       { nativeCursor: true, tools: true },
     );
     await openTools();
-    await fixture.page.evaluate(async () => {
-      window.dispatchEvent(new CustomEvent("gw:tools-toggle", { cancelable: true }));
-      const saved = await window.gwNative.settings.set({ teamManagement: false });
-      window.gwApplySettings?.(saved);
-    });
-    await fixture.page.waitForSelector('#toolbox-foundation[data-open="false"]');
-    assert.equal(
-      await fixture.page.locator("#toolbox-foundation").count(),
-      1,
-      "turning Apply off removed the host-owned Build/Team library",
-    );
-    await openTools();
     await fixture.page.getByRole("tab", { name: "Builds" }).click();
     await fixture.page.locator(".library-row").first().click();
     await fixture.page.getByRole("button", { name: "Export build" }).click();
@@ -787,9 +774,12 @@ export async function assertPackagedHostOnlyToolsSession() {
       { exact: true },
     ).first().waitFor();
     assert.ok(
-      (await fixture.page.evaluate(async () =>
-        (await window.gwNative.buildLibrary.get()).library.teams
-          .some((team) => team.name === "Patch-day team"))),
+      (await fixture.page.evaluate(async () => {
+        const api = window.gwNative;
+        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+        return (await api.buildLibrary.get()).library.teams
+          .some((team) => team.name === "Patch-day team");
+      })),
       "the host-only Tools route did not persist its library change",
     );
     assert.equal(

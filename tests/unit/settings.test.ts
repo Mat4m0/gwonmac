@@ -27,13 +27,15 @@ describe("settings", () => {
       controllerPromptStyle: "game-default",
       uiPanelOpacity: 94,
       gwonmacTools: false,
-      teamManagement: true,
+      buildLibrary: true,
+      tradeChat: true,
       xunlaiStorage: false,
-      travelPalette: false,
+      travelPalette: true,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
       skillKeyBindings: [null, null, null, null, null, null, null, null],
+      skillKeyLabelsEnabled: false,
       skillCooldownOverlayEnabled: true,
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
@@ -75,13 +77,15 @@ describe("settings", () => {
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       gwonmacTools: false,
-      teamManagement: true,
+      buildLibrary: true,
+      tradeChat: true,
       xunlaiStorage: false,
-      travelPalette: false,
+      travelPalette: true,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
       skillKeyBindings: [null, null, null, null, null, null, null, null],
+      skillKeyLabelsEnabled: false,
       skillCooldownOverlayEnabled: true,
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
@@ -248,6 +252,11 @@ describe("settings", () => {
       skillKeyBindings: [{ ...binding, input: { kind: "keyboard", code: "Unknown" } },
         ...skillKeyBindings.slice(1)],
     }), AppError);
+    assert.equal(parseSettings({ skillKeyBindings }).skillKeyLabelsEnabled, true);
+    assert.equal(parseSettings({
+      skillKeyBindings,
+      skillKeyLabelsEnabled: false,
+    }).skillKeyLabelsEnabled, false);
   });
 
   it("takes the acknowledged client build only as a client hash", () => {
@@ -359,7 +368,6 @@ describe("settings", () => {
       autoRelogAfterReload: true,
       renderScale: 1.5,
       gwonmacTools: false,
-      teamManagement: true,
       xunlaiStorage: false,
       travelPalette: false,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
@@ -372,6 +380,7 @@ describe("settings", () => {
     assert.deepEqual(Object.keys(disk).sort(), [
       "autoCheckUpdates",
       "autoRelogAfterReload",
+      "buildLibrary",
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
@@ -385,8 +394,9 @@ describe("settings", () => {
       "skillCooldownColor",
       "skillCooldownOverlayEnabled",
       "skillKeyBindings",
+      "skillKeyLabelsEnabled",
       "targetReadout",
-      "teamManagement",
+      "tradeChat",
       "travelPalette",
       "travelShortcuts",
       "uiCustomTheme",
@@ -422,6 +432,7 @@ describe("settings", () => {
       recovered = backup;
     });
     assert.equal(recovered, "", "an alpha profile must not be treated as corrupt");
+    assert.equal("teamManagement" in loaded, false);
     assert.deepEqual(loaded, {
       uiPanelOpacity: 94,
       renderScale: 1.5,
@@ -430,13 +441,15 @@ describe("settings", () => {
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       gwonmacTools: false,
-      teamManagement: true,
+      buildLibrary: true,
+      tradeChat: true,
       xunlaiStorage: false,
-      travelPalette: false,
+      travelPalette: true,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
       skillKeyBindings: [null, null, null, null, null, null, null, null],
+      skillKeyLabelsEnabled: false,
       skillCooldownOverlayEnabled: true,
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,

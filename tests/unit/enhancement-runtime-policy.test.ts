@@ -7,17 +7,20 @@ import { FEATURE_SELECTION_POLICIES } from "../../src/shared/feature-contracts.j
 
 const off = Object.freeze({
   gwonmacTools: false,
+  buildLibrary: false,
+  tradeChat: false,
   targetReadout: false,
-  teamManagement: false,
   xunlaiStorage: false,
   travelPalette: false,
-  skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
+  skillKeyLabelsEnabled: false,
   skillCooldownOverlayEnabled: false,
 });
 
 test("developer programs replace saved optional-tool selection in PvE", () => {
   assert.deepEqual(enhancementRuntimePolicy("toolbox-foundation", off, "pve"), {
     tools: true,
+    buildLibrary: true,
+    tradeChat: true,
     targetReadout: false,
     teamApply: false,
     xunlaiStorage: false,
@@ -27,6 +30,8 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
     tools: true,
+    buildLibrary: true,
+    tradeChat: true,
     targetReadout: false,
     teamApply: true,
     xunlaiStorage: true,
@@ -36,6 +41,8 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
   });
   assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
     tools: true,
+    buildLibrary: true,
+    tradeChat: true,
     targetReadout: false,
     teamApply: false,
     xunlaiStorage: true,
@@ -45,6 +52,8 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
     tools: false,
+    buildLibrary: false,
+    tradeChat: false,
     targetReadout: true,
     teamApply: false,
     xunlaiStorage: false,
@@ -57,15 +66,18 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
 test("unknown regions keep local Tools while live PvE features fail closed", () => {
   const on = Object.freeze({
     gwonmacTools: true,
+    buildLibrary: true,
+    tradeChat: true,
     targetReadout: true,
-    teamManagement: true,
     xunlaiStorage: true,
     travelPalette: true,
-    skillKeyBindings: off.skillKeyBindings,
+    skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("none", on, "unknown"), {
     tools: true,
+    buildLibrary: true,
+    tradeChat: true,
     targetReadout: false,
     teamApply: false,
     xunlaiStorage: true,
@@ -78,19 +90,12 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
 test("confirmed active PvP play disables every product and developer tool", () => {
   const on = Object.freeze({
     gwonmacTools: true,
+    buildLibrary: true,
+    tradeChat: true,
     targetReadout: true,
-    teamManagement: true,
     xunlaiStorage: true,
     travelPalette: true,
-    skillKeyBindings: [{
-      input: { kind: "keyboard" as const, code: "KeyC" },
-      modifiers: {
-        control: false,
-        option: false,
-        shift: false,
-        command: false,
-      },
-    }, null, null, null, null, null, null, null] as const,
+    skillKeyLabelsEnabled: true,
     skillCooldownOverlayEnabled: true,
   });
   for (const program of [
@@ -102,6 +107,8 @@ test("confirmed active PvP play disables every product and developer tool", () =
   ] as const) {
     assert.deepEqual(enhancementRuntimePolicy(program, on, "pvp"), {
       tools: false,
+      buildLibrary: false,
+      tradeChat: false,
       targetReadout: false,
       teamApply: false,
       xunlaiStorage: false,
@@ -115,14 +122,17 @@ test("confirmed active PvP play disables every product and developer tool", () =
 test("product tool settings remain live once the capability is present", () => {
   assert.deepEqual(enhancementRuntimePolicy("none", {
     gwonmacTools: true,
+    buildLibrary: true,
+    tradeChat: true,
     targetReadout: false,
-    teamManagement: true,
     xunlaiStorage: false,
     travelPalette: true,
-    skillKeyBindings: off.skillKeyBindings,
+    skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: true,
   }, "pve"), {
     tools: true,
+    buildLibrary: true,
+    tradeChat: true,
     targetReadout: false,
     teamApply: true,
     xunlaiStorage: false,
@@ -136,7 +146,7 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
   const empty = enhancementRuntimePolicy("none", {
     ...off,
     gwonmacTools: true,
-    skillKeyBindings: [null, null, null, null, null, null, null, null],
+    skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: false,
   }, "pve");
   assert.equal(empty.skillKeyLabels, false);
@@ -144,19 +154,7 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
   const labels = enhancementRuntimePolicy("none", {
     ...off,
     gwonmacTools: true,
-    skillKeyBindings: [
-      {
-        input: { kind: "keyboard", code: "KeyC" },
-        modifiers: { control: false, option: false, shift: false, command: false },
-      },
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-    ],
+    skillKeyLabelsEnabled: true,
     skillCooldownOverlayEnabled: false,
   }, "pve");
   assert.equal(labels.skillKeyLabels, true);
@@ -183,13 +181,13 @@ test("local Tools require their setting or developer program and only active PvP
   for (const program of programs) {
     for (const playRegion of regions) {
       for (const enabled of [false, true]) {
-        for (const teamManagement of [false, true]) {
+        for (const buildLibrary of [false, true]) {
           for (const targetReadout of [false, true]) {
             for (const xunlaiStorage of [false, true]) {
               const policy = enhancementRuntimePolicy(program, {
                 ...off,
                 gwonmacTools: enabled,
-                teamManagement,
+                buildLibrary,
                 xunlaiStorage,
                 targetReadout,
               }, playRegion);

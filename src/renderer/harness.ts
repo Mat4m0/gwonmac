@@ -508,11 +508,13 @@ const emptySkillKeyBindings:
     [null, null, null, null, null, null, null, null];
 window.gwToolsSettings = () => Object.freeze({
   gwonmacTools: appSettings?.gwonmacTools ?? false,
-  teamManagement: appSettings?.teamManagement ?? true,
+  buildLibrary: appSettings?.buildLibrary ?? true,
+  tradeChat: appSettings?.tradeChat ?? true,
   xunlaiStorage: appSettings?.xunlaiStorage ?? false,
   travelPalette: appSettings?.travelPalette ?? false,
   targetReadout: appSettings?.targetReadout ?? false,
   skillKeyBindings: appSettings?.skillKeyBindings ?? emptySkillKeyBindings,
+  skillKeyLabelsEnabled: appSettings?.skillKeyLabelsEnabled ?? false,
   skillCooldownOverlayEnabled: appSettings?.skillCooldownOverlayEnabled ?? true,
   skillCooldownColor: appSettings?.skillCooldownColor
     ?? Object.freeze({ kind: 'preset', preset: 'red' }),

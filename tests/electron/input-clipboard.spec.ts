@@ -80,8 +80,8 @@ test.describe("renderer text editing", () => {
           { id: "edit-select-all", label: "Select All", role: null, accelerator: "CmdOrCtrl+A", hasClick: true },
         ],
         appAccelerators: [null, null, null, null],
-        toolsLabel: "Show or hide GWonMac Tools",
-        tradeLabel: "Show or hide Trade Chat",
+        toolsLabel: "Build Library",
+        tradeLabel: "Trade Chat",
       });
     } finally {
       await closeOffline(fixture);

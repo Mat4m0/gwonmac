@@ -18,7 +18,7 @@ import {
   DEVELOPER_PACKAGE_FILES,
   forgePackageFiles,
   htmlScriptEntryPoints,
-  PRELOAD_ENTRY,
+  PRELOAD_ENTRIES,
   relativeEsmClosure,
 } from "../helpers/package-inventory.ts";
 
@@ -55,7 +55,7 @@ test("every relative ESM dependency reachable from a shipped entry point is pack
   const closure = relativeEsmClosure({
     entryPoints: [
       manifest.main,
-      PRELOAD_ENTRY,
+      ...PRELOAD_ENTRIES,
       ...htmlScriptEntryPoints(rendererIndex, shippedText(rendererIndex)),
     ],
     inventory: packaged,

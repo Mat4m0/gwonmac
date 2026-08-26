@@ -396,7 +396,9 @@ export async function assertTargetReadoutLifecycle() {
 
 export async function assertCleanupSafetyGates() {
   for (const gate of ["observer", "cursor-refresh", "callback", "hook"] as const) {
-    const fixture = await launchPackaged(`gw-packaged-cleanup-${gate}-`, {});
+    const fixture = await launchPackaged(`gw-packaged-cleanup-${gate}-`, {
+      gwonmacTools: true,
+    });
     try {
       const pageErrors: string[] = [];
       fixture.page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -413,11 +415,13 @@ export async function assertCleanupSafetyGates() {
           window.gwSurfaces = installSurfaceController(document);
           window.gwToolsSettings = () => Object.freeze({
             gwonmacTools: true,
-            teamManagement: true,
+            buildLibrary: true,
+            tradeChat: true,
             xunlaiStorage: true,
             travelPalette: true,
             targetReadout: false,
             skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
+            skillKeyLabelsEnabled: false,
             skillCooldownOverlayEnabled: true,
             skillCooldownColor: { kind: "preset", preset: "red" } as const,
           });
@@ -578,7 +582,9 @@ export async function assertCleanupSafetyGates() {
 }
 
 export async function assertToolboxFoundationLifecycle() {
-  const fixture = await launchPackaged("gw-packaged-toolbox-foundation-", {});
+  const fixture = await launchPackaged("gw-packaged-toolbox-foundation-", {
+    gwonmacTools: true,
+  });
   try {
     await fixture.page.waitForFunction(() => {
       const { Module } = globalThis as PageGlobals;
@@ -793,11 +799,13 @@ export async function assertToolboxFoundationLifecycle() {
       globalThis.dispatchEvent(new Event("pagehide"));
       window.gwToolsSettings = () => Object.freeze({
         gwonmacTools: true,
-        teamManagement: true,
+        buildLibrary: true,
+        tradeChat: true,
       xunlaiStorage: true,
       travelPalette: true,
         targetReadout: false,
         skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
+        skillKeyLabelsEnabled: false,
         skillCooldownOverlayEnabled: true,
         skillCooldownColor: { kind: "preset", preset: "red" } as const,
       });
@@ -1218,9 +1226,8 @@ export async function assertToolboxFoundationLifecycle() {
       message: "companion cleanup failed",
       aggregateMessage: "Companion cleanup was incomplete",
       failures: [
-        "Companion cleanup failed during core observer memory release",
-        "Companion cleanup failed during storage disposal",
-        "Companion cleanup failed during Travel disposal",
+        "Companion cleanup failed during observer memory release",
+        "Companion cleanup failed during extension callback resource release",
       ],
     }]);
     assert.deepEqual(result.after.storageConfigurations.at(-1), [0, 0]);
@@ -1244,7 +1251,9 @@ export async function assertToolboxFoundationLifecycle() {
 }
 
 export async function assertRollbackAfterTablePublication() {
-  const fixture = await launchPackaged("gw-packaged-foundation-rollback-", {});
+  const fixture = await launchPackaged("gw-packaged-foundation-rollback-", {
+    gwonmacTools: true,
+  });
   try {
     await fixture.page.waitForFunction(() => {
       const { Module } = globalThis as PageGlobals;
@@ -1346,11 +1355,13 @@ export async function assertRollbackAfterTablePublication() {
         globalThis.dispatchEvent(new Event("pagehide"));
         window.gwToolsSettings = () => Object.freeze({
           gwonmacTools: true,
-          teamManagement: true,
+          buildLibrary: true,
+          tradeChat: true,
       xunlaiStorage: true,
       travelPalette: true,
           targetReadout: false,
           skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
+          skillKeyLabelsEnabled: false,
           skillCooldownOverlayEnabled: true,
           skillCooldownColor: { kind: "preset", preset: "red" } as const,
         });
@@ -1452,7 +1463,7 @@ export async function assertRollbackAfterTablePublication() {
         cause: "intentional post-table failure",
         errors: [
           "intentional post-table failure",
-          "Companion cleanup failed during core observer memory release",
+          "Companion cleanup failed during observer memory release",
         ],
       },
       replacementCursorStatePreserved: true,

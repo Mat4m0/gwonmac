@@ -134,7 +134,6 @@ test.describe("build templates", () => {
 
   test("previews an import, and writes nothing until it is confirmed", async () => {
     const fixture = await launchOffline("gw-templates-import-e2e-");
-    const source = await mkdtemp(path.join(tmpdir(), "gw-templates-source-"));
     try {
       const { page } = fixture;
       await installFakeMount(page, {
@@ -142,19 +141,19 @@ test.describe("build templates", () => {
       });
       await openTemplates(page);
 
-      const list = path.join(source, "MyBuilds.txt");
-      await writeFile(
-        list,
-        [
+      const list = {
+        name: "MyBuilds.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from([
           `Me/E Domination\t${SKILLS}`,
           `[PvP Set;${EQUIPMENT}]`,
           // Already saved under this exact code: nothing to do.
           `Shockaxe: ${SKILLS}`,
           "a line with no code at all",
-        ].join("\n"),
-      );
+        ].join("\n")),
+      };
 
-      await page.setInputFiles("#templates-file-files", [list]);
+      await page.setInputFiles("#templates-file-files", list);
       await expect(page.locator("#templates-preview")).toBeVisible();
       // The preview is the task: the source buttons stand down so the pane
       // still fits, and Cancel is the way back to them.
@@ -178,7 +177,7 @@ test.describe("build templates", () => {
       await page.locator("#templates-cancel").click();
       await expect(page.locator("#templates-preview")).toBeHidden();
       await expect(page.locator("#templates-actions")).toBeVisible();
-      await page.setInputFiles("#templates-file-files", [list]);
+      await page.setInputFiles("#templates-file-files", list);
 
       await page.locator("#templates-confirm").click();
       await expect(page.locator("#templates-status")).toContainText(
@@ -196,7 +195,6 @@ test.describe("build templates", () => {
         "/app:/Templates/Equipment/PvP Set.txt": EQUIPMENT,
       });
     } finally {
-      await rm(source, { recursive: true, force: true });
       await closeOffline(fixture);
     }
   });

@@ -19,9 +19,11 @@ import {
 } from "electron";
 import {
   EXTERNAL_URLS,
+  type AppSettings,
   type GameTextEditCommand,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
+import { featureActivationRequested } from "../shared/feature-contracts.js";
 import { logEvent, reloadTranscriptForWindow } from "./diagnostics.js";
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import {
@@ -47,6 +49,26 @@ export interface ApplicationMenuActions {
   host: WindowHost;
   /** Window state stays window.ts's; the menu only asks for the reset. */
   resetWindowState: (win: BrowserWindow) => Promise<void>;
+}
+
+/** Keep optional commands visible while removing every disabled action. */
+export function updateToolsMenuItems(
+  settings: Pick<
+    AppSettings,
+    "gwonmacTools" | "buildLibrary" | "tradeChat" | "xunlaiStorage" | "travelPalette"
+  >,
+): void {
+  const menu = Menu.getApplicationMenu();
+  const availability = {
+    "toggle-tools": featureActivationRequested("buildLibrary", settings),
+    "toggle-trade": featureActivationRequested("tradeChat", settings),
+    "open-xunlai-storage": featureActivationRequested("xunlaiStorage", settings),
+    "open-travel": featureActivationRequested("travel", settings),
+  } as const;
+  for (const [id, enabled] of Object.entries(availability)) {
+    const item = menu?.getMenuItemById(id);
+    if (item) item.enabled = enabled;
+  }
 }
 
 async function editFocusedText(
@@ -363,22 +385,26 @@ export function installApplicationMenu({
         { type: "separator" },
         {
           id: "toggle-tools",
-          label: "Show or hide GWonMac Tools",
+          label: "Build Library",
+          enabled: false,
           click: withGameOwner((win) => toggleTools(win)),
         },
         {
           id: "toggle-trade",
-          label: "Show or hide Trade Chat",
+          label: "Trade Chat",
+          enabled: false,
           click: withGameOwner((win) => toggleTrade(win)),
         },
         {
           id: "open-xunlai-storage",
           label: "Open Xunlai Storage",
+          enabled: false,
           click: withGameOwner((win) => openStorage(win)),
         },
         {
           id: "open-travel",
-          label: "Show or hide Quick Travel",
+          label: "Travel",
+          enabled: false,
           click: withGameOwner((win) => toggleTravel(win)),
         },
         {

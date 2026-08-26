@@ -175,8 +175,7 @@
   font-size: var(--ui-font-size);
   letter-spacing: .02em;
 }
-.settings-pane > fieldset,
-#settings-tools-config > fieldset {
+.settings-pane > fieldset {
   margin-top: var(--ui-space-3);
   padding: var(--ui-space-3) 0 0;
   border-top: 1px solid var(--ui-line-soft);
@@ -196,14 +195,71 @@
   font-size: var(--ui-font-size-lg);
 }
 .settings-feature-master .settings-note { margin-inline-start: 26px; }
-#settings-tool-features {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--ui-space-2) var(--ui-space-4);
+.settings-tools-restart {
+  margin: var(--ui-space-3) 0 0 26px;
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-warning);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-warning-panel-fill);
 }
-#settings-form #settings-tool-features label.settings-check { margin: 0; }
-.settings-shortcuts { display: grid; gap: var(--ui-space-2); }
-.settings-shortcuts > .settings-note { margin: 0; }
+.settings-tools-restart p { margin: 0 0 var(--ui-space-2); }
+.settings-tools-list {
+  display: grid;
+  max-width: 760px;
+  border-top: 1px solid var(--ui-line-soft);
+}
+.settings-tool {
+  padding: var(--ui-space-4) 0;
+  border-bottom: 1px solid var(--ui-line-soft);
+}
+.settings-tool-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+}
+#settings-form .settings-tool-heading label.settings-check { margin: 0; }
+.settings-tool-heading .settings-check span {
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size-lg);
+  font-weight: var(--ui-font-weight-semibold);
+}
+.settings-tool-stage {
+  color: var(--ui-accent);
+  font-size: var(--ui-font-size-sm);
+  font-weight: var(--ui-font-weight-semibold);
+}
+.settings-tool-stage[data-stage="test"] { color: var(--ui-warning); }
+.settings-tool-description {
+  max-width: 65ch;
+  margin: var(--ui-space-1) 0 0 26px;
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-reading);
+  text-wrap: pretty;
+}
+.settings-tool-config {
+  display: grid;
+  gap: var(--ui-space-3);
+  margin: var(--ui-space-3) 0 0 26px;
+  padding-top: var(--ui-space-3);
+  border-top: 1px solid var(--ui-line-soft);
+}
+.settings-tool-config[hidden] { display: none; }
+#settings-form .settings-tool-option { margin: 0; }
+.settings-tool-command {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+.settings-tool-command code {
+  color: var(--ui-text-bright);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.settings-shortcuts-restore {
+  justify-self: start;
+  margin-top: var(--ui-space-3);
+}
 .settings-skill-keys { display: grid; gap: var(--ui-space-2); }
 .settings-skill-keys > .settings-note { margin: 0; }
 .settings-skill-key-grid { display: grid; gap: var(--ui-space-1); }
@@ -319,7 +375,6 @@
   justify-self: start;
 }
 .settings-shortcut-message { color: var(--ui-warning); }
-#settings-shortcuts-restore { justify-self: start; margin-top: var(--ui-space-1); }
 .settings-availability {
   margin-top: var(--ui-space-4);
   padding-top: var(--ui-space-3);
@@ -788,7 +843,6 @@
   }
   .settings-panes { padding: var(--ui-space-4); }
   .settings-pane-header { margin-bottom: var(--ui-space-4); }
-  #settings-tool-features { grid-template-columns: minmax(0, 1fr); }
   .settings-shortcut-row { grid-template-columns: minmax(0, 1fr) auto; }
   .settings-shortcut-name { grid-column: 1 / -1; }
   .settings-display-row {

@@ -59,6 +59,11 @@ type Slot = {
   visible: boolean;
 };
 
+export type ToolboxAvailability = Readonly<{
+  builds: boolean;
+  trade: boolean;
+}>;
+
 export function createToolboxFoundation(
   parent: HTMLElement,
   options: FoundationOptions,
@@ -85,6 +90,7 @@ export function createToolboxFoundation(
   let disposed = false;
   let stackOrder = 0;
   let active: Slot | null = null;
+  let availability: ToolboxAvailability = { builds: true, trade: true };
 
   const requestClose = (slot: Slot): void => {
     if (!slot.visible) return;
@@ -172,7 +178,8 @@ export function createToolboxFoundation(
 
   const onToggleChord = (event: KeyboardEvent) => {
     if (
-      event.code !== TOGGLE_CODE
+      !availability.builds
+      || event.code !== TOGGLE_CODE
       || !event.ctrlKey
       || !event.shiftKey
       || event.altKey
@@ -183,11 +190,12 @@ export function createToolboxFoundation(
     toggle(builds);
   };
   const onBuildsCommand = (event: Event) => {
+    if (!availability.builds) return;
     event.preventDefault();
     toggle(builds);
   };
   const onTradeCommand = (event: Event) => {
-    if (!trade) return;
+    if (!trade || !availability.trade) return;
     event.preventDefault();
     toggle(trade);
   };
@@ -210,6 +218,11 @@ export function createToolboxFoundation(
     update(next: ToolboxState) {
       state = next;
       builds.tool?.update(next);
+    },
+    setAvailable(next: ToolboxAvailability) {
+      availability = next;
+      if (!next.builds) setOpen(builds, false);
+      if (trade && !next.trade) setOpen(trade, false);
     },
     get state() { return state; },
     dispose() {
@@ -237,6 +250,7 @@ export function createToolboxLifecycle(
 ) {
   let foundation: ReturnType<typeof createToolboxFoundation> | null = null;
   let state: ToolboxState = Object.freeze({ status: "waiting" });
+  let availability: ToolboxAvailability = { builds: true, trade: true };
   let disposed = false;
   return {
     setEnabled(enabled: boolean) {
@@ -245,6 +259,7 @@ export function createToolboxLifecycle(
         if (foundation) return;
         foundation = createToolboxFoundation(parent, options);
         foundation.update(state);
+        foundation.setAvailable(availability);
       } else {
         foundation?.dispose();
         foundation = null;
@@ -253,6 +268,10 @@ export function createToolboxLifecycle(
     update(next: ToolboxState) {
       state = next;
       foundation?.update(next);
+    },
+    setAvailable(next: ToolboxAvailability) {
+      availability = next;
+      foundation?.setAvailable(next);
     },
     get state() { return foundation?.state ?? null; },
     dispose() {

@@ -17,6 +17,7 @@ type FeedbackTone = "neutral" | "progress" | "success" | "warning" | "error";
 
 export function bindSkillCooldownSettings(options: Readonly<{
   fieldset: HTMLFieldSetElement;
+  enabled: HTMLInputElement;
   persist: (patch: Pick<AppSettings, "skillCooldownColor">) => Promise<unknown>;
   recoverAfterPersistFailure: (message: string) => Promise<void>;
   feedback: (message: string, tone: FeedbackTone, resetAfter?: number) => void;
@@ -24,13 +25,10 @@ export function bindSkillCooldownSettings(options: Readonly<{
   const choices = [...options.fieldset.querySelectorAll<HTMLInputElement>(
     'input[name="skillCooldownColorChoice"]',
   )];
-  const enabled = options.fieldset.querySelector<HTMLInputElement>(
-    '[name="skillCooldownOverlayEnabled"]',
-  );
   const picker = options.fieldset.querySelector<HTMLInputElement>('[name="skillCooldownCustomPicker"]');
   const text = options.fieldset.querySelector<HTMLInputElement>('[name="skillCooldownCustomHex"]');
   const preview = options.fieldset.querySelector<HTMLElement>('.settings-skill-cooldown-preview-slot');
-  if (!enabled || !picker || !text || !preview) throw new Error("incomplete skill cooldown settings");
+  if (!picker || !text || !preview) throw new Error("incomplete skill cooldown settings");
   const countdown = createSkillCooldownView(preview);
   countdown.element.style.setProperty("--skill-cooldown-slot-height", "72px");
   const key = createSkillKeyBindingView(preview);
@@ -109,9 +107,10 @@ export function bindSkillCooldownSettings(options: Readonly<{
 
   return Object.freeze({
     render(settings: AppSettings) {
-      options.fieldset.hidden = !settings.gwonmacTools;
-      enabled.checked = settings.skillCooldownOverlayEnabled;
-      enabled.disabled = !settings.gwonmacTools;
+      options.fieldset.hidden = !settings.gwonmacTools
+        || !settings.skillCooldownOverlayEnabled;
+      options.enabled.checked = settings.skillCooldownOverlayEnabled;
+      options.enabled.disabled = !settings.gwonmacTools;
       const color = settings.skillCooldownColor;
       // A radio save can resolve while the player is typing a custom value.
       // Keep the active editor authoritative until its own change is saved,

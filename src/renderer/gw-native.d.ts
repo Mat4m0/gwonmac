@@ -10,7 +10,7 @@
  */
 import type {
   AppSettings,
-  GwNativeApi,
+  RendererGwNativeApi,
 } from "../shared/contracts.js";
 import type {
   VisualCaptureFailure,
@@ -222,7 +222,7 @@ declare global {
   }
 
   interface Window {
-    readonly gwNative: GwNativeApi;
+    readonly gwNative: RendererGwNativeApi;
     FS?: {
       syncfs(
         populate: boolean,
@@ -236,11 +236,13 @@ declare global {
     gwSurfaces: GwonmacSurfaceController;
     gwToolsSettings(): Readonly<{
       gwonmacTools: boolean;
-      teamManagement: boolean;
+      buildLibrary: boolean;
+      tradeChat: boolean;
       xunlaiStorage: boolean;
       travelPalette: boolean;
       targetReadout: boolean;
       skillKeyBindings: AppSettings['skillKeyBindings'];
+      skillKeyLabelsEnabled: boolean;
       skillCooldownOverlayEnabled: boolean;
       skillCooldownColor: AppSettings['skillCooldownColor'];
     }>;

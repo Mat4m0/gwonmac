@@ -3,7 +3,7 @@
 // and `url` only, so this file cannot require the canonical contracts. It is
 // the *body* of the preload: scripts/generate-preload.ts prepends the
 // constants below from src/shared/contracts.ts and writes the result to
-// build/preload/preload.cjs. Copying a channel name back into this file would
+// the generated Core and Tools preload artifacts. Copying a channel name back into this file would
 // reintroduce the drift the generator exists to remove, so no string literal
 // here may start with the gw channel prefix — tests/policy asserts that.
 // `process` is declared here for the same reason the generated constants are: the
@@ -135,7 +135,7 @@ ipcRenderer.on(IPC.rendererCommand, (_event, id, command) => {
     );
 });
 
-/** @type {import("../shared/contracts.js").GwNativeApi} */
+/** @type {import("../shared/contracts.js").CoreGwNativeApiBase} */
 const api = {
   init: rendererInit(),
   // A constant, not a capability: the derived client's dirfd markers, which the
@@ -185,26 +185,8 @@ const api = {
     get: () => ipcRenderer.invoke(IPC.settingsGet),
     set: (value) => ipcRenderer.invoke(IPC.settingsSet, value),
     reset: () => ipcRenderer.invoke(IPC.settingsReset),
+    restartForTools: () => ipcRenderer.invoke(IPC.settingsRestartForTools),
     onChange: (callback) => listen(IPC.settingsEvent, callback),
-  },
-  trade: {
-    subscribe: (source) => ipcRenderer.invoke(IPC.tradeSubscribe, source),
-    unsubscribe: () => ipcRenderer.invoke(IPC.tradeUnsubscribe),
-    search: (request) => ipcRenderer.invoke(IPC.tradeSearch, request),
-    retry: (source) => ipcRenderer.invoke(IPC.tradeRetry, source),
-    getSaved: () => ipcRenderer.invoke(IPC.tradeSavedGet),
-    setSaved: (value) => ipcRenderer.invoke(IPC.tradeSavedSet, value),
-    getTraderQuotes: () => ipcRenderer.invoke(IPC.traderQuotesGet),
-    getTraderPriceHistory: (request) => ipcRenderer.invoke(IPC.traderPriceHistoryGet, request),
-    onEvent: (callback) => listen(IPC.tradeEvent, callback),
-  },
-  travelPreferences: {
-    get: () => ipcRenderer.invoke(IPC.travelPreferencesGet),
-    set: (value) => ipcRenderer.invoke(IPC.travelPreferencesSet, value),
-  },
-  travelHistory: {
-    get: (value) => ipcRenderer.invoke(IPC.travelHistoryGet, value),
-    record: (value) => ipcRenderer.invoke(IPC.travelHistoryRecord, value),
   },
   shortcuts: {
     capture: () => ipcRenderer.invoke(IPC.shortcutCapture),
@@ -214,10 +196,6 @@ const api = {
     capture: () => ipcRenderer.invoke(IPC.skillKeyCapture),
     submitPointer: (binding) => ipcRenderer.invoke(IPC.skillKeyCapturePointer, binding),
     cancelCapture: () => ipcRenderer.invoke(IPC.skillKeyCaptureCancel),
-  },
-  buildLibrary: {
-    get: () => ipcRenderer.invoke(IPC.buildLibraryGet),
-    set: (value) => ipcRenderer.invoke(IPC.buildLibrarySet, value),
   },
   credentials: {
     load: () => ipcRenderer.invoke(IPC.credentialsLoad),
@@ -303,6 +281,7 @@ const api = {
     useSingle: () => ipcRenderer.invoke(IPC.accountsUseSingle),
   },
 };
+/* TOOLS_API_EXTENSION */
 for (const namespace of Object.values(api)) Object.freeze(namespace);
 Object.freeze(api);
 

@@ -1,5 +1,6 @@
 // The one release test that executes production code: it loads the *built*
-// preload — build/preload/preload.cjs, the file a packaged app actually runs —
+// Tools preload — build/preload/preload-tools.cjs, one of the files a packaged
+// app actually runs —
 // in a vm with a recording `ipcRenderer` and calls every capability it exposes.
 //
 // This behavior test replaced the deleted source scans. The old release suite
@@ -27,7 +28,8 @@ import type {
 } from "../../src/shared/contracts.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const ARTIFACT = "build/preload/preload.cjs";
+const TOOLS_ARTIFACT = "build/preload/preload-tools.cjs";
+const CORE_ARTIFACT = "build/preload/preload-core.cjs";
 
 // The canonical channels come out of `build/`, the same tree the artifact under
 // test comes from, and are typed from the `src/` module `build/` is emitted
@@ -42,7 +44,8 @@ const {
 }: typeof import("../../src/shared/contracts.ts") = await import(
   new URL("../../build/shared/contracts.js", import.meta.url).href
 );
-const source = await readFile(path.join(root, ARTIFACT), "utf8");
+const toolsSource = await readFile(path.join(root, TOOLS_ARTIFACT), "utf8");
+const coreSource = await readFile(path.join(root, CORE_ARTIFACT), "utf8");
 
 /** One recorded `ipcRenderer.invoke` or `.send`. */
 interface Recorded {
@@ -65,7 +68,7 @@ type IpcListener = (event: unknown, ...args: unknown[]) => void;
  * meet, not something the load proves. The coverage test below executes that
  * requirement against what the artifact really exposed.
  */
-function load(argv: string[] = []) {
+function load(argv: string[] = [], source = toolsSource) {
   const invoked: Recorded[] = [];
   const sent: Recorded[] = [];
   const listeners = new Map<string, IpcListener[]>();
@@ -182,6 +185,11 @@ const INVOCATIONS: Invocation[] = [
   { path: "settings.get", args: [], channel: IPC.settingsGet },
   { path: "settings.set", args: [RENDERER_SETTINGS_PATCH], channel: IPC.settingsSet },
   { path: "settings.reset", args: [], channel: IPC.settingsReset },
+  {
+    path: "settings.restartForTools",
+    args: [],
+    channel: IPC.settingsRestartForTools,
+  },
   {
     path: "travelPreferences.get",
     args: [],
@@ -490,6 +498,27 @@ test("every exposed capability is exercised by this file", () => {
     ].sort(),
     "a capability was added to or removed from the preload without a test here",
   );
+});
+
+test("the Core preload exposes no optional Tools namespace or channel", () => {
+  const { api } = load([], coreSource);
+  for (const namespace of [
+    "trade",
+    "travelPreferences",
+    "travelHistory",
+    "buildLibrary",
+  ]) {
+    assert.equal(
+      Reflect.has(api, namespace),
+      false,
+      `${namespace} leaked into the Core bridge`,
+    );
+  }
+  for (const channel of Object.values(IPC).filter((channel) =>
+    /gw:(?:trade|trader|travel|buildLibrary):/u.test(channel)
+  )) {
+    assert.doesNotMatch(coreSource, new RegExp(channel.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
+  }
 });
 
 test("each capability invokes the channel the contracts name, with its arguments", async () => {

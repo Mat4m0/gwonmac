@@ -30,17 +30,17 @@ export type ShortcutCaptureResult =
 export const DEFAULT_SHORTCUTS: Readonly<Record<ShortcutAction, ShortcutBinding>> =
   Object.freeze({
     "tools.toggle": Object.freeze({ key: "b", shift: false, option: false }),
-    "trade.toggle": Object.freeze({ key: "b", shift: true, option: false }),
+    "trade.toggle": Object.freeze({ key: "k", shift: false, option: false }),
     "storage.open": Object.freeze({ key: "c", shift: true, option: false }),
     "travel.open": Object.freeze({ key: "t", shift: false, option: false }),
   });
 
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
-    "tools.toggle": "Show or hide GWonMac Tools",
-    "trade.toggle": "Show or hide Trade Chat",
+    "tools.toggle": "Build Library",
+    "trade.toggle": "Trade Chat",
     "storage.open": "Open Xunlai storage",
-    "travel.open": "Show or hide Quick Travel",
+    "travel.open": "Travel",
   });
 
 export interface ShortcutInput {

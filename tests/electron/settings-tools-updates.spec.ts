@@ -41,6 +41,49 @@ async function openControls(app: ElectronApplication, page: Page) {
 }
 
 test.describe("tools and update settings", () => {
+  test("groups each tool with the settings it owns", async () => {
+    const fixture = await launchOffline(
+      "gw-settings-tool-hierarchy-e2e-",
+      {},
+      (userData) => writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({ gwonmacTools: true, xunlaiStorage: true }),
+        { mode: 0o600 },
+      ),
+    );
+    try {
+      const { app, page } = fixture;
+      await openControls(app, page);
+
+      await expect(page.locator("#settings-tool-features")).toBeVisible();
+      await expect(page.locator('[data-tool="buildLibrary"]'))
+        .toContainText("Build Library");
+      await expect(page.locator('[data-tool="tradeChat"]'))
+        .toContainText("Trade Chat");
+      await expect(page.locator('[data-tool="travelPalette"]'))
+        .toContainText("Travel");
+      await expect(page.locator('[data-tool="xunlaiStorage"]'))
+        .toContainText("Xunlai Storage");
+
+      const buildToggle = page.locator('[name="buildLibrary"]');
+      await expect(page.locator('[data-tool-config="buildLibrary"]')).toBeVisible();
+      await buildToggle.uncheck();
+      await expect(page.locator('[data-tool-config="buildLibrary"]')).toBeHidden();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).buildLibrary,
+      )).toBe(false);
+
+      const labels = page.locator('[name="skillKeyLabelsEnabled"]');
+      await expect(page.locator("#settings-skill-keys")).toBeHidden();
+      await labels.check();
+      await expect(page.locator("#settings-skill-keys")).toBeVisible();
+      await labels.uncheck();
+      await expect(page.locator("#settings-skill-keys")).toBeHidden();
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("removes Travel Recent controls while accepting the released file", async () => {
     const fixture = await launchOffline(
       "gw-settings-travel-recents-e2e-",
@@ -78,7 +121,11 @@ test.describe("tools and update settings", () => {
       await expect(page.locator('select[name="travelRecentLimit"]')).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Clear Recent" })).toHaveCount(0);
       await expect(page.getByText("Recent destinations", { exact: true })).toHaveCount(0);
-      await expect(page.evaluate(() => window.gwNative.travelPreferences.get()))
+      await expect(page.evaluate(() => {
+        const api = window.gwNative;
+        if (!("travelPreferences" in api)) throw new Error("Tools preload is unavailable");
+        return api.travelPreferences.get();
+      }))
         .resolves.toMatchObject({ synonyms: [] });
       expect(JSON.parse(await readFile(
         path.join(userData, "travel-preferences.json"),
@@ -95,7 +142,15 @@ test.describe("tools and update settings", () => {
   });
 
   test("Command-Shift-C opens storage or its settings, never hero builds", async () => {
-    const fixture = await launchOffline("gw-storage-shortcut-e2e-");
+    const fixture = await launchOffline(
+      "gw-storage-shortcut-e2e-",
+      {},
+      (userData) => writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({ gwonmacTools: true, xunlaiStorage: true }),
+        { mode: 0o600 },
+      ),
+    );
     try {
       const { app, page } = fixture;
       await page.evaluate(() => {
@@ -133,7 +188,16 @@ test.describe("tools and update settings", () => {
   });
 
   test("records, replaces, clears, and restores app shortcuts without firing them", async () => {
-    const fixture = await launchOffline("gw-settings-shortcuts-e2e-");
+    test.setTimeout(60_000);
+    const fixture = await launchOffline(
+      "gw-settings-shortcuts-e2e-",
+      {},
+      (userData) => writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({ gwonmacTools: true, xunlaiStorage: true }),
+        { mode: 0o600 },
+      ),
+    );
     try {
       const { app, page } = fixture;
       await openControls(app, page);
@@ -142,7 +206,7 @@ test.describe("tools and update settings", () => {
       const tradeRow = page.locator('[data-shortcut-action="trade.toggle"]');
       const storageRow = page.locator('[data-shortcut-action="storage.open"]');
       await expect(toolsRow.locator("kbd")).toHaveText("⌘B");
-      await expect(tradeRow.locator("kbd")).toHaveText("⌘⇧B");
+      await expect(tradeRow.locator("kbd")).toHaveText("⌘K");
       await expect(storageRow.locator("kbd")).toHaveText("⌘⇧C");
 
       await page.evaluate(() => {
@@ -196,7 +260,7 @@ test.describe("tools and update settings", () => {
       await storageRow.locator(".settings-shortcut-change").click();
       await sendInput(app, "K", ["meta", "shift"]);
       await expect(storageRow.locator(".settings-shortcut-message"))
-        .toContainText("used by Show or hide GWonMac Tools");
+        .toContainText("used by Build Library");
       await storageRow.locator(".settings-shortcut-replace").click();
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({
@@ -217,7 +281,7 @@ test.describe("tools and update settings", () => {
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ shortcutOverrides: {} });
       await expect(toolsRow.locator("kbd")).toHaveText("⌘B");
-      await expect(tradeRow.locator("kbd")).toHaveText("⌘⇧B");
+      await expect(tradeRow.locator("kbd")).toHaveText("⌘K");
       await expect(tradeRow.locator(".settings-shortcut-change")).toHaveText("Change");
       await expect(storageRow.locator("kbd")).toHaveText("⌘⇧C");
       await page.locator("#settings-done").click();
@@ -260,7 +324,7 @@ test.describe("tools and update settings", () => {
           }
         }, true);
       });
-      await sendInput(app, "B", ["meta", "shift"]);
+      await sendInput(app, "K", ["meta"]);
       await expect(page.locator("body")).toHaveAttribute(
         "data-trade-shortcut-actions",
         "1",
@@ -268,7 +332,7 @@ test.describe("tools and update settings", () => {
 
       await openControls(app, page);
       const tradeRow = page.locator('[data-shortcut-action="trade.toggle"]');
-      await expect(tradeRow.locator("kbd")).toHaveText("⌘⇧B");
+      await expect(tradeRow.locator("kbd")).toHaveText("⌘K");
       await tradeRow.locator(".settings-shortcut-change").click();
       await sendInput(app, "K", ["meta", "shift"]);
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
@@ -308,9 +372,9 @@ test.describe("tools and update settings", () => {
 
       await openControls(app, page);
       await page.locator("#settings-shortcuts-restore").click();
-      await expect(tradeRow.locator("kbd")).toHaveText("⌘⇧B");
+      await expect(tradeRow.locator("kbd")).toHaveText("⌘K");
       await page.locator("#settings-done").click();
-      await sendInput(app, "B", ["meta", "shift"]);
+      await sendInput(app, "K", ["meta"]);
       await expect(page.locator("body")).toHaveAttribute(
         "data-trade-shortcut-actions",
         "3",
@@ -327,7 +391,7 @@ test.describe("tools and update settings", () => {
       async (userData) => {
         await writeFile(
           path.join(userData, "settings.json"),
-          JSON.stringify({ gwonmacTools: true }),
+          JSON.stringify({ gwonmacTools: true, skillKeyLabelsEnabled: true }),
           { mode: 0o600 },
         );
       },
@@ -425,11 +489,7 @@ test.describe("tools and update settings", () => {
       const fieldset = page.locator("#settings-skill-cooldowns");
       await expect(fieldset).toBeVisible();
 
-      const enabled = fieldset.locator('[name="skillCooldownOverlayEnabled"]');
-      await enabled.uncheck();
-      await expect.poll(() => page.evaluate(async () =>
-        (await window.gwNative.settings.get()).skillCooldownOverlayEnabled,
-      )).toBe(false);
+      const enabled = page.locator('[name="skillCooldownOverlayEnabled"]');
 
       await fieldset.locator('[name="skillCooldownColorChoice"][value="gold"]')
         .check();
@@ -446,9 +506,17 @@ test.describe("tools and update settings", () => {
         (await window.gwNative.settings.get()).skillCooldownColor,
       )).toEqual({ kind: "custom", value: "#123abc" });
 
+      await enabled.uncheck();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).skillCooldownOverlayEnabled,
+      )).toBe(false);
+      await expect(fieldset).toBeHidden();
+
       await page.locator("#settings-done").click();
       await openControls(app, page);
       await expect(enabled).not.toBeChecked();
+      await enabled.check();
+      await expect(fieldset).toBeVisible();
       await expect(
         fieldset.locator('[name="skillCooldownColorChoice"][value="custom"]'),
       ).toBeChecked();
@@ -699,11 +767,11 @@ test.describe("tools and update settings", () => {
         "Guild Wars cursor",
       );
       await expect(controls).toContainText(
-        "Tools work in outposts and guild halls, and close during PvP play",
+        "The first enable requires one restart",
       );
-      await expect(controls).toContainText("Apply teams in Guild Wars");
+      await expect(controls).toContainText("Build Library");
       await expect(page.locator('input[name="nativeCursor"]')).toHaveCount(0);
-      await expect(page.locator('input[name="teamManagement"]')).toBeDisabled();
+      await expect(page.locator('input[name="teamManagement"]')).toHaveCount(0);
       await expect(page.locator('input[name="xunlaiStorage"]')).toBeDisabled();
       await expect(page.locator('input[name="targetReadout"]')).toBeDisabled();
       expect(
@@ -719,7 +787,7 @@ test.describe("tools and update settings", () => {
       });
       await page.locator('input[name="gwonmacTools"]').click();
       await expect(page.locator("#settings-feedback")).toHaveText(
-        "Optional Tools were not changed. Your current setup is still active.",
+        "Tools Beta was not changed. Your current setup is still active.",
       );
       await expect(page.locator("#settings-feedback")).toHaveAttribute(
         "data-tone",
@@ -786,7 +854,7 @@ test.describe("tools and update settings", () => {
           buttons: ["Enable and Restart", "Cancel"],
           detail:
             "GWonMac prepares every certified Tools capability together. Restart once to use the saved change. This closes Guild Wars if it is running.",
-          message: "Restart to enable optional Tools?",
+          message: "Restart to enable Tools Beta?",
         },
         warning: {
           buttons: ["OK"],
@@ -813,7 +881,6 @@ test.describe("tools and update settings", () => {
           JSON.stringify({
             gwonmacTools: true,
             targetReadout: false,
-            teamManagement: false,
             xunlaiStorage: false,
             travelPalette: false,
           }),
@@ -836,7 +903,6 @@ test.describe("tools and update settings", () => {
 
       await page.evaluate(async () => {
         await window.gwNative.settings.set({ targetReadout: true });
-        await window.gwNative.settings.set({ teamManagement: true });
         await window.gwNative.settings.set({ xunlaiStorage: true });
         await window.gwNative.settings.set({ travelPalette: true });
         await window.gwNative.settings.set({ gwonmacTools: false });
@@ -847,11 +913,71 @@ test.describe("tools and update settings", () => {
       await expect.poll(() => page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({
           targetReadout: true,
-          teamManagement: true,
           xunlaiStorage: true,
           travelPalette: true,
           gwonmacTools: true,
         });
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("disabling prepared Tools is immediate and honestly reports pending unload", async () => {
+    const fixture = await launchOffline(
+      "gw-tools-pending-unload-e2e-",
+      {},
+      (userData) => writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({
+          gwonmacTools: true,
+          buildLibrary: true,
+          tradeChat: true,
+          xunlaiStorage: true,
+          travelPalette: true,
+        }),
+        { mode: 0o600 },
+      ),
+    );
+    try {
+      const { app, page } = fixture;
+      await openControls(app, page);
+      const menuEnabled = () => app.evaluate(({ Menu }) => Object.fromEntries(
+        ["toggle-tools", "toggle-trade", "open-xunlai-storage", "open-travel"]
+          .map((id) => [id, Menu.getApplicationMenu()?.getMenuItemById(id)?.enabled]),
+      ));
+
+      await expect(page.locator("#settings-tools-restart-required")).toBeHidden();
+      await expect.poll(menuEnabled).toEqual({
+        "toggle-tools": true,
+        "toggle-trade": true,
+        "open-xunlai-storage": true,
+        "open-travel": true,
+      });
+
+      await page.locator('input[name="gwonmacTools"]').uncheck();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).gwonmacTools)).toBe(false);
+      await expect(page.locator("#settings-tools-restart-required")).toContainText(
+        "Tools are disabled. Restart GWonMac to unload Tools code completely.",
+      );
+      await expect(page.locator("#settings-tools-restart-required")).toBeVisible();
+      await expect.poll(menuEnabled).toEqual({
+        "toggle-tools": false,
+        "toggle-trade": false,
+        "open-xunlai-storage": false,
+        "open-travel": false,
+      });
+
+      await page.locator('input[name="gwonmacTools"]').check();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).gwonmacTools)).toBe(true);
+      await expect(page.locator("#settings-tools-restart-required")).toBeHidden();
+      await expect.poll(menuEnabled).toEqual({
+        "toggle-tools": true,
+        "toggle-trade": true,
+        "open-xunlai-storage": true,
+        "open-travel": true,
+      });
     } finally {
       await closeOffline(fixture);
     }

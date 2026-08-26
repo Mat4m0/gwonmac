@@ -18,20 +18,17 @@ import {
 } from "../shared/companion-kernel-contract.js";
 import { COMPANION_PLAY_REGION_BYTES } from "./companion-play-region-snapshot.js";
 import {
-  COMPANION_SKILL_COOLDOWN_BYTES,
-  COMPANION_SKILL_SLOT_BYTES,
-} from "./companion-skill-snapshot.js";
-import {
-  COMPANION_CURSOR_BYTES,
-  COMPANION_PARTY_BYTES,
-  COMPANION_SNAPSHOT_BYTES,
-  COMPANION_TOOLBOX_BYTES,
-} from "./companion-snapshot.js";
-import {
   COMPANION_KERNEL_RUNTIME_ALIGN,
   COMPANION_KERNEL_RUNTIME_BYTES,
   validateCompanionOwnedRegions,
 } from "./companion-owned-regions.js";
+
+const COMPANION_CURSOR_BYTES = COMPANION_ABI.cursor.bytes;
+const COMPANION_PARTY_BYTES = COMPANION_ABI.party.bytes;
+const COMPANION_SNAPSHOT_BYTES = COMPANION_ABI.snapshot.bytes;
+const COMPANION_TOOLBOX_BYTES = COMPANION_ABI.toolbox.bytes;
+const COMPANION_SKILL_SLOT_BYTES = COMPANION_ABI.skillSlots.bytes;
+const COMPANION_SKILL_COOLDOWN_BYTES = COMPANION_ABI.skillCooldowns.bytes;
 
 type CompanionKernelInit = (
   snapshotPointer: number,

@@ -15,7 +15,7 @@ import {
   assertRequiredPackageFiles,
   forgePackageFiles,
   htmlScriptEntryPoints,
-  PRELOAD_ENTRY,
+  PRELOAD_ENTRIES,
   relativeEsmClosure,
 } from "./helpers/package-inventory.ts";
 import { stopChildProcess } from "./helpers/child-process.ts";
@@ -103,7 +103,7 @@ const packagedRendererIndex = "/build/renderer/index.html";
 const packagedClosure = relativeEsmClosure({
   entryPoints: [
     packagedManifest.main,
-    PRELOAD_ENTRY,
+    ...PRELOAD_ENTRIES,
     ...htmlScriptEntryPoints(
       packagedRendererIndex,
       asarText(packagedRendererIndex),

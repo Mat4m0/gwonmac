@@ -47,13 +47,9 @@ import {
   type SteamTokenResult,
   type StoredCredentials,
   type TemplateExportEntry,
+  type ToolsInvokeChannel,
 } from "../shared/contracts.js";
 import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
-import {
-  parseTravelUserPreferencesUpdate,
-  type TravelUserPreferences,
-  type TravelUserPreferencesUpdate,
-} from "../shared/travel.js";
 import type {
   RendererFrameBatch,
   RendererMetrics,
@@ -69,8 +65,6 @@ import {
 } from "../shared/skill-key-bindings.js";
 import { errorCode, ValidationError } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
-import { parseBuildLibrary } from "../shared/builds/parse-library.js";
-import type { BuildLibrary } from "../shared/builds/library.js";
 import {
   isGraphicsDiagnostics,
   parseRendererMilestoneArgs,
@@ -125,6 +119,7 @@ import {
   confirmSettingsReset,
   requestCacheClear,
   requestGameStorageReset,
+  requestToolsUnloadRestart,
 } from "./settings-actions.js";
 import { editGameText } from './game-text-editing.js';
 import {
@@ -135,31 +130,16 @@ import {
   type Parser,
 } from "./ipc-channel-registry.js";
 import {
-  tradeChannelDefinitions,
-  type TradeInvokeChannel,
-  type TradeIpcContext,
-} from "./trade-ipc.js";
-import {
   parseVisualCaptureSubmission,
   submitVisualCapture,
 } from "./visual-capture.js";
 import { parseDiagnosticProfile } from "./core/diagnostic-profile.js";
-import {
-  parseTravelHistoryCharacter,
-  parseTravelHistoryRecord,
-  type TravelCharacterKey,
-  type TravelHistory,
-} from "../shared/travel-history.js";
 
-export interface IpcContext extends TradeIpcContext {
+export interface IpcContext {
   sockets: SocketManager;
   windows: WindowRegistry;
   credentialsStoreFor: (win: BrowserWindow) => CredentialsStore;
   steamSessionStoreFor: (win: BrowserWindow) => SteamSessionStore;
-  getBuildLibrary: (
-    win: BrowserWindow,
-  ) => Promise<{ readonly library: BuildLibrary; readonly recovered: boolean }>;
-  setBuildLibrary: (win: BrowserWindow, library: BuildLibrary) => Promise<BuildLibrary>;
   gameStorageResetMarkerFor: (win: BrowserWindow) => string;
   getProgress: () => DownloadProgress;
   getSnapshotMetadata: () => Promise<SnapshotMetadata>;
@@ -168,10 +148,6 @@ export interface IpcContext extends TradeIpcContext {
   updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
   setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
   resetSettings: () => Promise<SettingsResetOutcome>;
-  getTravelPreferences: () => Promise<TravelUserPreferences>;
-  setTravelPreferences: (update: TravelUserPreferencesUpdate) => Promise<TravelUserPreferences>;
-  getTravelHistory: (characterKey: TravelCharacterKey) => Promise<TravelHistory>;
-  recordTravelHistory: (characterKey: TravelCharacterKey, mapId: number) => Promise<TravelHistory>;
   /** Whether this process started with every certified Tools capability prepared. */
   toolsEnabledAtLaunch: boolean;
   downloadFullGame: () => Promise<FullDownloadOutcome>;
@@ -468,7 +444,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
     );
     return pending;
   };
-
   /**
    * Every channel main answers, with the parser that turns its arguments into
    * the input it takes. Checked against `InvokeChannel`, so a channel with no
@@ -510,11 +485,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
       await ctx.sockets.close(socketId, win.webContents.id);
     }),
 
-    buildLibraryGet: channel(nothing, (win) => ctx.getBuildLibrary(win)),
-
-    buildLibrarySet: channel(one(parseBuildLibrary), (win, library) =>
-      ctx.setBuildLibrary(win, library)),
-
     settingsGet: channel(nothing, async () => {
       try {
         return await ctx.getSettings();
@@ -540,15 +510,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
       return outcome;
     }),
 
-    ...tradeChannelDefinitions(ctx),
+    settingsRestartForTools: channel(nothing, (win) =>
+      requestToolsUnloadRestart(win)),
 
-    travelPreferencesGet: channel(nothing, () => ctx.getTravelPreferences()),
-    travelPreferencesSet: channel(one(parseTravelUserPreferencesUpdate), (_win, update) =>
-      ctx.setTravelPreferences(update)),
-    travelHistoryGet: channel(one(parseTravelHistoryCharacter), (_win, value) =>
-      ctx.getTravelHistory(value.characterKey)),
-    travelHistoryRecord: channel(one(parseTravelHistoryRecord), (_win, value) =>
-      ctx.recordTravelHistory(value.characterKey, value.mapId)),
     shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
     shortcutCaptureCancel: channel(nothing, (win) => {
       cancelWindowShortcutCapture(win);
@@ -799,9 +763,9 @@ export function registerIpcHandlers(ctx: IpcContext): {
       (win, entries) => ctx.saveAccountTemplates(win, entries),
     ),
   } satisfies Record<
-    Exclude<InvokeChannel, SteamInvokeChannel | TradeInvokeChannel>,
+    Exclude<InvokeChannel, SteamInvokeChannel | ToolsInvokeChannel>,
     AnyChannelDef
-  > & Record<TradeInvokeChannel, AnyChannelDef>;
+  >;
 
   registerChannelDefinitions(ctx.windows, handlers);
   const steamSettled = registerSteamIpcHandlers(

@@ -480,6 +480,10 @@ test("Multi isolates profile windows and Copy Reload Trace", async () => {
   const fixture = await launchOffline("gw-multi-e2e-", {
     GW_BACKGROUND_LAUNCH: "0",
   }, async (userData) => {
+    await writeFile(
+      path.join(userData, "settings.json"),
+      JSON.stringify({ gwonmacTools: true, buildLibrary: true }),
+    );
     await mkdir(path.join(userData, "multi"), { recursive: true });
     await writeFile(
       path.join(userData, "launcher-mode.json"),
@@ -876,14 +880,26 @@ test("Multi isolates profile windows and Copy Reload Trace", async () => {
     ]);
 
     const libraries = await Promise.all(games.map((game) =>
-      game.evaluate(() => window.gwNative.buildLibrary.get()),
+      game.evaluate(() => {
+        const api = window.gwNative;
+        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+        return api.buildLibrary.get();
+      }),
     ));
     await games[0]!.evaluate(
-      (library) => window.gwNative.buildLibrary.set({ ...library, tags: ["primary"] }),
+      (library) => {
+        const api = window.gwNative;
+        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+        return api.buildLibrary.set({ ...library, tags: ["primary"] });
+      },
       libraries[0]!.library,
     );
     await expect(games[1]!.evaluate(
-      (library) => window.gwNative.buildLibrary.set({ ...library, tags: ["alt"] }),
+      (library) => {
+        const api = window.gwNative;
+        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+        return api.buildLibrary.set({ ...library, tags: ["alt"] });
+      },
       libraries[1]!.library,
     )).rejects.toThrow();
     expect(await readFile(path.join(fixture.userData, "build-library.json"), "utf8"))

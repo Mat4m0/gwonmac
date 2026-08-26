@@ -48,12 +48,21 @@
   ) as HTMLInputElement;
   const updateTrack = form.elements.namedItem('updateTrack') as HTMLSelectElement;
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
-  const teamManagement = form.elements.namedItem('teamManagement') as HTMLInputElement;
+  const buildLibrary = form.elements.namedItem('buildLibrary') as HTMLInputElement;
+  const tradeChat = form.elements.namedItem('tradeChat') as HTMLInputElement;
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
   const travelPalette = form.elements.namedItem('travelPalette') as HTMLInputElement;
   const targetReadout = form.elements.namedItem('targetReadout') as HTMLInputElement;
+  const skillKeyLabelsEnabled = form.elements.namedItem(
+    'skillKeyLabelsEnabled',
+  ) as HTMLInputElement;
+  const skillCooldownOverlayEnabled = form.elements.namedItem(
+    'skillCooldownOverlayEnabled',
+  ) as HTMLInputElement;
   const toolFeatures = byId('settings-tool-features');
   const toolsOff = byId('settings-tools-off');
+  const toolsRestartRequired = byId('settings-tools-restart-required');
+  const toolsRestart = byId('settings-tools-restart') as HTMLButtonElement;
   const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
   const accountsStatus = byId('accounts-setup-status');
   const accountsModeStatus = byId('accounts-mode-status');
@@ -296,6 +305,7 @@
   const skillCooldownSettings = import('./settings-skill-cooldowns.js').then((module) =>
     module.bindSkillCooldownSettings({
       fieldset: byId('settings-skill-cooldowns') as HTMLFieldSetElement,
+      enabled: skillCooldownOverlayEnabled,
       persist: (patch) => persistSettings(patch),
       recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
       feedback: setFeedback,
@@ -510,10 +520,12 @@
           ? { autoRelogAfterReload: control.checked }
           : null;
       case 'gwonmacTools':
-      case 'teamManagement':
+      case 'buildLibrary':
+      case 'tradeChat':
       case 'xunlaiStorage':
       case 'travelPalette':
       case 'targetReadout':
+      case 'skillKeyLabelsEnabled':
       case 'skillCooldownOverlayEnabled':
         return control instanceof globalThis.HTMLInputElement
           ? { [control.name]: control.checked }
@@ -554,20 +566,42 @@
     autoRelogAfterReload.checked = settings.autoRelogAfterReload;
     diagnosticProfile.value = selectedDiagnosticProfile;
     gwonmacTools.checked = settings.gwonmacTools;
-    teamManagement.checked = settings.teamManagement;
+    buildLibrary.checked = settings.buildLibrary;
+    tradeChat.checked = settings.tradeChat;
     xunlaiStorage.checked = settings.xunlaiStorage;
     travelPalette.checked = settings.travelPalette;
     targetReadout.checked = settings.targetReadout;
+    skillKeyLabelsEnabled.checked = settings.skillKeyLabelsEnabled;
+    skillCooldownOverlayEnabled.checked = settings.skillCooldownOverlayEnabled;
     void shortcutSettings.then((binder) => binder.render(settings));
     void skillKeySettings.then((binder) => binder.render(settings));
     void skillCooldownSettings.then((binder) => binder.render(settings));
     void themeSettings.then((binder) => binder.render(settings));
     toolFeatures.hidden = !settings.gwonmacTools;
     toolsOff.hidden = settings.gwonmacTools;
-    teamManagement.disabled = !settings.gwonmacTools;
+    toolsRestartRequired.hidden = !(
+      window.gwNative.init.enhancementSelection.tools
+      && !settings.gwonmacTools
+    );
+    buildLibrary.disabled = !settings.gwonmacTools;
+    tradeChat.disabled = !settings.gwonmacTools;
+    skillKeyLabelsEnabled.disabled = !settings.gwonmacTools;
+    skillCooldownOverlayEnabled.disabled = !settings.gwonmacTools;
     xunlaiStorage.disabled = !settings.gwonmacTools;
     travelPalette.disabled = !settings.gwonmacTools;
     targetReadout.disabled = !settings.gwonmacTools;
+    const configurations = {
+      buildLibrary: settings.buildLibrary,
+      tradeChat: settings.tradeChat,
+      travelPalette: settings.travelPalette,
+      xunlaiStorage: settings.xunlaiStorage,
+    } as const;
+    for (const [tool, enabled] of Object.entries(configurations)) {
+      const configuration = form.querySelector<HTMLElement>(
+        `[data-tool-config="${tool}"]`,
+      );
+      if (configuration) configuration.hidden = !settings.gwonmacTools || !enabled;
+    }
     autoCheckUpdates.checked = settings.autoCheckUpdates;
     updateTrack.value = settings.updateTrack;
     void extendedMemorySetting.then((setting) => {
@@ -645,6 +679,13 @@
     control.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
   });
 
+  toolsRestart.addEventListener('click', () => {
+    setFeedback();
+    void window.gwNative.settings.restartForTools().catch(() => {
+      setFeedback('GWonMac could not start the restart. Quit and reopen it to finish unloading Tools.', 'error');
+    });
+  });
+
   form.addEventListener('change', (event) => {
     const control = event.target;
     if (
@@ -677,7 +718,7 @@
           patch.gwonmacTools !== undefined
           && saved.gwonmacTools !== patch.gwonmacTools
         ) {
-          setFeedback('Optional Tools were not changed. Your current setup is still active.', 'warning');
+          setFeedback('Tools Beta was not changed. Your current setup is still active.', 'warning');
           return;
         }
         if (patch.extendedMemoryEnabled !== undefined) {
@@ -725,7 +766,9 @@
         );
       } else {
         setFeedback(
-          'GWonMac settings and Travel preferences were reset. Game data will download automatically next launch.',
+          outcome.travelPreferences === null
+            ? 'GWonMac settings were reset. Stored Tools data was kept.'
+            : 'GWonMac settings and Travel preferences were reset. Game data will download automatically next launch.',
           'success',
           4500,
         );

@@ -24,9 +24,14 @@ export function rendererRoot(): string {
   return path.join(app.getAppPath(), "build", "renderer");
 }
 
-export function preloadPath(): string {
+export function preloadPath(tools = false): string {
   // Sandboxed preload must be CommonJS (.cjs); ESM graphs are not executed.
-  return path.join(app.getAppPath(), "build", "preload", "preload.cjs");
+  return path.join(
+    app.getAppPath(),
+    "build",
+    "preload",
+    tools ? "preload-tools.cjs" : "preload-core.cjs",
+  );
 }
 
 /**

@@ -34,6 +34,8 @@ export function enhancementRuntimePolicy(
     // The local Tools host remains reachable without a live observation, but
     // withdraws when the certified region reports active PvP play.
     tools: selected("tools", developerToolbox),
+    buildLibrary: selected("buildLibrary", developerToolbox),
+    tradeChat: selected("tradeChat", developerToolbox),
     targetReadout: selected(
       "targetReadout",
       program === "target-observer",

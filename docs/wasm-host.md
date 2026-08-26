@@ -189,20 +189,43 @@ transform restores persistent template operations. Certified Core adds the
 Guild Wars cursor and native double-click. These behaviors have no player
 switch when their proof passes.
 
-Optional Tools are off by default. The master **Enable optional Tools Beta**
+Optional Tools are off by default. The master **Enable Tools Beta**
 setting selects a commands-capable derived module on the next start. The first
-enable therefore requires a restart.
+enable therefore requires a restart. Every tool also has an individual switch.
+The master setting must remain on for any tool surface, shortcut, or alias.
+
+The persisted `gwonmacTools` value is desired state. The launch-time
+`enhancementSelection.tools` value is the authoritative statement of what this
+process loaded. Core selects a Core preload, registers no tool IPC, constructs
+no optional store or network service, and reaches optional renderer and main
+implementation only through uncalled dynamic imports. Shared validation,
+settings fields, labels, disabled menu entries, and fixed companion ABI metadata
+remain Core metadata. Tools implementation bytes may remain in the package.
+
+Turning the master off during a Tools-capable launch immediately removes tool
+surfaces, shortcuts, aliases, observers, commands, file access, and Trade
+network activity. It does not restart the game. The difference between saved
+state and launch selection is the pending-unload state shown in Settings. A
+restart selects the Core preload and module graph; re-enabling before that
+restart reactivates the already-loaded Tools runtime and clears the notice.
 
 After that restart, these choices update during the session:
 
-- **Apply teams in Guild Wars** controls only the fixed Team Apply operations.
-  The local Tools panel and saved Build/Team library remain available whenever
-  the master Tools setting is on, except during active PvP play.
+- **Build Library** controls the host-owned build and team surface, its
+  Command-B shortcut, and the fixed Apply Team operations available in
+  supported PvE outposts.
+- **Trade Chat** controls the read-only Trade surface, Command-K, and `/trade`.
+- **Travel** controls the palette, Command-T, and `/tp`.
+- **Xunlai Storage** controls the named storage action, Command-Shift-C,
+  `/chest`, and `/xunlai`.
 - **Target distance and range** controls the shipped Test readout and its target
   observation.
-- Saved **Skill key labels** select only renderer-owned labels over the
-  certified skill-slot rectangles. The companion publishes geometry, not
-  bindings, and the renderer never turns a label into game input.
+- **Skill Key Labels** controls renderer-owned labels over the certified
+  skill-slot rectangles. Saved bindings remain when the tool is off. The
+  companion publishes geometry, not bindings, and the renderer never turns a
+  label into game input.
+- **Skill Cooldowns** controls the display of observed recharge numbers. Its
+  saved colour remains when the tool is off.
 
 Disabled optional observers stop their domain reads. Core cursor observation
 stays active. A small map-policy projection combines ArenaNet's map flag with
@@ -210,10 +233,11 @@ the instance type. Guild halls and PvP outposts remain supported; active PvP
 play closes Tools and Xunlai storage. Stricter live features also withdraw
 during transitions and unknown regions.
 
-If live integration is unavailable, the host can still mount the saved-library
-part of Tools. Players can edit, import, and export builds and teams. Live party
-observation, storage opening, and Apply remain unavailable. This host-only
-surface does not become certification authority.
+If live integration is unavailable while Tools Beta and Build Library remain
+enabled, the host can still mount the saved-library part of Tools. Players can
+edit, import, and export builds and teams. Live party observation, storage
+opening, and Apply remain unavailable. This host-only surface does not become
+certification authority.
 
 ## Companion architecture
 
@@ -322,8 +346,8 @@ Travel failure returns a partial result and keeps the completed settings reset;
 running the reset again safely finishes it. Window-position cleanup is a
 separate best-effort action and cannot change that result.
 
-Team Apply requires enabled Tools and Apply teams in Guild Wars, a proved Team
-Apply capability, a positively classified supported outpost, fresh party state,
+Team Apply requires enabled Tools and Build Library, a proved Team Apply
+capability, a positively classified supported outpost, fresh party state,
 and an explicit player action.
 
 The runner checks policy before each command and while it confirms results. A

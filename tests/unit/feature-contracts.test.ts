@@ -214,20 +214,13 @@ test("shared activation and area policy cover required, setting, and content fea
   assert.equal(featureActivationRequested("skillKeyLabels", enabled), false);
   assert.equal(featureActivationRequested("skillKeyLabels", {
     ...enabled,
-    skillKeyBindings: [
-      {
-        input: { kind: "keyboard", code: "KeyC" },
-        modifiers: { control: false, option: false, shift: false, command: false },
-      },
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-    ],
+    skillKeyLabelsEnabled: true,
   }), true);
+  assert.equal(featureActivationRequested("teamApply", enabled), true);
+  assert.equal(featureActivationRequested("teamApply", {
+    ...enabled,
+    buildLibrary: false,
+  }), false);
   assert.equal(featureRegionAllowsRequest("travel", "pve"), true);
   assert.equal(featureRegionAllowsRequest("travel", "unknown"), false);
   assert.equal(featureRegionAllowsRequest("tools", "unknown"), true);

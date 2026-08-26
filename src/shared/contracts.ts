@@ -386,8 +386,10 @@ export interface AppSettings {
   uiPanelOpacity: number;
   /** Master opt-in for the optional executable Tools Beta capability. */
   gwonmacTools: boolean;
-  /** Allow explicit Apply team commands when live-game policy also permits. */
-  teamManagement: boolean;
+  /** Show the saved Build Library and allow its app shortcut. */
+  buildLibrary: boolean;
+  /** Show the read-only Trade Chat surface and allow its app shortcut. */
+  tradeChat: boolean;
   /** Allow the explicit local Xunlai window command in supported outposts. */
   xunlaiStorage: boolean;
   /** Allow the focused Travel palette and its explicit map command. */
@@ -400,6 +402,8 @@ export interface AppSettings {
   shortcutOverrides: ShortcutOverrides;
   /** Display-only labels that mirror the player's eight Guild Wars bindings. */
   skillKeyBindings: SkillKeyBindings;
+  /** Show the configured skill-key labels over the eight player skill slots. */
+  skillKeyLabelsEnabled: boolean;
   /** Show Guild Wars' observed recharge state as display-only countdowns. */
   skillCooldownOverlayEnabled: boolean;
   /** One curated or exact RGB color shared by all eight cooldown labels. */
@@ -457,7 +461,8 @@ export type SettingsResetOutcome =
   | Readonly<{
       status: "complete";
       settings: AppSettings;
-      travelPreferences: TravelUserPreferences;
+      /** Null when a Core launch intentionally leaves stored Tools data alone. */
+      travelPreferences: TravelUserPreferences | null;
     }>
   | Readonly<{
       status: "partial";
@@ -474,13 +479,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   controllerPromptStyle: "game-default",
   uiPanelOpacity: 94,
   gwonmacTools: false,
-  teamManagement: true,
+  buildLibrary: true,
+  tradeChat: true,
   xunlaiStorage: false,
-  travelPalette: false,
+  travelPalette: true,
   travelShortcuts: DEFAULT_STORED_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
   skillKeyBindings: EMPTY_SKILL_KEY_BINDINGS,
+  skillKeyLabelsEnabled: false,
   skillCooldownOverlayEnabled: true,
   skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,
@@ -895,7 +902,8 @@ export const SKILL_ICON_ROUTE = (skillId: number): string =>
 /** What `SKILL_ICON_ROUTE` produces, as the server's matcher. */
 export const SKILL_ICON_PATTERN = /^skill-icons\/([0-9]{1,7})\.bmp$/u;
 
-export const IPC = {
+/** Channels and events exposed by every preload. */
+export const CORE_IPC = {
   progressCurrent: "gw:progress:current",
   progressEvent: "gw:progress:event",
   snapshotMetadata: "gw:snapshot:metadata",
@@ -907,27 +915,13 @@ export const IPC = {
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
   settingsReset: "gw:settings:reset",
+  settingsRestartForTools: "gw:settings:restartForTools",
   settingsEvent: "gw:settings:event",
-  tradeSubscribe: "gw:trade:subscribe",
-  tradeUnsubscribe: "gw:trade:unsubscribe",
-  tradeSearch: "gw:trade:search",
-  tradeRetry: "gw:trade:retry",
-  tradeEvent: "gw:trade:event",
-  tradeSavedGet: "gw:trade:saved:get",
-  tradeSavedSet: "gw:trade:saved:set",
-  traderQuotesGet: "gw:trader:quotes:get",
-  traderPriceHistoryGet: "gw:trader:priceHistory:get",
-  travelPreferencesGet: "gw:travelPreferences:get",
-  travelPreferencesSet: "gw:travelPreferences:set",
-  travelHistoryGet: "gw:travelHistory:get",
-  travelHistoryRecord: "gw:travelHistory:record",
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   skillKeyCapture: "gw:skillKeys:capture",
   skillKeyCapturePointer: "gw:skillKeys:capturePointer",
   skillKeyCaptureCancel: "gw:skillKeys:captureCancel",
-  buildLibraryGet: "gw:buildLibrary:get",
-  buildLibrarySet: "gw:buildLibrary:set",
   credentialsLoad: "gw:credentials:load",
   credentialsSave: "gw:credentials:save",
   credentialsClear: "gw:credentials:clear",
@@ -984,6 +978,28 @@ export const IPC = {
   accountsUseSingle: "gw:accounts:useSingle",
 } as const;
 
+/** Channels and events that exist only in a Tools-capable launch. */
+export const TOOLS_IPC = {
+  tradeSubscribe: "gw:trade:subscribe",
+  tradeUnsubscribe: "gw:trade:unsubscribe",
+  tradeSearch: "gw:trade:search",
+  tradeRetry: "gw:trade:retry",
+  tradeEvent: "gw:trade:event",
+  tradeSavedGet: "gw:trade:saved:get",
+  tradeSavedSet: "gw:trade:saved:set",
+  traderQuotesGet: "gw:trader:quotes:get",
+  traderPriceHistoryGet: "gw:trader:priceHistory:get",
+  travelPreferencesGet: "gw:travelPreferences:get",
+  travelPreferencesSet: "gw:travelPreferences:set",
+  travelHistoryGet: "gw:travelHistory:get",
+  travelHistoryRecord: "gw:travelHistory:record",
+  buildLibraryGet: "gw:buildLibrary:get",
+  buildLibrarySet: "gw:buildLibrary:set",
+} as const;
+
+/** Complete channel vocabulary; ownership is decided at declaration time. */
+export const IPC = { ...CORE_IPC, ...TOOLS_IPC } as const;
+
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
 
 /**
@@ -1007,10 +1023,19 @@ export const EVENT_CHANNELS = [
   "appUpdatesState",
 ] as const;
 
+/** Channels present only in the Tools preload and Tools main runtime. */
+export const TOOL_CHANNELS = Object.freeze(
+  Object.keys(TOOLS_IPC) as (keyof typeof TOOLS_IPC)[],
+);
+
+export type ToolChannel = (typeof TOOL_CHANNELS)[number];
+
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
 
 /** Every channel the renderer `invoke`s, i.e. every channel main must answer. */
 export type InvokeChannel = Exclude<keyof typeof IPC, EventChannel>;
+export type ToolsInvokeChannel = Exclude<keyof typeof TOOLS_IPC, EventChannel>;
+export type CoreInvokeChannel = Exclude<keyof typeof CORE_IPC, EventChannel>;
 
 export type GameTextEditRequest =
   | { command: "copy"; text: string }
@@ -1032,7 +1057,7 @@ export type GameReloadCause = (typeof GAME_RELOAD_CAUSES)[number];
 // wrong cannot stuff megabytes into the OS pasteboard.
 export const CLIPBOARD_TEXT_CEILING = 64 * 1024;
 
-export interface GwNativeApi {
+export interface CoreGwNativeApiBase {
   /** Launch-time configuration, available before the first renderer script. */
   init: RendererInit;
   /**
@@ -1076,28 +1101,8 @@ export interface GwNativeApi {
     get(): Promise<AppSettings>;
     set(value: RendererSettingsPatch): Promise<AppSettings>;
     reset(): Promise<SettingsResetOutcome | null>;
+    restartForTools(): Promise<boolean>;
     onChange(callback: (settings: AppSettings) => void): () => void;
-  };
-  trade: {
-    subscribe(source: TradeSource): Promise<TradeSnapshot>;
-    unsubscribe(): Promise<void>;
-    search(request: TradeSearchRequest): Promise<TradeSearchResult>;
-    retry(source: TradeSource): Promise<void>;
-    getSaved(): Promise<TradeSavedState>;
-    setSaved(value: TradeSavedState): Promise<TradeSavedState>;
-    getTraderQuotes(): Promise<TraderQuoteSnapshot>;
-    getTraderPriceHistory(
-      request: TraderPriceHistoryRequest,
-    ): Promise<TraderPriceHistoryResult>;
-    onEvent(callback: (event: TradeEvent) => void): () => void;
-  };
-  travelPreferences: {
-    get(): Promise<TravelUserPreferences>;
-    set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
-  };
-  travelHistory: {
-    get(value: { characterKey: string }): Promise<readonly number[]>;
-    record(value: { characterKey: string; mapId: number }): Promise<readonly number[]>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;
@@ -1107,10 +1112,6 @@ export interface GwNativeApi {
     capture(): Promise<SkillKeyCaptureResult>;
     submitPointer(binding: SkillKeyBinding): Promise<boolean>;
     cancelCapture(): Promise<void>;
-  };
-  buildLibrary: {
-    get(): Promise<{ library: BuildLibrary; recovered: boolean }>;
-    set(value: BuildLibrary): Promise<BuildLibrary>;
   };
   credentials: {
     load(): Promise<StoredCredentials | null>;
@@ -1238,3 +1239,57 @@ export interface GwNativeApi {
     useSingle(): Promise<void>;
   };
 }
+
+/** Optional namespaces installed only by the Tools preload extension. */
+export interface ToolsNativeApiExtension {
+  trade: {
+    subscribe(source: TradeSource): Promise<TradeSnapshot>;
+    unsubscribe(): Promise<void>;
+    search(request: TradeSearchRequest): Promise<TradeSearchResult>;
+    retry(source: TradeSource): Promise<void>;
+    getSaved(): Promise<TradeSavedState>;
+    setSaved(value: TradeSavedState): Promise<TradeSavedState>;
+    getTraderQuotes(): Promise<TraderQuoteSnapshot>;
+    getTraderPriceHistory(
+      request: TraderPriceHistoryRequest,
+    ): Promise<TraderPriceHistoryResult>;
+    onEvent(callback: (event: TradeEvent) => void): () => void;
+  };
+  travelPreferences: {
+    get(): Promise<TravelUserPreferences>;
+    set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
+  };
+  travelHistory: {
+    get(value: { characterKey: string }): Promise<readonly number[]>;
+    record(value: { characterKey: string; mapId: number }): Promise<readonly number[]>;
+  };
+  buildLibrary: {
+    get(): Promise<{ library: BuildLibrary; recovered: boolean }>;
+    set(value: BuildLibrary): Promise<BuildLibrary>;
+  };
+}
+
+export type ToolNativeNamespace = keyof ToolsNativeApiExtension;
+
+type LaunchRendererInit<Tools extends boolean> = Omit<
+  RendererInit,
+  "enhancementSelection"
+> & Readonly<{
+  enhancementSelection: Omit<EnhancementSelection, "tools">
+    & Readonly<{ tools: Tools }>;
+}>;
+
+type LaunchGwNativeApi<Tools extends boolean> = Omit<CoreGwNativeApiBase, "init">
+  & Readonly<{ init: LaunchRendererInit<Tools> }>;
+
+/** The capability surface generated into a Core preload. */
+export type CoreGwNativeApi = LaunchGwNativeApi<false>;
+
+/** The complete API generated only into a Tools preload. */
+export type ToolsGwNativeApi = LaunchGwNativeApi<true> & ToolsNativeApiExtension;
+
+/** Historical full-bridge name retained for standalone Tools and fixtures. */
+export type GwNativeApi = ToolsGwNativeApi;
+
+/** The game renderer receives exactly one launch-discriminated surface. */
+export type RendererGwNativeApi = CoreGwNativeApi | ToolsGwNativeApi;

@@ -428,9 +428,7 @@ test.describe("data and display settings", () => {
       expect(reset).toMatchObject({
         status: "complete",
         settings: { renderScale: 2 },
-        travelPreferences: {
-          synonyms: [],
-        },
+        travelPreferences: null,
       });
       expect(
         await app.evaluate(() => {
@@ -495,9 +493,7 @@ test.describe("data and display settings", () => {
           renderScale: 2,
           showDiagnostics: false,
         },
-        travelPreferences: {
-          synonyms: [],
-        },
+        travelPreferences: null,
       });
       expect(await page.evaluate(() => window.gwNative.settings.get())).toMatchObject({
         renderScale: 2,
@@ -527,7 +523,7 @@ test.describe("data and display settings", () => {
       ]).then(() => undefined),
     );
     try {
-      const { app, page } = fixture;
+      const { app, page, userData } = fixture;
       await app.evaluate(({ dialog }) => {
         dialog.showMessageBox = async () => ({
           response: 1,
@@ -536,14 +532,20 @@ test.describe("data and display settings", () => {
       });
       const before = await page.evaluate(async () => ({
         settings: await window.gwNative.settings.get(),
-        travel: await window.gwNative.travelPreferences.get(),
       }));
+      const travelBefore = await readFile(
+        path.join(userData, "travel-preferences.json"),
+        "utf8",
+      );
 
       expect(await page.evaluate(() => window.gwNative.settings.reset())).toBeNull();
       expect(await page.evaluate(async () => ({
         settings: await window.gwNative.settings.get(),
-        travel: await window.gwNative.travelPreferences.get(),
       }))).toEqual(before);
+      expect(await readFile(
+        path.join(userData, "travel-preferences.json"),
+        "utf8",
+      )).toBe(travelBefore);
     } finally {
       await closeOffline(fixture);
     }

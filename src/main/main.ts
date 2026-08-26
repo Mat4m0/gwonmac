@@ -46,9 +46,6 @@ import {
 } from "./core/diagnostic-profile.js";
 import { PreferencesCoordinator } from "./core/preferences-coordinator.js";
 import { SocketManager } from "./core/sockets.js";
-import { TradeChatService } from "./core/trade-chat-service.js";
-import { TradeSavedStore } from "./core/trade-saved-store.js";
-import { TravelHistoryStore } from "./core/travel-history.js";
 import {
   count,
   exportDiagnosticsForWindow,
@@ -139,8 +136,8 @@ import {
   revealAccountsWindow,
 } from "./accounts-window.js";
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
-import { BuildLibraryCoordinator } from "./core/build-library-coordinator.js";
 import { GameReloader } from "./game-reload.js";
+import { updateToolsMenuItems } from "./window-menu.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -293,9 +290,13 @@ function sendToRenderer(channel: string, value: unknown): void {
 }
 
 /** Publish the one durable Settings snapshot to every live game projection. */
-function publishSettings(settings: AppSettings): void {
+let applyToolsSettings: ((settings: AppSettings) => Promise<void>) | null = null;
+
+async function publishSettings(settings: AppSettings): Promise<void> {
+  await applyToolsSettings?.(settings);
+  updateToolsMenuItems(settings);
   for (const win of windowRegistry.gameWindows()) {
-    updateWindowShortcuts(win, settings.shortcutOverrides);
+    updateWindowShortcuts(win, settings);
   }
   sendToRenderer(IPC.settingsEvent, settings);
 }
@@ -610,9 +611,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     onProgress: setProgress,
   });
   const sockets = buildSocketManager();
-  const tradeChat = new TradeChatService();
-  const tradeSaved = new TradeSavedStore(paths.tradeSaved);
-  const travelHistory = new TravelHistoryStore(paths.travelHistory);
   appUpdaterController = new AppUpdater({
     currentVersion: HOST_VERSION,
     capable: distribution.automaticUpdates,
@@ -688,24 +686,31 @@ if (primaryInstance) void app.whenReady().then(async () => {
     windowHost: host,
   });
   await accounts.resumePendingDeletions();
-  const buildLibraries = new BuildLibraryCoordinator();
+  const toolsRuntime = enhancementSelection.tools
+    ? (await import("./tools-runtime.js")).createToolsRuntime({
+        paths,
+        windows: windowRegistry,
+        accounts,
+        preferences,
+        initialSettings: settings,
+      })
+    : null;
+  applyToolsSettings = toolsRuntime?.applySettings ?? null;
+  await toolsRuntime?.applySettings(settings);
 
   const ipcCleanup = registerIpcHandlers({
     sockets,
     windows: windowRegistry,
     credentialsStoreFor: (win) => accounts.credentialsStoreFor(win),
     steamSessionStoreFor: (win) => accounts.steamSessionStoreFor(win),
-    getBuildLibrary: (win) =>
-      buildLibraries.get(win, accounts.buildLibraryPathFor(win)),
-    setBuildLibrary: (win, library) =>
-      buildLibraries.set(win, accounts.buildLibraryPathFor(win), library),
     gameStorageResetMarkerFor: (win) => accounts.gameStorageResetMarkerFor(win),
     getProgress: () => clientRuntime.progress,
     getSnapshotMetadata: () => clientRuntime.snapshotMetadata(),
     getCacheInfo: () => clientRuntime.cacheInfo(),
     getSettings: () => preferences.getSettings(),
     updateSettings: (patch) => preferences.updateSettings(patch),
-    resetSettings: () => preferences.resetSettings(),
+    resetSettings: () => toolsRuntime?.resetSettings()
+      ?? preferences.resetCoreSettings(),
     setDiagnosticProfile: async (profile) => {
       diagnosticProfile = await saveDiagnosticProfile(
         paths.diagnosticProfile,
@@ -713,14 +718,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       );
       return diagnosticProfile;
     },
-    getTravelPreferences: () => preferences.getTravelPreferences(),
-    setTravelPreferences: (update) => preferences.updateTravelPreferences(update),
-    getTravelHistory: (characterKey) => travelHistory.get(characterKey),
-    recordTravelHistory: (characterKey, mapId) => travelHistory.record(characterKey, mapId),
     toolsEnabledAtLaunch: enhancementSelection.tools,
-    tradeChat,
-    getTradeSaved: () => tradeSaved.get(),
-    setTradeSaved: (value) => tradeSaved.set(value),
     downloadFullGame: () => clientRuntime.downloadAll(),
     stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>
@@ -829,7 +827,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
       await Promise.all(gameWindows.map((win) => flushWindowState(win)));
     }
     sockets.closeAll();
-    tradeChat.dispose();
+    await toolsRuntime?.dispose();
+    applyToolsSettings = null;
     updateLongRunningTaskFeedback(INITIAL_PROGRESS, null);
     await clientRuntime.shutdown();
     if (activeAccountMode === "single") await clearBrowserCookies("quit");

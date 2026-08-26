@@ -9,9 +9,9 @@ import type {
 } from "../../../src/shared/tools-bundle-contracts";
 
 const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
-  mountToolsApp: (target, options) => mount(target, {
+  mountToolsApp: (target, { nativeApi, ...options }) => mount(target, {
     host: createNativeHost(
-      window.gwNative,
+      nativeApi,
       options.publishTemplate,
       options.commands,
       options.storage,
@@ -22,17 +22,17 @@ const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
     mode: "embedded",
     ...options,
   }),
-  mountTravelPalette: (target, options) => mountTravel(target, {
+  mountTravelPalette: (target, { nativeApi, ...options }) => mountTravel(target, {
     ...options,
     host: createNativeTravelHost(
-      window.gwNative,
+      nativeApi,
       options.command,
       options.development,
     ),
   }),
-  mountTradeChat: (target, options) => mountTrade(target, {
+  mountTradeChat: (target, { nativeApi, ...options }) => mountTrade(target, {
     ...options,
-    host: createNativeTradeHost(window.gwNative),
+    host: createNativeTradeHost(nativeApi),
   }),
 });
 

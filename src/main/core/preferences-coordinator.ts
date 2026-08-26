@@ -10,23 +10,25 @@ import type {
 } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
 import { isDeepStrictEqual } from "node:util";
-import {
-  DEFAULT_TRAVEL_PREFERENCES,
-  sameTravelUserPreferences,
-  storeTravelShortcuts,
-  travelShortcutsFromStored,
-  type TravelPreferencesDocument,
-  type TravelUserPreferences,
-  type TravelUserPreferencesUpdate,
+import type {
+  TravelPreferencesDocument,
+  TravelUserPreferences,
+  TravelUserPreferencesUpdate,
 } from "../../shared/travel.js";
 import { AtomicPublicationUnconfirmedError } from "./atomic-file.js";
 import { Mutex } from "./mutex.js";
 import { DEFAULT_SETTINGS } from "../../shared/contracts.js";
 import { loadSettings, saveSettings } from "./settings.js";
-import {
-  loadTravelPreferences,
-  updateTravelPreferences,
-} from "./travel-preferences.js";
+
+async function travelDomain() {
+  const [shared, stored] = await Promise.all([
+    import("../../shared/travel.js"),
+    import("./travel-preferences.js"),
+  ]);
+  return { shared, stored };
+}
+
+type TravelDomain = Awaited<ReturnType<typeof travelDomain>>;
 
 export type PreferencesPaths = Readonly<{
   settings: string;
@@ -35,10 +37,11 @@ export type PreferencesPaths = Readonly<{
 
 function composeTravelPreferences(
   settings: AppSettings,
-  travel: Awaited<ReturnType<typeof loadTravelPreferences>>,
+  travel: TravelPreferencesDocument,
+  shared: TravelDomain["shared"],
 ): TravelUserPreferences {
   return Object.freeze({
-    shortcuts: travelShortcutsFromStored(settings.travelShortcuts),
+    shortcuts: shared.travelShortcutsFromStored(settings.travelShortcuts),
     synonyms: travel.synonyms,
   });
 }
@@ -53,12 +56,9 @@ function unconfirmedTravelWrite(cause: unknown): Error {
 async function saveSettingsAndReconcile(
   path: string,
   intended: AppSettings,
-  publish: (settings: AppSettings) => void,
 ): Promise<AppSettings> {
   try {
-    const saved = await saveSettings(path, intended);
-    publish(saved);
-    return saved;
+    return await saveSettings(path, intended);
   } catch (error) {
     if (!(error instanceof AtomicPublicationUnconfirmedError)) throw error;
     let active: AppSettings;
@@ -70,7 +70,6 @@ async function saveSettingsAndReconcile(
         { cause: reloadError },
       );
     }
-    publish(active);
     if (isDeepStrictEqual(active, intended)) return active;
     throw new Error(
       "Settings were published, but gwonmac found different active values; review them before retrying.",
@@ -81,49 +80,57 @@ async function saveSettingsAndReconcile(
 
 export class PreferencesCoordinator {
   readonly #lock = new Mutex();
+  readonly #publication = new Mutex();
   readonly #paths: () => PreferencesPaths;
   readonly #onTravelRecovered:
     | ((backupPath: string) => void | Promise<void>)
     | undefined;
-  readonly #publishSettings: (settings: AppSettings) => void;
+  readonly #publishSettings: (settings: AppSettings) => void | Promise<void>;
 
   constructor(
     paths: () => PreferencesPaths,
     onTravelRecovered?: (backupPath: string) => void | Promise<void>,
-    publishSettings: (settings: AppSettings) => void = () => undefined,
+    publishSettings: (settings: AppSettings) => void | Promise<void> = () => undefined,
   ) {
     this.#paths = paths;
     this.#onTravelRecovered = onTravelRecovered;
     this.#publishSettings = publishSettings;
   }
 
+  #publish(settings: AppSettings): Promise<void> {
+    return this.#publication.run(async () => {
+      await this.#publishSettings(settings);
+    });
+  }
+
   getSettings(): Promise<AppSettings> {
     return this.#lock.run(() => loadSettings(this.#paths().settings));
   }
 
-  updateSettings(patch: AppSettingsPatch): Promise<AppSettings> {
-    return this.#lock.run(async () => {
+  async updateSettings(patch: AppSettingsPatch): Promise<AppSettings> {
+    const settings = await this.#lock.run(async () => {
       const path = this.#paths().settings;
       const current = await loadSettings(path);
       return saveSettingsAndReconcile(
         path,
         { ...current, ...patch },
-        this.#publishSettings,
       );
     });
+    await this.#publish(settings);
+    return settings;
   }
 
-  resetSettings(): Promise<SettingsResetOutcome> {
-    return this.#lock.run(async () => {
+  async resetSettings(): Promise<SettingsResetOutcome> {
+    const outcome = await this.#lock.run(async () => {
       const paths = this.#paths();
+      const { shared, stored } = await travelDomain();
       const settings = await saveSettingsAndReconcile(
         paths.settings,
         { ...DEFAULT_SETTINGS },
-        this.#publishSettings,
       );
       let currentTravel: TravelPreferencesDocument;
       try {
-        currentTravel = await loadTravelPreferences(
+        currentTravel = await stored.loadTravelPreferences(
           paths.travelPreferences,
           this.#onTravelRecovered,
         );
@@ -135,26 +142,26 @@ export class PreferencesCoordinator {
           pending: "travel",
         });
       }
-      if (isDeepStrictEqual(currentTravel, DEFAULT_TRAVEL_PREFERENCES)) {
+      if (isDeepStrictEqual(currentTravel, shared.DEFAULT_TRAVEL_PREFERENCES)) {
         return Object.freeze({
           status: "complete",
           settings,
-          travelPreferences: composeTravelPreferences(settings, currentTravel),
+          travelPreferences: composeTravelPreferences(settings, currentTravel, shared),
         });
       }
       let travel: TravelPreferencesDocument;
       try {
-        travel = await updateTravelPreferences(
+        travel = await stored.updateTravelPreferences(
           paths.travelPreferences,
           {
-            synonyms: DEFAULT_TRAVEL_PREFERENCES.synonyms,
+            synonyms: shared.DEFAULT_TRAVEL_PREFERENCES.synonyms,
           },
           this.#onTravelRecovered,
         );
       } catch (error) {
         if (error instanceof AtomicPublicationUnconfirmedError) {
           try {
-            travel = await loadTravelPreferences(
+            travel = await stored.loadTravelPreferences(
               paths.travelPreferences,
               this.#onTravelRecovered,
             );
@@ -166,11 +173,11 @@ export class PreferencesCoordinator {
               pending: "travel",
             });
           }
-          if (isDeepStrictEqual(travel, DEFAULT_TRAVEL_PREFERENCES)) {
+          if (isDeepStrictEqual(travel, shared.DEFAULT_TRAVEL_PREFERENCES)) {
             return Object.freeze({
               status: "complete",
               settings,
-              travelPreferences: composeTravelPreferences(settings, travel),
+              travelPreferences: composeTravelPreferences(settings, travel, shared),
             });
           }
         } else {
@@ -179,43 +186,65 @@ export class PreferencesCoordinator {
         return Object.freeze({
           status: "partial",
           settings,
-          travelPreferences: composeTravelPreferences(settings, travel),
+          travelPreferences: composeTravelPreferences(settings, travel, shared),
           pending: "travel",
         });
       }
       return Object.freeze({
         status: "complete",
         settings,
-        travelPreferences: composeTravelPreferences(settings, travel),
+        travelPreferences: composeTravelPreferences(settings, travel, shared),
       });
     });
+    await this.#publish(outcome.settings);
+    return outcome;
+  }
+
+  /**
+   * Resets only Core-owned settings. A Core launch must not import Travel just
+   * because the player reset ordinary application preferences.
+   */
+  async resetCoreSettings(): Promise<SettingsResetOutcome> {
+    const outcome = await this.#lock.run(async () => Object.freeze({
+      status: "complete" as const,
+      settings: await saveSettingsAndReconcile(
+        this.#paths().settings,
+        { ...DEFAULT_SETTINGS },
+      ),
+      travelPreferences: null,
+    }));
+    await this.#publish(outcome.settings);
+    return outcome;
   }
 
   getTravelPreferences(): Promise<TravelUserPreferences> {
     return this.#lock.run(async () => {
       const paths = this.#paths();
+      const { shared, stored } = await travelDomain();
       return composeTravelPreferences(
         await loadSettings(paths.settings),
-        await loadTravelPreferences(
+        await stored.loadTravelPreferences(
           paths.travelPreferences,
           this.#onTravelRecovered,
         ),
+        shared,
       );
     });
   }
 
-  updateTravelPreferences(
+  async updateTravelPreferences(
     update: TravelUserPreferencesUpdate,
   ): Promise<TravelUserPreferences> {
-    return this.#lock.run(async () => {
+    const result = await this.#lock.run(async () => {
       const paths = this.#paths();
+      const { shared, stored } = await travelDomain();
       const settings = await loadSettings(paths.settings);
-      const travel = await loadTravelPreferences(
+      const travel = await stored.loadTravelPreferences(
         paths.travelPreferences,
         this.#onTravelRecovered,
       );
-      const current = composeTravelPreferences(settings, travel);
-      if (!sameTravelUserPreferences(current, update.expected)) {
+      const current = composeTravelPreferences(settings, travel, shared);
+      if (!shared.sameTravelUserPreferences(current, update.expected)) {
         throw new AppError(
           "validation",
           "Travel preferences changed in another window; reload before saving",
@@ -225,19 +254,19 @@ export class PreferencesCoordinator {
         if (update.patch.shortcuts !== undefined) {
           const saved = await saveSettingsAndReconcile(paths.settings, {
             ...settings,
-            travelShortcuts: storeTravelShortcuts(
+            travelShortcuts: shared.storeTravelShortcuts(
               update.patch.shortcuts,
               settings.travelShortcuts,
             ),
-          }, this.#publishSettings);
-          return composeTravelPreferences(saved, travel);
+          });
+          return composeTravelPreferences(saved, travel, shared);
         }
-        const saved = await updateTravelPreferences(
+        const saved = await stored.updateTravelPreferences(
           paths.travelPreferences,
           update.patch,
           this.#onTravelRecovered,
         );
-        return composeTravelPreferences(settings, saved);
+        return composeTravelPreferences(settings, saved, shared);
       } catch (error) {
         if (error instanceof AtomicPublicationUnconfirmedError) {
           throw unconfirmedTravelWrite(error);
@@ -245,5 +274,9 @@ export class PreferencesCoordinator {
         throw error;
       }
     });
+    if (update.patch.shortcuts !== undefined) {
+      await this.#publish(await this.getSettings());
+    }
+    return result;
   }
 }
