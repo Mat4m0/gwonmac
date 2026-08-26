@@ -9,6 +9,7 @@ const base: ClientSession = {
     clientSha256: "4".repeat(64),
     features: {
       gameFileSaving: { status: "available" },
+      nativeDoubleClick: { status: "available" },
       nativeCursor: { status: "available" },
       targetObservation: { status: "available" },
       partyObservation: { status: "available" },

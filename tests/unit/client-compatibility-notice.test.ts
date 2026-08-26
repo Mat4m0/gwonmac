@@ -27,6 +27,7 @@ function compatibility(
     clientSha256: "a".repeat(64),
     features: {
       gameFileSaving: available,
+      nativeDoubleClick: available,
       nativeCursor: off,
       playRegionObservation,
       preGameControls,
@@ -58,7 +59,8 @@ const IDS = [
   "client-compat-title", "client-compat-detail", "client-compat-version",
   "client-compat", "client-compat-play",
   "client-compat-check", "client-compat-restart", "client-compat-update",
-  "settings-feature-gameFileSaving", "settings-feature-nativeCursor",
+  "settings-feature-gameFileSaving", "settings-feature-nativeDoubleClick",
+  "settings-feature-nativeCursor",
   "settings-feature-targetObservation", "settings-feature-partyObservation",
   "settings-feature-teamApply",
   "settings-feature-travelAction", "settings-feature-xunlaiAction",
@@ -199,6 +201,7 @@ describe("client compatibility notice", () => {
                   for (const chatAliases of optional) {
                     const features = {
                       gameFileSaving,
+                      nativeDoubleClick: available,
                       nativeCursor,
                       playRegionObservation: off,
                       preGameControls: off,

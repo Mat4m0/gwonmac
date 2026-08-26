@@ -35,8 +35,6 @@ import {
 import { transformEnhancementWasm } from "../main/certification/enhancement-transform.js";
 import {
   deriveNativeDoubleClickBuild,
-  findNativeDoubleClickBuild,
-  NATIVE_DOUBLE_CLICK_BUILDS,
   rewriteWithBuild,
 } from "../main/certification/native-double-click.js";
 import { preparePostTemplateSaveModule } from "../main/certification/template-save-verifier.js";
@@ -147,11 +145,11 @@ async function verify(argv: readonly string[]): Promise<void> {
   const capabilities = result.enhancementBuild
     ? supportedEnhancementCapabilities(result.enhancementBuild)
     : null;
-  const featureVerdicts = result.featureVerdicts;
-  const features = featureVerdicts === null
+  const features = result.featureVerdicts;
+  const featureStatuses = features === null
     ? null
     : Object.fromEntries(ENHANCEMENT_CAPABILITY_FIELDS.map((feature) => {
-        const verdict = featureVerdicts[feature];
+        const verdict = features[feature];
         return [feature, verdict.status === "ambiguous"
           ? {
               status: verdict.status,
@@ -166,14 +164,14 @@ async function verify(argv: readonly string[]): Promise<void> {
     officialSha256: result.officialSha256,
     templateSaving: result.templateSaveBuild !== null,
     verifierAbi: result.verifierAbi,
-    features,
+    features: featureStatuses,
     capabilities,
     reasons: result.reasons,
   })}\n`);
   if (
     result.templateSaveBuild === null
-    || features === null
-    || Object.values(features).some(({ status }) => status !== "proved")
+    || featureStatuses === null
+    || Object.values(featureStatuses).some(({ status }) => status !== "proved")
   ) {
     process.exitCode = 1;
   }
@@ -194,12 +192,7 @@ async function compare(argv: readonly string[]): Promise<void> {
   );
   const postTemplate = preparePostTemplateSaveModule(official);
   const doubleClick = postTemplate
-    && (
-      findNativeDoubleClickBuild(
-        createHash("sha256").update(postTemplate.bytes).digest("hex"),
-      )
-      || deriveNativeDoubleClickBuild(postTemplate.bytes)
-    )
+    && deriveNativeDoubleClickBuild(postTemplate.bytes)
     ? "exact" as const
     : "not-located" as const;
   const report = createCarryForwardReport(
@@ -364,30 +357,27 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
     }
   }
   const derivations: Record<string, string> = {};
+  let completeRouteProved = true;
   for (const [, bytes] of predecessors) {
     const input = createHash("sha256").update(bytes).digest("hex");
+    const build = deriveNativeDoubleClickBuild(bytes);
+    if (!build?.route) {
+      completeRouteProved = false;
+      continue;
+    }
     derivations[input] = createHash("sha256")
-      .update(rewriteWithBuild(bytes, NATIVE_DOUBLE_CLICK_BUILDS[0]!))
+      .update(rewriteWithBuild(bytes, build))
       .digest("hex");
   }
-  const shipped = NATIVE_DOUBLE_CLICK_BUILDS[0]!.derivations;
-  // One structural callback can serve several certified game builds. Compare
-  // only the predecessors produced by this official client; requiring equality
-  // with the whole cumulative table made every later patch look stale merely
-  // because the table also retained the preceding build's derivations.
-  const matches = Object.entries(derivations).every(
-    ([inputSha256, outputSha256]) =>
-      shipped[inputSha256] === outputSha256,
-  );
   process.stdout.write(`${JSON.stringify({
     officialSha256,
     predecessors: predecessors.map(([name]) => name),
     derivations,
-    matchesShippedTable: matches,
+    completeRouteProved,
   }, null, 2)}\n`);
-  if (!matches) {
+  if (!completeRouteProved || Object.keys(derivations).length !== predecessors.length) {
     process.stderr.write(
-      "certification double-click: derived table does not match the shipped one\n",
+      "certification double-click: complete native input route did not prove\n",
     );
     process.exitCode = 1;
   }

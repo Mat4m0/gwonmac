@@ -659,6 +659,7 @@ export interface ClientCompatibility {
   /** Main's effective state from the exact module served for this session. */
   features: Readonly<{
     gameFileSaving: RequiredFeatureStatus;
+    nativeDoubleClick: OptionalFeatureStatus;
     nativeCursor: OptionalFeatureStatus;
     targetObservation: OptionalFeatureStatus;
     partyObservation: OptionalFeatureStatus;

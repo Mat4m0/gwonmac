@@ -688,6 +688,7 @@ describe("client module preparation", () => {
           callbackParams: ["i32", "i32"],
           callbackResults: [],
           callbackBodySha256: sha256(body),
+          callbackFingerprint: sha256(body),
           flagStoreOffset: 3,
           flagStoreFrameOffset: 24,
           derivations: {},

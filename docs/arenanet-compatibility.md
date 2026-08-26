@@ -107,7 +107,7 @@ unwitnessed field must fail TypeScript compilation or boundary validation.
 | Feature | Required proof | Refusal behavior |
 | --- | --- | --- |
 | Template saving | Unique bridge stubs, all 11 call sites, signatures, argument modes, control flow, and independently derived static storage | Serve the untouched official module; do not claim persistent template repair |
-| Native double-click | Unique callback, signature, active table role, frame insertion point, and valid transformed output | Keep ordinary client input; never synthesize touch events |
+| Native double-click | Unique callback plus the complete enqueue, pump, translator, mouse-dispatch, click-consumer, and flag-lift route, then the exact frame insertion and output | Keep ordinary client input; report it unavailable; never synthesize touch events |
 | Guild Wars cursor | Unique loop/callback/table/neighbour graph, both producers, and independently derived globals, buffer, and layout | Use the normal macOS pointer |
 | Target Distance | Complete observation base, target-field ledger, precedence, and bounded finite snapshot behavior | Disable Target Distance only |
 | Party capture | Complete roster, ownership, profession, unlock, flag, skill, attribute, dirty-message, and transition lifecycle | Disable party observation and dependent Team Apply |

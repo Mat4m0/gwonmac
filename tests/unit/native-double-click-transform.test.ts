@@ -115,6 +115,7 @@ const entryFor = (
   callbackParams: [],
   callbackResults: ["i32"],
   callbackBodySha256: sha256(body),
+  callbackFingerprint: sha256(body),
   // After the locals declaration and `i32.const 7; drop`, which is where the
   // record store goes in the real callback: before the enqueue and after the
   // fields it fills.
@@ -276,25 +277,15 @@ test("refuses a module that already carries the flag export", () => {
   );
 });
 
-test("the shipped baseline states its own offsets and keeps valid historic fixtures", () => {
+test("the shipped baseline owns the complete route without predecessor pairs", () => {
   assert.equal(NATIVE_DOUBLE_CLICK_BUILDS.length, 1);
   for (const build of NATIVE_DOUBLE_CLICK_BUILDS) {
     assert.match(build.callbackBodySha256, /^[0-9a-f]{64}$/);
-    // Historic exact pairs remain regression fixtures. New upstream or local
-    // transform outputs are admitted by the unique callback/table proof and
-    // do not require another hash entry.
-    const pairs = Object.entries(build.derivations);
-    assert.ok(pairs.length > 0);
-    for (const [input, output] of pairs) {
-      assert.match(input, /^[0-9a-f]{64}$/);
-      assert.match(output, /^[0-9a-f]{64}$/);
-      assert.notEqual(input, output);
+    assert.deepEqual(build.derivations, {});
+    assert.ok(build.route);
+    for (const role of Object.values(build.route)) {
+      assert.match(role.bodySha256, /^[0-9a-f]{64}$/);
     }
-    assert.equal(
-      new Set(pairs.map(([, output]) => output)).size,
-      pairs.length,
-      "each predecessor must derive a distinct module",
-    );
     assert.ok(build.flagStoreOffset > 0);
     // The record base sits eight bytes above the frame pointer and the flag is
     // the fifth word of the record, so the store lands at frame+24. A different

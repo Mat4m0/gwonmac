@@ -28,6 +28,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
     clientSha256: "a".repeat(64),
     features: {
       gameFileSaving: available,
+      nativeDoubleClick: available,
       nativeCursor: selected(capabilities.nativeCursor),
       targetObservation: selected(capabilities.targetObservation),
       partyObservation: selected(capabilities.partyObservation),
@@ -71,6 +72,7 @@ describe("effective Enhancement capability boundary", () => {
         ...original.compatibility!,
         features: {
           gameFileSaving: available,
+          nativeDoubleClick: available,
           nativeCursor: { status: "unavailable", reason: "preparation-failed" },
           targetObservation: { status: "unavailable", reason: "game-update" },
           partyObservation: off,

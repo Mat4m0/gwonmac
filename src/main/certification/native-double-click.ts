@@ -40,6 +40,11 @@ import {
   signatureMatches,
   wasmEvidence,
 } from "./wasm-evidence.js";
+import type {
+  DecodedFunction,
+  ModuleShape,
+} from "./enhancement-evidence-types.js";
+import { relocationAwareFingerprint } from "./semantic-proof.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
@@ -53,18 +58,13 @@ export const DOUBLE_CLICK_FLAG_EXPORT = "gwonmac_double_click";
 /**
  * What must hold before a mousedown callback may be rewritten.
  *
- * `callbackBodySha256` is the whole proof. The transform inserts instructions
- * at a fixed offset into that body and relies on local 3 being the frame
- * pointer and the record living at frame+8; a body that hashes to the
- * certified value *is* that body, so there is nothing left to infer. A build
- * whose callback differs by a byte is refused rather than guessed at.
+ * `callbackBodySha256` binds the insertion site. `route` separately proves the
+ * existing enqueue, pump, translator, mouse dispatch and click-consumer path;
+ * an unchanged callback cannot grant authority when a downstream edge moved.
  *
- * `derivations` is separate from that proof and does a different job: it is
- * the set of certified predecessor modules this stage may consume, each mapped
- * to the module it produces. The chain runs this transform last, so those
- * predecessors are the template-save output and the Enhancement output of each
- * certified capability profile — and because the callback body survives both
- * of those transforms untouched, one proof covers every entry.
+ * `derivations` contains exactly one verifier-issued input/output transaction
+ * after derivation. Authored baselines keep it empty; no capability-profile
+ * Cartesian hash table participates in authority.
  */
 export interface NativeDoubleClickBuild {
   /** Active table slot the client registers as its mousedown callback. */
@@ -75,6 +75,7 @@ export interface NativeDoubleClickBuild {
   readonly callbackResults: readonly "i32"[];
   /** SHA-256 of that function's body, before the rewrite. */
   readonly callbackBodySha256: string;
+  readonly callbackFingerprint: string;
   /** Byte offset in the body at which the flag store is inserted. */
   readonly flagStoreOffset: number;
   /**
@@ -83,15 +84,34 @@ export interface NativeDoubleClickBuild {
    * double-click bit is masked out of.
    */
   readonly flagStoreFrameOffset: number;
+  /** End-to-end client path that consumes the stored record field. */
+  readonly route?: NativeDoubleClickRoute;
   /** Certified predecessor module hash -> the hash this stage produces. */
   readonly derivations: Readonly<Record<string, string>>;
 }
 
+interface NativeDoubleClickRouteRole {
+  readonly functionIndex: number;
+  readonly params: readonly "i32"[];
+  readonly results: readonly "i32"[];
+  readonly bodySha256: string;
+  readonly bodyFingerprint: string;
+}
+
+export interface NativeDoubleClickRoute {
+  readonly enqueue: NativeDoubleClickRouteRole;
+  readonly dequeue: NativeDoubleClickRouteRole;
+  readonly pump: NativeDoubleClickRouteRole;
+  readonly translator: NativeDoubleClickRouteRole;
+  readonly mouseDispatch: NativeDoubleClickRouteRole & { readonly tableSlot: number };
+  readonly clickConsumer: NativeDoubleClickRouteRole;
+  readonly flagLift: NativeDoubleClickRouteRole;
+}
+
 /**
- * The retained exact build and the preceding template-save-only build use the
- * same callback function, body, table slot, and record layout. Every hash below is reproduced by
- * `pnpm certification double-click`, which re-runs the chain from the official
- * bytes; the table is a cache of that derivation, never its authority.
+ * These hashes identify the semantic roles inside the proven route. Function
+ * indexes and table slots are observations only: derivation relocates every
+ * unique role and rechecks the call and table relationships.
  */
 export const NATIVE_DOUBLE_CLICK_BUILDS: readonly NativeDoubleClickBuild[] = [
   {
@@ -101,37 +121,19 @@ export const NATIVE_DOUBLE_CLICK_BUILDS: readonly NativeDoubleClickBuild[] = [
     callbackResults: ["i32"],
     callbackBodySha256:
       "1f6d69d4364a8369aba990defe34f746063a412fb2e6bc0ae9cc1b4b236acf1e",
+    callbackFingerprint: "fe687410854b1a0ab96016f2badfe47534b9b0fc21851a3cf28110cdeab683a0",
     flagStoreOffset: 101,
     flagStoreFrameOffset: 24,
-    derivations: {
-      // template-save output, with the Enhancement off
-      "9ee332604a9b2adbdfa1a8ab217f4fd1dac58b01a2443e037bc5bd11f279d094":
-        "e7d86cfcf7b09abbedd3afca758dbf4a3f3c6e1aa4d44e53b31e45e886d7f250",
-      // Build 38833 template-save output and Enhancement profiles.
-      "7d0ced840d3dc167b823ed0ad6ed411319faf97316345c8e37620e86d86f536e":
-        "eeeb4b70edbba53d5ee98a50dbba395dd175e8eebdd3e3bf93f8f9fcfa428a7b",
-      // Build 38833 Enhancement profiles.
-      "8c156901f7fa5a7d1ee23b6b2f2b53ce6c511dc358974e694db208e965f5d151": "ddf3bbc72299bf6e06e55e22248681e90eae93b80b560cf9a821650b420bddbb",
-      "96786cba1fac260f0924e3b1880dd65452c552c4e79b4e5e8a72e835d4cca0c8": "cd0f6854903ff49e356f4c600f3dfd821472e901119e8d9986f81b1fd8ad4991",
-      "d4d2406669ef5be751843112cf7547fa640c8444bae95a23e0eaba3a2d9c1517": "0582a836960b76d001871690ba3f28b720a7087ce4274fc9f0030e455010fdf5",
-      "b528291df4bd96541a8128fdd7de88b5712413fc192e6e051f71ac47459e221f": "e11f644ae081698e9f24e53ad68a0606bdcbcf3bf54d4bdd9751db3b098223ee",
-      "b7dc1e345bbe85a91b5423b4fc609ab37abbe2d15a387f29cfc7fbc7534c9fec": "77c4ce9b579c451ef27a48fe889ff4e137267ea8c75f3ebaf832b9679fab2937",
-      "0e4da3a2a31b6c84b12ada9f5f0ec87abdcb9c239349fa38d46aa472ecbf74df": "8d6e2fac4cb99459b139f9f29ed608973eec6c189e210d7d62fe5bdd8f3b05f6",
-      "4b5f4601b3ddfe363b9fc49a8130df417b28dc7ddcc75b0cc83a6dca3d21458d": "b93ea4cf880024c74324bbc24b468533539ae6c7dd284018a91d6a8bc000393b",
-      "97213e19d336ccecd26a25d20291d4ee03fdd3102f4a58a56ce4e0ea2e0353b7": "bf8dfec78038f79e93b8d85e416f6bc0b95bd69b1bbad98fa40e8d74fb063b6e",
-      aca4e4ff310162036a9dccab2d9d4180f4699930ca3e9337de8529ff391d245c: "b7384d00dcfd5245d3e329901f3875088bba3bb33ea27dc36e89e13e2e2122f7",
-      "80d86e2af5c5f1160610ae17482e6385ff3990e97fbfbd798e7396be810b4e84": "03287bd899c7247006fb7ccbee1b6c51841aacef24d1631062b096f70eecd650",
-      "00f8385b8343231e1f61bdac7a7ada1c48946d114f812e8c0927454eea72100c": "78e5d183071ddd9e6fc83611058e96d61ac2b630bbd8a42bc8b35a6a06adc620",
-      "04a0532fd2d5e6f3ecbbc050afaf47370a7f6b479431b471bf76d738a2e06e8a": "89cb4e6d802e99dc3b40f6cb0fc0f8e56da471574a726bbcffe222e1af836d28",
-      "43fa20fadf5b466976505696b80d95653c9b26f661ddf86959eb1cfbca6a9693": "e32e1cf2225666e86413df9555550bf697f820ec5951c49044555d82fd22dfad",
-      db8dec116c17306853f5075926b657ee1d46d9ad04ae6cd1fc683638e89b7e9f: "515e579f2892ae8ce6d6eaea9445642e018337024ad921c61b09c00afa10fa0e",
-      "92fbaba14a4986ad46cd5f412eccbc51d26bd41241bb6d6eb736df6d88216df3": "4319456e9b9759a837f099fecad05502aa9060e20a0bfd037a254227e1b6bd68",
-      e58f556348af308a9e13b011588baf57a2eacb1213e0d25fbda8a12eb6aaf7d6: "8e3702861e38dfd67099a5f2b69ff60927bc2edde14875c2e51d12fd95aff869",
-      "36ea50a64185d69da0f5e5de02d1e20a8fefcc0402cf19be22522de5ce795974": "12ac351d160721eab874dc8243a0887dbc4ed5b54f38d4df6f01dbf8c7417bf9",
-      b98fb10c37deda13b06b79b19efa9130ae70aca62c7df3da75b463bc62af2f4b: "850801fb84893e257dc9214d681628793aca2e61194cf81516f408ec05e2077a",
-      cc07d6c49c6a8079679114806231ecf2d015e41b7dab1242dacd8b7687bf8869: "26bcee5c721a4fa6bea809008af35b9cd762a530eb8595fa8b53f0d6f8c3aef2",
-      "58f0ce10fd231263e560e2496e07b6e152241c41e3ac0b6d04e7f13ca44ee924": "8b4bc57bd679144a34b00d2c1bd30eab5b4e290c261ad73c7d47ea20202d5024",
+    route: {
+      enqueue: { functionIndex: 791, params: ["i32"], results: [], bodySha256: "d9f78373ec35f3fb4ad7388d3b31e06b3d0c4db3343a0e74097a9dadfc80a93c", bodyFingerprint: "2d2039fa68e1196e7aebf2f987451a9188bce5ad2e60a977e11bdd6f397a939f" },
+      dequeue: { functionIndex: 794, params: ["i32"], results: ["i32"], bodySha256: "f6d22a37562eb7ec95f2d0aa9544c6eb8e9a209f1484ad0a6af1334940aaa2f0", bodyFingerprint: "4df17bd1d3dca473649f97098023e6f6e52a6f5f286c882a8719ff9b6971d1e1" },
+      pump: { functionIndex: 828, params: ["i32"], results: [], bodySha256: "11620652301dab72026f9c30b69a000412e8f19f7373755c19ed22b3f60d3a8f", bodyFingerprint: "f41f2481394d0264aca285ff719081173c5596ae87998d7f70f654233f69b248" },
+      translator: { functionIndex: 829, params: ["i32", "i32"], results: [], bodySha256: "c12a6ae5eb7fa95d377b4ac6ce5614d0632197e73ac730cd12a9e3ca43b9cfe0", bodyFingerprint: "c2b011ae71ed8c1cf6770dc4c7f2147c8ddb7a1bd6bd0b23c0d28205425e60ea" },
+      mouseDispatch: { functionIndex: 6293, params: ["i32", "i32"], results: [], bodySha256: "6c54a3e00fe0345f9ce2eaf4623553073883de2881819515f68c72f6e695876b", bodyFingerprint: "163d569bbd7595f3416f27aeffa562926a46a48640cad6bcdc19d0206a0ab700", tableSlot: 1736 },
+      clickConsumer: { functionIndex: 6269, params: ["i32", "i32", "i32"], results: [], bodySha256: "decf63eac1ae329406fc7da67a7612a4ece55b0ba6461d9f0cabce12fb817b97", bodyFingerprint: "167afdad4a437d0c89e3d8f6f3f4202780bbab71fd7bf0a01a89a63754a4da86" },
+      flagLift: { functionIndex: 6270, params: ["i32", "i32"], results: [], bodySha256: "9a6fe4439e635c9489bdc88d06de9d55039e47a214a82b5567c81024d11ea515", bodyFingerprint: "aa2524ac44c6287512b9d98feaf78ebaa6a5d984738b3e94007508d258df2f0d" },
     },
+    derivations: {},
   },
 ];
 
@@ -147,17 +149,6 @@ function encodeName(name: string): Uint8Array {
   return concat(uleb(bytes.length), bytes);
 }
 
-/** The entry that may consume this module, or null when none may. */
-export function findNativeDoubleClickBuild(
-  inputSha256: string,
-): NativeDoubleClickBuild | null {
-  return (
-    NATIVE_DOUBLE_CLICK_BUILDS.find((build) =>
-      Object.hasOwn(build.derivations, inputSha256),
-    ) ?? null
-  );
-}
-
 /** The module this stage produces from a certified predecessor. */
 export function nativeDoubleClickOutputSha256(
   build: NativeDoubleClickBuild,
@@ -170,6 +161,102 @@ function sameStrings(left: unknown, right: readonly string[]): boolean {
   return Array.isArray(left)
     && left.length === right.length
     && left.every((value, index) => value === right[index]);
+}
+
+function routeMatchesBaseline(
+  route: NativeDoubleClickRoute,
+  baseline: NativeDoubleClickRoute,
+): boolean {
+  const roles = [
+    "enqueue", "dequeue", "pump", "translator", "mouseDispatch",
+    "clickConsumer", "flagLift",
+  ] as const;
+  return roles.every((role) =>
+    route[role].bodyFingerprint === baseline[role].bodyFingerprint
+    && sameStrings(route[role].params, baseline[role].params)
+    && sameStrings(route[role].results, baseline[role].results),
+  );
+}
+
+function callNormalizedFingerprint(
+  body: Uint8Array,
+  decoded: DecodedFunction,
+): string {
+  const sites = [...decoded.callSites.values()].flat()
+    .sort((left, right) => left.offset - right.offset);
+  return relocationAwareFingerprint(body, sites.map((site, index) => ({
+    start: site.offset + 1,
+    end: site.operandEnd,
+    addressClass: "function-index",
+    role: `direct-call:${index}`,
+  })));
+}
+
+function locateRouteRole(
+  module: ModuleShape,
+  decoded: ReadonlyMap<number, DecodedFunction>,
+  baseline: NativeDoubleClickRouteRole,
+): NativeDoubleClickRouteRole | null {
+  const matches = module.bodies.flatMap((body, localIndex) =>
+    [localIndex + module.functionImportCount],
+  ).filter((functionIndex) => signatureMatches(
+    module, functionIndex, baseline.params, baseline.results,
+  ) && callNormalizedFingerprint(
+    functionBody(module, functionIndex), decoded.get(functionIndex)!,
+  ) === baseline.bodyFingerprint);
+  return matches.length === 1
+    ? Object.freeze({
+        ...baseline,
+        functionIndex: matches[0]!,
+        bodySha256: sha256(functionBody(module, matches[0]!)),
+      })
+    : null;
+}
+
+function deriveCompleteRoute(
+  evidence: NonNullable<ReturnType<typeof wasmEvidence>>,
+  baseline: NativeDoubleClickRoute,
+  callbackFunctionIndex: number,
+): NativeDoubleClickRoute | null {
+  const module = evidence.moduleView();
+  const decoded = new Map(evidence.decodeFunctions([]).map((entry) => [
+    entry.functionIndex, entry,
+  ]));
+  const enqueue = locateRouteRole(module, decoded, baseline.enqueue);
+  const dequeue = locateRouteRole(module, decoded, baseline.dequeue);
+  const pump = locateRouteRole(module, decoded, baseline.pump);
+  const translator = locateRouteRole(module, decoded, baseline.translator);
+  const mouseDispatch = locateRouteRole(module, decoded, baseline.mouseDispatch);
+  const clickConsumer = locateRouteRole(module, decoded, baseline.clickConsumer);
+  const flagLift = locateRouteRole(module, decoded, baseline.flagLift);
+  if (!enqueue || !dequeue || !pump || !translator || !mouseDispatch
+    || !clickConsumer || !flagLift) return null;
+  const calls = new Map([...decoded].map(([functionIndex, entry]) => [
+    functionIndex, entry.calls,
+  ]));
+  const callsAtLeast = (from: number, to: number, count = 1): boolean =>
+    (calls.get(from)?.get(to) ?? 0) >= count;
+  const dispatchSlots = evidence.tableRelations.get(mouseDispatch.functionIndex) ?? [];
+  if (
+    !callsAtLeast(callbackFunctionIndex, enqueue.functionIndex)
+    || !callsAtLeast(pump.functionIndex, dequeue.functionIndex)
+    || !callsAtLeast(pump.functionIndex, translator.functionIndex)
+    || !callsAtLeast(mouseDispatch.functionIndex, clickConsumer.functionIndex)
+    || !callsAtLeast(clickConsumer.functionIndex, flagLift.functionIndex, 2)
+    || dispatchSlots.length !== 1
+  ) return null;
+  return Object.freeze({
+    enqueue,
+    dequeue,
+    pump,
+    translator,
+    mouseDispatch: Object.freeze({
+      ...mouseDispatch,
+      tableSlot: dispatchSlots[0]!,
+    }),
+    clickConsumer,
+    flagLift,
+  });
 }
 
 /** Validate a relocated record that crossed the isolated-process boundary. */
@@ -191,17 +278,22 @@ export function isDerivedNativeDoubleClickBuild(
     || (build.flagStoreFrameOffset as number) < 0
     || typeof build.callbackBodySha256 !== "string"
     || !/^[0-9a-f]{64}$/.test(build.callbackBodySha256)
+    || typeof build.callbackFingerprint !== "string"
+    || !/^[0-9a-f]{64}$/.test(build.callbackFingerprint)
     || !build.derivations
     || typeof build.derivations !== "object"
     || Object.keys(build.derivations).length !== 1
     || !/^[0-9a-f]{64}$/.test(build.derivations[inputSha256] ?? "")
   ) return false;
   return baselines.some((baseline) =>
-    build.callbackBodySha256 === baseline.callbackBodySha256
+    build.callbackFingerprint === baseline.callbackFingerprint
     && build.flagStoreOffset === baseline.flagStoreOffset
     && build.flagStoreFrameOffset === baseline.flagStoreFrameOffset
     && sameStrings(build.callbackParams, baseline.callbackParams)
     && sameStrings(build.callbackResults, baseline.callbackResults)
+    && (baseline.route === undefined
+      || (build.route !== undefined
+        && routeMatchesBaseline(build.route, baseline.route)))
   );
 }
 
@@ -218,10 +310,16 @@ export function deriveNativeDoubleClickBuild(
     if (table.overwrittenSlots.length > 0) return null;
     const tableRelations = table.relations;
     const inputSha256 = evidence.inputSha256;
+    const decoded = new Map(evidence.decodeFunctions([]).map((entry) => [
+      entry.functionIndex, entry,
+    ]));
     const matches: NativeDoubleClickBuild[] = [];
     for (const baseline of baselines) {
       const candidates = module.bodies.flatMap((body, localIndex) =>
-        sha256(body) === baseline.callbackBodySha256
+        callNormalizedFingerprint(
+          body,
+          decoded.get(localIndex + module.functionImportCount)!,
+        ) === baseline.callbackFingerprint
           ? [localIndex + module.functionImportCount]
           : [],
       );
@@ -238,10 +336,16 @@ export function deriveNativeDoubleClickBuild(
         )
       )
         continue;
+      const route = baseline.route
+        ? deriveCompleteRoute(evidence, baseline.route, callbackFunctionIndex)
+        : undefined;
+      if (baseline.route && !route) continue;
       const candidate: NativeDoubleClickBuild = {
         ...baseline,
         callbackTableSlot: callbackSlots[0]!,
         callbackFunctionIndex,
+        callbackBodySha256: sha256(functionBody(module, callbackFunctionIndex)),
+        ...(route ? { route } : {}),
         derivations: {},
       };
       const output = rewriteWithBuild(input, candidate);
@@ -325,6 +429,10 @@ export function rewriteWithBuild(
   ) fail("the mousedown callback does not have the certified signature");
   if (sha256(body) !== build.callbackBodySha256) {
     fail("the mousedown callback is not the certified body");
+  }
+  if (build.route
+    && !deriveCompleteRoute(evidence, build.route, build.callbackFunctionIndex)) {
+    fail("the complete native double-click route is not certified");
   }
   if (build.flagStoreOffset > body.byteLength) {
     fail("flag store offset lies outside the callback body");

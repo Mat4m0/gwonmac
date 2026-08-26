@@ -986,10 +986,34 @@ test("every certified runtime profile reproduces the real client chain", async (
   // what catches an ABI/config edit whose source tests pass but whose authored
   // certificate hashes were not regenerated.
   const derivedTemplateDoubleClick = deriveNativeDoubleClickBuild(template);
+  assert.ok(derivedTemplateDoubleClick?.route);
   assert.equal(
     isDerivedNativeDoubleClickBuild(derivedTemplateDoubleClick, sha256(template)),
     true,
     "the exact fixture must independently cross semantic proof",
+  );
+  const doubleClickModule = wasmEvidence(template)!.moduleView();
+  const route = derivedTemplateDoubleClick.route;
+  const wrongTranslator = sameSignatureDestination(
+    doubleClickModule,
+    route.translator.functionIndex,
+    new Set(Object.values(route).map((role) => role.functionIndex)),
+  );
+  const brokenPump = rewriteCode(template, (bodies) => {
+    const body = bodies[route.pump.functionIndex - doubleClickModule.functionImportCount]!;
+    const source = paddedIndex(route.translator.functionIndex);
+    const replacement = paddedIndex(wrongTranslator);
+    const operand = body.findIndex((byte, offset) =>
+      byte === 0x10
+      && source.every((value, index) => body[offset + 1 + index] === value),
+    );
+    assert.notEqual(operand, -1, "pump must directly call its translator");
+    body.set(replacement, operand + 1);
+  });
+  assert.equal(
+    deriveNativeDoubleClickBuild(brokenPump),
+    null,
+    "an unchanged callback cannot hide a broken downstream route",
   );
   rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(template));
   for (const profile of enhancementProfilesForBuild(enhancementBuild)) {
