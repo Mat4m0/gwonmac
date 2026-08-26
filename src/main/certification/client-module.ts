@@ -218,22 +218,6 @@ export async function inspectEnhancementCache(
   );
 }
 
-async function discardUnsupportedCaches(
-  compatibilityCacheRoot: string,
-  enhancementCacheRoot: string,
-): Promise<ClientModulePreparationFailure | null> {
-  const [compatibility, enhancement] = await Promise.allSettled([
-    discardDerivedWasm(compatibilityCacheRoot),
-    discardDerivedWasm(enhancementCacheRoot),
-  ]);
-  if (compatibility.status === "rejected") {
-    return { stage: "template-save", error: compatibility.reason };
-  }
-  return enhancement.status === "rejected"
-    ? { stage: "enhancement", error: enhancement.reason }
-    : null;
-}
-
 async function discardEnhancementCache(
   cacheRoot: string,
 ): Promise<ClientModulePreparationFailure | null> {

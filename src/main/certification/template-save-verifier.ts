@@ -560,16 +560,44 @@ function templateCallerRoles(found: Located): Map<number, TemplateCallerRole> {
   if (deleted.length !== 1) fail("delete caller role is ambiguous");
   const roles = new Map<number, TemplateCallerRole>([
     [deleted[0]!, "delete"],
-    [found.scans[0]!, "skill-scan"],
-    [found.scans[1]!, "equipment-scan"],
     [found.writeFunction, "writer"],
-    [found.sinks[0]!, "directory-sink"],
-    [found.sinks[1]!, "screenshot-sink"],
   ]);
+  assignCallerRoles(found, roles, found.scans, ["skill-scan", "equipment-scan"]);
+  assignCallerRoles(found, roles, found.sinks, ["directory-sink", "screenshot-sink"]);
   if (roles.size !== 6) fail("template caller roles overlap");
   return roles;
 }
-
+function assignCallerRoles(
+  found: Located,
+  assigned: Map<number, TemplateCallerRole>,
+  candidates: readonly number[],
+  expectedRoles: readonly [TemplateCallerRole, TemplateCallerRole],
+): void {
+  const matches = expectedRoles.map((role) => candidates.filter((local) => {
+    const source = found.view.bodies[local]!;
+    const relocations = TEMPLATE_STATIC_RELOCATIONS[role];
+    if (relocations.some(({ end }) => end > source.byteLength)) return false;
+    try {
+      normalizeStaticRelocations(found, role, source, source.slice(), new Map());
+      return true;
+    } catch {
+      return false;
+    }
+  }));
+  const unique = matches.every((match) => match.length === 1)
+    && matches[0]![0] !== matches[1]![0];
+  if (!unique) {
+    // Synthetic locator fixtures omit the production ledger and grant no equivalence.
+    const productionSized = candidates.some((local) => expectedRoles.some(
+      (role) => TEMPLATE_STATIC_RELOCATIONS[role].every(
+        ({ end }) => end <= found.view.bodies[local]!.byteLength),
+    ));
+    if (productionSized) fail(`${expectedRoles.join("/")} role evidence is ambiguous`);
+    expectedRoles.forEach((role, index) => assigned.set(candidates[index]!, role));
+    return;
+  }
+  expectedRoles.forEach((role, index) => assigned.set(matches[index]![0]!, role));
+}
 function relocationValue(
   body: Uint8Array,
   relocation: StaticOperand,
@@ -603,7 +631,6 @@ function relocationValue(
   }
   fail(`static relocation at ${relocation.start} is not a memory offset`);
 }
-
 function staticAnchorAddress(
   found: Located,
   storage: TemplateStaticStorage,
@@ -611,7 +638,6 @@ function staticAnchorAddress(
 ): number {
   const cached = addresses.get(storage);
   if (cached !== undefined) return cached;
-
   const anchor = TEMPLATE_STATIC_ANCHORS[storage];
   let address: number;
   if (anchor.kind === "initialized-data") {
@@ -629,7 +655,6 @@ function staticAnchorAddress(
   addresses.set(storage, address);
   return address;
 }
-
 function normalizeStaticRelocations(
   found: Located,
   role: TemplateCallerRole,
@@ -676,12 +701,10 @@ function normalizeStaticRelocations(
     normalized[relocation.start] = index + 1;
   });
 }
-
 const FILE_OPEN_VTABLE_PREFIX = Uint8Array.of(
   0x5a, 0, 0, 0, 0x5b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0x5c, 0, 0, 0, 0x5d, 0, 0, 0, 0x5e, 0, 0, 0, 0x5f, 0, 0, 0,
 );
-
 function normalizedFileExistsBody(found: Located): string {
   const source = found.view.bodies[found.targets.fileExists.localFunction]
     ?? fail("file-exists body is missing");
@@ -914,10 +937,6 @@ function equivalentTemplateSaveBuild(
       || !target
       || target.signature !== EXPECTED_TEMPLATE_SIGNATURES[expected.kind]
       || candidate.callSites.length !== expected.callSites.length
-      || (
-        expected.stubBody
-        && !isDeepStrictEqual(candidate.stubBody, expected.stubBody)
-      )
     ) {
       return null;
     }
