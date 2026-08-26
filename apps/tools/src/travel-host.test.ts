@@ -80,18 +80,18 @@ describe("native Travel host", () => {
     expect(setTravel.mock.calls[0]?.[0].patch.shortcuts?.[8]).toEqual({ mapId: 642 });
   });
 
-  it("releases a travel attempt after Guild Wars confirms arrival", async () => {
+  it("releases a queued travel attempt when Guild Wars confirms arrival directly", async () => {
     vi.useFakeTimers();
     const { host } = fixture();
 
     await host.travel({ mapId: 449 });
-    host.updateGameState({ status: "waiting", reason: "loading" });
     host.updateGameState({
       status: "ready", mapId: 449, characterKey: null, unlockedMapWords: null,
     });
     await vi.runAllTimersAsync();
 
     expect(host.attempt.value).toEqual({ status: "idle" });
+    expect(host.notice.value?.message).not.toContain("did not start");
   });
 
   it("always releases a loading attempt after interruption or its arrival deadline", async () => {
@@ -144,7 +144,6 @@ describe("native Travel host", () => {
     });
 
     await host.travel({ mapId: 449 });
-    host.updateGameState({ status: "waiting", reason: "loading" });
     host.updateGameState({
       status: "ready", mapId: 449, characterKey, unlockedMapWords,
     });
