@@ -100,6 +100,7 @@ jobs:
         id: qualification
         continue-on-error: true
         env:
+          GW_CLIENT_JS: ${{ steps.official.outputs.js }}
           GW_CLIENT_WASM: ${{ steps.official.outputs.wasm }}
         run: |
           mkdir -p "$EVIDENCE"

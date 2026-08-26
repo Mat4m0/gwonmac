@@ -401,7 +401,14 @@ jobs:
           GW_CLIENT_JS: ${{ steps.official-client.outputs.js }}
           GW_CLIENT_WASM: ${{ steps.official-client.outputs.wasm }}
           GW_PACKAGE_INTENT: release
-        run: pnpm test:packaged
+        run: |
+          pnpm test:packaged
+          # Re-run the exact official generation after packaging through the
+          # same verifier, planner, transforms, and integrity-checked cache
+          # path used by production. The test also corrupts the final cache
+          # and requires deterministic reconstruction before publication.
+          node --import ./scripts/ts-hook.mjs --test --test-timeout=60000 \
+            tests/client-artifact/client-chain-qualification.test.ts
 
       - name: Prove signed Data Protection Keychain continuity without signing secrets
         env:
