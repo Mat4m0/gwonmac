@@ -90,6 +90,7 @@ const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
   minWidth: 520,
   minHeight: 400,
   viewportMargin: 32,
+  placementStorageKey: "gwonmac.trade-window-placement",
 });
 
 const current = computed(() => states[source.value]);

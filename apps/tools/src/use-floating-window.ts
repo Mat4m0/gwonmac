@@ -8,6 +8,10 @@ import {
   type Ref,
 } from "vue";
 import { installResizeGrip } from "../../../src/shared/ui/resize";
+import {
+  restoreFloatingWindowPlacement,
+  serializeFloatingWindowPlacement,
+} from "./floating-window-placement";
 
 export function useFloatingWindow(options: {
   mode: "standalone" | "embedded";
@@ -16,12 +20,31 @@ export function useFloatingWindow(options: {
   minWidth: number;
   minHeight: number;
   viewportMargin?: number;
+  placementStorageKey?: string;
 }) {
   const panel = ref<HTMLElement | null>(null);
   const resizeGrip = ref<HTMLButtonElement | null>(null);
-  const position = ref({ ...options.initialPosition });
-  const size = ref<{ width: number; height: number } | null>(null);
   const margin = options.viewportMargin ?? 0;
+  const viewport = () => ({ width: window.innerWidth, height: window.innerHeight, margin });
+  let serialized: string | null = null;
+  if (options.mode === "embedded" && options.placementStorageKey) {
+    try {
+      serialized = window.localStorage.getItem(options.placementStorageKey);
+    } catch {
+      // Browser storage refusal leaves the window at its ordinary default.
+    }
+  }
+  const restored = restoreFloatingWindowPlacement(
+    serialized,
+    viewport(),
+    { width: options.minWidth, height: options.minHeight },
+  );
+  const position = ref(restored
+    ? { left: restored.left, top: restored.top }
+    : { ...options.initialPosition });
+  const size = ref(restored
+    ? { width: restored.width, height: restored.height }
+    : null);
   const panelStyle = computed(() => options.mode === "embedded"
     ? {
         left: `${position.value.left}px`,
@@ -83,8 +106,38 @@ export function useFloatingWindow(options: {
   };
 
   let disposeResize: (() => void) | null = null;
+  let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  const persistPlacement = () => {
+    if (
+      options.mode !== "embedded"
+      || !options.placementStorageKey
+      || !panel.value
+    ) return;
+    const value = serializeFloatingWindowPlacement({
+      ...position.value,
+      width: size.value?.width ?? panel.value.offsetWidth,
+      height: size.value?.height ?? panel.value.offsetHeight,
+    }, viewport());
+    if (value === null) return;
+    try {
+      window.localStorage.setItem(options.placementStorageKey, value);
+    } catch {
+      // A UI preference must not make the surface unusable when storage fails.
+    }
+  };
+  const schedulePersistence = () => {
+    if (!options.placementStorageKey || options.mode !== "embedded") return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => {
+      persistTimer = null;
+      persistPlacement();
+    }, 150);
+  };
+  watch(position, schedulePersistence);
+  watch(size, schedulePersistence);
   onMounted(() => {
     window.addEventListener("resize", fitToViewport);
+    window.addEventListener("pagehide", persistPlacement);
     requestAnimationFrame(fitToViewport);
     if (options.mode !== "embedded" || !panel.value || !resizeGrip.value) return;
     disposeResize = installResizeGrip(resizeGrip.value, {
@@ -108,6 +161,9 @@ export function useFloatingWindow(options: {
   });
   onBeforeUnmount(() => {
     window.removeEventListener("resize", fitToViewport);
+    window.removeEventListener("pagehide", persistPlacement);
+    if (persistTimer) clearTimeout(persistTimer);
+    persistPlacement();
     disposeResize?.();
   });
   watch(options.visible, (visible) => {
