@@ -134,9 +134,10 @@ export function createNativeTravelHost(
     updateGameState(next) {
       state.value = next;
       const current = attempt.value;
-      if (current.status === "loading"
+      const arrived = current.status !== "idle"
         && next.status === "ready"
-        && next.mapId === current.mapId
+        && next.mapId === current.mapId;
+      if (arrived
         && next.characterKey !== null
         && unidentifiedOriginMapId !== null) {
         historyObservation.record({
@@ -146,6 +147,10 @@ export function createNativeTravelHost(
       }
       historyObservation.update(next);
       if (current.status === "idle") return;
+      if (arrived) {
+        clearAttempt();
+        return;
+      }
       if (next.status === "waiting" && next.reason === "loading") {
         window.clearTimeout(attemptTimer);
         attempt.value = { status: "loading", mapId: current.mapId };
@@ -170,7 +175,6 @@ export function createNativeTravelHost(
         return;
       }
       clearAttempt();
-      if (next.mapId !== current.mapId) return;
     },
     dispose() {
       historyObservation.dispose();

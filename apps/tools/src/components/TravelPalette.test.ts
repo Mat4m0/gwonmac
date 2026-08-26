@@ -146,6 +146,48 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
+  it("closes after submitting a destination", async () => {
+    const { wrapper } = fixture({ synonyms: [{ term: "daily run", mapId: 480 }] });
+    await flushPromises();
+
+    await wrapper.get("#travel-search-input").setValue("daily");
+    await wrapper.get('[role="option"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.emitted("close")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("keeps the palette open when destination submission is refused", async () => {
+    const test = fixture({ synonyms: [{ term: "daily run", mapId: 480 }] });
+    test.travel.mockRejectedValueOnce(new Error("travel refused"));
+    await flushPromises();
+
+    await test.wrapper.get("#travel-search-input").setValue("daily");
+    await test.wrapper.get('[role="option"]').trigger("click");
+    await flushPromises();
+
+    expect(test.wrapper.emitted("close")).toBeUndefined();
+    test.wrapper.unmount();
+  });
+
+  it("tabs from search through recents and favorites before header actions", async () => {
+    const { wrapper } = fixture({ history: [449] });
+    await flushPromises();
+    const controls = wrapper.findAll("input, button").filter(({ element }) =>
+      !(element as HTMLInputElement | HTMLButtonElement).disabled
+      && element.getAttribute("tabindex") !== "-1"
+    );
+
+    expect(controls[0]?.attributes("aria-label")).toBe("Destination or search phrase");
+    expect(controls[1]?.classes()).toContain("travel-recent");
+    expect(controls.slice(2, -2).every((control) =>
+      control.classes().includes("travel-favorite"))).toBe(true);
+    expect(controls.at(-2)?.attributes("aria-label")).toBe("Customize Travel");
+    expect(controls.at(-1)?.attributes("aria-label")).toBe("Close Quick Travel");
+    wrapper.unmount();
+  });
+
   it("shows at most six per-character recents without repeating the current map", async () => {
     const { wrapper } = fixture({ history: [55, 449, 81, 194, 642, 857, 248, 15] });
     await flushPromises();
@@ -345,6 +387,7 @@ describe("TravelPalette", () => {
     expect(rejected.wrapper.text()).toContain(
       "Travel could not start. Check Guild Wars, then try again.",
     );
+    expect(rejected.wrapper.emitted("close")).toBeUndefined();
     rejected.wrapper.unmount();
 
   });

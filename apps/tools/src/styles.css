@@ -33,12 +33,23 @@
 .travel-search {
   display: grid;
   min-height: 56px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
   flex: none;
   align-items: center;
-  gap: var(--ui-space-2);
-  padding: var(--ui-space-2) var(--ui-space-3);
+  padding: var(--ui-space-2) calc(var(--ui-space-3) + 84px) var(--ui-space-2) var(--ui-space-3);
   border-bottom: 1px solid var(--ui-line);
+}
+
+/* Keep these controls in the visual header while their later DOM position
+ * follows the task's natural keyboard order. */
+.travel-header-actions {
+  position: absolute;
+  top: 0;
+  right: var(--ui-space-3);
+  display: flex;
+  height: 56px;
+  align-items: center;
+  gap: var(--ui-space-2);
 }
 
 .travel-search-icon {
@@ -96,7 +107,7 @@
   box-shadow: none;
 }
 
-.travel-search .travel-close {
+.travel-header-actions .travel-close {
   width: 34px;
   min-width: 34px;
   min-height: 34px;
@@ -106,7 +117,7 @@
   box-shadow: none;
 }
 
-.travel-search .travel-close:hover:not(:disabled) {
+.travel-header-actions .travel-close:hover:not(:disabled) {
   background: var(--ui-hover);
 }
 
@@ -451,7 +462,11 @@
 
 @media (max-width: 560px) {
   .travel-palette { top: 16px; max-height: calc(100vh - 32px); }
-  .travel-search { min-height: 54px; padding-inline: var(--ui-space-3); }
+  .travel-search {
+    min-height: 54px;
+    padding-inline: var(--ui-space-3) calc(var(--ui-space-3) + 84px);
+  }
+  .travel-header-actions { height: 54px; }
   .travel-notice { margin-inline: var(--ui-space-3); }
   .travel-body { padding: var(--ui-space-3); }
   .travel-recent-grid { grid-template-columns: 1fr; }
