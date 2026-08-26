@@ -11,8 +11,6 @@ import { ENHANCEMENT_CAPABILITY_FIELDS } from
   "../../src/shared/enhancement-contracts.js";
 import { LOCAL_FEATURE_INVARIANTS } from
   "../../src/main/certification/local-client-verification-contract.js";
-import { ENHANCEMENT_BUILDS } from
-  "../../src/main/certification/enhancement-builds.js";
 
 const sha256 = (value: Uint8Array | string): string =>
   createHash("sha256").update(value).digest("hex");
@@ -24,11 +22,10 @@ test("retains bounded generation evidence without paths or raw addresses", async
   const wasmDigest = sha256(wasm);
   const jsDigest = sha256(js);
   const outputDigest = sha256("output");
-  const authoredBuild = ENHANCEMENT_BUILDS[0]!;
-  const fileOutputDigest = authoredBuild.sha256;
-  const feature601Input = authoredBuild.outputSha256["features-601"]!;
+  const fileOutputDigest = sha256("file-output");
+  const feature601Input = sha256("features-601-input");
   const feature601DoubleClick = sha256("features-601-double-click");
-  const feature7ffInput = authoredBuild.outputSha256["features-7ff"]!;
+  const feature7ffInput = sha256("features-7ff-input");
   const feature7ffDoubleClick = sha256("features-7ff-double-click");
   const generation = sha256("generation");
   const commit = "a".repeat(40);
@@ -188,16 +185,6 @@ test("retains bounded generation evidence without paths or raw addresses", async
       },
       extendedMemory,
       reason: "selected-input-mismatch",
-    }, {
-      doubleClick: {
-        ...doubleClick,
-        chains: doubleClick.chains.map((chain) =>
-          chain.profile === "features-601"
-            ? { ...chain, inputSha256: sha256("wrong-profile-input") }
-            : chain),
-      },
-      extendedMemory,
-      reason: "profile-input-mismatch",
     }];
     for (const refusal of refusalCases) {
       await Promise.all([

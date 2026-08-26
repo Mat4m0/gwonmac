@@ -12,16 +12,14 @@ import { readFile, stat } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import {
   ENHANCEMENT_CAPABILITY_FIELDS,
+  enhancementCapabilityProfile,
   isEnhancementCapabilityProfile,
+  RELEASE_ENHANCEMENT_CAPABILITIES,
 } from "../src/shared/enhancement-contracts.js";
 import {
   LOCAL_FEATURE_INVARIANTS,
   LOCAL_VERIFICATION_REASONS,
 } from "../src/main/certification/local-client-verification-contract.js";
-import {
-  ENHANCEMENT_BUILDS,
-  enhancementProfilesForBuild,
-} from "../src/main/certification/enhancement-builds.js";
 import { SEMANTIC_VERIFIER_ABI } from
   "../src/main/certification/semantic-proof.js";
 import { isDigest } from "../src/shared/digest.js";
@@ -417,11 +415,6 @@ function generationOutcome(
   if (baseInput !== fileVerdict.outputSha256) {
     return Object.freeze({ status: "investigation", reason: "selected-input-mismatch" });
   }
-  const authoredBuilds = ENHANCEMENT_BUILDS.filter((build) => build.sha256 === baseInput);
-  if (authoredBuilds.length !== 1) {
-    return Object.freeze({ status: "investigation", reason: "authored-build-missing" });
-  }
-  const authoredBuild = authoredBuilds[0]!;
   const doubleClickProfiles = doubleClickChains
     .map((chain) => chain.profile)
     .filter(isEnhancementCapabilityProfile)
@@ -430,20 +423,18 @@ function generationOutcome(
     .map((variant) => variant.profile)
     .filter(isEnhancementCapabilityProfile)
     .sort();
-  const expectedProfiles = [...enhancementProfilesForBuild(authoredBuild)].sort();
-  const matchesAuthoredProfiles = expectedProfiles.length === doubleClickProfiles.length
+  const expectedProfiles = Object.values(RELEASE_ENHANCEMENT_CAPABILITIES)
+    .map(enhancementCapabilityProfile)
+    .filter((profile): profile is NonNullable<typeof profile> => profile !== null)
+    .sort();
+  const matchesExpectedProfiles = expectedProfiles.length === doubleClickProfiles.length
     && expectedProfiles.every(
       (profile, index) => profile === doubleClickProfiles[index],
     );
   if (doubleClickProfiles.length !== memoryProfiles.length
     || doubleClickProfiles.some((profile, index) => profile !== memoryProfiles[index])
-    || !matchesAuthoredProfiles) {
+    || !matchesExpectedProfiles) {
     return Object.freeze({ status: "investigation", reason: "profile-set-mismatch" });
-  }
-  if (doubleClickChains.some((chain) =>
-    isEnhancementCapabilityProfile(chain.profile)
-      && authoredBuild.outputSha256[chain.profile] !== chain.inputSha256)) {
-    return Object.freeze({ status: "investigation", reason: "profile-input-mismatch" });
   }
   const memoryByProfile = new Map(memoryVariants.map((variant) => [
     variant.profile,

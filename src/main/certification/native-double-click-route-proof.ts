@@ -1,4 +1,7 @@
-/** Feature-owned semantic proof for the client's complete native mouse route. */
+/**
+ * Feature-owned semantic proof for the client's complete native mouse route.
+ * It locates the bounded callback-to-consumer graph without build-local indexes.
+ */
 import { createHash } from "node:crypto";
 import type {
   DecodedFunction,

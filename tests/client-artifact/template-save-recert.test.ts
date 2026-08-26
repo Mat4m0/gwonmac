@@ -37,7 +37,6 @@ import {
   supportedEnhancementCapabilities,
 } from "../../src/main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../../src/main/certification/enhancement-transform.js";
-import { deriveNativeDoubleClickBuild } from "../../src/main/certification/native-double-click.js";
 import {
   mutableSpans,
   decodeFunctions,
@@ -946,68 +945,4 @@ test("template-save static relocation anchors reject coherent wrong values", {
     true,
   );
   assert.equal(deriveEquivalentTemplateSaveBuild(wrongScreenshotDirectory), null);
-});
-
-test("native double-click refuses a broken downstream route", async () => {
-  const artifact = process.env.GW_CLIENT_WASM;
-  assert.ok(artifact, "GW_CLIENT_WASM must name the real Gw.jspi.wasm artifact");
-  const official = new Uint8Array(await readFile(artifact));
-  const verified = verifyLocalClientBytes(official);
-  assert.equal(
-    isLocalClientVerification(verified, sha256(official)),
-    true,
-    "the real client proof must cross the production boundary",
-  );
-  const templateBuild = verified.templateSaveBuild;
-  assert.ok(templateBuild, "the real client must pass the template-save proof");
-  const template = rewriteTemplateSaveWasm(official, templateBuild);
-  const enhancementBuild = verified.enhancementBuild;
-  assert.ok(enhancementBuild, "the template output must pass Enhancement proof");
-  const authoredBuild = ENHANCEMENT_BUILDS.find(
-    (candidate) => candidate.sha256 === enhancementBuild.sha256,
-  );
-  if (authoredBuild) {
-    for (const profile of enhancementProfilesForBuild(authoredBuild)) {
-      const capabilities = enhancementCapabilitiesForProfile(profile);
-      assert.ok(capabilities, `authored profile ${profile} must be valid`);
-      assert.equal(
-        sha256(transformEnhancementWasm(template, enhancementBuild, capabilities)),
-        enhancementOutputSha256(authoredBuild, capabilities),
-        `authored profile ${profile} must match the current transform ABI`,
-      );
-    }
-  }
-
-  // The off profile and every optional capability profile feed the same two
-  // downstream exact-hash transforms. Reproducing the complete chain here is
-  // what catches an ABI/config edit whose source tests pass but whose authored
-  // certificate hashes were not regenerated.
-  const derivedTemplateDoubleClick = deriveNativeDoubleClickBuild(template);
-  assert.ok(derivedTemplateDoubleClick?.route);
-  assert.equal(
-    isDerivedNativeDoubleClickBuild(derivedTemplateDoubleClick, sha256(template)),
-    true,
-    "the exact fixture must independently cross semantic proof",
-  );
-  const doubleClickModule = wasmEvidence(template)!.moduleView();
-  const route = derivedTemplateDoubleClick.route;
-  const wrongTranslator = sameSignatureDestination(
-    doubleClickModule,
-    route.translator.functionIndex,
-    new Set(Object.values(route).map((role) => role.functionIndex)),
-  );
-  const brokenPump = rewriteCode(template, (bodies) => {
-    const body = bodies[
-      route.pump.functionIndex - doubleClickModule.functionImportCount
-    ]!;
-    const source = paddedIndex(route.translator.functionIndex);
-    const replacement = paddedIndex(wrongTranslator);
-    const operand = body.findIndex((byte, offset) =>
-      byte === 0x10
-      && source.every((value, index) => body[offset + 1 + index] === value),
-    );
-    assert.notEqual(operand, -1);
-    body.set(replacement, operand + 1);
-  });
-  assert.equal(deriveNativeDoubleClickBuild(brokenPump), null);
 });

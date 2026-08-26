@@ -27,9 +27,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeAtomic } from "../main/core/atomic-file.js";
 import {
-  ENHANCEMENT_BUILDS,
   enhancementOutputSha256,
-  enhancementProfilesForBuild,
   findEnhancementBuild,
   supportedEnhancementCapabilities,
 } from "../main/certification/enhancement-builds.js";
@@ -48,7 +46,8 @@ import {
   ENHANCEMENT_CAPABILITY_PRESETS,
   ENHANCEMENT_CAPABILITY_FIELDS,
   ENHANCEMENT_TRANSFORM_ABI,
-  enhancementCapabilitiesForProfile,
+  RELEASE_ENHANCEMENT_CAPABILITIES,
+  enhancementCapabilityProfile,
 } from "../shared/enhancement-contracts.js";
 import {
   currentMessageAnchors,
@@ -143,11 +142,11 @@ async function verify(argv: readonly string[]): Promise<void> {
   const capabilities = result.enhancementBuild
     ? supportedEnhancementCapabilities(result.enhancementBuild)
     : null;
-  const features = result.featureVerdicts;
-  const featureStatuses = features === null
+  const featureVerdicts = result.featureVerdicts;
+  const features = featureVerdicts === null
     ? null
     : Object.fromEntries(ENHANCEMENT_CAPABILITY_FIELDS.map((feature) => {
-        const verdict = features[feature];
+        const verdict = featureVerdicts[feature];
         return [feature, verdict.status === "ambiguous"
           ? {
               status: verdict.status,
@@ -163,14 +162,14 @@ async function verify(argv: readonly string[]): Promise<void> {
     fileVerdict: result.fileVerdict,
     templateSaving: result.templateSaveBuild !== null,
     verifierAbi: result.verifierAbi,
-    features: featureStatuses,
+    features,
     capabilities,
     reasons: result.reasons,
   })}\n`);
   if (
     result.templateSaveBuild === null
-    || featureStatuses === null
-    || Object.values(featureStatuses).some(({ status }) => status !== "proved")
+    || features === null
+    || Object.values(features).some(({ status }) => status !== "proved")
   ) {
     process.exitCode = 1;
   }
@@ -337,22 +336,17 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
   const predecessors: Array<[string, Uint8Array]> = [
     [templateBuild ? "file-compatible" : "official", selectedInput],
   ];
-  const enhancementBuild = verification.enhancementBuild;
-  if (enhancementBuild) {
-    const authoredBuild = ENHANCEMENT_BUILDS.find(
-      (candidate) => candidate.sha256 === enhancementBuild.sha256,
-    );
-    if (!authoredBuild) throw new Error("verified Enhancement build has no authored profile row");
-    for (const profile of enhancementProfilesForBuild(authoredBuild)) {
-      const capabilities = enhancementCapabilitiesForProfile(profile);
-      if (!capabilities) throw new Error(`invalid certified profile ${profile}`);
-      const profileBuild = verifyLocalClientBytes(official, capabilities).enhancementBuild;
-      if (!profileBuild) throw new Error(`semantic verification refused profile ${profile}`);
-      predecessors.push([
-        profile,
-        transformEnhancementWasm(selectedInput, profileBuild, capabilities),
-      ]);
-    }
+  for (const [launch, capabilities] of Object.entries(
+    RELEASE_ENHANCEMENT_CAPABILITIES,
+  )) {
+    const profile = enhancementCapabilityProfile(capabilities);
+    if (!profile) throw new Error(`invalid ${launch} release capability set`);
+    const profileBuild = verifyLocalClientBytes(official, capabilities).enhancementBuild;
+    if (!profileBuild) throw new Error(`semantic verification refused profile ${profile}`);
+    predecessors.push([
+      profile,
+      transformEnhancementWasm(selectedInput, profileBuild, capabilities),
+    ]);
   }
   const chains: Array<Readonly<{
     profile: string;

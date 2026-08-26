@@ -25,12 +25,9 @@ import {
   rewriteWithBuild,
 } from "../src/main/certification/native-double-click.js";
 import {
-  ENHANCEMENT_BUILDS,
-  enhancementProfilesForBuild,
-} from "../src/main/certification/enhancement-builds.js";
-import {
-  enhancementCapabilitiesForProfile,
+  enhancementCapabilityProfile,
   NO_ENHANCEMENT_CAPABILITIES,
+  RELEASE_ENHANCEMENT_CAPABILITIES,
   type EnhancementCapabilities,
 } from "../src/shared/enhancement-contracts.js";
 import {
@@ -82,13 +79,11 @@ function withNativeDoubleClick(input: Uint8Array): Uint8Array {
 
 const predecessors = new Map<string, Uint8Array>();
 predecessors.set("off", withNativeDoubleClick(templateWasm));
-const profileBaseline = ENHANCEMENT_BUILDS.find(
-  (candidate) => candidate.sha256 === enhancementBuild.sha256,
-);
-if (!profileBaseline) throw new Error("Enhancement profile fixture is missing");
-for (const profile of enhancementProfilesForBuild(profileBaseline)) {
-  const capabilities = enhancementCapabilitiesForProfile(profile);
-  if (!capabilities) throw new Error(`invalid certified profile ${profile}`);
+for (const [launch, capabilities] of Object.entries(
+  RELEASE_ENHANCEMENT_CAPABILITIES,
+)) {
+  const profile = enhancementCapabilityProfile(capabilities);
+  if (!profile) throw new Error(`invalid ${launch} release capability set`);
   const profileVerification = verifyLocalClientBytes(officialWasm, capabilities);
   const profileBuild = profileVerification.enhancementBuild;
   if (!profileBuild) {
@@ -182,9 +177,11 @@ try {
   const selections: Array<readonly [string, EnhancementCapabilities]> = [
     ["off", NO_ENHANCEMENT_CAPABILITIES],
   ];
-  for (const profile of enhancementProfilesForBuild(profileBaseline)) {
-    const capabilities = enhancementCapabilitiesForProfile(profile);
-    if (!capabilities) throw new Error(`invalid certified profile ${profile}`);
+  for (const [launch, capabilities] of Object.entries(
+    RELEASE_ENHANCEMENT_CAPABILITIES,
+  )) {
+    const profile = enhancementCapabilityProfile(capabilities);
+    if (!profile) throw new Error(`invalid ${launch} release capability set`);
     selections.push([profile, capabilities]);
   }
   for (const [profile, capabilities] of selections) {

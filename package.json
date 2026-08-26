@@ -31,7 +31,7 @@
     "lint": "eslint .",
     "check:links": "node --import ./scripts/ts-hook.mjs scripts/check-markdown-links.ts",
     "test:unit": "node --import ./scripts/ts-hook.mjs --test --test-timeout=60000 tests/unit/*.ts",
-    "test:client-artifact": "node --import ./scripts/ts-hook.mjs --test --test-timeout=60000 tests/client-artifact/*.ts",
+    "test:client-artifact": "node --max-old-space-size=8192 --import ./scripts/ts-hook.mjs --test --test-concurrency=1 --test-timeout=60000 tests/client-artifact/*.ts",
     "test:integration": "node --import ./scripts/ts-hook.mjs --test --test-timeout=60000 tests/integration/*.ts",
     "test:electron": "playwright test --config=tests/electron/playwright.config.ts",
     "test:packaged": "node --import ./scripts/ts-hook.mjs tests/packaged-smoke.ts && node --import ./scripts/ts-hook.mjs tests/packaged-enhancement-runtime.ts",

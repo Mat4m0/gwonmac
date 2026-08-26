@@ -275,6 +275,12 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   all: capabilitiesFromMask(0x7ff),
 });
 
+/** The two capability sets shipped by Core and Tools release launches. */
+export const RELEASE_ENHANCEMENT_CAPABILITIES = Object.freeze({
+  core: ENHANCEMENT_CAPABILITY_PRESETS.core,
+  tools: ENHANCEMENT_CAPABILITY_PRESETS.all,
+});
+
 export {
   ENHANCEMENT_CONFIG_WORD_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
@@ -307,9 +313,9 @@ export function enhancementCapabilitiesFor(
   switch (program) {
     case "none":
       return selection.tools
-        ? ENHANCEMENT_CAPABILITY_PRESETS.all
+        ? RELEASE_ENHANCEMENT_CAPABILITIES.tools
         : selection.nativeCursor
-          ? ENHANCEMENT_CAPABILITY_PRESETS.core
+          ? RELEASE_ENHANCEMENT_CAPABILITIES.core
           : NO_ENHANCEMENT_CAPABILITIES;
     case "cursor-observer": return ENHANCEMENT_CAPABILITY_PRESETS.cursor;
     case "target-observer": return ENHANCEMENT_CAPABILITY_PRESETS.target;
