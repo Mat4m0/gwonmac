@@ -36,14 +36,10 @@ async function clickEdit(
   app: ElectronApplication,
   id: (typeof EDIT_ITEMS)[keyof typeof EDIT_ITEMS],
 ): Promise<void> {
-  await app.evaluate(({ app: electronApp, BrowserWindow, Menu }, itemId) => {
+  await app.evaluate(({ BrowserWindow, Menu }, itemId) => {
     const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
     const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
     if (!win || !item?.click) throw new Error(`${itemId} is unavailable`);
-    win.show();
-    electronApp.focus({ steal: true });
-    win.focus();
-    win.webContents.focus();
     item.click(item, win, {} as Electron.KeyboardEvent);
   }, id);
 }

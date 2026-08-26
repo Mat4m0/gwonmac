@@ -201,10 +201,17 @@ describe("ToolsApp shell and library", () => {
 
   it("exports a build code and writes it through the host capability", async () => {
     let copied = "";
+    let finishPublish!: (result: { fileName: string; location: string }) => void;
+    const publication = new Promise<{ fileName: string; location: string }>(
+      (resolve) => {
+        finishPublish = resolve;
+      },
+    );
     const demo = createDemoHost();
     const wrapper = await workbench({
       ...demo,
       writeClipboard: async (text) => { copied = text; },
+      publishBuild: async () => publication,
     });
     await wrapper.get('[role="tab"]:nth-child(2)').trigger("click");
     await wrapper.findAll(".library-row")[0]!.trigger("click");
@@ -227,7 +234,8 @@ describe("ToolsApp shell and library", () => {
       .findAll(".build-export .ui-button")
       .find((button) => button.text().includes("Save to Guild Wars"))!
       .trigger("click");
-    await new Promise((resolve) => setTimeout(resolve, 220));
+    finishPublish({ fileName: "Test Build.txt", location: "Templates/Skills" });
+    await flushPromises();
     expect(wrapper.text()).toContain("Template written:");
     expect(wrapper.text()).toContain("Load Template");
     wrapper.unmount();

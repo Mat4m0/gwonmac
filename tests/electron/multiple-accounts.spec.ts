@@ -687,36 +687,62 @@ test("Multi isolates profile windows and Copy Reload Trace", async () => {
     await expect(altGame.locator("#memory-notice")).toBeHidden();
     await expect(nonTargetGame.locator("#memory-notice")).toBeHidden();
 
-    const clickMenuForGame = (
+    const focusGame = (
       title: string,
-      id: string,
-    ) => fixture.app.evaluate(async ({ app, BrowserWindow, Menu }, request) => {
-        const win = BrowserWindow.getAllWindows().find((candidate) =>
-          candidate.getTitle() === request.title);
-        if (!win) throw new Error(`${request.title} is unavailable`);
-        const focused = new Promise<void>((resolve, reject) => {
-          if (win.isFocused()) {
-            resolve();
-            return;
+    ) => fixture.app.evaluate(async ({ app, BrowserWindow }, request) => {
+      const win = BrowserWindow.getAllWindows().find((candidate) =>
+        candidate.getTitle() === request);
+      if (!win) throw new Error(`${request} is unavailable`);
+      const focused = new Promise<void>((resolve, reject) => {
+        if (win.isFocused()) {
+          resolve();
+          return;
+        }
+        const timeout = setTimeout(() => {
+          win.removeListener("focus", onFocus);
+          reject(new Error(`${request} did not receive focus`));
+        }, 5_000);
+        const onFocus = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+        win.once("focus", onFocus);
+      });
+      win.show();
+      app.focus({ steal: true });
+      win.focus();
+      await focused;
+    }, title);
+    const clickMenuForGame = async (title: string, id: string) => {
+      await fixture.app.evaluate(
+        async ({ app, BrowserWindow, Menu }, request) => {
+          const win = BrowserWindow.getAllWindows().find((candidate) =>
+            candidate.getTitle() === request.title);
+          if (!win) throw new Error(`${request.title} is unavailable`);
+          if (!win.isFocused()) {
+            const focused = new Promise<void>((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                win.removeListener("focus", onFocus);
+                reject(new Error(`${request.title} did not receive focus`));
+              }, 5_000);
+              const onFocus = () => {
+                clearTimeout(timeout);
+                resolve();
+              };
+              win.once("focus", onFocus);
+            });
+            win.show();
+            app.focus({ steal: true });
+            win.focus();
+            await focused;
           }
-          const timeout = setTimeout(() => {
-            win.removeListener("focus", onFocus);
-            reject(new Error(`${request.title} did not receive focus`));
-          }, 5_000);
-          const onFocus = () => {
-            clearTimeout(timeout);
-            resolve();
-          };
-          win.once("focus", onFocus);
-        });
-        win.show();
-        app.focus({ steal: true });
-        win.focus();
-        await focused;
-      const item = Menu.getApplicationMenu()?.getMenuItemById(request.id);
-      if (!item?.click) throw new Error(`${request.id} menu item is unavailable`);
-      item.click(item, win, {} as Electron.KeyboardEvent);
-    }, { title, id });
+          const item = Menu.getApplicationMenu()?.getMenuItemById(request.id);
+          if (!item?.click) throw new Error(`${request.id} menu item is unavailable`);
+          item.click(item, win, {} as Electron.KeyboardEvent);
+        },
+        { title, id },
+      );
+    };
 
     await fixture.app.evaluate(({ BrowserWindow, dialog }) => {
       Object.defineProperty(dialog, "showMessageBox", {
@@ -743,26 +769,25 @@ test("Multi isolates profile windows and Copy Reload Trace", async () => {
     expect(await fixture.app.evaluate(() => globalThis.__runtimeDialogParent))
       .toBe("Guild Wars Reforged — Alt");
 
-    await Promise.all([
-      altGame.evaluate(() => {
-        const field = document.getElementById("osk-input-text");
-        if (!(field instanceof HTMLInputElement)) throw new Error("Alt proxy missing");
-        field.type = "text";
-        field.value = "alt selection";
-        field.focus();
-        field.setSelectionRange(0, 3);
-        (window.Module as { oskActiveInput?: Element | null }).oskActiveInput = field;
-      }),
-      nonTargetGame.evaluate(() => {
-        const field = document.getElementById("osk-input-text");
-        if (!(field instanceof HTMLInputElement)) throw new Error("Primary proxy missing");
-        field.type = "text";
-        field.value = "primary selection";
-        field.focus();
-        field.setSelectionRange(0, 7);
-        (window.Module as { oskActiveInput?: Element | null }).oskActiveInput = field;
-      }),
-    ]);
+    await focusGame("Guild Wars Reforged — Alt");
+    await nonTargetGame.evaluate(() => {
+      const field = document.getElementById("osk-input-text");
+      if (!(field instanceof HTMLInputElement)) throw new Error("Primary proxy missing");
+      field.type = "text";
+      field.value = "primary selection";
+      field.focus();
+      field.setSelectionRange(0, 7);
+      (window.Module as { oskActiveInput?: Element | null }).oskActiveInput = field;
+    });
+    await altGame.evaluate(() => {
+      const field = document.getElementById("osk-input-text");
+      if (!(field instanceof HTMLInputElement)) throw new Error("Alt proxy missing");
+      field.type = "text";
+      field.value = "alt selection";
+      field.focus();
+      field.setSelectionRange(0, 3);
+      (window.Module as { oskActiveInput?: Element | null }).oskActiveInput = field;
+    });
     const clipboardBeforeFocusedEdit = await fixture.app.evaluate(
       ({ clipboard }) => clipboard.readText(),
     );

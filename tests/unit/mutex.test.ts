@@ -198,19 +198,23 @@ describe("queue drain", () => {
 
 /**
  * The shape every settings write in `main.ts` has: read the file, merge a
- * patch, write the whole object back. `holdMs` stands in for the work between
- * the read and the write, and decides which of two unserialised patches lands
- * last rather than leaving that to the filesystem.
+ * patch, write the whole object back. Hooks let the race test establish an
+ * exact order without asking the scheduler to make one operation slower.
  */
 function patchSettings(
   path: string,
   patch: AppSettingsPatch,
-  holdMs: number,
+  hooks: {
+    afterRead?: () => Promise<void>;
+    afterSave?: () => void;
+  } = {},
 ): () => Promise<AppSettings> {
   return async () => {
     const current = await loadSettings(path);
-    await sleep(holdMs);
-    return saveSettings(path, { ...current, ...patch });
+    await hooks.afterRead?.();
+    const saved = await saveSettings(path, { ...current, ...patch });
+    hooks.afterSave?.();
+    return saved;
   };
 }
 
@@ -220,8 +224,8 @@ describe("settings write queue", () => {
     const lock = new Mutex();
 
     await Promise.all([
-      lock.run(patchSettings(path, { renderScale: 1 }, 40)),
-      lock.run(patchSettings(path, { showDiagnostics: true }, 0)),
+      lock.run(patchSettings(path, { renderScale: 1 })),
+      lock.run(patchSettings(path, { showDiagnostics: true })),
     ]);
 
     const settings = await loadSettings(path);
@@ -231,14 +235,22 @@ describe("settings write queue", () => {
 
   it("drops a patch when the same writes are not serialised", async () => {
     const path = join(await scratch(), "settings.json");
+    let releaseFirst!: () => void;
+    const secondSaved = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
 
     // The same two patches without the lock. Both read before either writes,
     // so the slower one merges onto a value that never carried the faster
     // one's field and then writes the whole object over it. A player who
     // toggles two settings in the same moment keeps one of them.
     await Promise.all([
-      patchSettings(path, { renderScale: 1 }, 40)(),
-      patchSettings(path, { showDiagnostics: true }, 0)(),
+      patchSettings(path, { renderScale: 1 }, {
+        afterRead: async () => secondSaved,
+      })(),
+      patchSettings(path, { showDiagnostics: true }, {
+        afterSave: releaseFirst,
+      })(),
     ]);
 
     const settings = await loadSettings(path);
@@ -253,7 +265,7 @@ describe("settings write queue", () => {
     const failed = lock.run(async () => {
       throw new Error("settings volume is read-only");
     });
-    const queued = lock.run(patchSettings(path, { renderScale: 1.5 }, 0));
+    const queued = lock.run(patchSettings(path, { renderScale: 1.5 }));
 
     await assert.rejects(failed, /read-only/);
     await queued;
