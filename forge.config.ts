@@ -87,6 +87,13 @@ const config: ForgeConfig = {
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
     },
     // Forge's own packaged output is out/; compiled JS lives in build/.
+    // The explicit filter below is the package boundary. Forge's npm pruner
+    // cannot walk pnpm's development symlinks once the one production module
+    // is admitted, and it would only duplicate that stricter allowlist.
+    prune: false,
+    // pnpm exposes direct dependencies as symlinks into its private store.
+    // A release archive must contain the dependency, not that workspace link.
+    derefSymlinks: true,
     ignore: ignorePackageFile,
   },
   rebuildConfig: {},

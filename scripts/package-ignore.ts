@@ -3,6 +3,14 @@ export function ignorePackageFile(file: string): boolean {
   if (!file || file === "/") return false;
   const p = file.startsWith("/") ? file : `/${file}`;
   if (p === "/package.json") return false;
+  // The main process imports the production WebSocket client at runtime.
+  // Forge can classify `ws` as a production module only after node_modules is
+  // admitted to the copy walk, and the project filter must admit its files.
+  if (
+    p === "/node_modules"
+    || p === "/node_modules/ws"
+    || p.startsWith("/node_modules/ws/")
+  ) return false;
   if (p === "/build" || p === "/build/main" || p === "/build/shared") {
     return false;
   }

@@ -1,5 +1,5 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
-import { readdirSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -16,6 +16,9 @@ export const PRELOAD_ENTRIES = Object.freeze([
 ]);
 
 export const REQUIRED_PACKAGE_FILES = Object.freeze([
+  "/node_modules/ws/package.json",
+  "/node_modules/ws/wrapper.mjs",
+  "/node_modules/ws/lib/websocket.js",
   "/build/native/host.node",
   "/build/renderer/companion-kernel.wasm",
   "/build/renderer/enhancements.js",
@@ -66,7 +69,7 @@ export function assertNoDeveloperPackageFiles(inventory: PackageInventory): void
 
   for (const file of inventory) {
     if (
-      !/^\/(?:build\/(?:main|shared|renderer|preload|native)\/|package\.json$)/u.test(
+      !/^\/(?:build\/(?:main|shared|renderer|preload|native)\/|node_modules\/ws\/|package\.json$)/u.test(
         file,
       )
     ) {
@@ -86,7 +89,12 @@ export function forgePackageFiles(root: string, ignore: PackagerIgnore): string[
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const name = `${prefix}/${entry.name}`;
       if (ignore(name)) continue;
-      if (entry.isDirectory()) {
+      // pnpm exposes direct dependencies as symlinks. Electron Packager
+      // dereferences them, so this proof must model the same directory walk.
+      const isDirectory = entry.isDirectory()
+        || (entry.isSymbolicLink()
+          && statSync(path.join(directory, entry.name)).isDirectory());
+      if (isDirectory) {
         files.push(...walk(path.join(directory, entry.name), name));
       } else {
         files.push(name);

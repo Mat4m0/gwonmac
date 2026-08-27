@@ -185,7 +185,9 @@ const userData = await mkdtemp(path.join(tmpdir(), "gw-packaged-smoke-"));
 // profile opts out so this test remains network-independent for every channel.
 await writeFile(
   path.join(userData, "settings.json"),
-  JSON.stringify({ autoCheckUpdates: false }),
+  // Tools dynamically imports its main-process runtime. Keep it enabled so
+  // this smoke proves that runtime's production dependencies load too.
+  JSON.stringify({ autoCheckUpdates: false, gwonmacTools: true }),
   { mode: 0o600 },
 );
 await writeFile(path.join(userData, "credentials.bin"), "retired-credentials");
