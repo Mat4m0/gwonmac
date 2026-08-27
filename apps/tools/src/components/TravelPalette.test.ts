@@ -219,7 +219,10 @@ describe("TravelPalette", () => {
   });
 
   it("shows every unlocked destination before typing when the catalogue is small", async () => {
-    const { wrapper, state, travel } = fixture({ history: [449, 55] });
+    const shortcuts: TravelShortcuts = [
+      { mapId: 164 }, null, null, null, null, null, null, null, null,
+    ];
+    const { wrapper, state, travel } = fixture({ history: [164, 165], shortcuts });
     const unlockedMapWords = Array.from({ length: 28 }, () => 0);
     for (const mapId of [148, 164, 165, 166, 163, 778]) {
       unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
@@ -232,25 +235,38 @@ describe("TravelPalette", () => {
     };
     await flushPromises();
 
-    expect(wrapper.get("#travel-available-title").text()).toBe("Available");
+    expect(wrapper.get("#travel-available-title").text()).toBe("Available destinations");
     expect(wrapper.findAll(".travel-available .travel-recent")).toHaveLength(6);
-    expect(wrapper.get(".travel-available").text()).toContain("All unlocked destinations");
+    expect(wrapper.get(".travel-available").text()).toContain("6 unlocked");
     expect(wrapper.get(".travel-available").text()).toContain("Ascalon City (pre-Searing)");
     expect(wrapper.get(".travel-available").text()).toContain("Piken Square (pre-Searing)");
     expect(wrapper.get(".travel-available").text()).toContain("Current");
+    expect(wrapper.get('[aria-label="Travel to Ashford Abbey, shortcut 1, recent"]').text()).toContain("1Recent");
     expect(wrapper.get('[aria-current="location"]').attributes("disabled")).toBeDefined();
     expect(wrapper.find(".travel-history").exists()).toBe(false);
     expect(wrapper.find(".travel-favorites").exists()).toBe(false);
+    expect(wrapper.findAll(".travel-available strong").map((name) => name.text())).toEqual([
+      "Ascalon City (pre-Searing)",
+      "Ashford Abbey",
+      "Foible's Fair",
+      "Fort Ranik (pre-Searing)",
+      "Piken Square (pre-Searing)",
+      "The Barradin Estate",
+    ]);
 
-    await wrapper.get('[aria-label="Travel to Ashford Abbey"]').trigger("click");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
+    expect(wrapper.get('[role="combobox"]').attributes("aria-controls")).toBeUndefined();
+    expect(wrapper.get(".travel-key-hints").text()).toContain("back");
+    await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
     expect(travel).toHaveBeenCalledWith({ mapId: 164 });
     wrapper.unmount();
   });
 
-  it("keeps Recent and Favorites when more than twelve destinations are unlocked", async () => {
+  it("keeps Recent and Favorites when more than ten destinations are unlocked", async () => {
     const { wrapper, state } = fixture({ history: [81] });
     const unlockedMapWords = Array.from({ length: 28 }, () => 0);
-    for (const mapId of [148, 164, 165, 166, 163, 778, 81, 55, 20, 49, 109, 85, 133]) {
+    for (const mapId of [148, 164, 165, 166, 163, 778, 81, 55, 20, 49, 109]) {
       unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
     }
     state.value = {

@@ -214,6 +214,17 @@
 .travel-recent svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .travel-palette .travel-recent[data-current] { opacity: 1; }
 .travel-current { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
+.travel-destination-context { display: flex; align-items: center; gap: var(--ui-space-2); }
+.travel-shortcut-context {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid var(--ui-line-soft);
+  border-radius: var(--ui-radius-sm);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
 
 .travel-history + .travel-favorites {
   margin-top: var(--ui-space-3);
