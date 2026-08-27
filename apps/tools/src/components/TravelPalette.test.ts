@@ -253,6 +253,7 @@ describe("TravelPalette", () => {
       "Piken Square (pre-Searing)",
       "The Barradin Estate",
     ]);
+    expect(wrapper.get(".travel-key-hints").text()).toContain("⌘1–9 save");
 
     await wrapper.get('[aria-label="Customize Travel"]').trigger("click");
     expect(wrapper.get('[role="combobox"]').attributes("aria-controls")).toBeUndefined();
