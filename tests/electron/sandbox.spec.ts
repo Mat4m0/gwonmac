@@ -238,6 +238,43 @@ test.describe("sandbox boundary", () => {
     }
   });
 
+  test("an enhancement program is ignored without the live-smoke posture", async () => {
+    const fixture = await launchOffline("gw-enhancement-stray-program-e2e-", {
+      GW_ENHANCEMENT_PROGRAM: "xunlai-storage",
+    });
+    try {
+      expect(await fixture.page.evaluate(() => window.gwNative.init.enhancementProgram))
+        .toBe("none");
+      await expect(fixture.page.locator("#developer-program-banner")).toBeHidden();
+      await expect(fixture.page).toHaveTitle("Guild Wars Reforged");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("a live-test program is unmistakable while preserving player launch selection", async () => {
+    const fixture = await launchOffline("gw-enhancement-live-program-e2e-", {
+      GW_LIVE_SMOKE: "1",
+      GW_ENHANCEMENT_PROGRAM: "xunlai-storage",
+    });
+    try {
+      expect(await fixture.page.evaluate(() => ({ ...window.gwNative.init })))
+        .toMatchObject({
+          enhancementProgram: "xunlai-storage",
+          // Program capability projection is independent of the player's
+          // persisted launch selection; the profile test pins it to features-270.
+          enhancementSelection: { nativeCursor: true, tools: false },
+        });
+      await expect(fixture.page.locator("#developer-program-banner"))
+        .toHaveText("Live test: Xunlai Storage — restricted capabilities");
+      await expect(fixture.page).toHaveTitle(
+        "[Live test: Xunlai Storage] Guild Wars Reforged",
+      );
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("passes an explicit template filesystem trace request to the renderer", async () => {
     const fixture = await launchOffline("gw-template-fs-trace-e2e-", {
       GW_TEMPLATE_FS_TRACE: "1",

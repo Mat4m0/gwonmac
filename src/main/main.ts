@@ -30,6 +30,7 @@ import {
 } from "../shared/contracts.js";
 import {
   NO_ENHANCEMENT_CAPABILITIES,
+  enhancementCapabilityProfile,
   type EnhancementProgram,
   type EnhancementSelection,
 } from "../shared/enhancement-contracts.js";
@@ -591,6 +592,14 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const enhancementCapabilities = diagnosticPolicy.officialClient
     ? NO_ENHANCEMENT_CAPABILITIES
     : requestedEnhancementCapabilities(settings, enhancementProgram);
+  logEvent({
+    k: "enhancement.launchSelected",
+    buildKind: app.isPackaged ? "packaged" : "development",
+    program: enhancementProgram,
+    toolsAtLaunch: enhancementSelection.tools,
+    diagnosticProfile,
+    requestedProfile: enhancementCapabilityProfile(enhancementCapabilities),
+  });
   if (activeAccountMode === "single") {
     await prepareWindowState(SINGLE_DIAGNOSTIC_OWNER_ID);
   }
@@ -606,6 +615,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     hostVersion: HOST_VERSION,
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     enhancementCapabilities,
+    enhancementProgram,
     extendedMemoryEnabled: settings.extendedMemoryEnabled,
     diagnosticProfile,
     onProgress: setProgress,

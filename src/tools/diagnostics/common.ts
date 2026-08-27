@@ -34,6 +34,13 @@ import {
   type VisualProblemManifest,
 } from "../../shared/contracts.js";
 import {
+  ENHANCEMENT_CAPABILITY_FIELDS,
+  ENHANCEMENT_PROGRAMS,
+  isEnhancementCapabilityProfile,
+} from "../../shared/enhancement-contracts.js";
+import { LOCAL_FEATURE_INVARIANTS } from
+  "../../main/certification/local-client-verification-contract.js";
+import {
   VISUAL_CAPTURE_FAILURES,
   VISUAL_CAPTURE_STAGES,
   type VisualCaptureFailure,
@@ -150,16 +157,68 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+const featureInvariants = new Set<string>(
+  Object.values(LOCAL_FEATURE_INVARIANTS).flat(),
+);
+
+function isEnhancementVerification(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const profile = (candidate: unknown) =>
+    candidate === null || isEnhancementCapabilityProfile(candidate);
+  const failureStage = value.preparationFailureStage;
+  if (
+    !profile(value.requestedProfile)
+    || !profile(value.effectiveProfile)
+    || !(failureStage === null
+      || failureStage === "template-save"
+      || failureStage === "enhancement"
+      || failureStage === "native-double-click")
+  ) return false;
+  if (value.featureVerdicts === null) return true;
+  const featureVerdicts = value.featureVerdicts;
+  if (!isRecord(featureVerdicts)) return false;
+  if (
+    Object.keys(featureVerdicts).length !== ENHANCEMENT_CAPABILITY_FIELDS.length
+  ) return false;
+  return ENHANCEMENT_CAPABILITY_FIELDS.every((feature) => {
+    const verdict = featureVerdicts[feature];
+    if (!isRecord(verdict)) return false;
+    if (!(verdict.invariant === null
+      || (typeof verdict.invariant === "string"
+        && featureInvariants.has(verdict.invariant)))) return false;
+    if (!(verdict.candidates === null
+      || (Number.isSafeInteger(verdict.candidates)
+        && Number(verdict.candidates) >= 0))) return false;
+    if (verdict.status === "off" || verdict.status === "proved") {
+      return verdict.invariant === null && verdict.candidates === null;
+    }
+    if (verdict.status === "changed") {
+      return verdict.invariant !== null && verdict.candidates === null;
+    }
+    return verdict.status === "ambiguous"
+      && verdict.invariant !== null
+      && verdict.candidates !== null;
+  });
+}
+
 export function isRuntimeDiagnosticState(
   value: unknown,
 ): value is RuntimeDiagnosticState {
   if (!isRecord(value)) return false;
+  const requestedCapabilities = value.enhancementCapabilitiesRequested;
   if (
     !DIAGNOSTIC_PROFILES.includes(
       value.diagnosticProfile as RuntimeDiagnosticState["diagnosticProfile"],
     )
+    || !ENHANCEMENT_PROGRAMS.includes(
+      value.enhancementProgram as RuntimeDiagnosticState["enhancementProgram"],
+    )
     || typeof value.extendedMemoryRequested !== "boolean"
-    || !isRecord(value.enhancementCapabilitiesRequested)
+    || !isRecord(requestedCapabilities)
+    || Object.keys(requestedCapabilities).length
+      !== ENHANCEMENT_CAPABILITY_FIELDS.length
+    || !ENHANCEMENT_CAPABILITY_FIELDS.every((feature) =>
+      typeof requestedCapabilities[feature] === "boolean")
   ) return false;
   if (value.status === "preparing") return true;
   return value.status === "active"
@@ -168,6 +227,9 @@ export function isRuntimeDiagnosticState(
       || value.presentationPath === "offscreen-imagebitmap")
     && (value.artifactKind === "official" || value.artifactKind === "derived")
     && isRecord(value.extendedMemoryEffective)
+    && (value.enhancementFeaturesEffective === null
+      || isRecord(value.enhancementFeaturesEffective))
+    && isEnhancementVerification(value.enhancementVerification)
     && isRecord(value.transforms)
     && isRecord(value.observers)
     && isRecord(value.snapshot);

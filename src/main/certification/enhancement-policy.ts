@@ -23,7 +23,9 @@ import {
 } from "../../shared/enhancement-contracts.js";
 
 export const ENHANCEMENT_AUTOMATION_ENABLED =
-  !app.isPackaged && process.env.GW_ENHANCEMENT_AUTOMATION === "1";
+  !app.isPackaged
+  && process.env.GW_LIVE_SMOKE === "1"
+  && process.env.GW_ENHANCEMENT_AUTOMATION === "1";
 
 const requestedProgram = process.env.GW_ENHANCEMENT_PROGRAM;
 
@@ -34,6 +36,7 @@ const requestedProgram = process.env.GW_ENHANCEMENT_PROGRAM;
  */
 export const DEVELOPER_ENHANCEMENT_PROGRAM: EnhancementProgram =
   !app.isPackaged
+  && process.env.GW_LIVE_SMOKE === "1"
   && ENHANCEMENT_PROGRAMS.some((program) => program === requestedProgram)
     ? requestedProgram as EnhancementProgram
     : "none";

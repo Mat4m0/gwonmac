@@ -11,6 +11,7 @@ import type {
   ClientTransforms,
   ClientCompatibility,
   ExtendedMemoryRuntimeStatus,
+  RuntimeEnhancementVerification,
 } from "../shared/contracts.js";
 import type { ChunkStore } from "./core/chunk-store.js";
 
@@ -23,6 +24,7 @@ export interface ActiveClient {
   readonly compatibility: ClientCompatibility | null;
   readonly extendedMemory: ExtendedMemoryRuntimeStatus;
   readonly transforms: ClientTransforms;
+  readonly enhancementVerification: RuntimeEnhancementVerification;
 }
 
 export type ClientGeneration = Omit<ActiveClient, "generation">;

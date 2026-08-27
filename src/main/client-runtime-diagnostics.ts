@@ -6,7 +6,10 @@ import type {
   DiagnosticProfile,
   RuntimeDiagnosticState,
 } from "../shared/contracts.js";
-import type { EnhancementCapabilities } from "../shared/enhancement-contracts.js";
+import type {
+  EnhancementCapabilities,
+  EnhancementProgram,
+} from "../shared/enhancement-contracts.js";
 import { diagnosticProfilePolicy } from "../shared/diagnostic-profile.js";
 import type { ActiveClient } from "./active-client.js";
 import { clientArtifactPath, type GamePaths } from "./core/paths.js";
@@ -18,6 +21,7 @@ export async function readClientRuntimeDiagnosticState(options: Readonly<{
   diagnosticProfile: DiagnosticProfile;
   extendedMemoryEnabled: boolean;
   enhancementCapabilities: EnhancementCapabilities;
+  enhancementProgram: EnhancementProgram;
 }>): Promise<RuntimeDiagnosticState> {
   const {
     active,
@@ -25,11 +29,13 @@ export async function readClientRuntimeDiagnosticState(options: Readonly<{
     diagnosticProfile,
     extendedMemoryEnabled,
     enhancementCapabilities,
+    enhancementProgram,
   } = options;
   if (!active) {
     return {
       status: "preparing",
       diagnosticProfile,
+      enhancementProgram,
       extendedMemoryRequested: extendedMemoryEnabled,
       enhancementCapabilitiesRequested: enhancementCapabilities,
     };
@@ -50,6 +56,7 @@ export async function readClientRuntimeDiagnosticState(options: Readonly<{
     status: "active",
     generation: active.generation,
     diagnosticProfile,
+    enhancementProgram,
     presentationPath: policy.presentationPath === "direct"
       ? "direct-canvas"
       : "offscreen-imagebitmap",
@@ -63,6 +70,7 @@ export async function readClientRuntimeDiagnosticState(options: Readonly<{
     extendedMemoryEffective: active.extendedMemory,
     enhancementCapabilitiesRequested: enhancementCapabilities,
     enhancementFeaturesEffective: active.compatibility?.features ?? null,
+    enhancementVerification: active.enhancementVerification,
     transforms: active.transforms,
     observers: {
       heapGrowth: true,

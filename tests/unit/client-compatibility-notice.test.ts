@@ -271,6 +271,20 @@ describe("client compatibility notice", () => {
     assert.equal(dom.element("settings-availability").open, true);
   });
 
+  it("names developer-program exclusions instead of showing an ambiguous Off", () => {
+    const dom = compatibilityDom();
+    renderClientCompatibility(dom.root, {
+      appVersion: "2026.8.10",
+      extendedMemory: STANDARD_MEMORY,
+      healthToken: null,
+      compatibility: compatibility(),
+    }, "xunlai-storage");
+    assert.equal(
+      dom.element("settings-feature-nativeCursor").textContent,
+      "Off — excluded by Xunlai Storage live-test mode",
+    );
+  });
+
   it("reports cooldown presentation unavailable when slot geometry is unavailable", () => {
     const dom = compatibilityDom();
     renderClientCompatibility(dom.root, {

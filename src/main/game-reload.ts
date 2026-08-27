@@ -60,7 +60,13 @@ export class GameReloader {
       Date.now() > intent.expiresAt
       || win.webContents.mainFrame.routingId === intent.sourceDocumentId
     ) {
-      if (Date.now() > intent.expiresAt) this.relogIntents.delete(win);
+      if (Date.now() > intent.expiresAt) {
+        this.relogIntents.delete(win);
+        this.dependencies.record(
+          { k: "relog.skipped", reason: "intent-expired" },
+          this.dependencies.diagnosticOwner(win),
+        );
+      }
       return false;
     }
     this.relogIntents.delete(win);
@@ -102,6 +108,12 @@ export class GameReloader {
     try {
       await this.dependencies.load(win, this.dependencies.rendererUrl);
       this.dependencies.record({ k: "gameReload.loaded", cause }, ownerId);
+      if (!autoRelogAfterReload) {
+        this.dependencies.record(
+          { k: "relog.skipped", reason: "disabled" },
+          ownerId,
+        );
+      }
     } catch (error) {
       this.relogIntents.delete(win);
       throw error;

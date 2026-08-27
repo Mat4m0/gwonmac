@@ -31,6 +31,25 @@ sampling.
 The shared startup timeline records application and renderer milestones. It
 also records the official client identity used by the session.
 
+For optional Core and Tools behavior, read the evidence in this order:
+
+`launch selection → requested profile → verifier verdict → effective profile → consumer signal`
+
+The launch event identifies release or development build kind, the developer
+program, whether Tools were enabled, and the diagnostic profile. The verifier
+then records one closed verdict for every capability: off, proved,
+changed at a named invariant, or ambiguous with a candidate count. The active
+runtime retains the requested and effective profiles plus any preparation
+failure stage. Finally, observer-backed consumers record installation and their
+first valid observation separately for cursor, region, target, party, skill
+geometry, and cooldowns. A missing first observation is not itself a failure:
+some observations depend on game state or on a player setting.
+
+Developer programs are accepted only by an unpackaged launch with
+`GW_LIVE_SMOKE=1`. Such a launch has a persistent warning and title prefix.
+Ordinary development and every packaged build use program `none` even if a
+stray developer-program environment variable exists.
+
 The recorder includes window focus, visibility, minimize, and resize state.
 This context is required. macOS can stop frame callbacks for an occluded or
 moving window without a renderer defect.
@@ -79,6 +98,11 @@ means the clipboard size limit removed events from this trace.
 and accepted once, followed by a certified playable explorable instance.
 `outcome=outpost` means the character reached a certified playable outpost.
 Loading is transition evidence only and can never complete the workflow.
+When automatic return does not run, `relog.skipped` is the terminal row. Its
+reason is one of `disabled`, `saved-login-unavailable`,
+`pre-game-controls-unavailable`, or `intent-expired`. A plain reload still
+records `gameReload.loaded`, which proves that the replacement renderer loaded
+even when automatic return is disabled.
 
 The trace contains only closed stages, outcomes, and bounded native-control
 state. It contains no Guild Wars UI text, dispatcher parameters, pointers,

@@ -126,6 +126,10 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
 export type LocalFeatureInvariant<Feature extends LocalClientFeature> =
   (typeof LOCAL_FEATURE_INVARIANTS)[Feature][number];
 
+export type AnyLocalFeatureInvariant = {
+  [Feature in LocalClientFeature]: LocalFeatureInvariant<Feature>;
+}[LocalClientFeature];
+
 export type LocalFeatureFailure<Feature extends LocalClientFeature> =
   | Readonly<{
       status: "changed";

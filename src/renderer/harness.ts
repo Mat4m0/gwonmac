@@ -209,6 +209,27 @@ async function escalateRepeatedCrash(): Promise<void> {
 let disposeSocketHost = () => {};
 let disposeHostOnlyTools = () => {};
 const native = () => window.gwNative;
+const developerProgramNames: Readonly<Record<
+  Exclude<import('../shared/enhancement-contracts.js').EnhancementProgram, 'none'>,
+  string
+>> = Object.freeze({
+  'cursor-observer': 'Cursor Observer',
+  'target-observer': 'Target Observer',
+  'toolbox-foundation': 'Toolbox Foundation',
+  'toolbox-commands': 'Toolbox Commands',
+  'xunlai-storage': 'Xunlai Storage',
+  'reconnect-probe': 'Reconnect Probe',
+});
+const developerProgram = native().init.enhancementProgram;
+if (developerProgram !== 'none') {
+  const name = developerProgramNames[developerProgram];
+  document.title = `[Live test: ${name}] Guild Wars Reforged`;
+  const banner = document.getElementById('developer-program-banner');
+  if (banner) {
+    banner.textContent = `Live test: ${name} — restricted capabilities`;
+    banner.hidden = false;
+  }
+}
 let automaticCharacterReturn:
   | import('./automatic-character-return.js').AutomaticCharacterReturn
   | null = null;
@@ -770,6 +791,7 @@ Module = {
       const stored = await native().credentials.load();
       if (!stored) {
         log('secureStorage: no saved credentials — the module should prompt');
+        automaticCharacterReturn?.savedCredentialsUnavailable();
         throw new Error('no stored credentials');
       }
       log('secureStorage: returning saved credentials');

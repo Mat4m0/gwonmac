@@ -169,7 +169,10 @@ interface EnhancementGate {
     | "none"
     | "cursor-observer"
     | "target-observer"
-    | "toolbox-foundation";
+    | "toolbox-foundation"
+    | "toolbox-commands"
+    | "xunlai-storage"
+    | "reconnect-probe";
   none: boolean;
   cursorOnly: boolean;
 }
@@ -179,10 +182,12 @@ function enhancementGate({
   isPackaged,
   automationVariable,
   programVariable,
+  liveSmoke = false,
 }: {
   isPackaged: boolean;
   automationVariable: string | undefined;
   programVariable?: string | undefined;
+  liveSmoke?: boolean;
 }): EnhancementGate {
   const environment = { ...process.env };
   delete environment.GW_ENHANCEMENT_AUTOMATION;
@@ -193,6 +198,8 @@ function enhancementGate({
   if (programVariable !== undefined) {
     environment.GW_ENHANCEMENT_PROGRAM = programVariable;
   }
+  if (liveSmoke) environment.GW_LIVE_SMOKE = "1";
+  else delete environment.GW_LIVE_SMOKE;
   environment.GW_PROBE_PACKAGED = isPackaged ? "1" : "0";
   environment.GW_PROBE_POLICY = pathToFileURL(
     path.join(root, "build/main/certification/enhancement-policy.js"),
@@ -227,8 +234,15 @@ test("packaged builds refuse automation and developer programs independently", (
     assert.equal(gate.cursorOnly, true);
   }
 
-  // Unpackaged automation grants input/IPC only. It does not select hooks.
-  const enabled = enhancementGate({ isPackaged: false, automationVariable: "1" });
+  // A stray variable never changes an ordinary development launch.
+  const stray = enhancementGate({ isPackaged: false, automationVariable: "1",
+    programVariable: "toolbox-foundation" });
+  assert.equal(stray.automation, false);
+  assert.equal(stray.program, "none");
+
+  // The explicit live-smoke posture may grant automation without selecting hooks.
+  const enabled = enhancementGate({ isPackaged: false, automationVariable: "1",
+    liveSmoke: true });
   assert.equal(enabled.automation, true);
   assert.equal(enabled.program, "none");
   assert.equal(enabled.none, false);
@@ -242,6 +256,7 @@ test("packaged builds refuse automation and developer programs independently", (
     isPackaged: false,
     automationVariable: undefined,
     programVariable: "toolbox-foundation",
+    liveSmoke: true,
   });
   assert.equal(foundation.automation, false);
   assert.equal(foundation.program, "toolbox-foundation");

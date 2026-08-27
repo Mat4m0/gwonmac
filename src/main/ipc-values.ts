@@ -11,8 +11,10 @@ import type {
 import {
   RELOG_INPUT_OUTCOMES,
   RELOG_INPUT_STAGES,
+  RELOG_SKIP_REASONS,
   RELOG_TERMINAL_OUTCOMES,
   RENDERER_MILESTONES,
+  ENHANCEMENT_OBSERVER_CONSUMERS,
   WASM_ABORT_REASON_KINDS,
   WASM_GROWTH_OUTCOMES,
   WASM_MEMORY_PROBE_STATUSES,
@@ -134,6 +136,14 @@ export function parseRendererMilestoneArgs(args: readonly unknown[]): ParsedMile
     milestoneFields = {
       outcome: record.outcome as (typeof RELOG_TERMINAL_OUTCOMES)[number],
     };
+  } else if (name === "relog.skipped") {
+    const valid = recordIsObject && Object.keys(record).length === 1
+      && typeof record.reason === "string"
+      && (RELOG_SKIP_REASONS as readonly string[]).includes(record.reason);
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      reason: record.reason as (typeof RELOG_SKIP_REASONS)[number],
+    };
   } else if (name === "wasm.abort") {
     const valid = recordIsObject && Object.keys(record).length === 3
       && typeof record.reasonKind === "string"
@@ -239,6 +249,16 @@ export function parseRendererMilestoneArgs(args: readonly unknown[]): ParsedMile
       companionAbi: record.companionAbi as number,
       installation: record.installation as number,
       capabilityProfile: record.capabilityProfile as string,
+    };
+  } else if (name === "enhancement.consumerSignal") {
+    const valid = recordIsObject && Object.keys(record).length === 2
+      && typeof record.consumer === "string"
+      && (ENHANCEMENT_OBSERVER_CONSUMERS as readonly string[]).includes(record.consumer)
+      && (record.signal === "installed" || record.signal === "first-observation");
+    if (!valid) throw new ValidationError("invalid renderer milestone");
+    milestoneFields = {
+      consumer: record.consumer as (typeof ENHANCEMENT_OBSERVER_CONSUMERS)[number],
+      signal: record.signal as "installed" | "first-observation",
     };
   } else if (name === "enhancement.uninstalled") {
     const valid = recordIsObject && Object.keys(record).length === 1

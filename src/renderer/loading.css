@@ -49,6 +49,13 @@
                       color:#ffd9cd; background:#7a2415d9;
                       border:1px solid #b8452f66; border-radius:6px;
                       text-shadow:0 1px 4px #0008; }
+#developer-program-banner { position:absolute; top:48px; left:18px; z-index:3;
+                            margin:0; max-width:min(620px,calc(100vw - 36px));
+                            padding:7px 10px; border:1px solid #ffb48880;
+                            border-radius:4px; background:#24120de8;
+                            color:#ffd4bd; font-size:12px; font-weight:600;
+                            text-shadow:0 1px 3px #000; }
+#developer-program-banner[hidden] { display:none; }
 
 /* Quiet project links in the top-right corner: one row that never reflows. */
 #loading-links { position:absolute; top:14px; right:18px; z-index:2;
@@ -260,6 +267,8 @@
   #loading { --dock-h: 128px; }
   #loading-unofficial { top:10px; left:50%; transform:translateX(-50%);
                         white-space:nowrap; }
+  #developer-program-banner { top:82px; left:12px;
+                              max-width:calc(100vw - 44px); }
   #loading-links { top:46px; left:12px; right:12px;
                    justify-content:center; gap:8px; font-size:12px; }
   #loading-update-line { top:72px; left:12px; right:12px;
