@@ -898,7 +898,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    18
+    19
 }
 
 #[no_mangle]

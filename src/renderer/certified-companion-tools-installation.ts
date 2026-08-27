@@ -338,7 +338,9 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         update: (state) => { party = state; professionTrace?.poll(state); toolbox?.update(state); } } : null,
       observeState,
       publishState: program === "target-observer",
-      skillSlots: slots?.sink == null ? null : { enabled: () => policy().skillKeyLabels,
+      // Geometry is shared by both HUDs. Cooldowns must keep the slot feed
+      // alive even when custom key labels are disabled.
+      skillSlots: slots?.sink == null ? null : { enabled: () => slots.active,
         update: (state) => slots.sink?.update(state) },
       skillCooldowns: cooldowns?.sink == null ? null : { enabled: () => policy().skillCooldowns,
         update: (state) => cooldowns.sink?.update(state) },
