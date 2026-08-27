@@ -1,24 +1,19 @@
 /**
  * Replaces one certified Guild Wars controller-prompt atlas at its existing
- * Emscripten WebGL upload boundary. Matching is by the atlas' established
- * exact-client checksum, never by dimensions alone. The game's bytes are put
- * back immediately after the synchronous upload, and every mismatch is an
- * unchanged pass-through.
+ * Emscripten WebGL upload boundary. Matching is by the atlas' certified
+ * content checksum, never by dimensions or the surrounding client build. The
+ * game's bytes are put back immediately after the synchronous upload, and
+ * every mismatch is an unchanged pass-through.
  */
 
 // Exact evidence and the recertification procedure live in
 // internal/upstream/controller-prompt-atlas.md.
-export const CONTROLLER_PROMPT_ATLAS_CERTIFICATIONS: Readonly<Record<string, Readonly<{
-  hash: number;
-  transform: AtlasTransform;
-}>>> = Object.freeze({
-  // Current exact JSPi client: the web renderer transposes/rebuilds texture
-  // uploads, so its RGBA checksum differs from the native TexMod checksum.
-  b8cc509714b82b69fdfd79a26ba257aa4c9ef23d90bca9dfcbbd044e371cfb17: Object.freeze({
-    hash: 0x74eb6846,
-    transform: "direct",
-  }),
-});
+const CONTROLLER_PROMPT_ATLAS_CERTIFICATIONS: Readonly<Record<number, AtlasTransform>> =
+  Object.freeze({
+    // The web renderer transposes/rebuilds texture uploads, so this RGBA
+    // checksum differs from the native TexMod checksum.
+    [0x74eb6846]: "direct",
+  });
 const ATLAS_WIDTH = 256;
 const ATLAS_HEIGHT = 512;
 const GL_TEXTURE_2D = 0x0de1;
@@ -174,20 +169,12 @@ export function texmodHash(
   return crc >>> 0;
 }
 
-export function certifiedWebGlAtlasTransform(
-  clientSha256: string | null,
-  hash: number,
-): AtlasTransform | null {
-  if (!clientSha256) return null;
-  const certification = CONTROLLER_PROMPT_ATLAS_CERTIFICATIONS[clientSha256];
-  return certification?.hash === hash ? certification.transform : null;
+export function certifiedWebGlAtlasTransform(hash: number): AtlasTransform | null {
+  return CONTROLLER_PROMPT_ATLAS_CERTIFICATIONS[hash] ?? null;
 }
 
-export function identifyControllerPromptAtlas(
-  bytes: Uint8Array,
-  clientSha256: string | null = null,
-): AtlasTransform | null {
-  return certifiedWebGlAtlasTransform(clientSha256, texmodHash(bytes));
+export function identifyControllerPromptAtlas(bytes: Uint8Array): AtlasTransform | null {
+  return certifiedWebGlAtlasTransform(texmodHash(bytes));
 }
 
 function atlasHashes(bytes: Uint8Array, width: number, height: number) {
@@ -291,11 +278,9 @@ function validRange(heap: Uint8Array | undefined, pointer: number, length: numbe
 }
 
 export async function preparePlayStationControllerPrompts({
-  clientSha256,
   diagnostics,
   log,
 }: {
-  clientSha256: string | null;
   diagnostics: boolean;
   log: (...values: unknown[]) => void;
 }): Promise<PreparedControllerPrompts> {
@@ -314,7 +299,6 @@ export async function preparePlayStationControllerPrompts({
         imports,
         module,
         atlas,
-        clientSha256,
         diagnostics,
         log,
       });
@@ -333,15 +317,13 @@ export function installControllerPromptTexture({
   imports,
   module,
   atlas,
-  clientSha256 = null,
-  identify = (bytes) => identifyControllerPromptAtlas(bytes, clientSha256),
+  identify = identifyControllerPromptAtlas,
   diagnostics = false,
   log,
 }: {
   imports: TextureImports;
   module: ClientMemory;
   atlas: ControllerPromptAtlas;
-  clientSha256?: string | null;
   identify?: (bytes: Uint8Array) => AtlasTransform | null;
   diagnostics?: boolean;
   log: (...values: unknown[]) => void;

@@ -1,14 +1,14 @@
 # Controller-prompt atlas evidence
 
-> **Status: exact-build historical evidence.** These values apply only to the
-> client SHA named below. A different client receives ArenaNet's unchanged
-> controller prompts until its atlas is independently certified.
+> **Status: content certification evidence.** The certified checksum applies to
+> this exact atlas content across client rebuilds. Changed atlas content receives
+> ArenaNet's unchanged controller prompts until it is independently certified.
 
 ## Certified upload
 
 | Fact | Value |
 | --- | --- |
-| JSPi client SHA-256 | `b8cc509714b82b69fdfd79a26ba257aa4c9ef23d90bca9dfcbbd044e371cfb17` |
+| Observed JSPi client SHA-256 values | `b8cc509714b82b69fdfd79a26ba257aa4c9ef23d90bca9dfcbbd044e371cfb17`, `3cd87bf15df6812073b558e9f365c8fb8e2a54b1b4c37028e5d3a6cbaf5e6f9e` |
 | WebGL upload | level 0, 256×512, RGBA/unsigned byte |
 | Upload byte length | 524,288 |
 | Direct uMod running CRC-32 | `0x74eb6846` |
@@ -18,7 +18,10 @@
 The older native TexMod/uMod texture has running CRC-32 `0xa30969c1`, but the
 JSPi renderer rebuilds/transposes uploads. That native checksum is research
 context only and is deliberately **not** accepted at runtime. Runtime
-certification binds the observed WebGL checksum to the exact client SHA.
+certification binds the replacement to the observed WebGL content checksum.
+The second observed client retained the same checksum after an ArenaNet rebuild.
+This is why the runtime does not bind unchanged atlas content to the whole client
+SHA.
 
 The hook observes the existing synchronous Emscripten WebGL import. It replaces
 the bytes only for that call and restores the WebAssembly heap immediately.
@@ -36,9 +39,9 @@ compressed, redefined, deleted, or context-reset textures lose their match.
    present. Record all four reported hashes; do not choose a nearest match.
 5. Visually confirm that replacing only this upload changes controller prompts
    throughout the UI and does not change unrelated textures.
-6. Add the new exact client SHA, observed direct hash, and required transform to
-   `CONTROLLER_PROMPT_ATLAS_CERTIFICATIONS`. Preserve the old entry only if that
-   client remains distributed.
+6. If the content changed, add the observed hash and required transform to
+   `CONTROLLER_PROMPT_ATLAS_CERTIFICATIONS`. Record the client SHA as evidence,
+   not as runtime authority.
 7. Run the focused texture tests, `pnpm check`, integration tests, release tests,
    and a real-client visual check before publishing.
 

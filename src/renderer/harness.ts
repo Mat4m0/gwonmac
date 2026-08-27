@@ -1361,7 +1361,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     if (settings.controllerPromptStyle === 'playstation') {
       try {
         controllerPrompts = await host.preparePlayStationControllerPrompts({
-          clientSha256: session.compatibility?.clientSha256 ?? null,
           diagnostics: window.gwNative.init.development,
           log,
         });

@@ -56,12 +56,9 @@ describe("controller prompt texture", () => {
     assert.equal(identifyControllerPromptAtlas(new Uint8Array(100)), null);
   });
 
-  it("pins the current WebGL fingerprint to the exact certified client", () => {
-    const currentClient = "b8cc509714b82b69fdfd79a26ba257aa4c9ef23d90bca9dfcbbd044e371cfb17";
-    assert.equal(certifiedWebGlAtlasTransform(currentClient, 0x74eb6846), "direct");
-    assert.equal(certifiedWebGlAtlasTransform(currentClient, 0x74eb6847), null);
-    assert.equal(certifiedWebGlAtlasTransform("0".repeat(64), 0x74eb6846), null);
-    assert.equal(certifiedWebGlAtlasTransform(null, 0x74eb6846), null);
+  it("pins the WebGL fingerprint to the atlas content instead of the client build", () => {
+    assert.equal(certifiedWebGlAtlasTransform(0x74eb6846), "direct");
+    assert.equal(certifiedWebGlAtlasTransform(0x74eb6847), null);
   });
 
   it("substitutes synchronously and restores the client's heap", () => {
