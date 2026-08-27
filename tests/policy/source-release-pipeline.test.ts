@@ -276,23 +276,60 @@ test("release entitlements are an exact three-key allowlist", () => {
 });
 
 
-test("the Stable rollback proof establishes its write generation before saving", () => {
+test("the Stable rollback proof respects the Build Library feature gate", () => {
   const roundTrip = read("scripts/verify-stable-beta-roundtrip.ts");
   const stableCreation = roundTrip.indexOf(
     'console.log("stable/beta compatibility: latest Stable creates canonical state")',
   );
-  const baselineRead = roundTrip.indexOf(
-    "await readToolsCanonical(running.page)",
+  const legacyOptOut = roundTrip.indexOf(
+    "stableInitialSettings.buildLibrary",
     stableCreation,
+  );
+  const stableEnable = roundTrip.indexOf("buildLibrary: true", legacyOptOut);
+  const baselineRead = roundTrip.indexOf(
+    "const stableTools = await readToolsCanonical(running.page)",
+    stableEnable,
   );
   const firstLibraryWrite = roundTrip.indexOf(
     "api.buildLibrary.set(library)",
-    stableCreation,
+    baselineRead,
+  );
+  const candidatePhase = roundTrip.indexOf(
+    'console.log("stable/beta compatibility: candidate reads, modifies, and writes")',
+  );
+  const candidateLibraryWrite = roundTrip.indexOf(
+    "api.buildLibrary.set(library)",
+    candidatePhase,
+  );
+  const candidateOptOut = roundTrip.indexOf(
+    "buildLibrary: false",
+    candidateLibraryWrite,
+  );
+  const rollbackPhase = roundTrip.indexOf(
+    'console.log("stable/beta compatibility: the same Stable reads and writes again")',
+  );
+  const rollbackOptOut = roundTrip.indexOf("returnedSettings.buildLibrary", rollbackPhase);
+  const rollbackEnable = roundTrip.indexOf(
+    "settings.set({ buildLibrary: true })",
+    rollbackOptOut,
+  );
+  const rollbackLibraryRead = roundTrip.indexOf(
+    "const returned = await readToolsCanonical(running.page)",
+    rollbackEnable,
   );
 
   assert.ok(stableCreation >= 0);
-  assert.ok(baselineRead > stableCreation);
+  assert.ok(legacyOptOut > stableCreation);
+  assert.ok(stableEnable > legacyOptOut);
+  assert.ok(baselineRead > stableEnable);
   assert.ok(firstLibraryWrite > baselineRead);
+  assert.ok(candidatePhase > firstLibraryWrite);
+  assert.ok(candidateLibraryWrite > candidatePhase);
+  assert.ok(candidateOptOut > candidateLibraryWrite);
+  assert.ok(rollbackPhase > candidateOptOut);
+  assert.ok(rollbackOptOut > rollbackPhase);
+  assert.ok(rollbackEnable > rollbackOptOut);
+  assert.ok(rollbackLibraryRead > rollbackEnable);
   assert.match(roundTrip, /saveWindowState\(cohort\.windowStatePath/);
   assert.doesNotMatch(
     roundTrip,

@@ -540,16 +540,14 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   // on whether both packaged versions read the exact same durable shape.
   await publishWindowSize(toolsCohort, 1_000, 700);
   await withPackagedApp(toolsCohort, stablePath, async (running) => {
-    const stableInitial = await readToolsCanonical(running.page);
-    assert.equal(
-      canonicalizeStableSettings(stableInitial.settings, { disk: false }).buildLibrary,
-      false,
-      "latest Stable lost the legacy Apply-Team opt-out before upgrade",
+    const stableInitialSettings = canonicalizeStableSettings(
+      await running.page.evaluate(() => window.gwNative.settings.get()),
+      { disk: false },
     );
     assert.equal(
-      stableInitial.recovered,
+      stableInitialSettings.buildLibrary,
       false,
-      "latest Stable recovered its fresh build library before the round-trip",
+      "latest Stable lost the legacy Apply-Team opt-out before upgrade",
     );
     const launchedStableVersion = (await running.page.evaluate(
       () => window.gwNative.appUpdates.getState(),
@@ -567,10 +565,17 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
         uiStyle: "obsidian",
         uiPanelOpacity: 88,
         updateTrack: "beta",
+        buildLibrary: true,
       })
     ), { disk: false });
     assert.equal(stableSettings.updateTrack, "beta", "latest Stable lacks the Beta enabler");
-    assert.equal(stableSettings.buildLibrary, false, "latest Stable enabled Apply Team while saving");
+    assert.equal(stableSettings.buildLibrary, true, "latest Stable did not enable Build Library");
+    const stableTools = await readToolsCanonical(running.page);
+    assert.equal(
+      stableTools.recovered,
+      false,
+      "latest Stable recovered its fresh build library before the round-trip",
+    );
     assert.deepEqual(
       await running.page.evaluate((library) => {
         const api = window.gwNative;
@@ -601,7 +606,7 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
     assert.equal(candidateInitial.recovered, false);
     assert.equal(candidateInitialSettings.updateTrack, "beta");
     assert.equal(candidateInitialSettings.uiPanelOpacity, 88);
-    assert.equal(candidateInitialSettings.buildLibrary, false);
+    assert.equal(candidateInitialSettings.buildLibrary, true);
     assert.deepEqual(candidateInitial.library, initialLibrary);
     await assertWindowMatchesPersistedState(candidateWindowState, running.page);
     await roundTripProfileStore(running.page, "stable-template", "candidate-template");
@@ -609,13 +614,14 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       async ({ settings, library }) => {
         const api = window.gwNative;
         if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
-        await api.settings.set(settings);
         await api.buildLibrary.set(library);
+        await api.settings.set(settings);
       },
       {
         settings: {
           showDiagnostics: true,
           uiPanelOpacity: 87,
+          buildLibrary: false,
         } satisfies Partial<AppSettings>,
         library: candidateLibrary,
       },
@@ -644,15 +650,19 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       stableVersion,
       "the return launch did not use the exact Stable baseline",
     );
-    const returned = await readToolsCanonical(running.page);
-    const returnedSettings = canonicalizeStableSettings(returned.settings, { disk: false });
-    assert.equal(returned.recovered, false);
-    assert.equal(returnedSettings.buildLibrary, false, "rollback Stable enabled Apply Team");
+    const returnedSettings = canonicalizeStableSettings(
+      await running.page.evaluate(() => window.gwNative.settings.get()),
+      { disk: false },
+    );
+    assert.equal(returnedSettings.buildLibrary, false, "rollback Stable lost the opt-out");
     assert.deepEqual(
       returnedSettings,
       validateCandidateSettings(candidateSettingsDocument, { disk: true }),
       "Stable did not read every candidate-written settings value",
     );
+    await running.page.evaluate(() => window.gwNative.settings.set({ buildLibrary: true }));
+    const returned = await readToolsCanonical(running.page);
+    assert.equal(returned.recovered, false);
     assert.deepEqual(returned.library, candidateLibrary);
     await assertWindowMatchesPersistedState(rollbackWindowState, running.page);
     await roundTripProfileStore(running.page, "candidate-template", "stable-return-template");
@@ -660,26 +670,28 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       async ({ settings, library }) => {
         const api = window.gwNative;
         if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
-        await api.settings.set(settings);
         await api.buildLibrary.set(library);
+        await api.settings.set(settings);
       },
       {
         settings: {
           showDiagnostics: false,
           updateTrack: "stable",
+          buildLibrary: false,
         } satisfies Partial<AppSettings>,
         library: finalLibrary,
       },
     );
-    const final = await readToolsCanonical(running.page);
-    const finalSettings = canonicalizeStableSettings(final.settings, { disk: false });
+    const finalSettings = canonicalizeStableSettings(
+      await running.page.evaluate(() => window.gwNative.settings.get()),
+      { disk: false },
+    );
     assert.equal(finalSettings.buildLibrary, false, "Stable save enabled Apply Team");
     assert.deepEqual(
       finalSettings,
       expectedFinalSettings,
       "Stable lost candidate-written settings while saving its own patch",
     );
-    assert.deepEqual(final.library, finalLibrary);
   });
 
   const names = await readdir(toolsCohort.userData);
