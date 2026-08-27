@@ -287,6 +287,23 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
+  it("shows the bounded Pre-Searing scope without claiming unknown unlocks", async () => {
+    const { wrapper, state } = fixture();
+    state.value = {
+      status: "ready",
+      mapId: 148,
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords: null,
+    };
+    await flushPromises();
+
+    expect(wrapper.get("#travel-available-title").text()).toBe("Destinations");
+    expect(wrapper.get(".travel-available").text()).toContain("6 nearby");
+    expect(wrapper.get(".travel-available").text()).toContain("Ashford Abbey");
+    expect(wrapper.get(".travel-available").text()).not.toContain("unlocked");
+    wrapper.unmount();
+  });
+
   it("keeps Recent and Favorites when more than ten destinations are unlocked", async () => {
     const { wrapper, state } = fixture({ history: [81] });
     const unlockedMapWords = Array.from({ length: 28 }, () => 0);
