@@ -218,6 +218,55 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
+  it("shows every unlocked destination before typing when the catalogue is small", async () => {
+    const { wrapper, state, travel } = fixture({ history: [449, 55] });
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0);
+    for (const mapId of [148, 164, 165, 166, 163, 778]) {
+      unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
+    }
+    state.value = {
+      status: "ready",
+      mapId: 148,
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords,
+    };
+    await flushPromises();
+
+    expect(wrapper.get("#travel-available-title").text()).toBe("Available");
+    expect(wrapper.findAll(".travel-available .travel-recent")).toHaveLength(6);
+    expect(wrapper.get(".travel-available").text()).toContain("All unlocked destinations");
+    expect(wrapper.get(".travel-available").text()).toContain("Ascalon City (pre-Searing)");
+    expect(wrapper.get(".travel-available").text()).toContain("Piken Square (pre-Searing)");
+    expect(wrapper.get(".travel-available").text()).toContain("Current");
+    expect(wrapper.get('[aria-current="location"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".travel-history").exists()).toBe(false);
+    expect(wrapper.find(".travel-favorites").exists()).toBe(false);
+
+    await wrapper.get('[aria-label="Travel to Ashford Abbey"]').trigger("click");
+    expect(travel).toHaveBeenCalledWith({ mapId: 164 });
+    wrapper.unmount();
+  });
+
+  it("keeps Recent and Favorites when more than twelve destinations are unlocked", async () => {
+    const { wrapper, state } = fixture({ history: [81] });
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0);
+    for (const mapId of [148, 164, 165, 166, 163, 778, 81, 55, 20, 49, 109, 85, 133]) {
+      unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
+    }
+    state.value = {
+      status: "ready",
+      mapId: 55,
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords,
+    };
+    await flushPromises();
+
+    expect(wrapper.find(".travel-available").exists()).toBe(false);
+    expect(wrapper.find(".travel-history").exists()).toBe(true);
+    expect(wrapper.find(".travel-favorites").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it("shows phrase search results from customization and returns through the cog", async () => {
     const { wrapper } = fixture({ synonyms: [{ term: "daily run", mapId: 480 }] });
     await flushPromises();

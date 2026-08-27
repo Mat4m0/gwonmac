@@ -212,6 +212,8 @@
 .travel-recent strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .travel-recent small { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); line-height: 1.2; }
 .travel-recent svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.travel-palette .travel-recent[data-current] { opacity: 1; }
+.travel-current { color: var(--ui-text-faint); font-size: var(--ui-font-size-sm); }
 
 .travel-history + .travel-favorites {
   margin-top: var(--ui-space-3);

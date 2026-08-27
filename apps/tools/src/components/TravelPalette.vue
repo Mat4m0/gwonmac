@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import {
+  TRAVEL_DESTINATIONS,
   TRAVEL_SEARCH_QUERY_LIMIT,
   TRAVEL_SHORTCUT_LIMIT,
   highlightTravelDestinationName,
@@ -20,6 +21,7 @@ import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 const props = defineProps<{ host: TravelHost; visible: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 type PaletteMode = "travel" | "customize";
+const TRAVEL_BROWSE_LIMIT = 12;
 const COMPACT_FAVORITE_LABELS: Readonly<Record<string, string>> = Object.freeze({
   "Ascalon City": "Ascalon",
   "Kaineng Center": "Kaineng",
@@ -75,6 +77,13 @@ const recentDestinations = computed(() => props.host.history.value
   .map((mapId) => travelDestination(mapId))
   .filter((destination): destination is TravelDestination => destination !== null)
   .slice(0, TRAVEL_HISTORY_VISIBLE_LIMIT));
+const browseDestinations = computed(() => {
+  const state = props.host.state.value;
+  if (state.status !== "ready" || state.unlockedMapWords === null) return [];
+  const destinations = TRAVEL_DESTINATIONS.filter(({ mapId }) => isAvailable(mapId));
+  return destinations.length <= TRAVEL_BROWSE_LIMIT ? destinations : [];
+});
+const browsingSmallCatalogue = computed(() => browseDestinations.value.length > 0);
 const activeDestination = computed(() => results.value[active.value] ?? null);
 const statusText = computed(() =>
   feedback.value
@@ -372,13 +381,19 @@ function onKeydown(event: KeyboardEvent): void {
     </section>
 
     <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="region" aria-label="Travel">
-      <section v-if="recentDestinations.length" class="travel-section travel-history" aria-labelledby="travel-history-title">
+      <section v-if="browsingSmallCatalogue" class="travel-section travel-available" aria-labelledby="travel-available-title">
+        <header class="travel-section-head"><h2 id="travel-available-title">Available</h2><span>All unlocked destinations</span></header>
+        <div class="travel-recent-grid">
+          <button v-for="destination in browseDestinations" :key="destination.mapId" type="button" class="travel-recent ui-row" :data-current="destination.mapId === currentMapId || undefined" :disabled="travelPending || host.unavailable !== null || destination.mapId === currentMapId" :aria-current="destination.mapId === currentMapId ? 'location' : undefined" :aria-label="destination.mapId === currentMapId ? `${destination.name}, current location` : `Travel to ${destination.name}`" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><span v-if="destination.mapId === currentMapId" class="travel-current">Current</span><svg v-else viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></button>
+        </div>
+      </section>
+      <section v-else-if="recentDestinations.length" class="travel-section travel-history" aria-labelledby="travel-history-title">
         <header class="travel-section-head"><h2 id="travel-history-title">Recent</h2></header>
         <div class="travel-recent-grid">
           <button v-for="destination in recentDestinations" :key="destination.mapId" type="button" class="travel-recent ui-row" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to recent destination ${destination.name}`" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></button>
         </div>
       </section>
-      <section class="travel-section travel-favorites" aria-labelledby="travel-favorites-title">
+      <section v-if="!browsingSmallCatalogue" class="travel-section travel-favorites" aria-labelledby="travel-favorites-title">
         <header class="travel-section-head"><h2 id="travel-favorites-title">Favorites</h2><span>Press 1–9</span></header>
         <div v-if="assignedShortcuts.length" class="travel-favorite-grid">
           <button v-for="row in assignedShortcuts" :key="row.index" type="button" class="travel-favorite ui-raised" :title="row.destination?.name" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to ${row.destination?.name}, shortcut ${row.index + 1}`" @click="row.request && travel(row.request)"><b>{{ row.index + 1 }}</b><span>{{ row.destination && favoriteLabel(row.destination) }}</span></button>
@@ -404,7 +419,7 @@ function onKeydown(event: KeyboardEvent): void {
         <p v-if="phraseError" id="travel-phrase-error" class="ui-field-error travel-phrase-error">{{ phraseError }}</p>
       </section>
     </section>
-    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</span><span v-if="mode === 'travel' || hasQuery" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span></footer>
+    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</span><span v-if="hasQuery" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="browsingSmallCatalogue" class="travel-key-hints">Type to filter</span><span v-else-if="mode === 'travel'" class="travel-key-hints"><kbd class="ui-kbd">1–9</kbd> travel</span><span v-else class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span></footer>
     <div class="travel-header-actions">
       <button ref="settingsButton" type="button" class="ui-button travel-close" data-icon aria-label="Customize Travel" title="Customize Travel" :aria-pressed="mode === 'customize'" aria-controls="travel-customize-panel" :disabled="preferenceControlsDisabled" @click="toggleCustomize"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg></button>
       <button type="button" class="ui-button travel-close" data-icon aria-label="Close Quick Travel" @click="emit('close')"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>
