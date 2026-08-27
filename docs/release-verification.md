@@ -194,7 +194,14 @@ On the maintainer Mac:
 7. If the release claims Tools support, test Target Distance, party and map
    transitions, Travel, eligible and restricted Xunlai states plus aliases, and
    one minimal reversible Team Apply operation.
-8. If 4 GB mode is requested, confirm it is effective. Also confirm that a
+8. With Tools enabled in a supported PvE area, confirm Settings changes from
+   supported to `Working — live skill bar detected` and `Working — live
+   cooldown data detected`. Verify every configured key badge, then use a
+   recharging skill and verify its cooldown number. A static `Available` result
+   is not live overlay acceptance.
+9. Copy and retain both reload traces: an outpost reload must end in `outpost`,
+   and an explorable reload must end in `restored`.
+10. If 4 GB mode is requested, confirm it is effective. Also confirm that a
    refused pair keeps the game playable in normal 2 GB mode.
 
 A 16 GB Apple Silicon MacBook Pro is sufficient for this owned check. Record the

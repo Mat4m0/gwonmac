@@ -24,6 +24,10 @@ import {
   type HiddenCursorRetry,
 } from "./cursor-refresh.js";
 import { decodeEnhancementManifest } from "./enhancement-manifest.js";
+import {
+  setSkillCooldownLiveState,
+  setSkillGeometryLiveState,
+} from "./observer-live-state.js";
 import { createPlayRegionObservationInstallation } from "./play-region-state-installation.js";
 import type {
   CompanionExtensionSession,
@@ -350,6 +354,19 @@ export async function installCoreCertifiedCompanion(
       playRegions.sink,
       extensionSession?.observer.readers ?? null,
       firstObservation,
+      {
+        skillGeometry(state) {
+          if (!setSkillGeometryLiveState(state)) return;
+          recordMilestone("enhancement.skillGeometryState", state.status === "ready"
+            ? { state: "ready", reason: null, candidates: 8 }
+            : {
+              state: "waiting",
+              reason: state.reason,
+              candidates: "candidateCount" in state ? state.candidateCount : null,
+            });
+        },
+        skillCooldowns: setSkillCooldownLiveState,
+      },
     );
 
     const installation = coreInstallations + 1;

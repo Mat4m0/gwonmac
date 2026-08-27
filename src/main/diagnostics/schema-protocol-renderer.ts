@@ -7,6 +7,7 @@ import { ALLOWED_PORTS } from "../core/allowlists.js";
 import {
   RELOG_INPUT_OUTCOMES,
   ENHANCEMENT_OBSERVER_CONSUMERS,
+  SKILL_GEOMETRY_WAIT_REASONS,
   RELOG_INPUT_STAGES,
   RELOG_SKIP_REASONS,
   RELOG_TERMINAL_OUTCOMES,
@@ -264,6 +265,16 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     fields: {
       consumer: literal(ENHANCEMENT_OBSERVER_CONSUMERS),
       signal: literal(["installed", "first-observation"] as const),
+    },
+  },
+  "enhancement.skillGeometryState": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: {
+      state: literal(["waiting", "ready"] as const),
+      reason: nullable(literal(SKILL_GEOMETRY_WAIT_REASONS)),
+      candidates: nullable(uint32),
     },
   },
   "renderer.processExitedDuringQuit": {

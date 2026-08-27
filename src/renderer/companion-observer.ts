@@ -104,6 +104,10 @@ export function observeCompanion(
   playRegion: PlayRegionConsumer | null = null,
   readers: OptionalObserverReaders | null = null,
   firstObservation: (consumer: EnhancementObserverConsumer) => void = () => {},
+  liveState: Readonly<{
+    skillGeometry?(state: CompanionSkillSlotState): void;
+    skillCooldowns?(state: CompanionSkillCooldownState): void;
+  }> = {},
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -195,22 +199,32 @@ export function observeCompanion(
         }
       }
     }
-    if (skillSlots && skillSlots.enabled?.() !== false) {
+    if (skillSlots && skillSlots.enabled?.() === false) {
+      liveState.skillGeometry?.(Object.freeze({
+        status: "waiting",
+        reason: "inactive",
+        candidateCount: 0,
+      }));
+    } else if (skillSlots) {
       if (!readers) throw new Error("Tools skill readers are unavailable");
       const state = readers.readCompanionSkillSlots(
         runtime.memory.buffer,
         runtime.skillSlotPointer ?? 0,
       );
       skillSlots.update(state);
+      liveState.skillGeometry?.(state);
       if (state.status === "ready") firstObservation("skill-geometry");
     }
-    if (skillCooldowns && skillCooldowns.enabled?.() !== false) {
+    if (skillCooldowns && skillCooldowns.enabled?.() === false) {
+      liveState.skillCooldowns?.(Object.freeze({ status: "waiting", reason: "game" }));
+    } else if (skillCooldowns) {
       if (!readers) throw new Error("Tools skill readers are unavailable");
       const state = readers.readCompanionSkillCooldowns(
         runtime.memory.buffer,
         runtime.skillCooldownPointer ?? 0,
       );
       skillCooldowns.update(state);
+      liveState.skillCooldowns?.(state);
       if (state.status === "ready") firstObservation("cooldowns");
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.

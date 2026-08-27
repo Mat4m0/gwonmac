@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   compatibilityReport,
   renderClientCompatibility,
+  renderEnhancementLiveAvailability,
   showCompatibilityNotice,
 } from "../../src/renderer/client-compatibility-notice.js";
 import type { ClientCompatibility, ClientSession } from "../../src/shared/contracts.js";
@@ -87,7 +88,9 @@ describe("client compatibility notice", () => {
       acknowledgePerBuild: false,
       recovery: null,
       summary: "This Guild Wars version is supported.",
-      details: ["Everything you turned on is available."],
+      details: [
+        "Compatibility checks passed. Features that use live game information are confirmed below.",
+      ],
     });
   });
 
@@ -321,11 +324,56 @@ describe("client compatibility notice", () => {
     );
     assert.equal(
       dom.element("settings-feature-skillSlotGeometry").textContent,
-      "Available",
+      "Supported — waiting for Guild Wars",
     );
     assert.equal(
       dom.element("settings-feature-skillCooldownObservation").textContent,
-      "Available",
+      "Supported — waiting for Guild Wars",
+    );
+  });
+
+  it("distinguishes certified overlay support from live observations", () => {
+    const dom = compatibilityDom();
+    const session: ClientSession = {
+      appVersion: "2026.8.10",
+      extendedMemory: STANDARD_MEMORY,
+      healthToken: null,
+      compatibility: compatibility({
+        skillSlotGeometry: available,
+        skillCooldownObservation: available,
+      }),
+    };
+    renderClientCompatibility(dom.root, session);
+    renderEnhancementLiveAvailability(dom.root, session, "none", {
+      skillGeometry: {
+        status: "ready",
+        sequence: 2,
+        frameId: 1,
+        viewportWidth: 800,
+        viewportHeight: 600,
+        slots: Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({
+          left: 100 + index * 52,
+          bottom: -12,
+          right: 148 + index * 52,
+          top: 36,
+        }))),
+      },
+      skillCooldowns: {
+        status: "ready",
+        sequence: 2,
+        generation: 1,
+        gameTimer: 1_000,
+        playerAgentId: 1,
+        rechargeTimestamps: Object.freeze([0, 0, 0, 0, 0, 0, 0, 0]),
+      },
+    });
+    assert.equal(
+      dom.element("settings-feature-skillSlotGeometry").textContent,
+      "Working — live skill bar detected",
+    );
+    assert.equal(
+      dom.element("settings-feature-skillCooldownObservation").textContent,
+      "Working — live cooldown data detected",
     );
   });
 
