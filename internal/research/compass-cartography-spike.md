@@ -369,3 +369,42 @@ scalar proof-color bounds. `texture-matrix.json` is the comparison summary. It
 does not retain decoded screenshot pixels. Classify each fingerprint as stable,
 content-specific, or rejected only after all three same-map openings, a closed
 negative control, the transition, and the different-map capture agree.
+
+## Two-tile live result
+
+The full matrix ran on 2026-08-27 against build 38878. Evidence is retained
+locally under
+`test-results/graphics-live/2026-08-27T15-19-06-919Z/` and is intentionally not
+committed.
+
+- Lion's Arch reproduced both exact matches across the initial load, two
+  close/reopen cycles, and an America-to-International district transition.
+  The cumulative counters advanced together from 1 to 4 and did not advance in
+  either closed capture.
+- `fnv1a32:2f4cf29b` visibly produced the yellow/blue checkerboard in stable
+  Lion's Arch map-space regions on all three open screenshots and after the
+  district transition.
+- Delrimor Bowl proved the second independent screen mapping:
+  `fnv1a32:fcaade3f` visibly produced the magenta/cyan checkerboard over a large
+  terrain region. Its cumulative count advanced from 4 to 7, while
+  `fnv1a32:2f4cf29b` advanced from 4 to 5.
+- Both candidates remained exact full 512x512, level-zero,
+  RGBA/UNSIGNED_BYTE sub-image uploads. The original fingerprints remained in
+  every record and the byte-exact restoration fixture continued to pass.
+- The proof-color bounds detector is reliable for the unambiguous Delrimor Bowl
+  magenta/cyan region. It produced false positives from normal world colors and
+  missed some checkerboards blended with terrain in Lion's Arch, so those
+  scalar bounds are diagnostic only. The labeled screenshots are the visual
+  evidence for Lion's Arch.
+- A forced `WEBGL_lose_context` cycle emitted both context-lost and
+  context-restored events, but the game canvas remained black with zero live
+  tracked textures after an additional bounded recovery window. Context-reset
+  recovery is rejected for this client path; the probe must not claim a usable
+  restored state merely because Chromium emitted the event.
+
+Classification: exact generated texture replacement is **feasible and
+content-specific** for the certified client and upload form. Normal Mission Map
+open/close and district lifecycles are stable. Forced graphics-context recovery
+is **too fragile** and must fail closed. This evidence supports a narrow
+development substitution path, not a generic TexMod loader or production asset
+pipeline.
