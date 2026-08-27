@@ -5,6 +5,10 @@ import {
   codeOperandOccurrences,
   wasmEvidence,
 } from "../src/main/certification/wasm-evidence.js";
+import { ENHANCEMENT_BUILDS } from
+  "../src/main/certification/enhancement-builds.js";
+import { deriveCompassFrameSpikeProof } from
+  "../src/main/certification/compass-frame-spike-proof.js";
 
 const clientPath = path.join(
   homedir(),
@@ -36,6 +40,14 @@ function utf16Le(value: string) {
 const bytes = new Uint8Array(await readFile(clientPath));
 const evidence = wasmEvidence(bytes);
 if (!evidence) throw new Error("the cached client is not a supported bounded WASM input");
+const retained = ENHANCEMENT_BUILDS[0];
+const compassProof = retained?.preGameControls && retained.skillSlotGeometry
+  ? deriveCompassFrameSpikeProof(
+      evidence,
+      retained.preGameControls,
+      retained.skillSlotGeometry,
+    )
+  : null;
 
 const compassAddresses = evidence.data.addresses(utf16Le("Compass"));
 const pathingAddresses = PATHING_ANCHORS.flatMap((label) =>
@@ -69,6 +81,16 @@ console.log(JSON.stringify({
     label: "Compass",
     encoding: "utf16-le",
     occurrences: compassAddresses.map(project),
+    namedFrameProof: compassProof === null
+      ? { status: "refused" }
+      : {
+          status: "proved",
+          ownerFunction: compassProof.ownerFunction,
+          closedRuntimePublication: [
+            "frameId", "visible", "viewportWidth", "viewportHeight",
+            "left", "bottom", "right", "top", "mapGeneration",
+          ],
+        },
   },
   pathing: PATHING_ANCHORS.map((label) => ({
     label,
