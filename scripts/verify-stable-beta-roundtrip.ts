@@ -40,7 +40,13 @@ import {
   type AppSettings,
 } from "../src/shared/contracts.ts";
 import { parseSettings, saveSettings } from "../src/main/core/settings.ts";
-import { saveWindowState } from "../src/main/core/window-state.ts";
+import {
+  fitWindowStateToDisplays,
+  parseWindowState,
+  saveWindowState,
+  type RestorableWindowState,
+  type WindowBounds,
+} from "../src/main/core/window-state.ts";
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.ts";
 import { DEFAULT_CUSTOM_UI_THEME } from "../src/shared/ui-theme.ts";
 import {
@@ -331,6 +337,7 @@ async function readCoreCanonical(page: Page): Promise<{
 async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
   await publishWindowSize(cohort, 1_000, 700);
   console.log("stable/beta compatibility: Core preload round-trip");
+  const stableWindowState = await readPersistedWindowState(cohort);
   const stableSettings = await withPackagedApp(cohort, stableApp!, async (core) => {
     const settings = await core.page.evaluate(() => window.gwNative.settings.set({
       autoCheckUpdates: false,
@@ -338,10 +345,11 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
       showDiagnostics: false,
     }));
     await roundTripProfileStore(core.page, null, "stable-core-template");
-    assert.deepEqual(await windowSize(core.page), { width: 1_000, height: 700 });
+    await assertWindowMatchesPersistedState(stableWindowState, core.page);
     return canonicalizeStableSettings(settings, { disk: false });
   });
   await assertDiskSentinel(cohort);
+  const candidateWindowState = await readPersistedWindowState(cohort);
   await withPackagedApp(cohort, candidateApp!, async (core) => {
     const initial = await readCoreCanonical(core.page);
     assert.deepEqual(initial.toolNamespaces, [], "candidate Core launch exposed a Tools namespace");
@@ -353,9 +361,10 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
     );
     assert.deepEqual(changed, { ...stableSettings, showDiagnostics: true });
     await roundTripProfileStore(core.page, "stable-core-template", "candidate-core-template");
-    assert.deepEqual(await windowSize(core.page), { width: 1_000, height: 700 });
+    await assertWindowMatchesPersistedState(candidateWindowState, core.page);
   });
   await assertDiskSentinel(cohort);
+  const rollbackWindowState = await readPersistedWindowState(cohort);
   await withPackagedApp(cohort, stableApp!, async (core) => {
     const returned = canonicalizeStableSettings(
       await core.page.evaluate(() => window.gwNative.settings.get()),
@@ -364,7 +373,7 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
     assert.equal(returned.buildLibrary, false, "rollback Stable lost the Apply-Team opt-out");
     assert.deepEqual(returned, { ...stableSettings, showDiagnostics: true });
     await roundTripProfileStore(core.page, "candidate-core-template", "stable-return-core-template");
-    assert.deepEqual(await windowSize(core.page), { width: 1_000, height: 700 });
+    await assertWindowMatchesPersistedState(rollbackWindowState, core.page);
   });
   await assertDiskSentinel(cohort);
 }
@@ -387,6 +396,33 @@ const publishWindowSize = (cohort: Cohort, width: number, height: number): Promi
 
 async function windowSize(page: Page): Promise<{ width: number; height: number }> {
   return page.evaluate(() => ({ width: outerWidth, height: outerHeight }));
+}
+
+async function assertWindowMatchesPersistedState(
+  stored: RestorableWindowState,
+  page: Page,
+): Promise<void> {
+  const workArea = await page.evaluate((): WindowBounds => ({
+    // GitHub's ephemeral macOS release runner exposes one display at the
+    // origin. The browser API provides its usable size but not a typed origin.
+    x: 0,
+    y: 0,
+    width: screen.availWidth,
+    height: screen.availHeight,
+  }));
+  const expected = fitWindowStateToDisplays(stored, [workArea], workArea).bounds;
+  assert.deepEqual(await windowSize(page), {
+    width: expected.width,
+    height: expected.height,
+  });
+}
+
+async function readPersistedWindowState(
+  cohort: Cohort,
+): Promise<RestorableWindowState> {
+  return parseWindowState(JSON.parse(
+    await readFile(cohort.windowStatePath, "utf8"),
+  ));
 }
 
 /**
@@ -548,6 +584,7 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   const stableSettingsDocument = await readSettingsDocument(toolsCohort);
 
   console.log("stable/beta compatibility: candidate reads, modifies, and writes");
+  const candidateWindowState = await readPersistedWindowState(toolsCohort);
   await withPackagedApp(toolsCohort, candidatePath, async (running) => {
     assert.equal(
       (await running.page.evaluate(
@@ -566,7 +603,7 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
     assert.equal(candidateInitialSettings.uiPanelOpacity, 88);
     assert.equal(candidateInitialSettings.buildLibrary, false);
     assert.deepEqual(candidateInitial.library, initialLibrary);
-    assert.deepEqual(await windowSize(running.page), { width: 1_000, height: 700 });
+    await assertWindowMatchesPersistedState(candidateWindowState, running.page);
     await roundTripProfileStore(running.page, "stable-template", "candidate-template");
     await running.page.evaluate(
       async ({ settings, library }) => {
@@ -593,6 +630,7 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   );
 
   console.log("stable/beta compatibility: the same Stable reads and writes again");
+  const rollbackWindowState = await readPersistedWindowState(toolsCohort);
   const expectedFinalSettings: Record<string, unknown> = {
     ...validateCandidateSettings(candidateSettingsDocument, { disk: true }),
     showDiagnostics: false,
@@ -616,7 +654,7 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       "Stable did not read every candidate-written settings value",
     );
     assert.deepEqual(returned.library, candidateLibrary);
-    assert.deepEqual(await windowSize(running.page), { width: 960, height: 680 });
+    await assertWindowMatchesPersistedState(rollbackWindowState, running.page);
     await roundTripProfileStore(running.page, "candidate-template", "stable-return-template");
     await running.page.evaluate(
       async ({ settings, library }) => {
