@@ -14,6 +14,7 @@ its rules.
 | How do client features remain safe across ArenaNet updates? | [ArenaNet compatibility](arenanet-compatibility.md) |
 | How does Trade Chat discovery work? | [Trade Chat discovery](trade-discovery.md) |
 | What can diagnostics record and export? | [Diagnostics](diagnostics.md) |
+| How do agents develop, branch, stabilize, and roll out changes? | [Development and rollout](development-workflow.md) |
 | How do I change or recertify an Enhancement? | [Enhancement development](enhancement-development.md) |
 | How are player skill cooldowns certified and displayed? | [Skill cooldowns](skill-cooldowns.md) |
 | What is the later research path for effects and debuffs? | [Future effect and debuff research](future-effect-durations.md) |

@@ -23,11 +23,25 @@ test("release workflow stages and publishes one tested, attested package version
   const feedWorkflow = read(".github/workflows/update-feeds.yml");
   const verification = read(".github/workflows/macos-verify.yml");
   assert.match(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
+  assert.match(
+    workflow,
+    /source:[\s\S]*outputs:[\s\S]*steps\.release-source\.outputs\.version[\s\S]*name: Resolve and validate the release source[\s\S]*SOURCE_BRANCH: \$\{\{ github\.ref_name \}\}[\s\S]*SOURCE_TYPE: \$\{\{ github\.ref_type \}\}[\s\S]*\^release\/\[0-9\]\{4\}/,
+  );
+  assert.match(workflow, /verify:\n {4}needs: source/);
+  assert.match(workflow, /release-build:\n {4}needs: \[source, verify\]/);
   assert.match(verification, /runs-on: macos-15/);
   assert.match(verification, /test "\$\(uname -m\)" = "arm64"/);
   assert.match(workflow, /test "\$\(uname -m\)" = "arm64"/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
+  assert.match(
+    workflow,
+    /release_line="\$\{version%%-\*\}"[\s\S]*\$SOURCE_BRANCH" == release\/\*[\s\S]*\$\{SOURCE_BRANCH#release\/\}" != "\$release_line"[\s\S]*does not match package version/,
+  );
+  assert.match(
+    workflow,
+    /release-build:[\s\S]*bundle-version: \$\{\{ needs\.source\.outputs\.bundle-version \}\}[\s\S]*version: \$\{\{ needs\.source\.outputs\.version \}\}/,
+  );
   assert.match(workflow, /git\/ref\/tags\/\$TAG/);
   assert.match(
     workflow,
@@ -191,14 +205,8 @@ test("release workflow stages and publishes one tested, attested package version
   // build or package-verification step may branch around work for a dry run.
   // The build records what it produced where skipped jobs cannot hide it.
   assert.match(workflow, /workflow_dispatch:\n {4}inputs:\n {6}dry_run:/);
-  assert.match(
-    releaseStage,
-    /stage-release:\n {4}if: github\.ref == 'refs\/heads\/main' && !inputs\.dry_run/,
-  );
-  assert.match(
-    releasePublish,
-    /release:\n {4}if: github\.ref == 'refs\/heads\/main' && !inputs\.dry_run/,
-  );
+  assert.match(releaseStage, /stage-release:\n {4}if: \$\{\{ !inputs\.dry_run \}\}/);
+  assert.match(releasePublish, /release:\n {4}if: \$\{\{ !inputs\.dry_run \}\}/);
   assert.equal(workflow.match(/if: [^\n]*dry_run/gu)?.length, 2);
   assert.match(
     releaseBuild,
