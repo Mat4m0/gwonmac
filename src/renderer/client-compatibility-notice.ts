@@ -11,6 +11,7 @@ import type {
   ClientCompatibility,
   ClientSession,
 } from '../shared/contracts.js';
+import type { EnhancementProgram } from '../shared/enhancement-contracts.js';
 
 export type CompatibilityReport = {
   degraded: boolean;
@@ -37,6 +38,15 @@ const FEATURE_NAMES: Readonly<Record<VisibleFeature, string>> = Object.freeze({
   skillSlotGeometry: 'skill key overlay',
   skillCooldownObservation: 'skill cooldown observation',
 });
+const PROGRAM_NAMES: Readonly<Record<Exclude<EnhancementProgram, 'none'>, string>> =
+  Object.freeze({
+    'cursor-observer': 'Cursor Observer',
+    'target-observer': 'Target Observer',
+    'toolbox-foundation': 'Toolbox Foundation',
+    'toolbox-commands': 'Toolbox Commands',
+    'xunlai-storage': 'Xunlai Storage',
+    'reconnect-probe': 'Reconnect Probe',
+  });
 
 function unavailableFeatures(compatibility: ClientCompatibility): VisibleFeature[] {
   // Area detection is an internal substrate. Its dependants already carry the
@@ -171,10 +181,15 @@ function requiredElement(root: Document, id: string): HTMLElement {
   return node;
 }
 
-function featureStatusLabel(status: ClientCompatibility['features'][Feature]): string {
+function featureStatusLabel(
+  status: ClientCompatibility['features'][Feature],
+  program: EnhancementProgram,
+): string {
   switch (status.status) {
     case 'available': return 'Available';
-    case 'off': return 'Off';
+    case 'off': return program === 'none'
+      ? 'Off'
+      : `Off — excluded by ${PROGRAM_NAMES[program]} live-test mode`;
     case 'unavailable': return 'Unavailable';
   }
 }
@@ -198,6 +213,7 @@ const offFeatureStatus = Object.freeze({ status: 'off' } as const);
 export function renderClientCompatibility(
   root: Document,
   session: ClientSession,
+  program: EnhancementProgram = 'none',
 ): CompatibilityReport | null {
   const settingsStatus = requiredElement(root, 'settings-compat-status');
   const settingsDetail = requiredElement(root, 'settings-compat-detail');
@@ -231,7 +247,7 @@ export function renderClientCompatibility(
       ? cooldownPresentationStatus(session.compatibility.features)
       : session.compatibility.features[feature];
     requiredElement(root, `settings-feature-${feature}`).textContent =
-      featureStatusLabel(status);
+      featureStatusLabel(status, program);
   }
   const detail = report.details.join(' ');
   settingsStatus.hidden = false;

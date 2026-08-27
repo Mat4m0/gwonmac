@@ -422,6 +422,7 @@
     renderClientCompatibility(
       document,
       session,
+      window.gwNative.init.enhancementProgram,
     );
     const fileSaving = session.compatibility?.features.gameFileSaving;
     templatePane?.setAvailability(
