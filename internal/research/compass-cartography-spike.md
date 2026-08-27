@@ -161,6 +161,50 @@ lifecycles without a crash or stale publication. The shape stage is successful
 when several samples match visible terrain. Only then is a renderer prototype
 worth building.
 
+### Exact pathing certification result
+
+The exact official client proves the pathing record shape, but it does not yet
+prove a safe owner chain. Run the bounded static verdict with:
+
+```sh
+pnpm recon:pathing-certification
+```
+
+The proof joins three independent anchors through the exact builder and loader:
+
+- function `3216` reads a live path-map count at `+0x14` and pointer at
+  `+0x18`; it advances by 48 bytes;
+- the live record stores two portal fields at `+0x14/+0x16` and six finite
+  coordinates at `+0x18..+0x2c`;
+- function `3281` constructs the six coordinates and owns the infinite-bounds
+  refusal;
+- function `3273` owns the unique definition-reference check against 1,024;
+  and
+- function `3288` calls both writers once, while loader `3208` calls the live
+  converter once.
+
+The 1,024 check bounds definition references. It is not a proved total live
+trapezoid bound. Static analysis did not establish any of these hypotheses:
+
+```text
+GameContext +0x14 -> MapContext
+MapContext +0x74 -> PathContext
+PathContext +0x00 -> MapStaticData
+MapStaticData +0x18 -> PathingMapArray
+```
+
+The GWCA layout remains a search hypothesis only. There is also no certified
+path-map count, array representation, lifetime, or total trapezoid bound.
+Therefore this branch adds no memory observer and publishes no geometry. A
+development observer without those facts would convert guessed offsets into a
+renderer-visible authority and violate the stop condition.
+
+The next acceptable experiment must first identify one exact client function
+that walks from a certified context owner to the same live `PathingMap` shape.
+Its owner transitions must then be tested at character select, loading, an
+outpost, an explorable area, and return to character select. Only a proved
+fixed-size owner record may precede sampled trapezoids.
+
 ## Compass geometry and orientation
 
 Reuse the certified UI-frame lookup method. Add a closed `Compass` observation,
