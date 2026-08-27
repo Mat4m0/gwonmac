@@ -114,6 +114,18 @@ test("release workflow stages and publishes one tested, attested package version
   assert.match(releaseBuild, /actions\/upload-artifact@/);
   assert.match(releaseStage, /actions\/download-artifact@/);
   assert.match(
+    releaseBuild,
+    /release-assets-name: \$\{\{ steps\.release-artifact\.outputs\.name \}\}[\s\S]*name=release-assets-\$GITHUB_RUN_ID-\$GITHUB_RUN_ATTEMPT[\s\S]*name: \$\{\{ steps\.release-artifact\.outputs\.name \}\}/,
+  );
+  assert.match(
+    releaseStage,
+    /name: \$\{\{ needs\.release-build\.outputs\.release-assets-name \}\}/,
+  );
+  assert.doesNotMatch(
+    releaseStage,
+    /release-assets-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
+  );
+  assert.match(
     releaseStage,
     /- name: Attest ZIP provenance\n {8}uses: actions\/attest@[0-9a-f]{40}[^\n]*\n {8}with:\n {10}subject-path: release-assets\/\*\.zip\n\n {6}- name: Attest ZIP SBOM\n {8}uses: actions\/attest@[0-9a-f]{40}[^\n]*\n {8}with:\n {10}subject-path: release-assets\/\*\.zip\n {10}sbom-path: \$\{\{ steps\.release-state\.outputs\.sbom \}\}\n\n {6}- name: Attest DMG provenance\n {8}uses: actions\/attest@[0-9a-f]{40}[^\n]*\n {8}with:\n {10}subject-path: release-assets\/\*\.dmg/,
   );
@@ -214,7 +226,7 @@ test("release workflow stages and publishes one tested, attested package version
   assert.match(workflow, /--json isDraft --jq '\.isDraft'\)" != "true"/);
   assert.match(
     workflow,
-    /--json targetCommitish --jq '\.targetCommitish'\)" = "\$GITHUB_SHA"/,
+    /draft_target="\$\(gh release view[\s\S]*--json targetCommitish --jq '\.targetCommitish'\)"[\s\S]*if \[ "\$draft_target" != "\$GITHUB_SHA" \]; then[\s\S]*Delete the obsolete unpublished draft before retrying/,
   );
   assert.match(
     workflow,
