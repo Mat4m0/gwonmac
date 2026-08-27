@@ -107,7 +107,7 @@ unwitnessed field must fail TypeScript compilation or boundary validation.
 | Feature | Required proof | Refusal behavior |
 | --- | --- | --- |
 | Template saving | Unique bridge stubs, all 11 call sites, signatures, argument modes, control flow, and independently derived static storage | Serve the untouched official module; do not claim persistent template repair |
-| Native double-click | Unique callback, signature, active table role, frame insertion point, and valid transformed output | Keep ordinary client input; never synthesize touch events |
+| Native double-click | Named browser mousedown registration of the unique callback, complete producer/consumer queue-storage ledgers, the exact translator dispatch role, mouse-message table binding, click consumer, and flag-lift route, followed by the exact frame insertion and output | Keep ordinary client input; report it unavailable; never synthesize touch events |
 | Guild Wars cursor | Unique loop/callback/table/neighbour graph, both producers, and independently derived globals, buffer, and layout | Use the normal macOS pointer |
 | Target Distance | Complete observation base, target-field ledger, precedence, and bounded finite snapshot behavior | Disable Target Distance only |
 | Party capture | Complete roster, ownership, profession, unlock, flag, skill, attribute, dirty-message, and transition lifecycle | Disable party observation and dependent Team Apply |
@@ -133,6 +133,25 @@ typed evidence, while production rechecks that exact digest against the
 candidate function before rewriting it. This distinction permits routine
 function-index and static-data relocation without weakening input binding.
 
+## Current implementation limits
+
+The rules above are the required design, not a promise that every existing
+locator already meets the final relocation-resistant bar. At verifier ABI 7:
+
+- parts of file/template certification still depend on fixed instruction spans
+  and exact static-role baselines;
+- parts of Core and Tools certification still use raw body digests or common
+  relocation checks while selecting a candidate; and
+- native double-click verifies the complete known route, but exact body binding
+  can still refuse after a harmless call-index change.
+
+These checks fail closed. They can therefore disable a feature after an
+equivalent ArenaNet rebuild even when game behavior did not change. A refusal
+must remain local to that feature and its declared dependants, but restoring it
+can still require a source change until the remaining locators are migrated to
+independent semantic witnesses. Do not describe the current implementation as
+automatically surviving every routine rebuild.
+
 ## Patch-day playbook
 
 The scheduled recertification workflow detects a changed ArenaNet code
@@ -157,8 +176,10 @@ For a refusal:
    its explicit dependants.
 2. Open or update one tracking issue naming the failed invariant and candidate
    count when applicable.
-3. Preserve the preceding and current artifacts locally. Never commit or upload
-   them.
+3. Preserve the preceding and current private investigation bundles before
+   ArenaNet replaces either pair. Never commit or publicly upload them. Record
+   their generation, hashes, sizes, verifier ABI, source commit, reports, and
+   live-QA notes as defined in [the recovery guide](../internal/upstream/recertify.md).
 4. Reproduce with the exact shortcut tables disabled.
 5. Classify every changed operand. Do not approve a common delta, copied
    address, unexplained constant, or partial occurrence ledger.
@@ -166,17 +187,22 @@ For a refusal:
    ambiguity, timeout, malformed-boundary, and output-mismatch tests.
 7. Run the complete acceptance chain before publishing a verifier change.
 
-The workflow's durable success ledger prevents repeated expensive derivation.
-It is bound to the verifier ABI and generation hash and cannot grant runtime
+The workflow's durable ledger prevents repeated expensive derivation. A closed
+proved issue or open refusal issue indexes each processed generation and
+verifier ABI. A GitHub attestation
+binds the privacy-safe `generation.json` record to the official WASM digest.
+The review artifact contains only that record and `carry-forward.md`, expires
+after 90 days, and contains no client bytes or locator internals. Detailed
+reports remain runner-temporary. None of this evidence can grant runtime
 authority.
 
 ## Retained evidence and lessons
 
-| Generation | Available evidence | Valid claim |
-| --- | --- | --- |
-| AEC predecessor | Retained official JS/WASM pair and full structural/mutation replay | All current feature proofs and all supported 4 GB profiles pass structurally |
-| fc931 | Non-binary workflow evidence only | Useful relationship evidence; no retrospective binary-pass claim |
-| e017 current | Retained official JS/WASM pair and full structural/mutation replay | All current feature proofs and all supported 4 GB profiles pass structurally |
+GitHub issues and signed attestations own the automated generation index, exact
+content identities, outcomes, and evidence references. The
+[client generation ledger](../internal/upstream/client-generation-ledger.md)
+defines that schema and retains only bootstrap observations that predate the
+deployed automation.
 
 The retained generations taught these rules:
 
@@ -203,7 +229,8 @@ The retained generations taught these rules:
 The stack is mergeable only when:
 
 - full repository verification and exact-head CI pass for every layer;
-- retained AEC and e017 artifacts pass with exact shortcuts disabled;
+- retained regression artifacts pass with exact shortcuts disabled, and the
+  then-current public generation has a signed qualification or refusal record;
 - every proof-anchor mutation disables only its owning capability;
 - clicks, double-clicks, bursts, and drags emit no synthetic touch events;
 - all supported 4 GB profiles allocate above 3 GB, reject mixed generations and

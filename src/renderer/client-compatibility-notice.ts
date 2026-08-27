@@ -26,6 +26,7 @@ type VisibleFeature = Exclude<Feature, 'playRegionObservation' | 'preGameControl
 
 const FEATURE_NAMES: Readonly<Record<VisibleFeature, string>> = Object.freeze({
   gameFileSaving: 'Guild Wars file saving',
+  nativeDoubleClick: 'native double-click',
   nativeCursor: 'Guild Wars cursor',
   targetObservation: 'target distance',
   partyObservation: 'live party details',

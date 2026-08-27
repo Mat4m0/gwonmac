@@ -291,7 +291,8 @@ test("a new client build can be re-certified without hand-derivation", async () 
   // The regression mode recertify.md makes step 0: prove the tool reproduces
   // today's certified entry before pointing it at a new build.
   assert.match(cli, /--expect-certified/);
-  assert.match(cli, /const features = result\.featureVerdicts/);
+  assert.match(cli, /const featureVerdicts = result\.featureVerdicts/);
+  assert.match(cli, /const features = featureVerdicts === null/);
   assert.match(cli, /invariant: verdict\.invariant/);
   assert.match(cli, /candidates: verdict\.candidates/);
   assert.doesNotMatch(cli, /\n\s+featureVerdicts,\n/);
@@ -441,7 +442,7 @@ test("the WASM section codec has exactly one home", async () => {
   // those transforms without parsing a second time, so it deliberately has no
   // codec dependency of its own.
   const sharers: ReadonlyArray<readonly [file: string, specifier: string]> = [
-    ["src/main/certification/enhancement-wasm-proof-context.ts", '../core/wasm-binary.js'],
+    ["src/main/certification/wasm-evidence.ts", '../core/wasm-binary.js'],
     ["src/main/certification/enhancement-transform.ts", '../core/wasm-binary.js'],
     ["src/main/certification/template-save-compat.ts", '../core/wasm-binary.js'],
     ["src/main/certification/template-save-verifier.ts", '../core/wasm-binary.js'],

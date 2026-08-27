@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { parseSettings } from "../../src/main/core/settings.ts";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
 import {
   ENHANCEMENT_CAPABILITY_CONTRACTS,
@@ -221,6 +222,10 @@ test("shared activation and area policy cover required, setting, and content fea
     ...enabled,
     buildLibrary: false,
   }), false);
+  assert.equal(featureActivationRequested("teamApply", parseSettings({
+    gwonmacTools: true,
+    teamManagement: false,
+  })), false);
   assert.equal(featureRegionAllowsRequest("travel", "pve"), true);
   assert.equal(featureRegionAllowsRequest("travel", "unknown"), false);
   assert.equal(featureRegionAllowsRequest("tools", "unknown"), true);

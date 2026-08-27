@@ -51,7 +51,7 @@ import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
   enhancementProofContext,
   type EnhancementProofContext,
-} from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
 import {
   preparePostTemplateSaveModule,
   type PostTemplateSaveModule,
@@ -568,6 +568,7 @@ function deriveEnhancementBuild(
     ? locateAutomaticCursor(templateOutput, ENHANCEMENT_BUILDS, context)
     : null;
   const locatedPlayRegion = requestedCapabilities.playRegionObservation
+      || requestedCapabilities.preGameControls
     ? locateAutomaticPlayRegion(templateOutput, ENHANCEMENT_BUILDS, context)
     : null;
   const locatedTarget = requestedCapabilities.targetObservation
@@ -580,17 +581,11 @@ function deriveEnhancementBuild(
     context,
     includePlayRegion,
   );
-  // Automatic input may use frame offsets only from this exact transformed
-  // client. Labels and function bodies can be re-derived on a future build,
-  // but they do not prove that the frame table and context layout stayed put.
-  const preGameBaseline = ENHANCEMENT_BUILDS.find(
-    (build) => build.sha256 === report.sha256,
-  ) ?? null;
   const preGameControls = requestedCapabilities.preGameControls
-      && preGameBaseline?.preGameControls
+      && locatedPlayRegion !== null
     ? derivePreGameControls(
         context,
-        preGameBaseline.preGameControls.layout,
+        locatedPlayRegion.playRegionLayout,
       )
     : null;
   const includePreGame = requestedCapabilities.preGameControls
@@ -649,9 +644,7 @@ function deriveEnhancementBuild(
       ? {
           preGameControls: changedFeature(
             "preGameControls",
-            preGameBaseline
-              ? "pre-game.exact-frame-labels"
-              : "pre-game.frame-layout",
+            "pre-game.frame-layout",
           ),
         }
       : {}),
@@ -666,19 +659,15 @@ function deriveEnhancementBuild(
         ? locatedTarget
         : localContributes
           ? locatedLocal
-          : includePreGame && preGameBaseline
-            ? Object.freeze({
-                baseline: preGameBaseline,
-                hookFunction: preGameBaseline.hookFunction,
-                hookBodySha256: preGameBaseline.hookBodySha256,
-              })
+          : includePreGame && locatedPlayRegion
+            ? locatedPlayRegion
             : null;
   if (source === null || !report.table || report.table.max === null) {
     return Object.freeze({ build: null, failures: completeFailures });
   }
   const observationLayout = includeTarget
     ? locatedTarget.observationLayout
-    : includeParty || includeXunlai
+    : includeParty || includeTravel || includeXunlai
       ? locatedLocal!.observationLayout!
       : skillbar.includeCooldown
         ? skillbar.cooldownObservationLayout
@@ -843,6 +832,7 @@ export function verifyLocalClientBytes(
     return {
       ...base,
       status: "template-refused",
+      fileVerdict: null,
       templateSaveBuild: null,
       enhancementBuild: null,
       featureVerdicts: null,
@@ -850,40 +840,54 @@ export function verifyLocalClientBytes(
     };
   }
 
-  let postTemplate: PostTemplateSaveModule | null;
+  let postTemplate: PostTemplateSaveModule | null = null;
+  let templateFailure: "template-shape-changed" | "template-transform-failed" | null = null;
   try {
     postTemplate = preparePostTemplateSaveModule(official);
   } catch {
-    return {
-      ...base,
-      status: "template-refused",
-      templateSaveBuild: null,
-      enhancementBuild: null,
-      featureVerdicts: null,
-      reasons: ["template-transform-failed"],
-    };
+    templateFailure = "template-transform-failed";
   }
-  if (!postTemplate) {
-    return {
-      ...base,
-      status: "template-refused",
-      templateSaveBuild: null,
-      enhancementBuild: null,
-      featureVerdicts: null,
-      reasons: ["template-shape-changed"],
-    };
+  if (!postTemplate && templateFailure === null) {
+    templateFailure = "template-shape-changed";
   }
 
-  const templateSaveBuild = postTemplate.build;
-  const templateOutput = postTemplate.bytes;
+  const templateSaveBuild = postTemplate?.build ?? null;
+  const fileVerdict = templateSaveBuild === null
+    ? Object.freeze({
+        status: "refused" as const,
+        inputSha256: officialSha256,
+        verifierAbi: SEMANTIC_VERIFIER_ABI,
+        reason: templateFailure!,
+      })
+    : Object.freeze({
+        status: "proved" as const,
+        inputSha256: officialSha256,
+        outputSha256: templateSaveBuild.outputSha256,
+        verifierAbi: SEMANTIC_VERIFIER_ABI,
+      });
+  const enhancementInput = postTemplate?.bytes ?? official;
+  const enhancementInputSha256 = sha256(enhancementInput);
   if (!enhancementCapabilitiesRequested(requestedCapabilities)) {
-    return {
+    return templateSaveBuild === null ? {
+      ...base,
+      status: "template-refused",
+      fileVerdict,
+      templateSaveBuild: null,
+      enhancementBuild: null,
+      featureVerdicts: localFeatureVerdictsForBuild(
+        enhancementInputSha256,
+        requestedCapabilities,
+        null,
+      ),
+      reasons: [templateFailure!],
+    } : {
       ...base,
       status: "template-proved",
+      fileVerdict,
       templateSaveBuild,
       enhancementBuild: null,
       featureVerdicts: localFeatureVerdictsForBuild(
-        templateSaveBuild.outputSha256,
+        enhancementInputSha256,
         requestedCapabilities,
         null,
       ),
@@ -902,7 +906,7 @@ export function verifyLocalClientBytes(
   try {
     derivation = deriveEnhancementBuild(
       official,
-      templateOutput,
+      enhancementInput,
       requestedCapabilities,
     );
   } catch {
@@ -910,7 +914,7 @@ export function verifyLocalClientBytes(
   }
   const enhancementBuild = derivation.build;
   const featureVerdicts = localFeatureVerdictsForBuild(
-    templateSaveBuild.outputSha256,
+    enhancementInputSha256,
     requestedCapabilities,
     enhancementBuild,
     derivation.failures,
@@ -919,6 +923,7 @@ export function verifyLocalClientBytes(
     return {
       ...base,
       status: "enhancement-refused",
+      fileVerdict,
       templateSaveBuild,
       enhancementBuild: null,
       featureVerdicts,
@@ -928,6 +933,7 @@ export function verifyLocalClientBytes(
   return {
     ...base,
     status: "proved",
+    fileVerdict,
     templateSaveBuild,
     enhancementBuild,
     featureVerdicts,

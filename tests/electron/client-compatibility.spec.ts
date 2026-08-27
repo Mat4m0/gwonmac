@@ -224,6 +224,7 @@ test.describe("client compatibility", () => {
             clientSha256: "a".repeat(64),
             features: {
               gameFileSaving: { status: "unavailable", reason: "game-update" },
+              nativeDoubleClick: { status: "unavailable", reason: "game-update" },
               nativeCursor: { status: "unavailable", reason: "game-update" },
               playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },

@@ -229,3 +229,30 @@ second action from completion of the first.
 
 This repaired only the old workaround. The exact-build native double-click
 transform later removed the synthetic tap mechanism.
+
+## 2026-08-26 client rebuild: Core evidence moved independently
+
+The `9fbfcb1c` generation inserted six functions at function index 12,956 and
+relocated the client's mutable and initialized data independently. The mutable
+Core state moved by 6,816 bytes, while cursor labels, frame labels, and the
+pre-game hash table each moved by different amounts. A shared address delta was
+therefore not evidence of unchanged behavior.
+
+The area table also grew from 888 to 897 rows. Its existing records retained
+their semantic content and nine new sentinel rows were appended. Qualification
+now binds this extension through the area lookup relationship, a normalized
+whole-table digest, the expected sentinel cardinality, and independent
+producer/consumer witnesses. It does not identify the rebuild by its module
+hash or accept a common relocation delta as authority.
+
+Cursor, play-region observation, and pre-game controls are located separately.
+Each proof binds typed function, immutable-data, and mutable-state roles. A
+broken cursor relation therefore refuses only cursor; a broken play-region
+relation refuses play-region and its declared pre-game dependant; and a broken
+pre-game frame or hash relation refuses only pre-game controls. Both the
+preceding and `9fbfcb1c` retained artifacts pass with exact-build shortcuts
+disabled.
+
+**Lesson:** an equivalent rebuild can move related evidence by unrelated
+amounts. Prove each role from content and use, then apply dependency closure;
+never infer meaning from address movement alone.

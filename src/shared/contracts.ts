@@ -659,6 +659,7 @@ export interface ClientCompatibility {
   /** Main's effective state from the exact module served for this session. */
   features: Readonly<{
     gameFileSaving: RequiredFeatureStatus;
+    nativeDoubleClick: OptionalFeatureStatus;
     nativeCursor: OptionalFeatureStatus;
     targetObservation: OptionalFeatureStatus;
     partyObservation: OptionalFeatureStatus;
@@ -1270,6 +1271,18 @@ export interface ToolsNativeApiExtension {
 }
 
 export type ToolNativeNamespace = keyof ToolsNativeApiExtension;
+
+const TOOL_NATIVE_NAMESPACE_MAP = {
+  trade: true,
+  travelPreferences: true,
+  travelHistory: true,
+  buildLibrary: true,
+} as const satisfies Record<ToolNativeNamespace, true>;
+
+/** Canonical, compile-time-exhaustive inventory owned by the Tools preload. */
+export const TOOL_NATIVE_NAMESPACES = Object.freeze(
+  Object.keys(TOOL_NATIVE_NAMESPACE_MAP) as ToolNativeNamespace[],
+);
 
 type LaunchRendererInit<Tools extends boolean> = Omit<
   RendererInit,

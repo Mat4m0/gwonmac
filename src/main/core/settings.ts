@@ -192,6 +192,12 @@ export function parseSettings(raw: unknown): AppSettings {
       shortcut === null ? null : { ...shortcut }
     );
   }
+  // Stable releases before Build Library became the owner of Apply Team used
+  // `teamManagement` for the same player opt-out. Dormant profiles can retain
+  // that released shape indefinitely, so this read alias is permanent.
+  if (!("buildLibrary" in src) && "teamManagement" in src) {
+    out.buildLibrary = asBool(src.teamManagement, "teamManagement");
+  }
   for (const setting of [
     "gwonmacTools",
     "buildLibrary",
@@ -332,6 +338,12 @@ async function recoverCorruptSettings(
 
 export async function saveSettings(path: string, value: AppSettings): Promise<AppSettings> {
   const cleaned = parseSettings(value);
-  await writeAtomicJson(path, { formatVersion: SETTINGS_FORMAT, ...cleaned });
+  await writeAtomicJson(path, {
+    formatVersion: SETTINGS_FORMAT,
+    ...cleaned,
+    // Rollback projection only. `buildLibrary` remains the sole runtime and
+    // type-system source of truth.
+    teamManagement: cleaned.buildLibrary,
+  });
   return cleaned;
 }

@@ -36,9 +36,10 @@ import {
   UI_FONTS,
   UI_STYLES,
   UPDATE_TRACKS,
+  TOOL_NATIVE_NAMESPACES,
   type AppSettings,
 } from "../src/shared/contracts.ts";
-import { parseSettings } from "../src/main/core/settings.ts";
+import { parseSettings, saveSettings } from "../src/main/core/settings.ts";
 import { saveWindowState } from "../src/main/core/window-state.ts";
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.ts";
 import { DEFAULT_CUSTOM_UI_THEME } from "../src/shared/ui-theme.ts";
@@ -55,6 +56,10 @@ import {
   launchPackagedApp,
   type RunningPackagedApp,
 } from "../tests/helpers/packaged-app.ts";
+import {
+  canonicalizeStableSettings,
+  validateCandidateSettings,
+} from "./release-settings-compatibility.ts";
 
 const stableApp = process.env.GW_STABLE_APP_PATH;
 const stableVersion = process.env.GW_STABLE_VERSION;
@@ -73,6 +78,8 @@ if (!stableApp || !stableVersion || !candidateApp || !candidateVersion) {
     "GW_STABLE_APP_PATH, GW_STABLE_VERSION, GW_CANDIDATE_APP_PATH, and GW_CANDIDATE_VERSION are required",
   );
 }
+const stablePath = stableApp;
+const candidatePath = candidateApp;
 const parsedStable = parseReleaseVersion(stableVersion);
 if (!parsedStable || parsedStable.channel !== "stable") {
   throw new Error("GW_STABLE_VERSION must name an exact Stable release");
@@ -91,35 +98,64 @@ if (compareReleaseVersions(parsedCandidate, parsedStable) <= 0) {
 }
 
 const productName = DISTRIBUTION_CHANNEL_CONFIG.release.productName;
-const userData = await mkdtemp(path.join(tmpdir(), "gwonmac-stable-beta-"));
-const windowStatePath = path.join(userData, "window-state.json");
-await writeFile(
-  path.join(userData, "settings.json"),
-  JSON.stringify({ autoCheckUpdates: false }),
-  { mode: 0o600 },
-);
-await mkdir(path.join(userData, "game/chunks"), { recursive: true });
-await writeFile(
-  path.join(userData, "game/chunks/chunk-directory-reset-sentinel"),
-  "chunk directory was not wholesale reset",
-);
+const proofRoot = await mkdtemp(path.join(tmpdir(), "gwonmac-stable-beta-"));
+type Cohort = Readonly<{ userData: string; windowStatePath: string }>;
+
+async function createCohort(
+  name: "core" | "tools",
+  settings: Readonly<Record<string, unknown>>,
+): Promise<Cohort> {
+  const userData = path.join(proofRoot, name);
+  const cohort = Object.freeze({
+    userData,
+    windowStatePath: path.join(userData, "window-state.json"),
+  });
+  await mkdir(path.join(userData, "game/chunks"), { recursive: true });
+  await writeFile(
+    path.join(userData, "settings.json"),
+    JSON.stringify(settings),
+    { mode: 0o600 },
+  );
+  await writeFile(
+    path.join(userData, "game/chunks/chunk-directory-reset-sentinel"),
+    "chunk directory was not wholesale reset",
+  );
+  return cohort;
+}
 
 const cloneLibrary = (library: BuildLibrary): BuildLibrary =>
   JSON.parse(JSON.stringify(library)) as BuildLibrary;
 
-async function launch(appPath: string): Promise<RunningPackagedApp> {
+async function launch(cohort: Cohort, appPath: string): Promise<RunningPackagedApp> {
   const running = await launchPackagedApp({
     appPath,
     productName,
-    userData,
+    userData: cohort.userData,
     arguments: ["--gw-volatile-secrets"],
   });
   await running.page.waitForFunction(() => "gwNative" in globalThis);
   return running;
 }
 
-async function readCanonical(page: Page): Promise<{
-  settings: AppSettings;
+async function withPackagedApp<T>(
+  cohort: Cohort,
+  appPath: string,
+  use: (running: RunningPackagedApp) => Promise<T>,
+): Promise<T> {
+  const running = await launch(cohort, appPath);
+  let completed = false;
+  try {
+    const result = await use(running);
+    completed = true;
+    return result;
+  } finally {
+    if (completed) await closePackagedApp(running);
+    else await closePackagedApp(running).catch(() => undefined);
+  }
+}
+
+async function readToolsCanonical(page: Page): Promise<{
+  settings: unknown;
   library: BuildLibrary;
   recovered: boolean;
 }> {
@@ -132,9 +168,9 @@ async function readCanonical(page: Page): Promise<{
   });
 }
 
-async function readSettingsDocument(): Promise<Record<string, unknown>> {
+async function readSettingsDocument(cohort: Cohort): Promise<Record<string, unknown>> {
   const value = JSON.parse(
-    await readFile(path.join(userData, "settings.json"), "utf8"),
+    await readFile(path.join(cohort.userData, "settings.json"), "utf8"),
   ) as unknown;
   assert.ok(
     typeof value === "object" && value !== null && !Array.isArray(value),
@@ -240,37 +276,34 @@ const candidateSettingsDomains = Array.from(
 );
 
 async function proveStableAcceptsCandidateSettingDomains(
+  cohort: Cohort,
   stablePath: string,
 ): Promise<void> {
   for (const [index, settings] of candidateSettingsDomains.entries()) {
-    await writeFile(
-      path.join(userData, "settings.json"),
-      JSON.stringify({ formatVersion: 1, ...settings }),
-      { mode: 0o600 },
-    );
-    const stable = await launch(stablePath);
-    try {
+    await saveSettings(path.join(cohort.userData, "settings.json"), settings);
+    await withPackagedApp(cohort, stablePath, async (stable) => {
       const read = await stable.page.evaluate(() => window.gwNative.settings.get());
       assert.deepEqual(
-        read,
+        canonicalizeStableSettings(read, { disk: false }),
         settings,
         `latest Stable refused candidate settings-domain case ${index + 1}`,
       );
       assert.deepEqual(
-        await stable.page.evaluate(() => window.gwNative.settings.set({})),
+        canonicalizeStableSettings(
+          await stable.page.evaluate(() => window.gwNative.settings.set({})),
+          { disk: false },
+        ),
         settings,
         `latest Stable could not rewrite candidate settings-domain case ${index + 1}`,
       );
-    } finally {
-      await closePackagedApp(stable);
-    }
+    });
     assert.deepEqual(
-      semanticSettings(await readSettingsDocument()),
+      canonicalizeStableSettings(await readSettingsDocument(cohort), { disk: true }),
       settings,
       `latest Stable changed candidate settings-domain case ${index + 1}`,
     );
   }
-  const names = await readdir(userData);
+  const names = await readdir(cohort.userData);
   assert.equal(
     names.some((name) => name.startsWith("settings.json.corrupt-")),
     false,
@@ -281,16 +314,70 @@ async function proveStableAcceptsCandidateSettingDomains(
 const sortedKeys = (value: Record<string, unknown>): string[] =>
   Object.keys(value).sort();
 
-function semanticSettings(
-  document: Record<string, unknown>,
-): Record<string, unknown> {
-  const { formatVersion, ...settings } = document;
-  assert.equal(formatVersion, 1, "settings.json formatVersion changed");
-  return settings;
+async function readCoreCanonical(page: Page): Promise<{
+  settings: Record<string, unknown>;
+  toolNamespaces: readonly string[];
+}> {
+  const value = await page.evaluate(async (toolNamespaces) => ({
+    settings: await window.gwNative.settings.get(),
+    toolNamespaces: toolNamespaces.filter((name) => name in window.gwNative),
+  }), TOOL_NATIVE_NAMESPACES);
+  return {
+    settings: validateCandidateSettings(value.settings, { disk: false }),
+    toolNamespaces: value.toolNamespaces,
+  };
 }
 
-const publishWindowSize = (width: number, height: number): Promise<void> =>
-  saveWindowState(windowStatePath, {
+async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
+  await publishWindowSize(cohort, 1_000, 700);
+  console.log("stable/beta compatibility: Core preload round-trip");
+  const stableSettings = await withPackagedApp(cohort, stableApp!, async (core) => {
+    const settings = await core.page.evaluate(() => window.gwNative.settings.set({
+      autoCheckUpdates: false,
+      gwonmacTools: false,
+      showDiagnostics: false,
+    }));
+    await roundTripProfileStore(core.page, null, "stable-core-template");
+    assert.deepEqual(await windowSize(core.page), { width: 1_000, height: 700 });
+    return canonicalizeStableSettings(settings, { disk: false });
+  });
+  await assertDiskSentinel(cohort);
+  await withPackagedApp(cohort, candidateApp!, async (core) => {
+    const initial = await readCoreCanonical(core.page);
+    assert.deepEqual(initial.toolNamespaces, [], "candidate Core launch exposed a Tools namespace");
+    assert.deepEqual(initial.settings, stableSettings, "candidate changed Stable-owned Core settings");
+    assert.equal(initial.settings.buildLibrary, false, "candidate lost the legacy Apply-Team opt-out");
+    const changed = validateCandidateSettings(
+      await core.page.evaluate(() => window.gwNative.settings.set({ showDiagnostics: true })),
+      { disk: false },
+    );
+    assert.deepEqual(changed, { ...stableSettings, showDiagnostics: true });
+    await roundTripProfileStore(core.page, "stable-core-template", "candidate-core-template");
+    assert.deepEqual(await windowSize(core.page), { width: 1_000, height: 700 });
+  });
+  await assertDiskSentinel(cohort);
+  await withPackagedApp(cohort, stableApp!, async (core) => {
+    const returned = canonicalizeStableSettings(
+      await core.page.evaluate(() => window.gwNative.settings.get()),
+      { disk: false },
+    );
+    assert.equal(returned.buildLibrary, false, "rollback Stable lost the Apply-Team opt-out");
+    assert.deepEqual(returned, { ...stableSettings, showDiagnostics: true });
+    await roundTripProfileStore(core.page, "candidate-core-template", "stable-return-core-template");
+    assert.deepEqual(await windowSize(core.page), { width: 1_000, height: 700 });
+  });
+  await assertDiskSentinel(cohort);
+}
+
+async function assertDiskSentinel(cohort: Cohort): Promise<void> {
+  assert.equal(
+    await readFile(path.join(cohort.userData, "game/chunks/chunk-directory-reset-sentinel"), "utf8"),
+    "chunk directory was not wholesale reset",
+  );
+}
+
+const publishWindowSize = (cohort: Cohort, width: number, height: number): Promise<void> =>
+  saveWindowState(cohort.windowStatePath, {
     bounds: { x: 100, y: 100, width, height },
     mode: "normal",
     // The rollback Stable ignores this additive field. The candidate requires
@@ -398,13 +485,16 @@ const finalLibrary: BuildLibrary = {
   tags: [...candidateLibrary.tags, "stable-return"],
 };
 
-let running: RunningPackagedApp | null = null;
-try {
+async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   console.log("stable/beta compatibility: Stable accepts candidate value domains");
-  await proveStableAcceptsCandidateSettingDomains(stableApp);
+  await proveStableAcceptsCandidateSettingDomains(toolsCohort, stablePath);
   await writeFile(
-    path.join(userData, "settings.json"),
-    JSON.stringify({ autoCheckUpdates: false }),
+    path.join(toolsCohort.userData, "settings.json"),
+    JSON.stringify({
+      autoCheckUpdates: false,
+      gwonmacTools: true,
+      teamManagement: false,
+    }),
     { mode: 0o600 },
   );
 
@@ -412,136 +502,149 @@ try {
   // The Electron suite owns native resize-to-disk behaviour. This release gate
   // writes through the candidate's canonical serializer so it can concentrate
   // on whether both packaged versions read the exact same durable shape.
-  await publishWindowSize(1_000, 700);
-  running = await launch(stableApp);
-  const stableInitial = await readCanonical(running.page);
-  assert.equal(
-    stableInitial.recovered,
-    false,
-    "latest Stable recovered its fresh build library before the round-trip",
-  );
-  const launchedStableVersion = (await running.page.evaluate(
-    () => window.gwNative.appUpdates.getState(),
-  )).currentVersion;
-  assert.equal(
-    launchedStableVersion,
-    stableVersion,
-    "the downloaded latest-Stable ZIP launched a different version",
-  );
-  const stableSettings = await running.page.evaluate(() =>
-    window.gwNative.settings.set({
-      autoCheckUpdates: false,
-      renderScale: 1.5,
-      uiStyle: "obsidian",
-      uiPanelOpacity: 88,
-      updateTrack: "beta",
-    })
-  );
-  assert.equal(stableSettings.updateTrack, "beta", "latest Stable lacks the Beta enabler");
-  assert.deepEqual(
-    await running.page.evaluate((library) => {
-      const api = window.gwNative;
-      if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
-      return api.buildLibrary.set(library);
-    }, initialLibrary),
-    initialLibrary,
-  );
-  await roundTripProfileStore(running.page, null, "stable-template");
-  await closePackagedApp(running);
-  running = null;
-  const stableSettingsDocument = await readSettingsDocument();
+  await publishWindowSize(toolsCohort, 1_000, 700);
+  await withPackagedApp(toolsCohort, stablePath, async (running) => {
+    const stableInitial = await readToolsCanonical(running.page);
+    assert.equal(
+      canonicalizeStableSettings(stableInitial.settings, { disk: false }).buildLibrary,
+      false,
+      "latest Stable lost the legacy Apply-Team opt-out before upgrade",
+    );
+    assert.equal(
+      stableInitial.recovered,
+      false,
+      "latest Stable recovered its fresh build library before the round-trip",
+    );
+    const launchedStableVersion = (await running.page.evaluate(
+      () => window.gwNative.appUpdates.getState(),
+    )).currentVersion;
+    assert.equal(
+      launchedStableVersion,
+      stableVersion,
+      "the downloaded latest-Stable ZIP launched a different version",
+    );
+    const stableSettings = canonicalizeStableSettings(await running.page.evaluate(() =>
+      window.gwNative.settings.set({
+        autoCheckUpdates: false,
+        gwonmacTools: true,
+        renderScale: 1.5,
+        uiStyle: "obsidian",
+        uiPanelOpacity: 88,
+        updateTrack: "beta",
+      })
+    ), { disk: false });
+    assert.equal(stableSettings.updateTrack, "beta", "latest Stable lacks the Beta enabler");
+    assert.equal(stableSettings.buildLibrary, false, "latest Stable enabled Apply Team while saving");
+    assert.deepEqual(
+      await running.page.evaluate((library) => {
+        const api = window.gwNative;
+        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+        return api.buildLibrary.set(library);
+      }, initialLibrary),
+      initialLibrary,
+    );
+    await roundTripProfileStore(running.page, null, "stable-template");
+  });
+  const stableSettingsDocument = await readSettingsDocument(toolsCohort);
 
   console.log("stable/beta compatibility: candidate reads, modifies, and writes");
-  running = await launch(candidateApp);
-  assert.equal(
-    (await running.page.evaluate(
-      () => window.gwNative.appUpdates.getState(),
-    )).currentVersion,
-    candidateVersion,
-    "the signed candidate app launched a different version",
-  );
-  const candidateInitial = await readCanonical(running.page);
-  assert.equal(candidateInitial.recovered, false);
-  assert.equal(candidateInitial.settings.updateTrack, "beta");
-  assert.equal(candidateInitial.settings.uiPanelOpacity, 88);
-  assert.deepEqual(candidateInitial.library, initialLibrary);
-  assert.deepEqual(await windowSize(running.page), { width: 1_000, height: 700 });
-  await roundTripProfileStore(running.page, "stable-template", "candidate-template");
-  await running.page.evaluate(
-    async ({ settings, library }) => {
-      const api = window.gwNative;
-      if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
-      await api.settings.set(settings);
-      await api.buildLibrary.set(library);
-    },
-    {
-      settings: {
-        showDiagnostics: true,
-        uiPanelOpacity: 87,
-      } satisfies Partial<AppSettings>,
-      library: candidateLibrary,
-    },
-  );
-  await closePackagedApp(running);
-  running = null;
-  await publishWindowSize(960, 680);
-  const candidateSettingsDocument = await readSettingsDocument();
+  await withPackagedApp(toolsCohort, candidatePath, async (running) => {
+    assert.equal(
+      (await running.page.evaluate(
+        () => window.gwNative.appUpdates.getState(),
+      )).currentVersion,
+      candidateVersion,
+      "the signed candidate app launched a different version",
+    );
+    const candidateInitial = await readToolsCanonical(running.page);
+    const candidateInitialSettings = validateCandidateSettings(
+      candidateInitial.settings,
+      { disk: false },
+    );
+    assert.equal(candidateInitial.recovered, false);
+    assert.equal(candidateInitialSettings.updateTrack, "beta");
+    assert.equal(candidateInitialSettings.uiPanelOpacity, 88);
+    assert.equal(candidateInitialSettings.buildLibrary, false);
+    assert.deepEqual(candidateInitial.library, initialLibrary);
+    assert.deepEqual(await windowSize(running.page), { width: 1_000, height: 700 });
+    await roundTripProfileStore(running.page, "stable-template", "candidate-template");
+    await running.page.evaluate(
+      async ({ settings, library }) => {
+        const api = window.gwNative;
+        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+        await api.settings.set(settings);
+        await api.buildLibrary.set(library);
+      },
+      {
+        settings: {
+          showDiagnostics: true,
+          uiPanelOpacity: 87,
+        } satisfies Partial<AppSettings>,
+        library: candidateLibrary,
+      },
+    );
+  });
+  await publishWindowSize(toolsCohort, 960, 680);
+  const candidateSettingsDocument = await readSettingsDocument(toolsCohort);
   assert.deepEqual(
-    sortedKeys(candidateSettingsDocument),
-    sortedKeys(stableSettingsDocument),
+    sortedKeys(validateCandidateSettings(candidateSettingsDocument, { disk: true })),
+    sortedKeys(canonicalizeStableSettings(stableSettingsDocument, { disk: true })),
     "candidate introduced or removed a durable settings key; ship the schema expansion in Stable before the beta/RC uses it",
   );
 
   console.log("stable/beta compatibility: the same Stable reads and writes again");
-  running = await launch(stableApp);
-  assert.equal(
-    (await running.page.evaluate(
-      () => window.gwNative.appUpdates.getState(),
-    )).currentVersion,
-    stableVersion,
-    "the return launch did not use the exact Stable baseline",
-  );
-  const returned = await readCanonical(running.page);
-  assert.equal(returned.recovered, false);
-  assert.deepEqual(
-    returned.settings,
-    semanticSettings(candidateSettingsDocument),
-    "Stable did not read every candidate-written settings value",
-  );
-  assert.deepEqual(returned.library, candidateLibrary);
-  assert.deepEqual(await windowSize(running.page), { width: 960, height: 680 });
-  await roundTripProfileStore(running.page, "candidate-template", "stable-return-template");
-  await running.page.evaluate(
-    async ({ settings, library }) => {
-      const api = window.gwNative;
-      if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
-      await api.settings.set(settings);
-      await api.buildLibrary.set(library);
-    },
-    {
-      settings: {
-        showDiagnostics: false,
-        updateTrack: "stable",
-      } satisfies Partial<AppSettings>,
-      library: finalLibrary,
-    },
-  );
-  const final = await readCanonical(running.page);
-  const expectedFinalSettings = {
-    ...semanticSettings(candidateSettingsDocument),
+  const expectedFinalSettings: Record<string, unknown> = {
+    ...validateCandidateSettings(candidateSettingsDocument, { disk: true }),
     showDiagnostics: false,
     updateTrack: "stable",
   };
-  assert.deepEqual(
-    final.settings,
-    expectedFinalSettings,
-    "Stable lost candidate-written settings while saving its own patch",
-  );
-  assert.deepEqual(final.library, finalLibrary);
-  await closePackagedApp(running);
-  running = null;
+  await withPackagedApp(toolsCohort, stablePath, async (running) => {
+    assert.equal(
+      (await running.page.evaluate(
+        () => window.gwNative.appUpdates.getState(),
+      )).currentVersion,
+      stableVersion,
+      "the return launch did not use the exact Stable baseline",
+    );
+    const returned = await readToolsCanonical(running.page);
+    const returnedSettings = canonicalizeStableSettings(returned.settings, { disk: false });
+    assert.equal(returned.recovered, false);
+    assert.equal(returnedSettings.buildLibrary, false, "rollback Stable enabled Apply Team");
+    assert.deepEqual(
+      returnedSettings,
+      validateCandidateSettings(candidateSettingsDocument, { disk: true }),
+      "Stable did not read every candidate-written settings value",
+    );
+    assert.deepEqual(returned.library, candidateLibrary);
+    assert.deepEqual(await windowSize(running.page), { width: 960, height: 680 });
+    await roundTripProfileStore(running.page, "candidate-template", "stable-return-template");
+    await running.page.evaluate(
+      async ({ settings, library }) => {
+        const api = window.gwNative;
+        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+        await api.settings.set(settings);
+        await api.buildLibrary.set(library);
+      },
+      {
+        settings: {
+          showDiagnostics: false,
+          updateTrack: "stable",
+        } satisfies Partial<AppSettings>,
+        library: finalLibrary,
+      },
+    );
+    const final = await readToolsCanonical(running.page);
+    const finalSettings = canonicalizeStableSettings(final.settings, { disk: false });
+    assert.equal(finalSettings.buildLibrary, false, "Stable save enabled Apply Team");
+    assert.deepEqual(
+      finalSettings,
+      expectedFinalSettings,
+      "Stable lost candidate-written settings while saving its own patch",
+    );
+    assert.deepEqual(final.library, finalLibrary);
+  });
 
-  const names = await readdir(userData);
+  const names = await readdir(toolsCohort.userData);
   assert.equal(
     names.some((name) => name.startsWith("settings.json.corrupt-")),
     false,
@@ -552,23 +655,38 @@ try {
     false,
     "Stable quarantined the candidate-written Build library",
   );
-  const diskSettings = await readSettingsDocument();
-  assert.deepEqual(diskSettings, {
-    formatVersion: 1,
-    ...expectedFinalSettings,
-  });
-  const diskLibrary = JSON.parse(await readFile(path.join(userData, "build-library.json"), "utf8"));
+  const diskSettings = await readSettingsDocument(toolsCohort);
+  assert.deepEqual(
+    canonicalizeStableSettings(diskSettings, { disk: true }),
+    expectedFinalSettings,
+  );
+  const diskLibrary = JSON.parse(await readFile(
+    path.join(toolsCohort.userData, "build-library.json"),
+    "utf8",
+  ));
   assert.deepEqual(diskLibrary, finalLibrary);
-  assert.ok(await readFile(path.join(userData, "window-state.json"), "utf8"));
+  assert.ok(await readFile(toolsCohort.windowStatePath, "utf8"));
   assert.equal(
     await readFile(
-      path.join(userData, "game/chunks/chunk-directory-reset-sentinel"),
+      path.join(toolsCohort.userData, "game/chunks/chunk-directory-reset-sentinel"),
       "utf8",
     ),
     "chunk directory was not wholesale reset",
   );
   console.log(`stable/beta compatibility: ${stableVersion} → ${candidateVersion} → ${stableVersion} passed`);
+}
+
+try {
+  const coreCohort = await createCohort(
+    "core",
+    { autoCheckUpdates: false, gwonmacTools: false, teamManagement: false },
+  );
+  const toolsCohort = await createCohort(
+    "tools",
+    { autoCheckUpdates: false, gwonmacTools: true },
+  );
+  await proveCoreRoundTrip(coreCohort);
+  await proveToolsRoundTrip(toolsCohort);
 } finally {
-  if (running) await closePackagedApp(running).catch(() => {});
-  await rm(userData, { recursive: true, force: true });
+  await rm(proofRoot, { recursive: true, force: true });
 }

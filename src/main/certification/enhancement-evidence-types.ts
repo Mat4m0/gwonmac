@@ -154,12 +154,14 @@ export interface WasmExport {
 }
 
 export interface ModuleShape {
-  readonly types: FunctionType[];
-  readonly functionTypeIndices: number[];
+  readonly types: readonly FunctionType[];
+  readonly functionTypeIndices: readonly number[];
   readonly functionImportCount: number;
-  readonly bodies: Uint8Array[];
-  readonly bodySha256: (string | undefined)[];
-  readonly exports: WasmExport[];
+  readonly bodies: readonly Uint8Array[];
+  readonly exports: readonly WasmExport[];
+  readonly importSection: Uint8Array | null;
+  readonly memorySection: Uint8Array | null;
+  readonly tableSection: Uint8Array | null;
   readonly elementSection: Uint8Array | null;
   readonly dataSegments: readonly Readonly<{
     base: number;
@@ -169,8 +171,28 @@ export interface ModuleShape {
 
 export interface DecodedFunction {
   readonly functionIndex: number;
-  readonly calls: Map<number, number>;
+  readonly calls: ReadonlyMap<number, number>;
+  readonly callSites: ReadonlyMap<number, readonly DirectCallSite[]>;
   readonly messageSites: Readonly<Record<number, number>>;
+  readonly constantSites: readonly InstructionOperandSite[];
+  readonly memorySites: readonly MemoryOperandSite[];
+}
+
+export interface InstructionOperandSite {
+  readonly opcode: number;
+  readonly offset: number;
+  readonly operandStart: number;
+  readonly operandEnd: number;
+  readonly value: number;
+}
+
+export interface MemoryOperandSite extends InstructionOperandSite {
+  readonly alignment: number;
+}
+
+export interface DirectCallSite {
+  readonly offset: number;
+  readonly operandEnd: number;
 }
 
 export type SemanticRole = Readonly<{

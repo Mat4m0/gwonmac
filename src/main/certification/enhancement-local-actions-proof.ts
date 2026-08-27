@@ -4,7 +4,11 @@
  */
 import { createHash } from "node:crypto";
 import { CLIENT_TICK_ROLE } from "./enhancement-client-hook-role.js";
-import { deriveObservationLayout } from "./enhancement-target-proof.js";
+import {
+  deriveAreaLookupFunction,
+  deriveObservationLayout,
+} from "./enhancement-target-proof.js";
+import { dataEvidence } from "./wasm-data-evidence.js";
 import {
   derivePartyObservation,
   deriveTeamApply,
@@ -13,12 +17,12 @@ import {
 import { playerChatUiEvidence } from "./enhancement-structural-report.js";
 import {
   bodyMatchesRole,
-  commonRelocationDelta,
   enhancementProofContext,
   functionBody,
   functionBodySha256,
   isolatedProof,
   MAX_INPUT_BYTES,
+  matchesEvidenceInput,
   mutableSpans,
   parseActiveTableRelations,
   roleFunctions,
@@ -32,8 +36,9 @@ import {
   uniqueRoleFunction,
   unsignedOperand,
   valuesForRole,
-} from "./enhancement-wasm-proof-context.js";
-import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
+import type { EnhancementProofContext } from "./wasm-evidence.js";
+import { tickEvidence } from "./enhancement-tick-evidence.js";
 import { verifyLayout } from "./semantic-proof.js";
 import {
   ENHANCEMENT_BUILDS,
@@ -66,7 +71,7 @@ export interface LocalActionRoleDiagnostics {
 
 const GAME_THREAD_DRAIN_ROLE = semanticRole(
   764,
-  "aa1694915623017676dffcba6b54ef5570b4029e9c9258f8b8e00480e5d37c99",
+  "99f25dda4f00ee0aee4950f638ce5ae485ce25d5319a480f3ae8e7f0df452895",
   Object.freeze([
     ...mutableSpans([
       [29, 34, "frame.clock"], [80, 85, "frame.clock"],
@@ -85,7 +90,11 @@ const GAME_THREAD_DRAIN_ROLE = semanticRole(
       [675, 680, "frame.pending"], [685, 690, "frame.buffer.start"],
       [706, 711, "frame.flag"],
     ]),
+    { start: 56, end: 61, role: "frame.parameter-name", addressClass: "immutable-data" },
+    { start: 62, end: 67, role: "frame.assertion-file", addressClass: "immutable-data" },
     { start: 253, end: 258, role: "frame.assertion", addressClass: "immutable-data" },
+    { start: 259, end: 264, role: "frame.assertion-file", addressClass: "immutable-data" },
+    { start: 605, end: 610, role: "frame.assertion-file", addressClass: "immutable-data" },
   ]),
   ["i32", "i32"],
   [],
@@ -93,7 +102,7 @@ const GAME_THREAD_DRAIN_ROLE = semanticRole(
 
 const CHAT_ALIASES_ROLE = semanticRole(
   380,
-  "290a42320733b1876002e363f057b3d5ef2863a4fc71b33ceba720943af3ca5c",
+  "12e4dd8ccb165d571ced52ca7333bd68dfda880a9d364212e069dfde3f6575b1",
   Object.freeze([
     ...mutableSpans([
       [50, 55, "aliases.flag"], [63, 68, "aliases.state"],
@@ -102,6 +111,8 @@ const CHAT_ALIASES_ROLE = semanticRole(
       [148, 153, "aliases.flag"], [248, 253, "aliases.state"],
     ]),
     { start: 110, end: 115, role: "aliases.buffer", addressClass: "immutable-data" },
+    { start: 122, end: 127, role: "aliases.callback", addressClass: "function-index" },
+    { start: 136, end: 141, role: "aliases.helper", addressClass: "function-index" },
     { start: 195, end: 200, role: "aliases.compare", addressClass: "immutable-data" },
     { start: 326, end: 331, role: "aliases.ui", addressClass: "function-index" },
     { start: 345, end: 350, role: "aliases.ui", addressClass: "function-index" },
@@ -112,10 +123,12 @@ const CHAT_ALIASES_ROLE = semanticRole(
 
 const XUNLAI_AGENT_READER_ROLE = semanticRole(
   418,
-  "fde5f7f940fb4ab5b55f85290897f47f341056b983514a6b0e03bb6f149aff8d",
+  "868c2b79ca4bf31593ca8e424c7f648e4c84965baf8847b3969fe74f23e958bb",
   Object.freeze([
     { start: 17, end: 22, role: "xunlai.assertion", addressClass: "immutable-data" },
+    { start: 23, end: 28, role: "xunlai.assertion-file", addressClass: "immutable-data" },
     { start: 29, end: 31, role: "xunlai.source-line", addressClass: "immutable-data" },
+    { start: 387, end: 392, role: "xunlai.array-file", addressClass: "immutable-data" },
   ]),
   ["i32"],
   ["i32"],
@@ -123,9 +136,10 @@ const XUNLAI_AGENT_READER_ROLE = semanticRole(
 
 const XUNLAI_ACCESS_READER_ROLE = semanticRole(
   85,
-  "ea782429f5a29731780e4c962909963b7a00b01f59b5122ec0c9ae292905ba09",
+  "c3a3d7dce4248e26482d55ee0adcedc5c65af584f3d51af700b923d3fc242c81",
   Object.freeze([
     { start: 17, end: 22, role: "xunlai.assertion", addressClass: "immutable-data" },
+    { start: 23, end: 28, role: "xunlai.assertion-file", addressClass: "immutable-data" },
     { start: 29, end: 31, role: "xunlai.source-line", addressClass: "immutable-data" },
   ]),
   ["i32"],
@@ -134,9 +148,11 @@ const XUNLAI_ACCESS_READER_ROLE = semanticRole(
 
 const UI_DISPATCHER_ROLE = semanticRole(
   47,
-  "d465b17c204272c3d4318d39a5829f36e6a5c02025e1052fb239580d718caee4",
+  "0c464900f79570672bf60d83386a9388a68204e519bda6b391021c7e855afc4a",
   Object.freeze([
     { start: 18, end: 23, role: "ui.forwarder", addressClass: "function-index" },
+    { start: 26, end: 31, role: "ui.assertion-expression", addressClass: "immutable-data" },
+    { start: 32, end: 37, role: "ui.assertion-file", addressClass: "immutable-data" },
     { start: 41, end: 46, role: "ui.assertion", addressClass: "function-index" },
   ]),
   ["i32", "i32", "i32"],
@@ -145,9 +161,12 @@ const UI_DISPATCHER_ROLE = semanticRole(
 
 const TRAVEL_PRODUCER_ROLE = semanticRole(
   216,
-  "d4a42987112772c9b18c756e39c6037334002a02c278bb9dbe54fc55f6af0d80",
+  "34518680e849e667366eb5555c559445a8dc590819827af48b103d71d8117577",
   Object.freeze([
     { start: 25, end: 30, role: "travel.area-reader", addressClass: "function-index" },
+    { start: 49, end: 51, role: "travel.area-count-bound", addressClass: "immutable-data" },
+    { start: 55, end: 60, role: "travel.assertion-b", addressClass: "immutable-data" },
+    { start: 61, end: 66, role: "travel.assertion-file", addressClass: "immutable-data" },
     { start: 70, end: 75, role: "travel.assertion", addressClass: "function-index" },
     { start: 88, end: 93, role: "travel.area-reader", addressClass: "function-index" },
     { start: 124, end: 129, role: "travel.precheck", addressClass: "function-index" },
@@ -161,8 +180,9 @@ const TRAVEL_PRODUCER_ROLE = semanticRole(
 
 const TRAVEL_CONTEXT_RESOLVER_ROLE = semanticRole(
   333,
-  "626a6724cd6caad005c7ec900258ff529e4f350e298dd62a32e8217e0ac15657",
+  "259fd64401eb59f8fc8de6d36be304107edbaa05b213321fdbf371233322fc29",
   Object.freeze([
+    { start: 8, end: 10, role: "context.area-count-bound", addressClass: "immutable-data" },
     { start: 14, end: 19, role: "context.mission", addressClass: "immutable-data" },
     { start: 20, end: 25, role: "context.assertion-file", addressClass: "immutable-data" },
     { start: 29, end: 34, role: "context.assertion", addressClass: "function-index" },
@@ -204,11 +224,52 @@ const XUNLAI_HANDLER_ROLE = semanticRole(
   [],
 );
 
+const XUNLAI_PLAYER_READER_ROLE = semanticRole(
+  126,
+  "f1445548fcb6723f0e96e9b5455a7b7b7378702013b4ccaa955b6af82d03c1c6",
+  Object.freeze([
+    { start: 33, end: 38, role: "player.array-file", addressClass: "immutable-data" },
+    { start: 90, end: 95, role: "player.array-file", addressClass: "immutable-data" },
+  ]),
+  ["i32"],
+  ["i32"],
+);
+
+const XUNLAI_AREA_TYPE_READER_ROLE = semanticRole(
+  362,
+  "d0b03173d5989872e8e0b0ceddcb950e99d9c2cc5e73fa663c0ccac5c4757edf",
+  [{ start: 6, end: 11, role: "area.lookup", addressClass: "function-index" }],
+  ["i32"],
+  ["i32"],
+);
+
+const TRAVEL_UNLOCK_CONSUMER_ROLE = semanticRole(
+  360,
+  "fdee88e92cd73fc576aedfa4f232b2b0e63a363433bb8a874c2893477650cf5c",
+  Object.freeze([
+    { start: 25, end: 30, role: "unlock.bounds", addressClass: "function-index" },
+    { start: 49, end: 51, role: "unlock.area-count-a", addressClass: "immutable-data" },
+    { start: 55, end: 60, role: "unlock.assertion", addressClass: "immutable-data" },
+    { start: 61, end: 66, role: "unlock.assertion-file", addressClass: "immutable-data" },
+    { start: 90, end: 95, role: "unlock.bounds", addressClass: "function-index" },
+    { start: 349, end: 351, role: "unlock.area-count-b", addressClass: "immutable-data" },
+  ]),
+  ["i32"],
+  ["i32"],
+);
+
 const LOCAL_ACTION_HASHES = Object.freeze({
-  xunlaiPlayerReader: "b98af3eb50f4c2aa1bc09f0a88712e32a2a14fe0d013126e1e4c0e842008e01f",
-  areaTypeReader: "9786e68238b6a2559646f8e0594b3d4ee808003f11ec775a475e337e7dd9aa90",
   frameAssertion: "1db4beca1a3d246ce3f4df09cfdd2a3e60c5cef5564d0361474f7f9cb3c95026",
+  frameParameterName: "a3a3f2f40f9a261466c73f8d5ccb6cde62cfe5adce83bbb88bb8582e6b45e222",
+  frameAssertionFile: "ae09386d3c010580726df6fd3ebda81021733a84674bf912c72adfd8ad07429b",
+  uiAssertionExpression: "ea55fe79e72433f82341762f830b1064c9b5f9d1db3b837298464b94de7b1a1b",
+  uiAssertionFile: "ae09386d3c010580726df6fd3ebda81021733a84674bf912c72adfd8ad07429b",
   xunlaiAssertion: "df83cbe4386b6f8641568f5d2b6444c941f6d448a7efffd9f4737e343b0972d2",
+  xunlaiAssertionFile: "318775ff39da8c24707b60aef72f059813aece94c3af9ac0def3f9a54f51fd0e",
+  arrayFile: "47d3990810bf698e496109cd7d900538167fa8ee92f01099aad6bde4e5046357",
+  travelAssertion: "c0b9ae1ef115c2c0ccef50278f782d43098fc5d8b57ff81de1bbbb4dc682c7b0",
+  travelAssertionFile: "dd1e7f984b542dd629cd4fa00df532b1e692d75136003b84193ed228b147b5a4",
+  unlockAssertionFile: "1be528eddebb4af8330d950eb75fe1ac02d346ed79cccdd9e31d26273b9ffda4",
 });
 
 function candidateDiagnostic(
@@ -252,11 +313,11 @@ export function inspectLocalActionRoleCandidates(
 ): LocalActionRoleDiagnostics | null {
   if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
   try {
-    const context = suppliedContext?.inputIdentity === input
+    const context = matchesEvidenceInput(suppliedContext, input)
       ? suppliedContext
       : enhancementProofContext(input);
     if (!context) return null;
-    const { module } = context;
+    const module = context.moduleView();
     const partyTeam = baselines.map((baseline) =>
       inspectPartyTeamRoleCandidates(module, baseline));
     return Object.freeze({
@@ -300,7 +361,7 @@ function isChatAliasesTable(table: Uint8Array, base: number): boolean {
 }
 
 
-function deriveChatAliases(
+export function deriveChatAliases(
   module: ModuleShape,
   baseline: KnownEnhancementBuild,
   uiDispatcher: NonNullable<KnownEnhancementBuild["uiDispatcher"]>,
@@ -314,10 +375,7 @@ function deriveChatAliases(
   const state = soleValue(values, "aliases.state");
   const buffer = soleValue(values, "aliases.buffer");
   const table = staticBytes(module, buffer, 104);
-  const initializedDataEnd = module.dataSegments.reduce(
-    (highest, segment) => Math.max(highest, segment.base + segment.bytes.byteLength),
-    0,
-  );
+  const { initializedDataEnd } = dataEvidence(module);
   if (
     !table
     || state < initializedDataEnd
@@ -327,6 +385,17 @@ function deriveChatAliases(
     || soleValue(values, "aliases.enabled") !== state + 28
     || soleValue(values, "aliases.flag") !== state + 32
     || soleValue(values, "aliases.compare") !== buffer + 92
+    || !signatureMatches(
+      module,
+      soleValue(values, "aliases.helper"),
+      ["i32", "i32", "i32"],
+      ["i32"],
+    )
+    || [...parseActiveTableRelations(module.elementSection)].filter(
+      ([functionIndex, slots]) =>
+        slots.includes(soleValue(values, "aliases.callback"))
+        && signatureMatches(module, functionIndex, ["i32"], []),
+    ).length !== 1
     || !isChatAliasesTable(table, buffer)
     || staticBytesOccurrenceCount(module, table) !== 1
     || unsignedOperand(body, 316) !== 0x1000_019d
@@ -342,7 +411,7 @@ function deriveChatAliases(
   });
 }
 
-function deriveGameThread(
+export function deriveGameThread(
   module: ModuleShape,
   baseline: KnownEnhancementBuild,
 ): KnownEnhancementBuild["gameThread"] | null {
@@ -351,25 +420,30 @@ function deriveGameThread(
   if (functionIndex === null || !expected) return null;
   const body = functionBody(module, functionIndex);
   const values = valuesForRole(body, GAME_THREAD_DRAIN_ROLE);
-  const delta = commonRelocationDelta([
-    [soleValue(values, "frame.clock"), 0x5a2248],
-    [soleValue(values, "frame.previous"), 0x5a2244],
-    [soleValue(values, "frame.ready"), 0x5a21ec],
-    [soleValue(values, "frame.elapsed"), 0x5a2250],
-    [soleValue(values, "frame.flag"), 0x5a21f0],
-    [soleValue(values, "frame.guard"), 0x5a2254],
-    [soleValue(values, "frame.state"), 0x5a223c],
-    [soleValue(values, "frame.counter"), 0x5a2258],
-    [soleValue(values, "frame.buffer.end"), 0x15ac30],
-    [soleValue(values, "frame.buffer.payload"), 0x15ac20],
-    [soleValue(values, "frame.buffer.start"), 0x15ac10],
-    [soleValue(values, "frame.pending"), 0x5a2240],
-  ]);
+  const clock = soleValue(values, "frame.clock");
+  const bufferStart = soleValue(values, "frame.buffer.start");
+  const { initializedDataEnd } = dataEvidence(module);
   const slots = parseActiveTableRelations(module.elementSection).get(functionIndex) ?? [];
   if (
-    delta === null
+    clock < initializedDataEnd
+    || clock % 4 !== 0
+    || bufferStart % 16 !== 0
+    || soleValue(values, "frame.previous") !== clock - 4
+    || soleValue(values, "frame.ready") !== clock - 0x5c
+    || soleValue(values, "frame.elapsed") !== clock + 8
+    || soleValue(values, "frame.flag") !== clock - 0x58
+    || soleValue(values, "frame.guard") !== clock + 0x0c
+    || soleValue(values, "frame.state") !== clock - 0x0c
+    || soleValue(values, "frame.counter") !== clock + 0x10
+    || soleValue(values, "frame.pending") !== clock - 8
+    || soleValue(values, "frame.buffer.payload") !== bufferStart + 0x10
+    || soleValue(values, "frame.buffer.end") !== bufferStart + 0x20
     || staticCStringHash(module, soleValue(values, "frame.assertion"))
       !== LOCAL_ACTION_HASHES.frameAssertion
+    || staticCStringHash(module, soleValue(values, "frame.assertion-file"))
+      !== LOCAL_ACTION_HASHES.frameAssertionFile
+    || staticCStringHash(module, soleValue(values, "frame.parameter-name"))
+      !== LOCAL_ACTION_HASHES.frameParameterName
     || slots.length !== 1
   ) return null;
   return Object.freeze({
@@ -383,7 +457,7 @@ function deriveGameThread(
   });
 }
 
-function deriveXunlaiAccess(
+export function deriveXunlaiAccess(
   module: ModuleShape,
   baseline: KnownEnhancementBuild,
   observation: EnhancementObservationBaseLayout,
@@ -393,11 +467,10 @@ function deriveXunlaiAccess(
   if (!expected) return null;
   const agentFunction = uniqueRoleFunction(module, XUNLAI_AGENT_READER_ROLE);
   const accessFunction = uniqueRoleFunction(module, XUNLAI_ACCESS_READER_ROLE);
-  const playerFunction = uniqueExactFunction(
-    module, LOCAL_ACTION_HASHES.xunlaiPlayerReader, ["i32"], ["i32"],
-  );
-  const areaTypeFunction = uniqueExactFunction(
-    module, LOCAL_ACTION_HASHES.areaTypeReader, ["i32"], ["i32"],
+  const playerFunction = uniqueRoleFunction(module, XUNLAI_PLAYER_READER_ROLE);
+  const areaTypeFunction = uniqueRoleFunction(
+    module,
+    XUNLAI_AREA_TYPE_READER_ROLE,
   );
   if (
     agentFunction === null || accessFunction === null
@@ -408,6 +481,11 @@ function deriveXunlaiAccess(
   const playerBody = functionBody(module, playerFunction);
   const agentValues = valuesForRole(agentBody, XUNLAI_AGENT_READER_ROLE);
   const accessValues = valuesForRole(accessBody, XUNLAI_ACCESS_READER_ROLE);
+  const playerValues = valuesForRole(playerBody, XUNLAI_PLAYER_READER_ROLE);
+  const areaTypeValues = valuesForRole(
+    functionBody(module, areaTypeFunction),
+    XUNLAI_AREA_TYPE_READER_ROLE,
+  );
   const agentLine = soleValue(agentValues, "xunlai.source-line");
   const accessLine = soleValue(accessValues, "xunlai.source-line");
   if (
@@ -415,7 +493,17 @@ function deriveXunlaiAccess(
       !== LOCAL_ACTION_HASHES.xunlaiAssertion
     || staticCStringHash(module, soleValue(accessValues, "xunlai.assertion"))
       !== LOCAL_ACTION_HASHES.xunlaiAssertion
+    || staticCStringHash(module, soleValue(agentValues, "xunlai.assertion-file"))
+      !== LOCAL_ACTION_HASHES.xunlaiAssertionFile
+    || staticCStringHash(module, soleValue(accessValues, "xunlai.assertion-file"))
+      !== LOCAL_ACTION_HASHES.xunlaiAssertionFile
+    || staticCStringHash(module, soleValue(agentValues, "xunlai.array-file"))
+      !== LOCAL_ACTION_HASHES.arrayFile
+    || staticCStringHash(module, soleValue(playerValues, "player.array-file"))
+      !== LOCAL_ACTION_HASHES.arrayFile
     || agentLine - 4_822 !== accessLine - 4_850
+    || soleValue(areaTypeValues, "area.lookup")
+      !== deriveAreaLookupFunction(module)
   ) return null;
   const worldPlayers = unsignedOperand(agentBody, 49);
   const playerRecordStride = unsignedOperand(agentBody, 146);
@@ -490,8 +578,9 @@ function uniqueCString(
     && staticBytesOccurrenceCount(module, bytes) === 1;
 }
 
-function deriveTravelContextResolver(
+export function deriveTravelContextResolver(
   module: ModuleShape,
+  missionBound: number,
 ): NonNullable<NonNullable<KnownEnhancementBuild["travelAction"]>["contextResolver"]> | null {
   const functionIndex = uniqueRoleFunction(module, TRAVEL_CONTEXT_RESOLVER_ROLE);
   if (functionIndex === null) return null;
@@ -509,7 +598,9 @@ function deriveTravelContextResolver(
     assertion, readerA, readerB, readerC, resolver, regionReader, mapCheck, languageReader,
   ];
   if (
-    callees.some((value) => value === null)
+    soleValue(values, "context.area-count-bound") !== missionBound
+    || missionBound <= 1
+    || callees.some((value) => value === null)
     || new Set(callees).size !== callees.length
     || !signatureMatches(module, assertion!, ["i32", "i32", "i32"], [])
     || !signatureMatches(module, readerA!, ["i32"], ["i32"])
@@ -551,12 +642,12 @@ export function locateAutomaticLocalActions(
 ): AutomaticLocalActionsLocation | null {
   if (!WebAssembly.validate(input) || input.byteLength > MAX_INPUT_BYTES) return null;
   try {
-    const context = suppliedContext?.inputIdentity === input
+    const context = matchesEvidenceInput(suppliedContext, input)
       ? suppliedContext
       : enhancementProofContext(input);
     if (!context) return null;
-    const { module } = context;
-    const tick = context.tick.candidate;
+    const module = context.moduleView();
+    const tick = tickEvidence(module).candidate;
     if (!tick || !bodyMatchesRole(functionBody(module, tick.functionIndex), CLIENT_TICK_ROLE)) {
       return null;
     }
@@ -588,6 +679,14 @@ export function locateAutomaticLocalActions(
         && uiAssertion !== uiFunction
         && signatureMatches(module, uiForwarder, ["i32", "i32", "i32"], [])
         && signatureMatches(module, uiAssertion, ["i32", "i32", "i32"], [])
+        && staticCStringHash(
+          module,
+          soleValue(uiValues!, "ui.assertion-expression"),
+        ) === LOCAL_ACTION_HASHES.uiAssertionExpression
+        && staticCStringHash(
+          module,
+          soleValue(uiValues!, "ui.assertion-file"),
+        ) === LOCAL_ACTION_HASHES.uiAssertionFile
         ? Object.freeze({
             ...expectedUi,
             functionIndex: uiFunction,
@@ -595,6 +694,8 @@ export function locateAutomaticLocalActions(
           })
         : null;
       const gameThread = isolatedProof(() => deriveGameThread(module, baseline));
+      const observationLayout = suppliedObservationLayout
+        ?? isolatedProof(() => deriveObservationLayout(module));
 
       const travelExpected = baseline.travelAction;
       const travelFunction = travelExpected
@@ -607,6 +708,12 @@ export function locateAutomaticLocalActions(
       const travelAreaReader = travelValues
         ? isolatedProof(() => soleValue(travelValues, "travel.area-reader"))
         : null;
+      const travelAreaCount = travelAreaReader === null
+        ? null
+        : isolatedProof(() => unsignedOperand(
+            functionBody(module, travelAreaReader),
+            6,
+          ));
       const travelAssertion = travelValues
         ? soleValue(travelValues, "travel.assertion")
         : null;
@@ -617,7 +724,11 @@ export function locateAutomaticLocalActions(
         ? soleValue(travelValues, "travel.postcheck")
         : null;
       const travelContextResolver = travelExpected
-        ? deriveTravelContextResolver(module)
+        && travelValues
+        ? deriveTravelContextResolver(
+            module,
+            soleValue(travelValues, "travel.area-count-bound"),
+          )
         : null;
       const unlockAccessor = travelExpected
         ? uniqueExactFunction(
@@ -628,16 +739,25 @@ export function locateAutomaticLocalActions(
           )
         : null;
       const unlockConsumer = travelExpected
-        ? uniqueExactFunction(
-            module,
-            travelExpected.unlockProof.consumer.bodySha256,
-            travelExpected.unlockProof.consumer.params,
-            travelExpected.unlockProof.consumer.results,
-          )
+        ? uniqueRoleFunction(module, TRAVEL_UNLOCK_CONSUMER_ROLE)
         : null;
+      const unlockConsumerValues = unlockConsumer === null
+        ? null
+        : valuesForRole(
+            functionBody(module, unlockConsumer),
+            TRAVEL_UNLOCK_CONSUMER_ROLE,
+          );
       const travelAction = uiDispatcher && gameThread && travelExpected && travelBody
+        && observationLayout
+        && travelAreaCount !== null
         && unsignedOperand(travelBody, 169) === travelExpected.messageId
         && travelValues !== null
+        && soleValue(travelValues, "travel.area-count-bound")
+          <= travelAreaCount
+        && staticCStringHash(module, soleValue(travelValues, "travel.assertion-b"))
+          === LOCAL_ACTION_HASHES.travelAssertion
+        && staticCStringHash(module, soleValue(travelValues, "travel.assertion-file"))
+          === LOCAL_ACTION_HASHES.travelAssertionFile
         && isolatedProof(() => soleValue(travelValues, "travel.ui"))
           === uiDispatcher.functionIndex
         && travelAreaReader !== null
@@ -659,6 +779,20 @@ export function locateAutomaticLocalActions(
         && travelContextResolver !== null
         && unlockAccessor !== null
         && unlockConsumer !== null
+        && unlockConsumerValues !== null
+        && soleValue(unlockConsumerValues, "unlock.area-count-a")
+          === travelAreaCount
+        && soleValue(unlockConsumerValues, "unlock.area-count-b")
+          === travelAreaCount
+        && staticCStringHash(
+          module,
+          soleValue(unlockConsumerValues, "unlock.assertion"),
+        ) === LOCAL_ACTION_HASHES.travelAssertion
+        && staticCStringHash(
+          module,
+          soleValue(unlockConsumerValues, "unlock.assertion-file"),
+        ) === LOCAL_ACTION_HASHES.unlockAssertionFile
+        && soleValue(unlockConsumerValues, "unlock.bounds") === travelAreaReader
         ? Object.freeze({
             ...travelExpected,
             producer: Object.freeze({
@@ -676,6 +810,7 @@ export function locateAutomaticLocalActions(
               consumer: Object.freeze({
                 ...travelExpected.unlockProof.consumer,
                 functionIndex: unlockConsumer,
+                bodySha256: functionBodySha256(module, unlockConsumer),
               }),
             }),
           })
@@ -689,8 +824,6 @@ export function locateAutomaticLocalActions(
       const handlerValues = handlerBody
         ? valuesForRole(handlerBody, XUNLAI_HANDLER_ROLE)
         : null;
-      const observationLayout = suppliedObservationLayout
-        ?? isolatedProof(() => deriveObservationLayout(module));
       const xunlaiAction = uiDispatcher && gameThread && observationLayout
         && handlerBody
         && handlerValues

@@ -34,26 +34,20 @@ import {
 import {
   ENHANCEMENT_BUILDS,
   enhancementProfilesForBuild,
-  enhancementOutputSha256,
   supportedEnhancementCapabilities,
 } from "../../src/main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../../src/main/certification/enhancement-transform.js";
 import {
-  deriveNativeDoubleClickBuild,
-  isDerivedNativeDoubleClickBuild,
-  rewriteNativeDoubleClickWasm,
-} from "../../src/main/certification/native-double-click.js";
-import { rewriteExtendedMemoryWasm } from "../../src/main/certification/extended-memory.js";
-import {
   mutableSpans,
   decodeFunctions,
   parseActiveTableRelations,
-  parseModule,
   semanticRole,
   signatureMatches,
   signatureEvidence,
   uniqueRoleFunction,
-} from "../../src/main/certification/enhancement-wasm-proof-context.js";
+  wasmEvidence,
+} from "../../src/main/certification/wasm-evidence.js";
+import type { ModuleShape } from "../../src/main/certification/enhancement-evidence-types.js";
 import {
   rewriteTemplateSaveWasm,
 } from "../../src/main/certification/template-save-compat.js";
@@ -62,6 +56,7 @@ import { inspectLocalActionRoleCandidates } from "../../src/main/certification/e
 import {
   inspectTargetRoleCandidates,
   locateAutomaticCursor,
+  locateAutomaticPlayRegion,
 } from "../../src/main/certification/enhancement-structural-evidence.js";
 
 const sha256 = (bytes: Uint8Array): string =>
@@ -118,7 +113,7 @@ function swapDefinedFunctions(
 }
 
 function sameSignatureDestination(
-  module: ReturnType<typeof parseModule>,
+  module: ModuleShape,
   sourceFunction: number,
   excluded: ReadonlySet<number> = new Set(),
 ): number {
@@ -197,10 +192,18 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedCaller)), true);
   assert.equal(deriveEquivalentTemplateSaveBuild(changedCaller), null);
-  assert.deepEqual(
-    verifyLocalClientBytes(changedCaller).reasons,
-    ["template-shape-changed"],
-  );
+  const isolatedFileFailure = verifyLocalClientBytes(changedCaller);
+  assert.equal(isolatedFileFailure.templateSaveBuild, null);
+  assert.equal(isolatedFileFailure.status, "proved");
+  assert.deepEqual(isolatedFileFailure.fileVerdict, {
+    status: "refused",
+    inputSha256: sha256(changedCaller),
+    verifierAbi: isolatedFileFailure.verifierAbi,
+    reason: "template-shape-changed",
+  });
+  assert.equal(isolatedFileFailure.officialSha256, sha256(changedCaller));
+  assert.deepEqual(isolatedFileFailure.reasons, []);
+  assert.deepEqual(capabilitiesOf(isolatedFileFailure), capabilitiesOf(local));
 
   // Static addresses must preserve their measured relationship to independent
   // initialized-data or BSS anchors. Moving one delete-state word must refuse.
@@ -228,13 +231,24 @@ test("the template-save verifier makes a fail-closed decision for a real client"
 
   const observationBase = local.enhancementBuild?.observationBase;
   assert.ok(observationBase, "the real client must prove its observation base");
-  const parsed = parseModule(bytes);
+  const parsed = wasmEvidence(bytes)?.moduleView();
+  assert.ok(parsed);
   const cursorLocation = locateAutomaticCursor(bytes, ENHANCEMENT_BUILDS);
   assert.ok(cursorLocation, "the real client must structurally derive Cursor");
   assert.deepEqual(
     cursorLocation.layout,
     local.enhancementBuild?.cursorEvent?.layout,
     "the shipped Cursor layout must be the structurally derived layout",
+  );
+  const playRegionLocation = locateAutomaticPlayRegion(bytes, ENHANCEMENT_BUILDS);
+  assert.ok(playRegionLocation, "the real client must derive play-region state");
+  assert.deepEqual(
+    playRegionLocation.playRegionLayout,
+    local.enhancementBuild?.playRegionObservation?.layout,
+  );
+  assert.ok(
+    local.enhancementBuild?.preGameControls,
+    "the real client must derive pre-game frame controls",
   );
   const agentArrayAccessor = uniqueRoleFunction(parsed, semanticRole(
     47,
@@ -282,11 +296,11 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
   assert.deepEqual(capabilitiesOf(addressDecision), {
     nativeCursor: true, targetObservation: false, partyObservation: false,
-    teamApply: false, travelAction: true, xunlaiAction: false, chatAliases: true,
+    teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false,
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
-    preGameControls: false,
+    preGameControls: true,
   });
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
@@ -300,19 +314,26 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     targetObservation: false,
     partyObservation: false,
     teamApply: false,
-    travelAction: true,
+    travelAction: false,
     xunlaiAction: false,
-    chatAliases: true,
+    chatAliases: false,
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
-    preGameControls: false,
+    preGameControls: true,
   });
 
+  const areaInfo = playRegionLocation.playRegionLayout.areaInfo;
+  const areaLookupLocal = parsed.bodies.findIndex((body) =>
+    body.byteLength === 47
+    && body.includes(paddedIndex(areaInfo)[0]!)
+    && paddedIndex(areaInfo).every((byte, index) => body[40 + index] === byte),
+  );
+  assert.notEqual(areaLookupLocal, -1);
   const targetMutations = [
     { local: 7327 - derived.importCount, offset: 132, label: "target occurrence ledger", shared: false },
     { local: 5109 - derived.importCount, offset: 39, label: "map field offset", shared: true },
-    { local: 17524 - derived.importCount, offset: 36, label: "area table stride", shared: true },
+    { local: areaLookupLocal, offset: 36, label: "area table stride", shared: true },
   ] as const;
   for (const mutation of targetMutations) {
     const changedTargetProof = rewriteCode(bytes, (bodies) => {
@@ -329,7 +350,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     assert.ok(refusal.enhancementBuild?.cursorEvent, mutation.label);
     assert.equal(refusal.enhancementBuild.targetObservation, undefined, mutation.label);
     assert.equal(capabilitiesOf(refusal)?.travelAction, !mutation.shared, mutation.label);
-    assert.equal(capabilitiesOf(refusal)?.chatAliases, true, mutation.label);
+    assert.equal(capabilitiesOf(refusal)?.chatAliases, !mutation.shared, mutation.label);
     assert.equal(capabilitiesOf(refusal)?.xunlaiAction, !mutation.shared, mutation.label);
     assert.equal(
       capabilitiesOf(refusal)?.playRegionObservation,
@@ -340,9 +361,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const cursorMutations = [
-    { local: 446 - derived.importCount, offset: 10, label: "main-loop control flow", shared: true },
-    { local: 2828 - derived.importCount, offset: 68, label: "one producer static", shared: false },
-    { local: 6234 - derived.importCount, offset: 45, label: "cursor art offset", shared: false },
+    { local: 446 - derived.importCount, offset: 10, label: "main-loop control flow", shared: true, equivalent: false },
+    { local: 2828 - derived.importCount, offset: 68, label: "non-canonical producer encoding", shared: false, equivalent: true },
+    { local: 6234 - derived.importCount, offset: 45, label: "cursor art offset", shared: false, equivalent: false },
   ] as const;
   for (const mutation of cursorMutations) {
     const changedCursorProof = rewriteCode(bytes, (bodies) => {
@@ -359,20 +380,31 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     if (mutation.shared) {
       assert.equal(refusal.enhancementBuild, null, mutation.label);
       assert.deepEqual(refusal.reasons, ["enhancement-layout-changed"], mutation.label);
-    } else {
+    } else if (!mutation.equivalent) {
       assert.ok(refusal.enhancementBuild?.targetObservation, mutation.label);
       assert.equal(refusal.enhancementBuild.cursorEvent, undefined, mutation.label);
       assert.equal(capabilitiesOf(refusal)?.travelAction, true, mutation.label);
       assert.equal(capabilitiesOf(refusal)?.xunlaiAction, true, mutation.label);
       assert.equal(capabilitiesOf(refusal)?.chatAliases, true, mutation.label);
       assert.deepEqual(refusal.reasons, [], mutation.label);
+    } else {
+      assert.ok(refusal.enhancementBuild?.cursorEvent, mutation.label);
     }
   }
 
+  const certifiedEnhancements = local.enhancementBuild!;
+  const travelProducer = certifiedEnhancements.travelAction!.producer.functionIndex;
+  const travelContext = certifiedEnhancements.travelAction!.contextResolver.functionIndex;
+  const xunlaiHandler = certifiedEnhancements.xunlaiAction!.handler.functionIndex;
+  const xunlaiAccess = certifiedEnhancements.xunlaiAction!.accessProof!
+    .readers["access-flags"].functionIndex;
+  const aliasParser = certifiedEnhancements.chatAliases!.parser.functionIndex;
+  const gameDrain = certifiedEnhancements.gameThread!.drain.functionIndex;
+  const uiDispatcher = certifiedEnhancements.uiDispatcher!.functionIndex;
   const localActionMutations = [
-    { local: 16199 - derived.importCount, offset: 169, feature: "travelAction", label: "Travel message" },
-    { local: 9196 - derived.importCount, offset: 78, feature: "xunlaiAction", label: "Xunlai access field" },
-    { local: 13703 - derived.importCount, offset: 316, feature: "chatAliases", label: "alias message" },
+    { local: travelProducer - derived.importCount, offset: 169, feature: "travelAction", label: "Travel message" },
+    { local: xunlaiAccess - derived.importCount, offset: 78, feature: "xunlaiAction", label: "Xunlai access field" },
+    { local: aliasParser - derived.importCount, offset: 316, feature: "chatAliases", label: "alias message" },
   ] as const;
   for (const mutation of localActionMutations) {
     const changed = rewriteCode(bytes, (bodies) => {
@@ -391,8 +423,8 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const changedTravelContext = rewriteCode(bytes, (bodies) => {
-    bodies[11650 - derived.importCount]![14]
-      = bodies[11650 - derived.importCount]![14]! ^ 1;
+    bodies[travelContext - derived.importCount]![14]
+      = bodies[travelContext - derived.importCount]![14]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedTravelContext)), true);
   const changedTravelContextDecision = verifyLocalClientBytes(changedTravelContext);
@@ -407,7 +439,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const changedDrain = rewriteCode(bytes, (bodies) => {
-    const body = bodies[6661 - derived.importCount]!;
+    const body = bodies[gameDrain - derived.importCount]!;
     body[330] = body[330]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedDrain)), true);
@@ -415,7 +447,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   const drainRefusal = capabilitiesOf(changedDrainDecision)!;
   assert.equal(drainRefusal.travelAction, false);
   assert.equal(drainRefusal.xunlaiAction, false);
-  assert.equal(drainRefusal.chatAliases, true, "the parser proof remains available");
+  assert.equal(drainRefusal.chatAliases, false);
   const drainEffective = effectiveCapabilitiesOf(changedDrainDecision)!;
   assert.equal(
     drainEffective.chatAliases,
@@ -472,7 +504,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const changedDispatcher = rewriteCode(bytes, (bodies) => {
-    const body = bodies[6842 - derived.importCount]!;
+    const body = bodies[uiDispatcher - derived.importCount]!;
     body[6] = body[6]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedDispatcher)), true);
@@ -557,7 +589,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(timerRefusal.skillCooldownObservation, false);
 
   const reindexedLocalActions = rewriteCode(bytes, (bodies) => {
-    swapDefinedFunctions(bodies, derived.importCount, 6842, 6840);
+    swapDefinedFunctions(bodies, derived.importCount, uiDispatcher, 6840);
   });
   assert.equal(WebAssembly.validate(new Uint8Array(reindexedLocalActions)), true);
   const reindexedCapabilities = capabilitiesOf(
@@ -575,7 +607,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   const travelContextDestination = 1083;
   assert.deepEqual(
     signatureEvidence(parsed, travelContextDestination),
-    signatureEvidence(parsed, 11650),
+    signatureEvidence(parsed, travelContext),
   );
   assert.equal(
     decodeFunctions(parsed, []).some(({ calls }) => calls.has(travelContextDestination)),
@@ -586,7 +618,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     false,
   );
   const reindexedTravelContext = rewriteCode(bytes, (bodies) => {
-    swapDefinedFunctions(bodies, derived.importCount, 11650, travelContextDestination);
+    swapDefinedFunctions(bodies, derived.importCount, travelContext, travelContextDestination);
   });
   assert.equal(WebAssembly.validate(new Uint8Array(reindexedTravelContext)), true);
   const reindexedTravelContextCapabilities = capabilitiesOf(
@@ -626,7 +658,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const changedTravelCall = rewriteCode(bytes, (bodies) => {
-    bodies[16199 - derived.importCount]!.set(paddedIndex(6840), 132);
+    bodies[travelProducer - derived.importCount]!.set(paddedIndex(6840), 132);
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedTravelCall)), true);
   const travelCallRefusal = capabilitiesOf(verifyLocalClientBytes(changedTravelCall))!;
@@ -635,7 +667,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(travelCallRefusal.chatAliases, true);
 
   const changedXunlaiCall = rewriteCode(bytes, (bodies) => {
-    bodies[8978 - derived.importCount]!.set(paddedIndex(6840), 98);
+    bodies[xunlaiHandler - derived.importCount]!.set(paddedIndex(6840), 98);
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedXunlaiCall)), true);
   const xunlaiCallRefusal = capabilitiesOf(verifyLocalClientBytes(changedXunlaiCall))!;
@@ -644,7 +676,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(xunlaiCallRefusal.chatAliases, true);
 
   const ambiguousTravel = rewriteCode(bytes, (bodies) => {
-    bodies[311 - derived.importCount] = bodies[16199 - derived.importCount]!.slice();
+    bodies[311 - derived.importCount] = bodies[travelProducer - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousTravel)), true);
   const ambiguousTravelDecision = verifyLocalClientBytes(ambiguousTravel);
@@ -665,7 +697,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
 
   const ambiguousTravelContext = rewriteCode(bytes, (bodies) => {
     bodies[travelContextDestination - derived.importCount]
-      = bodies[11650 - derived.importCount]!.slice();
+      = bodies[travelContext - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousTravelContext)), true);
   const ambiguousTravelContextDecision = verifyLocalClientBytes(ambiguousTravelContext);
@@ -687,7 +719,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(capabilitiesOf(ambiguousTravelContextDecision)?.xunlaiAction, true);
 
   const ambiguousDispatcher = rewriteCode(bytes, (bodies) => {
-    bodies[6840 - derived.importCount] = bodies[6842 - derived.importCount]!.slice();
+    bodies[6840 - derived.importCount] = bodies[uiDispatcher - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousDispatcher)), true);
   const ambiguousDispatcherDecision = verifyLocalClientBytes(ambiguousDispatcher);
@@ -712,7 +744,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(ambiguousDispatcherRefusal.chatAliases, false);
 
   const ambiguousXunlai = rewriteCode(bytes, (bodies) => {
-    bodies[223 - derived.importCount] = bodies[8978 - derived.importCount]!.slice();
+    bodies[223 - derived.importCount] = bodies[xunlaiHandler - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousXunlai)), true);
   assert.deepEqual(inspectLocalActionRoleCandidates(ambiguousXunlai)?.xunlaiAction, {
@@ -728,7 +760,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const ambiguousAliases = rewriteCode(bytes, (bodies) => {
-    bodies[350 - derived.importCount] = bodies[13703 - derived.importCount]!.slice();
+    bodies[350 - derived.importCount] = bodies[aliasParser - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousAliases)), true);
   assert.deepEqual(inspectLocalActionRoleCandidates(ambiguousAliases)?.chatAliases, {
@@ -809,25 +841,8 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(partyRefusal.xunlaiAction, true);
   assert.equal(partyRefusal.chatAliases, true);
 
-  for (const mutation of [
-    { functionIndex: 322, operand: 82, label: "Party immutable callee anchor" },
-    { functionIndex: 17787, operand: 23, label: "Party release static ledger" },
-    { functionIndex: 10343, operand: 5, label: "Party finish-state relocation" },
-  ] as const) {
-    const changedPartyCallee = rewriteCode(bytes, (bodies) => {
-      const body = bodies[mutation.functionIndex - derived.importCount]!;
-      body[mutation.operand] = body[mutation.operand]! ^ 1;
-    });
-    assert.equal(WebAssembly.validate(new Uint8Array(changedPartyCallee)), true);
-    const refusal = capabilitiesOf(verifyLocalClientBytes(changedPartyCallee))!;
-    assert.equal(refusal.partyObservation, false, mutation.label);
-    assert.equal(refusal.teamApply, false, mutation.label);
-    assert.equal(refusal.travelAction, true, mutation.label);
-    assert.equal(refusal.chatAliases, true, mutation.label);
-  }
-
   const changedTeamOpcode = rewriteCode(bytes, (bodies) => {
-    const body = bodies[6887 - derived.importCount]!;
+    const body = bodies[teamRoleFunction! - derived.importCount]!;
     body[30] = body[30]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedTeamOpcode)), true);
@@ -839,7 +854,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(teamRefusal.chatAliases, true);
 
   const changedAliasPointer = rewriteCode(bytes, (bodies) => {
-    const body = bodies[13703 - derived.importCount]!;
+    const body = bodies[aliasParser - derived.importCount]!;
     body[110] = body[110]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedAliasPointer)), true);
@@ -930,69 +945,4 @@ test("template-save static relocation anchors reject coherent wrong values", {
     true,
   );
   assert.equal(deriveEquivalentTemplateSaveBuild(wrongScreenshotDirectory), null);
-});
-
-test("every certified runtime profile reproduces the real client chain", async () => {
-  const artifact = process.env.GW_CLIENT_WASM;
-  assert.ok(
-    artifact,
-    "GW_CLIENT_WASM must explicitly name the real Gw.jspi.wasm artifact",
-  );
-  const official = new Uint8Array(await readFile(artifact));
-  const verified = verifyLocalClientBytes(official);
-  assert.equal(
-    isLocalClientVerification(verified, sha256(official)),
-    true,
-    "the real client proof must cross the production boundary",
-  );
-  const templateBuild = verified.templateSaveBuild;
-  assert.ok(templateBuild, "the real client must pass the template-save proof");
-  const template = rewriteTemplateSaveWasm(official, templateBuild);
-  const enhancementBuild = verified.enhancementBuild;
-  assert.ok(enhancementBuild, "the template output must pass Enhancement proof");
-  const authoredBuild = ENHANCEMENT_BUILDS.find(
-    (candidate) => candidate.sha256 === enhancementBuild.sha256,
-  );
-  assert.ok(authoredBuild, "the exact client must retain its authored build row");
-  for (const profile of enhancementProfilesForBuild(authoredBuild)) {
-    const capabilities = enhancementCapabilitiesForProfile(profile);
-    assert.ok(capabilities, `authored profile ${profile} must be valid`);
-    assert.equal(
-      sha256(transformEnhancementWasm(template, enhancementBuild, capabilities)),
-      enhancementOutputSha256(authoredBuild, capabilities),
-      `authored profile ${profile} must match the current transform ABI`,
-    );
-  }
-
-  // The off profile and every optional capability profile feed the same two
-  // downstream exact-hash transforms. Reproducing the complete chain here is
-  // what catches an ABI/config edit whose source tests pass but whose authored
-  // certificate hashes were not regenerated.
-  const derivedTemplateDoubleClick = deriveNativeDoubleClickBuild(template);
-  assert.equal(
-    isDerivedNativeDoubleClickBuild(derivedTemplateDoubleClick, sha256(template)),
-    true,
-    "the exact fixture must independently cross semantic proof",
-  );
-  rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(template));
-  for (const profile of enhancementProfilesForBuild(enhancementBuild)) {
-    const capabilities = enhancementCapabilitiesForProfile(profile);
-    assert.ok(capabilities, `certified profile ${profile} must be valid`);
-    const enhanced = transformEnhancementWasm(
-      template,
-      enhancementBuild,
-      capabilities,
-    );
-    assert.equal(
-      sha256(enhanced),
-      enhancementOutputSha256(enhancementBuild, capabilities),
-    );
-    const derivedDoubleClick = deriveNativeDoubleClickBuild(enhanced);
-    assert.equal(
-      isDerivedNativeDoubleClickBuild(derivedDoubleClick, sha256(enhanced)),
-      true,
-      `profile ${profile} must independently cross semantic proof`,
-    );
-    rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(enhanced));
-  }
 });

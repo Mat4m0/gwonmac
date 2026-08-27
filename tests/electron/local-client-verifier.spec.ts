@@ -54,9 +54,14 @@ test("re-verifies an unknown exact hash in an isolated process", async () => {
     const first = await run();
     expect(first).toMatchObject({
       officialSha256: sha256,
+      fileVerdict: {
+        status: "refused",
+        inputSha256: sha256,
+        reason: "template-shape-changed",
+      },
       templateSaveBuild: null,
       enhancementBuild: null,
-      reasons: ["template-shape-changed"],
+      reasons: ["enhancement-layout-changed"],
     });
 
     // A second launch must re-read the bytes. Profile state cannot preserve the

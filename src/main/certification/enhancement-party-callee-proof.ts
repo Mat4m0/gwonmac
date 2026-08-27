@@ -11,8 +11,9 @@ import {
   uniqueExactFunction,
   uniqueRoleFunction,
   valuesForRole,
-} from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
 import type { ModuleShape, SemanticRole } from "./enhancement-evidence-types.js";
+import { dataEvidence } from "./wasm-data-evidence.js";
 
 const span = (
   start: number,
@@ -20,12 +21,14 @@ const span = (
   addressClass: "function-index" | "immutable-data" | "mutable-static",
 ) => Object.freeze({ start, end: start + 5, role, addressClass });
 
-const CALLEE_ROLES = Object.freeze({
-  unlockResolver: semanticRole(62, "36a7d7f3a6fabf5333e02b9aa8f24e0568d588e6cea93b7e0fa79db0caecaa68", [
+const PARTY_CALLEE_ROLES = Object.freeze({
+  unlockResolver: semanticRole(62, "89a3bd86b2316709e91dc8c6e29fe0dd146bd341ea67500c1803dc90833ef0b5", [
     span(9, "resolver.slot", "mutable-static"), span(33, "resolver.apply", "function-index"),
+    span(25, "resolver.source-file", "immutable-data"),
     span(42, "resolver.slot", "mutable-static"),
   ], ["i32"], ["i32"]),
-  attributeApply: semanticRole(114, "a8883a9e3931c54ac72993d107f08f8ed9631449a425dad63ad54ef0e6a873ad", [
+  attributeApply: semanticRole(114, "30e9eb346f79bbb0bdebad3f93503e4381e20951a31441543ffc39375ed1e147", [
+    span(44, "apply.source-file", "immutable-data"),
     span(55, "apply.prepare", "function-index"), span(82, "apply.error-a", "immutable-data"),
     span(88, "apply.error-b", "immutable-data"), span(96, "apply.import", "function-index"),
   ], ["i32", "i32", "i32"], []),
@@ -35,14 +38,17 @@ const CALLEE_ROLES = Object.freeze({
   attributeFinish: semanticRole(76, "e4e61ee10c161858ab5a05ede4649e8a09649e4035327fd1a564e5e546443bb1", [
     span(49, "finish.notify", "function-index"), span(59, "finish.flush", "function-index"),
   ], ["i32", "i32", "i32"], []),
-  attributeBegin: semanticRole(309, "461708dfb1cfba5d50983461087cadcb4b706fa16538ab66bd517add2a77ac53", [
+  attributeBegin: semanticRole(309, "a3d603997c440ac3a816c9320d701d7e5fa1557adaada16515dcbe1456b24c3a", [
     span(191, "begin.error-a", "immutable-data"), span(205, "begin.apply", "function-index"),
+    span(197, "begin.source-file", "immutable-data"),
     span(229, "begin.error-b", "immutable-data"), span(243, "begin.apply", "function-index"),
+    span(235, "begin.source-file", "immutable-data"),
     span(292, "begin.ui", "function-index"),
   ], ["i32", "i32"], []),
-  attributeDecode: semanticRole(235, "d29313135d7a4120ee86dff7a2e463064a2ae857618567c5891851d6245239b8", [
+  attributeDecode: semanticRole(235, "ada7f9a374a6a34216e582e2d3c5a4dae59891c7a3431f3a1fc52eed62548376", [
     span(29, "decode.first", "function-index"), span(90, "decode.second", "function-index"),
     span(140, "decode.error", "immutable-data"), span(155, "decode.apply", "function-index"),
+    span(146, "decode.source-file", "immutable-data"),
     span(171, "decode.copy", "function-index"), span(189, "decode.release", "function-index"),
   ], ["i32", "i32", "i32"], []),
   attributeCommit: semanticRole(134, "771da112535ec001dfcb8ebd7902815aa868487eca03affedf1500b5843a1dae", [
@@ -54,7 +60,11 @@ const CALLEE_ROLES = Object.freeze({
   partyFlagNotify: semanticRole(16, "03a8933028dafb93280618f5b57c4f89081e4a2f351b9f608e937b0b3b4a6fa2", [
     span(4, "notify.resolve", "function-index"), span(10, "notify.dispatch", "function-index"),
   ], [], []),
-  notifyDispatch: semanticRole(1_054, "5234992743cc93ab20d3b162d0e35ecfc4b1622b85ba981f45331824d35089bc", [
+  notifyDispatch: semanticRole(1_054, "03bb2a190659b28eae56afe306dbbfd959295d294da23af71b32db30bd1ceea1", [
+    span(61, "notify.helper-a", "function-index"),
+    span(247, "notify.array-file", "immutable-data"),
+    span(583, "notify.helper-b", "function-index"),
+    span(703, "notify.helper-b", "function-index"),
     span(961, "notify.ui", "function-index"), span(1_022, "notify.ui", "function-index"),
   ], ["i32"], []),
 });
@@ -69,23 +79,35 @@ const RELEASE_STATIC_DELTAS = Object.freeze([
   16, 20, 40, 0, 0, 304, 304, 4, 4, 8, 24, 24, 12, 12, 20, 8, 20,
   20, 20, 8, 8, 40, 0, 0, 304, 304, 4, 4, 8, 40, 0, 0, 304, 4, 4, 32, 32,
 ] as const);
-const RELEASE_STORAGE_ROLE = semanticRole(
+const PARTY_RELEASE_STORAGE_ROLE = semanticRole(
   1_988,
-  "2958596503e4a6b9cd6cc220eb7b55e3330ea0e02c5afa22b2e60a516641c729",
-  RELEASE_STATIC_STARTS.map((start, index) => span(start, `release.static-${index}`, "mutable-static")),
+  "a99214933ed1c82fe6ce45a9c067cc87b374389e00c87373defa0faeb6dea402",
+  [
+    ...RELEASE_STATIC_STARTS.map((start, index) =>
+      span(start, `release.static-${index}`, "mutable-static")),
+    span(1_981, "release.cleanup", "function-index"),
+  ],
   ["i32"],
   [],
 );
 
-const LEAF_ROLES = Object.freeze({
-  first: semanticRole(60, "91265b97d2ae0718d4b9668b966b30017c46ef68059776e6942ef5e274ef8c7b", [span(13, "first.error", "immutable-data"), span(50, "first.empty", "immutable-data")], ["i32"], ["i32"]),
-  second: semanticRole(45, "77769d50a1726c9c451f0f38868104b9ae0fbc376d6ad26b3e45cda36a1edd09", [span(11, "second.error", "immutable-data"), span(39, "second.empty", "immutable-data")], ["i32"], ["i32"]),
-  third: semanticRole(48, "1225201de145d830b27bbb2a6c820cc25c2e50b1e64476520c9436cfa1e9fbcd", [span(11, "third.error", "immutable-data"), span(38, "third.empty", "immutable-data")], ["i32"], ["i32"]),
-  sixth: semanticRole(48, "b2985700fe8acbda202d211f6d9da186cb15a6c2cc91e101eb284ad48e64f0af", [span(11, "sixth.error", "immutable-data"), span(38, "sixth.empty", "immutable-data")], ["i32"], ["i32"]),
+const PARTY_LEAF_ROLES = Object.freeze({
+  first: semanticRole(60, "2295ea545e420022895bf4084eaa03bd8e47bce067db291c7e9ce2e1c390e89d", [span(13, "first.error", "immutable-data"), span(19, "first.source-file", "immutable-data"), span(50, "first.empty", "immutable-data")], ["i32"], ["i32"]),
+  second: semanticRole(45, "a99cc45b1dc37974f3ab2032d30f7617ebb5f0d45cdf249b2453094b8d49bb41", [span(11, "second.error", "immutable-data"), span(17, "second.source-file", "immutable-data"), span(39, "second.empty", "immutable-data")], ["i32"], ["i32"]),
+  third: semanticRole(48, "c6ef04ab4bddab108d5b0f7c90acb55f7d6eab79b0c28355ca89b43751c02060", [span(11, "third.error", "immutable-data"), span(17, "third.source-file", "immutable-data"), span(38, "third.empty", "immutable-data")], ["i32"], ["i32"]),
+  sixth: semanticRole(48, "7aaa435337e435feda9d0d29ab7f66079f92cadbcd52c1bf2749de775e883799", [span(11, "sixth.error", "immutable-data"), span(17, "sixth.source-file", "immutable-data"), span(38, "sixth.empty", "immutable-data")], ["i32"], ["i32"]),
   finishState: semanticRole(11, "8e87304b020e158179c2a265fec3d2b82230104b60f1c55db6aaafe7ecfc7936", [span(5, "finish.state", "mutable-static")], [], ["i32"]),
-  finishFlush: semanticRole(4_425, "fb5d7b8bf1f2aa5ffa8eb8b9af6a27151806ccea5ba03040945dbdf8f25d81b8", [
+  finishFlush: semanticRole(4_425, "c9e18e4f6773e7b7dde9c9b171ba89429f1a9c35e6b2e6f5d46d8220da5f9418", [
+    span(28, "flush.assert-e", "immutable-data"), span(34, "flush.source-file", "immutable-data"),
+    span(56, "flush.assert-f", "immutable-data"), span(62, "flush.source-file", "immutable-data"),
     span(115, "flush.assert-a", "immutable-data"), span(3_526, "flush.assert-b", "immutable-data"),
+    ...[121, 695, 844].map((start) => span(start, "flush.source-file", "immutable-data")),
+    span(888, "flush.assert-g", "immutable-data"), span(894, "flush.array-file", "immutable-data"),
+    span(2_818, "flush.assert-h", "immutable-data"), span(2_824, "flush.source-file", "immutable-data"),
     span(4_198, "flush.assert-c", "immutable-data"), span(4_390, "flush.assert-d", "immutable-data"),
+    span(3_532, "flush.source-file", "immutable-data"),
+    span(4_204, "flush.source-file", "immutable-data"),
+    span(4_396, "flush.source-file", "immutable-data"),
   ], ["i32", "i32", "i32"], []),
 });
 
@@ -110,11 +132,23 @@ const IMMUTABLE_HASHES = Object.freeze({
   "flush.assert-d": "3a27ab5c8418fcef888b2aff7a1dfd56fc9de2aa53789b29f4f0c4debe2c3dc4",
 });
 
+const PARTY_APPLY_PREPARE_ROLE = semanticRole(113,
+  "2598fca9c7b8501d556bf382d75b285bdb5fc3b824a3f861a104035e88e30150",
+  [span(33, "prepare.source-file", "immutable-data"),
+    span(58, "prepare.assertion", "immutable-data"),
+    span(64, "prepare.source-file", "immutable-data")],
+  ["i32", "i32", "i32"], []);
+const PARTY_DECODE_SECOND_ROLE = semanticRole(66,
+  "f7d8b9b0af470b4b8811847f143b5dc08b3a929ce1bbd70773d97ff13e3efda7",
+  [span(46, "second.empty", "immutable-data")],
+  ["i32", "i32", "i32"], ["i32"]);
+const PARTY_DECODE_COPY_ROLE = semanticRole(15,
+  "55503d8f407c3fe2635098719d71efbd50ce88afb596b08cee0b62005e89554a",
+  [span(8, "copy.helper", "function-index")],
+  ["i32", "i32", "i32"], []);
+
 const EXACT_LEAVES = Object.freeze({
-  applyPrepare: ["bdca14f409465ebefff3a6fd130733ea8abb37681d44d44adbef04dd7087d2b5", ["i32", "i32", "i32"], []],
   decodeFirst: ["b0ca60097a5aaaa6a371046a092ef3ad04a84b1f56ab6322e4e8b585beee721a", ["i32", "i32", "i32", "i32"], ["i32"]],
-  decodeSecond: ["af19ccb5b9e9d862bf7029ab1a66e532a1c7af014657d05378ae6302fb7e4710", ["i32", "i32", "i32"], ["i32"]],
-  decodeCopy: ["a6f6d28dae7bdd00b5cb1968256efecb6f18eea2e17fde5bca9235a9ffdd3ada", ["i32", "i32", "i32"], []],
   commitFourth: ["fb96881d692f9e58bd28daaf2a4c0f2872c9fe2f8f19b5a7248e244fbd91a03c", ["i32", "i32", "i32"], ["i32"]],
   commitFifth: ["5b3490ae4c66dad083b8cbea456d2e47d41ff794e9c03aa15acdf2b6523915ec", ["i32", "i32"], ["i32"]],
 } as const);
@@ -157,54 +191,56 @@ export function derivePartyCalleeGraph(
     [name, uniqueExactFunction(module, entry[0], entry[1], entry[2])])) as {
       [Name in keyof typeof EXACT_LEAVES]: number | null;
     };
+  const applyPrepare = uniqueRoleFunction(module, PARTY_APPLY_PREPARE_ROLE);
+  const decodeSecond = uniqueRoleFunction(module, PARTY_DECODE_SECOND_ROLE);
   const semantic = {
-    unlockResolver: uniqueRoleFunction(module, CALLEE_ROLES.unlockResolver),
-    attributeApply: uniqueRoleFunction(module, CALLEE_ROLES.attributeApply),
-    partyInfoRelease: uniqueRoleFunction(module, CALLEE_ROLES.partyInfoRelease),
-    attributeFinish: uniqueRoleFunction(module, CALLEE_ROLES.attributeFinish),
-    attributeBegin: uniqueRoleFunction(module, CALLEE_ROLES.attributeBegin),
-    attributeCommit: uniqueRoleFunction(module, CALLEE_ROLES.attributeCommit),
-    notifyDispatch: uniqueRoleFunction(module, CALLEE_ROLES.notifyDispatch),
-    releaseStorage: uniqueRoleFunction(module, RELEASE_STORAGE_ROLE),
-    first: uniqueRoleFunction(module, LEAF_ROLES.first),
-    second: uniqueRoleFunction(module, LEAF_ROLES.second),
-    third: uniqueRoleFunction(module, LEAF_ROLES.third),
-    sixth: uniqueRoleFunction(module, LEAF_ROLES.sixth),
-    finishFlush: uniqueRoleFunction(module, LEAF_ROLES.finishFlush),
+    unlockResolver: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.unlockResolver),
+    attributeApply: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.attributeApply),
+    partyInfoRelease: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.partyInfoRelease),
+    attributeFinish: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.attributeFinish),
+    attributeBegin: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.attributeBegin),
+    attributeCommit: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.attributeCommit),
+    notifyDispatch: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.notifyDispatch),
+    releaseStorage: uniqueRoleFunction(module, PARTY_RELEASE_STORAGE_ROLE),
+    first: uniqueRoleFunction(module, PARTY_LEAF_ROLES.first),
+    second: uniqueRoleFunction(module, PARTY_LEAF_ROLES.second),
+    third: uniqueRoleFunction(module, PARTY_LEAF_ROLES.third),
+    sixth: uniqueRoleFunction(module, PARTY_LEAF_ROLES.sixth),
+    finishFlush: uniqueRoleFunction(module, PARTY_LEAF_ROLES.finishFlush),
   } as const;
-  if (Object.values(exact).some((value) => value === null)
+  if (applyPrepare === null || decodeSecond === null
+    || Object.values(exact).some((value) => value === null)
     || Object.values(semantic).some((value) => value === null)) return null;
   const attributeDecode = observed.attributes[1];
   const partyFlagNotify = observed.partyFlagNotify;
-  if (!bodyMatchesRole(functionBody(module, attributeDecode), CALLEE_ROLES.attributeDecode)
-    || !bodyMatchesRole(functionBody(module, partyFlagNotify), CALLEE_ROLES.partyFlagNotify)) return null;
+  if (!bodyMatchesRole(functionBody(module, attributeDecode), PARTY_CALLEE_ROLES.attributeDecode)
+    || !bodyMatchesRole(functionBody(module, partyFlagNotify), PARTY_CALLEE_ROLES.partyFlagNotify)) return null;
 
-  const resolver = values(module, semantic.unlockResolver!, CALLEE_ROLES.unlockResolver);
-  const apply = values(module, semantic.attributeApply!, CALLEE_ROLES.attributeApply);
-  const release = values(module, semantic.partyInfoRelease!, CALLEE_ROLES.partyInfoRelease);
-  const finish = values(module, semantic.attributeFinish!, CALLEE_ROLES.attributeFinish);
+  const resolver = values(module, semantic.unlockResolver!, PARTY_CALLEE_ROLES.unlockResolver);
+  const apply = values(module, semantic.attributeApply!, PARTY_CALLEE_ROLES.attributeApply);
+  const release = values(module, semantic.partyInfoRelease!, PARTY_CALLEE_ROLES.partyInfoRelease);
+  const finish = values(module, semantic.attributeFinish!, PARTY_CALLEE_ROLES.attributeFinish);
   const finishStateFunction = soleValue(finish, "finish.notify");
   if (!bodyMatchesRole(
     functionBody(module, finishStateFunction),
-    LEAF_ROLES.finishState,
+    PARTY_LEAF_ROLES.finishState,
   )) return null;
-  const begin = values(module, semantic.attributeBegin!, CALLEE_ROLES.attributeBegin);
-  const decode = values(module, attributeDecode, CALLEE_ROLES.attributeDecode);
-  const commit = values(module, semantic.attributeCommit!, CALLEE_ROLES.attributeCommit);
-  const notify = values(module, partyFlagNotify, CALLEE_ROLES.partyFlagNotify);
-  const dispatch = values(module, semantic.notifyDispatch!, CALLEE_ROLES.notifyDispatch);
-  const releaseStorage = values(module, semantic.releaseStorage!, RELEASE_STORAGE_ROLE);
+  const begin = values(module, semantic.attributeBegin!, PARTY_CALLEE_ROLES.attributeBegin);
+  const decode = values(module, attributeDecode, PARTY_CALLEE_ROLES.attributeDecode);
+  const decodeCopy = soleValue(decode, "decode.copy");
+  const commit = values(module, semantic.attributeCommit!, PARTY_CALLEE_ROLES.attributeCommit);
+  const notify = values(module, partyFlagNotify, PARTY_CALLEE_ROLES.partyFlagNotify);
+  const dispatch = values(module, semantic.notifyDispatch!, PARTY_CALLEE_ROLES.notifyDispatch);
+  const releaseStorage = values(module, semantic.releaseStorage!, PARTY_RELEASE_STORAGE_ROLE);
   const releaseStaticValues = RELEASE_STATIC_STARTS.map((_, index) =>
     soleValue(releaseStorage, `release.static-${index}`));
   const releaseBase = Math.min(...releaseStaticValues);
   const resolverSlot = soleValue(resolver, "resolver.slot");
   const finishState = soleValue(
-    values(module, finishStateFunction, LEAF_ROLES.finishState),
+    values(module, finishStateFunction, PARTY_LEAF_ROLES.finishState),
     "finish.state",
   );
-  const initializedDataEnd = module.dataSegments.reduce(
-    (highest, segment) => Math.max(highest, segment.base + segment.bytes.byteLength), 0,
-  );
+  const { initializedDataEnd } = dataEvidence(module);
 
   if (
     observed.unlockResolver !== semantic.unlockResolver
@@ -214,7 +250,7 @@ export function derivePartyCalleeGraph(
     || observed.attributes[3] !== semantic.attributeCommit
     || observed.attributes[4] !== semantic.attributeFinish
     || soleValue(resolver, "resolver.apply") !== semantic.attributeApply
-    || soleValue(apply, "apply.prepare") !== exact.applyPrepare
+    || soleValue(apply, "apply.prepare") !== applyPrepare
     || soleValue(apply, "apply.import") !== 1
     || soleValue(release, "release.storage") !== semantic.releaseStorage
     || soleValue(finish, "finish.notify") !== finishStateFunction
@@ -222,9 +258,9 @@ export function derivePartyCalleeGraph(
     || soleValue(begin, "begin.apply") !== semantic.attributeApply
     || soleValue(begin, "begin.ui") !== uiDispatcher
     || soleValue(decode, "decode.first") !== exact.decodeFirst
-    || soleValue(decode, "decode.second") !== exact.decodeSecond
+    || soleValue(decode, "decode.second") !== decodeSecond
     || soleValue(decode, "decode.apply") !== semantic.attributeApply
-    || soleValue(decode, "decode.copy") !== exact.decodeCopy
+    || !bodyMatchesRole(functionBody(module, decodeCopy), PARTY_DECODE_COPY_ROLE)
     || soleValue(decode, "decode.release") !== semantic.partyInfoRelease
     || soleValue(commit, "commit.resolve") !== semantic.unlockResolver
     || soleValue(commit, "commit.first") !== semantic.first
@@ -239,17 +275,17 @@ export function derivePartyCalleeGraph(
     || releaseBase < initializedDataEnd || releaseBase % 4 !== 0
     || releaseStaticValues.some((value, index) =>
       value !== releaseBase + RELEASE_STATIC_DELTAS[index]!)
-    || resolverSlot - releaseBase !== -3_305_024
-    || finishState - releaseBase !== -55_084
+    || resolverSlot < initializedDataEnd || resolverSlot % 4 !== 0
+    || finishState < initializedDataEnd || finishState % 4 !== 0
     || !immutableValuesMatch(module, apply, ["apply.error-a", "apply.error-b"])
     || !immutableValuesMatch(module, release, ["release.empty"])
     || !immutableValuesMatch(module, begin, ["begin.error-a", "begin.error-b"])
     || !immutableValuesMatch(module, decode, ["decode.error"])
-    || !immutableValuesMatch(module, values(module, semantic.first!, LEAF_ROLES.first), ["first.error", "first.empty"])
-    || !immutableValuesMatch(module, values(module, semantic.second!, LEAF_ROLES.second), ["second.error", "second.empty"])
-    || !immutableValuesMatch(module, values(module, semantic.third!, LEAF_ROLES.third), ["third.error", "third.empty"])
-    || !immutableValuesMatch(module, values(module, semantic.sixth!, LEAF_ROLES.sixth), ["sixth.error", "sixth.empty"])
-    || !immutableValuesMatch(module, values(module, semantic.finishFlush!, LEAF_ROLES.finishFlush), [
+    || !immutableValuesMatch(module, values(module, semantic.first!, PARTY_LEAF_ROLES.first), ["first.error", "first.empty"])
+    || !immutableValuesMatch(module, values(module, semantic.second!, PARTY_LEAF_ROLES.second), ["second.error", "second.empty"])
+    || !immutableValuesMatch(module, values(module, semantic.third!, PARTY_LEAF_ROLES.third), ["third.error", "third.empty"])
+    || !immutableValuesMatch(module, values(module, semantic.sixth!, PARTY_LEAF_ROLES.sixth), ["sixth.error", "sixth.empty"])
+    || !immutableValuesMatch(module, values(module, semantic.finishFlush!, PARTY_LEAF_ROLES.finishFlush), [
       "flush.assert-a", "flush.assert-b", "flush.assert-c", "flush.assert-d",
     ])
   ) return null;

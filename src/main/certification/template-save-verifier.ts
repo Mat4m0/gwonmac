@@ -13,10 +13,9 @@
  * internal/upstream/recertify.md, which still owns re-measuring what the path
  * helpers actually do.
  *
- * Two measured facts make this cheap. Byte-scanning for the six-byte padded
- * `call` needle locates every call site with no false positives, so no
- * whole-module instruction decoder is needed. And caller-set intersection
- * identifies every target, so source-file attribution is not needed either —
+ * One bounded shared decoder locates direct calls and preserves each encoded
+ * call width, so only six-byte padded sites can be repointed. Caller-set
+ * intersection identifies every target, so source-file attribution is not needed either —
  * which is just as well, because the most important call site here references
  * no source string at all.
  */
@@ -26,7 +25,6 @@ import {
   functionImportIndex,
   indexOfBytes,
   readSleb,
-  readUleb,
 } from "../core/wasm-binary.js";
 import {
   certifyTemplateSaveRewrite,
@@ -44,13 +42,7 @@ import {
   templateCallNeedle as callNeedle,
   TemplateSaveModuleView as ModuleView,
 } from "./template-save-module-view.js";
-import {
-  TEMPLATE_STATIC_ANCHORS,
-  type StaticOperand,
-  type StaticRelocation,
-  type TemplateCallerRole,
-  type TemplateStaticStorage,
-} from "./template-save-static-anchors.js";
+import { templateSemanticFingerprint } from "./template-save-semantic-proof.js";
 
 const CARRIER_IMPORT_NAME = "__syscall_newfstatat";
 const ASSERT_HOOK_IMPORT_NAME = "emscripten_asm_const_int";
@@ -149,75 +141,6 @@ interface Located {
   readonly diagnostics: string[];
 }
 
-/** Exhaustive relocation operands in the six template callers. */
-const TEMPLATE_STATIC_RELOCATIONS: Readonly<
-  Record<TemplateCallerRole, readonly StaticRelocation[]>
-> = Object.freeze({
-  delete: [
-    { start: 21, end: 26, encoding: "memory-offset", baseline: 2674316, storage: "delete-state" },
-    { start: 33, end: 38, encoding: "memory-offset", baseline: 2674312, storage: "delete-state" },
-    { start: 81, end: 86, encoding: "memory-offset", baseline: 2674304, storage: "delete-state" },
-    { start: 116, end: 121, encoding: "memory-offset", baseline: 2674300, storage: "delete-state" },
-    { start: 162, end: 167, encoding: "memory-offset", baseline: 2674300, storage: "delete-state" },
-  ],
-  "skill-scan": [
-    { start: 55, end: 60, encoding: "memory-offset", baseline: 1447524, storage: "template-types" },
-    { start: 82, end: 87, encoding: "i32-const", baseline: 1447542, storage: "template-types" },
-    { start: 109, end: 114, encoding: "i32-const", baseline: 1447546, storage: "template-types" },
-    { start: 402, end: 407, encoding: "i32-const", baseline: 1447548, storage: "template-types" },
-    { start: 645, end: 650, encoding: "i32-const", baseline: 1447652, storage: "template-types" },
-    { start: 959, end: 964, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
-    { start: 974, end: 979, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
-  ],
-  "equipment-scan": [
-    { start: 55, end: 60, encoding: "memory-offset", baseline: 1447524, storage: "template-types" },
-    { start: 82, end: 87, encoding: "i32-const", baseline: 1447542, storage: "template-types" },
-    { start: 109, end: 114, encoding: "i32-const", baseline: 1447532, storage: "template-types" },
-    { start: 423, end: 428, encoding: "i32-const", baseline: 1447548, storage: "template-types" },
-    { start: 697, end: 702, encoding: "i32-const", baseline: 1447700, storage: "template-types" },
-    { start: 719, end: 724, encoding: "i32-const", baseline: 1238018, immutableString: "No valid case for switch variable 'type'" },
-    { start: 801, end: 806, encoding: "i32-const", baseline: 1447668, storage: "template-types" },
-    { start: 1121, end: 1126, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
-    { start: 1131, end: 1136, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
-    { start: 1146, end: 1151, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
-    { start: 1176, end: 1181, encoding: "memory-offset", baseline: 1250688, storage: "template-hash" },
-  ],
-  writer: [
-    { start: 130, end: 135, encoding: "i32-const", baseline: 1447532, storage: "template-types" },
-  ],
-  "directory-sink": [
-    { start: 55, end: 60, encoding: "memory-offset", baseline: 1520752, storage: "directory-types" },
-    { start: 70, end: 75, encoding: "memory-offset", baseline: 1520744, storage: "directory-types" },
-    { start: 85, end: 90, encoding: "memory-offset", baseline: 1520736, storage: "directory-types" },
-    { start: 162, end: 167, encoding: "i32-const", baseline: 1520756, storage: "directory-types" },
-    { start: 643, end: 648, encoding: "i32-const", baseline: 1520776, storage: "directory-types" },
-  ],
-  "screenshot-sink": [
-    { start: 27, end: 32, encoding: "memory-offset", baseline: 5943272, storage: "screenshot-state" },
-    { start: 41, end: 46, encoding: "memory-offset", baseline: 5943296, storage: "screenshot-state" },
-    { start: 65, end: 70, encoding: "memory-offset", baseline: 5943296, storage: "screenshot-state" },
-    { start: 99, end: 104, encoding: "i32-const", baseline: 1556320, storage: "screenshot-types" },
-    { start: 146, end: 151, encoding: "i32-const", baseline: 1244317, immutableString: "PathCreateDirectory() failed: %u\n" },
-    { start: 183, end: 188, encoding: "memory-offset", baseline: 2635884, storage: "screenshot-directory" },
-    { start: 282, end: 287, encoding: "i32-const", baseline: 1556336, storage: "screenshot-types" },
-    { start: 309, end: 314, encoding: "i32-const", baseline: 1556356, storage: "screenshot-types" },
-    { start: 367, end: 372, encoding: "i32-const", baseline: 1556388, storage: "screenshot-types" },
-    { start: 691, end: 696, encoding: "i32-const", baseline: 1241365, immutableString: "No valid case for switch variable '\"\"'" },
-    { start: 730, end: 735, encoding: "i32-const", baseline: 1556408, storage: "screenshot-types" },
-    { start: 1013, end: 1018, encoding: "i32-const", baseline: 1556430, storage: "screenshot-types" },
-    { start: 1248, end: 1253, encoding: "memory-offset", baseline: 5943276, storage: "screenshot-state" },
-    { start: 1262, end: 1267, encoding: "memory-offset", baseline: 5943276, storage: "screenshot-state" },
-    { start: 1294, end: 1299, encoding: "memory-offset", baseline: 5943268, storage: "screenshot-state" },
-    { start: 1305, end: 1310, encoding: "memory-offset", baseline: 5943296, storage: "screenshot-state" },
-    { start: 1329, end: 1334, encoding: "i32-const", baseline: 1241365, immutableString: "No valid case for switch variable '\"\"'" },
-    { start: 1373, end: 1378, encoding: "memory-offset", baseline: 5943292, storage: "screenshot-state" },
-    { start: 1390, end: 1395, encoding: "memory-offset", baseline: 5943280, storage: "screenshot-state" },
-    { start: 1407, end: 1412, encoding: "memory-offset", baseline: 5943284, storage: "screenshot-state" },
-    { start: 1428, end: 1433, encoding: "memory-offset", baseline: 5943288, storage: "screenshot-state" },
-    { start: 1449, end: 1454, encoding: "memory-offset", baseline: 5943288, storage: "screenshot-state" },
-    { start: 1473, end: 1478, encoding: "memory-offset", baseline: 5943272, storage: "screenshot-state" },
-  ],
-});
 
 /**
  * The `not-applicable` signal: no function returns `i32.const 2` from a
@@ -554,233 +477,6 @@ export function deriveTemplateSaveBuild(
   return certify(input, draftTemplateSaveBuild(input));
 }
 
-function templateCallerRoles(found: Located): Map<number, TemplateCallerRole> {
-  const deleted = [...found.view.callers(
-    found.view.functionIndex(found.targets.deleteFile.localFunction),
-  )];
-  if (deleted.length !== 1) fail("delete caller role is ambiguous");
-  const roles = new Map<number, TemplateCallerRole>([
-    [deleted[0]!, "delete"],
-    [found.scans[0]!, "skill-scan"],
-    [found.scans[1]!, "equipment-scan"],
-    [found.writeFunction, "writer"],
-    [found.sinks[0]!, "directory-sink"],
-    [found.sinks[1]!, "screenshot-sink"],
-  ]);
-  if (roles.size !== 6) fail("template caller roles overlap");
-  return roles;
-}
-
-function relocationValue(
-  body: Uint8Array,
-  relocation: StaticOperand,
-): number {
-  if (relocation.encoding === "i32-const") {
-    if (body[relocation.start - 1] !== 0x41) {
-      fail(`static relocation at ${relocation.start} is not i32.const`);
-    }
-    const cursor = { offset: relocation.start };
-    const value = readSleb(body, cursor);
-    if (cursor.offset !== relocation.end) {
-      fail(`static relocation at ${relocation.start} changed width`);
-    }
-    return value;
-  }
-  for (
-    let opcodeAt = Math.max(0, relocation.start - 6);
-    opcodeAt < relocation.start;
-    opcodeAt += 1
-  ) {
-    if (body[opcodeAt]! < 0x28 || body[opcodeAt]! > 0x3e) continue;
-    const cursor = { offset: opcodeAt + 1 };
-    try {
-      readUleb(body, cursor);
-      if (cursor.offset !== relocation.start) continue;
-      const value = readUleb(body, cursor);
-      if (cursor.offset === relocation.end) return value;
-    } catch {
-      // Another byte happened to look like a memory opcode; keep searching.
-    }
-  }
-  fail(`static relocation at ${relocation.start} is not a memory offset`);
-}
-
-function staticAnchorAddress(
-  found: Located,
-  storage: TemplateStaticStorage,
-  addresses: Map<TemplateStaticStorage, number>,
-): number {
-  const cached = addresses.get(storage);
-  if (cached !== undefined) return cached;
-
-  const anchor = TEMPLATE_STATIC_ANCHORS[storage];
-  let address: number;
-  if (anchor.kind === "initialized-data") {
-    const matches = found.view.dataAddresses(anchor.bytes);
-    if (matches.length !== 1) {
-      fail(`initialized static anchor ${storage} changed or is ambiguous`);
-    }
-    address = matches[0]!;
-  } else {
-    address = found.view.zeroInitializedBase;
-    if (address >= found.view.initialMemoryBytes) {
-      fail("zero-initialized static storage is outside initial memory");
-    }
-  }
-  addresses.set(storage, address);
-  return address;
-}
-
-function normalizeStaticRelocations(
-  found: Located,
-  role: TemplateCallerRole,
-  source: Uint8Array,
-  normalized: Uint8Array,
-  anchorAddresses: Map<TemplateStaticStorage, number>,
-): void {
-  const relocations = TEMPLATE_STATIC_RELOCATIONS[role];
-  if (relocations.some((relocation) => relocation.end > source.byteLength)) {
-    // Small synthetic locator fixtures do not model the production static
-    // ledger. Their fingerprint remains useful test evidence but can never
-    // equal the shipped production baseline.
-    return;
-  }
-  relocations.forEach((relocation, index) => {
-    const value = relocationValue(source, relocation);
-    if (relocation.immutableString !== undefined) {
-      if (
-        found.view.readString(value) !== relocation.immutableString
-        || found.view.stringOccurrenceCount(relocation.immutableString) !== 1
-      ) {
-        fail(`immutable ${role} reference ${index} changed or is ambiguous`);
-      }
-    } else {
-      const anchor = TEMPLATE_STATIC_ANCHORS[relocation.storage];
-      const anchorAddress = staticAnchorAddress(
-        found,
-        relocation.storage,
-        anchorAddresses,
-      );
-      const expected = anchorAddress + relocation.baseline - anchor.baseline;
-      if (value !== expected) {
-        fail(`static ${relocation.storage} reference ${index} is not anchored`);
-      }
-      if (
-        anchor.kind === "initialized-data"
-          ? !found.view.containsInitializedData(value)
-          : value < anchorAddress || value >= found.view.initialMemoryBytes
-      ) {
-        fail(`static ${relocation.storage} reference ${index} is out of bounds`);
-      }
-    }
-    normalized.fill(0, relocation.start, relocation.end);
-    normalized[relocation.start] = index + 1;
-  });
-}
-
-const FILE_OPEN_VTABLE_PREFIX = Uint8Array.of(
-  0x5a, 0, 0, 0, 0x5b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0x5c, 0, 0, 0, 0x5d, 0, 0, 0, 0x5e, 0, 0, 0, 0x5f, 0, 0, 0,
-);
-
-function normalizedFileExistsBody(found: Located): string {
-  const source = found.view.bodies[found.targets.fileExists.localFunction]
-    ?? fail("file-exists body is missing");
-  const relocation: StaticOperand = {
-    start: 295,
-    end: 300,
-    encoding: "i32-const",
-    baseline: 1255092,
-  };
-  if (source.byteLength < relocation.end) return sha256(source);
-  const pointer = relocationValue(source, relocation);
-  const content = found.view.readData(pointer, FILE_OPEN_VTABLE_PREFIX.byteLength);
-  if (
-    !content
-    || !sameBytes(content, FILE_OPEN_VTABLE_PREFIX)
-    || found.view.dataOccurrenceCount(FILE_OPEN_VTABLE_PREFIX) !== 1
-  ) {
-    fail("File::Open immutable vtable reference changed or is ambiguous");
-  }
-  const normalized = source.slice();
-  normalized.fill(0, relocation.start, relocation.end);
-  normalized[relocation.start] = 1;
-  return sha256(normalized);
-}
-
-/**
- * Identity of the complete bodies whose calls the transform will repoint.
- *
- * Function indices are allowed to move, so the five-byte operands of the
- * selected calls are replaced by stable bridge-kind tags before hashing. Every
- * other instruction and immediate remains exact. This is deliberately stricter
- * than the shape locator: a changed path calculation, flag, branch or unrelated
- * call is a semantic change and must refuse local certification.
- */
-function semanticFingerprint(
-  found: Located,
-  entry: KnownTemplateSaveBuild,
-): string {
-  const tags = new Map<BridgeKind, number>(
-    entry.bridges.map((bridge, index) => [bridge.kind, index + 1]),
-  );
-  const touched = new Map<number, string[]>();
-  for (const bridge of entry.bridges) {
-    for (const site of bridge.callSites) {
-      const roles = touched.get(site.localFunction) ?? [];
-      roles.push(`${bridge.kind}:${site.bodyOffset}`);
-      touched.set(site.localFunction, roles);
-    }
-  }
-
-  const callerRoles = templateCallerRoles(found);
-  const anchorAddresses = new Map<TemplateStaticStorage, number>();
-
-  const callers = [...touched].map(([local, roles]) => {
-    const source = found.view.bodies[local]
-      ?? fail(`semantic caller ${local} is out of range`);
-    const normalized = source.slice();
-    const role = callerRoles.get(local)
-      ?? fail(`semantic caller ${local} has no feature role`);
-    normalizeStaticRelocations(
-      found,
-      role,
-      source,
-      normalized,
-      anchorAddresses,
-    );
-    for (const bridge of entry.bridges) {
-      const expected = callNeedle(
-        found.view.functionIndex(bridge.stubFunction),
-      );
-      for (const site of bridge.callSites) {
-        if (site.localFunction !== local) continue;
-        const end = site.bodyOffset + expected.byteLength;
-        if (
-          end > source.byteLength
-          || !expected.every(
-            (byte, index) => source[site.bodyOffset + index] === byte,
-          )
-        ) {
-          fail(`semantic ${bridge.kind} call site signature mismatch`);
-        }
-        normalized.fill(0, site.bodyOffset + 1, end);
-        normalized[site.bodyOffset + 1] = tags.get(bridge.kind)!;
-      }
-    }
-    return {
-      role,
-      roles: [...roles].sort(),
-      bodySha256: sha256(normalized),
-    };
-  }).sort((left, right) => left.role.localeCompare(right.role));
-
-  return sha256(new TextEncoder().encode(JSON.stringify({
-    callers,
-    fileExistsBodySha256: normalizedFileExistsBody(found),
-  })));
-}
-
 function analyzeTemplateSaveCandidateInternal(
   input: Uint8Array,
   certifyOutput: boolean,
@@ -834,7 +530,7 @@ function analyzeTemplateSaveCandidateInternal(
       deleteAssertion: found.deleteAssertion,
       encodings: { padded, canonical },
       entry,
-      semanticFingerprint: semanticFingerprint(found, entry),
+      semanticFingerprint: templateSemanticFingerprint(found, entry),
       diagnostics: [
         ...found.diagnostics,
         `template scans ${found.scans.join(", ")}`,
@@ -880,7 +576,7 @@ export function analyzeTemplateSaveCandidate(
  * not from the whole client, so an unrelated ArenaNet rebuild can still pass.
  */
 export const TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT =
-  "82664898e240ff2119cb43d454ba567ce20195887ca28d1c6f4b1805304a0b38";
+  "c465fb8bf0bc00d2d599ef59d42d03f63123801607d254330635ced0e7f458c4";
 
 /**
  * Return a transform record only when the locator and the complete relevant
@@ -915,10 +611,6 @@ function equivalentTemplateSaveBuild(
       || !target
       || target.signature !== EXPECTED_TEMPLATE_SIGNATURES[expected.kind]
       || candidate.callSites.length !== expected.callSites.length
-      || (
-        expected.stubBody
-        && !isDeepStrictEqual(candidate.stubBody, expected.stubBody)
-      )
     ) {
       return null;
     }

@@ -39,6 +39,7 @@ jobs:
       contents: read
     outputs:
       bundle-version: ${{ steps.version.outputs.bundle-version }}
+      client-generation: ${{ steps.official-client.outputs.fingerprint }}
       prerelease: ${{ steps.version.outputs.prerelease }}
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
@@ -59,25 +60,6 @@ jobs:
       # the one rust-toolchain.toml names, with no version repeated here.
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
-
-      - name: Require a client canary newer than 14 days
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          runs="repos/$GITHUB_REPOSITORY/actions/workflows/client-canary.yml/runs"
-          started="$(gh api \
-            "$runs?status=success&branch=$GITHUB_REF_NAME&per_page=1" \
-            --jq '.workflow_runs[0].run_started_at // ""')"
-          test -n "$started"
-          age="$(node -e '
-            const started = Date.parse(process.argv[1]);
-            if (Number.isNaN(started)) process.exit(1);
-            console.log(Math.floor((Date.now() - started) / 86400000));
-          ' "$started")"
-          if [ "$age" -gt 14 ]; then
-            echo "The ArenaNet client canary is $age days old; run it again." >&2
-            exit 1
-          fi
 
       - name: Resolve release version
         id: version
@@ -121,6 +103,32 @@ jobs:
           fi
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Download the current ArenaNet client generation
+        id: official-client
+        run: pnpm client:official --download "$RUNNER_TEMP/release-client"
+
+      - name: Qualify the exact ArenaNet client before packaging
+        env:
+          GW_CLIENT_JS: ${{ steps.official-client.outputs.js }}
+          GW_CLIENT_WASM: ${{ steps.official-client.outputs.wasm }}
+        run: |
+          pnpm build
+          node build/tools/certification.js verify "$GW_CLIENT_WASM"
+          node build/tools/certification.js double-click "$GW_CLIENT_WASM"
+          pnpm test:client-artifact
+          pnpm memory:qualify:4gb "$GW_CLIENT_JS" "$GW_CLIENT_WASM"
+
+      - name: Refuse a client generation that changed during qualification
+        env:
+          QUALIFIED_GENERATION: ${{ steps.official-client.outputs.fingerprint }}
+        run: |
+          current="$(pnpm --silent client:official | node -e '
+            let input = "";
+            process.stdin.on("data", chunk => input += chunk);
+            process.stdin.on("end", () => console.log(JSON.parse(input).fingerprint));
+          ')"
+          test "$current" = "$QUALIFIED_GENERATION"
 
       - name: Import Developer ID and notarization credentials
         env:
@@ -390,8 +398,17 @@ jobs:
 
       - name: Smoke-test signed release candidate without signing secrets
         env:
+          GW_CLIENT_JS: ${{ steps.official-client.outputs.js }}
+          GW_CLIENT_WASM: ${{ steps.official-client.outputs.wasm }}
           GW_PACKAGE_INTENT: release
-        run: pnpm test:packaged
+        run: |
+          pnpm test:packaged
+          # Re-run the exact official generation after packaging through the
+          # same verifier, planner, transforms, and integrity-checked cache
+          # path used by production. The test also corrupts the final cache
+          # and requires deterministic reconstruction before publication.
+          node --import ./scripts/ts-hook.mjs --test --test-timeout=60000 \
+            tests/client-artifact/client-chain-qualification.test.ts
 
       - name: Prove signed Data Protection Keychain continuity without signing secrets
         env:
@@ -657,6 +674,7 @@ jobs:
         env:
           BUNDLE_VERSION: ${{ needs.release-build.outputs.bundle-version }}
           EXPECTED_CHECKSUMS_SHA256: ${{ needs.stage-release.outputs.checksums-sha256 }}
+          EXPECTED_CLIENT_GENERATION: ${{ needs.release-build.outputs.client-generation }}
           EXPECTED_WORKFLOW_URL: ${{ needs.stage-release.outputs.workflow-url }}
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ needs.release-build.outputs.prerelease }}
@@ -694,6 +712,13 @@ jobs:
             scripts/release-verification-record.ts publish \
             "$body_file" "$remote/SHA256SUMS.txt" "$EXPECTED_WORKFLOW_URL" \
             "$GITHUB_SHA" "$VERSION" "$BUNDLE_VERSION"
+          current_client_generation="$(node --import ./scripts/ts-hook.mjs \
+            scripts/official-client.ts | node -e '
+              let input = "";
+              process.stdin.on("data", chunk => input += chunk);
+              process.stdin.on("end", () => console.log(JSON.parse(input).fingerprint));
+            ')"
+          test "$current_client_generation" = "$EXPECTED_CLIENT_GENERATION"
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
 
   publish-update-feeds:

@@ -54,6 +54,10 @@ void app.whenReady().then(async () => {
           travelAction: true,
           xunlaiAction: true,
           chatAliases: true,
+          skillSlotGeometry: false,
+          skillCooldownObservation: false,
+          playRegionObservation: true,
+          preGameControls: false,
         },
       });
   state.localVerifierCompleted = true;

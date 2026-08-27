@@ -37,7 +37,7 @@ register(
   )}`,
 );
 
-const { applyPendingCacheClear, applyPendingGameStorageReset } =
+const { applyPendingCacheClear, applyPendingGameStorageReset, settingsResetDetail } =
   await import("../../src/main/settings-actions.ts");
 
 const root = await mkdtemp(path.join(tmpdir(), "gw-pending-markers-"));
@@ -62,6 +62,13 @@ test("ENOENT means no destructive startup action is pending", async () => {
 
   await applyPendingCacheClear(paths);
   await applyPendingGameStorageReset(paths, 1);
+});
+
+test("reset copy matches the data owner available at launch", () => {
+  assert.match(settingsResetDetail(false), /Stored Build Library and Travel/u);
+  assert.doesNotMatch(settingsResetDetail(false), /Travel shortcuts.*return to their defaults/u);
+  assert.match(settingsResetDetail(true), /Travel shortcuts.*return to their defaults/u);
+  assert.doesNotMatch(settingsResetDetail(true), /remain/u);
 });
 
 test("marker inspection failures other than ENOENT remain visible", async () => {

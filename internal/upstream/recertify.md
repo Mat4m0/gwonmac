@@ -25,6 +25,45 @@ player-facing code. Do not reconstruct a second whole-build state:
 Check this value first when a player reports a regression after an ArenaNet
 update.
 
+## Preserve the evidence before investigating
+
+ArenaNet may replace the public pair again at any time. Before changing a
+locator, copy the exact official JS/WASM pair and its available manifest/version
+metadata to the maintainer evidence store outside the repository and CI
+artifacts. On macOS, its working location is
+`~/Library/Application Support/gwonmac-maintainer/client-evidence/`. Matthias
+owns access and backup. Use bundle reference `YYYY-MM-DD-<generation-first-12>`.
+Do not rely on a runner temporary directory as the only retained copy.
+
+The private bundle must contain:
+
+- the code-generation SHA-256 from `pnpm client:official`;
+- JS and WASM SHA-256 values and byte lengths;
+- manifest/version metadata as received, when available;
+- verifier ABI, source commit, command lines, and complete unredacted verifier
+  outputs;
+- transform inputs and outputs needed to reproduce exact digest checks;
+- the preceding retained pair used for comparison; and
+- dated live-QA notes, macOS version, input device type, and the exact feature
+  behavior observed.
+
+Keep credentials, account identifiers, chat, character names, and unrelated
+diagnostics out of the bundle. Encrypt and access-control the private store.
+Never commit or publicly upload ArenaNet binaries, raw addresses, local paths,
+or unredacted locator reports.
+
+Keep every refused generation and every release-baseline generation until the
+last client transform that can use its comparison evidence is removed. Back up
+the store encrypted, and restore-check one bundle before each release. A local
+working copy without a restore-checked backup does not satisfy the release
+gate.
+
+Put the opaque private bundle reference on the canonical open refusal issue.
+The signed `generation.json` contains hashes, sizes, and closed outcomes. The
+[client generation ledger](client-generation-ledger.md) defines the schema and
+keeps bootstrap observations only. The private bundle and automated ledger are
+evidence; neither grants runtime authority.
+
 ## Step 1: try to delete the workaround
 
 Install the official candidate and test the affected official behavior. If
@@ -75,8 +114,9 @@ Use this procedure only after an automated refusal.
 
 ### 1. Record the artifact
 
-Record the official SHA-256, byte size, build ID, function import count, and
-WASM validity. Do not assume the old import count of 219.
+Confirm that the private bundle above is complete. Record the build ID,
+function import count, and WASM validity. Do not assume the old import count of
+219.
 
 ### 2. Generate investigation symbols
 

@@ -17,6 +17,7 @@ import {
   enhancementCapabilitiesCover,
   enhancementCapabilityProfile,
   enhancementConfigWordActive,
+  intersectEnhancementCapabilities,
   type EnhancementCapabilityProfile,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
@@ -402,7 +403,8 @@ export interface KnownEnhancementBuild {
       "frameArray" | "frameCount" | "frameBytes" | "frameId"
       | "frameState"> & Pick<EnhancementPlayRegionLayout,
       "contextRoot" | "gameContextSlot" | "characterContext"
-      | "currentInstanceType"> & Readonly<{ frameHashId: number }>;
+      | "characterUuid" | "currentInstanceType">
+      & Readonly<{ frameHashId: number }>;
   }>;
   /** Exact reader and clock authority for player skill recharge timestamps. */
   skillCooldownObservation?: Readonly<{
@@ -427,7 +429,7 @@ export function supportedEnhancementCapabilities(
   build: KnownEnhancementBuild,
 ): EnhancementCapabilities {
   const playRegionObservation = build.playRegionObservation !== undefined;
-  const observationBase = playRegionObservation && build.observationBase !== undefined;
+  const observationBase = build.observationBase !== undefined;
   const playerSkillbarObservation = build.playerSkillbarObservation !== undefined;
   const targetObservation = observationBase && build.targetObservation !== undefined;
   const partyObservation = observationBase && playerSkillbarObservation
@@ -438,7 +440,7 @@ export function supportedEnhancementCapabilities(
     && gameThread && build.travelAction !== undefined;
   const xunlaiAction = observationBase && build.uiDispatcher !== undefined
     && gameThread && build.xunlaiAction?.accessProof !== undefined;
-  return Object.freeze({
+  const located: EnhancementCapabilities = Object.freeze({
     nativeCursor: build.cursorEvent !== undefined,
     targetObservation,
     partyObservation,
@@ -446,13 +448,16 @@ export function supportedEnhancementCapabilities(
     travelAction,
     xunlaiAction,
     chatAliases: build.uiDispatcher !== undefined && build.chatAliases !== undefined,
-    skillSlotGeometry: playRegionObservation && build.skillSlotGeometry !== undefined,
-    skillCooldownObservation: playRegionObservation && observationBase
+    skillSlotGeometry: build.skillSlotGeometry !== undefined,
+    skillCooldownObservation: observationBase
       && playerSkillbarObservation
       && build.skillCooldownObservation !== undefined,
     playRegionObservation,
-    preGameControls: playRegionObservation && build.preGameControls !== undefined,
+    preGameControls: build.preGameControls !== undefined,
   });
+  // Evidence locators decide only what they proved. The shared registry owns
+  // every dependency and closes the available set in one canonical place.
+  return intersectEnhancementCapabilities(located, located);
 }
 
 export function enhancementProfilesForBuild(

@@ -168,29 +168,31 @@ export async function main(argv: readonly string[]): Promise<void> {
     fetch: createBoundedPatchFetch(fetch, PATCH_REQUEST_TIMEOUT_MS),
   });
 
-  const manifest = await client.fetchManifest();
+  // A download must name the manifest that produced its bytes. `update()`
+  // returns that exact manifest; fetching once before it would create a race
+  // where generation A labels bytes downloaded from generation B.
+  const manifest = download
+    ? (await client.update()).manifest
+    : await client.fetchManifest();
   const fingerprint = officialCodeGeneration(manifest);
   const recorded = parseCertifiedClientRecord(
     JSON.parse(await readFile(RECORD, "utf8")),
   ).codeGeneration;
-
-  if (download) {
-    // Publishes the JSPI artifacts and `version.json` and never assembles
-    // `Gw.snapshot`; every byte is verified against the manifest chunk hash
-    // that named it before it is written.
-    await client.update();
-  }
 
   // The fingerprint travels with the bytes: `--record` takes this value back as
   // an argument, so what gets recorded is the generation this run downloaded.
   const wasm = download
     ? clientArtifactPath(path.join(workingDir, "artifacts"), "Gw.jspi.wasm")
     : "";
+  const js = download
+    ? clientArtifactPath(path.join(workingDir, "artifacts"), "Gw.jspi.js")
+    : "";
   process.stdout.write(`${JSON.stringify({
     fingerprint,
     recorded,
     changed: fingerprint !== recorded,
     wasm: wasm || null,
+    js: js || null,
     verifierAbi: SEMANTIC_VERIFIER_ABI,
   })}\n`);
   await publishStepOutputs({
@@ -198,6 +200,7 @@ export async function main(argv: readonly string[]): Promise<void> {
     fingerprint,
     recorded,
     wasm,
+    js,
     verifier_abi: String(SEMANTIC_VERIFIER_ABI),
   });
 }

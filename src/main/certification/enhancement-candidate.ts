@@ -3,20 +3,13 @@
  * describes structure for recertification tooling and grants no capability.
  */
 import { createHash } from "node:crypto";
-import {
-  countFunctionImports,
-  parseExports,
-  parseIndexVector,
-  parseTypes,
-  sectionById,
-  splitSections,
-  valueTypeName,
-} from "../core/wasm-binary.js";
 import { findEnhancementBuild } from "./enhancement-builds.js";
+import { parseEnhancementTable } from "./enhancement-table.js";
 import {
-  enhancementTableSlotFunctions,
-  parseEnhancementTable,
-} from "./enhancement-table.js";
+  activeTableEvidence,
+  signatureEvidence,
+  wasmEvidence,
+} from "./wasm-evidence.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
@@ -51,30 +44,38 @@ export function inspectEnhancementCandidate(
       table: null,
     };
   }
-  const sections = splitSections(input);
-  const types = parseTypes(sectionById(sections, 1));
-  const importCount = countFunctionImports(sectionById(sections, 2));
-  const functionTypes = parseIndexVector(sectionById(sections, 3));
-  const mainLoopExport = parseExports(sectionById(sections, 7)).find(
+  const evidence = wasmEvidence(input);
+  if (!evidence) {
+    return {
+      sha256,
+      validWasm: true,
+      certifiedBuildId: null,
+      mainLoop: null,
+      table: null,
+    };
+  }
+  const module = evidence.moduleView();
+  const mainLoopExport = module.exports.find(
     (entry) => entry.kind === 0 && entry.name === "EmscriptenExeThreadMainLoop",
   );
   let mainLoop: EnhancementCandidateReport["mainLoop"] = null;
-  if (mainLoopExport && mainLoopExport.index >= importCount) {
-    const localIndex = mainLoopExport.index - importCount;
-    const typeIndex = functionTypes[localIndex];
-    const type = typeIndex === undefined ? undefined : types[typeIndex];
-    if (type) {
+  if (mainLoopExport) {
+    const signature = signatureEvidence(module, mainLoopExport.index);
+    if (signature) {
       mainLoop = {
         functionIndex: mainLoopExport.index,
-        params: type.params.map(valueTypeName),
-        results: type.results.map(valueTypeName),
+        params: [...signature.params],
+        results: [...signature.results],
       };
     }
   }
   let table: EnhancementCandidateReport["table"];
   try {
-    const { min, max } = parseEnhancementTable(sectionById(sections, 4));
-    const occupied = enhancementTableSlotFunctions(sectionById(sections, 9));
+    if (!module.tableSection) throw new Error("missing table section");
+    const { min, max } = parseEnhancementTable(module.tableSection);
+    const active = activeTableEvidence(module.elementSection);
+    if (active.overwrittenSlots.length > 0) throw new Error("overwritten table slot");
+    const occupied = new Set([...active.relations.values()].flat());
     const firstEmptySlots: number[] = [];
     for (let slot = 0; slot < min && firstEmptySlots.length < 8; slot += 1) {
       if (!occupied.has(slot)) firstEmptySlots.push(slot);

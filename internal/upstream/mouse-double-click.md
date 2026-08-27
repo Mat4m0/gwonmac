@@ -1,6 +1,6 @@
 # The client's mouse double-click channel is complete and never fed
 
-> **Status: confirmed upstream defect with an exact-build local workaround.**
+> **Status: confirmed upstream defect with a semantic local workaround.**
 > This is historical evidence. Current transform and input code define gwonmac
 > behavior.
 
@@ -251,12 +251,14 @@ i32.store offset=24  ;; record+16, the word #829 copies into msg[4]
 ```
 
 It adds no function, moves no function index, and touches no table entry. The
-guard is the callback's own body hash: the store depends on local 3 being the
-frame pointer and the record sitting at frame+8, and a body that hashes to the
-certified value *is* that body. Because neither the template-save nor the
-Enhancement transform touches that function, one proof covers every predecessor
-the stage can consume, which is why it can run last and leave both existing
-build tables untouched.
+guard proves the full route: the named browser mousedown import receives the
+unique callback's active table slot, followed by the 24-byte enqueue/dequeue
+copy with complete shared-storage ledgers, frame pump, `rec[16]` to message
+payload `[4]`, the uniquely proved translator dispatch target, message 30 table binding,
+`payload[4] & 1`, and the `FrMouse` consumer that ORs flag 1. Function indices,
+active table slots, initialized data, and mutable storage may relocate without
+granting authority. Initialized operands require exact content and occurrence
+cardinality; every downstream field, call, table, and mask edge remains exact.
 
 `src/renderer/native-double-click.ts` writes Chromium's click count into the
 global on every trusted press — set on each even click of a run, cleared
@@ -265,6 +267,16 @@ player's own macOS double-click preferences. The synthetic tap pair is deleted
 rather than kept beside it, and an Electron spec refuses any touch event so it
 cannot return as a fallback.
 
-`pnpm certification double-click` re-runs the same structural proof from the
-official bytes. Unknown parsing stays in the bounded utility process;
-production repeats the record-driven transform and checks the exact output.
+`pnpm certification double-click` re-runs the semantic proof independently for
+every module selected by the transform planner. It derives one exact
+input/output transaction instead of maintaining a Cartesian hash table for all
+Enhancement profiles. Unknown parsing stays in the bounded utility process;
+production checks the exact selected input, callback body, table relation, and
+verifier-issued output digest before publishing the cache.
+
+Retained official artifacts stay outside the repository. Patch-day
+qualification names the previous and current private artifacts with
+`GW_CLIENT_WASM_PREVIOUS` and `GW_CLIENT_WASM`, then runs
+`tests/client-artifact/native-double-click-route.test.ts`. Keep the exact input
+and output digests in private qualification evidence; never commit ArenaNet
+binaries or turn those digests into runtime authority.

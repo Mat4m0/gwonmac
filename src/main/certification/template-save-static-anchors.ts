@@ -58,7 +58,7 @@ function bytesFromHex(value: string): Uint8Array {
 
 /** Independent ownership for every address erased by caller normalization. */
 export const TEMPLATE_STATIC_ANCHORS: Readonly<
-  Record<TemplateStaticStorage, TemplateStaticAnchor>
+  Record<Exclude<TemplateStaticStorage, "screenshot-state">, TemplateStaticAnchor>
 > = Object.freeze({
   "delete-state": Object.freeze({ kind: "zero-initialized" as const, baseline: 2_673_696 }),
   "template-types": Object.freeze({
@@ -79,7 +79,6 @@ export const TEMPLATE_STATIC_ANCHORS: Readonly<
     baseline: 1_520_736,
     bytes: utf16Le("ChatDumps\0gw???.txt\0gw%03u.txt\0"),
   }),
-  "screenshot-state": Object.freeze({ kind: "zero-initialized" as const, baseline: 2_673_696 }),
   "screenshot-types": Object.freeze({
     kind: "initialized-data" as const,
     baseline: 1_556_320,

@@ -506,7 +506,11 @@ export function registerIpcHandlers(ctx: IpcContext): {
     }),
 
     settingsReset: channel(nothing, async (win) => {
-      const outcome = await confirmSettingsReset(win, ctx.resetSettings);
+      const outcome = await confirmSettingsReset(
+        win,
+        ctx.toolsEnabledAtLaunch,
+        ctx.resetSettings,
+      );
       return outcome;
     }),
 

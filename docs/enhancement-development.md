@@ -459,9 +459,10 @@ pnpm run check
 ```
 
 `recertify` must report per-feature ABI/input-hash-bound verdicts, and
-`double-click` must prove one unique callback, active table role, signature,
-insertion point, and valid output. A shipped hash-table match is regression
-evidence, not authority.
+`double-click` must prove one unique callback and the complete enqueue, pump,
+translator, mouse-dispatch, click-consumer, and flag-lift route before it
+checks the insertion and output. It derives one exact input/output transaction;
+there is no capability-profile predecessor table.
 
 Each recovered fact needs an independent semantic anchor. A common movement is
 not enough. Automated candidates are review evidence and cannot create runtime

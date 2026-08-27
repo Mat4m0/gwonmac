@@ -8,6 +8,12 @@ import {
 } from "../../src/main/certification/enhancement-structural-evidence.js";
 import { ENHANCEMENT_BUILDS } from "../../src/main/certification/enhancement-builds.js";
 import {
+  functionBody,
+  functionBodySha256,
+  matchesEvidenceInput,
+  wasmEvidence,
+} from "../../src/main/certification/wasm-evidence.js";
+import {
   concat,
   encodeCode,
   encodeIndexVector,
@@ -57,6 +63,7 @@ interface FixtureOptions {
   readonly splitUiTarget?: boolean;
   readonly unsupportedInstruction?: boolean;
   readonly tableRelation?: "unique" | "missing" | "duplicate" | "passive";
+  readonly tableBase?: number;
   /** Adds the exact neighbour and distinct-producer shape required at launch. */
   readonly automaticCursor?: boolean;
   readonly messageAnchors?: PlayerChatMessageAnchors;
@@ -264,7 +271,8 @@ function fixture(options: FixtureOptions = {}): Fixture {
       ? [tick, cursor, ui, tick, duplicateCursor, ui]
       : [cursor, duplicateCursor];
   }
-  const tableSize = Math.max(1, elementFunctions.length + 1);
+  const tableBase = options.tableBase ?? 1;
+  const tableSize = Math.max(1, tableBase + elementFunctions.length);
   const table = concat(
     uleb(1),
     Uint8Array.of(0x70),
@@ -288,7 +296,7 @@ function fixture(options: FixtureOptions = {}): Fixture {
       uleb(1),
       uleb(0),
       Uint8Array.of(0x41),
-      sleb(1),
+      sleb(tableBase),
       Uint8Array.of(0x0b),
       uleb(elementFunctions.length),
       ...elementFunctions.map(uleb),
@@ -611,5 +619,65 @@ describe("review-only Enhancement structural evidence", () => {
     assert.equal(report.tick.status, "candidate");
     assert.equal(report.playerChatUi.status, "unavailable");
     assert.equal(report.cursor.status, "unavailable");
+  });
+
+  it("rejects a cached evidence view after its exact input bytes mutate", () => {
+    const input = fixture().bytes;
+    const evidence = wasmEvidence(input);
+    assert.ok(evidence);
+    assert.equal(matchesEvidenceInput(evidence, input), true);
+
+    input[input.byteLength - 1] = input[input.byteLength - 1]! ^ 1;
+
+    assert.equal(matchesEvidenceInput(evidence, input), false);
+  });
+
+  it("does not expose mutable active-table relation arrays", () => {
+    const evidence = wasmEvidence(fixture().bytes);
+    assert.ok(evidence);
+    const relations = evidence.tableRelations as ReadonlyMap<number, readonly number[]> & {
+      set?: unknown;
+    };
+    assert.equal(relations.set, undefined);
+    for (const slots of evidence.tableRelations.values()) {
+      assert.equal(Object.isFrozen(slots), true);
+    }
+    const decoded = evidence.decodeFunctions([
+      PLAYER_CHAT,
+      NEARBY_7F,
+      NEARBY_80,
+    ]);
+    const caller = decoded.find((entry) => entry.callSites.size > 0);
+    assert.ok(caller);
+    assert.equal((caller.calls as ReadonlyMap<number, number> & { set?: unknown }).set, undefined);
+    assert.equal(
+      (caller.callSites as ReadonlyMap<number, readonly unknown[]> & { set?: unknown }).set,
+      undefined,
+    );
+    for (const sites of caller.callSites.values()) {
+      assert.equal(Object.isFrozen(sites), true);
+    }
+  });
+
+  it("preserves semantic table evidence when the active table relocates", () => {
+    const original = inspectEvidence(fixture({ tableBase: 1 }).bytes);
+    const relocated = inspectEvidence(fixture({ tableBase: 37 }).bytes);
+    assert.equal(original.cursor.status, "candidate");
+    assert.equal(relocated.cursor.status, "candidate");
+    assert.deepEqual(original.cursor.considered[0]?.activeTableSlots, [1]);
+    assert.deepEqual(relocated.cursor.considered[0]?.activeTableSlots, [37]);
+  });
+
+  it("isolates canonical evidence from mutations to a returned module view", () => {
+    const evidence = wasmEvidence(fixture().bytes);
+    assert.ok(evidence);
+    const first = evidence.moduleView();
+    const functionIndex = first.functionImportCount;
+    const expectedHash = functionBodySha256(first, functionIndex);
+    functionBody(first, functionIndex)[0] = 0xff;
+
+    const second = evidence.moduleView();
+    assert.equal(functionBodySha256(second, functionIndex), expectedHash);
+    assert.notEqual(functionBody(second, functionIndex)[0], 0xff);
   });
 });

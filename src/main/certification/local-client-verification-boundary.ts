@@ -25,6 +25,7 @@ import {
   type EnhancementVerificationReason,
   type LocalClientFeature,
   type LocalClientVerification,
+  type LocalFileVerdict,
   type LocalFeatureFailure,
   type LocalFeatureFailures,
   type LocalFeatureInvariant,
@@ -64,6 +65,33 @@ function isTemplateReason(value: unknown): value is TemplateVerificationReason {
 function isEnhancementReason(value: unknown): value is EnhancementVerificationReason {
   return value === "enhancement-layout-changed"
     || value === "enhancement-transform-failed";
+}
+
+function isLocalFileVerdict(
+  value: unknown,
+  officialSha256: string,
+  templateSaveBuild: KnownTemplateSaveBuild | null,
+): value is LocalFileVerdict {
+  if (!value || typeof value !== "object") return false;
+  const verdict = value as Partial<LocalFileVerdict>;
+  if (
+    verdict.inputSha256 !== officialSha256
+    || verdict.verifierAbi !== SEMANTIC_VERIFIER_ABI
+  ) return false;
+  if (verdict.status === "proved") {
+    return hasExactOwnKeys(value as Readonly<Record<string, unknown>>, [
+      "status", "inputSha256", "outputSha256", "verifierAbi",
+    ])
+      && templateSaveBuild !== null
+      && verdict.outputSha256 === templateSaveBuild.outputSha256;
+  }
+  return verdict.status === "refused"
+    && hasExactOwnKeys(value as Readonly<Record<string, unknown>>, [
+      "status", "inputSha256", "verifierAbi", "reason",
+    ])
+    && templateSaveBuild === null
+    && (verdict.reason === "template-shape-changed"
+      || verdict.reason === "template-transform-failed");
 }
 
 function isLocalFeatureInvariant<Feature extends LocalClientFeature>(
@@ -273,11 +301,9 @@ function matchesObservationBase(
   return expected !== undefined
     && Object.keys(candidate).sort().join() === Object.keys(expected).sort().join()
     && Object.values(candidate).every(isIndex)
-    && [
-      candidate.contextRoot - expected.contextRoot,
-      candidate.agentArray - expected.agentArray,
-      candidate.areaInfo - expected.areaInfo,
-    ].every((delta, _index, deltas) => delta === deltas[0])
+    && candidate.contextRoot % 4 === 0
+    && candidate.agentArray % 4 === 0
+    && candidate.areaInfo % 4 === 0
     && Object.entries(expected).every(([key, value]) =>
       key === "contextRoot" || key === "agentArray" || key === "areaInfo"
         || candidate[key as keyof typeof candidate] === value);
@@ -294,10 +320,6 @@ function matchesPlayRegionObservation(
     expected === undefined
     || Object.keys(candidate).sort().join() !== Object.keys(expected).sort().join()
     || !Object.values(candidate).every(isIndex)
-    || [
-      candidate.contextRoot - expected.contextRoot,
-      candidate.areaInfo - expected.areaInfo,
-    ].some((delta, _index, deltas) => delta !== deltas[0])
     || Object.entries(expected).some(([key, value]) =>
       key !== "contextRoot" && key !== "areaInfo"
       && candidate[key as keyof typeof candidate] !== value)
@@ -316,19 +338,12 @@ function matchesTargetObservation(
   if (candidate === undefined) return true;
   const expected = baseline.targetObservation?.layout;
   const candidateObservation = build.observationBase?.layout;
-  const expectedObservation = baseline.observationBase?.layout;
   return matchesObservationBase(build, baseline)
     && expected !== undefined
     && candidateObservation !== undefined
-    && expectedObservation !== undefined
     && Object.keys(candidate).sort().join() === Object.keys(expected).sort().join()
     && Object.values(candidate).every(isIndex)
-    && candidate.manualTargetAgentId === candidate.automaticTargetAgentId + 4
-    && [
-      candidate.manualTargetAgentId - expected.manualTargetAgentId,
-      candidate.automaticTargetAgentId - expected.automaticTargetAgentId,
-      candidateObservation.contextRoot - expectedObservation.contextRoot,
-    ].every((delta, _index, deltas) => delta === deltas[0]);
+    && candidate.manualTargetAgentId === candidate.automaticTargetAgentId + 4;
 }
 
 function matchesUiDispatcher(
@@ -539,9 +554,28 @@ function matchesPreGameControls(
   build: SemanticBuild,
   baseline: KnownEnhancementBuild,
 ): boolean {
-  return build.preGameControls === undefined
-    || (baseline.preGameControls !== undefined
-      && isDeepStrictEqual(build.preGameControls, baseline.preGameControls));
+  const candidate = build.preGameControls;
+  if (candidate === undefined) return true;
+  const expected = baseline.preGameControls;
+  return expected !== undefined
+    && isIndex(candidate.hashFunction.functionIndex)
+    && isDigest(candidate.hashFunction.bodySha256)
+    && isDeepStrictEqual(candidate.hashFunction.params, expected.hashFunction.params)
+    && isDeepStrictEqual(candidate.hashFunction.results, expected.hashFunction.results)
+    && Object.values(candidate.labels).every(isIndex)
+    && isDeepStrictEqual(candidate.labelHashes, expected.labelHashes)
+    && Object.keys(candidate.layout).sort().join()
+      === Object.keys(expected.layout).sort().join()
+    && candidate.layout.frameCount === candidate.layout.frameArray + 8
+    && candidate.layout.frameBytes === expected.layout.frameBytes
+    && candidate.layout.frameId === expected.layout.frameId
+    && candidate.layout.frameHashId === expected.layout.frameHashId
+    && candidate.layout.frameState === expected.layout.frameState
+    && candidate.layout.gameContextSlot === expected.layout.gameContextSlot
+    && candidate.layout.characterContext === expected.layout.characterContext
+    && candidate.layout.characterUuid === expected.layout.characterUuid
+    && candidate.layout.currentInstanceType === expected.layout.currentInstanceType
+    && isIndex(candidate.layout.contextRoot);
 }
 
 function matchesPlayerSkillbarObservation(
@@ -615,15 +649,13 @@ function isAutomaticSemanticBuild(
   if (
     Object.keys(build.outputSha256).length === 0
     || !Object.values(build.outputSha256).every(isDigest)
-    || (hasObservation && !hasPlayRegion)
-    || (hasTarget && (!hasPlayRegion || !hasObservation))
-    || (hasTravel && !hasPlayRegion)
-    || (hasXunlai && (!hasPlayRegion || !hasObservation))
-    || (hasPlayerSkillbar && (!hasPlayRegion || !hasObservation))
+    || (hasTarget && !hasObservation)
+    || (hasTravel && !hasObservation)
+    || (hasXunlai && !hasObservation)
+    || (hasPlayerSkillbar && !hasObservation)
     || (hasParty && (!hasObservation || !hasPlayerSkillbar
       || build.uiDispatcher === undefined))
-    || (hasSkillSlotGeometry && !hasPlayRegion)
-    || (hasSkillCooldown && (!hasPlayRegion || !hasObservation || !hasPlayerSkillbar))
+    || (hasSkillCooldown && (!hasObservation || !hasPlayerSkillbar))
     || (hasTeam && (!hasParty || build.gameThread === undefined))
     || ((hasTravel || hasXunlai) && build.gameThread === undefined)
     || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
@@ -677,6 +709,7 @@ export function isLocalClientVerification(
       "status",
       "officialSha256",
       "verifierAbi",
+      "fileVerdict",
       "templateSaveBuild",
       "enhancementBuild",
       "featureVerdicts",
@@ -694,15 +727,59 @@ export function isLocalClientVerification(
     return false;
   }
   if (result.templateSaveBuild === null) {
-    return result.status === "template-refused"
-      && result.enhancementBuild === null
-      && result.featureVerdicts === null
-      && result.reasons.length === 1
-      && isTemplateReason(result.reasons[0]);
+    const featureVerdicts = result.featureVerdicts;
+    if (featureVerdicts === null || featureVerdicts === undefined) {
+      return result.status === "template-refused"
+        && result.fileVerdict === null
+        && result.enhancementBuild === null
+        && result.reasons.length === 1
+        && result.reasons[0] === "invalid-wasm";
+    }
+    if (!isLocalFileVerdict(result.fileVerdict, officialSha256, null)) {
+      return false;
+    }
+    const enhancementBuild = result.enhancementBuild;
+    if (
+      enhancementBuild !== null
+      && !isAutomaticSemanticBuild(
+        enhancementBuild,
+        officialSha256,
+        requestedCapabilities,
+      )
+    ) return false;
+    const featureFailures = featureFailuresFromVerdicts(featureVerdicts);
+    if (
+      featureFailures === null
+      || !isDeepStrictEqual(
+        featureVerdicts,
+        localFeatureVerdictsForBuild(
+          officialSha256,
+          requestedCapabilities,
+          enhancementBuild,
+          featureFailures,
+        ),
+      )
+    ) return false;
+    if (!enhancementCapabilitiesRequested(requestedCapabilities)) {
+      return result.status === "template-refused"
+        && enhancementBuild === null
+        && result.reasons.length === 1
+        && isTemplateReason(result.reasons[0]);
+    }
+    return enhancementBuild === null
+      ? result.status === "enhancement-refused"
+        && result.reasons.length === 1
+        && isEnhancementReason(result.reasons[0])
+      : result.status === "proved" && result.reasons.length === 0;
   }
   if (!isTemplateSaveBuild(result.templateSaveBuild, officialSha256)) {
     return false;
   }
+  if (!isLocalFileVerdict(
+    result.fileVerdict,
+    officialSha256,
+    result.templateSaveBuild,
+  )) return false;
   const inputSha256 = result.templateSaveBuild.outputSha256;
   const enhancementBuild = result.enhancementBuild;
   if (

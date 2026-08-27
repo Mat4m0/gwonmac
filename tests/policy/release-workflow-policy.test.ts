@@ -36,7 +36,7 @@ test("release workflow stages and publishes one tested, attested package version
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
   assert.match(
     workflow,
-    /name: Smoke-test signed release candidate[\s\S]*?GW_PACKAGE_INTENT: release[\s\S]*?run: pnpm test:packaged/,
+    /name: Smoke-test signed release candidate[\s\S]*?GW_PACKAGE_INTENT: release[\s\S]*?run: \|[\s\S]*?pnpm test:packaged[\s\S]*?tests\/client-artifact\/client-chain-qualification\.test\.ts/,
   );
   assert.doesNotMatch(
     read("tests/packaged-smoke.ts"),
@@ -94,6 +94,22 @@ test("release workflow stages and publishes one tested, attested package version
     feedWorkflow.indexOf("\n  deploy:"),
   );
   assert.match(releaseBuild, /permissions:[\s\S]{0,80}contents: read/);
+  assert.match(
+    releaseBuild,
+    /name: Download the current ArenaNet client generation[\s\S]*pnpm client:official --download/,
+  );
+  assert.match(
+    releaseBuild,
+    /name: Qualify the exact ArenaNet client before packaging[\s\S]*certification\.js verify[\s\S]*certification\.js double-click[\s\S]*pnpm test:client-artifact[\s\S]*pnpm memory:qualify:4gb/,
+  );
+  assert.ok(
+    releaseBuild.indexOf("Qualify the exact ArenaNet client before packaging")
+      < releaseBuild.indexOf("Build, sign, notarize, and staple application"),
+  );
+  assert.match(
+    releaseBuild,
+    /name: Refuse a client generation that changed during qualification[\s\S]*test "\$current" = "\$QUALIFIED_GENERATION"/,
+  );
   assert.doesNotMatch(releaseBuild, /id-token: write|contents: write/);
   assert.match(releaseBuild, /actions\/upload-artifact@/);
   assert.match(releaseStage, /actions\/download-artifact@/);
@@ -109,6 +125,10 @@ test("release workflow stages and publishes one tested, attested package version
     /actions\/download-artifact|actions\/attest|pnpm install|pnpm make|pnpm test|gh release create/,
   );
   assert.match(releasePublish, /actions\/checkout@[0-9a-f]{40}/);
+  assert.match(
+    releasePublish,
+    /EXPECTED_CLIENT_GENERATION:[^\n]+client-generation[\s\S]*scripts\/official-client\.ts[\s\S]*test "\$current_client_generation" = "\$EXPECTED_CLIENT_GENERATION"[\s\S]*gh release edit "\$TAG"/,
+  );
   const signingMaterialRemovedAt = releaseBuild.indexOf(
     "security delete-keychain \"$APPLE_KEYCHAIN\"\n          rm -f",
   );
@@ -137,7 +157,10 @@ test("release workflow stages and publishes one tested, attested package version
     /pnpm test:packaged|pnpm test:signed-keychain|pnpm test:stable-beta-roundtrip/,
   );
   const runtimeWithoutSigningSecrets = releaseBuild.slice(signingMaterialRemovedAt);
-  assert.match(runtimeWithoutSigningSecrets, /run: pnpm test:packaged/);
+  assert.match(
+    runtimeWithoutSigningSecrets,
+    /run: \|[\s\S]*?pnpm test:packaged[\s\S]*?client-chain-qualification\.test\.ts/,
+  );
   assert.match(
     runtimeWithoutSigningSecrets,
     /GW_SIGNED_REPLACEMENT_APP_PATH:[^\n]+runtime-fixture\.outputs\.replacement/,

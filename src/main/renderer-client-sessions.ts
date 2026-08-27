@@ -37,6 +37,7 @@ function projectCompatibility(
     ...compatibility,
     features: Object.freeze({
       gameFileSaving: compatibility.features.gameFileSaving,
+      nativeDoubleClick: compatibility.features.nativeDoubleClick,
       nativeCursor: status("nativeCursor"),
       targetObservation: status("targetObservation"),
       partyObservation: status("partyObservation"),

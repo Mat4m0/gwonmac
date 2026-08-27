@@ -351,6 +351,14 @@ export class ClientRuntime {
       clientSha256: officialSha256,
       features: {
         gameFileSaving: prepared.gameFileSaving,
+        nativeDoubleClick: prepared.nativeDoubleClick
+          ? { status: "available" }
+          : {
+              status: "unavailable",
+              reason: prepared.failure?.stage === "native-double-click"
+                ? "preparation-failed"
+                : "game-update",
+            },
         nativeCursor: optionalFeatureStatus(
           requested.nativeCursor,
           effective.nativeCursor,

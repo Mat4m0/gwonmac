@@ -28,31 +28,26 @@ import path from "node:path";
 import { writeAtomic } from "../main/core/atomic-file.js";
 import {
   enhancementOutputSha256,
-  enhancementProfilesForBuild,
   findEnhancementBuild,
   supportedEnhancementCapabilities,
 } from "../main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from "../main/certification/enhancement-transform.js";
 import {
   deriveNativeDoubleClickBuild,
-  findNativeDoubleClickBuild,
-  NATIVE_DOUBLE_CLICK_BUILDS,
-  rewriteWithBuild,
 } from "../main/certification/native-double-click.js";
 import { preparePostTemplateSaveModule } from "../main/certification/template-save-verifier.js";
 import {
   isLocalClientVerification,
   verifyLocalClientBytes,
 } from "../main/certification/local-client-verifier.js";
-import {
-  findTemplateSaveBuild,
-  rewriteTemplateSaveWasm,
-} from "../main/certification/template-save-compat.js";
+import { rewriteTemplateSaveWasm } from
+  "../main/certification/template-save-compat.js";
 import {
   ENHANCEMENT_CAPABILITY_PRESETS,
   ENHANCEMENT_CAPABILITY_FIELDS,
   ENHANCEMENT_TRANSFORM_ABI,
-  enhancementCapabilitiesForProfile,
+  RELEASE_ENHANCEMENT_CAPABILITIES,
+  enhancementCapabilityProfile,
 } from "../shared/enhancement-contracts.js";
 import {
   currentMessageAnchors,
@@ -82,7 +77,7 @@ const USAGE =
   + "  template [PATH/Gw.jspi.wasm] [--emit-ts] [--write] [--expect-certified]\n"
   + "                                       re-derive the template-save build entry\n"
   + "  transform INPUT.wasm OUTPUT.wasm     write the derived Enhancement module\n"
-  + "  double-click [PATH/Gw.jspi.wasm]     re-derive the native double-click table\n";
+  + "  double-click [PATH/Gw.jspi.wasm]     prove the native double-click route\n";
 
 /**
  * The one fixed profile the command line emits. The other certified profiles
@@ -147,10 +142,11 @@ async function verify(argv: readonly string[]): Promise<void> {
   const capabilities = result.enhancementBuild
     ? supportedEnhancementCapabilities(result.enhancementBuild)
     : null;
-  const features = result.featureVerdicts === null
+  const featureVerdicts = result.featureVerdicts;
+  const features = featureVerdicts === null
     ? null
     : Object.fromEntries(ENHANCEMENT_CAPABILITY_FIELDS.map((feature) => {
-        const verdict = result.featureVerdicts[feature];
+        const verdict = featureVerdicts[feature];
         return [feature, verdict.status === "ambiguous"
           ? {
               status: verdict.status,
@@ -163,6 +159,7 @@ async function verify(argv: readonly string[]): Promise<void> {
       }));
   process.stdout.write(`${JSON.stringify({
     officialSha256: result.officialSha256,
+    fileVerdict: result.fileVerdict,
     templateSaving: result.templateSaveBuild !== null,
     verifierAbi: result.verifierAbi,
     features,
@@ -186,22 +183,22 @@ async function compare(argv: readonly string[]): Promise<void> {
     return;
   }
   const official = new Uint8Array(await readFile(filename));
+  const verification = verifyLocalClientBytes(official);
+  if (!isLocalClientVerification(verification, verification.officialSha256)) {
+    throw new Error("runtime feature verifier produced an invalid boundary result");
+  }
   const templateSave = inspectTemplateSaveCandidate(official);
   const enhancement = recertifyEnhancementBytes(
     official,
     currentMessageAnchors(),
   );
   const postTemplate = preparePostTemplateSaveModule(official);
-  const doubleClick = postTemplate
-    && (
-      findNativeDoubleClickBuild(
-        createHash("sha256").update(postTemplate.bytes).digest("hex"),
-      )
-      || deriveNativeDoubleClickBuild(postTemplate.bytes)
-    )
+  const selectedInput = postTemplate?.bytes ?? official;
+  const doubleClick = deriveNativeDoubleClickBuild(selectedInput)
     ? "exact" as const
     : "not-located" as const;
   const report = createCarryForwardReport(
+    verification,
     templateSave,
     enhancement,
     doubleClick,
@@ -326,14 +323,9 @@ async function transform(argv: readonly string[]): Promise<void> {
 }
 
 /**
- * Re-derives the native double-click table by running the whole chain from the
- * official bytes: template-save, then each certified Enhancement profile, then
- * this transform against every one of those outputs.
- *
- * It reads nothing from the shipped table except the structural entry — the
- * callback's slot, index, body hash and offsets — so a disagreement between
- * what it prints and what is checked in is a real change in the client rather
- * than a restatement of the constant being checked.
+ * Proves the native double-click route against each output of the whole chain.
+ * Each result is one exact input/output transaction; there is no Cartesian
+ * predecessor table to update when an unrelated capability profile changes.
  */
 async function doubleClick(argv: readonly string[]): Promise<void> {
   const [filename] = positionalArguments(argv);
@@ -341,52 +333,67 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
     await readFile(filename ?? installedClientArtifact()),
   );
   const officialSha256 = createHash("sha256").update(official).digest("hex");
-  const templateBuild = findTemplateSaveBuild(officialSha256);
-  if (!templateBuild) {
-    throw new Error(`unsupported official WASM hash ${officialSha256}`);
-  }
-  const templateSave = rewriteTemplateSaveWasm(official, templateBuild);
-  const predecessors: Array<[string, Uint8Array]> = [
-    ["template-save", templateSave],
+  const verification = verifyLocalClientBytes(official);
+  const templateBuild = verification.templateSaveBuild;
+  const selectedInput = templateBuild
+    ? rewriteTemplateSaveWasm(official, templateBuild)
+    : official;
+  const enhancementInputSha256 = createHash("sha256")
+    .update(selectedInput)
+    .digest("hex");
+  const predecessors: Array<Readonly<{
+    profile: string;
+    bytes: Uint8Array;
+    enhancementInputSha256?: string;
+  }>> = [
+    { profile: templateBuild ? "file-compatible" : "official", bytes: selectedInput },
   ];
-  const enhancementBuild = findEnhancementBuild(
-    createHash("sha256").update(templateSave).digest("hex"),
-  );
-  if (enhancementBuild) {
-    for (const profile of enhancementProfilesForBuild(enhancementBuild)) {
-      const capabilities = enhancementCapabilitiesForProfile(profile);
-      if (!capabilities) throw new Error(`invalid certified profile ${profile}`);
-      predecessors.push([
-        profile,
-        transformEnhancementWasm(templateSave, enhancementBuild, capabilities),
-      ]);
+  for (const [launch, capabilities] of Object.entries(
+    RELEASE_ENHANCEMENT_CAPABILITIES,
+  )) {
+    const profile = enhancementCapabilityProfile(capabilities);
+    if (!profile) throw new Error(`invalid ${launch} release capability set`);
+    const profileBuild = verifyLocalClientBytes(official, capabilities).enhancementBuild;
+    if (!profileBuild) throw new Error(`semantic verification refused profile ${profile}`);
+    predecessors.push({
+      profile,
+      bytes: transformEnhancementWasm(selectedInput, profileBuild, capabilities),
+      enhancementInputSha256,
+    });
+  }
+  const chains: Array<Readonly<{
+    profile: string;
+    inputSha256: string;
+    outputSha256: string;
+    enhancementInputSha256?: string;
+  }>> = [];
+  let completeRouteProved = true;
+  for (const predecessor of predecessors) {
+    const { profile, bytes } = predecessor;
+    const inputSha256 = createHash("sha256").update(bytes).digest("hex");
+    const build = deriveNativeDoubleClickBuild(bytes);
+    const outputSha256 = build?.derivations[inputSha256];
+    if (!outputSha256) {
+      completeRouteProved = false;
+      continue;
     }
+    chains.push(Object.freeze({
+      profile,
+      inputSha256,
+      outputSha256,
+      ...(predecessor.enhancementInputSha256 === undefined
+        ? {}
+        : { enhancementInputSha256: predecessor.enhancementInputSha256 }),
+    }));
   }
-  const derivations: Record<string, string> = {};
-  for (const [, bytes] of predecessors) {
-    const input = createHash("sha256").update(bytes).digest("hex");
-    derivations[input] = createHash("sha256")
-      .update(rewriteWithBuild(bytes, NATIVE_DOUBLE_CLICK_BUILDS[0]!))
-      .digest("hex");
-  }
-  const shipped = NATIVE_DOUBLE_CLICK_BUILDS[0]!.derivations;
-  // One structural callback can serve several certified game builds. Compare
-  // only the predecessors produced by this official client; requiring equality
-  // with the whole cumulative table made every later patch look stale merely
-  // because the table also retained the preceding build's derivations.
-  const matches = Object.entries(derivations).every(
-    ([inputSha256, outputSha256]) =>
-      shipped[inputSha256] === outputSha256,
-  );
   process.stdout.write(`${JSON.stringify({
     officialSha256,
-    predecessors: predecessors.map(([name]) => name),
-    derivations,
-    matchesShippedTable: matches,
+    chains,
+    completeRouteProved,
   }, null, 2)}\n`);
-  if (!matches) {
+  if (!completeRouteProved || chains.length !== predecessors.length) {
     process.stderr.write(
-      "certification double-click: derived table does not match the shipped one\n",
+      "certification double-click: complete native input route did not prove\n",
     );
     process.exitCode = 1;
   }

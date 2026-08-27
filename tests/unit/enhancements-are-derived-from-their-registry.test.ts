@@ -277,6 +277,7 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
       clientSha256: "a".repeat(64),
       features: {
         gameFileSaving: available,
+        nativeDoubleClick: available,
         nativeCursor: available,
         targetObservation: available,
         playRegionObservation: available,

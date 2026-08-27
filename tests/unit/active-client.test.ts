@@ -16,6 +16,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
       clientSha256: String(size).padStart(64, "0"),
       features: {
         gameFileSaving: supported ? available : unavailable,
+        nativeDoubleClick: supported ? available : unavailable,
         nativeCursor: supported ? available : unavailable,
         playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },

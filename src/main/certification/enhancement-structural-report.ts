@@ -10,9 +10,11 @@ import {
   functionHasSignature,
   MAX_CONSIDERED,
   MAX_INPUT_BYTES,
+  matchesEvidenceInput,
   signatureEvidence,
-} from "./enhancement-wasm-proof-context.js";
-import type { EnhancementProofContext } from "./enhancement-wasm-proof-context.js";
+} from "./wasm-evidence.js";
+import type { EnhancementProofContext } from "./wasm-evidence.js";
+import { tickEvidence } from "./enhancement-tick-evidence.js";
 import type {
   CursorConsideration,
   CursorEvidenceReport,
@@ -280,22 +282,25 @@ export function inspectEnhancementStructuralEvidence(
   let module: ModuleShape;
   let context: EnhancementProofContext;
   try {
-    const candidate = suppliedContext?.inputIdentity === input
+    const candidate = matchesEvidenceInput(suppliedContext, input)
       ? suppliedContext
       : enhancementProofContext(input);
     if (!candidate) throw new EvidenceError("module-shape-unsupported");
     context = candidate;
-    module = context.module;
+    module = context.moduleView();
   } catch (error) {
     const failure = error instanceof EvidenceError
       ? error.code
       : "module-shape-unsupported";
     return baseReport(sha256, true, failure);
   }
-  const tick = context.tick;
+  const tick = tickEvidence(module);
   let decoded: DecodedFunction[];
   try {
-    decoded = context.decodeFunctions(messageAnchors);
+    decoded = context.decodeFunctions([
+      messageAnchors.playerChatMessage,
+      ...messageAnchors.nearbyPlayerMessages,
+    ]);
   } catch (error) {
     const failure = error instanceof EvidenceError
       ? error.code

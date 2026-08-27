@@ -382,7 +382,14 @@ test.describe("data and display settings", () => {
       (userData) => Promise.all([
         writeFile(
           path.join(userData, "settings.json"),
-          JSON.stringify({ formatVersion: 1, nativeCursor: false }),
+          JSON.stringify({
+            formatVersion: 1,
+            nativeCursor: false,
+            travelShortcuts: [
+              { mapId: 55, district: "international", districtNumber: 0 },
+              null, null, null, null, null, null, null, null,
+            ],
+          }),
         ),
         writeFile(
           path.join(userData, "travel-preferences.json"),
@@ -446,7 +453,7 @@ test.describe("data and display settings", () => {
         relaunch: false,
         buttons: ["Reset GWonMac Settings", "Cancel"],
         detail:
-          "Display, tools, Travel shortcuts, custom search phrases, window size and position, and diagnostics return to their defaults. Downloaded game data and your saved login stay untouched.",
+          "Core-owned settings, including Tools switches, window size and position, and diagnostics return to their defaults. Stored Build Library and Travel shortcuts and search phrases remain. Downloaded game data and your saved login stay untouched.",
       });
       expect(await page.evaluate(() => window.gwNative.settings.get()))
         .toMatchObject({ renderScale: 2 });
@@ -454,10 +461,13 @@ test.describe("data and display settings", () => {
         await readFile(path.join(userData, "settings.json"), "utf8"),
       ) as { travelShortcuts: unknown[] };
       expect(rawSettings.travelShortcuts[0]).toEqual({
-        mapId: 81,
+        mapId: 55,
         district: "international",
         districtNumber: 0,
       });
+      expect(JSON.parse(
+        await readFile(path.join(userData, "travel-preferences.json"), "utf8"),
+      )).toMatchObject({ synonyms: [{ term: "home", mapId: 55 }] });
       await app.evaluate(({ app: electronApp }) => {
         electronApp.quit = globalThis.__resetRestart.originalQuit;
         electronApp.relaunch = globalThis.__resetRestart.originalRelaunch;
