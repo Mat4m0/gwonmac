@@ -2,6 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { Page } from "playwright";
+import { PNG } from "pngjs";
+import { analyzeCheckerboardBounds, type CheckerboardBounds } from "./checkerboard-bounds.js";
 import { projectLiveResult } from "./result.js";
 
 export type GraphicsProbeSample = Readonly<{
@@ -36,11 +38,15 @@ export type GraphicsProbeEvidence = Readonly<{
   captures: ReadonlyArray<Readonly<{
     label: string;
     screenshot: string;
+    checkerboardBounds: readonly CheckerboardBounds[];
     sample: GraphicsProbeSample;
   }>>;
 }>;
 
-const MISSION_MAP_TILE_PROOF_FINGERPRINT = "fnv1a32:fcaade3f";
+const MISSION_MAP_TILE_PROOFS = Object.freeze([
+  Object.freeze({ fingerprint: "fnv1a32:fcaade3f", palette: "magenta-cyan" as const }),
+  Object.freeze({ fingerprint: "fnv1a32:2f4cf29b", palette: "yellow-blue" as const }),
+]);
 
 type GraphicsProbeSession = Readonly<{
   evidence: GraphicsProbeEvidence;
@@ -122,31 +128,39 @@ export async function runGraphicsProbeSession({
     runId,
   );
   let captureCount = 0;
-  const replacementArmed = await page.evaluate((candidate) => (
-    window.gwTextureRecon?.armExactReplacement(candidate) ?? false
-  ), MISSION_MAP_TILE_PROOF_FINGERPRINT);
+  const replacementArmed = await page.evaluate((candidates) => (
+    window.gwTextureRecon?.armExactReplacements(candidates) ?? false
+  ), MISSION_MAP_TILE_PROOFS);
   const baseline = await readGraphicsProjection(page);
   const captures: Array<{
     label: string;
     screenshot: string;
+    checkerboardBounds: readonly CheckerboardBounds[];
     sample: GraphicsProbeSample;
   }> = [];
 
   console.log(`Graphics evidence directory: ${outputDir}`);
   console.log(JSON.stringify({
     checkpoint: "graphics-probe-ready",
-    please: "keep the Mission Map closed, capture the closed state, open it, then capture the open state",
-    exactReplacement: {
+    please: "follow the named Mission Map matrix; wait one second after each visual change before capture",
+    exactReplacements: {
       armed: replacementArmed,
-      fingerprint: MISSION_MAP_TILE_PROOF_FINGERPRINT,
-      expected: "one 512x512 Mission Map tile becomes a magenta/cyan checkerboard",
+      candidates: MISSION_MAP_TILE_PROOFS,
+      expected: "two 512x512 Mission Map tiles use distinct magenta/cyan and yellow/blue checkerboards",
     },
     suggestedSequence: [
       "capture mission-map-closed",
-      "capture mission-map-open",
-      "capture mission-map-closed-again",
+      "capture lions-arch-open-1",
+      "capture lions-arch-closed-1",
+      "capture lions-arch-open-2",
+      "capture lions-arch-closed-2",
+      "capture lions-arch-open-3",
+      "capture after-district-transition",
+      "capture different-map-open",
+      "reset-context",
+      "capture context-restored",
     ],
-    privacy: "each capture saves the visible game window plus bounded texture fingerprints; it saves no pixels from texture memory or WASM pointers",
+    privacy: "each capture saves the visible game window; JSON retains bounded fingerprints, activity rates, and scalar checkerboard bounds, never texture pixels or WASM pointers",
   }));
 
   const input = createInterface({ input: process.stdin, output: process.stdout });
@@ -154,6 +168,28 @@ export async function runGraphicsProbeSession({
     for await (const line of input) {
       const command = line.trim().toLowerCase();
       if (command === "q" || command === "quit") break;
+      if (command === "reset-context") {
+        const reset = await page.evaluate(() => {
+          const canvas = document.getElementById("canvas");
+          const visible = canvas instanceof HTMLCanvasElement ? canvas : null;
+          const offscreen = window.Module?.canvas === visible
+            ? window.Module.canvas.offscreen
+            : undefined;
+          const gl = offscreen?.getContext("webgl2") ?? offscreen?.getContext("webgl") ?? null;
+          const extension = gl?.getExtension("WEBGL_lose_context") ?? null;
+          if (!extension) return false;
+          extension.loseContext();
+          setTimeout(() => extension.restoreContext(), 500);
+          return true;
+        });
+        await page.waitForTimeout(1_500);
+        console.log(JSON.stringify({
+          checkpoint: "graphics-context-reset",
+          outcome: reset ? "requested" : "unavailable",
+          please: reset ? "capture context-restored" : "continue without context-reset evidence",
+        }));
+        continue;
+      }
       const requestedLabel = command.startsWith("capture ")
         ? command.slice("capture ".length).trim()
         : command === "" || command === "c" || command === "capture"
@@ -161,7 +197,7 @@ export async function runGraphicsProbeSession({
           : "";
       const label = requestedLabel.replaceAll(/[^a-z0-9-]+/g, "-").replaceAll(/^-|-$/g, "").slice(0, 48);
       if (!label) {
-        console.log("Type capture <label>, or q to finish.");
+        console.log("Type capture <label>, reset-context, or q to finish.");
         continue;
       }
 
@@ -170,18 +206,21 @@ export async function runGraphicsProbeSession({
       captureCount += 1;
       const stem = `capture-${String(captureCount).padStart(3, "0")}-${label}`;
       const screenshot = `${stem}.png`;
-      await page.screenshot({ path: path.join(outputDir, screenshot) });
+      const screenshotBytes = await page.screenshot();
+      await writeFile(path.join(outputDir, screenshot), screenshotBytes);
+      const decoded = PNG.sync.read(screenshotBytes);
+      const checkerboardBounds = analyzeCheckerboardBounds(decoded);
       await writeFile(
         path.join(outputDir, `${stem}.json`),
         JSON.stringify(sample, null, 2),
       );
-      captures.push({ label, screenshot, sample });
+      captures.push({ label, screenshot, checkerboardBounds, sample });
       const textureCandidates = sample.textureRecon?.records.slice(0, 12).map((record) => ({
         texture: record.texture,
         size: `${record.width}x${record.height}`,
         fingerprint: record.fingerprint,
-        draws: record.intervalDrawUses,
         binds: record.intervalBinds,
+        bindsPerSecond: record.bindsPerSecond,
         uploads: record.intervalUploads,
       })) ?? [];
       console.log(JSON.stringify({
@@ -193,6 +232,9 @@ export async function runGraphicsProbeSession({
         liveTextures: sample.textures?.liveTextures ?? null,
         wasmHeapBytes: sample.wasmHeapBytes,
         contextLost: sample.canvas.contextLost,
+        intervalDurationMs: sample.textureRecon?.intervalDurationMs ?? null,
+        exactReplacements: sample.textureRecon?.exactReplacements ?? [],
+        checkerboardBounds,
         textureCandidates,
       }));
     }
@@ -205,6 +247,27 @@ export async function runGraphicsProbeSession({
   await writeFile(
     path.join(outputDir, "evidence.json"),
     JSON.stringify(evidence, null, 2),
+  );
+  await writeFile(
+    path.join(outputDir, "texture-matrix.json"),
+    JSON.stringify(captures.map(({ label, checkerboardBounds, sample }) => ({
+      label,
+      contextLost: sample.canvas.contextLost,
+      intervalDurationMs: sample.textureRecon?.intervalDurationMs ?? null,
+      exactReplacements: sample.textureRecon?.exactReplacements ?? [],
+      checkerboardBounds,
+      candidates: sample.textureRecon?.records
+        .filter(({ fingerprint }) => MISSION_MAP_TILE_PROOFS.some((candidate) => candidate.fingerprint === fingerprint))
+        .map(({ fingerprint, uploadKind, width, height, intervalUploads, intervalBinds, bindsPerSecond }) => ({
+          fingerprint,
+          uploadKind,
+          width,
+          height,
+          intervalUploads,
+          intervalBinds,
+          bindsPerSecond,
+        })) ?? [],
+    })), null, 2),
   );
   const projection = await finalProjection(page, cadence);
   return {

@@ -25,7 +25,7 @@ The spike is complete only when each result links to reproducible evidence.
 | Keep rings aligned while the compass rotates | Medium | Native orientation and projection | Capture a stationary player before and after rotation. Compare native markers and candidate yaw. |
 | Show the current map border | Medium to high | Correct coordinate transform and boundary source | Render a diagnostic polyline for one certified map and compare it with the native compass. |
 | Read walkable areas | High | Certified pathing owner, array layout, lifetime, and bounds | Publish only presence, counts, and coordinate extrema before publishing any polygons. |
-| Identify compass and map textures | Medium | Which uploaded textures are used in each UI state | Compare bounded texture draw activity between named checkpoints. |
+| Identify compass and map textures | Medium | Which uploaded textures are used in each UI state | Compare bounded texture bind activity between timed named checkpoints. |
 | Replace native map graphics | High | Stable exact fingerprints, texture lifecycle, and redistribution rights | Replace one locally proven fingerprint with an obvious generated checkerboard in development only. |
 | Reveal unexplored cartography | Very high | Exploration-mask source and safe composition point | Prove a bounded mask source independently. Do not infer it from screenshots. |
 
@@ -106,10 +106,12 @@ capture explorable-idle
 q
 ```
 
-The texture probe records no pixel data. It retains level-zero dimensions,
-WebGL formats, a fingerprint for uploads up to 4 MiB, and interval activity.
-Each checkpoint clears only interval counters. This lets the next state show
-which already-loaded textures became active.
+The texture probe records no texture pixels. It retains level-zero dimensions,
+WebGL formats, a fingerprint for uploads up to 4 MiB, interval duration, and
+normalized bind activity. Each checkpoint clears only interval counters. This
+lets the next state show which already-loaded textures became active. The exact
+client does not call the wrapped draw imports, so the probe does not report a
+draw-use count.
 
 Treat a highly ranked texture as a candidate, not as proof. A bound texture can
 be counted even when the current shader does not sample it. Repeat the same
@@ -249,3 +251,41 @@ Next, repeat the proof for three map loads and one different map. Then replace
 two separately identified tiles with different generated colors to establish
 tile-to-screen placement and whether the fingerprint identifies map content,
 an overlay layer, or both.
+
+## Two-tile texture mapping procedure
+
+The next development run arms these exact upload fingerprints:
+
+| Fingerprint | Generated proof palette | Prior evidence |
+| --- | --- | --- |
+| `fnv1a32:fcaade3f` | magenta and cyan | Replaced the large Lion's Arch Mission Map region. |
+| `fnv1a32:2f4cf29b` | yellow and blue | Matched the first tile's bind count in two Lion's Arch runs. |
+
+Run `pnpm recon:compass-cartography`. Wait one second after every visual change,
+then enter these commands in order:
+
+```text
+capture mission-map-closed
+capture lions-arch-open-1
+capture lions-arch-closed-1
+capture lions-arch-open-2
+capture lions-arch-closed-2
+capture lions-arch-open-3
+capture after-district-transition
+capture different-map-open
+reset-context
+capture context-restored
+q
+```
+
+Move to another district before `after-district-transition`. Travel to a map
+outside Lion's Arch before `different-map-open`. Keep the Mission Map open for
+each `open` capture and closed for each `closed` capture. The `reset-context`
+command uses `WEBGL_lose_context` when Chromium exposes it. An unavailable
+extension is a recorded limitation, not a failed run.
+
+Each capture records a screenshot, bounded texture facts, timed bind rates, and
+scalar proof-color bounds. `texture-matrix.json` is the comparison summary. It
+does not retain decoded screenshot pixels. Classify each fingerprint as stable,
+content-specific, or rejected only after all three same-map openings, a closed
+negative control, the transition, and the different-map capture agree.

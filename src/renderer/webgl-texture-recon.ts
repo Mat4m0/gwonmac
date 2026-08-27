@@ -1,6 +1,6 @@
 /**
  * Owns a development-only, bounded WebGL texture-activity probe. It records
- * dimensions, formats, content fingerprints, and draw-use counts so a live
+ * dimensions, formats, content fingerprints, and normalized bind activity so a live
  * operator can compare named visual states without retaining pixels or WASM
  * pointers.
  */
@@ -61,8 +61,6 @@ type TextureReconImports = {
       imageBytes: number,
       data: number,
     ) => unknown;
-    glDrawArrays?: (mode: number, first: number, count: number) => unknown;
-    glDrawElements?: (mode: number, count: number, type: number, indices: number) => unknown;
   };
 };
 
@@ -81,21 +79,28 @@ export type TextureReconRecord = Readonly<{
   fingerprint: string | null;
   intervalUploads: number;
   intervalBinds: number;
-  intervalDrawUses: number;
+  bindsPerSecond: number;
 }>;
 
 export type TextureReconSnapshot = Readonly<{
+  intervalDurationMs: number;
   trackedTextures: number;
   saturated: boolean;
-  exactReplacement: Readonly<{
+  exactReplacements: readonly Readonly<{
     fingerprint: string;
+    palette: TextureProofPalette;
     replacements: number;
-  }> | null;
+  }>[];
   records: readonly TextureReconRecord[];
 }>;
 
+export type TextureProofPalette = "magenta-cyan" | "yellow-blue";
+
 export type TextureReconController = Readonly<{
-  armExactReplacement: (fingerprint: string) => boolean;
+  armExactReplacements: (replacements: readonly Readonly<{
+    fingerprint: string;
+    palette: TextureProofPalette;
+  }>[]) => boolean;
   checkpoint: () => TextureReconSnapshot;
   resetContext: () => void;
 }>;
@@ -112,7 +117,6 @@ type MutableRecord = {
   fingerprint: string | null;
   intervalUploads: number;
   intervalBinds: number;
-  intervalDrawUses: number;
 };
 
 function byteLength(format: number, type: number, width: number, height: number) {
@@ -157,24 +161,35 @@ function fingerprint(heap: Uint8Array | undefined, pointer: number, length: numb
   return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
+const PROOF_PALETTES: Readonly<Record<TextureProofPalette, readonly [
+  readonly [number, number, number],
+  readonly [number, number, number],
+]>> = Object.freeze({
+  "magenta-cyan": [[255, 0, 255], [0, 255, 255]],
+  "yellow-blue": [[255, 255, 0], [0, 64, 255]],
+});
+
 function replaceWithCheckerboard(
   heap: Uint8Array | undefined,
   pointer: number,
   length: number,
   expectedFingerprint: string | null,
+  palette: TextureProofPalette,
 ): (() => void) | null {
   if (!expectedFingerprint || fingerprint(heap, pointer, length) !== expectedFingerprint || !heap) {
     return null;
   }
   const original = heap.slice(pointer, pointer + length);
   const pixels = heap.subarray(pointer, pointer + length);
+  const colors = PROOF_PALETTES[palette];
   for (let y = 0; y < PROOF_TILE_SIZE; y += 1) {
     for (let x = 0; x < PROOF_TILE_SIZE; x += 1) {
       const offset = (y * PROOF_TILE_SIZE + x) * 4;
       const alternate = ((x >> 5) + (y >> 5)) % 2 === 0;
-      pixels[offset] = alternate ? 255 : 0;
-      pixels[offset + 1] = alternate ? 0 : 255;
-      pixels[offset + 2] = 255;
+      const color = colors[alternate ? 0 : 1];
+      pixels[offset] = color[0];
+      pixels[offset + 1] = color[1];
+      pixels[offset + 2] = color[2];
       pixels[offset + 3] = 255;
     }
   }
@@ -186,10 +201,12 @@ export function installWebGlTextureRecon({
   imports,
   module,
   log,
+  now = () => performance.now(),
 }: {
   imports: TextureReconImports;
   module: ClientMemory;
   log: (...values: unknown[]) => void;
+  now?: () => number;
 }): TextureReconController | null {
   const env = imports.env;
   if (!env || typeof env.glBindTexture !== "function") {
@@ -199,12 +216,14 @@ export function installWebGlTextureRecon({
 
   const records = new Map<number, MutableRecord>();
   const bindings = new Map<number, number>();
-  const reboundSinceDraw = new Set<number>();
   let activeUnit = GL_TEXTURE0;
   let saturated = false;
   let observationFailureReported = false;
-  let exactReplacementFingerprint: string | null = null;
-  let exactReplacementCount = 0;
+  let intervalStartedAt = now();
+  const exactReplacements = new Map<TextureProofPalette, {
+    fingerprint: string;
+    replacements: number;
+  }>();
 
   const observe = (callback: () => void) => {
     try {
@@ -221,7 +240,7 @@ export function installWebGlTextureRecon({
   };
 
   const currentTexture = () => bindings.get(activeUnit) ?? 0;
-  const recordUpload = (input: Omit<MutableRecord, "intervalUploads" | "intervalBinds" | "intervalDrawUses">) => {
+  const recordUpload = (input: Omit<MutableRecord, "intervalUploads" | "intervalBinds">) => {
     const texture = currentTexture();
     if (!texture) return;
     const previous = records.get(texture);
@@ -233,7 +252,6 @@ export function installWebGlTextureRecon({
       ...input,
       intervalUploads: (previous?.intervalUploads ?? 0) + 1,
       intervalBinds: previous?.intervalBinds ?? 0,
-      intervalDrawUses: previous?.intervalDrawUses ?? 0,
     });
   };
 
@@ -254,7 +272,6 @@ export function installWebGlTextureRecon({
     observe(() => {
       if (target !== GL_TEXTURE_2D) return;
       bindings.set(activeUnit, texture);
-      if (texture) reboundSinceDraw.add(texture);
       const record = records.get(texture);
       if (record) record.intervalBinds += 1;
     });
@@ -287,8 +304,11 @@ export function installWebGlTextureRecon({
         && height === PROOF_TILE_SIZE
         && format === GL_RGBA
         && type === GL_UNSIGNED_BYTE;
-      const restore = eligibleForProof
-        ? replaceWithCheckerboard(module.HEAPU8, pixels, uploadBytes, exactReplacementFingerprint)
+      const replacement = eligibleForProof
+        ? [...exactReplacements.entries()].find(([, candidate]) => candidate.fingerprint === uploadedFingerprint)
+        : undefined;
+      const restore = replacement
+        ? replaceWithCheckerboard(module.HEAPU8, pixels, uploadBytes, uploadedFingerprint, replacement[0])
         : null;
       let result: unknown;
       try {
@@ -298,7 +318,7 @@ export function installWebGlTextureRecon({
       }
       observe(() => {
         if (target !== GL_TEXTURE_2D || level !== 0) return;
-        if (restore) exactReplacementCount += 1;
+        if (restore && replacement) replacement[1].replacements += 1;
         recordUpload({ width, height, level, internalFormat: null, format, type, uploadKind: "sub-image", uploadBytes, fingerprint: uploadedFingerprint });
       });
       return result;
@@ -329,30 +349,6 @@ export function installWebGlTextureRecon({
     };
   }
 
-  const observeDraw = () => {
-    for (const texture of reboundSinceDraw) {
-      const record = records.get(texture);
-      if (record) record.intervalDrawUses += 1;
-    }
-    reboundSinceDraw.clear();
-  };
-  const drawArrays = env.glDrawArrays;
-  if (typeof drawArrays === "function") {
-    env.glDrawArrays = function (this: unknown, mode, first, count) {
-      const result = drawArrays.call(this, mode, first, count);
-      observe(observeDraw);
-      return result;
-    };
-  }
-  const drawElements = env.glDrawElements;
-  if (typeof drawElements === "function") {
-    env.glDrawElements = function (this: unknown, mode, count, type, indices) {
-      const result = drawElements.call(this, mode, count, type, indices);
-      observe(observeDraw);
-      return result;
-    };
-  }
-
   const deleteTextures = env.glDeleteTextures;
   if (typeof deleteTextures === "function") {
     env.glDeleteTextures = function (this: unknown, count, pointer) {
@@ -366,7 +362,6 @@ export function installWebGlTextureRecon({
       observe(() => {
         for (const texture of ids) {
           records.delete(texture);
-          reboundSinceDraw.delete(texture);
           for (const [unit, bound] of bindings) if (bound === texture) bindings.delete(unit);
         }
       });
@@ -375,43 +370,66 @@ export function installWebGlTextureRecon({
   }
 
   const clearInterval = () => {
-    reboundSinceDraw.clear();
     for (const record of records.values()) {
       record.intervalUploads = 0;
       record.intervalBinds = 0;
-      record.intervalDrawUses = 0;
     }
   };
   const checkpoint = (): TextureReconSnapshot => {
+    const checkpointAt = now();
+    const intervalDurationMs = Math.max(0, checkpointAt - intervalStartedAt);
+    const intervalSeconds = intervalDurationMs / 1_000;
     const active = [...records.entries()]
-      .filter(([, record]) => record.intervalUploads > 0 || record.intervalBinds > 0 || record.intervalDrawUses > 0)
-      .map(([texture, record]) => Object.freeze({ texture, ...record }))
-      .sort((a, b) => b.intervalDrawUses - a.intervalDrawUses || b.intervalBinds - a.intervalBinds || a.texture - b.texture);
-    const exactReplacement = exactReplacementFingerprint
-      ? Object.freeze({
-          fingerprint: exactReplacementFingerprint,
-          replacements: exactReplacementCount,
-        })
-      : null;
-    const snapshot = Object.freeze({ trackedTextures: records.size, saturated, exactReplacement, records: Object.freeze(active) });
+      .filter(([, record]) => record.intervalUploads > 0 || record.intervalBinds > 0)
+      .map(([texture, record]) => Object.freeze({
+        texture,
+        ...record,
+        bindsPerSecond: intervalSeconds > 0 ? record.intervalBinds / intervalSeconds : 0,
+      }))
+      .sort((a, b) => b.bindsPerSecond - a.bindsPerSecond || b.intervalUploads - a.intervalUploads || a.texture - b.texture);
+    const replacementSnapshot = [...exactReplacements.entries()].map(([palette, replacement]) => Object.freeze({
+      fingerprint: replacement.fingerprint,
+      palette,
+      replacements: replacement.replacements,
+    }));
+    const snapshot = Object.freeze({
+      intervalDurationMs,
+      trackedTextures: records.size,
+      saturated,
+      exactReplacements: Object.freeze(replacementSnapshot),
+      records: Object.freeze(active),
+    });
     clearInterval();
+    intervalStartedAt = checkpointAt;
     return snapshot;
   };
-  const armExactReplacement = (requestedFingerprint: string) => {
-    if (!/^fnv1a32:[0-9a-f]{8}$/u.test(requestedFingerprint)) return false;
-    exactReplacementFingerprint = requestedFingerprint;
-    exactReplacementCount = 0;
+  const armExactReplacements = (requested: readonly Readonly<{
+    fingerprint: string;
+    palette: TextureProofPalette;
+  }>[]) => {
+    if (
+      requested.length !== 2
+      || new Set(requested.map(({ fingerprint }) => fingerprint)).size !== requested.length
+      || new Set(requested.map(({ palette }) => palette)).size !== requested.length
+      || requested.some(({ fingerprint, palette }) => (
+        !/^fnv1a32:[0-9a-f]{8}$/u.test(fingerprint) || !Object.hasOwn(PROOF_PALETTES, palette)
+      ))
+    ) return false;
+    exactReplacements.clear();
+    for (const { fingerprint, palette } of requested) {
+      exactReplacements.set(palette, { fingerprint, replacements: 0 });
+    }
     return true;
   };
   const resetContext = () => {
     records.clear();
     bindings.clear();
-    reboundSinceDraw.clear();
     activeUnit = GL_TEXTURE0;
     saturated = false;
-    exactReplacementCount = 0;
+    intervalStartedAt = now();
+    for (const replacement of exactReplacements.values()) replacement.replacements = 0;
   };
 
   log("Texture recon armed for local development evidence");
-  return Object.freeze({ armExactReplacement, checkpoint, resetContext });
+  return Object.freeze({ armExactReplacements, checkpoint, resetContext });
 }
