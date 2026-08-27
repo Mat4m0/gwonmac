@@ -645,10 +645,18 @@ export async function assertPackagedOffSession() {
       const { Module } = globalThis as PageGlobals;
       if (!Module) throw new Error("the renderer published no Module");
       Module.onRuntimeInitialized();
-      return new Promise<void>((resolve) =>
-        globalThis.requestAnimationFrame(() =>
-          globalThis.requestAnimationFrame(() => resolve())));
     });
+    const expectedCoreResources = [
+      "gw://app/enhancement-cursor.js",
+      "gw://app/enhancement-manifest.js",
+    ];
+    const deadline = Date.now() + 10_000;
+    while (
+      !expectedCoreResources.every((expected) => resources.includes(expected))
+      && Date.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
 
     const performanceResources = await fixture.page.evaluate(() =>
       performance.getEntriesByType("resource").map((entry) => entry.name));
@@ -664,10 +672,7 @@ export async function assertPackagedOffSession() {
       loadedEnhancementResources.filter(
         (url) => url !== "gw://app/enhancement-runtime-policy.js",
       ),
-      [
-        "gw://app/enhancement-cursor.js",
-        "gw://app/enhancement-manifest.js",
-      ],
+      expectedCoreResources,
       "required Core did not stop at the unproved module manifest",
     );
     assert.deepEqual(
