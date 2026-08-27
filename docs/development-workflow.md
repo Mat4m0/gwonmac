@@ -58,15 +58,17 @@ changes can wait for one planned release.
 
 1. Select one green commit on `main`.
 2. Create `release/YYYY.M.PATCH` at that commit.
-3. Change the version on the release branch.
-4. Stop adding features to that branch.
-5. Fix only release blockers on that branch.
-6. Forward-port each release-only fix to `main`.
-7. Run **Versioned release** from the release branch.
-8. Complete the exact-draft QA in
+3. Open a version-change pull request against the release branch.
+4. Merge it only after **Application verification** passes.
+5. Stop adding features to that branch.
+6. Fix release blockers through focused pull requests against that branch.
+7. Forward-port each release-only fix to `main`.
+8. Wait for **Application verification** on the release branch.
+9. Run **Versioned release** from the release branch.
+10. Complete the exact-draft QA in
    [Release verification](release-verification.md).
-9. Publish only after the coordinator records `Passed`.
-10. Delete the release branch after every fix is on `main`.
+11. Publish only after the coordinator records `Passed`.
+12. Delete the release branch after every fix is on `main`.
 
 New work can continue on `main` after the release branch is created. It cannot
 enter the staged release unless it is deliberately backported.
@@ -76,12 +78,13 @@ enter the staged release unless it is deliberately backported.
 Use this path when `main` contains work that must not ship:
 
 1. Start `release/YYYY.M.PATCH` from the latest Stable tag.
-2. Apply the smallest safe fix.
-3. Do not backport unrelated work from `main`.
-4. Run CI and exact signed-draft QA.
-5. Publish the Stable patch.
-6. Forward-port the fix to `main` and any active planned release branch.
-7. Delete the emergency release branch.
+2. Apply the smallest safe fix on a topic branch.
+3. Open a pull request against the emergency release branch.
+4. Do not backport unrelated work from `main`.
+5. Run CI and exact signed-draft QA.
+6. Publish the Stable patch.
+7. Forward-port the fix to `main` and any active planned release branch.
+8. Delete the emergency release branch.
 
 An urgent, narrow compatibility repair does not require a Beta when the exact
 draft passes owned live QA. Do not use urgency to include unrelated changes.
@@ -147,7 +150,7 @@ hotfix. The updater compares versions, not their intended feature contents.
 
 Before an agent calls a commit release-ready, it must confirm:
 
-- the source branch is `main` or `release/YYYY.M.PATCH`;
+- the source branch is `release/YYYY.M.PATCH`;
 - the version and branch name agree for a release branch;
 - the branch head has green Application Verification;
 - the diff contains no unrelated feature work;
@@ -158,3 +161,19 @@ Before an agent calls a commit release-ready, it must confirm:
 
 An agent must not merge, approve signing, mark live QA as passed, publish a
 release, or announce it without an explicit coordinator request.
+
+## GitHub enforcement
+
+Repository settings enforce the model outside the codebase:
+
+- `main` requires the `verify / verify` check and linear history;
+- the `Protect release branches` ruleset applies the same requirements to
+  `release/*` and refuses force-pushes;
+- the `release` environment accepts `main` and `release/*`; and
+- the `release` environment requires Matthias's approval and does not allow an
+  administrator bypass.
+
+The Versioned release workflow accepts only `release/YYYY.M.PATCH`. It reuses
+the exact commit's required Application verification result. It does not rerun
+that complete macOS gate. The signed build still qualifies the current ArenaNet
+client and runs the release-only package, Keychain, and updater checks.

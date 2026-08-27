@@ -74,7 +74,7 @@ Gatekeeper globally.
 
 Complete this checklist:
 
-- [ ] The release commit is on `main` or `release/YYYY.M.PATCH`.
+- [ ] The release commit is on `release/YYYY.M.PATCH`.
 - [ ] `package.json` contains the intended new version.
 - [ ] The version stage matches Stable, Beta, or RC intent.
 - [ ] The release workflow's exact ArenaNet qualification is green. A recent
@@ -94,11 +94,12 @@ Do not publish a new version only to test the release system. Use the dry run.
 
 ## Safe dry run
 
-Manually run **Versioned release** on the intended source branch with `dry_run`
-set to `true`. Use only `main` or `release/YYYY.M.PATCH`.
+Wait for **Application verification** to pass on the release branch. Then run
+**Versioned release** on that branch with `dry_run` set to `true`.
 
-This path runs the real verification, build, signing, notarization, stapling,
-and package checks. It skips the GitHub mutation jobs.
+This path reuses Application verification for the exact source commit. It then
+runs the release-only current-client qualification, build, signing,
+notarization, stapling, and package checks. It skips the GitHub mutation jobs.
 
 Immediately before packaging, the workflow downloads the current verified
 ArenaNet JS/WASM pair. It runs the runtime feature verifier, every transform
