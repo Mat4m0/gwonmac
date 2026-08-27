@@ -32,13 +32,13 @@ It wraps only the official client's Emscripten `glTexImage2D` and full-atlas
 `glTexSubImage2D` imports. It does not patch WebGL prototypes, edit `Gw.dat`, or
 alter the verified client artifacts.
 
-The replacement requires an observed WebGL checksum for Guild Wars' 256×512
-RGBA controller atlas, certified against one exact JSPi client SHA. Width and
-height are not proof, and the older native TexMod/uMod checksum is not accepted
-at runtime. A mismatch, malformed heap range, unsupported upload, or missing
-import passes the original call through unchanged. During a match, the host
-temporarily places the app-owned pixels at the existing WASM pointer, calls the
-synchronous upload, and restores the client bytes in `finally`.
+The replacement requires the certified WebGL content checksum for Guild Wars'
+256×512 RGBA controller atlas. The surrounding client SHA, width, and height
+are not proof. The older native TexMod/uMod checksum is not accepted at runtime.
+A content mismatch, malformed heap range, unsupported upload, or missing import
+passes the original call through unchanged. During a match, the host temporarily
+places the app-owned pixels at the existing WASM pointer, calls the synchronous
+upload, and restores the client bytes in `finally`.
 
 A level-zero redefinition, partial or compressed update, texture deletion, or
 WebGL context reset withdraws the remembered match. This prevents a reused or
@@ -55,10 +55,11 @@ key.
 
 This is not a Tools or Enhancement capability. It reads no game state, sends
 no command, and has no PvE/PvP policy. It is a launch-time renderer preference,
-like render scale. ArenaNet updates remain playable because an unknown atlas
-hash passes through unchanged. Supporting a changed atlas requires reviewing
-the new texture and adding one exact client/hash certification; it never
-requires weakening the matcher or changing the Enhancement contract.
+like render scale. An ArenaNet rebuild that retains the certified atlas content
+keeps the setting working without an application release. An unknown atlas hash
+passes through unchanged. Supporting changed atlas content requires reviewing
+the new texture and adding its exact checksum; it never requires weakening the
+matcher or changing the Enhancement contract.
 
 In an unpackaged development build, `gwVirtualGamepad` can expose Guild Wars'
 real gamepad UI without hardware. Run `gwVirtualGamepad.activateUi()` in the

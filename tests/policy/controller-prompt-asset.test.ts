@@ -28,6 +28,7 @@ test("the PlayStation prompt atlas is the reviewed 256×512 CC0 composition", as
 
   const evidence = await readFile(evidencePath, "utf8");
   assert.match(evidence, /b8cc509714b82b69fdfd79a26ba257aa4c9ef23d90bca9dfcbbd044e371cfb17/u);
+  assert.match(evidence, /3cd87bf15df6812073b558e9f365c8fb8e2a54b1b4c37028e5d3a6cbaf5e6f9e/u);
   assert.match(evidence, /0x74eb6846/u);
   assert.match(evidence, /d3dcb98fa3bbc9541f6456a36611ebad44e557ef1099aad328393b4eca25f294/u);
   assert.match(evidence, /Matching candidates in the bounded diagnostic capture.*\| 1 \|/u);
