@@ -10,6 +10,7 @@ import {
   parseTravelUserPreferencesUpdate,
   searchTravelDestinations,
   storeTravelShortcuts,
+  travelBrowseScope,
   travelDestination,
   travelShortcutsFromStored,
 } from "../../src/shared/travel.js";
@@ -102,6 +103,20 @@ describe("Travel", () => {
     assert.equal(isTravelRequest({
       mapId: 2_000,
     }), false);
+  });
+
+  it("keeps early-game browse scopes local to the current campaign", () => {
+    assert.deepEqual(
+      travelBrowseScope(148).map(({ mapId }) => mapId),
+      [148, 164, 165, 166, 163, 778],
+    );
+    assert.equal(
+      travelBrowseScope(242).every(({ campaign }) => campaign === "Factions"),
+      true,
+    );
+    assert.equal(travelBrowseScope(242).some(({ mapId }) => mapId === 248), false);
+    assert.equal(travelBrowseScope(81).some(({ mapId }) => mapId === 148), false);
+    assert.deepEqual(travelBrowseScope(2_000), []);
   });
 
   it("rejects one request that would write both preference files", () => {

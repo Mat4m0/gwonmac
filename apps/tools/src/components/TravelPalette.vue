@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import {
-  TRAVEL_DESTINATIONS,
   TRAVEL_SEARCH_QUERY_LIMIT,
   TRAVEL_SHORTCUT_LIMIT,
   highlightTravelDestinationName,
   isTravelRequest,
   normaliseTravelTerm,
   searchTravelDestinations,
+  travelBrowseScope,
   travelDestination,
   type TravelDestination,
   type TravelRequest,
@@ -80,7 +80,7 @@ const recentDestinations = computed(() => props.host.history.value
 const browseDestinations = computed(() => {
   const state = props.host.state.value;
   if (state.status !== "ready" || state.unlockedMapWords === null) return [];
-  const destinations = TRAVEL_DESTINATIONS.filter(({ mapId }) => isAvailable(mapId));
+  const destinations = travelBrowseScope(state.mapId).filter(({ mapId }) => isAvailable(mapId));
   return destinations.length <= SMALL_TRAVEL_CATALOGUE_LIMIT
     ? [...destinations].sort((left, right) => left.name.localeCompare(right.name, "en"))
     : [];
