@@ -10,6 +10,10 @@
 
 <!-- Name the executable behavior or trust boundary that proves the result. -->
 
+## Delivery
+
+<!-- State the target branch and recommend: no app release, Developer Build, Beta, or Stable. Explain any rollout risk. -->
+
 ## Verification
 
 <!-- List the commands or manual checks you ran. -->

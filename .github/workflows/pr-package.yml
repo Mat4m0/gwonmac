@@ -6,7 +6,9 @@ name: Application verification
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - main
+      - "release/**"
   workflow_dispatch:
     inputs:
       checkout_ref:

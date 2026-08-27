@@ -322,7 +322,10 @@ test("application verification routes conservatively through one required result
   const classifier = read("scripts/ci-impact.ts");
 
   assert.match(workflow, /name: Application verification/);
-  assert.match(workflow, /pull_request:\n {2}push:\n {4}branches: \[main\]/);
+  assert.match(
+    workflow,
+    /pull_request:\n {2}push:\n {4}branches:\n {6}- main\n {6}- "release\/\*\*"/,
+  );
   assert.match(workflow, /workflow_dispatch:[\s\S]*checkout_ref:[\s\S]*pr_number:/);
   assert.doesNotMatch(workflow, /paths:|paths-ignore:/);
   assert.match(workflow, /permissions:\n {2}contents: read/);
@@ -458,7 +461,7 @@ test("developer builds are exact, ad-hoc, bounded, and isolated from releases", 
   assert.doesNotMatch(release, /pull_request:|push:/);
   assert.match(
     release,
-    /release-build:\n {4}if: github\.ref == 'refs\/heads\/main'\n {4}needs: verify/,
+    /name: Resolve and validate the release source[\s\S]*\^release\/\[0-9\]\{4\}[\s\S]*release-build:\n {4}needs: \[source, verify\]/,
   );
 
   // Developer dispatch is possible only from the trusted main workflow. The
