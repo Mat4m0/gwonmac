@@ -1,5 +1,6 @@
-# The only path to a public versioned release: dispatched by hand, refused off
-# main, and gated on the approval environment holding the Developer ID material.
+# The only path to a public versioned release: dispatched by hand from main or
+# one canonical release branch, and gated on the approval environment holding
+# the Developer ID material.
 name: Versioned release
 
 on:
@@ -23,14 +24,65 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      bundle-version: ${{ steps.release-source.outputs.bundle-version }}
+      prerelease: ${{ steps.release-source.outputs.prerelease }}
+      tag: ${{ steps.release-source.outputs.tag }}
+      version: ${{ steps.release-source.outputs.version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+      - name: Resolve and validate the release source
+        id: release-source
+        env:
+          SOURCE_BRANCH: ${{ github.ref_name }}
+          SOURCE_TYPE: ${{ github.ref_type }}
+        run: |
+          test "$SOURCE_TYPE" = "branch"
+          if [ "$SOURCE_BRANCH" != "main" ] \
+            && ! [[ "$SOURCE_BRANCH" =~ ^release/[0-9]{4}\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Release from main or release/YYYY.M.PATCH, not $SOURCE_BRANCH." >&2
+            exit 1
+          fi
+          version="$(node -p "require('./package.json').version")"
+          release_line="${version%%-*}"
+          if [[ "$SOURCE_BRANCH" == release/* ]] \
+            && [ "${SOURCE_BRANCH#release/}" != "$release_line" ]; then
+            echo "Release branch $SOURCE_BRANCH does not match package version $version." >&2
+            exit 1
+          fi
+          bundle_version="$(node --import ./scripts/ts-hook.mjs -e '
+            const { macOSBundleVersions } = await import("./scripts/macos-version.js");
+            console.log(macOSBundleVersions(process.argv[1]).buildVersion);
+          ' "$version")"
+          prerelease=false
+          if [[ "$version" == *-* ]]; then prerelease=true; fi
+          if [[ "$version" == *-alpha.* ]]; then
+            echo "Alpha builds are internal snapshots, not public releases." >&2
+            exit 1
+          fi
+          {
+            echo "version=$version"
+            echo "bundle-version=$bundle_version"
+            echo "tag=v$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
   verify:
+    needs: source
     uses: ./.github/workflows/macos-verify.yml
     with:
       artifact-name: ""
 
   release-build:
-    if: github.ref == 'refs/heads/main'
-    needs: verify
+    needs: [source, verify]
     runs-on: macos-15
     timeout-minutes: 60
     environment: release
@@ -39,11 +91,11 @@ jobs:
       contents: read
     outputs:
       release-assets-name: ${{ steps.release-artifact.outputs.name }}
-      bundle-version: ${{ steps.version.outputs.bundle-version }}
+      bundle-version: ${{ needs.source.outputs.bundle-version }}
       client-generation: ${{ steps.official-client.outputs.fingerprint }}
-      prerelease: ${{ steps.version.outputs.prerelease }}
-      tag: ${{ steps.version.outputs.tag }}
-      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ needs.source.outputs.prerelease }}
+      tag: ${{ needs.source.outputs.tag }}
+      version: ${{ needs.source.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -62,25 +114,6 @@ jobs:
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
 
-      - name: Resolve release version
-        id: version
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          bundle_version="$(node --import ./scripts/ts-hook.mjs -e '
-            const { macOSBundleVersions } = await import("./scripts/macos-version.js");
-            console.log(macOSBundleVersions(process.argv[1]).buildVersion);
-          ' "$version")"
-          prerelease=false
-          if [[ "$version" == *-* ]]; then prerelease=true; fi
-          if [[ "$version" == *-alpha.* ]]; then
-            echo "Alpha builds are internal snapshots, not public releases." >&2
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "bundle-version=$bundle_version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
-
       # The same refusal the release job enforces before publishing, moved
       # ahead of the build so a forgotten version bump fails in seconds, not
       # after signing and notarization. This job's read-only token cannot see
@@ -89,7 +122,7 @@ jobs:
       - name: Refuse a version that already shipped
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ needs.source.outputs.tag }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
@@ -305,8 +338,8 @@ jobs:
       - name: Prepare checksum-pinned release assets
         id: assets
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ needs.source.outputs.version }}
+          TAG: ${{ needs.source.outputs.tag }}
         run: |
           asset_dir="$RUNNER_TEMP/release-assets"
           mkdir -p "$asset_dir"
@@ -362,7 +395,7 @@ jobs:
         env:
           ASSET_DIR: ${{ steps.assets.outputs.asset_dir }}
           DRY_RUN: ${{ inputs.dry_run }}
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ needs.source.outputs.tag }}
         run: |
           outcome="built, signed, notarized, stapled, and verified"
           if [ "$DRY_RUN" = "true" ]; then
@@ -429,7 +462,7 @@ jobs:
       - name: Prove beta data returns to latest Stable without signing secrets
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.source.outputs.version }}
           GW_SIGNED_CHANNEL: release
         run: |
           case "$VERSION" in
@@ -492,7 +525,7 @@ jobs:
   # eligible for the website or AppUpdater and gives the release approver one
   # checksum-pinned candidate to test before the separate publish decision.
   stage-release:
-    if: github.ref == 'refs/heads/main' && !inputs.dry_run
+    if: ${{ !inputs.dry_run }}
     needs: release-build
     runs-on: macos-15
     timeout-minutes: 15
@@ -668,7 +701,7 @@ jobs:
   # staged draft again and refuses if any asset or the human-owned Verification
   # record changed or is missing. It never rebuilds or re-uploads an asset.
   release:
-    if: github.ref == 'refs/heads/main' && !inputs.dry_run
+    if: ${{ !inputs.dry_run }}
     needs: [release-build, stage-release]
     runs-on: macos-15
     timeout-minutes: 15

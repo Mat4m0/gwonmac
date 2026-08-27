@@ -80,7 +80,6 @@ function fixture(): Fixture {
     if (failure === "auth" && call.startsWith("gh auth status")) {
       throw new Error("expired GitHub login");
     }
-    if (command === "git") return args[0] === "branch" ? "main" : COMMIT;
     if (command === "/usr/libexec/PlistBuddy") {
       const key = args[1];
       const application = args[2] ?? "";
@@ -192,7 +191,6 @@ describe("temporary exact-draft testing", () => {
           targetCommitish: COMMIT,
           assets: expectedAssets("2026.8.8-beta.1").map((name) => ({ name })),
         },
-        COMMIT,
         releaseTag,
       ),
       /inconsistent GitHub prerelease metadata/u,
@@ -209,12 +207,20 @@ describe("temporary exact-draft testing", () => {
       assets: expectedAssets(VERSION).map((name) => ({ name })),
     };
     assert.throws(
-      () => assertDraftMetadata(TAG, { ...valid, isDraft: false }, COMMIT, releaseTag),
+      () => assertDraftMetadata(TAG, { ...valid, isDraft: false }, releaseTag),
       /not a draft/u,
     );
     assert.throws(
-      () => assertDraftMetadata(TAG, { ...valid, assets: [] }, COMMIT, releaseTag),
+      () => assertDraftMetadata(TAG, { ...valid, assets: [] }, releaseTag),
       /unexpected release assets/u,
+    );
+    assert.throws(
+      () => assertDraftMetadata(
+        TAG,
+        { ...valid, targetCommitish: "release/2026.8.8" },
+        releaseTag,
+      ),
+      /one exact commit/u,
     );
   });
 
@@ -225,6 +231,7 @@ describe("temporary exact-draft testing", () => {
       assert.deepEqual(readdirSync(test.temporaryParent), []);
       assert.match(test.editedBody() ?? "", /Status: `Passed`/u);
       assert.ok(test.calls.some((call) => call.startsWith("open -n ")));
+      assert.equal(test.calls.some((call) => call.startsWith("git ")), false);
     } finally {
       test.close();
     }
