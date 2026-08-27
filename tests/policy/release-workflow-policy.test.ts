@@ -36,7 +36,7 @@ test("release workflow stages and publishes one tested, attested package version
   assert.doesNotMatch(workflow, /pnpm version|date -u/);
   assert.match(
     workflow,
-    /name: Smoke-test signed release candidate[\s\S]*?GW_PACKAGE_INTENT: release[\s\S]*?run: pnpm test:packaged/,
+    /name: Smoke-test signed release candidate[\s\S]*?GW_PACKAGE_INTENT: release[\s\S]*?run: \|[\s\S]*?pnpm test:packaged[\s\S]*?tests\/client-artifact\/client-chain-qualification\.test\.ts/,
   );
   assert.doesNotMatch(
     read("tests/packaged-smoke.ts"),
@@ -157,7 +157,10 @@ test("release workflow stages and publishes one tested, attested package version
     /pnpm test:packaged|pnpm test:signed-keychain|pnpm test:stable-beta-roundtrip/,
   );
   const runtimeWithoutSigningSecrets = releaseBuild.slice(signingMaterialRemovedAt);
-  assert.match(runtimeWithoutSigningSecrets, /run: pnpm test:packaged/);
+  assert.match(
+    runtimeWithoutSigningSecrets,
+    /run: \|[\s\S]*?pnpm test:packaged[\s\S]*?client-chain-qualification\.test\.ts/,
+  );
   assert.match(
     runtimeWithoutSigningSecrets,
     /GW_SIGNED_REPLACEMENT_APP_PATH:[^\n]+runtime-fixture\.outputs\.replacement/,
