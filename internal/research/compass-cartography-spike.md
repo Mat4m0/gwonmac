@@ -223,6 +223,42 @@ stable rotation in its frame transform, certify that field. Otherwise locate a
 read-only camera yaw and prove it with four quarter turns. Do not estimate yaw
 from screenshots in production.
 
+### Track C offline result
+
+The exact-client proof now certifies the unique UTF-16 `Compass` label through
+the existing label-hash function and bounded frame table. It also requires the
+reviewed owner body and the existing SkillBar frame-layout proof. A changed
+label use, owner body, hash implementation, frame table, or geometry layout
+refuses the spike. Run `pnpm recon:client-anchors` to repeat this proof.
+
+The renderer prototype accepts only closed values: frame ID, visibility,
+viewport, rectangle, map generation, player coordinates, bounded trapezoids,
+and a proved north-up world-units-per-pixel calibration. It publishes no
+address or frame hash. It clips boundary segments to the Compass circle and
+hides the complete overlay for loading, hidden, stale, malformed, distorted,
+unsupported, or uncertain input. The prototype is not connected to the shipped
+companion ABI.
+
+Complete these live calibration steps before any integration:
+
+1. Add a named development reader through the certified frame table. Publish
+   only the closed Compass observation above.
+2. Capture the Compass at UI scales 1x, 1.5x, and 2x. Resize and relocate it at
+   each scale. Confirm that every rectangle follows the native frame.
+3. Stand still with a target whose certified distance is visible. Record the
+   player and target marker separation in Compass pixels at three distances.
+4. Accept a scale only when all measurements produce one stable
+   world-units-per-pixel value within the documented tolerance. Do not average
+   incompatible values.
+5. Rotate the camera through four quarter turns without moving. Confirm that a
+   fixed world marker remains north-up. If it rotates, stop and certify an
+   orientation field before drawing.
+6. Join one Track B synthetic trapezoid with the same map generation. Confirm
+   alignment before accepting any complete live geometry.
+
+Until these steps pass, the prototype remains synthetic and always receives an
+`uncertain` calibration in a live runtime. It therefore renders nothing.
+
 ## Texture investigation stages
 
 1. Rank texture activity across `closed`, `open`, `rotate`, and negative-control
