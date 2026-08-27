@@ -409,6 +409,20 @@ export function recordRendererMilestone(
     );
     return;
   }
+  if (name === "relog.skipped") {
+    if (!fields || !("reason" in fields)) return;
+    recordEvent({ k: "relog.skipped", reason: fields.reason }, { timestampUs }, ownerId);
+    return;
+  }
+  if (name === "enhancement.consumerSignal") {
+    if (!fields || !("consumer" in fields)) return;
+    recordEvent({
+      k: "enhancement.consumerSignal",
+      consumer: fields.consumer,
+      signal: fields.signal,
+    }, { timestampUs }, ownerId);
+    return;
+  }
   if (name === "wasm.abort") {
     // IPC validation guarantees these fields for this name; a call without
     // them is unreachable and recording a reasonless abort would be a lie.

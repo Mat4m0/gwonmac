@@ -37,10 +37,13 @@ import {
   type SnapshotMetadata,
 } from "../shared/contracts.js";
 import {
+  enhancementCapabilityProfile,
   enhancementCapabilitiesRequested,
   ENHANCEMENT_TRANSFORM_ABI,
+  ENHANCEMENT_CAPABILITY_FIELDS,
   NO_ENHANCEMENT_CAPABILITIES,
   type EnhancementCapabilities,
+  type EnhancementProgram,
 } from "../shared/enhancement-contracts.js";
 import { AppError, NotReadyError, errorCode } from "../shared/errors.js";
 import { INITIAL_PROGRESS } from "../shared/progress.js";
@@ -96,6 +99,10 @@ import {
   verifyExtendedMemoryLocally,
   verifyNativeDoubleClickLocally,
 } from "./certification/local-client-verifier-host.js";
+import type {
+  AnyLocalFeatureInvariant,
+  LocalFeatureVerdicts,
+} from "./certification/local-client-verification-contract.js";
 import { extendedMemoryRuntimeStatus } from "./extended-memory-runtime.js";
 import { supportedEnhancementCapabilities } from "./certification/enhancement-builds.js";
 import { readClientRuntimeDiagnosticState } from "./client-runtime-diagnostics.js";
@@ -103,6 +110,7 @@ import { selectOfficialDiagnosticClient } from "./client-diagnostic-selection.js
 import {
   diagnosticDigest,
   optionalFeatureStatus,
+  runtimeFeatureVerdicts,
 } from "./client-runtime-values.js";
 
 export type { ActiveClient } from "./active-client.js";
@@ -112,6 +120,7 @@ interface ClientRuntimeOptions {
   hostVersion: string;
   cachedOnly: boolean;
   enhancementCapabilities: EnhancementCapabilities;
+  enhancementProgram?: EnhancementProgram;
   extendedMemoryEnabled: boolean;
   diagnosticProfile: DiagnosticProfile;
   onProgress: (progress: DownloadProgress) => void;
@@ -200,6 +209,7 @@ export class ClientRuntime {
       diagnosticProfile: this.options.diagnosticProfile,
       extendedMemoryEnabled: this.options.extendedMemoryEnabled,
       enhancementCapabilities: this.options.enhancementCapabilities,
+      enhancementProgram: this.options.enhancementProgram ?? "none",
     });
   }
 
@@ -278,6 +288,7 @@ export class ClientRuntime {
     compatibility: ClientCompatibility | null;
     extendedMemory: ExtendedMemoryRuntimeStatus;
     transforms: ActiveClient["transforms"];
+    enhancementVerification: ActiveClient["enhancementVerification"];
   }> {
     const officialWasm = clientArtifactPath(
       this.options.paths.artifacts,
@@ -304,6 +315,12 @@ export class ClientRuntime {
         compatibility: null,
         extendedMemory,
         transforms: { templateSave: false, nativeDoubleClick: false },
+        enhancementVerification: {
+          requestedProfile: enhancementCapabilityProfile(this.options.enhancementCapabilities),
+          effectiveProfile: null,
+          preparationFailureStage: null,
+          featureVerdicts: null,
+        },
       };
     }
 
@@ -312,7 +329,17 @@ export class ClientRuntime {
       profile: this.options.diagnosticProfile,
       extendedMemoryEnabled: this.options.extendedMemoryEnabled,
     });
-    if (officialDiagnosticClient) return officialDiagnosticClient;
+    if (officialDiagnosticClient) {
+      return {
+        ...officialDiagnosticClient,
+        enhancementVerification: {
+          requestedProfile: enhancementCapabilityProfile(this.options.enhancementCapabilities),
+          effectiveProfile: null,
+          preparationFailureStage: null,
+          featureVerdicts: null,
+        },
+      };
+    }
 
     let certification: ClientCertification = {
       templateSaveBuild: null,
@@ -325,6 +352,7 @@ export class ClientRuntime {
     });
     if (local) {
       certification = certificationFromLocalVerification(local);
+      recordFeatureVerdicts(local.featureVerdicts);
       logEvent({ k: "wasm.localVerificationCompleted" });
     } else {
       logEvent({ k: "wasm.localVerificationUnavailable" });
@@ -508,6 +536,14 @@ export class ClientRuntime {
         templateSave: prepared.gameFileSaving.status === "available",
         nativeDoubleClick: prepared.nativeDoubleClick,
       },
+      enhancementVerification: {
+        requestedProfile: enhancementCapabilityProfile(requested),
+        effectiveProfile: enhancementCapabilityProfile(effective),
+        preparationFailureStage: prepared.failure?.stage
+          ?? (local?.status === "template-refused" ? "template-save"
+            : local?.status === "enhancement-refused" ? "enhancement" : null),
+        featureVerdicts: runtimeFeatureVerdicts(local?.featureVerdicts ?? null),
+      },
     };
   }
 
@@ -548,6 +584,7 @@ export class ClientRuntime {
       compatibility: enhancement.compatibility,
       extendedMemory: enhancement.extendedMemory,
       transforms: enhancement.transforms,
+      enhancementVerification: enhancement.enhancementVerification,
     });
     this.candidateHealthToken = candidateFingerprint
       ? Object.freeze({
@@ -1008,5 +1045,21 @@ export class ClientRuntime {
     await update?.catch(() => undefined);
     const active = this.activeSlot.current;
     active?.store.stop();
+  }
+}
+
+function recordFeatureVerdicts(verdicts: LocalFeatureVerdicts | null): void {
+  if (!verdicts) return;
+  for (const feature of ENHANCEMENT_CAPABILITY_FIELDS) {
+    const verdict = verdicts[feature];
+    logEvent({
+      k: "enhancement.featureVerdict",
+      feature,
+      status: verdict.status === "not-requested" ? "off" : verdict.status,
+      invariant: "invariant" in verdict
+        ? verdict.invariant as AnyLocalFeatureInvariant
+        : null,
+      candidates: verdict.status === "ambiguous" ? verdict.candidates : null,
+    });
   }
 }

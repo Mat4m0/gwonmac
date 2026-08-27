@@ -4,9 +4,25 @@
  */
 import type { EventSpec } from "./schema-fields.js";
 import {
+  DIAGNOSTIC_PROFILES,
+  type DiagnosticProfile,
+} from "../../shared/contracts.js";
+import {
+  ENHANCEMENT_CAPABILITY_FIELDS,
+  ENHANCEMENT_PROGRAMS,
+  isEnhancementCapabilityProfile,
+  type EnhancementCapability,
+  type EnhancementCapabilityProfile,
+  type EnhancementProgram,
+} from "../../shared/enhancement-contracts.js";
+import {
   isExtendedMemoryProfile,
   type ExtendedMemoryProfile,
 } from "../certification/extended-memory.js";
+import {
+  LOCAL_FEATURE_INVARIANTS,
+  type AnyLocalFeatureInvariant,
+} from "../certification/local-client-verification-contract.js";
 import {
   appPhase,
   appUpdateErrorCode,
@@ -35,6 +51,16 @@ const extendedMemoryProfile: FieldGuard<"none" | ExtendedMemoryProfile> = (
   value,
 ): value is "none" | ExtendedMemoryProfile =>
   value === "none" || isExtendedMemoryProfile(value);
+const localFeatureInvariants = new Set<AnyLocalFeatureInvariant>(
+  Object.values(LOCAL_FEATURE_INVARIANTS).flat(),
+);
+const localFeatureInvariant: FieldGuard<AnyLocalFeatureInvariant> = (
+  value,
+): value is AnyLocalFeatureInvariant =>
+  typeof value === "string"
+  && localFeatureInvariants.has(value as AnyLocalFeatureInvariant);
+const enhancementCapabilityProfile: FieldGuard<EnhancementCapabilityProfile> =
+  isEnhancementCapabilityProfile;
 
 export const APP_AND_UPDATE_EVENT_SCHEMA = {
   "app.uncaughtException": {
@@ -643,6 +669,29 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
   },
 
   // Client certification, transformation, and update.
+  "enhancement.launchSelected": {
+    scope: "app",
+    subsystem: "wasm",
+    level: "info",
+    fields: {
+      buildKind: literal(["packaged", "development"] as const),
+      program: literal<EnhancementProgram>(ENHANCEMENT_PROGRAMS),
+      toolsAtLaunch: boolean,
+      diagnosticProfile: literal<DiagnosticProfile>(DIAGNOSTIC_PROFILES),
+      requestedProfile: nullable(enhancementCapabilityProfile),
+    },
+  },
+  "enhancement.featureVerdict": {
+    scope: "app",
+    subsystem: "wasm",
+    level: "info",
+    fields: {
+      feature: literal<EnhancementCapability>(ENHANCEMENT_CAPABILITY_FIELDS),
+      status: literal(["off", "proved", "changed", "ambiguous"] as const),
+      invariant: nullable(localFeatureInvariant),
+      candidates: nullable(finiteNumber),
+    },
+  },
   "wasm.clientHashUnavailable": {
     scope: "app",
     subsystem: "wasm",

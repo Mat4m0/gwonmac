@@ -26,6 +26,7 @@ import {
   readCompanionPlayRegion,
 } from "./companion-play-region-snapshot.js";
 import type * as OptionalObserverReadersModule from "./companion-tools-observer-readers.js";
+import type { EnhancementObserverConsumer } from "../shared/diagnostics.js";
 
 export type SnapshotObserverTarget = {
   memory: WebAssembly.Memory;
@@ -102,6 +103,7 @@ export function observeCompanion(
   skillCooldowns: SkillCooldownConsumer | null = null,
   playRegion: PlayRegionConsumer | null = null,
   readers: OptionalObserverReaders | null = null,
+  firstObservation: (consumer: EnhancementObserverConsumer) => void = () => {},
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -115,10 +117,12 @@ export function observeCompanion(
     // Publish the sole policy fact before any dependent observation from the
     // same animation frame reaches its consumer.
     if (playRegion) {
-      playRegion.update(readCompanionPlayRegion(
+      const state = readCompanionPlayRegion(
         runtime.memory.buffer,
         runtime.playRegionPointer ?? 0,
-      ));
+      );
+      playRegion.update(state);
+      if (state.status === "ready") firstObservation("region");
     }
     if (observeState && readout?.enabled?.() !== false) {
       if (!readers) throw new Error("Tools snapshot readers are unavailable");
@@ -150,6 +154,7 @@ export function observeCompanion(
       runtime.renderSamples.push(runtime.lastRenderUs);
       if (runtime.renderSamples.length > 240) runtime.renderSamples.shift();
       readout?.update(state);
+      if (state.status === "ready") firstObservation("target");
     }
     if (toolbox && toolbox.enabled?.() !== false) {
       if (!readers) throw new Error("Tools party readers are unavailable");
@@ -185,21 +190,28 @@ export function observeCompanion(
         // Absent, rather than present and undefined: the field means "the
         // roster region was read", and a key holding nothing says the opposite.
         toolbox.update(party === null ? state : { ...state, party });
+        if (state.status === "ready" && state.partyObserved) {
+          firstObservation("party");
+        }
       }
     }
     if (skillSlots && skillSlots.enabled?.() !== false) {
       if (!readers) throw new Error("Tools skill readers are unavailable");
-      skillSlots.update(readers.readCompanionSkillSlots(
+      const state = readers.readCompanionSkillSlots(
         runtime.memory.buffer,
         runtime.skillSlotPointer ?? 0,
-      ));
+      );
+      skillSlots.update(state);
+      if (state.status === "ready") firstObservation("skill-geometry");
     }
     if (skillCooldowns && skillCooldowns.enabled?.() !== false) {
       if (!readers) throw new Error("Tools skill readers are unavailable");
-      skillCooldowns.update(readers.readCompanionSkillCooldowns(
+      const state = readers.readCompanionSkillCooldowns(
         runtime.memory.buffer,
         runtime.skillCooldownPointer ?? 0,
-      ));
+      );
+      skillCooldowns.update(state);
+      if (state.status === "ready") firstObservation("cooldowns");
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.
     for (const poller of pollers) {

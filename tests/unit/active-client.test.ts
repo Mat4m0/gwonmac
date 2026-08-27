@@ -34,6 +34,12 @@ function generation(wasmPath: string, size: number): ClientGeneration {
       ? { requestedAtLaunch: false, status: "standard", effectiveCapBytes: 2_147_483_648, fallbackReason: null }
       : { requestedAtLaunch: true, status: "active", effectiveCapBytes: 4_294_967_296, fallbackReason: null },
     transforms: { templateSave: supported, nativeDoubleClick: supported },
+    enhancementVerification: {
+      requestedProfile: supported ? "features-7ff" : "features-001",
+      effectiveProfile: supported ? "features-7ff" : null,
+      preparationFailureStage: null,
+      featureVerdicts: null,
+    },
   };
 }
 
@@ -51,5 +57,9 @@ describe("atomic active client publication", () => {
     assert.notEqual(rollback.generation, previous.generation);
     assert.equal(slot.current?.compatibility?.features.nativeCursor.status, "available");
     assert.equal(slot.current?.extendedMemory.status, "standard");
+    assert.equal(
+      slot.current?.enhancementVerification.effectiveProfile,
+      "features-7ff",
+    );
   });
 });

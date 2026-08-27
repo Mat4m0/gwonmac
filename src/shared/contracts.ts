@@ -26,7 +26,9 @@ import type { ErrorCode } from "./errors.js";
 import {
   ENHANCEMENT_CAPABILITY_FIELDS,
   type EnhancementCapability,
+  type EnhancementCapabilityProfile,
   type EnhancementCapabilities,
+  type EnhancementProgram,
 } from "./enhancement-contracts.js";
 import type { BuildLibrary } from "./builds/library.js";
 import type { ProfileId } from "./multiple-accounts.js";
@@ -68,10 +70,7 @@ import {
   DEFAULT_CUSTOM_UI_THEME,
   type CustomUiTheme,
 } from "./ui-theme.js";
-import type {
-  EnhancementProgram,
-  EnhancementSelection,
-} from "./enhancement-contracts.js";
+import type { EnhancementSelection } from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
 import {
   DEFAULT_UPDATE_TRACK,
@@ -710,11 +709,29 @@ export type ClientTransforms = Readonly<{
   nativeDoubleClick: boolean;
 }>;
 
+export type RuntimeEnhancementFeatureVerdict = Readonly<{
+  status: "off" | "proved" | "changed" | "ambiguous";
+  /** Always sourced from the verifier's closed invariant vocabulary. */
+  invariant: string | null;
+  candidates: number | null;
+}>;
+
+export type RuntimeEnhancementVerification = Readonly<{
+  requestedProfile: EnhancementCapabilityProfile | null;
+  effectiveProfile: EnhancementCapabilityProfile | null;
+  preparationFailureStage: "template-save" | "enhancement" | "native-double-click" | null;
+  featureVerdicts: Readonly<Record<
+    EnhancementCapability,
+    RuntimeEnhancementFeatureVerdict
+  >> | null;
+}>;
+
 /** Effective launch state written into diagnostics without renderer inference. */
 export type RuntimeDiagnosticState =
   | Readonly<{
       status: "preparing";
       diagnosticProfile: DiagnosticProfile;
+      enhancementProgram: EnhancementProgram;
       extendedMemoryRequested: boolean;
       enhancementCapabilitiesRequested: EnhancementCapabilities;
     }>
@@ -722,6 +739,7 @@ export type RuntimeDiagnosticState =
       status: "active";
       generation: number;
       diagnosticProfile: DiagnosticProfile;
+      enhancementProgram: EnhancementProgram;
       presentationPath: "direct-canvas" | "offscreen-imagebitmap";
       artifactKind: "official" | "derived";
       officialWasmSha256: string | null;
@@ -732,6 +750,7 @@ export type RuntimeDiagnosticState =
       extendedMemoryEffective: ExtendedMemoryRuntimeStatus;
       enhancementCapabilitiesRequested: EnhancementCapabilities;
       enhancementFeaturesEffective: ClientCompatibility["features"] | null;
+      enhancementVerification: RuntimeEnhancementVerification;
       transforms: ClientTransforms;
       observers: Readonly<{
         heapGrowth: true;

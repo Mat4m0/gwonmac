@@ -6,7 +6,9 @@ import type { EventSpec } from "./schema-fields.js";
 import { ALLOWED_PORTS } from "../core/allowlists.js";
 import {
   RELOG_INPUT_OUTCOMES,
+  ENHANCEMENT_OBSERVER_CONSUMERS,
   RELOG_INPUT_STAGES,
+  RELOG_SKIP_REASONS,
   RELOG_TERMINAL_OUTCOMES,
   WASM_ABORT_REASON_KINDS,
   WASM_GROWTH_OUTCOMES,
@@ -247,6 +249,21 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     fields: {
       outcome: literal(RELOG_TERMINAL_OUTCOMES),
       clockSynchronized: boolean,
+    },
+  },
+  "relog.skipped": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: { reason: literal(RELOG_SKIP_REASONS) },
+  },
+  "enhancement.consumerSignal": {
+    scope: "owner",
+    subsystem: "renderer",
+    level: "info",
+    fields: {
+      consumer: literal(ENHANCEMENT_OBSERVER_CONSUMERS),
+      signal: literal(["installed", "first-observation"] as const),
     },
   },
   "renderer.processExitedDuringQuit": {

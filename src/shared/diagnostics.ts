@@ -198,6 +198,7 @@ export const RENDERER_MILESTONES = [
   "relog.characterSubmitted",
   "relog.preGameProbe",
   "relog.inputSettled",
+  "relog.skipped",
   "relog.finished",
   "wasm.instantiate.begin",
   "wasm.instantiate.end",
@@ -217,11 +218,23 @@ export const RENDERER_MILESTONES = [
   // *prepared*; only these say the hook was installed, refused, or withdrawn —
   // the first question a wasm.abort triage asks.
   "enhancement.installed",
+  "enhancement.consumerSignal",
   "enhancement.installFailed",
   "enhancement.uninstalled",
 ] as const;
 
 export type RendererMilestone = (typeof RENDERER_MILESTONES)[number];
+
+export const ENHANCEMENT_OBSERVER_CONSUMERS = [
+  "cursor",
+  "region",
+  "target",
+  "party",
+  "skill-geometry",
+  "cooldowns",
+] as const;
+export type EnhancementObserverConsumer =
+  (typeof ENHANCEMENT_OBSERVER_CONSUMERS)[number];
 
 export const RELOG_INPUT_STAGES = ["login", "character", "reconnect"] as const;
 export type RelogInputStage = (typeof RELOG_INPUT_STAGES)[number];
@@ -241,6 +254,14 @@ export const RELOG_TERMINAL_OUTCOMES = [
   "timed-out",
 ] as const;
 export type RelogTerminalOutcome = (typeof RELOG_TERMINAL_OUTCOMES)[number];
+
+export const RELOG_SKIP_REASONS = [
+  "disabled",
+  "saved-login-unavailable",
+  "pre-game-controls-unavailable",
+  "intent-expired",
+] as const;
+export type RelogSkipReason = (typeof RELOG_SKIP_REASONS)[number];
 
 /**
  * The closed vocabulary a WASM abort collapses into before crossing IPC. The
@@ -314,6 +335,7 @@ export interface RendererMilestoneFieldsByName {
     outcome: RelogInputOutcome;
   };
   "relog.finished": { outcome: RelogTerminalOutcome };
+  "relog.skipped": { reason: RelogSkipReason };
   "build.info": { programId: string | number; buildId: string | number };
   /**
    * `heapBytes` is the WASM linear-memory size at the moment of death. The
@@ -360,6 +382,10 @@ export interface RendererMilestoneFieldsByName {
     companionAbi: number;
     installation: number;
     capabilityProfile: string;
+  };
+  "enhancement.consumerSignal": {
+    consumer: EnhancementObserverConsumer;
+    signal: "installed" | "first-observation";
   };
   "enhancement.uninstalled": { installation: number };
 }

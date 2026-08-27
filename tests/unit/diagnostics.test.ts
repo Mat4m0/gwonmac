@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import { diagnosticEventRecord } from "../../src/main/diagnostics/schema.ts";
 import type { DiagnosticEvent } from "../../src/main/diagnostics/schema.ts";
 import { isRendererMetrics, type RendererMetrics } from "../../src/shared/diagnostics.ts";
+import { NO_ENHANCEMENT_CAPABILITIES } from
+  "../../src/shared/enhancement-contracts.ts";
 import {
   analyzeFrames,
   comparisonWarnings,
@@ -289,6 +291,21 @@ describe("capture validation, format 2", () => {
   const events: DiagnosticEvent[] = [
     { k: "socket.close", socketId: 1, reason: "peer" },
     { k: "settings.saveFailed", code: "disk_full" },
+    {
+      k: "enhancement.launchSelected",
+      buildKind: "packaged",
+      program: "none",
+      toolsAtLaunch: true,
+      diagnosticProfile: "standard",
+      requestedProfile: "features-7ff",
+    },
+    {
+      k: "enhancement.featureVerdict",
+      feature: "nativeCursor",
+      status: "proved",
+      invariant: null,
+      candidates: null,
+    },
   ];
 
   it("reproduces the manifest's redaction result from events.jsonl", () => {
@@ -304,7 +321,7 @@ describe("capture validation, format 2", () => {
     capture.manifest.redaction.schemaChecked = 9;
     assert.match(
       validateCapture(capture).join("\n"),
-      /claims 9 schema-checked records, events\.jsonl has 2/,
+      /claims 9 schema-checked records, events\.jsonl has 4/,
     );
   });
 
@@ -447,8 +464,20 @@ function visualCapture(): Capture {
   capture.runtimeState = {
     status: "active",
     diagnosticProfile: "official-baseline",
+    enhancementProgram: "none",
     extendedMemoryRequested: true,
-    enhancementCapabilitiesRequested: {},
+    enhancementCapabilitiesRequested: NO_ENHANCEMENT_CAPABILITIES,
+    enhancementFeaturesEffective: null,
+    enhancementVerification: {
+      requestedProfile: null,
+      effectiveProfile: null,
+      preparationFailureStage: null,
+      featureVerdicts: null,
+    },
+    officialWasmSha256: null,
+    officialJsSha256: null,
+    selectedWasmSha256: null,
+    selectedJsSha256: null,
     generation: 1,
     presentationPath: "offscreen-imagebitmap",
     artifactKind: "official",

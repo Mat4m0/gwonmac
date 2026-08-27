@@ -9,6 +9,7 @@ import {
 } from "../shared/enhancement-contracts.js";
 import { COMPANION_ABI, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import type {
+  EnhancementObserverConsumer,
   RendererMilestone,
   RendererMilestoneFields,
 } from "../shared/diagnostics.js";
@@ -260,6 +261,15 @@ export async function installCoreCertifiedCompanion(
     });
 
     let cursorRefreshes = 0;
+    const observedConsumers = new Set<EnhancementObserverConsumer>();
+    const firstObservation = (consumer: EnhancementObserverConsumer) => {
+      if (observedConsumers.has(consumer)) return;
+      observedConsumers.add(consumer);
+      recordMilestone("enhancement.consumerSignal", {
+        consumer,
+        signal: "first-observation",
+      });
+    };
     let hiddenRetry: HiddenCursorRetry | null = null;
     let cursor: ReturnType<typeof createCursorConsumer> | null = null;
     if (capabilities.nativeCursor) {
@@ -322,6 +332,7 @@ export async function installCoreCertifiedCompanion(
       poll: () => {
         cursor?.poll();
         if (cursor) hiddenRetry?.afterPoll(cursor.state);
+        if (cursor?.state.valid) firstObservation("cursor");
       },
     };
     stopObserver = observeCompanion(
@@ -338,6 +349,7 @@ export async function installCoreCertifiedCompanion(
       extensionSession?.observer.skillCooldowns ?? null,
       playRegions.sink,
       extensionSession?.observer.readers ?? null,
+      firstObservation,
     );
 
     const installation = coreInstallations + 1;
@@ -401,6 +413,20 @@ export async function installCoreCertifiedCompanion(
     if (program !== "none") window.gwCompanionRuntime = runtime;
     hookSlot.value = manifest.tableSlot + 1;
     extensionSession?.afterHook();
+    const installedConsumers: readonly [boolean, EnhancementObserverConsumer][] = [
+      [capabilities.nativeCursor, "cursor"],
+      [capabilities.playRegionObservation, "region"],
+      [capabilities.targetObservation, "target"],
+      [capabilities.partyObservation, "party"],
+      [capabilities.skillSlotGeometry, "skill-geometry"],
+      [capabilities.skillCooldownObservation, "cooldowns"],
+    ];
+    for (const [installed, consumer] of installedConsumers) {
+      if (installed) recordMilestone("enhancement.consumerSignal", {
+        consumer,
+        signal: "installed",
+      });
+    }
     window.addEventListener("pagehide", cleanupAfterPageHide, { once: true });
     const capabilityProfile = enhancementCapabilityProfile(capabilities);
     if (capabilityProfile !== null) {
