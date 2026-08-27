@@ -6,6 +6,7 @@ import { COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/comp
 import type { EnhancementCapabilities, EnhancementProgram } from "../shared/enhancement-contracts.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { CompanionSnapshot } from "./companion-snapshot.js";
+import type { CompanionSkillSlotState } from "./companion-skill-snapshot.js";
 import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import type * as TeamCommandsModule from "./enhancement-team-commands.js";
 import type { ProfessionCommandTraceReader } from "./profession-command-trace.js";
@@ -16,6 +17,10 @@ import type {
   CompanionExtensionSession,
   PreparedCompanionExtension,
 } from "./certified-companion-extension.js";
+import {
+  setSkillCooldownReadiness,
+  setSkillGeometryReadiness,
+} from "./observer-readiness.js";
 import * as tools from "./certified-companion-tools.js";
 
 const EMPTY_REGION = Object.freeze({ pointer: 0, bytes: 0 });
@@ -33,6 +38,25 @@ function runCleanupSteps(
     }
   }
   if (failures.length > 0) throw new AggregateError(failures, message);
+}
+
+function reportSkillGeometry(state: CompanionSkillSlotState): void {
+  const readiness = state.status === "ready"
+    ? Object.freeze({ status: "ready" as const })
+    : Object.freeze({ status: "waiting" as const, reason: state.reason });
+  if (!setSkillGeometryReadiness(readiness)) return;
+  const fields = state.status === "ready"
+    ? { state: "ready" as const, reason: null, candidates: null }
+    : {
+      state: "waiting" as const,
+      reason: state.reason,
+      candidates: "candidateCount" in state ? state.candidateCount : null,
+    };
+  void window.gwNative.diagnostics.recordRendererMilestone(
+    "enhancement.skillGeometryState",
+    performance.now() * 1_000,
+    fields,
+  ).catch(() => {});
 }
 
 export async function prepareToolsCompanionExtension(
@@ -338,10 +362,19 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         update: (state) => { party = state; professionTrace?.poll(state); toolbox?.update(state); } } : null,
       observeState,
       publishState: program === "target-observer",
-      skillSlots: slots?.sink == null ? null : { enabled: () => policy().skillKeyLabels,
-        update: (state) => slots.sink?.update(state) },
+      // Geometry is shared by both HUDs. Cooldowns must keep the slot feed
+      // alive even when custom key labels are disabled.
+      skillSlots: slots?.sink == null ? null : { enabled: () => slots.active,
+        inactive: () => reportSkillGeometry(Object.freeze({
+          status: "waiting", reason: "inactive",
+        })),
+        update: (state) => { slots.sink?.update(state); reportSkillGeometry(state); } },
       skillCooldowns: cooldowns?.sink == null ? null : { enabled: () => policy().skillCooldowns,
-        update: (state) => cooldowns.sink?.update(state) },
+        inactive: () => { setSkillCooldownReadiness("waiting"); },
+        update: (state) => {
+          cooldowns.sink?.update(state);
+          setSkillCooldownReadiness(state.status);
+        } },
       readers: tools.observerReaders,
       pointers: { snapshot: core.snapshot.pointer, toolbox: core.toolbox.pointer,
         party: core.party.pointer, skillSlots: slots?.pointer ?? 0,

@@ -282,3 +282,61 @@ describe("the relog pre-game probe", () => {
     );
   });
 });
+
+describe("the skill geometry diagnostic", () => {
+  it("accepts only closed, internally consistent states", () => {
+    const waiting = {
+      state: "waiting",
+      reason: "slot-ambiguous",
+      candidates: 2,
+    } as const;
+    assert.deepEqual(
+      parseRendererMilestoneArgs([
+        "enhancement.skillGeometryState",
+        12_000,
+        waiting,
+      ]),
+      {
+        name: "enhancement.skillGeometryState",
+        rendererTimestampUs: 12_000,
+        fields: waiting,
+      },
+    );
+    assert.throws(
+      () => parseRendererMilestoneArgs([
+        "enhancement.skillGeometryState",
+        12_000,
+        { state: "ready", reason: "slot-missing", candidates: 8 },
+      ]),
+      /invalid renderer milestone/,
+    );
+    assert.throws(
+      () => parseRendererMilestoneArgs([
+        "enhancement.skillGeometryState",
+        12_000,
+        { state: "waiting", reason: "slot-missing", candidates: 7 },
+      ]),
+      /invalid renderer milestone/,
+    );
+    assert.deepEqual(
+      parseRendererMilestoneArgs([
+        "enhancement.skillGeometryState",
+        12_000,
+        { state: "ready", reason: null, candidates: null },
+      ]),
+      {
+        name: "enhancement.skillGeometryState",
+        rendererTimestampUs: 12_000,
+        fields: { state: "ready", reason: null, candidates: null },
+      },
+    );
+    assert.throws(
+      () => parseRendererMilestoneArgs([
+        "enhancement.skillGeometryState",
+        12_000,
+        { state: "waiting", reason: "raw-pointer", candidates: 1 },
+      ]),
+      /invalid renderer milestone/,
+    );
+  });
+});

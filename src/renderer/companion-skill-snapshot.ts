@@ -3,7 +3,10 @@
  * Skill geometry is independent from key labels so every skill-bar
  * presentation can consume the same certified, fail-closed projection.
  */
-import { COMPANION_ABI } from "../shared/companion-abi.js";
+import {
+  COMPANION_ABI,
+  SKILL_GEOMETRY_NATIVE_REASONS,
+} from "../shared/companion-abi.js";
 import { MAX_SKILL_COOLDOWN_MS } from "../shared/skill-cooldowns.js";
 
 export const COMPANION_SKILL_SLOT_ABI = COMPANION_ABI.skillSlots.abi;
@@ -30,10 +33,12 @@ export function readCompanionSkillSlots(buffer: ArrayBuffer, pointer: number) {
   const bytes = view.getUint16(6, true);
   const flags = view.getUint32(12, true);
   const frameId = view.getUint32(16, true);
-  const viewportWidth = view.getFloat32(20, true);
-  const viewportHeight = view.getFloat32(24, true);
+  const outcome = view.getUint32(20, true);
+  const candidateCount = view.getUint32(24, true);
+  const viewportWidth = view.getFloat32(28, true);
+  const viewportHeight = view.getFloat32(32, true);
   const slots = Object.freeze(Array.from({ length: 8 }, (_, index) => {
-    const at = 28 + index * 16;
+    const at = 36 + index * 16;
     return Object.freeze({
       left: view.getFloat32(at, true),
       bottom: view.getFloat32(at + 4, true),
@@ -51,19 +56,35 @@ export function readCompanionSkillSlots(buffer: ArrayBuffer, pointer: number) {
     || (flags & ~SKILL_SLOT_READY) !== 0
   ) return Object.freeze({ status: "waiting", reason: "snapshot" } as const);
   if ((flags & SKILL_SLOT_READY) === 0) {
-    return Object.freeze({ status: "waiting", reason: "frame" } as const);
+    const reason = SKILL_GEOMETRY_NATIVE_REASONS[
+      outcome as keyof typeof SKILL_GEOMETRY_NATIVE_REASONS
+    ];
+    if (
+      reason === undefined
+      || (reason === "slot-ambiguous"
+        ? candidateCount < 2 || candidateCount > 16_384
+        : candidateCount !== 0)
+    ) {
+      return Object.freeze({ status: "waiting", reason: "snapshot" } as const);
+    }
+    return reason === "slot-ambiguous"
+      ? Object.freeze({ status: "waiting" as const, reason, candidateCount })
+      : Object.freeze({ status: "waiting" as const, reason });
   }
   const finite = (value: number) => Number.isFinite(value) && Math.abs(value) <= 32_768;
   if (
-    frameId === 0
+    outcome !== 0
+    || candidateCount !== 0
+    || frameId === 0
     || !finite(viewportWidth)
     || !finite(viewportHeight)
     || viewportWidth <= 0
     || viewportHeight <= 0
     || slots.some(({ left, bottom, right, top }) =>
       ![left, bottom, right, top].every(finite)
-      || left < 0 || bottom < 0 || right <= left || top <= bottom
-      || right > viewportWidth || top > viewportHeight)
+      || right <= left || top <= bottom
+      || right <= 0 || top <= 0
+      || left >= viewportWidth || bottom >= viewportHeight)
   ) return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
   return Object.freeze({
     status: "ready" as const,

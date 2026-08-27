@@ -100,6 +100,9 @@ required duration/color/size/key-coexistence matrix at 1x, 1.5x, and 2x. It can
 place the view over a real native skill crop and writes reference, rendered,
 and difference images. This remains a calibration aid, not live acceptance.
 
-The only unresolved acceptance item is live visual and lifecycle verification.
-It requires the current worktree build running with Guild Wars, followed by a
-review of the final screenshot. Synthetic output must not close that item.
+Live acceptance requires both closed diagnostics and visual confirmation. The
+session must record first observations for skill geometry and cooldowns;
+Settings must show both live states as working; and a recharging skill must show
+the expected number over the correct native slot. Signed bottom-left frame
+coordinates are valid when a slot intersects the viewport, even when one edge
+is negative. Synthetic output alone cannot close this item.

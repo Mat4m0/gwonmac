@@ -335,6 +335,18 @@
     .then((module) => module.bindGameDataController(document, {
       feedback: setFeedback,
     }));
+  void Promise.all([
+    import('./observer-readiness.js'),
+    import('./client-compatibility-notice.js'),
+  ]).then(([readiness, compatibility]) => readiness.subscribeObserverReadiness((state) => {
+    if (!currentSession) return;
+    compatibility.renderEnhancementLiveAvailability(
+      document,
+      currentSession,
+      window.gwNative.init.enhancementProgram,
+      state,
+    );
+  }));
 
   window.gwNative.settings.onChange((settings) => {
     currentSettings = settings;

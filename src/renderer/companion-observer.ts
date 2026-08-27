@@ -50,11 +50,13 @@ export type StateConsumer = {
 
 export type SkillSlotConsumer = {
   enabled?(): boolean;
+  inactive?(): void;
   update(state: CompanionSkillSlotState): void;
 };
 
 export type SkillCooldownConsumer = {
   enabled?(): boolean;
+  inactive?(): void;
   update(state: CompanionSkillCooldownState): void;
 };
 
@@ -195,7 +197,9 @@ export function observeCompanion(
         }
       }
     }
-    if (skillSlots && skillSlots.enabled?.() !== false) {
+    if (skillSlots && skillSlots.enabled?.() === false) {
+      skillSlots.inactive?.();
+    } else if (skillSlots) {
       if (!readers) throw new Error("Tools skill readers are unavailable");
       const state = readers.readCompanionSkillSlots(
         runtime.memory.buffer,
@@ -204,7 +208,9 @@ export function observeCompanion(
       skillSlots.update(state);
       if (state.status === "ready") firstObservation("skill-geometry");
     }
-    if (skillCooldowns && skillCooldowns.enabled?.() !== false) {
+    if (skillCooldowns && skillCooldowns.enabled?.() === false) {
+      skillCooldowns.inactive?.();
+    } else if (skillCooldowns) {
       if (!readers) throw new Error("Tools skill readers are unavailable");
       const state = readers.readCompanionSkillCooldowns(
         runtime.memory.buffer,

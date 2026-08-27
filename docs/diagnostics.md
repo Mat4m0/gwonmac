@@ -45,6 +45,24 @@ first valid observation separately for cursor, region, target, party, skill
 geometry, and cooldowns. A missing first observation is not itself a failure:
 some observations depend on game state or on a player setting.
 
+Settings deliberately distinguishes static certification from live readiness.
+`Supported — waiting for Guild Wars` means the exact client passed verification
+but has not supplied usable data in this renderer. `Working — live skill bar
+detected` requires one complete eight-slot geometry publication.
+`Working — live cooldown data detected` additionally requires the player
+cooldown publication. A cooldown number is expected only while a skill is
+recharging, and a key badge is expected only for a configured slot. The live
+Settings projection retains only these closed readiness states; it does not
+retain coordinates, timers, agent IDs, recharge arrays, pointers, or other game
+data. A skill-geometry candidate count is present only for `slot-ambiguous`,
+where it is the largest number of visible frame candidates claiming one slot.
+Every other geometry outcome records `null`.
+
+Skill rectangles use Guild Wars' signed bottom-left `screen_*` coordinate
+space. A frame may cross a viewport edge and remain valid. The observer rejects
+non-finite, reversed, or wholly off-screen rectangles; it must not require all
+four edges to be positive or inside the viewport.
+
 Developer programs are accepted only by an unpackaged launch with
 `GW_LIVE_SMOKE=1`. Such a launch has a persistent warning and title prefix.
 Ordinary development and every packaged build use program `none` even if a

@@ -38,7 +38,33 @@ describe("skill-slot geometry kernel", () => {
 
     kernel.view.setUint32(ADDRESSES.frameTable + 9 * 4, 0, true);
     kernel.tick(1);
-    assert.deepEqual(kernel.skillSlots(), { status: "waiting", reason: "frame" });
+    assert.deepEqual(kernel.skillSlots(), { status: "waiting", reason: "slot-missing" });
+  });
+
+  it("accepts a valid skill bar clipped by a viewport edge", async () => {
+    const kernel = await createKernel();
+    installSkillBarGraph(kernel.view);
+    for (let child = 0; child < 8; child += 1) {
+      const frame = ADDRESSES.frameBuffer + (child + 2) * 0x1c8;
+      kernel.view.setFloat32(frame + 0x110, -12, true);
+      kernel.view.setFloat32(frame + 0x118, 36, true);
+    }
+    assert.equal(kernel.init({
+      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_PLAY_REGION_OBSERVATION
+        | FEATURE_SKILL_SLOT_GEOMETRY,
+    }), 1);
+
+    kernel.tick(1);
+
+    const ready = kernel.skillSlots();
+    assert.equal(ready.status, "ready");
+    if (ready.status !== "ready") return;
+    assert.deepEqual(ready.slots[0], {
+      left: 100,
+      bottom: -12,
+      right: 148,
+      top: 36,
+    });
   });
 
   it("refuses duplicate visible frames for one skill slot", async () => {
@@ -50,7 +76,11 @@ describe("skill-slot geometry kernel", () => {
         | FEATURE_SKILL_SLOT_GEOMETRY,
     }), 1);
     kernel.tick(1);
-    assert.deepEqual(kernel.skillSlots(), { status: "waiting", reason: "frame" });
+    assert.deepEqual(kernel.skillSlots(), {
+      status: "waiting",
+      reason: "slot-ambiguous",
+      candidateCount: 2,
+    });
   });
 
   it("periodically audits cached frames for new ambiguity", async () => {
@@ -69,6 +99,10 @@ describe("skill-slot geometry kernel", () => {
     for (let tick = 0; tick < 30; tick += 1) kernel.tick(1);
     assert.equal(kernel.skillSlots().status, "ready");
     kernel.tick(1);
-    assert.deepEqual(kernel.skillSlots(), { status: "waiting", reason: "frame" });
+    assert.deepEqual(kernel.skillSlots(), {
+      status: "waiting",
+      reason: "slot-ambiguous",
+      candidateCount: 2,
+    });
   });
 });

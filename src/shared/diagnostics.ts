@@ -12,6 +12,8 @@
  * so changing them makes existing exports incomparable rather than merely
  * differently shaped.
  */
+import { SKILL_GEOMETRY_NATIVE_REASONS } from "./companion-abi.js";
+
 export type DiagnosticLevel = "debug" | "info" | "warn" | "error";
 
 export type DiagnosticSubsystem =
@@ -219,6 +221,7 @@ export const RENDERER_MILESTONES = [
   // the first question a wasm.abort triage asks.
   "enhancement.installed",
   "enhancement.consumerSignal",
+  "enhancement.skillGeometryState",
   "enhancement.installFailed",
   "enhancement.uninstalled",
 ] as const;
@@ -235,6 +238,17 @@ export const ENHANCEMENT_OBSERVER_CONSUMERS = [
 ] as const;
 export type EnhancementObserverConsumer =
   (typeof ENHANCEMENT_OBSERVER_CONSUMERS)[number];
+
+export const SKILL_GEOMETRY_WAIT_REASONS = [
+  "memory",
+  "writing",
+  "snapshot",
+  "corrupt",
+  "stale",
+  ...Object.values(SKILL_GEOMETRY_NATIVE_REASONS),
+] as const;
+export type SkillGeometryWaitReason =
+  (typeof SKILL_GEOMETRY_WAIT_REASONS)[number];
 
 export const RELOG_INPUT_STAGES = ["login", "character", "reconnect"] as const;
 export type RelogInputStage = (typeof RELOG_INPUT_STAGES)[number];
@@ -386,6 +400,11 @@ export interface RendererMilestoneFieldsByName {
   "enhancement.consumerSignal": {
     consumer: EnhancementObserverConsumer;
     signal: "installed" | "first-observation";
+  };
+  "enhancement.skillGeometryState": {
+    state: "waiting" | "ready";
+    reason: SkillGeometryWaitReason | null;
+    candidates: number | null;
   };
   "enhancement.uninstalled": { installation: number };
 }

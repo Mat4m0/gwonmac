@@ -12,6 +12,8 @@ import type {
   ClientSession,
 } from '../shared/contracts.js';
 import type { EnhancementProgram } from '../shared/enhancement-contracts.js';
+import type { ObserverReadiness } from './observer-readiness.js';
+import { observerReadiness } from './observer-readiness.js';
 
 export type CompatibilityReport = {
   degraded: boolean;
@@ -70,7 +72,7 @@ export function compatibilityReport(
       acknowledgePerBuild: false,
       recovery: null,
       summary: 'This Guild Wars version is supported.',
-      details: ['Everything you turned on is available.'],
+      details: ['Compatibility checks passed. Features that use live game information are confirmed below.'],
     };
   }
 
@@ -205,6 +207,47 @@ function cooldownPresentationStatus(
   return cooldown;
 }
 
+function skillGeometryLiveLabel(state: ObserverReadiness['skillGeometry']): string {
+  if (state.status === 'ready') return 'Working — live skill bar detected';
+  switch (state.reason) {
+    case 'inactive':
+    case 'memory':
+    case 'writing':
+    case 'snapshot':
+    case 'stale':
+      return 'Supported — waiting for Guild Wars';
+    case 'parent-hidden':
+    case 'slot-hidden':
+      return 'Supported — skill bar is hidden';
+    default:
+      return 'Supported — live skill bar not detected';
+  }
+}
+
+export function renderEnhancementLiveAvailability(
+  root: Document,
+  session: ClientSession,
+  program: EnhancementProgram = 'none',
+  live: ObserverReadiness = observerReadiness(),
+): void {
+  const compatibility = session.compatibility;
+  if (!compatibility) return;
+  const geometry = compatibility.features.skillSlotGeometry;
+  const cooldown = cooldownPresentationStatus(compatibility.features);
+  requiredElement(root, 'settings-feature-skillSlotGeometry').textContent =
+    geometry.status === 'available'
+      ? skillGeometryLiveLabel(live.skillGeometry)
+      : featureStatusLabel(geometry, program);
+  requiredElement(root, 'settings-feature-skillCooldownObservation').textContent =
+    cooldown.status !== 'available'
+      ? featureStatusLabel(cooldown, program)
+      : live.skillGeometry.status !== 'ready'
+        ? skillGeometryLiveLabel(live.skillGeometry)
+        : live.skillCooldowns === 'ready'
+          ? 'Working — live cooldown data detected'
+          : 'Supported — waiting for recharge data';
+}
+
 const offFeatureStatus = Object.freeze({ status: 'off' } as const);
 
 /**
@@ -249,6 +292,7 @@ export function renderClientCompatibility(
     requiredElement(root, `settings-feature-${feature}`).textContent =
       featureStatusLabel(status, program);
   }
+  renderEnhancementLiveAvailability(root, session, program);
   const detail = report.details.join(' ');
   settingsStatus.hidden = false;
   settingsDetail.hidden = false;

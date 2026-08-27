@@ -411,7 +411,8 @@ export function recordRendererMilestone(
   }
   if (name === "relog.skipped") {
     if (!fields || !("reason" in fields)) return;
-    recordEvent({ k: "relog.skipped", reason: fields.reason }, { timestampUs }, ownerId);
+    const relogFields = fields as RendererMilestoneFieldsByName["relog.skipped"];
+    recordEvent({ k: "relog.skipped", reason: relogFields.reason }, { timestampUs }, ownerId);
     return;
   }
   if (name === "enhancement.consumerSignal") {
@@ -420,6 +421,18 @@ export function recordRendererMilestone(
       k: "enhancement.consumerSignal",
       consumer: fields.consumer,
       signal: fields.signal,
+    }, { timestampUs }, ownerId);
+    return;
+  }
+  if (name === "enhancement.skillGeometryState") {
+    if (!fields || !("state" in fields)) return;
+    const geometryFields =
+      fields as RendererMilestoneFieldsByName["enhancement.skillGeometryState"];
+    recordEvent({
+      k: "enhancement.skillGeometryState",
+      state: geometryFields.state,
+      reason: geometryFields.reason,
+      candidates: geometryFields.candidates,
     }, { timestampUs }, ownerId);
     return;
   }

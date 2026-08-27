@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   compatibilityReport,
   renderClientCompatibility,
+  renderEnhancementLiveAvailability,
   showCompatibilityNotice,
 } from "../../src/renderer/client-compatibility-notice.js";
 import type { ClientCompatibility, ClientSession } from "../../src/shared/contracts.js";
@@ -87,7 +88,9 @@ describe("client compatibility notice", () => {
       acknowledgePerBuild: false,
       recovery: null,
       summary: "This Guild Wars version is supported.",
-      details: ["Everything you turned on is available."],
+      details: [
+        "Compatibility checks passed. Features that use live game information are confirmed below.",
+      ],
     });
   });
 
@@ -321,11 +324,39 @@ describe("client compatibility notice", () => {
     );
     assert.equal(
       dom.element("settings-feature-skillSlotGeometry").textContent,
-      "Available",
+      "Supported — waiting for Guild Wars",
     );
     assert.equal(
       dom.element("settings-feature-skillCooldownObservation").textContent,
-      "Available",
+      "Supported — waiting for Guild Wars",
+    );
+  });
+
+  it("distinguishes certified overlay support from live observations", () => {
+    const dom = compatibilityDom();
+    const session: ClientSession = {
+      appVersion: "2026.8.10",
+      extendedMemory: STANDARD_MEMORY,
+      healthToken: null,
+      compatibility: compatibility({
+        skillSlotGeometry: available,
+        skillCooldownObservation: available,
+      }),
+    };
+    renderClientCompatibility(dom.root, session);
+    renderEnhancementLiveAvailability(dom.root, session, "none", {
+      skillGeometry: {
+        status: "ready",
+      },
+      skillCooldowns: "ready",
+    });
+    assert.equal(
+      dom.element("settings-feature-skillSlotGeometry").textContent,
+      "Working — live skill bar detected",
+    );
+    assert.equal(
+      dom.element("settings-feature-skillCooldownObservation").textContent,
+      "Working — live cooldown data detected",
     );
   });
 

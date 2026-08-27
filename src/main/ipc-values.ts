@@ -15,6 +15,7 @@ import {
   RELOG_TERMINAL_OUTCOMES,
   RENDERER_MILESTONES,
   ENHANCEMENT_OBSERVER_CONSUMERS,
+  SKILL_GEOMETRY_WAIT_REASONS,
   WASM_ABORT_REASON_KINDS,
   WASM_GROWTH_OUTCOMES,
   WASM_MEMORY_PROBE_STATUSES,
@@ -259,6 +260,27 @@ export function parseRendererMilestoneArgs(args: readonly unknown[]): ParsedMile
     milestoneFields = {
       consumer: record.consumer as (typeof ENHANCEMENT_OBSERVER_CONSUMERS)[number],
       signal: record.signal as "installed" | "first-observation",
+    };
+  } else if (name === "enhancement.skillGeometryState") {
+    const waiting = recordIsObject && record.state === "waiting"
+      && typeof record.reason === "string"
+      && (SKILL_GEOMETRY_WAIT_REASONS as readonly string[]).includes(record.reason)
+      && (record.reason === "slot-ambiguous"
+        ? (typeof record.candidates === "number"
+          && Number.isSafeInteger(record.candidates)
+          && record.candidates >= 2
+          && record.candidates <= 16_384)
+        : record.candidates === null);
+    const ready = recordIsObject && record.state === "ready"
+      && record.reason === null
+      && record.candidates === null;
+    if (!recordIsObject || Object.keys(record).length !== 3 || (!waiting && !ready)) {
+      throw new ValidationError("invalid renderer milestone");
+    }
+    milestoneFields = {
+      state: record.state as "waiting" | "ready",
+      reason: record.reason as (typeof SKILL_GEOMETRY_WAIT_REASONS)[number] | null,
+      candidates: record.candidates as number | null,
     };
   } else if (name === "enhancement.uninstalled") {
     const valid = recordIsObject && Object.keys(record).length === 1
