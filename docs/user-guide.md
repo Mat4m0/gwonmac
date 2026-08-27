@@ -166,7 +166,11 @@ After that restart, these choices update immediately:
   **Recent** comes from locations Guild Wars actually reports, including world
   map travel and other in-game paths. It keeps up to ten unique reviewed places
   per character across game and app restarts, hides the current map, and shows
-  the six newest destinations that character can still travel to.
+  the six newest destinations that character can still travel to. When the
+  character has 10 or fewer unlocked destinations, such as early in any
+  campaign, Travel shows the complete alphabetical list before the player
+  types. The list marks the current location, recent visits, and assigned number
+  shortcuts without repeating destinations in separate sections.
 
 Open **Trade Chat** from the View menu, with Command-K, or by typing the
 exact lowercase `/trade` command on a certified client. The Trade window is
