@@ -1,0 +1,417 @@
+/**
+ * Owns a development-only, bounded WebGL texture-activity probe. It records
+ * dimensions, formats, content fingerprints, and draw-use counts so a live
+ * operator can compare named visual states without retaining pixels or WASM
+ * pointers.
+ */
+
+const GL_TEXTURE_2D = 0x0de1;
+const GL_TEXTURE0 = 0x84c0;
+const MAX_TEXTURES = 4_096;
+const MAX_FINGERPRINT_BYTES = 4 * 1024 * 1024;
+const PROOF_TILE_SIZE = 512;
+const GL_RGBA = 0x1908;
+const GL_UNSIGNED_BYTE = 0x1401;
+
+type TextureReconImports = {
+  env?: {
+    glActiveTexture?: (texture: number) => unknown;
+    glBindTexture?: (target: number, texture: number) => unknown;
+    glDeleteTextures?: (count: number, pointer: number) => unknown;
+    glTexImage2D?: (
+      target: number,
+      level: number,
+      internalFormat: number,
+      width: number,
+      height: number,
+      border: number,
+      format: number,
+      type: number,
+      pixels: number,
+    ) => unknown;
+    glTexSubImage2D?: (
+      target: number,
+      level: number,
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+      format: number,
+      type: number,
+      pixels: number,
+    ) => unknown;
+    glCompressedTexImage2D?: (
+      target: number,
+      level: number,
+      internalFormat: number,
+      width: number,
+      height: number,
+      border: number,
+      imageBytes: number,
+      data: number,
+    ) => unknown;
+    glCompressedTexSubImage2D?: (
+      target: number,
+      level: number,
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+      format: number,
+      imageBytes: number,
+      data: number,
+    ) => unknown;
+    glDrawArrays?: (mode: number, first: number, count: number) => unknown;
+    glDrawElements?: (mode: number, count: number, type: number, indices: number) => unknown;
+  };
+};
+
+type ClientMemory = { HEAPU8?: Uint8Array };
+
+export type TextureReconRecord = Readonly<{
+  texture: number;
+  width: number;
+  height: number;
+  level: number;
+  internalFormat: number | null;
+  format: number | null;
+  type: number | null;
+  uploadKind: "image" | "sub-image" | "compressed-image" | "compressed-sub-image";
+  uploadBytes: number;
+  fingerprint: string | null;
+  intervalUploads: number;
+  intervalBinds: number;
+  intervalDrawUses: number;
+}>;
+
+export type TextureReconSnapshot = Readonly<{
+  trackedTextures: number;
+  saturated: boolean;
+  exactReplacement: Readonly<{
+    fingerprint: string;
+    replacements: number;
+  }> | null;
+  records: readonly TextureReconRecord[];
+}>;
+
+export type TextureReconController = Readonly<{
+  armExactReplacement: (fingerprint: string) => boolean;
+  checkpoint: () => TextureReconSnapshot;
+  resetContext: () => void;
+}>;
+
+type MutableRecord = {
+  width: number;
+  height: number;
+  level: number;
+  internalFormat: number | null;
+  format: number | null;
+  type: number | null;
+  uploadKind: TextureReconRecord["uploadKind"];
+  uploadBytes: number;
+  fingerprint: string | null;
+  intervalUploads: number;
+  intervalBinds: number;
+  intervalDrawUses: number;
+};
+
+function byteLength(format: number, type: number, width: number, height: number) {
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) {
+    return 0;
+  }
+  const components: Readonly<Record<number, number>> = {
+    0x1903: 1,
+    0x8227: 2,
+    0x1907: 3,
+    0x1908: 4,
+  };
+  const scalarBytes: Readonly<Record<number, number>> = {
+    0x1400: 1,
+    0x1401: 1,
+    0x1402: 2,
+    0x1403: 2,
+    0x1404: 4,
+    0x1405: 4,
+    0x1406: 4,
+    0x140b: 2,
+  };
+  return width * height * (components[format] ?? 0) * (scalarBytes[type] ?? 0);
+}
+
+function fingerprint(heap: Uint8Array | undefined, pointer: number, length: number): string | null {
+  if (
+    !heap
+    || !Number.isSafeInteger(pointer)
+    || !Number.isSafeInteger(length)
+    || pointer <= 0
+    || length <= 0
+    || length > MAX_FINGERPRINT_BYTES
+    || pointer > heap.byteLength - length
+  ) return null;
+  let hash = 0x811c9dc5;
+  const end = pointer + length;
+  for (let index = pointer; index < end; index += 1) {
+    hash ^= heap[index]!;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function replaceWithCheckerboard(
+  heap: Uint8Array | undefined,
+  pointer: number,
+  length: number,
+  expectedFingerprint: string | null,
+): (() => void) | null {
+  if (!expectedFingerprint || fingerprint(heap, pointer, length) !== expectedFingerprint || !heap) {
+    return null;
+  }
+  const original = heap.slice(pointer, pointer + length);
+  const pixels = heap.subarray(pointer, pointer + length);
+  for (let y = 0; y < PROOF_TILE_SIZE; y += 1) {
+    for (let x = 0; x < PROOF_TILE_SIZE; x += 1) {
+      const offset = (y * PROOF_TILE_SIZE + x) * 4;
+      const alternate = ((x >> 5) + (y >> 5)) % 2 === 0;
+      pixels[offset] = alternate ? 255 : 0;
+      pixels[offset + 1] = alternate ? 0 : 255;
+      pixels[offset + 2] = 255;
+      pixels[offset + 3] = 255;
+    }
+  }
+  return () => heap.set(original, pointer);
+}
+
+/** Installs the removable-in-practice probe before WASM instantiation. */
+export function installWebGlTextureRecon({
+  imports,
+  module,
+  log,
+}: {
+  imports: TextureReconImports;
+  module: ClientMemory;
+  log: (...values: unknown[]) => void;
+}): TextureReconController | null {
+  const env = imports.env;
+  if (!env || typeof env.glBindTexture !== "function") {
+    log("[warn] texture recon unavailable — texture binding import missing");
+    return null;
+  }
+
+  const records = new Map<number, MutableRecord>();
+  const bindings = new Map<number, number>();
+  const reboundSinceDraw = new Set<number>();
+  let activeUnit = GL_TEXTURE0;
+  let saturated = false;
+  let observationFailureReported = false;
+  let exactReplacementFingerprint: string | null = null;
+  let exactReplacementCount = 0;
+
+  const observe = (callback: () => void) => {
+    try {
+      callback();
+    } catch (error) {
+      if (observationFailureReported) return;
+      observationFailureReported = true;
+      try {
+        log("[warn] texture recon observation failed", error);
+      } catch {
+        // The probe must never change the client call path.
+      }
+    }
+  };
+
+  const currentTexture = () => bindings.get(activeUnit) ?? 0;
+  const recordUpload = (input: Omit<MutableRecord, "intervalUploads" | "intervalBinds" | "intervalDrawUses">) => {
+    const texture = currentTexture();
+    if (!texture) return;
+    const previous = records.get(texture);
+    if (!previous && records.size >= MAX_TEXTURES) {
+      saturated = true;
+      return;
+    }
+    records.set(texture, {
+      ...input,
+      intervalUploads: (previous?.intervalUploads ?? 0) + 1,
+      intervalBinds: previous?.intervalBinds ?? 0,
+      intervalDrawUses: previous?.intervalDrawUses ?? 0,
+    });
+  };
+
+  const activeTexture = env.glActiveTexture;
+  if (typeof activeTexture === "function") {
+    env.glActiveTexture = function (this: unknown, texture) {
+      const result = activeTexture.call(this, texture);
+      observe(() => {
+        if (Number.isSafeInteger(texture) && texture >= GL_TEXTURE0) activeUnit = texture;
+      });
+      return result;
+    };
+  }
+
+  const bindTexture = env.glBindTexture;
+  env.glBindTexture = function (this: unknown, target, texture) {
+    const result = bindTexture.call(this, target, texture);
+    observe(() => {
+      if (target !== GL_TEXTURE_2D) return;
+      bindings.set(activeUnit, texture);
+      if (texture) reboundSinceDraw.add(texture);
+      const record = records.get(texture);
+      if (record) record.intervalBinds += 1;
+    });
+    return result;
+  };
+
+  const texImage2D = env.glTexImage2D;
+  if (typeof texImage2D === "function") {
+    env.glTexImage2D = function (this: unknown, target, level, internalFormat, width, height, border, format, type, pixels) {
+      const result = texImage2D.call(this, target, level, internalFormat, width, height, border, format, type, pixels);
+      observe(() => {
+        if (target !== GL_TEXTURE_2D || level !== 0) return;
+        const uploadBytes = byteLength(format, type, width, height);
+        recordUpload({ width, height, level, internalFormat, format, type, uploadKind: "image", uploadBytes, fingerprint: fingerprint(module.HEAPU8, pixels, uploadBytes) });
+      });
+      return result;
+    };
+  }
+
+  const texSubImage2D = env.glTexSubImage2D;
+  if (typeof texSubImage2D === "function") {
+    env.glTexSubImage2D = function (this: unknown, target, level, x, y, width, height, format, type, pixels) {
+      const uploadBytes = byteLength(format, type, width, height);
+      const uploadedFingerprint = fingerprint(module.HEAPU8, pixels, uploadBytes);
+      const eligibleForProof = target === GL_TEXTURE_2D
+        && level === 0
+        && x === 0
+        && y === 0
+        && width === PROOF_TILE_SIZE
+        && height === PROOF_TILE_SIZE
+        && format === GL_RGBA
+        && type === GL_UNSIGNED_BYTE;
+      const restore = eligibleForProof
+        ? replaceWithCheckerboard(module.HEAPU8, pixels, uploadBytes, exactReplacementFingerprint)
+        : null;
+      let result: unknown;
+      try {
+        result = texSubImage2D.call(this, target, level, x, y, width, height, format, type, pixels);
+      } finally {
+        restore?.();
+      }
+      observe(() => {
+        if (target !== GL_TEXTURE_2D || level !== 0) return;
+        if (restore) exactReplacementCount += 1;
+        recordUpload({ width, height, level, internalFormat: null, format, type, uploadKind: "sub-image", uploadBytes, fingerprint: uploadedFingerprint });
+      });
+      return result;
+    };
+  }
+
+  const compressedImage = env.glCompressedTexImage2D;
+  if (typeof compressedImage === "function") {
+    env.glCompressedTexImage2D = function (this: unknown, target, level, internalFormat, width, height, border, imageBytes, data) {
+      const result = compressedImage.call(this, target, level, internalFormat, width, height, border, imageBytes, data);
+      observe(() => {
+        if (target !== GL_TEXTURE_2D || level !== 0) return;
+        recordUpload({ width, height, level, internalFormat, format: null, type: null, uploadKind: "compressed-image", uploadBytes: imageBytes, fingerprint: fingerprint(module.HEAPU8, data, imageBytes) });
+      });
+      return result;
+    };
+  }
+
+  const compressedSubImage = env.glCompressedTexSubImage2D;
+  if (typeof compressedSubImage === "function") {
+    env.glCompressedTexSubImage2D = function (this: unknown, target, level, x, y, width, height, format, imageBytes, data) {
+      const result = compressedSubImage.call(this, target, level, x, y, width, height, format, imageBytes, data);
+      observe(() => {
+        if (target !== GL_TEXTURE_2D || level !== 0) return;
+        recordUpload({ width, height, level, internalFormat: null, format, type: null, uploadKind: "compressed-sub-image", uploadBytes: imageBytes, fingerprint: fingerprint(module.HEAPU8, data, imageBytes) });
+      });
+      return result;
+    };
+  }
+
+  const observeDraw = () => {
+    for (const texture of reboundSinceDraw) {
+      const record = records.get(texture);
+      if (record) record.intervalDrawUses += 1;
+    }
+    reboundSinceDraw.clear();
+  };
+  const drawArrays = env.glDrawArrays;
+  if (typeof drawArrays === "function") {
+    env.glDrawArrays = function (this: unknown, mode, first, count) {
+      const result = drawArrays.call(this, mode, first, count);
+      observe(observeDraw);
+      return result;
+    };
+  }
+  const drawElements = env.glDrawElements;
+  if (typeof drawElements === "function") {
+    env.glDrawElements = function (this: unknown, mode, count, type, indices) {
+      const result = drawElements.call(this, mode, count, type, indices);
+      observe(observeDraw);
+      return result;
+    };
+  }
+
+  const deleteTextures = env.glDeleteTextures;
+  if (typeof deleteTextures === "function") {
+    env.glDeleteTextures = function (this: unknown, count, pointer) {
+      const heap = module.HEAPU8;
+      const ids: number[] = [];
+      if (heap && Number.isSafeInteger(count) && count >= 0 && count <= 4_096 && pointer >= 0 && pointer <= heap.byteLength - count * 4) {
+        const view = new DataView(heap.buffer, heap.byteOffset + pointer, count * 4);
+        for (let index = 0; index < count; index += 1) ids.push(view.getUint32(index * 4, true));
+      }
+      const result = deleteTextures.call(this, count, pointer);
+      observe(() => {
+        for (const texture of ids) {
+          records.delete(texture);
+          reboundSinceDraw.delete(texture);
+          for (const [unit, bound] of bindings) if (bound === texture) bindings.delete(unit);
+        }
+      });
+      return result;
+    };
+  }
+
+  const clearInterval = () => {
+    reboundSinceDraw.clear();
+    for (const record of records.values()) {
+      record.intervalUploads = 0;
+      record.intervalBinds = 0;
+      record.intervalDrawUses = 0;
+    }
+  };
+  const checkpoint = (): TextureReconSnapshot => {
+    const active = [...records.entries()]
+      .filter(([, record]) => record.intervalUploads > 0 || record.intervalBinds > 0 || record.intervalDrawUses > 0)
+      .map(([texture, record]) => Object.freeze({ texture, ...record }))
+      .sort((a, b) => b.intervalDrawUses - a.intervalDrawUses || b.intervalBinds - a.intervalBinds || a.texture - b.texture);
+    const exactReplacement = exactReplacementFingerprint
+      ? Object.freeze({
+          fingerprint: exactReplacementFingerprint,
+          replacements: exactReplacementCount,
+        })
+      : null;
+    const snapshot = Object.freeze({ trackedTextures: records.size, saturated, exactReplacement, records: Object.freeze(active) });
+    clearInterval();
+    return snapshot;
+  };
+  const armExactReplacement = (requestedFingerprint: string) => {
+    if (!/^fnv1a32:[0-9a-f]{8}$/u.test(requestedFingerprint)) return false;
+    exactReplacementFingerprint = requestedFingerprint;
+    exactReplacementCount = 0;
+    return true;
+  };
+  const resetContext = () => {
+    records.clear();
+    bindings.clear();
+    reboundSinceDraw.clear();
+    activeUnit = GL_TEXTURE0;
+    saturated = false;
+    exactReplacementCount = 0;
+  };
+
+  log("Texture recon armed for local development evidence");
+  return Object.freeze({ armExactReplacement, checkpoint, resetContext });
+}

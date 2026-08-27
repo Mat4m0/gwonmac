@@ -24,6 +24,7 @@ export type GraphicsProbeSample = Readonly<{
   }>;
   wasmHeapBytes: number;
   textures: ReturnType<NonNullable<Window["gwTextureStats"]>> | null;
+  textureRecon: ReturnType<NonNullable<Window["gwTextureRecon"]>["checkpoint"]> | null;
   images: Record<string, number | boolean> | null;
   programs: ReturnType<NonNullable<Window["gwGlRecon"]>> | null;
   lifecycle: ReturnType<Window["gwAutomation"]["read"]> | null;
@@ -33,10 +34,13 @@ export type GraphicsProbeSample = Readonly<{
 export type GraphicsProbeEvidence = Readonly<{
   baseline: GraphicsProbeSample;
   captures: ReadonlyArray<Readonly<{
+    label: string;
     screenshot: string;
     sample: GraphicsProbeSample;
   }>>;
 }>;
+
+const MISSION_MAP_TILE_PROOF_FINGERPRINT = "fnv1a32:fcaade3f";
 
 type GraphicsProbeSession = Readonly<{
   evidence: GraphicsProbeEvidence;
@@ -74,6 +78,7 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
       },
       wasmHeapBytes: window.gwWasmHeapBytes?.() ?? 0,
       textures: window.gwTextureStats?.() ?? null,
+      textureRecon: window.gwTextureRecon?.checkpoint() ?? null,
       images: typeof window.gwStats === "function" ? window.gwStats() : null,
       programs: window.gwGlRecon?.() ?? null,
       lifecycle: window.gwAutomation?.read() ?? null,
@@ -117,8 +122,12 @@ export async function runGraphicsProbeSession({
     runId,
   );
   let captureCount = 0;
+  const replacementArmed = await page.evaluate((candidate) => (
+    window.gwTextureRecon?.armExactReplacement(candidate) ?? false
+  ), MISSION_MAP_TILE_PROOF_FINGERPRINT);
   const baseline = await readGraphicsProjection(page);
   const captures: Array<{
+    label: string;
     screenshot: string;
     sample: GraphicsProbeSample;
   }> = [];
@@ -126,8 +135,18 @@ export async function runGraphicsProbeSession({
   console.log(`Graphics evidence directory: ${outputDir}`);
   console.log(JSON.stringify({
     checkpoint: "graphics-probe-ready",
-    please: "play normally; press Enter to capture evidence, or type q then Enter to finish",
-    privacy: "a capture saves the visible game window as a local screenshot",
+    please: "keep the Mission Map closed, capture the closed state, open it, then capture the open state",
+    exactReplacement: {
+      armed: replacementArmed,
+      fingerprint: MISSION_MAP_TILE_PROOF_FINGERPRINT,
+      expected: "one 512x512 Mission Map tile becomes a magenta/cyan checkerboard",
+    },
+    suggestedSequence: [
+      "capture mission-map-closed",
+      "capture mission-map-open",
+      "capture mission-map-closed-again",
+    ],
+    privacy: "each capture saves the visible game window plus bounded texture fingerprints; it saves no pixels from texture memory or WASM pointers",
   }));
 
   const input = createInterface({ input: process.stdin, output: process.stdout });
@@ -135,30 +154,46 @@ export async function runGraphicsProbeSession({
     for await (const line of input) {
       const command = line.trim().toLowerCase();
       if (command === "q" || command === "quit") break;
-      if (command !== "" && command !== "c" && command !== "capture") {
-        console.log("Press Enter to capture, or type q then Enter to finish.");
+      const requestedLabel = command.startsWith("capture ")
+        ? command.slice("capture ".length).trim()
+        : command === "" || command === "c" || command === "capture"
+          ? `state-${captureCount + 1}`
+          : "";
+      const label = requestedLabel.replaceAll(/[^a-z0-9-]+/g, "-").replaceAll(/^-|-$/g, "").slice(0, 48);
+      if (!label) {
+        console.log("Type capture <label>, or q to finish.");
         continue;
       }
 
       const sample = await readGraphicsProjection(page);
       await mkdir(outputDir, { recursive: true });
       captureCount += 1;
-      const stem = `capture-${String(captureCount).padStart(3, "0")}`;
+      const stem = `capture-${String(captureCount).padStart(3, "0")}-${label}`;
       const screenshot = `${stem}.png`;
       await page.screenshot({ path: path.join(outputDir, screenshot) });
       await writeFile(
         path.join(outputDir, `${stem}.json`),
         JSON.stringify(sample, null, 2),
       );
-      captures.push({ screenshot, sample });
+      captures.push({ label, screenshot, sample });
+      const textureCandidates = sample.textureRecon?.records.slice(0, 12).map((record) => ({
+        texture: record.texture,
+        size: `${record.width}x${record.height}`,
+        fingerprint: record.fingerprint,
+        draws: record.intervalDrawUses,
+        binds: record.intervalBinds,
+        uploads: record.intervalUploads,
+      })) ?? [];
       console.log(JSON.stringify({
         checkpoint: "graphics-captured",
         capture: captures.length,
+        label,
         screenshot,
         textureBytes: sample.textures?.knownTextureBytes ?? null,
         liveTextures: sample.textures?.liveTextures ?? null,
         wasmHeapBytes: sample.wasmHeapBytes,
         contextLost: sample.canvas.contextLost,
+        textureCandidates,
       }));
     }
   } finally {
