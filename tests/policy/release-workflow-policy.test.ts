@@ -22,13 +22,18 @@ test("release workflow stages and publishes one tested, attested package version
   const workflow = read(".github/workflows/release.yml");
   const feedWorkflow = read(".github/workflows/update-feeds.yml");
   const verification = read(".github/workflows/macos-verify.yml");
-  assert.match(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
+  assert.doesNotMatch(workflow, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
   assert.match(
     workflow,
     /source:[\s\S]*outputs:[\s\S]*steps\.release-source\.outputs\.version[\s\S]*name: Resolve and validate the release source[\s\S]*SOURCE_BRANCH: \$\{\{ github\.ref_name \}\}[\s\S]*SOURCE_TYPE: \$\{\{ github\.ref_type \}\}[\s\S]*\^release\/\[0-9\]\{4\}/,
   );
-  assert.match(workflow, /verify:\n {4}needs: source/);
-  assert.match(workflow, /release-build:\n {4}needs: \[source, verify\]/);
+  assert.doesNotMatch(workflow, /\n {2}verify:/);
+  assert.match(workflow, /release-build:\n {4}needs: source/);
+  assert.match(workflow, /checks: read/);
+  assert.match(
+    workflow,
+    /name: Require green Application verification for this commit[\s\S]*check-runs\?filter=latest&per_page=100[\s\S]*\.name == "verify \/ verify"[\s\S]*\.app\.slug == "github-actions"[\s\S]*\.conclusion == "success"/,
+  );
   assert.match(verification, /runs-on: macos-15/);
   assert.match(verification, /test "\$\(uname -m\)" = "arm64"/);
   assert.match(workflow, /test "\$\(uname -m\)" = "arm64"/);
@@ -36,7 +41,7 @@ test("release workflow stages and publishes one tested, attested package version
   assert.match(workflow, /require\('\.\/package\.json'\)\.version/);
   assert.match(
     workflow,
-    /release_line="\$\{version%%-\*\}"[\s\S]*\$SOURCE_BRANCH" == release\/\*[\s\S]*\$\{SOURCE_BRANCH#release\/\}" != "\$release_line"[\s\S]*does not match package version/,
+    /release_line="\$\{version%%-\*\}"[\s\S]*\$\{SOURCE_BRANCH#release\/\}" != "\$release_line"[\s\S]*does not match package version/,
   );
   assert.match(
     workflow,

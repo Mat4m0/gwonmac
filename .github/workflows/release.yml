@@ -1,6 +1,6 @@
-# The only path to a public versioned release: dispatched by hand from main or
-# one canonical release branch, and gated on the approval environment holding
-# the Developer ID material.
+# The only path to a public versioned release: dispatched by hand from one
+# canonical release branch and gated on the approval environment holding the
+# Developer ID material.
 name: Versioned release
 
 on:
@@ -17,6 +17,7 @@ on:
         type: boolean
 
 permissions:
+  checks: read
   contents: read
 
 concurrency:
@@ -46,15 +47,13 @@ jobs:
           SOURCE_TYPE: ${{ github.ref_type }}
         run: |
           test "$SOURCE_TYPE" = "branch"
-          if [ "$SOURCE_BRANCH" != "main" ] \
-            && ! [[ "$SOURCE_BRANCH" =~ ^release/[0-9]{4}\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "Release from main or release/YYYY.M.PATCH, not $SOURCE_BRANCH." >&2
+          if ! [[ "$SOURCE_BRANCH" =~ ^release/[0-9]{4}\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Release from release/YYYY.M.PATCH, not $SOURCE_BRANCH." >&2
             exit 1
           fi
           version="$(node -p "require('./package.json').version")"
           release_line="${version%%-*}"
-          if [[ "$SOURCE_BRANCH" == release/* ]] \
-            && [ "${SOURCE_BRANCH#release/}" != "$release_line" ]; then
+          if [ "${SOURCE_BRANCH#release/}" != "$release_line" ]; then
             echo "Release branch $SOURCE_BRANCH does not match package version $version." >&2
             exit 1
           fi
@@ -75,14 +74,30 @@ jobs:
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
 
-  verify:
-    needs: source
-    uses: ./.github/workflows/macos-verify.yml
-    with:
-      artifact-name: ""
+      # The protected source branch already ran Application verification for
+      # this exact commit. Reuse that result instead of repeating the complete
+      # macOS gate. The release build still owns current-client qualification,
+      # signing, notarization, and packaged runtime checks.
+      - name: Require green Application verification for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed="$(gh api \
+            "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?filter=latest&per_page=100" \
+            --jq '[.check_runs[] | select(
+              .name == "verify / verify"
+              and .app.slug == "github-actions"
+              and .status == "completed"
+              and .conclusion == "success"
+            )] | length')"
+          if [ "$passed" -lt 1 ]; then
+            echo "Application verification has not passed for $GITHUB_SHA." >&2
+            echo "Wait for verify / verify on the release branch, then run this workflow again." >&2
+            exit 1
+          fi
 
   release-build:
-    needs: [source, verify]
+    needs: source
     runs-on: macos-15
     timeout-minutes: 60
     environment: release
