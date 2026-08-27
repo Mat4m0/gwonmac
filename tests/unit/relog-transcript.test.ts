@@ -75,6 +75,20 @@ describe("reload transcript", () => {
     assert.match(absent, /no reload boundary/);
   });
 
+  it("formats a disabled automatic return as a complete terminal outcome", () => {
+    const text = formatRelogTranscript({
+      ownerId: 1,
+      completeFromStart: true,
+      records: [
+        event(1, 1, "gameReload.requested", { cause: "menu" }),
+        event(2, 1, "gameReload.loaded", { cause: "menu" }),
+        event(3, 1, "relog.skipped", { reason: "disabled" }),
+      ],
+    });
+    assert.match(text, /status: complete/);
+    assert.match(text, /relog\.skipped reason=disabled/);
+  });
+
   it("starts a menu trace at its own reload after an older Command-Q run", () => {
     const text = formatRelogTranscript({
       ownerId: 1,

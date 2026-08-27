@@ -12,7 +12,7 @@ function fixture(options: Readonly<{
   let routingId = 10;
   let loads = 0;
   let socketCloses = 0;
-  const events: string[] = [];
+  const events: Array<{ k: string; reason?: string }> = [];
   const win = {
     isDestroyed: () => false,
     webContents: {
@@ -33,7 +33,12 @@ function fixture(options: Readonly<{
       };
     },
     diagnosticOwner: () => 3,
-    record(event) { events.push(event.k); },
+    record(event) {
+      const reason = "reason" in event && typeof event.reason === "string"
+        ? event.reason
+        : undefined;
+      events.push({ k: event.k, ...(reason === undefined ? {} : { reason }) });
+    },
     sync: async () => "completed",
     async load() {
       loads += 1;
@@ -70,4 +75,13 @@ test("a settings read failure performs no partial reload", async () => {
   assert.equal(socketCloses(), 0);
   assert.deepEqual(events, []);
   assert.equal(reloader.claimRelogIntent(win), false);
+});
+
+test("a plain reload records both the renderer restart and disabled automatic return", async () => {
+  const { reloader, win, events } = fixture({ autoRelog: false });
+  await reloader.reload(win, "menu");
+  assert.deepEqual(events.slice(-2), [
+    { k: "gameReload.loaded" },
+    { k: "relog.skipped", reason: "disabled" },
+  ]);
 });

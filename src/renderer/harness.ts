@@ -791,6 +791,7 @@ Module = {
       const stored = await native().credentials.load();
       if (!stored) {
         log('secureStorage: no saved credentials — the module should prompt');
+        automaticCharacterReturn?.savedCredentialsUnavailable();
         throw new Error('no stored credentials');
       }
       log('secureStorage: returning saved credentials');

@@ -19,10 +19,11 @@ const RELOG_EVENTS = new Set([
   "relog.characterSubmitted",
   "relog.preGameProbe",
   "relog.inputSettled",
+  "relog.skipped",
   "relog.finished",
 ]);
 
-const TERMINAL_EVENTS = new Set(["relog.finished"]);
+const TERMINAL_EVENTS = new Set(["relog.finished", "relog.skipped"]);
 
 function scalar(fields: LogRecord["fields"], key: string): string | null {
   const value = fields[key];
@@ -70,6 +71,8 @@ function details(
     }
     case "relog.finished":
       return `outcome=${scalar(fields, "outcome") ?? "unknown"}`;
+    case "relog.skipped":
+      return `reason=${scalar(fields, "reason") ?? "unknown"}`;
     default:
       return "";
   }

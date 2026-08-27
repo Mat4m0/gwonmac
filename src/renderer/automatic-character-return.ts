@@ -28,6 +28,7 @@ type RecordMilestone = <Name extends RendererMilestone>(
 
 export type AutomaticCharacterReturn = Readonly<{
   savedCredentialsLoaded(): void;
+  savedCredentialsUnavailable(): void;
   tokenRequested(request: XMLHttpRequest): void;
   clearStatus(): void;
   dispose(): void;
@@ -321,6 +322,24 @@ export function installAutomaticCharacterReturn(
     return candidate;
   }).catch(() => null);
 
+  const skip = (
+    candidate: ActiveRun,
+    reason: "saved-login-unavailable" | "pre-game-controls-unavailable",
+  ) => {
+    if (!isActive(candidate)) return;
+    candidate.ended = true;
+    if (candidate.deadlineTimer !== null) clearTimeout(candidate.deadlineTimer);
+    candidate.deadlineTimer = null;
+    dependencies.record("relog.skipped", { reason });
+    clearStatus();
+  };
+
+  const savedCredentialsUnavailable = () => {
+    void intent.then((candidate) => {
+      if (candidate) skip(candidate, "saved-login-unavailable");
+    });
+  };
+
   const savedCredentialsLoaded = () => {
     void intent.then(async (candidate) => {
       if (!candidate || !isActive(candidate) || candidate.loginStarted) return;
@@ -334,12 +353,14 @@ export function installAutomaticCharacterReturn(
       await afterClientPaint();
       if (!isActive(candidate)) return;
       const input = dependencies.input();
-      const outcome = input
-        ? await sendWhenFocused(
-            candidate,
-            () => input.submitSavedLogin(candidate.expiresAt),
-          )
-        : "cancelled";
+      if (!input || !window.gwPreGameControls) {
+        skip(candidate, "pre-game-controls-unavailable");
+        return;
+      }
+      const outcome = await sendWhenFocused(
+        candidate,
+        () => input.submitSavedLogin(candidate.expiresAt),
+      );
       recordInput("login", outcome);
       if (didAdvance(outcome) && isActive(candidate)) {
         step(
@@ -386,6 +407,7 @@ export function installAutomaticCharacterReturn(
 
   return Object.freeze({
     savedCredentialsLoaded,
+    savedCredentialsUnavailable,
     tokenRequested,
     clearStatus,
     dispose() {
