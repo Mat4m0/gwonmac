@@ -59,19 +59,22 @@ export function readCompanionSkillSlots(buffer: ArrayBuffer, pointer: number) {
     const reason = SKILL_GEOMETRY_NATIVE_REASONS[
       outcome as keyof typeof SKILL_GEOMETRY_NATIVE_REASONS
     ];
-    if (reason === undefined || candidateCount > 16_384) {
+    if (
+      reason === undefined
+      || (reason === "slot-ambiguous"
+        ? candidateCount < 2 || candidateCount > 16_384
+        : candidateCount !== 0)
+    ) {
       return Object.freeze({ status: "waiting", reason: "snapshot" } as const);
     }
-    return Object.freeze({
-      status: "waiting" as const,
-      reason,
-      candidateCount,
-    });
+    return reason === "slot-ambiguous"
+      ? Object.freeze({ status: "waiting" as const, reason, candidateCount })
+      : Object.freeze({ status: "waiting" as const, reason });
   }
   const finite = (value: number) => Number.isFinite(value) && Math.abs(value) <= 32_768;
   if (
     outcome !== 0
-    || candidateCount !== 8
+    || candidateCount !== 0
     || frameId === 0
     || !finite(viewportWidth)
     || !finite(viewportHeight)

@@ -12,8 +12,8 @@ import type {
   ClientSession,
 } from '../shared/contracts.js';
 import type { EnhancementProgram } from '../shared/enhancement-contracts.js';
-import type { EnhancementLiveState } from './observer-live-state.js';
-import { enhancementLiveState } from './observer-live-state.js';
+import type { ObserverReadiness } from './observer-readiness.js';
+import { observerReadiness } from './observer-readiness.js';
 
 export type CompatibilityReport = {
   degraded: boolean;
@@ -207,7 +207,7 @@ function cooldownPresentationStatus(
   return cooldown;
 }
 
-function skillGeometryLiveLabel(state: EnhancementLiveState['skillGeometry']): string {
+function skillGeometryLiveLabel(state: ObserverReadiness['skillGeometry']): string {
   if (state.status === 'ready') return 'Working — live skill bar detected';
   switch (state.reason) {
     case 'inactive':
@@ -228,7 +228,7 @@ export function renderEnhancementLiveAvailability(
   root: Document,
   session: ClientSession,
   program: EnhancementProgram = 'none',
-  live: EnhancementLiveState = enhancementLiveState(),
+  live: ObserverReadiness = observerReadiness(),
 ): void {
   const compatibility = session.compatibility;
   if (!compatibility) return;
@@ -243,7 +243,7 @@ export function renderEnhancementLiveAvailability(
       ? featureStatusLabel(cooldown, program)
       : live.skillGeometry.status !== 'ready'
         ? skillGeometryLiveLabel(live.skillGeometry)
-        : live.skillCooldowns.status === 'ready'
+        : live.skillCooldowns === 'ready'
           ? 'Working — live cooldown data detected'
           : 'Supported — waiting for recharge data';
 }

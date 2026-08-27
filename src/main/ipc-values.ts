@@ -265,14 +265,15 @@ export function parseRendererMilestoneArgs(args: readonly unknown[]): ParsedMile
     const waiting = recordIsObject && record.state === "waiting"
       && typeof record.reason === "string"
       && (SKILL_GEOMETRY_WAIT_REASONS as readonly string[]).includes(record.reason)
-      && (record.candidates === null
-        || (typeof record.candidates === "number"
+      && (record.reason === "slot-ambiguous"
+        ? (typeof record.candidates === "number"
           && Number.isSafeInteger(record.candidates)
-          && record.candidates >= 0
-          && record.candidates <= 16_384));
+          && record.candidates >= 2
+          && record.candidates <= 16_384)
+        : record.candidates === null);
     const ready = recordIsObject && record.state === "ready"
       && record.reason === null
-      && record.candidates === 8;
+      && record.candidates === null;
     if (!recordIsObject || Object.keys(record).length !== 3 || (!waiting && !ready)) {
       throw new ValidationError("invalid renderer milestone");
     }

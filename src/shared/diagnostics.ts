@@ -12,6 +12,8 @@
  * so changing them makes existing exports incomparable rather than merely
  * differently shaped.
  */
+import { SKILL_GEOMETRY_NATIVE_REASONS } from "./companion-abi.js";
+
 export type DiagnosticLevel = "debug" | "info" | "warn" | "error";
 
 export type DiagnosticSubsystem =
@@ -243,20 +245,7 @@ export const SKILL_GEOMETRY_WAIT_REASONS = [
   "snapshot",
   "corrupt",
   "stale",
-  "inactive",
-  "invalid-input",
-  "frame-table",
-  "parent-missing",
-  "parent-hidden",
-  "slot-missing",
-  "slot-ambiguous",
-  "slot-relation",
-  "slot-hidden",
-  "viewport-invalid",
-  "slot-nonfinite",
-  "slot-order",
-  "slot-outside-viewport",
-  "viewport-mismatch",
+  ...Object.values(SKILL_GEOMETRY_NATIVE_REASONS),
 ] as const;
 export type SkillGeometryWaitReason =
   (typeof SKILL_GEOMETRY_WAIT_REASONS)[number];

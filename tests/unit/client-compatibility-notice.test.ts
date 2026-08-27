@@ -347,25 +347,8 @@ describe("client compatibility notice", () => {
     renderEnhancementLiveAvailability(dom.root, session, "none", {
       skillGeometry: {
         status: "ready",
-        sequence: 2,
-        frameId: 1,
-        viewportWidth: 800,
-        viewportHeight: 600,
-        slots: Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({
-          left: 100 + index * 52,
-          bottom: -12,
-          right: 148 + index * 52,
-          top: 36,
-        }))),
       },
-      skillCooldowns: {
-        status: "ready",
-        sequence: 2,
-        generation: 1,
-        gameTimer: 1_000,
-        playerAgentId: 1,
-        rechargeTimestamps: Object.freeze([0, 0, 0, 0, 0, 0, 0, 0]),
-      },
+      skillCooldowns: "ready",
     });
     assert.equal(
       dom.element("settings-feature-skillSlotGeometry").textContent,

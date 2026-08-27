@@ -18,20 +18,24 @@ const MAX_FRAMES: u32 = 16_384;
 const CACHE_AUDIT_TICKS: u32 = 30;
 const CREATED: u32 = 0x4;
 const HIDDEN: u32 = 0x200;
-const OUTCOME_INACTIVE: u32 = 1;
-const OUTCOME_INVALID_INPUT: u32 = 2;
-const OUTCOME_FRAME_TABLE: u32 = 3;
-const OUTCOME_PARENT_MISSING: u32 = 4;
-const OUTCOME_PARENT_HIDDEN: u32 = 5;
-const OUTCOME_SLOT_MISSING: u32 = 6;
-const OUTCOME_SLOT_AMBIGUOUS: u32 = 7;
-const OUTCOME_SLOT_RELATION: u32 = 8;
-const OUTCOME_SLOT_HIDDEN: u32 = 9;
-const OUTCOME_VIEWPORT_INVALID: u32 = 10;
-const OUTCOME_SLOT_NONFINITE: u32 = 11;
-const OUTCOME_SLOT_ORDER: u32 = 12;
-const OUTCOME_SLOT_OUTSIDE_VIEWPORT: u32 = 13;
-const OUTCOME_VIEWPORT_MISMATCH: u32 = 14;
+#[derive(Clone, Copy)]
+#[repr(u32)]
+enum Outcome {
+    Inactive = 1,
+    InvalidInput = 2,
+    FrameTable = 3,
+    ParentMissing = 4,
+    ParentHidden = 5,
+    SlotMissing = 6,
+    SlotAmbiguous = 7,
+    SlotRelation = 8,
+    SlotHidden = 9,
+    ViewportInvalid = 10,
+    SlotNonfinite = 11,
+    SlotOrder = 12,
+    SlotOutsideViewport = 13,
+    ViewportMismatch = 14,
+}
 
 static mut POINTER: u32 = 0;
 static mut SEQUENCE: u32 = 0;
@@ -99,25 +103,25 @@ unsafe fn visible(layout: Layout, frame: u32) -> bool {
         .is_some_and(|state| state & CREATED != 0 && state & HIDDEN == 0)
 }
 
-unsafe fn rect(layout: Layout, frame: u32) -> Result<(SkillSlotRect, f32, f32), u32> {
+unsafe fn rect(layout: Layout, frame: u32) -> Result<(SkillSlotRect, f32, f32), Outcome> {
     let read = |field| offset(frame, field).and_then(|at| unsafe { read_f32(at) });
-    let viewport_width = read(layout.frame_viewport_width).ok_or(OUTCOME_VIEWPORT_INVALID)?;
-    let viewport_height = read(layout.frame_viewport_height).ok_or(OUTCOME_VIEWPORT_INVALID)?;
+    let viewport_width = read(layout.frame_viewport_width).ok_or(Outcome::ViewportInvalid)?;
+    let viewport_height = read(layout.frame_viewport_height).ok_or(Outcome::ViewportInvalid)?;
     let next = SkillSlotRect {
-        left: read(layout.frame_screen_left).ok_or(OUTCOME_SLOT_NONFINITE)?,
-        bottom: read(layout.frame_screen_bottom).ok_or(OUTCOME_SLOT_NONFINITE)?,
-        right: read(layout.frame_screen_right).ok_or(OUTCOME_SLOT_NONFINITE)?,
-        top: read(layout.frame_screen_top).ok_or(OUTCOME_SLOT_NONFINITE)?,
+        left: read(layout.frame_screen_left).ok_or(Outcome::SlotNonfinite)?,
+        bottom: read(layout.frame_screen_bottom).ok_or(Outcome::SlotNonfinite)?,
+        right: read(layout.frame_screen_right).ok_or(Outcome::SlotNonfinite)?,
+        top: read(layout.frame_screen_top).ok_or(Outcome::SlotNonfinite)?,
     };
     if !finite(viewport_width) || !finite(viewport_height)
         || viewport_width <= 0.0 || viewport_height <= 0.0 {
-        return Err(OUTCOME_VIEWPORT_INVALID);
+        return Err(Outcome::ViewportInvalid);
     }
     if ![next.left, next.bottom, next.right, next.top].iter().all(|value| finite(*value)) {
-        return Err(OUTCOME_SLOT_NONFINITE);
+        return Err(Outcome::SlotNonfinite);
     }
     if next.right <= next.left || next.top <= next.bottom {
-        return Err(OUTCOME_SLOT_ORDER);
+        return Err(Outcome::SlotOrder);
     }
     // Guild Wars uses bottom-left coordinates and permits frames to be clipped
     // by a viewport edge. The established FramePosition projection therefore
@@ -129,7 +133,7 @@ unsafe fn rect(layout: Layout, frame: u32) -> Result<(SkillSlotRect, f32, f32), 
         || next.left >= viewport_width
         || next.bottom >= viewport_height
     {
-        return Err(OUTCOME_SLOT_OUTSIDE_VIEWPORT);
+        return Err(Outcome::SlotOutsideViewport);
     }
     Ok((next, viewport_width, viewport_height))
 }
@@ -138,12 +142,16 @@ type Observation = (f32, f32, [SkillSlotRect; 8]);
 
 #[derive(Clone, Copy)]
 struct Refusal {
-    outcome: u32,
+    outcome: Outcome,
     candidate_count: u32,
 }
 
-fn refuse(outcome: u32, candidate_count: u32) -> Refusal {
-    Refusal { outcome, candidate_count }
+fn refuse(outcome: Outcome) -> Refusal {
+    Refusal { outcome, candidate_count: 0 }
+}
+
+fn refuse_ambiguity(candidate_count: u32) -> Refusal {
+    Refusal { outcome: Outcome::SlotAmbiguous, candidate_count }
 }
 
 unsafe fn collect_cached(
@@ -154,32 +162,32 @@ unsafe fn collect_cached(
     slot_ids: [u32; 8],
 ) -> Result<Observation, Refusal> {
     let parent = unsafe { frame_at(layout, array, count, skill_bar_id) }
-        .ok_or_else(|| refuse(OUTCOME_PARENT_MISSING, 0))?;
+        .ok_or_else(|| refuse(Outcome::ParentMissing))?;
     if !unsafe { visible(layout, parent) } {
-        return Err(refuse(OUTCOME_PARENT_HIDDEN, 0));
+        return Err(refuse(Outcome::ParentHidden));
     }
     let parent_relation = offset(parent, layout.frame_relation)
-        .ok_or_else(|| refuse(OUTCOME_SLOT_RELATION, 0))?;
+        .ok_or_else(|| refuse(Outcome::SlotRelation))?;
     let mut slots = [EMPTY_RECT; 8];
     let mut viewport_width = 0.0;
     let mut viewport_height = 0.0;
     for (child, id) in slot_ids.iter().copied().enumerate() {
         let frame = unsafe { frame_at(layout, array, count, id) }
-            .ok_or_else(|| refuse(OUTCOME_SLOT_MISSING, child as u32))?;
+            .ok_or_else(|| refuse(Outcome::SlotMissing))?;
         let relation = offset(frame, layout.frame_relation)
             .and_then(|at| unsafe { read_u32(at) });
         let stored_child = offset(frame, layout.frame_child_offset_id)
             .and_then(|at| unsafe { read_u32(at) });
         if relation != Some(parent_relation) || stored_child != Some(child as u32) {
-            return Err(refuse(OUTCOME_SLOT_RELATION, child as u32));
+            return Err(refuse(Outcome::SlotRelation));
         }
         if !unsafe { visible(layout, frame) } {
-            return Err(refuse(OUTCOME_SLOT_HIDDEN, child as u32));
+            return Err(refuse(Outcome::SlotHidden));
         }
         let (bounds, width, height) = unsafe { rect(layout, frame) }
-            .map_err(|outcome| refuse(outcome, child as u32))?;
+            .map_err(refuse)?;
         if child != 0 && (width != viewport_width || height != viewport_height) {
-            return Err(refuse(OUTCOME_VIEWPORT_MISMATCH, child as u32));
+            return Err(refuse(Outcome::ViewportMismatch));
         }
         viewport_width = width;
         viewport_height = height;
@@ -195,14 +203,15 @@ unsafe fn discover(
     skill_bar_id: u32,
 ) -> Result<(Observation, [u32; 8]), Refusal> {
     let parent = unsafe { frame_at(layout, array, count, skill_bar_id) }
-        .ok_or_else(|| refuse(OUTCOME_PARENT_MISSING, 0))?;
+        .ok_or_else(|| refuse(Outcome::ParentMissing))?;
     if !unsafe { visible(layout, parent) } {
-        return Err(refuse(OUTCOME_PARENT_HIDDEN, 0));
+        return Err(refuse(Outcome::ParentHidden));
     }
     let parent_relation = offset(parent, layout.frame_relation)
-        .ok_or_else(|| refuse(OUTCOME_SLOT_RELATION, 0))?;
+        .ok_or_else(|| refuse(Outcome::SlotRelation))?;
     let mut slot_ids = [0_u32; 8];
     let mut found = 0_u32;
+    let mut candidate_counts = [0_u32; 8];
     for id in 1..count {
         let Some(frame) = (unsafe { frame_at(layout, array, count, id) }) else {
             continue;
@@ -220,16 +229,21 @@ unsafe fn discover(
         if child >= 8 || !unsafe { visible(layout, frame) } {
             continue;
         }
-        // Two visible frames claiming one skill slot are ambiguous. Never let
-        // table order decide which plausible-looking rectangle reaches the HUD.
-        if found & (1 << child) != 0 {
-            return Err(refuse(OUTCOME_SLOT_AMBIGUOUS, found.count_ones() + 1));
+        candidate_counts[child as usize] = candidate_counts[child as usize].saturating_add(1);
+        if found & (1 << child) == 0 {
+            slot_ids[child as usize] = id;
+            found |= 1 << child;
         }
-        slot_ids[child as usize] = id;
-        found |= 1 << child;
+    }
+    // Never let table order choose between two visible frames that claim the
+    // same slot. Finish the bounded scan so the diagnostic count has one exact
+    // meaning: the largest number of candidates for a single slot.
+    let candidate_count = candidate_counts.iter().copied().max().unwrap_or(0);
+    if candidate_count > 1 {
+        return Err(refuse_ambiguity(candidate_count));
     }
     if found != 0xff {
-        return Err(refuse(OUTCOME_SLOT_MISSING, found.count_ones()));
+        return Err(refuse(Outcome::SlotMissing));
     }
     let observed = unsafe { collect_cached(layout, array, count, skill_bar_id, slot_ids)? };
     Ok((observed, slot_ids))
@@ -237,10 +251,10 @@ unsafe fn discover(
 
 unsafe fn collect(layout: Layout, skill_bar_id: u32) -> Result<Observation, Refusal> {
     if skill_bar_id == 0 || !valid_layout(layout) {
-        return Err(refuse(OUTCOME_INVALID_INPUT, 0));
+        return Err(refuse(Outcome::InvalidInput));
     }
     let (array, count) = unsafe { frame_table(layout) }
-        .ok_or_else(|| refuse(OUTCOME_FRAME_TABLE, 0))?;
+        .ok_or_else(|| refuse(Outcome::FrameTable))?;
     let cache_matches = unsafe {
         CACHE_PARENT_ID == skill_bar_id
             && CACHE_FRAME_COUNT == count
@@ -269,8 +283,15 @@ unsafe fn publish(frame_id: u32, observed: Result<Observation, Refusal>) {
     let next = unsafe { SEQUENCE }.wrapping_add(2) & !1;
     let snapshot = unsafe { POINTER as *mut SkillSlotSnapshot };
     let (flags, outcome, candidate_count, viewport_width, viewport_height, slots) = match observed {
-        Ok((width, height, slots)) => (FLAG_SKILL_SLOTS_READY, 0, 8, width, height, slots),
-        Err(refusal) => (0, refusal.outcome, refusal.candidate_count, 0.0, 0.0, [EMPTY_RECT; 8]),
+        Ok((width, height, slots)) => (FLAG_SKILL_SLOTS_READY, 0, 0, width, height, slots),
+        Err(refusal) => (
+            0,
+            refusal.outcome as u32,
+            refusal.candidate_count,
+            0.0,
+            0.0,
+            [EMPTY_RECT; 8],
+        ),
     };
     unsafe {
         write_volatile(&mut (*snapshot).sequence, next.wrapping_sub(1));
@@ -300,7 +321,7 @@ pub(crate) unsafe fn initialize(pointer: u32) {
     for index in 0..SKILL_SLOT_BYTES / 4 {
         unsafe { write_volatile((pointer + index * 4) as *mut u32, 0) };
     }
-    unsafe { publish(0, Err(refuse(OUTCOME_INACTIVE, 0))) };
+    unsafe { publish(0, Err(refuse(Outcome::Inactive))) };
 }
 
 pub(crate) unsafe fn tick(layout: Layout, skill_bar_id: u32) {

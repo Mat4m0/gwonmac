@@ -336,9 +336,9 @@
       feedback: setFeedback,
     }));
   void Promise.all([
-    import('./observer-live-state.js'),
+    import('./observer-readiness.js'),
     import('./client-compatibility-notice.js'),
-  ]).then(([live, compatibility]) => live.subscribeEnhancementLiveState((state) => {
+  ]).then(([readiness, compatibility]) => readiness.subscribeObserverReadiness((state) => {
     if (!currentSession) return;
     compatibility.renderEnhancementLiveAvailability(
       document,

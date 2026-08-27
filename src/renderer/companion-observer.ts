@@ -50,11 +50,13 @@ export type StateConsumer = {
 
 export type SkillSlotConsumer = {
   enabled?(): boolean;
+  inactive?(): void;
   update(state: CompanionSkillSlotState): void;
 };
 
 export type SkillCooldownConsumer = {
   enabled?(): boolean;
+  inactive?(): void;
   update(state: CompanionSkillCooldownState): void;
 };
 
@@ -104,10 +106,6 @@ export function observeCompanion(
   playRegion: PlayRegionConsumer | null = null,
   readers: OptionalObserverReaders | null = null,
   firstObservation: (consumer: EnhancementObserverConsumer) => void = () => {},
-  liveState: Readonly<{
-    skillGeometry?(state: CompanionSkillSlotState): void;
-    skillCooldowns?(state: CompanionSkillCooldownState): void;
-  }> = {},
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -200,11 +198,7 @@ export function observeCompanion(
       }
     }
     if (skillSlots && skillSlots.enabled?.() === false) {
-      liveState.skillGeometry?.(Object.freeze({
-        status: "waiting",
-        reason: "inactive",
-        candidateCount: 0,
-      }));
+      skillSlots.inactive?.();
     } else if (skillSlots) {
       if (!readers) throw new Error("Tools skill readers are unavailable");
       const state = readers.readCompanionSkillSlots(
@@ -212,11 +206,10 @@ export function observeCompanion(
         runtime.skillSlotPointer ?? 0,
       );
       skillSlots.update(state);
-      liveState.skillGeometry?.(state);
       if (state.status === "ready") firstObservation("skill-geometry");
     }
     if (skillCooldowns && skillCooldowns.enabled?.() === false) {
-      liveState.skillCooldowns?.(Object.freeze({ status: "waiting", reason: "game" }));
+      skillCooldowns.inactive?.();
     } else if (skillCooldowns) {
       if (!readers) throw new Error("Tools skill readers are unavailable");
       const state = readers.readCompanionSkillCooldowns(
@@ -224,7 +217,6 @@ export function observeCompanion(
         runtime.skillCooldownPointer ?? 0,
       );
       skillCooldowns.update(state);
-      liveState.skillCooldowns?.(state);
       if (state.status === "ready") firstObservation("cooldowns");
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.

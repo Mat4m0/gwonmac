@@ -38,11 +38,7 @@ describe("skill-slot geometry kernel", () => {
 
     kernel.view.setUint32(ADDRESSES.frameTable + 9 * 4, 0, true);
     kernel.tick(1);
-    assert.deepEqual(kernel.skillSlots(), {
-      status: "waiting",
-      reason: "slot-missing",
-      candidateCount: 7,
-    });
+    assert.deepEqual(kernel.skillSlots(), { status: "waiting", reason: "slot-missing" });
   });
 
   it("accepts a valid skill bar clipped by a viewport edge", async () => {
@@ -83,7 +79,7 @@ describe("skill-slot geometry kernel", () => {
     assert.deepEqual(kernel.skillSlots(), {
       status: "waiting",
       reason: "slot-ambiguous",
-      candidateCount: 9,
+      candidateCount: 2,
     });
   });
 
@@ -106,7 +102,7 @@ describe("skill-slot geometry kernel", () => {
     assert.deepEqual(kernel.skillSlots(), {
       status: "waiting",
       reason: "slot-ambiguous",
-      candidateCount: 9,
+      candidateCount: 2,
     });
   });
 });

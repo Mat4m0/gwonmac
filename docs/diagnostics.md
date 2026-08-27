@@ -51,7 +51,12 @@ but has not supplied usable data in this renderer. `Working — live skill bar
 detected` requires one complete eight-slot geometry publication.
 `Working — live cooldown data detected` additionally requires the player
 cooldown publication. A cooldown number is expected only while a skill is
-recharging, and a key badge is expected only for a configured slot.
+recharging, and a key badge is expected only for a configured slot. The live
+Settings projection retains only these closed readiness states; it does not
+retain coordinates, timers, agent IDs, recharge arrays, pointers, or other game
+data. A skill-geometry candidate count is present only for `slot-ambiguous`,
+where it is the largest number of visible frame candidates claiming one slot.
+Every other geometry outcome records `null`.
 
 Skill rectangles use Guild Wars' signed bottom-left `screen_*` coordinate
 space. A frame may cross a viewport edge and remain valid. The observer rejects
