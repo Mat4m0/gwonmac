@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import {
-  TRAVEL_DESTINATIONS,
   TRAVEL_SEARCH_QUERY_LIMIT,
   TRAVEL_SHORTCUT_LIMIT,
   highlightTravelDestinationName,
   isTravelRequest,
   normaliseTravelTerm,
   searchTravelDestinations,
+  travelBrowseScope,
   travelDestination,
   type TravelDestination,
   type TravelRequest,
@@ -72,6 +72,10 @@ const assignedShortcuts = computed(() => shortcutRows.value.filter(
 const currentMapId = computed(() =>
   props.host.state.value.status === "ready" ? props.host.state.value.mapId : null
 );
+const browseUnlocksKnown = computed(() =>
+  props.host.state.value.status === "ready"
+  && props.host.state.value.unlockedMapWords !== null
+);
 const recentDestinations = computed(() => props.host.history.value
   .filter((mapId) => mapId !== currentMapId.value && isAvailable(mapId))
   .map((mapId) => travelDestination(mapId))
@@ -79,8 +83,8 @@ const recentDestinations = computed(() => props.host.history.value
   .slice(0, TRAVEL_HISTORY_VISIBLE_LIMIT));
 const browseDestinations = computed(() => {
   const state = props.host.state.value;
-  if (state.status !== "ready" || state.unlockedMapWords === null) return [];
-  const destinations = TRAVEL_DESTINATIONS.filter(({ mapId }) => isAvailable(mapId));
+  if (state.status !== "ready") return [];
+  const destinations = travelBrowseScope(state.mapId).filter(({ mapId }) => isAvailable(mapId));
   return destinations.length <= SMALL_TRAVEL_CATALOGUE_LIMIT
     ? [...destinations].sort((left, right) => left.name.localeCompare(right.name, "en"))
     : [];
@@ -418,7 +422,7 @@ function onKeydown(event: KeyboardEvent): void {
 
     <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="region" aria-label="Travel">
       <section v-if="showingSmallCatalogue" class="travel-section travel-available" aria-labelledby="travel-available-title">
-        <header class="travel-section-head"><h2 id="travel-available-title">Available destinations</h2><span>{{ browseDestinations.length }} unlocked</span></header>
+        <header class="travel-section-head"><h2 id="travel-available-title">{{ browseUnlocksKnown ? 'Available destinations' : 'Destinations' }}</h2><span>{{ browseDestinations.length }} {{ browseUnlocksKnown ? 'unlocked' : 'nearby' }}</span></header>
         <div id="travel-available" class="travel-recent-grid" role="listbox">
           <button v-for="destination in browseDestinations" :id="`travel-${destination.mapId}`" :key="destination.mapId" type="button" class="travel-recent ui-row" role="option" :data-current="destination.mapId === currentMapId || undefined" :disabled="travelPending || host.unavailable !== null || destination.mapId === currentMapId" :aria-current="destination.mapId === currentMapId ? 'location' : undefined" :aria-selected="destination.mapId === activeDestination?.mapId" :aria-label="browseDestinationLabel(destination)" @mouseenter="activateBrowseDestination(destination.mapId)" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><span class="travel-destination-context"><span v-if="shortcutNumber(destination.mapId) !== null" class="travel-shortcut-context" :title="`Shortcut ${shortcutNumber(destination.mapId)}`" aria-hidden="true">{{ shortcutNumber(destination.mapId) }}</span><span v-if="destination.mapId === currentMapId" class="travel-current">Current</span><span v-else-if="wasRecentlyVisited(destination.mapId)" class="travel-current">Recent</span><svg v-else viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></span></button>
         </div>

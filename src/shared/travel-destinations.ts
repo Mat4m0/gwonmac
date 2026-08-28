@@ -244,6 +244,28 @@ export const TRAVEL_DESTINATIONS: readonly TravelDestination[] = Object.freeze([
   destination(795, "Zaishen Menagerie", "Battle Isles", ["menagerie"]),
 ]);
 
+const PRE_SEARING_MAP_IDS: readonly number[] = Object.freeze([
+  148, 164, 165, 166, 163, 778,
+]);
+
+/**
+ * Returns the destination group that is useful around the current outpost.
+ * Cross-campaign unlocks (especially the Battle Isles) must not make a small
+ * early-game catalogue look large. Pre-Searing is kept separate from the rest
+ * of Prophecies because its characters cannot cross the Searing boundary.
+ */
+export function travelBrowseScope(currentMapId: number): readonly TravelDestination[] {
+  const current = travelDestination(currentMapId);
+  if (current === null) return [];
+  const preSearing = PRE_SEARING_MAP_IDS.includes(currentMapId);
+  return TRAVEL_DESTINATIONS.filter((candidate) =>
+    preSearing
+      ? PRE_SEARING_MAP_IDS.includes(candidate.mapId)
+      : candidate.campaign === current.campaign
+        && !PRE_SEARING_MAP_IDS.includes(candidate.mapId)
+  );
+}
+
 export function travelDestination(mapId: number): TravelDestination | null {
   return TRAVEL_DESTINATIONS.find((candidate) => candidate.mapId === mapId) ?? null;
 }
