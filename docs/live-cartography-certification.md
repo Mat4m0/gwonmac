@@ -75,4 +75,3 @@ Stop and fail closed if:
 - stale data survives loading or a generation mismatch;
 - geometry becomes dense, unbounded, or redraws continuously while idle; or
 - Guild Wars input is intercepted.
-

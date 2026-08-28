@@ -42,4 +42,3 @@ The operator matrix and capture labels are in
 [Live cartography certification](live-cartography-certification.md). Shipping
 requires stable projection through movement, rotation, pan, zoom, map-window
 move and resize, game-window resize, map transitions, and context restoration.
-
