@@ -48,6 +48,9 @@
   ) as HTMLInputElement;
   const updateTrack = form.elements.namedItem('updateTrack') as HTMLSelectElement;
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
+  const cartographyOverlayEnabled = form.elements.namedItem(
+    'cartographyOverlayEnabled',
+  ) as HTMLInputElement;
   const buildLibrary = form.elements.namedItem('buildLibrary') as HTMLInputElement;
   const tradeChat = form.elements.namedItem('tradeChat') as HTMLInputElement;
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
@@ -319,6 +322,13 @@
       feedback: setFeedback,
       copy: (text) => window.gwNative.clipboard.writeText(text),
     }));
+  const cartographySettings = import('./settings-cartography.js').then((module) =>
+    module.bindCartographySettings({
+      form,
+      persist: persistSettings,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      feedback: setFeedback,
+    }));
   void import('./settings-accounts.js').then((module) =>
     module.bindAccountSettings({
       enable: accountsEnable,
@@ -533,6 +543,7 @@
           ? { autoRelogAfterReload: control.checked }
           : null;
       case 'gwonmacTools':
+      case 'cartographyOverlayEnabled':
       case 'buildLibrary':
       case 'tradeChat':
       case 'xunlaiStorage':
@@ -579,6 +590,7 @@
     autoRelogAfterReload.checked = settings.autoRelogAfterReload;
     diagnosticProfile.value = selectedDiagnosticProfile;
     gwonmacTools.checked = settings.gwonmacTools;
+    cartographyOverlayEnabled.checked = settings.cartographyOverlayEnabled;
     buildLibrary.checked = settings.buildLibrary;
     tradeChat.checked = settings.tradeChat;
     xunlaiStorage.checked = settings.xunlaiStorage;
@@ -590,6 +602,7 @@
     void skillKeySettings.then((binder) => binder.render(settings));
     void skillCooldownSettings.then((binder) => binder.render(settings));
     void themeSettings.then((binder) => binder.render(settings));
+    void cartographySettings.then((binder) => binder.render(settings));
     toolFeatures.hidden = !settings.gwonmacTools;
     toolsOff.hidden = settings.gwonmacTools;
     toolsRestartRequired.hidden = !(

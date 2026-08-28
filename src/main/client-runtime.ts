@@ -121,6 +121,7 @@ interface ClientRuntimeOptions {
   cachedOnly: boolean;
   enhancementCapabilities: EnhancementCapabilities;
   enhancementProgram?: EnhancementProgram;
+  cartographySpike?: boolean;
   extendedMemoryEnabled: boolean;
   diagnosticProfile: DiagnosticProfile;
   onProgress: (progress: DownloadProgress) => void;
@@ -365,6 +366,9 @@ export class ClientRuntime {
       enhancementCapabilities: this.options.enhancementCapabilities,
       compatibilityCacheRoot: this.options.paths.compatibility,
       enhancementCacheRoot: this.options.paths.enhancements,
+      ...(this.options.cartographySpike
+        ? { cartographySpike: { cacheRoot: this.options.paths.cartographySpike } }
+        : {}),
       nativeDoubleClickCacheRoot: this.options.paths.nativeDoubleClick,
       extendedMemoryCacheRoot: this.options.paths.extendedMemory,
       extendedMemoryEnabled: this.options.extendedMemoryEnabled,
@@ -539,7 +543,9 @@ export class ClientRuntime {
       enhancementVerification: {
         requestedProfile: enhancementCapabilityProfile(requested),
         effectiveProfile: enhancementCapabilityProfile(effective),
-        preparationFailureStage: prepared.failure?.stage
+        preparationFailureStage: prepared.failure?.stage === "cartography-spike"
+          ? null
+          : prepared.failure?.stage
           ?? (local?.status === "template-refused" ? "template-save"
             : local?.status === "enhancement-refused" ? "enhancement" : null),
         featureVerdicts: runtimeFeatureVerdicts(local?.featureVerdicts ?? null),

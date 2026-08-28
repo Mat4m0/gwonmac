@@ -27,6 +27,12 @@ export const ENHANCEMENT_AUTOMATION_ENABLED =
   && process.env.GW_LIVE_SMOKE === "1"
   && process.env.GW_ENHANCEMENT_AUTOMATION === "1";
 
+/** Exact-client scalar pathing sampler; never honored by packaged builds. */
+export const CARTOGRAPHY_SPIKE_ENABLED =
+  !app.isPackaged
+  && process.env.GW_LIVE_SMOKE === "1"
+  && process.env.GW_CARTOGRAPHY_SPIKE === "1";
+
 const requestedProgram = process.env.GW_ENHANCEMENT_PROGRAM;
 
 /**

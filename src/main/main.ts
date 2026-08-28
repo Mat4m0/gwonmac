@@ -81,6 +81,7 @@ import { gamePaths } from "./paths.js";
 import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
+  CARTOGRAPHY_SPIKE_ENABLED,
   enhancementSelectionFor,
   requestedEnhancementCapabilities,
 } from "./certification/enhancement-policy.js";
@@ -616,6 +617,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     enhancementCapabilities,
     enhancementProgram,
+    cartographySpike: CARTOGRAPHY_SPIKE_ENABLED,
     extendedMemoryEnabled: settings.extendedMemoryEnabled,
     diagnosticProfile,
     onProgress: setProgress,

@@ -43,6 +43,7 @@ import {
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
+import { prepareCartographySpike } from "./cartography-spike-client.js";
 import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
 import {
   nativeDoubleClickOutputSha256,
@@ -71,6 +72,7 @@ export interface ClientModulePreparationFailure {
   readonly stage:
     | "template-save"
     | "enhancement"
+    | "cartography-spike"
     | "native-double-click";
   readonly error: unknown;
 }
@@ -152,6 +154,8 @@ export interface PrepareClientModuleOptions {
   readonly enhancementCapabilities: EnhancementCapabilities;
   readonly compatibilityCacheRoot: string;
   readonly enhancementCacheRoot: string;
+  /** Development-only. Omitted by every normal preparation caller. */
+  readonly cartographySpike?: Readonly<{ cacheRoot: string }>;
   readonly nativeDoubleClickCacheRoot: string;
   readonly extendedMemoryCacheRoot: string;
   readonly extendedMemoryEnabled: boolean;
@@ -297,8 +301,26 @@ export async function prepareClientModule(
     wasmInputSha256: string;
   }) => Promise<ExtendedMemoryStructuralProof | null> = async () => null,
 ): Promise<PreparedClientModule> {
+  const certified = await prepareCertifiedChain(options);
+  const cartography = options.cartographySpike
+    ? await prepareCartographySpike(
+        certified.wasmPath,
+        certified.wasmSha256,
+        options.cartographySpike.cacheRoot,
+      )
+    : null;
+  const cartographyPrepared: PreparedWasmClientModule = cartography === null
+    ? certified
+    : {
+        ...certified,
+        wasmPath: cartography.wasmPath,
+        wasmSha256: cartography.wasmSha256,
+        failure: cartography.error === null
+          ? certified.failure
+          : certified.failure ?? { stage: "cartography-spike", error: cartography.error },
+      };
   const prepared = await withNativeDoubleClick(
-    await prepareCertifiedChain(options),
+    cartographyPrepared,
     options.nativeDoubleClickCacheRoot,
     verifyNativeDoubleClick,
   );
@@ -355,10 +377,11 @@ export async function prepareClientModule(
 /**
  * Select and prepare the one client module this launch serves.
  *
- * The chain is fixed: official -> template-save -> optional Enhancement. Unknown
- * and disabled stages delete caches they cannot use. A transform failure is
- * graceful and leaves the last good cache intact, but never serves it for a
- * different input.
+ * The product chain is fixed: official -> template-save -> optional
+ * Enhancement. The development-only cartography stage is appended afterward
+ * by `prepareClientModule`. Unknown and disabled stages delete caches they
+ * cannot use. A transform failure is graceful and leaves the last good cache
+ * intact, but never serves it for a different input.
  */
 async function prepareCertifiedChain(
   options: PrepareClientModuleOptions,

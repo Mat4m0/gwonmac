@@ -27,6 +27,11 @@ import type { VirtualGamepadController } from "./virtual-gamepad.js";
 import type { ControllerPromptTextureStats } from "./controller-prompt-texture.js";
 import type { TextureReconController } from "./webgl-texture-recon.js";
 import type {
+  CompassFrameSpikeController,
+  MissionMapFrameSpikeController,
+  PathingSpikeController,
+} from "../shared/cartography-spike.js";
+import type {
   InputTrace as SharedInputTrace,
   InputTraceEntry as SharedInputTraceEntry,
   InputTraceRecord as SharedInputTraceRecord,
@@ -260,6 +265,12 @@ declare global {
     gwControllerPromptTextureStats?(): ControllerPromptTextureStats;
     /** Bounded texture activity and fingerprints; unpackaged development only. */
     gwTextureRecon?: TextureReconController;
+    /** Fixed scalar pathing sample; unpackaged development spike only. */
+    gwPathingSpike?: PathingSpikeController;
+    /** Certified native Compass frame scalars; unpackaged development spike only. */
+    gwCompassFrameSpike?: CompassFrameSpikeController;
+    /** Certified native Mission Map frame scalars; unpackaged development spike only. */
+    gwMissionMapFrameSpike?: MissionMapFrameSpikeController;
     /** Unpackaged-development controller used to exercise Guild Wars' real gamepad UI. */
     gwVirtualGamepad?: VirtualGamepadController;
     gwResolveClientCompatibility(): Promise<void>;

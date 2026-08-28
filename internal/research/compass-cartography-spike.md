@@ -5,6 +5,53 @@ Status: active research on branch `test/compass-cartography-recon`.
 This spike answers whether gwonmac can support a clearer compass, range rings,
 map borders, and cartography help. It does not implement a player feature.
 
+## Current verdict and product boundary
+
+The feasibility question has moved past “can we draw it?” The exact build now
+supports a closed, development-only path from certified native values to a
+pointer-transparent overlay:
+
+| Surface | Verdict | Remaining gate |
+| --- | --- | --- |
+| Compass inverse walkability mask | **Feasible** | Production lifecycle and performance pass. |
+| Mission Map frame placement | **Feasible** | Open, move, resize, game-window resize, and close passed live. |
+| Mission Map inverse walkability mask | **Partial** | Certify zoom, pan, and player map anchor. |
+| Exact generated texture substitution | **Feasible, content-specific** | Keep research-only; no generic asset loader. |
+| Cartography completion/unexplored-area reveal | **Out of scope** | Requires an independently certified exploration mask. |
+
+Ship this as one independent **Compass & Cartography** feature, not as more
+logic in the generic renderer harness. Its canonical input is a map-generation
+snapshot containing bounded pathing geometry and native frame observations.
+The feature owns two presentation adapters: Compass and Mission Map. Each
+adapter fails closed independently, so an uncertain Mission Map transform
+cannot disable the proven Compass mask.
+
+Do not ship the development globals, amber proof outline, checkerboards,
+fingerprint controls, or a generic TexMod-compatible loader. Before adding a
+player setting, complete the Mission Map affine transform or explicitly ship a
+Compass-only first version. The first setting should be one feature toggle with
+one restrained clarity strength; separate colors and per-surface controls are
+not justified yet.
+
+For production, build the bounded geometry cache once per map generation and
+reuse it for both surfaces. Reproject only when the player, direction, native
+frame, zoom, or pan changes. Keep raw WASM values in the certification layer;
+no address or general memory reader may cross into the renderer.
+
+### Proven Mission Map frame lifecycle
+
+On 2026-08-27 the exact `MapWindow` frame resolved uniquely as frame ID 14.
+Its rectangle stayed pixel-aligned while the in-game Mission Map was moved and
+resized and while the whole game window was resized. Closing the Mission Map
+removed the amber proof outline immediately while the Compass mask remained.
+The frame's own viewport dimensions are local to that window; its screen edges
+are global logical coordinates and must be projected through the certified
+global Compass viewport. This relationship is now an explicit tested rule.
+
+Local evidence is retained under
+`test-results/graphics-live/2026-08-27T20-43-37-575Z/` and is intentionally not
+committed.
+
 ## Decision to make
 
 For each candidate, choose one result:
@@ -163,8 +210,10 @@ worth building.
 
 ### Exact pathing certification result
 
-The exact official client proves the pathing record shape, but it does not yet
-prove a safe owner chain. Run the bounded static verdict with:
+The initial static pass proved the pathing record shape but not a safe owner
+chain. A later exact-client wrapper avoided that uncertain chain by observing
+the already-validated live `PathingMap` after Guild Wars completed its own
+converter. Run the bounded static verdict with:
 
 ```sh
 pnpm recon:pathing-certification
@@ -193,17 +242,12 @@ PathContext +0x00 -> MapStaticData
 MapStaticData +0x18 -> PathingMapArray
 ```
 
-The GWCA layout remains a search hypothesis only. There is also no certified
-path-map count, array representation, lifetime, or total trapezoid bound.
-Therefore this branch adds no memory observer and publishes no geometry. A
-development observer without those facts would convert guessed offsets into a
-renderer-visible authority and violate the stop condition.
-
-The next acceptable experiment must first identify one exact client function
-that walks from a certified context owner to the same live `PathingMap` shape.
-Its owner transitions must then be tested at character select, loading, an
-outpost, an explorable area, and return to character select. Only a proved
-fixed-size owner record may precede sampled trapezoids.
+The GWCA owner layout remains a search hypothesis and is not used. The appended
+wrapper retains at most 64 maps, refuses more than 65,536 total trapezoids, and
+copies only bounded scalar coordinates after the original converter succeeds.
+It exports no pointer and resets on the companion map lifecycle. The renderer
+independently rejects stale generations, non-finite or excessive coordinates,
+inverted Y bounds, and reversed left/right edges.
 
 ## Compass geometry and orientation
 
@@ -239,25 +283,14 @@ hides the complete overlay for loading, hidden, stale, malformed, distorted,
 unsupported, or uncertain input. The prototype is not connected to the shipped
 companion ABI.
 
-Complete these live calibration steps before any integration:
+The Compass rectangle, direction, world scale, movement, rotation, and bounded
+live geometry have passed the visible prototype loop. The remaining calibration
+is Mission Map specific:
 
-1. Add a named development reader through the certified frame table. Publish
-   only the closed Compass observation above.
-2. Capture the Compass at UI scales 1x, 1.5x, and 2x. Resize and relocate it at
-   each scale. Confirm that every rectangle follows the native frame.
-3. Stand still with a target whose certified distance is visible. Record the
-   player and target marker separation in Compass pixels at three distances.
-4. Accept a scale only when all measurements produce one stable
-   world-units-per-pixel value within the documented tolerance. Do not average
-   incompatible values.
-5. Rotate the camera through four quarter turns without moving. Confirm that a
-   fixed world marker remains north-up. If it rotates, stop and certify an
-   orientation field before drawing.
-6. Join one Track B synthetic trapezoid with the same map generation. Confirm
-   alignment before accepting any complete live geometry.
-
-Until these steps pass, the prototype remains synthetic and always receives an
-`uncertain` calibration in a live runtime. It therefore renders nothing.
+1. Certify Mission Map zoom, pan, and player map anchor as bounded scalars.
+2. Verify the player marker and three synthetic world points at every zoom.
+3. Pan continuously in both axes and reject any one-frame lag.
+4. Reuse the proven inverse-mask renderer only after that transform passes.
 
 ## Texture investigation stages
 
@@ -408,3 +441,101 @@ open/close and district lifecycles are stable. Forced graphics-context recovery
 is **too fragile** and must fail closed. This evidence supports a narrow
 development substitution path, not a generic TexMod loader or production asset
 pipeline.
+
+## Augmented native map direction
+
+The preferred player-facing result is not a Toolbox-style replacement minimap.
+Keep the native Compass and Mission Map terrain, icons, pings, and markers, then
+mute only the regions outside the certified walkable geometry. Pathing is a
+navigation approximation, so the feature must describe reachable ground rather
+than promise pixel-exact collision boundaries.
+
+Render the effect as an inverse mask:
+
+1. draw a bounded translucent neutral veil over the native map content;
+2. rasterize every certified walkable trapezoid into an offscreen alpha mask;
+3. cut that mask out of the veil with destination-out compositing; and
+4. optionally derive one subtle external contour from the raster mask.
+
+This removes internal trapezoid seams without a polygon-union algorithm. The
+first prototype must omit the contour: accept it only if the muted terrain alone
+does not provide enough separation. The production surface must omit all spike
+frames, needles, labels, and diagnostic colors.
+
+### Compass path
+
+The existing development overlay already has the required closed inputs:
+certified frame geometry, player coordinates, camera direction, map generation,
+and complete bounded pathing geometry. Replacing its direct fill and per-edge
+stroke with the inverse mask requires no new game-state proof.
+
+Acceptance requires stable alignment while moving and rotating, immediate
+refusal during loading or stale generations, no input capture, and a visual
+comparison at three fixed veil strengths. Prefer one product setting with
+`subtle`, `clear`, and `strong` values over independent color controls.
+
+### Mission Map reference result
+
+The current local GWToolbox++ source contains a useful independent reference in
+`GWToolboxdll/Widgets/MissionMapWidget.cpp`. It rasterizes all pathing trapezoids
+into a walkability grid and shades non-walkable cells over the native Mission
+Map. This validates the presentation approach, but its native pointer layouts
+are hypotheses only for the official WASM client.
+
+The reference projection uses a Mission Map frame rectangle, viewport scale,
+zoom, pan offset, and a conversion through world-map coordinates. gwonmac can
+use a smaller current-map-only transform anchored to the live player:
+
+```text
+map_x = player_map_x + (world_x - player_world_x) / 96
+map_y = player_map_y - (world_y - player_world_y) / 96
+
+screen_x = frame_center_x + (map_x - pan_x) * frame_scale_x * zoom
+screen_y = frame_center_y + (map_y - pan_y) * frame_scale_y * zoom
+```
+
+This avoids AreaInfo bounds, map-file bounds, world-map anchors, and DAT loading.
+The `96` conversion remains a candidate constant until the exact client and live
+movement prove it. Frame scale should be derived from the certified content
+rectangle and Mission Map logical size when possible, rather than published as
+another independent source of truth.
+
+### Mission Map certification work
+
+The exact build contains one UTF-16 `MapWindow` string but no direct code
+operand reference, so the existing named-Compass proof cannot simply be reused.
+Use the Mission Map context's bounded frame ID as the candidate owner instead.
+The build also contains the unique source anchor
+`../../../../Gw/Ui/Game/Map/GmMapWindow.cpp`, referenced by a small family of
+Mission Map renderer functions, plus unique Mission Map assertion strings. Use
+those exact bodies to prove only these closed values:
+
+- visibility and content rectangle from the bounded frame table;
+- logical drawable width and height;
+- current Mission Map zoom;
+- current Mission Map player anchor;
+- current pan offset; and
+- the same current map generation as the pathing snapshot.
+
+No pointer, hash, AreaInfo record, or DAT-derived map bound crosses into the
+renderer. Refuse non-finite values, invalid rectangles, zoom outside the live
+observed range, missing owners, loading, generation mismatch, and partial
+snapshots.
+
+### Mission Map live proof sequence
+
+1. Draw only a pointer-transparent outline around the certified content area.
+2. Draw a cross at the projected player position and compare it with the native
+   player marker while stationary, moving, and spectating where available.
+3. Draw three synthetic world-space points around the player. Verify their
+   direction and distance at every native zoom level.
+4. Pan continuously in both axes and require the overlay to remain attached
+   without one-frame lag.
+5. Replace the synthetic points with the same inverse walkability mask used by
+   the Compass.
+6. Repeat through close/reopen, resize, UI scale, district transition, map
+   loading, a different map, and a layered bridge or underground map.
+
+The Mission Map renderer is feasible only after steps 1-4 prove one affine
+transform. If they fail, retain the Compass overlay and do not compensate with
+per-map constants or screenshot calibration.

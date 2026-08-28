@@ -12,6 +12,7 @@ import {
 import {
   deriveCertifiedFrameLabel,
 } from "./enhancement-pre-game-proof.js";
+import { deriveSkillSlotGeometry } from "./enhancement-skill-slot-geometry-proof.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 
 const COMPASS_OWNER_BODY_SHA256 =
@@ -58,19 +59,23 @@ export function deriveCompassFrameSpikeProof(
   );
   if (owners.length !== 1) return null;
   const owner = owners[0]!;
+  const currentGeometry = deriveSkillSlotGeometry(context);
   if (
-    !signatureMatches(module, owner.functionIndex, ["i32", "i32"], [])
+    currentGeometry === null
+    || !signatureMatches(module, owner.functionIndex, ["i32", "i32"], [])
     || functionBodySha256(module, owner.functionIndex)
       !== COMPASS_OWNER_BODY_SHA256
   ) return null;
   const shared = preGame.layout;
-  const geometry = skillFrame.layout;
+  const retainedGeometry = skillFrame.layout;
+  const geometry = currentGeometry.layout;
   if (
-    shared.frameArray !== geometry.frameArray
-    || shared.frameCount !== geometry.frameCount
-    || shared.frameBytes !== geometry.frameBytes
+    shared.frameBytes !== geometry.frameBytes
     || shared.frameId !== geometry.frameId
     || shared.frameState !== geometry.frameState
+    || retainedGeometry.frameBytes !== geometry.frameBytes
+    || retainedGeometry.frameId !== geometry.frameId
+    || retainedGeometry.frameState !== geometry.frameState
   ) return null;
   return Object.freeze({
     labelAddress: named.labelAddress,
@@ -78,10 +83,10 @@ export function deriveCompassFrameSpikeProof(
     ownerFunction: owner.functionIndex,
     ownerBodySha256: COMPASS_OWNER_BODY_SHA256,
     layout: Object.freeze({
-      frameArray: shared.frameArray,
-      frameCount: shared.frameCount,
-      frameBytes: shared.frameBytes,
-      frameId: shared.frameId,
+      frameArray: geometry.frameArray,
+      frameCount: geometry.frameCount,
+      frameBytes: geometry.frameBytes,
+      frameId: geometry.frameId,
       frameHashId: shared.frameHashId,
       framePositionFlags: geometry.framePositionFlags,
       frameViewportWidth: geometry.frameViewportWidth,

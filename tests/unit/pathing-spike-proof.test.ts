@@ -6,6 +6,9 @@ import {
 } from "../../src/main/certification/pathing-spike-proof.js";
 
 const VALID: PathingShapeFacts = Object.freeze({
+  converterCaller: 3208,
+  converterCallSiteOffset: 0x1b9,
+  pathMapHolderOffset: 0x00,
   pathMapTrapezoidCount: 0x14,
   pathMapTrapezoidPointer: 0x18,
   liveStride: 0x30,
@@ -19,6 +22,9 @@ describe("the pathing shape spike", () => {
   it("accepts only the jointly proved exact shape", () => {
     assert.equal(validPathingShapeFacts(VALID), true);
     for (const key of [
+      "converterCaller",
+      "converterCallSiteOffset",
+      "pathMapHolderOffset",
       "pathMapTrapezoidCount",
       "pathMapTrapezoidPointer",
       "liveStride",

@@ -27,6 +27,22 @@ export type GraphicsProbeSample = Readonly<{
   wasmHeapBytes: number;
   textures: ReturnType<NonNullable<Window["gwTextureStats"]>> | null;
   textureRecon: ReturnType<NonNullable<Window["gwTextureRecon"]>["checkpoint"]> | null;
+  pathing: ReturnType<NonNullable<Window["gwPathingSpike"]>["snapshot"]> | null;
+  pathingGeometry: Readonly<{
+    count: number;
+    extrema: readonly [number, number, number, number];
+    sample: NonNullable<ReturnType<NonNullable<Window["gwPathingSpike"]>["readLargestGeometry"]>>;
+  }> | null;
+  compassFrame: ReturnType<NonNullable<Window["gwCompassFrameSpike"]>["snapshot"]> | null;
+  missionMapFrame: ReturnType<NonNullable<Window["gwMissionMapFrameSpike"]>["snapshot"]> | null;
+  companion: Readonly<{
+    status: string;
+    mapId: number | null;
+    instanceName: string | null;
+    playerX: number | null;
+    playerY: number | null;
+    sequence: number | null;
+  }> | null;
   images: Record<string, number | boolean> | null;
   programs: ReturnType<NonNullable<Window["gwGlRecon"]>> | null;
   lifecycle: ReturnType<Window["gwAutomation"]["read"]> | null;
@@ -64,6 +80,17 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
     const gl = offscreen?.getContext("webgl2")
       ?? offscreen?.getContext("webgl")
       ?? null;
+    const geometry = window.gwPathingSpike?.readLargestGeometry() ?? null;
+    const extrema = geometry?.reduce(
+      (bounds, trapezoid) => [
+        Math.min(bounds[0], trapezoid.topLeftX, trapezoid.bottomLeftX),
+        Math.max(bounds[1], trapezoid.topRightX, trapezoid.bottomRightX),
+        Math.min(bounds[2], trapezoid.bottomY),
+        Math.max(bounds[3], trapezoid.topY),
+      ] as const,
+      [Infinity, -Infinity, Infinity, -Infinity] as const,
+    ) ?? null;
+    const companion = window.gwCompanionState;
     return {
       capturedAt: new Date().toISOString(),
       rendererNowMs: performance.now(),
@@ -85,6 +112,22 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
       wasmHeapBytes: window.gwWasmHeapBytes?.() ?? 0,
       textures: window.gwTextureStats?.() ?? null,
       textureRecon: window.gwTextureRecon?.checkpoint() ?? null,
+      pathing: window.gwPathingSpike?.snapshot() ?? null,
+      pathingGeometry: geometry === null ? null : {
+        count: geometry.length,
+        extrema: extrema!,
+        sample: geometry.slice(0, 3),
+      },
+      compassFrame: window.gwCompassFrameSpike?.snapshot() ?? null,
+      missionMapFrame: window.gwMissionMapFrameSpike?.snapshot() ?? null,
+      companion: companion === undefined ? null : {
+        status: companion.status,
+        mapId: companion.status === "ready" ? companion.mapId : null,
+        instanceName: companion.status === "ready" ? companion.instanceName : null,
+        playerX: companion.status === "ready" ? companion.playerX : null,
+        playerY: companion.status === "ready" ? companion.playerY : null,
+        sequence: "sequence" in companion ? companion.sequence ?? null : null,
+      },
       images: typeof window.gwStats === "function" ? window.gwStats() : null,
       programs: window.gwGlRecon?.() ?? null,
       lifecycle: window.gwAutomation?.read() ?? null,
@@ -128,9 +171,12 @@ export async function runGraphicsProbeSession({
     runId,
   );
   let captureCount = 0;
-  const replacementArmed = await page.evaluate((candidates) => (
-    window.gwTextureRecon?.armExactReplacements(candidates) ?? false
-  ), MISSION_MAP_TILE_PROOFS);
+  const cartographyCalibration = process.env.GW_CARTOGRAPHY_SPIKE === "1";
+  const replacementArmed = cartographyCalibration
+    ? false
+    : await page.evaluate((candidates) => (
+        window.gwTextureRecon?.armExactReplacements(candidates) ?? false
+      ), MISSION_MAP_TILE_PROOFS);
   const baseline = await readGraphicsProjection(page);
   const captures: Array<{
     label: string;
@@ -143,11 +189,13 @@ export async function runGraphicsProbeSession({
   console.log(JSON.stringify({
     checkpoint: "graphics-probe-ready",
     please: "follow the named Mission Map matrix; wait one second after each visual change before capture",
-    exactReplacements: {
-      armed: replacementArmed,
-      candidates: MISSION_MAP_TILE_PROOFS,
-      expected: "two 512x512 Mission Map tiles use distinct magenta/cyan and yellow/blue checkerboards",
-    },
+    exactReplacements: cartographyCalibration
+      ? { armed: false, reason: "native Mission Map retained for projection calibration" }
+      : {
+          armed: replacementArmed,
+          candidates: MISSION_MAP_TILE_PROOFS,
+          expected: "two 512x512 Mission Map tiles use distinct magenta/cyan and yellow/blue checkerboards",
+        },
     suggestedSequence: [
       "capture mission-map-closed",
       "capture lions-arch-open-1",
@@ -234,6 +282,7 @@ export async function runGraphicsProbeSession({
         contextLost: sample.canvas.contextLost,
         intervalDurationMs: sample.textureRecon?.intervalDurationMs ?? null,
         exactReplacements: sample.textureRecon?.exactReplacements ?? [],
+        pathing: sample.pathing,
         checkerboardBounds,
         textureCandidates,
       }));

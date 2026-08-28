@@ -45,6 +45,14 @@ import {
   DEFAULT_CUSTOM_UI_THEME,
   normaliseCustomUiTheme,
 } from "../../shared/ui-theme.js";
+import {
+  CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
+  CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
+  CARTOGRAPHY_OVERLAY_OPACITY_MAX,
+  CARTOGRAPHY_OVERLAY_OPACITY_MIN,
+  isCartographyOverlayStyleId,
+  normaliseCartographyOverlayStyle,
+} from "../../shared/cartography-overlay.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
 
@@ -117,6 +125,9 @@ export function parseSettings(raw: unknown): AppSettings {
   const out: AppSettings = {
     ...DEFAULT_SETTINGS,
     uiCustomTheme: { ...DEFAULT_CUSTOM_UI_THEME },
+    cartographyOverlayCustomStyle: {
+      ...DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
+    },
   };
 
   if ("renderScale" in src) {
@@ -160,6 +171,38 @@ export function parseSettings(raw: unknown): AppSettings {
       UI_PANEL_OPACITY_MAX,
     );
   }
+  if ("cartographyOverlayStyle" in src) {
+    if (!isCartographyOverlayStyleId(src.cartographyOverlayStyle)) {
+      throw new AppError("bad_settings", "settings.cartographyOverlayStyle has unknown value");
+    }
+    out.cartographyOverlayStyle = src.cartographyOverlayStyle;
+  }
+  if ("cartographyOverlayOpacity" in src) {
+    out.cartographyOverlayOpacity = asBoundedInteger(
+      src.cartographyOverlayOpacity,
+      "cartographyOverlayOpacity",
+      CARTOGRAPHY_OVERLAY_OPACITY_MIN,
+      CARTOGRAPHY_OVERLAY_OPACITY_MAX,
+    );
+  }
+  if ("cartographyControlIdleOpacity" in src) {
+    out.cartographyControlIdleOpacity = asBoundedInteger(
+      src.cartographyControlIdleOpacity,
+      "cartographyControlIdleOpacity",
+      CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
+      CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
+    );
+  }
+  if ("cartographyOverlayCustomStyle" in src) {
+    const style = normaliseCartographyOverlayStyle(src.cartographyOverlayCustomStyle);
+    if (style === null) {
+      throw new AppError(
+        "bad_settings",
+        "settings.cartographyOverlayCustomStyle is invalid",
+      );
+    }
+    out.cartographyOverlayCustomStyle = style;
+  }
   if ("shortcutOverrides" in src) {
     if (!isShortcutOverrides(src.shortcutOverrides)) {
       throw new AppError("bad_settings", "settings.shortcutOverrides has invalid bindings");
@@ -200,6 +243,7 @@ export function parseSettings(raw: unknown): AppSettings {
   }
   for (const setting of [
     "gwonmacTools",
+    "cartographyOverlayEnabled",
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",

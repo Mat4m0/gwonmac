@@ -41,6 +41,9 @@ const F32_STORE = 0x38;
 const I32_STORE16 = 0x3b;
 
 export interface PathingShapeFacts {
+  readonly converterCaller: number;
+  readonly converterCallSiteOffset: number;
+  readonly pathMapHolderOffset: number;
   readonly pathMapTrapezoidCount: number;
   readonly pathMapTrapezoidPointer: number;
   readonly liveStride: number;
@@ -68,6 +71,9 @@ export interface PathingShapeProof {
 }
 
 const EXPECTED_FACTS: PathingShapeFacts = Object.freeze({
+  converterCaller: EXPECTED_FUNCTIONS.loader,
+  converterCallSiteOffset: 0x1b9,
+  pathMapHolderOffset: 0x00,
   pathMapTrapezoidCount: 0x14,
   pathMapTrapezoidPointer: 0x18,
   liveStride: 0x30,
@@ -84,7 +90,10 @@ function sameNumbers(actual: readonly number[], expected: readonly number[]): bo
 
 /** Mutation-test boundary for every shape value the spike is willing to claim. */
 export function validPathingShapeFacts(candidate: PathingShapeFacts): boolean {
-  return candidate.pathMapTrapezoidCount === EXPECTED_FACTS.pathMapTrapezoidCount
+  return candidate.converterCaller === EXPECTED_FACTS.converterCaller
+    && candidate.converterCallSiteOffset === EXPECTED_FACTS.converterCallSiteOffset
+    && candidate.pathMapHolderOffset === EXPECTED_FACTS.pathMapHolderOffset
+    && candidate.pathMapTrapezoidCount === EXPECTED_FACTS.pathMapTrapezoidCount
     && candidate.pathMapTrapezoidPointer === EXPECTED_FACTS.pathMapTrapezoidPointer
     && candidate.liveStride === EXPECTED_FACTS.liveStride
     && sameNumbers(candidate.livePortalFields, EXPECTED_FACTS.livePortalFields)
@@ -161,6 +170,10 @@ export function certifyPathingShape(input: Uint8Array): PathingShapeProof | null
   const boundWriter = decodedAt(decoded, EXPECTED_FUNCTIONS.boundWriter);
   const coordinateWriter = decodedAt(decoded, EXPECTED_FUNCTIONS.coordinateWriter);
   const builder = decodedAt(decoded, EXPECTED_FUNCTIONS.builder);
+  const converterCallers = decoded.filter(
+    (candidate) => (candidate.calls.get(EXPECTED_FUNCTIONS.converter) ?? 0) > 0,
+  );
+  const converterCallSites = loader?.callSites.get(EXPECTED_FUNCTIONS.converter) ?? [];
   if (!converter || !loader || !boundWriter || !coordinateWriter || !builder) return null;
   if (
     anchoredFunction(evidence, decoded, ANCHORS.index) !== EXPECTED_FUNCTIONS.converter
@@ -175,12 +188,20 @@ export function certifyPathingShape(input: Uint8Array): PathingShapeProof | null
     || !exactSignature(evidence, EXPECTED_FUNCTIONS.boundWriter, ["i32", "i32", "i32"], [])
     || !exactSignature(evidence, EXPECTED_FUNCTIONS.coordinateWriter, ["i32", "i32", "i32"], [])
     || !exactSignature(evidence, EXPECTED_FUNCTIONS.builder, ["i32", "i32", "i32"], ["i32"])
+    || converterCallers.length !== 1
+    || converterCallers[0]?.functionIndex !== EXPECTED_FACTS.converterCaller
     || loader.calls.get(EXPECTED_FUNCTIONS.converter) !== 1
+    || converterCallSites.length !== 1
+    || converterCallSites[0]?.offset !== EXPECTED_FACTS.converterCallSiteOffset
     || builder.calls.get(EXPECTED_FUNCTIONS.coordinateWriter) !== 1
     || builder.calls.get(EXPECTED_FUNCTIONS.boundWriter) !== 1
     || converter.constantSites.filter((site) => site.value === 0x30).length !== 6
     || boundWriter.constantSites.filter((site) => site.value === 1024).length !== 1
-    || !containsOffsets(converter.memorySites, I32_LOAD, [0x14, 0x18])
+    || !containsOffsets(converter.memorySites, I32_LOAD, [
+      EXPECTED_FACTS.pathMapHolderOffset,
+      EXPECTED_FACTS.pathMapTrapezoidCount,
+      EXPECTED_FACTS.pathMapTrapezoidPointer,
+    ])
     || !containsOffsets(converter.memorySites, I32_LOAD16_U, [0x10, 0x12])
     || !containsOffsets(converter.memorySites, I32_STORE16, [0x14, 0x16])
     || !containsOffsets(converter.memorySites, F32_LOAD, EXPECTED_FACTS.definitionCoordinateFields)

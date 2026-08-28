@@ -39,6 +39,7 @@ export interface GamePaths {
   rejectedClient: string;
   compatibility: string;
   enhancements: string;
+  cartographySpike: string;
   nativeDoubleClick: string;
   extendedMemory: string;
   chunks: string;
@@ -74,6 +75,7 @@ export function gamePaths(userData: string): GamePaths {
     rejectedClient: path.join(game, "rejected-client.json"),
     compatibility: path.join(game, "compatibility"),
     enhancements: path.join(game, "enhancements"),
+    cartographySpike: path.join(game, "cartography-spike"),
     nativeDoubleClick: path.join(game, "double-click"),
     extendedMemory: path.join(game, "extended-memory"),
     chunks: path.join(game, "chunks"),

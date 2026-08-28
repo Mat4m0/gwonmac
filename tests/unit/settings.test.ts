@@ -26,6 +26,11 @@ describe("settings", () => {
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       uiPanelOpacity: 94,
+      cartographyOverlayEnabled: false,
+      cartographyOverlayStyle: "black",
+      cartographyOverlayOpacity: 55,
+      cartographyControlIdleOpacity: 35,
+      cartographyOverlayCustomStyle: DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,
@@ -76,6 +81,11 @@ describe("settings", () => {
       uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
+      cartographyOverlayEnabled: false,
+      cartographyOverlayStyle: "black",
+      cartographyOverlayOpacity: 55,
+      cartographyControlIdleOpacity: 35,
+      cartographyOverlayCustomStyle: DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,
@@ -145,6 +155,47 @@ describe("settings", () => {
     assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, accent: "#fff" } }), AppError);
     assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, extra: true } }), AppError);
     assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, windowGradient: "yes" } }), AppError);
+  });
+
+  it("validates one shared cartography appearance", () => {
+    assert.deepEqual(parseSettingsPatch({
+      cartographyOverlayEnabled: true,
+      cartographyOverlayStyle: "pink",
+      cartographyOverlayOpacity: 72,
+      cartographyControlIdleOpacity: 44,
+      cartographyOverlayCustomStyle: {
+        veilColor: "#102030",
+        outlineColor: "#DDEEFF",
+        outlineWidth: 3,
+      },
+    }), {
+      cartographyOverlayEnabled: true,
+      cartographyOverlayStyle: "pink",
+      cartographyOverlayOpacity: 72,
+      cartographyControlIdleOpacity: 44,
+      cartographyOverlayCustomStyle: {
+        veilColor: "#102030",
+        outlineColor: "#DDEEFF",
+        outlineWidth: 3,
+      },
+    });
+    assert.throws(() => parseSettingsPatch({ cartographyOverlayStyle: "blue" }), AppError);
+    assert.throws(() => parseSettingsPatch({ cartographyOverlayOpacity: 101 }), AppError);
+    assert.throws(() => parseSettingsPatch({ cartographyControlIdleOpacity: 14 }), AppError);
+    assert.throws(() => parseSettingsPatch({
+      cartographyOverlayCustomStyle: {
+        veilColor: "#10203",
+        outlineColor: "#DDEEFF",
+        outlineWidth: 3,
+      },
+    }), AppError);
+    assert.throws(() => parseSettingsPatch({
+      cartographyOverlayCustomStyle: {
+        veilColor: "#102030",
+        outlineColor: "#DDEEFF",
+        outlineWidth: 5,
+      },
+    }), AppError);
   });
 
   it("accepts only the supported interface fonts", () => {
@@ -381,6 +432,11 @@ describe("settings", () => {
       "autoCheckUpdates",
       "autoRelogAfterReload",
       "buildLibrary",
+      "cartographyControlIdleOpacity",
+      "cartographyOverlayCustomStyle",
+      "cartographyOverlayEnabled",
+      "cartographyOverlayOpacity",
+      "cartographyOverlayStyle",
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
@@ -478,6 +534,11 @@ describe("settings", () => {
       uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
+      cartographyOverlayEnabled: false,
+      cartographyOverlayStyle: "black",
+      cartographyOverlayOpacity: 55,
+      cartographyControlIdleOpacity: 35,
+      cartographyOverlayCustomStyle: DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,

@@ -70,6 +70,11 @@ import {
   DEFAULT_CUSTOM_UI_THEME,
   type CustomUiTheme,
 } from "./ui-theme.js";
+import {
+  DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE,
+  type CartographyOverlayStyle,
+  type CartographyOverlayStyleId,
+} from "./cartography-overlay.js";
 import type { EnhancementSelection } from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
 import {
@@ -383,6 +388,16 @@ export interface AppSettings {
    * game behind them. This is presentation only and never reaches the game.
    */
   uiPanelOpacity: number;
+  /** Show certified walkability on the native Compass and Mission Map. */
+  cartographyOverlayEnabled: boolean;
+  /** One appearance shared by both native map surfaces. */
+  cartographyOverlayStyle: CartographyOverlayStyleId;
+  /** Shared veil and outline strength, as a whole percentage. */
+  cartographyOverlayOpacity: number;
+  /** Visibility of the collapsed Compass control, as a whole percentage. */
+  cartographyControlIdleOpacity: number;
+  /** The one saved custom appearance, retained while a built-in is active. */
+  cartographyOverlayCustomStyle: CartographyOverlayStyle;
   /** Master opt-in for the optional executable Tools Beta capability. */
   gwonmacTools: boolean;
   /** Show the saved Build Library and allow its app shortcut. */
@@ -477,6 +492,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiFont: "guild-wars",
   controllerPromptStyle: "game-default",
   uiPanelOpacity: 94,
+  cartographyOverlayEnabled: false,
+  cartographyOverlayStyle: "black",
+  cartographyOverlayOpacity: 55,
+  cartographyControlIdleOpacity: 35,
+  cartographyOverlayCustomStyle: DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE,
   gwonmacTools: false,
   buildLibrary: true,
   tradeChat: true,
@@ -634,6 +654,7 @@ export type SettingsPane =
   | "data"
   | "templates"
   | "display"
+  | "maps"
   | "controls"
   | "updates"
   | "advanced";

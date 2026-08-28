@@ -625,6 +625,16 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       }
     },
   }),
+  "cartography-probe": Object.freeze({
+    tier: "graphics-observation",
+    program: "target-observer",
+    readiness: "observer",
+    validate(result: LiveResult) {
+      if (!result.evidence) {
+        throw new Error("cartography probe recorded no evidence");
+      }
+    },
+  }),
   target: Object.freeze({
     tier: "automation",
     program: "target-observer",

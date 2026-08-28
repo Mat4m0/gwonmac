@@ -3,6 +3,9 @@ import { homedir } from "node:os";
 import path from "node:path";
 import {
   codeOperandOccurrences,
+  functionBody,
+  functionBodySha256,
+  signatureEvidence,
   wasmEvidence,
 } from "../src/main/certification/wasm-evidence.js";
 import { ENHANCEMENT_BUILDS } from
@@ -26,6 +29,11 @@ const PATHING_ANCHORS = Object.freeze([
   "m_trapezoid->portalLeft < pathMap.portalCount",
   "Failure: Infinite trapezoid bounds",
   "Next pathing trapezoid not found",
+]);
+
+const MISSION_MAP_ANCHORS = Object.freeze([
+  "../../../../Gw/Ui/Game/Map/GmMapWindow.cpp",
+  "MapWindow",
 ]);
 
 function utf16Le(value: string) {
@@ -56,9 +64,16 @@ const pathingAddresses = PATHING_ANCHORS.flatMap((label) =>
     address,
   }))
 );
+const missionMapAddresses = MISSION_MAP_ANCHORS.flatMap((label) => {
+  const bytes = label === "MapWindow"
+    ? utf16Le(label)
+    : new TextEncoder().encode(`${label}\0`);
+  return evidence.data.addresses(bytes).map((address) => ({ label, address }));
+});
 const trackedAddresses = [
   ...compassAddresses,
   ...pathingAddresses.map(({ address }) => address),
+  ...missionMapAddresses.map(({ address }) => address),
 ];
 const references = new Map<number, number[]>();
 for (const decoded of evidence.decodeFunctions(trackedAddresses)) {
@@ -74,6 +89,30 @@ const project = (address: number) => ({
   codeReferences: codeOperandOccurrences(evidence.moduleView(), address),
   functions: Object.freeze(references.get(address) ?? []),
 });
+const decodedFunctions = evidence.decodeFunctions(trackedAddresses);
+const callers = new Map<number, number[]>();
+for (const decoded of decodedFunctions) {
+  for (const target of decoded.calls.keys()) {
+    const values = callers.get(target) ?? [];
+    values.push(decoded.functionIndex);
+    callers.set(target, values);
+  }
+}
+const functionEvidence = (functionIndex: number) => {
+  const decoded = decodedFunctions.find((value) => value.functionIndex === functionIndex);
+  return {
+    functionIndex,
+    signature: signatureEvidence(evidence.moduleView(), functionIndex),
+    bodyBytes: functionBody(evidence.moduleView(), functionIndex).byteLength,
+    bodySha256: functionBodySha256(evidence.moduleView(), functionIndex),
+    tableSlots: Object.freeze(evidence.tableRelations.get(functionIndex) ?? []),
+    callers: Object.freeze(callers.get(functionIndex) ?? []),
+    callees: Object.freeze(decoded === undefined ? [] : [...decoded.calls.entries()]),
+    memoryOffsets: Object.freeze(decoded === undefined
+      ? []
+      : [...new Set(decoded.memorySites.map(({ value }) => value))].sort((a, b) => a - b)),
+  };
+};
 
 console.log(JSON.stringify({
   clientSha256: evidence.inputSha256,
@@ -98,4 +137,20 @@ console.log(JSON.stringify({
       .filter((candidate) => candidate.label === label)
       .map(({ address }) => project(address)),
   })),
+  missionMap: MISSION_MAP_ANCHORS.map((label) => ({
+    label,
+    occurrences: missionMapAddresses
+      .filter((candidate) => candidate.label === label)
+      .map(({ address }) => {
+        const occurrence = project(address);
+        return {
+          ...occurrence,
+          functionEvidence: occurrence.functions.map(functionEvidence),
+        };
+      }),
+  })),
+  missionMapNeighborhood: Array.from(
+    { length: 71 },
+    (_, offset) => functionEvidence(16_070 + offset),
+  ),
 }, null, 2));
