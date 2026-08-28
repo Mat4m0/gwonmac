@@ -1,5 +1,17 @@
 # Active migrations
 
+## Piken Square Travel map ID projection
+
+- Why: Stable v2026.8.10 released Piken Square (pre-Searing) as map ID 778.
+  The official ID is 779. Current runtime values use 779, while shortcuts,
+  search phrases, and history still serialize 778 for safe rollback.
+- Introduced: 2026-08-29 with the Piken Square Travel correction.
+- Depends on it: profiles written by v2026.8.10 and rollback from the current
+  Beta to that Stable release.
+- Remove when: v2026.8.10 is outside the supported rollback window. Remove the
+  write projection and its rollback tests. Keep the 778 read projection for
+  dormant profiles that have not opened a corrected release.
+
 ## Apply-Team rollback projection
 
 - Why: the supported rollback Stable still reads `teamManagement`, so the

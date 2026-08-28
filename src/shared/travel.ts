@@ -6,6 +6,10 @@ import {
   travelDestination,
 } from "./travel-destinations.js";
 import {
+  travelMapIdForStableStorage,
+  travelMapIdFromReleasedStorage,
+} from "./travel-map-id.js";
+import {
   createTravelPreferences,
   parseTravelPreferencesPatch,
   type TravelPreferencesPatch,
@@ -18,6 +22,7 @@ export {
   travelDestination,
   type TravelDestination,
 } from "./travel-destinations.js";
+export { PIKEN_SQUARE_PRE_SEARING_MAP_ID } from "./travel-map-id.js";
 
 export const TRAVEL_SHORTCUT_LIMIT = 9;
 export * from "./travel-preferences.js";
@@ -213,7 +218,7 @@ export function isStoredTravelShortcuts(value: unknown): value is StoredTravelSh
       const shortcut = entry as Record<string, unknown>;
       return Object.keys(shortcut).length === 3
         && Number.isSafeInteger(shortcut.mapId)
-        && travelDestination(Number(shortcut.mapId)) !== null
+        && travelDestination(travelMapIdFromReleasedStorage(Number(shortcut.mapId))) !== null
         && TRAVEL_DISTRICTS.some(({ id }) => id === shortcut.district)
         && Number.isSafeInteger(shortcut.districtNumber)
         && Number(shortcut.districtNumber) >= 0
@@ -224,7 +229,9 @@ export function isStoredTravelShortcuts(value: unknown): value is StoredTravelSh
 export function travelShortcutsFromStored(stored: StoredTravelShortcuts): TravelShortcuts {
   return Object.freeze(Array.from({ length: TRAVEL_SHORTCUT_LIMIT }, (_, index) => {
     const shortcut = stored[index];
-    return shortcut ? Object.freeze({ mapId: shortcut.mapId }) : null;
+    return shortcut
+      ? Object.freeze({ mapId: travelMapIdFromReleasedStorage(shortcut.mapId) })
+      : null;
   })) as TravelShortcuts;
 }
 
@@ -236,10 +243,12 @@ export function storeTravelShortcuts(
   return Object.freeze(shortcuts.map((shortcut, index) => {
     if (shortcut === null) return null;
     const existing = previous[index];
-    return existing?.mapId === shortcut.mapId
+    return existing !== undefined
+      && existing !== null
+      && travelMapIdFromReleasedStorage(existing.mapId) === shortcut.mapId
       ? Object.freeze({ ...existing })
       : Object.freeze({
-          mapId: shortcut.mapId,
+          mapId: travelMapIdForStableStorage(shortcut.mapId),
           district: "international" as const,
           districtNumber: 0,
         });

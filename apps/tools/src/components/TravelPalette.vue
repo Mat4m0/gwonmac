@@ -76,18 +76,38 @@ const browseUnlocksKnown = computed(() =>
   props.host.state.value.status === "ready"
   && props.host.state.value.unlockedMapWords !== null
 );
+const browseScope = computed(() => {
+  const state = props.host.state.value;
+  return state.status === "ready" ? travelBrowseScope(state.mapId) : [];
+});
+const browseTravelableDestinations = computed(() =>
+  browseScope.value.filter(({ mapId }) => isAvailable(mapId))
+);
+const browseIncludesLockedCurrent = computed(() =>
+  currentMapId.value !== null
+  && browseScope.value.some(({ mapId }) => mapId === currentMapId.value)
+  && !browseTravelableDestinations.value.some(({ mapId }) => mapId === currentMapId.value)
+);
 const recentDestinations = computed(() => props.host.history.value
   .filter((mapId) => mapId !== currentMapId.value && isAvailable(mapId))
   .map((mapId) => travelDestination(mapId))
   .filter((destination): destination is TravelDestination => destination !== null)
   .slice(0, TRAVEL_HISTORY_VISIBLE_LIMIT));
 const browseDestinations = computed(() => {
-  const state = props.host.state.value;
-  if (state.status !== "ready") return [];
-  const destinations = travelBrowseScope(state.mapId).filter(({ mapId }) => isAvailable(mapId));
+  const destinations = [...browseTravelableDestinations.value];
+  if (browseIncludesLockedCurrent.value) {
+    const current = browseScope.value.find(({ mapId }) => mapId === currentMapId.value);
+    if (current !== undefined) destinations.push(current);
+  }
   return destinations.length <= SMALL_TRAVEL_CATALOGUE_LIMIT
-    ? [...destinations].sort((left, right) => left.name.localeCompare(right.name, "en"))
+    ? destinations.sort((left, right) => left.name.localeCompare(right.name, "en"))
     : [];
+});
+const browseCountText = computed(() => {
+  if (!browseUnlocksKnown.value) return `${browseDestinations.value.length} nearby`;
+  return `${browseTravelableDestinations.value.length} unlocked${
+    browseIncludesLockedCurrent.value ? " + current" : ""
+  }`;
 });
 const browsingSmallCatalogue = computed(() => browseDestinations.value.length > 0);
 const showingSmallCatalogue = computed(() =>
@@ -422,7 +442,7 @@ function onKeydown(event: KeyboardEvent): void {
 
     <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="region" aria-label="Travel">
       <section v-if="showingSmallCatalogue" class="travel-section travel-available" aria-labelledby="travel-available-title">
-        <header class="travel-section-head"><h2 id="travel-available-title">{{ browseUnlocksKnown ? 'Available destinations' : 'Destinations' }}</h2><span>{{ browseDestinations.length }} {{ browseUnlocksKnown ? 'unlocked' : 'nearby' }}</span></header>
+        <header class="travel-section-head"><h2 id="travel-available-title">{{ browseUnlocksKnown && !browseIncludesLockedCurrent ? 'Available destinations' : 'Destinations' }}</h2><span>{{ browseCountText }}</span></header>
         <div id="travel-available" class="travel-recent-grid" role="listbox">
           <button v-for="destination in browseDestinations" :id="`travel-${destination.mapId}`" :key="destination.mapId" type="button" class="travel-recent ui-row" role="option" :data-current="destination.mapId === currentMapId || undefined" :disabled="travelPending || host.unavailable !== null || destination.mapId === currentMapId" :aria-current="destination.mapId === currentMapId ? 'location' : undefined" :aria-selected="destination.mapId === activeDestination?.mapId" :aria-label="browseDestinationLabel(destination)" @mouseenter="activateBrowseDestination(destination.mapId)" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><span class="travel-destination-context"><span v-if="shortcutNumber(destination.mapId) !== null" class="travel-shortcut-context" :title="`Shortcut ${shortcutNumber(destination.mapId)}`" aria-hidden="true">{{ shortcutNumber(destination.mapId) }}</span><span v-if="destination.mapId === currentMapId" class="travel-current">Current</span><span v-else-if="wasRecentlyVisited(destination.mapId)" class="travel-current">Recent</span><svg v-else viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></span></button>
         </div>

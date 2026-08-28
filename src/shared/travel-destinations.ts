@@ -3,6 +3,8 @@
  * Exposes the map-id allowlist used by certification and the UI.
  */
 
+import { PIKEN_SQUARE_PRE_SEARING_MAP_ID } from "./travel-map-id.js";
+
 export type TravelDestination = Readonly<{
   mapId: number;
   name: string;
@@ -30,7 +32,7 @@ export const TRAVEL_DESTINATIONS: readonly TravelDestination[] = Object.freeze([
   destination(165, "Foible's Fair", "Prophecies"),
   destination(166, "Fort Ranik (pre-Searing)", "Prophecies", ["pre ranik"]),
   destination(163, "The Barradin Estate", "Prophecies", ["barradin estate"]),
-  destination(778, "Piken Square (pre-Searing)", "Prophecies", ["pre piken"]),
+  destination(PIKEN_SQUARE_PRE_SEARING_MAP_ID, "Piken Square (pre-Searing)", "Prophecies", ["pre piken"]),
 
   // Prophecies — towns and outposts
   destination(81, "Ascalon City", "Prophecies", ["ac", "ascalon"]),
@@ -245,7 +247,7 @@ export const TRAVEL_DESTINATIONS: readonly TravelDestination[] = Object.freeze([
 ]);
 
 const PRE_SEARING_MAP_IDS: readonly number[] = Object.freeze([
-  148, 164, 165, 166, 163, 778,
+  148, 164, 165, 166, 163, PIKEN_SQUARE_PRE_SEARING_MAP_ID,
 ]);
 
 /**

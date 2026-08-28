@@ -322,8 +322,10 @@ changed ready map that belongs to the reviewed direct-travel catalogue,
 including arrivals outside the palette. Main serializes at most ten unique map
 IDs per character in atomic `travel-history.json`. The companion hashes the
 official 128-bit character UUID before publication; raw UUIDs and names never
-cross the boundary or reach disk. The palette excludes the current map and any
-positively locked destination. History cannot authorize travel.
+cross the boundary or reach disk. Recent excludes the current map and any
+positively locked destination. The small local catalogue can still show the
+reviewed current outpost as disabled when a ferry reached it without an unlock.
+History cannot authorize travel.
 
 Shortcut slots remain in `settings.json` using the district-bearing shape the
 published Stable understands. The current runtime projects those records to

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   TRAVEL_DESTINATIONS,
+  PIKEN_SQUARE_PRE_SEARING_MAP_ID,
   TRAVEL_SEARCH_QUERY_LIMIT,
   isStoredTravelShortcuts,
   isTravelRequest,
@@ -30,7 +31,7 @@ describe("Travel", () => {
       407, 414, 421, 424, 425, 426, 427, 428, 431, 433, 434, 435, 438, 440, 442,
       449, 450, 457, 467, 469, 473, 474, 476, 477, 478, 479, 480, 489, 491, 492,
       493, 494, 495, 496, 497, 502, 544, 545, 554, 555, 559, 624, 638, 639, 640,
-      641, 642, 643, 644, 645, 648, 650, 652, 675, 721, 778, 795, 796, 857,
+      641, 642, 643, 644, 645, 648, 650, 652, 675, 721, 779, 795, 796, 857,
     ];
     assert.equal(TRAVEL_DESTINATIONS.length, 199);
     assert.deepEqual(
@@ -83,22 +84,28 @@ describe("Travel", () => {
 
   it("keeps Stable-readable shortcut fields on disk while runtime stays map-only", () => {
     const stored = [
-      { mapId: 55, district: "europe-english" as const, districtNumber: 2 },
+      { mapId: 778, district: "europe-english" as const, districtNumber: 2 },
       null,
     ];
     assert.equal(isStoredTravelShortcuts(stored), true);
     const runtime = travelShortcutsFromStored(stored);
     assert.deepEqual(runtime, [
-      { mapId: 55 }, null, null, null, null, null, null, null, null,
-    ]);
-    assert.deepEqual(storeTravelShortcuts(runtime, stored), [
-      { mapId: 55, district: "europe-english", districtNumber: 2 },
+      { mapId: PIKEN_SQUARE_PRE_SEARING_MAP_ID },
       null, null, null, null, null, null, null, null,
     ]);
+    assert.deepEqual(storeTravelShortcuts(runtime, stored), [
+      { mapId: 778, district: "europe-english", districtNumber: 2 },
+      null, null, null, null, null, null, null, null,
+    ]);
+    assert.equal(storeTravelShortcuts(runtime, [])[0]?.mapId, 778);
   });
 
   it("resolves only catalogue map ids", () => {
     assert.equal(travelDestination(81)?.name, "Ascalon City");
+    assert.equal(travelDestination(PIKEN_SQUARE_PRE_SEARING_MAP_ID)?.name, "Piken Square (pre-Searing)");
+    assert.equal(travelDestination(778), null, "released Piken typo is storage-only");
+    assert.equal(isTravelRequest({ mapId: 778 }), false);
+    assert.equal(isTravelRequest({ mapId: PIKEN_SQUARE_PRE_SEARING_MAP_ID }), true);
     assert.equal(travelDestination(2_000), null);
     assert.equal(isTravelRequest({
       mapId: 2_000,
@@ -108,7 +115,7 @@ describe("Travel", () => {
   it("keeps early-game browse scopes local to the current campaign", () => {
     assert.deepEqual(
       travelBrowseScope(148).map(({ mapId }) => mapId),
-      [148, 164, 165, 166, 163, 778],
+      [148, 164, 165, 166, 163, PIKEN_SQUARE_PRE_SEARING_MAP_ID],
     );
     assert.equal(
       travelBrowseScope(242).every(({ campaign }) => campaign === "Factions"),

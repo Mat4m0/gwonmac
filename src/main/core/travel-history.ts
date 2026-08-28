@@ -14,6 +14,10 @@ import {
   type TravelHistory,
   type TravelHistoryDocument,
 } from "../../shared/travel-history.js";
+import {
+  travelMapIdForStableStorage,
+  travelMapIdFromReleasedStorage,
+} from "../../shared/travel-map-id.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
 
@@ -26,11 +30,39 @@ async function readDocument(path: string): Promise<TravelHistoryDocument> {
     throw error;
   }
   try {
-    return parseTravelHistoryDocument(JSON.parse(text) as unknown);
+    return parseTravelHistoryDocument(runtimeHistory(JSON.parse(text) as unknown));
   } catch {
     await quarantineCorruptDocument(path);
     return DEFAULT_TRAVEL_HISTORY;
   }
+}
+
+function runtimeHistory(value: unknown): unknown {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+  const document = value as Record<string, unknown>;
+  if (document.characters === null || typeof document.characters !== "object"
+    || Array.isArray(document.characters)) return value;
+  return {
+    ...document,
+    characters: Object.fromEntries(Object.entries(document.characters).map(([key, history]) => [
+      key,
+      Array.isArray(history)
+        ? history.map((mapId) => Number.isSafeInteger(mapId)
+            ? travelMapIdFromReleasedStorage(Number(mapId))
+            : mapId)
+        : history,
+    ])),
+  };
+}
+
+function storedHistory(document: TravelHistoryDocument): TravelHistoryDocument {
+  return {
+    ...document,
+    characters: Object.fromEntries(Object.entries(document.characters).map(([key, history]) => [
+      key,
+      history.map(travelMapIdForStableStorage),
+    ])) as Record<TravelCharacterKey, TravelHistory>,
+  };
 }
 
 function updateCharacter(
@@ -77,7 +109,10 @@ export class TravelHistoryStore {
         document.characters[characterKey] ?? EMPTY_TRAVEL_HISTORY,
         mapId,
       );
-      await writeAtomicJson(this.#path, updateCharacter(document, characterKey, next));
+      await writeAtomicJson(
+        this.#path,
+        storedHistory(updateCharacter(document, characterKey, next)),
+      );
       return next;
     });
   }

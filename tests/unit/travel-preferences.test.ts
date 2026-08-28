@@ -71,6 +71,28 @@ describe("Travel preferences", () => {
     });
   });
 
+  it("keeps the corrected Piken map ID rollback-safe on disk", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-travel-preferences-"));
+    const path = join(dir, "travel-preferences.json");
+    await writeFile(path, JSON.stringify({
+      formatVersion: 1,
+      synonyms: [{ term: "north", mapId: 778 }],
+      recentLimit: 0,
+      recentMapIds: [],
+    }));
+
+    assert.deepEqual(await loadTravelPreferences(path), {
+      formatVersion: 1,
+      synonyms: [{ term: "north", mapId: 779 }],
+    });
+    await updateTravelPreferences(path, {
+      synonyms: [{ term: "north", mapId: 779 }],
+    });
+    assert.deepEqual(JSON.parse(await readFile(path, "utf8")).synonyms, [
+      { term: "north", mapId: 778 },
+    ]);
+  });
+
   it("rejects ambiguous synonyms and unknown document fields", () => {
     const document = {
       formatVersion: 1,

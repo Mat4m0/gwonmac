@@ -4,6 +4,10 @@
  */
 import { travelDestination } from "../../shared/travel-destinations.js";
 import {
+  travelMapIdForStableStorage,
+  travelMapIdFromReleasedStorage,
+} from "../../shared/travel-map-id.js";
+import {
   TRAVEL_PREFERENCES_FORMAT,
   createTravelPreferences,
   type TravelPreferencesDocument,
@@ -17,8 +21,20 @@ function isReleasedRecentData(limit: unknown, mapIds: unknown): boolean {
     && mapIds.length <= 10
     && new Set(mapIds).size === mapIds.length
     && mapIds.every((mapId) =>
-      Number.isSafeInteger(mapId) && travelDestination(Number(mapId)) !== null
+      Number.isSafeInteger(mapId)
+      && travelDestination(travelMapIdFromReleasedStorage(Number(mapId))) !== null
     );
+}
+
+function runtimeSynonyms(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((entry) => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return entry;
+    const synonym = entry as Record<string, unknown>;
+    return Number.isSafeInteger(synonym.mapId)
+      ? { ...synonym, mapId: travelMapIdFromReleasedStorage(Number(synonym.mapId)) }
+      : entry;
+  });
 }
 
 export function parseTravelPreferencesV1(value: unknown): TravelPreferencesDocument {
@@ -31,7 +47,7 @@ export function parseTravelPreferencesV1(value: unknown): TravelPreferencesDocum
     || input.formatVersion !== TRAVEL_PREFERENCES_FORMAT
     || !isReleasedRecentData(input.recentLimit, input.recentMapIds)
   ) throw new TypeError("Travel preferences are invalid");
-  return createTravelPreferences(input.synonyms);
+  return createTravelPreferences(runtimeSynonyms(input.synonyms));
 }
 
 export function serializeTravelPreferencesV1(
@@ -39,7 +55,10 @@ export function serializeTravelPreferencesV1(
 ): Readonly<Record<string, unknown>> {
   return Object.freeze({
     formatVersion: TRAVEL_PREFERENCES_FORMAT,
-    synonyms: preferences.synonyms,
+    synonyms: Object.freeze(preferences.synonyms.map((entry) => Object.freeze({
+      ...entry,
+      mapId: travelMapIdForStableStorage(entry.mapId),
+    }))),
     recentLimit: 0,
     recentMapIds: Object.freeze([]),
   });

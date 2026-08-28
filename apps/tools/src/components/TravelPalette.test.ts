@@ -224,7 +224,7 @@ describe("TravelPalette", () => {
     ];
     const { wrapper, state, travel } = fixture({ history: [164, 165], shortcuts });
     const unlockedMapWords = Array.from({ length: 28 }, () => 0);
-    for (const mapId of [148, 164, 165, 166, 163, 778]) {
+    for (const mapId of [148, 164, 165, 166, 163, 779]) {
       unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
     }
     for (const mapId of [188, 248, 281, 282, 330, 368, 467, 721, 795, 796, 857]) {
@@ -301,6 +301,30 @@ describe("TravelPalette", () => {
     expect(wrapper.get(".travel-available").text()).toContain("6 nearby");
     expect(wrapper.get(".travel-available").text()).toContain("Ashford Abbey");
     expect(wrapper.get(".travel-available").text()).not.toContain("unlocked");
+    wrapper.unmount();
+  });
+
+  it("shows a ferried current outpost without claiming it is unlocked", async () => {
+    const { wrapper, state } = fixture();
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0);
+    for (const mapId of [148, 164, 165, 166, 163]) {
+      unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
+    }
+    state.value = {
+      status: "ready",
+      mapId: 779,
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords,
+    };
+    await flushPromises();
+
+    expect(wrapper.get("#travel-available-title").text()).toBe("Destinations");
+    expect(wrapper.get(".travel-available").text()).toContain("5 unlocked + current");
+    expect(wrapper.findAll(".travel-available .travel-recent")).toHaveLength(6);
+    expect(wrapper.get('[aria-current="location"]').text()).toContain("Piken Square");
+    expect(wrapper.get('[aria-current="location"]').attributes("disabled")).toBeDefined();
+    await wrapper.get("#travel-search-input").setValue("piken");
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
     wrapper.unmount();
   });
 

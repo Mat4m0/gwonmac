@@ -166,7 +166,9 @@ After that restart, these choices update immediately:
   **Recent** comes from locations Guild Wars actually reports, including world
   map travel and other in-game paths. It keeps up to ten unique reviewed places
   per character across game and app restarts, hides the current map, and shows
-  the six newest destinations that character can still travel to. When the
+  the six newest destinations that character can still travel to. A reviewed
+  current outpost remains visible and disabled even when the character was
+  ferried there without unlocking map travel. When the
   character has 10 or fewer unlocked destinations, such as early in any
   campaign, Travel shows the complete alphabetical list before the player
   types. The list marks the current location, recent visits, and assigned number
