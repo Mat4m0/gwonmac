@@ -51,6 +51,9 @@
   const cartographyOverlayEnabled = form.elements.namedItem(
     'cartographyOverlayEnabled',
   ) as HTMLInputElement;
+  const cartographyGridEnabled = form.elements.namedItem(
+    'cartographyGridEnabled',
+  ) as HTMLInputElement;
   const buildLibrary = form.elements.namedItem('buildLibrary') as HTMLInputElement;
   const tradeChat = form.elements.namedItem('tradeChat') as HTMLInputElement;
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
@@ -544,6 +547,7 @@
           : null;
       case 'gwonmacTools':
       case 'cartographyOverlayEnabled':
+      case 'cartographyGridEnabled':
       case 'buildLibrary':
       case 'tradeChat':
       case 'xunlaiStorage':
@@ -591,6 +595,7 @@
     diagnosticProfile.value = selectedDiagnosticProfile;
     gwonmacTools.checked = settings.gwonmacTools;
     cartographyOverlayEnabled.checked = settings.cartographyOverlayEnabled;
+    cartographyGridEnabled.checked = settings.cartographyGridEnabled;
     buildLibrary.checked = settings.buildLibrary;
     tradeChat.checked = settings.tradeChat;
     xunlaiStorage.checked = settings.xunlaiStorage;

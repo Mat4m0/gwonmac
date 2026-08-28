@@ -7,10 +7,10 @@ import type { ScreenBox } from "./frame-placement.js";
 import type { WalkabilityMask } from "./walkability-mask.js";
 import { GAME_UNITS_PER_RASTER_PIXEL } from "./walkability-mask.js";
 
-const COMPASS_WORLD_RADIUS = 5_000;
-const COMPASS_MAP_RADIUS = 96;
-const COMPASS_FRAME_WIDTH = 245;
-const GAME_UNITS_PER_MAP_UNIT = 96;
+export const COMPASS_WORLD_RADIUS = 5_000;
+export const COMPASS_MAP_RADIUS = 96;
+export const COMPASS_FRAME_WIDTH = 245;
+export const GAME_UNITS_PER_MAP_UNIT = 96;
 
 export type MaskTransform = Readonly<{
   a: number;

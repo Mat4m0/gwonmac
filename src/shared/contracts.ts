@@ -390,6 +390,8 @@ export interface AppSettings {
   uiPanelOpacity: number;
   /** Show certified walkability on the native Compass and Mission Map. */
   cartographyOverlayEnabled: boolean;
+  /** Draw the game's fixed cartography cells over both native map surfaces. */
+  cartographyGridEnabled: boolean;
   /** One appearance shared by both native map surfaces. */
   cartographyOverlayStyle: CartographyOverlayStyleId;
   /** Shared veil and outline strength, as a whole percentage. */
@@ -493,6 +495,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   controllerPromptStyle: "game-default",
   uiPanelOpacity: 94,
   cartographyOverlayEnabled: false,
+  cartographyGridEnabled: false,
   cartographyOverlayStyle: "black",
   cartographyOverlayOpacity: 55,
   cartographyControlIdleOpacity: 35,

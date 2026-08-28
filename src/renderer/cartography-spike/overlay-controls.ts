@@ -47,7 +47,7 @@ export function createCartographyOverlayControls(options: Readonly<{
   ].join(";");
 
   const select = document.createElement("select");
-  select.setAttribute("aria-label", "Walkability overlay style");
+  select.setAttribute("aria-label", "Map overlay style");
   select.style.cssText = [
     `display:block;width:${CONTROL_SIZE}px;height:${CONTROL_SIZE}px`, "padding:0",
     "border:2px solid rgba(255,255,255,.82)", "border-radius:50%",
@@ -67,7 +67,7 @@ export function createCartographyOverlayControls(options: Readonly<{
   slider.min = "0";
   slider.max = "100";
   slider.step = "1";
-  slider.setAttribute("aria-label", "Walkability overlay opacity");
+  slider.setAttribute("aria-label", "Map overlay opacity");
   slider.style.cssText = [
     "display:none", "width:18px", "height:80px", "margin:6px auto 0",
     "writing-mode:vertical-lr", "direction:rtl", "accent-color:#d8c580",

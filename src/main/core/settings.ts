@@ -244,6 +244,7 @@ export function parseSettings(raw: unknown): AppSettings {
   for (const setting of [
     "gwonmacTools",
     "cartographyOverlayEnabled",
+    "cartographyGridEnabled",
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",

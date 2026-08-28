@@ -26,6 +26,7 @@ import type { PublishedCompanionState } from "./companion-snapshot.js";
 import type { VirtualGamepadController } from "./virtual-gamepad.js";
 import type { ControllerPromptTextureStats } from "./controller-prompt-texture.js";
 import type { TextureReconController } from "./webgl-texture-recon.js";
+import type { CartographyGridStats } from "./cartography-spike/overlay.js";
 import type {
   CompassFrameSpikeController,
   MissionMapFrameSpikeController,
@@ -240,6 +241,7 @@ declare global {
       canvas?: HTMLCanvasElement & { offscreen?: OffscreenCanvas };
     };
     gwApplySettings?(settings: AppSettings): void;
+    gwCartographyGridStats?(): CartographyGridStats;
     gwSurfaces: GwonmacSurfaceController;
     gwToolsSettings(): Readonly<{
       gwonmacTools: boolean;

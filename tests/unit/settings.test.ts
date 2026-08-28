@@ -27,6 +27,7 @@ describe("settings", () => {
       controllerPromptStyle: "game-default",
       uiPanelOpacity: 94,
       cartographyOverlayEnabled: false,
+      cartographyGridEnabled: false,
       cartographyOverlayStyle: "black",
       cartographyOverlayOpacity: 55,
       cartographyControlIdleOpacity: 35,
@@ -82,6 +83,7 @@ describe("settings", () => {
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       cartographyOverlayEnabled: false,
+      cartographyGridEnabled: false,
       cartographyOverlayStyle: "black",
       cartographyOverlayOpacity: 55,
       cartographyControlIdleOpacity: 35,
@@ -160,6 +162,7 @@ describe("settings", () => {
   it("validates one shared cartography appearance", () => {
     assert.deepEqual(parseSettingsPatch({
       cartographyOverlayEnabled: true,
+      cartographyGridEnabled: true,
       cartographyOverlayStyle: "pink",
       cartographyOverlayOpacity: 72,
       cartographyControlIdleOpacity: 44,
@@ -170,6 +173,7 @@ describe("settings", () => {
       },
     }), {
       cartographyOverlayEnabled: true,
+      cartographyGridEnabled: true,
       cartographyOverlayStyle: "pink",
       cartographyOverlayOpacity: 72,
       cartographyControlIdleOpacity: 44,
@@ -180,6 +184,7 @@ describe("settings", () => {
       },
     });
     assert.throws(() => parseSettingsPatch({ cartographyOverlayStyle: "blue" }), AppError);
+    assert.throws(() => parseSettingsPatch({ cartographyGridEnabled: "yes" }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyOverlayOpacity: 101 }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyControlIdleOpacity: 14 }), AppError);
     assert.throws(() => parseSettingsPatch({
@@ -433,6 +438,7 @@ describe("settings", () => {
       "autoRelogAfterReload",
       "buildLibrary",
       "cartographyControlIdleOpacity",
+      "cartographyGridEnabled",
       "cartographyOverlayCustomStyle",
       "cartographyOverlayEnabled",
       "cartographyOverlayOpacity",
@@ -535,6 +541,7 @@ describe("settings", () => {
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       cartographyOverlayEnabled: false,
+      cartographyGridEnabled: false,
       cartographyOverlayStyle: "black",
       cartographyOverlayOpacity: 55,
       cartographyControlIdleOpacity: 35,

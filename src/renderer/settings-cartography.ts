@@ -164,10 +164,12 @@ export function bindCartographySettings(options: Readonly<{
   return Object.freeze({
     render(settings: AppSettings) {
       current = settings;
-      panel.setAttribute("aria-disabled", String(!settings.cartographyOverlayEnabled));
+      const appearanceEnabled = settings.cartographyOverlayEnabled
+        || settings.cartographyGridEnabled;
+      panel.setAttribute("aria-disabled", String(!appearanceEnabled));
       for (const control of panel.querySelectorAll<HTMLInputElement | HTMLButtonElement>(
         "input, button",
-      )) control.disabled = !settings.cartographyOverlayEnabled;
+      )) control.disabled = !appearanceEnabled;
       choices.forEach((choice) => {
         choice.checked = choice.value === settings.cartographyOverlayStyle;
       });
