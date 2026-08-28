@@ -8,6 +8,7 @@ import {
   advanceCartographyGridAnchor,
   CARTOGRAPHY_CELL_MAP_UNITS,
   cartographyCellAt,
+  cartographyCellAtScreenPoint,
   createCartographyGridAnchor,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
@@ -106,6 +107,26 @@ test("rescales Mission Map cells from the current drawable rectangle", () => {
   assert.ok(resized);
   assert.equal(resized.transform.a, regular.transform.a * 1.5);
   assert.equal(resized.transform.d, regular.transform.d * 1.5);
+});
+
+test("resolves passive Mission Map hovers through pan and zoom", () => {
+  const box = Object.freeze({ left: 100, top: 200, width: 640, height: 320 });
+  const projection = projectCartographyGridToMissionMap({ frame: missionFrame, box });
+  assert.ok(projection);
+  assert.deepEqual(
+    cartographyCellAtScreenPoint(projection, box.left + 320, box.top + 160),
+    cartographyCellAt(missionFrame.panX, missionFrame.panY),
+  );
+  assert.equal(cartographyCellAtScreenPoint(projection, box.left - 1, box.top + 160), null);
+  assert.equal(cartographyCellAtScreenPoint(projection, box.left + 640, box.top + 160), null);
+
+  const compass = projectCartographyGridToCompass({
+    frame: missionFrame,
+    compass: compassFrame,
+    box: { left: 0, top: 0, width: 245, height: 260 },
+  });
+  assert.ok(compass);
+  assert.equal(cartographyCellAtScreenPoint(compass, 100, 100), null);
 });
 
 test("keeps the absolute cell phase while the Compass rotates", () => {

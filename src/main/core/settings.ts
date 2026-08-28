@@ -245,6 +245,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "gwonmacTools",
     "cartographyOverlayEnabled",
     "cartographyGridEnabled",
+    "cartographyBirdsEyeCompass",
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",

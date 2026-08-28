@@ -6,7 +6,9 @@
 import type { CartographyOverlayStyle } from "../../shared/cartography-overlay.js";
 import {
   CARTOGRAPHY_CELL_MAP_UNITS,
+  type CartographyCell,
   type CartographyGridProjection,
+  type CartographyRevealRadius,
 } from "./cartography-grid-projection.js";
 
 const MIN_CELL_PIXELS = 8;
@@ -22,6 +24,10 @@ export type CartographyGridLayerSnapshot = Readonly<{
   lastCellX: number;
   firstCellY: number;
   lastCellY: number;
+  focusCellX: number;
+  focusCellY: number;
+  revealRadius: CartographyRevealRadius;
+  hovering: boolean;
   drawCount: number;
 }>;
 
@@ -32,6 +38,8 @@ export type CartographyGridLayer = Readonly<{
     opacity: number;
     explorationVersion: string;
     isExplored(cellX: number, cellY: number): boolean | null;
+    hoveredCell: CartographyCell | null;
+    revealRadius: CartographyRevealRadius;
   }>): void;
   snapshot(): CartographyGridLayerSnapshot | null;
   hide(): void;
@@ -96,6 +104,28 @@ function cellPolygon(
   context.closePath();
 }
 
+function cellRangePolygon(
+  context: CanvasRenderingContext2D,
+  projection: CartographyGridProjection,
+  center: CartographyCell,
+  radius: CartographyRevealRadius,
+): void {
+  const left = (center.x - radius) * CARTOGRAPHY_CELL_MAP_UNITS;
+  const top = (center.y - radius) * CARTOGRAPHY_CELL_MAP_UNITS;
+  const right = (center.x + radius + 1) * CARTOGRAPHY_CELL_MAP_UNITS;
+  const bottom = (center.y + radius + 1) * CARTOGRAPHY_CELL_MAP_UNITS;
+  const corners = [
+    projectedPoint(projection, left, top),
+    projectedPoint(projection, right, top),
+    projectedPoint(projection, right, bottom),
+    projectedPoint(projection, left, bottom),
+  ];
+  context.beginPath();
+  context.moveTo(corners[0]!.x, corners[0]!.y);
+  for (const corner of corners.slice(1)) context.lineTo(corner.x, corner.y);
+  context.closePath();
+}
+
 export function createCartographyGridLayer(
   parent: HTMLElement,
   id: string,
@@ -130,6 +160,8 @@ export function createCartographyGridLayer(
     cellWidthPixels: number,
     cellHeightPixels: number,
     isExplored: (cellX: number, cellY: number) => boolean | null,
+    hoveredCell: CartographyCell | null,
+    revealRadius: CartographyRevealRadius,
   ): boolean => {
     if (context === null) return false;
     const dpr = document.defaultView?.devicePixelRatio ?? 1;
@@ -147,11 +179,22 @@ export function createCartographyGridLayer(
     const minY = projection.firstCellY * CARTOGRAPHY_CELL_MAP_UNITS;
     const maxY = (projection.lastCellY + 1) * CARTOGRAPHY_CELL_MAP_UNITS;
     const outlineVisible = style.outlineWidth > 0;
+    const focusCell = hoveredCell ?? projection.currentCell;
 
     context.fillStyle = style.veilColor;
     context.globalAlpha = strength * 0.2;
     for (let cellY = projection.firstCellY; cellY <= projection.lastCellY; cellY += 1) {
       for (let cellX = projection.firstCellX; cellX <= projection.lastCellX; cellX += 1) {
+        if (isExplored(cellX, cellY) !== false) continue;
+        cellPolygon(context, projection, cellX, cellY);
+        context.fill();
+      }
+    }
+
+    context.fillStyle = style.outlineColor;
+    context.globalAlpha = strength * 0.12;
+    for (let cellY = focusCell.y - 1; cellY <= focusCell.y + 1; cellY += 1) {
+      for (let cellX = focusCell.x - 1; cellX <= focusCell.x + 1; cellX += 1) {
         if (isExplored(cellX, cellY) !== false) continue;
         cellPolygon(context, projection, cellX, cellY);
         context.fill();
@@ -193,6 +236,21 @@ export function createCartographyGridLayer(
       context.lineTo(to.x, to.y);
     }
     context.stroke();
+
+    cellRangePolygon(context, projection, focusCell, 1);
+    context.setLineDash([]);
+    context.strokeStyle = style.outlineColor;
+    context.lineWidth = Math.max(1.5, style.outlineWidth + 1);
+    context.globalAlpha = outlineVisible ? strength * 0.96 : 0;
+    context.stroke();
+    if (revealRadius === 3) {
+      cellRangePolygon(context, projection, focusCell, 3);
+      context.setLineDash([6, 4]);
+      context.lineWidth = Math.max(1, style.outlineWidth);
+      context.globalAlpha = outlineVisible ? strength * 0.72 : 0;
+      context.stroke();
+      context.setLineDash([]);
+    }
 
     if (
       projection.surface === "mission-map"
@@ -243,13 +301,32 @@ export function createCartographyGridLayer(
     context.lineWidth = Math.max(1, style.outlineWidth + 1);
     context.globalAlpha = outlineVisible ? strength * 0.95 : 0;
     context.stroke();
+
+    if (hoveredCell !== null) {
+      cellPolygon(context, projection, hoveredCell.x, hoveredCell.y);
+      context.fillStyle = style.outlineColor;
+      context.globalAlpha = strength * 0.16;
+      context.fill();
+      context.strokeStyle = style.outlineColor;
+      context.lineWidth = Math.max(2, style.outlineWidth + 1);
+      context.globalAlpha = outlineVisible ? strength : 0;
+      context.stroke();
+    }
     context.restore();
     drawCount += 1;
     return true;
   };
 
   return Object.freeze({
-    update({ projection, style, opacity, explorationVersion, isExplored }) {
+    update({
+      projection,
+      style,
+      opacity,
+      explorationVersion,
+      isExplored,
+      hoveredCell,
+      revealRadius,
+    }) {
       const { box, transform } = projection;
       const cellWidthPixels = Math.hypot(transform.a, transform.b)
         * CARTOGRAPHY_CELL_MAP_UNITS;
@@ -280,6 +357,7 @@ export function createCartographyGridLayer(
         projection.currentCell.x, projection.currentCell.y,
         style.veilColor, style.outlineColor, style.outlineWidth, opacity,
         explorationVersion,
+        hoveredCell?.x ?? "-", hoveredCell?.y ?? "-", revealRadius,
       ].join(":");
       if (
         nextVersion !== drawingVersion
@@ -290,6 +368,8 @@ export function createCartographyGridLayer(
           cellWidthPixels,
           cellHeightPixels,
           isExplored,
+          hoveredCell,
+          revealRadius,
         )
       ) {
         hide();
@@ -307,6 +387,10 @@ export function createCartographyGridLayer(
         lastCellX: projection.lastCellX,
         firstCellY: projection.firstCellY,
         lastCellY: projection.lastCellY,
+        focusCellX: (hoveredCell ?? projection.currentCell).x,
+        focusCellY: (hoveredCell ?? projection.currentCell).y,
+        revealRadius,
+        hovering: hoveredCell !== null,
         drawCount,
       });
     },

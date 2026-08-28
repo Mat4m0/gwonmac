@@ -19,6 +19,7 @@ import {
 } from "./cartography-grid-layer.js";
 import {
   advanceCartographyGridAnchor,
+  cartographyCellAtScreenPoint,
   createCartographyGridAnchor,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
@@ -91,6 +92,19 @@ export function mountCartographyOverlay(options: Readonly<{
   let explorationBitmap: ExplorationSpikeBitmap | null = null;
   let explorationFingerprint = "";
   let nextExplorationReadAt = 0;
+  let pointerX = Number.NaN;
+  let pointerY = Number.NaN;
+
+  const rememberPointer = (event: PointerEvent): void => {
+    pointerX = event.clientX;
+    pointerY = event.clientY;
+  };
+  const forgetPointer = (): void => {
+    pointerX = Number.NaN;
+    pointerY = Number.NaN;
+  };
+  view.addEventListener("pointermove", rememberPointer, { capture: true, passive: true });
+  view.addEventListener("blur", forgetPointer);
 
   const refreshExploration = (generation: number): void => {
     if (
@@ -188,6 +202,7 @@ export function mountCartographyOverlay(options: Readonly<{
       settings.cartographyOverlayCustomStyle,
     );
     const opacity = previewOpacity ?? settings.cartographyOverlayOpacity;
+    const revealRadius = settings.cartographyBirdsEyeCompass ? 3 : 1;
     refreshExploration(compass.generation);
     const missionContentBox = missionMap !== null && missionMapBox !== null
       ? projectMissionMapContentBox(missionMap, missionMapBox)
@@ -232,6 +247,8 @@ export function mountCartographyOverlay(options: Readonly<{
           opacity,
           explorationVersion: explorationFingerprint,
           isExplored: exploredCell,
+          hoveredCell: null,
+          revealRadius,
         });
         gridPresented = true;
       }
@@ -245,12 +262,19 @@ export function mountCartographyOverlay(options: Readonly<{
       if (missionProjection === null) {
         missionMapGridLayer.hide();
       } else {
+        const hoveredCell = cartographyCellAtScreenPoint(
+          missionProjection,
+          pointerX,
+          pointerY,
+        );
         missionMapGridLayer.update({
           projection: missionProjection,
           style,
           opacity,
           explorationVersion: explorationFingerprint,
           isExplored: exploredCell,
+          hoveredCell,
+          revealRadius,
         });
         gridPresented = true;
       }
@@ -358,6 +382,8 @@ export function mountCartographyOverlay(options: Readonly<{
     disposed = true;
     if (startupTimer !== 0) view.clearTimeout(startupTimer);
     view.cancelAnimationFrame(animationFrame);
+    view.removeEventListener("pointermove", rememberPointer, true);
+    view.removeEventListener("blur", forgetPointer);
     compassMaskLayer.dispose();
     missionMapMaskLayer.dispose();
     compassGridLayer.dispose();

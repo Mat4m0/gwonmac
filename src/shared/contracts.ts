@@ -392,6 +392,8 @@ export interface AppSettings {
   cartographyOverlayEnabled: boolean;
   /** Draw the game's fixed cartography cells over both native map surfaces. */
   cartographyGridEnabled: boolean;
+  /** Preview the Bird's Eye Compass reveal reach instead of the normal 3×3. */
+  cartographyBirdsEyeCompass: boolean;
   /** One appearance shared by both native map surfaces. */
   cartographyOverlayStyle: CartographyOverlayStyleId;
   /** Shared veil and outline strength, as a whole percentage. */
@@ -496,6 +498,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiPanelOpacity: 94,
   cartographyOverlayEnabled: false,
   cartographyGridEnabled: false,
+  cartographyBirdsEyeCompass: false,
   cartographyOverlayStyle: "black",
   cartographyOverlayOpacity: 55,
   cartographyControlIdleOpacity: 35,

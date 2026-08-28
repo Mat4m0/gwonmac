@@ -22,6 +22,7 @@ const COMPASS_CELL_RADIUS = 3;
 const MAX_GRID_AXIS_CELLS = 128;
 
 export type CartographyCell = Readonly<{ x: number; y: number }>;
+export type CartographyRevealRadius = 1 | 3;
 
 export type CartographyGridAnchor = Readonly<{
   frame: MissionMapFrameSpikeSnapshot;
@@ -54,6 +55,31 @@ export function cartographyCellAt(mapX: number, mapY: number): CartographyCell |
   return Number.isSafeInteger(x) && Number.isSafeInteger(y)
     ? Object.freeze({ x, y })
     : null;
+}
+
+/** Resolve a passive screen-space hover through the current Mission Map transform. */
+export function cartographyCellAtScreenPoint(
+  projection: CartographyGridProjection,
+  clientX: number,
+  clientY: number,
+): CartographyCell | null {
+  const { box, transform } = projection;
+  if (
+    projection.surface !== "mission-map"
+    || !Number.isFinite(clientX)
+    || !Number.isFinite(clientY)
+    || clientX < box.left
+    || clientX >= box.left + box.width
+    || clientY < box.top
+    || clientY >= box.top + box.height
+  ) return null;
+  const determinant = transform.a * transform.d - transform.b * transform.c;
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < Number.EPSILON) return null;
+  const localX = clientX - box.left - transform.e;
+  const localY = clientY - box.top - transform.f;
+  const mapX = (transform.d * localX - transform.c * localY) / determinant;
+  const mapY = (-transform.b * localX + transform.a * localY) / determinant;
+  return cartographyCellAt(mapX, mapY);
 }
 
 function validFrameProjection(frame: MissionMapFrameSpikeSnapshot): boolean {

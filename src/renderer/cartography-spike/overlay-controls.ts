@@ -13,6 +13,7 @@ import type { ScreenBox } from "./frame-placement.js";
 const COLLAPSE_DELAY_MS = 1_500;
 const CONTROL_SIZE = 22;
 const EXPANDED_HEIGHT = 112;
+const EXPANDED_GRID_HEIGHT = 138;
 
 const STYLE_NAMES: Readonly<Record<CartographyOverlayStyleId, string>> = Object.freeze({
   black: "Black",
@@ -73,12 +74,21 @@ export function createCartographyOverlayControls(options: Readonly<{
     "writing-mode:vertical-lr", "direction:rtl", "accent-color:#d8c580",
     "cursor:pointer", "filter:drop-shadow(0 1px 2px rgba(0,0,0,.75))",
   ].join(";");
+  const revealRange = document.createElement("button");
+  revealRange.type = "button";
+  revealRange.style.cssText = [
+    `display:none;width:${CONTROL_SIZE}px;height:${CONTROL_SIZE}px`, "margin:4px 0 0",
+    "padding:0", "border:1px solid rgba(255,255,255,.72)", "border-radius:5px",
+    "background:rgba(12,14,13,.78)", "color:#f5f0df", "cursor:pointer",
+    "font:700 10px/1 system-ui,sans-serif", "font-variant-numeric:tabular-nums",
+    "text-shadow:0 1px 2px #000", "box-shadow:0 1px 3px rgba(0,0,0,.55)",
+  ].join(";");
   const value = document.createElement("output");
   value.style.cssText = [
     "position:absolute", "display:none", "left:26px", "top:46px",
     "font-variant-numeric:tabular-nums", "text-shadow:0 1px 3px #000,0 0 3px #000",
   ].join(";");
-  root.append(select, slider, value);
+  root.append(select, revealRange, slider, value);
   options.parent.append(root);
 
   let current: AppSettings | null = null;
@@ -91,9 +101,19 @@ export function createCartographyOverlayControls(options: Readonly<{
     write = next.catch(() => undefined);
     return next;
   };
+  const syncRevealRange = () => {
+    const birdsEye = current?.cartographyBirdsEyeCompass ?? false;
+    revealRange.textContent = birdsEye ? "7×7" : "3×3";
+    revealRange.title = birdsEye
+      ? "Reveal range: Bird's Eye Compass (outer cells require pathable terrain)"
+      : "Reveal range: Normal compass";
+    revealRange.setAttribute("aria-label", revealRange.title);
+    revealRange.setAttribute("aria-pressed", String(birdsEye));
+  };
   const setExpanded = (next: boolean) => {
     expanded = next;
     slider.style.display = next ? "block" : "none";
+    revealRange.style.display = next && current?.cartographyGridEnabled ? "block" : "none";
     if (!next) {
       value.style.display = "none";
       options.previewOpacity(null);
@@ -145,10 +165,27 @@ export function createCartographyOverlayControls(options: Readonly<{
     const style = CARTOGRAPHY_OVERLAY_STYLE_IDS.find((id) => id === select.value);
     if (style !== undefined) void persist({ cartographyOverlayStyle: style });
   });
+  revealRange.addEventListener("click", () => {
+    if (current === null) return;
+    const next = !current.cartographyBirdsEyeCompass;
+    current = { ...current, cartographyBirdsEyeCompass: next };
+    syncRevealRange();
+    void persist({ cartographyBirdsEyeCompass: next }).then((settings) => {
+      current = settings;
+      syncRevealRange();
+      revealRange.style.display = expanded && settings.cartographyGridEnabled
+        ? "block"
+        : "none";
+    });
+  });
 
   return Object.freeze({
     update(box, settings) {
       current = settings;
+      syncRevealRange();
+      revealRange.style.display = expanded && settings.cartographyGridEnabled
+        ? "block"
+        : "none";
       select.value = settings.cartographyOverlayStyle;
       const style = cartographyOverlayStyle(
         settings.cartographyOverlayStyle,
@@ -160,7 +197,9 @@ export function createCartographyOverlayControls(options: Readonly<{
       if (document.activeElement !== slider) slider.value = String(settings.cartographyOverlayOpacity);
       if (!expanded) root.style.opacity = String(settings.cartographyControlIdleOpacity / 100);
 
-      const height = expanded ? EXPANDED_HEIGHT : CONTROL_SIZE;
+      const height = expanded
+        ? settings.cartographyGridEnabled ? EXPANDED_GRID_HEIGHT : EXPANDED_HEIGHT
+        : CONTROL_SIZE;
       const gap = 3;
       const margin = 6;
       const roomLeft = box.left >= CONTROL_SIZE + gap + margin;
