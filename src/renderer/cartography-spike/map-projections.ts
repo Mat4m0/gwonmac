@@ -11,6 +11,7 @@ export const COMPASS_WORLD_RADIUS = 5_000;
 export const COMPASS_MAP_RADIUS = 96;
 export const COMPASS_FRAME_WIDTH = 245;
 export const GAME_UNITS_PER_MAP_UNIT = 96;
+const MISSION_MAP_BOTTOM_PADDING = 2;
 
 export type MaskTransform = Readonly<{
   a: number;
@@ -83,11 +84,19 @@ export function projectMissionMapContentBox(
     || frame.drawableWidth <= 0 || frame.drawableWidth > nativeWidth
     || frame.drawableHeight <= 0 || frame.drawableHeight > nativeHeight
   ) return null;
-  const width = outerBox.width * frame.drawableWidth / nativeWidth;
-  const height = outerBox.height * frame.drawableHeight / nativeHeight;
+  const scaleX = outerBox.width / nativeWidth;
+  const scaleY = outerBox.height / nativeHeight;
+  const sideInset = (nativeWidth - frame.drawableWidth) / 2;
+  const verticalInset = nativeHeight - frame.drawableHeight;
+  const bottomInset = sideInset + MISSION_MAP_BOTTOM_PADDING;
+  if (sideInset < 0 || bottomInset > verticalInset) return null;
+  const width = frame.drawableWidth * scaleX;
+  const height = frame.drawableHeight * scaleY;
   return Object.freeze({
-    left: outerBox.left + (outerBox.width - width) / 2,
-    top: outerBox.top + (outerBox.height - height) / 2,
+    left: outerBox.left + sideInset * scaleX,
+    // The title bar makes the vertical margins asymmetric. The native map has
+    // two additional lower-padding units beyond its shared side-border inset.
+    top: outerBox.top + (verticalInset - bottomInset) * scaleY,
     width,
     height,
   });

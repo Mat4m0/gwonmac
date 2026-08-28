@@ -25,6 +25,26 @@ export const PATHING_SPIKE_GLOBALS = Object.freeze({
   )),
 });
 
+export const EXPLORATION_SPIKE_GLOBALS = Object.freeze({
+  status: "gwonmac_exploration_spike_status",
+  sequence: "gwonmac_exploration_spike_sequence",
+  generation: "gwonmac_exploration_spike_generation",
+  width: "gwonmac_exploration_spike_width",
+  height: "gwonmac_exploration_spike_height",
+  dwordCount: "gwonmac_exploration_spike_dword_count",
+  observe: "gwonmac_exploration_spike_observe",
+  readWord: "gwonmac_exploration_spike_read_word",
+});
+
+export const EXPLORATION_SPIKE_SCALARS = Object.freeze([
+  EXPLORATION_SPIKE_GLOBALS.status,
+  EXPLORATION_SPIKE_GLOBALS.sequence,
+  EXPLORATION_SPIKE_GLOBALS.generation,
+  EXPLORATION_SPIKE_GLOBALS.width,
+  EXPLORATION_SPIKE_GLOBALS.height,
+  EXPLORATION_SPIKE_GLOBALS.dwordCount,
+]);
+
 type NativeFrameGlobals = Readonly<{
   status: string;
   generation: string;
@@ -190,4 +210,23 @@ export type PathingSpikeTrapezoid = Readonly<{
 export type PathingSpikeController = SpikeController<PathingSpikeSnapshot> & Readonly<{
   reset(): void;
   readLargestGeometry(): readonly PathingSpikeTrapezoid[] | null;
+}>;
+
+export type ExplorationSpikeSnapshot = Readonly<{
+  status: number;
+  sequence: number;
+  generation: number;
+  width: number;
+  height: number;
+  dwordCount: number;
+}>;
+
+export type ExplorationSpikeBitmap = Readonly<{
+  snapshot: ExplorationSpikeSnapshot;
+  words: Uint32Array;
+}>;
+
+export type ExplorationSpikeController = SpikeController<ExplorationSpikeSnapshot> & Readonly<{
+  isExplored(cellX: number, cellY: number): boolean | null;
+  readBitmap(): ExplorationSpikeBitmap | null;
 }>;

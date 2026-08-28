@@ -10,6 +10,8 @@
 import { createHash } from "node:crypto";
 import {
   PATHING_SPIKE_GLOBALS,
+  EXPLORATION_SPIKE_GLOBALS,
+  EXPLORATION_SPIKE_SCALARS,
   COMPASS_FRAME_SPIKE_GLOBALS,
   COMPASS_FRAME_SPIKE_SCALARS,
   MISSION_MAP_FRAME_SPIKE_GLOBALS,
@@ -106,10 +108,21 @@ const MISSION_MAP_CERTIFICATE = Object.freeze({
   panY: 0x20,
 });
 
+const EXPLORATION_CERTIFICATE = Object.freeze({
+  contextRoot: 0x5a29b0,
+  gameContextSlot: 6,
+  worldContext: 0x2c,
+  cartographedAreas: 0x5a4,
+  arrayCapacity: 0x04,
+  arraySize: 0x08,
+  gridWidth: 0x5b4,
+  gridHeight: 0x5b8,
+});
+
 const MAX_TRAPEZOIDS_PER_MAP = 65_536;
 const MAX_TOTAL_TRAPEZOIDS = 65_536;
 const MAX_CAPTURED_PATH_MAPS = 64;
-export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 15;
+export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 17;
 export { PATHING_SPIKE_GLOBALS } from "../../shared/cartography-spike.js";
 
 function fail(message: string): never {
@@ -200,6 +213,16 @@ type MissionMapProjectionGlobals = Readonly<{
   playerMapY: number;
   nativeMapWidth: number;
   nativeMapHeight: number;
+}>;
+
+type ExplorationGlobals = Readonly<{
+  status: number;
+  sequence: number;
+  generation: number;
+  width: number;
+  height: number;
+  dwordCount: number;
+  bufferPointer: number;
 }>;
 
 type FrameCertificate = typeof FRAME_LAYOUT & Readonly<{ labelHash: number }>;
@@ -513,6 +536,83 @@ function missionMapEventWrapper(
   );
 }
 
+/** Read the bounded exploration bitmap owner chain and publish no address. */
+function explorationObserver(
+  globals: ExplorationGlobals,
+  pathingGeneration: number,
+): Uint8Array {
+  const refuse = (status: number) => concat(
+    i32(0), globalSet(globals.bufferPointer),
+    i32(status), globalSet(globals.status), Uint8Array.of(0x0f),
+  );
+  const requirePointer = (pointerLocal: number, bytes: number, status: number) => concat(
+    local(pointerLocal), Uint8Array.of(0x45, 0x04, 0x40),
+    refuse(status), Uint8Array.of(0x0b),
+    local(pointerLocal), local(5), i32(bytes), Uint8Array.of(0x6b, 0x4b, 0x04, 0x40),
+    refuse(status), Uint8Array.of(0x0b),
+  );
+  return concat(
+    // pointer scratch, capacity, size, cell/word count, and memory bytes.
+    Uint8Array.of(0x01, 0x06, 0x7f),
+    Uint8Array.of(0x3f, 0x00), i32(65_536), Uint8Array.of(0x6c, 0x21), uleb(5),
+    i32(EXPLORATION_CERTIFICATE.contextRoot), i32Load(), Uint8Array.of(0x21), uleb(0),
+    requirePointer(0, EXPLORATION_CERTIFICATE.gameContextSlot * 4 + 4, 2),
+    local(0), i32Load(EXPLORATION_CERTIFICATE.gameContextSlot * 4),
+    Uint8Array.of(0x21), uleb(0),
+    requirePointer(0, EXPLORATION_CERTIFICATE.worldContext + 4, 3),
+    local(0), i32Load(EXPLORATION_CERTIFICATE.worldContext), Uint8Array.of(0x21), uleb(1),
+    requirePointer(1, EXPLORATION_CERTIFICATE.gridHeight + 4, 4),
+    local(1), i32Load(EXPLORATION_CERTIFICATE.gridWidth), Uint8Array.of(0x22), uleb(0),
+    Uint8Array.of(0x45, 0x04, 0x40), refuse(5), Uint8Array.of(0x0b),
+    local(0), i32(8_192), Uint8Array.of(0x4b, 0x04, 0x40),
+    refuse(5), Uint8Array.of(0x0b),
+    local(1), i32Load(EXPLORATION_CERTIFICATE.gridHeight), Uint8Array.of(0x22), uleb(4),
+    Uint8Array.of(0x45, 0x04, 0x40), refuse(5), Uint8Array.of(0x0b),
+    local(4), i32(8_192), Uint8Array.of(0x4b, 0x04, 0x40),
+    refuse(5), Uint8Array.of(0x0b),
+    local(0), local(4), Uint8Array.of(0x6c, 0x21), uleb(4),
+    local(1), i32Load(EXPLORATION_CERTIFICATE.cartographedAreas),
+    Uint8Array.of(0x21), uleb(0),
+    local(1), i32Load(
+      EXPLORATION_CERTIFICATE.cartographedAreas + EXPLORATION_CERTIFICATE.arrayCapacity,
+    ), Uint8Array.of(0x21), uleb(2),
+    local(1), i32Load(
+      EXPLORATION_CERTIFICATE.cartographedAreas + EXPLORATION_CERTIFICATE.arraySize,
+    ), Uint8Array.of(0x22), uleb(3),
+    local(2), Uint8Array.of(0x4b, 0x04, 0x40), refuse(6), Uint8Array.of(0x0b),
+    local(3), i32(262_144), Uint8Array.of(0x4b, 0x04, 0x40),
+    refuse(6), Uint8Array.of(0x0b),
+    // ceil(width * height / 32) must fit in the source array.
+    local(4), i32(31), Uint8Array.of(0x6a), i32(5), Uint8Array.of(0x76),
+    local(3), Uint8Array.of(0x4b, 0x04, 0x40), refuse(7), Uint8Array.of(0x0b),
+    local(3), Uint8Array.of(0x45, 0x45), local(0), Uint8Array.of(0x45, 0x71, 0x04, 0x40),
+    refuse(8), Uint8Array.of(0x0b),
+    local(0), local(5), local(3), i32(4), Uint8Array.of(0x6c, 0x6b, 0x4b),
+    Uint8Array.of(0x04, 0x40), refuse(8), Uint8Array.of(0x0b),
+    local(0), globalSet(globals.bufferPointer),
+    // Reload dimensions from the validated owner after retaining the buffer privately.
+    local(1), i32Load(EXPLORATION_CERTIFICATE.gridWidth), globalSet(globals.width),
+    local(1), i32Load(EXPLORATION_CERTIFICATE.gridHeight), globalSet(globals.height),
+    local(3), globalSet(globals.dwordCount),
+    globalGet(pathingGeneration), globalSet(globals.generation),
+    globalGet(globals.sequence), i32(1), Uint8Array.of(0x6a), globalSet(globals.sequence),
+    i32(1), globalSet(globals.status),
+    Uint8Array.of(0x0b),
+  );
+}
+
+function explorationReadWord(globals: ExplorationGlobals): Uint8Array {
+  return concat(
+    Uint8Array.of(0x00),
+    globalGet(globals.status), i32(1), Uint8Array.of(0x47, 0x04, 0x40),
+    i32(0), Uint8Array.of(0x0f, 0x0b),
+    local(0), globalGet(globals.dwordCount), Uint8Array.of(0x4f, 0x04, 0x40),
+    i32(0), Uint8Array.of(0x0f, 0x0b),
+    globalGet(globals.bufferPointer), local(0), i32(4), Uint8Array.of(0x6c, 0x6a),
+    i32Load(), Uint8Array.of(0x0b),
+  );
+}
+
 /** Add the exact scalar sampler to the certified current client. */
 export function transformCartographySpikeWasm(input: Uint8Array): Uint8Array {
   const evidence = wasmEvidence(input) ?? fail("invalid WebAssembly input");
@@ -553,15 +653,18 @@ export function transformCartographySpikeWasm(input: Uint8Array): Uint8Array {
   const compassNames = COMPASS_FRAME_SPIKE_SCALARS;
   const missionMapNames = MISSION_MAP_FRAME_SPIKE_SCALARS;
   const missionMapProjectionNames = MISSION_MAP_PROJECTION_SPIKE_SCALARS;
+  const explorationNames = EXPLORATION_SPIKE_SCALARS;
   const allFunctionNames = [
     ...functionNames,
     COMPASS_FRAME_SPIKE_GLOBALS.observe,
     MISSION_MAP_FRAME_SPIKE_GLOBALS.observe,
+    EXPLORATION_SPIKE_GLOBALS.observe,
+    EXPLORATION_SPIKE_GLOBALS.readWord,
   ];
   if (
     [
       ...names, ...compassNames, ...missionMapNames,
-      ...missionMapProjectionNames, ...allFunctionNames,
+      ...missionMapProjectionNames, ...explorationNames, ...allFunctionNames,
     ]
       .some((name) => existingExports.has(name))
   ) {
@@ -576,6 +679,9 @@ export function transformCartographySpikeWasm(input: Uint8Array): Uint8Array {
   const firstCompassGlobal = firstMapCountGlobal + MAX_CAPTURED_PATH_MAPS;
   const firstMissionMapGlobal = firstCompassGlobal + compassNames.length;
   const firstMissionMapProjectionGlobal = firstMissionMapGlobal + missionMapNames.length;
+  const firstExplorationGlobal = firstMissionMapProjectionGlobal
+    + missionMapProjectionNames.length;
+  const explorationBufferPointer = firstExplorationGlobal + explorationNames.length;
   const samplerGlobals: SamplerGlobals = Object.freeze({
     status: firstGlobal,
     sequence: firstGlobal + 1,
@@ -638,6 +744,15 @@ export function transformCartographySpikeWasm(input: Uint8Array): Uint8Array {
     nativeMapWidth: firstMissionMapProjectionGlobal + 10,
     nativeMapHeight: firstMissionMapProjectionGlobal + 11,
   });
+  const explorationGlobals: ExplorationGlobals = Object.freeze({
+    status: firstExplorationGlobal,
+    sequence: firstExplorationGlobal + 1,
+    generation: firstExplorationGlobal + 2,
+    width: firstExplorationGlobal + 3,
+    height: firstExplorationGlobal + 4,
+    dwordCount: firstExplorationGlobal + 5,
+    bufferPointer: explorationBufferPointer,
+  });
 
   const loaderLocal = CERTIFICATE.loader - module.functionImportCount;
   const converterLocal = CERTIFICATE.converter - module.functionImportCount;
@@ -663,11 +778,13 @@ export function transformCartographySpikeWasm(input: Uint8Array): Uint8Array {
     { params: [0x7f], results: [] },
     { params: [], results: [] },
     { params: [0x7f], results: [0x7d] },
+    { params: [0x7f], results: [0x7f] },
   ];
-  const resetType = nextTypes.length - 2;
-  const readCoordinateType = nextTypes.length - 1;
-  // samplerType is the first of the three appended types.
-  const actualSamplerType = nextTypes.length - 3;
+  const resetType = nextTypes.length - 3;
+  const readWordType = nextTypes.length - 1;
+  const actualReadCoordinateType = nextTypes.length - 2;
+  // samplerType is the first of the four appended types.
+  const actualSamplerType = nextTypes.length - 4;
   const samplerFunction = module.functionImportCount + bodies.length;
   const wrapperFunction = samplerFunction + 1;
   const resetFunction = wrapperFunction + 1;
@@ -676,6 +793,8 @@ export function transformCartographySpikeWasm(input: Uint8Array): Uint8Array {
   const compassObserverFunction = compassMapRenderWrapperFunction + 1;
   const missionMapObserverFunction = compassObserverFunction + 1;
   const missionMapEventWrapperFunction = missionMapObserverFunction + 1;
+  const explorationObserverFunction = missionMapEventWrapperFunction + 1;
+  const explorationReadWordFunction = explorationObserverFunction + 1;
   loader.set(concat(Uint8Array.of(0x10), paddedIndex(wrapperFunction)), CERTIFICATE.callSiteOffset);
   const expectedCompassMapRenderCall = concat(
     Uint8Array.of(0x10), paddedIndex(COMPASS_CERTIFICATE.mapRenderFunction),
@@ -708,16 +827,19 @@ export function transformCartographySpikeWasm(input: Uint8Array): Uint8Array {
       missionMapProjectionGlobals,
       samplerGlobals.generation,
     ),
+    explorationObserver(explorationGlobals, samplerGlobals.generation),
+    explorationReadWord(explorationGlobals),
   );
   const nextFunctionTypes = [
-    ...functionTypes, actualSamplerType, converterType, resetType, readCoordinateType,
+    ...functionTypes, actualSamplerType, converterType, resetType, actualReadCoordinateType,
     compassMapRenderType, resetType, resetType, missionMapDispatcherType,
+    resetType, readWordType,
   ];
   const nextGlobals = concat(
     uleb(
       globals.count + names.length + 1 + MAX_CAPTURED_PATH_MAPS * 2
       + compassNames.length + missionMapNames.length
-      + missionMapProjectionNames.length,
+      + missionMapProjectionNames.length + explorationNames.length + 1,
     ),
     globals.entries,
     ...names.map((_, index) => index < 7
@@ -737,11 +859,16 @@ export function transformCartographySpikeWasm(input: Uint8Array): Uint8Array {
     ...missionMapProjectionNames.map((_, index) => index < 3
       ? Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b)
       : Uint8Array.of(0x7d, 0x01, 0x43, 0, 0, 0, 0, 0x0b)),
+    ...Array.from(
+      { length: explorationNames.length + 1 },
+      () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
+    ),
   );
   const nextExports = concat(
     uleb(
       exports.count + names.length + compassNames.length
       + missionMapNames.length + missionMapProjectionNames.length
+      + explorationNames.length
       + allFunctionNames.length,
     ),
     exports.entries,
@@ -774,6 +901,19 @@ export function transformCartographySpikeWasm(input: Uint8Array): Uint8Array {
       encodeName(MISSION_MAP_FRAME_SPIKE_GLOBALS.observe),
       Uint8Array.of(0x00),
       uleb(missionMapObserverFunction),
+    ),
+    ...explorationNames.map((name, index) => concat(
+      encodeName(name), Uint8Array.of(0x03), uleb(firstExplorationGlobal + index),
+    )),
+    concat(
+      encodeName(EXPLORATION_SPIKE_GLOBALS.observe),
+      Uint8Array.of(0x00),
+      uleb(explorationObserverFunction),
+    ),
+    concat(
+      encodeName(EXPLORATION_SPIKE_GLOBALS.readWord),
+      Uint8Array.of(0x00),
+      uleb(explorationReadWordFunction),
     ),
   );
 

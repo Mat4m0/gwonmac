@@ -16,11 +16,11 @@ import {
 const OUTPUT_SHA256 = Object.freeze(new Map<string, string>([
   [
     "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb",
-    "0942ca6e16926ade3789c8c3c2f4dfe4ddb88ba5f52a0b4c2fee40d4e88c7b8f",
+    "0ba13a1175acc4e62788a48fa1613f3869917dee01909babc5eec87bc712f2b2",
   ],
   [
     "f489cbd47bfd10642b31012cfde24546b564510cc38512e3d1f1cc072e4ee25c",
-    "708c3b3da97b79f182ff1d964d7761fb122b0092b1cab60689f7dd53fb669e5b",
+    "86ca1baa4808f1596e3fdc1e1be8300e8da75ffc41fac149f229055e0d468dbb",
   ],
 ]));
 

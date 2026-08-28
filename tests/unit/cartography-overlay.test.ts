@@ -57,7 +57,7 @@ test("projects the certified Mission Map drawable area and player anchor", () =>
     frame,
     Object.freeze({ left: 100, top: 200, width: 668, height: 368 }),
   );
-  assert.deepEqual(content, { left: 114, top: 223, width: 640, height: 322 });
+  assert.deepEqual(content, { left: 114, top: 230, width: 640, height: 322 });
   assert.deepEqual(
     projectGamePointToMissionMap(frame, content, 1_000, 2_000, 1_000, 2_000),
     { x: 320, y: 161 },

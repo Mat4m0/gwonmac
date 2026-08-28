@@ -8,6 +8,9 @@ import type {
 } from "../../shared/cartography-spike.js";
 
 const MAX_VIEWPORT_EDGE = 32_768;
+// Native frame edges are integer-aligned while the UI-scale viewport can be
+// fractional. Accept and clamp only that final-pixel rounding difference.
+const FRAME_EDGE_TOLERANCE = 1;
 
 export type ScreenBox = Readonly<{
   left: number;
@@ -44,23 +47,27 @@ export function projectNativeFrame(
     || viewport.width > MAX_VIEWPORT_EDGE
     || viewport.height <= 0
     || viewport.height > MAX_VIEWPORT_EDGE
-    || frame.left < 0
-    || frame.bottom < 0
+    || frame.left < -FRAME_EDGE_TOLERANCE
+    || frame.bottom < -FRAME_EDGE_TOLERANCE
     || frame.left >= frame.right
     || frame.bottom >= frame.top
-    || frame.right > viewport.width
-    || frame.top > viewport.height
+    || frame.right > viewport.width + FRAME_EDGE_TOLERANCE
+    || frame.top > viewport.height + FRAME_EDGE_TOLERANCE
     || canvas.width <= 0
     || canvas.height <= 0
   ) return null;
 
   const scaleX = canvas.width / viewport.width;
   const scaleY = canvas.height / viewport.height;
+  const left = Math.max(0, frame.left);
+  const bottom = Math.max(0, frame.bottom);
+  const right = Math.min(viewport.width, frame.right);
+  const top = Math.min(viewport.height, frame.top);
   return Object.freeze({
-    left: canvas.left + frame.left * scaleX,
-    top: canvas.top + (viewport.height - frame.top) * scaleY,
-    width: (frame.right - frame.left) * scaleX,
-    height: (frame.top - frame.bottom) * scaleY,
+    left: canvas.left + left * scaleX,
+    top: canvas.top + (viewport.height - top) * scaleY,
+    width: (right - left) * scaleX,
+    height: (top - bottom) * scaleY,
   });
 }
 

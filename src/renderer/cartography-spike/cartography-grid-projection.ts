@@ -23,6 +23,12 @@ const MAX_GRID_AXIS_CELLS = 128;
 
 export type CartographyCell = Readonly<{ x: number; y: number }>;
 
+export type CartographyGridAnchor = Readonly<{
+  frame: MissionMapFrameSpikeSnapshot;
+  playerX: number;
+  playerY: number;
+}>;
+
 export type CartographyGridProjection = Readonly<{
   box: ScreenBox;
   transform: MaskTransform;
@@ -63,6 +69,46 @@ function validFrameProjection(frame: MissionMapFrameSpikeSnapshot): boolean {
     && frame.zoom > 0
     && frame.drawableWidth > 0
     && frame.drawableHeight > 0;
+}
+
+/**
+ * Retain the last certified map-space origin so the Compass grid can continue
+ * while the Mission Map is closed. Live game-space movement advances the
+ * anchor; a generation change invalidates it.
+ */
+export function createCartographyGridAnchor(input: Readonly<{
+  frame: MissionMapFrameSpikeSnapshot;
+  playerX: number;
+  playerY: number;
+}>): CartographyGridAnchor | null {
+  if (
+    !validFrameProjection(input.frame)
+    || !Number.isFinite(input.playerX)
+    || !Number.isFinite(input.playerY)
+  ) return null;
+  return Object.freeze({
+    frame: input.frame,
+    playerX: input.playerX,
+    playerY: input.playerY,
+  });
+}
+
+export function advanceCartographyGridAnchor(
+  anchor: CartographyGridAnchor,
+  input: Readonly<{ generation: number; playerX: number; playerY: number }>,
+): MissionMapFrameSpikeSnapshot | null {
+  if (
+    input.generation !== anchor.frame.generation
+    || !Number.isFinite(input.playerX)
+    || !Number.isFinite(input.playerY)
+  ) return null;
+  return Object.freeze({
+    ...anchor.frame,
+    playerMapX: anchor.frame.playerMapX
+      + (input.playerX - anchor.playerX) / GAME_UNITS_PER_MAP_UNIT,
+    playerMapY: anchor.frame.playerMapY
+      - (input.playerY - anchor.playerY) / GAME_UNITS_PER_MAP_UNIT,
+  });
 }
 
 function validCellRange(first: number, last: number): boolean {

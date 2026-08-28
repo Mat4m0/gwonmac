@@ -5,6 +5,8 @@
  */
 import type {
   CompassFrameSpikeController,
+  ExplorationSpikeBitmap,
+  ExplorationSpikeController,
   MissionMapFrameSpikeController,
   PathingSpikeController,
 } from "../../shared/cartography-spike.js";
@@ -16,8 +18,11 @@ import {
   type CartographyGridLayerSnapshot,
 } from "./cartography-grid-layer.js";
 import {
+  advanceCartographyGridAnchor,
+  createCartographyGridAnchor,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
+  type CartographyGridAnchor,
 } from "./cartography-grid-projection.js";
 import { projectMissionMapFrame, projectNativeFrame } from "./frame-placement.js";
 import { createInverseMaskLayer } from "./inverse-mask-layer.js";
@@ -47,6 +52,7 @@ export function mountCartographyOverlay(options: Readonly<{
   compass: CompassFrameSpikeController;
   missionMap: MissionMapFrameSpikeController;
   pathing: PathingSpikeController;
+  exploration: ExplorationSpikeController | null;
   companion(): PublishedCompanionState | null | undefined;
   settings(): AppSettings;
   persist(patch: RendererSettingsPatch): Promise<AppSettings>;
@@ -81,6 +87,47 @@ export function mountCartographyOverlay(options: Readonly<{
   let geometryVersion = "";
   let mask: WalkabilityMask | null = null;
   let lifecycle = INITIAL_PATHING_MAP_LIFECYCLE;
+  let gridAnchor: CartographyGridAnchor | null = null;
+  let explorationBitmap: ExplorationSpikeBitmap | null = null;
+  let explorationFingerprint = "";
+  let nextExplorationReadAt = 0;
+
+  const refreshExploration = (generation: number): void => {
+    if (
+      explorationBitmap !== null
+      && explorationBitmap.snapshot.generation !== generation
+    ) {
+      explorationBitmap = null;
+      explorationFingerprint = "";
+      nextExplorationReadAt = 0;
+    }
+    if (options.exploration === null || view.performance.now() < nextExplorationReadAt) return;
+    nextExplorationReadAt = view.performance.now() + 500;
+    const next = options.exploration.readBitmap();
+    if (next === null || next.snapshot.generation !== generation) {
+      explorationBitmap = null;
+      explorationFingerprint = "";
+      return;
+    }
+    let hash = 2_166_136_261;
+    for (const word of next.words) {
+      hash ^= word;
+      hash = Math.imul(hash, 16_777_619) >>> 0;
+    }
+    explorationBitmap = next;
+    explorationFingerprint = `${generation}:${hash.toString(16)}`;
+  };
+
+  const exploredCell = (cellX: number, cellY: number): boolean | null => {
+    const bitmap = explorationBitmap;
+    if (
+      bitmap === null
+      || cellX < 0 || cellX >= bitmap.snapshot.width
+      || cellY < 0 || cellY >= bitmap.snapshot.height
+    ) return null;
+    const bit = cellY * bitmap.snapshot.width + cellX;
+    return ((bitmap.words[bit >>> 5]! >>> (bit & 31)) & 1) === 1;
+  };
 
   const hideWalkability = () => {
     geometryVersion = "";
@@ -126,6 +173,7 @@ export function mountCartographyOverlay(options: Readonly<{
     );
     lifecycle = transition.lifecycle;
     if (transition.reset) {
+      gridAnchor = null;
       options.pathing.reset();
       withdrawAll();
       return;
@@ -140,30 +188,55 @@ export function mountCartographyOverlay(options: Readonly<{
       settings.cartographyOverlayCustomStyle,
     );
     const opacity = previewOpacity ?? settings.cartographyOverlayOpacity;
+    refreshExploration(compass.generation);
     const missionContentBox = missionMap !== null && missionMapBox !== null
       ? projectMissionMapContentBox(missionMap, missionMapBox)
       : null;
 
     let gridPresented = false;
-    if (
-      settings.cartographyGridEnabled
-      && compassBox !== null
-      && missionMap !== null
-      && missionMap.generation === compass.generation
-    ) {
-      const compassProjection = projectCartographyGridToCompass({
-        frame: missionMap,
-        compass,
-        box: compassBox,
-      });
+    if (settings.cartographyGridEnabled && compassBox !== null) {
+      const liveCompassProjection = missionMap === null
+        ? null
+        : projectCartographyGridToCompass({
+            frame: missionMap,
+            compass,
+            box: compassBox,
+          });
+      if (liveCompassProjection !== null && missionMap !== null) {
+        gridAnchor = createCartographyGridAnchor({
+          frame: missionMap,
+          playerX: companion.playerX,
+          playerY: companion.playerY,
+        });
+      }
+      const anchoredFrame = liveCompassProjection === null && gridAnchor !== null
+        ? advanceCartographyGridAnchor(gridAnchor, {
+            generation: compass.generation,
+            playerX: companion.playerX,
+            playerY: companion.playerY,
+          })
+        : null;
+      const compassProjection = liveCompassProjection ?? (anchoredFrame === null
+        ? null
+        : projectCartographyGridToCompass({
+            frame: anchoredFrame,
+            compass,
+            box: compassBox,
+          }));
       if (compassProjection === null) {
         compassGridLayer.hide();
       } else {
-        compassGridLayer.update({ projection: compassProjection, style, opacity });
+        compassGridLayer.update({
+          projection: compassProjection,
+          style,
+          opacity,
+          explorationVersion: explorationFingerprint,
+          isExplored: exploredCell,
+        });
         gridPresented = true;
       }
 
-      const missionProjection = missionContentBox === null
+      const missionProjection = missionMap === null || missionContentBox === null
         ? null
         : projectCartographyGridToMissionMap({
             frame: missionMap,
@@ -172,7 +245,13 @@ export function mountCartographyOverlay(options: Readonly<{
       if (missionProjection === null) {
         missionMapGridLayer.hide();
       } else {
-        missionMapGridLayer.update({ projection: missionProjection, style, opacity });
+        missionMapGridLayer.update({
+          projection: missionProjection,
+          style,
+          opacity,
+          explorationVersion: explorationFingerprint,
+          isExplored: exploredCell,
+        });
         gridPresented = true;
       }
     } else {

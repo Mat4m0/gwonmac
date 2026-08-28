@@ -10,7 +10,7 @@ import {
 } from "./cartography-grid-projection.js";
 
 const MIN_CELL_PIXELS = 8;
-const CENTER_DOT_CELL_PIXELS = 18;
+const CENTER_MARKER_CELL_PIXELS = 18;
 
 export type CartographyGridLayerSnapshot = Readonly<{
   surface: "compass" | "mission-map";
@@ -30,6 +30,8 @@ export type CartographyGridLayer = Readonly<{
     projection: CartographyGridProjection;
     style: CartographyOverlayStyle;
     opacity: number;
+    explorationVersion: string;
+    isExplored(cellX: number, cellY: number): boolean | null;
   }>): void;
   snapshot(): CartographyGridLayerSnapshot | null;
   hide(): void;
@@ -127,6 +129,7 @@ export function createCartographyGridLayer(
     opacity: number,
     cellWidthPixels: number,
     cellHeightPixels: number,
+    isExplored: (cellX: number, cellY: number) => boolean | null,
   ): boolean => {
     if (context === null) return false;
     const dpr = document.defaultView?.devicePixelRatio ?? 1;
@@ -144,6 +147,16 @@ export function createCartographyGridLayer(
     const minY = projection.firstCellY * CARTOGRAPHY_CELL_MAP_UNITS;
     const maxY = (projection.lastCellY + 1) * CARTOGRAPHY_CELL_MAP_UNITS;
     const outlineVisible = style.outlineWidth > 0;
+
+    context.fillStyle = style.veilColor;
+    context.globalAlpha = strength * 0.2;
+    for (let cellY = projection.firstCellY; cellY <= projection.lastCellY; cellY += 1) {
+      for (let cellX = projection.firstCellX; cellX <= projection.lastCellX; cellX += 1) {
+        if (isExplored(cellX, cellY) !== false) continue;
+        cellPolygon(context, projection, cellX, cellY);
+        context.fill();
+      }
+    }
 
     context.strokeStyle = style.outlineColor;
     context.lineWidth = Math.max(1, style.outlineWidth);
@@ -183,24 +196,36 @@ export function createCartographyGridLayer(
 
     if (
       projection.surface === "mission-map"
-      && outlineVisible
-      && Math.min(cellWidthPixels, cellHeightPixels) >= CENTER_DOT_CELL_PIXELS
+      && Math.min(cellWidthPixels, cellHeightPixels) >= CENTER_MARKER_CELL_PIXELS
       && (projection.lastCellX - projection.firstCellX + 1)
         * (projection.lastCellY - projection.firstCellY + 1) <= 4_096
     ) {
-      context.fillStyle = style.outlineColor;
-      context.globalAlpha = strength * 0.62;
-      const radius = Math.min(1.5, Math.min(cellWidthPixels, cellHeightPixels) * 0.055);
+      const radius = Math.min(
+        4,
+        Math.max(2.5, Math.min(cellWidthPixels, cellHeightPixels) * 0.08),
+      );
+      context.lineCap = "round";
       for (let cellY = projection.firstCellY; cellY <= projection.lastCellY; cellY += 1) {
         for (let cellX = projection.firstCellX; cellX <= projection.lastCellX; cellX += 1) {
+          if (isExplored(cellX, cellY) !== false) continue;
           const center = projectedPoint(
             projection,
             (cellX + 0.5) * CARTOGRAPHY_CELL_MAP_UNITS,
             (cellY + 0.5) * CARTOGRAPHY_CELL_MAP_UNITS,
           );
           context.beginPath();
-          context.arc(center.x, center.y, radius, 0, Math.PI * 2);
-          context.fill();
+          context.moveTo(center.x - radius, center.y - radius);
+          context.lineTo(center.x + radius, center.y + radius);
+          context.moveTo(center.x + radius, center.y - radius);
+          context.lineTo(center.x - radius, center.y + radius);
+          context.strokeStyle = style.veilColor;
+          context.lineWidth = 4;
+          context.globalAlpha = strength * 0.9;
+          context.stroke();
+          context.strokeStyle = style.outlineColor;
+          context.lineWidth = 1.5;
+          context.globalAlpha = strength;
+          context.stroke();
         }
       }
     }
@@ -224,7 +249,7 @@ export function createCartographyGridLayer(
   };
 
   return Object.freeze({
-    update({ projection, style, opacity }) {
+    update({ projection, style, opacity, explorationVersion, isExplored }) {
       const { box, transform } = projection;
       const cellWidthPixels = Math.hypot(transform.a, transform.b)
         * CARTOGRAPHY_CELL_MAP_UNITS;
@@ -254,10 +279,18 @@ export function createCartographyGridLayer(
         projection.firstCellY, projection.lastCellY,
         projection.currentCell.x, projection.currentCell.y,
         style.veilColor, style.outlineColor, style.outlineWidth, opacity,
+        explorationVersion,
       ].join(":");
       if (
         nextVersion !== drawingVersion
-        && !draw(projection, style, opacity, cellWidthPixels, cellHeightPixels)
+        && !draw(
+          projection,
+          style,
+          opacity,
+          cellWidthPixels,
+          cellHeightPixels,
+          isExplored,
+        )
       ) {
         hide();
         return;

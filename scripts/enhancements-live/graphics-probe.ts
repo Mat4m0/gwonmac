@@ -36,6 +36,12 @@ export type GraphicsProbeSample = Readonly<{
   }> | null;
   compassFrame: ReturnType<NonNullable<Window["gwCompassFrameSpike"]>["snapshot"]> | null;
   missionMapFrame: ReturnType<NonNullable<Window["gwMissionMapFrameSpike"]>["snapshot"]> | null;
+  exploration: Readonly<{
+    snapshot: ReturnType<NonNullable<Window["gwExplorationSpike"]>["snapshot"]>;
+    cellX: number | null;
+    cellY: number | null;
+    neighborhood: readonly Readonly<{ x: number; y: number; explored: boolean | null }>[];
+  }> | null;
   companion: Readonly<{
     status: string;
     mapId: number | null;
@@ -92,6 +98,21 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
       [Infinity, -Infinity, Infinity, -Infinity] as const,
     ) ?? null;
     const companion = window.gwCompanionState;
+    const missionMapFrame = window.gwMissionMapFrameSpike?.snapshot() ?? null;
+    const explorationSnapshot = window.gwExplorationSpike?.snapshot() ?? null;
+    const explorationCellX = missionMapFrame === null
+      ? null
+      : Math.floor(missionMapFrame.playerMapX / 32);
+    const explorationCellY = missionMapFrame === null
+      ? null
+      : Math.floor(missionMapFrame.playerMapY / 32);
+    const explorationNeighborhood = explorationCellX === null || explorationCellY === null
+      ? []
+      : Array.from({ length: 25 }, (_, index) => {
+          const x = explorationCellX + index % 5 - 2;
+          const y = explorationCellY + Math.floor(index / 5) - 2;
+          return { x, y, explored: window.gwExplorationSpike?.isExplored(x, y) ?? null };
+        });
     return {
       capturedAt: new Date().toISOString(),
       rendererNowMs: performance.now(),
@@ -121,7 +142,13 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
         sample: geometry.slice(0, 3),
       },
       compassFrame: window.gwCompassFrameSpike?.snapshot() ?? null,
-      missionMapFrame: window.gwMissionMapFrameSpike?.snapshot() ?? null,
+      missionMapFrame,
+      exploration: explorationSnapshot === null ? null : {
+        snapshot: explorationSnapshot,
+        cellX: explorationCellX,
+        cellY: explorationCellY,
+        neighborhood: explorationNeighborhood,
+      },
       companion: companion === undefined ? null : {
         status: companion.status,
         mapId: companion.status === "ready" ? companion.mapId : null,
@@ -310,6 +337,7 @@ export async function runGraphicsProbeSession({
         intervalDurationMs: sample.textureRecon?.intervalDurationMs ?? null,
         exactReplacements: sample.textureRecon?.exactReplacements ?? [],
         cartographyGrid: sample.cartographyGrid,
+        exploration: sample.exploration,
         pathing: sample.pathing,
         checkerboardBounds,
         textureCandidates,

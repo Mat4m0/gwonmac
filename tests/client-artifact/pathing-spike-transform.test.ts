@@ -8,6 +8,7 @@ import { transformCartographySpikeWasm } from
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
 import {
   COMPASS_FRAME_SPIKE_GLOBALS,
+  EXPLORATION_SPIKE_GLOBALS,
   MISSION_MAP_PROJECTION_SPIKE_GLOBALS,
 } from
   "../../src/shared/cartography-spike.js";
@@ -41,6 +42,8 @@ test("the exact converter call is wrapped without moving existing functions", {
   assert.ok(Object.values(COMPASS_FRAME_SPIKE_GLOBALS)
     .every((name) => exportNames.has(name)));
   assert.ok(Object.values(MISSION_MAP_PROJECTION_SPIKE_GLOBALS)
+    .every((name) => exportNames.has(name)));
+  assert.ok(Object.values(EXPLORATION_SPIKE_GLOBALS)
     .every((name) => exportNames.has(name)));
 
   const missionMapWrapper = decoded.find((candidate) =>

@@ -29,6 +29,7 @@ import type { TextureReconController } from "./webgl-texture-recon.js";
 import type { CartographyGridStats } from "./cartography-spike/overlay.js";
 import type {
   CompassFrameSpikeController,
+  ExplorationSpikeController,
   MissionMapFrameSpikeController,
   PathingSpikeController,
 } from "../shared/cartography-spike.js";
@@ -273,6 +274,8 @@ declare global {
     gwCompassFrameSpike?: CompassFrameSpikeController;
     /** Certified native Mission Map frame scalars; unpackaged development spike only. */
     gwMissionMapFrameSpike?: MissionMapFrameSpikeController;
+    /** Certified exploration bitmap dimensions and bounded bit reader; development only. */
+    gwExplorationSpike?: ExplorationSpikeController;
     /** Unpackaged-development controller used to exercise Guild Wars' real gamepad UI. */
     gwVirtualGamepad?: VirtualGamepadController;
     gwResolveClientCompatibility(): Promise<void>;

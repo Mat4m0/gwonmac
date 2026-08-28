@@ -50,6 +50,26 @@ test("hidden, stale, malformed, and locally bounded Mission Map frames fail clos
   assert.equal(projectNativeFrame(missionMap, canvas), null);
 });
 
+test("clamps only fractional viewport-edge rounding", () => {
+  const box = projectNativeFrame({
+    ...missionMap,
+    viewportWidth: 1_854.62,
+    viewportHeight: 1_021.24,
+    left: 1_610,
+    right: 1_855,
+    bottom: 752.24,
+    top: 1_021.24,
+  }, { left: 0, top: 0, width: 2_241, height: 1_234 });
+  assert.ok(box);
+  assert.ok(box.left >= 0);
+  assert.ok(box.left + box.width <= 2_241);
+  assert.equal(projectNativeFrame({
+    ...missionMap,
+    viewportWidth: 1_854.62,
+    right: 1_856,
+  }, canvas), null);
+});
+
 test("Mission Map projection refuses a mismatched map generation", () => {
   const compass = Object.freeze({
     ...missionMap,
