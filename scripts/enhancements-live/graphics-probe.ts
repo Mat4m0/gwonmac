@@ -27,6 +27,7 @@ export type GraphicsProbeSample = Readonly<{
   wasmHeapBytes: number;
   textures: ReturnType<NonNullable<Window["gwTextureStats"]>> | null;
   textureRecon: ReturnType<NonNullable<Window["gwTextureRecon"]>["checkpoint"]> | null;
+  cartographyGrid: ReturnType<NonNullable<Window["gwCartographyGridStats"]>> | null;
   pathing: ReturnType<NonNullable<Window["gwPathingSpike"]>["snapshot"]> | null;
   pathingGeometry: Readonly<{
     count: number;
@@ -112,6 +113,7 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
       wasmHeapBytes: window.gwWasmHeapBytes?.() ?? 0,
       textures: window.gwTextureStats?.() ?? null,
       textureRecon: window.gwTextureRecon?.checkpoint() ?? null,
+      cartographyGrid: window.gwCartographyGridStats?.() ?? null,
       pathing: window.gwPathingSpike?.snapshot() ?? null,
       pathingGeometry: geometry === null ? null : {
         count: geometry.length,
@@ -196,18 +198,43 @@ export async function runGraphicsProbeSession({
           candidates: MISSION_MAP_TILE_PROOFS,
           expected: "two 512x512 Mission Map tiles use distinct magenta/cyan and yellow/blue checkerboards",
         },
-    suggestedSequence: [
-      "capture mission-map-closed",
-      "capture lions-arch-open-1",
-      "capture lions-arch-closed-1",
-      "capture lions-arch-open-2",
-      "capture lions-arch-closed-2",
-      "capture lions-arch-open-3",
-      "capture after-district-transition",
-      "capture different-map-open",
-      "reset-context",
-      "capture context-restored",
-    ],
+    suggestedSequence: cartographyCalibration
+      ? [
+          "capture maps-closed",
+          "capture compass-idle-1",
+          "capture compass-idle-2",
+          "capture compass-grid-default",
+          "capture compass-walk-same-cell",
+          "capture compass-cross-cell",
+          "capture compass-rotated",
+          "capture mission-default",
+          "capture mission-pan-horizontal",
+          "capture mission-pan-vertical",
+          "capture mission-zoom-min",
+          "capture mission-zoom-max",
+          "capture mission-window-moved",
+          "capture mission-window-resized",
+          "capture mission-reopened",
+          "capture layers-grid-only",
+          "capture layers-walkability-only",
+          "capture layers-all",
+          "capture district-transition",
+          "capture different-map",
+          "reset-context",
+          "capture context-restored",
+        ]
+      : [
+          "capture mission-map-closed",
+          "capture lions-arch-open-1",
+          "capture lions-arch-closed-1",
+          "capture lions-arch-open-2",
+          "capture lions-arch-closed-2",
+          "capture lions-arch-open-3",
+          "capture after-district-transition",
+          "capture different-map-open",
+          "reset-context",
+          "capture context-restored",
+        ],
     privacy: "each capture saves the visible game window; JSON retains bounded fingerprints, activity rates, and scalar checkerboard bounds, never texture pixels or WASM pointers",
   }));
 
@@ -282,6 +309,7 @@ export async function runGraphicsProbeSession({
         contextLost: sample.canvas.contextLost,
         intervalDurationMs: sample.textureRecon?.intervalDurationMs ?? null,
         exactReplacements: sample.textureRecon?.exactReplacements ?? [],
+        cartographyGrid: sample.cartographyGrid,
         pathing: sample.pathing,
         checkerboardBounds,
         textureCandidates,
@@ -304,6 +332,7 @@ export async function runGraphicsProbeSession({
       contextLost: sample.canvas.contextLost,
       intervalDurationMs: sample.textureRecon?.intervalDurationMs ?? null,
       exactReplacements: sample.textureRecon?.exactReplacements ?? [],
+      cartographyGrid: sample.cartographyGrid,
       checkerboardBounds,
       candidates: sample.textureRecon?.records
         .filter(({ fingerprint }) => MISSION_MAP_TILE_PROOFS.some((candidate) => candidate.fingerprint === fingerprint))
