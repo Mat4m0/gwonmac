@@ -218,13 +218,16 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("shows every unlocked destination before typing when the catalogue is small", async () => {
+  it("shows every local unlocked destination when cross-campaign unlocks make the account catalogue large", async () => {
     const shortcuts: TravelShortcuts = [
       { mapId: 164 }, null, null, null, null, null, null, null, null,
     ];
     const { wrapper, state, travel } = fixture({ history: [164, 165], shortcuts });
     const unlockedMapWords = Array.from({ length: 28 }, () => 0);
     for (const mapId of [148, 164, 165, 166, 163, 778]) {
+      unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
+    }
+    for (const mapId of [188, 248, 281, 282, 330, 368, 467, 721, 795, 796, 857]) {
       unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
     }
     state.value = {
@@ -264,10 +267,47 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
+  it("uses the same local rule for another early campaign", async () => {
+    const { wrapper, state } = fixture();
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0);
+    for (const mapId of [194, 242, 243, 249, 250, 251, 188, 248, 281, 282, 330, 368, 467, 721, 795, 796, 857]) {
+      unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
+    }
+    state.value = {
+      status: "ready",
+      mapId: 242,
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords,
+    };
+    await flushPromises();
+
+    expect(wrapper.get(".travel-available").text()).toContain("6 unlocked");
+    expect(wrapper.get(".travel-available").text()).toContain("Shing Jea Monastery");
+    expect(wrapper.get(".travel-available").text()).not.toContain("Great Temple of Balthazar");
+    wrapper.unmount();
+  });
+
+  it("shows the bounded Pre-Searing scope without claiming unknown unlocks", async () => {
+    const { wrapper, state } = fixture();
+    state.value = {
+      status: "ready",
+      mapId: 148,
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords: null,
+    };
+    await flushPromises();
+
+    expect(wrapper.get("#travel-available-title").text()).toBe("Destinations");
+    expect(wrapper.get(".travel-available").text()).toContain("6 nearby");
+    expect(wrapper.get(".travel-available").text()).toContain("Ashford Abbey");
+    expect(wrapper.get(".travel-available").text()).not.toContain("unlocked");
+    wrapper.unmount();
+  });
+
   it("keeps Recent and Favorites when more than ten destinations are unlocked", async () => {
     const { wrapper, state } = fixture({ history: [81] });
     const unlockedMapWords = Array.from({ length: 28 }, () => 0);
-    for (const mapId of [148, 164, 165, 166, 163, 778, 81, 55, 20, 49, 109]) {
+    for (const mapId of [81, 55, 20, 49, 109, 85, 133, 136, 57, 155, 159]) {
       unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
     }
     state.value = {

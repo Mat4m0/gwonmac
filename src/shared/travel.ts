@@ -14,6 +14,7 @@ import {
 
 export {
   TRAVEL_DESTINATIONS,
+  travelBrowseScope,
   travelDestination,
   type TravelDestination,
 } from "./travel-destinations.js";
