@@ -207,6 +207,32 @@ Do not create permanent `develop`, `next`, `beta`, or `stable` branches. The
 signed Stable tag is the production source. `main` can continue with completed
 future work while a release branch stabilizes.
 
+### Merge and commit movement
+
+GitHub accepts only squash merges. The resulting squash commit on the target
+branch is the canonical commit. Do not rely on a topic-branch commit hash after
+merge.
+
+Move a completed change between protected branches only through a focused pull
+request:
+
+- from `main` to a planned release: branch from the exact release branch,
+  `git cherry-pick -x <main-squash-commit>`, and target that release branch;
+- from a release branch to `main`: branch from `main`,
+  `git cherry-pick -x <release-squash-commit>`, and target `main`; and
+- from an emergency release to an active planned release: branch from the
+  planned release, cherry-pick the canonical emergency squash commit with
+  `-x`, and target the planned release.
+
+Name the source pull request and exact canonical source commit in the new pull
+request body. Compare the complete diff with the destination branch. Never
+merge or rebase all of `main` into a release branch, and never copy changes by
+hand when a canonical source commit exists. If the source commit, destination,
+or release inclusion is unclear, stop and resolve it before changing history.
+
+See [Development and rollout](docs/development-workflow.md#merge-and-commit-movement)
+for the decision table and full procedure.
+
 Use Conventional Commits. Keep commits atomic. Review staged changes before a
 commit and the complete branch diff before a pull request.
 
