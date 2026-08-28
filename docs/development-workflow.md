@@ -54,6 +54,41 @@ reduce branch drift. Do not add a hidden feature flag for unfinished code.
 A merge to `main` does not require an application release. Several completed
 changes can wait for one planned release.
 
+## Merge and commit movement
+
+The repository allows squash merges only. GitHub creates one canonical commit
+on the target branch from the pull-request title and body, then deletes the
+merged topic branch. Use that canonical squash commit for every later backport
+or forward-port.
+
+| Change | Start the topic branch from | Pull-request target | Commit to apply |
+| --- | --- | --- | --- |
+| Normal feature or fix | `main` | `main` | The topic change |
+| Completed `main` fix needed by a planned release | Exact `release/YYYY.M.PATCH` | That release branch | Canonical `main` squash commit |
+| Release-only blocker that `main` also needs | `main` | `main` | Canonical release squash commit |
+| Emergency Stable fix | Latest signed Stable tag | Emergency release branch | The emergency change only |
+| Emergency fix needed by `main` or a planned release | Destination branch | That destination branch | Canonical emergency squash commit |
+
+For a backport or forward-port:
+
+1. Fetch remote references and identify the canonical squash commit on the
+   source branch.
+2. Create a new topic branch from the exact destination branch.
+3. Run `git cherry-pick -x <canonical-source-commit>` so the commit records its
+   origin.
+4. Compare the complete branch diff with the destination. It must contain only
+   the intended change and necessary conflict resolution.
+5. Open a pull request that names the source pull request, canonical source
+   commit, destination, and reason for inclusion.
+6. Require **Application verification** to pass, then squash-merge the pull
+   request.
+
+Do not merge or rebase `main` into a release branch. Do not cherry-pick a
+pre-merge topic commit when a canonical squash commit exists. Do not resolve a
+conflict by broadening the release without an explicit inclusion decision. If
+the histories disagree, stop and explain the exact conflict instead of
+inventing another branch or compatibility path.
+
 ## Planned release
 
 1. Select one green commit on `main`.
@@ -166,9 +201,12 @@ release, or announce it without an explicit coordinator request.
 
 Repository settings enforce the model outside the codebase:
 
-- `main` requires the `verify / verify` check and linear history;
-- the `Protect release branches` ruleset applies the same requirements to
-  `release/*` and refuses force-pushes;
+- GitHub permits squash merges only and deletes merged topic branches;
+- `main` requires a pull request, resolved conversations, linear history, and
+  the strict `verify / verify` check, including for administrators;
+- the `Protect release branches` ruleset requires a pull request with squash
+  merge, resolved conversations, and the strict `verify / verify` check for
+  `release/*`, with no bypass and no force-pushes;
 - the `release` environment accepts `main` and `release/*`; and
 - the `release` environment requires Matthias's approval and does not allow an
   administrator bypass.
