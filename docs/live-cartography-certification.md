@@ -31,7 +31,7 @@ diagnostics. It must not store texture pixels or WASM pointers.
 | Rotate without walking | `capture compass-rotated` | Grid rotates with the native Compass without a phase jump. |
 | Resize the game | `capture compass-game-resized` | Circle, grid, and highlight remain aligned. |
 | Move or resize Compass | `capture compass-relocated` | Overlay follows the frame and remains pointer-transparent. |
-| Toggle reveal range | `capture compass-reveal-ranges` | Normal and Bird's Eye ranges use the intended 3×3 and 7×7 cell footprints. |
+| Toggle reveal range | `capture compass-reveal-ranges` | Off hides persistent bounds; Normal and Bird's Eye use the intended 3×3 and 7×7 footprints. |
 
 Click, drag, scroll, and use keyboard controls through the overlay. Guild Wars
 must receive input unchanged. A stationary state must not redraw continuously.

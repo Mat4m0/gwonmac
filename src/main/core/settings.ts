@@ -203,6 +203,13 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.cartographyOverlayCustomStyle = style;
   }
+  if ("cartographyRevealMode" in src) {
+    const mode = src.cartographyRevealMode;
+    if (mode !== "off" && mode !== "normal" && mode !== "birds-eye") {
+      throw new AppError("bad_settings", "settings.cartographyRevealMode is invalid");
+    }
+    out.cartographyRevealMode = mode;
+  }
   if ("shortcutOverrides" in src) {
     if (!isShortcutOverrides(src.shortcutOverrides)) {
       throw new AppError("bad_settings", "settings.shortcutOverrides has invalid bindings");
@@ -245,7 +252,6 @@ export function parseSettings(raw: unknown): AppSettings {
     "gwonmacTools",
     "cartographyOverlayEnabled",
     "cartographyGridEnabled",
-    "cartographyBirdsEyeCompass",
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",

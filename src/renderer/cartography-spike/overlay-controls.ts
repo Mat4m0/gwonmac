@@ -102,13 +102,12 @@ export function createCartographyOverlayControls(options: Readonly<{
     return next;
   };
   const syncRevealRange = () => {
-    const birdsEye = current?.cartographyBirdsEyeCompass ?? false;
-    revealRange.textContent = birdsEye ? "7×7" : "3×3";
-    revealRange.title = birdsEye
+    const mode = current?.cartographyRevealMode ?? "off";
+    revealRange.textContent = mode === "birds-eye" ? "7×7" : mode === "normal" ? "3×3" : "Off";
+    revealRange.title = mode === "birds-eye"
       ? "Reveal range: Bird's Eye Compass (outer cells require pathable terrain)"
-      : "Reveal range: Normal compass";
+      : mode === "normal" ? "Reveal range: Normal compass" : "Reveal range: hover only";
     revealRange.setAttribute("aria-label", revealRange.title);
-    revealRange.setAttribute("aria-pressed", String(birdsEye));
   };
   const setExpanded = (next: boolean) => {
     expanded = next;
@@ -167,10 +166,12 @@ export function createCartographyOverlayControls(options: Readonly<{
   });
   revealRange.addEventListener("click", () => {
     if (current === null) return;
-    const next = !current.cartographyBirdsEyeCompass;
-    current = { ...current, cartographyBirdsEyeCompass: next };
+    const next = current.cartographyRevealMode === "off"
+      ? "normal"
+      : current.cartographyRevealMode === "normal" ? "birds-eye" : "off";
+    current = { ...current, cartographyRevealMode: next };
     syncRevealRange();
-    void persist({ cartographyBirdsEyeCompass: next }).then((settings) => {
+    void persist({ cartographyRevealMode: next }).then((settings) => {
       current = settings;
       syncRevealRange();
       revealRange.style.display = expanded && settings.cartographyGridEnabled

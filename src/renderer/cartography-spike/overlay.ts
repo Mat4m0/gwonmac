@@ -202,7 +202,9 @@ export function mountCartographyOverlay(options: Readonly<{
       settings.cartographyOverlayCustomStyle,
     );
     const opacity = previewOpacity ?? settings.cartographyOverlayOpacity;
-    const revealRadius = settings.cartographyBirdsEyeCompass ? 3 : 1;
+    const revealRadius = settings.cartographyRevealMode === "birds-eye"
+      ? 3
+      : settings.cartographyRevealMode === "normal" ? 1 : 0;
     refreshExploration(compass.generation);
     const missionContentBox = missionMap !== null && missionMapBox !== null
       ? projectMissionMapContentBox(missionMap, missionMapBox)

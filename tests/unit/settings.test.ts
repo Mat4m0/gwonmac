@@ -28,7 +28,7 @@ describe("settings", () => {
       uiPanelOpacity: 94,
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
-      cartographyBirdsEyeCompass: false,
+      cartographyRevealMode: "off",
       cartographyOverlayStyle: "black",
       cartographyOverlayOpacity: 55,
       cartographyControlIdleOpacity: 35,
@@ -85,7 +85,7 @@ describe("settings", () => {
       controllerPromptStyle: "game-default",
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
-      cartographyBirdsEyeCompass: false,
+      cartographyRevealMode: "off",
       cartographyOverlayStyle: "black",
       cartographyOverlayOpacity: 55,
       cartographyControlIdleOpacity: 35,
@@ -165,7 +165,7 @@ describe("settings", () => {
     assert.deepEqual(parseSettingsPatch({
       cartographyOverlayEnabled: true,
       cartographyGridEnabled: true,
-      cartographyBirdsEyeCompass: true,
+      cartographyRevealMode: "birds-eye",
       cartographyOverlayStyle: "pink",
       cartographyOverlayOpacity: 72,
       cartographyControlIdleOpacity: 44,
@@ -177,7 +177,7 @@ describe("settings", () => {
     }), {
       cartographyOverlayEnabled: true,
       cartographyGridEnabled: true,
-      cartographyBirdsEyeCompass: true,
+      cartographyRevealMode: "birds-eye",
       cartographyOverlayStyle: "pink",
       cartographyOverlayOpacity: 72,
       cartographyControlIdleOpacity: 44,
@@ -189,7 +189,7 @@ describe("settings", () => {
     });
     assert.throws(() => parseSettingsPatch({ cartographyOverlayStyle: "blue" }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyGridEnabled: "yes" }), AppError);
-    assert.throws(() => parseSettingsPatch({ cartographyBirdsEyeCompass: "yes" }), AppError);
+    assert.throws(() => parseSettingsPatch({ cartographyRevealMode: "wide" }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyOverlayOpacity: 101 }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyControlIdleOpacity: 14 }), AppError);
     assert.throws(() => parseSettingsPatch({
@@ -442,13 +442,13 @@ describe("settings", () => {
       "autoCheckUpdates",
       "autoRelogAfterReload",
       "buildLibrary",
-      "cartographyBirdsEyeCompass",
       "cartographyControlIdleOpacity",
       "cartographyGridEnabled",
       "cartographyOverlayCustomStyle",
       "cartographyOverlayEnabled",
       "cartographyOverlayOpacity",
       "cartographyOverlayStyle",
+      "cartographyRevealMode",
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
@@ -548,7 +548,7 @@ describe("settings", () => {
       controllerPromptStyle: "game-default",
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
-      cartographyBirdsEyeCompass: false,
+      cartographyRevealMode: "off",
       cartographyOverlayStyle: "black",
       cartographyOverlayOpacity: 55,
       cartographyControlIdleOpacity: 35,

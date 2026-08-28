@@ -54,9 +54,9 @@
   const cartographyGridEnabled = form.elements.namedItem(
     'cartographyGridEnabled',
   ) as HTMLInputElement;
-  const cartographyBirdsEyeCompass = form.elements.namedItem(
-    'cartographyBirdsEyeCompass',
-  ) as HTMLInputElement;
+  const cartographyRevealMode = form.elements.namedItem(
+    'cartographyRevealMode',
+  ) as HTMLSelectElement;
   const buildLibrary = form.elements.namedItem('buildLibrary') as HTMLInputElement;
   const tradeChat = form.elements.namedItem('tradeChat') as HTMLInputElement;
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
@@ -551,7 +551,6 @@
       case 'gwonmacTools':
       case 'cartographyOverlayEnabled':
       case 'cartographyGridEnabled':
-      case 'cartographyBirdsEyeCompass':
       case 'buildLibrary':
       case 'tradeChat':
       case 'xunlaiStorage':
@@ -561,6 +560,11 @@
       case 'skillCooldownOverlayEnabled':
         return control instanceof globalThis.HTMLInputElement
           ? { [control.name]: control.checked }
+          : null;
+      case 'cartographyRevealMode':
+        return control instanceof globalThis.HTMLSelectElement
+          && ['off', 'normal', 'birds-eye'].includes(control.value)
+          ? { cartographyRevealMode: control.value as AppSettings['cartographyRevealMode'] }
           : null;
       case 'autoCheckUpdates':
         return control instanceof globalThis.HTMLInputElement
@@ -600,8 +604,8 @@
     gwonmacTools.checked = settings.gwonmacTools;
     cartographyOverlayEnabled.checked = settings.cartographyOverlayEnabled;
     cartographyGridEnabled.checked = settings.cartographyGridEnabled;
-    cartographyBirdsEyeCompass.checked = settings.cartographyBirdsEyeCompass;
-    cartographyBirdsEyeCompass.disabled = !settings.cartographyGridEnabled;
+    cartographyRevealMode.value = settings.cartographyRevealMode;
+    cartographyRevealMode.disabled = !settings.cartographyGridEnabled;
     buildLibrary.checked = settings.buildLibrary;
     tradeChat.checked = settings.tradeChat;
     xunlaiStorage.checked = settings.xunlaiStorage;

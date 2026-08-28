@@ -121,12 +121,12 @@ texture, GWonMac leaves the game's texture untouched instead of guessing.
 ## Maps and cartography
 
 Open **Settings → Maps** for two independent features. **Show cartography
-grid** marks the game's exploration cells and highlights the cell containing
+guidance** marks the game's exploration cells and highlights the cell containing
 your character. **Show walkability overlay** keeps Guild Wars' map artwork and
-shades terrain outside the certified walkable geometry. The grid and
-walkability layers share color and opacity controls but can be enabled
-independently. Both preserve the native map artwork and hide when their current
-map projection or data cannot be certified.
+shades terrain outside the certified walkable geometry. Cartography guidance
+uses quiet fixed colors; the walkability appearance remains customizable. Both
+preserve the native map artwork and hide when their current map projection or
+data cannot be certified.
 
 ## Game integration and optional Tools
 

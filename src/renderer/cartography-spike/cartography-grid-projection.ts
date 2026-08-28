@@ -22,7 +22,7 @@ const COMPASS_CELL_RADIUS = 3;
 const MAX_GRID_AXIS_CELLS = 128;
 
 export type CartographyCell = Readonly<{ x: number; y: number }>;
-export type CartographyRevealRadius = 1 | 3;
+export type CartographyRevealRadius = 0 | 1 | 3;
 
 export type CartographyGridAnchor = Readonly<{
   frame: MissionMapFrameSpikeSnapshot;

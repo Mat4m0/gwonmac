@@ -13,6 +13,9 @@ import {
 
 const MIN_CELL_PIXELS = 8;
 const CENTER_MARKER_CELL_PIXELS = 18;
+const GRID_COLOR = "#D8E1DE";
+const MISSING_COLOR = "#E2B85C";
+const FOCUS_COLOR = "#8ED8F8";
 
 export type CartographyGridLayerSnapshot = Readonly<{
   surface: "compass" | "mission-map";
@@ -180,31 +183,26 @@ export function createCartographyGridLayer(
     const maxY = (projection.lastCellY + 1) * CARTOGRAPHY_CELL_MAP_UNITS;
     const outlineVisible = style.outlineWidth > 0;
     const focusCell = hoveredCell ?? projection.currentCell;
+    const effectiveRevealRadius = hoveredCell !== null && revealRadius === 0
+      ? 1
+      : revealRadius;
 
-    context.fillStyle = style.veilColor;
-    context.globalAlpha = strength * 0.2;
-    for (let cellY = projection.firstCellY; cellY <= projection.lastCellY; cellY += 1) {
-      for (let cellX = projection.firstCellX; cellX <= projection.lastCellX; cellX += 1) {
-        if (isExplored(cellX, cellY) !== false) continue;
-        cellPolygon(context, projection, cellX, cellY);
-        context.fill();
+    if (effectiveRevealRadius > 0) {
+      context.fillStyle = MISSING_COLOR;
+      context.globalAlpha = strength * 0.08;
+      for (let cellY = focusCell.y - 1; cellY <= focusCell.y + 1; cellY += 1) {
+        for (let cellX = focusCell.x - 1; cellX <= focusCell.x + 1; cellX += 1) {
+          if (isExplored(cellX, cellY) !== false) continue;
+          cellPolygon(context, projection, cellX, cellY);
+          context.fill();
+        }
       }
     }
 
-    context.fillStyle = style.outlineColor;
-    context.globalAlpha = strength * 0.12;
-    for (let cellY = focusCell.y - 1; cellY <= focusCell.y + 1; cellY += 1) {
-      for (let cellX = focusCell.x - 1; cellX <= focusCell.x + 1; cellX += 1) {
-        if (isExplored(cellX, cellY) !== false) continue;
-        cellPolygon(context, projection, cellX, cellY);
-        context.fill();
-      }
-    }
-
-    context.strokeStyle = style.outlineColor;
-    context.lineWidth = Math.max(1, style.outlineWidth);
+    context.strokeStyle = GRID_COLOR;
+    context.lineWidth = 1;
     context.globalAlpha = outlineVisible
-      ? strength * (projection.surface === "compass" ? 0.34 : 0.44)
+      ? strength * (projection.surface === "compass" ? 0.2 : 0.26)
       : 0;
     context.beginPath();
     for (let cellX = projection.firstCellX; cellX <= projection.lastCellX + 1; cellX += 1) {
@@ -237,17 +235,19 @@ export function createCartographyGridLayer(
     }
     context.stroke();
 
-    cellRangePolygon(context, projection, focusCell, 1);
-    context.setLineDash([]);
-    context.strokeStyle = style.outlineColor;
-    context.lineWidth = Math.max(1.5, style.outlineWidth + 1);
-    context.globalAlpha = outlineVisible ? strength * 0.96 : 0;
-    context.stroke();
-    if (revealRadius === 3) {
+    if (effectiveRevealRadius > 0) {
+      cellRangePolygon(context, projection, focusCell, 1);
+      context.setLineDash([]);
+      context.strokeStyle = FOCUS_COLOR;
+      context.lineWidth = 1.5;
+      context.globalAlpha = outlineVisible ? strength * 0.78 : 0;
+      context.stroke();
+    }
+    if (effectiveRevealRadius === 3) {
       cellRangePolygon(context, projection, focusCell, 3);
       context.setLineDash([6, 4]);
-      context.lineWidth = Math.max(1, style.outlineWidth);
-      context.globalAlpha = outlineVisible ? strength * 0.72 : 0;
+      context.lineWidth = 1;
+      context.globalAlpha = outlineVisible ? strength * 0.5 : 0;
       context.stroke();
       context.setLineDash([]);
     }
@@ -272,18 +272,10 @@ export function createCartographyGridLayer(
             (cellY + 0.5) * CARTOGRAPHY_CELL_MAP_UNITS,
           );
           context.beginPath();
-          context.moveTo(center.x - radius, center.y - radius);
-          context.lineTo(center.x + radius, center.y + radius);
-          context.moveTo(center.x + radius, center.y - radius);
-          context.lineTo(center.x - radius, center.y + radius);
-          context.strokeStyle = style.veilColor;
-          context.lineWidth = 4;
-          context.globalAlpha = strength * 0.9;
-          context.stroke();
-          context.strokeStyle = style.outlineColor;
-          context.lineWidth = 1.5;
-          context.globalAlpha = strength;
-          context.stroke();
+          context.arc(center.x, center.y, radius * 0.65, 0, Math.PI * 2);
+          context.fillStyle = MISSING_COLOR;
+          context.globalAlpha = strength * 0.72;
+          context.fill();
         }
       }
     }
@@ -294,22 +286,22 @@ export function createCartographyGridLayer(
       projection.currentCell.x,
       projection.currentCell.y,
     );
-    context.fillStyle = style.veilColor;
-    context.globalAlpha = strength * 0.22;
+    context.fillStyle = FOCUS_COLOR;
+    context.globalAlpha = strength * 0.08;
     context.fill();
-    context.strokeStyle = style.outlineColor;
-    context.lineWidth = Math.max(1, style.outlineWidth + 1);
-    context.globalAlpha = outlineVisible ? strength * 0.95 : 0;
+    context.strokeStyle = FOCUS_COLOR;
+    context.lineWidth = 1.5;
+    context.globalAlpha = outlineVisible ? strength * 0.72 : 0;
     context.stroke();
 
     if (hoveredCell !== null) {
       cellPolygon(context, projection, hoveredCell.x, hoveredCell.y);
-      context.fillStyle = style.outlineColor;
-      context.globalAlpha = strength * 0.16;
+      context.fillStyle = FOCUS_COLOR;
+      context.globalAlpha = strength * 0.1;
       context.fill();
-      context.strokeStyle = style.outlineColor;
-      context.lineWidth = Math.max(2, style.outlineWidth + 1);
-      context.globalAlpha = outlineVisible ? strength : 0;
+      context.strokeStyle = FOCUS_COLOR;
+      context.lineWidth = 1.5;
+      context.globalAlpha = outlineVisible ? strength * 0.86 : 0;
       context.stroke();
     }
     context.restore();
