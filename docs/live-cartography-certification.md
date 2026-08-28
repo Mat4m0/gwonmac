@@ -59,8 +59,9 @@ change proportionally with zoom and resizing.
 Capture `layers-grid-only`, `layers-walkability-only`, and `layers-all` from
 the same position. Grid and walkability must remain independently switchable,
 use the shared style coherently, and preserve native map detail. Repeat a
-combined capture at low, medium, and full opacity and with two contrasting
-themes.
+combined capture at low, medium, and full opacity and with the Quiet and Paper
+presets. Copy a preset into Custom and confirm that each semantic color changes
+the same role on the Compass and Mission Map.
 
 Then capture a district transition, explorable entry, mission restart,
 different map, return to character selection, and graphics-context reset when

@@ -112,7 +112,7 @@
 .settings-cartography-style-list label:has(input:checked) { border-color: var(--ui-accent); background: var(--ui-selection-fill); color: var(--ui-selection-ink); }
 .settings-cartography-style-list input { position: absolute; opacity: 0; pointer-events: none; }
 .settings-cartography-style-list label:focus-within { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
-.settings-cartography-style-list [data-cartography-style-swatch] { width: 25px; height: 25px; border: 2px solid var(--cartography-outline); border-radius: var(--ui-radius-pill); background: var(--cartography-veil); box-shadow: 0 0 0 1px var(--ui-outline); }
+.settings-cartography-style-list [data-cartography-style-swatch] { width: 28px; height: 28px; border: 2px solid var(--cartography-outline); border-radius: var(--ui-radius-pill); background: conic-gradient(var(--cartography-missing) 0 25%, var(--cartography-current) 0 50%, var(--cartography-range) 0 75%, var(--cartography-veil) 0); }
 .settings-cartography-opacity { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--ui-space-2); }
 .settings-cartography-opacity label { color: var(--ui-text-bright); font-weight: var(--ui-font-weight-semibold); }
 .settings-cartography-opacity output,
@@ -130,6 +130,7 @@
 .settings-cartography-preview-map { position: relative; overflow: hidden; background: linear-gradient(135deg, var(--ui-success), var(--ui-text-muted) 48%, var(--ui-well)); }
 .settings-cartography-preview-compass { width: 132px; aspect-ratio: 1; border: 7px solid var(--ui-text-muted); border-radius: var(--ui-radius-pill); }
 .settings-cartography-preview-map { width: 100%; height: 112px; border: 5px solid var(--ui-line); }
+.settings-cartography-preview :is(.settings-cartography-preview-compass, .settings-cartography-preview-map)::before { content:""; position:absolute; z-index:1; inset:0; background-image:linear-gradient(to right, transparent 49%, var(--cartography-grid) 50%, transparent 51%),linear-gradient(to bottom, transparent 49%, var(--cartography-grid) 50%, transparent 51%); background-size:28px 28px; opacity:calc(var(--cartography-opacity) * .45); }
 .settings-cartography-preview :is(.settings-cartography-preview-compass, .settings-cartography-preview-map)::after { content:""; position:absolute; inset:0; background:var(--cartography-veil); opacity:var(--cartography-opacity); }
 .settings-cartography-preview :is(.settings-cartography-preview-compass, .settings-cartography-preview-map) > span { position:absolute; z-index:1; inset:20% 15%; border:var(--cartography-outline-width) solid var(--cartography-outline); background:linear-gradient(135deg, transparent 0 28%, var(--ui-outline) 29% 44%, transparent 45% 61%, var(--ui-outline) 62% 75%, transparent 76%); mix-blend-mode:destination-out; transform:rotate(-8deg); }
 .settings-cartography-preview figcaption { grid-column: 1 / -1; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }

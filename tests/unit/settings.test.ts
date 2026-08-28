@@ -173,6 +173,12 @@ describe("settings", () => {
         veilColor: "#102030",
         outlineColor: "#DDEEFF",
         outlineWidth: 3,
+        gridColor: "#112233",
+        missingColor: "#445566",
+        currentColor: "#778899",
+        hoverColor: "#AABBCC",
+        normalRangeColor: "#DDEEFF",
+        birdsEyeRangeColor: "#123456",
       },
     }), {
       cartographyOverlayEnabled: true,
@@ -185,6 +191,12 @@ describe("settings", () => {
         veilColor: "#102030",
         outlineColor: "#DDEEFF",
         outlineWidth: 3,
+        gridColor: "#112233",
+        missingColor: "#445566",
+        currentColor: "#778899",
+        hoverColor: "#AABBCC",
+        normalRangeColor: "#DDEEFF",
+        birdsEyeRangeColor: "#123456",
       },
     });
     assert.throws(() => parseSettingsPatch({ cartographyOverlayStyle: "blue" }), AppError);
@@ -192,11 +204,35 @@ describe("settings", () => {
     assert.throws(() => parseSettingsPatch({ cartographyRevealMode: "wide" }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyOverlayOpacity: 101 }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyControlIdleOpacity: 14 }), AppError);
+    assert.deepEqual(parseSettingsPatch({
+      cartographyOverlayCustomStyle: {
+        veilColor: "#102030",
+        outlineColor: "#DDEEFF",
+        outlineWidth: 2,
+      },
+    }).cartographyOverlayCustomStyle, {
+      ...DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
+      veilColor: "#102030",
+      outlineColor: "#DDEEFF",
+      outlineWidth: 2,
+    });
     assert.throws(() => parseSettingsPatch({
       cartographyOverlayCustomStyle: {
         veilColor: "#10203",
         outlineColor: "#DDEEFF",
         outlineWidth: 3,
+        gridColor: "#112233",
+        missingColor: "#445566",
+        currentColor: "#778899",
+        hoverColor: "#AABBCC",
+        normalRangeColor: "#DDEEFF",
+        birdsEyeRangeColor: "#123456",
+      },
+    }), AppError);
+    assert.throws(() => parseSettingsPatch({
+      cartographyOverlayCustomStyle: {
+        ...DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
+        gridColor: "#12345Z",
       },
     }), AppError);
     assert.throws(() => parseSettingsPatch({
@@ -204,6 +240,12 @@ describe("settings", () => {
         veilColor: "#102030",
         outlineColor: "#DDEEFF",
         outlineWidth: 5,
+        gridColor: "#112233",
+        missingColor: "#445566",
+        currentColor: "#778899",
+        hoverColor: "#AABBCC",
+        normalRangeColor: "#DDEEFF",
+        birdsEyeRangeColor: "#123456",
       },
     }), AppError);
   });

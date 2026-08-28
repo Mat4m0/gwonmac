@@ -48,8 +48,30 @@ export function bindCartographySettings(options: Readonly<{
   const veilHex = byName<HTMLInputElement>("cartographyVeilHex");
   const outlinePicker = byName<HTMLInputElement>("cartographyOutlinePicker");
   const outlineHex = byName<HTMLInputElement>("cartographyOutlineHex");
+  const gridPicker = byName<HTMLInputElement>("cartographyGridPicker");
+  const gridHex = byName<HTMLInputElement>("cartographyGridHex");
+  const missingPicker = byName<HTMLInputElement>("cartographyMissingPicker");
+  const missingHex = byName<HTMLInputElement>("cartographyMissingHex");
+  const currentPicker = byName<HTMLInputElement>("cartographyCurrentPicker");
+  const currentHex = byName<HTMLInputElement>("cartographyCurrentHex");
+  const hoverPicker = byName<HTMLInputElement>("cartographyHoverPicker");
+  const hoverHex = byName<HTMLInputElement>("cartographyHoverHex");
+  const normalRangePicker = byName<HTMLInputElement>("cartographyNormalRangePicker");
+  const normalRangeHex = byName<HTMLInputElement>("cartographyNormalRangeHex");
+  const birdsEyeRangePicker = byName<HTMLInputElement>("cartographyBirdsEyeRangePicker");
+  const birdsEyeRangeHex = byName<HTMLInputElement>("cartographyBirdsEyeRangeHex");
   const outlineWidth = byName<HTMLInputElement>("cartographyOutlineWidth");
   const outlineWidthValue = byName<HTMLOutputElement>("cartographyOutlineWidthValue");
+  const colorControls = [
+    [veilPicker, veilHex],
+    [outlinePicker, outlineHex],
+    [gridPicker, gridHex],
+    [missingPicker, missingHex],
+    [currentPicker, currentHex],
+    [hoverPicker, hoverHex],
+    [normalRangePicker, normalRangeHex],
+    [birdsEyeRangePicker, birdsEyeRangeHex],
+  ] as const;
   let current: AppSettings | null = null;
 
   const selectedStyle = (): CartographyOverlayStyleId | null => {
@@ -60,19 +82,33 @@ export function bindCartographySettings(options: Readonly<{
     veilColor: veilHex.value.toUpperCase(),
     outlineColor: outlineHex.value.toUpperCase(),
     outlineWidth: Number(outlineWidth.value),
+    gridColor: gridHex.value.toUpperCase(),
+    missingColor: missingHex.value.toUpperCase(),
+    currentColor: currentHex.value.toUpperCase(),
+    hoverColor: hoverHex.value.toUpperCase(),
+    normalRangeColor: normalRangeHex.value.toUpperCase(),
+    birdsEyeRangeColor: birdsEyeRangeHex.value.toUpperCase(),
   });
   const draw = (style: CartographyOverlayStyle, opacityPercent: number) => {
     preview.style.setProperty("--cartography-veil", style.veilColor);
     preview.style.setProperty("--cartography-outline", style.outlineColor);
     preview.style.setProperty("--cartography-outline-width", `${style.outlineWidth}px`);
     preview.style.setProperty("--cartography-opacity", String(opacityPercent / 100));
+    preview.style.setProperty("--cartography-grid", style.gridColor);
+    preview.style.setProperty("--cartography-missing", style.missingColor);
+    preview.style.setProperty("--cartography-current", style.currentColor);
+    preview.style.setProperty("--cartography-hover", style.hoverColor);
+    preview.style.setProperty("--cartography-normal-range", style.normalRangeColor);
+    preview.style.setProperty("--cartography-birds-eye-range", style.birdsEyeRangeColor);
     opacityValue.value = `${opacityPercent}%`;
     outlineWidthValue.value = `${style.outlineWidth} px`;
     const customSwatch = options.form.querySelector<HTMLElement>(
       '[data-cartography-style-swatch="custom"]',
     );
-    customSwatch?.style.setProperty("--cartography-veil", current?.cartographyOverlayCustomStyle.veilColor ?? style.veilColor);
-    customSwatch?.style.setProperty("--cartography-outline", current?.cartographyOverlayCustomStyle.outlineColor ?? style.outlineColor);
+    if (customSwatch !== null && customSwatch !== undefined) {
+      const saved = current?.cartographyOverlayCustomStyle ?? style;
+      setSwatch(customSwatch, saved);
+    }
   };
   const drawSelected = () => {
     if (current === null) return;
@@ -94,16 +130,22 @@ export function bindCartographySettings(options: Readonly<{
         cartographyOverlayStyle: "custom",
         cartographyOverlayCustomStyle: style,
       });
-      options.feedback("Custom overlay style saved.", "success", 2200);
+      options.feedback("Custom map palette saved.", "success", 2200);
     } catch {
       await options.recoverAfterPersistFailure("Review the active map style before trying again.");
     }
   };
 
+  const setSwatch = (swatch: HTMLElement, style: CartographyOverlayStyle) => {
+    swatch.style.setProperty("--cartography-veil", style.veilColor);
+    swatch.style.setProperty("--cartography-outline", style.outlineColor);
+    swatch.style.setProperty("--cartography-missing", style.missingColor);
+    swatch.style.setProperty("--cartography-current", style.currentColor);
+    swatch.style.setProperty("--cartography-range", style.birdsEyeRangeColor);
+  };
   for (const [id, style] of Object.entries(CARTOGRAPHY_OVERLAY_BUILTIN_STYLES)) {
     const swatch = options.form.querySelector<HTMLElement>(`[data-cartography-style-swatch="${id}"]`);
-    swatch?.style.setProperty("--cartography-veil", style.veilColor);
-    swatch?.style.setProperty("--cartography-outline", style.outlineColor);
+    if (swatch !== null) setSwatch(swatch, style);
   }
   choices.forEach((choice) => choice.addEventListener("change", () => {
     const style = selectedStyle();
@@ -133,6 +175,18 @@ export function bindCartographySettings(options: Readonly<{
     veilHex.value = source.veilColor;
     outlinePicker.value = source.outlineColor;
     outlineHex.value = source.outlineColor;
+    gridPicker.value = source.gridColor;
+    gridHex.value = source.gridColor;
+    missingPicker.value = source.missingColor;
+    missingHex.value = source.missingColor;
+    currentPicker.value = source.currentColor;
+    currentHex.value = source.currentColor;
+    hoverPicker.value = source.hoverColor;
+    hoverHex.value = source.hoverColor;
+    normalRangePicker.value = source.normalRangeColor;
+    normalRangeHex.value = source.normalRangeColor;
+    birdsEyeRangePicker.value = source.birdsEyeRangeColor;
+    birdsEyeRangeHex.value = source.birdsEyeRangeColor;
     outlineWidth.value = String(source.outlineWidth);
     choices.forEach((choice) => { choice.checked = choice.value === "custom"; });
     custom.hidden = false;
@@ -156,8 +210,7 @@ export function bindCartographySettings(options: Readonly<{
     });
     text.addEventListener("change", () => { void saveCustom(); });
   };
-  bindColor(veilPicker, veilHex);
-  bindColor(outlinePicker, outlineHex);
+  colorControls.forEach(([picker, text]) => bindColor(picker, text));
   outlineWidth.addEventListener("input", drawSelected);
   outlineWidth.addEventListener("change", () => { void saveCustom(); });
 
@@ -177,13 +230,23 @@ export function bindCartographySettings(options: Readonly<{
       controlOpacity.value = String(settings.cartographyControlIdleOpacity);
       controlOpacityValue.value = `${settings.cartographyControlIdleOpacity}%`;
       const style = settings.cartographyOverlayCustomStyle;
-      veilPicker.value = style.veilColor;
-      veilHex.value = style.veilColor;
-      outlinePicker.value = style.outlineColor;
-      outlineHex.value = style.outlineColor;
+      const values = [
+        style.veilColor,
+        style.outlineColor,
+        style.gridColor,
+        style.missingColor,
+        style.currentColor,
+        style.hoverColor,
+        style.normalRangeColor,
+        style.birdsEyeRangeColor,
+      ] as const;
+      colorControls.forEach(([picker, text], index) => {
+        const value = values[index]!;
+        picker.value = value;
+        text.value = value;
+        validateHex(text);
+      });
       outlineWidth.value = String(style.outlineWidth);
-      validateHex(veilHex);
-      validateHex(outlineHex);
       custom.hidden = settings.cartographyOverlayStyle !== "custom";
       editCustom.hidden = settings.cartographyOverlayStyle === "custom";
       draw(

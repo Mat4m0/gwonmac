@@ -16,10 +16,10 @@ const EXPANDED_HEIGHT = 112;
 const EXPANDED_GRID_HEIGHT = 138;
 
 const STYLE_NAMES: Readonly<Record<CartographyOverlayStyleId, string>> = Object.freeze({
-  black: "Black",
-  white: "White",
-  green: "Green",
-  pink: "Pink",
+  black: "Quiet",
+  white: "Paper",
+  green: "Verdant",
+  pink: "Vivid",
   custom: "Custom",
 });
 
@@ -48,7 +48,7 @@ export function createCartographyOverlayControls(options: Readonly<{
   ].join(";");
 
   const select = document.createElement("select");
-  select.setAttribute("aria-label", "Map overlay style");
+  select.setAttribute("aria-label", "Map color preset");
   select.style.cssText = [
     `display:block;width:${CONTROL_SIZE}px;height:${CONTROL_SIZE}px`, "padding:0",
     "border:2px solid rgba(255,255,255,.82)", "border-radius:50%",
@@ -192,9 +192,9 @@ export function createCartographyOverlayControls(options: Readonly<{
         settings.cartographyOverlayStyle,
         settings.cartographyOverlayCustomStyle,
       );
-      select.style.background = style.veilColor;
+      select.style.background = `conic-gradient(${style.missingColor} 0 25%, ${style.currentColor} 0 50%, ${style.birdsEyeRangeColor} 0 75%, ${style.veilColor} 0)`;
       select.style.borderColor = style.outlineColor;
-      select.title = `Overlay style: ${STYLE_NAMES[settings.cartographyOverlayStyle]}`;
+      select.title = `Map colors: ${STYLE_NAMES[settings.cartographyOverlayStyle]}`;
       if (document.activeElement !== slider) slider.value = String(settings.cartographyOverlayOpacity);
       if (!expanded) root.style.opacity = String(settings.cartographyControlIdleOpacity / 100);
 

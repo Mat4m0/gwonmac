@@ -13,9 +13,6 @@ import {
 
 const MIN_CELL_PIXELS = 8;
 const CENTER_MARKER_CELL_PIXELS = 18;
-const GRID_COLOR = "#D8E1DE";
-const MISSING_COLOR = "#E2B85C";
-const FOCUS_COLOR = "#8ED8F8";
 
 export type CartographyGridLayerSnapshot = Readonly<{
   surface: "compass" | "mission-map";
@@ -181,14 +178,13 @@ export function createCartographyGridLayer(
     const maxX = (projection.lastCellX + 1) * CARTOGRAPHY_CELL_MAP_UNITS;
     const minY = projection.firstCellY * CARTOGRAPHY_CELL_MAP_UNITS;
     const maxY = (projection.lastCellY + 1) * CARTOGRAPHY_CELL_MAP_UNITS;
-    const outlineVisible = style.outlineWidth > 0;
     const focusCell = hoveredCell ?? projection.currentCell;
     const effectiveRevealRadius = hoveredCell !== null && revealRadius === 0
       ? 1
       : revealRadius;
 
     if (effectiveRevealRadius > 0) {
-      context.fillStyle = MISSING_COLOR;
+      context.fillStyle = style.missingColor;
       context.globalAlpha = strength * 0.08;
       for (let cellY = focusCell.y - 1; cellY <= focusCell.y + 1; cellY += 1) {
         for (let cellX = focusCell.x - 1; cellX <= focusCell.x + 1; cellX += 1) {
@@ -199,11 +195,9 @@ export function createCartographyGridLayer(
       }
     }
 
-    context.strokeStyle = GRID_COLOR;
+    context.strokeStyle = style.gridColor;
     context.lineWidth = 1;
-    context.globalAlpha = outlineVisible
-      ? strength * (projection.surface === "compass" ? 0.2 : 0.26)
-      : 0;
+    context.globalAlpha = strength * (projection.surface === "compass" ? 0.2 : 0.26);
     context.beginPath();
     for (let cellX = projection.firstCellX; cellX <= projection.lastCellX + 1; cellX += 1) {
       const from = projectedPoint(
@@ -238,16 +232,17 @@ export function createCartographyGridLayer(
     if (effectiveRevealRadius > 0) {
       cellRangePolygon(context, projection, focusCell, 1);
       context.setLineDash([]);
-      context.strokeStyle = FOCUS_COLOR;
+      context.strokeStyle = style.normalRangeColor;
       context.lineWidth = 1.5;
-      context.globalAlpha = outlineVisible ? strength * 0.78 : 0;
+      context.globalAlpha = strength * 0.78;
       context.stroke();
     }
     if (effectiveRevealRadius === 3) {
       cellRangePolygon(context, projection, focusCell, 3);
       context.setLineDash([6, 4]);
+      context.strokeStyle = style.birdsEyeRangeColor;
       context.lineWidth = 1;
-      context.globalAlpha = outlineVisible ? strength * 0.5 : 0;
+      context.globalAlpha = strength * 0.5;
       context.stroke();
       context.setLineDash([]);
     }
@@ -273,7 +268,7 @@ export function createCartographyGridLayer(
           );
           context.beginPath();
           context.arc(center.x, center.y, radius * 0.65, 0, Math.PI * 2);
-          context.fillStyle = MISSING_COLOR;
+          context.fillStyle = style.missingColor;
           context.globalAlpha = strength * 0.72;
           context.fill();
         }
@@ -286,22 +281,22 @@ export function createCartographyGridLayer(
       projection.currentCell.x,
       projection.currentCell.y,
     );
-    context.fillStyle = FOCUS_COLOR;
+    context.fillStyle = style.currentColor;
     context.globalAlpha = strength * 0.08;
     context.fill();
-    context.strokeStyle = FOCUS_COLOR;
+    context.strokeStyle = style.currentColor;
     context.lineWidth = 1.5;
-    context.globalAlpha = outlineVisible ? strength * 0.72 : 0;
+    context.globalAlpha = strength * 0.72;
     context.stroke();
 
     if (hoveredCell !== null) {
       cellPolygon(context, projection, hoveredCell.x, hoveredCell.y);
-      context.fillStyle = FOCUS_COLOR;
+      context.fillStyle = style.hoverColor;
       context.globalAlpha = strength * 0.1;
       context.fill();
-      context.strokeStyle = FOCUS_COLOR;
+      context.strokeStyle = style.hoverColor;
       context.lineWidth = 1.5;
-      context.globalAlpha = outlineVisible ? strength * 0.86 : 0;
+      context.globalAlpha = strength * 0.86;
       context.stroke();
     }
     context.restore();
@@ -347,7 +342,9 @@ export function createCartographyGridLayer(
         projection.firstCellX, projection.lastCellX,
         projection.firstCellY, projection.lastCellY,
         projection.currentCell.x, projection.currentCell.y,
-        style.veilColor, style.outlineColor, style.outlineWidth, opacity,
+        style.veilColor, style.outlineColor, style.outlineWidth,
+        style.gridColor, style.missingColor, style.currentColor, style.hoverColor,
+        style.normalRangeColor, style.birdsEyeRangeColor, opacity,
         explorationVersion,
         hoveredCell?.x ?? "-", hoveredCell?.y ?? "-", revealRadius,
       ].join(":");
