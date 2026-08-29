@@ -15,10 +15,11 @@ import {
   Notification,
   powerMonitor,
   session,
+  shell,
   systemPreferences,
 } from "electron";
 import { readFileSync } from "node:fs";
-import { access, mkdir, rm } from "node:fs/promises";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
@@ -140,7 +141,20 @@ import {
 import { LauncherOrchestrator } from "./launcher-orchestrator.js";
 import { registerLauncherIpc } from "./launcher-ipc.js";
 import { LAUNCHER_IPC } from "../shared/launcher-contracts.js";
+import type { GlobalTool, LauncherSettingsPatch, ShortcutReplacement } from "../shared/launcher-contracts.js";
+import {
+  DEFAULT_SHORTCUTS,
+  shortcutReserved,
+  withShortcutOverride,
+} from "../shared/keyboard-shortcuts.js";
 import { sendIfLive } from "./ipc-channel-registry.js";
+import {
+  TOOL_ACTION,
+  allGlobalToolsPatch,
+  globalToolPatch,
+  shortcutOwner,
+} from "./core/launcher-tools.js";
+import { captureLauncherShortcut } from "./launcher-shortcut-capture.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -296,8 +310,10 @@ function sendToRenderer(channel: string, value: unknown): void {
 
 /** Publish the one durable Settings snapshot to every live game projection. */
 let applyToolsSettings: ((settings: AppSettings) => Promise<void>) | null = null;
+let currentSettings: AppSettings | null = null;
 
 async function publishSettings(settings: AppSettings): Promise<void> {
+  currentSettings = settings;
   await applyToolsSettings?.(settings);
   updateToolsMenuItems(settings);
   for (const win of windowRegistry.gameWindows()) {
@@ -580,6 +596,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         "The settings file was corrupt. Defaults were restored and a diagnostic copy was preserved.",
     });
   });
+  currentSettings = settings;
   let diagnosticProfile = await loadDiagnosticProfile(paths.diagnosticProfile);
   const diagnosticPolicy = diagnosticProfilePolicy(diagnosticProfile);
   const enhancementSelection: EnhancementSelection = diagnosticPolicy.officialClient
@@ -650,6 +667,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         }).show();
       }
       sendToRenderer(IPC.appUpdatesState, state);
+      launcherOrchestrator?.publish();
     },
   });
   appUpdaterController.restoreLastCheckedAt(settings.lastUpdateCheckAt);
@@ -713,7 +731,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     hasActiveClient: () => clientRuntime.active !== null,
     getProgress: () => clientRuntime.progress,
     getAppUpdate: () => appUpdaterController!.getState(),
-    toolsConfigured: () => enhancementSelectionFor(settings).tools,
+    getSettings: () => currentSettings ?? settings,
     toolsLoaded: () => enhancementSelection.tools,
     developmentFixtures: !app.isPackaged || process.env.GW_LAUNCHER_FIXTURES === "1",
     publish: (snapshot) => {
@@ -722,23 +740,171 @@ if (primaryInstance) void app.whenReady().then(async () => {
     },
   });
 
+  const restartAndInstallUpdate = (win: BrowserWindow): Promise<void> => {
+    if (updateRestartInFlight) return updateRestartInFlight;
+    const updater = appUpdaterController;
+    const operation = (async () => {
+      if (updater?.getState().phase !== "ready") return;
+      if (windowRegistry.contextForWebContents(win.webContents.id)?.role === "game") {
+        await resetGameInput(win);
+      }
+      if (sockets.size() > 0) {
+        const { response } = await dialog.showMessageBox(win, {
+          type: "warning",
+          buttons: ["Restart and Update", "Later"],
+          defaultId: 1,
+          cancelId: 1,
+          message: "Restart and update Guild Wars Reforged?",
+          detail: "Open game windows will close. The downloaded update remains ready if you choose Later.",
+        });
+        if (response !== 0) return;
+      }
+      await runQuitCleanup();
+      if (!updater.quitAndInstall()) app.exit(1);
+    })().finally(() => {
+      if (updateRestartInFlight === operation) updateRestartInFlight = null;
+    });
+    updateRestartInFlight = operation;
+    return operation;
+  };
+
   registerLauncherIpc({
     windows: windowRegistry,
     snapshot: () => launcherOrchestrator!.snapshot(),
     create: async (name) => {
       await accounts.create({ name });
     },
+    updateAppearance: async ({ id, icon, color }) => {
+      await launcherOrchestrator!.updateAppearance(id, { icon, color });
+    },
     setSelection: (ids) => launcherOrchestrator!.setSelection(ids),
     play: (ids) => launcherOrchestrator!.play(ids),
     show: (id) => launcherOrchestrator!.show(id),
     cancelQueued: (ids) => launcherOrchestrator!.cancel(ids),
-    dismissMigrationNotice: () => launcherOrchestrator!.dismissMigrationNotice(),
-    completeIntroduction: () => launcherOrchestrator!.completeIntroduction(),
-    updatePreferences: (patch) => launcherOrchestrator!.updatePreferences(patch),
-    checkUpdates: () => checkForAppUpdates(),
-    restartAndInstall: async (_win) => {
-      await appUpdaterController?.quitAndInstall();
+    archive: async (id) => {
+      if (accounts.state().profiles.find((profile) => !profile.archived)?.id === id) {
+        throw new Error("Main account cannot be archived");
+      }
+      await accounts.archive(id);
     },
+    restore: async (id) => {
+      await accounts.restore(id);
+    },
+    delete: async (win, id) => {
+      await accounts.delete(win, id);
+    },
+    dismissMigrationNotice: () => launcherOrchestrator!.dismissMigrationNotice(),
+    completeSetup: async (enableTools) => {
+      if (enableTools) await preferences.updateSettings(allGlobalToolsPatch(true));
+      await launcherOrchestrator!.completeSetup();
+      if (enableTools) {
+        app.relaunch();
+        app.quit();
+      }
+    },
+    completeIntroduction: () => launcherOrchestrator!.completeIntroduction(),
+    replayIntroduction: () => launcherOrchestrator!.replayIntroduction(),
+    updatePreferences: (patch) => launcherOrchestrator!.updatePreferences(patch),
+    updateSettings: async (patch: LauncherSettingsPatch) => {
+      await preferences.updateSettings(patch);
+      launcherOrchestrator!.publish();
+    },
+    resetSettings: async (win) => {
+      const { response } = await dialog.showMessageBox(win, {
+        type: "warning",
+        buttons: ["Reset Settings", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        message: "Reset launcher settings?",
+        detail: "Accounts, saved logins, game files, builds, templates, screenshots, and chat logs are kept.",
+      });
+      if (response !== 0) return;
+      await (toolsRuntime?.resetSettings() ?? preferences.resetCoreSettings());
+      await launcherState.resetPresentation();
+      launcherOrchestrator!.publish();
+    },
+    setToolsMaster: async (enabled) => {
+      await preferences.updateSettings({ gwonmacTools: enabled });
+      launcherOrchestrator!.publish();
+    },
+    setToolFeature: async ({ tool, enabled }) => {
+      await preferences.updateSettings(globalToolPatch(tool, enabled));
+      launcherOrchestrator!.publish();
+    },
+    captureShortcut: (win, tool) => captureLauncherShortcut(
+      win,
+      tool,
+      () => currentSettings ?? settings,
+    ),
+    replaceShortcut: async ({ tool, binding }: ShortcutReplacement) => {
+      if (shortcutReserved(binding)) throw new Error("That shortcut is reserved by macOS or the application");
+      const active = currentSettings ?? settings;
+      let overrides = active.shortcutOverrides;
+      const conflict = shortcutOwner(binding, active, tool);
+      if (conflict) overrides = withShortcutOverride(overrides, TOOL_ACTION[conflict], null);
+      overrides = withShortcutOverride(overrides, TOOL_ACTION[tool], binding);
+      await preferences.updateSettings({ shortcutOverrides: overrides });
+      launcherOrchestrator!.publish();
+    },
+    restoreDefaultShortcut: async (tool: GlobalTool) => {
+      const active = currentSettings ?? settings;
+      const binding = DEFAULT_SHORTCUTS[TOOL_ACTION[tool]];
+      let overrides = active.shortcutOverrides;
+      const conflict = shortcutOwner(binding, active, tool);
+      if (conflict) overrides = withShortcutOverride(overrides, TOOL_ACTION[conflict], null);
+      overrides = withShortcutOverride(overrides, TOOL_ACTION[tool], binding);
+      await preferences.updateSettings({ shortcutOverrides: overrides });
+      launcherOrchestrator!.publish();
+    },
+    restartToApplyTools: async (_win) => {
+      if (windowRegistry.gameWindows().length > 0) return;
+      app.relaunch();
+      app.quit();
+    },
+    cacheInfo: () => clientRuntime.cacheInfo(),
+    retryPreparation: () => clientRuntime.retryClient(() => {
+      app.relaunch();
+      app.quit();
+    }),
+    repairGameFiles: async (win) => {
+      if (windowRegistry.gameWindows().length > 0) {
+        await dialog.showMessageBox(win, {
+          type: "info",
+          buttons: ["OK"],
+          message: "Close your game windows first",
+          detail: "Open games stay usable. Repair can start after every account is closed.",
+        });
+        return;
+      }
+      await clientRuntime.retryClient(() => {
+        app.relaunch();
+        app.quit();
+      });
+    },
+    pauseDownload: () => clientRuntime.stopDownload(),
+    resumeDownload: async () => {
+      await clientRuntime.downloadAll();
+    },
+    resetGameFiles: async (win) => {
+      const { response } = await dialog.showMessageBox(win, {
+        type: "warning",
+        buttons: ["Reset and Redownload", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        message: "Reset and redownload game files?",
+        detail: "Accounts, saved logins, settings, Tools, shortcuts, builds, templates, screenshots, and chat logs are kept.",
+      });
+      if (response !== 0) return;
+      await writeFile(paths.cacheClearRequest, "launcher-full-reset-v1", { mode: 0o600 });
+      app.relaunch();
+      app.quit();
+    },
+    openExternal: async (kind) => {
+      await shell.openExternal(EXTERNAL_URLS[kind]);
+    },
+    revealLogs: () => shell.showItemInFolder(paths.diagnostics),
+    checkUpdates: () => checkForAppUpdates(),
+    restartAndInstall: restartAndInstallUpdate,
   });
 
   const ipcCleanup = registerIpcHandlers({
@@ -776,35 +942,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       }),
     getAppUpdateState: () => appUpdaterController!.getState(),
     checkAppUpdates: () => checkForAppUpdates(),
-    restartAndInstallUpdate: (win) => {
-      if (updateRestartInFlight) return updateRestartInFlight;
-      const updater = appUpdaterController;
-      const operation = (async () => {
-        if (updater?.getState().phase !== "ready") return;
-        await resetGameInput(win);
-        if (sockets.size() > 0) {
-          const { response } = await dialog.showMessageBox(win, {
-            type: "warning",
-            buttons: ["Restart and Update", "Later"],
-            defaultId: 1,
-            cancelId: 1,
-            message: "Restart and update Guild Wars?",
-            detail:
-              "The current game connection will close. The downloaded update remains ready if you choose Later.",
-          });
-          if (response !== 0) return;
-        }
-        await runQuitCleanup();
-        // Cleanup is deliberately irreversible. If Squirrel refuses the
-        // terminal handoff, leave instead of resuming a process whose sockets,
-        // client runtime, diagnostics, and persistence owners are gone.
-        if (!updater.quitAndInstall()) app.exit(1);
-      })().finally(() => {
-        if (updateRestartInFlight === operation) updateRestartInFlight = null;
-      });
-      updateRestartInFlight = operation;
-      return operation;
-    },
+    restartAndInstallUpdate,
     getClientSession: (win) => rendererClientSessions.session(
       {
         owner: win,

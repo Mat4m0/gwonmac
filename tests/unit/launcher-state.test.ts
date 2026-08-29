@@ -62,4 +62,19 @@ describe("launcher presentation state", () => {
     assert.deepEqual(store.get().selectedProfileIds, [id]);
     assert.equal(store.get().preferences.content.first, "dailies");
   });
+
+  it("persists setup, replayable introduction, and validated appearance", async () => {
+    const path = await fixture();
+    const loaded = await loadOrCreateLauncherState(path, "fresh");
+    const store = new LauncherStateStore(path, loaded.document, false);
+    const id = parseProfileId("ba46cb0e-55c2-4c05-9808-5c35ce83b0b0");
+    await store.completeSetup();
+    await store.completeIntroduction();
+    await store.replayIntroduction();
+    await store.updateAppearance(id, { icon: "archive", color: "#496b58" });
+    assert.equal(store.get().setupVersion, 1);
+    assert.equal(store.get().introductionVersion, 0);
+    assert.deepEqual(store.appearance(id), { icon: "archive", color: "#496b58" });
+    await assert.rejects(store.updateAppearance(id, { icon: "url", color: "red" }));
+  });
 });

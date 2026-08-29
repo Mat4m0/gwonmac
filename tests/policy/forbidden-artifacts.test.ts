@@ -111,6 +111,7 @@ test("only public identifiers and explicit profile-id fixtures are UUID-shaped",
     "9E1BD41C-CFC0-4CA8-A57F-2F0CA159C72D",
   ]);
   const profileIdFixtures = new Set([
+    "apps/launcher/src/fixtures.ts",
     "tests/electron/multiple-accounts.spec.ts",
     "tests/electron/profile-close.spec.ts",
     "tests/helpers/launcher-profile-fixtures.ts",

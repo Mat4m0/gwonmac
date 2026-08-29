@@ -9,7 +9,7 @@
  */
 import { app, dialog, session, type Session } from "electron";
 import type { BrowserWindow } from "electron";
-import { rm, stat, writeFile } from "node:fs/promises";
+import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import type {
   AppSettings,
   AppSettingsPatch,
@@ -219,7 +219,15 @@ async function pendingMarkerExists(markerPath: string): Promise<boolean> {
 
 export async function applyPendingCacheClear(paths: GamePaths): Promise<void> {
   if (!(await pendingMarkerExists(paths.cacheClearRequest))) return;
+  const fullReset = await readFile(paths.cacheClearRequest, "utf8")
+    .then((value) => value === "launcher-full-reset-v1")
+    .catch(() => false);
   await rm(paths.chunks, { recursive: true, force: true });
+  if (fullReset) {
+    await rm(paths.artifacts, { recursive: true, force: true });
+    await rm(paths.previousArtifacts, { recursive: true, force: true });
+    await rm(paths.rejectedClient, { force: true });
+  }
   await rm(paths.cacheClearRequest, { force: true });
   logEvent({ k: "cache.clearedAtStartup" });
 }

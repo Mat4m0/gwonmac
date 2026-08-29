@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import type { AccountsState, DownloadProgress } from "../../src/shared/contracts.ts";
+import { DEFAULT_SETTINGS, type AccountsState, type DownloadProgress } from "../../src/shared/contracts.ts";
 import type { LauncherSnapshot } from "../../src/shared/launcher-contracts.ts";
 import { LauncherStateStore, loadOrCreateLauncherState } from "../../src/main/core/launcher-state.ts";
 import { LauncherOrchestrator } from "../../src/main/launcher-orchestrator.ts";
@@ -84,7 +84,7 @@ async function fixture() {
     hasActiveClient: () => active,
     getProgress: () => progress,
     getAppUpdate: () => ({ phase: "idle", currentVersion: "1.0.0" }),
-    toolsConfigured: () => false,
+    getSettings: () => DEFAULT_SETTINGS,
     toolsLoaded: () => false,
     developmentFixtures: true,
     publish: (snapshot) => snapshots.push(snapshot),

@@ -22,6 +22,11 @@ const INTRODUCTION_VERSION = 1;
 const DOCUMENT_MODE = 0o600;
 const DEFAULT_COLOR = "#9a6638";
 const DEFAULT_ICON = "swords";
+const PROFILE_ICONS = new Set(["swords", "archive", "map", "scroll", "shield", "star", "crown", "flame"]);
+
+function validAppearance(value: LauncherProfileAppearance): boolean {
+  return PROFILE_ICONS.has(value.icon) && /^#[0-9a-f]{6}$/iu.test(value.color);
+}
 
 export interface LauncherStateDocument {
   readonly formatVersion: 1;
@@ -112,7 +117,11 @@ export function parseLauncherState(value: unknown): LauncherStateDocument {
   for (const [id, raw] of Object.entries(appearances)) {
     parseProfileId(id);
     const appearance = record(raw, "profile appearance");
-    if (typeof appearance.icon !== "string" || typeof appearance.color !== "string") {
+    if (
+      typeof appearance.icon !== "string"
+      || typeof appearance.color !== "string"
+      || !validAppearance({ icon: appearance.icon, color: appearance.color })
+    ) {
       throw new Error("profile appearance is invalid");
     }
     parsedAppearances[id] = { icon: appearance.icon, color: appearance.color };
@@ -191,8 +200,33 @@ export class LauncherStateStore {
     await this.save({ ...this.value, migrationNoticeDismissed: true });
   }
 
+  async completeSetup(): Promise<void> {
+    await this.save({ ...this.value, setupVersion: SETUP_VERSION });
+  }
+
   async completeIntroduction(): Promise<void> {
     await this.save({ ...this.value, introductionVersion: INTRODUCTION_VERSION });
+  }
+
+  async replayIntroduction(): Promise<void> {
+    await this.save({ ...this.value, introductionVersion: 0 });
+  }
+
+  async updateAppearance(profileId: ProfileId, appearance: LauncherProfileAppearance): Promise<void> {
+    if (!validAppearance(appearance)) throw new Error("Profile appearance is invalid");
+    await this.save({
+      ...this.value,
+      appearances: { ...this.value.appearances, [profileId]: appearance },
+    });
+  }
+
+  async resetPresentation(): Promise<void> {
+    await this.save({
+      ...this.value,
+      preferences: DEFAULT_LAUNCHER_PREFERENCES,
+      selectedProfileIds: [],
+      appearances: {},
+    });
   }
 
   async updatePreferences(patch: LauncherPreferencesPatch): Promise<void> {

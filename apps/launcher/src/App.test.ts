@@ -1,6 +1,12 @@
-import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { LauncherNativeApi } from "@shared/launcher-contracts";
 import App from "./App.vue";
+import { fixtureSnapshot } from "./fixtures";
+
+afterEach(() => {
+  Object.defineProperty(window, "launcherNative", { configurable: true, value: undefined });
+});
 
 describe("unified launcher shell", () => {
   it("keeps Home focused on content and moves account management to Accounts", async () => {
@@ -25,5 +31,45 @@ describe("unified launcher shell", () => {
     await wrapper.findAll("nav button")[3]!.trigger("click");
     expect(wrapper.get(".placeholder-note").text()).toContain("not connected yet");
     expect(wrapper.text()).not.toContain("submitted");
+  });
+
+  it("keeps Tool switches and shortcuts together", async () => {
+    const wrapper = mount(App);
+    await wrapper.get('button[aria-label="Settings"]').trigger("click");
+    await wrapper.findAll(".settings-page aside button")[2]!.trigger("click");
+    expect(wrapper.text()).toContain("Tools apply to every account");
+    expect(wrapper.text()).toContain("Build Management");
+    expect(wrapper.text()).toContain("⌘B");
+    expect(wrapper.text()).toContain("Quick Travel");
+    expect(wrapper.text()).toContain("Xunlai Storage");
+    expect(wrapper.text()).not.toContain("Trade Chat");
+  });
+
+  it("keeps Tools off unless a fresh player explicitly enables them", async () => {
+    const completeSetup = vi.fn(async () => undefined);
+    const fresh = {
+      ...fixtureSnapshot,
+      experience: {
+        ...fixtureSnapshot.experience,
+        installationKind: "fresh" as const,
+        setup: "pending" as const,
+        introduction: "pending" as const,
+        showMigrationNotice: false,
+      },
+    };
+    Object.defineProperty(window, "launcherNative", {
+      configurable: true,
+      value: {
+        state: { get: async () => fresh, onChange: () => () => undefined },
+        experience: { completeSetup },
+      } as unknown as LauncherNativeApi,
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    expect(wrapper.text()).toContain("Welcome to Guild Wars Reforged");
+    await wrapper.get(".setup-card .primary").trigger("click");
+    expect(wrapper.text()).toContain("Tools apply to every account");
+    await wrapper.findAll(".setup-card .secondary")[1]!.trigger("click");
+    expect(completeSetup).toHaveBeenCalledWith({ enableTools: false });
   });
 });

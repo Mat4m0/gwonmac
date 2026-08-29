@@ -249,7 +249,16 @@ test("the launcher preload exposes only its frozen launcher bridge", async () =>
   });
   assert.equal(exposedName, "launcherNative");
   assert.ok(launcher);
-  assert.deepEqual(Object.keys(launcher).sort(), ["experience", "profiles", "state", "updates"]);
+  assert.deepEqual(Object.keys(launcher).sort(), [
+    "experience",
+    "external",
+    "gameFiles",
+    "profiles",
+    "settings",
+    "state",
+    "tools",
+    "updates",
+  ]);
   assert.equal(Object.isFrozen(launcher), true);
   assert.equal(Object.values(launcher).every(Object.isFrozen), true);
   await launcher.state.get();

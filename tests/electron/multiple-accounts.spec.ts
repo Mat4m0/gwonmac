@@ -44,6 +44,9 @@ test("fresh startup creates Main and adds an account without restart", async () 
   });
   try {
     await expect(fixture.page).toHaveURL("gw://app/launcher/index.html");
+    await fixture.page.getByRole("button", { name: "Continue" }).click();
+    await fixture.page.getByRole("button", { name: "Not now" }).click();
+    await fixture.page.getByRole("button", { name: "Skip" }).click();
     await expect(fixture.page.getByRole("button", { name: "Play" })).toBeVisible();
     await fixture.page.getByRole("button", { name: "Accounts" }).click();
     await expect(fixture.page.getByText("Main account", { exact: true })).toBeVisible();
@@ -69,7 +72,7 @@ test("fresh startup creates Main and adds an account without restart", async () 
 });
 
 test("serializes concurrent profile launches behind one client canary", async () => {
-  const fixture = await launchOffline(
+  const fixture = await launchCachedClient(
     "gw-launcher-concurrent-open-",
     { GW_TEST_RETURN_LAUNCHER: "1" },
     seedTwoProfiles,

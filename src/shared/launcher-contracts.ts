@@ -4,23 +4,48 @@
  * commands and the rebuildable projection the Vue application renders.
  */
 import type {
+  AppSettings,
   AppUpdateState,
+  CacheInfo,
   DownloadActivity,
   FullDownloadState,
 } from "./contracts.js";
+import type { ShortcutBinding } from "./keyboard-shortcuts.js";
 import type { ProfileId } from "./multiple-accounts.js";
 
 export const LAUNCHER_IPC = Object.freeze({
   stateGet: "gw:launcher:state:get",
   stateEvent: "gw:launcher:state:event",
   profilesCreate: "gw:launcher:profiles:create",
+  profilesUpdateAppearance: "gw:launcher:profiles:updateAppearance",
   profilesSetSelection: "gw:launcher:profiles:setSelection",
   profilesPlay: "gw:launcher:profiles:play",
   profilesShow: "gw:launcher:profiles:show",
   profilesCancelQueued: "gw:launcher:profiles:cancelQueued",
+  profilesArchive: "gw:launcher:profiles:archive",
+  profilesRestore: "gw:launcher:profiles:restore",
+  profilesDelete: "gw:launcher:profiles:delete",
   experienceDismissMigration: "gw:launcher:experience:dismissMigration",
+  experienceCompleteSetup: "gw:launcher:experience:completeSetup",
   experienceCompleteIntroduction: "gw:launcher:experience:completeIntroduction",
+  experienceReplayIntroduction: "gw:launcher:experience:replayIntroduction",
   experienceUpdatePreferences: "gw:launcher:experience:updatePreferences",
+  settingsUpdate: "gw:launcher:settings:update",
+  settingsReset: "gw:launcher:settings:reset",
+  toolsSetMasterEnabled: "gw:launcher:tools:setMasterEnabled",
+  toolsSetFeature: "gw:launcher:tools:setFeature",
+  toolsCaptureShortcut: "gw:launcher:tools:captureShortcut",
+  toolsReplaceShortcut: "gw:launcher:tools:replaceShortcut",
+  toolsRestoreDefaultShortcut: "gw:launcher:tools:restoreDefaultShortcut",
+  toolsRestartToApply: "gw:launcher:tools:restartToApply",
+  gameFilesInfo: "gw:launcher:gameFiles:info",
+  gameFilesRetryPreparation: "gw:launcher:gameFiles:retryPreparation",
+  gameFilesRepair: "gw:launcher:gameFiles:repair",
+  gameFilesPauseDownload: "gw:launcher:gameFiles:pauseDownload",
+  gameFilesResumeDownload: "gw:launcher:gameFiles:resumeDownload",
+  gameFilesResetAndRestart: "gw:launcher:gameFiles:resetAndRestart",
+  externalOpen: "gw:launcher:external:open",
+  externalRevealLogs: "gw:launcher:external:revealLogs",
   updatesCheck: "gw:launcher:updates:check",
   updatesRestartAndInstall: "gw:launcher:updates:restartAndInstall",
 } as const);
@@ -52,6 +77,44 @@ export interface LauncherProfileAppearance {
   readonly color: string;
 }
 
+export const GLOBAL_TOOLS = ["build-management", "quick-travel", "xunlai-storage"] as const;
+export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
+export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "donate"] as const;
+export type LauncherExternalLink = (typeof LAUNCHER_EXTERNAL_LINKS)[number];
+
+export interface GlobalToolSetting {
+  readonly enabled: boolean;
+  readonly shortcut: ShortcutBinding | null;
+}
+
+export type GlobalToolSettings = Readonly<Record<GlobalTool, GlobalToolSetting>>;
+
+export interface LauncherSettings {
+  readonly autoCheckUpdates: boolean;
+  readonly updateTrack: AppSettings["updateTrack"];
+  readonly extendedMemoryEnabled: boolean;
+  readonly showDiagnostics: boolean;
+}
+
+export type LauncherSettingsPatch = Partial<LauncherSettings>;
+export interface ProfileAppearanceUpdate extends LauncherProfileAppearance {
+  readonly id: ProfileId;
+}
+export interface GlobalToolUpdate {
+  readonly tool: GlobalTool;
+  readonly enabled: boolean;
+}
+export interface ShortcutReplacement {
+  readonly tool: GlobalTool;
+  readonly binding: ShortcutBinding;
+}
+export type LauncherShortcutCaptureResult =
+  | Readonly<{ status: "captured"; binding: ShortcutBinding }>
+  | Readonly<{ status: "reserved" }>
+  | Readonly<{ status: "conflict"; tool: GlobalTool }>
+  | Readonly<{ status: "cancelled" }>
+  | Readonly<{ status: "invalid" }>;
+
 export interface LauncherProfileSummary {
   readonly id: ProfileId;
   readonly name: string;
@@ -82,7 +145,9 @@ export interface LauncherSnapshot {
     configured: boolean;
     loaded: boolean;
     restartRequired: boolean;
+    features: GlobalToolSettings;
   }>;
+  readonly settings: LauncherSettings;
   readonly profiles: readonly LauncherProfileSummary[];
   readonly selectedProfileIds: readonly ProfileId[];
   readonly preferences: LauncherPreferences;
@@ -101,20 +166,80 @@ export interface LauncherNativeApi {
   };
   readonly profiles: {
     create(input: { readonly name: string }): Promise<void>;
+    updateAppearance(input: ProfileAppearanceUpdate): Promise<void>;
     setSelection(ids: readonly ProfileId[]): Promise<void>;
     play(ids: readonly ProfileId[]): Promise<void>;
     show(id: ProfileId): Promise<void>;
     cancelQueued(ids: readonly ProfileId[]): Promise<void>;
+    archive(id: ProfileId): Promise<void>;
+    restore(id: ProfileId): Promise<void>;
+    delete(id: ProfileId): Promise<void>;
   };
   readonly experience: {
+    completeSetup(input: { readonly enableTools: boolean }): Promise<void>;
     completeIntroduction(): Promise<void>;
+    replayIntroduction(): Promise<void>;
     dismissMigrationNotice(): Promise<void>;
     updatePreferences(patch: LauncherPreferencesPatch): Promise<void>;
+  };
+  readonly settings: {
+    update(patch: LauncherSettingsPatch): Promise<void>;
+    reset(): Promise<void>;
+  };
+  readonly tools: {
+    setMasterEnabled(enabled: boolean): Promise<void>;
+    setFeature(input: GlobalToolUpdate): Promise<void>;
+    captureShortcut(tool: GlobalTool): Promise<LauncherShortcutCaptureResult>;
+    replaceShortcut(input: ShortcutReplacement): Promise<void>;
+    restoreDefaultShortcut(tool: GlobalTool): Promise<void>;
+    restartToApply(): Promise<void>;
+  };
+  readonly gameFiles: {
+    info(): Promise<CacheInfo>;
+    retryPreparation(): Promise<void>;
+    repair(): Promise<void>;
+    pauseDownload(): Promise<void>;
+    resumeDownload(): Promise<void>;
+    resetAndRestart(): Promise<void>;
   };
   readonly updates: {
     check(): Promise<void>;
     restartAndInstall(): Promise<void>;
   };
+  readonly external: {
+    open(kind: LauncherExternalLink): Promise<void>;
+    revealLogs(): Promise<void>;
+  };
+}
+
+export function parseGlobalTool(value: unknown): GlobalTool {
+  if (typeof value === "string" && GLOBAL_TOOLS.includes(value as GlobalTool)) return value as GlobalTool;
+  throw new Error("Tool is invalid");
+}
+
+export function parseLauncherExternalLink(value: unknown): LauncherExternalLink {
+  if (typeof value === "string" && LAUNCHER_EXTERNAL_LINKS.includes(value as LauncherExternalLink)) return value as LauncherExternalLink;
+  throw new Error("external link is invalid");
+}
+
+export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatch {
+  const source = exactObject(value, ["autoCheckUpdates", "updateTrack", "extendedMemoryEnabled", "showDiagnostics"], "launcher settings patch");
+  const result: {
+    autoCheckUpdates?: boolean;
+    updateTrack?: AppSettings["updateTrack"];
+    extendedMemoryEnabled?: boolean;
+    showDiagnostics?: boolean;
+  } = {};
+  for (const key of ["autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics"] as const) {
+    if (source[key] === undefined) continue;
+    if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean`);
+    result[key] = source[key];
+  }
+  if (source.updateTrack !== undefined) {
+    if (source.updateTrack !== "stable" && source.updateTrack !== "beta") throw new Error("update track is invalid");
+    result.updateTrack = source.updateTrack;
+  }
+  return result;
 }
 
 function exactObject(value: unknown, allowed: readonly string[], label: string): Record<string, unknown> {

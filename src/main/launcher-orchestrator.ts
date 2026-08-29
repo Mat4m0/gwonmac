@@ -5,6 +5,7 @@
  */
 import type {
   AccountsState,
+  AppSettings,
   AppUpdateState,
   DownloadProgress,
 } from "../shared/contracts.js";
@@ -14,6 +15,7 @@ import type {
 } from "../shared/launcher-contracts.js";
 import type { ProfileId } from "../shared/multiple-accounts.js";
 import type { LauncherStateStore } from "./core/launcher-state.js";
+import { launcherToolSettings } from "./core/launcher-tools.js";
 
 interface LauncherAccountsOwner {
   state(): AccountsState;
@@ -30,7 +32,7 @@ export interface LauncherOrchestratorOptions {
   readonly hasActiveClient: () => boolean;
   readonly getProgress: () => DownloadProgress;
   readonly getAppUpdate: () => AppUpdateState;
-  readonly toolsConfigured: () => boolean;
+  readonly getSettings: () => AppSettings;
   readonly toolsLoaded: () => boolean;
   readonly developmentFixtures: boolean;
   readonly publish: (snapshot: LauncherSnapshot) => void;
@@ -57,6 +59,7 @@ export class LauncherOrchestrator {
       : accounts.profiles.filter((profile) => !profile.archived).slice(0, 1).map((profile) => profile.id);
     const progress = this.options.getProgress();
     const readiness = this.readiness(progress);
+    const settings = this.options.getSettings();
     const fixture = this.options.developmentFixtures ? "fixture" as const : "placeholder" as const;
     return {
       revision: this.revision,
@@ -71,9 +74,16 @@ export class LauncherOrchestrator {
       readiness,
       appUpdate: this.options.getAppUpdate(),
       tools: {
-        configured: this.options.toolsConfigured(),
+        configured: settings.gwonmacTools,
         loaded: this.options.toolsLoaded(),
-        restartRequired: this.options.toolsConfigured() !== this.options.toolsLoaded(),
+        restartRequired: settings.gwonmacTools !== this.options.toolsLoaded(),
+        features: launcherToolSettings(settings),
+      },
+      settings: {
+        autoCheckUpdates: settings.autoCheckUpdates,
+        updateTrack: settings.updateTrack,
+        extendedMemoryEnabled: settings.extendedMemoryEnabled,
+        showDiagnostics: settings.showDiagnostics,
       },
       profiles: accounts.profiles.map((profile) => ({
         id: profile.id,
@@ -163,6 +173,22 @@ export class LauncherOrchestrator {
 
   async completeIntroduction(): Promise<void> {
     await this.options.state.completeIntroduction();
+    this.publish();
+  }
+
+  async replayIntroduction(): Promise<void> {
+    await this.options.state.replayIntroduction();
+    this.publish();
+  }
+
+  async completeSetup(): Promise<void> {
+    await this.options.state.completeSetup();
+    this.publish();
+  }
+
+  async updateAppearance(profileId: ProfileId, appearance: LauncherSnapshot["profiles"][number]["appearance"]): Promise<void> {
+    this.options.accounts.validateOpenable([profileId]);
+    await this.options.state.updateAppearance(profileId, appearance);
     this.publish();
   }
 
