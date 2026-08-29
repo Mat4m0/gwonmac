@@ -297,7 +297,9 @@ test.describe("client compatibility", () => {
     );
     try {
       await fixture.app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
+        BrowserWindow.getAllWindows()
+          .find((win) => win.webContents.getURL() === "gw://app/")
+          ?.webContents.forcefullyCrashRenderer();
       });
       await expect
         .poll(() => pathExists(path.join(artifacts, "manifest.json")), {
@@ -309,7 +311,10 @@ test.describe("client compatibility", () => {
       );
       expect(await pathExists(rejected)).toBe(true);
       await expect
-        .poll(() => fixture.app.windows().length, { timeout: 15_000 })
+        .poll(
+          () => fixture.app.windows().filter((page) => page.url() === "gw://app/").length,
+          { timeout: 15_000 },
+        )
         .toBe(1);
     } finally {
       await closeOffline(fixture);

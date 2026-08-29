@@ -54,7 +54,11 @@ const launchEnv = (
       inherited[name] = value;
     }
   }
-  return { ...inherited, ...overrides };
+  return {
+    ...inherited,
+    GW_TEST_ALLOW_UNREADY_LAUNCH: "1",
+    ...overrides,
+  };
 };
 
 /**
@@ -67,6 +71,22 @@ const launch = (userData: string, env: Record<string, string>) =>
     env,
     executablePath: electronBin,
   });
+
+async function openFirstProfile(app: ElectronApplication) {
+  const launcher = await app.firstWindow({ timeout: 30_000 });
+  await launcher.waitForLoadState("domcontentloaded");
+  const profileId = await launcher.evaluate(async () =>
+    (await window.gwNative.accounts.get()).profiles.find(
+      (profile) => !profile.archived,
+    )?.id,
+  );
+  if (!profileId) throw new Error("launcher has no active profile");
+  const game = app.waitForEvent("window", { timeout: 30_000 });
+  await launcher.evaluate((id) => window.gwNative.accounts.open([id]), profileId);
+  const page = await game;
+  await page.waitForLoadState("domcontentloaded");
+  return page;
+}
 
 test.describe("Electron application", () => {
   test("a second instance exits and reveals the primary window", async () => {
@@ -177,7 +197,7 @@ test.describe("Electron application", () => {
     }
   });
 
-  test("red X closes sockets and exits cleanly", async () => {
+  test("red X closes profile sockets and application quit exits cleanly", async () => {
     const server = net.createServer();
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
@@ -192,8 +212,7 @@ test.describe("Electron application", () => {
     let app: ElectronApplication | undefined;
     try {
       app = await launch(userData, env);
-      const page = await app.firstWindow({ timeout: 30_000 });
-      await page.waitForLoadState("domcontentloaded");
+      const page = await openFirstProfile(app);
       // The socket host arrives behind a dynamic import, so it is not present
       // at domcontentloaded. Wait for the capability instead of racing it.
       await page.waitForFunction(
@@ -225,8 +244,13 @@ test.describe("Electron application", () => {
         electronProcess.once("exit", (code, signal) => resolve({ code, signal }));
       });
       await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.close();
+        BrowserWindow.getAllWindows()
+          .find((win) => win.webContents.getURL() === "gw://app/")
+          ?.close();
       }).catch(() => undefined);
+      await expect.poll(() => app?.windows().filter((win) => win.url() === "gw://app/").length)
+        .toBe(0);
+      await app.evaluate(({ app: electronApp }) => electronApp.quit());
       const result = await exited;
       expect(result).toEqual({ code: 0, signal: null });
 
@@ -241,7 +265,7 @@ test.describe("Electron application", () => {
       expect(events).toContain('"name":"app.beforeQuit"');
       expect(events).toContain('"name":"quit.cleanupStarted"');
       expect(events).toContain('"name":"quit.cleanupCompleted"');
-      expect(events).toContain('"reason":"owner"');
+      expect(events).toContain('"reason":"owner-gone"');
       expect(events).not.toContain('"name":"app.uncaughtException"');
       expect(events).not.toContain('"name":"renderer.recoveryScheduled"');
       expect(events).not.toContain("Object has been destroyed");
@@ -258,23 +282,29 @@ test.describe("Electron application", () => {
     // No GW_BACKGROUND_LAUNCH: setFullScreen is unreliable on a non-key window.
     const env = launchEnv({ GW_REQUIRE_CACHED_CLIENT: "1" });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-window-state-e2e-"));
+    // Exercise the adopted released owner whose state remains at the root.
+    await writeFile(path.join(userData, "settings.json"), "{}", { mode: 0o600 });
     const closeCleanly = async (runningApp: ElectronApplication) => {
       const processHandle = runningApp.process();
       const exited = new Promise<ProcessExit>((resolve) => {
         processHandle.once("exit", (code, signal) => resolve({ code, signal }));
       });
-      await runningApp.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.close();
+      await runningApp.evaluate(({ app: electronApp, BrowserWindow }) => {
+        BrowserWindow.getAllWindows()
+          .find((win) => win.webContents.getURL() === "gw://app/")
+          ?.close();
+        electronApp.quit();
       }).catch(() => undefined);
       expect(await exited).toEqual({ code: 0, signal: null });
     };
 
     let app = await launch(userData, env);
     try {
-      await app.firstWindow({ timeout: 30_000 });
+      await openFirstProfile(app);
       await app.evaluate(({ app: electronApp, BrowserWindow }) =>
         new Promise<void>((resolve, reject) => {
-          const win = BrowserWindow.getAllWindows()[0];
+          const win = BrowserWindow.getAllWindows()
+            .find((candidate) => candidate.webContents.getURL() === "gw://app/");
           if (!win) {
             reject(new Error("window missing"));
             return;
@@ -298,7 +328,8 @@ test.describe("Electron application", () => {
         }));
       const statePath = path.join(userData, "window-state.json");
       await app.evaluate(({ BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows()[0];
+        const win = BrowserWindow.getAllWindows()
+          .find((candidate) => candidate.webContents.getURL() === "gw://app/");
         if (!win) throw new Error("window missing");
         win.setBounds({ x: 120, y: 90, width: 960, height: 700 });
       });
@@ -317,7 +348,8 @@ test.describe("Electron application", () => {
         bounds: { x: number; y: number; width: number; height: number };
       }).bounds;
       await app.evaluate(({ BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows()[0];
+        const win = BrowserWindow.getAllWindows()
+          .find((candidate) => candidate.webContents.getURL() === "gw://app/");
         if (!win) throw new Error("window missing");
         win.setFullScreen(true);
       });
@@ -344,11 +376,13 @@ test.describe("Electron application", () => {
       expect((await stat(statePath)).mode & 0o777).toBe(0o600);
 
       app = await launch(userData, env);
-      const resetPage = await app.firstWindow({ timeout: 30_000 });
+      const resetPage = await openFirstProfile(app);
       await expect
         .poll(() =>
           app.evaluate(({ BrowserWindow }) =>
-            BrowserWindow.getAllWindows()[0]?.isFullScreen()),
+            BrowserWindow.getAllWindows()
+              .find((win) => win.webContents.getURL() === "gw://app/")
+              ?.isFullScreen()),
         )
         .toBe(true);
       // AppKit can adjust a restored frame by a few pixels between processes.
@@ -366,6 +400,19 @@ test.describe("Electron application", () => {
         },
       });
 
+      await app.evaluate(({ app: electronApp, BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()
+          .find((candidate) => candidate.webContents.getURL() === "gw://app/");
+        if (!win) throw new Error("window missing");
+        win.show();
+        electronApp.focus({ steal: true });
+        win.focus();
+      });
+      await expect.poll(() => app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find((candidate) => candidate.webContents.getURL() === "gw://app/")
+          ?.isFocused(),
+      )).toBe(true);
       await resetPage.evaluate(() => {
         const probe = window as ResetProbeWindow;
         probe.__windowResetReleasedInput = false;
@@ -386,7 +433,8 @@ test.describe("Electron application", () => {
       await expect
         .poll(() =>
           app.evaluate(({ BrowserWindow }) => {
-            const win = BrowserWindow.getAllWindows()[0];
+            const win = BrowserWindow.getAllWindows()
+              .find((candidate) => candidate.webContents.getURL() === "gw://app/");
             return win && !win.isFullScreen() ? win.getBounds() : null;
           }),
           { timeout: 15_000 },
@@ -404,7 +452,8 @@ test.describe("Electron application", () => {
         })
         .toBe("normal");
       const actualReset = await app.evaluate(({ BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows()[0];
+        const win = BrowserWindow.getAllWindows()
+          .find((candidate) => candidate.webContents.getURL() === "gw://app/");
         if (!win) throw new Error("window missing");
         return win.getBounds();
       });
@@ -456,8 +505,7 @@ test.describe("Electron application", () => {
     let app: ElectronApplication | undefined;
     try {
       app = await launch(userData, env);
-      const page = await app.firstWindow({ timeout: 30_000 });
-      await page.waitForLoadState("domcontentloaded");
+      const page = await openFirstProfile(app);
       await page.waitForFunction(
         () => (window.Module as GameModule | undefined)?.socket !== undefined,
       );
@@ -554,8 +602,7 @@ test.describe("Electron application", () => {
 
     let app = await launch(userData, env);
     try {
-      const page = await app.firstWindow({ timeout: 30_000 });
-      await page.waitForLoadState("domcontentloaded");
+      const page = await openFirstProfile(app);
       await page.evaluate(() =>
         window.gwNative.credentials.save({
           username: "relaunch@example.invalid",
@@ -573,11 +620,11 @@ test.describe("Electron application", () => {
       expect(await readFile(path.join(userData, "settings.json"), "utf8")).toBe(settings);
       expect(await readFile(path.join(userData, "window-state.json"), "utf8"))
         .toBe(windowState);
-      await app.close();
+      await app.evaluate(({ app: electronApp }) => electronApp.quit());
+      await app.close().catch(() => undefined);
 
       app = await launch(userData, env);
-      const relaunchedPage = await app.firstWindow({ timeout: 30_000 });
-      await relaunchedPage.waitForLoadState("domcontentloaded");
+      const relaunchedPage = await openFirstProfile(app);
       expect(await relaunchedPage.evaluate(() =>
         window.gwNative.credentials.load())).toBeNull();
       expect(await readFile(path.join(userData, "credentials.bin"), "utf8"))

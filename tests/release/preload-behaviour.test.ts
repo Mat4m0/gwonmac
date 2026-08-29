@@ -242,19 +242,8 @@ const INVOCATIONS: Invocation[] = [
   },
   { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {
-    path: "accounts.setup",
-    args: [{ templateEntries: [] }],
-    channel: IPC.accountsSetup,
-  },
-  {
     path: "accounts.create",
-    args: [{
-      name: "Alt",
-      templates: "private",
-      builds: "private",
-      copySingleBuilds: false,
-      copySingleTemplates: false,
-    }],
+    args: [{ name: "Alt" }],
     channel: IPC.accountsCreate,
   },
   {
@@ -271,7 +260,6 @@ const INVOCATIONS: Invocation[] = [
   { path: "accounts.restore", args: [PROFILE_ID], channel: IPC.accountsRestore },
   { path: "accounts.delete", args: [PROFILE_ID], channel: IPC.accountsDelete },
   { path: "accounts.open", args: [[PROFILE_ID]], channel: IPC.accountsOpen },
-  { path: "accounts.useSingle", args: [], channel: IPC.accountsUseSingle },
   {
     path: "accounts.loadTemplates",
     args: [],
@@ -479,6 +467,11 @@ const SUBSCRIPTIONS: Subscription[] = [
     path: "appUpdates.onState",
     channel: IPC.appUpdatesState,
     subscribe: (api, listener) => api.appUpdates.onState(listener),
+  },
+  {
+    path: "accounts.onChange",
+    channel: IPC.accountsState,
+    subscribe: (api, listener) => api.accounts.onChange(listener),
   },
   {
     path: "trade.onEvent",

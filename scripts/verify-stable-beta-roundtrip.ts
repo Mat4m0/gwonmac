@@ -62,6 +62,7 @@ import {
   launchPackagedApp,
   type RunningPackagedApp,
 } from "../tests/helpers/packaged-app.ts";
+import { seedCachedClient } from "../tests/helpers/cached-client.ts";
 import {
   canonicalizeStableSettings,
   validateCandidateSettings,
@@ -126,6 +127,10 @@ async function createCohort(
     path.join(userData, "game/chunks/chunk-directory-reset-sentinel"),
     "chunk directory was not wholesale reset",
   );
+  await seedCachedClient({
+    artifacts: path.join(userData, "game/artifacts"),
+    userData,
+  });
   return cohort;
 }
 
@@ -138,6 +143,7 @@ async function launch(cohort: Cohort, appPath: string): Promise<RunningPackagedA
     productName,
     userData: cohort.userData,
     arguments: ["--gw-volatile-secrets"],
+    openFirstProfile: true,
   });
   await running.page.waitForFunction(() => "gwNative" in globalThis);
   return running;

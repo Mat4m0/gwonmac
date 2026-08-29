@@ -254,11 +254,11 @@ try {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     events = await recordedEvents();
-    if (events.some((event) => event.name === "clock.synchronized")) break;
+    if (events.some((event) => event.name === "launcher.connected")) break;
     if (child.exitCode !== null) break;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  if (!events.some((event) => event.name === "clock.synchronized")) {
+  if (!events.some((event) => event.name === "launcher.connected")) {
     throw new Error(
       `packaged renderer did not synchronize with main\n${output.join("").slice(-4_000)}`,
     );

@@ -2,10 +2,13 @@ import { chromium, type Browser, type Page } from "playwright";
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import type { ProfileId } from "../../src/shared/multiple-accounts.ts";
 
 export interface RunningPackagedApp {
   readonly browser: Browser;
   readonly child: ChildProcess;
+  /** Present only for the unified launcher-first application. */
+  readonly launcherPage: Page | null;
   readonly page: Page;
 }
 
@@ -15,6 +18,8 @@ export interface PackagedAppLaunch {
   readonly userData: string;
   readonly environment?: Readonly<Record<string, string>>;
   readonly arguments?: readonly string[];
+  /** Open the first active profile when the packaged app starts on the launcher. */
+  readonly openFirstProfile?: boolean;
 }
 
 const delay = (milliseconds: number) =>
@@ -46,6 +51,47 @@ async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<bool
     }, timeoutMs);
     child.once("exit", exited);
   });
+}
+
+const allPages = (browser: Browser): Page[] =>
+  browser.contexts().flatMap((context) => context.pages());
+
+async function isLauncherPage(page: Page): Promise<boolean> {
+  return page.evaluate(() => location.pathname.endsWith("/launcher.html"));
+}
+
+async function waitForGamePage(
+  browser: Browser,
+  previousPages: ReadonlySet<Page>,
+): Promise<Page> {
+  return waitUntil("the packaged game window", async () => {
+    for (const page of allPages(browser)) {
+      if (previousPages.has(page) || page.isClosed()) continue;
+      try {
+        await page.waitForLoadState("domcontentloaded", { timeout: 250 });
+        if (!(await isLauncherPage(page))) return page;
+      } catch {
+        // A renderer can disappear while CDP enumerates it. Keep polling.
+      }
+    }
+    return null;
+  });
+}
+
+/** Open one profile through the packaged launcher's validated preload API. */
+export async function openPackagedProfile(
+  running: RunningPackagedApp,
+  profileId: ProfileId,
+): Promise<Page> {
+  const launcher = running.launcherPage;
+  if (!launcher) {
+    throw new Error("this packaged app has no unified launcher page");
+  }
+  const previousPages = new Set(allPages(running.browser));
+  await launcher.evaluate((id) => {
+    void window.gwNative.accounts.open([id]).catch(() => undefined);
+  }, profileId);
+  return waitForGamePage(running.browser, previousPages);
 }
 
 /**
@@ -98,15 +144,33 @@ export async function launchPackagedApp(
       }
     });
     const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
-    const page = await waitUntil("the packaged app window", async () => {
+    const firstPage = await waitUntil("the packaged app window", async () => {
       for (const context of browser.contexts()) {
         const [first] = context.pages();
         if (first) return first;
       }
       return null;
     });
-    await page.waitForLoadState("domcontentloaded");
-    return { browser, child, page };
+    await firstPage.waitForLoadState("domcontentloaded");
+    const launcherPage = await isLauncherPage(firstPage) ? firstPage : null;
+    const running: RunningPackagedApp = {
+      browser,
+      child,
+      launcherPage,
+      page: firstPage,
+    };
+    if (!launcherPage || options.openFirstProfile !== true) return running;
+
+    const profileId = await launcherPage.evaluate(async () =>
+      (await window.gwNative.accounts.get()).profiles.find(
+        (profile) => !profile.archived,
+      )?.id ?? null
+    );
+    if (!profileId) throw new Error("the packaged launcher has no active profile");
+    return {
+      ...running,
+      page: await openPackagedProfile(running, profileId),
+    };
   } catch (error) {
     child.kill("SIGTERM");
     throw error;
@@ -117,6 +181,10 @@ export async function launchPackagedApp(
 export async function closePackagedApp(
   { browser, child, page }: RunningPackagedApp,
 ): Promise<void> {
+  // Closing the unified launcher's game window deliberately leaves its
+  // companion available. Ask the app to perform its normal coordinated quit
+  // so release proofs cover shutdown and do not wait for a forced signal.
+  await page.evaluate(() => window.gwNative.app.requestQuit()).catch(() => {});
   await page.close().catch(() => {});
   await browser.close().catch(() => {});
   if (await waitForExit(child, 6_000)) return;

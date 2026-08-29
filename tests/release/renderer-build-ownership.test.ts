@@ -66,3 +66,12 @@ test("shared renderer runtime modules belong to the renderer output", () => {
   assert.equal(existsSync(path.join(renderer, "shared/contracts.js")), true);
   assert.equal(existsSync(path.join(root, "build/shared/contracts.js")), true);
 });
+
+test("the packaged renderer contains one launcher entry", () => {
+  assert.equal(existsSync(path.join(renderer, "launcher.html")), true);
+  assert.equal(existsSync(path.join(renderer, "launcher.css")), true);
+  assert.equal(existsSync(path.join(renderer, "launcher.js")), true);
+  assert.equal(existsSync(path.join(renderer, "accounts.html")), false);
+  assert.equal(existsSync(path.join(renderer, "accounts.css")), false);
+  assert.equal(existsSync(path.join(renderer, "accounts.js")), false);
+});

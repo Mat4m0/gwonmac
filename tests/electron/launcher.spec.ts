@@ -235,7 +235,13 @@ test.describe("launcher recovery", () => {
   });
 
   test("confirms, persists, and applies a saved-files reset before replacement startup", async () => {
-    let fixture = await launchOffline("gw-filesystem-reset-e2e-");
+    let fixture = await launchOffline(
+      "gw-filesystem-reset-e2e-",
+      {},
+      async (userData) => {
+        await writeFile(path.join(userData, "settings.json"), "{}", { mode: 0o600 });
+      },
+    );
     const { userData } = fixture;
     const marker = path.join(userData, "clear-game-storage-on-start");
     try {

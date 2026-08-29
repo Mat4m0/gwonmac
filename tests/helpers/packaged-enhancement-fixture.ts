@@ -342,12 +342,13 @@ export async function rendererPage(
   browser: Browser,
   child: ChildProcess,
   output: string[],
+  expectedUrl: "gw://app/" | "gw://app/launcher.html",
 ) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline && child.exitCode === null) {
     for (const context of browser.contexts()) {
       const page = context.pages().find((candidate) =>
-        candidate.url().startsWith("gw://app/"));
+        candidate.url() === expectedUrl);
       if (page) {
         await page.waitForLoadState("domcontentloaded");
         return page;
@@ -375,7 +376,7 @@ export async function launchPackaged(
   prefix: string,
   settings: AppSettingsPatch,
   {
-    cachedClient = false,
+    cachedClient = true,
     prepare = async () => undefined,
   }: LaunchOptions = {},
 ) {
@@ -412,6 +413,9 @@ export async function launchPackaged(
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_ENABLE_LOGGING: "1",
+    // This ad-hoc package has no distribution marker. Official signed builds
+    // ignore this seam and continue to block launch until repair succeeds.
+    GW_TEST_ALLOW_UNREADY_LAUNCH: "1",
   };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.GW_REQUIRE_CACHED_CLIENT;
@@ -436,7 +440,16 @@ export async function launchPackaged(
   let browser: Browser | undefined;
   try {
     browser = await connectCdp(port, child, output);
-    const page = await rendererPage(browser, child, output);
+    const launcher = await rendererPage(
+      browser,
+      child,
+      output,
+      "gw://app/launcher.html",
+    );
+    await launcher.getByRole("button", { name: /^Play /u }).click({
+      timeout: 30_000,
+    });
+    const page = await rendererPage(browser, child, output, "gw://app/");
     return { artifacts, browser, child, output, page, userData };
   } catch (error) {
     await stopChildProcess(child);

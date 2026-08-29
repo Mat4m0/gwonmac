@@ -32,7 +32,11 @@ test("keeps an account open until an incomplete save is resolved explicitly", as
     }));
   });
   try {
-    await fixture.page.evaluate(
+    const launcher = fixture.app.windows().find(
+      (page) => page.url() === "gw://app/launcher.html",
+    );
+    if (!launcher) throw new Error("launcher window not found");
+    await launcher.evaluate(
       ([first, second]) => window.gwNative.accounts.open(
         [first, second] as ProfileId[],
       ),
@@ -145,7 +149,7 @@ test("keeps an account open until an incomplete save is resolved explicitly", as
         ],
         responses: [],
       });
-    expect(await fixture.page.evaluate(() => document.visibilityState)).toBe("visible");
+    expect(await launcher.evaluate(() => document.visibilityState)).toBe("visible");
   } finally {
     await closeOffline(fixture);
   }
