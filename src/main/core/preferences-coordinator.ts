@@ -6,9 +6,11 @@
 import type {
   AppSettings,
   AppSettingsPatch,
+  RendererSettingsPatch,
   SettingsResetOutcome,
 } from "../../shared/contracts.js";
 import { AppError } from "../../shared/errors.js";
+import { selectCartographyPreset } from "../../shared/cartography-presets.js";
 import { isDeepStrictEqual } from "node:util";
 import type {
   TravelPreferencesDocument,
@@ -107,17 +109,53 @@ export class PreferencesCoordinator {
     return this.#lock.run(() => loadSettings(this.#paths().settings));
   }
 
-  async updateSettings(patch: AppSettingsPatch): Promise<AppSettings> {
+  async #commitSettings(
+    update: (current: AppSettings) => AppSettings,
+  ): Promise<AppSettings> {
     const settings = await this.#lock.run(async () => {
       const path = this.#paths().settings;
       const current = await loadSettings(path);
-      return saveSettingsAndReconcile(
-        path,
-        { ...current, ...patch },
-      );
+      return saveSettingsAndReconcile(path, update(current));
     });
     await this.#publish(settings);
     return settings;
+  }
+
+  updateSettings(patch: AppSettingsPatch): Promise<AppSettings> {
+    return this.#commitSettings((current) => ({ ...current, ...patch }));
+  }
+
+  updateRendererSettings(patch: RendererSettingsPatch): Promise<AppSettings> {
+    const { cartographyPresetSelection, ...storedPatch } = patch;
+    if (
+      cartographyPresetSelection !== undefined
+      && Object.hasOwn(storedPatch, "cartographyPresetLibrary")
+    ) {
+      throw new AppError(
+        "bad_settings",
+        "Cartography selection and library replacement are mutually exclusive",
+      );
+    }
+    return this.#commitSettings((current) => {
+      if (cartographyPresetSelection === undefined) {
+        return { ...current, ...storedPatch };
+      }
+      const library = selectCartographyPreset(
+        current.cartographyPresetLibrary,
+        cartographyPresetSelection,
+      );
+      if (library === null) {
+        throw new AppError(
+          "bad_settings",
+          "The selected Cartography preset no longer exists",
+        );
+      }
+      return {
+        ...current,
+        ...storedPatch,
+        cartographyPresetLibrary: library,
+      };
+    });
   }
 
   async resetSettings(): Promise<SettingsResetOutcome> {

@@ -2,7 +2,8 @@
  * Draws one inverse walkability mask for any certified native map projection.
  * Owns clipping, veil removal, boundary drawing, and screen-sized canvas reuse.
  */
-import type { CartographyOverlayStyle } from "../../shared/cartography-overlay.js";
+import type { CartographyWalkabilityStyle } from "../../shared/cartography-overlay.js";
+import { cartographyWalkabilityStyleFingerprint } from "./cartography-paint.js";
 import type { InverseMaskProjection } from "./map-projections.js";
 import type { WalkabilityMask } from "./walkability-mask.js";
 
@@ -11,7 +12,7 @@ export type InverseMaskLayer = Readonly<{
     projection: InverseMaskProjection;
     mask: WalkabilityMask;
     version: string;
-    style: CartographyOverlayStyle;
+    style: CartographyWalkabilityStyle;
     opacity: number;
   }>): void;
   hide(): void;
@@ -97,7 +98,7 @@ export function createInverseMaskLayer(
     context.drawImage(walkable, 0, 0);
     context.globalCompositeOperation = "source-over";
 
-    const outlineRadius = Math.round(input.style.outlineWidth * dpr);
+    const outlineRadius = Math.round(input.style.boundaryWidth * dpr);
     if (outlineRadius > 0) {
       const paintOutline = (radius: number, color: string, alpha: number): void => {
         expandedContext.setTransform(1, 0, 0, 1, 0, 0);
@@ -124,10 +125,14 @@ export function createInverseMaskLayer(
       const strength = input.opacity / 100;
       paintOutline(
         outlineRadius + Math.max(1, Math.round(dpr)),
-        input.style.veilColor,
-        strength * 0.9,
+        input.style.boundaryCasingColor,
+        Math.min(1, strength * 1.45),
       );
-      paintOutline(outlineRadius, input.style.outlineColor, strength);
+      paintOutline(
+        outlineRadius,
+        input.style.boundaryColor,
+        Math.min(1, strength * 1.6),
+      );
     }
     return true;
   };
@@ -142,13 +147,11 @@ export function createInverseMaskLayer(
       const transform = input.projection.transform;
       const nextVersion = [
         input.version,
-        (document.defaultView?.devicePixelRatio ?? 1).toFixed(2),
-        box.width.toFixed(2), box.height.toFixed(2),
-        transform.a.toFixed(5), transform.b.toFixed(5),
-        transform.c.toFixed(5), transform.d.toFixed(5),
-        transform.e.toFixed(2), transform.f.toFixed(2),
-        input.style.veilColor, input.style.outlineColor,
-        input.style.outlineWidth, input.opacity,
+        document.defaultView?.devicePixelRatio ?? 1,
+        box.width, box.height,
+        transform.a, transform.b, transform.c, transform.d, transform.e, transform.f,
+        JSON.stringify(input.projection.clip),
+        cartographyWalkabilityStyleFingerprint(input.style), input.opacity,
       ].join(":");
       if (nextVersion !== drawingVersion && !draw(input)) {
         root.style.display = "none";

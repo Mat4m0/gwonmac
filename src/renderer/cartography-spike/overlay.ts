@@ -11,7 +11,7 @@ import type {
   PathingSpikeController,
   WorldMapAnchorSpikeController,
 } from "../../shared/cartography-spike.js";
-import { cartographyOverlayStyle } from "../../shared/cartography-overlay.js";
+import { resolveCartographyPreset } from "../../shared/cartography-presets.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
 import type { PublishedCompanionState } from "../companion-snapshot.js";
 import {
@@ -25,6 +25,7 @@ import {
 } from "./cartography-grid-projection.js";
 import { projectMissionMapFrame, projectNativeFrame } from "./frame-placement.js";
 import { createInverseMaskLayer } from "./inverse-mask-layer.js";
+import { cartographyHoverRevealRadius } from "./cartography-paint.js";
 import {
   projectMissionMapContentBox,
   projectWalkabilityToCompass,
@@ -38,6 +39,7 @@ import {
 import { createWalkabilityMask, type WalkabilityMask } from "./walkability-mask.js";
 
 const MAX_RENDERED_TRAPEZOIDS = 4_096;
+type CartographyRenderLane = "coordinator" | "grid" | "walkability" | "controls";
 
 export type CartographyGridStats = Readonly<{
   compass: CartographyGridLayerSnapshot | null;
@@ -57,6 +59,7 @@ export function mountCartographyOverlay(options: Readonly<{
   settings(): AppSettings;
   persist(patch: RendererSettingsPatch): Promise<AppSettings>;
 }>): () => void {
+  const document = options.parent.ownerDocument;
   const compassMaskLayer = createInverseMaskLayer(
     options.parent,
     "cartography-compass-mask",
@@ -73,13 +76,17 @@ export function mountCartographyOverlay(options: Readonly<{
     options.parent,
     "cartography-mission-map-grid",
   );
-  let previewOpacity: number | null = null;
+  let previewGridOpacity: number | null = null;
+  let previewWalkabilityOpacity: number | null = null;
   const controls = createCartographyOverlayControls({
     parent: options.parent,
     persist: options.persist,
-    previewOpacity: (opacity) => { previewOpacity = opacity; },
+    previewOpacity: (layer, opacity) => {
+      if (layer === "grid") previewGridOpacity = opacity;
+      else previewWalkabilityOpacity = opacity;
+    },
   });
-  const view = options.parent.ownerDocument.defaultView;
+  const view = document.defaultView;
   if (view === null) throw new Error("cartography overlay requires a live document");
   let animationFrame = 0;
   let startupTimer = 0;
@@ -93,24 +100,32 @@ export function mountCartographyOverlay(options: Readonly<{
   let pointerX = Number.NaN;
   let pointerY = Number.NaN;
   let shiftHeld = false;
+  let optionHeld = false;
 
   const rememberPointer = (event: PointerEvent): void => {
     pointerX = event.clientX;
     pointerY = event.clientY;
     shiftHeld = event.shiftKey;
+    optionHeld = event.altKey;
   };
-  const rememberShift = (event: KeyboardEvent): void => {
-    if (event.key === "Shift") shiftHeld = event.type === "keydown";
+  const rememberModifiers = (event: KeyboardEvent): void => {
+    shiftHeld = event.shiftKey;
+    optionHeld = event.altKey;
   };
   const forgetPointer = (): void => {
     pointerX = Number.NaN;
     pointerY = Number.NaN;
     shiftHeld = false;
+    optionHeld = false;
+  };
+  const forgetHiddenModifiers = (): void => {
+    if (document.visibilityState === "hidden") forgetPointer();
   };
   view.addEventListener("pointermove", rememberPointer, { capture: true, passive: true });
-  view.addEventListener("keydown", rememberShift, true);
-  view.addEventListener("keyup", rememberShift, true);
+  view.addEventListener("keydown", rememberModifiers, true);
+  view.addEventListener("keyup", rememberModifiers, true);
   view.addEventListener("blur", forgetPointer);
+  document.addEventListener("visibilitychange", forgetHiddenModifiers);
 
   const refreshExploration = (generation: number): void => {
     if (
@@ -164,6 +179,23 @@ export function mountCartographyOverlay(options: Readonly<{
     hideGrid();
     controls.hide();
   };
+  const failedLanes = new Set<CartographyRenderLane>();
+  const runLane = (
+    lane: CartographyRenderLane,
+    renderLane: () => void,
+    withdrawLane: () => void,
+  ): void => {
+    try {
+      renderLane();
+      failedLanes.delete(lane);
+    } catch (cause) {
+      withdrawLane();
+      if (!failedLanes.has(lane)) {
+        failedLanes.add(lane);
+        console.error(`[cartography] ${lane} rendering failed`, cause);
+      }
+    }
+  };
 
   const gridStats = (): CartographyGridStats => Object.freeze({
     compass: compassGridLayer.snapshot(),
@@ -208,11 +240,14 @@ export function mountCartographyOverlay(options: Readonly<{
       return;
     }
 
-    const style = cartographyOverlayStyle(
-      settings.cartographyOverlayStyle,
-      settings.cartographyOverlayCustomStyle,
-    );
-    const opacity = previewOpacity ?? settings.cartographyOverlayOpacity;
+    const style = resolveCartographyPreset(settings.cartographyPresetLibrary);
+    if (style === null) {
+      withdrawAll();
+      return;
+    }
+    const gridOpacity = previewGridOpacity ?? settings.cartographyGridOpacity;
+    const walkabilityOpacity = previewWalkabilityOpacity
+      ?? settings.cartographyWalkabilityOpacity;
     const revealRadius = settings.cartographyRevealMode === "birds-eye"
       ? 3
       : settings.cartographyRevealMode === "normal" ? 1 : 0;
@@ -221,6 +256,7 @@ export function mountCartographyOverlay(options: Readonly<{
       ? projectMissionMapContentBox(missionMap, missionMapBox)
       : null;
 
+    runLane("grid", () => {
     if (settings.cartographyGridEnabled && compassBox !== null) {
       const certifiedCompassAnchor = worldMapAnchor?.status === 1
         && worldMapAnchor.generation > 0
@@ -245,8 +281,8 @@ export function mountCartographyOverlay(options: Readonly<{
       } else {
         compassGridLayer.update({
           projection: compassProjection,
-          style,
-          opacity,
+          style: style.grid,
+          opacity: gridOpacity,
           explorationVersion: explorationFingerprint,
           isExplored: exploredCell,
           hoveredCell: null,
@@ -266,20 +302,23 @@ export function mountCartographyOverlay(options: Readonly<{
         const hoveredCell = shiftHeld
           ? cartographyCellAtScreenPoint(missionProjection, pointerX, pointerY)
           : null;
+        const hoverRevealRadius = cartographyHoverRevealRadius(shiftHeld, optionHeld);
         missionMapGridLayer.update({
           projection: missionProjection,
-          style,
-          opacity,
+          style: style.grid,
+          opacity: gridOpacity,
           explorationVersion: explorationFingerprint,
           isExplored: exploredCell,
           hoveredCell,
-          revealRadius,
+          revealRadius: hoveredCell === null ? revealRadius : hoverRevealRadius,
         });
       }
     } else {
       hideGrid();
     }
+    }, hideGrid);
 
+    runLane("walkability", () => {
     const walkabilityReady = settings.cartographyOverlayEnabled
       && compassBox !== null
       && pathing?.status === 1
@@ -321,8 +360,8 @@ export function mountCartographyOverlay(options: Readonly<{
             projection: compassProjection,
             mask,
             version: geometryVersion,
-            style,
-            opacity,
+            style: style.walkability,
+            opacity: walkabilityOpacity,
           });
         }
 
@@ -342,29 +381,27 @@ export function mountCartographyOverlay(options: Readonly<{
             projection: missionProjection,
             mask,
             version: geometryVersion,
-            style,
-            opacity,
+            style: style.walkability,
+            opacity: walkabilityOpacity,
           });
         }
       }
     }
+    }, hideWalkability);
 
+    runLane("controls", () => {
     if (compassBox !== null) {
       controls.update(compassBox, settings);
     } else {
       controls.hide();
     }
+    }, controls.hide);
   };
 
   const update = () => {
     if (disposed) return;
-    try {
-      render();
-    } catch {
-      withdrawAll();
-    } finally {
-      if (!disposed) animationFrame = view.requestAnimationFrame(update);
-    }
+    runLane("coordinator", render, withdrawAll);
+    if (!disposed) animationFrame = view.requestAnimationFrame(update);
   };
   // The feature mounts while Emscripten is still completing startup. Deferring
   // once lets Guild Wars register its frame first, so live frame scalars are
@@ -379,9 +416,10 @@ export function mountCartographyOverlay(options: Readonly<{
     if (startupTimer !== 0) view.clearTimeout(startupTimer);
     view.cancelAnimationFrame(animationFrame);
     view.removeEventListener("pointermove", rememberPointer, true);
-    view.removeEventListener("keydown", rememberShift, true);
-    view.removeEventListener("keyup", rememberShift, true);
+    view.removeEventListener("keydown", rememberModifiers, true);
+    view.removeEventListener("keyup", rememberModifiers, true);
     view.removeEventListener("blur", forgetPointer);
+    document.removeEventListener("visibilitychange", forgetHiddenModifiers);
     compassMaskLayer.dispose();
     missionMapMaskLayer.dispose();
     compassGridLayer.dispose();

@@ -1,283 +1,295 @@
 /**
- * Binds the canonical Maps settings to previews and strict persisted values.
- * Keeps custom-color editing and preset selection on that single settings contract.
+ * Owns Settings bindings for map layers and the player-owned preset library.
+ * Domain operations validate every edit before this module renders or persists it.
  */
 import {
-  CARTOGRAPHY_OVERLAY_BUILTIN_STYLES,
-  CARTOGRAPHY_OVERLAY_STYLE_IDS,
-  cartographyOverlayStyle,
-  isCartographyOverlayHex,
-  normaliseCartographyOverlayStyle,
-  type CartographyOverlayStyle,
-  type CartographyOverlayStyleId,
+  CARTOGRAPHY_CUSTOM_PRESETS_MAX,
+  decodeCartographyPreset, encodeCartographyPreset,
+  type CartographyPresetLibrary,
 } from "../shared/cartography-overlay.js";
-import type { AppSettings } from "../shared/contracts.js";
+import {
+  addCartographyPreset,
+  deleteCartographyPreset,
+  renameCartographyPreset,
+  replaceCartographyPresetStyle,
+  resolveCartographyPresetEntry,
+  selectCartographyPreset,
+} from "../shared/cartography-presets.js";
+import type {
+  AppSettings,
+  RendererSettingsPatch,
+} from "../shared/contracts.js";
+import {
+  parseCartographyPresetRef,
+  renderCartographyPresetOptions,
+} from "./cartography-preset-select.js";
+import { createCartographyPresetEditor } from "./settings-cartography-editor.js";
 
 type FeedbackTone = "neutral" | "progress" | "success" | "warning" | "error";
+type PersistedKey = "cartographyPresetLibrary" | "cartographyGridOpacity"
+  | "cartographyWalkabilityOpacity" | "cartographyControlIdleOpacity";
+
+function freshPresetId(): string { return `preset-${crypto.randomUUID()}`; }
+
+/** Keeps intermediate global Settings renders from replacing a newer local draft. */
+export function createCartographyLibraryWriteGate() {
+  let latestRevision = 0;
+  const pending = new Set<number>();
+  return Object.freeze({
+    begin(): number {
+      latestRevision += 1;
+      pending.add(latestRevision);
+      return latestRevision;
+    },
+    finish(revision: number): void { pending.delete(revision); },
+    isLatest(revision: number): boolean { return revision === latestRevision; },
+    acceptsCanonicalRender(): boolean { return pending.size === 0; },
+  });
+}
 
 export function bindCartographySettings(options: Readonly<{
   form: HTMLFormElement;
-  persist(patch: Partial<Pick<
-    AppSettings,
-    | "cartographyOverlayStyle"
-    | "cartographyOverlayOpacity"
-    | "cartographyControlIdleOpacity"
-    | "cartographyOverlayCustomStyle"
-  >>): Promise<unknown>;
-  recoverAfterPersistFailure(message: string): Promise<void>;
+  persist(patch: RendererSettingsPatch): Promise<AppSettings>;
+  recoverAfterPersistFailure(message: string): Promise<AppSettings | null>;
   feedback(message: string, tone: FeedbackTone, resetAfter?: number): void;
+  readClipboard(): Promise<string>;
+  writeClipboard(text: string): Promise<void>;
+  prompt?(message: string, initial: string): string | null;
+  confirm?(message: string): boolean;
 }>) {
-  const byName = <T extends HTMLElement>(name: string): T => {
-    const element = options.form.elements.namedItem(name);
-    if (!(element instanceof HTMLElement)) throw new Error(`missing cartography control: ${name}`);
-    return element as T;
+  const query = <T extends Element>(selector: string): T => {
+    const value = options.form.querySelector<T>(selector);
+    if (value === null) throw new Error(`missing cartography control: ${selector}`);
+    return value;
   };
-  const panel = options.form.querySelector<HTMLElement>("#settings-cartography-options");
-  const custom = options.form.querySelector<HTMLFieldSetElement>("#settings-cartography-custom");
-  const editCustom = options.form.querySelector<HTMLButtonElement>("#settings-cartography-edit-custom");
-  const preview = options.form.querySelector<HTMLElement>(".settings-cartography-preview");
-  if (!panel || !custom || !editCustom || !preview) throw new Error("incomplete cartography settings");
-  const choices = [...options.form.querySelectorAll<HTMLInputElement>(
-    'input[name="cartographyOverlayStyleChoice"]',
-  )];
-  const opacity = byName<HTMLInputElement>("cartographyOverlayOpacity");
-  const opacityValue = byName<HTMLOutputElement>("cartographyOverlayOpacityValue");
-  const controlOpacity = byName<HTMLInputElement>("cartographyControlIdleOpacity");
-  const controlOpacityValue = byName<HTMLOutputElement>("cartographyControlIdleOpacityValue");
-  const veilPicker = byName<HTMLInputElement>("cartographyVeilPicker");
-  const veilHex = byName<HTMLInputElement>("cartographyVeilHex");
-  const outlinePicker = byName<HTMLInputElement>("cartographyOutlinePicker");
-  const outlineHex = byName<HTMLInputElement>("cartographyOutlineHex");
-  const gridPicker = byName<HTMLInputElement>("cartographyGridPicker");
-  const gridHex = byName<HTMLInputElement>("cartographyGridHex");
-  const missingPicker = byName<HTMLInputElement>("cartographyMissingPicker");
-  const missingHex = byName<HTMLInputElement>("cartographyMissingHex");
-  const currentPicker = byName<HTMLInputElement>("cartographyCurrentPicker");
-  const currentHex = byName<HTMLInputElement>("cartographyCurrentHex");
-  const hoverPicker = byName<HTMLInputElement>("cartographyHoverPicker");
-  const hoverHex = byName<HTMLInputElement>("cartographyHoverHex");
-  const normalRangePicker = byName<HTMLInputElement>("cartographyNormalRangePicker");
-  const normalRangeHex = byName<HTMLInputElement>("cartographyNormalRangeHex");
-  const birdsEyeRangePicker = byName<HTMLInputElement>("cartographyBirdsEyeRangePicker");
-  const birdsEyeRangeHex = byName<HTMLInputElement>("cartographyBirdsEyeRangeHex");
-  const outlineWidth = byName<HTMLInputElement>("cartographyOutlineWidth");
-  const outlineWidthValue = byName<HTMLOutputElement>("cartographyOutlineWidthValue");
-  const colorControls = [
-    [veilPicker, veilHex],
-    [outlinePicker, outlineHex],
-    [gridPicker, gridHex],
-    [missingPicker, missingHex],
-    [currentPicker, currentHex],
-    [hoverPicker, hoverHex],
-    [normalRangePicker, normalRangeHex],
-    [birdsEyeRangePicker, birdsEyeRangeHex],
-  ] as const;
-  let current: AppSettings | null = null;
+  const byName = <T extends HTMLElement>(name: string): T => {
+    const value = options.form.elements.namedItem(name);
+    if (!(value instanceof HTMLElement)) throw new Error(`missing cartography control: ${name}`);
+    return value as T;
+  };
+  const select = byName<HTMLSelectElement>("cartographyPresetSelection");
+  const status = query<HTMLElement>("[data-cartography-status]");
+  const note = query<HTMLElement>("[data-cartography-preset-note]");
+  const editorNote = query<HTMLElement>("#settings-cartography-editor-note");
+  const actions = Object.fromEntries(
+    [...options.form.querySelectorAll<HTMLButtonElement>("[data-cartography-preset-action]")]
+      .map((button) => [button.dataset.cartographyPresetAction!, button]),
+  ) as Record<"copy" | "rename" | "duplicate" | "delete" | "export" | "import", HTMLButtonElement>;
+  const gridOpacity = byName<HTMLInputElement>("cartographyGridOpacity");
+  const gridOpacityValue = byName<HTMLOutputElement>("cartographyGridOpacityValue");
+  const walkabilityOpacity = byName<HTMLInputElement>("cartographyWalkabilityOpacity");
+  const walkabilityOpacityValue = byName<HTMLOutputElement>("cartographyWalkabilityOpacityValue");
+  const idleOpacity = byName<HTMLInputElement>("cartographyControlIdleOpacity");
+  const idleOpacityValue = byName<HTMLOutputElement>("cartographyControlIdleOpacityValue");
+  const preview = query<HTMLElement>(".settings-cartography-preview");
+  const ask = options.prompt ?? ((message, initial) => window.prompt(message, initial));
+  const askConfirm = options.confirm ?? ((message) => window.confirm(message));
+  let library: CartographyPresetLibrary | null = null;
   let persistRevision = 0;
+  const libraryWrites = createCartographyLibraryWriteGate();
 
-  const persistControl = async (
-    patch: Parameters<typeof options.persist>[0],
-    failureMessage: string,
-  ): Promise<void> => {
+  const announce = (message: string, tone: FeedbackTone = "neutral"): void => {
+    status.textContent = message;
+    status.dataset.tone = tone;
+    options.feedback(message, tone, tone === "success" ? 2_200 : undefined);
+  };
+  const persist = async (
+    patch: Partial<Pick<AppSettings, PersistedKey>>, failure: string,
+  ): Promise<AppSettings | null> => {
     const revision = ++persistRevision;
     try {
-      await options.persist(patch);
+      return await options.persist(patch);
     } catch {
-      if (revision === persistRevision) {
-        await options.recoverAfterPersistFailure(failureMessage);
-      }
+      if (revision === persistRevision) await options.recoverAfterPersistFailure(failure);
+      return null;
     }
   };
-
-  const selectedStyle = (): CartographyOverlayStyleId | null => {
-    const value = choices.find((choice) => choice.checked)?.value;
-    return CARTOGRAPHY_OVERLAY_STYLE_IDS.find((id) => id === value) ?? null;
+  const renderOptions = (): void => {
+    if (library === null) return;
+    renderCartographyPresetOptions(select, library);
   };
-  const editedStyle = (): CartographyOverlayStyle | null => normaliseCartographyOverlayStyle({
-    veilColor: veilHex.value.toUpperCase(),
-    outlineColor: outlineHex.value.toUpperCase(),
-    outlineWidth: Number(outlineWidth.value),
-    gridColor: gridHex.value.toUpperCase(),
-    missingColor: missingHex.value.toUpperCase(),
-    currentColor: currentHex.value.toUpperCase(),
-    hoverColor: hoverHex.value.toUpperCase(),
-    normalRangeColor: normalRangeHex.value.toUpperCase(),
-    birdsEyeRangeColor: birdsEyeRangeHex.value.toUpperCase(),
+  const editor = createCartographyPresetEditor({
+    form: options.form,
+    change(style, commit) {
+      if (library?.activePreset.kind !== "custom") return;
+      const id = library.activePreset.id;
+      const next = replaceCartographyPresetStyle(library, id, style);
+      if (next === null) return;
+      library = next;
+      if (commit) void persistLibrary(
+        { cartographyPresetLibrary: library }, "The custom Cartography preset was not saved.",
+      );
+    },
   });
-  const draw = (style: CartographyOverlayStyle, opacityPercent: number) => {
-    preview.style.setProperty("--cartography-veil", style.veilColor);
-    preview.style.setProperty("--cartography-outline", style.outlineColor);
-    preview.style.setProperty("--cartography-outline-width", `${style.outlineWidth}px`);
-    preview.style.setProperty("--cartography-opacity", String(opacityPercent / 100));
-    preview.style.setProperty("--cartography-grid", style.gridColor);
-    preview.style.setProperty("--cartography-missing", style.missingColor);
-    preview.style.setProperty("--cartography-current", style.currentColor);
-    preview.style.setProperty("--cartography-hover", style.hoverColor);
-    preview.style.setProperty("--cartography-normal-range", style.normalRangeColor);
-    preview.style.setProperty("--cartography-birds-eye-range", style.birdsEyeRangeColor);
-    opacityValue.value = `${opacityPercent}%`;
-    outlineWidthValue.value = `${style.outlineWidth} px`;
-    const customSwatch = options.form.querySelector<HTMLElement>(
-      '[data-cartography-style-swatch="custom"]',
-    );
-    if (customSwatch !== null && customSwatch !== undefined) {
-      const saved = current?.cartographyOverlayCustomStyle ?? style;
-      setSwatch(customSwatch, saved);
+  const renderPreset = (): void => {
+    if (library === null) return;
+    renderOptions();
+    const preset = resolveCartographyPresetEntry(library);
+    if (preset === null) {
+      announce("This Cartography preset is no longer available.", "error");
+      return;
     }
+    const editable = preset.custom !== null;
+    const full = library.customPresets.length >= CARTOGRAPHY_CUSTOM_PRESETS_MAX;
+    actions.copy.hidden = editable;
+    actions.copy.disabled = full;
+    actions.rename.hidden = !editable;
+    actions.duplicate.hidden = !editable;
+    actions.duplicate.disabled = full;
+    actions.delete.hidden = !editable;
+    actions.import.disabled = full;
+    note.textContent = full ? "Your preset library is full. Delete a preset before adding another."
+      : editable
+      ? "This is your preset. Changes save automatically."
+      : "Built-in presets cannot be changed. Make a copy to customize one.";
+    editorNote.textContent = editable ? `Editing “${preset.name}”.`
+      : "Choose a custom preset to edit its appearance.";
+    editor.render(preset.style, editable);
   };
-  const drawSelected = () => {
-    if (current === null) return;
-    const id = selectedStyle() ?? current.cartographyOverlayStyle;
-    const style = id === "custom" ? editedStyle() : CARTOGRAPHY_OVERLAY_BUILTIN_STYLES[id];
-    if (style !== null) draw(style, Number(opacity.value));
-  };
-  const validateHex = (input: HTMLInputElement) => {
-    input.setCustomValidity(isCartographyOverlayHex(input.value.toUpperCase())
-      ? ""
-      : "Enter a six-digit color such as #171A1C.");
-  };
-  const saveCustom = async () => {
-    const style = editedStyle();
-    if (style === null) return;
-    options.feedback("Saving…", "progress");
+  const persistLibrary = async (
+    patch: RendererSettingsPatch,
+    failure: string,
+    success?: string,
+  ): Promise<void> => {
+    const revision = libraryWrites.begin();
     try {
-      await options.persist({
-        cartographyOverlayStyle: "custom",
-        cartographyOverlayCustomStyle: style,
-      });
-      options.feedback("Custom map palette saved.", "success", 2200);
+      const saved = await options.persist(patch);
+      if (!libraryWrites.isLatest(revision)) return;
+      library = saved.cartographyPresetLibrary;
+      renderPreset();
+      announce(success ?? "Preset saved.", "success");
     } catch {
-      await options.recoverAfterPersistFailure("Review the active map style before trying again.");
+      if (!libraryWrites.isLatest(revision)) return;
+      const recovered = await options.recoverAfterPersistFailure(failure);
+      if (recovered !== null) {
+        library = recovered.cartographyPresetLibrary;
+        renderPreset();
+      }
+    } finally {
+      libraryWrites.finish(revision);
     }
   };
-
-  const setSwatch = (swatch: HTMLElement, style: CartographyOverlayStyle) => {
-    swatch.style.setProperty("--cartography-veil", style.veilColor);
-    swatch.style.setProperty("--cartography-outline", style.outlineColor);
-    swatch.style.setProperty("--cartography-grid", style.gridColor);
-    swatch.style.setProperty("--cartography-missing", style.missingColor);
-    swatch.style.setProperty("--cartography-current", style.currentColor);
-    swatch.style.setProperty("--cartography-range", style.birdsEyeRangeColor);
+  const replaceLibrary = (
+    next: CartographyPresetLibrary | null,
+    message?: string,
+    patch?: RendererSettingsPatch,
+  ): void => {
+    if (next === null) {
+      announce("That Cartography preset change is not valid.", "error");
+      return;
+    }
+    library = next;
+    renderPreset();
+    status.textContent = "Saving…";
+    void persistLibrary(
+      patch ?? { cartographyPresetLibrary: next },
+      "The Cartography preset was not saved.",
+      message ?? "Preset selected.",
+    );
   };
-  for (const [id, style] of Object.entries(CARTOGRAPHY_OVERLAY_BUILTIN_STYLES)) {
-    const swatch = options.form.querySelector<HTMLElement>(`[data-cartography-style-swatch="${id}"]`);
-    if (swatch !== null) setSwatch(swatch, style);
-  }
-  choices.forEach((choice) => choice.addEventListener("change", () => {
-    const style = selectedStyle();
-    if (style === null) return;
-    custom.hidden = style !== "custom";
-    editCustom.hidden = style === "custom";
-    drawSelected();
-    void persistControl(
-      { cartographyOverlayStyle: style },
-      "The map color preset was not saved.",
-    );
-  }));
-  opacity.addEventListener("input", drawSelected);
-  opacity.addEventListener("change", () => {
-    void persistControl(
-      { cartographyOverlayOpacity: Number(opacity.value) },
-      "The map opacity was not saved.",
+
+  select.addEventListener("change", () => {
+    if (library === null) return;
+    const active = parseCartographyPresetRef(select.value, library);
+    if (active !== null) replaceLibrary(
+      selectCartographyPreset(library, active),
+      "Preset selected.",
+      { cartographyPresetSelection: active },
     );
   });
-  controlOpacity.addEventListener("input", () => {
-    controlOpacityValue.value = `${controlOpacity.value}%`;
+  actions.copy.addEventListener("click", () => {
+    if (library === null) return;
+    const source = resolveCartographyPresetEntry(library);
+    if (source === null) return;
+    const name = ask("Name your preset", `${source.name} copy`);
+    if (name !== null) replaceLibrary(addCartographyPreset(library, {
+      id: freshPresetId(), name, style: source.style,
+    }), "Preset created.");
   });
-  controlOpacity.addEventListener("change", () => {
-    void persistControl(
-      { cartographyControlIdleOpacity: Number(controlOpacity.value) },
-      "The map control opacity was not saved.",
+  actions.duplicate.addEventListener("click", () => {
+    if (library === null) return;
+    const source = resolveCartographyPresetEntry(library);
+    if (source === null) return;
+    replaceLibrary(addCartographyPreset(library, {
+      id: freshPresetId(), name: `${source.name} copy`, style: source.style,
+    }), "Preset duplicated.");
+  });
+  actions.rename.addEventListener("click", () => {
+    if (library?.activePreset.kind !== "custom") return;
+    const source = resolveCartographyPresetEntry(library)?.custom ?? null;
+    if (source === null) return;
+    const entered = ask("Rename preset", source.name);
+    if (entered === null || entered.trim() === source.name) return;
+    replaceLibrary(renameCartographyPreset(library, source.id, entered), "Preset renamed.");
+  });
+  actions.delete.addEventListener("click", () => {
+    if (library?.activePreset.kind !== "custom") return;
+    const source = resolveCartographyPresetEntry(library)?.custom ?? null;
+    if (source === null || !askConfirm(`Delete “${source.name}”? This cannot be undone.`)) return;
+    replaceLibrary(
+      deleteCartographyPreset(library, source.id),
+      "Preset deleted. Cartographer is now active.",
     );
   });
-  editCustom.addEventListener("click", () => {
-    if (current === null) return;
-    const source = cartographyOverlayStyle(
-      current.cartographyOverlayStyle,
-      current.cartographyOverlayCustomStyle,
-    );
-    veilPicker.value = source.veilColor;
-    veilHex.value = source.veilColor;
-    outlinePicker.value = source.outlineColor;
-    outlineHex.value = source.outlineColor;
-    gridPicker.value = source.gridColor;
-    gridHex.value = source.gridColor;
-    missingPicker.value = source.missingColor;
-    missingHex.value = source.missingColor;
-    currentPicker.value = source.currentColor;
-    currentHex.value = source.currentColor;
-    hoverPicker.value = source.hoverColor;
-    hoverHex.value = source.hoverColor;
-    normalRangePicker.value = source.normalRangeColor;
-    normalRangeHex.value = source.normalRangeColor;
-    birdsEyeRangePicker.value = source.birdsEyeRangeColor;
-    birdsEyeRangeHex.value = source.birdsEyeRangeColor;
-    outlineWidth.value = String(source.outlineWidth);
-    choices.forEach((choice) => { choice.checked = choice.value === "custom"; });
-    custom.hidden = false;
-    editCustom.hidden = true;
-    draw(source, Number(opacity.value));
-    void saveCustom();
+  actions.export.addEventListener("click", async () => {
+    if (library === null) return;
+    const preset = resolveCartographyPresetEntry(library);
+    if (preset === null) return;
+    try {
+      await options.writeClipboard(encodeCartographyPreset(preset));
+      announce("Preset copied to the clipboard.", "success");
+    } catch { announce("The preset could not be copied.", "error"); }
+  });
+  actions.import.addEventListener("click", async () => {
+    if (library === null) return;
+    try {
+      const decoded = decodeCartographyPreset(await options.readClipboard());
+      if (decoded === null) {
+        announce("The clipboard does not contain a valid GWonMac Cartography preset.", "error");
+        return;
+      }
+      if (!askConfirm(`Import “${decoded.name}” as a new Cartography preset?`)) {
+        announce("Import canceled.");
+        return;
+      }
+      replaceLibrary(addCartographyPreset(library, {
+        id: freshPresetId(), name: decoded.name, style: decoded.style,
+      }), "Preset imported.");
+    } catch { announce("The preset could not be imported.", "error"); }
   });
 
-  const bindColor = (picker: HTMLInputElement, text: HTMLInputElement) => {
-    picker.addEventListener("input", () => {
-      text.value = picker.value.toUpperCase();
-      validateHex(text);
-      drawSelected();
+  const bindOpacity = (
+    input: HTMLInputElement, output: HTMLOutputElement,
+    key: "cartographyGridOpacity" | "cartographyWalkabilityOpacity" | "cartographyControlIdleOpacity",
+    failure: string,
+  ): void => {
+    input.addEventListener("input", () => {
+      output.value = `${input.value}%`;
+      if (key !== "cartographyControlIdleOpacity") {
+        const layer = key === "cartographyGridOpacity" ? "grid" : "walkability";
+        preview.style.setProperty(`--cartography-${layer}-opacity`, String(Number(input.value) / 100));
+      }
     });
-    picker.addEventListener("change", () => { void saveCustom(); });
-    text.addEventListener("input", () => {
-      text.value = text.value.toUpperCase();
-      validateHex(text);
-      if (isCartographyOverlayHex(text.value)) picker.value = text.value;
-      drawSelected();
-    });
-    text.addEventListener("change", () => { void saveCustom(); });
+    input.addEventListener("change", () => void persist({ [key]: Number(input.value) }, failure));
   };
-  colorControls.forEach(([picker, text]) => bindColor(picker, text));
-  outlineWidth.addEventListener("input", drawSelected);
-  outlineWidth.addEventListener("change", () => { void saveCustom(); });
+  bindOpacity(gridOpacity, gridOpacityValue, "cartographyGridOpacity", "The grid opacity was not saved.");
+  bindOpacity(walkabilityOpacity, walkabilityOpacityValue, "cartographyWalkabilityOpacity", "The walkability opacity was not saved.");
+  bindOpacity(idleOpacity, idleOpacityValue, "cartographyControlIdleOpacity", "The control visibility was not saved.");
 
   return Object.freeze({
     render(settings: AppSettings) {
-      current = settings;
-      const appearanceEnabled = settings.cartographyOverlayEnabled
-        || settings.cartographyGridEnabled;
-      panel.setAttribute("aria-disabled", String(!appearanceEnabled));
-      for (const control of panel.querySelectorAll<HTMLInputElement | HTMLButtonElement>(
-        "input, button",
-      )) control.disabled = !appearanceEnabled;
-      choices.forEach((choice) => {
-        choice.checked = choice.value === settings.cartographyOverlayStyle;
-      });
-      opacity.value = String(settings.cartographyOverlayOpacity);
-      controlOpacity.value = String(settings.cartographyControlIdleOpacity);
-      controlOpacityValue.value = `${settings.cartographyControlIdleOpacity}%`;
-      const style = settings.cartographyOverlayCustomStyle;
-      const values = [
-        style.veilColor,
-        style.outlineColor,
-        style.gridColor,
-        style.missingColor,
-        style.currentColor,
-        style.hoverColor,
-        style.normalRangeColor,
-        style.birdsEyeRangeColor,
-      ] as const;
-      colorControls.forEach(([picker, text], index) => {
-        const value = values[index]!;
-        picker.value = value;
-        text.value = value;
-        validateHex(text);
-      });
-      outlineWidth.value = String(style.outlineWidth);
-      custom.hidden = settings.cartographyOverlayStyle !== "custom";
-      editCustom.hidden = settings.cartographyOverlayStyle === "custom";
-      draw(
-        cartographyOverlayStyle(settings.cartographyOverlayStyle, style),
-        settings.cartographyOverlayOpacity,
-      );
+      if (libraryWrites.acceptsCanonicalRender()) {
+        library = settings.cartographyPresetLibrary;
+      }
+      gridOpacity.value = String(settings.cartographyGridOpacity);
+      gridOpacityValue.value = `${settings.cartographyGridOpacity}%`;
+      walkabilityOpacity.value = String(settings.cartographyWalkabilityOpacity);
+      walkabilityOpacityValue.value = `${settings.cartographyWalkabilityOpacity}%`;
+      idleOpacity.value = String(settings.cartographyControlIdleOpacity);
+      idleOpacityValue.value = `${settings.cartographyControlIdleOpacity}%`;
+      preview.style.setProperty("--cartography-grid-opacity", String(settings.cartographyGridOpacity / 100));
+      preview.style.setProperty("--cartography-walkability-opacity", String(settings.cartographyWalkabilityOpacity / 100));
+      renderPreset();
     },
   });
 }

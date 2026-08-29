@@ -721,7 +721,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSnapshotMetadata: () => clientRuntime.snapshotMetadata(),
     getCacheInfo: () => clientRuntime.cacheInfo(),
     getSettings: () => preferences.getSettings(),
-    updateSettings: (patch) => preferences.updateSettings(patch),
+    updateSettings: (patch) => preferences.updateRendererSettings(patch),
     resetSettings: () => toolsRuntime?.resetSettings()
       ?? preferences.resetCoreSettings(),
     setDiagnosticProfile: async (profile) => {

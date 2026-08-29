@@ -274,7 +274,9 @@
     return operation;
   }
 
-  async function recoverSettingsAfterFailedWrite(message: string): Promise<void> {
+  async function recoverSettingsAfterFailedWrite(
+    message: string,
+  ): Promise<AppSettings | null> {
     currentSettings = await window.gwNative.settings.get().catch(() => null);
     if (currentSettings) {
       fillForm(currentSettings);
@@ -289,7 +291,13 @@
         : 'GWonMac could not confirm the active settings. Close and reopen Settings before retrying.',
       'error',
     );
+    return currentSettings;
   }
+  const recoverSettingsAfterFailedWriteVoid = async (
+    message: string,
+  ): Promise<void> => {
+    await recoverSettingsAfterFailedWrite(message);
+  };
 
   const shortcutSettings = import('./settings-shortcuts.js').then((module) =>
     module.bindShortcutSettings({
@@ -298,7 +306,7 @@
       restore: byId('settings-shortcuts-restore'),
       settings: () => currentSettings,
       persist: (shortcutOverrides) => persistSettings({ shortcutOverrides }),
-      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWriteVoid,
       feedback: setFeedback,
     }));
   const skillKeySettings = import('./settings-skill-keys.js').then((module) =>
@@ -308,7 +316,7 @@
       clearAll: byId('settings-skill-keys-clear') as HTMLButtonElement,
       settings: () => currentSettings,
       persist: (skillKeyBindings) => persistSettings({ skillKeyBindings }),
-      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWriteVoid,
       feedback: setFeedback,
     }));
   const skillCooldownSettings = import('./settings-skill-cooldowns.js').then((module) =>
@@ -316,7 +324,7 @@
       fieldset: byId('settings-skill-cooldowns') as HTMLFieldSetElement,
       enabled: skillCooldownOverlayEnabled,
       persist: (patch) => persistSettings(patch),
-      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWriteVoid,
       feedback: setFeedback,
     }));
   const themeSettings = import('./settings-theme.js').then((module) =>
@@ -324,7 +332,7 @@
       form,
       settings: () => currentSettings,
       persist: persistSettings,
-      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWriteVoid,
       feedback: setFeedback,
       copy: (text) => window.gwNative.clipboard.writeText(text),
     }));
@@ -334,6 +342,8 @@
       persist: persistSettings,
       recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
       feedback: setFeedback,
+      readClipboard: () => window.gwNative.clipboard.readText(),
+      writeClipboard: (text) => window.gwNative.clipboard.writeText(text),
     }));
   void import('./settings-accounts.js').then((module) =>
     module.bindAccountSettings({

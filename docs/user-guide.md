@@ -120,15 +120,18 @@ texture, GWonMac leaves the game's texture untouched instead of guessing.
 
 ## Maps and cartography
 
-Open **Settings → Maps** for two independent features. **Show cartography
-guidance** marks the game's exploration cells and highlights the cell containing
-your character. **Show walkability overlay** keeps Guild Wars' map artwork and
-shades terrain outside the certified walkable geometry. Choose Contrast, Soft,
-or Monochrome, or customize the walkability veil and outline, cell grid,
-unexplored cells, current and hovered cells, and both reveal ranges. Hold Shift
-while hovering a Mission Map cell to inspect its reveal area. One palette
-applies to the Compass and Mission Map. Both preserve the native map artwork
-and hide when their current map projection or data cannot be certified.
+Open **Settings → Maps** for two independent features. **Grid** marks the game's
+exploration cells and highlights the cell containing your character. **Walkable
+terrain** keeps Guild Wars' map artwork and shades terrain outside the certified
+walkable geometry. Choose Cartographer,
+Synthwave, or Monochrome. To change an appearance, make a named copy and edit
+its walkability colors, grid lines, unseen-cell marker, and inspection ranges.
+Custom presets can be copied and imported for sharing, renamed, duplicated, or
+deleted. Hold Shift over a Mission Map cell to inspect its normal 3×3 reveal
+area, or Option+Shift for the Bird's Eye 7×7 area. One preset applies to the
+Compass and Mission Map, while each layer keeps its own opacity. Both preserve
+the native map artwork and hide when their current map projection or data
+cannot be certified.
 
 ## Game integration and optional Tools
 

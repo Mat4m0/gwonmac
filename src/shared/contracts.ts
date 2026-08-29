@@ -71,9 +71,9 @@ import {
   type CustomUiTheme,
 } from "./ui-theme.js";
 import {
-  DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE,
-  type CartographyOverlayStyle,
-  type CartographyOverlayStyleId,
+  DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
+  type CartographyPresetLibrary,
+  type CartographyPresetRef,
 } from "./cartography-overlay.js";
 import type { EnhancementSelection } from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
@@ -392,16 +392,16 @@ export interface AppSettings {
   cartographyOverlayEnabled: boolean;
   /** Draw the game's fixed cartography cells over both native map surfaces. */
   cartographyGridEnabled: boolean;
-  /** Which reveal footprint is shown persistently; hover still previews 3×3. */
+  /** Persistent Compass footprint; Mission Map hover uses Shift or Option+Shift. */
   cartographyRevealMode: "off" | "normal" | "birds-eye";
-  /** One appearance shared by both native map surfaces. */
-  cartographyOverlayStyle: CartographyOverlayStyleId;
-  /** Shared veil and outline strength, as a whole percentage. */
-  cartographyOverlayOpacity: number;
+  /** Active built-in or player-owned appearance and all custom presets. */
+  cartographyPresetLibrary: CartographyPresetLibrary;
+  /** Walkability veil and boundary strength, as a whole percentage. */
+  cartographyWalkabilityOpacity: number;
+  /** Grid, reveal ranges, and unseen-cell strength, as a whole percentage. */
+  cartographyGridOpacity: number;
   /** Visibility of the collapsed Compass control, as a whole percentage. */
   cartographyControlIdleOpacity: number;
-  /** The one saved custom appearance, retained while a built-in is active. */
-  cartographyOverlayCustomStyle: CartographyOverlayStyle;
   /** Master opt-in for the optional executable Tools Beta capability. */
   gwonmacTools: boolean;
   /** Show the saved Build Library and allow its app shortcut. */
@@ -471,9 +471,32 @@ export interface AppSettings {
 }
 
 export type AppSettingsPatch = Partial<AppSettings>;
-/** Settings fields the sandboxed renderer may write through generic IPC. */
-export type RendererSettingsPatch = Omit<AppSettingsPatch, "travelShortcuts">
-  & Readonly<{ travelShortcuts?: never }>;
+/**
+ * Settings fields the sandboxed renderer may write through generic IPC.
+ * Preset selection is an operation rather than a stored field: main applies it
+ * to the latest library under the preferences lock, so a compact-map choice
+ * cannot overwrite edits made in the full Settings window.
+ */
+type RendererStoredSettingsPatch = Omit<
+  AppSettingsPatch,
+  "travelShortcuts"
+> & Readonly<{
+  travelShortcuts?: never;
+  cartographyPresetSelection?: never;
+}>;
+
+type RendererPresetSelectionPatch = Omit<
+  RendererStoredSettingsPatch,
+  "cartographyPresetLibrary" | "cartographyPresetSelection"
+> & Readonly<{
+  cartographyPresetLibrary?: never;
+  cartographyPresetSelection: CartographyPresetRef;
+}>;
+
+/** A renderer write may replace the library or select from it, never both. */
+export type RendererSettingsPatch =
+  | RendererStoredSettingsPatch
+  | RendererPresetSelectionPatch;
 
 export type SettingsResetOutcome =
   | Readonly<{
@@ -499,10 +522,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cartographyOverlayEnabled: false,
   cartographyGridEnabled: false,
   cartographyRevealMode: "off",
-  cartographyOverlayStyle: "contrast",
-  cartographyOverlayOpacity: 55,
+  cartographyPresetLibrary: DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
+  cartographyWalkabilityOpacity: 55,
+  cartographyGridOpacity: 65,
   cartographyControlIdleOpacity: 35,
-  cartographyOverlayCustomStyle: DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE,
   gwonmacTools: false,
   buildLibrary: true,
   tradeChat: true,

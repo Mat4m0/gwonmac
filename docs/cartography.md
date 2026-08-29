@@ -8,10 +8,14 @@ GWonMac has two separate, optional native-map features:
 - **Walkability overlay** shades terrain outside certified pathing geometry
   while preserving the native map artwork.
 
-The features can be enabled independently. Their shared palette keeps the
-walkability boundary warm and the generated grid cool, with a dark under-stroke
-so both remain legible over bright snow and dark terrain. Contrast, Soft, and
-Monochrome presets are provided, and every semantic role remains customizable.
+The features can be enabled independently. Their shared appearance keeps the
+walkability boundary distinct from the generated grid. A dark casing beneath
+meaningful lines keeps them legible over bright snow and dark terrain.
+Cartographer, Synthwave, and Monochrome presets are included. Built-in presets
+cannot be changed; make a named copy when you want to customize every color,
+line width, grid pattern, or unseen-cell marker. Custom presets can be copied
+and imported as versioned text, so players can share them without adding files
+to the game installation.
 
 ## Generated grid
 
@@ -26,10 +30,13 @@ or unsupported build hides the derived layer instead of guessing. Canvas
 layers are pointer-transparent and redraw only when their projection changes.
 
 The grid makes the game's exploration-cell boundaries visible beneath the
-smoothed fog. Warm dots mark cells that may still need attention. Persistent
-reveal guidance defaults to off; holding Shift while hovering a Mission Map
-cell previews its 3×3 range, while optional normal and Bird's Eye modes show
-3×3 and 7×7 footprints.
+smoothed fog. An unseen-cell marker identifies cells that may still need
+attention without relying on color alone. Corner brackets are the quiet
+default; crosses, diamonds, stipple, and hatching are available in custom
+presets. Persistent reveal guidance defaults to off. Hold Shift while hovering
+a Mission Map cell to preview its normal 3×3 range, or hold Option+Shift to
+preview the Bird's Eye 7×7 range. Optional persistent modes show the same
+footprints around the player on the Compass.
 Observed exploration state is advisory and resets or hides whenever the client
 cannot provide a complete current-generation snapshot.
 

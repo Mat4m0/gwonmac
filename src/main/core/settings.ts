@@ -48,10 +48,10 @@ import {
 import {
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
-  CARTOGRAPHY_OVERLAY_OPACITY_MAX,
-  CARTOGRAPHY_OVERLAY_OPACITY_MIN,
-  isCartographyOverlayStyleId,
-  normaliseCartographyOverlayStyle,
+  CARTOGRAPHY_OPACITY_MAX,
+  CARTOGRAPHY_OPACITY_MIN,
+  normaliseCartographyPresetLibrary,
+  normaliseCartographyPresetRef,
 } from "../../shared/cartography-overlay.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
@@ -125,9 +125,6 @@ export function parseSettings(raw: unknown): AppSettings {
   const out: AppSettings = {
     ...DEFAULT_SETTINGS,
     uiCustomTheme: { ...DEFAULT_CUSTOM_UI_THEME },
-    cartographyOverlayCustomStyle: {
-      ...DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
-    },
   };
 
   if ("renderScale" in src) {
@@ -171,19 +168,25 @@ export function parseSettings(raw: unknown): AppSettings {
       UI_PANEL_OPACITY_MAX,
     );
   }
-  if ("cartographyOverlayStyle" in src) {
-    if (!isCartographyOverlayStyleId(src.cartographyOverlayStyle)) {
-      throw new AppError("bad_settings", "settings.cartographyOverlayStyle has unknown value");
+  if ("cartographyPresetLibrary" in src) {
+    const library = normaliseCartographyPresetLibrary(src.cartographyPresetLibrary);
+    if (library === null) {
+      throw new AppError("bad_settings", "settings.cartographyPresetLibrary is invalid");
     }
-    out.cartographyOverlayStyle = src.cartographyOverlayStyle;
+    out.cartographyPresetLibrary = library;
   }
-  if ("cartographyOverlayOpacity" in src) {
-    out.cartographyOverlayOpacity = asBoundedInteger(
-      src.cartographyOverlayOpacity,
-      "cartographyOverlayOpacity",
-      CARTOGRAPHY_OVERLAY_OPACITY_MIN,
-      CARTOGRAPHY_OVERLAY_OPACITY_MAX,
-    );
+  for (const setting of [
+    "cartographyWalkabilityOpacity",
+    "cartographyGridOpacity",
+  ] as const) {
+    if (setting in src) {
+      out[setting] = asBoundedInteger(
+        src[setting],
+        setting,
+        CARTOGRAPHY_OPACITY_MIN,
+        CARTOGRAPHY_OPACITY_MAX,
+      );
+    }
   }
   if ("cartographyControlIdleOpacity" in src) {
     out.cartographyControlIdleOpacity = asBoundedInteger(
@@ -192,16 +195,6 @@ export function parseSettings(raw: unknown): AppSettings {
       CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
       CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
     );
-  }
-  if ("cartographyOverlayCustomStyle" in src) {
-    const style = normaliseCartographyOverlayStyle(src.cartographyOverlayCustomStyle);
-    if (style === null) {
-      throw new AppError(
-        "bad_settings",
-        "settings.cartographyOverlayCustomStyle is invalid",
-      );
-    }
-    out.cartographyOverlayCustomStyle = style;
   }
   if ("cartographyRevealMode" in src) {
     const mode = src.cartographyRevealMode;
@@ -339,19 +332,42 @@ export function parseSettingsPatch(raw: unknown): AppSettingsPatch {
 
 /** The generic renderer bridge cannot bypass Travel's compare-and-refuse path. */
 export function parseRendererSettingsPatch(raw: unknown): RendererSettingsPatch {
-  if (
-    raw !== null
-    && typeof raw === "object"
-    && !Array.isArray(raw)
-    && Object.hasOwn(raw, "travelShortcuts")
-  ) {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new AppError("bad_settings", "settings patch must be an object");
+  }
+  if (Object.hasOwn(raw, "travelShortcuts")) {
     throw new AppError(
       "bad_settings",
       "settings.travelShortcuts must use the Travel preference capability",
     );
   }
-  const { travelShortcuts: _travelShortcuts, ...patch } = parseSettingsPatch(raw);
-  return patch;
+  const src = raw as Record<string, unknown>;
+  const hasSelection = Object.hasOwn(src, "cartographyPresetSelection");
+  if (hasSelection && Object.hasOwn(src, "cartographyPresetLibrary")) {
+    throw new AppError(
+      "bad_settings",
+      "settings preset selection and library replacement are mutually exclusive",
+    );
+  }
+  const {
+    travelShortcuts: _travelShortcuts,
+    cartographyPresetSelection: selectionValue,
+    ...storedPatch
+  } = src;
+  const {
+    travelShortcuts: _parsedTravelShortcuts,
+    ...patch
+  } = parseSettingsPatch(storedPatch);
+  if (!hasSelection) return patch;
+  const selection = normaliseCartographyPresetRef(selectionValue);
+  if (selection === null) {
+    throw new AppError("bad_settings", "settings.cartographyPresetSelection is invalid");
+  }
+  const {
+    cartographyPresetLibrary: _cartographyPresetLibrary,
+    ...selectionPatch
+  } = patch;
+  return { ...selectionPatch, cartographyPresetSelection: selection };
 }
 
 export async function loadSettings(

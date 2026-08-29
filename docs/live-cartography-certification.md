@@ -7,7 +7,7 @@ and walkability layer over Guild Wars' native maps.
 ## Before launching
 
 1. Build and run all offline checks from the feature worktree.
-2. Enable **Show cartography grid**. Leave **Show walkability overlay** off for
+2. Enable **Grid** in **Settings → Maps**. Leave **Walkable terrain** off for
    the first captures.
 3. Start the evidence runner:
 
@@ -48,7 +48,8 @@ must receive input unchanged. A stationary state must not redraw continuously.
 | Move map window | `capture mission-window-moved` | Overlay follows the drawable region exactly. |
 | Resize map window | `capture mission-window-resized` | Bounds and scale update without an old-sized frame or vertical offset. |
 | Resize game window | `capture mission-game-resized` | Projection remains attached at the new global scale. |
-| Hold Shift and hover a cell | `capture mission-cell-hover` | Hover guidance identifies one cell and its reveal neighborhood without intercepting map input; releasing Shift hides it. |
+| Hold Shift and hover a cell | `capture mission-cell-hover` | Hover guidance identifies one cell and its normal 3×3 reveal neighborhood without intercepting map input; releasing Shift hides it. |
+| Hold Option+Shift and hover a cell | `capture mission-birds-eye-hover` | The same cell shows the Bird's Eye 7×7 footprint; releasing either modifier returns to the expected smaller or hidden state. |
 | Close and reopen | `capture mission-reopened` | Projection returns without a stale duplicate canvas. |
 
 Compare the reported cell pixel sizes with the visible result. Values must
@@ -59,9 +60,12 @@ change proportionally with zoom and resizing.
 Capture `layers-grid-only`, `layers-walkability-only`, and `layers-all` from
 the same position. Grid and walkability must remain independently switchable,
 use the shared style coherently, and preserve native map detail. Repeat a
-combined capture at low, medium, and full opacity and with the Contrast, Soft,
-and Monochrome presets. Copy a preset into Custom and confirm that each semantic color changes
-the same role on the Compass and Mission Map.
+combined capture at low, medium, and full opacity for each layer and with the
+Cartographer, Synthwave, and Monochrome presets. Make a custom copy and confirm
+that colors, line widths, line patterns, and all five unseen-cell markers change
+the same role on the Compass and Mission Map. Copy that preset, delete the local
+copy, import it again, and confirm the imported preset remains selected after
+reopening Settings.
 
 Then capture a district transition, explorable entry, mission restart,
 different map, return to character selection, and graphics-context reset when
