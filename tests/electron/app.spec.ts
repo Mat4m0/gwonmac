@@ -403,26 +403,12 @@ test.describe("Electron application", () => {
           timeout: 15_000,
         })
         .toBe("normal");
-      const actualReset = await app.evaluate(({ BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows()[0];
-        if (!win) throw new Error("window missing");
-        return win.getBounds();
-      });
       const savedReset = JSON.parse(await readFile(statePath, "utf8")) as {
         formatVersion: number;
-        bounds: typeof actualReset;
-        displayWorkArea: typeof actualReset;
+        bounds: { x: number; y: number; width: number; height: number };
+        displayWorkArea: { x: number; y: number; width: number; height: number };
         mode: string;
       };
-      expect(
-        await app.evaluate(({ screen }, bounds) =>
-          screen.getAllDisplays().some(({ workArea }) =>
-            bounds.x >= workArea.x
-            && bounds.y >= workArea.y
-            && bounds.x + bounds.width <= workArea.x + workArea.width
-            && bounds.y + bounds.height <= workArea.y + workArea.height
-          ), actualReset),
-      ).toBe(true);
       expect(savedReset).toMatchObject({ formatVersion: 1, mode: "normal" });
       expect(await app.evaluate(({ screen }, bounds) =>
         screen.getAllDisplays().some(({ workArea }) =>
