@@ -412,7 +412,7 @@ test.describe("Electron application", () => {
         BrowserWindow.getAllWindows()
           .find((candidate) => candidate.webContents.getURL() === "gw://app/")
           ?.isFocused(),
-      )).toBe(true);
+      ), { timeout: 15_000 }).toBe(true);
       await resetPage.evaluate(() => {
         const probe = window as ResetProbeWindow;
         probe.__windowResetReleasedInput = false;

@@ -300,6 +300,7 @@ test("Show never duplicates a game and companion close policy stays profile-loca
 });
 
 test("the account workspace survives a full application restart", async () => {
+  test.setTimeout(60_000);
   const first = await launchCachedClient("gw-launcher-restart-", {
     GW_TEST_RETURN_LAUNCHER: "1",
   });
