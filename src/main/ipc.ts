@@ -160,6 +160,7 @@ export interface IpcContext {
     win: BrowserWindow,
     features: readonly EnhancementRuntimeFeature[],
   ) => void;
+  gameReadyToPresent: (win: BrowserWindow) => void;
   acquireSteamToken: (
     parent: BrowserWindow,
     record: (event: SteamAcquireEvent) => void,
@@ -697,6 +698,10 @@ export function registerIpcHandlers(ctx: IpcContext): {
     clientHealthy: channel(asClientHealthToken, (_win, token) =>
       ctx.confirmClientHealthy(token),
     ),
+
+    gameReadyToPresent: channel(nothing, (win) => {
+      ctx.gameReadyToPresent(win);
+    }),
 
     clientSession: channel(nothing, (win) => ctx.getClientSession(win)),
 

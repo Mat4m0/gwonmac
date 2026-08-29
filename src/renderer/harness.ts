@@ -710,6 +710,7 @@ Module = {
         performance.mark('gw.frame.first-submit');
         milestone('frame.firstSubmit');
         clientHealthConfirmation?.firstFramePresented();
+        void window.gwNative.client.readyToPresent();
         log('first frame presented');
         // The client is now running and has installed its resize handling.
         // Give it one settled-layout signal so the initial backing buffer

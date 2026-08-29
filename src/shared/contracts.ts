@@ -971,6 +971,7 @@ export const CORE_IPC = {
   templatesExport: "gw:templates:export",
   clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
+  gameReadyToPresent: "gw:game:readyToPresent",
   clientSession: "gw:client:session",
   clientFeatureFailure: "gw:client:featureFailure",
   // Main→renderer, and the renderer's acknowledgement. Main waits on the
@@ -1236,6 +1237,7 @@ export interface CoreGwNativeApiBase {
     healthy(token: ClientHealthToken): Promise<void>;
     session(): Promise<ClientSession>;
     featureFailure(features: readonly EnhancementRuntimeFeature[]): Promise<void>;
+    readyToPresent(): Promise<void>;
   };
   appUpdates: {
     getState(): Promise<AppUpdateState>;

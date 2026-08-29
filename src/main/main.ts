@@ -92,6 +92,7 @@ import {
   requestGameQuit,
   type WindowHost,
   updateLongRunningTaskFeedback,
+  gameReadyToPresent,
 } from "./window.js";
 import {
   releaseWindowShortcutKey,
@@ -823,6 +824,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         features,
       );
     },
+    gameReadyToPresent,
     acquireSteamToken: (parent, record) =>
       acquireSteamToken(STEAM_OAUTH, { parent, record }),
     getAccountsState: () => accounts.state(),

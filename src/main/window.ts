@@ -103,6 +103,32 @@ const preparedWindowStates = new Map<string, WindowState | null>();
 const windowStateOwners = new Map<BrowserWindow, WindowStateOwner>();
 const ownedWindowTitles = new WeakMap<BrowserWindow, string>();
 const profileCloses = new WeakMap<BrowserWindow, Promise<void>>();
+const GAME_FIRST_FRAME_TIMEOUT_MS = 90_000;
+
+interface GamePresentationGate {
+  browserReady: boolean;
+  frameReady: boolean;
+  settled: boolean;
+  readonly promise: Promise<void>;
+  readonly present: () => void;
+  readonly fail: (error: Error) => void;
+}
+
+const gamePresentationGates = new WeakMap<BrowserWindow, GamePresentationGate>();
+
+export function gameReadyToPresent(win: BrowserWindow): void {
+  const gate = gamePresentationGates.get(win);
+  if (!gate || gate.settled) return;
+  gate.frameReady = true;
+  gate.present();
+}
+
+export function waitForGamePresentation(win: BrowserWindow): Promise<void> {
+  const gate = gamePresentationGates.get(win);
+  if (!gate) return Promise.reject(new Error("game presentation is not registered"));
+  return gate.promise;
+}
+
 let downloadPowerBlockerId: number | null = null;
 
 export function updateLongRunningTaskFeedback(
@@ -402,6 +428,8 @@ export function createMainWindow(
     readonly title?: string;
     readonly windowStatePath?: string;
     readonly showInactive?: boolean;
+    /** Test-only compatibility seam for a fixture with no playable client. */
+    readonly awaitFirstFrame?: boolean;
     readonly onRendererRecoveryStart?: () => void;
     readonly onRendererRecovered?: () => void;
     readonly onRendererFailure?: () => void;
@@ -474,12 +502,48 @@ export function createMainWindow(
   const rendererId = win.webContents.id;
   const diagnosticOwnerId = options.diagnosticOwnerId;
 
+  let resolvePresentation!: () => void;
+  let rejectPresentation!: (error: Error) => void;
+  const presentationPromise = new Promise<void>((resolve, reject) => {
+    resolvePresentation = resolve;
+    rejectPresentation = reject;
+  });
+  const presentationTimeout = setTimeout(() => {
+    const gate = gamePresentationGates.get(win);
+    if (!gate || gate.settled) return;
+    gate.fail(new Error("game did not submit its first frame"));
+    options.onRendererFailure?.();
+    if (!win.isDestroyed()) win.destroy();
+  }, GAME_FIRST_FRAME_TIMEOUT_MS);
+  const gate: GamePresentationGate = {
+    browserReady: false,
+    frameReady: false,
+    settled: false,
+    promise: presentationPromise,
+    present: () => {
+      if (gate.settled || !gate.browserReady || !gate.frameReady) return;
+      gate.settled = true;
+      clearTimeout(presentationTimeout);
+      if (initialState?.mode === "maximized") win.maximize();
+      if (!BACKGROUND_LAUNCH) {
+        if (options.showInactive) win.showInactive();
+        else win.show();
+      }
+      if (initialState?.mode === "fullscreen") win.setFullScreen(true);
+      resolvePresentation();
+    },
+    fail: (error) => {
+      if (gate.settled) return;
+      gate.settled = true;
+      clearTimeout(presentationTimeout);
+      rejectPresentation(error);
+    },
+  };
+  gamePresentationGates.set(win, gate);
+  if (options.awaitFirstFrame === false) gate.frameReady = true;
   win.once("ready-to-show", () => {
-    if (initialState?.mode === "maximized") win.maximize();
-    if (BACKGROUND_LAUNCH) return;
-    if (options.showInactive) win.showInactive();
-    else win.show();
-    if (initialState?.mode === "fullscreen") win.setFullScreen(true);
+    gate.browserReady = true;
+    gate.present();
   });
 
   const rememberNormalBounds = (): void => {
@@ -634,6 +698,13 @@ export function createMainWindow(
     }, diagnosticOwnerId);
     host.sockets.closeAll(rendererId);
     if (isQuitting()) return;
+    const presentation = gamePresentationGates.get(win);
+    if (presentation && !presentation.settled) {
+      presentation.fail(new Error("game renderer stopped before its first frame"));
+      options.onRendererFailure?.();
+      if (!win.isDestroyed()) win.destroy();
+      return;
+    }
     if (
       !rendererRecoveryUsed.has(statePath) &&
       details.reason !== "clean-exit" &&
@@ -684,6 +755,11 @@ export function createMainWindow(
   });
 
   win.on("closed", () => {
+    const presentation = gamePresentationGates.get(win);
+    if (presentation && !presentation.settled) {
+      presentation.fail(new Error("game window closed before its first frame"));
+    }
+    gamePresentationGates.delete(win);
     windowRegistry.unregister(win);
     windowStateOwners.delete(win);
     if (!windowRegistry.profileWindow(context.profileId)) {

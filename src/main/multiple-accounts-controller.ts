@@ -58,6 +58,7 @@ import {
   prepareWindowState,
   resetRendererRecovery,
   setOwnedWindowTitle,
+  waitForGamePresentation,
   type WindowHost,
 } from "./window.js";
 import { windowRegistry } from "./window-registry.js";
@@ -561,6 +562,7 @@ export class MultipleAccountsController {
         title: `Guild Wars Reforged — ${this.profileName(profileId)}`,
         windowStatePath: storage.windowState,
         showInactive: true,
+        awaitFirstFrame: !this.options.allowUnreadyLaunch,
         onRendererRecoveryStart: () => {
           hubWasVisibleBeforeRecovery = windowRegistry.launcherWindow()?.isVisible() ?? false;
         },
@@ -579,7 +581,10 @@ export class MultipleAccountsController {
           }
         },
       });
-      await this.waitForWindow(win);
+      await Promise.all([
+        this.waitForWindow(win),
+        waitForGamePresentation(win),
+      ]);
       this.profileRuntime.set(profileId, "running");
       this.publish();
       return { win, opened: true };

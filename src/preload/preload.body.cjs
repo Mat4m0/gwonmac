@@ -259,6 +259,7 @@ const api = {
     session: () => ipcRenderer.invoke(IPC.clientSession),
     featureFailure: (features) =>
       ipcRenderer.invoke(IPC.clientFeatureFailure, features),
+    readyToPresent: () => ipcRenderer.invoke(IPC.gameReadyToPresent),
   },
   appUpdates: {
     getState: () => ipcRenderer.invoke(IPC.appUpdatesGetState),
