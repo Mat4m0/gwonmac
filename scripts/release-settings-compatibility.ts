@@ -61,3 +61,21 @@ export function validateCandidateSettings(
   }
   return settings;
 }
+
+/** Compare a candidate through the durable settings surface the rollback Stable owns. */
+export function projectStableOwnedSettings(
+  candidate: unknown,
+  stable: unknown,
+): Record<string, unknown> {
+  const candidateSettings = settingsRecord(candidate);
+  const stableSettings = settingsRecord(stable);
+  const projected: Record<string, unknown> = {};
+  for (const key of Object.keys(stableSettings)) {
+    assert.ok(
+      Object.hasOwn(candidateSettings, key),
+      `candidate settings omit Stable-owned key ${key}`,
+    );
+    projected[key] = candidateSettings[key];
+  }
+  return projected;
+}
