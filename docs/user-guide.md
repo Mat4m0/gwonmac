@@ -121,6 +121,9 @@ every account. The launcher exposes:
 - **Skill Cooldowns** — show numeric recharge timers with a preset or custom color;
 - **Effect Timers** — show exact remaining time on your own native Effects icons in PvE.
 
+Quick Travel keeps a reviewed current outpost visible and disabled in its small
+catalogue, even when a character was ferried there without unlocking map travel.
+
 Open **Settings → Tools** to configure them. Features with shortcuts have
 an editable shortcut value. Select **Change** to capture a shortcut. Open
 the three-dot shortcut menu for **Clear** and **Restore default**.
