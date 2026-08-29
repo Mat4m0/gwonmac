@@ -16,8 +16,11 @@ import * as enhancementContracts from "../../src/shared/enhancement-contracts.ts
 import type { GwNativeApi } from "../../src/shared/contracts.ts";
 import {
   PRELOAD_CONSTANTS,
+  launcherPreloadSource,
   preloadSource,
 } from "../../scripts/generate-preload.js";
+import type { LauncherNativeApi } from "../../src/shared/launcher-contracts.ts";
+import { LAUNCHER_IPC } from "../../src/shared/launcher-contracts.ts";
 
 const allContracts = { ...contracts, ...enhancementContracts };
 
@@ -217,4 +220,39 @@ test("a contracts export the body needs but does not have fails the build", () =
     "DIAGNOSTIC_PROFILES",
     "WASM_BRIDGE_MARKERS",
   ]);
+});
+
+test("the launcher preload exposes only its frozen launcher bridge", async () => {
+  const invoked: string[] = [];
+  let exposedName = "";
+  let launcher: LauncherNativeApi | undefined;
+  vm.runInNewContext(launcherPreloadSource(root), {
+    require(name: string) {
+      assert.equal(name, "electron");
+      return {
+        contextBridge: {
+          exposeInMainWorld(name: string, value: LauncherNativeApi) {
+            exposedName = name;
+            launcher = value;
+          },
+        },
+        ipcRenderer: {
+          invoke(channel: string) {
+            invoked.push(channel);
+            return Promise.resolve();
+          },
+          on() {},
+          removeListener() {},
+        },
+      };
+    },
+  });
+  assert.equal(exposedName, "launcherNative");
+  assert.ok(launcher);
+  assert.deepEqual(Object.keys(launcher).sort(), ["experience", "profiles", "state", "updates"]);
+  assert.equal(Object.isFrozen(launcher), true);
+  assert.equal(Object.values(launcher).every(Object.isFrozen), true);
+  await launcher.state.get();
+  await launcher.profiles.play([]);
+  assert.deepEqual(invoked, [LAUNCHER_IPC.stateGet, LAUNCHER_IPC.profilesPlay]);
 });

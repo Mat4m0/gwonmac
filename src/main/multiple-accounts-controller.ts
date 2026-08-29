@@ -210,23 +210,44 @@ export class MultipleAccountsController {
     return this.launchLock.run(() => this.openBatch(profileIds));
   }
 
-  private async openBatch(profileIds: readonly ProfileId[]): Promise<void> {
+  validateOpenable(profileIds: readonly ProfileId[]): void {
+    if (profileIds.length === 0) throw new Error("Choose at least one account");
+    const seen = new Set<ProfileId>();
     for (const profileId of profileIds) {
+      if (seen.has(profileId)) throw new Error("An account can be selected only once");
+      seen.add(profileId);
       resolveProfileStorage(this.workspace, profileId, this.options.paths);
       this.profileName(profileId);
     }
+  }
+
+  queue(profileIds: readonly ProfileId[]): void {
+    this.profileRuntime.queue(
+      profileIds,
+      (profileId) => windowRegistry.profileWindow(profileId) !== null,
+    );
+    this.publish();
+  }
+
+  releaseQueued(profileIds: readonly ProfileId[]): void {
+    this.profileRuntime.releaseQueued(profileIds);
+    this.publish();
+  }
+
+  show(profileId: ProfileId): boolean {
+    this.validateOpenable([profileId]);
+    const win = windowRegistry.profileWindow(profileId);
+    if (!win) return false;
+    this.options.windows.revealGame(win, { activateApp: true });
+    return true;
+  }
+
+  private async openBatch(profileIds: readonly ProfileId[]): Promise<void> {
+    this.validateOpenable(profileIds);
     if (
       !this.options.clientRuntime.active
       && !this.options.allowUnreadyLaunch
     ) {
-      for (const profileId of profileIds) {
-        this.profileRuntime.set(
-          profileId,
-          "failed",
-          launchIssueForStage("validating"),
-        );
-      }
-      this.publish();
       throw new Error("Guild Wars must be repaired before opening an account");
     }
     this.profileRuntime.queue(

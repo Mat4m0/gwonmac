@@ -131,6 +131,15 @@ import { WindowCoordinator } from "./window-coordinator.js";
 import { GameReloader } from "./game-reload.js";
 import { updateToolsMenuItems } from "./window-menu.js";
 import { resolveAdoptedProfileStorage } from "./core/profile-storage.js";
+import {
+  LauncherStateStore,
+  classifyLauncherInstallation,
+  loadOrCreateLauncherState,
+} from "./core/launcher-state.js";
+import { LauncherOrchestrator } from "./launcher-orchestrator.js";
+import { registerLauncherIpc } from "./launcher-ipc.js";
+import { LAUNCHER_IPC } from "../shared/launcher-contracts.js";
+import { sendIfLive } from "./ipc-channel-registry.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -268,7 +277,10 @@ function setProgress(next: DownloadProgress): void {
     for (const win of windows) updateLongRunningTaskFeedback(next, win);
   }
   sendToRenderer(IPC.progressEvent, next);
+  launcherOrchestrator?.clientChanged();
 }
+
+let launcherOrchestrator: LauncherOrchestrator | null = null;
 
 function sendToRenderer(channel: string, value: unknown): void {
   for (const win of windowRegistry.windows()) {
@@ -488,6 +500,16 @@ if (primaryInstance) void app.whenReady().then(async () => {
   app.once("will-quit", () => stopCommandKeyUps());
   const paths = gamePaths();
   const legacySingleData = await hasReleasedSingleData(paths);
+  const workspaceExisted = await pathExists(paths.multiWorkspace);
+  const loadedLauncherState = await loadOrCreateLauncherState(
+    paths.launcherState,
+    classifyLauncherInstallation({ legacySingleData, existingWorkspace: workspaceExisted }),
+  );
+  const launcherState = new LauncherStateStore(
+    paths.launcherState,
+    loadedLauncherState.document,
+    loadedLauncherState.recoveredFromCorruption,
+  );
   let accountWorkspace;
   for (;;) {
     try {
@@ -663,7 +685,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
     protocol: protocolDeps,
     windowHost: host,
     windows: windowCoordinator,
-    publishState: (state) => sendToRenderer(IPC.accountsState, state),
+    publishState: (state) => {
+      sendToRenderer(IPC.accountsState, state);
+      launcherOrchestrator?.publish();
+    },
     allowUnreadyLaunch:
       (!app.isPackaged || distributionChannel === null)
       && process.env.GW_TEST_ALLOW_UNREADY_LAUNCH === "1",
@@ -680,6 +705,40 @@ if (primaryInstance) void app.whenReady().then(async () => {
     : null;
   applyToolsSettings = toolsRuntime?.applySettings ?? null;
   await toolsRuntime?.applySettings(settings);
+
+  launcherOrchestrator = new LauncherOrchestrator({
+    accounts,
+    state: launcherState,
+    hasActiveClient: () => clientRuntime.active !== null,
+    getProgress: () => clientRuntime.progress,
+    getAppUpdate: () => appUpdaterController!.getState(),
+    toolsConfigured: () => enhancementSelectionFor(settings).tools,
+    toolsLoaded: () => enhancementSelection.tools,
+    developmentFixtures: !app.isPackaged || process.env.GW_LAUNCHER_FIXTURES === "1",
+    publish: (snapshot) => {
+      const launcher = windowRegistry.launcherWindow();
+      if (launcher) sendIfLive(launcher, LAUNCHER_IPC.stateEvent, snapshot);
+    },
+  });
+
+  registerLauncherIpc({
+    windows: windowRegistry,
+    snapshot: () => launcherOrchestrator!.snapshot(),
+    create: async (name) => {
+      await accounts.create({ name });
+    },
+    setSelection: (ids) => launcherOrchestrator!.setSelection(ids),
+    play: (ids) => launcherOrchestrator!.play(ids),
+    show: (id) => launcherOrchestrator!.show(id),
+    cancelQueued: (ids) => launcherOrchestrator!.cancel(ids),
+    dismissMigrationNotice: () => launcherOrchestrator!.dismissMigrationNotice(),
+    completeIntroduction: () => launcherOrchestrator!.completeIntroduction(),
+    updatePreferences: (patch) => launcherOrchestrator!.updatePreferences(patch),
+    checkUpdates: () => checkForAppUpdates(),
+    restartAndInstall: async (_win) => {
+      await appUpdaterController?.quitAndInstall();
+    },
+  });
 
   const ipcCleanup = registerIpcHandlers({
     sockets,

@@ -30,6 +30,7 @@ describe("resolved profile paths", () => {
       tradeSaved: `${root}/trade-saved.json`,
       buildLibrary: `${root}/build-library.json`,
       windowState: `${root}/window-state.json`,
+      launcherState: `${root}/launcher-state.json`,
       launcherMode: `${root}/launcher-mode.json`,
       multiRoot: `${root}/multi`,
       multiWorkspace: `${root}/multi/workspace.json`,

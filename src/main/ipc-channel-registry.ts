@@ -63,6 +63,21 @@ export function registerChannelDefinitions(
   }
 }
 
+export function registerNamedChannelDefinitions<Key extends string>(
+  windows: WindowRegistry,
+  channels: Readonly<Record<Key, string>>,
+  handlers: Readonly<Partial<Record<Key, AnyChannelDef>>>,
+): void {
+  for (const [key, definition] of Object.entries(handlers) as [Key, AnyChannelDef][]) {
+    const def = definition as ChannelDef<unknown, unknown>;
+    ipcMain.handle(channels[key], async (event, ...args: unknown[]) => {
+      const win = assertSender(windows, event, def.role);
+      const input = def.parse(args);
+      return def.run(win, input);
+    });
+  }
+}
+
 export function sendIfLive(
   win: BrowserWindow,
   channelName: string,

@@ -32,6 +32,8 @@ declare global {
     typeof import("../src/shared/contracts.js").DIAGNOSTIC_PROFILES;
   const WASM_BRIDGE_MARKERS:
     typeof import("../src/shared/contracts.js").WASM_BRIDGE_MARKERS;
+  const LAUNCHER_IPC:
+    typeof import("../src/shared/launcher-contracts.js").LAUNCHER_IPC;
 }
 
 export {};
