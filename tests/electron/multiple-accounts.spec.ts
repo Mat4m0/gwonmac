@@ -43,8 +43,9 @@ test("fresh startup creates Main and adds an account without restart", async () 
     GW_TEST_RETURN_LAUNCHER: "1",
   });
   try {
-    await expect(fixture.page).toHaveURL("gw://app/launcher.html");
-    await expect(fixture.page.getByRole("heading", { name: "Play Guild Wars" })).toBeVisible();
+    await expect(fixture.page).toHaveURL("gw://app/launcher/index.html");
+    await expect(fixture.page.getByRole("button", { name: "Play" })).toBeVisible();
+    await fixture.page.getByRole("button", { name: "Accounts" }).click();
     await expect(fixture.page.getByText("Main account", { exact: true })).toBeVisible();
     const processId = fixture.app.process().pid;
 
@@ -93,8 +94,8 @@ test("serializes concurrent profile launches behind one client canary", async ()
 
     await fixture.page.evaluate(([first, second]) => {
       window.__concurrentProfileOpen = Promise.all([
-        window.gwNative.accounts.open([first as ProfileId]),
-        window.gwNative.accounts.open([second as ProfileId]),
+        window.launcherNative.profiles.play([first as ProfileId]),
+        window.launcherNative.profiles.play([second as ProfileId]),
       ]).then(() => undefined);
     }, [FIRST, SECOND] as const);
 
@@ -134,7 +135,7 @@ test("publishes global Settings changes to every open profile", async () => {
   );
   try {
     await fixture.page.evaluate(
-      ([first, second]) => window.gwNative.accounts.open(
+      ([first, second]) => window.launcherNative.profiles.play(
         [first, second] as ProfileId[],
       ),
       [FIRST, SECOND] as const,
@@ -175,7 +176,7 @@ test("an existing Single account is adopted and remains isolated from a new prof
   );
   try {
     await expect(fixture.page.getByText("Ready to play")).toBeVisible({ timeout: 30_000 });
-    const state = await fixture.page.evaluate(() => window.gwNative.accounts.get());
+    const state = await fixture.page.evaluate(() => window.launcherNative.state.get());
     expect(state.profiles[0]?.id).toBe(LEGACY_PRIMARY_PROFILE_ID);
 
     await fixture.page.getByRole("button", { name: "Add account" }).click();
@@ -236,16 +237,16 @@ test("Show never duplicates a game and companion close policy stays profile-loca
 
     await fixture.app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()
-        .find((win) => win.webContents.getURL().endsWith("launcher.html"))
+        .find((win) => win.webContents.getURL().endsWith("launcher/index.html"))
         ?.close();
     });
     await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows().find((win) => win.webContents.getURL().endsWith("launcher.html"))?.isVisible(),
+      BrowserWindow.getAllWindows().find((win) => win.webContents.getURL().endsWith("launcher/index.html"))?.isVisible(),
     )).toBe(false);
     await fixture.app.evaluate(({ app }) => app.emit("activate"));
     await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) => {
       const launcher = BrowserWindow.getAllWindows()
-        .find((win) => win.webContents.getURL().endsWith("launcher.html"));
+        .find((win) => win.webContents.getURL().endsWith("launcher/index.html"));
       return launcher ? { focused: launcher.isFocused(), visible: launcher.isVisible() } : null;
     })).toEqual({ focused: true, visible: true });
 

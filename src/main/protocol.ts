@@ -54,6 +54,8 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
   ".webp": "image/webp",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
   ".ttf": "font/ttf",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
@@ -65,6 +67,11 @@ const CSP =
   "font-src 'self' gw:; connect-src 'self' gw:; worker-src 'self' gw: blob:; " +
   "object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'; " +
   "frame-ancestors 'none'";
+const LAUNCHER_CSP =
+  "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; " +
+  "base-uri 'none'; frame-src 'none'; form-action 'none'; frame-ancestors 'none'; " +
+  "worker-src 'none'";
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 /**
  * `Response` accepts a plain `ArrayBuffer`, while Node buffers may be views
@@ -172,9 +179,40 @@ export function installGwProtocolHandlerForSession(
   owner.protocol.handle("gw", (request) => handleGwRequest(request, deps));
 }
 
+/** The launcher partition can serve only its compiled offline Vue subtree. */
+export function installLauncherProtocolHandlerForSession(owner: Session): void {
+  owner.protocol.handle("gw", async (request) => {
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return new Response("method not allowed", { status: 405 });
+    }
+    const url = new URL(request.url);
+    if (url.hostname !== "app" || !url.pathname.startsWith("/launcher/")) {
+      return new Response("not found", { status: 404, headers: launcherHeaders() });
+    }
+    const root = path.join(rendererRoot(), "launcher");
+    const filePath = safeUnder(root, url.pathname.slice("/launcher".length));
+    if (!filePath) return new Response("not found", { status: 404, headers: launcherHeaders() });
+    return fileResponse(
+      filePath,
+      request,
+      MIME[path.extname(filePath).toLowerCase()] ?? "application/octet-stream",
+      undefined,
+      launcherHeaders,
+    );
+  });
+}
+
 function headers(extra: Record<string, string> = {}): Headers {
   return new Headers({
     "Content-Security-Policy": CSP,
+    "X-Content-Type-Options": "nosniff",
+    ...extra,
+  });
+}
+
+function launcherHeaders(extra: Record<string, string> = {}): Headers {
+  return new Headers({
+    "Content-Security-Policy": LAUNCHER_CSP,
     "X-Content-Type-Options": "nosniff",
     ...extra,
   });
@@ -202,8 +240,9 @@ async function fileResponse(
   request: Request,
   mime: string,
   cacheControl?: "no-store",
+  makeHeaders: (extra?: Record<string, string>) => Headers = headers,
 ): Promise<Response> {
-  const fileHeaders = (extra: Record<string, string> = {}) => headers({
+  const fileHeaders = (extra: Record<string, string> = {}) => makeHeaders({
     ...(cacheControl ? { "Cache-Control": cacheControl } : {}),
     ...extra,
   });

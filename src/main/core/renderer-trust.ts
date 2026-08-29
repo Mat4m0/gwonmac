@@ -9,7 +9,7 @@
  * from having to know what any individual setting means.
  */
 const TRUSTED_PATHS = new Set(["/", "/index.html"]);
-const LAUNCHER_PATH = "/launcher.html";
+const LAUNCHER_PATH = "/launcher/index.html";
 
 function trustedUrl(raw: string, paths: ReadonlySet<string>): boolean {
   try {

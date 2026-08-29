@@ -45,12 +45,13 @@ describe("canonical renderer URL", () => {
   });
 
   it("gives the launcher its own document boundary", () => {
-    assert.equal(isLauncherRendererUrl("gw://app/launcher.html"), true);
+    assert.equal(isLauncherRendererUrl("gw://app/launcher/index.html"), true);
     for (const url of [
       "gw://app/",
       "gw://app/index.html",
-      "gw://app/launcher.html?profile=one",
-      "gw://app/launcher.html#profile",
+      "gw://app/launcher/index.html?profile=one",
+      "gw://app/launcher/index.html#profile",
+      "gw://app/launcher/assets/app.js",
     ]) {
       assert.equal(isLauncherRendererUrl(url), false, url);
     }

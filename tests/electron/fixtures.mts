@@ -129,13 +129,13 @@ export async function launchOfflineAt(
       return { app, page, userData };
     }
     const profileId = await page.evaluate(async () =>
-      (await window.gwNative.accounts.get()).profiles.find(
+      (await window.launcherNative.state.get()).profiles.find(
         (profile) => !profile.archived,
       )?.id,
     );
     if (!profileId) throw new Error("launcher fixture has no active profile");
     const gamePage = app.waitForEvent("window", { timeout: 30_000 });
-    await page.evaluate((id) => window.gwNative.accounts.open([id]), profileId);
+    await page.evaluate((id) => window.launcherNative.profiles.play([id]), profileId);
     const game = await gamePage;
     await game.waitForLoadState("domcontentloaded");
     return { app, page: game, userData };

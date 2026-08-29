@@ -118,11 +118,14 @@ test("only public identifiers and explicit profile-id fixtures are UUID-shaped",
     "tests/unit/account-profile-creation.test.ts",
     "tests/unit/account-workspace-bootstrap.test.ts",
     "tests/unit/credentials.test.ts",
+    "tests/unit/launcher-orchestrator.test.ts",
+    "tests/unit/launcher-state.test.ts",
     "tests/unit/multiple-accounts.test.ts",
     "tests/unit/native-keychain.test.ts",
     "tests/unit/paths.test.ts",
     "tests/unit/profile-storage.test.ts",
     "tests/unit/window-registry.test.ts",
+    "tests/unit/window-coordinator.test.ts",
   ]);
   const hits = [];
   for (const file of tracked) {

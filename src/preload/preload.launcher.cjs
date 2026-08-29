@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 /** @template T @param {string} channel @param {(value: T) => void} callback */
 function listen(channel, callback) {
+  /** @param {Electron.IpcRendererEvent} _event @param {T} value */
   const handler = (_event, value) => callback(value);
   ipcRenderer.on(channel, handler);
   let active = true;

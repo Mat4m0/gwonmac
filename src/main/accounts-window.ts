@@ -8,14 +8,13 @@
 import { app, BrowserWindow, Menu, session } from "electron";
 import { BACKGROUND_LAUNCH } from "./background-launch.js";
 import { isQuitting } from "./lifecycle.js";
-import { preloadPath } from "./paths.js";
+import { launcherPreloadPath } from "./paths.js";
 import type { ProtocolDeps } from "./protocol.js";
-import { installGwProtocolHandlerForSession } from "./protocol.js";
-import { sendRendererCommand } from "./renderer-commands.js";
+import { installLauncherProtocolHandlerForSession } from "./protocol.js";
 import type { WindowCoordinator } from "./window-coordinator.js";
 import { windowRegistry } from "./window-registry.js";
 
-const LAUNCHER_URL = "gw://app/launcher.html";
+const LAUNCHER_URL = "gw://app/launcher/index.html";
 let protocolInstalled = false;
 
 function installLauncherMenu(): void {
@@ -25,17 +24,6 @@ function installLauncherMenu(): void {
           label: app.name,
           submenu: [
             { role: "about" as const },
-            { type: "separator" as const },
-            {
-              id: "launcher-settings-menu",
-              label: "Settings…",
-              accelerator: "CommandOrControl+,",
-              click: () => {
-                void sendRendererCommand(windowRegistry.launcherWindow(), {
-                  type: "accounts.settings.open",
-                });
-              },
-            },
             { type: "separator" as const },
             { role: "hide" as const },
             { role: "hideOthers" as const },
@@ -69,23 +57,23 @@ export function createLauncherWindow(
   const owner = session.fromPartition("persist:gw-launcher", { cache: false });
   if (BACKGROUND_LAUNCH) app.dock?.hide();
   if (!protocolInstalled) {
-    installGwProtocolHandlerForSession(owner, deps);
+    installLauncherProtocolHandlerForSession(owner);
     protocolInstalled = true;
   }
   owner.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   owner.setPermissionCheckHandler(() => false);
   const win = new BrowserWindow({
-    width: 960,
-    height: 700,
-    minWidth: 640,
-    minHeight: 560,
+    width: 1180,
+    height: 760,
+    minWidth: 900,
+    minHeight: 640,
     title: "Guild Wars Reforged",
     titleBarStyle: "hiddenInset",
     backgroundColor: "#0a0806",
     show: false,
     webPreferences: {
       session: owner,
-      preload: preloadPath(),
+      preload: launcherPreloadPath(),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,

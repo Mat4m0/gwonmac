@@ -1,0 +1,25 @@
+{
+  "name": "@gwonmac/launcher-ui",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.19" },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --mode embedded",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "lucide-vue-next": "^0.544.0",
+    "vue": "^3.5.40"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^20.8.4",
+    "typescript": "^5.9.2",
+    "vite": "^8.1.5",
+    "vitest": "^4.0.18",
+    "vue-tsc": "^3.3.8"
+  }
+}

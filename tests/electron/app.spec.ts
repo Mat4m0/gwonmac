@@ -76,13 +76,13 @@ async function openFirstProfile(app: ElectronApplication) {
   const launcher = await app.firstWindow({ timeout: 30_000 });
   await launcher.waitForLoadState("domcontentloaded");
   const profileId = await launcher.evaluate(async () =>
-    (await window.gwNative.accounts.get()).profiles.find(
+    (await window.launcherNative.state.get()).profiles.find(
       (profile) => !profile.archived,
     )?.id,
   );
   if (!profileId) throw new Error("launcher has no active profile");
   const game = app.waitForEvent("window", { timeout: 30_000 });
-  await launcher.evaluate((id) => window.gwNative.accounts.open([id]), profileId);
+  await launcher.evaluate((id) => window.launcherNative.profiles.play([id]), profileId);
   const page = await game;
   await page.waitForLoadState("domcontentloaded");
   return page;

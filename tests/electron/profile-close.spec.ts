@@ -33,11 +33,11 @@ test("keeps an account open until an incomplete save is resolved explicitly", as
   });
   try {
     const launcher = fixture.app.windows().find(
-      (page) => page.url() === "gw://app/launcher.html",
+      (page) => page.url() === "gw://app/launcher/index.html",
     );
     if (!launcher) throw new Error("launcher window not found");
     await launcher.evaluate(
-      ([first, second]) => window.gwNative.accounts.open(
+      ([first, second]) => window.launcherNative.profiles.play(
         [first, second] as ProfileId[],
       ),
       [FIRST, SECOND] as const,
