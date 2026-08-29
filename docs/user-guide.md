@@ -155,6 +155,12 @@ If game preparation fails, the launcher shows one global repair state rather
 than marking every account failed. Existing game windows remain separate. If a
 single profile fails to start, retry that profile from Accounts.
 
+If launcher presentation preferences cannot be read, the application keeps a
+diagnostic copy, restores safe defaults, and skips first-run setup rather than
+guessing that an existing installation is new. The launcher reports that its
+preferences were reset; profiles, saved login, game files, builds, and
+templates are not changed.
+
 Use **Open logs** before reporting a reproducible launcher or game-start issue.
 Do not include passwords, Steam tokens, or other credentials in a report.
 

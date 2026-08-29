@@ -33,8 +33,13 @@ Main resolves the immutable profile from the registered native sender.
 
 `launcher-state.json` contains presentation state only. It is created
 atomically before account bootstrap and is not another profile or settings
-store. Corrupt JSON is preserved before conservative defaults are written;
-ordinary read failures remain fatal and are never treated as corruption.
+store. Corrupt JSON is copied to a durable diagnostic backup while the source
+remains in place, then conservative defaults atomically replace it. A crash at
+any point therefore retries corruption recovery instead of looking like a
+fresh installation. Recovery skips forced setup and keeps **Launcher
+preferences were reset** pending across restarts until the player dismisses
+the recovery notices. Ordinary read failures remain fatal and are never
+treated as corruption.
 
 ## Existing installation adoption
 

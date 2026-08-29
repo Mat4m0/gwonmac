@@ -149,20 +149,9 @@ export async function waitForPlayable(
   tier: LiveTier,
   readiness: LiveReadiness,
 ): Promise<number> {
-  await page.waitForFunction(
-    async () => {
-      const progress = await window.gwNative.progress.current();
-      // A failed preparation is its own member of the progress union and
-      // carries a code, not a message. This read a `progress.error` field that
-      // the union has never had, so a client that failed to download looked
-      // exactly like one still working and the wait ran its full half hour
-      // before saying anything.
-      if (progress.phase === "error") throw new Error(progress.errorCode);
-      return progress.phase === "ready";
-    },
-    null,
-    { timeout: 30 * 60_000, polling: 500 },
-  );
+  // Main creates a game renderer only after the launcher owns a playable
+  // client. Readiness therefore begins at the game-owned first-frame boundary;
+  // update and preparation state intentionally never crosses this preload.
   await page.waitForFunction(
     () => {
       const stage = window.gwAutomation?.read().stage;

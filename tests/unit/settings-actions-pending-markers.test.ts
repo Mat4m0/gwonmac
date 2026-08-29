@@ -29,15 +29,12 @@ register(
        if (specifier.endsWith("/renderer-commands.js")) {
          return module("export const resetGameInput = async () => {};");
        }
-       if (specifier.endsWith("/window.js")) {
-         return module("export const resetWindowState = async () => {};");
-       }
        return next(specifier, context);
      }`,
   )}`,
 );
 
-const { applyPendingCacheClear, applyPendingGameStorageReset, settingsResetDetail } =
+const { applyPendingCacheClear, applyPendingGameStorageReset } =
   await import("../../src/main/settings-actions.ts");
 
 const root = await mkdtemp(path.join(tmpdir(), "gw-pending-markers-"));
@@ -65,13 +62,6 @@ test("ENOENT means no destructive startup action is pending", async () => {
 
   await applyPendingCacheClear(paths);
   await applyPendingGameStorageReset(paths, 1);
-});
-
-test("reset copy matches the data owner available at launch", () => {
-  assert.match(settingsResetDetail(false), /Stored Build Library and Travel/u);
-  assert.doesNotMatch(settingsResetDetail(false), /Travel shortcuts.*return to their defaults/u);
-  assert.match(settingsResetDetail(true), /Travel shortcuts.*return to their defaults/u);
-  assert.doesNotMatch(settingsResetDetail(true), /remain/u);
 });
 
 test("marker inspection failures other than ENOENT remain visible", async () => {

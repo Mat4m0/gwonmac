@@ -9,7 +9,10 @@ import {
   loadOrCreateLauncherState,
 } from "../../src/main/core/launcher-state.ts";
 import { parseProfileId } from "../../src/shared/multiple-accounts.ts";
-import { parseLauncherProfileAppearance } from "../../src/shared/launcher-contracts.ts";
+import {
+  parseLauncherProfileAppearance,
+  parseLauncherSettingsPatch,
+} from "../../src/shared/launcher-contracts.ts";
 
 const roots: string[] = [];
 
@@ -30,6 +33,12 @@ describe("launcher presentation state", () => {
     assert.throws(() => parseLauncherProfileAppearance({ icon: "map", color: "red" }));
     assert.throws(() => parseLauncherProfileAppearance({ icon: "map", color: "#496b58", extra: true }));
   });
+  it("keeps render quality on the launcher settings boundary", () => {
+    assert.deepEqual(parseLauncherSettingsPatch({ renderScale: 1.5 }), {
+      renderScale: 1.5,
+    });
+    assert.throws(() => parseLauncherSettingsPatch({ renderScale: 3 }));
+  });
   it("classifies every supported starting state before account bootstrap", () => {
     assert.equal(classifyLauncherInstallation({ legacySingleData: false, existingWorkspace: false }), "fresh");
     assert.equal(classifyLauncherInstallation({ legacySingleData: true, existingWorkspace: false }), "migrated-single");
@@ -46,23 +55,56 @@ describe("launcher presentation state", () => {
     assert.deepEqual(second.document, first.document);
   });
 
+  it("accepts candidate format-1 state written before durable reset notices", async () => {
+    const path = await fixture();
+    const created = await loadOrCreateLauncherState(path, "migrated-single");
+    const earlierFormatOne: Record<string, unknown> = { ...created.document };
+    delete earlierFormatOne.preferencesResetPending;
+    await writeFile(path, JSON.stringify(earlierFormatOne));
+
+    const loaded = await loadOrCreateLauncherState(path, "fresh");
+
+    assert.equal(loaded.document.installationKind, "migrated-single");
+    assert.equal(loaded.document.preferencesResetPending, false);
+    assert.equal(
+      (await readdir(join(path, ".."))).some((name) =>
+        name.startsWith("launcher-state.json.corrupt-")),
+      false,
+    );
+  });
+
   it("skips forced setup and preserves corrupt bytes when classification is uncertain", async () => {
     const path = await fixture();
-    await writeFile(path, "not json");
+    const corruptBytes = Buffer.from([0xff, 0x00, 0x7b, 0x0a]);
+    await writeFile(path, corruptBytes);
     const loaded = await loadOrCreateLauncherState(path, "fresh");
-    assert.equal(loaded.recoveredFromCorruption, true);
+    assert.equal(loaded.document.preferencesResetPending, true);
     assert.equal(loaded.document.installationKind, "migrated-single");
     assert.equal(loaded.document.setupVersion, 1);
     const names = await readdir(join(path, ".."));
     const backup = names.find((name) => name.startsWith("launcher-state.json.corrupt-"));
     assert.ok(backup);
-    assert.equal(await readFile(join(path, "..", backup), "utf8"), "not json");
+    assert.deepEqual(await readFile(join(path, "..", backup)), corruptBytes);
+
+    const restarted = await loadOrCreateLauncherState(path, "fresh");
+    assert.equal(restarted.document.installationKind, "migrated-single");
+    assert.equal(restarted.document.setupVersion, 1);
+    assert.equal(restarted.document.preferencesResetPending, true);
+
+    const store = new LauncherStateStore(
+      path,
+      restarted.document,
+    );
+    await store.dismissMigrationNotice();
+    const acknowledged = await loadOrCreateLauncherState(path, "fresh");
+    assert.equal(acknowledged.document.preferencesResetPending, false);
+    assert.equal(acknowledged.document.migrationNoticeDismissed, true);
   });
 
   it("normalizes remembered selection and Home order atomically", async () => {
     const path = await fixture();
     const loaded = await loadOrCreateLauncherState(path, "migrated-multi");
-    const store = new LauncherStateStore(path, loaded.document, false);
+    const store = new LauncherStateStore(path, loaded.document);
     const id = parseProfileId("ba46cb0e-55c2-4c05-9808-5c35ce83b0b0");
     await store.setSelection([id, id]);
     await store.updatePreferences({ content: { news: false, first: "news" } });
@@ -73,7 +115,7 @@ describe("launcher presentation state", () => {
   it("serializes concurrent presentation changes without losing either update", async () => {
     const path = await fixture();
     const loaded = await loadOrCreateLauncherState(path, "migrated-multi");
-    const store = new LauncherStateStore(path, loaded.document, false);
+    const store = new LauncherStateStore(path, loaded.document);
     const id = parseProfileId("ba46cb0e-55c2-4c05-9808-5c35ce83b0b0");
     await Promise.all([
       store.setSelection([id]),
@@ -86,7 +128,7 @@ describe("launcher presentation state", () => {
   it("persists setup, replayable introduction, and validated appearance", async () => {
     const path = await fixture();
     const loaded = await loadOrCreateLauncherState(path, "fresh");
-    const store = new LauncherStateStore(path, loaded.document, false);
+    const store = new LauncherStateStore(path, loaded.document);
     const id = parseProfileId("ba46cb0e-55c2-4c05-9808-5c35ce83b0b0");
     await store.completeSetup();
     await store.completeIntroduction();

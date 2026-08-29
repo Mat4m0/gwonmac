@@ -72,7 +72,7 @@ export class LauncherOrchestrator {
         introduction: document.introductionVersion > 0 ? "complete" : "pending",
         showMigrationNotice:
           document.installationKind !== "fresh" && !document.migrationNoticeDismissed,
-        preferencesReset: this.options.state.recoveredFromCorruption,
+        preferencesReset: document.preferencesResetPending,
       },
       readiness,
       appUpdate: this.options.getAppUpdate(),
@@ -85,6 +85,7 @@ export class LauncherOrchestrator {
       settings: {
         autoCheckUpdates: settings.autoCheckUpdates,
         updateTrack: settings.updateTrack,
+        renderScale: settings.renderScale,
         extendedMemoryEnabled: settings.extendedMemoryEnabled,
         showDiagnostics: settings.showDiagnostics,
         cartographyOverlayEnabled: settings.cartographyOverlayEnabled,
@@ -141,8 +142,11 @@ export class LauncherOrchestrator {
       return;
     }
     if (this.options.getProgress().phase === "error") {
+      // Repair is one global launcher state, not a profile launch failure.
+      // Keep the command idempotent so a stale renderer action cannot turn
+      // that already-presented state into an unhandled IPC rejection.
       this.publish();
-      throw new Error("Guild Wars game files need repair before opening an account");
+      return;
     }
     const pending = new Set(this.pending);
     for (const id of closed) {

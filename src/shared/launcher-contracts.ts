@@ -10,6 +10,7 @@ import type {
   DownloadActivity,
   FullDownloadState,
 } from "./contracts.js";
+import { RENDER_SCALES } from "./contracts.js";
 import {
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
@@ -108,6 +109,7 @@ export type GlobalToolSettings = Readonly<Record<GlobalTool, GlobalToolSetting>>
 export interface LauncherSettings {
   readonly autoCheckUpdates: boolean;
   readonly updateTrack: AppSettings["updateTrack"];
+  readonly renderScale: AppSettings["renderScale"];
   readonly extendedMemoryEnabled: boolean;
   readonly showDiagnostics: boolean;
   readonly cartographyOverlayEnabled: boolean;
@@ -251,7 +253,7 @@ export function parseLauncherExternalLink(value: unknown): LauncherExternalLink 
 
 export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatch {
   const source = exactObject(value, [
-    "autoCheckUpdates", "updateTrack", "extendedMemoryEnabled", "showDiagnostics",
+    "autoCheckUpdates", "updateTrack", "renderScale", "extendedMemoryEnabled", "showDiagnostics",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyRevealMode",
     "cartographyPresetLibrary", "cartographyWalkabilityOpacity", "cartographyGridOpacity",
     "cartographyControlIdleOpacity",
@@ -259,6 +261,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
   const result: {
     autoCheckUpdates?: boolean;
     updateTrack?: AppSettings["updateTrack"];
+    renderScale?: AppSettings["renderScale"];
     extendedMemoryEnabled?: boolean;
     showDiagnostics?: boolean;
     cartographyOverlayEnabled?: boolean;
@@ -280,6 +283,13 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
   if (source.updateTrack !== undefined) {
     if (source.updateTrack !== "stable" && source.updateTrack !== "beta") throw new Error("update track is invalid");
     result.updateTrack = source.updateTrack;
+  }
+  if (source.renderScale !== undefined) {
+    if (
+      typeof source.renderScale !== "number"
+      || !RENDER_SCALES.includes(source.renderScale as AppSettings["renderScale"])
+    ) throw new Error("render scale is invalid");
+    result.renderScale = source.renderScale as AppSettings["renderScale"];
   }
   if (source.cartographyRevealMode !== undefined) {
     if (!["off", "normal", "birds-eye"].includes(source.cartographyRevealMode as string)) throw new Error("cartography reveal mode is invalid");

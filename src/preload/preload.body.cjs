@@ -155,10 +155,6 @@ const api = {
   inputTrace: {
     onEntry: (callback) => listen(IPC.inputTraceEvent, callback),
   },
-  progress: {
-    current: () => ipcRenderer.invoke(IPC.progressCurrent),
-    onChange: (callback) => listen(IPC.progressEvent, callback),
-  },
   snapshot: {
     metadata: () => ipcRenderer.invoke(IPC.snapshotMetadata),
   },
@@ -184,18 +180,7 @@ const api = {
   settings: {
     get: () => ipcRenderer.invoke(IPC.settingsGet),
     set: (value) => ipcRenderer.invoke(IPC.settingsSet, value),
-    reset: () => ipcRenderer.invoke(IPC.settingsReset),
-    restartForTools: () => ipcRenderer.invoke(IPC.settingsRestartForTools),
     onChange: (callback) => listen(IPC.settingsEvent, callback),
-  },
-  shortcuts: {
-    capture: () => ipcRenderer.invoke(IPC.shortcutCapture),
-    cancelCapture: () => ipcRenderer.invoke(IPC.shortcutCaptureCancel),
-  },
-  skillKeys: {
-    capture: () => ipcRenderer.invoke(IPC.skillKeyCapture),
-    submitPointer: (binding) => ipcRenderer.invoke(IPC.skillKeyCapturePointer, binding),
-    cancelCapture: () => ipcRenderer.invoke(IPC.skillKeyCaptureCancel),
   },
   credentials: {
     load: () => ipcRenderer.invoke(IPC.credentialsLoad),
@@ -206,15 +191,6 @@ const api = {
     getToken: (silent) => ipcRenderer.invoke(IPC.steamToken, silent),
     store: (token, expiry) => ipcRenderer.invoke(IPC.steamStore, token, expiry),
     clear: () => ipcRenderer.invoke(IPC.steamClear),
-  },
-  cache: {
-    info: () => ipcRenderer.invoke(IPC.cacheInfo),
-    clearAndRestart: () => ipcRenderer.invoke(IPC.cacheClear),
-    downloadAll: () => ipcRenderer.invoke(IPC.cacheDownloadAll),
-    stopDownload: () => ipcRenderer.invoke(IPC.cacheStopDownload),
-  },
-  gameStorage: {
-    resetAndRestart: () => ipcRenderer.invoke(IPC.gameStorageReset),
   },
   diagnostics: {
     clockSync: (rendererNowUs) =>
@@ -254,19 +230,11 @@ const api = {
     export: (entries) => ipcRenderer.invoke(IPC.templatesExport, entries),
   },
   client: {
-    retry: () => ipcRenderer.invoke(IPC.clientRetry),
     healthy: (token) => ipcRenderer.invoke(IPC.clientHealthy, token),
     session: () => ipcRenderer.invoke(IPC.clientSession),
     featureFailure: (features) =>
       ipcRenderer.invoke(IPC.clientFeatureFailure, features),
     readyToPresent: () => ipcRenderer.invoke(IPC.gameReadyToPresent),
-  },
-  appUpdates: {
-    getState: () => ipcRenderer.invoke(IPC.appUpdatesGetState),
-    check: () => ipcRenderer.invoke(IPC.appUpdatesCheck),
-    restartAndInstall: () =>
-      ipcRenderer.invoke(IPC.appUpdatesRestartAndInstall),
-    onState: (callback) => listen(IPC.appUpdatesState, callback),
   },
   profileTemplates: {
     loadTemplates: () => ipcRenderer.invoke(IPC.profileTemplatesLoad),

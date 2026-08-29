@@ -15,7 +15,7 @@ import { LAUNCHER_PROFILE_ICONS } from "../../shared/launcher-contracts.js";
 import type { ProfileId } from "../../shared/multiple-accounts.js";
 import { parseProfileId } from "../../shared/multiple-accounts.js";
 import { writeAtomicJson } from "./atomic-file.js";
-import { quarantineCorruptDocument } from "./corrupt-document.js";
+import { preserveCorruptDocument } from "./corrupt-document.js";
 import { Mutex } from "./mutex.js";
 
 const FORMAT_VERSION = 1;
@@ -36,6 +36,8 @@ export interface LauncherStateDocument {
   readonly setupVersion: number;
   readonly introductionVersion: number;
   readonly migrationNoticeDismissed: boolean;
+  /** Remains durable until the player dismisses the recovery notice flow. */
+  readonly preferencesResetPending: boolean;
   readonly selectedProfileIds: readonly ProfileId[];
   readonly preferences: LauncherPreferences;
   readonly appearances: Readonly<Record<string, LauncherProfileAppearance>>;
@@ -43,7 +45,6 @@ export interface LauncherStateDocument {
 
 export interface LoadedLauncherState {
   readonly document: LauncherStateDocument;
-  readonly recoveredFromCorruption: boolean;
 }
 
 export const DEFAULT_LAUNCHER_PREFERENCES: LauncherPreferences = Object.freeze({
@@ -66,7 +67,10 @@ export function classifyLauncherInstallation(input: Readonly<{
   return "fresh";
 }
 
-function defaults(kind: LauncherInstallationKind): LauncherStateDocument {
+function defaults(
+  kind: LauncherInstallationKind,
+  preferencesResetPending = false,
+): LauncherStateDocument {
   const fresh = kind === "fresh";
   return {
     formatVersion: FORMAT_VERSION,
@@ -74,6 +78,7 @@ function defaults(kind: LauncherInstallationKind): LauncherStateDocument {
     setupVersion: fresh ? 0 : SETUP_VERSION,
     introductionVersion: fresh ? 0 : INTRODUCTION_VERSION,
     migrationNoticeDismissed: fresh,
+    preferencesResetPending,
     selectedProfileIds: [],
     preferences: DEFAULT_LAUNCHER_PREFERENCES,
     appearances: {},
@@ -135,6 +140,11 @@ export function parseLauncherState(value: unknown): LauncherStateDocument {
     setupVersion: version(source.setupVersion, "setup version"),
     introductionVersion: version(source.introductionVersion, "introduction version"),
     migrationNoticeDismissed: boolean(source.migrationNoticeDismissed, "migration notice"),
+    // Additive within the candidate-owned document. Older candidate writes
+    // predate durable recovery acknowledgement and therefore mean no notice.
+    preferencesResetPending: source.preferencesResetPending === undefined
+      ? false
+      : boolean(source.preferencesResetPending, "preferences reset notice"),
     selectedProfileIds: source.selectedProfileIds.map(parseProfileId),
     preferences: {
       content: {
@@ -153,44 +163,48 @@ export async function loadOrCreateLauncherState(
   path: string,
   kind: LauncherInstallationKind,
 ): Promise<LoadedLauncherState> {
-  let text: string;
+  let bytes: Buffer;
   try {
-    text = await readFile(path, "utf8");
+    bytes = await readFile(path);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       const document = defaults(kind);
       await writeAtomicJson(path, document, DOCUMENT_MODE);
-      return { document, recoveredFromCorruption: false };
+      return { document };
     }
     throw error;
   }
 
   try {
-    return { document: parseLauncherState(JSON.parse(text) as unknown), recoveredFromCorruption: false };
+    const document = parseLauncherState(JSON.parse(bytes.toString("utf8")) as unknown);
+    return { document };
   } catch {
-    await quarantineCorruptDocument(path);
+    // Copy first. Renaming the source before publishing defaults creates a
+    // crash window where the next launch sees an absent document and can
+    // incorrectly classify an existing installation as fresh.
+    await preserveCorruptDocument(path, bytes, DOCUMENT_MODE);
     // An invalid document makes the original install kind uncertain. Treat
     // it as migrated and skip forced setup so recovery cannot trap a player.
-    const document = defaults(kind === "fresh" ? "migrated-single" : kind);
+    const document = defaults(
+      kind === "fresh" ? "migrated-single" : kind,
+      true,
+    );
     await writeAtomicJson(path, document, DOCUMENT_MODE);
-    return { document, recoveredFromCorruption: true };
+    return { document };
   }
 }
 
 export class LauncherStateStore {
   readonly path: string;
-  readonly recoveredFromCorruption: boolean;
   private value: LauncherStateDocument;
   private readonly writes = new Mutex();
 
   constructor(
     path: string,
     value: LauncherStateDocument,
-    recoveredFromCorruption: boolean,
   ) {
     this.path = path;
     this.value = value;
-    this.recoveredFromCorruption = recoveredFromCorruption;
   }
 
   get(): LauncherStateDocument {
@@ -206,7 +220,11 @@ export class LauncherStateStore {
   }
 
   async dismissMigrationNotice(): Promise<void> {
-    await this.save((current) => ({ ...current, migrationNoticeDismissed: true }));
+    await this.save((current) => ({
+      ...current,
+      migrationNoticeDismissed: true,
+      preferencesResetPending: false,
+    }));
   }
 
   async completeSetup(): Promise<void> {

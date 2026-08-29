@@ -153,16 +153,6 @@ export class MultipleAccountsController {
     ).buildLibrary;
   }
 
-  gameStorageResetMarkerFor(win: BrowserWindow): string {
-    const context = windowRegistry.contextForWebContents(win.webContents.id);
-    if (context?.role !== "game") throw new Error("game window has no profile");
-    return resolveProfileStorage(
-      this.workspace,
-      context.profileId,
-      this.options.paths,
-    ).gameStorageClearRequest;
-  }
-
   state(): AccountsState {
     const legacy = this.workspace.legacyPrimaryProfileId;
     return {

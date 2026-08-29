@@ -67,11 +67,11 @@ const plainInit = (value: GwNativeApi["init"]): GwNativeApi["init"] => ({
 
 test("the exposed method invokes the channel the contracts name", async () => {
   const { api, invoked, listened } = run(preloadSource(allContracts, root));
-  await api.progress.current();
+  await api.credentials.load();
   await api.credentials.save({ username: "u", password: "p" });
   api.sockets.onEvent(() => {});
   assert.deepEqual(invoked, [
-    { channel: contracts.IPC.progressCurrent, args: [] },
+    { channel: contracts.IPC.credentialsLoad, args: [] },
     {
       channel: contracts.IPC.credentialsSave,
       args: [{ username: "u", password: "p" }],
@@ -86,12 +86,12 @@ test("the exposed method invokes the channel the contracts name", async () => {
 test("renaming a canonical channel moves the call, with no edit to the body", async () => {
   const renamed = {
     ...allContracts,
-    IPC: { ...contracts.IPC, progressCurrent: "gw:progress:renamedByThisTest" },
+    IPC: { ...contracts.IPC, credentialsLoad: "gw:credentials:renamedByThisTest" },
   };
   const { api, invoked } = run(preloadSource(renamed, root));
-  await api.progress.current();
+  await api.credentials.load();
   assert.deepEqual(invoked, [
-    { channel: "gw:progress:renamedByThisTest", args: [] },
+    { channel: "gw:credentials:renamedByThisTest", args: [] },
   ]);
 });
 

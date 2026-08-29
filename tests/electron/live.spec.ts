@@ -102,19 +102,35 @@ test.describe("live client", () => {
       executablePath: electronBin,
     });
     try {
-      const page = await application.firstWindow({ timeout: 30_000 });
-      await page.waitForLoadState("domcontentloaded");
+      const launcher = await application.firstWindow({ timeout: 30_000 });
+      await launcher.waitForLoadState("domcontentloaded");
       await expect
         .poll(
           () =>
-            page.evaluate(async () => {
-              const progress = await window.gwNative.progress.current();
-              if (progress.phase === "error") throw new Error(progress.errorCode);
-              return progress.phase;
-            }),
+            launcher.evaluate(async () =>
+              (await window.launcherNative.state.get()).readiness.state),
           { timeout: 5 * 60_000, intervals: [500, 1_000, 2_000] },
         )
-        .toBe("ready");
+        .toBe("playable");
+
+      const profileId = await launcher.evaluate(async () => {
+        let state = await window.launcherNative.state.get();
+        if (state.experience.setup === "pending") {
+          await window.launcherNative.experience.completeSetup({ enableTools: false });
+          state = await window.launcherNative.state.get();
+        }
+        if (state.experience.introduction === "pending") {
+          await window.launcherNative.experience.completeIntroduction();
+          state = await window.launcherNative.state.get();
+        }
+        const profile = state.profiles.find((candidate) => !candidate.archived);
+        if (!profile) throw new Error("live fixture has no account profile");
+        return profile.id;
+      });
+      const gameWindow = application.waitForEvent("window", { timeout: 30_000 });
+      await launcher.evaluate((id) => window.launcherNative.profiles.play([id]), profileId);
+      const page = await gameWindow;
+      await page.waitForLoadState("domcontentloaded");
 
       await expect
         .poll(
@@ -317,11 +333,8 @@ test.describe("live client", () => {
       });
 
       const applyScale = (renderScale: AppSettings["renderScale"]) =>
-        page.evaluate(async (scale) => {
-          const saved = await window.gwNative.settings.set({ renderScale: scale });
-          const apply = window.gwApplySettings;
-          if (!apply) throw new Error("the renderer published no gwApplySettings");
-          apply(saved);
+        launcher.evaluate(async (scale) => {
+          await window.launcherNative.settings.update({ renderScale: scale });
         }, renderScale);
       const dimensions = () =>
         page.evaluate(async () => {
@@ -438,7 +451,17 @@ test.describe("live client", () => {
           env,
           executablePath: electronBin,
         });
-        const reopenedPage = await application.firstWindow({ timeout: 30_000 });
+        const reopenedLauncher = await application.firstWindow({ timeout: 30_000 });
+        await reopenedLauncher.waitForLoadState("domcontentloaded");
+        await expect.poll(() => reopenedLauncher.evaluate(async () =>
+          (await window.launcherNative.state.get()).readiness.state), {
+          timeout: 5 * 60_000,
+          intervals: [500, 1_000],
+        }).toBe("playable");
+        const reopenedGame = application.waitForEvent("window", { timeout: 30_000 });
+        await reopenedLauncher.evaluate((id) =>
+          window.launcherNative.profiles.play([id]), profileId);
+        const reopenedPage = await reopenedGame;
         await reopenedPage.waitForLoadState("domcontentloaded");
         await expect
           .poll(

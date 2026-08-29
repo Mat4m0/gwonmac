@@ -70,7 +70,7 @@ async function fixture(options: { allowUnreadyLaunch?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), "gw-launcher-orchestrator-"));
   roots.push(root);
   const loaded = await loadOrCreateLauncherState(join(root, "launcher-state.json"), "migrated-multi");
-  const state = new LauncherStateStore(join(root, "launcher-state.json"), loaded.document, false);
+  const state = new LauncherStateStore(join(root, "launcher-state.json"), loaded.document);
   const accounts = new AccountsFixture();
   let active = false;
   let progress: DownloadProgress = {
@@ -177,15 +177,13 @@ describe("main-owned launcher orchestration", () => {
     assert.equal(value.orchestrator.snapshot().readiness.state, "repair-required");
   });
 
-  it("refuses new launches while the global client needs repair", async () => {
+  it("refuses new launches through the global repair state without rejecting the command", async () => {
     const value = await fixture();
     value.fail();
-    await assert.rejects(
-      value.orchestrator.play([first]),
-      /game files need repair/u,
-    );
+    await value.orchestrator.play([first]);
     assert.deepEqual(value.accounts.queued, []);
     assert.deepEqual(value.accounts.opened, []);
+    assert.equal(value.orchestrator.snapshot().readiness.state, "repair-required");
   });
 
   it("keeps the unpackaged renderer-test seam behind an explicit option", async () => {

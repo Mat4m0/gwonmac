@@ -206,9 +206,12 @@ test.describe("client generation coordination", () => {
       // The cached-only startup publishes its final refusal asynchronously.
       // Cross that boundary before issuing protocol requests so a renderer
       // transition cannot destroy the evaluation that is reading them.
-      await expect.poll(() => fixture.page.evaluate(async () =>
-        window.gwNative.progress.current(),
-      )).toMatchObject({ phase: "error", errorCode: "not_ready" });
+      const launcher = fixture.app.windows().find((page) =>
+        page.url().endsWith("launcher/index.html"));
+      expect(launcher).toBeDefined();
+      await expect.poll(() => launcher!.evaluate(async () =>
+        (await window.launcherNative.state.get()).readiness,
+      )).toMatchObject({ state: "repair-required", reason: "not_ready" });
       const responses = await fixture.page.evaluate(async () =>
         Promise.all(
           ["Gw.jspi.js", "Gw.jspi.wasm", "version.json"].map(async (name) => {

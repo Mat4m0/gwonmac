@@ -21,15 +21,11 @@ import {
   IPC,
   type AppSettings,
   type AccountTemplateLibrary,
-  type AppUpdateState,
-  type CacheInfo,
   type ClientHealthToken,
   type ClientSession,
-  type DownloadProgress,
   type DiagnosticProfile,
   type EnhancementRuntimeFeature,
   type ExternalLinkKind,
-  type FullDownloadOutcome,
   GAME_RELOAD_CAUSES,
   type GameReloadCause,
   type GraphicsDiagnostics,
@@ -38,7 +34,6 @@ import {
   type RevealKind,
   type RendererSettingsPatch,
   type SocketEvent,
-  type SettingsResetOutcome,
   type SnapshotMetadata,
   type SteamTokenResult,
   type StoredCredentials,
@@ -54,10 +49,6 @@ import {
   isRendererMetrics,
 } from "../shared/diagnostics.js";
 import { isDigest } from "../shared/digest.js";
-import {
-  isSkillKeyBinding,
-  type SkillKeyBinding,
-} from "../shared/skill-key-bindings.js";
 import { errorCode, ValidationError } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
 import {
@@ -96,20 +87,7 @@ import { gamePaths } from "./paths.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
 import { windowRegistry, type WindowRegistry } from "./window-registry.js";
-import {
-  cancelWindowShortcutCapture,
-  cancelWindowSkillKeyCapture,
-  captureWindowShortcut,
-  captureWindowSkillKey,
-  captureWindowSkillKeyPointer,
-} from "./window-shortcuts.js";
-import {
-  applySettingsChange,
-  confirmSettingsReset,
-  requestCacheClear,
-  requestGameStorageReset,
-  requestToolsUnloadRestart,
-} from "./settings-actions.js";
+import { applySettingsChange } from "./settings-actions.js";
 import { editGameText } from './game-text-editing.js';
 import {
   channel,
@@ -129,23 +107,11 @@ export interface IpcContext {
   windows: WindowRegistry;
   credentialsStoreFor: (win: BrowserWindow) => CredentialsStore;
   steamSessionStoreFor: (win: BrowserWindow) => SteamSessionStore;
-  gameStorageResetMarkerFor: (win: BrowserWindow) => string;
-  getProgress: () => DownloadProgress;
   getSnapshotMetadata: () => Promise<SnapshotMetadata>;
-  getCacheInfo: () => Promise<CacheInfo>;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: RendererSettingsPatch) => Promise<AppSettings>;
   setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
-  resetSettings: () => Promise<SettingsResetOutcome>;
-  /** Whether this process started with every certified Tools capability prepared. */
-  toolsEnabledAtLaunch: boolean;
-  downloadFullGame: () => Promise<FullDownloadOutcome>;
-  stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
-  retryClient: () => Promise<void>;
-  getAppUpdateState: () => AppUpdateState;
-  checkAppUpdates: () => Promise<void>;
-  restartAndInstallUpdate: (win: BrowserWindow) => Promise<void>;
   getClientSession: (win: BrowserWindow) => ClientSession;
   recordClientFeatureFailure: (
     win: BrowserWindow,
@@ -205,12 +171,6 @@ const parseSocketId = (value: unknown): number => {
   return value as number;
 };
 const asSocketId = one(parseSocketId);
-const asSkillKeyPointerBinding = one((value: unknown): SkillKeyBinding => {
-  if (!isSkillKeyBinding(value) || value.input.kind === "keyboard") {
-    throw new ValidationError("skill key pointer binding is invalid");
-  }
-  return value;
-});
 
 const asClientHealthToken = one((value: unknown): ClientHealthToken => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -424,8 +384,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
    * `channel()` cannot be called without a parser.
    */
   const handlers = {
-    progressCurrent: channel(nothing, () => ctx.getProgress(), "any"),
-
     snapshotMetadata: channel(nothing, () => ctx.getSnapshotMetadata()),
 
     dnsResolve: channel(asString("dns name"), async (win, name) => {
@@ -467,38 +425,12 @@ export function registerIpcHandlers(ctx: IpcContext): {
       }
     }),
 
-    settingsSet: channel(one(parseRendererSettingsPatch), async (win, patch) => {
+    settingsSet: channel(one(parseRendererSettingsPatch), async (_win, patch) => {
       const saved = await applySettingsChange(
-        win,
         patch,
-        ctx.toolsEnabledAtLaunch,
-        ctx.getSettings,
         ctx.updateSettings,
       );
       return saved;
-    }),
-
-    settingsReset: channel(nothing, async (win) => {
-      const outcome = await confirmSettingsReset(
-        win,
-        ctx.toolsEnabledAtLaunch,
-        ctx.resetSettings,
-      );
-      return outcome;
-    }),
-
-    settingsRestartForTools: channel(nothing, (win) =>
-      requestToolsUnloadRestart(win)),
-
-    shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
-    shortcutCaptureCancel: channel(nothing, (win) => {
-      cancelWindowShortcutCapture(win);
-    }),
-    skillKeyCapture: channel(nothing, (win) => captureWindowSkillKey(win)),
-    skillKeyCapturePointer: channel(asSkillKeyPointerBinding, (win, binding) =>
-      captureWindowSkillKeyPointer(win, binding)),
-    skillKeyCaptureCancel: channel(nothing, (win) => {
-      cancelWindowSkillKeyCapture(win);
     }),
 
     credentialsLoad: channel(nothing, async (win) => {
@@ -544,27 +476,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
         throw error;
       }
     }),
-
-    cacheInfo: channel(nothing, async () => {
-      try {
-        return await ctx.getCacheInfo();
-      } catch (error) {
-        logEvent({ k: "cache.infoFailed", code: errorCode(error) });
-        throw error;
-      }
-    }),
-
-    cacheClear: channel(nothing, (win) =>
-      requestCacheClear(win, paths.cacheClearRequest),
-    ),
-
-    cacheDownloadAll: channel(nothing, () => ctx.downloadFullGame()),
-
-    cacheStopDownload: channel(nothing, () => ctx.stopFullDownload()),
-
-    gameStorageReset: channel(nothing, (win) =>
-      requestGameStorageReset(win, ctx.gameStorageResetMarkerFor(win)),
-    ),
 
     diagnosticsGraphics: channel(asGraphics, (win, value) => {
       recordGraphics(ctx.windows.requireDiagnosticOwnerForWindow(win), value);
@@ -669,8 +580,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
       return result;
     }),
 
-    clientRetry: channel(nothing, () => ctx.retryClient(), "any"),
-
     clientHealthy: channel(asClientHealthToken, (_win, token) =>
       ctx.confirmClientHealthy(token),
     ),
@@ -685,12 +594,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
       ctx.recordClientFeatureFailure(win, features),
     ),
 
-    appUpdatesGetState: channel(nothing, () => ctx.getAppUpdateState(), "any"),
-    appUpdatesCheck: channel(nothing, () => ctx.checkAppUpdates(), "any"),
-    appUpdatesRestartAndInstall: channel(
-      nothing,
-      (win) => ctx.restartAndInstallUpdate(win),
-    ),
     profileTemplatesLoad: channel(
       nothing,
       (win) => ctx.loadAccountTemplates(win),

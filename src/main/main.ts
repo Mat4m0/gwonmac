@@ -291,7 +291,6 @@ function setProgress(next: DownloadProgress): void {
   else {
     for (const win of windows) updateLongRunningTaskFeedback(next, win);
   }
-  sendToRenderer(IPC.progressEvent, next);
   launcherOrchestrator?.clientChanged();
 }
 
@@ -528,7 +527,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const launcherState = new LauncherStateStore(
     paths.launcherState,
     loadedLauncherState.document,
-    loadedLauncherState.recoveredFromCorruption,
   );
   let accountWorkspace;
   for (;;) {
@@ -672,7 +670,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
           silent: true,
         }).show();
       }
-      sendToRenderer(IPC.appUpdatesState, state);
       launcherOrchestrator?.publish();
     },
   });
@@ -924,14 +921,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     windows: windowRegistry,
     credentialsStoreFor: (win) => accounts.credentialsStoreFor(win),
     steamSessionStoreFor: (win) => accounts.steamSessionStoreFor(win),
-    gameStorageResetMarkerFor: (win) => accounts.gameStorageResetMarkerFor(win),
-    getProgress: () => clientRuntime.progress,
     getSnapshotMetadata: () => clientRuntime.snapshotMetadata(),
-    getCacheInfo: () => clientRuntime.cacheInfo(),
     getSettings: () => preferences.getSettings(),
     updateSettings: (patch) => preferences.updateRendererSettings(patch),
-    resetSettings: () => toolsRuntime?.resetSettings()
-      ?? preferences.resetCoreSettings(),
     setDiagnosticProfile: async (profile) => {
       diagnosticProfile = await saveDiagnosticProfile(
         paths.diagnosticProfile,
@@ -939,22 +931,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
       );
       return diagnosticProfile;
     },
-    toolsEnabledAtLaunch: enhancementSelection.tools,
-    downloadFullGame: () => clientRuntime.downloadAll(),
-    stopFullDownload: () => clientRuntime.stopDownload(),
     confirmClientHealthy: (token) =>
       clientRuntime.confirmCandidateHealthy(token),
-    retryClient: () =>
-      clientRuntime.retryClient(() => {
-        // An active generation may still have protocol reads in flight. End the
-        // process before startup rollback/update renames its artifact paths; the
-        // replacement process then follows the ordinary no-client boot path.
-        app.relaunch();
-        app.quit();
-      }),
-    getAppUpdateState: () => appUpdaterController!.getState(),
-    checkAppUpdates: () => checkForAppUpdates(),
-    restartAndInstallUpdate,
     getClientSession: (win) => rendererClientSessions.session(
       {
         owner: win,

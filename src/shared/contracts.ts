@@ -41,15 +41,10 @@ import type {
 import type {
   AccountTemplateLibrary,
 } from "./accounts-contracts.js";
-import type {
-  ShortcutCaptureResult,
-  ShortcutOverrides,
-} from "./keyboard-shortcuts.js";
+import type { ShortcutOverrides } from "./keyboard-shortcuts.js";
 import {
   EMPTY_SKILL_KEY_BINDINGS,
-  type SkillKeyBinding,
   type SkillKeyBindings,
-  type SkillKeyCaptureResult,
 } from "./skill-key-bindings.js";
 import {
   DEFAULT_SKILL_COOLDOWN_COLOR,
@@ -466,24 +461,31 @@ export interface AppSettings {
 
 export type AppSettingsPatch = Partial<AppSettings>;
 /**
- * Settings fields the sandboxed renderer may write through generic IPC.
+ * The only settings a game renderer may write. Global launcher, update, Tools,
+ * appearance, and diagnostics policy never crosses the game preload.
+ */
+export const RENDERER_WRITABLE_SETTINGS = [
+  "autoRelogAfterReload",
+  "cartographyOverlayEnabled",
+  "cartographyGridEnabled",
+  "cartographyGridOpacity",
+  "cartographyWalkabilityOpacity",
+] as const satisfies readonly (keyof AppSettings)[];
+type RendererWritableSetting = (typeof RENDERER_WRITABLE_SETTINGS)[number];
+
+/**
+ * Settings fields the sandboxed game renderer may write through generic IPC.
  * Preset selection is an operation rather than a stored field: main applies it
  * to the latest library under the preferences lock, so a compact-map choice
  * cannot overwrite edits made in the full Settings window.
  */
-type RendererStoredSettingsPatch = Omit<
-  AppSettingsPatch,
-  "travelShortcuts"
+type RendererStoredSettingsPatch = Readonly<
+  Partial<Pick<AppSettings, RendererWritableSetting>>
 > & Readonly<{
-  travelShortcuts?: never;
   cartographyPresetSelection?: never;
 }>;
 
-type RendererPresetSelectionPatch = Omit<
-  RendererStoredSettingsPatch,
-  "cartographyPresetLibrary" | "cartographyPresetSelection"
-> & Readonly<{
-  cartographyPresetLibrary?: never;
+type RendererPresetSelectionPatch = Readonly<{
   cartographyPresetSelection: CartographyPresetRef;
 }>;
 
@@ -969,8 +971,6 @@ export const SKILL_ICON_PATTERN = /^skill-icons\/([0-9]{1,7})\.bmp$/u;
 
 /** Channels and events exposed by every preload. */
 export const CORE_IPC = {
-  progressCurrent: "gw:progress:current",
-  progressEvent: "gw:progress:event",
   snapshotMetadata: "gw:snapshot:metadata",
   dnsResolve: "gw:dns:resolve",
   socketConnect: "gw:socket:connect",
@@ -979,25 +979,13 @@ export const CORE_IPC = {
   socketEvent: "gw:socket:event",
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
-  settingsReset: "gw:settings:reset",
-  settingsRestartForTools: "gw:settings:restartForTools",
   settingsEvent: "gw:settings:event",
-  shortcutCapture: "gw:shortcuts:capture",
-  shortcutCaptureCancel: "gw:shortcuts:captureCancel",
-  skillKeyCapture: "gw:skillKeys:capture",
-  skillKeyCapturePointer: "gw:skillKeys:capturePointer",
-  skillKeyCaptureCancel: "gw:skillKeys:captureCancel",
   credentialsLoad: "gw:credentials:load",
   credentialsSave: "gw:credentials:save",
   credentialsClear: "gw:credentials:clear",
   steamToken: "gw:steam:token",
   steamStore: "gw:steam:store",
   steamClear: "gw:steam:clear",
-  cacheInfo: "gw:cache:info",
-  cacheClear: "gw:cache:clear",
-  cacheDownloadAll: "gw:cache:downloadAll",
-  cacheStopDownload: "gw:cache:stopDownload",
-  gameStorageReset: "gw:gameStorage:reset",
   diagnosticsGraphics: "gw:diagnostics:graphics",
   diagnosticsClockSync: "gw:diagnostics:clockSync",
   diagnosticsClockResult: "gw:diagnostics:clockResult",
@@ -1016,7 +1004,6 @@ export const CORE_IPC = {
   clipboardReadText: "gw:clipboard:readText",
   clipboardEdit: "gw:clipboard:edit",
   templatesExport: "gw:templates:export",
-  clientRetry: "gw:client:retry",
   clientHealthy: "gw:client:healthy",
   gameReadyToPresent: "gw:game:readyToPresent",
   clientSession: "gw:client:session",
@@ -1027,10 +1014,6 @@ export const CORE_IPC = {
   rendererCommand: "gw:renderer:command",
   rendererCommandDone: "gw:renderer:commandDone",
   inputTraceEvent: "gw:inputTrace:event",
-  appUpdatesGetState: "gw:appUpdates:getState",
-  appUpdatesCheck: "gw:appUpdates:check",
-  appUpdatesRestartAndInstall: "gw:appUpdates:restartAndInstall",
-  appUpdatesState: "gw:appUpdates:state",
   profileTemplatesLoad: "gw:profileTemplates:load",
   profileTemplatesSave: "gw:profileTemplates:save",
 } as const;
@@ -1070,14 +1053,12 @@ export type IpcChannel = (typeof IPC)[keyof typeof IPC];
  * failure instead of a runtime "no handler registered".
  */
 export const EVENT_CHANNELS = [
-  "progressEvent",
   "socketEvent",
   "settingsEvent",
   "tradeEvent",
   "rendererCommand",
   "rendererCommandDone",
   "inputTraceEvent",
-  "appUpdatesState",
 ] as const;
 
 /** Channels present only in the Tools preload and Tools main runtime. */
@@ -1138,10 +1119,6 @@ export interface CoreGwNativeApiBase {
   inputTrace: {
     onEntry(callback: (entry: MainInputTraceEntry) => void): () => void;
   };
-  progress: {
-    current(): Promise<DownloadProgress>;
-    onChange(callback: (value: DownloadProgress) => void): () => void;
-  };
   snapshot: {
     metadata(): Promise<SnapshotMetadata>;
   };
@@ -1157,18 +1134,7 @@ export interface CoreGwNativeApiBase {
   settings: {
     get(): Promise<AppSettings>;
     set(value: RendererSettingsPatch): Promise<AppSettings>;
-    reset(): Promise<SettingsResetOutcome | null>;
-    restartForTools(): Promise<boolean>;
     onChange(callback: (settings: AppSettings) => void): () => void;
-  };
-  shortcuts: {
-    capture(): Promise<ShortcutCaptureResult>;
-    cancelCapture(): Promise<void>;
-  };
-  skillKeys: {
-    capture(): Promise<SkillKeyCaptureResult>;
-    submitPointer(binding: SkillKeyBinding): Promise<boolean>;
-    cancelCapture(): Promise<void>;
   };
   credentials: {
     load(): Promise<StoredCredentials | null>;
@@ -1203,15 +1169,6 @@ export interface CoreGwNativeApiBase {
     store(token: string, expiry: number | null): Promise<void>;
     /** Forget the stored token. Signing out here does not unlink the account. */
     clear(): Promise<void>;
-  };
-  cache: {
-    info(): Promise<CacheInfo>;
-    clearAndRestart(): Promise<boolean>;
-    downloadAll(): Promise<FullDownloadOutcome>;
-    stopDownload(): Promise<void>;
-  };
-  gameStorage: {
-    resetAndRestart(): Promise<boolean>;
   };
   diagnostics: {
     clockSync(rendererNowUs: number): Promise<ClockSyncResponse>;
@@ -1271,17 +1228,10 @@ export interface CoreGwNativeApiBase {
     ): Promise<TemplateExportResult>;
   };
   client: {
-    retry(): Promise<void>;
     healthy(token: ClientHealthToken): Promise<void>;
     session(): Promise<ClientSession>;
     featureFailure(features: readonly EnhancementRuntimeFeature[]): Promise<void>;
     readyToPresent(): Promise<void>;
-  };
-  appUpdates: {
-    getState(): Promise<AppUpdateState>;
-    check(): Promise<void>;
-    restartAndInstall(): Promise<void>;
-    onState(callback: (state: AppUpdateState) => void): () => void;
   };
   profileTemplates: {
     loadTemplates(): Promise<AccountTemplateLibrary | null>;

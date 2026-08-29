@@ -26,6 +26,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
   settings: {
     autoCheckUpdates: true,
     updateTrack: "stable",
+    renderScale: 2,
     extendedMemoryEnabled: false,
     showDiagnostics: false,
     cartographyOverlayEnabled: false,
