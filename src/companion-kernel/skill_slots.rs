@@ -283,7 +283,7 @@ unsafe fn collect(layout: Layout, skill_bar_id: u32) -> Result<Observation, Refu
 unsafe fn collect_chat(
     layout: Layout,
     chat_frame_id: u32,
-) -> Result<(SkillSlotRect, f32, f32), Refusal> {
+) -> Result<SkillSlotRect, Refusal> {
     if chat_frame_id == 0 || !valid_layout(layout) {
         return Err(refuse(Outcome::InvalidInput));
     }
@@ -294,14 +294,15 @@ unsafe fn collect_chat(
     if !unsafe { visible(layout, frame) } {
         return Err(refuse(Outcome::ParentHidden));
     }
-    unsafe { rect(layout, frame) }.map_err(refuse)
+    let (bounds, _, _) = unsafe { rect(layout, frame) }.map_err(refuse)?;
+    Ok(bounds)
 }
 
 unsafe fn publish(
     frame_id: u32,
     observed: Result<Observation, Refusal>,
     chat_frame_id: u32,
-    chat_observed: Result<(SkillSlotRect, f32, f32), Refusal>,
+    chat_observed: Result<SkillSlotRect, Refusal>,
 ) {
     let next = unsafe { SEQUENCE }.wrapping_add(2) & !1;
     let snapshot = unsafe { POINTER as *mut SkillSlotSnapshot };
@@ -321,7 +322,7 @@ unsafe fn publish(
     // skill viewport is the projection source; requiring the local sizes to
     // match discarded the real movable chat editor.
     let (published_chat_id, chat_outcome, chat_input) = match chat_observed {
-        Ok((bounds, _, _)) if flags & FLAG_SKILL_SLOTS_READY != 0 => {
+        Ok(bounds) if flags & FLAG_SKILL_SLOTS_READY != 0 => {
             flags |= FLAG_CHAT_INPUT_READY;
             (chat_frame_id, 0, bounds)
         }

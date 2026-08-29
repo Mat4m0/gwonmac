@@ -15,7 +15,6 @@ import type { installCompanionKernel } from "./companion-kernel-loader.js";
 import type {
   OptionalObserverReaders,
   SkillCooldownConsumer,
-  SkillSlotConsumer,
   StateConsumer,
   ToolboxConsumer,
 } from "./companion-observer.js";
@@ -34,14 +33,12 @@ export type CompanionObserverExtension = Readonly<{
   toolbox: ToolboxConsumer | null;
   observeState: boolean;
   publishState: boolean;
-  skillSlots: SkillSlotConsumer | null;
   skillCooldowns: SkillCooldownConsumer | null;
   readers: OptionalObserverReaders | null;
   pointers: Readonly<{
     snapshot: number;
     toolbox: number;
     party: number;
-    skillSlots: number;
     skillCooldowns: number;
   }>;
 }>;
@@ -83,7 +80,6 @@ export type PreparedCompanionExtension = Readonly<{
   initialize(memory: WebAssembly.Memory): void;
   ownedRegions(): readonly CompanionOwnedRegion[];
   kernelRegions: Readonly<{
-    skillSlots: KernelRegion;
     skillCooldowns: KernelRegion;
   }>;
   activate(context: CompanionExtensionActivation): CompanionExtensionSession;

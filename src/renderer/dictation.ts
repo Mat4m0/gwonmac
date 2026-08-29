@@ -103,12 +103,7 @@ export function installDictation(document: Document): DictationControl {
     }
     if (event.state === 'preparing') {
       state = 'preparing';
-      const percentage = event.progress === undefined
-        ? null
-        : Math.round(Math.max(0, Math.min(1, event.progress)) * 100);
-      render(percentage === null
-        ? 'Preparing on-device dictation…'
-        : `Downloading on-device dictation… ${percentage}%`);
+      render('Preparing on-device dictation…');
       return;
     }
     if (event.state === 'listening') {

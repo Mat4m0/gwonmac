@@ -9,7 +9,6 @@ const geometry = (sequence: number, left = 0): CompanionSkillSlotState => ({
   frameId: 4,
   chatFrameId: 0,
   chatInput: null,
-  skillSlotsReady: true,
   viewportWidth: 800,
   viewportHeight: 600,
   slots: Array.from({ length: 8 }, (_, index) => ({

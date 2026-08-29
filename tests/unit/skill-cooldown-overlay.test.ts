@@ -60,7 +60,6 @@ const geometry = (sequence = 2) => ({
   frameId: 4,
   chatFrameId: 0,
   chatInput: null,
-  skillSlotsReady: true as const,
   viewportWidth: 800,
   viewportHeight: 600,
   slots: Array.from({ length: 8 }, (_, index) => ({

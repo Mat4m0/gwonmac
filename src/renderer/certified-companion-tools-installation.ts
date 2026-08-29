@@ -118,7 +118,6 @@ export async function prepareToolsCompanionExtension(
       ...(travel === null ? [] : [travel.region()]),
     ],
     kernelRegions: {
-      skillSlots: EMPTY_REGION,
       get skillCooldowns() {
         return cooldowns === null
           ? EMPTY_REGION : { pointer: cooldowns.pointer, bytes: cooldowns.bytes };
@@ -362,7 +361,6 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       publishState: program === "target-observer",
       // Geometry is shared by both HUDs. Cooldowns must keep the slot feed
       // alive even when custom key labels are disabled.
-      skillSlots: null,
       skillCooldowns: cooldowns?.sink == null ? null : { enabled: () => policy().skillCooldowns,
         inactive: () => { setSkillCooldownReadiness("waiting"); },
         update: (state) => {
@@ -371,8 +369,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         } },
       readers: tools.observerReaders,
       pointers: { snapshot: core.snapshot.pointer, toolbox: core.toolbox.pointer,
-        party: core.party.pointer, skillSlots: skillGeometry.pointer,
-        skillCooldowns: cooldowns?.pointer ?? 0 },
+        party: core.party.pointer, skillCooldowns: cooldowns?.pointer ?? 0 },
     },
     beforeHook() {
       source.subscribe(({ reason }) => {

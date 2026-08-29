@@ -14,7 +14,6 @@ type ActiveDictation = Readonly<{
   onClosed: () => void;
 } & (
   | { kind: 'capture' }
-  | { kind: 'committing' }
   | { kind: 'setup'; resolve(locale: string): void; reject(reason: Error): void }
 )>;
 
@@ -90,6 +89,9 @@ export class DictationController {
   }
 
   prepare(window: BrowserWindow): Promise<string> {
+    if (!this.permissionHostReady) {
+      return Promise.reject(new Error('On-device dictation setup is unavailable'));
+    }
     this.cancel();
     const generation = ++this.generation;
     const onClosed = () => this.cancel(window);
@@ -132,7 +134,6 @@ export class DictationController {
     event: NativeDictationEvent,
   ): void {
     if (!this.isActive(generation, window)) return;
-    if (this.active?.kind === 'committing') return;
     if (event.type === 'ready') {
       if (this.active?.kind !== 'setup') return;
       this.active.resolve(event.locale);
@@ -146,9 +147,7 @@ export class DictationController {
       return;
     }
     if (event.type === 'preparing') {
-      this.send(window, event.progress === undefined
-        ? { state: 'preparing' }
-        : { state: 'preparing', progress: event.progress });
+      this.send(window, { state: 'preparing' });
       return;
     }
     if (event.type === 'listening') {
@@ -159,52 +158,30 @@ export class DictationController {
       const transcript = event.transcript.slice(0, DICTATION_TEXT_CEILING);
       if (event.final) {
         if (this.active?.kind !== 'capture') return;
-        this.active = { ...this.active, kind: 'committing' };
-        this.commitFinal(generation, window, transcript);
+        this.releaseActive();
+        this.commitFinal(window, transcript);
       } else {
         this.send(window, { state: 'listening', transcript });
       }
       return;
     }
-    const reason: Extract<DictationEvent, { state: 'error' }>['reason'] =
-      event.reason === 'permission-denied'
-        ? 'permission-denied'
-        : event.reason === 'model-unavailable'
-          ? 'model-unavailable'
-          : event.reason === 'model-download-failed'
-          ? 'model-download-failed'
-          : event.reason === 'setup-required'
-            ? 'setup-required'
-        : event.reason === 'audio-unavailable'
-          ? 'audio-unavailable'
-          : event.reason === 'unavailable'
-            ? 'unavailable'
-            : 'recognition-failed';
     if (this.active?.kind === 'setup') {
-      this.active.reject(new Error(`On-device dictation setup failed: ${reason}`));
+      this.active.reject(new Error(`On-device dictation setup failed: ${event.reason}`));
     } else {
-      this.send(window, { state: 'error', reason });
+      this.send(window, { state: 'error', reason: event.reason });
     }
     this.releaseActive();
   }
 
-  private commitFinal(
-    generation: number,
-    window: BrowserWindow,
-    transcript: string,
-  ): void {
+  private commitFinal(window: BrowserWindow, transcript: string): void {
     try {
-      if (!window.isFocused()) throw new Error('owning window lost focus');
-      sendDictationText(window.webContents, transcript);
-      if (!this.isActive(generation, window)) return;
-      this.send(window, { state: 'final', transcript });
-    } catch {
-      if (!this.isActive(generation, window)) return;
-      this.send(window, { state: 'error', reason: 'insertion-failed' });
-    } finally {
-      if (this.isActive(generation, window)) {
-        this.releaseActive();
+      if (window.isDestroyed() || !window.isFocused()) {
+        throw new Error('owning window lost focus');
       }
+      sendDictationText(window.webContents, transcript);
+      this.send(window, { state: 'final' });
+    } catch {
+      this.send(window, { state: 'error', reason: 'insertion-failed' });
     }
   }
 

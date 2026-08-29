@@ -1146,9 +1146,9 @@ export const DICTATION_TEXT_CEILING = 4_096;
 
 export type DictationEvent =
   | Readonly<{ state: "requesting" }>
-  | Readonly<{ state: "preparing"; progress?: number }>
+  | Readonly<{ state: "preparing" }>
   | Readonly<{ state: "listening"; transcript: string }>
-  | Readonly<{ state: "final"; transcript: string }>
+  | Readonly<{ state: "final" }>
   | Readonly<{
       state: "error";
       reason:

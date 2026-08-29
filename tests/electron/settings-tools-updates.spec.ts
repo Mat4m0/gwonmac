@@ -69,7 +69,6 @@ test.describe("tools and update settings", () => {
             chatFrameId: 11,
             viewportWidth: 800,
             viewportHeight: 600,
-            skillSlotsReady: false,
             slots: Array.from({ length: 8 }, () => ({
               left: 0, bottom: 0, right: 0, top: 0,
             })),

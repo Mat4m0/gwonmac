@@ -81,7 +81,7 @@ function fixture(
 test('setup prepares the model without microphone permission or game events', async () => {
   const subject = fixture(true);
   const prepared = subject.controller.prepare(subject.window);
-  subject.emit({ type: 'preparing', progress: 0.5 });
+  subject.emit({ type: 'preparing' });
   subject.emit({ type: 'ready', locale: 'English (US)' });
   assert.equal(await prepared, 'English (US)');
   assert.equal(subject.permissionRequests(), 0);
@@ -94,6 +94,16 @@ test('an unpackaged Electron host never touches macOS speech privacy APIs', asyn
   assert.deepEqual(subject.sent, [
     [IPC.dictationEvent, { state: 'error', reason: 'unavailable' }],
   ]);
+  assert.equal(subject.permissionRequests(), 0);
+  assert.equal(subject.cancelled(), 0);
+});
+
+test('an unpackaged Electron host cannot prepare Apple speech assets', async () => {
+  const subject = fixture(true, false);
+  await assert.rejects(
+    subject.controller.prepare(subject.window),
+    /setup is unavailable/,
+  );
   assert.equal(subject.permissionRequests(), 0);
   assert.equal(subject.cancelled(), 0);
 });
@@ -122,7 +132,7 @@ test('the owning window receives and directly inserts the final transcript', asy
   assert.deepEqual(subject.sent.slice(1), [
     [IPC.dictationEvent, { state: 'listening', transcript: '' }],
     [IPC.dictationEvent, { state: 'listening', transcript: 'hello' }],
-    [IPC.dictationEvent, { state: 'final', transcript: 'hello world' }],
+    [IPC.dictationEvent, { state: 'final' }],
   ]);
 });
 
@@ -145,7 +155,7 @@ test('a duplicate native final cannot insert the phrase twice', async () => {
 
   assert.equal(subject.inserted.join(''), 'one phrase');
   assert.deepEqual(subject.sent.slice(1), [
-    [IPC.dictationEvent, { state: 'final', transcript: 'one phrase' }],
+    [IPC.dictationEvent, { state: 'final' }],
   ]);
 });
 

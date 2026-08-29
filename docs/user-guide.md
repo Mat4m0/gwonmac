@@ -117,14 +117,14 @@ not download a model or request microphone access.
 
 After setup, a small microphone appears beside the movable chat input only when
 Guild Wars opens a normal text field. Select the microphone, speak, then select
-it again to finish. The recognized
-words are added to the current draft. Review them and press Return yourself.
+it again to finish. A blue status bubble updates while Apple recognizes your
+speech. The final words are added to the current draft. Review them and press Return yourself.
 GWonMac never sends chat automatically.
 
 The first recording asks for macOS Microphone access. Apple manages and may
 share the downloaded language model with other apps. Audio and transcripts are
-not sent to GWonMac services. The mic does not appear for email, password, or number fields,
-and GWonMac does not save or include transcripts in diagnostics. If access was
+not sent to GWonMac services. The mic does not appear for email, password, or
+number fields, and GWonMac does not save or include transcripts in diagnostics. If access was
 denied, allow **Guild Wars Reforged** under **System Settings → Privacy &
 Security → Microphone**.
 

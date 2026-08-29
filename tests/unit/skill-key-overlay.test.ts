@@ -200,7 +200,6 @@ test("the consumer maps only slot eight's custom C binding", () => {
     frameId: 1,
     chatFrameId: 0,
     chatInput: null,
-    skillSlotsReady: true as const,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Array.from({ length: 8 }, (_, index) => ({
@@ -253,7 +252,6 @@ test("a viewport resize refreshes projected key geometry", () => {
     frameId: 1,
     chatFrameId: 0,
     chatInput: null,
-    skillSlotsReady: true as const,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Array.from({ length: 8 }, (_, index) => ({
@@ -306,7 +304,6 @@ test("the consumer withdraws geometry whose publisher stopped advancing", () => 
     frameId: 1,
     chatFrameId: 0,
     chatInput: null,
-    skillSlotsReady: true as const,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Array.from({ length: 8 }, (_, index) => ({

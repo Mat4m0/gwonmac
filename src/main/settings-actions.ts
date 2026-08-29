@@ -92,13 +92,16 @@ export async function applySettingsChange(
 ): Promise<AppSettings> {
   try {
     const previous = await read();
-    const capabilityToEnable = patch.gwonmacTools === true && !toolsEnabledAtLaunch
-      ? "tools"
-      : patch.dictationEnabled === true
-          && !previous.dictationEnabled
-          && !toolsEnabledAtLaunch
-        ? "dictation"
-        : null;
+    let capabilityToEnable: "tools" | "dictation" | null = null;
+    if (patch.gwonmacTools === true && !toolsEnabledAtLaunch) {
+      capabilityToEnable = "tools";
+    } else if (
+      patch.dictationEnabled === true
+      && !previous.dictationEnabled
+      && !toolsEnabledAtLaunch
+    ) {
+      capabilityToEnable = "dictation";
+    }
     if (
       capabilityToEnable !== null
       && !(await confirmAction(win, {

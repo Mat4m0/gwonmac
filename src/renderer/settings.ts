@@ -611,7 +611,7 @@
     dictationSetup.hidden = settings.dictationEnabled;
     dictationDisable.hidden = !settings.dictationEnabled;
     dictationState.textContent = settings.dictationEnabled
-      ? 'Enabled. Restart GWonMac if you enabled it during this session.'
+      ? 'Enabled.'
       : 'Off. No language model or microphone permission is requested.';
     if (settings.dictationEnabled) dictationDisclosure.hidden = true;
     for (const { name } of appearanceRanges) {

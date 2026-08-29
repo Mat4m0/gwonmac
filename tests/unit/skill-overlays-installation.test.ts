@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { COMPANION_FEATURE_BITS } from "../../src/shared/companion-abi.ts";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
 import { createSkillOverlaysInstallation } from "../../src/renderer/skill-overlays-installation.ts";
+import { createSkillSlotGeometryInstallation } from "../../src/renderer/skill-slot-geometry-installation.ts";
+import { createSkillCooldownObservationInstallation } from "../../src/renderer/skill-cooldown-state-installation.ts";
 
 const binding = Object.freeze({
   input: Object.freeze({ kind: "keyboard" as const, code: "KeyC" }),
@@ -28,10 +30,15 @@ const withBinding = Object.freeze({
 });
 
 test("skill policy activates and withdraws only the observation regions it needs", () => {
-  const skills = createSkillOverlaysInstallation({
+  const capabilities = {
     skillSlotGeometry: true,
     skillCooldownObservation: true,
-  });
+  };
+  const skills = createSkillOverlaysInstallation(
+    capabilities,
+    createSkillSlotGeometryInstallation(capabilities.skillSlotGeometry),
+    createSkillCooldownObservationInstallation(capabilities.skillCooldownObservation),
+  );
   skills.sync(DEFAULT_SETTINGS, { skillKeyLabels: false, skillCooldowns: false });
   assert.equal(skills.geometry.active, false);
   assert.equal(skills.cooldowns.active, false);
@@ -50,7 +57,6 @@ test("skill policy activates and withdraws only the observation regions it needs
     frameId: 1,
     chatFrameId: 0,
     chatInput: null,
-    skillSlotsReady: true,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({
@@ -71,7 +77,6 @@ test("skill policy activates and withdraws only the observation regions it needs
     frameId: 2,
     chatFrameId: 0,
     chatInput: null,
-    skillSlotsReady: true,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({
@@ -92,7 +97,6 @@ test("skill policy activates and withdraws only the observation regions it needs
     frameId: 2,
     chatFrameId: 0,
     chatInput: null,
-    skillSlotsReady: true,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({

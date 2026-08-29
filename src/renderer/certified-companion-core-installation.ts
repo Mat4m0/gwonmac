@@ -27,6 +27,7 @@ import { decodeEnhancementManifest } from "./enhancement-manifest.js";
 import { createPlayRegionObservationInstallation } from "./play-region-state-installation.js";
 import { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
 import type { CompanionSkillSlotState } from "./companion-interface-geometry-snapshot.js";
+import { setSkillGeometryReadiness } from "./observer-readiness.js";
 import type {
   CompanionExtensionSession,
   PrepareCompanionExtension,
@@ -43,6 +44,24 @@ const recordMilestone = (
     .recordRendererMilestone(name, performance.now() * 1_000, fields)
     .catch(() => {});
 };
+
+function reportSkillGeometry(state: CompanionSkillSlotState): void {
+  const readiness = state.status === "ready"
+    ? Object.freeze({ status: "ready" as const })
+    : Object.freeze({ status: "waiting" as const, reason: state.reason });
+  if (!setSkillGeometryReadiness(readiness)) return;
+  void window.gwNative.diagnostics.recordRendererMilestone(
+    "enhancement.skillGeometryState",
+    performance.now() * 1_000,
+    state.status === "ready"
+      ? { state: "ready", reason: null, candidates: null }
+      : {
+          state: "waiting",
+          reason: state.reason,
+          candidates: "candidateCount" in state ? state.candidateCount : null,
+        },
+  ).catch(() => {});
+}
 
 function percentile95(samples: readonly number[]): number {
   if (samples.length === 0) return 0;
@@ -127,6 +146,12 @@ export async function installCoreCertifiedCompanion(
   const skillGeometry = createSkillSlotGeometryInstallation(
     capabilities.skillSlotGeometry,
   );
+  const stopSkillGeometry = skillGeometry.subscribe((state) => {
+    reportSkillGeometry(state);
+    window.dispatchEvent(new CustomEvent("gwonmac:chat-geometry", {
+      detail: state,
+    }));
+  });
   let coreMemory: ReturnType<typeof allocateCompanionCoreMemory> | null = null;
   let stopObserver = () => {};
   let disposeCursor = () => {};
@@ -170,8 +195,11 @@ export async function installCoreCertifiedCompanion(
       attempt("extension presentation disposal", () => {
         extensionSession?.disposePresentation();
       });
-        attempt("play-region feed disposal", playRegions.dispose);
-        attempt("interface geometry feed disposal", skillGeometry.dispose);
+      attempt("play-region feed disposal", playRegions.dispose);
+      attempt("interface geometry subscription disposal", () => {
+        stopSkillGeometry();
+      });
+      attempt("interface geometry feed disposal", skillGeometry.dispose);
     }
     const callbackWithdrawn = attempt("callback withdrawal", () => {
       if (table.get(manifest.tableSlot) === installedCallback) {
@@ -364,12 +392,7 @@ export async function installCoreCertifiedCompanion(
       capabilities.skillSlotGeometry ? {
         enabled: () => skillGeometry.active,
         inactive: () => skillGeometry.setActive(false),
-        update: (state: CompanionSkillSlotState) => {
-          skillGeometry.sink?.update(state);
-          window.dispatchEvent(new CustomEvent("gwonmac:chat-geometry", {
-            detail: skillGeometry.state,
-          }));
-        },
+        update: (state: CompanionSkillSlotState) => skillGeometry.sink?.update(state),
       } : null,
       extensionSession?.observer.skillCooldowns ?? null,
       playRegions.sink,

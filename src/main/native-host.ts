@@ -10,7 +10,7 @@ import type { NativeKeychain } from "./core/native-keychain.js";
 import { unpackedPath, type BundleLayout } from "./core/paths.js";
 
 export type NativeDictationEvent =
-  | Readonly<{ type: "preparing"; progress?: number }>
+  | Readonly<{ type: "preparing" }>
   | Readonly<{ type: "ready"; locale: string }>
   | Readonly<{ type: "listening" }>
   | Readonly<{ type: "result"; transcript: string; final: boolean }>

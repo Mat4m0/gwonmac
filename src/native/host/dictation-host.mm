@@ -9,8 +9,7 @@
 #include <new>
 
 extern "C" {
-using GwonmacSpeechCallback = void (*)(void *, int32_t, const char *, double,
-                                       int32_t);
+using GwonmacSpeechCallback = void (*)(void *, int32_t, const char *, int32_t);
 bool GwonmacModernSpeechAvailable();
 void GwonmacModernSpeechStart(GwonmacSpeechCallback callback, void *context);
 void GwonmacModernSpeechPrepare(GwonmacSpeechCallback callback, void *context);
@@ -46,16 +45,9 @@ void SetUtf8(napi_env env, napi_value object, const char *name,
     napi_set_named_property(env, object, name, string);
 }
 
-void SetDouble(napi_env env, napi_value object, const char *name,
-               double value) {
-  napi_value number;
-  if (napi_create_double(env, value, &number) == napi_ok)
-    napi_set_named_property(env, object, name, number);
-}
-
 void Dispatch(DictationSession *session, const char *type,
               NSString *transcript = nil, bool final = false,
-              const char *reason = nullptr, double progress = -1) {
+              const char *reason = nullptr) {
   if (session == nullptr || session != gSession)
     return;
   napi_handle_scope scope = nullptr;
@@ -86,8 +78,6 @@ void Dispatch(DictationSession *session, const char *type,
   }
   if (reason != nullptr)
     SetUtf8(session->env, event, "reason", reason);
-  if (progress >= 0)
-    SetDouble(session->env, event, "progress", progress);
   napi_make_callback(session->env, session->async_context, receiver, callback,
                      1, &event, &ignored);
   ClearPendingException(session->env);
@@ -108,8 +98,7 @@ void Cleanup(bool cancelTask) {
   delete session;
 }
 
-void Receive(void *context, int32_t event, const char *text, double progress,
-             int32_t final) {
+void Receive(void *context, int32_t event, const char *text, int32_t final) {
   const auto token = reinterpret_cast<uintptr_t>(context);
   DictationSession *session = gSession;
   if (session == nullptr || session->token != token)
@@ -119,17 +108,14 @@ void Receive(void *context, int32_t event, const char *text, double progress,
     Dispatch(session, "preparing");
     return;
   case 1:
-    Dispatch(session, "preparing", nil, false, nullptr, progress);
-    return;
-  case 2:
     Dispatch(session, "ready", text == nullptr
       ? @"" : [NSString stringWithUTF8String:text]);
     Cleanup(false);
     return;
-  case 3:
+  case 2:
     Dispatch(session, "listening");
     return;
-  case 4: {
+  case 3: {
     NSString *transcript = text == nullptr
                                ? @""
                                : [NSString stringWithUTF8String:text];
@@ -138,7 +124,7 @@ void Receive(void *context, int32_t event, const char *text, double progress,
       Cleanup(false);
     return;
   }
-  case 5:
+  case 4:
     Dispatch(session, "error", nil, false,
              text == nullptr ? "recognition-failed" : text);
     Cleanup(false);

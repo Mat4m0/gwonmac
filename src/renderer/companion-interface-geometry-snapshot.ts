@@ -124,7 +124,6 @@ export function readCompanionSkillSlots(buffer: ArrayBuffer, pointer: number) {
     viewportWidth,
     viewportHeight,
     slots,
-    skillSlotsReady: skillReady,
     chatInput: chatReady ? chatInput : null,
   });
 }

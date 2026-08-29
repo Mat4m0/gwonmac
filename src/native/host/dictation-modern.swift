@@ -6,17 +6,15 @@ typealias GwonmacSpeechCallback = @convention(c) (
   UnsafeMutableRawPointer?,
   Int32,
   UnsafePointer<CChar>?,
-  Double,
   Int32
 ) -> Void
 
 private enum SpeechEvent: Int32 {
   case preparing = 0
-  case downloading = 1
-  case ready = 2
-  case listening = 3
-  case result = 4
-  case error = 5
+  case ready = 1
+  case listening = 2
+  case result = 3
+  case error = 4
 }
 
 private enum SpeechOperation {
@@ -95,13 +93,6 @@ private final class ModernDictation {
         if let request = try await AssetInventory.assetInstallationRequest(
           supporting: [transcriber]
         ) {
-          let progressTask = Task { [weak self] in
-            while !Task.isCancelled {
-              self?.emit(.downloading, progress: request.progress.fractionCompleted)
-              try? await Task.sleep(for: .milliseconds(200))
-            }
-          }
-          defer { progressTask.cancel() }
           try await request.downloadAndInstall()
         }
         try Task.checkCancellation()
@@ -261,15 +252,14 @@ private final class ModernDictation {
   private func emit(
     _ event: SpeechEvent,
     text: String? = nil,
-    progress: Double = -1,
     final: Bool = false
   ) {
     if let text {
       text.withCString {
-        callback(context, event.rawValue, $0, progress, final ? 1 : 0)
+        callback(context, event.rawValue, $0, final ? 1 : 0)
       }
     } else {
-      callback(context, event.rawValue, nil, progress, final ? 1 : 0)
+      callback(context, event.rawValue, nil, final ? 1 : 0)
     }
   }
 }
