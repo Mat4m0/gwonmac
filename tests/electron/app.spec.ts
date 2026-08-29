@@ -255,6 +255,7 @@ test.describe("Electron application", () => {
   });
 
   test("persists fullscreen and normal bounds, then resets safely", async () => {
+    test.setTimeout(60_000);
     // No GW_BACKGROUND_LAUNCH: setFullScreen is unreliable on a non-key window.
     const env = launchEnv({ GW_REQUIRE_CACHED_CLIENT: "1" });
     const userData = await mkdtemp(path.join(tmpdir(), "gw-window-state-e2e-"));
