@@ -2,7 +2,10 @@
  * Owns the Cartography grid drawn above a certified native-map projection.
  * Both map surfaces share its cells, markers, range outlines, and redraw cache.
  */
-import type { CartographyGridStyle } from "../../shared/cartography-overlay.js";
+import type {
+  CartographyGridStyle,
+  CartographyUnseenMarker,
+} from "../../shared/cartography-overlay.js";
 import {
   cartographyGridStyleFingerprint,
   drawUnseenCellMarker,
@@ -34,6 +37,7 @@ export type CartographyGridLayerSnapshot = Readonly<{
   focusCellY: number;
   revealRadius: CartographyRevealRadius;
   hovering: boolean;
+  otherRouteCount: number;
   drawCount: number;
 }>;
 
@@ -44,6 +48,8 @@ export type CartographyGridLayer = Readonly<{
     opacity: number;
     explorationVersion: string;
     isExplored(cellX: number, cellY: number): boolean | null;
+    revealabilityVersion: string;
+    canCurrentMapReveal(cellX: number, cellY: number): boolean | null;
     hoveredCell: CartographyCell | null;
     revealRadius: CartographyRevealRadius;
   }>): void;
@@ -51,6 +57,23 @@ export type CartographyGridLayer = Readonly<{
   hide(): void;
   dispose(): void;
 }>;
+
+export type CartographyCellPresentation = Readonly<{
+  marker: CartographyUnseenMarker;
+  tone: "unseen" | "other-route";
+}>;
+
+/** Only unexplored, current-map-relevant cells receive guidance. */
+export function cartographyCellPresentation(
+  explored: boolean | null,
+  canCurrentMapReveal: boolean | null,
+  unseenMarker: CartographyUnseenMarker,
+): CartographyCellPresentation | null {
+  if (explored !== false || canCurrentMapReveal === null) return null;
+  return Object.freeze(canCurrentMapReveal
+    ? { marker: unseenMarker, tone: "unseen" }
+    : { marker: "hatch", tone: "other-route" });
+}
 
 function sizeCanvas(canvas: HTMLCanvasElement, width: number, height: number): void {
   if (canvas.width !== width) canvas.width = width;
@@ -161,10 +184,11 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
     cellWidthPixels: number,
     cellHeightPixels: number,
     isExplored: (cellX: number, cellY: number) => boolean | null,
+    canCurrentMapReveal: (cellX: number, cellY: number) => boolean | null,
     hoveredCell: CartographyCell | null,
     revealRadius: CartographyRevealRadius,
-  ): boolean => {
-    if (context === null) return false;
+  ): Readonly<{ otherRouteCount: number }> | null => {
+    if (context === null) return null;
     const dpr = document.defaultView?.devicePixelRatio ?? 1;
     const width = Math.max(1, Math.round(projection.box.width * dpr));
     const height = Math.max(1, Math.round(projection.box.height * dpr));
@@ -180,6 +204,7 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
     const minY = projection.firstCellY * CARTOGRAPHY_CELL_MAP_UNITS;
     const maxY = (projection.lastCellY + 1) * CARTOGRAPHY_CELL_MAP_UNITS;
     const focusCell = hoveredCell ?? projection.currentCell;
+    let otherRouteCount = 0;
 
     context.beginPath();
     for (let cellX = projection.firstCellX; cellX <= projection.lastCellX + 1; cellX += 1) {
@@ -219,12 +244,25 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
     ) {
       for (let cellY = projection.firstCellY; cellY <= projection.lastCellY; cellY += 1) {
         for (let cellX = projection.firstCellX; cellX <= projection.lastCellX; cellX += 1) {
-          if (isExplored(cellX, cellY) !== false) continue;
+          const explored = isExplored(cellX, cellY);
+          const revealable = explored === null
+            ? null
+            : canCurrentMapReveal(cellX, cellY);
+          const presentation = cartographyCellPresentation(
+            explored,
+            revealable,
+            style.unseen.marker,
+          );
+          if (presentation === null) continue;
+          if (presentation.tone === "other-route") otherRouteCount += 1;
+          const color = presentation.tone === "unseen"
+            ? style.unseen.color
+            : style.noWalkableColor;
           drawUnseenCellMarker(
             context,
-            style.unseen.marker,
+            presentation.marker,
             cornersForCell(projection, cellX, cellY),
-            style.unseen.color,
+            color,
             style.casingColor,
             Math.min(1, strength * 1.25),
             Math.min(cellWidthPixels, cellHeightPixels),
@@ -241,11 +279,21 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
     }
     context.restore();
     drawCount += 1;
-    return true;
+    return Object.freeze({ otherRouteCount });
   };
 
   return Object.freeze({
-    update({ projection, style, opacity, explorationVersion, isExplored, hoveredCell, revealRadius }) {
+    update({
+      projection,
+      style,
+      opacity,
+      explorationVersion,
+      isExplored,
+      revealabilityVersion,
+      canCurrentMapReveal,
+      hoveredCell,
+      revealRadius,
+    }) {
       const { box, transform } = projection;
       const cellWidthPixels = Math.hypot(transform.a, transform.b) * CARTOGRAPHY_CELL_MAP_UNITS;
       const cellHeightPixels = Math.hypot(transform.c, transform.d) * CARTOGRAPHY_CELL_MAP_UNITS;
@@ -264,14 +312,27 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
         projectionFingerprint(projection),
         document.defaultView?.devicePixelRatio ?? 1,
         cartographyGridStyleFingerprint(style), opacity, explorationVersion,
+        revealabilityVersion,
         hoveredCell?.x ?? "-", hoveredCell?.y ?? "-", revealRadius,
       ].join(":");
-      if (nextVersion !== drawingVersion && !draw(
-        projection, style, opacity, cellWidthPixels, cellHeightPixels,
-        isExplored, hoveredCell, revealRadius,
-      )) {
-        hide();
-        return;
+      let otherRouteCount = latest?.otherRouteCount ?? 0;
+      if (nextVersion !== drawingVersion) {
+        const drawn = draw(
+          projection,
+          style,
+          opacity,
+          cellWidthPixels,
+          cellHeightPixels,
+          isExplored,
+          canCurrentMapReveal,
+          hoveredCell,
+          revealRadius,
+        );
+        if (drawn === null) {
+          hide();
+          return;
+        }
+        otherRouteCount = drawn.otherRouteCount;
       }
       drawingVersion = nextVersion;
       root.style.display = "block";
@@ -289,6 +350,7 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
         focusCellY: (hoveredCell ?? projection.currentCell).y,
         revealRadius,
         hovering: hoveredCell !== null,
+        otherRouteCount,
         drawCount,
       });
     },

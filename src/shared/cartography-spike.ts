@@ -48,16 +48,26 @@ export const EXPLORATION_SPIKE_SCALARS = Object.freeze([
 export const WORLD_MAP_ANCHOR_SPIKE_GLOBALS = Object.freeze({
   status: "gwonmac_world_map_anchor_spike_status",
   generation: "gwonmac_world_map_anchor_spike_generation",
+  continent: "gwonmac_world_map_anchor_spike_continent",
   worldAnchorX: "gwonmac_world_map_anchor_spike_x",
   worldAnchorY: "gwonmac_world_map_anchor_spike_y",
+  mapMinX: "gwonmac_world_map_anchor_spike_map_min_x",
+  mapMinY: "gwonmac_world_map_anchor_spike_map_min_y",
+  mapMaxX: "gwonmac_world_map_anchor_spike_map_max_x",
+  mapMaxY: "gwonmac_world_map_anchor_spike_map_max_y",
   observe: "gwonmac_world_map_anchor_spike_observe",
 });
 
 export const WORLD_MAP_ANCHOR_SPIKE_SCALARS = Object.freeze([
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.status,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.generation,
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.continent,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorX,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorY,
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMinX,
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMinY,
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMaxX,
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMaxY,
 ]);
 
 type NativeFrameGlobals = Readonly<{
@@ -249,8 +259,13 @@ export type ExplorationSpikeController = SpikeController<ExplorationSpikeSnapsho
 export type WorldMapAnchorSpikeSnapshot = Readonly<{
   status: number;
   generation: number;
+  continent: number;
   worldAnchorX: number;
   worldAnchorY: number;
+  mapMinX: number;
+  mapMinY: number;
+  mapMaxX: number;
+  mapMaxY: number;
 }>;
 
 export type WorldMapAnchorSpikeController = SpikeController<WorldMapAnchorSpikeSnapshot>;

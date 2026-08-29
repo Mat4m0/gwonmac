@@ -70,6 +70,12 @@ under the MIT License and identifies it as derived from
 [GuildWarsMapBrowser](https://github.com/Jonathan-Greve/GuildWarsMapBrowser) by
 Jonathan Bjørn Greve. It decompresses an archive stream and decodes a texture.
 
+`src/renderer/cartography-spike/toolbox-cartography-data.ts` contains compact
+cell masks converted from GWToolbox++ `CartographyData.h` at commit
+`cbe940d3edcc0c47fc02a59079a8f6e08d11f4cf`. They identify standable and
+creditable cartography cells without bundling map textures or annotations.
+The source file is distributed by GWToolbox++ under its MIT License.
+
 Both grants are included as `COPYING-GWTOOLBOX` and
 `COPYING-GUILDWARSMAPBROWSER` beside the source and in the packaged
 application's Resources directory.
