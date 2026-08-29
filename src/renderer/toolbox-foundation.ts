@@ -203,8 +203,11 @@ export function createToolboxFoundation(
   const stopAtOverlay = (event: Event) => event.stopPropagation();
   for (const name of [
     "keydown", "keyup", "pointerdown", "pointerup", "pointermove",
-    "mousedown", "mouseup", "mousemove", "click", "wheel", "contextmenu",
+    "mousedown", "mouseup", "mousemove", "click", "contextmenu",
   ]) root.addEventListener(name, stopAtOverlay);
+  // A non-passive wheel listener makes Chromium send native scrolling through
+  // the main thread. Tools only contains the event; it never cancels scrolling.
+  root.addEventListener("wheel", stopAtOverlay, { passive: true });
 
   const mirrorCursor = () => { root.style.cursor = canvas.style.cursor; };
   const cursorMirror = new MutationObserver(mirrorCursor);

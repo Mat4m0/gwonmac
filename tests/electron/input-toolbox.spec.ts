@@ -240,6 +240,19 @@ test.describe("renderer Tools input", () => {
       const trade = page.getByTestId("stub-trade");
       await expect(root).not.toHaveAttribute("data-open");
       await expect(tool).toBeHidden();
+      const cdp = await fixture.app.context().newCDPSession(page);
+      const rootHandle = await cdp.send("Runtime.evaluate", {
+        expression: "document.querySelector('#toolbox-foundation')",
+      });
+      if (!rootHandle.result.objectId) throw new Error("Tools root is missing");
+      const { listeners } = await cdp.send("DOMDebugger.getEventListeners", {
+        objectId: rootHandle.result.objectId,
+      });
+      expect(listeners).toContainEqual(expect.objectContaining({
+        type: "wheel",
+        passive: true,
+      }));
+      await cdp.detach();
 
       // The game owns canvas clicks while the palette is closed.
       await page.locator("#canvas").click({ position: GAME_POINT });
