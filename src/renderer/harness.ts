@@ -435,7 +435,6 @@ function requestHeapCap() {
             }
           },
         },
-        window.gwSurfaces,
       );
       disposeMemoryWarningSettings();
       disposeMemoryWarningSettings = native().settings.onChange((updated) => {

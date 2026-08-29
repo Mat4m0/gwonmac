@@ -6,6 +6,8 @@ type KeyboardInputWindow = typeof window & {
   __gameKeys: string[];
 };
 
+type MemoryWarningModule = typeof import("../../src/renderer/memory-warning.js");
+
 /**
  * ArenaNet's generated host object owns the active OSK field. Intersecting its
  * declaration keeps these tests narrower than an untyped Module replacement.
@@ -152,6 +154,62 @@ test.describe("renderer keyboard input", () => {
         await Promise.resolve();
         return document.activeElement?.id;
       })).toBe("canvas");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
+  test("keeps the memory warning passive until a player clicks it", async () => {
+    const fixture = await launchCachedClient("gw-memory-warning-input-e2e-");
+    try {
+      const { page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(async () => {
+        const canvas = document.getElementById("canvas");
+        if (!(canvas instanceof HTMLCanvasElement)) {
+          throw new Error("#canvas is missing");
+        }
+        const moduleUrl: string = "gw://app/memory-warning.js";
+        const { bindMemoryWarning } = await import(moduleUrl) as MemoryWarningModule;
+        const presenter = bindMemoryWarning(document, {
+          autoRelogAfterReload: false,
+          async saveAutoRelog() {},
+          reload() {},
+        });
+        if (!presenter) throw new Error("memory warning is unavailable");
+
+        canvas.dataset.memoryWarningKeys = "";
+        canvas.addEventListener("keydown", (event) => {
+          canvas.dataset.memoryWarningKeys += `${event.code} `;
+        }, true);
+        canvas.focus();
+        presenter.present("critical", 2_147_483_648);
+      });
+
+      const canvas = page.locator("#canvas");
+      await expect(page.locator("#memory-notice")).toBeVisible();
+      expect(await page.evaluate(() => document.activeElement?.id)).toBe("canvas");
+      await page.keyboard.press("Tab");
+      // This fixture has no client-owned Tab default. Restore the game target
+      // so Escape independently proves that the warning does not claim it.
+      await canvas.evaluate((element) => {
+        if (!(element instanceof HTMLCanvasElement)) {
+          throw new Error("#canvas is missing");
+        }
+        element.focus();
+      });
+      await page.keyboard.press("Escape");
+      await expect(canvas).toHaveAttribute("data-memory-warning-keys", "Tab Escape ");
+      await expect(page.locator("#memory-notice")).toBeVisible();
+
+      await page.getByRole("button", { name: "Later" }).evaluate((button) => {
+        if (!(button instanceof HTMLButtonElement)) {
+          throw new Error("Later button is missing");
+        }
+        button.click();
+      });
+      await expect(page.locator("#memory-notice")).toBeHidden();
+      expect(await page.evaluate(() => document.activeElement?.id)).toBe("canvas");
     } finally {
       await closeOffline(fixture);
     }
