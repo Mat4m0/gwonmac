@@ -302,7 +302,7 @@ test("the Stable rollback proof respects the Build Library feature gate", () => 
     candidatePhase,
   );
   const candidateOptOut = roundTrip.indexOf(
-    "buildLibrary: false",
+    'tool: "build-management"',
     candidateLibraryWrite,
   );
   const rollbackPhase = roundTrip.indexOf(
@@ -310,7 +310,7 @@ test("the Stable rollback proof respects the Build Library feature gate", () => 
   );
   const rollbackOptOut = roundTrip.indexOf("returnedSettings.buildLibrary", rollbackPhase);
   const rollbackEnable = roundTrip.indexOf(
-    "settings.set({ buildLibrary: true })",
+    "updateStableSettings(running, { buildLibrary: true })",
     rollbackOptOut,
   );
   const rollbackLibraryRead = roundTrip.indexOf(
@@ -351,6 +351,28 @@ test("the Stable domain proof writes through the candidate rollback serializer",
   assert.doesNotMatch(
     domainProof,
     /JSON\.stringify\(\{ formatVersion: 1, \.\.\.settings \}\)/,
+  );
+});
+
+test("the Stable rollback proof preserves unified-launcher cutover documents", () => {
+  const roundTrip = read("scripts/verify-stable-beta-roundtrip.ts");
+
+  assert.match(roundTrip, /launcher-mode\.json/);
+  assert.match(roundTrip, /multi\/workspace\.json/);
+  assert.match(roundTrip, /launcher-state\.json/);
+  assert.match(roundTrip, /assertCandidateAdoptedWithoutChangingStableOwners/);
+  assert.match(roundTrip, /assertRollbackIgnoredCandidateLauncherDocuments/);
+  assert.match(
+    roundTrip,
+    /returned\.launcherMode,[\s\S]*candidateDocuments\.launcherMode/,
+  );
+  assert.match(
+    roundTrip,
+    /returned\.workspace,[\s\S]*candidateDocuments\.workspace/,
+  );
+  assert.match(
+    roundTrip,
+    /returned\.launcherState,[\s\S]*candidateDocuments\.launcherState/,
   );
 });
 

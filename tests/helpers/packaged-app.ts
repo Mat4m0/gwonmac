@@ -63,8 +63,11 @@ async function isLauncherPage(page: Page): Promise<boolean> {
 async function waitForGamePage(
   browser: Browser,
   previousPages: ReadonlySet<Page>,
+  launchFailure: () => unknown,
 ): Promise<Page> {
   return waitUntil("the packaged game window", async () => {
+    const failure = launchFailure();
+    if (failure !== undefined) throw failure;
     for (const page of allPages(browser)) {
       if (previousPages.has(page) || page.isClosed()) continue;
       try {
@@ -88,10 +91,22 @@ export async function openPackagedProfile(
     throw new Error("this packaged app has no unified launcher page");
   }
   const previousPages = new Set(allPages(running.browser));
-  await launcher.evaluate((id) => {
-    void window.launcherNative.profiles.play([id]).catch(() => undefined);
-  }, profileId);
-  return waitForGamePage(running.browser, previousPages);
+  let launchFailure: unknown;
+  // The first profile's Play promise settles only after that game proves its
+  // presentation and client canary. A package proof needs the page in order
+  // to exercise those renderer-owned steps, so observe an early rejection
+  // while waiting for the window instead of deadlocking on the command first.
+  void launcher.evaluate(
+    (id) => window.launcherNative.profiles.play([id]),
+    profileId,
+  ).catch((error: unknown) => {
+    launchFailure = error;
+  });
+  return waitForGamePage(
+    running.browser,
+    previousPages,
+    () => launchFailure,
+  );
 }
 
 /**
@@ -184,7 +199,10 @@ export async function closePackagedApp(
   // Closing the unified launcher's game window deliberately leaves its
   // companion available. Ask the app to perform its normal coordinated quit
   // so release proofs cover shutdown and do not wait for a forced signal.
-  await page.evaluate(() => window.gwNative.app.requestQuit()).catch(() => {});
+  await Promise.race([
+    page.evaluate(() => window.gwNative.app.requestQuit()).catch(() => {}),
+    delay(4_000),
+  ]);
   await page.close().catch(() => {});
   await browser.close().catch(() => {});
   if (await waitForExit(child, 6_000)) return;
