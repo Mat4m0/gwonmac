@@ -110,6 +110,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.equal(observation.tier, "observation");
     assert.equal("GW_ENHANCEMENT_AUTOMATION" in observation.env, false);
     assert.equal(planFor("graphics-probe").scenario.program, "none");
+    assert.equal(planFor("cartography-probe").scenario.program, "none");
 
     const automation = planFor("movement");
     assert.equal(automation.env.GW_ENHANCEMENT_AUTOMATION, "1");
@@ -120,6 +121,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     // channel there is nothing to send on: child.send does not exist.
     assert.deepEqual(planFor("cursor-capture").stdio, ["ignore", "pipe", "pipe"]);
     assert.deepEqual(planFor("graphics-probe").stdio, ["ignore", "pipe", "pipe"]);
+    assert.deepEqual(planFor("cartography-probe").stdio, ["ignore", "pipe", "pipe"]);
     assert.deepEqual(planFor("movement").stdio, [
       "ignore",
       "pipe",
