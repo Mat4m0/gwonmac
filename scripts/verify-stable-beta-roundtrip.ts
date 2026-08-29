@@ -4,12 +4,11 @@
  *
  * This intentionally launches the two signed app bundles, not two source
  * checkouts. It is the stable-enabler gate for the first Beta and the recurring
- * compatibility gate after that. There is no migration framework: if a
- * candidate adds a durable settings key or accepted value that Stable does not
- * already own, or changes any durable shape in a way Stable cannot round-trip,
- * the release is refused. New settings therefore expand in Stable first and
- * may be used by a later candidate; old fields contract only after the
- * supported Stable baseline no longer needs them.
+ * compatibility gate after that. Stable-owned settings and player data must
+ * survive unchanged. A candidate may add settings that the older Stable does
+ * not own; deliberately returning to that Stable may discard those additive
+ * preferences, and a later candidate recreates their safe defaults. The proof
+ * still refuses a candidate that removes or changes any Stable-owned field.
  */
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -65,6 +64,7 @@ import {
 } from "../tests/helpers/packaged-app.ts";
 import {
   canonicalizeStableSettings,
+  projectStableOwnedSettings,
   validateCandidateSettings,
 } from "./release-settings-compatibility.ts";
 
@@ -299,32 +299,39 @@ const candidateSettingsDomains = Array.from(
   },
 );
 
-async function proveStableAcceptsCandidateSettingDomains(
+async function proveStablePreservesOwnedSettingDomains(
   cohort: Cohort,
   stablePath: string,
 ): Promise<void> {
+  const stableBaseline = await withPackagedApp(cohort, stablePath, async (stable) =>
+    canonicalizeStableSettings(
+      await stable.page.evaluate(() => window.gwNative.settings.get()),
+      { disk: false },
+    )
+  );
   for (const [index, settings] of candidateSettingsDomains.entries()) {
+    const expected = projectStableOwnedSettings(settings, stableBaseline);
     await saveSettings(path.join(cohort.userData, "settings.json"), settings);
     await withPackagedApp(cohort, stablePath, async (stable) => {
       const read = await stable.page.evaluate(() => window.gwNative.settings.get());
       assert.deepEqual(
         canonicalizeStableSettings(read, { disk: false }),
-        settings,
-        `latest Stable refused candidate settings-domain case ${index + 1}`,
+        expected,
+        `latest Stable changed an owned settings-domain value in case ${index + 1}`,
       );
       assert.deepEqual(
         canonicalizeStableSettings(
           await stable.page.evaluate(() => window.gwNative.settings.set({})),
           { disk: false },
         ),
-        settings,
-        `latest Stable could not rewrite candidate settings-domain case ${index + 1}`,
+        expected,
+        `latest Stable could not rewrite its owned settings-domain values in case ${index + 1}`,
       );
     });
     assert.deepEqual(
       canonicalizeStableSettings(await readSettingsDocument(cohort), { disk: true }),
-      settings,
-      `latest Stable changed candidate settings-domain case ${index + 1}`,
+      expected,
+      `latest Stable changed its owned settings-domain values on disk in case ${index + 1}`,
     );
   }
   const names = await readdir(cohort.userData);
@@ -334,9 +341,6 @@ async function proveStableAcceptsCandidateSettingDomains(
     "latest Stable quarantined a candidate-owned settings value",
   );
 }
-
-const sortedKeys = (value: Record<string, unknown>): string[] =>
-  Object.keys(value).sort();
 
 async function readCoreCanonical(page: Page): Promise<{
   settings: Record<string, unknown>;
@@ -371,13 +375,20 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
   await withPackagedApp(cohort, candidateApp!, async (core) => {
     const initial = await readCoreCanonical(core.page);
     assert.deepEqual(initial.toolNamespaces, [], "candidate Core launch exposed a Tools namespace");
-    assert.deepEqual(initial.settings, stableSettings, "candidate changed Stable-owned Core settings");
+    assert.deepEqual(
+      projectStableOwnedSettings(initial.settings, stableSettings),
+      stableSettings,
+      "candidate changed Stable-owned Core settings",
+    );
     assert.equal(initial.settings.buildLibrary, false, "candidate lost the legacy Apply-Team opt-out");
     const changed = validateCandidateSettings(
       await core.page.evaluate(() => window.gwNative.settings.set({ showDiagnostics: true })),
       { disk: false },
     );
-    assert.deepEqual(changed, { ...stableSettings, showDiagnostics: true });
+    assert.deepEqual(
+      projectStableOwnedSettings(changed, stableSettings),
+      { ...stableSettings, showDiagnostics: true },
+    );
     await roundTripProfileStore(core.page, "stable-core-template", "candidate-core-template");
     await assertWindowMatchesPersistedState(candidateWindowState, core.page);
   });
@@ -540,8 +551,8 @@ const finalLibrary: BuildLibrary = {
 };
 
 async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
-  console.log("stable/beta compatibility: Stable accepts candidate value domains");
-  await proveStableAcceptsCandidateSettingDomains(toolsCohort, stablePath);
+  console.log("stable/beta compatibility: Stable preserves its owned value domains");
+  await proveStablePreservesOwnedSettingDomains(toolsCohort, stablePath);
   await writeFile(
     path.join(toolsCohort.userData, "settings.json"),
     JSON.stringify({
@@ -647,16 +658,23 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   });
   await publishWindowSize(toolsCohort, 960, 680);
   const candidateSettingsDocument = await readSettingsDocument(toolsCohort);
-  assert.deepEqual(
-    sortedKeys(validateCandidateSettings(candidateSettingsDocument, { disk: true })),
-    sortedKeys(canonicalizeStableSettings(stableSettingsDocument, { disk: true })),
-    "candidate introduced or removed a durable settings key; ship the schema expansion in Stable before the beta/RC uses it",
+  const stableSettingsBeforeCandidate = canonicalizeStableSettings(
+    stableSettingsDocument,
+    { disk: true },
+  );
+  const candidateSettings = validateCandidateSettings(
+    candidateSettingsDocument,
+    { disk: true },
+  );
+  const stableSettingsAfterCandidate = projectStableOwnedSettings(
+    candidateSettings,
+    stableSettingsBeforeCandidate,
   );
 
   console.log("stable/beta compatibility: the same Stable reads and writes again");
   const rollbackWindowState = await readPersistedWindowState(toolsCohort);
   const expectedFinalSettings: Record<string, unknown> = {
-    ...validateCandidateSettings(candidateSettingsDocument, { disk: true }),
+    ...stableSettingsAfterCandidate,
     showDiagnostics: false,
     updateTrack: "stable",
   };
@@ -675,8 +693,8 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
     assert.equal(returnedSettings.buildLibrary, false, "rollback Stable lost the opt-out");
     assert.deepEqual(
       returnedSettings,
-      validateCandidateSettings(candidateSettingsDocument, { disk: true }),
-      "Stable did not read every candidate-written settings value",
+      stableSettingsAfterCandidate,
+      "Stable changed a candidate-written setting it owns",
     );
     await running.page.evaluate(() => window.gwNative.settings.set({ buildLibrary: true }));
     const returned = await readToolsCanonical(running.page);
