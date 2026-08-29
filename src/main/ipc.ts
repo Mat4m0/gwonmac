@@ -20,7 +20,6 @@ import {
   EXTERNAL_URLS,
   IPC,
   type AppSettings,
-  type AppSettingsPatch,
   type AccountsSetupRequest,
   type AccountProfileCreateRequest,
   type AccountProfileUpdateRequest,
@@ -41,6 +40,7 @@ import {
   type InvokeChannel,
   type GameTextEditRequest,
   type RevealKind,
+  type RendererSettingsPatch,
   type SocketEvent,
   type SettingsResetOutcome,
   type SnapshotMetadata,
@@ -145,7 +145,7 @@ export interface IpcContext {
   getSnapshotMetadata: () => Promise<SnapshotMetadata>;
   getCacheInfo: () => Promise<CacheInfo>;
   getSettings: () => Promise<AppSettings>;
-  updateSettings: (patch: AppSettingsPatch) => Promise<AppSettings>;
+  updateSettings: (patch: RendererSettingsPatch) => Promise<AppSettings>;
   setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
   resetSettings: () => Promise<SettingsResetOutcome>;
   /** Whether this process started with every certified Tools capability prepared. */

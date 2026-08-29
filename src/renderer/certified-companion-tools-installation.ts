@@ -22,6 +22,10 @@ import {
   setSkillGeometryReadiness,
 } from "./observer-readiness.js";
 import * as tools from "./certified-companion-tools.js";
+import {
+  clearCartographyPlayerState,
+  updateCartographyPlayerState,
+} from "./cartography-player-state.js";
 
 const EMPTY_REGION = Object.freeze({ pointer: 0, bytes: 0 });
 
@@ -195,6 +199,10 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const snapshot = () => source.snapshot;
   const policy = () => snapshot().policy;
   const playRegion = () => snapshot().playRegion;
+  const cartographyActive = () => {
+    const settings = window.gwToolsSettings();
+    return settings.cartographyOverlayEnabled || settings.cartographyGridEnabled;
+  };
   let companionState: CompanionSnapshot | null = null;
   let party: ToolboxObservation | null = null;
   let readout: ReturnType<typeof tools.createTargetReadout> | null = null;
@@ -290,7 +298,8 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
       | (foundation && policy().tools ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
       | (capabilities.playRegionObservation ? COMPANION_FEATURE_BITS.playRegionObservation : 0)
-      | (policy().targetReadout ? COMPANION_FEATURE_BITS.targetObservation : 0)
+      | (policy().targetReadout || cartographyActive()
+        ? COMPANION_FEATURE_BITS.targetObservation : 0)
       | skills.activeFeatureFlags,
     0, 0, 0, 0,
   );
@@ -356,8 +365,15 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
           enabled: () => policy().tradeChat,
         }]),
       ],
-      state: observeState ? { enabled: () => policy().targetReadout || policy().xunlaiStorage,
-        update: (state) => { companionState = state; readout?.update(state); syncStorage(); } } : null,
+      state: observeState ? {
+        enabled: () => policy().targetReadout || policy().xunlaiStorage || cartographyActive(),
+        update: (state) => {
+          companionState = state;
+          updateCartographyPlayerState(state);
+          readout?.update(state);
+          syncStorage();
+        },
+      } : null,
       toolbox: foundation ? { enabled: () => policy().buildLibrary,
         update: (state) => { party = state; professionTrace?.poll(state); toolbox?.update(state); } } : null,
       observeState,
@@ -407,7 +423,10 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       return commands === null ? base : Object.assign(base, commands);
     },
     withdrawPolicy: source.dispose,
-    disposePresentation,
+    disposePresentation() {
+      clearCartographyPlayerState();
+      disposePresentation();
+    },
     releaseObserverMemory(free) {
       runCleanupSteps("Companion Tools observer memory cleanup failed", [
         () => slots?.release(free),

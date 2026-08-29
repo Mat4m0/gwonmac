@@ -58,7 +58,7 @@ register(
 // gate deleted, since the environment half is false either way.
 process.env.GW_ENHANCEMENT_AUTOMATION = "1";
 process.env.GW_ENHANCEMENT_PROGRAM = "toolbox-foundation";
-
+process.env.GW_LIVE_SMOKE = "1";
 const {
   DEVELOPER_ENHANCEMENT_PROGRAM,
   ENHANCEMENT_AUTOMATION_ENABLED,
@@ -69,7 +69,7 @@ const { effectiveCapabilities } = await import(
   "../../src/renderer/effective-enhancement-capabilities.ts"
 );
 
-test("a packaged build refuses GW_ENHANCEMENT_AUTOMATION=1, so the tools decide alone", () => {
+test("a packaged build refuses every developer gate", () => {
   assert.equal(process.env.GW_ENHANCEMENT_AUTOMATION, "1");
   assert.equal(ENHANCEMENT_AUTOMATION_ENABLED, false);
   assert.equal(DEVELOPER_ENHANCEMENT_PROGRAM, "none");

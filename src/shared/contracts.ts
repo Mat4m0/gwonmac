@@ -70,6 +70,11 @@ import {
   DEFAULT_CUSTOM_UI_THEME,
   type CustomUiTheme,
 } from "./ui-theme.js";
+import {
+  DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
+  type CartographyPresetLibrary,
+  type CartographyPresetRef,
+} from "./cartography-overlay.js";
 import type { EnhancementSelection } from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
 import {
@@ -383,6 +388,20 @@ export interface AppSettings {
    * game behind them. This is presentation only and never reaches the game.
    */
   uiPanelOpacity: number;
+  /** Show certified walkability on the native Compass and Mission Map. */
+  cartographyOverlayEnabled: boolean;
+  /** Draw the game's fixed cartography cells over both native map surfaces. */
+  cartographyGridEnabled: boolean;
+  /** Persistent Compass footprint; Mission Map hover uses Shift or Option+Shift. */
+  cartographyRevealMode: "off" | "normal" | "birds-eye";
+  /** Active built-in or player-owned appearance and all custom presets. */
+  cartographyPresetLibrary: CartographyPresetLibrary;
+  /** Walkability veil and boundary strength, as a whole percentage. */
+  cartographyWalkabilityOpacity: number;
+  /** Grid, reveal ranges, and unseen-cell strength, as a whole percentage. */
+  cartographyGridOpacity: number;
+  /** Visibility of the collapsed Compass control, as a whole percentage. */
+  cartographyControlIdleOpacity: number;
   /** Master opt-in for the optional executable Tools Beta capability. */
   gwonmacTools: boolean;
   /** Show the saved Build Library and allow its app shortcut. */
@@ -452,9 +471,32 @@ export interface AppSettings {
 }
 
 export type AppSettingsPatch = Partial<AppSettings>;
-/** Settings fields the sandboxed renderer may write through generic IPC. */
-export type RendererSettingsPatch = Omit<AppSettingsPatch, "travelShortcuts">
-  & Readonly<{ travelShortcuts?: never }>;
+/**
+ * Settings fields the sandboxed renderer may write through generic IPC.
+ * Preset selection is an operation rather than a stored field: main applies it
+ * to the latest library under the preferences lock, so a compact-map choice
+ * cannot overwrite edits made in the full Settings window.
+ */
+type RendererStoredSettingsPatch = Omit<
+  AppSettingsPatch,
+  "travelShortcuts"
+> & Readonly<{
+  travelShortcuts?: never;
+  cartographyPresetSelection?: never;
+}>;
+
+type RendererPresetSelectionPatch = Omit<
+  RendererStoredSettingsPatch,
+  "cartographyPresetLibrary" | "cartographyPresetSelection"
+> & Readonly<{
+  cartographyPresetLibrary?: never;
+  cartographyPresetSelection: CartographyPresetRef;
+}>;
+
+/** A renderer write may replace the library or select from it, never both. */
+export type RendererSettingsPatch =
+  | RendererStoredSettingsPatch
+  | RendererPresetSelectionPatch;
 
 export type SettingsResetOutcome =
   | Readonly<{
@@ -477,6 +519,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiFont: "guild-wars",
   controllerPromptStyle: "game-default",
   uiPanelOpacity: 94,
+  cartographyOverlayEnabled: false,
+  cartographyGridEnabled: false,
+  cartographyRevealMode: "off",
+  cartographyPresetLibrary: DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
+  cartographyWalkabilityOpacity: 55,
+  cartographyGridOpacity: 65,
+  cartographyControlIdleOpacity: 35,
   gwonmacTools: false,
   buildLibrary: true,
   tradeChat: true,
@@ -634,6 +683,7 @@ export type SettingsPane =
   | "data"
   | "templates"
   | "display"
+  | "maps"
   | "controls"
   | "updates"
   | "advanced";
@@ -706,6 +756,7 @@ export type ExtendedMemoryRuntimeStatus =
 
 export type ClientTransforms = Readonly<{
   templateSave: boolean;
+  cartography: boolean;
   nativeDoubleClick: boolean;
 }>;
 
@@ -719,7 +770,12 @@ export type RuntimeEnhancementFeatureVerdict = Readonly<{
 export type RuntimeEnhancementVerification = Readonly<{
   requestedProfile: EnhancementCapabilityProfile | null;
   effectiveProfile: EnhancementCapabilityProfile | null;
-  preparationFailureStage: "template-save" | "enhancement" | "native-double-click" | null;
+  preparationFailureStage:
+    | "template-save"
+    | "enhancement"
+    | "cartography"
+    | "native-double-click"
+    | null;
   featureVerdicts: Readonly<Record<
     EnhancementCapability,
     RuntimeEnhancementFeatureVerdict

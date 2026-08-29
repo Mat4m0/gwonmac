@@ -95,6 +95,7 @@
 .settings-panes[data-active="data"] #settings-pane-data,
 .settings-panes[data-active="templates"] #settings-pane-templates,
 .settings-panes[data-active="display"] #settings-pane-display,
+.settings-panes[data-active="maps"] #settings-pane-maps,
 .settings-panes[data-active="controls"] #settings-pane-controls,
 .settings-panes[data-active="updates"] #settings-pane-updates,
 .settings-panes[data-active="accounts"] #settings-pane-accounts,
