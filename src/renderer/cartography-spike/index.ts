@@ -9,6 +9,7 @@ import { createPathingSpikeReader } from "./pathing-observer.js";
 import { createExplorationSpikeReader } from "./exploration-observer.js";
 import { createWorldMapAnchorSpikeReader } from "./world-map-anchor-observer.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
+import { readCartographyPlayerState } from "../cartography-player-state.js";
 
 /** Install the complete feature or do nothing; never mount a misleading subset. */
 export function installCartographySpike(options: Readonly<{
@@ -42,7 +43,7 @@ export function installCartographySpike(options: Readonly<{
     pathing,
     exploration,
     worldMapAnchor,
-    companion: () => window.gwCompanionState,
+    companion: readCartographyPlayerState,
     settings: options.settings,
     persist: options.persist,
   });

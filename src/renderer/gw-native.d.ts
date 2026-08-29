@@ -251,6 +251,8 @@ declare global {
       xunlaiStorage: boolean;
       travelPalette: boolean;
       targetReadout: boolean;
+      cartographyOverlayEnabled: boolean;
+      cartographyGridEnabled: boolean;
       skillKeyBindings: AppSettings['skillKeyBindings'];
       skillKeyLabelsEnabled: boolean;
       skillCooldownOverlayEnabled: boolean;

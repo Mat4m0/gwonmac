@@ -534,6 +534,8 @@ window.gwToolsSettings = () => Object.freeze({
   xunlaiStorage: appSettings?.xunlaiStorage ?? false,
   travelPalette: appSettings?.travelPalette ?? false,
   targetReadout: appSettings?.targetReadout ?? false,
+  cartographyOverlayEnabled: appSettings?.cartographyOverlayEnabled ?? false,
+  cartographyGridEnabled: appSettings?.cartographyGridEnabled ?? false,
   skillKeyBindings: appSettings?.skillKeyBindings ?? emptySkillKeyBindings,
   skillKeyLabelsEnabled: appSettings?.skillKeyLabelsEnabled ?? false,
   skillCooldownOverlayEnabled: appSettings?.skillCooldownOverlayEnabled ?? true,
