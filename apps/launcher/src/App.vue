@@ -219,6 +219,15 @@ async function completeIntroduction() {
   else snapshot.value = { ...snapshot.value, experience: { ...snapshot.value.experience, introduction: "complete" } };
 }
 
+async function dismissMigrationNotice() {
+  if (native) await runAction("The notice could not be dismissed.", () => native.experience.dismissMigrationNotice());
+  else snapshot.value = { ...snapshot.value, experience: { ...snapshot.value.experience, showMigrationNotice: false } };
+}
+
+async function openExternal(kind: Parameters<NonNullable<typeof native>["external"]["open"]>[0]) {
+  await runAction("The link could not be opened.", () => native?.external.open(kind));
+}
+
 async function updateContent(content: NonNullable<LauncherPreferencesPatch["content"]>) {
   await runAction("Content settings could not be saved.", () => native?.experience.updatePreferences({ content }));
   if (!native) snapshot.value = { ...snapshot.value, preferences: { content: { ...snapshot.value.preferences.content, ...content } } };
@@ -287,11 +296,11 @@ async function replaceToolShortcut() {
     <section v-else class="funding-banner">
       <div><strong>Help cover the yearly costs</strong><span>Apple Developer Program, domain, and hosting</span></div>
       <div class="funding-progress"><span>{{ fixtureContent ? '€42 raised' : 'Yearly cost' }}</span><div><i :style="{ width: fixtureContent ? '34%' : '0%' }" /></div><span>€125 goal</span></div>
-      <button @click="native?.external.open('donate')">Support project</button>
+      <button @click="openExternal('donate')">Support project</button>
     </section>
 
     <main :class="{ 'artwork-only': route === 'home' && !snapshot.preferences.content.news && !snapshot.preferences.content.dailies }">
-      <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('content')" @issues="route = 'issues'" @external="native?.external.open($event)" />
+      <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('content')" @issues="route = 'issues'" @external="openExternal" />
 
       <section v-else-if="route === 'accounts'" class="page accounts-page">
         <div class="page-head"><div><span class="eyebrow">Accounts</span><h1>Game windows</h1><p>Add another account when you want another game window.</p></div><button class="secondary" @click="addOpen = true"><Plus />Add account</button></div>
@@ -303,12 +312,12 @@ async function replaceToolShortcut() {
             <div class="account-actions"><button class="secondary" @click="editAppearance(profile)"><Settings />Customize</button><button v-if="profile.state === 'running'" class="secondary" @click="runAction('The game window could not be shown.', () => native?.profiles.show(profile.id))">Show</button><template v-else><button v-if="profile.id !== visibleProfiles[0]?.id" class="text-link" @click="runAction('The account could not be archived.', () => native?.profiles.archive(profile.id))">Archive</button><button class="secondary" @click="runAction('This account could not be opened. Try again.', () => native?.profiles.play([profile.id]))"><RotateCcw v-if="profile.state === 'failed'" /><Play v-else />{{ profile.state === 'failed' ? 'Try again' : 'Play' }}</button></template></div>
           </article>
         </div>
-        <details v-if="snapshot.profiles.some(profile => profile.archived)" class="archived-accounts"><summary>Archived accounts</summary><article v-for="profile in snapshot.profiles.filter(candidate => candidate.archived)" :key="profile.id"><span>{{ profile.name }}</span><button class="secondary" @click="native?.profiles.restore(profile.id)">Restore</button><button class="danger-button" @click="native?.profiles.delete(profile.id)">Delete permanently</button></article></details>
+        <details v-if="snapshot.profiles.some(profile => profile.archived)" class="archived-accounts"><summary>Archived accounts</summary><article v-for="profile in snapshot.profiles.filter(candidate => candidate.archived)" :key="profile.id"><span>{{ profile.name }}</span><button class="secondary" @click="runAction('The account could not be restored.', () => native?.profiles.restore(profile.id))">Restore</button><button class="danger-button" @click="runAction('The account could not be deleted.', () => native?.profiles.delete(profile.id))">Delete permanently</button></article></details>
       </section>
 
       <section v-else-if="route === 'issues'" class="page">
         <div class="page-head"><div><span class="eyebrow">Support</span><h1>Known issues</h1><p>Current game and macOS issues, with workarounds when we have one.</p></div></div>
-        <div v-if="snapshot.contentAvailability.knownIssues === 'placeholder'" class="empty-state"><AlertTriangle /><h3>Known Issues are not connected yet.</h3><p>Check GitHub or Discord for current reports and workarounds.</p><div class="form-actions"><button class="secondary" @click="native?.external.open('discord')">Open Discord</button><button class="primary" @click="native?.external.open('github')">Open GitHub</button></div></div>
+        <div v-if="snapshot.contentAvailability.knownIssues === 'placeholder'" class="empty-state"><AlertTriangle /><h3>Known Issues are not connected yet.</h3><p>Check GitHub or Discord for current reports and workarounds.</p><div class="form-actions"><button class="secondary" @click="openExternal('discord')">Open Discord</button><button class="primary" @click="openExternal('github')">Open GitHub</button></div></div>
         <div v-else class="issue-list">
           <article><AlertTriangle /><div><h3>Some textures may appear black</h3><p>Restart the affected game window. Your saved data is not affected.</p><button class="text-link">View workaround <ExternalLink /></button></div><span>Game</span></article>
           <article><AlertTriangle /><div><h3>Long sessions can use too much memory</h3><p>Close and reopen the game window when macOS shows a memory warning.</p></div><span>Game</span></article>
@@ -323,9 +332,9 @@ async function replaceToolShortcut() {
           <div class="form-row"><label>Type<select><option>Problem</option><option>Idea</option><option>Something else</option></select></label><label>Email (optional)<input type="email" placeholder="name@example.com" /></label></div>
           <button type="button" class="attachment"><Plus />Add screenshot or file</button>
           <p class="placeholder-note">Direct feedback is not connected yet. For now, continue on GitHub or Discord.</p>
-          <div class="form-actions"><button class="secondary" @click="native?.external.open('discord')">Open Discord</button><button class="primary" @click="native?.external.open('bugReport')">Open GitHub issue</button></div>
+          <div class="form-actions"><button class="secondary" @click="openExternal('discord')">Open Discord</button><button class="primary" @click="openExternal('bugReport')">Open GitHub issue</button></div>
         </form>
-        <div v-else class="empty-state"><MessageSquareText /><h3>Direct feedback is not connected yet.</h3><p>For now, send a problem or idea through GitHub or talk to us on Discord.</p><div class="form-actions"><button class="secondary" @click="native?.external.open('discord')">Open Discord</button><button class="primary" @click="native?.external.open('bugReport')">Open GitHub issue</button></div></div>
+        <div v-else class="empty-state"><MessageSquareText /><h3>Direct feedback is not connected yet.</h3><p>For now, send a problem or idea through GitHub or talk to us on Discord.</p><div class="form-actions"><button class="secondary" @click="openExternal('discord')">Open Discord</button><button class="primary" @click="openExternal('bugReport')">Open GitHub issue</button></div></div>
       </section>
 
       <section v-else class="settings-page">
@@ -347,7 +356,7 @@ async function replaceToolShortcut() {
             </div>
           </template>
           <template v-else-if="settingsRoute === 'game-files'"><h1>Game files</h1><p>Game files are shared by every account.</p><div class="setting-group"><div class="setting-row"><span><strong>Guild Wars client</strong><small v-if="gameFilesLoading">Checking game files…</small><small v-else-if="gameFilesInfo">{{ cacheSummary(gameFilesInfo) }}</small><small v-else>File details are unavailable.</small></span><span :class="{ good: snapshot.readiness.state !== 'repair-required' }">{{ snapshot.readiness.state === 'repair-required' ? 'Needs repair' : snapshot.readiness.state === 'preparing' ? 'Preparing' : 'Ready' }}</span></div><div v-if="snapshot.readiness.state === 'preparing'" class="download-card"><div><strong>{{ snapshot.readiness.progress.label }}</strong><span>{{ formatProgress(snapshot.readiness.progress) }}</span></div><progress :value="snapshot.readiness.progress.received" :max="snapshot.readiness.progress.total || 1" /></div><div v-else-if="snapshot.readiness.state === 'playable' && snapshot.readiness.backgroundDownload" class="download-card"><div><strong>Complete game download</strong><span v-if="snapshot.readiness.backgroundDownload.status === 'running'">Downloading in the background. You can play now.</span><span v-else-if="snapshot.readiness.backgroundDownload.status === 'paused'">Download paused. You can still play.</span><span v-else-if="snapshot.readiness.backgroundDownload.status === 'failed'">The background download stopped. Verified files were kept.</span><span v-else-if="snapshot.readiness.backgroundDownload.status === 'complete'">All game files are available offline.</span><span v-else>Pausing download…</span></div><button v-if="snapshot.readiness.backgroundDownload.status === 'running'" class="secondary" @click="runGameFilesAction('The download could not be paused.', () => native?.gameFiles.pauseDownload())">Pause</button><button v-else-if="snapshot.readiness.backgroundDownload.status === 'paused' || snapshot.readiness.backgroundDownload.status === 'failed'" class="secondary" @click="runGameFilesAction('The download could not be resumed.', () => native?.gameFiles.resumeDownload())">{{ snapshot.readiness.backgroundDownload.status === 'failed' ? 'Try again' : 'Resume' }}</button></div><div class="file-actions"><button v-if="snapshot.readiness.state === 'repair-required'" class="primary" @click="runGameFilesAction('Game files could not be repaired.', () => native?.gameFiles.repair())"><Wrench />Repair game files</button><button v-else class="secondary" @click="runGameFilesAction('Game files could not be checked.', () => native?.gameFiles.repair())"><Wrench />Check and repair game files</button><button v-if="snapshot.readiness.state === 'repair-required'" class="secondary" @click="runGameFilesAction('Game preparation could not be restarted.', () => native?.gameFiles.retryPreparation())"><RotateCcw />Try preparation again</button></div><details><summary>Advanced</summary><button class="danger-button" @click="runAction('Game files could not be reset.', () => native?.gameFiles.resetAndRestart())">Reset and redownload game files</button><p>This removes only downloaded Guild Wars client data after restart. Profiles, saved logins, application settings, Tools, shortcuts, builds, templates, screenshots, chat logs, and window positions are kept.</p></details></div></template>
-          <template v-else><h1>Advanced</h1><div class="setting-group"><label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label><label><span><strong>Diagnostics</strong><small>Collect more local troubleshooting data.</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label><button class="secondary" @click="native?.external.revealLogs()"><FileText />Open logs</button><button class="danger-button" @click="native?.settings.reset()">Reset launcher settings</button></div></template>
+          <template v-else><h1>Advanced</h1><div class="setting-group"><label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label><label><span><strong>Diagnostics</strong><small>Collect more local troubleshooting data.</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label><button class="secondary" @click="runAction('Logs could not be opened.', () => native?.external.revealLogs())"><FileText />Open logs</button><button class="danger-button" @click="runAction('Launcher settings could not be reset.', () => native?.settings.reset())">Reset launcher settings</button></div></template>
         </div>
       </section>
     </main>
@@ -365,7 +374,7 @@ async function replaceToolShortcut() {
     </BaseModal>
 
     <div v-if="snapshot.experience.preferencesReset && !preferencesResetDismissed" class="toast"><AlertTriangle /><div><strong>Launcher preferences were reset.</strong><span>Your accounts, saved login, game files, builds, and templates were not changed.</span></div><button class="icon-button" aria-label="Dismiss" @click="preferencesResetDismissed = true"><X /></button></div>
-    <div v-else-if="snapshot.experience.showMigrationNotice" class="toast"><Check /><div><strong>{{ snapshot.experience.installationKind === 'migrated-single' ? 'Your existing account is ready.' : 'Your accounts are ready.' }}</strong><span>We kept your saved login, settings, builds, templates, and game files.</span></div><button class="icon-button" aria-label="Dismiss" @click="native?.experience.dismissMigrationNotice()"><X /></button></div>
+    <div v-else-if="snapshot.experience.showMigrationNotice" class="toast"><Check /><div><strong>{{ snapshot.experience.installationKind === 'migrated-single' ? 'Your existing account is ready.' : 'Your accounts are ready.' }}</strong><span>We kept your saved login, settings, builds, templates, and game files.</span></div><button class="icon-button" aria-label="Dismiss" @click="dismissMigrationNotice"><X /></button></div>
 
     <BaseModal v-if="snapshot.experience.setup === 'pending'" labelledby="setup-title" :dismissible="false" wide>
       <div class="setup-card">
