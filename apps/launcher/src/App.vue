@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   AlertTriangle,
   Archive,
@@ -28,7 +28,7 @@ import type { CacheInfo } from "@shared/contracts";
 import { shortcutDisplay } from "@shared/keyboard-shortcuts";
 import type { ShortcutBinding } from "@shared/keyboard-shortcuts";
 import type { ProfileId } from "@shared/multiple-accounts";
-import { fixtureSnapshot } from "./fixtures";
+import { fixtureSnapshotFor } from "./fixtures";
 import { cacheSummary, formatProgress, profileStatus, updateStatus } from "./launcher-view-model";
 import BaseModal from "./components/BaseModal.vue";
 import LauncherHeader from "./components/LauncherHeader.vue";
@@ -38,16 +38,19 @@ import type { LauncherRoute, SettingsRoute } from "./routes";
 
 const route = ref<LauncherRoute>("home");
 const settingsRoute = ref<SettingsRoute>("general");
-const snapshot = ref<LauncherSnapshot>(fixtureSnapshot);
+const snapshot = ref<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
 const addOpen = ref(false);
 const appearanceProfile = ref<ProfileId | null>(null);
 const appearanceIcon = ref("swords");
 const appearanceColor = ref("#9a6638");
 const newName = ref("");
+const newIcon = ref("swords");
+const newColor = ref("#9a6638");
 const busy = ref(false);
 const setupStep = ref<1 | 2>(1);
 const introStep = ref(0);
+const introCallout = ref<HTMLElement | null>(null);
 const shortcutMessage = ref("");
 const pendingShortcutReplacement = ref<{ tool: GlobalTool; binding: ShortcutBinding } | null>(null);
 const preferencesResetDismissed = ref(false);
@@ -78,6 +81,11 @@ onMounted(async () => {
   }
 });
 onBeforeUnmount(() => unsubscribe?.());
+watch([synchronized, () => snapshot.value.experience.introduction], async ([ready, introduction]) => {
+  if (!ready || introduction !== "pending") return;
+  await nextTick();
+  introCallout.value?.focus();
+}, { immediate: true });
 
 const visibleProfiles = computed(() => snapshot.value.profiles.filter((profile) => !profile.archived));
 const selectedProfiles = computed(() => visibleProfiles.value.filter((profile) => selected.value.includes(profile.id)));
@@ -123,8 +131,10 @@ async function createProfile() {
   const name = newName.value.trim();
   if (!name) return;
   await runAction("The account could not be added. Try another name or try again.", async () => {
-    await native?.profiles.create({ name });
+    await native?.profiles.create({ name, appearance: { icon: newIcon.value, color: newColor.value } });
     newName.value = "";
+    newIcon.value = "swords";
+    newColor.value = "#9a6638";
     addOpen.value = false;
   });
 }
@@ -204,6 +214,11 @@ async function completeSetup(enableTools: boolean) {
   snapshot.value = { ...snapshot.value, experience: { ...snapshot.value.experience, setup: "complete" } };
 }
 
+async function completeIntroduction() {
+  if (native) await runAction("The introduction could not be closed.", () => native.experience.completeIntroduction());
+  else snapshot.value = { ...snapshot.value, experience: { ...snapshot.value.experience, introduction: "complete" } };
+}
+
 async function updateContent(content: NonNullable<LauncherPreferencesPatch["content"]>) {
   await runAction("Content settings could not be saved.", () => native?.experience.updatePreferences({ content }));
   if (!native) snapshot.value = { ...snapshot.value, preferences: { content: { ...snapshot.value.preferences.content, ...content } } };
@@ -252,7 +267,7 @@ async function replaceToolShortcut() {
 <template>
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
-  <div v-else class="app-shell">
+  <div v-else class="app-shell" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
     <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @introduction="runAction('The introduction could not be opened.', () => native?.experience.replayIntroduction())" />
 
     <section v-if="snapshot.readiness.state === 'repair-required'" class="priority-banner danger">
@@ -342,7 +357,7 @@ async function replaceToolShortcut() {
     <LaunchBar :snapshot="snapshot" :selected="selected" :busy="busy" @toggle="toggleProfile" @action="primaryAction" @manage="route = 'accounts'" />
 
     <BaseModal v-if="addOpen" labelledby="add-account-title" @close="addOpen = false">
-      <form @submit.prevent="createProfile"><div class="modal-head"><h2 id="add-account-title">Add account</h2><button type="button" class="icon-button" aria-label="Close" @click="addOpen = false"><X /></button></div><p>This opens another separate Guild Wars window. Sign-in stays inside the game.</p><label>Name<input v-model="newName" autofocus maxlength="48" placeholder="Second account" /></label><div class="form-actions"><button type="button" class="secondary" @click="addOpen = false">Cancel</button><button class="primary" :disabled="!newName.trim()">Add account</button></div></form>
+      <form @submit.prevent="createProfile"><div class="modal-head"><h2 id="add-account-title">Add account</h2><button type="button" class="icon-button" aria-label="Close" @click="addOpen = false"><X /></button></div><p>This opens another separate Guild Wars window. Sign-in stays inside the game.</p><label>Name<input v-model="newName" autofocus maxlength="48" placeholder="Second account" /></label><details><summary>Appearance</summary><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="newIcon === icon" :class="{ selected: newIcon === icon }" @click="newIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="newColor === color" :class="{ selected: newColor === color }" :style="{ background: color }" @click="newColor = color" /><label>Custom color<input v-model="newColor" type="color" /></label></fieldset></details><div class="form-actions"><button type="button" class="secondary" @click="addOpen = false">Cancel</button><button class="primary" :disabled="!newName.trim()">Add account</button></div></form>
     </BaseModal>
 
     <BaseModal v-if="appearanceProfile" labelledby="appearance-title" @close="appearanceProfile = null">
@@ -359,11 +374,11 @@ async function replaceToolShortcut() {
       </div>
     </BaseModal>
 
-    <div v-else-if="snapshot.experience.introduction === 'pending'" class="intro-callout" :class="`step-${introStep}`" role="dialog" aria-label="Launcher introduction" @keydown.esc="native?.experience.completeIntroduction()">
+    <div v-else-if="snapshot.experience.introduction === 'pending'" ref="introCallout" class="intro-callout" :class="`step-${introStep}`" role="dialog" aria-label="Launcher introduction" tabindex="-1" @keydown.esc="completeIntroduction">
       <span>{{ introStep + 1 }} of 3</span>
       <strong>{{ ['Choose the accounts to open', 'Read news or check dailies', 'Find help and report problems'][introStep] }}</strong>
       <p>{{ ['The launcher remembers your selection.', 'You can hide either section in Content settings.', 'Known Issues shows workarounds. Feedback opens the current support channels.'][introStep] }}</p>
-      <div class="form-actions"><button class="text-link" @click="native?.experience.completeIntroduction()">Skip</button><button v-if="introStep > 0" class="secondary" @click="introStep -= 1">Back</button><button class="primary" @click="introStep === 2 ? native?.experience.completeIntroduction() : introStep += 1">{{ introStep === 2 ? 'Done' : 'Next' }}</button></div>
+      <div class="form-actions"><button class="text-link" @click="completeIntroduction">Skip</button><button v-if="introStep > 0" class="secondary" @click="introStep -= 1">Back</button><button class="primary" @click="introStep === 2 ? completeIntroduction() : introStep += 1">{{ introStep === 2 ? 'Done' : 'Next' }}</button></div>
     </div>
   </div>
 </template>

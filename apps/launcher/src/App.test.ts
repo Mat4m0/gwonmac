@@ -169,6 +169,24 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).toContain("1.0 GB of 2.0 GB verified");
   });
 
+  it("creates an account with its optional appearance in one step", async () => {
+    const create = vi.fn(async () => undefined);
+    installNative({ profiles: { create } });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.findAll("nav button")[1]!.trigger("click");
+    await wrapper.get(".page-head .secondary").trigger("click");
+    const name = document.querySelector<HTMLInputElement>('input[placeholder="Second account"]')!;
+    name.value = "PvP account";
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector<HTMLDetailsElement>(".modal details")!.open = true;
+    document.querySelectorAll<HTMLButtonElement>(".modal .icon-options button")[2]!.click();
+    document.querySelectorAll<HTMLButtonElement>(".modal .color-options > button")[2]!.click();
+    document.querySelector<HTMLFormElement>(".modal form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+    expect(create).toHaveBeenCalledWith({ name: "PvP account", appearance: { icon: "map", color: "#46658a" } });
+  });
+
   it("supports arrow-key navigation for Home tabs", async () => {
     const wrapper = mount(App);
     await wrapper.get("#news-tab").trigger("keydown", { key: "ArrowRight" });

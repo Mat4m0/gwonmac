@@ -76,6 +76,14 @@ export interface LauncherProfileAppearance {
   readonly icon: string;
   readonly color: string;
 }
+export const LAUNCHER_PROFILE_ICONS = ["swords", "archive", "map", "scroll", "shield", "star", "crown", "flame"] as const;
+
+export function parseLauncherProfileAppearance(value: unknown): LauncherProfileAppearance {
+  const source = exactObject(value, ["icon", "color"], "profile appearance");
+  if (typeof source.icon !== "string" || !LAUNCHER_PROFILE_ICONS.includes(source.icon as (typeof LAUNCHER_PROFILE_ICONS)[number])) throw new Error("profile icon is invalid");
+  if (typeof source.color !== "string" || !/^#[0-9a-f]{6}$/iu.test(source.color)) throw new Error("profile color is invalid");
+  return { icon: source.icon, color: source.color };
+}
 
 export const GLOBAL_TOOLS = ["build-management", "quick-travel", "xunlai-storage"] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
@@ -99,6 +107,10 @@ export interface LauncherSettings {
 export type LauncherSettingsPatch = Partial<LauncherSettings>;
 export interface ProfileAppearanceUpdate extends LauncherProfileAppearance {
   readonly id: ProfileId;
+}
+export interface LauncherProfileCreateInput {
+  readonly name: string;
+  readonly appearance?: LauncherProfileAppearance;
 }
 export interface GlobalToolUpdate {
   readonly tool: GlobalTool;
@@ -165,7 +177,7 @@ export interface LauncherNativeApi {
     onChange(callback: (snapshot: LauncherSnapshot) => void): () => void;
   };
   readonly profiles: {
-    create(input: { readonly name: string }): Promise<void>;
+    create(input: LauncherProfileCreateInput): Promise<void>;
     updateAppearance(input: ProfileAppearanceUpdate): Promise<void>;
     setSelection(ids: readonly ProfileId[]): Promise<void>;
     play(ids: readonly ProfileId[]): Promise<void>;

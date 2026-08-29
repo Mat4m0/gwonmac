@@ -38,3 +38,42 @@ export const fixtureSnapshot: LauncherSnapshot = {
   },
   contentAvailability: { news: "fixture", dailies: "fixture", knownIssues: "fixture", feedback: "fixture" },
 };
+
+export type LauncherFixtureScenario = "default" | "fresh" | "preparing" | "repair" | "offline" | "update" | "failed" | "production";
+
+export function fixtureSnapshotFor(search: string): LauncherSnapshot {
+  const requested = new URLSearchParams(search).get("fixture") as LauncherFixtureScenario | null;
+  switch (requested) {
+    case "fresh":
+      return {
+        ...fixtureSnapshot,
+        experience: { installationKind: "fresh", setup: "pending", introduction: "pending", showMigrationNotice: false, preferencesReset: false },
+        profiles: [fixtureSnapshot.profiles[0]!],
+        selectedProfileIds: [fixtureSnapshot.profiles[0]!.id],
+        tools: {
+          ...fixtureSnapshot.tools,
+          configured: false,
+          loaded: false,
+          features: {
+            "build-management": { ...fixtureSnapshot.tools.features["build-management"], enabled: false },
+            "quick-travel": { ...fixtureSnapshot.tools.features["quick-travel"], enabled: false },
+            "xunlai-storage": { ...fixtureSnapshot.tools.features["xunlai-storage"], enabled: false },
+          },
+        },
+      };
+    case "preparing":
+      return { ...fixtureSnapshot, readiness: { state: "preparing", progress: { phase: "client", label: "Downloading the playable client", received: 620_000_000, total: 1_100_000_000, bytesPerSecond: 12_500_000, secondsRemaining: 38 } } };
+    case "repair":
+      return { ...fixtureSnapshot, readiness: { state: "repair-required", reason: "client-invalid" } };
+    case "offline":
+      return { ...fixtureSnapshot, readiness: { state: "offline-playable" } };
+    case "update":
+      return { ...fixtureSnapshot, readiness: { state: "playable", backgroundDownload: null }, appUpdate: { phase: "ready", currentVersion: "2026.8.10", latestVersion: "2026.8.11", checkedAt: "2026-08-29T12:00:00.000Z" } };
+    case "failed":
+      return { ...fixtureSnapshot, profiles: fixtureSnapshot.profiles.map((profile, index) => index === 0 ? { ...profile, state: "failed", failure: "renderer-crash" } : profile) };
+    case "production":
+      return { ...fixtureSnapshot, experience: { ...fixtureSnapshot.experience, showMigrationNotice: false }, readiness: { state: "playable", backgroundDownload: null }, contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" } };
+    default:
+      return fixtureSnapshot;
+  }
+}

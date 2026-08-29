@@ -17,8 +17,8 @@ const emit = defineEmits<{
     <nav aria-label="Main navigation">
       <button :class="{ active: route === 'home' }" :aria-current="route === 'home' ? 'page' : undefined" @click="emit('navigate', 'home')"><Home />Home</button>
       <button :class="{ active: route === 'accounts' }" :aria-current="route === 'accounts' ? 'page' : undefined" @click="emit('navigate', 'accounts')"><Users />Accounts</button>
-      <button :class="{ active: route === 'issues' }" :aria-current="route === 'issues' ? 'page' : undefined" @click="emit('navigate', 'issues')"><AlertTriangle />Known issues</button>
-      <button :class="{ active: route === 'feedback' }" :aria-current="route === 'feedback' ? 'page' : undefined" @click="emit('navigate', 'feedback')"><MessageSquareText />Feedback</button>
+      <button class="issues-nav" :class="{ active: route === 'issues' }" :aria-current="route === 'issues' ? 'page' : undefined" @click="emit('navigate', 'issues')"><AlertTriangle />Known issues</button>
+      <button class="feedback-nav" :class="{ active: route === 'feedback' }" :aria-current="route === 'feedback' ? 'page' : undefined" @click="emit('navigate', 'feedback')"><MessageSquareText />Feedback</button>
     </nav>
     <div class="title-actions">
       <button class="icon-button" aria-label="Settings" @click="emit('settings')"><Settings /></button>

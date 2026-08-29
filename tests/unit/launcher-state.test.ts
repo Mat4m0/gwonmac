@@ -9,6 +9,7 @@ import {
   loadOrCreateLauncherState,
 } from "../../src/main/core/launcher-state.ts";
 import { parseProfileId } from "../../src/shared/multiple-accounts.ts";
+import { parseLauncherProfileAppearance } from "../../src/shared/launcher-contracts.ts";
 
 const roots: string[] = [];
 
@@ -23,6 +24,12 @@ async function fixture(): Promise<string> {
 }
 
 describe("launcher presentation state", () => {
+  it("validates account appearance before profile creation", () => {
+    assert.deepEqual(parseLauncherProfileAppearance({ icon: "map", color: "#496b58" }), { icon: "map", color: "#496b58" });
+    assert.throws(() => parseLauncherProfileAppearance({ icon: "url", color: "#496b58" }));
+    assert.throws(() => parseLauncherProfileAppearance({ icon: "map", color: "red" }));
+    assert.throws(() => parseLauncherProfileAppearance({ icon: "map", color: "#496b58", extra: true }));
+  });
   it("classifies every supported starting state before account bootstrap", () => {
     assert.equal(classifyLauncherInstallation({ legacySingleData: false, existingWorkspace: false }), "fresh");
     assert.equal(classifyLauncherInstallation({ legacySingleData: true, existingWorkspace: false }), "migrated-single");

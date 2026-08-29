@@ -776,8 +776,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
     windows: windowRegistry,
     connected: () => logEvent({ k: "launcher.connected" }),
     snapshot: () => launcherOrchestrator!.snapshot(),
-    create: async (name) => {
-      await accounts.create({ name });
+    create: async ({ name, appearance }) => {
+      const previousIds = new Set(accounts.state().profiles.map((profile) => profile.id));
+      const next = await accounts.create({ name });
+      const created = next.profiles.find((profile) => !previousIds.has(profile.id));
+      if (!created) throw new Error("Created account was not published");
+      if (appearance) await launcherOrchestrator!.updateAppearance(created.id, appearance);
     },
     updateAppearance: async ({ id, icon, color }) => {
       await launcherOrchestrator!.updateAppearance(id, { icon, color });

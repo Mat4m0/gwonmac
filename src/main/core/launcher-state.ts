@@ -11,6 +11,7 @@ import type {
   LauncherPreferencesPatch,
   LauncherProfileAppearance,
 } from "../../shared/launcher-contracts.js";
+import { LAUNCHER_PROFILE_ICONS } from "../../shared/launcher-contracts.js";
 import type { ProfileId } from "../../shared/multiple-accounts.js";
 import { parseProfileId } from "../../shared/multiple-accounts.js";
 import { writeAtomicJson } from "./atomic-file.js";
@@ -23,7 +24,7 @@ const INTRODUCTION_VERSION = 1;
 const DOCUMENT_MODE = 0o600;
 const DEFAULT_COLOR = "#9a6638";
 const DEFAULT_ICON = "swords";
-const PROFILE_ICONS = new Set(["swords", "archive", "map", "scroll", "shield", "star", "crown", "flame"]);
+const PROFILE_ICONS = new Set<string>(LAUNCHER_PROFILE_ICONS);
 
 function validAppearance(value: LauncherProfileAppearance): boolean {
   return PROFILE_ICONS.has(value.icon) && /^#[0-9a-f]{6}$/iu.test(value.color);

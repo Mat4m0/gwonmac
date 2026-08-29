@@ -11,6 +11,7 @@ import type {
   LauncherSnapshot,
   LauncherPreferencesPatch,
   LauncherExternalLink,
+  LauncherProfileCreateInput,
   ProfileAppearanceUpdate,
   ShortcutReplacement,
 } from "../shared/launcher-contracts.js";
@@ -18,6 +19,7 @@ import {
   LAUNCHER_IPC,
   parseGlobalTool,
   parseLauncherExternalLink,
+  parseLauncherProfileAppearance,
   parseLauncherPreferencesPatch,
   parseLauncherSettingsPatch,
 } from "../shared/launcher-contracts.js";
@@ -40,7 +42,7 @@ export interface LauncherIpcContext {
   readonly windows: WindowRegistry;
   readonly connected: () => void;
   readonly snapshot: () => LauncherSnapshot;
-  readonly create: (name: string) => Promise<void>;
+  readonly create: (input: LauncherProfileCreateInput) => Promise<void>;
   readonly updateAppearance: (input: ProfileAppearanceUpdate) => Promise<void>;
   readonly setSelection: (ids: readonly ProfileId[]) => Promise<void>;
   readonly play: (ids: readonly ProfileId[]) => Promise<void>;
@@ -84,11 +86,13 @@ const one = <Value>(parse: (value: unknown) => Value): Parser<Value> => (args) =
 };
 const profileIds = one(parseProfileIds);
 const profileId = one(parseProfileId);
-const profileCreate = one((value: unknown): string => {
+const profileCreate = one((value: unknown): LauncherProfileCreateInput => {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("profile request must be an object");
   const source = value as Record<string, unknown>;
-  if (Object.keys(source).some((key) => key !== "name")) throw new Error("profile request has an unknown field");
-  return parseProfileName(source.name);
+  if (Object.keys(source).some((key) => !["name", "appearance"].includes(key))) throw new Error("profile request has an unknown field");
+  const name = parseProfileName(source.name);
+  if (source.appearance === undefined) return { name };
+  return { name, appearance: parseLauncherProfileAppearance(source.appearance) };
 });
 const booleanValue = one((value: unknown): boolean => {
   if (typeof value !== "boolean") throw new Error("value must be a boolean");
@@ -131,7 +135,7 @@ export function registerLauncherIpc(ctx: LauncherIpcContext): void {
       }
       return ctx.snapshot();
     }, "launcher"),
-    profilesCreate: channel(profileCreate, (_win, name) => ctx.create(name), "launcher"),
+    profilesCreate: channel(profileCreate, (_win, input) => ctx.create(input), "launcher"),
     profilesUpdateAppearance: channel(appearance, (_win, input) => ctx.updateAppearance(input), "launcher"),
     profilesSetSelection: channel(profileIds, (_win, ids) => ctx.setSelection(ids), "launcher"),
     profilesPlay: channel(profileIds, (_win, ids) => ctx.play(ids), "launcher"),
