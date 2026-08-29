@@ -43,7 +43,7 @@ declare const WebAssembly: {
   Module: new (bytes: Uint8Array) => object;
 };
 
-export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 22;
+export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 23;
 export { PATHING_SPIKE_GLOBALS } from "../../shared/cartography-spike.js";
 
 import {
@@ -248,8 +248,13 @@ export function transformCartographySpikeWasm(
   const worldMapAnchorGlobals: WorldMapAnchorGlobals = Object.freeze({
     status: firstWorldMapAnchorGlobal,
     generation: firstWorldMapAnchorGlobal + 1,
-    worldAnchorX: firstWorldMapAnchorGlobal + 2,
-    worldAnchorY: firstWorldMapAnchorGlobal + 3,
+    continent: firstWorldMapAnchorGlobal + 2,
+    worldAnchorX: firstWorldMapAnchorGlobal + 3,
+    worldAnchorY: firstWorldMapAnchorGlobal + 4,
+    mapMinX: firstWorldMapAnchorGlobal + 5,
+    mapMinY: firstWorldMapAnchorGlobal + 6,
+    mapMaxX: firstWorldMapAnchorGlobal + 7,
+    mapMaxY: firstWorldMapAnchorGlobal + 8,
   });
 
   const loaderLocal = CERTIFICATE.loader - module.functionImportCount;
@@ -382,7 +387,7 @@ export function transformCartographySpikeWasm(
       { length: explorationNames.length + 1 },
       () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
     ),
-    ...worldMapAnchorNames.map((_, index) => index < 2
+    ...worldMapAnchorNames.map((_, index) => index < 3
       ? Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b)
       : Uint8Array.of(0x7d, 0x01, 0x43, 0, 0, 0, 0, 0x0b)),
   );
