@@ -2,6 +2,7 @@
 :root { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: #f4efe7; background: #090907; font-synthesis: none; --gold: #e8b75c; --line: rgba(240, 224, 197, .14); --surface: rgba(23, 21, 18, .92); --muted: #aaa297; --control: rgba(255, 255, 255, .065); }
 * { box-sizing: border-box; }
 html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+.launcher-boot { min-height: 100%; display: grid; place-items: center; color: var(--muted); background: #0b0b09; }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
 button, a, input, textarea, select { -webkit-app-region: no-drag; }

@@ -15,6 +15,7 @@ import type { ProfileId } from "../../shared/multiple-accounts.js";
 import { parseProfileId } from "../../shared/multiple-accounts.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
+import { Mutex } from "./mutex.js";
 
 const FORMAT_VERSION = 1;
 const SETUP_VERSION = 1;
@@ -151,17 +152,23 @@ export async function loadOrCreateLauncherState(
   path: string,
   kind: LauncherInstallationKind,
 ): Promise<LoadedLauncherState> {
+  let text: string;
   try {
-    const text = await readFile(path, "utf8");
-    return { document: parseLauncherState(JSON.parse(text) as unknown), recoveredFromCorruption: false };
+    text = await readFile(path, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       const document = defaults(kind);
       await writeAtomicJson(path, document, DOCUMENT_MODE);
       return { document, recoveredFromCorruption: false };
     }
+    throw error;
+  }
+
+  try {
+    return { document: parseLauncherState(JSON.parse(text) as unknown), recoveredFromCorruption: false };
+  } catch {
     await quarantineCorruptDocument(path);
-    // An unreadable document makes the original install kind uncertain. Treat
+    // An invalid document makes the original install kind uncertain. Treat
     // it as migrated and skip forced setup so recovery cannot trap a player.
     const document = defaults(kind === "fresh" ? "migrated-single" : kind);
     await writeAtomicJson(path, document, DOCUMENT_MODE);
@@ -173,6 +180,7 @@ export class LauncherStateStore {
   readonly path: string;
   readonly recoveredFromCorruption: boolean;
   private value: LauncherStateDocument;
+  private readonly writes = new Mutex();
 
   constructor(
     path: string,
@@ -193,52 +201,57 @@ export class LauncherStateStore {
   }
 
   async setSelection(ids: readonly ProfileId[]): Promise<void> {
-    await this.save({ ...this.value, selectedProfileIds: [...new Set(ids)] });
+    await this.save((current) => ({ ...current, selectedProfileIds: [...new Set(ids)] }));
   }
 
   async dismissMigrationNotice(): Promise<void> {
-    await this.save({ ...this.value, migrationNoticeDismissed: true });
+    await this.save((current) => ({ ...current, migrationNoticeDismissed: true }));
   }
 
   async completeSetup(): Promise<void> {
-    await this.save({ ...this.value, setupVersion: SETUP_VERSION });
+    await this.save((current) => ({ ...current, setupVersion: SETUP_VERSION }));
   }
 
   async completeIntroduction(): Promise<void> {
-    await this.save({ ...this.value, introductionVersion: INTRODUCTION_VERSION });
+    await this.save((current) => ({ ...current, introductionVersion: INTRODUCTION_VERSION }));
   }
 
   async replayIntroduction(): Promise<void> {
-    await this.save({ ...this.value, introductionVersion: 0 });
+    await this.save((current) => ({ ...current, introductionVersion: 0 }));
   }
 
   async updateAppearance(profileId: ProfileId, appearance: LauncherProfileAppearance): Promise<void> {
     if (!validAppearance(appearance)) throw new Error("Profile appearance is invalid");
-    await this.save({
-      ...this.value,
-      appearances: { ...this.value.appearances, [profileId]: appearance },
-    });
+    await this.save((current) => ({
+      ...current,
+      appearances: { ...current.appearances, [profileId]: appearance },
+    }));
   }
 
   async resetPresentation(): Promise<void> {
-    await this.save({
-      ...this.value,
+    await this.save((current) => ({
+      ...current,
       preferences: DEFAULT_LAUNCHER_PREFERENCES,
       selectedProfileIds: [],
       appearances: {},
-    });
+    }));
   }
 
   async updatePreferences(patch: LauncherPreferencesPatch): Promise<void> {
-    const content = { ...this.value.preferences.content, ...patch.content };
-    if (!content.news && !content.dailies) content.first = "news";
-    else if (!content[content.first]) content.first = content.news ? "news" : "dailies";
-    await this.save({ ...this.value, preferences: { content } });
+    await this.save((current) => {
+      const content = { ...current.preferences.content, ...patch.content };
+      if (!content.news && !content.dailies) content.first = "news";
+      else if (!content[content.first]) content.first = content.news ? "news" : "dailies";
+      return { ...current, preferences: { content } };
+    });
   }
 
-  private async save(next: LauncherStateDocument): Promise<void> {
-    const parsed = parseLauncherState(next);
-    await writeAtomicJson(this.path, parsed, DOCUMENT_MODE);
-    this.value = parsed;
+  private async save(update: (current: LauncherStateDocument) => LauncherStateDocument): Promise<void> {
+    await this.writes.run(async () => {
+      const next = update(this.value);
+      const parsed = parseLauncherState(next);
+      await writeAtomicJson(this.path, parsed, DOCUMENT_MODE);
+      this.value = parsed;
+    });
   }
 }

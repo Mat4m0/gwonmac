@@ -63,6 +63,19 @@ describe("launcher presentation state", () => {
     assert.equal(store.get().preferences.content.first, "dailies");
   });
 
+  it("serializes concurrent presentation changes without losing either update", async () => {
+    const path = await fixture();
+    const loaded = await loadOrCreateLauncherState(path, "migrated-multi");
+    const store = new LauncherStateStore(path, loaded.document, false);
+    const id = parseProfileId("ba46cb0e-55c2-4c05-9808-5c35ce83b0b0");
+    await Promise.all([
+      store.setSelection([id]),
+      store.updatePreferences({ content: { dailies: false } }),
+    ]);
+    assert.deepEqual(store.get().selectedProfileIds, [id]);
+    assert.equal(store.get().preferences.content.dailies, false);
+  });
+
   it("persists setup, replayable introduction, and validated appearance", async () => {
     const path = await fixture();
     const loaded = await loadOrCreateLauncherState(path, "fresh");

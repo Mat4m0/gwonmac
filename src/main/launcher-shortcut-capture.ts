@@ -41,7 +41,7 @@ export function captureLauncherShortcut(
         return;
       }
       const conflict = shortcutOwner(binding, getSettings(), tool);
-      finish(conflict ? { status: "conflict", tool: conflict } : { status: "captured", binding });
+      finish(conflict ? { status: "conflict", tool: conflict, binding } : { status: "captured", binding });
     };
     const timer = setTimeout(() => finish({ status: "cancelled" }), CAPTURE_TIMEOUT_MS);
     win.webContents.on("before-input-event", onInput);

@@ -124,7 +124,7 @@
               void import('./template-store.js').then(async ({ exportEntries, templateFilesystem }) => {
                 const templates = templateFilesystem();
                 if (templates) {
-                  await window.gwNative.accounts.saveTemplates(exportEntries(templates));
+                  await window.gwNative.profileTemplates.saveTemplates(exportEntries(templates));
                 }
                 resolve();
               }).catch(reject);

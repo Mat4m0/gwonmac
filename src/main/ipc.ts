@@ -21,10 +21,7 @@ import {
   IPC,
   type AppSettings,
   type AppSettingsPatch,
-  type AccountProfileCreateRequest,
-  type AccountProfileUpdateRequest,
   type AccountTemplateLibrary,
-  type AccountsState,
   type AppUpdateState,
   type CacheInfo,
   type ClientHealthToken,
@@ -48,7 +45,6 @@ import {
   type TemplateExportEntry,
   type ToolsInvokeChannel,
 } from "../shared/contracts.js";
-import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
 import type {
   RendererFrameBatch,
   RendererMetrics,
@@ -69,11 +65,6 @@ import {
   parseRendererMilestoneArgs,
   toWireSocketEvent,
 } from "./ipc-values.js";
-import {
-  parseAccountProfileCreate,
-  parseAccountProfileUpdate,
-  parseProfileIds,
-} from "./accounts-ipc-values.js";
 import { resolveDns } from "./core/dns.js";
 import { exportTemplates, parseExportEntries } from "./template-export.js";
 import {
@@ -165,16 +156,6 @@ export interface IpcContext {
     parent: BrowserWindow,
     record: (event: SteamAcquireEvent) => void,
   ) => Promise<SteamAcquireResult>;
-  getAccountsState: () => AccountsState;
-  openAccounts: (profileIds: readonly ProfileId[]) => Promise<void>;
-  createAccount: (request: AccountProfileCreateRequest) => Promise<AccountsState>;
-  updateAccount: (request: AccountProfileUpdateRequest) => Promise<AccountsState>;
-  archiveAccount: (profileId: ProfileId) => Promise<AccountsState>;
-  restoreAccount: (profileId: ProfileId) => Promise<AccountsState>;
-  deleteAccount: (
-    parent: BrowserWindow,
-    profileId: ProfileId,
-  ) => Promise<AccountsState>;
   requestQuit: (win: BrowserWindow) => void;
   reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
   claimRelogIntent: (win: BrowserWindow) => boolean;
@@ -417,10 +398,6 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   return value;
 });
 
-const asAccountProfileCreate = one(parseAccountProfileCreate);
-const asAccountProfileUpdate = one(parseAccountProfileUpdate);
-const asProfileId = one(parseProfileId);
-const asProfileIds = one(parseProfileIds);
 const asMilestone = parseRendererMilestoneArgs;
 
 export function registerIpcHandlers(ctx: IpcContext): {
@@ -428,7 +405,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
 } {
   const paths = gamePaths();
   const secretOperations = new Set<Promise<unknown>>();
-  const connectedLaunchers = new WeakSet<BrowserWindow>();
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
       return Promise.reject(new ValidationError("application is quitting"));
@@ -715,52 +691,11 @@ export function registerIpcHandlers(ctx: IpcContext): {
       nothing,
       (win) => ctx.restartAndInstallUpdate(win),
     ),
-    accountsGet: channel(
-      nothing,
-      (win) => {
-        if (!connectedLaunchers.has(win)) {
-          connectedLaunchers.add(win);
-          logEvent({ k: "launcher.connected" });
-        }
-        return ctx.getAccountsState();
-      },
-      "launcher",
-    ),
-    accountsOpen: channel(
-      asProfileIds,
-      (_win, profileIds) => ctx.openAccounts(profileIds),
-      "launcher",
-    ),
-    accountsCreate: channel(
-      asAccountProfileCreate,
-      (_win, request) => ctx.createAccount(request),
-      "launcher",
-    ),
-    accountsUpdate: channel(
-      asAccountProfileUpdate,
-      (_win, request) => ctx.updateAccount(request),
-      "launcher",
-    ),
-    accountsArchive: channel(
-      asProfileId,
-      (_win, profileId) => ctx.archiveAccount(profileId),
-      "launcher",
-    ),
-    accountsRestore: channel(
-      asProfileId,
-      (_win, profileId) => ctx.restoreAccount(profileId),
-      "launcher",
-    ),
-    accountsDelete: channel(
-      asProfileId,
-      (win, profileId) => ctx.deleteAccount(win, profileId),
-      "launcher",
-    ),
-    accountsTemplatesLoad: channel(
+    profileTemplatesLoad: channel(
       nothing,
       (win) => ctx.loadAccountTemplates(win),
     ),
-    accountsTemplatesSave: channel(
+    profileTemplatesSave: channel(
       one(parseExportEntries),
       (win, entries) => ctx.saveAccountTemplates(win, entries),
     ),

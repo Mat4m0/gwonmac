@@ -38,6 +38,7 @@ import type { WindowRegistry } from "./window-registry.js";
 
 export interface LauncherIpcContext {
   readonly windows: WindowRegistry;
+  readonly connected: () => void;
   readonly snapshot: () => LauncherSnapshot;
   readonly create: (name: string) => Promise<void>;
   readonly updateAppearance: (input: ProfileAppearanceUpdate) => Promise<void>;
@@ -121,8 +122,15 @@ const shortcutReplacement = one((value: unknown): ShortcutReplacement => {
 });
 
 export function registerLauncherIpc(ctx: LauncherIpcContext): void {
+  const connected = new WeakSet<BrowserWindow>();
   registerNamedChannelDefinitions(ctx.windows, LAUNCHER_IPC, {
-    stateGet: channel(nothing, () => ctx.snapshot(), "launcher"),
+    stateGet: channel(nothing, (win) => {
+      if (!connected.has(win)) {
+        connected.add(win);
+        ctx.connected();
+      }
+      return ctx.snapshot();
+    }, "launcher"),
     profilesCreate: channel(profileCreate, (_win, name) => ctx.create(name), "launcher"),
     profilesUpdateAppearance: channel(appearance, (_win, input) => ctx.updateAppearance(input), "launcher"),
     profilesSetSelection: channel(profileIds, (_win, ids) => ctx.setSelection(ids), "launcher"),

@@ -23,6 +23,7 @@ interface LauncherAccountsOwner {
   queue(ids: readonly ProfileId[]): void;
   releaseQueued(ids: readonly ProfileId[]): void;
   open(ids: readonly ProfileId[]): Promise<void>;
+  isOpen(id: ProfileId): boolean;
   show(id: ProfileId): boolean;
 }
 
@@ -35,6 +36,8 @@ export interface LauncherOrchestratorOptions {
   readonly getSettings: () => AppSettings;
   readonly toolsLoaded: () => boolean;
   readonly developmentFixtures: boolean;
+  /** Unpackaged Electron tests only: lets renderer-focused suites bypass client preparation. */
+  readonly allowUnreadyLaunch?: boolean;
   readonly publish: (snapshot: LauncherSnapshot) => void;
   readonly reportLaunchFailure?: (error: unknown) => void;
 }
@@ -120,12 +123,12 @@ export class LauncherOrchestrator {
   async play(ids: readonly ProfileId[]): Promise<void> {
     this.options.accounts.validateOpenable(ids);
     await this.options.state.setSelection(ids);
-    const closed = ids.filter((id) => !this.options.accounts.show(id));
+    const closed = ids.filter((id) => !this.options.accounts.isOpen(id));
     if (closed.length === 0) {
       this.publish();
       return;
     }
-    if (this.options.hasActiveClient()) {
+    if (this.options.hasActiveClient() || this.options.allowUnreadyLaunch) {
       await this.options.accounts.open(closed);
       this.publish();
       return;
@@ -219,12 +222,11 @@ export class LauncherOrchestrator {
     if (this.draining || this.pending.length === 0) return;
     this.draining = (async () => {
       while (this.options.hasActiveClient() && this.pending.length > 0) {
-        const batch = this.pending;
-        this.pending = [];
+        const profileId = this.pending.shift()!;
         try {
-          await this.options.accounts.open(batch);
+          await this.options.accounts.open([profileId]);
         } catch (error) {
-          this.options.accounts.releaseQueued(batch);
+          this.options.accounts.releaseQueued([profileId]);
           this.options.reportLaunchFailure?.(error);
         }
       }

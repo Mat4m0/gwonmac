@@ -60,9 +60,13 @@ class AccountsFixture {
   show(id: ProfileId): boolean {
     return this.openProfiles.has(id);
   }
+
+  isOpen(id: ProfileId): boolean {
+    return this.openProfiles.has(id);
+  }
 }
 
-async function fixture() {
+async function fixture(options: { allowUnreadyLaunch?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), "gw-launcher-orchestrator-"));
   roots.push(root);
   const loaded = await loadOrCreateLauncherState(join(root, "launcher-state.json"), "migrated-multi");
@@ -87,6 +91,9 @@ async function fixture() {
     getSettings: () => DEFAULT_SETTINGS,
     toolsLoaded: () => false,
     developmentFixtures: true,
+    ...(options.allowUnreadyLaunch === undefined
+      ? {}
+      : { allowUnreadyLaunch: options.allowUnreadyLaunch }),
     publish: (snapshot) => snapshots.push(snapshot),
   });
   return {
@@ -113,7 +120,7 @@ describe("main-owned launcher orchestration", () => {
     assert.deepEqual(value.accounts.opened, []);
     value.activate();
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(value.accounts.opened, [[second, first]]);
+    assert.deepEqual(value.accounts.opened, [[second], [first]]);
   });
 
   it("opens immediately while the complete game keeps downloading", async () => {
@@ -131,6 +138,34 @@ describe("main-owned launcher orchestration", () => {
     value.activate();
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(value.accounts.opened, [[first]]);
+  });
+
+  it("cancels a later profile while the first queued profile is opening", async () => {
+    const value = await fixture();
+    let release!: () => void;
+    value.accounts.blocker = new Promise<void>((resolve) => { release = resolve; });
+    await value.orchestrator.play([first, second]);
+    value.activate();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(value.accounts.opened, [[first]]);
+    value.orchestrator.cancel([second]);
+    release();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(value.accounts.opened, [[first]]);
+  });
+
+  it("checks open state without focusing an already-open profile", async () => {
+    const value = await fixture();
+    value.accounts.openProfiles.add(first);
+    let showCalls = 0;
+    value.accounts.show = (id) => {
+      showCalls += 1;
+      return value.accounts.openProfiles.has(id);
+    };
+    value.activate();
+    await value.orchestrator.play([first, second]);
+    assert.equal(showCalls, 0);
+    assert.deepEqual(value.accounts.opened, [[second]]);
   });
 
   it("keeps global client failure out of profile-local failure state", async () => {
@@ -151,5 +186,12 @@ describe("main-owned launcher orchestration", () => {
     );
     assert.deepEqual(value.accounts.queued, []);
     assert.deepEqual(value.accounts.opened, []);
+  });
+
+  it("keeps the unpackaged renderer-test seam behind an explicit option", async () => {
+    const value = await fixture({ allowUnreadyLaunch: true });
+    value.fail();
+    await value.orchestrator.play([first]);
+    assert.deepEqual(value.accounts.opened, [[first]]);
   });
 });

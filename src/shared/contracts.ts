@@ -31,7 +31,6 @@ import {
   type EnhancementProgram,
 } from "./enhancement-contracts.js";
 import type { BuildLibrary } from "./builds/library.js";
-import type { ProfileId } from "./multiple-accounts.js";
 import type { TemplateExportEntry } from "./template-contracts.js";
 import type { MainInputTraceEntry } from "./input-trace.js";
 import type {
@@ -40,9 +39,6 @@ import type {
   VisualCaptureSubmission,
 } from "./visual-capture.js";
 import type {
-  AccountProfileCreateRequest,
-  AccountProfileUpdateRequest,
-  AccountsState,
   AccountTemplateLibrary,
 } from "./accounts-contracts.js";
 import type {
@@ -979,16 +975,8 @@ export const CORE_IPC = {
   appUpdatesCheck: "gw:appUpdates:check",
   appUpdatesRestartAndInstall: "gw:appUpdates:restartAndInstall",
   appUpdatesState: "gw:appUpdates:state",
-  accountsGet: "gw:accounts:get",
-  accountsState: "gw:accounts:state",
-  accountsOpen: "gw:accounts:open",
-  accountsCreate: "gw:accounts:create",
-  accountsUpdate: "gw:accounts:update",
-  accountsArchive: "gw:accounts:archive",
-  accountsRestore: "gw:accounts:restore",
-  accountsDelete: "gw:accounts:delete",
-  accountsTemplatesLoad: "gw:accounts:templatesLoad",
-  accountsTemplatesSave: "gw:accounts:templatesSave",
+  profileTemplatesLoad: "gw:profileTemplates:load",
+  profileTemplatesSave: "gw:profileTemplates:save",
 } as const;
 
 /** Channels and events that exist only in a Tools-capable launch. */
@@ -1034,7 +1022,6 @@ export const EVENT_CHANNELS = [
   "rendererCommandDone",
   "inputTraceEvent",
   "appUpdatesState",
-  "accountsState",
 ] as const;
 
 /** Channels present only in the Tools preload and Tools main runtime. */
@@ -1240,15 +1227,7 @@ export interface CoreGwNativeApiBase {
     restartAndInstall(): Promise<void>;
     onState(callback: (state: AppUpdateState) => void): () => void;
   };
-  accounts: {
-    get(): Promise<AccountsState>;
-    onChange(callback: (state: AccountsState) => void): () => void;
-    open(profileIds: readonly ProfileId[]): Promise<void>;
-    create(value: AccountProfileCreateRequest): Promise<AccountsState>;
-    update(value: AccountProfileUpdateRequest): Promise<AccountsState>;
-    archive(profileId: ProfileId): Promise<AccountsState>;
-    restore(profileId: ProfileId): Promise<AccountsState>;
-    delete(profileId: ProfileId): Promise<AccountsState>;
+  profileTemplates: {
     loadTemplates(): Promise<AccountTemplateLibrary | null>;
     saveTemplates(entries: readonly TemplateExportEntry[]): Promise<void>;
   };

@@ -72,4 +72,34 @@ describe("unified launcher shell", () => {
     await wrapper.findAll(".setup-card .secondary")[1]!.trigger("click");
     expect(completeSetup).toHaveBeenCalledWith({ enableTools: false });
   });
+
+  it("asks before replacing another Tool shortcut", async () => {
+    const replaceShortcut = vi.fn(async () => undefined);
+    Object.defineProperty(window, "launcherNative", {
+      configurable: true,
+      value: {
+        state: { get: async () => fixtureSnapshot, onChange: () => () => undefined },
+        tools: {
+          captureShortcut: async () => ({
+            status: "conflict" as const,
+            tool: "quick-travel" as const,
+            binding: { key: "t", shift: false, option: false },
+          }),
+          replaceShortcut,
+        },
+      } as unknown as LauncherNativeApi,
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('button[aria-label="Settings"]').trigger("click");
+    await wrapper.findAll(".settings-page aside button")[2]!.trigger("click");
+    await wrapper.findAll(".tool-row .secondary")[0]!.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("already used by Quick Travel");
+    await wrapper.findAll(".settings-content .form-actions .primary")[0]!.trigger("click");
+    expect(replaceShortcut).toHaveBeenCalledWith({
+      tool: "build-management",
+      binding: { key: "t", shift: false, option: false },
+    });
+  });
 });

@@ -31,6 +31,7 @@ import {
 import type { LauncherSnapshot } from "@shared/launcher-contracts";
 import type { GlobalTool, LauncherPreferencesPatch, LauncherSettingsPatch } from "@shared/launcher-contracts";
 import { shortcutDisplay } from "@shared/keyboard-shortcuts";
+import type { ShortcutBinding } from "@shared/keyboard-shortcuts";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { fixtureSnapshot } from "./fixtures";
 import logoUrl from "@site/reforged-logo.webp";
@@ -53,9 +54,12 @@ const busy = ref(false);
 const setupStep = ref<1 | 2>(1);
 const introStep = ref(0);
 const shortcutMessage = ref("");
+const pendingShortcutReplacement = ref<{ tool: GlobalTool; binding: ShortcutBinding } | null>(null);
+const preferencesResetDismissed = ref(false);
 let unsubscribe: (() => void) | undefined;
 
 const native = window.launcherNative;
+const synchronized = ref(!native);
 const fixtureContent = computed(() => snapshot.value.contentAvailability.news === "fixture");
 onMounted(async () => {
   if (!native) return;
@@ -63,6 +67,7 @@ onMounted(async () => {
   snapshot.value = initial;
   selected.value = [...initial.selectedProfileIds];
   contentTab.value = initial.preferences.content.first;
+  synchronized.value = true;
   unsubscribe = native.state.onChange((next) => {
     if (next.revision < snapshot.value.revision) return;
     snapshot.value = next;
@@ -77,6 +82,7 @@ const selectedProfiles = computed(() => visibleProfiles.value.filter((profile) =
 const openSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state === "running"));
 const waiting = computed(() => selectedProfiles.value.some((profile) => profile.state === "queued"));
 const primaryLabel = computed(() => {
+  if (snapshot.value.readiness.state === "repair-required") return "Open Game Files";
   if (waiting.value) return "Cancel waiting";
   if (selectedProfiles.value.length === 1 && openSelected.value.length === 1) return "Show";
   return selectedProfiles.value.length > 1 ? `Open ${selectedProfiles.value.length} accounts` : "Play";
@@ -107,12 +113,16 @@ async function toggleProfile(id: ProfileId) {
 
 async function primaryAction() {
   if (busy.value || selected.value.length === 0) return;
+  if (snapshot.value.readiness.state === "repair-required") {
+    openSettings("game-files");
+    return;
+  }
   busy.value = true;
   try {
-    if (waiting.value) await native?.profiles.cancelQueued(selected.value);
+    if (waiting.value) await native?.profiles.cancelQueued([...selected.value]);
     else if (selectedProfiles.value.length === 1 && openSelected.value.length === 1) {
       await native?.profiles.show(selected.value[0]!);
-    } else await native?.profiles.play(selected.value);
+    } else await native?.profiles.play([...selected.value]);
   } finally {
     busy.value = false;
   }
@@ -173,6 +183,7 @@ async function setTool(tool: GlobalTool, enabled: boolean) {
 }
 
 async function captureToolShortcut(tool: GlobalTool) {
+  pendingShortcutReplacement.value = null;
   shortcutMessage.value = `Press a shortcut for ${toolLabels[tool]}. Escape cancels.`;
   const result = await native?.tools.captureShortcut(tool);
   if (!result) return;
@@ -180,14 +191,26 @@ async function captureToolShortcut(tool: GlobalTool) {
     await native?.tools.replaceShortcut({ tool, binding: result.binding });
     shortcutMessage.value = "Shortcut saved.";
   } else if (result.status === "reserved") shortcutMessage.value = "That shortcut is used by macOS or this application.";
-  else if (result.status === "conflict") shortcutMessage.value = `That shortcut is already used by ${toolLabels[result.tool]}.`;
+  else if (result.status === "conflict") {
+    pendingShortcutReplacement.value = { tool, binding: result.binding };
+    shortcutMessage.value = `That shortcut is already used by ${toolLabels[result.tool]}.`;
+  }
   else if (result.status === "invalid") shortcutMessage.value = "Use Command with a letter or number.";
   else shortcutMessage.value = "Shortcut change cancelled.";
+}
+
+async function replaceToolShortcut() {
+  const replacement = pendingShortcutReplacement.value;
+  if (!replacement) return;
+  await native?.tools.replaceShortcut(replacement);
+  pendingShortcutReplacement.value = null;
+  shortcutMessage.value = "Shortcut replaced.";
 }
 </script>
 
 <template>
-  <div class="app-shell">
+  <div v-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
+  <div v-else class="app-shell">
     <header class="titlebar">
       <button class="brand" aria-label="Home" @click="route = 'home'">
         <img :src="logoUrl" alt="Guild Wars Reforged" />
@@ -300,7 +323,7 @@ async function captureToolShortcut(tool: GlobalTool) {
         <div class="settings-content">
           <template v-if="settingsRoute === 'general'"><h1>General</h1><div class="setting-group"><label><span><strong>Automatic updates</strong><small>Keep Guild Wars Reforged up to date.</small></span><input type="checkbox" :checked="snapshot.settings.autoCheckUpdates" @change="updateLauncherSettings({ autoCheckUpdates: checked($event) })" /></label><label><span><strong>Update channel</strong><small>Stable is recommended.</small></span><select :value="snapshot.settings.updateTrack" @change="updateLauncherSettings({ updateTrack: ($event.currentTarget as HTMLSelectElement).value as 'stable' | 'beta' })"><option value="stable">Stable</option><option value="beta">Beta</option></select></label></div></template>
           <template v-else-if="settingsRoute === 'content'"><h1>Content</h1><div class="setting-group"><label><span><strong>News</strong><small>Official Guild Wars and Reforged updates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.news" @change="updateContent({ news: checked($event) })" /></label><label><span><strong>Dailies</strong><small>Daily activities and the weekly schedule.</small></span><input type="checkbox" :checked="snapshot.preferences.content.dailies" @change="updateContent({ dailies: checked($event) })" /></label><label v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies"><span><strong>First Home tab</strong></span><select :value="snapshot.preferences.content.first" @change="updateContent({ first: ($event.currentTarget as HTMLSelectElement).value as 'news' | 'dailies' })"><option value="news">News</option><option value="dailies">Dailies</option></select></label><label v-if="snapshot.preferences.content.news"><span><strong>Official Guild Wars news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.officialNews" @change="updateContent({ officialNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Guild Wars Reforged news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.reforgedNews" @change="updateContent({ reforgedNews: checked($event) })" /></label></div></template>
-          <template v-else-if="settingsRoute === 'tools'"><h1>Tools</h1><p>Tools apply to every account.</p><div class="setting-group"><label><span><strong>Enable Tools</strong><small>Build Management, Quick Travel, and Xunlai Storage.</small></span><input type="checkbox" :checked="snapshot.tools.configured" @change="native?.tools.setMasterEnabled(checked($event))" /></label><div v-for="(setting, tool) in snapshot.tools.features" :key="tool" class="tool-row"><label><span><strong>{{ toolLabels[tool] }}</strong><small>{{ shortcutDisplay(setting.shortcut) }}</small></span><input type="checkbox" :checked="setting.enabled" :disabled="!snapshot.tools.configured" @change="setTool(tool, checked($event))" /></label><div><button class="secondary" @click="captureToolShortcut(tool)">Change shortcut</button><button class="text-link" @click="native?.tools.restoreDefaultShortcut(tool)">Restore default</button></div></div><p v-if="shortcutMessage" class="inline-message" aria-live="polite">{{ shortcutMessage }}</p><div v-if="snapshot.tools.restartRequired" class="restart-row"><span><strong>Restart needed</strong><small>Your change is saved.</small></span><button v-if="!visibleProfiles.some(profile => profile.state === 'running')" class="primary" @click="native?.tools.restartToApply()">Restart launcher</button><span v-else>Applies after your next normal restart.</span></div></div></template>
+          <template v-else-if="settingsRoute === 'tools'"><h1>Tools</h1><p>Tools apply to every account.</p><div class="setting-group"><label><span><strong>Enable Tools</strong><small>Build Management, Quick Travel, and Xunlai Storage.</small></span><input type="checkbox" :checked="snapshot.tools.configured" @change="native?.tools.setMasterEnabled(checked($event))" /></label><div v-for="(setting, tool) in snapshot.tools.features" :key="tool" class="tool-row"><label><span><strong>{{ toolLabels[tool] }}</strong><small>{{ shortcutDisplay(setting.shortcut) }}</small></span><input type="checkbox" :checked="setting.enabled" :disabled="!snapshot.tools.configured" @change="setTool(tool, checked($event))" /></label><div><button class="secondary" @click="captureToolShortcut(tool)">Change shortcut</button><button class="text-link" @click="native?.tools.restoreDefaultShortcut(tool)">Restore default</button></div></div><p v-if="shortcutMessage" class="inline-message" aria-live="polite">{{ shortcutMessage }}</p><div v-if="pendingShortcutReplacement" class="form-actions"><button class="secondary" @click="pendingShortcutReplacement = null; shortcutMessage = 'Shortcut change cancelled.'">Cancel</button><button class="primary" @click="replaceToolShortcut">Replace shortcut</button></div><div v-if="snapshot.tools.restartRequired" class="restart-row"><span><strong>Restart needed</strong><small>Your change is saved.</small></span><button v-if="!visibleProfiles.some(profile => profile.state === 'running')" class="primary" @click="native?.tools.restartToApply()">Restart launcher</button><span v-else>Applies after your next normal restart.</span></div></div></template>
           <template v-else-if="settingsRoute === 'game-files'"><h1>Game files</h1><div class="setting-group"><div class="setting-row"><span><strong>Guild Wars client</strong><small>Verified and ready to play.</small></span><span class="good">{{ snapshot.readiness.state === 'repair-required' ? 'Needs repair' : 'Ready' }}</span></div><button class="secondary" @click="native?.gameFiles.repair()"><Wrench />Repair game files</button><button v-if="snapshot.readiness.state === 'playable' && snapshot.readiness.backgroundDownload?.status === 'running'" class="secondary" @click="native?.gameFiles.pauseDownload()">Pause background download</button><button v-else class="secondary" @click="native?.gameFiles.resumeDownload()">Resume background download</button><details><summary>Advanced</summary><button class="danger-button" @click="native?.gameFiles.resetAndRestart()">Reset and redownload game files</button><p>Profiles, logins, settings, Tools, shortcuts, builds, templates, screenshots, and chat logs are kept.</p></details></div></template>
           <template v-else><h1>Advanced</h1><div class="setting-group"><label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label><label><span><strong>Diagnostics</strong><small>Collect more local troubleshooting data.</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label><button class="secondary" @click="native?.external.revealLogs()"><FileText />Open logs</button><button class="danger-button" @click="native?.settings.reset()">Reset launcher settings</button></div></template>
         </div>
@@ -331,7 +354,8 @@ async function captureToolShortcut(tool: GlobalTool) {
       <form class="modal" @submit.prevent="saveAppearance"><div class="modal-head"><h2>Account appearance</h2><button type="button" class="icon-button" aria-label="Close" @click="appearanceProfile = null"><X /></button></div><p>Choose a simple icon and color for this account.</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><label>Custom color<input v-model="appearanceColor" type="color" /></label></fieldset><div class="form-actions"><button type="button" class="secondary" @click="appearanceProfile = null">Cancel</button><button class="primary">Save</button></div></form>
     </div>
 
-    <div v-if="snapshot.experience.showMigrationNotice" class="toast"><Check /><div><strong>{{ snapshot.experience.installationKind === 'migrated-single' ? 'Your existing account is ready.' : 'Your accounts are ready.' }}</strong><span>We kept your saved login, settings, builds, templates, and game files.</span></div><button class="icon-button" aria-label="Dismiss" @click="native?.experience.dismissMigrationNotice()"><X /></button></div>
+    <div v-if="snapshot.experience.preferencesReset && !preferencesResetDismissed" class="toast"><AlertTriangle /><div><strong>Launcher preferences were reset.</strong><span>Your accounts, saved login, game files, builds, and templates were not changed.</span></div><button class="icon-button" aria-label="Dismiss" @click="preferencesResetDismissed = true"><X /></button></div>
+    <div v-else-if="snapshot.experience.showMigrationNotice" class="toast"><Check /><div><strong>{{ snapshot.experience.installationKind === 'migrated-single' ? 'Your existing account is ready.' : 'Your accounts are ready.' }}</strong><span>We kept your saved login, settings, builds, templates, and game files.</span></div><button class="icon-button" aria-label="Dismiss" @click="native?.experience.dismissMigrationNotice()"><X /></button></div>
 
     <div v-if="snapshot.experience.setup === 'pending'" class="modal-backdrop setup-backdrop">
       <section class="modal setup-card" role="dialog" aria-modal="true" aria-labelledby="setup-title">

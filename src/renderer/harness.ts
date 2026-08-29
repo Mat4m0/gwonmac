@@ -1033,7 +1033,7 @@ function mountGameFilesystem() {
     module: clientRuntime(),
     log,
     async restoreTemplates(fs) {
-      const library = await native().accounts.loadTemplates();
+      const library = await native().profileTemplates.loadTemplates();
       if (!library) return;
       const { replaceTemplateProjection } = await import('./template-store.js');
       await replaceTemplateProjection(fs, library.entries);

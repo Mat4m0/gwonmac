@@ -268,17 +268,9 @@ const api = {
       ipcRenderer.invoke(IPC.appUpdatesRestartAndInstall),
     onState: (callback) => listen(IPC.appUpdatesState, callback),
   },
-  accounts: {
-    get: () => ipcRenderer.invoke(IPC.accountsGet),
-    onChange: (callback) => listen(IPC.accountsState, callback),
-    open: (profileIds) => ipcRenderer.invoke(IPC.accountsOpen, profileIds),
-    create: (value) => ipcRenderer.invoke(IPC.accountsCreate, value),
-    update: (value) => ipcRenderer.invoke(IPC.accountsUpdate, value),
-    archive: (profileId) => ipcRenderer.invoke(IPC.accountsArchive, profileId),
-    restore: (profileId) => ipcRenderer.invoke(IPC.accountsRestore, profileId),
-    delete: (profileId) => ipcRenderer.invoke(IPC.accountsDelete, profileId),
-    loadTemplates: () => ipcRenderer.invoke(IPC.accountsTemplatesLoad),
-    saveTemplates: (entries) => ipcRenderer.invoke(IPC.accountsTemplatesSave, entries),
+  profileTemplates: {
+    loadTemplates: () => ipcRenderer.invoke(IPC.profileTemplatesLoad),
+    saveTemplates: (entries) => ipcRenderer.invoke(IPC.profileTemplatesSave, entries),
   },
 };
 /* TOOLS_API_EXTENSION */

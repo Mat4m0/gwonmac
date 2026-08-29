@@ -699,6 +699,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
     diagnosticProfile,
   );
+  const allowUnreadyLaunch =
+    (!app.isPackaged || distributionChannel === null)
+    && process.env.GW_TEST_ALLOW_UNREADY_LAUNCH === "1";
   const accounts = new MultipleAccountsController({
     workspace: accountWorkspace,
     paths,
@@ -707,13 +710,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
     protocol: protocolDeps,
     windowHost: host,
     windows: windowCoordinator,
-    publishState: (state) => {
-      sendToRenderer(IPC.accountsState, state);
+    publishState: () => {
       launcherOrchestrator?.publish();
     },
-    allowUnreadyLaunch:
-      (!app.isPackaged || distributionChannel === null)
-      && process.env.GW_TEST_ALLOW_UNREADY_LAUNCH === "1",
+    allowUnreadyLaunch,
   });
   await accounts.resumePendingDeletions();
   const toolsRuntime = enhancementSelection.tools
@@ -737,6 +737,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSettings: () => currentSettings ?? settings,
     toolsLoaded: () => enhancementSelection.tools,
     developmentFixtures: !app.isPackaged || process.env.GW_LAUNCHER_FIXTURES === "1",
+    allowUnreadyLaunch,
     publish: (snapshot) => {
       const launcher = windowRegistry.launcherWindow();
       if (launcher) sendIfLive(launcher, LAUNCHER_IPC.stateEvent, snapshot);
@@ -773,6 +774,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   registerLauncherIpc({
     windows: windowRegistry,
+    connected: () => logEvent({ k: "launcher.connected" }),
     snapshot: () => launcherOrchestrator!.snapshot(),
     create: async (name) => {
       await accounts.create({ name });
@@ -968,13 +970,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     gameReadyToPresent,
     acquireSteamToken: (parent, record) =>
       acquireSteamToken(STEAM_OAUTH, { parent, record }),
-    getAccountsState: () => accounts.state(),
-    openAccounts: (profileIds) => accounts.open(profileIds),
-    createAccount: (request) => accounts.create(request),
-    updateAccount: (request) => accounts.update(request),
-    archiveAccount: (profileId) => accounts.archive(profileId),
-    restoreAccount: (profileId) => accounts.restore(profileId),
-    deleteAccount: (parent, profileId) => accounts.delete(parent, profileId),
     loadAccountTemplates: (win) => accounts.loadTemplates(win),
     saveAccountTemplates: (win, entries) => accounts.saveTemplates(win, entries),
     requestQuit: requestGameQuit,

@@ -235,6 +235,11 @@ export class MultipleAccountsController {
     this.publish();
   }
 
+  isOpen(profileId: ProfileId): boolean {
+    this.validateOpenable([profileId]);
+    return windowRegistry.profileWindow(profileId) !== null;
+  }
+
   show(profileId: ProfileId): boolean {
     this.validateOpenable([profileId]);
     const win = windowRegistry.profileWindow(profileId);
