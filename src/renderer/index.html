@@ -12,6 +12,8 @@
 <link rel="stylesheet" href="ui/components.css">
 <link rel="stylesheet" href="harness.css">
 <link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="settings-cartography.css">
+<link rel="stylesheet" href="cartography-overlay-controls.css">
 <link rel="stylesheet" href="loading.css">
 <!-- tabindex=0 + autofocus match the shipped page; tabindex=-1 is focusable but
      not keyboard-focusable, and key events never reached the module. -->
@@ -211,6 +213,7 @@
         <button type="button" class="settings-rtab" id="settings-tab-display"
                 role="tab" aria-selected="false" aria-controls="settings-pane-display"
                 data-pane="display">Display</button>
+        <button type="button" class="settings-rtab" id="settings-tab-maps" role="tab" aria-selected="false" aria-controls="settings-pane-maps" data-pane="maps">Maps</button>
         <button type="button" class="settings-rtab" id="settings-tab-controls"
                 role="tab" aria-selected="false" aria-controls="settings-pane-controls"
                 data-pane="controls">Tools</button>
@@ -603,6 +606,7 @@
             </section>
           </div>
         </section>
+        <!-- build-include:settings-cartography.html -->
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
                  aria-labelledby="settings-tab-controls">
           <header class="settings-pane-header">

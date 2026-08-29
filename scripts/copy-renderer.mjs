@@ -14,6 +14,7 @@ import path from "node:path";
 const ASSETS = [
   "accounts.css",
   "accounts.html",
+  "cartography-overlay-controls.css",
   "favicon.ico",
   "favicon.png",
   "fonts/COPYING-QUALITYPE",
@@ -23,8 +24,8 @@ const ASSETS = [
   "images/hero-video.webm",
   "images/logo.webp",
   "images/playstation-controller-prompts.png",
-  "index.html",
   "loading.css",
+  "settings-cartography.css",
   "settings.css",
 ];
 
@@ -72,6 +73,22 @@ const copy = (from, relative) => {
 for (const relative of ASSETS) {
   copy(path.resolve("src/renderer", relative), relative);
 }
+
+// Keep the source settings shell reviewable without adding a runtime fetch or
+// shipping an internal fragment. The packaged renderer remains one document.
+const settingsPartialMarker = "        <!-- build-include:settings-cartography.html -->";
+const indexSource = fs.readFileSync(path.resolve("src/renderer/index.html"), "utf8");
+if (indexSource.split(settingsPartialMarker).length !== 2) {
+  throw new Error("index.html must contain exactly one Cartography settings include");
+}
+const settingsPartial = fs.readFileSync(
+  path.resolve("src/renderer/settings-cartography.html"),
+  "utf8",
+).trimEnd();
+fs.writeFileSync(
+  path.join(dest, "index.html"),
+  indexSource.replace(settingsPartialMarker, settingsPartial),
+);
 for (const [from, relative] of SHARED_ASSETS) {
   copy(path.resolve(from), relative);
 }

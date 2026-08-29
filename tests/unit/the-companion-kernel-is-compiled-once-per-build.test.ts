@@ -40,7 +40,10 @@ function rendererCheckout(): string {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, contents);
   };
-  write("src/renderer/index.html", "<!doctype html>\n");
+  write(
+    "src/renderer/index.html",
+    "<!doctype html>\n        <!-- build-include:settings-cartography.html -->\n",
+  );
   write("src/renderer/accounts.html", "<!doctype html>\n");
   write("src/renderer/accounts.css", "css");
   write("src/renderer/loading.js", "export {};\n");
@@ -49,6 +52,9 @@ function rendererCheckout(): string {
   write("src/renderer/favicon.png", "png");
   write("src/renderer/harness.css", "css");
   write("src/renderer/loading.css", "css");
+  write("src/renderer/cartography-overlay-controls.css", "controls-css");
+  write("src/renderer/settings-cartography.css", "cartography-css");
+  write("src/renderer/settings-cartography.html", "        <section>Cartography</section>\n");
   write("src/renderer/settings.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
@@ -105,7 +111,11 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
   it("still produces the renderer tree and its static media", () => {
     assert.equal(
       readFileSync(path.join(root, "build/renderer/index.html"), "utf8"),
-      "<!doctype html>\n",
+      "<!doctype html>\n        <section>Cartography</section>\n",
+    );
+    assert.equal(
+      existsSync(path.join(root, "build/renderer/settings-cartography.html")),
+      false,
     );
     assert.equal(
       readFileSync(path.join(root, "build/renderer/fonts/COPYING-QUALITYPE"), "utf8"),
@@ -150,6 +160,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
     assert.deepEqual(relative, [
       "accounts.css",
       "accounts.html",
+      "cartography-overlay-controls.css",
       "favicon.ico",
       "favicon.png",
       "fonts/COPYING-INTER",
@@ -171,6 +182,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "images/playstation-controller-prompts.png",
       "index.html",
       "loading.css",
+      "settings-cartography.css",
       "settings.css",
       // Copied out of src/shared, and flattened to `ui/` so the renderer and
       // the Tools bundle load the one design system by the same href.

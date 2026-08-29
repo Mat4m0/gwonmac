@@ -45,6 +45,14 @@ import {
   DEFAULT_CUSTOM_UI_THEME,
   normaliseCustomUiTheme,
 } from "../../shared/ui-theme.js";
+import {
+  CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
+  CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
+  CARTOGRAPHY_OPACITY_MAX,
+  CARTOGRAPHY_OPACITY_MIN,
+  normaliseCartographyPresetLibrary,
+  normaliseCartographyPresetRef,
+} from "../../shared/cartography-overlay.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
 
@@ -160,6 +168,41 @@ export function parseSettings(raw: unknown): AppSettings {
       UI_PANEL_OPACITY_MAX,
     );
   }
+  if ("cartographyPresetLibrary" in src) {
+    const library = normaliseCartographyPresetLibrary(src.cartographyPresetLibrary);
+    if (library === null) {
+      throw new AppError("bad_settings", "settings.cartographyPresetLibrary is invalid");
+    }
+    out.cartographyPresetLibrary = library;
+  }
+  for (const setting of [
+    "cartographyWalkabilityOpacity",
+    "cartographyGridOpacity",
+  ] as const) {
+    if (setting in src) {
+      out[setting] = asBoundedInteger(
+        src[setting],
+        setting,
+        CARTOGRAPHY_OPACITY_MIN,
+        CARTOGRAPHY_OPACITY_MAX,
+      );
+    }
+  }
+  if ("cartographyControlIdleOpacity" in src) {
+    out.cartographyControlIdleOpacity = asBoundedInteger(
+      src.cartographyControlIdleOpacity,
+      "cartographyControlIdleOpacity",
+      CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
+      CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
+    );
+  }
+  if ("cartographyRevealMode" in src) {
+    const mode = src.cartographyRevealMode;
+    if (mode !== "off" && mode !== "normal" && mode !== "birds-eye") {
+      throw new AppError("bad_settings", "settings.cartographyRevealMode is invalid");
+    }
+    out.cartographyRevealMode = mode;
+  }
   if ("shortcutOverrides" in src) {
     if (!isShortcutOverrides(src.shortcutOverrides)) {
       throw new AppError("bad_settings", "settings.shortcutOverrides has invalid bindings");
@@ -200,6 +243,8 @@ export function parseSettings(raw: unknown): AppSettings {
   }
   for (const setting of [
     "gwonmacTools",
+    "cartographyOverlayEnabled",
+    "cartographyGridEnabled",
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",
@@ -287,19 +332,42 @@ export function parseSettingsPatch(raw: unknown): AppSettingsPatch {
 
 /** The generic renderer bridge cannot bypass Travel's compare-and-refuse path. */
 export function parseRendererSettingsPatch(raw: unknown): RendererSettingsPatch {
-  if (
-    raw !== null
-    && typeof raw === "object"
-    && !Array.isArray(raw)
-    && Object.hasOwn(raw, "travelShortcuts")
-  ) {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new AppError("bad_settings", "settings patch must be an object");
+  }
+  if (Object.hasOwn(raw, "travelShortcuts")) {
     throw new AppError(
       "bad_settings",
       "settings.travelShortcuts must use the Travel preference capability",
     );
   }
-  const { travelShortcuts: _travelShortcuts, ...patch } = parseSettingsPatch(raw);
-  return patch;
+  const src = raw as Record<string, unknown>;
+  const hasSelection = Object.hasOwn(src, "cartographyPresetSelection");
+  if (hasSelection && Object.hasOwn(src, "cartographyPresetLibrary")) {
+    throw new AppError(
+      "bad_settings",
+      "settings preset selection and library replacement are mutually exclusive",
+    );
+  }
+  const {
+    travelShortcuts: _travelShortcuts,
+    cartographyPresetSelection: selectionValue,
+    ...storedPatch
+  } = src;
+  const {
+    travelShortcuts: _parsedTravelShortcuts,
+    ...patch
+  } = parseSettingsPatch(storedPatch);
+  if (!hasSelection) return patch;
+  const selection = normaliseCartographyPresetRef(selectionValue);
+  if (selection === null) {
+    throw new AppError("bad_settings", "settings.cartographyPresetSelection is invalid");
+  }
+  const {
+    cartographyPresetLibrary: _cartographyPresetLibrary,
+    ...selectionPatch
+  } = patch;
+  return { ...selectionPatch, cartographyPresetSelection: selection };
 }
 
 export async function loadSettings(

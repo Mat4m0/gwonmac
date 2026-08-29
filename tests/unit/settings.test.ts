@@ -6,9 +6,14 @@ import { join } from "node:path";
 import {
   DEFAULT_SETTINGS,
   LAST_UPDATE_CHECK_AT_MAX,
+  type RendererSettingsPatch,
 } from "../../src/shared/contracts.js";
 import { DEFAULT_CUSTOM_UI_THEME } from "../../src/shared/ui-theme.js";
 import { AppError } from "../../src/shared/errors.js";
+import {
+  CARTOGRAPHY_BUILTIN_PRESETS,
+  type CartographyPresetRef,
+} from "../../src/shared/cartography-overlay.js";
 import {
   loadSettings,
   parseSettings,
@@ -18,6 +23,20 @@ import {
 } from "../../src/main/core/settings.js";
 
 describe("settings", () => {
+  it("makes preset selection and library replacement exclusive for renderer callers", () => {
+    const accepts = (patch: RendererSettingsPatch): RendererSettingsPatch => patch;
+    const selection: CartographyPresetRef = { kind: "builtin", id: "monochrome" };
+    assert.deepEqual(accepts({ cartographyPresetSelection: selection }), {
+      cartographyPresetSelection: selection,
+    });
+    // @ts-expect-error A semantic selection cannot carry a stale library snapshot.
+    const invalid: RendererSettingsPatch = {
+      cartographyPresetSelection: selection,
+      cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
+    };
+    assert.ok(invalid);
+  });
+
   it("exposes the documented defaults", () => {
     assert.deepEqual(DEFAULT_SETTINGS, {
       renderScale: 2,
@@ -26,6 +45,13 @@ describe("settings", () => {
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       uiPanelOpacity: 94,
+      cartographyOverlayEnabled: false,
+      cartographyGridEnabled: false,
+      cartographyRevealMode: "off",
+      cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
+      cartographyWalkabilityOpacity: 55,
+      cartographyGridOpacity: 65,
+      cartographyControlIdleOpacity: 35,
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,
@@ -76,6 +102,13 @@ describe("settings", () => {
       uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
+      cartographyOverlayEnabled: false,
+      cartographyGridEnabled: false,
+      cartographyRevealMode: "off",
+      cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
+      cartographyWalkabilityOpacity: 55,
+      cartographyGridOpacity: 65,
+      cartographyControlIdleOpacity: 35,
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,
@@ -145,6 +178,58 @@ describe("settings", () => {
     assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, accent: "#fff" } }), AppError);
     assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, extra: true } }), AppError);
     assert.throws(() => parseSettings({ uiCustomTheme: { ...custom, windowGradient: "yes" } }), AppError);
+  });
+
+  it("validates the cartography preset library and independent opacities", () => {
+    const library = {
+      activePreset: { kind: "custom", id: "night-run" },
+      customPresets: [{
+        id: "night-run",
+        name: " Night Run ",
+        style: CARTOGRAPHY_BUILTIN_PRESETS.synthwave.style,
+      }],
+    } as const;
+    assert.deepEqual(parseSettingsPatch({
+      cartographyOverlayEnabled: true,
+      cartographyGridEnabled: true,
+      cartographyRevealMode: "birds-eye",
+      cartographyPresetLibrary: library,
+      cartographyWalkabilityOpacity: 72,
+      cartographyGridOpacity: 61,
+      cartographyControlIdleOpacity: 44,
+    }), {
+      cartographyOverlayEnabled: true,
+      cartographyGridEnabled: true,
+      cartographyRevealMode: "birds-eye",
+      cartographyPresetLibrary: {
+        activePreset: { kind: "custom", id: "night-run" },
+        customPresets: [{
+          id: "night-run",
+          name: "Night Run",
+          style: CARTOGRAPHY_BUILTIN_PRESETS.synthwave.style,
+        }],
+      },
+      cartographyWalkabilityOpacity: 72,
+      cartographyGridOpacity: 61,
+      cartographyControlIdleOpacity: 44,
+    });
+    assert.throws(() => parseSettingsPatch({ cartographyGridEnabled: "yes" }), AppError);
+    assert.throws(() => parseSettingsPatch({ cartographyRevealMode: "wide" }), AppError);
+    assert.throws(() => parseSettingsPatch({ cartographyWalkabilityOpacity: 101 }), AppError);
+    assert.throws(() => parseSettingsPatch({ cartographyGridOpacity: -1 }), AppError);
+    assert.throws(() => parseSettingsPatch({ cartographyControlIdleOpacity: 14 }), AppError);
+    assert.throws(() => parseSettingsPatch({
+      cartographyPresetLibrary: {
+        ...library,
+        activePreset: { kind: "custom", id: "missing" },
+      },
+    }), AppError);
+    assert.throws(() => parseSettingsPatch({ cartographyOverlayStyle: "contrast" }), AppError);
+    assert.deepEqual(parseSettings({
+      cartographyOverlayStyle: "contrast",
+      cartographyOverlayOpacity: 99,
+      cartographyOverlayCustomStyle: {},
+    }).cartographyPresetLibrary, DEFAULT_SETTINGS.cartographyPresetLibrary);
   });
 
   it("accepts only the supported interface fonts", () => {
@@ -333,11 +418,29 @@ describe("settings", () => {
     assert.deepEqual(parseRendererSettingsPatch({ renderScale: 1.5 }), {
       renderScale: 1.5,
     });
+    assert.deepEqual(parseRendererSettingsPatch({
+      cartographyPresetSelection: { kind: "builtin", id: "synthwave" },
+    }), {
+      cartographyPresetSelection: { kind: "builtin", id: "synthwave" },
+    });
     assert.throws(
       () => parseRendererSettingsPatch({
         travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       }),
       /Travel preference capability/u,
+    );
+    assert.throws(
+      () => parseRendererSettingsPatch({
+        cartographyPresetSelection: { kind: "builtin", id: "unknown" },
+      }),
+      /PresetSelection is invalid/u,
+    );
+    assert.throws(
+      () => parseRendererSettingsPatch({
+        cartographyPresetSelection: { kind: "builtin", id: "synthwave" },
+        cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
+      }),
+      /mutually exclusive/u,
     );
   });
 
@@ -381,6 +484,13 @@ describe("settings", () => {
       "autoCheckUpdates",
       "autoRelogAfterReload",
       "buildLibrary",
+      "cartographyControlIdleOpacity",
+      "cartographyGridEnabled",
+      "cartographyGridOpacity",
+      "cartographyOverlayEnabled",
+      "cartographyPresetLibrary",
+      "cartographyRevealMode",
+      "cartographyWalkabilityOpacity",
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
@@ -478,6 +588,13 @@ describe("settings", () => {
       uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
+      cartographyOverlayEnabled: false,
+      cartographyGridEnabled: false,
+      cartographyRevealMode: "off",
+      cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
+      cartographyWalkabilityOpacity: 55,
+      cartographyGridOpacity: 65,
+      cartographyControlIdleOpacity: 35,
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,

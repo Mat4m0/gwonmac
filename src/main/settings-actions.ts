@@ -12,7 +12,6 @@ import type { BrowserWindow } from "electron";
 import { rm, stat, writeFile } from "node:fs/promises";
 import type {
   AppSettings,
-  AppSettingsPatch,
   RendererSettingsPatch,
   SettingsResetOutcome,
 } from "../shared/contracts.js";
@@ -89,7 +88,7 @@ export async function applySettingsChange(
   patch: RendererSettingsPatch,
   toolsEnabledAtLaunch: boolean,
   read: () => Promise<AppSettings>,
-  write: (patch: AppSettingsPatch) => Promise<AppSettings>,
+  write: (patch: RendererSettingsPatch) => Promise<AppSettings>,
 ): Promise<AppSettings> {
   try {
     const previous = await read();

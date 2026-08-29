@@ -145,15 +145,61 @@ function exactLabel(
   module: ModuleShape,
   data: WasmDataEvidence,
   value: string,
+  expectedCodeReferences = 1,
 ): number | null {
   const encoded = utf16Le(value);
   const address = uniqueStaticAddress(data, encoded);
   if (
     address === null
-    || codeOperandOccurrences(module, address) !== 1
+    || codeOperandOccurrences(module, address) !== expectedCodeReferences
     || !isDeepStrictEqual(staticBytes(module, address, encoded.length), encoded)
   ) return null;
   return address;
+}
+
+export type CertifiedFrameLabel = Readonly<{
+  labelAddress: number;
+  labelHash: number;
+}>;
+
+/**
+ * Certify one explicit frame label against the already reviewed label-hash
+ * implementation. This remains a build-time locator: neither the address nor
+ * the hash belongs in a renderer observation.
+ */
+export function deriveCertifiedFrameLabel(
+  context: EnhancementProofContext,
+  value: string,
+  expectedCodeReferences: number,
+): CertifiedFrameLabel | null {
+  const module = context.moduleView();
+  const labelAddress = exactLabel(
+    module,
+    context.data,
+    value,
+    expectedCodeReferences,
+  );
+  const hashFunction = uniqueRoleFunction(module, HASH_FUNCTION_ROLE);
+  if (
+    labelAddress === null
+    || hashFunction === null
+    || !signatureMatches(module, hashFunction, ["i32", "i32"], ["i32"])
+  ) return null;
+  const evidence = valuesForRole(
+    functionBody(module, hashFunction),
+    HASH_FUNCTION_ROLE,
+  );
+  const tableAddress = soleValue(evidence, "hash.table");
+  const table = staticBytes(module, tableAddress, 16 * 4);
+  if (
+    table === null
+    || context.data.addresses(table).length !== 1
+    || createHash("sha256").update(table).digest("hex") !== HASH_TABLE_SHA256
+  ) return null;
+  const hash = labelHash(module, tableAddress, value);
+  return hash === null || hash === 0
+    ? null
+    : Object.freeze({ labelAddress, labelHash: hash });
 }
 
 function uniqueCString(

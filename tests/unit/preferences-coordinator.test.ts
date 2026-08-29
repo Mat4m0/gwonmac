@@ -11,6 +11,7 @@ import {
   DEFAULT_TRAVEL_SHORTCUTS,
   replaceTravelShortcut,
 } from "../../src/shared/travel.js";
+import { CARTOGRAPHY_BUILTIN_PRESETS } from "../../src/shared/cartography-overlay.js";
 
 type ResetOutcome = Awaited<ReturnType<PreferencesCoordinator["resetSettings"]>>;
 
@@ -185,6 +186,45 @@ describe("PreferencesCoordinator", () => {
       district: "international",
       districtNumber: 0,
     });
+  });
+
+  it("selects a preset without replacing the current custom library", async () => {
+    const { coordinator } = await fixture();
+    const customPreset = {
+      id: "player-night",
+      name: "Player Night",
+      style: CARTOGRAPHY_BUILTIN_PRESETS.synthwave.style,
+    } as const;
+    await coordinator.updateSettings({
+      cartographyPresetLibrary: {
+        activePreset: { kind: "custom", id: customPreset.id },
+        customPresets: [customPreset],
+      },
+    });
+
+    const saved = await coordinator.updateRendererSettings({
+      cartographyPresetSelection: { kind: "builtin", id: "monochrome" },
+    });
+
+    assert.deepEqual(saved.cartographyPresetLibrary, {
+      activePreset: { kind: "builtin", id: "monochrome" },
+      customPresets: [customPreset],
+    });
+  });
+
+  it("refuses a compact-map selection after its custom preset was deleted", async () => {
+    const { coordinator } = await fixture();
+
+    await assert.rejects(
+      coordinator.updateRendererSettings({
+        cartographyPresetSelection: { kind: "custom", id: "deleted-preset" },
+      }),
+      /no longer exists/u,
+    );
+    assert.deepEqual(
+      (await coordinator.getSettings()).cartographyPresetLibrary,
+      DEFAULT_SETTINGS.cartographyPresetLibrary,
+    );
   });
 
   it("reports a post-rename failure as unconfirmed, then reloads the active value", async () => {

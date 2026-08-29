@@ -48,6 +48,15 @@
   ) as HTMLInputElement;
   const updateTrack = form.elements.namedItem('updateTrack') as HTMLSelectElement;
   const gwonmacTools = form.elements.namedItem('gwonmacTools') as HTMLInputElement;
+  const cartographyOverlayEnabled = form.elements.namedItem(
+    'cartographyOverlayEnabled',
+  ) as HTMLInputElement;
+  const cartographyGridEnabled = form.elements.namedItem(
+    'cartographyGridEnabled',
+  ) as HTMLInputElement;
+  const cartographyRevealMode = form.elements.namedItem(
+    'cartographyRevealMode',
+  ) as HTMLSelectElement;
   const buildLibrary = form.elements.namedItem('buildLibrary') as HTMLInputElement;
   const tradeChat = form.elements.namedItem('tradeChat') as HTMLInputElement;
   const xunlaiStorage = form.elements.namedItem('xunlaiStorage') as HTMLInputElement;
@@ -265,7 +274,9 @@
     return operation;
   }
 
-  async function recoverSettingsAfterFailedWrite(message: string): Promise<void> {
+  async function recoverSettingsAfterFailedWrite(
+    message: string,
+  ): Promise<AppSettings | null> {
     currentSettings = await window.gwNative.settings.get().catch(() => null);
     if (currentSettings) {
       fillForm(currentSettings);
@@ -280,7 +291,13 @@
         : 'GWonMac could not confirm the active settings. Close and reopen Settings before retrying.',
       'error',
     );
+    return currentSettings;
   }
+  const recoverSettingsAfterFailedWriteVoid = async (
+    message: string,
+  ): Promise<void> => {
+    await recoverSettingsAfterFailedWrite(message);
+  };
 
   const shortcutSettings = import('./settings-shortcuts.js').then((module) =>
     module.bindShortcutSettings({
@@ -289,7 +306,7 @@
       restore: byId('settings-shortcuts-restore'),
       settings: () => currentSettings,
       persist: (shortcutOverrides) => persistSettings({ shortcutOverrides }),
-      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWriteVoid,
       feedback: setFeedback,
     }));
   const skillKeySettings = import('./settings-skill-keys.js').then((module) =>
@@ -299,7 +316,7 @@
       clearAll: byId('settings-skill-keys-clear') as HTMLButtonElement,
       settings: () => currentSettings,
       persist: (skillKeyBindings) => persistSettings({ skillKeyBindings }),
-      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWriteVoid,
       feedback: setFeedback,
     }));
   const skillCooldownSettings = import('./settings-skill-cooldowns.js').then((module) =>
@@ -307,7 +324,7 @@
       fieldset: byId('settings-skill-cooldowns') as HTMLFieldSetElement,
       enabled: skillCooldownOverlayEnabled,
       persist: (patch) => persistSettings(patch),
-      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWriteVoid,
       feedback: setFeedback,
     }));
   const themeSettings = import('./settings-theme.js').then((module) =>
@@ -315,9 +332,18 @@
       form,
       settings: () => currentSettings,
       persist: persistSettings,
-      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWriteVoid,
       feedback: setFeedback,
       copy: (text) => window.gwNative.clipboard.writeText(text),
+    }));
+  const cartographySettings = import('./settings-cartography.js').then((module) =>
+    module.bindCartographySettings({
+      form,
+      persist: persistSettings,
+      recoverAfterPersistFailure: recoverSettingsAfterFailedWrite,
+      feedback: setFeedback,
+      readClipboard: () => window.gwNative.clipboard.readText(),
+      writeClipboard: (text) => window.gwNative.clipboard.writeText(text),
     }));
   void import('./settings-accounts.js').then((module) =>
     module.bindAccountSettings({
@@ -533,6 +559,8 @@
           ? { autoRelogAfterReload: control.checked }
           : null;
       case 'gwonmacTools':
+      case 'cartographyOverlayEnabled':
+      case 'cartographyGridEnabled':
       case 'buildLibrary':
       case 'tradeChat':
       case 'xunlaiStorage':
@@ -542,6 +570,11 @@
       case 'skillCooldownOverlayEnabled':
         return control instanceof globalThis.HTMLInputElement
           ? { [control.name]: control.checked }
+          : null;
+      case 'cartographyRevealMode':
+        return control instanceof globalThis.HTMLSelectElement
+          && ['off', 'normal', 'birds-eye'].includes(control.value)
+          ? { cartographyRevealMode: control.value as AppSettings['cartographyRevealMode'] }
           : null;
       case 'autoCheckUpdates':
         return control instanceof globalThis.HTMLInputElement
@@ -579,6 +612,10 @@
     autoRelogAfterReload.checked = settings.autoRelogAfterReload;
     diagnosticProfile.value = selectedDiagnosticProfile;
     gwonmacTools.checked = settings.gwonmacTools;
+    cartographyOverlayEnabled.checked = settings.cartographyOverlayEnabled;
+    cartographyGridEnabled.checked = settings.cartographyGridEnabled;
+    cartographyRevealMode.value = settings.cartographyRevealMode;
+    cartographyRevealMode.disabled = !settings.cartographyGridEnabled;
     buildLibrary.checked = settings.buildLibrary;
     tradeChat.checked = settings.tradeChat;
     xunlaiStorage.checked = settings.xunlaiStorage;
@@ -590,6 +627,7 @@
     void skillKeySettings.then((binder) => binder.render(settings));
     void skillCooldownSettings.then((binder) => binder.render(settings));
     void themeSettings.then((binder) => binder.render(settings));
+    void cartographySettings.then((binder) => binder.render(settings));
     toolFeatures.hidden = !settings.gwonmacTools;
     toolsOff.hidden = settings.gwonmacTools;
     toolsRestartRequired.hidden = !(
