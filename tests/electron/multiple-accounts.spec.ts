@@ -75,12 +75,15 @@ test("fresh startup creates Main and adds an account without restart", async () 
     await fixture.page.getByRole("button", { name: "Not now" }).click();
     await fixture.page.getByRole("button", { name: "Skip" }).click();
     await expect(fixture.page.getByRole("button", { name: "Play" })).toBeVisible();
-    await fixture.page.getByRole("button", { name: "Accounts" }).click();
+    await fixture.page.getByRole("button", { name: "Accounts", exact: true }).click();
     await expect(fixture.page.getByText("Main account", { exact: true })).toBeVisible();
     const processId = fixture.app.process().pid;
 
     await fixture.page.getByRole("button", { name: "Add account" }).click();
     await fixture.page.getByLabel("Name").fill("Second account");
+    await fixture.page.getByText("Appearance", { exact: true }).click();
+    await fixture.page.getByRole("button", { name: "map" }).click();
+    await fixture.page.getByRole("button", { name: "Use #46658a" }).click();
     await fixture.page.getByRole("button", { name: "Add account", exact: true }).last().click();
     await expect(fixture.page.getByText("Second account", { exact: true })).toBeVisible();
     expect(fixture.app.process().pid).toBe(processId);
@@ -93,6 +96,9 @@ test("fresh startup creates Main and adds an account without restart", async () 
       "Main account",
       "Second account",
     ]);
+    const appearance = await fixture.page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles.find((profile) => profile.name === "Second account")?.appearance);
+    expect(appearance).toEqual({ icon: "map", color: "#46658a" });
   } finally {
     await closeOffline(fixture);
   }
@@ -210,7 +216,7 @@ test("an existing Single account is adopted before a new profile is added", asyn
     const state = await fixture.page.evaluate(() => window.launcherNative.state.get());
     expect(state.profiles[0]?.id).toBe(LEGACY_PRIMARY_PROFILE_ID);
 
-    await fixture.page.getByRole("button", { name: "Accounts" }).click();
+    await fixture.page.getByRole("button", { name: "Accounts", exact: true }).click();
     await fixture.page.getByRole("button", { name: "Add account" }).click();
     await fixture.page.getByLabel("Name").fill("Second account");
     await fixture.page.getByRole("button", { name: "Add account", exact: true }).last().click();
@@ -302,7 +308,7 @@ test("the account workspace survives a full application restart", async () => {
     await first.page.getByRole("button", { name: "Continue" }).click();
     await first.page.getByRole("button", { name: "Not now" }).click();
     await first.page.getByRole("button", { name: "Skip" }).click();
-    await first.page.getByRole("button", { name: "Accounts" }).click();
+    await first.page.getByRole("button", { name: "Accounts", exact: true }).click();
     await first.page.getByRole("button", { name: "Add account" }).click();
     await first.page.getByLabel("Name").fill("Second account");
     await first.page.getByRole("button", { name: "Add account", exact: true }).last().click();
@@ -312,7 +318,7 @@ test("the account workspace survives a full application restart", async () => {
     restarted = await launchOfflineAt(first.userData, {
       GW_TEST_RETURN_LAUNCHER: "1",
     });
-    await restarted.page.getByRole("button", { name: "Accounts" }).click();
+    await restarted.page.getByRole("button", { name: "Accounts", exact: true }).click();
     await expect(restarted.page.getByText("Main account", { exact: true })).toBeVisible();
     await expect(restarted.page.getByText("Second account", { exact: true })).toBeVisible();
   } finally {

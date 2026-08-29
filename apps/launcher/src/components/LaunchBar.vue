@@ -55,7 +55,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onPointerDown)
   <footer class="launchbar">
     <div class="readiness" role="status" aria-live="polite"><span class="ready-dot" :class="snapshot.readiness.state" /><div><strong>{{ readyText }}</strong><small v-if="snapshot.readiness.state === 'playable'">Guild Wars and your enabled Tools are available.</small></div></div>
     <div ref="pickerWrap" class="picker-wrap">
-      <button ref="pickerButton" class="account-picker" aria-haspopup="dialog" :aria-expanded="pickerOpen" aria-controls="profile-picker" @click="pickerOpen = !pickerOpen"><Users /><span><small>Accounts</small><strong>{{ selectedProfiles.length }} selected</strong></span><ChevronDown /></button>
+      <button ref="pickerButton" class="account-picker" :aria-label="`Choose accounts, ${selectedProfiles.length} selected`" aria-haspopup="dialog" :aria-expanded="pickerOpen" aria-controls="profile-picker" @click="pickerOpen = !pickerOpen"><Users /><span aria-hidden="true"><small>Accounts</small><strong>{{ selectedProfiles.length }} selected</strong></span><ChevronDown aria-hidden="true" /></button>
       <div v-if="pickerOpen" id="profile-picker" class="profile-picker" role="dialog" aria-label="Choose accounts" @keydown.esc="closePicker()">
         <strong>Choose accounts</strong>
         <button v-for="profile in visibleProfiles" :key="profile.id" role="checkbox" :aria-checked="selected.includes(profile.id)" @click="emit('toggle', profile.id)">
