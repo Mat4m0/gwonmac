@@ -12,9 +12,12 @@ import {
 } from "../tests/helpers/launcher-profile-fixtures.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const scenario = process.argv[2] as LauncherFixtureScenario | undefined;
+const requestedScenario = process.argv[2];
+const scenario = (requestedScenario === undefined || requestedScenario === "--keep"
+  ? "fresh"
+  : requestedScenario) as LauncherFixtureScenario;
 const keep = process.argv.includes("--keep");
-if (!scenario || !LAUNCHER_FIXTURE_SCENARIOS.includes(scenario)) {
+if (!LAUNCHER_FIXTURE_SCENARIOS.includes(scenario)) {
   throw new Error(`usage: pnpm launcher:fixture <${LAUNCHER_FIXTURE_SCENARIOS.join("|")}> [--keep]`);
 }
 
