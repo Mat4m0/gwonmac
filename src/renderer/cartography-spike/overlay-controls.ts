@@ -108,7 +108,10 @@ export function createCartographyOverlayControls(options: Readonly<{
   fields.append(presetRow);
   const hint = document.createElement("p");
   hint.className = "cartography-overlay-hint";
-  hint.innerHTML = "Hold <kbd>Shift</kbd> to inspect 3×3. Add <kbd>Option</kbd> for 7×7.";
+  hint.innerHTML = [
+    "Hold <kbd>Shift</kbd> to inspect 3×3. Add <kbd>Option</kbd> for 7×7.",
+    "<br>Marker: reveal here. Hatch: another map or route.",
+  ].join("");
   const status = document.createElement("p");
   status.className = "cartography-overlay-status";
   status.setAttribute("role", "status");

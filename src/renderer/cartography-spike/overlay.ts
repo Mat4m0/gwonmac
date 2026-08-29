@@ -19,6 +19,10 @@ import {
   type CartographyGridLayerSnapshot,
 } from "./cartography-grid-layer.js";
 import {
+  createCartographyCellRevealability,
+  type CartographyCellRevealability,
+} from "./cell-revealability.js";
+import {
   cartographyCellAtScreenPoint,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
@@ -92,7 +96,12 @@ export function mountCartographyOverlay(options: Readonly<{
   let startupTimer = 0;
   let disposed = false;
   let geometryVersion = "";
+  let geometry: ReturnType<PathingSpikeController["readLargestGeometry"]> = null;
+  let maskGeometryVersion = "";
   let mask: WalkabilityMask | null = null;
+  let revealabilitySourceVersion = "";
+  let revealabilityVersion = "";
+  let revealability: CartographyCellRevealability | null = null;
   const pathingSession = createPathingMapSession(options.pathing);
   let explorationBitmap: ExplorationSpikeBitmap | null = null;
   let explorationFingerprint = "";
@@ -165,17 +174,25 @@ export function mountCartographyOverlay(options: Readonly<{
   };
 
   const hideWalkability = () => {
-    geometryVersion = "";
-    mask = null;
     compassMaskLayer.hide();
     missionMapMaskLayer.hide();
+  };
+  const resetPathingDerivedState = () => {
+    geometryVersion = "";
+    geometry = null;
+    maskGeometryVersion = "";
+    mask = null;
+    revealabilitySourceVersion = "";
+    revealabilityVersion = "";
+    revealability = null;
+    hideWalkability();
   };
   const hideGrid = () => {
     compassGridLayer.hide();
     missionMapGridLayer.hide();
   };
   const withdrawAll = () => {
-    hideWalkability();
+    resetPathingDerivedState();
     hideGrid();
     controls.hide();
   };
@@ -255,20 +272,89 @@ export function mountCartographyOverlay(options: Readonly<{
     const missionContentBox = missionMap !== null && missionMapBox !== null
       ? projectMissionMapContentBox(missionMap, missionMapBox)
       : null;
+    const certifiedCompassAnchor = worldMapAnchor?.status === 1
+      && worldMapAnchor.generation > 0
+      && worldMapAnchor.generation === compass.generation
+      ? Object.freeze({
+          generation: worldMapAnchor.generation,
+          continent: worldMapAnchor.continent,
+          worldAnchorX: worldMapAnchor.worldAnchorX,
+          worldAnchorY: worldMapAnchor.worldAnchorY,
+          mapMinX: worldMapAnchor.mapMinX,
+          mapMinY: worldMapAnchor.mapMinY,
+          mapMaxX: worldMapAnchor.mapMaxX,
+          mapMaxY: worldMapAnchor.mapMaxY,
+          playerMapX: worldMapAnchor.worldAnchorX
+            + companion.playerX / GAME_UNITS_PER_MAP_UNIT,
+          playerMapY: worldMapAnchor.worldAnchorY
+            - companion.playerY / GAME_UNITS_PER_MAP_UNIT,
+        })
+      : null;
+    const pathingNeeded = settings.cartographyGridEnabled
+      || settings.cartographyOverlayEnabled;
+    const pathingReady = pathingNeeded
+      && pathing?.status === 1
+      && pathing.totalTrapezoids > 0
+      && pathing.totalTrapezoids <= MAX_RENDERED_TRAPEZOIDS
+      && pathing.generation === compass.generation;
+    if (pathingReady && pathing !== null) {
+      const nextGeometryVersion = [
+        pathing.generation,
+        pathing.sequence,
+        pathing.totalTrapezoids,
+      ].join(":");
+      if (nextGeometryVersion !== geometryVersion) {
+        geometry = options.pathing.readLargestGeometry();
+        geometryVersion = geometry === null ? "" : nextGeometryVersion;
+        maskGeometryVersion = "";
+        mask = null;
+        revealabilitySourceVersion = "";
+        revealabilityVersion = "";
+        revealability = null;
+      }
+    } else {
+      resetPathingDerivedState();
+    }
+    if (geometry !== null && certifiedCompassAnchor !== null) {
+      const classificationRevealRadius = revealRadius === 3 ? 3 : 1;
+      const nextRevealabilitySourceVersion = [
+        geometryVersion,
+        certifiedCompassAnchor.continent,
+        certifiedCompassAnchor.worldAnchorX,
+        certifiedCompassAnchor.worldAnchorY,
+        certifiedCompassAnchor.mapMinX,
+        certifiedCompassAnchor.mapMinY,
+        certifiedCompassAnchor.mapMaxX,
+        certifiedCompassAnchor.mapMaxY,
+        classificationRevealRadius,
+      ].join(":");
+      if (nextRevealabilitySourceVersion !== revealabilitySourceVersion) {
+        revealability = createCartographyCellRevealability({
+          geometry,
+          worldAnchorX: certifiedCompassAnchor.worldAnchorX,
+          worldAnchorY: certifiedCompassAnchor.worldAnchorY,
+          continent: certifiedCompassAnchor.continent,
+          mapMinX: certifiedCompassAnchor.mapMinX,
+          mapMinY: certifiedCompassAnchor.mapMinY,
+          mapMaxX: certifiedCompassAnchor.mapMaxX,
+          mapMaxY: certifiedCompassAnchor.mapMaxY,
+          revealRadius: classificationRevealRadius,
+        });
+        revealabilitySourceVersion = nextRevealabilitySourceVersion;
+      }
+      revealabilityVersion = revealability === null
+        ? ""
+        : revealabilitySourceVersion;
+    } else {
+      revealabilitySourceVersion = "";
+      revealabilityVersion = "";
+      revealability = null;
+    }
+    const canCurrentMapReveal = (cellX: number, cellY: number): boolean | null =>
+      revealability?.canCurrentMapReveal(cellX, cellY) ?? null;
 
     runLane("grid", () => {
     if (settings.cartographyGridEnabled && compassBox !== null) {
-      const certifiedCompassAnchor = worldMapAnchor?.status === 1
-        && worldMapAnchor.generation > 0
-        && worldMapAnchor.generation === compass.generation
-        ? Object.freeze({
-            generation: worldMapAnchor.generation,
-            playerMapX: worldMapAnchor.worldAnchorX
-              + companion.playerX / GAME_UNITS_PER_MAP_UNIT,
-            playerMapY: worldMapAnchor.worldAnchorY
-              - companion.playerY / GAME_UNITS_PER_MAP_UNIT,
-          })
-        : null;
       const compassProjection = certifiedCompassAnchor === null
         ? null
         : projectCartographyGridToCompass({
@@ -285,6 +371,8 @@ export function mountCartographyOverlay(options: Readonly<{
           opacity: gridOpacity,
           explorationVersion: explorationFingerprint,
           isExplored: exploredCell,
+          revealabilityVersion,
+          canCurrentMapReveal,
           hoveredCell: null,
           revealRadius,
         });
@@ -309,6 +397,8 @@ export function mountCartographyOverlay(options: Readonly<{
           opacity: gridOpacity,
           explorationVersion: explorationFingerprint,
           isExplored: exploredCell,
+          revealabilityVersion,
+          canCurrentMapReveal,
           hoveredCell,
           revealRadius: hoveredCell === null ? revealRadius : hoverRevealRadius,
         });
@@ -321,25 +411,13 @@ export function mountCartographyOverlay(options: Readonly<{
     runLane("walkability", () => {
     const walkabilityReady = settings.cartographyOverlayEnabled
       && compassBox !== null
-      && pathing?.status === 1
-      && pathing.totalTrapezoids > 0
-      && pathing.totalTrapezoids <= MAX_RENDERED_TRAPEZOIDS
-      && pathing.generation === compass.generation;
-    if (!walkabilityReady || pathing === null) {
+      && geometry !== null;
+    if (!walkabilityReady || geometry === null) {
       hideWalkability();
     } else {
-      const nextGeometryVersion = [
-        pathing.generation,
-        pathing.sequence,
-        pathing.totalTrapezoids,
-      ].join(":");
-      if (nextGeometryVersion !== geometryVersion) {
-        const geometry = options.pathing.readLargestGeometry();
-        geometryVersion = geometry === null ? "" : nextGeometryVersion;
-        mask = geometry === null
-          ? null
-          : createWalkabilityMask(options.parent.ownerDocument, geometry);
-        if (mask === null) geometryVersion = "";
+      if (maskGeometryVersion !== geometryVersion) {
+        mask = createWalkabilityMask(options.parent.ownerDocument, geometry);
+        maskGeometryVersion = geometryVersion;
       }
       if (mask === null) {
         compassMaskLayer.hide();

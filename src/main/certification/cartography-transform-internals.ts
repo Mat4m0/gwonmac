@@ -89,10 +89,15 @@ export const WORLD_MAP_ANCHOR_CERTIFICATE = Object.freeze({
   mapId: 0x8c,
   areaInfoCount: 883,
   areaInfoStride: 0x7c,
+  continent: 0x04,
   iconStartX: 0x48,
   iconStartY: 0x4c,
+  iconEndX: 0x50,
+  iconEndY: 0x54,
   iconStartXDupe: 0x58,
   iconStartYDupe: 0x5c,
+  iconEndXDupe: 0x60,
+  iconEndYDupe: 0x64,
 });
 
 export type CartographyMemoryLayout = Readonly<{
@@ -223,8 +228,13 @@ export type ExplorationGlobals = Readonly<{
 export type WorldMapAnchorGlobals = Readonly<{
   status: number;
   generation: number;
+  continent: number;
   worldAnchorX: number;
   worldAnchorY: number;
+  mapMinX: number;
+  mapMinY: number;
+  mapMaxX: number;
+  mapMaxY: number;
 }>;
 
 type ExplorationCertificate = Readonly<
@@ -588,9 +598,26 @@ export function worldMapAnchorObserver(
     local(0), f32Load(certificate.mapEndY), Uint8Array.of(0x8b),
     f32(96), Uint8Array.of(0x95, 0x92, 0x21), uleb(5),
   );
+  const writeMapInfo = (
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ) => concat(
+    local(2), i32Load(certificate.continent), globalSet(globals.continent),
+    local(2), i32Load(startX), Uint8Array.of(0xb3, 0x22), uleb(6),
+    globalSet(globals.mapMinX),
+    local(2), i32Load(startY), Uint8Array.of(0xb3, 0x22), uleb(7),
+    globalSet(globals.mapMinY),
+    local(2), i32Load(endX), Uint8Array.of(0xb3, 0x22), uleb(8),
+    globalSet(globals.mapMaxX),
+    local(2), i32Load(endY), Uint8Array.of(0xb3, 0x22), uleb(9),
+    globalSet(globals.mapMaxY),
+    writeAnchors(startX, startY),
+  );
   return concat(
-    // MapContext, map id, AreaInfo, memory bytes; two calculated anchors.
-    Uint8Array.of(0x02, 0x04, 0x7f, 0x02, 0x7d),
+    // MapContext, map id, AreaInfo, memory bytes; anchors and map bounds.
+    Uint8Array.of(0x02, 0x04, 0x7f, 0x06, 0x7d),
     i32(0), globalSet(globals.status),
     Uint8Array.of(0x3f, 0x00), i32(65_536), Uint8Array.of(0x6c, 0x21), uleb(3),
     i32(certificate.contextRoot), i32Load(),
@@ -613,17 +640,21 @@ export function worldMapAnchorObserver(
     requirePointer(2, certificate.areaInfoStride, 6),
     local(2), i32Load(certificate.iconStartX),
     Uint8Array.of(0x45, 0x04, 0x40),
-    writeAnchors(
+    writeMapInfo(
       certificate.iconStartXDupe,
       certificate.iconStartYDupe,
+      certificate.iconEndXDupe,
+      certificate.iconEndYDupe,
     ),
     Uint8Array.of(0x05),
-    writeAnchors(
+    writeMapInfo(
       certificate.iconStartX,
       certificate.iconStartY,
+      certificate.iconEndX,
+      certificate.iconEndY,
     ),
     Uint8Array.of(0x0b),
-    // Publish only the two derived scalars before validating their range. A
+    // Publish the derived scalars before validating their range. A
     // non-ready status remains fail-closed, while live evidence can identify
     // which exact calculation violated the certificate without exposing a pointer.
     local(4), globalSet(globals.worldAnchorX),
@@ -632,6 +663,20 @@ export function worldMapAnchorObserver(
     Uint8Array.of(0x5d, 0x45, 0x04, 0x40), refuse(7), Uint8Array.of(0x0b),
     local(5), Uint8Array.of(0x8b), f32(1_000_000),
     Uint8Array.of(0x5d, 0x45, 0x04, 0x40), refuse(7), Uint8Array.of(0x0b),
+    globalGet(globals.continent), i32(5), Uint8Array.of(0x4b, 0x04, 0x40),
+    refuse(7), Uint8Array.of(0x0b),
+    local(8), local(6), Uint8Array.of(0x5e, 0x45, 0x04, 0x40),
+    refuse(7), Uint8Array.of(0x0b),
+    local(9), local(7), Uint8Array.of(0x5e, 0x45, 0x04, 0x40),
+    refuse(7), Uint8Array.of(0x0b),
+    local(6), Uint8Array.of(0x8b), f32(1_000_000),
+    Uint8Array.of(0x5f, 0x45, 0x04, 0x40), refuse(7), Uint8Array.of(0x0b),
+    local(7), Uint8Array.of(0x8b), f32(1_000_000),
+    Uint8Array.of(0x5f, 0x45, 0x04, 0x40), refuse(7), Uint8Array.of(0x0b),
+    local(8), Uint8Array.of(0x8b), f32(1_000_000),
+    Uint8Array.of(0x5f, 0x45, 0x04, 0x40), refuse(7), Uint8Array.of(0x0b),
+    local(9), Uint8Array.of(0x8b), f32(1_000_000),
+    Uint8Array.of(0x5f, 0x45, 0x04, 0x40), refuse(7), Uint8Array.of(0x0b),
     local(4), globalSet(globals.worldAnchorX),
     local(5), globalSet(globals.worldAnchorY),
     globalGet(pathingGeneration), globalSet(globals.generation),
