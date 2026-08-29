@@ -633,6 +633,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     enhancementCapabilities,
     enhancementProgram,
+    // Cartography is a certified product transform. The official diagnostic
+    // profile is the one intentional path that serves an untouched client.
+    cartographySpike: !diagnosticPolicy.officialClient,
     extendedMemoryEnabled: settings.extendedMemoryEnabled,
     diagnosticProfile,
     onProgress: setProgress,
@@ -926,7 +929,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSnapshotMetadata: () => clientRuntime.snapshotMetadata(),
     getCacheInfo: () => clientRuntime.cacheInfo(),
     getSettings: () => preferences.getSettings(),
-    updateSettings: (patch) => preferences.updateSettings(patch),
+    updateSettings: (patch) => preferences.updateRendererSettings(patch),
     resetSettings: () => toolsRuntime?.resetSettings()
       ?? preferences.resetCoreSettings(),
     setDiagnosticProfile: async (profile) => {

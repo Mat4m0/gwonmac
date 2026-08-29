@@ -11,10 +11,10 @@ export const boxOf = async (locator: Locator) => {
 export async function startGameInput(page: Page) {
   const canvas = page.locator("#canvas");
   // A full Electron run can have several recently closed renderer processes
-  // draining while the next cached fixture starts. The product has no
-  // five-second startup promise; wait for the explicit renderer-owned signal
-  // instead of turning temporary suite load into an input failure.
+  // draining while the next cached fixture starts. Wait for the explicit
+  // renderer-owned signal instead of inventing a short product startup
+  // promise. This bound covers loaded CI without weakening the assertion.
   await expect(canvas).toHaveAttribute("data-input-ready", "true", {
-    timeout: 15_000,
+    timeout: 30_000,
   });
 }

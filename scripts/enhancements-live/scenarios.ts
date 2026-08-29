@@ -625,6 +625,19 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       }
     },
   }),
+  "cartography-probe": Object.freeze({
+    tier: "graphics-observation",
+    // Exercise the same sealed Core client chain a player launches. A custom
+    // developer observer profile produces a different derivative and would
+    // correctly be refused by Cartography's finite build registry.
+    program: "none",
+    readiness: "observer",
+    validate(result: LiveResult) {
+      if (!result.evidence) {
+        throw new Error("cartography probe recorded no evidence");
+      }
+    },
+  }),
   target: Object.freeze({
     tier: "automation",
     program: "target-observer",

@@ -46,8 +46,8 @@ function rendererCheckout(): string {
   write("src/renderer/favicon.ico", "ico");
   write("src/renderer/favicon.png", "png");
   write("src/renderer/harness.css", "css");
+  write("src/renderer/cartography-overlay-controls.css", "controls-css");
   write("src/renderer/loading.css", "css");
-  write("src/renderer/settings.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
   write("src/renderer/images/logo.webp", "webp");
@@ -136,6 +136,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       .map((file) => path.relative(path.join(root, "build/renderer"), file))
       .sort();
     assert.deepEqual(relative, [
+      "cartography-overlay-controls.css",
       "favicon.ico",
       "favicon.png",
       "fonts/COPYING-INTER",

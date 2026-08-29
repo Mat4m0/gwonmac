@@ -96,6 +96,19 @@ launcher offers to restart. With games open, it saves the change for the next
 normal restart and does not close them. Individual Tool switches and shortcuts
 apply to all running profiles when the Tools runtime is already loaded.
 
+## Maps and cartography
+
+Open **Settings → Maps** for two independent features. **Grid** marks the game's
+exploration cells and highlights the cell containing your character.
+**Walkable terrain** shades terrain outside certified pathing geometry while it
+keeps the native map artwork visible.
+
+Choose Cartographer, Synthwave, or Monochrome. Custom styles can change colors,
+line widths, patterns, unseen-cell markers, and inspection ranges. Hold Shift
+over a Mission Map cell to inspect its normal 3×3 reveal area, or Option-Shift
+for the Bird's Eye 7×7 area. One style applies to the Compass and Mission Map.
+Both layers hide when the current map projection or data cannot be certified.
+
 ## Saved login
 
 Guild Wars owns sign-in inside each game window. The launcher does not ask for
@@ -106,7 +119,9 @@ share saved-login access with the published application.
 ## Display, input, and memory
 
 Mouse, trackpad, keyboard, and controller input go directly to Guild Wars. The
-application does not broadcast input between profiles.
+application does not broadcast input between profiles. Main letters, the number
+row, and ANSI punctuation keep the same physical game binding when the macOS
+input source changes. Text fields still use the active input source.
 
 Open **Settings → Advanced** to enable extended memory or local diagnostics and
 to reveal logs. The in-game memory warning remains available during long

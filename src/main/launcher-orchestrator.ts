@@ -87,6 +87,13 @@ export class LauncherOrchestrator {
         updateTrack: settings.updateTrack,
         extendedMemoryEnabled: settings.extendedMemoryEnabled,
         showDiagnostics: settings.showDiagnostics,
+        cartographyOverlayEnabled: settings.cartographyOverlayEnabled,
+        cartographyGridEnabled: settings.cartographyGridEnabled,
+        cartographyRevealMode: settings.cartographyRevealMode,
+        cartographyPresetLibrary: settings.cartographyPresetLibrary,
+        cartographyWalkabilityOpacity: settings.cartographyWalkabilityOpacity,
+        cartographyGridOpacity: settings.cartographyGridOpacity,
+        cartographyControlIdleOpacity: settings.cartographyControlIdleOpacity,
       },
       profiles: accounts.profiles.map((profile) => ({
         id: profile.id,

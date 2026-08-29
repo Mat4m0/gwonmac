@@ -23,6 +23,7 @@ const TOKENS = "src/shared/ui/tokens.css";
  *  launcher is: two surfaces of one product cannot each own a palette. */
 const CONSUMERS = [
   "src/shared/ui/components.css",
+  "src/renderer/cartography-overlay-controls.css",
   "apps/tools/src/styles.css",
   "apps/tools/src/styles/base-shell.css",
   "apps/tools/src/styles/library.css",

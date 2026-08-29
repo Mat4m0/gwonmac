@@ -10,6 +10,14 @@ import type {
   DownloadActivity,
   FullDownloadState,
 } from "./contracts.js";
+import {
+  CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
+  CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
+  CARTOGRAPHY_OPACITY_MAX,
+  CARTOGRAPHY_OPACITY_MIN,
+  normaliseCartographyPresetLibrary,
+  type CartographyPresetLibrary,
+} from "./cartography-overlay.js";
 import type { ShortcutBinding } from "./keyboard-shortcuts.js";
 import type { ProfileId } from "./multiple-accounts.js";
 
@@ -102,6 +110,13 @@ export interface LauncherSettings {
   readonly updateTrack: AppSettings["updateTrack"];
   readonly extendedMemoryEnabled: boolean;
   readonly showDiagnostics: boolean;
+  readonly cartographyOverlayEnabled: boolean;
+  readonly cartographyGridEnabled: boolean;
+  readonly cartographyRevealMode: AppSettings["cartographyRevealMode"];
+  readonly cartographyPresetLibrary: CartographyPresetLibrary;
+  readonly cartographyWalkabilityOpacity: number;
+  readonly cartographyGridOpacity: number;
+  readonly cartographyControlIdleOpacity: number;
 }
 
 export type LauncherSettingsPatch = Partial<LauncherSettings>;
@@ -235,14 +250,29 @@ export function parseLauncherExternalLink(value: unknown): LauncherExternalLink 
 }
 
 export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatch {
-  const source = exactObject(value, ["autoCheckUpdates", "updateTrack", "extendedMemoryEnabled", "showDiagnostics"], "launcher settings patch");
+  const source = exactObject(value, [
+    "autoCheckUpdates", "updateTrack", "extendedMemoryEnabled", "showDiagnostics",
+    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyRevealMode",
+    "cartographyPresetLibrary", "cartographyWalkabilityOpacity", "cartographyGridOpacity",
+    "cartographyControlIdleOpacity",
+  ], "launcher settings patch");
   const result: {
     autoCheckUpdates?: boolean;
     updateTrack?: AppSettings["updateTrack"];
     extendedMemoryEnabled?: boolean;
     showDiagnostics?: boolean;
+    cartographyOverlayEnabled?: boolean;
+    cartographyGridEnabled?: boolean;
+    cartographyRevealMode?: AppSettings["cartographyRevealMode"];
+    cartographyPresetLibrary?: CartographyPresetLibrary;
+    cartographyWalkabilityOpacity?: number;
+    cartographyGridOpacity?: number;
+    cartographyControlIdleOpacity?: number;
   } = {};
-  for (const key of ["autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics"] as const) {
+  for (const key of [
+    "autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics",
+    "cartographyOverlayEnabled", "cartographyGridEnabled",
+  ] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean`);
     result[key] = source[key];
@@ -250,6 +280,25 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
   if (source.updateTrack !== undefined) {
     if (source.updateTrack !== "stable" && source.updateTrack !== "beta") throw new Error("update track is invalid");
     result.updateTrack = source.updateTrack;
+  }
+  if (source.cartographyRevealMode !== undefined) {
+    if (!["off", "normal", "birds-eye"].includes(source.cartographyRevealMode as string)) throw new Error("cartography reveal mode is invalid");
+    result.cartographyRevealMode = source.cartographyRevealMode as AppSettings["cartographyRevealMode"];
+  }
+  if (source.cartographyPresetLibrary !== undefined) {
+    const library = normaliseCartographyPresetLibrary(source.cartographyPresetLibrary);
+    if (library === null) throw new Error("cartography preset library is invalid");
+    result.cartographyPresetLibrary = library;
+  }
+  for (const [key, minimum, maximum] of [
+    ["cartographyWalkabilityOpacity", CARTOGRAPHY_OPACITY_MIN, CARTOGRAPHY_OPACITY_MAX],
+    ["cartographyGridOpacity", CARTOGRAPHY_OPACITY_MIN, CARTOGRAPHY_OPACITY_MAX],
+    ["cartographyControlIdleOpacity", CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN, CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX],
+  ] as const) {
+    const candidate = source[key];
+    if (candidate === undefined) continue;
+    if (typeof candidate !== "number" || !Number.isSafeInteger(candidate) || candidate < minimum || candidate > maximum) throw new Error(`${key} is invalid`);
+    result[key] = candidate;
   }
   return result;
 }

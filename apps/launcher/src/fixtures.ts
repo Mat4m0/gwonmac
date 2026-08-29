@@ -1,4 +1,5 @@
 import type { LauncherSnapshot } from "@shared/launcher-contracts";
+import { DEFAULT_CARTOGRAPHY_PRESET_LIBRARY } from "@shared/cartography-overlay";
 import { LEGACY_PRIMARY_PROFILE_ID, parseProfileId } from "@shared/multiple-accounts";
 
 export const fixtureSnapshot: LauncherSnapshot = {
@@ -27,6 +28,13 @@ export const fixtureSnapshot: LauncherSnapshot = {
     updateTrack: "stable",
     extendedMemoryEnabled: false,
     showDiagnostics: false,
+    cartographyOverlayEnabled: false,
+    cartographyGridEnabled: false,
+    cartographyRevealMode: "off",
+    cartographyPresetLibrary: DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
+    cartographyWalkabilityOpacity: 55,
+    cartographyGridOpacity: 65,
+    cartographyControlIdleOpacity: 35,
   },
   profiles: [
     { id: LEGACY_PRIMARY_PROFILE_ID, name: "Main account", archived: false, state: "ready", appearance: { icon: "swords", color: "#8a5a32" } },

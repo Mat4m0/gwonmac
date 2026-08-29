@@ -163,7 +163,7 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await flushPromises();
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button")[3]!.trigger("click");
+    await wrapper.findAll(".settings-page aside button")[4]!.trigger("click");
     await flushPromises();
     expect(info).toHaveBeenCalledOnce();
     expect(wrapper.text()).toContain("1.0 GB of 2.0 GB verified");

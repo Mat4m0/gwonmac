@@ -49,6 +49,7 @@ import {
 } from "../src/main/core/window-state.ts";
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.ts";
 import { DEFAULT_CUSTOM_UI_THEME } from "../src/shared/ui-theme.ts";
+import { CARTOGRAPHY_BUILTIN_PRESETS } from "../src/shared/cartography-overlay.ts";
 import {
   compareReleaseVersions,
   parseReleaseVersion,
@@ -262,6 +263,23 @@ const candidateSettingsDomains = Array.from(
       uiFont: cycle(UI_FONTS, index),
       controllerPromptStyle: cycle(CONTROLLER_PROMPT_STYLES, index),
       uiPanelOpacity: cycle(opacityValues, index),
+      cartographyOverlayEnabled: cycle(booleanValues, index),
+      cartographyGridEnabled: cycle(booleanValues, index + 1),
+      cartographyRevealMode: cycle(["off", "normal", "birds-eye"] as const, index),
+      cartographyPresetLibrary: index % 2 === 0 ? {
+        activePreset: { kind: "builtin", id: "cartographer" },
+        customPresets: [],
+      } : {
+        activePreset: { kind: "custom", id: "roundtrip-preset" },
+        customPresets: [{
+          id: "roundtrip-preset",
+          name: "Round-trip preset",
+          style: CARTOGRAPHY_BUILTIN_PRESETS.synthwave.style,
+        }],
+      },
+      cartographyWalkabilityOpacity: cycle([0, 55, 100] as const, index),
+      cartographyGridOpacity: cycle([0, 65, 100] as const, index),
+      cartographyControlIdleOpacity: cycle([15, 35, 100] as const, index),
       gwonmacTools: cycle(booleanValues, index),
       buildLibrary: cycle(booleanValues, index + 1),
       tradeChat: cycle(booleanValues, index),

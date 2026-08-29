@@ -328,6 +328,41 @@ test("the account workspace survives a full application restart", async () => {
   }
 });
 
+test("global map settings live in the launcher and survive restart", async () => {
+  test.setTimeout(60_000);
+  const first = await launchOffline("gw-launcher-maps-", {
+    GW_TEST_RETURN_LAUNCHER: "1",
+  });
+  let restarted: Awaited<ReturnType<typeof launchOfflineAt>> | null = null;
+  try {
+    await first.page.getByRole("button", { name: "Continue" }).click();
+    await first.page.getByRole("button", { name: "Not now" }).click();
+    await first.page.getByRole("button", { name: "Skip" }).click();
+    await first.page.getByRole("button", { name: "Settings" }).click();
+    await first.page.getByRole("button", { name: "Maps" }).click();
+    await expect(first.page.getByRole("heading", { name: "Maps" })).toBeVisible();
+    await first.page.getByLabel("Exploration grid").check();
+    await first.page.getByRole("button", { name: "Customize style" }).click();
+    await expect(first.page.getByText("Custom style", { exact: true })).toBeVisible();
+    const beforeRestart = await first.page.evaluate(() => window.launcherNative.state.get());
+    expect(beforeRestart.settings.cartographyGridEnabled).toBe(true);
+    expect(beforeRestart.settings.cartographyPresetLibrary.activePreset.kind).toBe("custom");
+    await first.app.close();
+
+    restarted = await launchOfflineAt(first.userData, {
+      GW_TEST_RETURN_LAUNCHER: "1",
+    });
+    const afterRestart = await restarted.page.evaluate(() => window.launcherNative.state.get());
+    expect(afterRestart.settings.cartographyGridEnabled).toBe(true);
+    expect(afterRestart.settings.cartographyPresetLibrary.activePreset).toEqual(
+      beforeRestart.settings.cartographyPresetLibrary.activePreset,
+    );
+  } finally {
+    if (restarted) await closeOffline(restarted);
+    else await closeOffline(first);
+  }
+});
+
 test("renderer recovery stays inside one profile and leaves the launcher alive", async () => {
   const fixture = await launchCachedClient("gw-launcher-recovery-", {
     GW_TEST_RETURN_LAUNCHER: "1",
