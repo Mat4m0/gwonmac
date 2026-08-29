@@ -1,30 +1,24 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   AlertTriangle,
   Archive,
   Check,
-  ChevronDown,
-  CircleHelp,
   Clock3,
   ExternalLink,
   FileText,
   Flame,
-  Home,
   MessageSquareText,
   Map as MapIcon,
-  Newspaper,
   Play,
   Plus,
   RotateCcw,
   ScrollText,
   Settings,
   Shield,
-  SlidersHorizontal,
   Swords,
   Star,
   Crown,
-  Users,
   Wrench,
   X,
 } from "lucide-vue-next";
@@ -35,23 +29,21 @@ import { shortcutDisplay } from "@shared/keyboard-shortcuts";
 import type { ShortcutBinding } from "@shared/keyboard-shortcuts";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { fixtureSnapshot } from "./fixtures";
-import { cacheSummary, formatProgress, launchLabel, profileStatus, updateStatus } from "./launcher-view-model";
+import { cacheSummary, formatProgress, profileStatus, updateStatus } from "./launcher-view-model";
 import BaseModal from "./components/BaseModal.vue";
-import logoUrl from "@site/reforged-logo.webp";
+import LauncherHeader from "./components/LauncherHeader.vue";
+import LaunchBar from "./components/LaunchBar.vue";
+import HomeView from "./components/HomeView.vue";
+import type { LauncherRoute, SettingsRoute } from "./routes";
 
-type Route = "home" | "accounts" | "issues" | "feedback" | "settings";
-type SettingsRoute = "general" | "content" | "tools" | "game-files" | "advanced";
-
-const route = ref<Route>("home");
+const route = ref<LauncherRoute>("home");
 const settingsRoute = ref<SettingsRoute>("general");
 const snapshot = ref<LauncherSnapshot>(fixtureSnapshot);
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
-const contentTab = ref<"news" | "dailies">(snapshot.value.preferences.content.first);
 const addOpen = ref(false);
 const appearanceProfile = ref<ProfileId | null>(null);
 const appearanceIcon = ref("swords");
 const appearanceColor = ref("#9a6638");
-const pickerOpen = ref(false);
 const newName = ref("");
 const busy = ref(false);
 const setupStep = ref<1 | 2>(1);
@@ -64,7 +56,6 @@ const operationError = ref("");
 const startupError = ref(false);
 const gameFilesInfo = ref<CacheInfo | null>(null);
 const gameFilesLoading = ref(false);
-const weekExpanded = ref(false);
 let unsubscribe: (() => void) | undefined;
 
 const native = window.launcherNative;
@@ -76,13 +67,11 @@ onMounted(async () => {
     const initial = await native.state.get();
     snapshot.value = initial;
     selected.value = [...initial.selectedProfileIds];
-    contentTab.value = initial.preferences.content.first;
     synchronized.value = true;
     unsubscribe = native.state.onChange((next) => {
       if (next.revision < snapshot.value.revision) return;
       snapshot.value = next;
       selected.value = [...next.selectedProfileIds];
-      if (!next.preferences.content[contentTab.value]) contentTab.value = next.preferences.content.first;
     });
   } catch {
     startupError.value = true;
@@ -95,17 +84,7 @@ const selectedProfiles = computed(() => visibleProfiles.value.filter((profile) =
 const openSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state === "running"));
 const closedSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state !== "running"));
 const waiting = computed(() => selectedProfiles.value.some((profile) => profile.state === "queued"));
-const primaryLabel = computed(() => launchLabel(selectedProfiles.value, snapshot.value.readiness));
 const updateCopy = computed(() => updateStatus(snapshot.value.appUpdate));
-const readyText = computed(() => {
-  const state = snapshot.value.readiness.state;
-  if (state === "preparing") return "Preparing Guild Wars";
-  if (state === "repair-required") return "Game files need repair";
-  if (state === "offline-playable") return "Ready to play offline";
-  return snapshot.value.readiness.backgroundDownload?.status === "running"
-    ? "Ready to play · Downloading game files"
-    : "Ready to play";
-});
 const preparationPercent = computed(() => {
   if (snapshot.value.readiness.state !== "preparing") return 0;
   const { received, total } = snapshot.value.readiness.progress;
@@ -206,18 +185,6 @@ async function runGameFilesAction(message: string, action: () => Promise<void> |
   if (await runAction(message, action)) await loadGameFilesInfo();
 }
 
-function selectContentTab(tab: "news" | "dailies") {
-  contentTab.value = tab;
-}
-
-async function moveContentTab(event: KeyboardEvent) {
-  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-  event.preventDefault();
-  contentTab.value = contentTab.value === "news" ? "dailies" : "news";
-  await nextTick();
-  document.querySelector<HTMLElement>(`#${contentTab.value}-tab`)?.focus();
-}
-
 const toolLabels: Readonly<Record<GlobalTool, string>> = {
   "build-management": "Build Management",
   "quick-travel": "Quick Travel",
@@ -286,22 +253,7 @@ async function replaceToolShortcut() {
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
   <div v-else class="app-shell">
-    <header class="titlebar">
-      <button class="brand" aria-label="Home" @click="route = 'home'">
-        <img :src="logoUrl" alt="Guild Wars Reforged" />
-      </button>
-      <nav aria-label="Main navigation">
-        <button :class="{ active: route === 'home' }" @click="route = 'home'"><Home />Home</button>
-        <button :class="{ active: route === 'accounts' }" @click="route = 'accounts'"><Users />Accounts</button>
-        <button :class="{ active: route === 'issues' }" @click="route = 'issues'"><AlertTriangle />Known issues</button>
-        <button :class="{ active: route === 'feedback' }" @click="route = 'feedback'"><MessageSquareText />Feedback</button>
-      </nav>
-      <div class="title-actions">
-        <button class="icon-button" aria-label="Settings" @click="openSettings()"><Settings /></button>
-        <button class="help-button" @click="native?.experience.replayIntroduction()"><CircleHelp />Show introduction</button>
-        <span class="unofficial">Unofficial client</span>
-      </div>
-    </header>
+    <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @introduction="runAction('The introduction could not be opened.', () => native?.experience.replayIntroduction())" />
 
     <section v-if="snapshot.readiness.state === 'repair-required'" class="priority-banner danger">
       <AlertTriangle /><div><strong>Game files need repair</strong><span>Guild Wars cannot start until the client is ready.</span></div>
@@ -324,48 +276,7 @@ async function replaceToolShortcut() {
     </section>
 
     <main :class="{ 'artwork-only': route === 'home' && !snapshot.preferences.content.news && !snapshot.preferences.content.dailies }">
-      <template v-if="route === 'home'">
-        <section class="hero-panel" :class="{ 'hero-placeholder': !fixtureContent }">
-          <div v-if="fixtureContent" class="hero-copy">
-            <span class="eyebrow">Guild Wars · August 29</span>
-            <h1>Wayfarer’s Reverie starts Tuesday.</h1>
-            <p>The event includes quests across Tyria, Cantha, and Elona.</p>
-            <button class="text-link" @click="contentTab = 'news'">Read update <ExternalLink /></button>
-          </div>
-          <div v-else class="hero-copy">
-            <span class="eyebrow">Guild Wars Reforged</span>
-            <h1>Your accounts. One launcher.</h1>
-            <p>Updates, game files, Tools, and every Guild Wars window are managed here.</p>
-          </div>
-        </section>
-        <section v-if="snapshot.preferences.content.news || snapshot.preferences.content.dailies" class="home-panel">
-          <div class="panel-head">
-            <div v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies" class="segmented" role="tablist" aria-label="Home content" @keydown="moveContentTab">
-              <button id="news-tab" role="tab" :tabindex="contentTab === 'news' ? 0 : -1" :aria-selected="contentTab === 'news'" aria-controls="news-panel" @click="selectContentTab('news')"><Newspaper />News</button>
-              <button id="dailies-tab" role="tab" :tabindex="contentTab === 'dailies' ? 0 : -1" :aria-selected="contentTab === 'dailies'" aria-controls="dailies-panel" @click="selectContentTab('dailies')"><Clock3 />Dailies</button>
-            </div>
-            <h2 v-else>{{ snapshot.preferences.content.news ? 'News' : 'Dailies' }}</h2>
-            <button class="customize" @click="openSettings('content')"><SlidersHorizontal />Customize</button>
-          </div>
-          <div v-if="contentTab === 'news' && snapshot.contentAvailability.news === 'placeholder'" id="news-panel" role="tabpanel" aria-labelledby="news-tab" class="empty-state"><Newspaper /><h3>News is not connected yet.</h3><p>You can still read Guild Wars Reforged updates on the project website.</p><button class="secondary" @click="native?.external.open('github')">Open project updates <ExternalLink /></button></div>
-          <div v-else-if="contentTab === 'news'" id="news-panel" role="tabpanel" aria-labelledby="news-tab" class="news-list">
-            <article v-if="snapshot.preferences.content.officialNews"><span>Guild Wars</span><div><h3>Client stability update</h3><p>Fixed a cinematic crash and map reveal problems.</p></div><time>Aug 29</time></article>
-            <article v-if="snapshot.preferences.content.reforgedNews"><span>Reforged</span><div><h3>The unified launcher is coming</h3><p>Accounts, Tools, downloads, and repair now live in one place.</p></div><time>New</time></article>
-            <article><span>Issues</span><div><h3>Two known game issues</h3><p>Workarounds are available.</p></div><button @click="route = 'issues'">View</button></article>
-          </div>
-          <div v-else-if="snapshot.contentAvailability.dailies === 'placeholder'" id="dailies-panel" role="tabpanel" aria-labelledby="dailies-tab" class="empty-state"><Clock3 /><h3>Daily activities are not connected yet.</h3><p>Use the Guild Wars Wiki for the current schedule.</p></div>
-          <div v-else id="dailies-panel" role="tabpanel" aria-labelledby="dailies-tab" class="daily-view">
-            <div class="daily-date"><span>Today · Aug 29</span><strong>Changes in 5h 18m</strong><small>18:00 local time</small></div>
-            <div class="daily-grid">
-              <article v-for="daily in ['Gate of Pain', 'Zoldark the Unholy', 'Random Arena', 'Skyward Reach', 'Justiciar Marron', 'Footman Tate', 'Baked Husks']" :key="daily"><Swords /><div><small>Daily activity</small><strong>{{ daily }}</strong></div><ExternalLink /></article>
-            </div>
-            <template v-if="weekExpanded">
-              <div v-for="day in ['Tomorrow · Aug 30', 'Monday · Aug 31', 'Tuesday · Sep 1', 'Wednesday · Sep 2', 'Thursday · Sep 3', 'Friday · Sep 4']" :key="day" class="daily-week-row"><strong>{{ day }}</strong><span>Zaishen Mission · Zaishen Bounty · Vanguard Quest</span></div>
-            </template>
-            <button class="load-more" :aria-expanded="weekExpanded" @click="weekExpanded = !weekExpanded">{{ weekExpanded ? 'Show today only' : 'Show the next 7 days' }}</button>
-          </div>
-        </section>
-      </template>
+      <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('content')" @issues="route = 'issues'" @external="native?.external.open($event)" />
 
       <section v-else-if="route === 'accounts'" class="page accounts-page">
         <div class="page-head"><div><span class="eyebrow">Accounts</span><h1>Game windows</h1><p>Add another account when you want another game window.</p></div><button class="secondary" @click="addOpen = true"><Plus />Add account</button></div>
@@ -428,21 +339,7 @@ async function replaceToolShortcut() {
 
     <div v-if="operationError" class="operation-error" role="alert"><AlertTriangle /><span>{{ operationError }}</span><button class="icon-button" aria-label="Dismiss error" @click="operationError = ''"><X /></button></div>
 
-    <footer class="launchbar">
-      <div class="readiness"><span class="ready-dot" :class="snapshot.readiness.state" /><div><strong>{{ readyText }}</strong><small v-if="snapshot.readiness.state === 'playable'">Guild Wars and your enabled Tools are available.</small></div></div>
-      <div class="picker-wrap">
-        <button class="account-picker" aria-haspopup="dialog" :aria-expanded="pickerOpen" aria-controls="profile-picker" @click="pickerOpen = !pickerOpen"><Users /><span><small>Accounts</small><strong>{{ selectedProfiles.length }} selected</strong></span><ChevronDown /></button>
-        <div v-if="pickerOpen" id="profile-picker" class="profile-picker" role="dialog" aria-label="Choose accounts" @keydown.esc="pickerOpen = false">
-          <strong>Choose accounts</strong>
-          <button v-for="profile in visibleProfiles" :key="profile.id" role="checkbox" :aria-checked="selected.includes(profile.id)" @click="toggleProfile(profile.id)">
-            <span aria-hidden="true" class="checkbox" :class="{ checked: selected.includes(profile.id) }"><Check v-if="selected.includes(profile.id)" /></span>
-            <span><b>{{ profile.name }}</b><small>{{ profileStatus(profile) }}</small></span>
-          </button>
-          <button class="manage" @click="pickerOpen = false; route = 'accounts'"><Settings />Manage accounts</button>
-        </div>
-      </div>
-      <button class="primary launch" :disabled="busy || selected.length === 0 || (closedSelected.length === 0 && selectedProfiles.length > 1)" @click="primaryAction"><X v-if="waiting" /><Play v-else />{{ primaryLabel }}</button>
-    </footer>
+    <LaunchBar :snapshot="snapshot" :selected="selected" :busy="busy" @toggle="toggleProfile" @action="primaryAction" @manage="route = 'accounts'" />
 
     <BaseModal v-if="addOpen" labelledby="add-account-title" @close="addOpen = false">
       <form @submit.prevent="createProfile"><div class="modal-head"><h2 id="add-account-title">Add account</h2><button type="button" class="icon-button" aria-label="Close" @click="addOpen = false"><X /></button></div><p>This opens another separate Guild Wars window. Sign-in stays inside the game.</p><label>Name<input v-model="newName" autofocus maxlength="48" placeholder="Second account" /></label><div class="form-actions"><button type="button" class="secondary" @click="addOpen = false">Cancel</button><button class="primary" :disabled="!newName.trim()">Add account</button></div></form>
