@@ -5,16 +5,11 @@ import {
   Archive,
   Check,
   Clock3,
-  ExternalLink,
   FileText,
   Flame,
-  MessageSquareText,
   Map as MapIcon,
-  Play,
-  Plus,
   RotateCcw,
   ScrollText,
-  Settings,
   Shield,
   Swords,
   Star,
@@ -29,16 +24,27 @@ import { shortcutDisplay } from "@shared/keyboard-shortcuts";
 import type { ShortcutBinding } from "@shared/keyboard-shortcuts";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { fixtureSnapshotFor } from "./fixtures";
-import { cacheSummary, formatProgress, profileStatus, updateStatus } from "./launcher-view-model";
+import { cacheSummary, formatProgress, updateStatus } from "./launcher-view-model";
+import AccountsView from "./components/AccountsView.vue";
 import BaseModal from "./components/BaseModal.vue";
+import FeedbackView from "./components/FeedbackView.vue";
 import LauncherHeader from "./components/LauncherHeader.vue";
 import LaunchBar from "./components/LaunchBar.vue";
 import HomeView from "./components/HomeView.vue";
+import KnownIssuesView from "./components/KnownIssuesView.vue";
 import MapsSettings from "./components/MapsSettings.vue";
 import type { LauncherRoute, SettingsRoute } from "./routes";
 
 const route = ref<LauncherRoute>("home");
 const settingsRoute = ref<SettingsRoute>("general");
+const settingsSections: readonly { readonly id: SettingsRoute; readonly label: string }[] = [
+  { id: "general", label: "General" },
+  { id: "content", label: "Content" },
+  { id: "tools", label: "Tools" },
+  { id: "maps", label: "Maps" },
+  { id: "game-files", label: "Game files" },
+  { id: "advanced", label: "Advanced" },
+];
 const snapshot = ref<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
 const addOpen = ref(false);
@@ -126,6 +132,13 @@ async function primaryAction() {
   } finally {
     busy.value = false;
   }
+}
+
+async function showProfile(id: ProfileId) {
+  await runAction(
+    "The game window could not be shown.",
+    () => native?.profiles.show(id),
+  );
 }
 
 async function createProfile() {
@@ -303,57 +316,38 @@ async function replaceToolShortcut() {
     <main :class="{ 'artwork-only': route === 'home' && !snapshot.preferences.content.news && !snapshot.preferences.content.dailies }">
       <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('content')" @issues="route = 'issues'" @external="openExternal" />
 
-      <section v-else-if="route === 'accounts'" class="page accounts-page">
-        <div class="page-head"><div><span class="eyebrow">Accounts</span><h1>Game windows</h1><p>Add another account when you want another game window.</p></div><button class="secondary" @click="addOpen = true"><Plus />Add account</button></div>
-        <div class="account-cards">
-          <article v-for="profile in visibleProfiles" :key="profile.id" class="account-card">
-            <div class="avatar" :style="{ background: profile.appearance.color }"><component :is="profileIcons[profile.appearance.icon as keyof typeof profileIcons] ?? Swords" /></div>
-            <div><h3>{{ profile.name }}</h3><p>{{ profileStatus(profile) }}</p></div>
-            <span class="status-dot" :class="profile.state" />
-            <div class="account-actions"><button class="secondary" @click="editAppearance(profile)"><Settings />Customize</button><button v-if="profile.state === 'running'" class="secondary" @click="runAction('The game window could not be shown.', () => native?.profiles.show(profile.id))">Show</button><template v-else><button v-if="profile.id !== visibleProfiles[0]?.id" class="text-link" @click="runAction('The account could not be archived.', () => native?.profiles.archive(profile.id))">Archive</button><button class="secondary" @click="runAction('This account could not be opened. Try again.', () => native?.profiles.play([profile.id]))"><RotateCcw v-if="profile.state === 'failed'" /><Play v-else />{{ profile.state === 'failed' ? 'Try again' : 'Play' }}</button></template></div>
-          </article>
-        </div>
-        <details v-if="snapshot.profiles.some(profile => profile.archived)" class="archived-accounts"><summary>Archived accounts</summary><article v-for="profile in snapshot.profiles.filter(candidate => candidate.archived)" :key="profile.id"><span>{{ profile.name }}</span><button class="secondary" @click="runAction('The account could not be restored.', () => native?.profiles.restore(profile.id))">Restore</button><button class="danger-button" @click="runAction('The account could not be deleted.', () => native?.profiles.delete(profile.id))">Delete permanently</button></article></details>
-      </section>
+      <AccountsView
+        v-else-if="route === 'accounts'"
+        :profiles="snapshot.profiles"
+        @add="addOpen = true"
+        @customize="editAppearance"
+        @show="showProfile"
+        @play="id => runAction('This account could not be opened. Try again.', () => native?.profiles.play([id]))"
+        @archive="id => runAction('The account could not be archived.', () => native?.profiles.archive(id))"
+        @restore="id => runAction('The account could not be restored.', () => native?.profiles.restore(id))"
+        @delete="id => runAction('The account could not be deleted.', () => native?.profiles.delete(id))"
+      />
 
-      <section v-else-if="route === 'issues'" class="page">
-        <div class="page-head"><div><span class="eyebrow">Support</span><h1>Known issues</h1><p>Current game and macOS issues, with workarounds when we have one.</p></div></div>
-        <div v-if="snapshot.contentAvailability.knownIssues === 'placeholder'" class="empty-state"><AlertTriangle /><h3>Known Issues are not connected yet.</h3><p>Check GitHub or Discord for current reports and workarounds.</p><div class="form-actions"><button class="secondary" @click="openExternal('discord')">Open Discord</button><button class="primary" @click="openExternal('github')">Open GitHub</button></div></div>
-        <div v-else class="issue-list">
-          <article><AlertTriangle /><div><h3>Some textures may appear black</h3><p>Restart the affected game window. Your saved data is not affected.</p><button class="text-link">View workaround <ExternalLink /></button></div><span>Game</span></article>
-          <article><AlertTriangle /><div><h3>Long sessions can use too much memory</h3><p>Close and reopen the game window when macOS shows a memory warning.</p></div><span>Game</span></article>
-          <article class="resolved"><Check /><div><h3>Map reveal crash</h3><p>Fixed in the current launcher version.</p></div><span>Resolved</span></article>
-        </div>
-      </section>
+      <KnownIssuesView v-else-if="route === 'issues'" :availability="snapshot.contentAvailability.knownIssues" @external="openExternal" />
 
-      <section v-else-if="route === 'feedback'" class="page feedback-page">
-        <div class="page-head"><div><span class="eyebrow">Feedback</span><h1>Tell us what happened</h1><p>Small reports are useful. You do not need to write a perfect bug report.</p></div></div>
-        <form v-if="snapshot.contentAvailability.feedback === 'fixture'" class="feedback-form" @submit.prevent>
-          <label>What would you like to share?<textarea rows="6" placeholder="A short description is enough." /></label>
-          <div class="form-row"><label>Type<select><option>Problem</option><option>Idea</option><option>Something else</option></select></label><label>Email (optional)<input type="email" placeholder="name@example.com" /></label></div>
-          <button type="button" class="attachment"><Plus />Add screenshot or file</button>
-          <p class="placeholder-note">Direct feedback is not connected yet. For now, continue on GitHub or Discord.</p>
-          <div class="form-actions"><button class="secondary" @click="openExternal('discord')">Open Discord</button><button class="primary" @click="openExternal('bugReport')">Open GitHub issue</button></div>
-        </form>
-        <div v-else class="empty-state"><MessageSquareText /><h3>Direct feedback is not connected yet.</h3><p>For now, send a problem or idea through GitHub or talk to us on Discord.</p><div class="form-actions"><button class="secondary" @click="openExternal('discord')">Open Discord</button><button class="primary" @click="openExternal('bugReport')">Open GitHub issue</button></div></div>
-      </section>
+      <FeedbackView v-else-if="route === 'feedback'" :availability="snapshot.contentAvailability.feedback" @external="openExternal" />
 
       <section v-else class="settings-page">
-        <aside><h2>Settings</h2><button v-for="item in (['general', 'content', 'tools', 'maps', 'game-files', 'advanced'] as SettingsRoute[])" :key="item" :class="{ active: settingsRoute === item }" @click="selectSettings(item)">{{ item.replace('-', ' ') }}</button></aside>
+        <aside aria-label="Settings sections"><h2>Settings</h2><button v-for="item in settingsSections" :key="item.id" :aria-current="settingsRoute === item.id ? 'page' : undefined" :class="{ active: settingsRoute === item.id }" @click="selectSettings(item.id)">{{ item.label }}</button></aside>
         <div class="settings-content">
           <template v-if="settingsRoute === 'general'"><h1>General</h1><div class="setting-group"><label><span><strong>Automatic updates</strong><small>Keep Guild Wars Reforged up to date.</small></span><input type="checkbox" :checked="snapshot.settings.autoCheckUpdates" @change="updateLauncherSettings({ autoCheckUpdates: checked($event) })" /></label><label><span><strong>Update channel</strong><small>Stable is recommended.</small></span><select :value="snapshot.settings.updateTrack" @change="updateLauncherSettings({ updateTrack: ($event.currentTarget as HTMLSelectElement).value as 'stable' | 'beta' })"><option value="stable">Stable</option><option value="beta">Beta</option></select></label><div class="setting-row"><span><strong>{{ updateCopy.title }}</strong><small>{{ updateCopy.detail }}</small></span><button v-if="snapshot.appUpdate.phase !== 'ready'" class="secondary" :disabled="snapshot.appUpdate.phase === 'checking' || snapshot.appUpdate.phase === 'downloading'" @click="runAction('Could not check for updates. Try again when you are online.', () => native?.updates.check())">Check now</button><button v-else class="primary" @click="runAction('The update could not be installed.', () => native?.updates.restartAndInstall())">Restart and update</button></div></div></template>
           <template v-else-if="settingsRoute === 'content'"><h1>Content</h1><div class="setting-group"><label><span><strong>News</strong><small>Official Guild Wars and Reforged updates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.news" @change="updateContent({ news: checked($event) })" /></label><label><span><strong>Dailies</strong><small>Daily activities and the weekly schedule.</small></span><input type="checkbox" :checked="snapshot.preferences.content.dailies" @change="updateContent({ dailies: checked($event) })" /></label><label v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies"><span><strong>First Home tab</strong></span><select :value="snapshot.preferences.content.first" @change="updateContent({ first: ($event.currentTarget as HTMLSelectElement).value as 'news' | 'dailies' })"><option value="news">News</option><option value="dailies">Dailies</option></select></label><label v-if="snapshot.preferences.content.news"><span><strong>Official Guild Wars news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.officialNews" @change="updateContent({ officialNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Guild Wars Reforged news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.reforgedNews" @change="updateContent({ reforgedNews: checked($event) })" /></label></div></template>
           <template v-else-if="settingsRoute === 'tools'">
             <h1>Tools</h1><p>Tools apply to every account.</p>
             <div class="setting-group">
-              <label><span><strong>Enable Tools</strong><small>Build Management, Quick Travel, and Xunlai Storage.</small></span><input type="checkbox" :checked="snapshot.tools.configured" @change="runAction('Tools could not be enabled.', () => native?.tools.setMasterEnabled(checked($event)))" /></label>
+              <label><span><strong>Enable Tools</strong><small>Build Management, Quick Travel, and Xunlai Storage.</small></span><input type="checkbox" :checked="snapshot.tools.configured" @change="runAction('The Tools setting could not be saved.', () => native?.tools.setMasterEnabled(checked($event)))" /></label>
               <div v-for="(setting, tool) in snapshot.tools.features" :key="tool" class="tool-row">
                 <label><span><strong>{{ toolLabels[tool] }}</strong><small>{{ shortcutDisplay(setting.shortcut) }}</small></span><input type="checkbox" :checked="setting.enabled" :disabled="!snapshot.tools.configured" @change="setTool(tool, checked($event))" /></label>
                 <div><button class="secondary" @click="captureToolShortcut(tool)">Change shortcut</button><button class="text-link" @click="runAction('The default shortcut could not be restored.', () => native?.tools.restoreDefaultShortcut(tool))">Restore default</button></div>
               </div>
               <p v-if="shortcutMessage" class="inline-message" aria-live="polite">{{ shortcutMessage }}</p>
               <div v-if="pendingShortcutReplacement" class="form-actions"><button class="secondary" @click="pendingShortcutReplacement = null; shortcutMessage = 'Shortcut change cancelled.'">Cancel</button><button class="primary" @click="replaceToolShortcut">Replace shortcut</button></div>
-              <div v-if="snapshot.tools.restartRequired" class="restart-row"><span><strong>Restart needed</strong><small>Your change is saved.</small></span><button v-if="!visibleProfiles.some(profile => profile.state === 'running')" class="primary" @click="runAction('The launcher could not restart.', () => native?.tools.restartToApply())">Restart launcher</button><span v-else>Applies after your next normal restart.</span></div>
+              <div v-if="snapshot.tools.restartRequired" class="restart-row"><span><strong>Restart needed</strong><small>Your change is saved.</small></span><button v-if="!visibleProfiles.some(profile => profile.state === 'running')" class="primary" @click="runAction('The application could not restart.', () => native?.tools.restartToApply())">Restart application</button><span v-else>Applies after your next normal restart.</span></div>
             </div>
           </template>
           <MapsSettings v-else-if="settingsRoute === 'maps'" :settings="snapshot.settings" :save="updateLauncherSettings" />
@@ -365,7 +359,7 @@ async function replaceToolShortcut() {
 
     <div v-if="operationError" class="operation-error" role="alert"><AlertTriangle /><span>{{ operationError }}</span><button class="icon-button" aria-label="Dismiss error" @click="operationError = ''"><X /></button></div>
 
-    <LaunchBar :snapshot="snapshot" :selected="selected" :busy="busy" @toggle="toggleProfile" @action="primaryAction" @manage="route = 'accounts'" />
+    <LaunchBar :snapshot="snapshot" :selected="selected" :busy="busy" @toggle="toggleProfile" @show="showProfile" @action="primaryAction" @manage="route = 'accounts'" />
 
     <BaseModal v-if="addOpen" labelledby="add-account-title" @close="addOpen = false">
       <form @submit.prevent="createProfile"><div class="modal-head"><h2 id="add-account-title">Add account</h2><button type="button" class="icon-button" aria-label="Close" @click="addOpen = false"><X /></button></div><p>This opens another separate Guild Wars window. Sign-in stays inside the game.</p><label>Name<input v-model="newName" autofocus maxlength="48" placeholder="Second account" /></label><details><summary>Appearance</summary><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="newIcon === icon" :class="{ selected: newIcon === icon }" @click="newIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="newColor === color" :class="{ selected: newColor === color }" :style="{ background: color }" @click="newColor = color" /><label>Custom color<input v-model="newColor" type="color" /></label></fieldset></details><div class="form-actions"><button type="button" class="secondary" @click="addOpen = false">Cancel</button><button class="primary" :disabled="!newName.trim()">Add account</button></div></form>
@@ -381,15 +375,15 @@ async function replaceToolShortcut() {
     <BaseModal v-if="snapshot.experience.setup === 'pending'" labelledby="setup-title" :dismissible="false" wide>
       <div class="setup-card">
         <template v-if="setupStep === 1"><span class="eyebrow">Welcome</span><h2 id="setup-title">Welcome to Guild Wars Reforged</h2><p>Guild Wars Reforged runs Guild Wars on your Mac. It is an unofficial community project and is not affiliated with ArenaNet or NCSOFT.</p><div class="form-actions"><button class="primary" @click="setupStep = 2">Continue</button></div></template>
-        <template v-else><span class="eyebrow">Optional</span><h2 id="setup-title">Optional Tools</h2><p>Build Management saves team builds. Quick Travel opens a map search. Xunlai Storage opens storage in supported outposts.</p><p><strong>Tools apply to every account.</strong></p><div class="form-actions spread"><button class="secondary" @click="setupStep = 1">Back</button><span /><button class="secondary" @click="completeSetup(false)">Not now</button><button class="primary" @click="completeSetup(true)">Enable Tools</button></div></template>
+        <template v-else><span class="eyebrow">Optional</span><h2 id="setup-title">Optional Tools</h2><p>Build Management saves team builds. Quick Travel opens a map search. Xunlai Storage opens storage in supported outposts.</p><p><strong>Tools apply to every account.</strong></p><p class="setup-note">If you enable Tools, the app restarts once to finish setup.</p><div class="form-actions spread"><button class="secondary" @click="setupStep = 1">Back</button><span /><button class="secondary" @click="completeSetup(false)">Not now</button><button class="primary" @click="completeSetup(true)">Enable Tools</button></div></template>
       </div>
     </BaseModal>
 
-    <div v-else-if="snapshot.experience.introduction === 'pending'" ref="introCallout" class="intro-callout" :class="`step-${introStep}`" role="dialog" aria-label="Launcher introduction" tabindex="-1" @keydown.esc="completeIntroduction">
+    <aside v-else-if="snapshot.experience.introduction === 'pending'" ref="introCallout" class="intro-callout" :class="`step-${introStep}`" aria-label="Launcher introduction" tabindex="-1" @keydown.esc="completeIntroduction">
       <span>{{ introStep + 1 }} of 3</span>
       <strong>{{ ['Choose the accounts to open', 'Read news or check dailies', 'Find help and report problems'][introStep] }}</strong>
       <p>{{ ['The launcher remembers your selection.', 'You can hide either section in Content settings.', 'Known Issues shows workarounds. Feedback opens the current support channels.'][introStep] }}</p>
       <div class="form-actions"><button class="text-link" @click="completeIntroduction">Skip</button><button v-if="introStep > 0" class="secondary" @click="introStep -= 1">Back</button><button class="primary" @click="introStep === 2 ? completeIntroduction() : introStep += 1">{{ introStep === 2 ? 'Done' : 'Next' }}</button></div>
-    </div>
+    </aside>
   </div>
 </template>

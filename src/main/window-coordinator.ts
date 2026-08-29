@@ -71,7 +71,8 @@ export class WindowCoordinator<Window extends PresentableWindow> {
 
   /**
    * Complete a delayed Play request without stealing focus after the player
-   * has moved on. New game windows are already shown inactive while loading.
+   * has moved on. Game windows stay hidden until their first submitted frame,
+   * then appear inactive before this explicit launch-owner check may focus one.
    */
   revealAsyncGameIfLauncherFocused(win: Window): boolean {
     if (!this.#registry.launcherWindow()?.isFocused()) return false;
