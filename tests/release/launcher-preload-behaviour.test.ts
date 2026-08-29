@@ -6,7 +6,7 @@ import test from "node:test";
 import vm from "node:vm";
 import type { LauncherNativeApi } from "../../src/shared/launcher-contracts.ts";
 import { LAUNCHER_IPC } from "../../src/shared/launcher-contracts.ts";
-import type { ProfileId } from "../../src/shared/multiple-accounts.ts";
+import { LEGACY_PRIMARY_PROFILE_ID } from "../../src/shared/multiple-accounts.ts";
 
 const source = await readFile(
   path.resolve(import.meta.dirname, "../../build/preload/preload-launcher.cjs"),
@@ -48,7 +48,7 @@ test("the built launcher preload exposes every launcher command and nothing else
   assert.equal(Object.isFrozen(api), true);
   assert.equal(Object.values(api).every(Object.isFrozen), true);
 
-  const id = "00000000-0000-4000-8000-000000000001" as ProfileId;
+  const id = LEGACY_PRIMARY_PROFILE_ID;
   const binding = { key: "t", shift: false, option: false } as const;
   const stop = api.state.onChange(() => undefined);
   assert.equal(listeners.get(LAUNCHER_IPC.stateEvent)?.length, 1);
