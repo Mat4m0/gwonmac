@@ -39,7 +39,7 @@ permissions:
 
 jobs:
   verify:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       GW_PACKAGE_INTENT: ${{ inputs.package-intent }}

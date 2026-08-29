@@ -34,7 +34,8 @@ test("release workflow stages and publishes one tested, attested package version
     workflow,
     /name: Require green Application verification for this commit[\s\S]*check-runs\?filter=latest&per_page=100[\s\S]*\.name == "verify \/ verify"[\s\S]*\.app\.slug == "github-actions"[\s\S]*\.conclusion == "success"/,
   );
-  assert.match(verification, /runs-on: macos-15/);
+  assert.match(verification, /runs-on: macos-26/);
+  assert.match(workflow, /release-build:[\s\S]*runs-on: macos-26/);
   assert.match(verification, /test "\$\(uname -m\)" = "arm64"/);
   assert.match(workflow, /test "\$\(uname -m\)" = "arm64"/);
   assert.match(workflow, /persist-credentials: false/);

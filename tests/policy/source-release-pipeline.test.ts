@@ -789,7 +789,7 @@ test("client recertification reports evidence but cannot grant authority", () =>
   // before the compiler runs. tests/policy/toolchain-floors.test.ts scans every
   // workflow for that ordering; this pins the job's reason to exist beside it.
   assert.match(derive, /if: needs\.detect\.outputs\.needed == 'true'/);
-  assert.match(derive, /runs-on: macos-15/);
+  assert.match(derive, /runs-on: macos-26/);
   assert.ok(
     derive.indexOf("run: rustup toolchain install") < derive.indexOf("run: pnpm build"),
     "the kernel is compiled on the runner's own toolchain",
@@ -938,7 +938,7 @@ test("the scheduled canary exercises the latest ArenaNet client conservatively",
   const workflow = read(".github/workflows/client-canary.yml");
   assert.match(workflow, /schedule:[\s\S]*cron:/);
   assert.match(workflow, /workflow_dispatch:/);
-  assert.match(workflow, /runs-on: macos-15/);
+  assert.match(workflow, /runs-on: macos-26/);
   assert.match(workflow, /timeout-minutes: 20/);
   assert.match(workflow, /GW_LIVE_SMOKE: "1"/);
   assert.match(workflow, /tests\/electron\/live\.spec\.ts/);
