@@ -659,7 +659,6 @@ test("Multi isolates profile windows and Copy Reload Trace", async () => {
             await window.gwNative.app.reloadGame("memory-warning");
           },
         },
-        window.gwSurfaces,
       );
       if (!presenter) throw new Error("memory warning is unavailable");
       presenter.present("critical", 2_147_483_648);

@@ -22,7 +22,6 @@ export type MemoryWarningActions = Readonly<{
 export function bindMemoryWarning(
   document: Document,
   actions: MemoryWarningActions,
-  surfaces: GwonmacSurfaceController | null = null,
 ): MemoryWarningPresenter | null {
   const root = document.getElementById("memory-notice");
   const live = document.getElementById("memory-notice-text");
@@ -52,14 +51,8 @@ export function bindMemoryWarning(
     dismissedLevel = currentLevel;
     root.hidden = true;
     details.open = false;
-    dismissable?.setOpen(false);
     document.getElementById("canvas")?.focus();
   };
-  const dismissable = surfaces?.register({
-    root,
-    priority: 8,
-    dismiss,
-  }) ?? null;
 
   for (const name of [
     "keydown", "keyup", "pointerdown", "pointerup", "pointermove",
@@ -81,13 +74,11 @@ export function bindMemoryWarning(
 
   reloadButton.addEventListener("click", () => {
     root.hidden = true;
-    dismissable?.setOpen(false);
     (reloadButton as HTMLButtonElement).disabled = true;
     void pendingPreferenceSave.then(() => actions.reload())
       .catch(() => {
         (reloadButton as HTMLButtonElement).disabled = false;
         root.hidden = false;
-        dismissable?.setOpen(true);
       });
   });
   laterButton.addEventListener("click", dismiss);
@@ -106,7 +97,6 @@ export function bindMemoryWarning(
       live.setAttribute("role", level === "critical" ? "alert" : "status");
       live.setAttribute("aria-live", level === "critical" ? "assertive" : "polite");
       root.hidden = false;
-      dismissable?.setOpen(true);
     },
     setAutoRelog(enabled) {
       savedAutoRelog = enabled;
@@ -115,7 +105,6 @@ export function bindMemoryWarning(
     hide() {
       root.hidden = true;
       details.open = false;
-      dismissable?.setOpen(false);
     },
   };
 }

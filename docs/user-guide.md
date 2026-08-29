@@ -330,7 +330,8 @@ cannot stop memory that continues to grow.
 When the app warns about memory, choose whether to return to the selected
 character automatically, then choose **Reload Guild Wars**. This uses the same
 saved preference as Command-Q and **View → Reload Guild Wars**. Reload in an
-outpost when you want the lowest gameplay risk.
+outpost when you want the lowest gameplay risk. The warning does not take
+keyboard focus from Guild Wars. Click a warning control when you want to use it.
 
 ## Updates
 
