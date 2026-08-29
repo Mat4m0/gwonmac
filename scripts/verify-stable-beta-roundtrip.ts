@@ -256,6 +256,7 @@ const candidateSettingsDomains = Array.from(
       uiCustomTheme: cycle(customThemeValues, index),
       uiFont: cycle(UI_FONTS, index),
       controllerPromptStyle: cycle(CONTROLLER_PROMPT_STYLES, index),
+      dictationEnabled: cycle(booleanValues, index),
       uiPanelOpacity: cycle(opacityValues, index),
       cartographyOverlayEnabled: cycle(booleanValues, index),
       cartographyGridEnabled: cycle(booleanValues, index + 1),

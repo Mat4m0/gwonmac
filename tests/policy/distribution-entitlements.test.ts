@@ -17,8 +17,9 @@ test("each channel has an exact minimal and isolated entitlement file", () => {
       path.join(root, `packaging/entitlements.${channel}.plist`),
       "utf8",
     );
-    assert.equal((source.match(/<key>/gu) ?? []).length, 3);
+    assert.equal((source.match(/<key>/gu) ?? []).length, 4);
     assert.match(source, /<key>com\.apple\.security\.cs\.allow-jit<\/key>\s*<true\/>/u);
+    assert.match(source, /<key>com\.apple\.security\.device\.audio-input<\/key>\s*<true\/>/u);
     assert.match(
       source,
       new RegExp(

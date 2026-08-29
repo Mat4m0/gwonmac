@@ -809,7 +809,7 @@ pub unsafe extern "C" fn companion_init(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _d: u32, _e: u32) {
+pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d: u32, _e: u32) {
     match kind {
         DISPATCH_TICK => {
             if !unsafe { INITIALIZED } {
@@ -835,7 +835,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
                 unsafe { cursor::tick(layout) };
             }
             if active & FEATURE_SKILL_SLOT_GEOMETRY != 0 {
-                unsafe { skill_slots::tick(layout, b) };
+                unsafe { skill_slots::tick(layout, b, d) };
             }
             if active & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0 {
                 unsafe { skill_cooldowns::tick(layout, c) };

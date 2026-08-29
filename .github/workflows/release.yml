@@ -98,7 +98,7 @@ jobs:
 
   release-build:
     needs: source
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     environment: release
     permissions:

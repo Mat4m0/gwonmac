@@ -217,6 +217,26 @@ sends Guild Wars Control-A, so a following Cut can export the same selection.
 Password text never crosses the renderer bridge. Physical Control stays
 available to Guild Wars unchanged.
 
+Optional dictation stays outside Chromium's renderer media permissions. Main
+owns recognition and commits a final transcript to the still-focused Guild
+Wars editor with complete trusted key-down, character, and key-up sequences.
+The mic is eligible only while ArenaNet owns that exact text proxy. Dictation
+never reads or changes the pasteboard, never simulates Paste, and never sends
+Return or another control character. The renderer owns eligibility, placement,
+and visible state. Main requests microphone access only after the player
+selects the visible mic and
+owns one native Apple Speech session across all game windows. On macOS 26 or
+newer, an explicit Settings setup uses AssetInventory to install the selected
+language's system-managed model before enabling the feature. Older macOS does
+not load a fallback recognizer. SpeechAnalyzer sends bounded partial transcripts
+only to the owning renderer. The final transcript stays in Main only long
+enough to insert it; no layer logs it. The renderer shows
+the control only for the ordinary text and multiline Guild Wars proxies, and
+cancels when that proxy closes or changes. Password, email, and number proxies
+are never eligible. A certified `EditMessage` frame rectangle anchors the mic to the
+movable Guild Wars chat input; missing or uncertified geometry hides it.
+Insertion edits the draft only: no layer presses Return or sends chat.
+
 Before the first window exists, Electron writes the bundle-specific persistent
 `ApplePressAndHoldEnabled = false` preference. This makes macOS send physical
 repeat keydowns to hidden text proxies for printable characters, Backspace,

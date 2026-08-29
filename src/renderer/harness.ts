@@ -495,6 +495,7 @@ const STARTUP_LABELS = {
 
 const SNAPSHOT_URL = 'Gw.snapshot';
 let appSettings: import('../shared/contracts.js').AppSettings | null = null;
+let dictationControl: import('./dictation.js').DictationControl | null = null;
 let clientResizeFrame = 0;
 
 function currentRenderScale(): import('../shared/contracts.js').AppSettings['renderScale'] {
@@ -528,6 +529,7 @@ const emptySkillKeyBindings:
   import('../shared/contracts.js').AppSettings['skillKeyBindings'] =
     [null, null, null, null, null, null, null, null];
 window.gwToolsSettings = () => Object.freeze({
+  dictationEnabled: appSettings?.dictationEnabled ?? false,
   gwonmacTools: appSettings?.gwonmacTools ?? false,
   buildLibrary: appSettings?.buildLibrary ?? true,
   tradeChat: appSettings?.tradeChat ?? true,
@@ -551,6 +553,7 @@ window.gwApplySettings = (next) => {
   }
   window.gwDiagnostics?.setVisible(updated.showDiagnostics);
   applyAppearance(updated);
+  dictationControl?.setEnabled(updated.dictationEnabled);
   window.dispatchEvent(new CustomEvent('gw:tools-settings', {
     detail: window.gwToolsSettings(),
   }));
@@ -1377,6 +1380,9 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       native().client.session(),
     ]);
     appSettings = settings;
+    const { installDictation } = await import('./dictation.js');
+    dictationControl = installDictation(document);
+    dictationControl.setEnabled(settings.dictationEnabled);
     if (settings.controllerPromptStyle === 'playstation') {
       try {
         controllerPrompts = await host.preparePlayStationControllerPrompts({

@@ -109,6 +109,25 @@ Main letters, the number row, and ANSI punctuation keep the same physical game
 binding when the macOS input source changes. Text fields still use the active
 input source. An old custom binding can need one manual rebind.
 
+Choose **Settings → Tools → In-game dictation → Set up** on macOS 26 or
+newer. GWonMac asks Apple to prepare the on-device model for your current
+language, then asks you to restart once so it can attach dictation to the
+certified Guild Wars chat frame. This is optional; when it is off, GWonMac does
+not download a model or request microphone access.
+
+After setup, a small microphone appears beside the movable chat input only when
+Guild Wars opens a normal text field. Select the microphone, speak, then select
+it again to finish. A blue status bubble updates while Apple recognizes your
+speech. The final words are added to the current draft. Review them and press Return yourself.
+GWonMac never sends chat automatically.
+
+The first recording asks for macOS Microphone access. Apple manages and may
+share the downloaded language model with other apps. Audio and transcripts are
+not sent to GWonMac services. The mic does not appear for email, password, or
+number fields, and GWonMac does not save or include transcripts in diagnostics. If access was
+denied, allow **Guild Wars Reforged** under **System Settings → Privacy &
+Security → Microphone**.
+
 The official client includes browser gamepad support. This project does not have
 a dedicated controller release test.
 

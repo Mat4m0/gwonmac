@@ -10,6 +10,7 @@ import {
   FEATURE_SKILL_SLOT_GEOMETRY,
   FEATURE_TOOLBOX_FOUNDATION,
   installDuplicateSkillSlot,
+  installChatInputFrame,
   installSkillBarGraph,
 } from "../fixtures/enhancements.ts";
 
@@ -19,8 +20,7 @@ describe("skill-slot geometry kernel", () => {
     installSkillBarGraph(kernel.view);
     assert.equal(kernel.init({ features: FEATURE_SKILL_SLOT_GEOMETRY }), 0);
     assert.equal(kernel.init({
-      features: FEATURE_TOOLBOX_FOUNDATION | FEATURE_PLAY_REGION_OBSERVATION
-        | FEATURE_SKILL_SLOT_GEOMETRY,
+      features: FEATURE_PLAY_REGION_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY,
     }), 1);
     kernel.tick(1);
     const ready = kernel.skillSlots();
@@ -64,6 +64,58 @@ describe("skill-slot geometry kernel", () => {
       bottom: -12,
       right: 148,
       top: 36,
+    });
+  });
+
+  it("publishes and follows the movable chat editor", async () => {
+    const kernel = await createKernel();
+    installSkillBarGraph(kernel.view);
+    installChatInputFrame(kernel.view);
+    assert.equal(kernel.init({
+      features: FEATURE_PLAY_REGION_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY,
+    }), 1);
+    kernel.tick(1, 0, 11);
+    const ready = kernel.skillSlots();
+    assert.equal(ready.status, "ready");
+    if (ready.status !== "ready") return;
+    assert.equal(ready.chatFrameId, 11);
+    assert.deepEqual(ready.chatInput, {
+      left: 96, bottom: 72, right: 500, top: 96,
+    });
+
+    const frame = ADDRESSES.frameBuffer + 11 * 0x1c8;
+    kernel.view.setFloat32(frame + 0x10c, 180, true);
+    kernel.view.setFloat32(frame + 0x114, 640, true);
+    kernel.tick(1, 0, 11);
+    const moved = kernel.skillSlots();
+    assert.equal(moved.status, "ready");
+    if (moved.status === "ready") {
+      assert.equal(moved.chatInput?.left, 180);
+      assert.equal(moved.chatInput?.right, 640);
+    }
+  });
+
+  it("keeps chat geometry when Guild Wars uses a separate chat viewport", async () => {
+    const kernel = await createKernel();
+    installSkillBarGraph(kernel.view);
+    installChatInputFrame(kernel.view);
+    const frame = ADDRESSES.frameBuffer + 11 * 0x1c8;
+    kernel.view.setFloat32(frame + 0x104, 1_600, true);
+    kernel.view.setFloat32(frame + 0x108, 1_200, true);
+    assert.equal(kernel.init({
+      features: FEATURE_PLAY_REGION_OBSERVATION | FEATURE_SKILL_SLOT_GEOMETRY,
+    }), 1);
+
+    kernel.tick(1, 0, 11);
+
+    const ready = kernel.skillSlots();
+    assert.equal(ready.status, "ready");
+    if (ready.status !== "ready") return;
+    assert.equal(ready.chatFrameId, 11);
+    assert.equal(ready.viewportWidth, 800);
+    assert.equal(ready.viewportHeight, 600);
+    assert.deepEqual(ready.chatInput, {
+      left: 96, bottom: 72, right: 500, top: 96,
     });
   });
 

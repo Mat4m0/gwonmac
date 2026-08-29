@@ -10,5 +10,4 @@ export {
 } from "./companion-snapshot.js";
 export {
   readCompanionSkillCooldowns,
-  readCompanionSkillSlots,
 } from "./companion-skill-snapshot.js";

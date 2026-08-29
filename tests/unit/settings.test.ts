@@ -44,6 +44,7 @@ describe("settings", () => {
       uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
+      dictationEnabled: false,
       uiPanelOpacity: 94,
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
@@ -109,6 +110,7 @@ describe("settings", () => {
       cartographyWalkabilityOpacity: 55,
       cartographyGridOpacity: 65,
       cartographyControlIdleOpacity: 35,
+      dictationEnabled: false,
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,
@@ -254,6 +256,14 @@ describe("settings", () => {
     );
     assert.throws(() => parseSettings({ controllerPromptStyle: "nintendo" }), AppError);
     assert.throws(() => parseSettings({ controllerPromptStyle: true }), AppError);
+  });
+
+  it("accepts dictation only as an explicit boolean", () => {
+    assert.equal(parseSettings({ dictationEnabled: true }).dictationEnabled, true);
+    assert.throws(
+      () => parseSettings({ dictationEnabled: "on" }),
+      (error: unknown) => error instanceof AppError && error.code === "bad_settings",
+    );
   });
 
   it("rejects unknown types", () => {
@@ -494,6 +504,7 @@ describe("settings", () => {
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
+      "dictationEnabled",
       "extendedMemoryEnabled",
       "formatVersion",
       "gwonmacTools",
@@ -595,6 +606,7 @@ describe("settings", () => {
       cartographyWalkabilityOpacity: 55,
       cartographyGridOpacity: 65,
       cartographyControlIdleOpacity: 35,
+      dictationEnabled: false,
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,

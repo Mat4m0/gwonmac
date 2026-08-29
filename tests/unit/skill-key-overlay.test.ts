@@ -10,7 +10,7 @@ import { createCompanionSequenceFeed } from "../../src/renderer/companion-sequen
 import {
   sameCompanionSkillSlotGeometry,
   type CompanionSkillSlotState,
-} from "../../src/renderer/companion-skill-snapshot.js";
+} from "../../src/renderer/companion-interface-geometry-snapshot.js";
 
 class FakeElement {
   id = "";
@@ -198,6 +198,8 @@ test("the consumer maps only slot eight's custom C binding", () => {
     status: "ready",
     sequence: 2,
     frameId: 1,
+    chatFrameId: 0,
+    chatInput: null,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Array.from({ length: 8 }, (_, index) => ({
@@ -248,6 +250,8 @@ test("a viewport resize refreshes projected key geometry", () => {
     status: "ready",
     sequence: 2,
     frameId: 1,
+    chatFrameId: 0,
+    chatInput: null,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Array.from({ length: 8 }, (_, index) => ({
@@ -298,6 +302,8 @@ test("the consumer withdraws geometry whose publisher stopped advancing", () => 
     status: "ready" as const,
     sequence: 2,
     frameId: 1,
+    chatFrameId: 0,
+    chatInput: null,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Array.from({ length: 8 }, (_, index) => ({

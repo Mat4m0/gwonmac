@@ -385,6 +385,10 @@ const INVOCATIONS: Invocation[] = [
     args: ["official-baseline"],
     channel: IPC.diagnosticsProfileSet,
   },
+  { path: "dictation.prepare", args: [], channel: IPC.dictationPrepare },
+  { path: "dictation.start", args: [], channel: IPC.dictationStart },
+  { path: "dictation.finish", args: [], channel: IPC.dictationFinish },
+  { path: "dictation.cancel", args: [], channel: IPC.dictationCancel },
   { path: "app.openExternal", args: ["bugReport"], channel: IPC.appOpenExternal },
   { path: "app.reveal", args: ["gameData"], channel: IPC.appRevealPath },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
@@ -479,6 +483,11 @@ const SUBSCRIPTIONS: Subscription[] = [
     path: "appUpdates.onState",
     channel: IPC.appUpdatesState,
     subscribe: (api, listener) => api.appUpdates.onState(listener),
+  },
+  {
+    path: "dictation.onEvent",
+    channel: IPC.dictationEvent,
+    subscribe: (api, listener) => api.dictation.onEvent(listener),
   },
   {
     path: "trade.onEvent",

@@ -15,6 +15,7 @@ const root = path.resolve(
 );
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 const source = read("src/native/host/host.mm");
+const dictationSource = read("src/native/host/dictation-modern.swift");
 
 test("the native boundary uses only ABI-stable Node-API", () => {
   assert.match(source, /#include <node_api\.h>/u);
@@ -47,6 +48,22 @@ test("Command-held releases use one app-local macOS monitor", () => {
 
 test("the native host does not own the app key-repeat preference", () => {
   assert.doesNotMatch(source, /ApplePressAndHoldEnabled|registerDefaults/u);
+});
+
+test("dictation is native, on-device, bounded to an explicit session", () => {
+  assert.match(dictationSource, /import Speech/u);
+  assert.match(dictationSource, /DictationTranscriber/u);
+  assert.match(dictationSource, /AssetInventory\.status/u);
+  assert.match(dictationSource, /assetInstallationRequest/u);
+  assert.match(dictationSource, /installTap\(onBus: 0/u);
+  assert.match(dictationSource, /removeTap\(onBus: 0/u);
+  assert.match(dictationSource, /finalizeAndFinishThroughEndOfInput/u);
+  assert.match(dictationSource, /bestAvailableAudioFormat/u);
+  assert.match(dictationSource, /AVAudioConverter/u);
+  assert.doesNotMatch(
+    source + dictationSource,
+    /SFSpeechRecognizer|SFSpeechURLRecognitionRequest|writeToFile/u,
+  );
 });
 
 test("the native boundary owns two fixed Data Protection Keychain items", () => {
@@ -87,18 +104,33 @@ test("the native boundary owns two fixed Data Protection Keychain items", () => 
 });
 
 test("the canonical build emits one host-only Node-API 8 addon", () => {
-  const nativeSteps = BUILD_STEPS.filter(([, args]) =>
+  const objectiveCSteps = BUILD_STEPS.filter(([, args]) =>
     args.includes("src/native/host/host.mm"),
   );
-  assert.equal(nativeSteps.length, 1);
-  const [command, args] = nativeSteps[0]!;
+  assert.equal(objectiveCSteps.length, 1);
+  const [command, args] = objectiveCSteps[0]!;
   assert.equal(command, "xcrun");
   assert.ok(args.includes("-DNAPI_VERSION=8"));
   assert.ok(args.includes("node_modules/node-api-headers/include"));
   assert.ok(args.includes("-mmacosx-version-min=12.0"));
-  assert.ok(args.includes("AppKit"));
-  assert.deepEqual(args.slice(-2), ["-o", "build/native/host.node"]);
+  assert.deepEqual(args.slice(-2), ["-o", "build/native/host.o"]);
   assert.equal(args.filter((arg) => arg === "-arch").length, 1);
+
+  const swiftSteps = BUILD_STEPS.filter(([, stepArgs]) =>
+    stepArgs.includes("src/native/host/dictation-modern.swift"),
+  );
+  assert.equal(swiftSteps.length, 1);
+  assert.equal(swiftSteps[0]![1][0], "swiftc");
+  const linkSteps = BUILD_STEPS.filter(([, stepArgs]) =>
+    stepArgs.includes("build/native/host.o")
+      && stepArgs.includes("build/native/dictation-modern.o"),
+  );
+  assert.equal(linkSteps.length, 1);
+  const linkArgs = linkSteps[0]![1];
+  assert.ok(linkArgs.includes("AppKit"));
+  assert.ok(linkArgs.includes("AVFoundation"));
+  assert.ok(linkArgs.includes("Speech"));
+  assert.deepEqual(linkArgs.slice(-2), ["-o", "build/native/host.node"]);
   assert.equal(
     JSON.parse(read("package.json")).devDependencies["node-api-headers"],
     "1.9.0",

@@ -58,6 +58,8 @@ const geometry = (sequence = 2) => ({
   status: "ready" as const,
   sequence,
   frameId: 4,
+  chatFrameId: 0,
+  chatInput: null,
   viewportWidth: 800,
   viewportHeight: 600,
   slots: Array.from({ length: 8 }, (_, index) => ({

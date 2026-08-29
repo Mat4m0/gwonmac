@@ -124,6 +124,7 @@ export function approvedDistributionEntitlements(
 ): Readonly<Record<string, unknown>> {
   return {
     "com.apple.security.cs.allow-jit": true,
+    "com.apple.security.device.audio-input": true,
     "com.apple.application-identifier": applicationIdentifier(channel),
     "com.apple.developer.team-identifier": APPLE_TEAM_ID,
   };

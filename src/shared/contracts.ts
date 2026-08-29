@@ -383,6 +383,8 @@ export interface AppSettings {
   uiFont: UiFont;
   /** Visual style for Guild Wars' controller-button texture atlas. */
   controllerPromptStyle: ControllerPromptStyle;
+  /** Show the native macOS microphone beside Guild Wars text fields. */
+  dictationEnabled: boolean;
   /**
    * The application's Guild Wars panels stay translucent enough to see the
    * game behind them. This is presentation only and never reaches the game.
@@ -518,6 +520,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
   uiFont: "guild-wars",
   controllerPromptStyle: "game-default",
+  dictationEnabled: false,
   uiPanelOpacity: 94,
   cartographyOverlayEnabled: false,
   cartographyGridEnabled: false,
@@ -993,6 +996,11 @@ export const CORE_IPC = {
   settingsReset: "gw:settings:reset",
   settingsRestartForTools: "gw:settings:restartForTools",
   settingsEvent: "gw:settings:event",
+  dictationStart: "gw:dictation:start",
+  dictationPrepare: "gw:dictation:prepare",
+  dictationFinish: "gw:dictation:finish",
+  dictationCancel: "gw:dictation:cancel",
+  dictationEvent: "gw:dictation:event",
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   skillKeyCapture: "gw:skillKeys:capture",
@@ -1092,6 +1100,7 @@ export const EVENT_CHANNELS = [
   "progressEvent",
   "socketEvent",
   "settingsEvent",
+  "dictationEvent",
   "tradeEvent",
   "rendererCommand",
   "rendererCommandDone",
@@ -1132,6 +1141,26 @@ export type GameReloadCause = (typeof GAME_RELOAD_CAUSES)[number];
 // Far above any text a game field holds, low enough that a renderer gone
 // wrong cannot stuff megabytes into the OS pasteboard.
 export const CLIPBOARD_TEXT_CEILING = 64 * 1024;
+
+export const DICTATION_TEXT_CEILING = 4_096;
+
+export type DictationEvent =
+  | Readonly<{ state: "requesting" }>
+  | Readonly<{ state: "preparing" }>
+  | Readonly<{ state: "listening"; transcript: string }>
+  | Readonly<{ state: "final" }>
+  | Readonly<{
+      state: "error";
+      reason:
+        | "permission-denied"
+        | "unavailable"
+        | "model-unavailable"
+        | "model-download-failed"
+        | "setup-required"
+        | "audio-unavailable"
+        | "insertion-failed"
+        | "recognition-failed";
+    }>;
 
 export interface CoreGwNativeApiBase {
   /** Launch-time configuration, available before the first renderer script. */
@@ -1179,6 +1208,17 @@ export interface CoreGwNativeApiBase {
     reset(): Promise<SettingsResetOutcome | null>;
     restartForTools(): Promise<boolean>;
     onChange(callback: (settings: AppSettings) => void): () => void;
+  };
+  dictation: {
+    /** Install Apple's optional on-device language asset without microphone access. */
+    prepare(): Promise<string>;
+    /** Request access and begin one player-owned recording. */
+    start(): Promise<void>;
+    /** End audio and let Apple finish the current phrase. */
+    finish(): Promise<void>;
+    /** Discard a recording when the game field closes or changes. */
+    cancel(): Promise<void>;
+    onEvent(callback: (event: DictationEvent) => void): () => void;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;

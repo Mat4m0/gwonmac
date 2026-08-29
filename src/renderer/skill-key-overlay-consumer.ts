@@ -3,7 +3,7 @@
  * rectangle. Geometry comes from the game; labels come from the app. This is
  * the only join between those two sources and it owns no discovery or input.
  */
-import type { CompanionSkillSlotState } from "./companion-skill-snapshot.js";
+import type { CompanionSkillSlotState } from "./companion-interface-geometry-snapshot.js";
 import { createSkillKeyOverlay } from "./skill-key-overlay.js";
 import {
   EMPTY_SKILL_KEY_BINDINGS,

@@ -85,6 +85,10 @@ const config: ForgeConfig = {
     ...(releaseNotarization ? { osxNotarize: releaseNotarization } : {}),
     extendInfo: {
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
+      NSMicrophoneUsageDescription:
+        "Guild Wars Reforged uses the microphone only when you start in-game dictation.",
+      NSSpeechRecognitionUsageDescription:
+        "Guild Wars Reforged converts speech to a local Guild Wars text draft.",
     },
     // Forge's own packaged output is out/; compiled JS lives in build/.
     // The explicit filter below is the package boundary. Forge's npm pruner

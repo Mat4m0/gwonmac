@@ -5,8 +5,9 @@ import { ENHANCEMENT_CONFIG_WORD_COUNT } from "../../src/shared/enhancement-cont
 import { COMPANION_PLAY_REGION_BYTES } from "../../src/renderer/companion-play-region-snapshot.ts";
 import {
   COMPANION_SKILL_COOLDOWN_BYTES,
-  COMPANION_SKILL_SLOT_BYTES,
 } from "../../src/renderer/companion-skill-snapshot.ts";
+import { COMPANION_SKILL_SLOT_BYTES } from
+  "../../src/renderer/companion-interface-geometry-snapshot.ts";
 import {
   COMPANION_CURSOR_BYTES,
   COMPANION_PARTY_BYTES,

@@ -7,9 +7,9 @@ import { COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import type { AppSettings } from "../shared/contracts.js";
 import type { EnhancementCapabilities } from "../shared/enhancement-contracts.js";
 import { createSkillCooldownOverlayConsumer } from "./skill-cooldown-overlay-consumer.js";
-import { createSkillCooldownObservationInstallation } from "./skill-cooldown-state-installation.js";
+import type { createSkillCooldownObservationInstallation } from "./skill-cooldown-state-installation.js";
 import { createSkillKeyOverlayConsumer } from "./skill-key-overlay-consumer.js";
-import { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
+import type { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
 
 type SkillSettings = Pick<AppSettings, "skillKeyBindings" | "skillCooldownColor">;
 type SkillFeaturePolicy = Readonly<{
@@ -19,11 +19,9 @@ type SkillFeaturePolicy = Readonly<{
 
 export function createSkillOverlaysInstallation(
   capabilities: Pick<EnhancementCapabilities, "skillSlotGeometry" | "skillCooldownObservation">,
+  geometry: ReturnType<typeof createSkillSlotGeometryInstallation>,
+  cooldowns: ReturnType<typeof createSkillCooldownObservationInstallation>,
 ) {
-  const geometry = createSkillSlotGeometryInstallation(capabilities.skillSlotGeometry);
-  const cooldowns = createSkillCooldownObservationInstallation(
-    capabilities.skillCooldownObservation,
-  );
   let keyConsumer: ReturnType<typeof createSkillKeyOverlayConsumer> | null = null;
   let cooldownConsumer: ReturnType<typeof createSkillCooldownOverlayConsumer> | null = null;
   let unsubscribeKeyGeometry: (() => void) | null = null;
@@ -34,11 +32,6 @@ export function createSkillOverlaysInstallation(
   return Object.freeze({
     geometry,
     cooldowns,
-    certifiedFeatureFlags:
-      (capabilities.skillSlotGeometry ? COMPANION_FEATURE_BITS.skillSlotGeometry : 0)
-      | (capabilities.skillCooldownObservation
-        ? COMPANION_FEATURE_BITS.skillCooldownObservation
-        : 0),
     get activeFeatureFlags() { return activeFeatureFlags; },
     mount(parent: HTMLElement, settings: SkillSettings) {
       if (!capabilities.skillSlotGeometry || keyConsumer !== null) return;

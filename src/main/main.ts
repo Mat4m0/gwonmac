@@ -139,6 +139,7 @@ import {
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { GameReloader } from "./game-reload.js";
 import { updateToolsMenuItems } from "./window-menu.js";
+import { DictationController } from './dictation.js';
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -447,6 +448,11 @@ if (primaryInstance) void app.whenReady().then(async () => {
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
   });
+  const dictation = new DictationController(
+    nativeHost,
+    () => systemPreferences.askForMediaAccess('microphone'),
+    app.isPackaged,
+  );
   const stopCommandKeyUps = installMacosCommandKeyUps(nativeHost, {
     focusedGameTarget() {
       return windowRegistry.focusedGameWindow();
@@ -467,6 +473,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     },
   });
   app.once("will-quit", () => stopCommandKeyUps());
+  app.once('will-quit', () => dictation.dispose());
   const paths = gamePaths();
   try {
     activeAccountMode = await loadAccountMode(paths.launcherMode);
@@ -722,6 +729,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getCacheInfo: () => clientRuntime.cacheInfo(),
     getSettings: () => preferences.getSettings(),
     updateSettings: (patch) => preferences.updateRendererSettings(patch),
+    dictation,
     resetSettings: () => toolsRuntime?.resetSettings()
       ?? preferences.resetCoreSettings(),
     setDiagnosticProfile: async (profile) => {

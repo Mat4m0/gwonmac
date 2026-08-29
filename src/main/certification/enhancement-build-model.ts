@@ -375,6 +375,15 @@ export interface KnownEnhancementBuild {
       bodySha256: string;
     }>;
     labelAddress: number;
+    /** The movable Guild Wars chat editor captured through the same frame constructor. */
+    chatInitializer: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly [];
+      bodySha256: string;
+      constructorCallOperand: number;
+    }>;
+    chatLabelAddress: number;
     layout: EnhancementSkillSlotGeometryLayout;
   }>;
   /** Exact label-hash authority and frame layout used by reload automation. */

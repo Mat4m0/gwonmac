@@ -10,7 +10,7 @@ export const COMPANION_ABI = Object.freeze({
   cursor: Object.freeze({ abi: 1, bytes: 4_160 }),
   toolbox: Object.freeze({ abi: 4, bytes: 64 }),
   party: Object.freeze({ abi: 7, bytes: 1_560 }),
-  skillSlots: Object.freeze({ abi: 2, bytes: 164 }),
+  skillSlots: Object.freeze({ abi: 3, bytes: 188 }),
   skillCooldowns: Object.freeze({ abi: 1, bytes: 60 }),
   playRegion: Object.freeze({ abi: 2, bytes: 148 }),
 });

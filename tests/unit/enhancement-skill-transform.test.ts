@@ -5,7 +5,7 @@ import type { EnhancementCapabilities } from "../../src/shared/enhancement-contr
 import type { KnownEnhancementBuild } from "../../src/main/certification/enhancement-builds.js";
 import {
   resolveEnhancementSkillTransform,
-  rewriteSkillBarConstructorCapture,
+  rewriteInterfaceFrameCaptures,
 } from "../../src/main/certification/enhancement-skill-transform.js";
 import { concat, paddedIndex, uleb } from "../../src/main/core/wasm-binary.js";
 
@@ -30,7 +30,10 @@ const initializer = concat(Uint8Array.of(0), Uint8Array.of(0x10), paddedIndex(1)
 const constructor = Uint8Array.of(0, 0x41, 0, 0x0b);
 const reader = concat(Uint8Array.of(0), Uint8Array.of(0x10), paddedIndex(3), Uint8Array.of(0x0b));
 const timer = Uint8Array.of(0, 0x41, 0, 0x0b);
-const bodies = [initializer, constructor, reader, timer] as const;
+const chatInitializer = concat(
+  Uint8Array.of(0), Uint8Array.of(0x10), paddedIndex(1), Uint8Array.of(0x0b),
+);
+const bodies = [initializer, constructor, reader, timer, chatInitializer] as const;
 
 function build(): KnownEnhancementBuild {
   return {
@@ -58,6 +61,14 @@ function build(): KnownEnhancementBuild {
         bodySha256: hash(constructor),
       },
       labelAddress: 0,
+      chatInitializer: {
+        functionIndex: 4,
+        params: ["i32", "i32"],
+        results: [],
+        bodySha256: hash(chatInitializer),
+        constructorCallOperand: 2,
+      },
+      chatLabelAddress: 2,
       layout: {} as never,
     },
     skillCooldownObservation: {
@@ -106,11 +117,12 @@ function resolve(
   return { labels, resolution };
 }
 
-test("skill transform resolves and verifies only its four certified functions", () => {
+test("skill transform resolves and verifies its certified functions", () => {
   const { labels, resolution } = resolve();
   assert.deepEqual(labels, [
     "SkillBar initializer",
     "SkillBar frame constructor",
+    "chat editor initializer",
     "skill recharge reader",
     "precise skill timer",
   ]);
@@ -177,36 +189,45 @@ test("skill transform refuses changed bodies and changed certified call operands
   );
 });
 
-test("SkillBar capture rewrites only the certified operand and preserves wrapper bytes", () => {
+test("interface capture rewrites both certified operands", () => {
   const { resolution } = resolve();
   const nextBodies = bodies.map((body) => new Uint8Array(body));
-  let wrapper: Uint8Array | null = null;
-  rewriteSkillBarConstructorCapture({
+  const wrappers: Uint8Array[] = [];
+  rewriteInterfaceFrameCaptures({
     resolution,
     nextBodies,
     skillBarFrameGlobalIndex: 12,
+    chatInputFrameGlobalIndex: 13,
     appendFunction: (typeIndex, body) => {
       assert.equal(typeIndex, 41);
-      wrapper = body;
-      return 99;
+      wrappers.push(body);
+      return 99 + wrappers.length - 1;
     },
   });
 
   const expectedInitializer = new Uint8Array(initializer);
   expectedInitializer.set(paddedIndex(99), 2);
   assert.deepEqual(nextBodies[0], expectedInitializer);
-  assert.deepEqual(nextBodies.slice(1), bodies.slice(1));
+  const expectedChat = new Uint8Array(chatInitializer);
+  expectedChat.set(paddedIndex(100), 2);
+  assert.deepEqual(nextBodies[4], expectedChat);
+  assert.deepEqual(nextBodies.slice(1, 4), bodies.slice(1, 4));
   assert.deepEqual(
-    wrapper,
+    wrappers[0],
     concat(
       uleb(1), uleb(1), Uint8Array.of(0x7f),
       ...Array.from({ length: 6 }, (_, index) =>
         concat(Uint8Array.of(0x20), uleb(index))),
       Uint8Array.of(0x10), uleb(1),
-      Uint8Array.of(0x22), uleb(6),
+      Uint8Array.of(0x21), uleb(6),
+      Uint8Array.of(0x20), uleb(6),
+      Uint8Array.of(0x04, 0x40),
+      Uint8Array.of(0x20), uleb(6),
       Uint8Array.of(0x24), uleb(12),
+      Uint8Array.of(0x0b),
       Uint8Array.of(0x20), uleb(6),
       Uint8Array.of(0x0b),
     ),
   );
+  assert.equal(wrappers.length, 2);
 });

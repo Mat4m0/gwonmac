@@ -248,7 +248,6 @@ export function resetWindowState(win: BrowserWindow): Promise<void> {
         owner.timer = null;
       }
       const requested = defaultWindowState(primaryWorkArea());
-      let settled = requested;
       if (win && !win.isDestroyed()) {
         if (win.isFullScreen()) {
           await new Promise<void>((resolve, reject) => {
@@ -279,24 +278,19 @@ export function resetWindowState(win: BrowserWindow): Promise<void> {
           });
         }
         win.setBounds(requested.bounds);
-        settled = {
-          bounds: { ...win.getBounds() },
-          mode: "normal",
-          displayWorkArea: displayWorkAreaFor(win.getBounds()),
-        };
       }
       owner.lastNormalPlacement = {
-        bounds: settled.bounds,
-        displayWorkArea: settled.displayWorkArea,
+        bounds: requested.bounds,
+        displayWorkArea: requested.displayWorkArea,
       };
       const write = owner.write.then(() =>
-        saveWindowState(owner.path, settled),
+        saveWindowState(owner.path, requested),
       );
       owner.write = write.catch(() => undefined);
       await write;
       logEvent({ k: "window.stateReset",
-        width: settled.bounds.width,
-        height: settled.bounds.height,
+        width: requested.bounds.width,
+        height: requested.bounds.height,
       }, owner.diagnosticOwnerId);
     } finally {
       owner.resetDepth -= 1;

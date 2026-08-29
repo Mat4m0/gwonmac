@@ -96,19 +96,33 @@ export const BUILD_STEPS = [
   // directory, so it cannot disturb the emits above and its position here is
   // for readability rather than correctness.
   ["pnpm", ["--filter", "@gwonmac/tools-ui", "build:embedded"]],
-  // The only native addon. It uses raw Node-API version 8, whose ABI remains
-  // stable across the Node and Electron upgrades this project takes. The
-  // framework APIs resolve at runtime from the Electron host, so the bundle
-  // deliberately leaves Node-API symbols undefined here.
+  // The only native addon. Swift owns Apple's modern, on-device transcription
+  // API; Objective-C++ owns the Node-API boundary. They meet at a
+  // four-function C ABI, then swiftc links both objects while deliberately
+  // leaving Node-API symbols for the Electron host to resolve at runtime.
+  [
+    "xcrun",
+    [
+      "swiftc",
+      "-module-cache-path",
+      "build/.swift-module-cache",
+      "-parse-as-library",
+      "-target",
+      `${nativeArchitecture}-apple-macosx12.0`,
+      "-O",
+      "-c",
+      "src/native/host/dictation-modern.swift",
+      "-o",
+      "build/native/dictation-modern.o",
+    ],
+  ],
   [
     "xcrun",
     [
       "clang++",
       "-std=c++20",
       "-fobjc-arc",
-      "-bundle",
-      "-undefined",
-      "dynamic_lookup",
+      "-c",
       "-DNAPI_VERSION=8",
       "-I",
       "node_modules/node-api-headers/include",
@@ -121,6 +135,51 @@ export const BUILD_STEPS = [
       "-Werror",
       "-fvisibility=hidden",
       "src/native/host/host.mm",
+      "-o",
+      "build/native/host.o",
+    ],
+  ],
+  [
+    "xcrun",
+    [
+      "clang++",
+      "-std=c++20",
+      "-fobjc-arc",
+      "-c",
+      "-DNAPI_VERSION=8",
+      "-I",
+      "node_modules/node-api-headers/include",
+      "-mmacosx-version-min=12.0",
+      "-arch",
+      nativeArchitecture,
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-fvisibility=hidden",
+      "src/native/host/dictation-host.mm",
+      "-o",
+      "build/native/dictation-host.o",
+    ],
+  ],
+  [
+    "xcrun",
+    [
+      "swiftc",
+      "-module-cache-path",
+      "build/.swift-module-cache",
+      "-target",
+      `${nativeArchitecture}-apple-macosx12.0`,
+      "-emit-library",
+      "build/native/host.o",
+      "build/native/dictation-host.o",
+      "build/native/dictation-modern.o",
+      "-Xlinker",
+      "-undefined",
+      "-Xlinker",
+      "dynamic_lookup",
+      "-Xlinker",
+      "-lc++",
       "-framework",
       "AppKit",
       "-framework",
@@ -129,6 +188,10 @@ export const BUILD_STEPS = [
       "LocalAuthentication",
       "-framework",
       "Security",
+      "-framework",
+      "AVFoundation",
+      "-framework",
+      "Speech",
       "-o",
       "build/native/host.node",
     ],

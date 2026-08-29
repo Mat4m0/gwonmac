@@ -34,7 +34,7 @@ import {
 import { applyFeatureContributions } from "./enhancement-transform-features.js";
 import {
   resolveEnhancementSkillTransform,
-  rewriteSkillBarConstructorCapture,
+  rewriteInterfaceFrameCaptures,
 } from "./enhancement-skill-transform.js";
 import {
   preGameDiagnosticReader,
@@ -104,20 +104,22 @@ function dispatcher(
   dispatchTypeIndex: number,
   originalIndex: number,
   hookGlobalIndex: number,
-  extraArgumentGlobal: number | null = null,
-  extraArgumentFunction: number | null = null,
+  extraArguments: readonly (Readonly<{
+    source: "global" | "function";
+    index: number;
+  }> | null)[] = [],
 ): Uint8Array {
   const args = Array.from({ length: paramCount }, (_, index) =>
     concat(Uint8Array.of(0x20), uleb(index)),
   );
   const dispatchArgs = [
     ...args,
-    ...(extraArgumentGlobal === null
-      ? []
-      : [concat(Uint8Array.of(0x23), uleb(extraArgumentGlobal))]),
-    ...(extraArgumentFunction === null
-      ? []
-      : [concat(Uint8Array.of(0x10), uleb(extraArgumentFunction))]),
+    ...extraArguments.map((argument) => argument === null
+      ? Uint8Array.of(0x41, 0x00)
+      : concat(
+          Uint8Array.of(argument.source === "global" ? 0x23 : 0x10),
+          uleb(argument.index),
+        )),
   ];
   return concat(
     uleb(0),
@@ -779,6 +781,9 @@ function assembleEnhancementTransform(
   const skillBarFrameGlobalIndex = capabilities.skillSlotGeometry
     ? allocateGlobals(1)
     : 0;
+  const chatInputFrameGlobalIndex = capabilities.skillSlotGeometry
+    ? allocateGlobals(1)
+    : 0;
   const commandPendingGlobalIndex = hasActionQueue ? allocateGlobals(1) : 0;
   const commandArgumentGlobalBase = hasActionQueue
     ? allocateGlobals(COMMAND_ARGS)
@@ -858,27 +863,34 @@ function assembleEnhancementTransform(
     ? selectedOriginalIndices[uiHookIndex]!
     : null;
   selected.forEach((hook, index) => {
+    const tickArguments = hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
+      ? [
+          capabilities.skillSlotGeometry
+            ? { source: "global" as const, index: skillBarFrameGlobalIndex }
+            : null,
+          capabilities.skillCooldownObservation
+            ? { source: "function" as const, index: skillTimerFunctionIndex! }
+            : null,
+          capabilities.skillSlotGeometry
+            ? { source: "global" as const, index: chatInputFrameGlobalIndex }
+            : null,
+        ]
+      : [];
     nextBodies[hook.localIndex] = dispatcher(
       hook.type.params.length,
       hook.dispatchKind,
       dispatchTypeIndex,
       selectedOriginalIndices[index]!,
       hookGlobalIndex,
-      capabilities.skillSlotGeometry
-        && hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
-        ? skillBarFrameGlobalIndex
-        : null,
-      capabilities.skillCooldownObservation
-        && hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
-        ? skillTimerFunctionIndex
-        : null,
+      tickArguments,
     );
   });
 
-  rewriteSkillBarConstructorCapture({
+  rewriteInterfaceFrameCaptures({
     resolution: skillResolution,
     nextBodies,
     skillBarFrameGlobalIndex,
+    chatInputFrameGlobalIndex,
     appendFunction,
   });
 

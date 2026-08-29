@@ -9,6 +9,23 @@ import { createRequire } from "node:module";
 import type { NativeKeychain } from "./core/native-keychain.js";
 import { unpackedPath, type BundleLayout } from "./core/paths.js";
 
+export type NativeDictationEvent =
+  | Readonly<{ type: "preparing" }>
+  | Readonly<{ type: "ready"; locale: string }>
+  | Readonly<{ type: "listening" }>
+  | Readonly<{ type: "result"; transcript: string; final: boolean }>
+  | Readonly<{
+      type: "error";
+      reason:
+        | "permission-denied"
+        | "unavailable"
+        | "model-unavailable"
+        | "model-download-failed"
+        | "setup-required"
+        | "audio-unavailable"
+        | "recognition-failed";
+    }>;
+
 export interface NativeHost extends NativeKeychain {
   /**
    * Observe app-local key releases owned by a Command chord. Returning true
@@ -16,6 +33,10 @@ export interface NativeHost extends NativeKeychain {
    * owns its replacement.
    */
   monitorCommandKeyUps(handler: (keyCode: number) => boolean): () => void;
+  startDictation(handler: (event: NativeDictationEvent) => void): void;
+  prepareDictation(handler: (event: NativeDictationEvent) => void): void;
+  finishDictation(): void;
+  cancelDictation(): void;
 }
 
 export type NativeHostLayout = BundleLayout;
@@ -32,6 +53,10 @@ function isNativeHost(value: unknown): value is NativeHost {
     typeof candidate.save === "function" &&
     typeof candidate.clear === "function" &&
     typeof candidate.monitorCommandKeyUps === "function"
+    && typeof candidate.startDictation === "function"
+    && typeof candidate.prepareDictation === "function"
+    && typeof candidate.finishDictation === "function"
+    && typeof candidate.cancelDictation === "function"
   );
 }
 

@@ -265,6 +265,7 @@ export function enhancementCapabilityProfile(
 export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursor: capabilitiesFromMask(0x001),
   core: capabilitiesFromMask(0x601),
+  dictation: capabilitiesFromMask(0x681),
   reconnect: capabilitiesFromMask(0x601),
   region: capabilitiesFromMask(0x200),
   target: capabilitiesFromMask(0x202),
@@ -275,9 +276,10 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   all: capabilitiesFromMask(0x7ff),
 });
 
-/** The two capability sets shipped by Core and Tools release launches. */
+/** The capability sets shipped by Core, opt-in dictation, and Tools launches. */
 export const RELEASE_ENHANCEMENT_CAPABILITIES = Object.freeze({
   core: ENHANCEMENT_CAPABILITY_PRESETS.core,
+  dictation: ENHANCEMENT_CAPABILITY_PRESETS.dictation,
   tools: ENHANCEMENT_CAPABILITY_PRESETS.all,
 });
 
@@ -286,7 +288,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 46;
+export const ENHANCEMENT_TRANSFORM_ABI = 48;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,

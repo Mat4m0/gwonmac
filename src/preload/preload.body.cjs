@@ -188,6 +188,13 @@ const api = {
     restartForTools: () => ipcRenderer.invoke(IPC.settingsRestartForTools),
     onChange: (callback) => listen(IPC.settingsEvent, callback),
   },
+  dictation: {
+    prepare: () => ipcRenderer.invoke(IPC.dictationPrepare),
+    start: () => ipcRenderer.invoke(IPC.dictationStart),
+    finish: () => ipcRenderer.invoke(IPC.dictationFinish),
+    cancel: () => ipcRenderer.invoke(IPC.dictationCancel),
+    onEvent: (callback) => listen(IPC.dictationEvent, callback),
+  },
   shortcuts: {
     capture: () => ipcRenderer.invoke(IPC.shortcutCapture),
     cancelCapture: () => ipcRenderer.invoke(IPC.shortcutCaptureCancel),

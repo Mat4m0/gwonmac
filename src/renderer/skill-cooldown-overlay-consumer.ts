@@ -8,10 +8,8 @@ import {
   skillCooldownCssColor,
   type SkillCooldownColor,
 } from "../shared/skill-cooldowns.js";
-import type {
-  CompanionSkillCooldownState,
-  CompanionSkillSlotState,
-} from "./companion-skill-snapshot.js";
+import type { CompanionSkillSlotState } from "./companion-interface-geometry-snapshot.js";
+import type { CompanionSkillCooldownState } from "./companion-skill-snapshot.js";
 import { createSkillCooldownOverlay, type SkillCooldownSlot } from "./skill-cooldown-overlay.js";
 import { projectSkillSlots } from "./skill-slot-projection.js";
 

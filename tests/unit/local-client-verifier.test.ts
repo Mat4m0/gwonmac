@@ -324,6 +324,14 @@ function automaticSkillSlots(): ProvedVerification {
           "a29fca1d30e5fa7dea1ca30f6453acbb8a099e4423c1f05ee43b01cfc3045c41",
       },
       labelAddress: 5_700_000,
+      chatInitializer: {
+        functionIndex: 4_203,
+        params: ["i32", "i32"],
+        results: [],
+        bodySha256: "b".repeat(64),
+        constructorCallOperand: 1_339,
+      },
+      chatLabelAddress: 5_700_040,
       layout: {
         frameArray: 5_906_396,
         frameCount: 5_906_404,

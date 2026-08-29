@@ -54,6 +54,7 @@ test.describe("sandbox boundary", () => {
           "commands",
           "credentials",
           "diagnostics",
+          "dictation",
           "dns",
           "gameStorage",
           "init",

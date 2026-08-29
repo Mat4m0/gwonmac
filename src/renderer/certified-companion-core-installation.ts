@@ -25,6 +25,9 @@ import {
 } from "./cursor-refresh.js";
 import { decodeEnhancementManifest } from "./enhancement-manifest.js";
 import { createPlayRegionObservationInstallation } from "./play-region-state-installation.js";
+import { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
+import type { CompanionSkillSlotState } from "./companion-interface-geometry-snapshot.js";
+import { setSkillGeometryReadiness } from "./observer-readiness.js";
 import type {
   CompanionExtensionSession,
   PrepareCompanionExtension,
@@ -41,6 +44,24 @@ const recordMilestone = (
     .recordRendererMilestone(name, performance.now() * 1_000, fields)
     .catch(() => {});
 };
+
+function reportSkillGeometry(state: CompanionSkillSlotState): void {
+  const readiness = state.status === "ready"
+    ? Object.freeze({ status: "ready" as const })
+    : Object.freeze({ status: "waiting" as const, reason: state.reason });
+  if (!setSkillGeometryReadiness(readiness)) return;
+  void window.gwNative.diagnostics.recordRendererMilestone(
+    "enhancement.skillGeometryState",
+    performance.now() * 1_000,
+    state.status === "ready"
+      ? { state: "ready", reason: null, candidates: null }
+      : {
+          state: "waiting",
+          reason: state.reason,
+          candidates: "candidateCount" in state ? state.candidateCount : null,
+        },
+  ).catch(() => {});
+}
 
 function percentile95(samples: readonly number[]): number {
   if (samples.length === 0) return 0;
@@ -59,6 +80,9 @@ export async function installCoreCertifiedCompanion(
     (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
     | (capabilities.playRegionObservation
       ? COMPANION_FEATURE_BITS.playRegionObservation
+      : 0)
+    | (capabilities.skillSlotGeometry
+      ? COMPANION_FEATURE_BITS.skillSlotGeometry
       : 0);
   const manifest = decodeEnhancementManifest(module, capabilities);
   const exports = instance.exports;
@@ -119,6 +143,15 @@ export async function installCoreCertifiedCompanion(
   const playRegions = createPlayRegionObservationInstallation(
     capabilities.playRegionObservation,
   );
+  const skillGeometry = createSkillSlotGeometryInstallation(
+    capabilities.skillSlotGeometry,
+  );
+  const stopSkillGeometry = skillGeometry.subscribe((state) => {
+    reportSkillGeometry(state);
+    window.dispatchEvent(new CustomEvent("gwonmac:chat-geometry", {
+      detail: state,
+    }));
+  });
   let coreMemory: ReturnType<typeof allocateCompanionCoreMemory> | null = null;
   let stopObserver = () => {};
   let disposeCursor = () => {};
@@ -163,6 +196,10 @@ export async function installCoreCertifiedCompanion(
         extensionSession?.disposePresentation();
       });
       attempt("play-region feed disposal", playRegions.dispose);
+      attempt("interface geometry subscription disposal", () => {
+        stopSkillGeometry();
+      });
+      attempt("interface geometry feed disposal", skillGeometry.dispose);
     }
     const callbackWithdrawn = attempt("callback withdrawal", () => {
       if (table.get(manifest.tableSlot) === installedCallback) {
@@ -176,6 +213,7 @@ export async function installCoreCertifiedCompanion(
           extensionSession?.releaseObserverMemory(free);
         });
         attempt("play-region allocation release", () => playRegions.release(free));
+        attempt("interface geometry allocation release", () => skillGeometry.release(free));
       }
       attempt("extension callback resource release", () => {
         if (extensionSession) extensionSession.releaseCallbackResources(free);
@@ -234,12 +272,16 @@ export async function installCoreCertifiedCompanion(
     });
     const core = coreMemory;
     playRegions.allocate(malloc);
+    skillGeometry.allocate(malloc);
     extension?.allocate(malloc);
-    if (!playRegions.allocated) throw new Error("Companion allocation failed");
+    if (!playRegions.allocated || !skillGeometry.allocated) {
+      throw new Error("Companion allocation failed");
+    }
     validateCompanionOwnedRegions([
       ...core.regions,
       ...(extension?.ownedRegions() ?? []),
       ...(playRegions.region === null ? [] : [playRegions.region]),
+      ...(skillGeometry.region === null ? [] : [skillGeometry.region]),
     ], memory.buffer.byteLength);
     core.initialize();
     extension?.initialize(memory);
@@ -254,7 +296,7 @@ export async function installCoreCertifiedCompanion(
         cursor: core.cursor,
         toolbox: core.toolbox,
         party: core.party,
-        skillSlots: extension?.kernelRegions.skillSlots ?? { pointer: 0, bytes: 0 },
+        skillSlots: { pointer: skillGeometry.pointer, bytes: skillGeometry.bytes },
         skillCooldowns: extension?.kernelRegions.skillCooldowns ?? { pointer: 0, bytes: 0 },
         playRegion: { pointer: playRegions.pointer, bytes: playRegions.bytes },
       },
@@ -302,6 +344,7 @@ export async function installCoreCertifiedCompanion(
       core,
       kernel,
       playRegions,
+      skillGeometry,
       capabilities,
       program,
       isCleaned: () => cleaned,
@@ -311,6 +354,7 @@ export async function installCoreCertifiedCompanion(
       },
     }) ?? null;
     playRegions.setActive(true);
+    skillGeometry.setActive(true);
     extensionSession?.beforeHook();
     table.set(manifest.tableSlot, kernel.dispatch);
     installedCallback = kernel.dispatch;
@@ -319,7 +363,7 @@ export async function installCoreCertifiedCompanion(
       snapshotPointer: extensionSession?.observer.pointers.snapshot ?? 0,
       toolboxPointer: extensionSession?.observer.pointers.toolbox ?? 0,
       partyPointer: extensionSession?.observer.pointers.party ?? 0,
-      skillSlotPointer: extensionSession?.observer.pointers.skillSlots ?? 0,
+      skillSlotPointer: skillGeometry.pointer,
       skillCooldownPointer: extensionSession?.observer.pointers.skillCooldowns ?? 0,
       playRegionPointer: playRegions.pointer,
       hertz: 0,
@@ -345,7 +389,11 @@ export async function installCoreCertifiedCompanion(
       extensionSession?.observer.toolbox ?? null,
       extensionSession?.observer.observeState ?? false,
       extensionSession?.observer.publishState ?? false,
-      extensionSession?.observer.skillSlots ?? null,
+      capabilities.skillSlotGeometry ? {
+        enabled: () => skillGeometry.active,
+        inactive: () => skillGeometry.setActive(false),
+        update: (state: CompanionSkillSlotState) => skillGeometry.sink?.update(state),
+      } : null,
       extensionSession?.observer.skillCooldowns ?? null,
       playRegions.sink,
       extensionSession?.observer.readers ?? null,

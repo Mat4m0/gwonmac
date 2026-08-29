@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSkillSlotGeometryInstallation } from "../../src/renderer/skill-slot-geometry-installation.js";
-import type { CompanionSkillSlotState } from "../../src/renderer/companion-skill-snapshot.js";
+import type { CompanionSkillSlotState } from "../../src/renderer/companion-interface-geometry-snapshot.js";
 
 const geometry = (sequence: number, left = 0): CompanionSkillSlotState => ({
   status: "ready",
   sequence,
   frameId: 4,
+  chatFrameId: 0,
+  chatInput: null,
   viewportWidth: 800,
   viewportHeight: 600,
   slots: Array.from({ length: 8 }, (_, index) => ({

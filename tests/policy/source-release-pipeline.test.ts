@@ -186,6 +186,7 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   assert.equal(dmgVolumeName, "Guild Wars Reforged");
   assert.ok(Buffer.byteLength(dmgVolumeName, "utf8") <= 27);
   assert.match(signing, /com\.apple\.security\.cs\.allow-jit/);
+  assert.match(signing, /com\.apple\.security\.device\.audio-input/);
   assert.doesNotMatch(signing, /camera|microphone|location|bluetooth|usb/i);
   assert.match(forge, /\["--force", "--deep", "--sign", "-", appPath\]/);
   assert.match(workflow, /security create-keychain/);
@@ -251,7 +252,7 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   assert.match(verifier, /args\.length > 1 && !diskImage/);
 });
 
-test("release entitlements are an exact three-key allowlist", () => {
+test("release entitlements are an exact four-key allowlist", () => {
   const entitlements = read("packaging/entitlements.release.plist");
   const keys = [...entitlements.matchAll(/<key>([^<]+)<\/key>/gu)]
     .map((match) => match[1])
@@ -260,6 +261,7 @@ test("release entitlements are an exact three-key allowlist", () => {
     "com.apple.application-identifier",
     "com.apple.developer.team-identifier",
     "com.apple.security.cs.allow-jit",
+    "com.apple.security.device.audio-input",
   ]);
   assert.match(
     entitlements,
@@ -787,7 +789,7 @@ test("client recertification reports evidence but cannot grant authority", () =>
   // before the compiler runs. tests/policy/toolchain-floors.test.ts scans every
   // workflow for that ordering; this pins the job's reason to exist beside it.
   assert.match(derive, /if: needs\.detect\.outputs\.needed == 'true'/);
-  assert.match(derive, /runs-on: macos-15/);
+  assert.match(derive, /runs-on: macos-26/);
   assert.ok(
     derive.indexOf("run: rustup toolchain install") < derive.indexOf("run: pnpm build"),
     "the kernel is compiled on the runner's own toolchain",
@@ -936,7 +938,7 @@ test("the scheduled canary exercises the latest ArenaNet client conservatively",
   const workflow = read(".github/workflows/client-canary.yml");
   assert.match(workflow, /schedule:[\s\S]*cron:/);
   assert.match(workflow, /workflow_dispatch:/);
-  assert.match(workflow, /runs-on: macos-15/);
+  assert.match(workflow, /runs-on: macos-26/);
   assert.match(workflow, /timeout-minutes: 20/);
   assert.match(workflow, /GW_LIVE_SMOKE: "1"/);
   assert.match(workflow, /tests\/electron\/live\.spec\.ts/);
