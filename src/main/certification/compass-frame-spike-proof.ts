@@ -16,7 +16,7 @@ import { deriveSkillSlotGeometry } from "./enhancement-skill-slot-geometry-proof
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 
 const COMPASS_OWNER_BODY_SHA256 =
-  "e4ae212b84a9b2270784ed4fe46a24b6a3b757f80e16ed341388f449e342d29f";
+  "9df419f84c93ec674540ef60dc74cae03495e3308843ab3fcc594cad93e97043";
 
 type PreGameProof = NonNullable<KnownEnhancementBuild["preGameControls"]>;
 type SkillFrameProof = NonNullable<KnownEnhancementBuild["skillSlotGeometry"]>;

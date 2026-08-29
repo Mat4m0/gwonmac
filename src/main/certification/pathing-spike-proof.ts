@@ -12,7 +12,7 @@ import {
 import type { DecodedFunction, MemoryOperandSite } from "./enhancement-evidence-types.js";
 
 const OFFICIAL_SHA256 =
-  "3cd87bf15df6812073b558e9f365c8fb8e2a54b1b4c37028e5d3a6cbaf5e6f9e";
+  "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb";
 const ANCHORS = Object.freeze({
   bound: "def->trapezoidCount < 1024",
   index: "index < pathMap.trapezoidCount",
