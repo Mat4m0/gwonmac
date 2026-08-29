@@ -36,6 +36,7 @@ describe("cartography appearance", () => {
   it("ships a readable Cartographer hierarchy without requiring customization", () => {
     const { grid, walkability } = CARTOGRAPHY_BUILTIN_PRESETS.cartographer.style;
     assert.deepEqual(grid.unseen, { color: "#FF7A1A", marker: "diamond" });
+    assert.equal(grid.noWalkableColor, "#8F99A3");
     assert.deepEqual(grid.lattice, { color: "#E8E1D0", width: 2, pattern: "solid" });
     assert.deepEqual(grid.normalRange, { color: "#00D9FF", width: 4, pattern: "solid" });
     assert.deepEqual(grid.birdsEyeRange, {
@@ -83,6 +84,18 @@ describe("cartography appearance", () => {
       ...style,
       grid: { ...style.grid, unseen: { ...style.grid.unseen, marker: "circle" } },
     }), null);
+  });
+
+  it("upgrades local presets across revealability guidance previews", () => {
+    const source = structuredClone(CARTOGRAPHY_BUILTIN_PRESETS.cartographer.style);
+    const legacyGrid = {
+      ...source.grid,
+      exploredNoWalkableColor: "#FF4FD8",
+    } as Record<string, unknown>;
+    delete legacyGrid.noWalkableColor;
+    const upgraded = normaliseCartographyPresetStyle({ ...source, grid: legacyGrid });
+    assert.equal(upgraded?.grid.noWalkableColor, "#8F99A3");
+    assert.equal(Object.hasOwn(upgraded?.grid ?? {}, "exploredNoWalkableColor"), false);
   });
 
   it("normalises one atomic library and resolves built-in and custom refs", () => {

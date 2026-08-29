@@ -36,17 +36,31 @@ export function createWorldMapAnchorSpikeReader(
       }
       const status = numberGlobal(exports, WORLD_MAP_ANCHOR_SPIKE_GLOBALS.status);
       const generation = numberGlobal(exports, WORLD_MAP_ANCHOR_SPIKE_GLOBALS.generation);
+      const continent = numberGlobal(exports, WORLD_MAP_ANCHOR_SPIKE_GLOBALS.continent);
       const worldAnchorX = numberGlobal(exports, WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorX);
       const worldAnchorY = numberGlobal(exports, WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorY);
+      const mapMinX = numberGlobal(exports, WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMinX);
+      const mapMinY = numberGlobal(exports, WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMinY);
+      const mapMaxX = numberGlobal(exports, WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMaxX);
+      const mapMaxY = numberGlobal(exports, WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMaxY);
       if (
         status === null || generation === null
-        || worldAnchorX === null || worldAnchorY === null
+        || continent === null || worldAnchorX === null || worldAnchorY === null
+        || mapMinX === null || mapMinY === null || mapMaxX === null || mapMaxY === null
         || !Number.isSafeInteger(status) || !Number.isSafeInteger(generation)
+        || !Number.isSafeInteger(continent)
       ) return null;
-      const snapshot = Object.freeze({ status, generation, worldAnchorX, worldAnchorY });
+      const snapshot = Object.freeze({
+        status, generation, continent, worldAnchorX, worldAnchorY,
+        mapMinX, mapMinY, mapMaxX, mapMaxY,
+      });
       return status !== 1 || (
-        Math.abs(worldAnchorX) <= 1_000_000
+        continent >= 0 && continent <= 5
+        && Math.abs(worldAnchorX) <= 1_000_000
         && Math.abs(worldAnchorY) <= 1_000_000
+        && mapMinX >= 0 && mapMinY >= 0
+        && mapMaxX > mapMinX && mapMaxY > mapMinY
+        && mapMaxX <= 1_000_000 && mapMaxY <= 1_000_000
       )
         ? snapshot
         : null;

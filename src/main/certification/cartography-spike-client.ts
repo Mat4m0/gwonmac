@@ -28,21 +28,21 @@ const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuil
     "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb",
     {
       memoryLayout: "official",
-      outputSha256: "415cb41793e7b08b18a14c2b0ebcdeb5811c003ed350bb517ac49e48f95c28d5",
+      outputSha256: "4018c8a174fffa626c4fb02d26e605d19d161dd7ed1079bb160d41360953f9d9",
     },
   ],
   [
     "7db72c8d5b4864fb4526e1455edfee3755887a242f68ec1c2f8447cfb38ad281",
     {
       memoryLayout: "relocated",
-      outputSha256: "35035470153136329f0ffddaad2e2be2ab66fb7f8d457deba0f75a731962813e",
+      outputSha256: "82d44183288d531fd09598b89e95bffd4dbcd843d5d0803d2ed6f0dfd8baac8a",
     },
   ],
   [
     "9d3383ad41e767570a0b2b8d8e2fec2e52cdcbd25d9c1680b8eb979f4eef6991",
     {
       memoryLayout: "relocated",
-      outputSha256: "ac6a0b4ce1f66dcecbabfaa13888aa8262e46dcaf1a319ffbc1d85a4551802fc",
+      outputSha256: "af80daa05c1886c451b3cb5a707508bb81cedc68dac18663c92498019319efaa",
     },
   ],
   [
@@ -56,7 +56,7 @@ const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuil
     "1f4a199ea902f839abb3b71861759f956db2aa4e7f31fcabd1970d12d24ca3a0",
     {
       memoryLayout: "relocated",
-      outputSha256: "18b177e4678f2ddddc5a817dca1568d20a18ab2118cab0a584a5a78d07eb54e3",
+      outputSha256: "3016b231dc47236360598f58f5dc35066595028c2a3aae39e2a9ca9580a2a656",
     },
   ],
 ]);

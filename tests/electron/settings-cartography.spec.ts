@@ -44,6 +44,32 @@ test.describe("Cartography settings", () => {
         return settings.cartographyPresetLibrary.customPresets
           .find((style) => style.id === active.id)?.style.grid.unseen.marker ?? null;
       })).toBe("cross");
+      const noRevealColor = customizer.locator(
+        'input[name="cartographyNoWalkableColor"]',
+      );
+      await noRevealColor.fill("#667788");
+      await noRevealColor.blur();
+      await expect.poll(() => page.evaluate(async () => {
+        const settings = await window.gwNative.settings.get();
+        const active = settings.cartographyPresetLibrary.activePreset;
+        if (active.kind !== "custom") return null;
+        return settings.cartographyPresetLibrary.customPresets
+          .find((style) => style.id === active.id)?.style.grid.noWalkableColor ?? null;
+      })).toBe("#667788");
+      await expect.poll(() => page.evaluate(async () => {
+        const settings = await window.gwNative.settings.get();
+        const active = settings.cartographyPresetLibrary.activePreset;
+        if (active.kind !== "custom") return null;
+        const grid = settings.cartographyPresetLibrary.customPresets
+          .find((style) => style.id === active.id)?.style.grid;
+        return grid === undefined ? null : {
+          marker: grid.unseen.marker,
+          noWalkableColor: grid.noWalkableColor,
+        };
+      })).toEqual({
+        marker: "cross",
+        noWalkableColor: "#667788",
+      });
 
       const done = customizer.getByRole("button", { name: "Done" });
       await done.click();

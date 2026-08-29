@@ -126,6 +126,10 @@ terrain** keeps Guild Wars' map artwork and shades terrain outside the certified
 walkable geometry. Choose Cartographer, Synthwave, or Monochrome. Select
 **Customize style…** to create an editable version of the active style and
 change its terrain colors, grid lines, unseen-cell marker, or inspection ranges.
+The normal unseen marker means the loaded map has ground within reveal range.
+Grey hatching means the unseen cell is creditable somewhere, but not from known
+ground in this map; another map or special route may be required. Explored and
+out-of-map cells stay unmarked. Guidance never changes the game's explored state.
 Use **Manage styles** to copy and import styles for sharing, rename or duplicate
 them, or delete custom styles. Hold Shift over a Mission Map cell to inspect its
 normal 3×3 reveal area, or Option+Shift for the Bird's Eye 7×7 area. One style applies to the
