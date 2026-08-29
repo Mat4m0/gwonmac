@@ -18,9 +18,10 @@ import {
   type PublishedCompanionState,
 } from "./companion-snapshot.js";
 import {
-  type CompanionSkillCooldownState,
+  readCompanionSkillSlots,
   type CompanionSkillSlotState,
-} from "./companion-skill-snapshot.js";
+} from "./companion-interface-geometry-snapshot.js";
+import type { CompanionSkillCooldownState } from "./companion-skill-snapshot.js";
 import {
   type CompanionPlayRegionState,
   readCompanionPlayRegion,
@@ -200,8 +201,7 @@ export function observeCompanion(
     if (skillSlots && skillSlots.enabled?.() === false) {
       skillSlots.inactive?.();
     } else if (skillSlots) {
-      if (!readers) throw new Error("Tools skill readers are unavailable");
-      const state = readers.readCompanionSkillSlots(
+      const state = readCompanionSkillSlots(
         runtime.memory.buffer,
         runtime.skillSlotPointer ?? 0,
       );

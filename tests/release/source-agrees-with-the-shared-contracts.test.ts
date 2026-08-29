@@ -68,15 +68,19 @@ test("every main→renderer event channel is named somewhere in main", async () 
   // would notice.
   const { EVENT_CHANNELS }: typeof import("../../src/shared/contracts.ts") =
     await import(new URL("../../build/shared/contracts.js", import.meta.url).href);
-  const main = execFileSync("git", ["ls-files", "--", "src/main"], {
+  const main = execFileSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "--", "src/main"],
+    {
     cwd: root,
     encoding: "utf8",
-  })
+    },
+  )
     .split("\n")
     .filter((file) => file && existsSync(path.join(root, file)))
     .map(read)
     .join("\n");
-  assert.equal(EVENT_CHANNELS.length, 8);
+  assert.equal(EVENT_CHANNELS.length, 9);
   for (const key of EVENT_CHANNELS) {
     assert.match(main, new RegExp(`\\bIPC\\.${key}\\b`), `${key} is missing from main`);
   }

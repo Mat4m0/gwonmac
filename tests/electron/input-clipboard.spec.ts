@@ -45,6 +45,54 @@ async function clickEdit(
 }
 
 test.describe("renderer text editing", () => {
+  test("types dictation through complete trusted key sequences", async () => {
+    const fixture = await launchCachedClient("gw-dictation-insert-text-");
+    try {
+      const { app, page } = fixture;
+      await startGameInput(page);
+      await page.evaluate(() => {
+        const field = document.getElementById("osk-input-text");
+        if (!(field instanceof HTMLInputElement)) throw new Error("text proxy is missing");
+        const host = window as OskWindow;
+        host.Module.oskActiveInput = field;
+        host.__clipboardInputs = [];
+        for (const phase of ["beforeinput", "input"] as const) {
+          field.addEventListener(phase, (event) => {
+            if (!(event instanceof InputEvent)) return;
+            host.__clipboardInputs?.push({
+              phase,
+              inputType: event.inputType,
+              data: event.data,
+              trusted: event.isTrusted,
+            });
+          });
+        }
+        field.value = "";
+        field.focus();
+      });
+      await app.evaluate(({ BrowserWindow }, text) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (!win) throw new Error("game window is missing");
+        for (const keyCode of text) {
+          win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+          win.webContents.sendInputEvent({ type: "char", keyCode });
+          win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+        }
+      }, "Grüße 123");
+
+      await expect(page.locator("#osk-input-text")).toHaveValue("Grüße 123");
+      const observations = await page.evaluate(() =>
+        (window as OskWindow).__clipboardInputs ?? []);
+      expect(observations.every((event) =>
+        event.inputType === "insertText" && event.trusted)).toBe(true);
+      expect(observations.filter((event) => event.phase === "input")
+        .map((event) => event.data).join(""))
+        .toBe("Grüße 123");
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("uses custom Edit items and keeps app shortcuts off the native menu", async () => {
     const fixture = await launchCachedClient("gw-edit-menu-contract-");
     try {

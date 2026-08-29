@@ -33,6 +33,7 @@ import type {
   PathingSpikeController,
   WorldMapAnchorSpikeController,
 } from "../shared/cartography-spike.js";
+import type { CompanionSkillSlotState } from "./companion-interface-geometry-snapshot.js";
 import type {
   InputTrace as SharedInputTrace,
   InputTraceEntry as SharedInputTraceEntry,
@@ -56,6 +57,9 @@ export interface AppSettingsNegativeTypeTest extends AppSettings {
 }
 
 declare global {
+  interface WindowEventMap {
+    "gwonmac:chat-geometry": CustomEvent<CompanionSkillSlotState>;
+  }
   interface GameInputDiagnostics {
     event(name: string, value?: unknown): void;
   }
@@ -240,11 +244,13 @@ declare global {
     };
     Module?: {
       canvas?: HTMLCanvasElement & { offscreen?: OffscreenCanvas };
+      oskActiveInput?: EventTarget | null;
     };
     gwApplySettings?(settings: AppSettings): void;
     gwCartographyGridStats?(): CartographyGridStats;
     gwSurfaces: GwonmacSurfaceController;
     gwToolsSettings(): Readonly<{
+      dictationEnabled?: boolean;
       gwonmacTools: boolean;
       buildLibrary: boolean;
       tradeChat: boolean;

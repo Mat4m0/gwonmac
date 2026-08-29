@@ -36,9 +36,11 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-601":
-          "cfdc58bd7a024fe6cdc4ae631e6edfcb23cb54a8885d3f264243c0fcc2ba64cf",
+          "4da16e7d0814f5957acd3b6b7f0015b498012d1b94c41fd1867ca969d3dd8774",
+        "features-681":
+          "17d30b20bee572b992516c5c9b1604796264c3dc6758ab68f9c6eb8ec5de5ec1",
         "features-7ff":
-          "74b75630edff0cb9e9b68cc719a43d496b72c1b1aa9720afb40d7c1ed9aac0f5",
+          "2dbfd05a25a80d2fd312f0df0a0cf7d7edda1975ecd168bbf0cfcdf8ffab3256",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is
@@ -492,6 +494,15 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
             "a29fca1d30e5fa7dea1ca30f6453acbb8a099e4423c1f05ee43b01cfc3045c41",
         }),
         labelAddress: 0x186e1a,
+        chatInitializer: Object.freeze({
+          functionIndex: 13736,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "5097f3592ca8c5978cf6586ea78cb9f4852857143280138f98e801ffe365573e",
+          constructorCallOperand: 139,
+        }),
+        chatLabelAddress: 0x1813dc,
         layout: Object.freeze({
           frameArray: 0x5a1fdc,
           frameCount: 0x5a1fe4,

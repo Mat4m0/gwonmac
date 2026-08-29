@@ -147,6 +147,16 @@
             autocomplete="off" autocorrect="off" autocapitalize="off"
             spellcheck="false" writingsuggestions="false"></textarea>
 </div>
+<div id="dictation-control" class="dictation-control" data-state="idle" hidden>
+  <button id="dictation-button" type="button" tabindex="-1" aria-label="Start dictation"
+          aria-describedby="dictation-status">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/>
+      <path d="M6.5 11.5v.5a5.5 5.5 0 0 0 11 0v-.5M12 17.5V21M9.5 21h5"/>
+    </svg>
+  </button>
+  <span id="dictation-status" role="status" aria-live="polite">Dictate</span>
+</div>
 <div id="log"></div>
 <output id="diagnostics" aria-live="off"></output>
 <!-- The memory warning: shown over the running game when the client's heap is
@@ -613,6 +623,23 @@
             <h3 id="settings-controls-title" class="settings-pane-title">Tools</h3>
             <p class="settings-pane-intro">Choose which optional GWonMac features are available while you play.</p>
           </header>
+          <section class="settings-task" aria-labelledby="settings-dictation-label">
+            <h4 id="settings-dictation-label">In-game dictation</h4>
+            <p id="settings-dictation-help" class="settings-note">Optional on macOS 26 or newer. Shows a microphone only while a Guild Wars text field is open, attached to the movable chat box.</p>
+            <p id="settings-dictation-state" class="settings-note" role="status"></p>
+            <div class="settings-actions">
+              <button type="button" id="settings-dictation-setup" class="ui-button">Set up…</button>
+              <button type="button" id="settings-dictation-disable" class="ui-button" hidden>Turn off</button>
+            </div>
+            <div id="settings-dictation-disclosure" class="settings-tools-restart" hidden>
+              <p>Apple may download an on-device language model for your current language. Audio and transcripts stay on this Mac. Microphone access is requested only when you use the mic.</p>
+              <div class="settings-actions">
+                <button type="button" id="settings-dictation-prepare" class="ui-button">Prepare and enable</button>
+                <button type="button" id="settings-dictation-cancel" class="ui-button">Cancel</button>
+              </div>
+            </div>
+          </section>
+          <div class="settings-divider" aria-hidden="true"></div>
           <section class="settings-feature-master" aria-labelledby="settings-tools-master-label">
             <label class="settings-check ui-check">
               <input type="checkbox" name="gwonmacTools" aria-describedby="settings-tools-help">

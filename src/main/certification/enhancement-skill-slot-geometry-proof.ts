@@ -119,10 +119,11 @@ export function isSkillSlotGeometryProof(
   if (!value || typeof value !== "object") return false;
   const proof = value as Partial<SkillSlotGeometryProof>;
   const initializer = proof.initializer;
+  const chatInitializer = proof.chatInitializer;
   const constructor = proof.constructor;
   const layout = proof.layout;
   return Object.keys(proof).sort().join() ===
-      "constructor,initializer,labelAddress,layout"
+      "chatInitializer,chatLabelAddress,constructor,initializer,labelAddress,layout"
     && initializer !== undefined
     && Object.keys(initializer).sort().join() ===
       "bodySha256,constructorCallOperand,functionIndex,params,results"
@@ -133,6 +134,16 @@ export function isSkillSlotGeometryProof(
     && isDeepStrictEqual(initializer.params, ["i32", "i32"])
     && isDeepStrictEqual(initializer.results, [])
     && /^[0-9a-f]{64}$/.test(initializer.bodySha256 ?? "")
+    && chatInitializer !== undefined
+    && Object.keys(chatInitializer).sort().join() ===
+      "bodySha256,constructorCallOperand,functionIndex,params,results"
+    && Number.isSafeInteger(chatInitializer.functionIndex)
+    && chatInitializer.functionIndex >= 0
+    && Number.isSafeInteger(chatInitializer.constructorCallOperand)
+    && chatInitializer.constructorCallOperand >= 0
+    && isDeepStrictEqual(chatInitializer.params, ["i32", "i32"])
+    && isDeepStrictEqual(chatInitializer.results, [])
+    && /^[0-9a-f]{64}$/.test(chatInitializer.bodySha256 ?? "")
     && constructor !== undefined
     && Object.keys(constructor).sort().join() ===
       "bodySha256,functionIndex,params,results"
@@ -147,6 +158,9 @@ export function isSkillSlotGeometryProof(
     && typeof proof.labelAddress === "number"
     && Number.isSafeInteger(proof.labelAddress)
     && proof.labelAddress > 0
+    && typeof proof.chatLabelAddress === "number"
+    && Number.isSafeInteger(proof.chatLabelAddress)
+    && proof.chatLabelAddress > 0
     && layout !== undefined
     && Number.isSafeInteger(layout.frameArray)
     && Number.isSafeInteger(layout.frameCount)
@@ -200,6 +214,33 @@ export function deriveSkillSlotGeometry(
       ["i32", "i32", "i32", "i32", "i32", "i32"],
       ["i32"],
     )
+  ) return null;
+
+  // The chat editor is the `EditMessage` child in the unique GmChat frame
+  // definition. Its generic frame constructor is the same one already proven
+  // above, so a changed label block, call site, function, or signature refuses
+  // the entire all-or-nothing geometry capability.
+  const chatBlock = utf16Le("GmChat\0BtnStateSwitch\0EditMessage");
+  const chatBlockAddress = uniqueStaticAddress(context, chatBlock);
+  if (chatBlockAddress === null) return null;
+  const chatLabelAddress = chatBlockAddress
+    + "GmChat\0BtnStateSwitch\0".length * 2;
+  if (codeOperandOccurrences(module, chatLabelAddress) !== 1) return null;
+  const encodedChatLabel = paddedOperand(chatLabelAddress);
+  const chatCandidates = module.bodies.flatMap((body, localIndex) => {
+    const operand = indexOfBytes(body, encodedChatLabel);
+    return operand < 0
+      ? []
+      : [{ body, operand, functionIndex: module.functionImportCount + localIndex }];
+  });
+  if (chatCandidates.length !== 1) return null;
+  const chatInitializer = chatCandidates[0]!;
+  const chatCallOperand = chatInitializer.operand + encodedChatLabel.byteLength + 1;
+  if (
+    chatInitializer.body[chatInitializer.operand - 1] !== 0x41
+    || chatInitializer.body[chatCallOperand - 1] !== 0x10
+    || unsignedOperand(chatInitializer.body, chatCallOperand) !== constructorFunction
+    || !signatureMatches(module, chatInitializer.functionIndex, ["i32", "i32"], [])
   ) return null;
 
   const allocator = uniqueRoleFunction(module, SKILL_SLOT_ALLOCATOR_ROLE);
@@ -259,6 +300,14 @@ export function deriveSkillSlotGeometry(
       bodySha256: functionBodySha256(module, constructorFunction),
     }),
     labelAddress,
+    chatInitializer: Object.freeze({
+      functionIndex: chatInitializer.functionIndex,
+      params: Object.freeze(["i32", "i32"] as const),
+      results: Object.freeze([] as const),
+      bodySha256: functionBodySha256(module, chatInitializer.functionIndex),
+      constructorCallOperand: chatCallOperand,
+    }),
+    chatLabelAddress,
     layout,
   });
 }

@@ -6,7 +6,7 @@ import {
   COMPANION_SKILL_SLOT_BYTES,
   sameCompanionSkillSlotGeometry,
   type CompanionSkillSlotState,
-} from "./companion-skill-snapshot.js";
+} from "./companion-interface-geometry-snapshot.js";
 import { createCompanionRegionInstallation } from "./companion-region-installation.js";
 import { CONTINUOUS_COMPANION_FRESHNESS } from "./companion-sequence-feed.js";
 

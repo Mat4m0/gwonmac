@@ -7,6 +7,9 @@ test("projects a valid Guild Wars skill slot clipped by the viewport edge", () =
     status: "ready" as const,
     sequence: 2,
     frameId: 1,
+    chatFrameId: 0,
+    chatInput: null,
+    skillSlotsReady: true,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({

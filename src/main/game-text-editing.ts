@@ -10,19 +10,6 @@ import {
   type GameTextEditRequest,
 } from '../shared/contracts.js';
 
-const sendControlChord = (contents: WebContents, keyCode: 'A' | 'X'): void => {
-  contents.sendInputEvent({
-    type: 'keyDown', keyCode: 'Control', modifiers: ['control'],
-  });
-  contents.sendInputEvent({
-    type: 'keyDown', keyCode, modifiers: ['control'],
-  });
-  contents.sendInputEvent({
-    type: 'keyUp', keyCode, modifiers: ['control'],
-  });
-  contents.sendInputEvent({ type: 'keyUp', keyCode: 'Control' });
-};
-
 const sendControlPaste = (contents: WebContents): void => {
   contents.sendInputEvent({
     type: 'keyDown', keyCode: 'Control', modifiers: ['control'],
@@ -36,6 +23,19 @@ const sendControlPaste = (contents: WebContents): void => {
   contents.paste();
   contents.sendInputEvent({
     type: 'keyUp', keyCode: 'V', modifiers: ['control'],
+  });
+  contents.sendInputEvent({ type: 'keyUp', keyCode: 'Control' });
+};
+
+const sendControlChord = (contents: WebContents, keyCode: 'A' | 'X'): void => {
+  contents.sendInputEvent({
+    type: 'keyDown', keyCode: 'Control', modifiers: ['control'],
+  });
+  contents.sendInputEvent({
+    type: 'keyDown', keyCode, modifiers: ['control'],
+  });
+  contents.sendInputEvent({
+    type: 'keyUp', keyCode, modifiers: ['control'],
   });
   contents.sendInputEvent({ type: 'keyUp', keyCode: 'Control' });
 };

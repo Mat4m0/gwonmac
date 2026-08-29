@@ -25,6 +25,8 @@ test("retains bounded generation evidence without paths or raw addresses", async
   const fileOutputDigest = sha256("file-output");
   const feature601Input = sha256("features-601-input");
   const feature601DoubleClick = sha256("features-601-double-click");
+  const feature681Input = sha256("features-681-input");
+  const feature681DoubleClick = sha256("features-681-double-click");
   const feature7ffInput = sha256("features-7ff-input");
   const feature7ffDoubleClick = sha256("features-7ff-double-click");
   const generation = sha256("generation");
@@ -51,6 +53,11 @@ test("retains bounded generation evidence without paths or raw addresses", async
       outputSha256: feature601DoubleClick,
       enhancementInputSha256: fileOutputDigest,
     }, {
+      profile: "features-681",
+      inputSha256: feature681Input,
+      outputSha256: feature681DoubleClick,
+      enhancementInputSha256: fileOutputDigest,
+    }, {
       profile: "features-7ff",
       inputSha256: feature7ffInput,
       outputSha256: feature7ffDoubleClick,
@@ -73,6 +80,10 @@ test("retains bounded generation evidence without paths or raw addresses", async
     }, {
       profile: "features-601",
       inputSha256: feature601DoubleClick,
+      outputSha256: outputDigest,
+    }, {
+      profile: "features-681",
+      inputSha256: feature681DoubleClick,
       outputSha256: outputDigest,
     }, {
       profile: "features-7ff",

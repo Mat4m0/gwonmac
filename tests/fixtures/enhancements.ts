@@ -20,10 +20,12 @@ import {
   readCompanionParty,
 } from "../../src/renderer/companion-snapshot.ts";
 import {
-  COMPANION_SKILL_COOLDOWN_BYTES,
   readCompanionSkillSlots,
-  readCompanionSkillCooldowns,
   COMPANION_SKILL_SLOT_BYTES,
+} from "../../src/renderer/companion-interface-geometry-snapshot.ts";
+import {
+  COMPANION_SKILL_COOLDOWN_BYTES,
+  readCompanionSkillCooldowns,
 } from "../../src/renderer/companion-skill-snapshot.ts";
 import {
   COMPANION_PLAY_REGION_BYTES,
@@ -648,12 +650,12 @@ export async function createKernel(
         features,
       );
     },
-    tick: (skillBarFrameId = 0, skillTimer = 0) => exports.dispatch(
+    tick: (skillBarFrameId = 0, skillTimer = 0, chatInputFrameId = 0) => exports.dispatch(
       COMPANION_DISPATCH_KINDS.tick,
       123,
       skillBarFrameId,
       skillTimer,
-      0,
+      chatInputFrameId,
       0,
     ),
     cursorEvent: (...args: number[]) =>
@@ -831,6 +833,21 @@ export function installDuplicateSkillSlot(
   view.setFloat32(duplicate + 0x110, 20, true);
   view.setFloat32(duplicate + 0x114, 148, true);
   view.setFloat32(duplicate + 0x118, 68, true);
+}
+
+export function installChatInputFrame(view: DataView, id = 11) {
+  const frame = ADDRESSES.frameBuffer + id * 0x1c8;
+  const count = view.getUint32(ADDRESSES.frameCountGlobal, true);
+  view.setUint32(ADDRESSES.frameCountGlobal, Math.max(count, id + 1), true);
+  view.setUint32(ADDRESSES.frameTable + id * 4, frame, true);
+  view.setUint32(frame + 0xbc, id, true);
+  view.setUint32(frame + 0x18c, 0x4, true);
+  view.setFloat32(frame + 0x104, 800, true);
+  view.setFloat32(frame + 0x108, 600, true);
+  view.setFloat32(frame + 0x10c, 96, true);
+  view.setFloat32(frame + 0x110, 72, true);
+  view.setFloat32(frame + 0x114, 500, true);
+  view.setFloat32(frame + 0x118, 96, true);
 }
 
 /**

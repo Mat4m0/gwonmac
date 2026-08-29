@@ -6,6 +6,8 @@
 
 #include <node_api.h>
 
+#include "dictation-host.hpp"
+
 #import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 #import <LocalAuthentication/LocalAuthentication.h>
@@ -583,7 +585,16 @@ napi_value Init(napi_env env, napi_value exports) {
        nullptr},
       {"monitorCommandKeyUps", nullptr, MonitorCommandKeyUpsCallback, nullptr,
        nullptr, nullptr, napi_default, nullptr},
+      {"startDictation", nullptr, GwonmacStartDictation, nullptr, nullptr,
+       nullptr, napi_default, nullptr},
+      {"prepareDictation", nullptr, GwonmacPrepareDictation, nullptr, nullptr,
+       nullptr, napi_default, nullptr},
+      {"finishDictation", nullptr, GwonmacFinishDictation, nullptr, nullptr,
+       nullptr, napi_default, nullptr},
+      {"cancelDictation", nullptr, GwonmacCancelDictation, nullptr, nullptr,
+       nullptr, napi_default, nullptr},
   };
+  napi_add_env_cleanup_hook(env, GwonmacCleanupDictation, nullptr);
   if (napi_define_properties(env, exports,
                              sizeof(properties) / sizeof(properties[0]),
                              properties) != napi_ok) {

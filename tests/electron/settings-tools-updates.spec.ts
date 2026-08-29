@@ -6,7 +6,7 @@ import {
 } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import { closeOffline, launchCachedClient, launchOffline } from "./fixtures.mjs";
 import { packageVersion } from "./settings-test-fixture.mjs";
 
 type ShortcutModifier = "meta" | "control" | "shift" | "alt";
@@ -41,6 +41,86 @@ async function openControls(app: ElectronApplication, page: Page) {
 }
 
 test.describe("tools and update settings", () => {
+  test("shows the dictation mic only for eligible Guild Wars text", async () => {
+    const fixture = await launchCachedClient(
+      "gw-settings-dictation-e2e-",
+      {},
+      (userData) => writeFile(
+        path.join(userData, "settings.json"),
+        JSON.stringify({ dictationEnabled: true }),
+        { mode: 0o600 },
+      ),
+    );
+    try {
+      const { app, page } = fixture;
+      await expect.poll(() => page.evaluate(() => {
+        const input = document.querySelector<HTMLInputElement>("#osk-input-text");
+        const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
+        if (!input) throw new Error("text proxy is missing");
+        if (!canvas) throw new Error("game canvas is missing");
+        canvas.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
+        (window as unknown as { Module: { oskActiveInput: Element } })
+          .Module.oskActiveInput = input;
+        window.dispatchEvent(new CustomEvent("gwonmac:chat-geometry", {
+          detail: {
+            status: "ready",
+            sequence: 2,
+            frameId: 1,
+            chatFrameId: 11,
+            viewportWidth: 800,
+            viewportHeight: 600,
+            skillSlotsReady: false,
+            slots: Array.from({ length: 8 }, () => ({
+              left: 0, bottom: 0, right: 0, top: 0,
+            })),
+            chatInput: { left: 100, bottom: 70, right: 500, top: 100 },
+          },
+        }));
+        input.focus();
+        return !document.querySelector<HTMLElement>("#dictation-control")?.hidden;
+      })).toBe(true);
+      await expect(page.locator("#dictation-control")).toBeVisible();
+      await expect(page.locator("#dictation-button"))
+        .toHaveAccessibleName("Start dictation");
+      const placement = await page.locator("#dictation-control").evaluate((control) => {
+        const controlRect = control.getBoundingClientRect();
+        const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
+        if (!canvas) throw new Error("game canvas is missing");
+        const canvasRect = canvas.getBoundingClientRect();
+        const chatTop = canvasRect.top + (600 - 100) / 600 * canvasRect.height;
+        const chatHeight = 30 / 600 * canvasRect.height;
+        return {
+          left: controlRect.left,
+          top: controlRect.top,
+          expectedLeft: canvasRect.left + 500 / 800 * canvasRect.width + 8,
+          expectedTop: chatTop + (chatHeight - 36) / 2,
+          viewportWidth: document.documentElement.clientWidth,
+          viewportHeight: document.documentElement.clientHeight,
+        };
+      });
+      expect(placement.left).toBeCloseTo(placement.expectedLeft, 1);
+      expect(placement.top).toBeCloseTo(placement.expectedTop, 1);
+
+      await page.evaluate(() => {
+        const input = document.querySelector<HTMLInputElement>("#osk-input-password");
+        if (!input) throw new Error("password proxy is missing");
+        (window as unknown as { Module: { oskActiveInput: Element } })
+          .Module.oskActiveInput = input;
+        input.focus();
+      });
+      await expect(page.locator("#dictation-control")).toBeHidden();
+
+      await openControls(app, page);
+      await expect(page.locator("#settings-dictation-disable")).toBeVisible();
+      await page.locator("#settings-dictation-disable").click();
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.gwNative.settings.get()).dictationEnabled,
+      )).toBe(false);
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("groups each tool with the settings it owns", async () => {
     const fixture = await launchOffline(
       "gw-settings-tool-hierarchy-e2e-",

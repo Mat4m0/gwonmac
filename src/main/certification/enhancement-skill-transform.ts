@@ -36,6 +36,7 @@ export type EnhancementSkillTransformResolution = Readonly<{
   geometry: Readonly<{
     certificate: SkillSlotGeometryCertificate;
     initializer: ResolvedSkillFunction;
+    chatInitializer: ResolvedSkillFunction;
     constructor: ResolvedSkillFunction;
   }> | null;
   cooldown: Readonly<{
@@ -89,20 +90,43 @@ export function resolveEnhancementSkillTransform(options: Readonly<{
       certificate.constructor.params,
       certificate.constructor.results,
     );
+    const chatInitializer = resolveFunction(
+      "chat editor initializer",
+      certificate.chatInitializer.functionIndex,
+      certificate.chatInitializer.params,
+      certificate.chatInitializer.results,
+    );
     if (
       bodyHash(bodies, importCount, certificate.initializer.functionIndex, fail)
         !== certificate.initializer.bodySha256
       || bodyHash(bodies, importCount, certificate.constructor.functionIndex, fail)
         !== certificate.constructor.bodySha256
+      || bodyHash(bodies, importCount, certificate.chatInitializer.functionIndex, fail)
+        !== certificate.chatInitializer.bodySha256
     ) fail("SkillBar frame capture bodies do not match their certificates");
-    const operand = certificate.initializer.constructorCallOperand;
-    const body = bodies[initializer.localIndex]!;
     const expected = paddedIndex(certificate.constructor.functionIndex);
-    if (
-      body[operand - 1] !== 0x10
-      || expected.some((byte, index) => body[operand + index] !== byte)
-    ) fail("SkillBar constructor call site does not match its certificate");
-    geometry = { certificate, initializer, constructor };
+    const certifiedCall = (
+      resolved: ResolvedSkillFunction,
+      operand: number,
+      label: string,
+    ) => {
+      const body = bodies[resolved.localIndex]!;
+      if (
+        body[operand - 1] !== 0x10
+        || expected.some((byte, index) => body[operand + index] !== byte)
+      ) fail(`${label} constructor call site does not match its certificate`);
+    };
+    certifiedCall(
+      initializer,
+      certificate.initializer.constructorCallOperand,
+      "SkillBar",
+    );
+    certifiedCall(
+      chatInitializer,
+      certificate.chatInitializer.constructorCallOperand,
+      "chat editor",
+    );
+    geometry = { certificate, initializer, chatInitializer, constructor };
   }
 
   let cooldown: EnhancementSkillTransformResolution["cooldown"] = null;
@@ -141,16 +165,18 @@ export function resolveEnhancementSkillTransform(options: Readonly<{
 }
 
 /** Append the capture wrapper and replace only the certified call operand. */
-export function rewriteSkillBarConstructorCapture(options: Readonly<{
+export function rewriteInterfaceFrameCaptures(options: Readonly<{
   resolution: EnhancementSkillTransformResolution;
   nextBodies: Uint8Array[];
   skillBarFrameGlobalIndex: number;
+  chatInputFrameGlobalIndex: number;
   appendFunction: (typeIndex: number, body: Uint8Array) => number;
 }>): void {
   const {
     resolution,
     nextBodies,
     skillBarFrameGlobalIndex,
+    chatInputFrameGlobalIndex,
     appendFunction,
   } = options;
   const geometry = resolution.geometry;
@@ -158,29 +184,47 @@ export function rewriteSkillBarConstructorCapture(options: Readonly<{
   const {
     certificate: skillSlotGeometry,
     initializer: skillInitializer,
+    chatInitializer,
     constructor: skillConstructor,
   } = geometry;
 
-  const wrapperIndex = appendFunction(
+  const captureWrapper = (globalIndex: number) => appendFunction(
     skillConstructor.typeIndex,
     concat(
-      // One i32 local holds the constructor result while it is published.
+      // Zero is constructor refusal, not a frame. Retain the last successful
+      // frame so a later optional UI initialization cannot erase it; the
+      // kernel still validates that retained id against the live frame table.
       uleb(1), uleb(1), Uint8Array.of(0x7f),
       ...Array.from({ length: 6 }, (_, index) =>
         concat(Uint8Array.of(0x20), uleb(index))),
       Uint8Array.of(0x10), uleb(skillSlotGeometry.constructor.functionIndex),
-      Uint8Array.of(0x22), uleb(6),
-      Uint8Array.of(0x24), uleb(skillBarFrameGlobalIndex),
+      Uint8Array.of(0x21), uleb(6),
+      Uint8Array.of(0x20), uleb(6),
+      Uint8Array.of(0x04, 0x40),
+      Uint8Array.of(0x20), uleb(6),
+      Uint8Array.of(0x24), uleb(globalIndex),
+      Uint8Array.of(0x0b),
       Uint8Array.of(0x20), uleb(6),
       Uint8Array.of(0x0b),
     ),
   );
-  const rewrittenInitializer = new Uint8Array(
-    nextBodies[skillInitializer.localIndex]!,
-  );
-  rewrittenInitializer.set(
-    paddedIndex(wrapperIndex),
+  const rewriteCapture = (
+    resolved: ResolvedSkillFunction,
+    operand: number,
+    globalIndex: number,
+  ) => {
+    const rewritten = new Uint8Array(nextBodies[resolved.localIndex]!);
+    rewritten.set(paddedIndex(captureWrapper(globalIndex)), operand);
+    nextBodies[resolved.localIndex] = rewritten;
+  };
+  rewriteCapture(
+    skillInitializer,
     skillSlotGeometry.initializer.constructorCallOperand,
+    skillBarFrameGlobalIndex,
   );
-  nextBodies[skillInitializer.localIndex] = rewrittenInitializer;
+  rewriteCapture(
+    chatInitializer,
+    skillSlotGeometry.chatInitializer.constructorCallOperand,
+    chatInputFrameGlobalIndex,
+  );
 }

@@ -51,7 +51,7 @@ pub(crate) const FLAG_PLAY_REGION_UNLOCKS: u32 = 1 << 3;
 
 pub(crate) const SKILL_SLOT_BYTES: u32 = size_of::<SkillSlotSnapshot>() as u32;
 pub(crate) const SKILL_SLOT_MAGIC: u32 = 0x534b_5747;
-pub(crate) const SKILL_SLOT_ABI_AND_SIZE: u32 = (SKILL_SLOT_BYTES << 16) | 2;
+pub(crate) const SKILL_SLOT_ABI_AND_SIZE: u32 = (SKILL_SLOT_BYTES << 16) | 3;
 pub(crate) const FLAG_SKILL_SLOTS_READY: u32 = 1 << 0;
 
 pub(crate) const SKILL_COOLDOWN_BYTES: u32 = size_of::<SkillCooldownSnapshot>() as u32;
@@ -482,6 +482,9 @@ pub(crate) struct SkillSlotSnapshot {
     pub(crate) viewport_width: f32,
     pub(crate) viewport_height: f32,
     pub(crate) slots: [SkillSlotRect; SKILL_SLOTS],
+    pub(crate) chat_frame_id: u32,
+    pub(crate) chat_outcome: u32,
+    pub(crate) chat_input: SkillSlotRect,
 }
 
 #[repr(C)]
@@ -568,5 +571,5 @@ const _: [(); 148] = [(); size_of::<PlayRegionSnapshot>()];
 const _: [(); 4160] = [(); size_of::<CursorSnapshot>()];
 const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
 const _: [(); 16] = [(); size_of::<SkillSlotRect>()];
-const _: [(); 164] = [(); size_of::<SkillSlotSnapshot>()];
+const _: [(); 188] = [(); size_of::<SkillSlotSnapshot>()];
 const _: [(); 60] = [(); size_of::<SkillCooldownSnapshot>()];

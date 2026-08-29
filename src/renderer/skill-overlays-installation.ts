@@ -19,11 +19,11 @@ type SkillFeaturePolicy = Readonly<{
 
 export function createSkillOverlaysInstallation(
   capabilities: Pick<EnhancementCapabilities, "skillSlotGeometry" | "skillCooldownObservation">,
-) {
-  const geometry = createSkillSlotGeometryInstallation(capabilities.skillSlotGeometry);
-  const cooldowns = createSkillCooldownObservationInstallation(
+  geometry = createSkillSlotGeometryInstallation(capabilities.skillSlotGeometry),
+  cooldowns = createSkillCooldownObservationInstallation(
     capabilities.skillCooldownObservation,
-  );
+  ),
+) {
   let keyConsumer: ReturnType<typeof createSkillKeyOverlayConsumer> | null = null;
   let cooldownConsumer: ReturnType<typeof createSkillCooldownOverlayConsumer> | null = null;
   let unsubscribeKeyGeometry: (() => void) | null = null;

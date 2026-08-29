@@ -6,7 +6,7 @@ import { COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/comp
 import type { EnhancementCapabilities, EnhancementProgram } from "../shared/enhancement-contracts.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { CompanionSnapshot } from "./companion-snapshot.js";
-import type { CompanionSkillSlotState } from "./companion-skill-snapshot.js";
+import { createSkillCooldownObservationInstallation } from "./skill-cooldown-state-installation.js";
 import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import type * as TeamCommandsModule from "./enhancement-team-commands.js";
 import type { ProfessionCommandTraceReader } from "./profession-command-trace.js";
@@ -19,7 +19,6 @@ import type {
 } from "./certified-companion-extension.js";
 import {
   setSkillCooldownReadiness,
-  setSkillGeometryReadiness,
 } from "./observer-readiness.js";
 import * as tools from "./certified-companion-tools.js";
 import {
@@ -44,25 +43,6 @@ function runCleanupSteps(
   if (failures.length > 0) throw new AggregateError(failures, message);
 }
 
-function reportSkillGeometry(state: CompanionSkillSlotState): void {
-  const readiness = state.status === "ready"
-    ? Object.freeze({ status: "ready" as const })
-    : Object.freeze({ status: "waiting" as const, reason: state.reason });
-  if (!setSkillGeometryReadiness(readiness)) return;
-  const fields = state.status === "ready"
-    ? { state: "ready" as const, reason: null, candidates: null }
-    : {
-      state: "waiting" as const,
-      reason: state.reason,
-      candidates: "candidateCount" in state ? state.candidateCount : null,
-    };
-  void window.gwNative.diagnostics.recordRendererMilestone(
-    "enhancement.skillGeometryState",
-    performance.now() * 1_000,
-    fields,
-  ).catch(() => {});
-}
-
 export async function prepareToolsCompanionExtension(
   exports: WebAssembly.Exports,
   capabilities: EnhancementCapabilities,
@@ -70,9 +50,9 @@ export async function prepareToolsCompanionExtension(
 ): Promise<PreparedCompanionExtension> {
   const foundation = capabilities.partyObservation;
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
-  const skills = tools.createSkillOverlaysInstallation(capabilities);
-  const slots = skills.geometry;
-  const cooldowns = skills.cooldowns;
+  const cooldowns = createSkillCooldownObservationInstallation(
+    capabilities.skillCooldownObservation,
+  );
   const enqueue = capabilities.teamApply && typeof exports.enhancement_command === "function"
     ? exports.enhancement_command as EnhancementCommandEnqueue : null;
   const traceReader = capabilities.teamApply
@@ -109,7 +89,9 @@ export async function prepareToolsCompanionExtension(
       (observeState ? COMPANION_FEATURE_BITS.gameSnapshot : 0)
       | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
       | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
-      | skills.certifiedFeatureFlags,
+      | (capabilities.skillCooldownObservation
+        ? COMPANION_FEATURE_BITS.skillCooldownObservation
+        : 0),
     memoryNeeds: {
       snapshot: observeState,
       toolbox: foundation,
@@ -120,12 +102,10 @@ export async function prepareToolsCompanionExtension(
     },
     allocate(malloc) {
       allocated = true;
-      slots?.allocate(malloc);
       cooldowns?.allocate(malloc);
       storage?.allocate(malloc);
       travel?.allocate(malloc);
-      if ((slots !== null && !slots.allocated)
-        || (cooldowns !== null && !cooldowns.allocated)
+      if ((cooldowns !== null && !cooldowns.allocated)
         || (storage !== null && !storage.region().pointer)
         || (travel !== null && !travel.region().pointer)) {
         throw new Error("Companion Tools allocation failed");
@@ -133,15 +113,12 @@ export async function prepareToolsCompanionExtension(
     },
     initialize(memory) { storage?.initialize(memory); travel?.initialize(); },
     ownedRegions: () => [
-      ...(slots?.region == null ? [] : [slots.region]),
       ...(cooldowns?.region == null ? [] : [cooldowns.region]),
       ...(storage === null ? [] : [storage.region()]),
       ...(travel === null ? [] : [travel.region()]),
     ],
     kernelRegions: {
-      get skillSlots() {
-        return slots === null ? EMPTY_REGION : { pointer: slots.pointer, bytes: slots.bytes };
-      },
+      skillSlots: EMPTY_REGION,
       get skillCooldowns() {
         return cooldowns === null
           ? EMPTY_REGION : { pointer: cooldowns.pointer, bytes: cooldowns.bytes };
@@ -149,7 +126,7 @@ export async function prepareToolsCompanionExtension(
     },
     activate(context) {
       const session = activateTools({ context, capabilities, program, foundation, observeState,
-        skills, slots, cooldowns, enqueue, traceReader, teamCommands, storage,
+        cooldowns, enqueue, traceReader, teamCommands, storage,
         travel, configureTrade, takeTrade });
       activated = true;
       return session;
@@ -157,7 +134,6 @@ export async function prepareToolsCompanionExtension(
     rollback(free) {
       if (!allocated || activated) return;
       runCleanupSteps("Companion Tools allocation rollback failed", [
-        () => slots?.release(free),
         () => cooldowns?.release(free),
         () => storage?.dispose(free),
         () => travel?.dispose(free),
@@ -172,8 +148,6 @@ type ToolsInput = Readonly<{
   program: EnhancementProgram;
   foundation: boolean;
   observeState: boolean;
-  skills: ReturnType<typeof tools.createSkillOverlaysInstallation>;
-  slots: ReturnType<typeof tools.createSkillOverlaysInstallation>["geometry"];
   cooldowns: ReturnType<typeof tools.createSkillOverlaysInstallation>["cooldowns"];
   enqueue: EnhancementCommandEnqueue | null;
   traceReader: ProfessionCommandTraceReader | null;
@@ -185,10 +159,15 @@ type ToolsInput = Readonly<{
 }>;
 
 function activateTools(input: ToolsInput): CompanionExtensionSession {
-  const { context, capabilities, program, foundation, observeState, skills,
-    slots, cooldowns, enqueue, traceReader, teamCommands, storage, travel,
+  const { context, capabilities, program, foundation, observeState,
+    cooldowns, enqueue, traceReader, teamCommands, storage, travel,
     configureTrade, takeTrade } = input;
-  const { memory, core, kernel, playRegions } = context;
+  const { memory, core, kernel, playRegions, skillGeometry } = context;
+  const skills = tools.createSkillOverlaysInstallation(
+    capabilities,
+    skillGeometry,
+    cooldowns,
+  );
   const source = tools.createCompanionPolicySource({
     program,
     readSettings: window.gwToolsSettings,
@@ -216,7 +195,6 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => { readout?.dispose(); readout = null; },
       () => toolbox?.dispose(),
       () => skills.disposePresentation(),
-      () => slots?.dispose(),
       () => cooldowns?.dispose(),
       () => { configureTrade?.(0); },
       () => professionTrace?.dispose(),
@@ -300,7 +278,10 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       | (capabilities.playRegionObservation ? COMPANION_FEATURE_BITS.playRegionObservation : 0)
       | (policy().targetReadout || cartographyActive()
         ? COMPANION_FEATURE_BITS.targetObservation : 0)
-      | skills.activeFeatureFlags,
+      | skills.activeFeatureFlags
+      | (snapshot().settings.dictationEnabled && capabilities.skillSlotGeometry
+        ? COMPANION_FEATURE_BITS.skillSlotGeometry
+        : 0),
     0, 0, 0, 0,
   );
   const syncStorage = () => storage?.update({
@@ -328,6 +309,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const syncConsumers = () => {
     syncTarget();
     skills.sync(snapshot().settings, policy());
+    if (snapshot().settings.dictationEnabled) skillGeometry.setActive(true);
     syncObservers();
     syncStorage();
     syncTravel();
@@ -380,11 +362,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       publishState: program === "target-observer",
       // Geometry is shared by both HUDs. Cooldowns must keep the slot feed
       // alive even when custom key labels are disabled.
-      skillSlots: slots?.sink == null ? null : { enabled: () => slots.active,
-        inactive: () => reportSkillGeometry(Object.freeze({
-          status: "waiting", reason: "inactive",
-        })),
-        update: (state) => { slots.sink?.update(state); reportSkillGeometry(state); } },
+      skillSlots: null,
       skillCooldowns: cooldowns?.sink == null ? null : { enabled: () => policy().skillCooldowns,
         inactive: () => { setSkillCooldownReadiness("waiting"); },
         update: (state) => {
@@ -393,7 +371,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         } },
       readers: tools.observerReaders,
       pointers: { snapshot: core.snapshot.pointer, toolbox: core.toolbox.pointer,
-        party: core.party.pointer, skillSlots: slots?.pointer ?? 0,
+        party: core.party.pointer, skillSlots: skillGeometry.pointer,
         skillCooldowns: cooldowns?.pointer ?? 0 },
     },
     beforeHook() {
@@ -429,7 +407,6 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     },
     releaseObserverMemory(free) {
       runCleanupSteps("Companion Tools observer memory cleanup failed", [
-        () => slots?.release(free),
         () => cooldowns?.release(free),
       ]);
     },

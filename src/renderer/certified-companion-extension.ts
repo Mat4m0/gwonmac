@@ -20,10 +20,12 @@ import type {
   ToolboxConsumer,
 } from "./companion-observer.js";
 import type { createPlayRegionObservationInstallation } from "./play-region-state-installation.js";
+import type { createSkillSlotGeometryInstallation } from "./skill-slot-geometry-installation.js";
 
 type CoreMemory = ReturnType<typeof allocateCompanionCoreMemory>;
 type Kernel = Awaited<ReturnType<typeof installCompanionKernel>>;
 type PlayRegions = ReturnType<typeof createPlayRegionObservationInstallation>;
+type SkillGeometry = ReturnType<typeof createSkillSlotGeometryInstallation>;
 export type KernelRegion = Readonly<{ pointer: number; bytes: number }>;
 
 export type CompanionObserverExtension = Readonly<{
@@ -63,6 +65,7 @@ export type CompanionExtensionActivation = Readonly<{
   core: CoreMemory;
   kernel: Kernel;
   playRegions: PlayRegions;
+  skillGeometry: SkillGeometry;
   capabilities: EnhancementCapabilities;
   program: EnhancementProgram;
   isCleaned(): boolean;

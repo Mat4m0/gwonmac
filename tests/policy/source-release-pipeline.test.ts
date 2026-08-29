@@ -186,6 +186,7 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   assert.equal(dmgVolumeName, "Guild Wars Reforged");
   assert.ok(Buffer.byteLength(dmgVolumeName, "utf8") <= 27);
   assert.match(signing, /com\.apple\.security\.cs\.allow-jit/);
+  assert.match(signing, /com\.apple\.security\.device\.audio-input/);
   assert.doesNotMatch(signing, /camera|microphone|location|bluetooth|usb/i);
   assert.match(forge, /\["--force", "--deep", "--sign", "-", appPath\]/);
   assert.match(workflow, /security create-keychain/);
@@ -251,7 +252,7 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   assert.match(verifier, /args\.length > 1 && !diskImage/);
 });
 
-test("release entitlements are an exact three-key allowlist", () => {
+test("release entitlements are an exact four-key allowlist", () => {
   const entitlements = read("packaging/entitlements.release.plist");
   const keys = [...entitlements.matchAll(/<key>([^<]+)<\/key>/gu)]
     .map((match) => match[1])
@@ -260,6 +261,7 @@ test("release entitlements are an exact three-key allowlist", () => {
     "com.apple.application-identifier",
     "com.apple.developer.team-identifier",
     "com.apple.security.cs.allow-jit",
+    "com.apple.security.device.audio-input",
   ]);
   assert.match(
     entitlements,

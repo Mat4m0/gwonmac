@@ -92,21 +92,29 @@ export async function applySettingsChange(
 ): Promise<AppSettings> {
   try {
     const previous = await read();
-    const restartForCapability = patch.gwonmacTools === true
-      && !toolsEnabledAtLaunch;
+    const capabilityToEnable = patch.gwonmacTools === true && !toolsEnabledAtLaunch
+      ? "tools"
+      : patch.dictationEnabled === true
+          && !previous.dictationEnabled
+          && !toolsEnabledAtLaunch
+        ? "dictation"
+        : null;
     if (
-      restartForCapability
+      capabilityToEnable !== null
       && !(await confirmAction(win, {
         confirmLabel: "Enable and Restart",
-        message: "Restart to enable Tools Beta?",
-        detail:
-          "GWonMac prepares every certified Tools capability together. Restart once to use the saved change. This closes Guild Wars if it is running.",
+        message: capabilityToEnable === "tools"
+          ? "Restart to enable Tools Beta?"
+          : "Restart to enable in-game dictation?",
+        detail: capabilityToEnable === "tools"
+          ? "GWonMac prepares every certified Tools capability together. Restart once to use the saved change. This closes Guild Wars if it is running."
+          : "The Apple language model is ready. Restart once so GWonMac can attach the microphone to the certified Guild Wars chat frame. This closes Guild Wars if it is running.",
       }))
     ) {
       return previous;
     }
     const saved = await write(patch);
-    if (restartForCapability) requestRelaunch(win, "capabilityEnable");
+    if (capabilityToEnable !== null) requestRelaunch(win, "capabilityEnable");
     return saved;
   } catch (error) {
     logEvent({ k: "settings.saveFailed", code: errorCode(error) });

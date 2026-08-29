@@ -31,6 +31,12 @@
   const controllerPromptStyle = form.elements.namedItem(
     'controllerPromptStyle',
   ) as HTMLSelectElement;
+  const dictationSetup = byId('settings-dictation-setup') as HTMLButtonElement;
+  const dictationDisable = byId('settings-dictation-disable') as HTMLButtonElement;
+  const dictationDisclosure = byId('settings-dictation-disclosure');
+  const dictationPrepare = byId('settings-dictation-prepare') as HTMLButtonElement;
+  const dictationCancel = byId('settings-dictation-cancel') as HTMLButtonElement;
+  const dictationState = byId('settings-dictation-state');
   const showDiagnostics = form.elements.namedItem(
     'showDiagnostics',
   ) as HTMLInputElement;
@@ -602,6 +608,12 @@
     uiStyle.value = settings.uiStyle;
     uiFont.value = settings.uiFont;
     controllerPromptStyle.value = settings.controllerPromptStyle;
+    dictationSetup.hidden = settings.dictationEnabled;
+    dictationDisable.hidden = !settings.dictationEnabled;
+    dictationState.textContent = settings.dictationEnabled
+      ? 'Enabled. Restart GWonMac if you enabled it during this session.'
+      : 'Off. No language model or microphone permission is requested.';
+    if (settings.dictationEnabled) dictationDisclosure.hidden = true;
     for (const { name } of appearanceRanges) {
       const range = appearanceRange(name);
       if (range) range.value = String(settings[name]);
@@ -735,6 +747,40 @@
     void window.gwNative.settings.restartForTools().catch(() => {
       setFeedback('GWonMac could not start the restart. Quit and reopen it to finish unloading Tools.', 'error');
     });
+  });
+
+  dictationSetup.addEventListener('click', () => {
+    dictationDisclosure.hidden = false;
+  });
+  dictationCancel.addEventListener('click', () => {
+    dictationDisclosure.hidden = true;
+  });
+  dictationPrepare.addEventListener('click', async () => {
+    dictationPrepare.disabled = true;
+    dictationCancel.disabled = true;
+    setFeedback('Preparing Apple on-device dictation…', 'progress');
+    try {
+      const locale = await window.gwNative.dictation.prepare();
+      const saved = await persistSettings({ dictationEnabled: true });
+      fillForm(saved);
+      setFeedback(saved.dictationEnabled
+        ? `Dictation is ready for ${locale}.`
+        : `The ${locale} model is ready. Choose Set up again when you are ready to restart GWonMac.`, 'success', 8_000);
+    } catch {
+      setFeedback('Dictation setup could not finish. It requires macOS 26 or newer and an available Apple language model.', 'error');
+    } finally {
+      dictationPrepare.disabled = false;
+      dictationCancel.disabled = false;
+    }
+  });
+  dictationDisable.addEventListener('click', async () => {
+    setFeedback('Saving…', 'progress');
+    try {
+      fillForm(await persistSettings({ dictationEnabled: false }));
+      setFeedback('Dictation is off. Apple manages any downloaded language model in macOS.', 'success', 5_000);
+    } catch {
+      await recoverSettingsAfterFailedWrite('Dictation could not be turned off.');
+    }
   });
 
   form.addEventListener('change', (event) => {

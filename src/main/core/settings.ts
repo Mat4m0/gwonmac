@@ -242,6 +242,7 @@ export function parseSettings(raw: unknown): AppSettings {
     out.buildLibrary = asBool(src.teamManagement, "teamManagement");
   }
   for (const setting of [
+    "dictationEnabled",
     "gwonmacTools",
     "cartographyOverlayEnabled",
     "cartographyGridEnabled",

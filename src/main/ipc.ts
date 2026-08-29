@@ -134,6 +134,7 @@ import {
   submitVisualCapture,
 } from "./visual-capture.js";
 import { parseDiagnosticProfile } from "./core/diagnostic-profile.js";
+import type { DictationController } from './dictation.js';
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -146,6 +147,7 @@ export interface IpcContext {
   getCacheInfo: () => Promise<CacheInfo>;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: RendererSettingsPatch) => Promise<AppSettings>;
+  dictation: DictationController;
   setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
   resetSettings: () => Promise<SettingsResetOutcome>;
   /** Whether this process started with every certified Tools capability prepared. */
@@ -516,6 +518,16 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     settingsRestartForTools: channel(nothing, (win) =>
       requestToolsUnloadRestart(win)),
+
+    dictationPrepare: channel(nothing, (win) => ctx.dictation.prepare(win)),
+    dictationStart: channel(nothing, async (win) => {
+      if (!(await ctx.getSettings()).dictationEnabled) {
+        throw new ValidationError('dictation is disabled');
+      }
+      await ctx.dictation.start(win);
+    }),
+    dictationFinish: channel(nothing, (win) => ctx.dictation.finish(win)),
+    dictationCancel: channel(nothing, (win) => ctx.dictation.cancel(win)),
 
     shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
     shortcutCaptureCancel: channel(nothing, (win) => {

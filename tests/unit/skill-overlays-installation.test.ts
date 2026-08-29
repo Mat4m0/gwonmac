@@ -48,6 +48,9 @@ test("skill policy activates and withdraws only the observation regions it needs
     status: "ready",
     sequence: 2,
     frameId: 1,
+    chatFrameId: 0,
+    chatInput: null,
+    skillSlotsReady: true,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({
@@ -66,6 +69,9 @@ test("skill policy activates and withdraws only the observation regions it needs
     status: "ready",
     sequence: 2,
     frameId: 2,
+    chatFrameId: 0,
+    chatInput: null,
+    skillSlotsReady: true,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({
@@ -84,6 +90,9 @@ test("skill policy activates and withdraws only the observation regions it needs
     status: "ready",
     sequence: 4,
     frameId: 2,
+    chatFrameId: 0,
+    chatInput: null,
+    skillSlotsReady: true,
     viewportWidth: 800,
     viewportHeight: 600,
     slots: Object.freeze(Array.from({ length: 8 }, (_, index) => Object.freeze({

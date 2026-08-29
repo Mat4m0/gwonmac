@@ -18,6 +18,7 @@ const MAX_FRAMES: u32 = 16_384;
 const CACHE_AUDIT_TICKS: u32 = 30;
 const CREATED: u32 = 0x4;
 const HIDDEN: u32 = 0x200;
+const FLAG_CHAT_INPUT_READY: u32 = 1 << 1;
 #[derive(Clone, Copy)]
 #[repr(u32)]
 enum Outcome {
@@ -279,10 +280,32 @@ unsafe fn collect(layout: Layout, skill_bar_id: u32) -> Result<Observation, Refu
     Ok(observed)
 }
 
-unsafe fn publish(frame_id: u32, observed: Result<Observation, Refusal>) {
+unsafe fn collect_chat(
+    layout: Layout,
+    chat_frame_id: u32,
+) -> Result<(SkillSlotRect, f32, f32), Refusal> {
+    if chat_frame_id == 0 || !valid_layout(layout) {
+        return Err(refuse(Outcome::InvalidInput));
+    }
+    let (array, count) = unsafe { frame_table(layout) }
+        .ok_or_else(|| refuse(Outcome::FrameTable))?;
+    let frame = unsafe { frame_at(layout, array, count, chat_frame_id) }
+        .ok_or_else(|| refuse(Outcome::ParentMissing))?;
+    if !unsafe { visible(layout, frame) } {
+        return Err(refuse(Outcome::ParentHidden));
+    }
+    unsafe { rect(layout, frame) }.map_err(refuse)
+}
+
+unsafe fn publish(
+    frame_id: u32,
+    observed: Result<Observation, Refusal>,
+    chat_frame_id: u32,
+    chat_observed: Result<(SkillSlotRect, f32, f32), Refusal>,
+) {
     let next = unsafe { SEQUENCE }.wrapping_add(2) & !1;
     let snapshot = unsafe { POINTER as *mut SkillSlotSnapshot };
-    let (flags, outcome, candidate_count, viewport_width, viewport_height, slots) = match observed {
+    let (mut flags, outcome, candidate_count, viewport_width, viewport_height, slots) = match observed {
         Ok((width, height, slots)) => (FLAG_SKILL_SLOTS_READY, 0, 0, width, height, slots),
         Err(refusal) => (
             0,
@@ -293,17 +316,35 @@ unsafe fn publish(frame_id: u32, observed: Result<Observation, Refusal>) {
             [EMPTY_RECT; 8],
         ),
     };
+    // Chat frames can carry a local clipping viewport while their screen
+    // bounds remain in the global interface coordinate space. The certified
+    // skill viewport is the projection source; requiring the local sizes to
+    // match discarded the real movable chat editor.
+    let (published_chat_id, chat_outcome, chat_input) = match chat_observed {
+        Ok((bounds, _, _)) if flags & FLAG_SKILL_SLOTS_READY != 0 => {
+            flags |= FLAG_CHAT_INPUT_READY;
+            (chat_frame_id, 0, bounds)
+        }
+        Ok(_) => (0, Outcome::ViewportMismatch as u32, EMPTY_RECT),
+        Err(refusal) => (0, refusal.outcome as u32, EMPTY_RECT),
+    };
     unsafe {
         write_volatile(&mut (*snapshot).sequence, next.wrapping_sub(1));
         write_volatile(&mut (*snapshot).magic, SKILL_SLOT_MAGIC);
         write_volatile(&mut (*snapshot).abi_and_size, SKILL_SLOT_ABI_AND_SIZE);
         write_volatile(&mut (*snapshot).flags, flags);
-        write_volatile(&mut (*snapshot).frame_id, if flags == 0 { 0 } else { frame_id });
+        write_volatile(
+            &mut (*snapshot).frame_id,
+            if flags & FLAG_SKILL_SLOTS_READY == 0 { 0 } else { frame_id },
+        );
         write_volatile(&mut (*snapshot).outcome, outcome);
         write_volatile(&mut (*snapshot).candidate_count, candidate_count);
         write_volatile(&mut (*snapshot).viewport_width, viewport_width);
         write_volatile(&mut (*snapshot).viewport_height, viewport_height);
         write_volatile(&mut (*snapshot).slots, slots);
+        write_volatile(&mut (*snapshot).chat_frame_id, published_chat_id);
+        write_volatile(&mut (*snapshot).chat_outcome, chat_outcome);
+        write_volatile(&mut (*snapshot).chat_input, chat_input);
         write_volatile(&mut (*snapshot).sequence, next);
         SEQUENCE = next;
     }
@@ -321,10 +362,18 @@ pub(crate) unsafe fn initialize(pointer: u32) {
     for index in 0..SKILL_SLOT_BYTES / 4 {
         unsafe { write_volatile((pointer + index * 4) as *mut u32, 0) };
     }
-    unsafe { publish(0, Err(refuse(Outcome::Inactive))) };
+    unsafe {
+        publish(
+            0,
+            Err(refuse(Outcome::Inactive)),
+            0,
+            Err(refuse(Outcome::Inactive)),
+        )
+    };
 }
 
-pub(crate) unsafe fn tick(layout: Layout, skill_bar_id: u32) {
+pub(crate) unsafe fn tick(layout: Layout, skill_bar_id: u32, chat_frame_id: u32) {
     let observed = unsafe { collect(layout, skill_bar_id) };
-    unsafe { publish(skill_bar_id, observed) };
+    let chat_observed = unsafe { collect_chat(layout, chat_frame_id) };
+    unsafe { publish(skill_bar_id, observed, chat_frame_id, chat_observed) };
 }
