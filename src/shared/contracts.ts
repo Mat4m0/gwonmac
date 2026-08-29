@@ -42,7 +42,6 @@ import type {
 import type {
   AccountProfileCreateRequest,
   AccountProfileUpdateRequest,
-  AccountsSetupRequest,
   AccountsState,
   AccountTemplateLibrary,
 } from "./accounts-contracts.js";
@@ -99,7 +98,6 @@ export type {
   AccountProfileRequest,
   AccountProfileSummary,
   AccountProfileUpdateRequest,
-  AccountsSetupRequest,
   AccountsState,
   AccountTemplateLibrary,
   MultiProfileRuntimeState,
@@ -986,7 +984,7 @@ export const CORE_IPC = {
   appUpdatesRestartAndInstall: "gw:appUpdates:restartAndInstall",
   appUpdatesState: "gw:appUpdates:state",
   accountsGet: "gw:accounts:get",
-  accountsSetup: "gw:accounts:setup",
+  accountsState: "gw:accounts:state",
   accountsOpen: "gw:accounts:open",
   accountsCreate: "gw:accounts:create",
   accountsUpdate: "gw:accounts:update",
@@ -995,7 +993,6 @@ export const CORE_IPC = {
   accountsDelete: "gw:accounts:delete",
   accountsTemplatesLoad: "gw:accounts:templatesLoad",
   accountsTemplatesSave: "gw:accounts:templatesSave",
-  accountsUseSingle: "gw:accounts:useSingle",
 } as const;
 
 /** Channels and events that exist only in a Tools-capable launch. */
@@ -1041,6 +1038,7 @@ export const EVENT_CHANNELS = [
   "rendererCommandDone",
   "inputTraceEvent",
   "appUpdatesState",
+  "accountsState",
 ] as const;
 
 /** Channels present only in the Tools preload and Tools main runtime. */
@@ -1247,7 +1245,7 @@ export interface CoreGwNativeApiBase {
   };
   accounts: {
     get(): Promise<AccountsState>;
-    setup(value: AccountsSetupRequest): Promise<void>;
+    onChange(callback: (state: AccountsState) => void): () => void;
     open(profileIds: readonly ProfileId[]): Promise<void>;
     create(value: AccountProfileCreateRequest): Promise<AccountsState>;
     update(value: AccountProfileUpdateRequest): Promise<AccountsState>;
@@ -1256,7 +1254,6 @@ export interface CoreGwNativeApiBase {
     delete(profileId: ProfileId): Promise<AccountsState>;
     loadTemplates(): Promise<AccountTemplateLibrary | null>;
     saveTemplates(entries: readonly TemplateExportEntry[]): Promise<void>;
-    useSingle(): Promise<void>;
   };
 }
 

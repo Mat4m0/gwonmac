@@ -18,7 +18,7 @@ import {
   systemPreferences,
 } from "electron";
 import { readFileSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { access, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   EXTERNAL_URLS,
@@ -84,12 +84,8 @@ import {
   enhancementSelectionFor,
   requestedEnhancementCapabilities,
 } from "./certification/enhancement-policy.js";
+import { registerGwScheme } from "./protocol.js";
 import {
-  installGwProtocolHandler,
-  registerGwScheme,
-} from "./protocol.js";
-import {
-  createMainWindow,
   flushWindowState,
   prepareWindowState,
   RENDERER_URL,
@@ -126,19 +122,15 @@ import {
 } from "./settings-actions.js";
 import { windowRegistry } from "./window-registry.js";
 import {
+  bootstrapAccountWorkspace,
   loadAccountMode,
-  loadMultiWorkspace,
-  quarantineAccountDocument,
-  saveAccountMode,
 } from "./core/multiple-accounts.js";
-import type { AccountMode, MultiWorkspace } from "../shared/multiple-accounts.js";
-import {
-  createAccountsWindow,
-  revealAccountsWindow,
-} from "./accounts-window.js";
+import { createLauncherWindow } from "./accounts-window.js";
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
+import { WindowCoordinator } from "./window-coordinator.js";
 import { GameReloader } from "./game-reload.js";
 import { updateToolsMenuItems } from "./window-menu.js";
+import { resolveAdoptedProfileStorage } from "./core/profile-storage.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -187,22 +179,21 @@ const rendererClientSessions = new RendererClientSessions<BrowserWindow>();
 const SINGLE_DIAGNOSTIC_OWNER_ID = 1;
 let updateRestartInFlight: Promise<void> | null = null;
 let secondInstanceRequested = false;
-let activeAccountMode: AccountMode = "single";
+const windowCoordinator = new WindowCoordinator(
+  {
+    ...(app.dock ? { dock: app.dock } : {}),
+    focus: (options) => app.focus(options),
+  },
+  windowRegistry,
+);
 const INJECT_STARTUP_FAILURE =
   !app.isPackaged && process.env.GW_TEST_STARTUP_FAILURE === "1";
 
 function revealMainWindow(): void {
-  if (activeAccountMode === "multi" && revealAccountsWindow()) return;
-  const win = windowRegistry.singleGameWindow();
-  if (!win) {
+  if (!windowCoordinator.revealLauncher({ activateApp: true })) {
     secondInstanceRequested = true;
-    return;
   }
-  secondInstanceRequested = false;
-  app.dock?.show();
-  if (win.isMinimized()) win.restore();
-  if (!win.isVisible()) win.show();
-  win.focus();
+  else secondInstanceRequested = false;
 }
 
 /** The one application-update action; AppUpdater owns every outcome. */
@@ -271,16 +262,16 @@ function buildSocketManager(): SocketManager {
 }
 
 function setProgress(next: DownloadProgress): void {
-  const gameWindows = windowRegistry.gameWindows();
-  if (gameWindows.length === 0) updateLongRunningTaskFeedback(next, null);
+  const windows = windowRegistry.windows();
+  if (windows.length === 0) updateLongRunningTaskFeedback(next, null);
   else {
-    for (const win of gameWindows) updateLongRunningTaskFeedback(next, win);
+    for (const win of windows) updateLongRunningTaskFeedback(next, win);
   }
   sendToRenderer(IPC.progressEvent, next);
 }
 
 function sendToRenderer(channel: string, value: unknown): void {
-  for (const win of windowRegistry.gameWindows()) {
+  for (const win of windowRegistry.windows()) {
     if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
     try {
       win.webContents.send(channel, value);
@@ -321,7 +312,35 @@ function packagedDistributionChannel(): DistributionChannel | null {
   }
 }
 
-async function ensureDirs(mode: AccountMode): Promise<void> {
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Classify released Single data before the candidate publishes any owner. */
+async function hasReleasedSingleData(paths: ReturnType<typeof gamePaths>): Promise<boolean> {
+  if (await pathExists(paths.launcherMode)) {
+    try {
+      return await loadAccountMode(paths.launcherMode) === "single";
+    } catch {
+      // The old mode document is not operational state anymore. Preserve it
+      // byte-for-byte and fall back to canonical Single-owned evidence.
+    }
+  }
+  return (await Promise.all([
+    paths.settings,
+    paths.buildLibrary,
+    paths.windowState,
+    path.join(paths.userData, "IndexedDB"),
+    path.join(paths.userData, "Local Storage"),
+  ].map(pathExists))).some(Boolean);
+}
+
+async function ensureDirs(): Promise<void> {
   const paths = gamePaths();
   await mkdir(paths.game, { recursive: true });
   await mkdir(paths.chunks, { recursive: true });
@@ -331,7 +350,7 @@ async function ensureDirs(mode: AccountMode): Promise<void> {
   // write and rename leaves `<name>.<pid>.<hex>.tmp` behind, and boot is the
   // only moment at which every one of those directories is known to be idle.
   const roots = documentDirectories(paths);
-  if (mode === "multi") roots.push(paths.multiRoot, paths.multiProfiles);
+  roots.push(paths.multiRoot, paths.multiProfiles);
   const removed = await sweepOrphanDirectories(roots);
   if (removed > 0) logEvent({ k: "orphanTemps.swept", removed });
 }
@@ -411,7 +430,7 @@ function buildWindowHost(
       await clientRuntime.recoverRendererCrash();
     },
     gameWindowClosed: () => {
-      if (activeAccountMode === "multi") revealAccountsWindow();
+      windowCoordinator.afterGameClosed();
     },
   };
 }
@@ -468,81 +487,36 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   app.once("will-quit", () => stopCommandKeyUps());
   const paths = gamePaths();
-  try {
-    activeAccountMode = await loadAccountMode(paths.launcherMode);
-  } catch {
-    const { response } = await dialog.showMessageBox({
-      type: "warning",
-      buttons: ["Open Single Account Mode", "Quit"],
-      defaultId: 0,
-      cancelId: 1,
-      message: "Account mode settings are damaged",
-      detail:
-        "GWonMac can preserve the damaged file and restart in Single Account mode. Your saved login, templates, builds, and downloaded game data will not be changed.",
-    });
-    if (response !== 0) {
-      app.quit();
-      return;
-    }
-    await quarantineAccountDocument(paths.launcherMode);
-    await saveAccountMode(paths.launcherMode, "single");
-    app.relaunch();
-    app.quit();
-    return;
-  }
-  // The registry is safe to inspect from Single mode for the explicit Accounts
-  // settings pane. Its sessions, libraries, and Keychain items remain closed.
-  let multiWorkspace: MultiWorkspace | null;
-  try {
-    multiWorkspace = await loadMultiWorkspace(paths.multiWorkspace);
-  } catch {
-    if (activeAccountMode === "multi") {
+  const legacySingleData = await hasReleasedSingleData(paths);
+  let accountWorkspace;
+  for (;;) {
+    try {
+      accountWorkspace = await bootstrapAccountWorkspace(
+        paths.multiWorkspace,
+        legacySingleData,
+      );
+      break;
+    } catch {
       const { response } = await dialog.showMessageBox({
         type: "warning",
-        buttons: ["Open Single Account Mode", "Quit"],
+        buttons: ["Retry", "Quit"],
         defaultId: 0,
         cancelId: 1,
-        message: "Multiple Accounts profiles are damaged",
+        message: "Account profiles could not be opened",
         detail:
-          "GWonMac can preserve the damaged workspace and restart in Single Account mode. Single Account data and profile Keychain items will not be changed.",
+          "No account data was changed. Retry after fixing the workspace, or quit and report the problem.",
       });
-      if (response !== 0) {
-        app.quit();
-        return;
-      }
-      await quarantineAccountDocument(paths.multiWorkspace);
-      await saveAccountMode(paths.launcherMode, "single");
-      app.relaunch();
+      if (response === 0) continue;
       app.quit();
       return;
     }
-    await quarantineAccountDocument(paths.multiWorkspace);
-    multiWorkspace = null;
   }
-  if (activeAccountMode === "multi" && !multiWorkspace) {
-    const { response } = await dialog.showMessageBox({
-      type: "warning",
-      buttons: ["Open Single Account Mode", "Quit"],
-      defaultId: 0,
-      cancelId: 1,
-      message: "Multiple Accounts profiles are missing",
-      detail:
-        "Restart in Single Account mode without changing its saved login, templates, builds, or Guild Wars files.",
-    });
-    if (response !== 0) {
-      app.quit();
-      return;
-    }
-    await saveAccountMode(paths.launcherMode, "single");
-    app.relaunch();
-    app.quit();
-    return;
-  }
+  const adoptedStorage = resolveAdoptedProfileStorage(accountWorkspace, paths);
   await applyPendingCacheClear(paths);
-  if (activeAccountMode === "single") {
+  if (adoptedStorage) {
     await applyPendingGameStorageReset(paths, SINGLE_DIAGNOSTIC_OWNER_ID);
   }
-  await ensureDirs(activeAccountMode);
+  await ensureDirs();
   await startDiagnostics();
   const distributionChannel = packagedDistributionChannel();
   const distribution = distributionCapabilities(distributionChannel);
@@ -556,7 +530,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     && distribution.persistentSecrets
     && !app.commandLine.hasSwitch("gw-volatile-secrets");
   if (
-    activeAccountMode === "single"
+    adoptedStorage
     && persistentSecrets
     && distribution.cleanupLegacySecrets
   ) {
@@ -568,7 +542,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       logEvent({ k: "legacySecrets.cleanupFailed", code: errorCode(failure) });
     }
   }
-  if (activeAccountMode === "single") {
+  if (adoptedStorage) {
     await clearBrowserCookies("startup");
     await clearBrowserNetworkCache();
   }
@@ -600,8 +574,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     diagnosticProfile,
     requestedProfile: enhancementCapabilityProfile(enhancementCapabilities),
   });
-  if (activeAccountMode === "single") {
-    await prepareWindowState(SINGLE_DIAGNOSTIC_OWNER_ID);
+  if (adoptedStorage) {
+    await prepareWindowState(SINGLE_DIAGNOSTIC_OWNER_ID, adoptedStorage.windowState);
   }
   const keychain: NativeKeychain = persistentSecrets
     ? nativeHost
@@ -674,11 +648,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getActiveClient: () => clientRuntime.active,
     diagnosticOwnerId: () => SINGLE_DIAGNOSTIC_OWNER_ID,
   };
-  if (activeAccountMode === "single") {
-    installGwProtocolHandler(protocolDeps);
-    logEvent({ k: "protocol.installed" });
-  }
-
   const host = buildWindowHost(
     clientRuntime,
     sockets,
@@ -687,13 +656,17 @@ if (primaryInstance) void app.whenReady().then(async () => {
     diagnosticProfile,
   );
   const accounts = new MultipleAccountsController({
-    mode: activeAccountMode,
-    workspace: multiWorkspace,
+    workspace: accountWorkspace,
     paths,
     keychain,
     clientRuntime,
     protocol: protocolDeps,
     windowHost: host,
+    windows: windowCoordinator,
+    publishState: (state) => sendToRenderer(IPC.accountsState, state),
+    allowUnreadyLaunch:
+      (!app.isPackaged || distributionChannel === null)
+      && process.env.GW_TEST_ALLOW_UNREADY_LAUNCH === "1",
   });
   await accounts.resumePendingDeletions();
   const toolsRuntime = enhancementSelection.tools
@@ -794,7 +767,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     acquireSteamToken: (parent, record) =>
       acquireSteamToken(STEAM_OAUTH, { parent, record }),
     getAccountsState: () => accounts.state(),
-    setupAccounts: (request) => accounts.setup(request),
     openAccounts: (profileIds) => accounts.open(profileIds),
     createAccount: (request) => accounts.create(request),
     updateAccount: (request) => accounts.update(request),
@@ -806,13 +778,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
     requestQuit: requestGameQuit,
     reloadGame: (win, cause) => host.reloadGame(win, cause),
     claimRelogIntent: (win) => host.claimRelogIntent(win),
-    useSingleAccountMode: () => accounts.useSingleMode(),
   });
 
   onAppQuit(async () => {
-    if (activeAccountMode === "single") {
-      const win = windowRegistry.singleGameWindow();
-      if (win && !win.isDestroyed()) {
+    const gameWindows = windowRegistry.gameWindows();
+    await Promise.all(gameWindows.map(async (win) => {
+      if (!win.isDestroyed()) {
         const outcome = await sendRendererCommand(win, {
           type: "filesystem.sync",
         });
@@ -820,37 +791,19 @@ if (primaryInstance) void app.whenReady().then(async () => {
           logEvent({ k: "quit.rendererSyncIncomplete", outcome });
         }
       }
-      await ipcCleanup.drainSecrets();
-      if (win) await flushWindowState(win);
-    } else {
-      const gameWindows = windowRegistry.gameWindows();
-      await Promise.all(gameWindows.map(async (win) => {
-        if (win.isDestroyed()) return;
-        const outcome = await sendRendererCommand(win, {
-          type: "filesystem.sync",
-        });
-        if (outcome !== "completed") {
-          logEvent({ k: "quit.rendererSyncIncomplete", outcome });
-        }
-      }));
-      await ipcCleanup.drainSecrets();
-      await Promise.all(gameWindows.map((win) => flushWindowState(win)));
-    }
+    }));
+    await ipcCleanup.drainSecrets();
+    await Promise.all(gameWindows.map((win) => flushWindowState(win)));
     sockets.closeAll();
     await toolsRuntime?.dispose();
     applyToolsSettings = null;
     updateLongRunningTaskFeedback(INITIAL_PROGRESS, null);
     await clientRuntime.shutdown();
-    if (activeAccountMode === "single") await clearBrowserCookies("quit");
+    if (adoptedStorage) await clearBrowserCookies("quit");
     await stopDiagnostics();
   });
 
-  const win = activeAccountMode === "multi"
-    ? createAccountsWindow(protocolDeps)
-    : createMainWindow(host, {
-        context: { mode: "single", role: "game" },
-        diagnosticOwnerId: SINGLE_DIAGNOSTIC_OWNER_ID,
-      });
+  const win = createLauncherWindow(protocolDeps, windowCoordinator);
   // The same persisted due-time governs launch and background checks. A player
   // who restarts repeatedly therefore does not spend another network request
   // until the previous settled attempt is six hours old.
@@ -931,13 +884,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
   }
 
   app.on("activate", () => {
-    if (activeAccountMode === "multi") {
-      if (!revealAccountsWindow()) createAccountsWindow(protocolDeps);
-    } else if (!windowRegistry.singleGameWindow()) {
-      createMainWindow(host, {
-        context: { mode: "single", role: "game" },
-        diagnosticOwnerId: SINGLE_DIAGNOSTIC_OWNER_ID,
-      });
+    if (!windowCoordinator.revealLauncher({ activateApp: true })) {
+      createLauncherWindow(protocolDeps, windowCoordinator);
     }
   });
   app.on("child-process-gone", (_event, details) => {

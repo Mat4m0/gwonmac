@@ -63,12 +63,6 @@
   const toolsOff = byId('settings-tools-off');
   const toolsRestartRequired = byId('settings-tools-restart-required');
   const toolsRestart = byId('settings-tools-restart') as HTMLButtonElement;
-  const accountsEnable = byId('accounts-enable') as HTMLButtonElement;
-  const accountsStatus = byId('accounts-setup-status');
-  const accountsModeStatus = byId('accounts-mode-status');
-  const accountsSingleSetup = byId('accounts-single-setup');
-  const accountsMultiActive = byId('accounts-multi-active');
-  const accountsReturnSingle = byId('accounts-return-single') as HTMLButtonElement;
   /**
    * The appearance slider beside the `output` that reads it back.
    *
@@ -319,16 +313,6 @@
       feedback: setFeedback,
       copy: (text) => window.gwNative.clipboard.writeText(text),
     }));
-  void import('./settings-accounts.js').then((module) =>
-    module.bindAccountSettings({
-      enable: accountsEnable,
-      status: accountsStatus,
-      modeStatus: accountsModeStatus,
-      singleSetup: accountsSingleSetup,
-      multiActive: accountsMultiActive,
-      returnSingle: accountsReturnSingle,
-    }));
-
   const extendedMemorySetting = import('./extended-memory-setting.js')
     .then((module) => module.bindExtendedMemorySetting(document));
   const gameData = import('./settings-game-data.js')

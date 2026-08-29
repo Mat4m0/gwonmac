@@ -25,9 +25,8 @@ describe("window registry", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
     const win = fake(7);
     const profileId = parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae");
-    registry.register(win, { mode: "multi", role: "game", profileId }, 7);
+    registry.register(win, { role: "game", profileId }, 7);
     assert.deepEqual(registry.contextForWebContents(7), {
-      mode: "multi",
       role: "game",
       profileId,
     });
@@ -39,13 +38,13 @@ describe("window registry", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
     const profileId = parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae");
     const first = fake(7);
-    registry.register(first, { mode: "multi", role: "game", profileId }, 42);
+    registry.register(first, { role: "game", profileId }, 42);
     assert.equal(registry.diagnosticOwnerForWebContents(7), 42);
     registry.unregister(first);
     const replacement = fake(8);
     registry.register(
       replacement,
-      { mode: "multi", role: "game", profileId },
+      { role: "game", profileId },
       42,
     );
     assert.equal(registry.diagnosticOwnerForWindow(replacement), 42);
@@ -55,9 +54,11 @@ describe("window registry", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
     const first = fake(7, 700);
     const second = fake(8, 800);
-    registry.register(first, { mode: "single", role: "game" }, 101);
+    registry.register(first, {
+      role: "game",
+      profileId: parseProfileId("c153668f-ed81-46b9-aa0c-da22a6342446"),
+    }, 101);
     registry.register(second, {
-      mode: "multi",
       role: "game",
       profileId: parseProfileId("b2521fbf-50a8-424c-823a-bd5be4b58ace"),
     }, 202);
@@ -68,9 +69,11 @@ describe("window registry", () => {
 
   it("refuses to assign a renderer process shared by different owners", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
-    registry.register(fake(7, 700), { mode: "single", role: "game" }, 101);
+    registry.register(fake(7, 700), {
+      role: "game",
+      profileId: parseProfileId("c153668f-ed81-46b9-aa0c-da22a6342446"),
+    }, 101);
     registry.register(fake(8, 700), {
-      mode: "multi",
       role: "game",
       profileId: parseProfileId("b2521fbf-50a8-424c-823a-bd5be4b58ace"),
     }, 202);
@@ -81,23 +84,26 @@ describe("window registry", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
     const profileId = parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae");
     const first = fake(1);
-    registry.register(first, { mode: "multi", role: "game", profileId }, 1);
+    registry.register(first, { role: "game", profileId }, 1);
     assert.throws(
       () => registry.register(
         fake(2),
-        { mode: "multi", role: "game", profileId },
+        { role: "game", profileId },
         2,
       ),
       AppError,
     );
     first.destroy();
-    registry.register(fake(2), { mode: "multi", role: "game", profileId }, 2);
+    registry.register(fake(2), { role: "game", profileId }, 2);
   });
 
   it("unregisters only the exact native window", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
     const win = fake(1);
-    registry.register(win, { mode: "single", role: "game" }, 1);
+    registry.register(win, {
+      role: "game",
+      profileId: parseProfileId("c153668f-ed81-46b9-aa0c-da22a6342446"),
+    }, 1);
     registry.unregister(fake(1));
     assert.notEqual(registry.contextForWebContents(1), null);
     registry.unregister(win);
@@ -115,7 +121,10 @@ describe("window registry", () => {
       isFocused: () => false,
     };
     const registry = new WindowRegistry<typeof win>();
-    registry.register(win, { mode: "single", role: "game" }, 1);
+    registry.register(win, {
+      role: "game",
+      profileId: parseProfileId("c153668f-ed81-46b9-aa0c-da22a6342446"),
+    }, 1);
     readable = false;
     assert.doesNotThrow(() => registry.unregister(win));
     assert.equal(registry.contextForWebContents(1), null);
@@ -123,15 +132,14 @@ describe("window registry", () => {
 
   it("does not return destroyed windows", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
-    const hub = fake(1);
+    const launcher = fake(1);
     const game = fake(2);
-    registry.register(hub, { mode: "multi", role: "hub" });
+    registry.register(launcher, { role: "launcher" });
     assert.throws(
-      () => registry.requireDiagnosticOwnerForWindow(hub),
+      () => registry.requireDiagnosticOwnerForWindow(launcher),
       AppError,
     );
     registry.register(game, {
-      mode: "multi",
       role: "game",
       profileId: parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae"),
     }, 2);
@@ -141,20 +149,21 @@ describe("window registry", () => {
     assert.equal(registry.windows().length, 1);
   });
 
-  it("owns the one Single game window and the one Multiple Accounts Hub", () => {
+  it("owns one launcher and one game window per profile", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
-    const single = fake(1);
-    const hub = fake(2);
-    registry.register(single, { mode: "single", role: "game" }, 1);
-    registry.register(hub, { mode: "multi", role: "hub" });
-    assert.equal(registry.singleGameWindow(), single);
-    assert.equal(registry.hubWindow(), hub);
+    const game = fake(1);
+    const launcher = fake(2);
+    const profileId = parseProfileId("c153668f-ed81-46b9-aa0c-da22a6342446");
+    registry.register(game, { role: "game", profileId }, 1);
+    registry.register(launcher, { role: "launcher" });
+    assert.equal(registry.profileWindow(profileId), game);
+    assert.equal(registry.launcherWindow(), launcher);
     assert.throws(
-      () => registry.register(fake(3), { mode: "single", role: "game" }, 3),
+      () => registry.register(fake(3), { role: "game", profileId }, 3),
       AppError,
     );
     assert.throws(
-      () => registry.register(fake(4), { mode: "multi", role: "hub" }),
+      () => registry.register(fake(4), { role: "launcher" }),
       AppError,
     );
   });
@@ -167,7 +176,10 @@ describe("window registry", () => {
       isFocused: () => focused,
     };
     const registry = new WindowRegistry<typeof win>();
-    registry.register(win, { mode: "single", role: "game" }, 7);
+    registry.register(win, {
+      role: "game",
+      profileId: parseProfileId("c153668f-ed81-46b9-aa0c-da22a6342446"),
+    }, 7);
     assert.equal(registry.windowForWebContents(7), win);
     assert.equal(registry.windowForWebContents(8), null);
     assert.equal(registry.focusedWindow(), null);
@@ -181,12 +193,10 @@ describe("window registry", () => {
   it("refuses an ambiguous game selection", () => {
     const registry = new WindowRegistry<ReturnType<typeof fake>>();
     registry.register(fake(1), {
-      mode: "multi",
       role: "game",
       profileId: parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae"),
     }, 1);
     registry.register(fake(2), {
-      mode: "multi",
       role: "game",
       profileId: parseProfileId("b2521fbf-50a8-424c-823a-bd5be4b58ace"),
     }, 2);

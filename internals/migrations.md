@@ -1,5 +1,21 @@
 # Active migrations
 
+## Adopted Main account storage
+
+- Why: the unified launcher must present released Single Account data as a
+  profile without copying or moving the default Electron session, fixed
+  Keychain items, root builds, templates, reset marker, or window state. An
+  additive v1 workspace marker identifies that virtual profile; supported
+  Stable builds ignore the field and keep their canonical data untouched.
+- Introduced: 2026-08-29 with the unified launcher foundation.
+- Depends on it: installations created before the unified launcher and the
+  supported rollback Stable that still starts from `launcher-mode.json`.
+- Remove when: the rollback Stable is outside support and a signed migration
+  has copied and verified the default-session and fixed-Keychain owners into a
+  normal profile partition. Remove the storage adapter, additive marker,
+  rollback tests, and this entry together.
+- Related issue: none yet.
+
 ## Apply-Team rollback projection
 
 - Why: the supported rollback Stable still reads `teamManagement`, so the

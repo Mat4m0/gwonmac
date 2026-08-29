@@ -21,7 +21,6 @@ import {
   IPC,
   type AppSettings,
   type AppSettingsPatch,
-  type AccountsSetupRequest,
   type AccountProfileCreateRequest,
   type AccountProfileUpdateRequest,
   type AccountTemplateLibrary,
@@ -73,7 +72,6 @@ import {
 import {
   parseAccountProfileCreate,
   parseAccountProfileUpdate,
-  parseAccountsSetup,
   parseProfileIds,
 } from "./accounts-ipc-values.js";
 import { resolveDns } from "./core/dns.js";
@@ -167,7 +165,6 @@ export interface IpcContext {
     record: (event: SteamAcquireEvent) => void,
   ) => Promise<SteamAcquireResult>;
   getAccountsState: () => AccountsState;
-  setupAccounts: (request: AccountsSetupRequest) => Promise<void>;
   openAccounts: (profileIds: readonly ProfileId[]) => Promise<void>;
   createAccount: (request: AccountProfileCreateRequest) => Promise<AccountsState>;
   updateAccount: (request: AccountProfileUpdateRequest) => Promise<AccountsState>;
@@ -177,7 +174,6 @@ export interface IpcContext {
     parent: BrowserWindow,
     profileId: ProfileId,
   ) => Promise<AccountsState>;
-  useSingleAccountMode: () => Promise<void>;
   requestQuit: (win: BrowserWindow) => void;
   reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
   claimRelogIntent: (win: BrowserWindow) => boolean;
@@ -420,7 +416,6 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   return value;
 });
 
-const asAccountsSetup = one(parseAccountsSetup);
 const asAccountProfileCreate = one(parseAccountProfileCreate);
 const asAccountProfileUpdate = one(parseAccountProfileUpdate);
 const asProfileId = one(parseProfileId);
@@ -432,6 +427,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
 } {
   const paths = gamePaths();
   const secretOperations = new Set<Promise<unknown>>();
+  const connectedLaunchers = new WeakSet<BrowserWindow>();
   const secretOperation = <T>(operation: () => Promise<T>): Promise<T> => {
     if (isQuitting()) {
       return Promise.reject(new ValidationError("application is quitting"));
@@ -451,7 +447,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
    * `channel()` cannot be called without a parser.
    */
   const handlers = {
-    progressCurrent: channel(nothing, () => ctx.getProgress()),
+    progressCurrent: channel(nothing, () => ctx.getProgress(), "any"),
 
     snapshotMetadata: channel(nothing, () => ctx.getSnapshotMetadata()),
 
@@ -696,7 +692,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
       return result;
     }),
 
-    clientRetry: channel(nothing, () => ctx.retryClient()),
+    clientRetry: channel(nothing, () => ctx.retryClient(), "any"),
 
     clientHealthy: channel(asClientHealthToken, (_win, token) =>
       ctx.confirmClientHealthy(token),
@@ -708,55 +704,52 @@ export function registerIpcHandlers(ctx: IpcContext): {
       ctx.recordClientFeatureFailure(win, features),
     ),
 
-    appUpdatesGetState: channel(nothing, () => ctx.getAppUpdateState()),
-    appUpdatesCheck: channel(nothing, () => ctx.checkAppUpdates()),
+    appUpdatesGetState: channel(nothing, () => ctx.getAppUpdateState(), "any"),
+    appUpdatesCheck: channel(nothing, () => ctx.checkAppUpdates(), "any"),
     appUpdatesRestartAndInstall: channel(
       nothing,
       (win) => ctx.restartAndInstallUpdate(win),
     ),
     accountsGet: channel(
       nothing,
-      () => ctx.getAccountsState(),
-      "any",
-    ),
-    accountsSetup: channel(
-      asAccountsSetup,
-      (_win, request) => ctx.setupAccounts(request),
+      (win) => {
+        if (!connectedLaunchers.has(win)) {
+          connectedLaunchers.add(win);
+          logEvent({ k: "launcher.connected" });
+        }
+        return ctx.getAccountsState();
+      },
+      "launcher",
     ),
     accountsOpen: channel(
       asProfileIds,
       (_win, profileIds) => ctx.openAccounts(profileIds),
-      "hub",
+      "launcher",
     ),
     accountsCreate: channel(
       asAccountProfileCreate,
       (_win, request) => ctx.createAccount(request),
-      "hub",
+      "launcher",
     ),
     accountsUpdate: channel(
       asAccountProfileUpdate,
       (_win, request) => ctx.updateAccount(request),
-      "hub",
+      "launcher",
     ),
     accountsArchive: channel(
       asProfileId,
       (_win, profileId) => ctx.archiveAccount(profileId),
-      "hub",
+      "launcher",
     ),
     accountsRestore: channel(
       asProfileId,
       (_win, profileId) => ctx.restoreAccount(profileId),
-      "hub",
+      "launcher",
     ),
     accountsDelete: channel(
       asProfileId,
       (win, profileId) => ctx.deleteAccount(win, profileId),
-      "hub",
-    ),
-    accountsUseSingle: channel(
-      nothing,
-      () => ctx.useSingleAccountMode(),
-      "any",
+      "launcher",
     ),
     accountsTemplatesLoad: channel(
       nothing,

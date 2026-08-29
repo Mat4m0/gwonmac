@@ -33,6 +33,7 @@ import {
 } from "../../shared/visual-capture.js";
 import { gamePaths } from "../paths.js";
 import { windowRegistry } from "../window-registry.js";
+import { LEGACY_PRIMARY_PROFILE_ID } from "../../shared/multiple-accounts.js";
 import {
   completedTracePath,
   exportedCaptureLevel,
@@ -394,7 +395,9 @@ export async function exportDiagnosticsForWindow(
   return exportDiagnosticsZip(filePath, {
     appVersion: app.getVersion(),
     diagnosticOwnerId,
-    includePreviousSession: context?.mode === "single",
+    includePreviousSession:
+      context?.role === "game"
+      && context.profileId === LEGACY_PRIMARY_PROFILE_ID,
     electronVersions: runtimeVersions(),
     settings: await readSettings(),
     ...(options.runtimeState ? { runtimeState: options.runtimeState } : {}),

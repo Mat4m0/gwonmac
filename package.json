@@ -23,6 +23,7 @@
     "build": "node scripts/build.mjs",
     "dev": "pnpm build && electron-forge start",
     "dev:signed": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts",
+    "launcher:fixture": "pnpm build && node --import ./scripts/ts-hook.mjs scripts/launcher-fixture.ts",
     "test:signed-dev": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts --test-keychain",
     "tools:dev": "pnpm --filter @gwonmac/tools-ui dev",
     "tools:test": "pnpm --filter @gwonmac/tools-ui test",

@@ -9,7 +9,7 @@ const inputs = [
   "loading",
   "harness",
   "settings",
-  "accounts",
+  "launcher",
 ].map((name) => path.resolve(`src/renderer/${name}.ts`));
 
 /** @type {import("rollup").Plugin} */

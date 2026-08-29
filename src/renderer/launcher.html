@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guild Wars Reforged</title>
+  <link rel="icon" href="favicon.png" type="image/png" sizes="48x48">
+  <link rel="stylesheet" href="launcher.css">
+</head>
+<body>
+  <main class="launcher">
+    <div class="titlebar-drag" aria-hidden="true"></div>
+    <header class="launcher-header">
+      <img class="brand" src="images/logo.webp" alt="Guild Wars Reforged">
+      <div class="client-status">
+        <p class="client-state" id="client-state" role="status" aria-live="polite">
+          <span id="client-state-dot" aria-hidden="true"></span>
+          <span id="client-state-label">Checking game files…</span>
+        </p>
+        <button id="client-retry" class="secondary compact" type="button" hidden>Retry</button>
+      </div>
+    </header>
+
+    <section class="accounts" aria-labelledby="accounts-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Accounts</p>
+          <h1 id="accounts-title">Play Guild Wars</h1>
+        </div>
+        <button id="account-add" class="secondary" type="button">Add account</button>
+      </div>
+
+      <div id="account-list" class="account-list" aria-busy="true">
+        <article class="account-row loading-row" aria-hidden="true"></article>
+      </div>
+      <p id="account-status" class="message" role="status" aria-live="polite"></p>
+    </section>
+
+    <footer class="launcher-footer">
+      <p id="app-update-state">Checking for gwonmac updates…</p>
+    </footer>
+  </main>
+
+  <dialog id="account-dialog" aria-labelledby="account-dialog-title">
+    <form id="account-form" method="dialog">
+      <h2 id="account-dialog-title">Add account</h2>
+      <p>The account opens in its own game window.</p>
+      <label for="account-name">Name</label>
+      <input id="account-name" type="text" maxlength="48" autocomplete="off" placeholder="For example, Storage" required>
+      <p id="account-dialog-status" class="message" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button id="account-cancel" class="secondary" type="button">Cancel</button>
+        <button id="account-save" class="primary" type="submit">Add account</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="launcher.js"></script>
+</body>
+</html>

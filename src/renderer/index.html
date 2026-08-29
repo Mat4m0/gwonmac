@@ -218,9 +218,6 @@
         <button type="button" class="settings-rtab" id="settings-tab-updates"
                 role="tab" aria-selected="false" aria-controls="settings-pane-updates"
                 data-pane="updates">Updates</button>
-        <button type="button" class="settings-rtab" id="settings-tab-accounts"
-                role="tab" aria-selected="false" aria-controls="settings-pane-accounts"
-                data-pane="accounts">Accounts</button>
         <button type="button" class="settings-rtab" id="settings-tab-advanced"
                 role="tab" aria-selected="false" aria-controls="settings-pane-advanced"
                 data-pane="advanced">Advanced</button>
@@ -924,30 +921,6 @@
             Reset GWonMac settings…
           </button>
           <p class="settings-danger-sub">Restores display, tools, and window position. Downloaded game data and your login are kept.</p>
-        </section>
-        <section class="settings-pane" id="settings-pane-accounts" role="tabpanel"
-                 aria-labelledby="settings-tab-accounts">
-          <header class="settings-pane-header">
-            <h3 class="settings-pane-title">Multiple Accounts</h3>
-            <p class="settings-pane-intro">Open several independent Guild Wars accounts, each in its own window.</p>
-          </header>
-          <p id="accounts-mode-status" class="settings-status">Checking account mode…</p>
-          <p class="settings-note">Your current window, saved login, settings, templates, and builds stay in Single Account mode. Multiple Accounts creates a separate workspace and asks you to sign in once for each account.</p>
-          <div id="accounts-multi-active" hidden>
-            <div class="settings-divider" aria-hidden="true"></div>
-            <p class="settings-note">Login, game settings, screenshots, chat logs, and Single Account data are never shared. Returning to Single Account restarts GWonMac and preserves both workspaces.</p>
-            <div class="settings-actions-row">
-              <button type="button" id="accounts-return-single" class="ui-button">Return to Single Account…</button>
-            </div>
-          </div>
-          <div id="accounts-single-setup">
-            <div class="settings-divider" aria-hidden="true"></div>
-            <p class="settings-note">GWonMac restarts into the Account Picker. Create and manage every account there, including any one-time copy into your first account.</p>
-            <div class="settings-actions-row">
-              <button type="button" id="accounts-enable" class="ui-button" data-variant="primary">Enable and Restart…</button>
-            </div>
-            <p id="accounts-setup-status" class="settings-status" role="status" aria-live="polite"></p>
-          </div>
         </section>
       </div>
     </div>

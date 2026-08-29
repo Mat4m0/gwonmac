@@ -362,11 +362,9 @@ export function closeProfileWindow(win: BrowserWindow): Promise<void> {
   return operation;
 }
 
-/** Close one profile in Multi mode, or the application in Single mode. */
+/** Close exactly the profile that owns this game window. */
 export function requestGameQuit(win: BrowserWindow): void {
-  const context = windowRegistry.contextForWebContents(win.webContents.id);
-  if (context?.mode === "multi") void closeProfileWindow(win);
-  else app.quit();
+  void closeProfileWindow(win);
 }
 
 /** The only renderer URL, and it carries no configuration. */
@@ -407,6 +405,8 @@ export function createMainWindow(
     readonly onRendererRecoveryStart?: () => void;
     readonly onRendererRecovered?: () => void;
     readonly onRendererFailure?: () => void;
+    /** Runs only when this profile has no replacement window. */
+    readonly onProfileClosed?: () => void;
   },
 ): BrowserWindow {
   const context = options.context;
@@ -678,24 +678,18 @@ export function createMainWindow(
 
   win.on("close", (event) => {
     if (isQuitting()) return;
-    if (context.mode === "multi") {
-      event.preventDefault();
-      void closeProfileWindow(win);
-      return;
-    }
     event.preventDefault();
     logEvent({ k: "window.closeRequested" }, diagnosticOwnerId);
-    app.quit();
+    void closeProfileWindow(win);
   });
 
   win.on("closed", () => {
     windowRegistry.unregister(win);
     windowStateOwners.delete(win);
-    if (
-      context.mode === "multi"
-      && context.role === "game"
-      && !windowRegistry.profileWindow(context.profileId)
-    ) host.gameWindowClosed?.();
+    if (!windowRegistry.profileWindow(context.profileId)) {
+      options.onProfileClosed?.();
+      host.gameWindowClosed?.();
+    }
   });
 
   win.on("focus", installMenu);

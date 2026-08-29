@@ -1,16 +1,19 @@
 /**
- * The durable Single/Multiple Accounts selection and Multi profile registry.
+ * The durable profile registry and legacy rollback document readers.
  *
- * A missing launcher-mode document means the legacy Single Account path. An
- * existing malformed document fails closed. Writes use the repository's one
- * atomic file publisher so setup cannot expose a partial workspace or mode.
+ * The candidate never writes `launcher-mode.json`; its reader and writer stay
+ * only for supported Stable tests and rollback code. Workspace publication
+ * uses the repository's atomic file publisher.
  */
 import { randomUUID } from "node:crypto";
 import { readFile, rename } from "node:fs/promises";
+import { isDeepStrictEqual } from "node:util";
 import {
+  LEGACY_PRIMARY_PROFILE_ID,
   parseLauncherMode,
   parseMultiWorkspace,
   parseProfileName,
+  type AccountWorkspace,
   type AccountMode,
   type LibraryScope,
   type MultiWorkspace,
@@ -69,6 +72,93 @@ export async function saveMultiWorkspace(
   const parsed = parseMultiWorkspace(workspace);
   await writeAtomicJson(path, parsed, DOCUMENT_MODE);
   return parsed;
+}
+
+export interface AccountWorkspaceBootstrapDependencies {
+  readonly loadWorkspace: typeof loadMultiWorkspace;
+  readonly saveWorkspace: typeof saveMultiWorkspace;
+  readonly addProfile: typeof addMultiProfile;
+}
+
+const accountWorkspaceBootstrapDependencies: AccountWorkspaceBootstrapDependencies = {
+  loadWorkspace: loadMultiWorkspace,
+  saveWorkspace: saveMultiWorkspace,
+  addProfile: addMultiProfile,
+};
+
+export class AmbiguousAccountWorkspaceBootstrapError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AmbiguousAccountWorkspaceBootstrapError";
+  }
+}
+
+function normalizedAccountWorkspace(
+  current: MultiWorkspace | null,
+  legacySingleData: boolean,
+  dependencies: AccountWorkspaceBootstrapDependencies,
+): AccountWorkspace {
+  let workspace = current ?? createMultiWorkspace();
+  const legacyPrimaryProfileId = legacySingleData
+    ? LEGACY_PRIMARY_PROFILE_ID
+    : null;
+  if (
+    !legacySingleData
+    && workspace.profiles.length === 0
+  ) {
+    workspace = dependencies.addProfile(workspace, {
+      name: "Main account",
+      templates: "private",
+      builds: "private",
+    });
+  }
+  return parseMultiWorkspace({
+    ...workspace,
+    legacyPrimaryProfileId,
+  }) as AccountWorkspace;
+}
+
+/**
+ * Publish the unified account registry without touching released Single data.
+ *
+ * Callers must determine `legacySingleData` before they publish any candidate
+ * settings or window state. A present marker wins on later launches, which
+ * prevents candidate-created files from reclassifying a fresh installation.
+ */
+export async function bootstrapAccountWorkspace(
+  path: string,
+  legacySingleData: boolean,
+  dependencies: AccountWorkspaceBootstrapDependencies =
+    accountWorkspaceBootstrapDependencies,
+): Promise<AccountWorkspace> {
+  const current = await dependencies.loadWorkspace(path);
+  if (current?.legacyPrimaryProfileId !== undefined) {
+    return current as AccountWorkspace;
+  }
+  const candidate = normalizedAccountWorkspace(
+    current,
+    legacySingleData,
+    dependencies,
+  );
+  try {
+    return await dependencies.saveWorkspace(path, candidate) as AccountWorkspace;
+  } catch (error) {
+    let durable: MultiWorkspace | null;
+    try {
+      durable = await dependencies.loadWorkspace(path);
+    } catch (reloadError) {
+      throw new AmbiguousAccountWorkspaceBootstrapError(
+        "Account workspace bootstrap is unclear; restart before retrying",
+        { cause: new AggregateError([error, reloadError]) },
+      );
+    }
+    if (isDeepStrictEqual(durable, candidate)) return candidate;
+    if (isDeepStrictEqual(durable, current)) throw error;
+    throw new AmbiguousAccountWorkspaceBootstrapError(
+      "Account workspace bootstrap is unclear; restart before retrying",
+      { cause: error },
+    );
+  }
 }
 
 /** Preserve an unreadable account document before a player-approved recovery. */

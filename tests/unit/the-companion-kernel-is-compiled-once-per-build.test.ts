@@ -41,8 +41,8 @@ function rendererCheckout(): string {
     writeFileSync(file, contents);
   };
   write("src/renderer/index.html", "<!doctype html>\n");
-  write("src/renderer/accounts.html", "<!doctype html>\n");
-  write("src/renderer/accounts.css", "css");
+  write("src/renderer/launcher.html", "<!doctype html>\n");
+  write("src/renderer/launcher.css", "css");
   write("src/renderer/loading.js", "export {};\n");
   write("src/renderer/gw-native.d.ts", "export {};\n");
   write("src/renderer/favicon.ico", "ico");
@@ -148,8 +148,6 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       .map((file) => path.relative(path.join(root, "build/renderer"), file))
       .sort();
     assert.deepEqual(relative, [
-      "accounts.css",
-      "accounts.html",
       "favicon.ico",
       "favicon.png",
       "fonts/COPYING-INTER",
@@ -170,6 +168,8 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "images/logo.webp",
       "images/playstation-controller-prompts.png",
       "index.html",
+      "launcher.css",
+      "launcher.html",
       "loading.css",
       "settings.css",
       // Copied out of src/shared, and flattened to `ui/` so the renderer and
