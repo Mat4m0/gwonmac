@@ -14,6 +14,7 @@ import {
   replaceCartographyPresetStyle,
   resolveCartographyPresetEntry,
   selectCartographyPreset,
+  uniqueCartographyPresetName,
 } from "../shared/cartography-presets.js";
 import type {
   AppSettings,
@@ -70,22 +71,28 @@ export function bindCartographySettings(options: Readonly<{
   const select = byName<HTMLSelectElement>("cartographyPresetSelection");
   const status = query<HTMLElement>("[data-cartography-status]");
   const note = query<HTMLElement>("[data-cartography-preset-note]");
-  const editorNote = query<HTMLElement>("#settings-cartography-editor-note");
+  const customizer = query<HTMLElement>("[data-cartography-customizer]");
+  const customizerTitle = query<HTMLElement>("#settings-cartography-customizer-title");
+  const done = query<HTMLButtonElement>('[data-cartography-editor-action="done"]');
+  const manage = query<HTMLDetailsElement>(".settings-cartography-manage");
   const actions = Object.fromEntries(
     [...options.form.querySelectorAll<HTMLButtonElement>("[data-cartography-preset-action]")]
       .map((button) => [button.dataset.cartographyPresetAction!, button]),
-  ) as Record<"copy" | "rename" | "duplicate" | "delete" | "export" | "import", HTMLButtonElement>;
+  ) as Record<
+    "customize" | "rename" | "duplicate" | "delete" | "export" | "import",
+    HTMLButtonElement
+  >;
   const gridOpacity = byName<HTMLInputElement>("cartographyGridOpacity");
   const gridOpacityValue = byName<HTMLOutputElement>("cartographyGridOpacityValue");
   const walkabilityOpacity = byName<HTMLInputElement>("cartographyWalkabilityOpacity");
   const walkabilityOpacityValue = byName<HTMLOutputElement>("cartographyWalkabilityOpacityValue");
   const idleOpacity = byName<HTMLInputElement>("cartographyControlIdleOpacity");
   const idleOpacityValue = byName<HTMLOutputElement>("cartographyControlIdleOpacityValue");
-  const preview = query<HTMLElement>(".settings-cartography-preview");
   const ask = options.prompt ?? ((message, initial) => window.prompt(message, initial));
   const askConfirm = options.confirm ?? ((message) => window.confirm(message));
   let library: CartographyPresetLibrary | null = null;
   let persistRevision = 0;
+  let editorOpen = false;
   const libraryWrites = createCartographyLibraryWriteGate();
 
   const announce = (message: string, tone: FeedbackTone = "neutral"): void => {
@@ -117,7 +124,7 @@ export function bindCartographySettings(options: Readonly<{
       if (next === null) return;
       library = next;
       if (commit) void persistLibrary(
-        { cartographyPresetLibrary: library }, "The custom Cartography preset was not saved.",
+        { cartographyPresetLibrary: library }, "The custom Cartography style was not saved.",
       );
     },
   });
@@ -126,25 +133,25 @@ export function bindCartographySettings(options: Readonly<{
     renderOptions();
     const preset = resolveCartographyPresetEntry(library);
     if (preset === null) {
-      announce("This Cartography preset is no longer available.", "error");
+      announce("This Cartography style is no longer available.", "error");
       return;
     }
     const editable = preset.custom !== null;
     const full = library.customPresets.length >= CARTOGRAPHY_CUSTOM_PRESETS_MAX;
-    actions.copy.hidden = editable;
-    actions.copy.disabled = full;
+    actions.customize.textContent = editable ? "Edit style…" : "Customize style…";
+    actions.customize.disabled = !editable && full;
     actions.rename.hidden = !editable;
-    actions.duplicate.hidden = !editable;
     actions.duplicate.disabled = full;
     actions.delete.hidden = !editable;
     actions.import.disabled = full;
-    note.textContent = full ? "Your preset library is full. Delete a preset before adding another."
+    note.textContent = full ? "Your style library is full. Delete a style before adding another."
       : editable
-      ? "This is your preset. Changes save automatically."
-      : "Built-in presets cannot be changed. Make a copy to customize one.";
-    editorNote.textContent = editable ? `Editing “${preset.name}”.`
-      : "Choose a custom preset to edit its appearance.";
-    editor.render(preset.style, editable);
+      ? "Your style is ready. Edit it at any time or share it from Manage styles."
+      : "Built-in styles are ready to use. Customize one to make it yours.";
+    if (!editable) editorOpen = false;
+    customizer.hidden = !editable || !editorOpen;
+    customizerTitle.textContent = `Edit ${preset.name}`;
+    editor.render(preset.style);
   };
   const persistLibrary = async (
     patch: RendererSettingsPatch,
@@ -157,7 +164,7 @@ export function bindCartographySettings(options: Readonly<{
       if (!libraryWrites.isLatest(revision)) return;
       library = saved.cartographyPresetLibrary;
       renderPreset();
-      announce(success ?? "Preset saved.", "success");
+      announce(success ?? "Style saved.", "success");
     } catch {
       if (!libraryWrites.isLatest(revision)) return;
       const recovered = await options.recoverAfterPersistFailure(failure);
@@ -175,7 +182,7 @@ export function bindCartographySettings(options: Readonly<{
     patch?: RendererSettingsPatch,
   ): void => {
     if (next === null) {
-      announce("That Cartography preset change is not valid.", "error");
+      announce("That Cartography style change is not valid.", "error");
       return;
     }
     library = next;
@@ -183,44 +190,72 @@ export function bindCartographySettings(options: Readonly<{
     status.textContent = "Saving…";
     void persistLibrary(
       patch ?? { cartographyPresetLibrary: next },
-      "The Cartography preset was not saved.",
-      message ?? "Preset selected.",
+      "The Cartography style was not saved.",
+      message ?? "Style selected.",
     );
   };
 
   select.addEventListener("change", () => {
     if (library === null) return;
     const active = parseCartographyPresetRef(select.value, library);
-    if (active !== null) replaceLibrary(
-      selectCartographyPreset(library, active),
-      "Preset selected.",
-      { cartographyPresetSelection: active },
-    );
+    if (active !== null) {
+      editorOpen = false;
+      manage.open = false;
+      replaceLibrary(
+        selectCartographyPreset(library, active),
+        "Style selected.",
+        { cartographyPresetSelection: active },
+      );
+    }
   });
-  actions.copy.addEventListener("click", () => {
+  actions.customize.addEventListener("click", () => {
     if (library === null) return;
     const source = resolveCartographyPresetEntry(library);
     if (source === null) return;
-    const name = ask("Name your preset", `${source.name} copy`);
-    if (name !== null) replaceLibrary(addCartographyPreset(library, {
+    editorOpen = true;
+    if (source.custom !== null) {
+      renderPreset();
+      customizer.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const name = uniqueCartographyPresetName(`${source.name} custom`, library);
+    if (name === null) {
+      editorOpen = false;
+      announce("Your style library is full. Delete a style before adding another.", "warning");
+      return;
+    }
+    replaceLibrary(addCartographyPreset(library, {
       id: freshPresetId(), name, style: source.style,
-    }), "Preset created.");
+    }), "Custom style created.");
+    customizer.scrollIntoView({ block: "nearest" });
+  });
+  done.addEventListener("click", () => {
+    editorOpen = false;
+    customizer.hidden = true;
+    actions.customize.focus();
   });
   actions.duplicate.addEventListener("click", () => {
     if (library === null) return;
     const source = resolveCartographyPresetEntry(library);
     if (source === null) return;
+    const name = uniqueCartographyPresetName(`${source.name} copy`, library);
+    if (name === null) {
+      announce("Your style library is full. Delete a style before adding another.", "warning");
+      return;
+    }
     replaceLibrary(addCartographyPreset(library, {
-      id: freshPresetId(), name: `${source.name} copy`, style: source.style,
-    }), "Preset duplicated.");
+      id: freshPresetId(),
+      name,
+      style: source.style,
+    }), "Style duplicated.");
   });
   actions.rename.addEventListener("click", () => {
     if (library?.activePreset.kind !== "custom") return;
     const source = resolveCartographyPresetEntry(library)?.custom ?? null;
     if (source === null) return;
-    const entered = ask("Rename preset", source.name);
+    const entered = ask("Rename style", source.name);
     if (entered === null || entered.trim() === source.name) return;
-    replaceLibrary(renameCartographyPreset(library, source.id, entered), "Preset renamed.");
+    replaceLibrary(renameCartographyPreset(library, source.id, entered), "Style renamed.");
   });
   actions.delete.addEventListener("click", () => {
     if (library?.activePreset.kind !== "custom") return;
@@ -228,7 +263,7 @@ export function bindCartographySettings(options: Readonly<{
     if (source === null || !askConfirm(`Delete “${source.name}”? This cannot be undone.`)) return;
     replaceLibrary(
       deleteCartographyPreset(library, source.id),
-      "Preset deleted. Cartographer is now active.",
+      "Style deleted. Cartographer is now active.",
     );
   });
   actions.export.addEventListener("click", async () => {
@@ -237,25 +272,25 @@ export function bindCartographySettings(options: Readonly<{
     if (preset === null) return;
     try {
       await options.writeClipboard(encodeCartographyPreset(preset));
-      announce("Preset copied to the clipboard.", "success");
-    } catch { announce("The preset could not be copied.", "error"); }
+      announce("Style copied to the clipboard.", "success");
+    } catch { announce("The style could not be copied.", "error"); }
   });
   actions.import.addEventListener("click", async () => {
     if (library === null) return;
     try {
       const decoded = decodeCartographyPreset(await options.readClipboard());
       if (decoded === null) {
-        announce("The clipboard does not contain a valid GWonMac Cartography preset.", "error");
+        announce("The clipboard does not contain a valid GWonMac Cartography style.", "error");
         return;
       }
-      if (!askConfirm(`Import “${decoded.name}” as a new Cartography preset?`)) {
+      if (!askConfirm(`Import “${decoded.name}” as a new Cartography style?`)) {
         announce("Import canceled.");
         return;
       }
       replaceLibrary(addCartographyPreset(library, {
         id: freshPresetId(), name: decoded.name, style: decoded.style,
-      }), "Preset imported.");
-    } catch { announce("The preset could not be imported.", "error"); }
+      }), "Style imported.");
+    } catch { announce("The style could not be imported.", "error"); }
   });
 
   const bindOpacity = (
@@ -265,10 +300,6 @@ export function bindCartographySettings(options: Readonly<{
   ): void => {
     input.addEventListener("input", () => {
       output.value = `${input.value}%`;
-      if (key !== "cartographyControlIdleOpacity") {
-        const layer = key === "cartographyGridOpacity" ? "grid" : "walkability";
-        preview.style.setProperty(`--cartography-${layer}-opacity`, String(Number(input.value) / 100));
-      }
     });
     input.addEventListener("change", () => void persist({ [key]: Number(input.value) }, failure));
   };
@@ -287,8 +318,6 @@ export function bindCartographySettings(options: Readonly<{
       walkabilityOpacityValue.value = `${settings.cartographyWalkabilityOpacity}%`;
       idleOpacity.value = String(settings.cartographyControlIdleOpacity);
       idleOpacityValue.value = `${settings.cartographyControlIdleOpacity}%`;
-      preview.style.setProperty("--cartography-grid-opacity", String(settings.cartographyGridOpacity / 100));
-      preview.style.setProperty("--cartography-walkability-opacity", String(settings.cartographyWalkabilityOpacity / 100));
       renderPreset();
     },
   });

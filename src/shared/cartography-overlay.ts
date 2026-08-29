@@ -204,41 +204,41 @@ export const CARTOGRAPHY_BUILTIN_PRESETS: Readonly<Record<
 >> = Object.freeze({
   cartographer: Object.freeze({ name: "Cartographer", style: presetStyle({
     walkability: {
-      veilColor: "#081014", boundaryColor: "#E69F00", boundaryWidth: 2,
+      veilColor: "#081014", boundaryColor: "#F2A900", boundaryWidth: 3,
       boundaryCasingColor: "#050709",
     },
     grid: {
-      casingColor: "#050709", lattice: line("#E8E1D0", 1),
-      unseen: { color: "#D55E00", marker: "corners" },
-      current: line("#FFFFFF", 2), hover: line("#F0E442", 3),
-      normalRange: line("#009E73", 2, "dashed"),
-      birdsEyeRange: line("#CC79A7", 2, "dash-dot"),
+      casingColor: "#050709", lattice: line("#E8E1D0", 2),
+      unseen: { color: "#FF7A1A", marker: "diamond" },
+      current: line("#FFFFFF", 3), hover: line("#FFE45C", 4),
+      normalRange: line("#00D9FF", 4),
+      birdsEyeRange: line("#FF4FD8", 4, "dash-dot"),
     },
   }) }),
   synthwave: Object.freeze({ name: "Synthwave", style: presetStyle({
     walkability: {
-      veilColor: "#080516", boundaryColor: "#FF4FD8", boundaryWidth: 2,
+      veilColor: "#080516", boundaryColor: "#FF4FD8", boundaryWidth: 3,
       boundaryCasingColor: "#070A12",
     },
     grid: {
-      casingColor: "#070A12", lattice: line("#00E5FF", 1),
+      casingColor: "#070A12", lattice: line("#00E5FF", 2),
       unseen: { color: "#FFB000", marker: "cross" },
-      current: line("#FFFFFF", 2), hover: line("#F9F871", 3),
-      normalRange: line("#00E5FF", 2, "dashed"),
-      birdsEyeRange: line("#B967FF", 2, "dash-dot"),
+      current: line("#FFFFFF", 3), hover: line("#F9F871", 4),
+      normalRange: line("#00E5FF", 4),
+      birdsEyeRange: line("#B967FF", 4, "dash-dot"),
     },
   }) }),
   monochrome: Object.freeze({ name: "Monochrome", style: presetStyle({
     walkability: {
-      veilColor: "#080A0C", boundaryColor: "#F2F4F5", boundaryWidth: 1,
+      veilColor: "#080A0C", boundaryColor: "#F2F4F5", boundaryWidth: 2,
       boundaryCasingColor: "#050607",
     },
     grid: {
-      casingColor: "#050607", lattice: line("#A8B0B8", 1, "dotted"),
+      casingColor: "#050607", lattice: line("#A8B0B8", 2, "dotted"),
       unseen: { color: "#FFFFFF", marker: "diamond" },
-      current: line("#FFFFFF", 2), hover: line("#D8DDE2", 3),
-      normalRange: line("#D8DDE2", 2, "dashed"),
-      birdsEyeRange: line("#8F99A3", 2, "dash-dot"),
+      current: line("#FFFFFF", 3), hover: line("#D8DDE2", 4),
+      normalRange: line("#F2F4F5", 4),
+      birdsEyeRange: line("#8F99A3", 4, "dash-dot"),
     },
   }) }),
 });

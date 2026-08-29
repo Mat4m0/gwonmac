@@ -1,111 +1,119 @@
         <section class="settings-pane" id="settings-pane-maps" role="tabpanel" aria-labelledby="settings-tab-maps">
           <header class="settings-pane-header">
             <h3 id="settings-maps-title" class="settings-pane-title">Maps</h3>
-            <p class="settings-pane-intro">Show exploration cells and walkable terrain over the original Guild Wars maps.</p>
+            <p class="settings-pane-intro">Make unexplored cells and reachable terrain easier to read on the original Guild Wars maps.</p>
           </header>
 
           <fieldset class="settings-cartography-group settings-cartography-layers">
-            <legend>Layers</legend>
-            <label class="settings-cartography-layer-row">
-              <span><strong>Grid</strong><small>Shows cartography cells and marks cells you have not explored.</small></span>
-              <span class="settings-check ui-check"><input type="checkbox" name="cartographyGridEnabled"><span class="sr-only">Show grid</span></span>
-            </label>
-            <label class="settings-cartography-layer-row">
-              <span><strong>Walkable terrain</strong><small>Darkens blocked terrain and outlines paths.</small></span>
-              <span class="settings-check ui-check"><input type="checkbox" name="cartographyOverlayEnabled"><span class="sr-only">Show walkable terrain</span></span>
-            </label>
+            <legend>Map layers</legend>
+            <div class="settings-cartography-layer-card">
+              <label class="settings-cartography-layer-row">
+                <span><strong>Exploration grid</strong><small>Shows cartography cells and marks cells you have not explored.</small></span>
+                <span class="settings-check ui-check"><input type="checkbox" name="cartographyGridEnabled"><span class="sr-only">Show exploration grid</span></span>
+              </label>
+              <div class="settings-cartography-opacity">
+                <label for="settings-cartography-grid-opacity">Visibility</label>
+                <output name="cartographyGridOpacityValue" for="settings-cartography-grid-opacity">65%</output>
+                <input id="settings-cartography-grid-opacity" class="ui-range" type="range" name="cartographyGridOpacity" min="0" max="100" step="1">
+              </div>
+            </div>
+            <div class="settings-cartography-layer-card">
+              <label class="settings-cartography-layer-row">
+                <span><strong>Walkable terrain</strong><small>Darkens blocked terrain and outlines paths you can reach.</small></span>
+                <span class="settings-check ui-check"><input type="checkbox" name="cartographyOverlayEnabled"><span class="sr-only">Show walkable terrain</span></span>
+              </label>
+              <div class="settings-cartography-opacity">
+                <label for="settings-cartography-walkability-opacity">Visibility</label>
+                <output name="cartographyWalkabilityOpacityValue" for="settings-cartography-walkability-opacity">55%</output>
+                <input id="settings-cartography-walkability-opacity" class="ui-range" type="range" name="cartographyWalkabilityOpacity" min="0" max="100" step="1">
+              </div>
+            </div>
           </fieldset>
 
           <div id="settings-cartography-options" class="settings-cartography-options">
             <fieldset class="settings-cartography-group settings-cartography-preset">
-              <legend>Appearance</legend>
+              <legend>Style</legend>
               <div class="settings-cartography-preset-row">
-                <label for="settings-cartography-preset">Preset</label>
+                <label for="settings-cartography-preset">Map appearance</label>
                 <select id="settings-cartography-preset" class="ui-select" name="cartographyPresetSelection"></select>
+                <button type="button" class="ui-button" data-variant="primary" data-cartography-preset-action="customize">Customize style…</button>
               </div>
-              <div class="settings-cartography-preset-actions" aria-label="Preset actions">
-                <button type="button" class="ui-button" data-cartography-preset-action="copy">Make a copy</button>
-                <button type="button" class="ui-button" data-cartography-preset-action="rename">Rename</button>
-                <button type="button" class="ui-button" data-cartography-preset-action="duplicate">Duplicate</button>
-                <button type="button" class="ui-link" data-cartography-preset-action="delete">Delete</button>
-                <button type="button" class="ui-button" data-cartography-preset-action="export">Copy preset</button>
-                <button type="button" class="ui-button" data-cartography-preset-action="import">Import preset</button>
-              </div>
-              <p class="settings-note" data-cartography-preset-note>Built-in presets are ready to use. Make a copy to edit one.</p>
+              <p class="settings-note" data-cartography-preset-note>Built-in styles are ready to use. Customize one to make it yours.</p>
               <p class="settings-cartography-status" role="status" aria-live="polite" data-cartography-status></p>
+              <details class="settings-cartography-manage">
+                <summary>Manage styles</summary>
+                <div class="settings-cartography-preset-actions" aria-label="Style actions">
+                  <button type="button" class="ui-button" data-cartography-preset-action="rename">Rename…</button>
+                  <button type="button" class="ui-button" data-cartography-preset-action="duplicate">Duplicate</button>
+                  <button type="button" class="ui-button" data-cartography-preset-action="export">Copy to clipboard</button>
+                  <button type="button" class="ui-button" data-cartography-preset-action="import">Import from clipboard…</button>
+                  <button type="button" class="ui-link quiet-danger" data-cartography-preset-action="delete">Delete style…</button>
+                </div>
+              </details>
             </fieldset>
 
-            <fieldset class="settings-cartography-segments" aria-describedby="settings-cartography-editor-note">
-              <legend>Edit layer</legend>
-              <div class="settings-cartography-segmented">
-                <label><input type="radio" name="cartographyEditorLayer" value="grid" checked><span>Grid</span></label>
-                <label><input type="radio" name="cartographyEditorLayer" value="walkability"><span>Walkable</span></label>
-              </div>
-              <p id="settings-cartography-editor-note" class="settings-note">Choose a custom preset to edit its appearance.</p>
-            </fieldset>
+            <section class="settings-cartography-customizer" data-cartography-customizer hidden aria-labelledby="settings-cartography-customizer-title">
+              <header class="settings-cartography-customizer-header">
+                <span>
+                  <h4 id="settings-cartography-customizer-title">Edit style</h4>
+                  <p>Changes appear in the game and save automatically.</p>
+                </span>
+                <button type="button" class="ui-button" data-cartography-editor-action="done">Done</button>
+              </header>
 
-            <fieldset class="settings-cartography-editor" data-cartography-editor="grid">
-              <legend>Grid appearance</legend>
-              <div class="settings-cartography-opacity">
-                <label for="settings-cartography-grid-opacity">Opacity</label>
-                <output name="cartographyGridOpacityValue" for="settings-cartography-grid-opacity">65%</output>
-                <input id="settings-cartography-grid-opacity" class="ui-range" type="range" name="cartographyGridOpacity" min="0" max="100" step="1">
-              </div>
               <template id="settings-cartography-line-template">
-                <h4 data-line-title></h4>
+                <h5 data-line-title></h5>
                 <label>Color <span><input type="color" data-line-color-picker><input class="ui-input" type="text" data-line-color inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
                 <label>Width <span><input class="ui-range" type="range" data-line-width min="0" max="4" step="1"><output data-line-width-value>1 px</output></span></label>
                 <label>Pattern <select class="ui-select" data-line-pattern></select></label>
               </template>
-              <div class="settings-cartography-line-editor" data-cartography-line="lattice"></div>
-              <label class="settings-cartography-color-row">Grid casing <span><input type="color" name="cartographyGridCasingColorPicker"><input class="ui-input" type="text" name="cartographyGridCasingColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
-              <fieldset class="settings-cartography-unseen">
-                <legend>Unseen cells</legend>
-                <div class="settings-cartography-marker-list"></div>
-                <label class="settings-cartography-color-row">Indicator color <span><input type="color" name="cartographyUnseenColorPicker"><input class="ui-input" type="text" name="cartographyUnseenColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
-              </fieldset>
-              <details class="settings-cartography-advanced">
+
+              <details class="settings-cartography-editor" data-cartography-editor="grid" open>
+                <summary>Grid and unseen cells</summary>
+                <div class="settings-cartography-editor-body">
+                  <div class="settings-cartography-line-editor" data-cartography-line="lattice"></div>
+                  <label class="settings-cartography-color-row">Grid casing <span><input type="color" name="cartographyGridCasingColorPicker"><input class="ui-input" type="text" name="cartographyGridCasingColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
+                  <fieldset class="settings-cartography-unseen">
+                    <legend>Unseen cell marker</legend>
+                    <div class="settings-cartography-marker-list"></div>
+                    <label class="settings-cartography-color-row">Marker color <span><input type="color" name="cartographyUnseenColorPicker"><input class="ui-input" type="text" name="cartographyUnseenColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
+                  </fieldset>
+                </div>
+              </details>
+
+              <details class="settings-cartography-editor">
                 <summary>Inspection highlights</summary>
-                <div class="settings-cartography-advanced-body">
+                <div class="settings-cartography-editor-body settings-cartography-advanced-body">
                   <div class="settings-cartography-line-editor" data-cartography-line="current"></div>
                   <div class="settings-cartography-line-editor" data-cartography-line="hover"></div>
                   <div class="settings-cartography-line-editor" data-cartography-line="normalRange"></div>
                   <div class="settings-cartography-line-editor" data-cartography-line="birdsEyeRange"></div>
                 </div>
               </details>
-            </fieldset>
 
-            <fieldset class="settings-cartography-editor" data-cartography-editor="walkability" hidden>
-              <legend>Walkable appearance</legend>
-              <div class="settings-cartography-opacity">
-                <label for="settings-cartography-walkability-opacity">Opacity</label>
-                <output name="cartographyWalkabilityOpacityValue" for="settings-cartography-walkability-opacity">55%</output>
-                <input id="settings-cartography-walkability-opacity" class="ui-range" type="range" name="cartographyWalkabilityOpacity" min="0" max="100" step="1">
-              </div>
-              <div class="settings-cartography-walkability-grid">
-                <label>Blocked terrain <span><input type="color" name="cartographyVeilColorPicker"><input class="ui-input" type="text" name="cartographyVeilColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
-                <label>Path boundary <span><input type="color" name="cartographyBoundaryColorPicker"><input class="ui-input" type="text" name="cartographyBoundaryColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
-                <label>Boundary casing <span><input type="color" name="cartographyBoundaryCasingColorPicker"><input class="ui-input" type="text" name="cartographyBoundaryCasingColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
-                <label>Boundary width <span><input class="ui-range" type="range" name="cartographyBoundaryWidth" min="0" max="4" step="1"><output name="cartographyBoundaryWidthValue">1 px</output></span></label>
-              </div>
-            </fieldset>
+              <details class="settings-cartography-editor" data-cartography-editor="walkability">
+                <summary>Walkable terrain</summary>
+                <div class="settings-cartography-editor-body settings-cartography-walkability-grid">
+                  <label>Blocked terrain <span><input type="color" name="cartographyVeilColorPicker"><input class="ui-input" type="text" name="cartographyVeilColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
+                  <label>Path boundary <span><input type="color" name="cartographyBoundaryColorPicker"><input class="ui-input" type="text" name="cartographyBoundaryColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
+                  <label>Boundary casing <span><input type="color" name="cartographyBoundaryCasingColorPicker"><input class="ui-input" type="text" name="cartographyBoundaryCasingColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
+                  <label>Boundary width <span><input class="ui-range" type="range" name="cartographyBoundaryWidth" min="0" max="4" step="1"><output name="cartographyBoundaryWidthValue">1 px</output></span></label>
+                </div>
+              </details>
+              <p id="settings-cartography-color-help" class="settings-note">Enter a six-digit color such as #56B4E9.</p>
+            </section>
 
-            <p id="settings-cartography-color-help" class="settings-note">Use a six-digit color, for example #56B4E9.</p>
-
-            <details class="settings-cartography-group settings-cartography-behavior">
-              <summary>Inspection and in-game control</summary>
+            <fieldset class="settings-cartography-group settings-cartography-behavior">
+              <legend>Inspection</legend>
               <div class="settings-cartography-behavior-body">
-                <label for="settings-cartography-reveal-mode">Compass reveal range</label>
+                <label for="settings-cartography-reveal-mode">Compass range</label>
                 <select id="settings-cartography-reveal-mode" class="ui-select" name="cartographyRevealMode"><option value="off">Off</option><option value="normal">Normal 3×3</option><option value="birds-eye">Bird’s Eye 7×7</option></select>
-                <p class="settings-note"><kbd>Shift</kbd> previews a normal 3×3 area on the Mission Map. <kbd>Option</kbd> + <kbd>Shift</kbd> previews Bird’s Eye 7×7.</p>
-                <div class="settings-cartography-opacity"><label for="settings-cartography-control-opacity">Idle control visibility</label><output name="cartographyControlIdleOpacityValue" for="settings-cartography-control-opacity">35%</output><input id="settings-cartography-control-opacity" class="ui-range" type="range" name="cartographyControlIdleOpacity" min="15" max="100" step="1"></div>
+                <p class="settings-note"><kbd>Shift</kbd> previews 3×3 on the Mission Map. <kbd>Option</kbd> + <kbd>Shift</kbd> previews Bird’s Eye 7×7.</p>
+                <details class="settings-cartography-control-visibility">
+                  <summary>In-game control visibility</summary>
+                  <div class="settings-cartography-opacity"><label for="settings-cartography-control-opacity">Visibility while idle</label><output name="cartographyControlIdleOpacityValue" for="settings-cartography-control-opacity">35%</output><input id="settings-cartography-control-opacity" class="ui-range" type="range" name="cartographyControlIdleOpacity" min="15" max="100" step="1"></div>
+                </details>
               </div>
-            </details>
-
-            <figure class="settings-cartography-preview" aria-labelledby="settings-cartography-preview-caption">
-              <div class="settings-cartography-preview-swatch" data-cartography-preview="walkability"><span></span></div>
-              <div class="settings-cartography-preview-swatch" data-cartography-preview="grid"><span aria-hidden="true"></span></div>
-              <figcaption id="settings-cartography-preview-caption"><strong>Preset preview</strong><span><i data-cartography-legend="walkability"></i> Blocked terrain</span><span><i data-cartography-legend="grid"></i> Grid</span><span><i data-cartography-legend="unseen"></i> Unseen cells</span></figcaption>
-            </figure>
+            </fieldset>
           </div>
         </section>

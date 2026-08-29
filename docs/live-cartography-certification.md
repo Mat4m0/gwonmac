@@ -61,10 +61,10 @@ Capture `layers-grid-only`, `layers-walkability-only`, and `layers-all` from
 the same position. Grid and walkability must remain independently switchable,
 use the shared style coherently, and preserve native map detail. Repeat a
 combined capture at low, medium, and full opacity for each layer and with the
-Cartographer, Synthwave, and Monochrome presets. Make a custom copy and confirm
+Cartographer, Synthwave, and Monochrome styles. Select **Customize style…** and confirm
 that colors, line widths, line patterns, and all five unseen-cell markers change
-the same role on the Compass and Mission Map. Copy that preset, delete the local
-copy, import it again, and confirm the imported preset remains selected after
+the same role on the Compass and Mission Map. Copy that style, delete the local
+copy, import it again, and confirm the imported style remains selected after
 reopening Settings.
 
 Then capture a district transition, explorable entry, mission restart,

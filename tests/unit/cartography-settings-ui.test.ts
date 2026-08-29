@@ -86,3 +86,22 @@ test("compact Cartography controls avoid frame-loop layout reads and static inli
   assert.match(controls, /canonical !== settings/u);
   assert.match(controls, /boxChanged \|\| becameVisible/u);
 });
+
+test("Cartography settings disclose customization instead of showing a disabled editor", () => {
+  const html = readFileSync("src/renderer/settings-cartography.html", "utf8");
+  assert.match(html, /data-cartography-preset-action="customize"/u);
+  assert.match(html, /data-cartography-customizer hidden/u);
+  assert.match(html, /<summary>Manage styles<\/summary>/u);
+  assert.match(html, /<summary>Inspection highlights<\/summary>/u);
+  assert.doesNotMatch(html, /\sdisabled(?:=|\s|>)/u);
+  assert.doesNotMatch(html, /cartographyEditorLayer|settings-cartography-preview/u);
+});
+
+test("Cartography customization uses one direct editable path", () => {
+  const controller = readFileSync("src/renderer/settings-cartography.ts", "utf8");
+  const editor = readFileSync("src/renderer/settings-cartography-editor.ts", "utf8");
+  assert.match(controller, /uniqueCartographyPresetName\(`\$\{source\.name\} custom`/u);
+  assert.match(controller, /customizer\.hidden = !editable \|\| !editorOpen/u);
+  assert.match(controller, /actions\.customize\.focus\(\)/u);
+  assert.doesNotMatch(editor, /control\.disabled|data-preset-readonly|showLayer/u);
+});

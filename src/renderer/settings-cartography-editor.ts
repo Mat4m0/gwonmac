@@ -51,7 +51,7 @@ const MARKER_PRESENTATION = Object.freeze({
 }>>>;
 
 export type CartographyPresetEditor = Readonly<{
-  render(style: CartographyPresetStyle, editable: boolean): void;
+  render(style: CartographyPresetStyle): void;
 }>;
 
 const HEX = /^#[0-9A-F]{6}$/;
@@ -90,14 +90,6 @@ export function createCartographyPresetEditor(options: Readonly<{
   form: HTMLFormElement;
   change(style: CartographyPresetStyle, commit: boolean): void;
 }>): CartographyPresetEditor {
-  const gridEditor = element<HTMLFieldSetElement>(options.form, '[data-cartography-editor="grid"]');
-  const walkabilityEditor = element<HTMLFieldSetElement>(
-    options.form,
-    '[data-cartography-editor="walkability"]',
-  );
-  const layerChoices = [...options.form.querySelectorAll<HTMLInputElement>(
-    'input[name="cartographyEditorLayer"]',
-  )];
   const lineTemplate = element<HTMLTemplateElement>(
     options.form,
     "#settings-cartography-line-template",
@@ -153,16 +145,12 @@ export function createCartographyPresetEditor(options: Readonly<{
     options.form,
     "cartographyBoundaryWidthValue",
   );
-  const preview = element<HTMLElement>(options.form, ".settings-cartography-preview");
-  const unseenPreview = element<HTMLElement>(preview, '[data-cartography-preview="grid"] span');
-
   let draft: CartographyPresetStyle | null = null;
 
   const publish = (candidate: CartographyPresetStyle, commit: boolean): void => {
     const normalised = normaliseCartographyPresetStyle(candidate);
     if (normalised === null) return;
     draft = normalised;
-    drawPreview(normalised);
     options.change(normalised, commit);
   };
   const updateLine = (
@@ -187,25 +175,6 @@ export function createCartographyPresetEditor(options: Readonly<{
     if (draft === null) return;
     publish({ ...draft, walkability: { ...draft.walkability, ...patch } }, commit);
   };
-  const drawPreview = (style: CartographyPresetStyle): void => {
-    preview.style.setProperty("--cartography-veil", style.walkability.veilColor);
-    preview.style.setProperty("--cartography-boundary", style.walkability.boundaryColor);
-    preview.style.setProperty("--cartography-boundary-width", `${style.walkability.boundaryWidth}px`);
-    preview.style.setProperty(
-      "--cartography-boundary-casing",
-      style.walkability.boundaryCasingColor,
-    );
-    preview.style.setProperty("--cartography-grid", style.grid.lattice.color);
-    preview.style.setProperty("--cartography-unseen", style.grid.unseen.color);
-    unseenPreview.textContent = MARKER_PRESENTATION[style.grid.unseen.marker].symbol;
-  };
-  const showLayer = (): void => {
-    const selected = layerChoices.find(({ checked }) => checked)?.value ?? "grid";
-    gridEditor.hidden = selected !== "grid";
-    walkabilityEditor.hidden = selected !== "walkability";
-  };
-  layerChoices.forEach((choice) => choice.addEventListener("change", showLayer));
-
   for (const [key, controls] of lines) {
     controls.colorPicker.addEventListener("input", () => {
       controls.color.value = controls.colorPicker.value.toUpperCase();
@@ -294,7 +263,7 @@ export function createCartographyPresetEditor(options: Readonly<{
     setColorValidity(text);
   };
   return Object.freeze({
-    render(style, editable) {
+    render(style) {
       draft = style;
       for (const [key, controls] of lines) {
         const line = style.grid[key];
@@ -317,20 +286,6 @@ export function createCartographyPresetEditor(options: Readonly<{
       );
       boundaryWidth.value = String(style.walkability.boundaryWidth);
       boundaryWidthValue.value = `${style.walkability.boundaryWidth} px`;
-      for (const control of gridEditor.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
-        "input, select",
-      )) {
-        control.disabled = !editable && control.name !== "cartographyGridOpacity";
-      }
-      for (const control of walkabilityEditor.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
-        "input, select",
-      )) {
-        control.disabled = !editable && control.name !== "cartographyWalkabilityOpacity";
-      }
-      gridEditor.toggleAttribute("data-preset-readonly", !editable);
-      walkabilityEditor.toggleAttribute("data-preset-readonly", !editable);
-      drawPreview(style);
-      showLayer();
     },
   });
 }

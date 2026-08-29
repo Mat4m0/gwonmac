@@ -11,9 +11,10 @@ GWonMac has two separate, optional native-map features:
 The features can be enabled independently. Their shared appearance keeps the
 walkability boundary distinct from the generated grid. A dark casing beneath
 meaningful lines keeps them legible over bright snow and dark terrain.
-Cartographer, Synthwave, and Monochrome presets are included. Built-in presets
-cannot be changed; make a named copy when you want to customize every color,
-line width, grid pattern, or unseen-cell marker. Custom presets can be copied
+Cartographer, Synthwave, and Monochrome styles are included. Built-in styles
+cannot be changed; **Customize style…** creates and opens an editable version
+without showing a disabled editor first. Custom styles can change every color,
+line width, grid pattern, or unseen-cell marker. They can also be copied
 and imported as versioned text, so players can share them without adding files
 to the game installation.
 
@@ -31,9 +32,9 @@ layers are pointer-transparent and redraw only when their projection changes.
 
 The grid makes the game's exploration-cell boundaries visible beneath the
 smoothed fog. An unseen-cell marker identifies cells that may still need
-attention without relying on color alone. Corner brackets are the quiet
-default; crosses, diamonds, stipple, and hatching are available in custom
-presets. Persistent reveal guidance defaults to off. Hold Shift while hovering
+attention without relying on color alone. A diamond is the readable default;
+corner brackets, crosses, stipple, and hatching remain available in custom
+styles. Persistent reveal guidance defaults to off. Hold Shift while hovering
 a Mission Map cell to preview its normal 3×3 range, or hold Option+Shift to
 preview the Bird's Eye 7×7 range. Optional persistent modes show the same
 footprints around the player on the Compass.

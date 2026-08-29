@@ -33,6 +33,17 @@ describe("cartography appearance", () => {
     assert.equal(CARTOGRAPHY_BUILTIN_PRESETS.cartographer.style.grid.lattice.color, "#E8E1D0");
   });
 
+  it("ships a readable Cartographer hierarchy without requiring customization", () => {
+    const { grid, walkability } = CARTOGRAPHY_BUILTIN_PRESETS.cartographer.style;
+    assert.deepEqual(grid.unseen, { color: "#FF7A1A", marker: "diamond" });
+    assert.deepEqual(grid.lattice, { color: "#E8E1D0", width: 2, pattern: "solid" });
+    assert.deepEqual(grid.normalRange, { color: "#00D9FF", width: 4, pattern: "solid" });
+    assert.deepEqual(grid.birdsEyeRange, {
+      color: "#FF4FD8", width: 4, pattern: "dash-dot",
+    });
+    assert.equal(walkability.boundaryWidth, 3);
+  });
+
   it("exposes every supported line pattern and unseen-cell marker", () => {
     assert.deepEqual(CARTOGRAPHY_LINE_PATTERNS, ["solid", "dashed", "dotted", "dash-dot"]);
     assert.deepEqual(CARTOGRAPHY_UNSEEN_MARKERS, [
