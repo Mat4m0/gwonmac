@@ -118,6 +118,21 @@ prompt artwork: it does not remap buttons or change controller input. Restart
 GWonMac after changing it. If a Guild Wars update changes the exact prompt
 texture, GWonMac leaves the game's texture untouched instead of guessing.
 
+## Maps and cartography
+
+Open **Settings → Maps** for two independent features. **Grid** marks the game's
+exploration cells and highlights the cell containing your character. **Walkable
+terrain** keeps Guild Wars' map artwork and shades terrain outside the certified
+walkable geometry. Choose Cartographer, Synthwave, or Monochrome. Select
+**Customize style…** to create an editable version of the active style and
+change its terrain colors, grid lines, unseen-cell marker, or inspection ranges.
+Use **Manage styles** to copy and import styles for sharing, rename or duplicate
+them, or delete custom styles. Hold Shift over a Mission Map cell to inspect its
+normal 3×3 reveal area, or Option+Shift for the Bird's Eye 7×7 area. One style applies to the
+Compass and Mission Map, while each layer keeps its own opacity. Both preserve
+the native map artwork and hide when their current map projection or data
+cannot be certified.
+
 ## Game integration and optional Tools
 
 Open **Settings → Tools**.

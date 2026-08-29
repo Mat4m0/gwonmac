@@ -121,6 +121,7 @@ interface ClientRuntimeOptions {
   cachedOnly: boolean;
   enhancementCapabilities: EnhancementCapabilities;
   enhancementProgram?: EnhancementProgram;
+  cartographySpike?: boolean;
   extendedMemoryEnabled: boolean;
   diagnosticProfile: DiagnosticProfile;
   onProgress: (progress: DownloadProgress) => void;
@@ -314,7 +315,7 @@ export class ClientRuntime {
         jsPath: clientArtifactPath(this.options.paths.artifacts, "Gw.jspi.js"),
         compatibility: null,
         extendedMemory,
-        transforms: { templateSave: false, nativeDoubleClick: false },
+        transforms: { templateSave: false, cartography: false, nativeDoubleClick: false },
         enhancementVerification: {
           requestedProfile: enhancementCapabilityProfile(this.options.enhancementCapabilities),
           effectiveProfile: null,
@@ -365,6 +366,9 @@ export class ClientRuntime {
       enhancementCapabilities: this.options.enhancementCapabilities,
       compatibilityCacheRoot: this.options.paths.compatibility,
       enhancementCacheRoot: this.options.paths.enhancements,
+      ...(this.options.cartographySpike
+        ? { cartographySpike: { cacheRoot: this.options.paths.cartographySpike } }
+        : {}),
       nativeDoubleClickCacheRoot: this.options.paths.nativeDoubleClick,
       extendedMemoryCacheRoot: this.options.paths.extendedMemory,
       extendedMemoryEnabled: this.options.extendedMemoryEnabled,
@@ -534,6 +538,7 @@ export class ClientRuntime {
       extendedMemory,
       transforms: {
         templateSave: prepared.gameFileSaving.status === "available",
+        cartography: prepared.cartography,
         nativeDoubleClick: prepared.nativeDoubleClick,
       },
       enhancementVerification: {

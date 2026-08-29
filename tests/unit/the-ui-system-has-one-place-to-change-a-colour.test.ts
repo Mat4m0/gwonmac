@@ -23,6 +23,8 @@ const TOKENS = "src/shared/ui/tokens.css";
  *  Settings dialog is: two surfaces of one product cannot each own a palette. */
 const CONSUMERS = [
   "src/shared/ui/components.css",
+  "src/renderer/cartography-overlay-controls.css",
+  "src/renderer/settings-cartography.css",
   "src/renderer/settings.css",
   "apps/tools/src/styles.css",
   "apps/tools/src/styles/base-shell.css",

@@ -1,0 +1,158 @@
+/* Compact Cartography controls beside the live Compass.
+ * Static presentation stays here; TypeScript owns only state and geometry. */
+
+#cartography-overlay-controls {
+  position: fixed;
+  z-index: var(--ui-z-status);
+  width: var(--cartography-control-size);
+  height: var(--cartography-control-size);
+  box-sizing: border-box;
+  color: var(--ui-text-bright);
+  font: var(--ui-font-weight-semibold) var(--ui-type-caption-size) / 1.25 var(--ui-font-interface);
+  pointer-events: auto;
+  transition: opacity 140ms ease-out;
+}
+
+#cartography-overlay-controls[hidden],
+.cartography-overlay-panel[hidden] {
+  display: none;
+}
+
+.cartography-overlay-trigger {
+  display: grid;
+  width: var(--cartography-control-size);
+  height: var(--cartography-control-size);
+  padding: 0;
+  place-items: center;
+  color: var(--cartography-trigger-color, var(--ui-text-bright));
+  background: var(--ui-well-overlay-fill);
+  border: var(--ui-frame-width) solid var(--cartography-trigger-border, var(--ui-edge-strong));
+  border-radius: var(--ui-radius-pill);
+  box-shadow: var(--ui-shadow-raised-soft);
+  cursor: pointer;
+}
+
+.cartography-overlay-trigger:focus-visible,
+.cartography-overlay-panel :where(button, input, select):focus-visible {
+  outline: var(--ui-border-width) solid var(--ui-focus);
+  outline-offset: var(--ui-frame-width);
+}
+
+.cartography-overlay-icon {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.cartography-overlay-panel {
+  position: absolute;
+  width: var(--cartography-panel-width);
+  box-sizing: border-box;
+  padding: var(--ui-space-3);
+  color: var(--ui-text);
+  background: var(--ui-panel-fill);
+  border: var(--ui-frame-width) solid var(--ui-edge);
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: blur(6px);
+}
+
+.cartography-overlay-heading {
+  display: block;
+  margin: 0 0 var(--ui-space-2);
+  color: var(--ui-text-bright);
+  font-size: var(--ui-type-caption-size);
+}
+
+.cartography-overlay-layers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ui-space-2);
+  margin-bottom: var(--ui-space-3);
+}
+
+.cartography-overlay-layer {
+  height: var(--ui-control-height-compact);
+  padding: 0 var(--ui-space-2);
+  color: var(--ui-text-muted);
+  background: var(--ui-well-fill);
+  border: var(--ui-frame-width) solid var(--ui-edge);
+  border-radius: var(--ui-radius);
+  font: var(--ui-font-weight-semibold) var(--ui-type-caption-size) / 1 var(--ui-font-interface);
+  cursor: pointer;
+}
+
+.cartography-overlay-layer[aria-pressed="true"] {
+  color: var(--ui-accent-hover);
+  background: var(--ui-accent-well-fill);
+  border-color: var(--ui-accent);
+}
+
+.cartography-overlay-layer:disabled,
+.cartography-overlay-panel :where(input, select):disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.cartography-overlay-fields {
+  display: grid;
+  gap: var(--ui-space-2);
+}
+
+.cartography-overlay-field {
+  display: grid;
+  grid-template-columns: 66px 1fr 30px;
+  align-items: center;
+  gap: var(--ui-space-2);
+  color: var(--ui-text-muted);
+}
+
+.cartography-overlay-field[data-kind="preset"] {
+  grid-template-columns: 66px 1fr;
+}
+
+.cartography-overlay-field input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--ui-accent);
+  cursor: pointer;
+}
+
+.cartography-overlay-field output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cartography-overlay-field select {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--ui-space-1);
+  color: var(--ui-text);
+  background: var(--ui-well-strong-fill);
+  border: var(--ui-frame-width) solid var(--ui-edge);
+  border-radius: var(--ui-radius-sm);
+  font: var(--ui-font-weight-semibold) var(--ui-type-caption-size) / 1 var(--ui-font-interface);
+}
+
+.cartography-overlay-hint,
+.cartography-overlay-status {
+  font: var(--ui-font-weight-medium) 10px / 1.4 var(--ui-font-readable);
+}
+
+.cartography-overlay-hint {
+  margin: var(--ui-space-3) 0 0;
+  color: var(--ui-text-faint);
+}
+
+.cartography-overlay-hint kbd {
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-data);
+}
+
+.cartography-overlay-status {
+  min-height: 14px;
+  margin: var(--ui-space-1) 0 0;
+  color: var(--ui-warning);
+}

@@ -44,6 +44,7 @@ describe("resolved profile paths", () => {
       rejectedClient: `${root}/game/rejected-client.json`,
       compatibility: `${root}/game/compatibility`,
       enhancements: `${root}/game/enhancements`,
+      cartographySpike: `${root}/game/cartography-spike`,
       nativeDoubleClick: `${root}/game/double-click`,
       extendedMemory: `${root}/game/extended-memory`,
       chunks: `${root}/game/chunks`,

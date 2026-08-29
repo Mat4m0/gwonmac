@@ -208,6 +208,7 @@ async function escalateRepeatedCrash(): Promise<void> {
 }
 let disposeSocketHost = () => {};
 let disposeHostOnlyTools = () => {};
+let disposeCartographySpike = () => {};
 const native = () => window.gwNative;
 const developerProgramNames: Readonly<Record<
   Exclude<import('../shared/enhancement-contracts.js').EnhancementProgram, 'none'>,
@@ -533,6 +534,8 @@ window.gwToolsSettings = () => Object.freeze({
   xunlaiStorage: appSettings?.xunlaiStorage ?? false,
   travelPalette: appSettings?.travelPalette ?? false,
   targetReadout: appSettings?.targetReadout ?? false,
+  cartographyOverlayEnabled: appSettings?.cartographyOverlayEnabled ?? false,
+  cartographyGridEnabled: appSettings?.cartographyGridEnabled ?? false,
   skillKeyBindings: appSettings?.skillKeyBindings ?? emptySkillKeyBindings,
   skillKeyLabelsEnabled: appSettings?.skillKeyLabelsEnabled ?? false,
   skillCooldownOverlayEnabled: appSettings?.skillCooldownOverlayEnabled ?? true,
@@ -634,6 +637,7 @@ addEventListener('beforeunload', () => {
   clientHealthConfirmation?.dispose();
   imageSource?.stop();
   disposeHostOnlyTools();
+  disposeCartographySpike();
   disposeSocketHost();
   window.gwVirtualGamepad?.dispose();
   controllerPrompts?.dispose();
@@ -755,6 +759,22 @@ Module = {
       milestone('wasm.instantiate.end');
       gameWasmInstance = result.instance;
       gameWasmModule = result.module;
+      const { installCartographySpike } = await import('./cartography-spike/index.js');
+      disposeCartographySpike();
+      disposeCartographySpike = installCartographySpike({
+        exports: result.instance.exports,
+        parent: document.body,
+        canvas: Module.canvas,
+        settings: () => {
+          if (appSettings === null) throw new Error('cartography installed before settings');
+          return appSettings;
+        },
+        persist: async (patch) => {
+          const saved = await native().settings.set(patch);
+          window.gwApplySettings?.(saved);
+          return saved;
+        },
+      });
       maybeInstallEnhancements();
       success(result.instance, result.module);
     })().catch((error) => {
