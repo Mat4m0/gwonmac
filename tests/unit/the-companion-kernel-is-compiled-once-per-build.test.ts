@@ -41,8 +41,6 @@ function rendererCheckout(): string {
     writeFileSync(file, contents);
   };
   write("src/renderer/index.html", "<!doctype html>\n");
-  write("src/renderer/launcher.html", "<!doctype html>\n");
-  write("src/renderer/launcher.css", "css");
   write("src/renderer/loading.js", "export {};\n");
   write("src/renderer/gw-native.d.ts", "export {};\n");
   write("src/renderer/favicon.ico", "ico");
@@ -54,8 +52,6 @@ function rendererCheckout(): string {
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
   write("src/renderer/images/logo.webp", "webp");
   write("src/renderer/images/playstation-controller-prompts.png", "controller-png");
-  write("src/renderer/images/hero-poster.jpg", "jpeg");
-  write("src/renderer/images/hero-video.webm", "webm");
   write("apps/website/public/bg-reforged.jpg", "landscape");
   write("src/renderer/.DS_Store", "local metadata");
   write("src/renderer/images/local-note.txt", "untracked");
@@ -112,14 +108,6 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "licence",
     );
     assert.equal(
-      readFileSync(path.join(root, "build/renderer/images/hero-poster.jpg"), "utf8"),
-      "jpeg",
-    );
-    assert.equal(
-      readFileSync(path.join(root, "build/renderer/images/hero-video.webm"), "utf8"),
-      "webm",
-    );
-    assert.equal(
       readFileSync(
         path.join(root, "build/renderer/images/playstation-controller-prompts.png"),
         "utf8",
@@ -163,8 +151,6 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "fonts/inter.css",
       "harness.css",
       "images/bg-reforged.jpg",
-      "images/hero-poster.jpg",
-      "images/hero-video.webm",
       "images/logo.webp",
       "images/playstation-controller-prompts.png",
       "index.html",

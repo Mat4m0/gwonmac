@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ProfileId } from "../../src/shared/multiple-accounts.js";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import { closeOffline, launchCachedClient } from "./fixtures.mjs";
 
 declare global {
   var __profileCloseDialogs: {
@@ -16,7 +16,7 @@ const FIRST = "00000000-0000-4000-8000-000000000001";
 const SECOND = "00000000-0000-4000-8000-000000000002";
 
 test("keeps an account open until an incomplete save is resolved explicitly", async () => {
-  const fixture = await launchOffline("gw-multi-close-save-e2e-", {}, async (userData) => {
+  const fixture = await launchCachedClient("gw-multi-close-save-e2e-", {}, async (userData) => {
     await mkdir(path.join(userData, "multi"), { recursive: true });
     await writeFile(
       path.join(userData, "launcher-mode.json"),

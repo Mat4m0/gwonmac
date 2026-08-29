@@ -64,7 +64,7 @@ export async function seedLauncherProfileFixture(
   if (scenario === "interrupted") {
     await mkdir(paths.multiRoot, { recursive: true });
     await writeFile(
-      `${paths.multiWorkspace}.1234.abcdef.tmp`,
+      `${paths.multiWorkspace}.1234.abcdef12.tmp`,
       "{\"formatVersion\":1",
       { mode: 0o600 },
     );

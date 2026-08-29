@@ -10,9 +10,11 @@ type PackagerIgnore = NonNullable<ForgeConfig["packagerConfig"]>["ignore"];
 
 export const CORE_PRELOAD_ENTRY = "/build/preload/preload-core.cjs";
 export const TOOLS_PRELOAD_ENTRY = "/build/preload/preload-tools.cjs";
+export const LAUNCHER_PRELOAD_ENTRY = "/build/preload/preload-launcher.cjs";
 export const PRELOAD_ENTRIES = Object.freeze([
   CORE_PRELOAD_ENTRY,
   TOOLS_PRELOAD_ENTRY,
+  LAUNCHER_PRELOAD_ENTRY,
 ]);
 
 export const REQUIRED_PACKAGE_FILES = Object.freeze([
@@ -32,8 +34,7 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
   "/build/main/main.js",
   ...PRELOAD_ENTRIES,
   "/build/renderer/index.html",
-  "/build/renderer/images/hero-poster.jpg",
-  "/build/renderer/images/hero-video.webm",
+  "/build/renderer/launcher/index.html",
   "/build/renderer/images/logo.webp",
   "/package.json",
 ]);
@@ -53,6 +54,13 @@ export const DEVELOPER_PACKAGE_FILES = Object.freeze([
 export function assertRequiredPackageFiles(inventory: PackageInventory): void {
   for (const file of REQUIRED_PACKAGE_FILES) {
     if (!inventory.has(file)) throw new Error(`${file} is missing from the packaged app`);
+  }
+  for (const extension of [".js", ".css", ".jpg", ".webp", ".otf"]) {
+    if (![...inventory].some((file) =>
+      file.startsWith("/build/renderer/launcher/assets/") && file.endsWith(extension)
+    )) {
+      throw new Error(`the packaged Vue launcher has no ${extension} asset`);
+    }
   }
 }
 

@@ -9,7 +9,7 @@ import { closeOffline, launchOffline } from "./fixtures.mjs";
 test("Tools reset promises and clears both Travel preference owners", async () => {
   const fixture = await launchOffline(
     "gw-settings-tools-reset-e2e-",
-    {},
+    { GW_TEST_RETURN_LAUNCHER: "1" },
     async (userData) => {
       await writeFile(
         path.join(userData, "settings.json"),
@@ -53,10 +53,10 @@ test("Tools reset promises and clears both Travel preference owners", async () =
     });
 
     expect(await page.evaluate(() => window.launcherNative.settings.reset()))
-      .toMatchObject({ status: "complete" });
+      .toBeUndefined();
     expect(await app.evaluate(() => globalThis.__resetRestart.options?.detail))
       .toBe(
-        "Display, tools, Travel shortcuts, custom search phrases, window size and position, and diagnostics return to their defaults. Downloaded game data and your saved login stay untouched.",
+        "Accounts, saved logins, game files, builds, templates, screenshots, and chat logs are kept.",
       );
     const settings = JSON.parse(
       await readFile(path.join(userData, "settings.json"), "utf8"),

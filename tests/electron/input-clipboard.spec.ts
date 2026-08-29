@@ -281,43 +281,26 @@ test.describe("renderer text editing", () => {
             { phase: "input", inputType: "insertFromPaste", trusted: true },
           ]);
 
-        await app.evaluate(({ BrowserWindow, Menu }) => {
-          const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-          const item = Menu.getApplicationMenu()?.items[0]?.submenu?.items
-            .find((candidate) => candidate.label === "Settings…");
-          if (!win || !item?.click) throw new Error("Settings menu is unavailable");
-          item.click(item, win, {} as Electron.KeyboardEvent);
-        });
-        await page.locator("#settings-tab-templates").click();
         await page.evaluate(() => {
-          const label = document.getElementById("templates-name-field");
-          const preview = document.getElementById("templates-preview");
-          const input = document.getElementById("templates-name");
-          if (
-            !(label instanceof HTMLElement)
-            || !(preview instanceof HTMLElement)
-            || !(input instanceof HTMLInputElement)
-          ) {
-            throw new Error("Settings input is missing");
-          }
-          preview.hidden = false;
-          label.hidden = false;
+          const input = document.createElement("input");
+          input.id = "ordinary-chromium-input";
+          document.body.append(input);
           input.value = "ordinary Chromium";
           (window as OskWindow).Module.oskActiveInput = null;
           input.focus();
           input.setSelectionRange(0, 8);
         });
         expect(await page.evaluate(() => document.activeElement?.id))
-          .toBe("templates-name");
+          .toBe("ordinary-chromium-input");
         await clickEdit(app, EDIT_ITEMS.copy);
         await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
           .toBe("ordinary");
         await app.evaluate(({ clipboard }) => clipboard.writeText("normal"));
         await clickEdit(app, EDIT_ITEMS.paste);
-        await expect(page.locator("#templates-name")).toHaveValue("normal Chromium");
+        await expect(page.locator("#ordinary-chromium-input")).toHaveValue("normal Chromium");
         await clickEdit(app, EDIT_ITEMS.selectAll);
         await clickEdit(app, EDIT_ITEMS.cut);
-        await expect(page.locator("#templates-name")).toHaveValue("");
+        await expect(page.locator("#ordinary-chromium-input")).toHaveValue("");
         expect(await app.evaluate(({ clipboard }) => clipboard.readText()))
           .toBe("normal Chromium");
       } finally {

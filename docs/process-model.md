@@ -14,6 +14,8 @@ those facts.
 ```text
 Electron main process
   application lifecycle
+  revisioned launcher projection and launch queue
+  launcher presentation preferences
   account-profile workspace
   game-window registry
   ArenaNet client and content updates
@@ -25,18 +27,19 @@ Electron main process
   application updates
   diagnostics
           |
-          | validated IPC
-          v
-Sandboxed preload
-          |
-          | frozen window.gwNative capabilities
-          v
-Chromium renderer
-  launcher, game, and settings
-  Guild Wars Module host
-  input and presentation
-  required Core features
-  optional Tools
+          | validated, window-specific IPC
+          +-----------------------------+
+          v                             v
+Launcher preload                  Game preload
+  frozen launcherNative             frozen gwNative
+  profiles and global actions       profile runtime only
+          |                             |
+          v                             v
+Vue launcher renderer             Game renderer
+  setup and profiles                canvas and input
+  updates and game files            saved session
+  global Tools settings             health proof
+  support surfaces                  in-game Tools
 ```
 
 The renderer has no Node.js integration. Context isolation, the Chromium
@@ -46,8 +49,17 @@ The main process validates IPC senders and values. It also validates navigation,
 permissions, external links, DNS names, socket destinations, ports, and proxy
 routes.
 
-The preload exposes one frozen `window.gwNative` object. It transports
-capabilities. It does not own game rules or persistence rules.
+The two preloads expose different frozen capability objects. The launcher gets
+`window.launcherNative`, which can read one revisioned projection and send
+narrow profile or global commands. It cannot access credentials, Steam tokens,
+sockets, templates, game snapshots, or game health channels. A game window gets
+`window.gwNative`, which contains only its profile-owned runtime capabilities.
+Neither preload owns domain or persistence rules.
+
+The Vue renderer reads one `LauncherSnapshot` on mount and subscribes to newer
+revisions. The snapshot is a rebuildable projection, not writable state. The
+main process remains the canonical owner of profiles, downloads, updates,
+Tools, windows, and launch sequencing.
 
 ## Account profiles
 
@@ -115,11 +127,16 @@ selection.
 | `src/main/certification/` | Client certification and deterministic WASM transforms |
 | `src/main/protocol.ts` | `gw://app` routing and range responses |
 | `src/main/ipc.ts` | Validated IPC registration |
+| `src/main/launcher-ipc.ts` | Launcher-only IPC registration and sender validation |
+| `src/main/launcher-orchestrator.ts` | Revisioned launcher projection and queued profile launch commands |
+| `src/main/core/launcher-state.ts` | Atomic presentation-only launcher preferences |
 | `src/main/settings-actions.ts` | Confirmed settings actions and recovery requests |
 | `src/main/app-updater.ts` | Updates for the `gwonmac` application |
 | `src/main/diagnostics.ts` and `src/main/diagnostics/` | Diagnostics entry point and implementation |
-| `src/preload/preload.body.cjs` | Sandboxed preload body |
-| `src/renderer/` | Launcher, game host, input, presentation, and diagnostics UI |
+| `src/preload/preload.launcher.cjs` | Reduced sandboxed Vue-launcher preload body |
+| `src/preload/preload.body.cjs` | Sandboxed game preload body |
+| `apps/launcher/` | Vue launcher shell and deterministic development fixtures |
+| `src/renderer/` | Game host, input, presentation, in-game Tools, and diagnostics UI |
 | `src/companion-kernel/` | Read-only companion WASM for certified Core and Tools features |
 | `src/shared/` | Contracts and validation used by more than one process |
 | `src/tools/` and `tools/` | Maintainer commands and binary research tools |

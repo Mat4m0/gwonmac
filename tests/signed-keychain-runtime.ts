@@ -102,13 +102,15 @@ async function useSecrets(
     if (accountName !== "Main account") {
       const launcher = running.launcherPage;
       if (!launcher) throw new Error("the signed app did not expose the unified launcher");
-      let target = (await launcher.evaluate(() => window.gwNative.accounts.get()))
+      let target = (await launcher.evaluate(() => window.launcherNative.state.get()))
         .profiles.find((candidate) => candidate.name === accountName);
       if (!target) {
-        target = (await launcher.evaluate(
-          (name) => window.gwNative.accounts.create({ name }),
+        await launcher.evaluate(
+          (name) => window.launcherNative.profiles.create({ name }),
           accountName,
-        )).profiles.find((candidate) => candidate.name === accountName);
+        );
+        target = (await launcher.evaluate(() => window.launcherNative.state.get()))
+          .profiles.find((candidate) => candidate.name === accountName);
       }
       if (!target) throw new Error(`could not create signed test account ${accountName}`);
       gamePage = await openPackagedProfile(running, target.id);

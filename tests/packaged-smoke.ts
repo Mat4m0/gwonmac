@@ -100,6 +100,7 @@ const asarText = (file: string) =>
   extractFile(asarPath, file.slice(1)).toString("utf8");
 const packagedManifest = JSON.parse(asarText("/package.json"));
 const packagedRendererIndex = "/build/renderer/index.html";
+const packagedLauncherIndex = "/build/renderer/launcher/index.html";
 const packagedClosure = relativeEsmClosure({
   entryPoints: [
     packagedManifest.main,
@@ -108,12 +109,22 @@ const packagedClosure = relativeEsmClosure({
       packagedRendererIndex,
       asarText(packagedRendererIndex),
     ),
+    ...htmlScriptEntryPoints(
+      packagedLauncherIndex,
+      asarText(packagedLauncherIndex),
+    ),
   ],
   inventory: actualPackageFiles,
   readText: asarText,
 });
 assert.ok(packagedClosure.has("/build/main/certification/enhancement-builds.js"));
 assert.ok(packagedClosure.has("/build/renderer/enhancement-readout.js"));
+assert.ok(
+  [...packagedClosure].some((file) =>
+    file.startsWith("/build/renderer/launcher/assets/") && file.endsWith(".js")
+  ),
+  "the packaged dependency walk did not reach the Vue launcher",
+);
 
 const { stdout: bundleInfo } = await execFileAsync("plutil", [
   "-p",

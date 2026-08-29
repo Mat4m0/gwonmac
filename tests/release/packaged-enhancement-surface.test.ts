@@ -52,11 +52,13 @@ test("the packaged app contains the Enhancement runtime and its build tables", (
 test("every relative ESM dependency reachable from a shipped entry point is packaged", () => {
   const manifest = JSON.parse(shippedText("/package.json"));
   const rendererIndex = "/build/renderer/index.html";
+  const launcherIndex = "/build/renderer/launcher/index.html";
   const closure = relativeEsmClosure({
     entryPoints: [
       manifest.main,
       ...PRELOAD_ENTRIES,
       ...htmlScriptEntryPoints(rendererIndex, shippedText(rendererIndex)),
+      ...htmlScriptEntryPoints(launcherIndex, shippedText(launcherIndex)),
     ],
     inventory: packaged,
     readText: shippedText,
@@ -73,6 +75,24 @@ test("every relative ESM dependency reachable from a shipped entry point is pack
     "the packaged utility verifier entry must ship beside its host",
   );
   assert.ok(closure.has("/build/renderer/enhancement-readout.js"));
+  assert.ok(
+    [...closure].some((file) =>
+      file.startsWith("/build/renderer/launcher/assets/") && file.endsWith(".js")
+    ),
+    "the packaged dependency walk did not reach the Vue launcher",
+  );
+});
+
+test("the retired launcher assets are absent from the package", () => {
+  for (const file of [
+    "/build/renderer/launcher.html",
+    "/build/renderer/launcher.css",
+    "/build/renderer/launcher.js",
+    "/build/renderer/settings.css",
+    "/build/renderer/settings.js",
+  ]) {
+    assert.equal(packaged.has(file), false, `${file} still ships`);
+  }
 });
 
 test("the packaged app contains no developer tool", () => {
@@ -263,7 +283,7 @@ test("packaged builds refuse automation and developer programs independently", (
   assert.equal(foundation.none, true);
 });
 
-test("the cursor is required and retired cursor preferences are dropped", async () => {
+test("the cursor remains required without a retired game-side setting", async () => {
   // Loaded from `build/`, which is this suite's subject, and typed from the
   // `src/` modules `build/` is emitted from. The annotation is on the
   // declaration rather than an assertion on the call: a dynamic `import()`
@@ -280,7 +300,8 @@ test("the cursor is required and retired cursor preferences are dropped", async 
   assert.equal(parseSettings({ targetReadout: true }).targetReadout, true);
 
   assert.doesNotMatch(shippedText("/build/renderer/index.html"), /name="nativeCursor"/u);
-  assert.match(shippedText("/build/renderer/index.html"), /Guild Wars cursor/u);
-  assert.match(shippedText("/build/renderer/index.html"), /name="gwonmacTools"/u);
-  assert.match(shippedText("/build/renderer/index.html"), /name="targetReadout"/u);
+  assert.doesNotMatch(
+    shippedText("/build/renderer/index.html"),
+    /Guild Wars cursor|name="gwonmacTools"|name="targetReadout"/u,
+  );
 });

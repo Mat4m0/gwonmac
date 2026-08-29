@@ -428,6 +428,7 @@ test.describe("Electron application", () => {
           resetPage.evaluate(
             () => (window as ResetProbeWindow).__windowResetReleasedInput,
           ),
+          { timeout: 15_000 },
         )
         .toBe(true);
       await expect

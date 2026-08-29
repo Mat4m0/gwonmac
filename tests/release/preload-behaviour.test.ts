@@ -162,7 +162,6 @@ function call(api: GwNativeApi, dotted: string): Capability {
 }
 
 const PACKET = new Uint8Array([1, 2, 3, 4]);
-const PROFILE_ID = "00000000-0000-4000-8000-000000000001";
 const RENDERER_SETTINGS_PATCH = { renderScale: 2 } satisfies RendererSettingsPatch;
 
 /** A request/response capability, with the arguments a caller really passes. */
@@ -240,35 +239,15 @@ const INVOCATIONS: Invocation[] = [
     }],
     channel: IPC.traderPriceHistoryGet,
   },
-  { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {
-    path: "accounts.create",
-    args: [{ name: "Alt" }],
-    channel: IPC.accountsCreate,
-  },
-  {
-    path: "accounts.update",
-    args: [{
-      id: PROFILE_ID,
-      name: "Alt",
-      templates: "shared",
-      builds: "private",
-    }],
-    channel: IPC.accountsUpdate,
-  },
-  { path: "accounts.archive", args: [PROFILE_ID], channel: IPC.accountsArchive },
-  { path: "accounts.restore", args: [PROFILE_ID], channel: IPC.accountsRestore },
-  { path: "accounts.delete", args: [PROFILE_ID], channel: IPC.accountsDelete },
-  { path: "accounts.open", args: [[PROFILE_ID]], channel: IPC.accountsOpen },
-  {
-    path: "accounts.loadTemplates",
+    path: "profileTemplates.loadTemplates",
     args: [],
-    channel: IPC.accountsTemplatesLoad,
+    channel: IPC.profileTemplatesLoad,
   },
   {
-    path: "accounts.saveTemplates",
+    path: "profileTemplates.saveTemplates",
     args: [[{ path: "Skills/Alt.txt", contents: "OQCiUyo8AkVwR4KMMGAAAEAA" }]],
-    channel: IPC.accountsTemplatesSave,
+    channel: IPC.profileTemplatesSave,
   },
   { path: "shortcuts.capture", args: [], channel: IPC.shortcutCapture },
   {
@@ -417,6 +396,7 @@ const INVOCATIONS: Invocation[] = [
     args: [{ generation: 7, fingerprint: "a".repeat(64) }],
     channel: IPC.clientHealthy,
   },
+  { path: "client.readyToPresent", args: [], channel: IPC.gameReadyToPresent },
   { path: "client.session", args: [], channel: IPC.clientSession },
   { path: "appUpdates.getState", args: [], channel: IPC.appUpdatesGetState },
   { path: "appUpdates.check", args: [], channel: IPC.appUpdatesCheck },
@@ -467,11 +447,6 @@ const SUBSCRIPTIONS: Subscription[] = [
     path: "appUpdates.onState",
     channel: IPC.appUpdatesState,
     subscribe: (api, listener) => api.appUpdates.onState(listener),
-  },
-  {
-    path: "accounts.onChange",
-    channel: IPC.accountsState,
-    subscribe: (api, listener) => api.accounts.onChange(listener),
   },
   {
     path: "trade.onEvent",

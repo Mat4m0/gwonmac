@@ -30,11 +30,31 @@ import {
   TOOLBOX_SNAPSHOT_POINTER,
 } from "./packaged-enhancement-fixture.ts";
 
+async function clearProductionCompanion(page: Page): Promise<void> {
+  await page.waitForFunction(() =>
+    document.querySelectorAll("#toolbox-foundation, #enhancement-target").length > 0
+    || typeof window.gwCursorState === "function");
+  await page.evaluate(async () => {
+    // The packaged fixture now reaches the real game renderer before these
+    // deliberately synthetic runtime probes begin. The host-only Tools path is
+    // owned by the renderer and tears down on `beforeunload`; a certified
+    // companion owns its own `pagehide` cleanup. Exercise both production
+    // boundaries before installing the probe so the two runtimes never share
+    // globals, surfaces, or event listeners.
+    globalThis.dispatchEvent(new Event("beforeunload"));
+    globalThis.dispatchEvent(new Event("pagehide"));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  });
+  await page.waitForFunction(() =>
+    document.querySelectorAll("#toolbox-foundation, #enhancement-target").length === 0);
+}
+
 async function installTargetReadout(
   page: Page,
   moduleBytes: Uint8Array,
   capabilities = TARGET_ONLY,
 ) {
+  await clearProductionCompanion(page);
   return page.evaluate(async ({
     bytes,
     tableSize,
@@ -79,7 +99,6 @@ async function installTargetReadout(
     const { installCertifiedCompanion }:
       typeof import("../../src/renderer/certified-companion-installation.ts") =
       await import(specifier);
-    globalThis.dispatchEvent(new Event("pagehide"));
     const runtime = await installCertifiedCompanion(
       {
         exports: {
@@ -590,6 +609,7 @@ export async function assertToolboxFoundationLifecycle() {
       const { Module } = globalThis as PageGlobals;
       return typeof Module?.socket?.connect === "function";
     });
+    await clearProductionCompanion(fixture.page);
     const result = await fixture.page.evaluate(async ({
       bytes,
       layout,
@@ -1259,6 +1279,7 @@ export async function assertRollbackAfterTablePublication() {
       const { Module } = globalThis as PageGlobals;
       return typeof Module?.socket?.connect === "function";
     });
+    await clearProductionCompanion(fixture.page);
     const result = await fixture.page.evaluate(async ({ bytes, tableSize, capabilities }: {
       bytes: number[];
       tableSize: number;

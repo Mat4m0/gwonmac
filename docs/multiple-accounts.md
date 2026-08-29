@@ -18,7 +18,9 @@ Failure in one profile does not close another profile.
 | State | Owner |
 |---|---|
 | Profile registry and deletion journal | `multi/workspace.json` |
+| Launcher setup, content order, remembered selection, profile appearance | `launcher-state.json` |
 | Live profile state | Main-process profile runtime |
+| Queued launch intent and launcher snapshot | Main-process launcher orchestrator |
 | Launcher and game-window identity | Main-process window registry |
 | Window presentation | Main-process window coordinator |
 | Application settings, client downloads, repair, updates, Tools install | Global main-process owners |
@@ -28,6 +30,11 @@ Failure in one profile does not close another profile.
 The renderer displays validated snapshots and sends narrow commands. It never
 chooses storage, migrates data, owns update state, or identifies its profile.
 Main resolves the immutable profile from the registered native sender.
+
+`launcher-state.json` contains presentation state only. It is created
+atomically before account bootstrap and is not another profile or settings
+store. Corrupt JSON is preserved before conservative defaults are written;
+ordinary read failures remain fatal and are never treated as corruption.
 
 ## Existing installation adoption
 
@@ -79,9 +86,29 @@ panels, parent-child windows, all-workspaces behavior, or an AppKit bridge.
 Physical Dock, Command-Tab, Spaces, Stage Manager, and multi-display ordering
 remain packaged macOS qualification boundaries.
 
+## Launch queue and first frame
+
+The main process owns one queue of requested profile IDs. A healthy installed
+client opens immediately. During first preparation, Play records the requested
+profiles and preparation continues independently; Cancel waiting removes only
+profiles that have not started. Once the client is playable, the queue drains
+one profile at a time so the first candidate window can complete the existing
+client canary before another profile starts. A global client failure moves the
+launcher to one repair state without marking every profile as failed.
+
+A game window is created only after a playable client exists. Electron keeps it
+hidden after `ready-to-show`; the game renderer then submits the dedicated
+`gameReadyToPresent` event with its owning profile. Main accepts that event once,
+restores maximize or fullscreen state, and presents the window only if the
+launch still owns focus. A crash or 90-second timeout destroys only that
+profile window and returns a local retry state. Diagnostics are not used as
+presentation control flow.
+
 ## Security boundary
 
-The launcher has a dedicated sandboxed session and exact trusted URL. It can
-read profile summaries plus global progress/update state and can request Play,
-Show, Add, or retry. It cannot access game sockets, credentials, Steam tokens,
-player files, templates, snapshots, or game diagnostics.
+The launcher uses the isolated `persist:gw-launcher` session and exact
+`gw://app/launcher/index.html` main-frame URL. Its reduced preload can read the
+revisioned launcher snapshot and request validated profile, setup, settings,
+Tools, game-file, update, and external-link actions. It cannot access game
+sockets, credentials, Steam tokens, player files, templates, snapshots, or game
+diagnostics. Game windows cannot invoke launcher mutation channels.

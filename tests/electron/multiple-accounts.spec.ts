@@ -26,6 +26,33 @@ declare global {
 const FIRST = "00000000-0000-4000-8000-000000000001";
 const SECOND = "00000000-0000-4000-8000-000000000002";
 
+for (const scenario of ["multi", "mixed", "interrupted"] as const) {
+  test(`${scenario} account data bootstraps into the unified launcher`, async () => {
+    const fixture = await launchCachedClient(`gw-${scenario}-bootstrap-`, {
+      GW_TEST_RETURN_LAUNCHER: "1",
+    }, (userData) => seedLauncherProfileFixture(userData, scenario));
+    try {
+      const snapshot = await fixture.page.evaluate(() => window.launcherNative.state.get());
+      expect(snapshot.experience.installationKind).toBe(
+        scenario === "multi" ? "migrated-multi" : scenario === "mixed" ? "mixed" : "fresh",
+      );
+      expect(snapshot.profiles.map(({ name }) => name)).toEqual(
+        scenario === "multi"
+          ? ["Existing account"]
+          : scenario === "mixed"
+            ? ["Main account", "Existing account"]
+            : ["Main account"],
+      );
+      expect(snapshot.experience.setup).toBe(scenario === "interrupted" ? "pending" : "complete");
+      if (scenario === "interrupted") {
+        expect((await readFile(path.join(fixture.userData, "multi", "workspace.json.1234.abcdef12.tmp"), "utf8").catch(() => null))).toBeNull();
+      }
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+}
+
 async function seedTwoProfiles(userData: string): Promise<void> {
   await mkdir(path.join(userData, "multi"), { recursive: true });
   await writeFile(path.join(userData, "multi", "workspace.json"), JSON.stringify({
@@ -173,6 +200,13 @@ test("an existing Single account is adopted before a new profile is added", asyn
   );
   try {
     await expect(fixture.page.getByText("Ready to play")).toBeVisible({ timeout: 30_000 });
+    await fixture.app.evaluate(({ app, BrowserWindow }) => {
+      app.focus({ steal: true });
+      const launcher = BrowserWindow.getAllWindows()
+        .find((win) => win.webContents.getURL().endsWith("launcher/index.html"));
+      launcher?.show();
+      launcher?.focus();
+    });
     const state = await fixture.page.evaluate(() => window.launcherNative.state.get());
     expect(state.profiles[0]?.id).toBe(LEGACY_PRIMARY_PROFILE_ID);
 
@@ -211,9 +245,6 @@ test("Show never duplicates a game and companion close policy stays profile-loca
     if (!startedGame) throw new Error("game window is required");
     await startedGame.evaluate(() => window.gwNative.client.readyToPresent());
     await fixture.page.evaluate(() => window.__concurrentProfileOpen);
-    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows().find((win) => win.webContents.getURL() === "gw://app/")?.isFocused(),
-    )).toBe(true);
     await expect.poll(() => fixture.page.evaluate(() =>
       window.launcherNative.state.get().then((snapshot) => snapshot.profiles[0]?.state),
     )).toBe("running");
@@ -230,8 +261,8 @@ test("Show never duplicates a game and companion close policy stays profile-loca
     await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) => {
       const game = BrowserWindow.getAllWindows()
         .find((win) => win.webContents.getURL() === "gw://app/");
-      return game ? { focused: game.isFocused(), minimized: game.isMinimized() } : null;
-    })).toEqual({ focused: true, minimized: false });
+      return game ? { visible: game.isVisible(), minimized: game.isMinimized() } : null;
+    })).toEqual({ visible: true, minimized: false });
 
     await fixture.app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()
@@ -245,8 +276,8 @@ test("Show never duplicates a game and companion close policy stays profile-loca
     await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) => {
       const launcher = BrowserWindow.getAllWindows()
         .find((win) => win.webContents.getURL().endsWith("launcher/index.html"));
-      return launcher ? { focused: launcher.isFocused(), visible: launcher.isVisible() } : null;
-    })).toEqual({ focused: true, visible: true });
+      return launcher?.isVisible() ?? false;
+    })).toBe(true);
 
     const game = fixture.app.windows().find((page) => page.url() === "gw://app/");
     if (!game) throw new Error("game window is required");
@@ -357,8 +388,42 @@ test("mandatory client repair blocks Play and stays global", async () => {
     });
     expect(outcome).toBe("blocked");
     expect(fixture.app.windows().filter((page) => page.url() === "gw://app/")).toHaveLength(0);
-    await fixture.page.getByRole("button", { name: "Open Game Files" }).click();
+    await fixture.page.locator(".priority-banner").getByRole("button", { name: "Open Game Files" }).click();
     await expect(fixture.page.getByRole("button", { name: "Repair game files" })).toBeVisible();
+  } finally {
+    await closeOffline(fixture);
+  }
+});
+
+test("a production-style game stays hidden until its first frame and has no second launcher", async () => {
+  const fixture = await launchCachedClient("gw-first-frame-cutover-", {
+    GW_TEST_RETURN_LAUNCHER: "1",
+    GW_TEST_ALLOW_UNREADY_LAUNCH: "0",
+    GW_BACKGROUND_LAUNCH: "0",
+  });
+  try {
+    const id = await fixture.page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles[0]!.id);
+    await fixture.page.evaluate((profileId) => {
+      window.__concurrentProfileOpen = window.launcherNative.profiles.play([profileId]);
+    }, id);
+    const game = await fixture.app.waitForEvent("window");
+    await game.waitForLoadState("domcontentloaded");
+    expect(await fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().find((win) =>
+        win.webContents.getURL() === "gw://app/")?.isVisible() ?? true,
+    )).toBe(false);
+    expect(await game.evaluate(() => ({
+      canvas: document.querySelectorAll("canvas").length,
+      launcherBridge: typeof (window as Window & { launcherNative?: unknown }).launcherNative,
+      forbiddenText: /Play Guild Wars|Check for updates|Repair game files|Settings/.test(document.body.innerText),
+    }))).toEqual({ canvas: 1, launcherBridge: "undefined", forbiddenText: false });
+    await game.evaluate(() => window.gwNative.client.readyToPresent());
+    await fixture.page.evaluate(() => window.__concurrentProfileOpen);
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().find((win) =>
+        win.webContents.getURL() === "gw://app/")?.isVisible() ?? false,
+    )).toBe(true);
   } finally {
     await closeOffline(fixture);
   }

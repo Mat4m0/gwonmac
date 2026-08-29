@@ -10,5 +10,11 @@ export const boxOf = async (locator: Locator) => {
 
 export async function startGameInput(page: Page) {
   const canvas = page.locator("#canvas");
-  await expect(canvas).toHaveAttribute("data-input-ready", "true");
+  // A full Electron run can have several recently closed renderer processes
+  // draining while the next cached fixture starts. The product has no
+  // five-second startup promise; wait for the explicit renderer-owned signal
+  // instead of turning temporary suite load into an input failure.
+  await expect(canvas).toHaveAttribute("data-input-ready", "true", {
+    timeout: 15_000,
+  });
 }

@@ -89,7 +89,7 @@ export async function openPackagedProfile(
   }
   const previousPages = new Set(allPages(running.browser));
   await launcher.evaluate((id) => {
-    void window.gwNative.accounts.open([id]).catch(() => undefined);
+    void window.launcherNative.profiles.play([id]).catch(() => undefined);
   }, profileId);
   return waitForGamePage(running.browser, previousPages);
 }
@@ -162,7 +162,7 @@ export async function launchPackagedApp(
     if (!launcherPage || options.openFirstProfile !== true) return running;
 
     const profileId = await launcherPage.evaluate(async () =>
-      (await window.gwNative.accounts.get()).profiles.find(
+      (await window.launcherNative.state.get()).profiles.find(
         (profile) => !profile.archived,
       )?.id ?? null
     );

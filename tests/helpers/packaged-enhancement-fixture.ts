@@ -446,7 +446,7 @@ export async function launchPackaged(
       output,
       "gw://app/launcher/index.html",
     );
-    await launcher.getByRole("button", { name: /^Play /u }).click({
+    await launcher.getByRole("button", { name: "Play", exact: true }).click({
       timeout: 30_000,
     });
     const page = await rendererPage(browser, child, output, "gw://app/");
