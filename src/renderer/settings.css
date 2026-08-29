@@ -107,12 +107,12 @@
 .settings-cartography-custom { padding: 0; border: 0; }
 .settings-cartography-styles > legend,
 .settings-cartography-custom > legend { margin-bottom: var(--ui-space-2); color: var(--ui-text-bright); font-weight: var(--ui-font-weight-semibold); }
-.settings-cartography-style-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--ui-space-2); }
+.settings-cartography-style-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--ui-space-2); }
 .settings-cartography-style-list label { display: grid; min-height: 70px; place-items: center; gap: 5px; padding: var(--ui-space-2); border: 1px solid var(--ui-line-soft); border-radius: var(--ui-radius-lg); cursor: pointer; }
 .settings-cartography-style-list label:has(input:checked) { border-color: var(--ui-accent); background: var(--ui-selection-fill); color: var(--ui-selection-ink); }
 .settings-cartography-style-list input { position: absolute; opacity: 0; pointer-events: none; }
 .settings-cartography-style-list label:focus-within { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
-.settings-cartography-style-list [data-cartography-style-swatch] { width: 28px; height: 28px; border: 2px solid var(--cartography-outline); border-radius: var(--ui-radius-pill); background: conic-gradient(var(--cartography-missing) 0 25%, var(--cartography-current) 0 50%, var(--cartography-range) 0 75%, var(--cartography-veil) 0); }
+.settings-cartography-style-list [data-cartography-style-swatch] { width: 28px; height: 28px; border: 2px solid var(--cartography-outline); border-radius: var(--ui-radius-pill); background: linear-gradient(to right, transparent 45%, var(--cartography-grid) 45% 55%, transparent 55%), linear-gradient(to bottom, transparent 45%, var(--cartography-grid) 45% 55%, transparent 55%), var(--cartography-veil); box-shadow: 0 0 0 1px var(--ui-edge); }
 .settings-cartography-opacity { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--ui-space-2); }
 .settings-cartography-opacity label { color: var(--ui-text-bright); font-weight: var(--ui-font-weight-semibold); }
 .settings-cartography-opacity output,

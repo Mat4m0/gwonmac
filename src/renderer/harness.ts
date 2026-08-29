@@ -21,9 +21,6 @@ type GwClientImports = Parameters<
     typeof import('./wasm-memory-attribution.js').installWasmMemoryAttribution
   >[0]['imports'] &
   Parameters<
-    typeof import('./webgl-texture-recon.js').installWebGlTextureRecon
-  >[0]['imports'] &
-  Parameters<
     typeof import('./controller-prompt-texture.js').installControllerPromptTexture
   >[0]['imports'] &
   Parameters<
@@ -572,7 +569,6 @@ let controllerPrompts: import('./controller-prompt-texture.js').PreparedControll
 let host: typeof import('./graphics.js') &
   typeof import('./client-exit.js') &
   typeof import('./wasm-memory-attribution.js') &
-  typeof import('./webgl-texture-recon.js') &
   typeof import('./gl-program-cache.js') &
   typeof import('./filesystem.js') &
   typeof import('./input.js') &
@@ -648,7 +644,6 @@ addEventListener('beforeunload', () => {
   automaticCharacterReturn?.dispose();
   delete window.gwVirtualGamepad;
   delete window.gwControllerPromptTextureStats;
-  delete window.gwTextureRecon;
 });
 
 Module = {
@@ -676,17 +671,6 @@ Module = {
       );
     } else {
       delete window.gwTextureStats;
-    }
-    if (window.gwNative.init.development && glOverridesEnabled) {
-      const textureRecon = host.installWebGlTextureRecon({
-        imports,
-        module: Module,
-        log,
-      });
-      if (textureRecon) {
-        window.gwTextureRecon = textureRecon;
-        addEventListener('gw:graphics-context-reset', textureRecon.resetContext);
-      }
     }
     if (controllerPrompts) {
       const installedControllerPrompts = controllerPrompts.install({
@@ -773,24 +757,22 @@ Module = {
       milestone('wasm.instantiate.end');
       gameWasmInstance = result.instance;
       gameWasmModule = result.module;
-      if (window.gwNative.init.development) {
-        const { installCartographySpike } = await import('./cartography-spike/index.js');
-        disposeCartographySpike();
-        disposeCartographySpike = installCartographySpike({
-          exports: result.instance.exports,
-          parent: document.body,
-          canvas: Module.canvas,
-          settings: () => {
-            if (appSettings === null) throw new Error('cartography installed before settings');
-            return appSettings;
-          },
-          persist: async (patch) => {
-            const saved = await native().settings.set(patch);
-            window.gwApplySettings?.(saved);
-            return saved;
-          },
-        });
-      }
+      const { installCartographySpike } = await import('./cartography-spike/index.js');
+      disposeCartographySpike();
+      disposeCartographySpike = installCartographySpike({
+        exports: result.instance.exports,
+        parent: document.body,
+        canvas: Module.canvas,
+        settings: () => {
+          if (appSettings === null) throw new Error('cartography installed before settings');
+          return appSettings;
+        },
+        persist: async (patch) => {
+          const saved = await native().settings.set(patch);
+          window.gwApplySettings?.(saved);
+          return saved;
+        },
+      });
       maybeInstallEnhancements();
       success(result.instance, result.module);
     })().catch((error) => {
@@ -1295,7 +1277,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       { createSocketHost },
       clientExit,
       memoryAttribution,
-      textureRecon,
       graphics,
       glProgramCache,
       filesystem,
@@ -1317,7 +1298,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       import('./socket-host.js'),
       import('./client-exit.js'),
       import('./wasm-memory-attribution.js'),
-      import('./webgl-texture-recon.js'),
       import('./graphics.js'),
       import('./gl-program-cache.js'),
       import('./filesystem.js'),
@@ -1338,7 +1318,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     host = {
       ...clientExit,
       ...memoryAttribution,
-      ...textureRecon,
       ...graphics,
       ...glProgramCache,
       ...filesystem,

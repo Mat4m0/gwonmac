@@ -21,7 +21,10 @@ import {
   isDerivedNativeDoubleClickBuild,
   rewriteNativeDoubleClickWasm,
 } from "../../src/main/certification/native-double-click.js";
-import { rewriteExtendedMemoryWasm } from
+import {
+  deriveExtendedMemoryStructuralProof,
+  rewriteExtendedMemoryWasm,
+} from
   "../../src/main/certification/extended-memory.js";
 import { rewriteTemplateSaveWasm } from
   "../../src/main/certification/template-save-compat.js";
@@ -30,7 +33,7 @@ import {
   RELEASE_ENHANCEMENT_CAPABILITIES,
 } from "../../src/shared/enhancement-contracts.js";
 
-const sha256 = (bytes: Uint8Array): string =>
+const sha256 = (bytes: Uint8Array | string): string =>
   createHash("sha256").update(bytes).digest("hex");
 
 test("every shipped runtime profile reproduces the real client chain", async () => {
@@ -86,18 +89,29 @@ test("every shipped runtime profile reproduces the real client chain", async () 
       enhancementCapabilities: capabilities,
       compatibilityCacheRoot: join(cacheRoot, "file"),
       enhancementCacheRoot: join(cacheRoot, "enhancement"),
+      cartographySpike: { cacheRoot: join(cacheRoot, "cartography") },
       nativeDoubleClickCacheRoot: join(cacheRoot, "double-click"),
       extendedMemoryCacheRoot: join(cacheRoot, "memory"),
-      extendedMemoryEnabled: false,
+      extendedMemoryEnabled: true,
     }, async ({ wasmPath, inputSha256 }) => {
       const input = new Uint8Array(await readFile(wasmPath));
       assert.equal(sha256(input), inputSha256);
       return deriveNativeDoubleClickBuild(input);
+    }, async ({ jsPath, jsInputSha256, wasmPath, wasmInputSha256 }) => {
+      const [jsInput, wasmInput] = await Promise.all([
+        readFile(jsPath, "utf8"),
+        readFile(wasmPath),
+      ]);
+      assert.equal(sha256(jsInput), jsInputSha256);
+      assert.equal(sha256(wasmInput), wasmInputSha256);
+      return deriveExtendedMemoryStructuralProof(jsInput, wasmInput);
     });
     try {
       const prepared = await prepare();
       assert.equal(prepared.failure, null);
+      assert.equal(prepared.cartography, true);
       assert.equal(prepared.nativeDoubleClick, true);
+      assert.equal(prepared.extendedMemory.status, "active");
       assert.deepEqual(prepared.effectiveCapabilities, capabilities);
       assert.equal(sha256(await readFile(prepared.wasmPath)), prepared.wasmSha256);
 
@@ -106,7 +120,9 @@ test("every shipped runtime profile reproduces the real client chain", async () 
       await writeFile(prepared.wasmPath, "stale release qualification cache");
       const rebuilt = await prepare();
       assert.equal(rebuilt.failure, null);
+      assert.equal(rebuilt.cartography, true);
       assert.equal(rebuilt.nativeDoubleClick, true);
+      assert.equal(rebuilt.extendedMemory.status, "active");
       assert.equal(rebuilt.wasmSha256, prepared.wasmSha256);
       assert.equal(sha256(await readFile(rebuilt.wasmPath)), rebuilt.wasmSha256);
     } finally {

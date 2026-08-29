@@ -48,7 +48,7 @@ must receive input unchanged. A stationary state must not redraw continuously.
 | Move map window | `capture mission-window-moved` | Overlay follows the drawable region exactly. |
 | Resize map window | `capture mission-window-resized` | Bounds and scale update without an old-sized frame or vertical offset. |
 | Resize game window | `capture mission-game-resized` | Projection remains attached at the new global scale. |
-| Hover a cell | `capture mission-cell-hover` | Hover guidance identifies one cell and its reveal neighborhood without intercepting map input. |
+| Hold Shift and hover a cell | `capture mission-cell-hover` | Hover guidance identifies one cell and its reveal neighborhood without intercepting map input; releasing Shift hides it. |
 | Close and reopen | `capture mission-reopened` | Projection returns without a stale duplicate canvas. |
 
 Compare the reported cell pixel sizes with the visible result. Values must
@@ -59,8 +59,8 @@ change proportionally with zoom and resizing.
 Capture `layers-grid-only`, `layers-walkability-only`, and `layers-all` from
 the same position. Grid and walkability must remain independently switchable,
 use the shared style coherently, and preserve native map detail. Repeat a
-combined capture at low, medium, and full opacity and with the Quiet and Paper
-presets. Copy a preset into Custom and confirm that each semantic color changes
+combined capture at low, medium, and full opacity and with the Contrast, Soft,
+and Monochrome presets. Copy a preset into Custom and confirm that each semantic color changes
 the same role on the Compass and Mission Map.
 
 Then capture a district transition, explorable entry, mission restart,

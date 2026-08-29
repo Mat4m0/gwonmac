@@ -45,6 +45,21 @@ export const EXPLORATION_SPIKE_SCALARS = Object.freeze([
   EXPLORATION_SPIKE_GLOBALS.dwordCount,
 ]);
 
+export const WORLD_MAP_ANCHOR_SPIKE_GLOBALS = Object.freeze({
+  status: "gwonmac_world_map_anchor_spike_status",
+  generation: "gwonmac_world_map_anchor_spike_generation",
+  worldAnchorX: "gwonmac_world_map_anchor_spike_x",
+  worldAnchorY: "gwonmac_world_map_anchor_spike_y",
+  observe: "gwonmac_world_map_anchor_spike_observe",
+});
+
+export const WORLD_MAP_ANCHOR_SPIKE_SCALARS = Object.freeze([
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.status,
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.generation,
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorX,
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorY,
+]);
+
 type NativeFrameGlobals = Readonly<{
   status: string;
   generation: string;
@@ -230,3 +245,12 @@ export type ExplorationSpikeController = SpikeController<ExplorationSpikeSnapsho
   isExplored(cellX: number, cellY: number): boolean | null;
   readBitmap(): ExplorationSpikeBitmap | null;
 }>;
+
+export type WorldMapAnchorSpikeSnapshot = Readonly<{
+  status: number;
+  generation: number;
+  worldAnchorX: number;
+  worldAnchorY: number;
+}>;
+
+export type WorldMapAnchorSpikeController = SpikeController<WorldMapAnchorSpikeSnapshot>;

@@ -72,7 +72,7 @@ export interface ClientModulePreparationFailure {
   readonly stage:
     | "template-save"
     | "enhancement"
-    | "cartography-spike"
+    | "cartography"
     | "native-double-click";
   readonly error: unknown;
 }
@@ -92,6 +92,8 @@ interface PreparedWasmClientModule {
    * renderer's switch and not merely a report.
    */
   readonly nativeDoubleClick: boolean;
+  /** Whether the served module carries the certified Cartography observers. */
+  readonly cartography: boolean;
 }
 
 function productCapabilityCount(capabilities: EnhancementCapabilities): number {
@@ -154,7 +156,7 @@ export interface PrepareClientModuleOptions {
   readonly enhancementCapabilities: EnhancementCapabilities;
   readonly compatibilityCacheRoot: string;
   readonly enhancementCacheRoot: string;
-  /** Development-only. Omitted by every normal preparation caller. */
+  /** Omitted only for diagnostic profiles that require the untouched client. */
   readonly cartographySpike?: Readonly<{ cacheRoot: string }>;
   readonly nativeDoubleClickCacheRoot: string;
   readonly extendedMemoryCacheRoot: string;
@@ -303,7 +305,7 @@ export async function prepareClientModule(
 ): Promise<PreparedClientModule> {
   const certified = await prepareCertifiedChain(options);
   const cartography = options.cartographySpike
-    ? await prepareCartographySpike(
+      ? await prepareCartographySpike(
         certified.wasmPath,
         certified.wasmSha256,
         options.cartographySpike.cacheRoot,
@@ -315,9 +317,10 @@ export async function prepareClientModule(
         ...certified,
         wasmPath: cartography.wasmPath,
         wasmSha256: cartography.wasmSha256,
+        cartography: cartography.error === null,
         failure: cartography.error === null
           ? certified.failure
-          : certified.failure ?? { stage: "cartography-spike", error: cartography.error },
+          : certified.failure ?? { stage: "cartography", error: cartography.error },
       };
   const prepared = await withNativeDoubleClick(
     cartographyPrepared,
@@ -378,8 +381,8 @@ export async function prepareClientModule(
  * Select and prepare the one client module this launch serves.
  *
  * The product chain is fixed: official -> template-save -> optional
- * Enhancement. The development-only cartography stage is appended afterward
- * by `prepareClientModule`. Unknown and disabled stages delete caches they
+ * Enhancement. The certified Cartography stage is appended afterward by
+ * `prepareClientModule`. Unknown and disabled stages delete caches they
  * cannot use. A transform failure is graceful and leaves the last good cache
  * intact, but never serves it for a different input.
  */
@@ -438,6 +441,7 @@ async function prepareCertifiedChain(
       enhancementBuild: null,
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
+      cartography: false,
       nativeDoubleClick: false,
       failure: fileFailure ?? cleanupFailure,
     };
@@ -452,6 +456,7 @@ async function prepareCertifiedChain(
       enhancementBuild: null,
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
+      cartography: false,
       nativeDoubleClick: false,
       failure: {
         stage: "enhancement",
@@ -468,6 +473,7 @@ async function prepareCertifiedChain(
       enhancementBuild: null,
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
+      cartography: false,
       nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
@@ -491,6 +497,7 @@ async function prepareCertifiedChain(
         enhancementBuild,
         requestedCapabilities,
         effectiveCapabilities: candidate,
+        cartography: false,
         nativeDoubleClick: false,
         failure: firstFailure === null
           ? fileFailure
@@ -507,6 +514,7 @@ async function prepareCertifiedChain(
     enhancementBuild,
     requestedCapabilities,
     effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
+    cartography: false,
     nativeDoubleClick: false,
     failure: firstFailure === null
       ? null

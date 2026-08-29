@@ -259,7 +259,7 @@ const candidateSettingsDomains = Array.from(
       cartographyOverlayEnabled: cycle(booleanValues, index),
       cartographyGridEnabled: cycle(booleanValues, index + 1),
       cartographyRevealMode: cycle(["off", "normal", "birds-eye"] as const, index),
-      cartographyOverlayStyle: "black",
+      cartographyOverlayStyle: "contrast",
       cartographyOverlayOpacity: cycle([0, 55, 100] as const, index),
       cartographyControlIdleOpacity: cycle([15, 35, 100] as const, index),
       cartographyOverlayCustomStyle: {

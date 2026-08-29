@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   advancePathingMapLifecycle,
+  createPathingMapSession,
   type PathingMapLifecycle,
 } from "../../src/renderer/cartography-spike/pathing-lifecycle.js";
 import {
@@ -14,32 +15,71 @@ import {
 test("resets pathing once while leaving a ready map", () => {
   let state: PathingMapLifecycle = Object.freeze({
     lastReadyMapId: null,
+    lastReadyCapture: null,
     resetForTransition: false,
   });
-  let result = advancePathingMapLifecycle(state, 650);
+  let result = advancePathingMapLifecycle(state, { mapId: 650, capture: "1:4:200" });
   assert.equal(result.reset, false);
+  assert.equal(result.mapChanged, false);
 
   result = advancePathingMapLifecycle(result.lifecycle, null);
   assert.equal(result.reset, true);
+  assert.equal(result.mapChanged, false);
   state = result.lifecycle;
 
   result = advancePathingMapLifecycle(state, null);
   assert.equal(result.reset, false);
 
-  result = advancePathingMapLifecycle(result.lifecycle, 651);
+  result = advancePathingMapLifecycle(
+    result.lifecycle,
+    { mapId: 651, capture: "2:1:180" },
+  );
   assert.equal(result.reset, false);
   assert.deepEqual(result.lifecycle, {
     lastReadyMapId: 651,
+    lastReadyCapture: "2:1:180",
     resetForTransition: false,
   });
 });
 
-test("resets when a map id changes without an observed loading frame", () => {
+test("resets stale pathing when a map id changes without an observed loading frame", () => {
   const result = advancePathingMapLifecycle(
-    Object.freeze({ lastReadyMapId: 650, resetForTransition: false }),
-    651,
+    Object.freeze({
+      lastReadyMapId: 650,
+      lastReadyCapture: "1:4:200",
+      resetForTransition: false,
+    }),
+    { mapId: 651, capture: "1:4:200" },
   );
   assert.equal(result.reset, true);
+  assert.equal(result.mapChanged, true);
+});
+
+test("keeps fresh pathing captured before a direct map-id change is observed", () => {
+  const result = advancePathingMapLifecycle(
+    Object.freeze({
+      lastReadyMapId: 650,
+      lastReadyCapture: "1:4:200",
+      resetForTransition: false,
+    }),
+    { mapId: 651, capture: "1:9:240" },
+  );
+  assert.equal(result.reset, false);
+  assert.equal(result.mapChanged, true);
+  assert.deepEqual(result.lifecycle, {
+    lastReadyMapId: 651,
+    lastReadyCapture: "1:9:240",
+    resetForTransition: false,
+  });
+});
+
+test("the pathing session owns one reset side effect per transition", () => {
+  let resets = 0;
+  const session = createPathingMapSession({ reset: () => { resets += 1; } });
+  session.advance({ mapId: 650, capture: "1:4:200" });
+  assert.equal(session.advance(null).reset, true);
+  assert.equal(session.advance(null).reset, false);
+  assert.equal(resets, 1);
 });
 
 test("projects the certified Mission Map drawable area and player anchor", () => {

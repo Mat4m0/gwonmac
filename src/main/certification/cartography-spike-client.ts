@@ -1,6 +1,6 @@
 /**
- * Seals the exact-build cartography observation transform and its derived cache.
- * Refuses every client whose certified source evidence does not match exactly.
+ * Prepares certified native Cartography observers and their derived cache.
+ * It refuses a module whose observer transform cannot prove its boundaries.
  */
 import {
   buildFingerprint,
@@ -11,18 +11,48 @@ import {
 import {
   CARTOGRAPHY_SPIKE_TRANSFORM_ABI,
   transformCartographySpikeWasm,
+  type CartographyMemoryLayoutId,
 } from "./pathing-spike-transform.js";
 
-const OUTPUT_SHA256 = Object.freeze(new Map<string, string>([
+interface CertifiedCartographyBuild {
+  readonly memoryLayout: CartographyMemoryLayoutId;
+  readonly outputSha256: string;
+}
+
+/**
+ * Exact outputs of the finite client chains we ship. A transform change must
+ * be independently recertified and update these seals before it can run.
+ */
+const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuild> = new Map([
   [
     "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb",
-    "0ba13a1175acc4e62788a48fa1613f3869917dee01909babc5eec87bc712f2b2",
+    {
+      memoryLayout: "official",
+      outputSha256: "415cb41793e7b08b18a14c2b0ebcdeb5811c003ed350bb517ac49e48f95c28d5",
+    },
   ],
   [
-    "f489cbd47bfd10642b31012cfde24546b564510cc38512e3d1f1cc072e4ee25c",
-    "86ca1baa4808f1596e3fdc1e1be8300e8da75ffc41fac149f229055e0d468dbb",
+    "7db72c8d5b4864fb4526e1455edfee3755887a242f68ec1c2f8447cfb38ad281",
+    {
+      memoryLayout: "relocated",
+      outputSha256: "35035470153136329f0ffddaad2e2be2ab66fb7f8d457deba0f75a731962813e",
+    },
   ],
-]));
+  [
+    "9d3383ad41e767570a0b2b8d8e2fec2e52cdcbd25d9c1680b8eb979f4eef6991",
+    {
+      memoryLayout: "relocated",
+      outputSha256: "ac6a0b4ce1f66dcecbabfaa13888aa8262e46dcaf1a319ffbc1d85a4551802fc",
+    },
+  ],
+  [
+    "1f4a199ea902f839abb3b71861759f956db2aa4e7f31fcabd1970d12d24ca3a0",
+    {
+      memoryLayout: "relocated",
+      outputSha256: "18b177e4678f2ddddc5a817dca1568d20a18ab2118cab0a584a5a78d07eb54e3",
+    },
+  ],
+]);
 
 export type CartographySpikePreparation = Readonly<{
   wasmPath: string;
@@ -30,19 +60,19 @@ export type CartographySpikePreparation = Readonly<{
   error: unknown | null;
 }>;
 
-/** Prepare the sealed development client without leaking spike policy into the chain. */
+/** Prepare Cartography only for an exact, independently sealed client chain. */
 export async function prepareCartographySpike(
   wasmPath: string,
   wasmSha256: string,
   cacheRoot: string,
 ): Promise<CartographySpikePreparation> {
-  const expectedOutputSha256 = OUTPUT_SHA256.get(wasmSha256);
-  if (!expectedOutputSha256) {
+  const build = CERTIFIED_CARTOGRAPHY_BUILDS.get(wasmSha256);
+  if (!build) {
     await discardDerivedWasm(cacheRoot).catch(() => undefined);
     return Object.freeze({
       wasmPath,
       wasmSha256,
-      error: new Error("cartography spike certificate does not match the served client"),
+      error: new Error(`uncertified Cartography input ${wasmSha256}`),
     });
   }
   const cache: DerivedWasmCache = {
@@ -55,12 +85,16 @@ export async function prepareCartographySpike(
       callSiteOffset: 0x1b9,
       missionMapLabelHash: 3_378_147_614,
     }),
-    expectedOutputSha256,
+    expectedOutputSha256: build.outputSha256,
   };
   try {
     return Object.freeze({
-      wasmPath: await prepareDerivedWasm(wasmPath, cache, transformCartographySpikeWasm),
-      wasmSha256: expectedOutputSha256,
+      wasmPath: await prepareDerivedWasm(
+        wasmPath,
+        cache,
+        (input) => transformCartographySpikeWasm(input, build.memoryLayout),
+      ),
+      wasmSha256: build.outputSha256,
       error: null,
     });
   } catch (error) {

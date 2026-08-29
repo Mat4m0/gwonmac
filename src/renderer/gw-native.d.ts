@@ -25,13 +25,13 @@ import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { PublishedCompanionState } from "./companion-snapshot.js";
 import type { VirtualGamepadController } from "./virtual-gamepad.js";
 import type { ControllerPromptTextureStats } from "./controller-prompt-texture.js";
-import type { TextureReconController } from "./webgl-texture-recon.js";
 import type { CartographyGridStats } from "./cartography-spike/overlay.js";
 import type {
   CompassFrameSpikeController,
   ExplorationSpikeController,
   MissionMapFrameSpikeController,
   PathingSpikeController,
+  WorldMapAnchorSpikeController,
 } from "../shared/cartography-spike.js";
 import type {
   InputTrace as SharedInputTrace,
@@ -266,14 +266,13 @@ declare global {
     gwTextureStats?(): TextureMemorySnapshot;
     /** Bounded atlas-sized upload fingerprints; unpackaged development only. */
     gwControllerPromptTextureStats?(): ControllerPromptTextureStats;
-    /** Bounded texture activity and fingerprints; unpackaged development only. */
-    gwTextureRecon?: TextureReconController;
     /** Fixed scalar pathing sample; unpackaged development spike only. */
     gwPathingSpike?: PathingSpikeController;
     /** Certified native Compass frame scalars; unpackaged development spike only. */
     gwCompassFrameSpike?: CompassFrameSpikeController;
     /** Certified native Mission Map frame scalars; unpackaged development spike only. */
     gwMissionMapFrameSpike?: MissionMapFrameSpikeController;
+    gwWorldMapAnchorSpike?: WorldMapAnchorSpikeController;
     /** Certified exploration bitmap dimensions and bounded bit reader; development only. */
     gwExplorationSpike?: ExplorationSpikeController;
     /** Unpackaged-development controller used to exercise Guild Wars' real gamepad UI. */

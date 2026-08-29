@@ -73,6 +73,21 @@ export function bindCartographySettings(options: Readonly<{
     [birdsEyeRangePicker, birdsEyeRangeHex],
   ] as const;
   let current: AppSettings | null = null;
+  let persistRevision = 0;
+
+  const persistControl = async (
+    patch: Parameters<typeof options.persist>[0],
+    failureMessage: string,
+  ): Promise<void> => {
+    const revision = ++persistRevision;
+    try {
+      await options.persist(patch);
+    } catch {
+      if (revision === persistRevision) {
+        await options.recoverAfterPersistFailure(failureMessage);
+      }
+    }
+  };
 
   const selectedStyle = (): CartographyOverlayStyleId | null => {
     const value = choices.find((choice) => choice.checked)?.value;
@@ -139,6 +154,7 @@ export function bindCartographySettings(options: Readonly<{
   const setSwatch = (swatch: HTMLElement, style: CartographyOverlayStyle) => {
     swatch.style.setProperty("--cartography-veil", style.veilColor);
     swatch.style.setProperty("--cartography-outline", style.outlineColor);
+    swatch.style.setProperty("--cartography-grid", style.gridColor);
     swatch.style.setProperty("--cartography-missing", style.missingColor);
     swatch.style.setProperty("--cartography-current", style.currentColor);
     swatch.style.setProperty("--cartography-range", style.birdsEyeRangeColor);
@@ -153,17 +169,26 @@ export function bindCartographySettings(options: Readonly<{
     custom.hidden = style !== "custom";
     editCustom.hidden = style === "custom";
     drawSelected();
-    void options.persist({ cartographyOverlayStyle: style });
+    void persistControl(
+      { cartographyOverlayStyle: style },
+      "The map color preset was not saved.",
+    );
   }));
   opacity.addEventListener("input", drawSelected);
   opacity.addEventListener("change", () => {
-    void options.persist({ cartographyOverlayOpacity: Number(opacity.value) });
+    void persistControl(
+      { cartographyOverlayOpacity: Number(opacity.value) },
+      "The map opacity was not saved.",
+    );
   });
   controlOpacity.addEventListener("input", () => {
     controlOpacityValue.value = `${controlOpacity.value}%`;
   });
   controlOpacity.addEventListener("change", () => {
-    void options.persist({ cartographyControlIdleOpacity: Number(controlOpacity.value) });
+    void persistControl(
+      { cartographyControlIdleOpacity: Number(controlOpacity.value) },
+      "The map control opacity was not saved.",
+    );
   });
   editCustom.addEventListener("click", () => {
     if (current === null) return;

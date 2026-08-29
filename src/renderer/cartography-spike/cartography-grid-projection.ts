@@ -9,10 +9,8 @@ import type {
 } from "../../shared/cartography-spike.js";
 import type { ScreenBox } from "./frame-placement.js";
 import {
-  COMPASS_FRAME_WIDTH,
-  COMPASS_MAP_RADIUS,
-  COMPASS_WORLD_RADIUS,
-  GAME_UNITS_PER_MAP_UNIT,
+  projectMapUnitsToCompass,
+  projectMapUnitsToMissionMap,
   type MaskTransform,
 } from "./map-projections.js";
 
@@ -24,10 +22,10 @@ const MAX_GRID_AXIS_CELLS = 128;
 export type CartographyCell = Readonly<{ x: number; y: number }>;
 export type CartographyRevealRadius = 0 | 1 | 3;
 
-export type CartographyGridAnchor = Readonly<{
-  frame: MissionMapFrameSpikeSnapshot;
-  playerX: number;
-  playerY: number;
+export type CompassCartographyAnchor = Readonly<{
+  generation: number;
+  playerMapX: number;
+  playerMapY: number;
 }>;
 
 export type CartographyGridProjection = Readonly<{
@@ -97,46 +95,6 @@ function validFrameProjection(frame: MissionMapFrameSpikeSnapshot): boolean {
     && frame.drawableHeight > 0;
 }
 
-/**
- * Retain the last certified map-space origin so the Compass grid can continue
- * while the Mission Map is closed. Live game-space movement advances the
- * anchor; a generation change invalidates it.
- */
-export function createCartographyGridAnchor(input: Readonly<{
-  frame: MissionMapFrameSpikeSnapshot;
-  playerX: number;
-  playerY: number;
-}>): CartographyGridAnchor | null {
-  if (
-    !validFrameProjection(input.frame)
-    || !Number.isFinite(input.playerX)
-    || !Number.isFinite(input.playerY)
-  ) return null;
-  return Object.freeze({
-    frame: input.frame,
-    playerX: input.playerX,
-    playerY: input.playerY,
-  });
-}
-
-export function advanceCartographyGridAnchor(
-  anchor: CartographyGridAnchor,
-  input: Readonly<{ generation: number; playerX: number; playerY: number }>,
-): MissionMapFrameSpikeSnapshot | null {
-  if (
-    input.generation !== anchor.frame.generation
-    || !Number.isFinite(input.playerX)
-    || !Number.isFinite(input.playerY)
-  ) return null;
-  return Object.freeze({
-    ...anchor.frame,
-    playerMapX: anchor.frame.playerMapX
-      + (input.playerX - anchor.playerX) / GAME_UNITS_PER_MAP_UNIT,
-    playerMapY: anchor.frame.playerMapY
-      - (input.playerY - anchor.playerY) / GAME_UNITS_PER_MAP_UNIT,
-  });
-}
-
 function validCellRange(first: number, last: number): boolean {
   return Number.isSafeInteger(first)
     && Number.isSafeInteger(last)
@@ -168,19 +126,12 @@ export function projectCartographyGridToMissionMap(input: Readonly<{
   if (!validCellRange(firstCellX, lastCellX) || !validCellRange(firstCellY, lastCellY)) {
     return null;
   }
-  const scaleX = frame.zoom * box.width / frame.drawableWidth;
-  const scaleY = frame.zoom * box.height / frame.drawableHeight;
+  const mapProjection = projectMapUnitsToMissionMap(frame, box);
+  if (mapProjection === null) return null;
   return Object.freeze({
     box,
-    transform: Object.freeze({
-      a: scaleX,
-      b: 0,
-      c: 0,
-      d: scaleY,
-      e: box.width / 2 - frame.panX * scaleX,
-      f: box.height / 2 - frame.panY * scaleY,
-    }),
-    clip: Object.freeze({ kind: "rectangle" }),
+    transform: mapProjection.transform,
+    clip: mapProjection.clip,
     firstCellX,
     lastCellX,
     firstCellY,
@@ -192,22 +143,23 @@ export function projectCartographyGridToMissionMap(input: Readonly<{
 
 /**
  * Project a small local grid through the rotating Compass. The absolute phase
- * comes from the Mission Map's player world-map coordinate, even while that
- * frame is hidden; the Compass contributes only its certified camera basis.
+ * comes from a currently certified world-map coordinate; the Compass
+ * contributes only its certified camera basis.
  */
 export function projectCartographyGridToCompass(input: Readonly<{
-  frame: MissionMapFrameSpikeSnapshot;
+  frame: CompassCartographyAnchor;
   compass: CompassFrameSpikeSnapshot;
   box: ScreenBox;
 }>): CartographyGridProjection | null {
-  const { frame, compass, box } = input;
+  const { frame: anchor, compass, box } = input;
   const directionLength = Math.hypot(
     compass.compassDirectionX,
     compass.compassDirectionY,
   );
   if (
-    !validFrameProjection(frame)
-    || frame.generation !== compass.generation
+    anchor.generation !== compass.generation
+    || !Number.isFinite(anchor.playerMapX)
+    || !Number.isFinite(anchor.playerMapY)
     || compass.status !== 1
     || !compass.visible
     || !Number.isFinite(directionLength)
@@ -217,30 +169,20 @@ export function projectCartographyGridToCompass(input: Readonly<{
     || box.width <= 0
     || box.height <= 0
   ) return null;
-  const currentCell = cartographyCellAt(frame.playerMapX, frame.playerMapY);
+  const currentCell = cartographyCellAt(anchor.playerMapX, anchor.playerMapY);
   if (currentCell === null) return null;
-  const directionX = compass.compassDirectionX / directionLength;
-  const directionY = compass.compassDirectionY / directionLength;
-  const centerX = box.width / 2;
-  const centerY = box.width / 2;
-  const radius = box.width * COMPASS_MAP_RADIUS / COMPASS_FRAME_WIDTH;
-  if (radius <= 0 || centerY + radius > box.height) return null;
-  const mapUnitScale = GAME_UNITS_PER_MAP_UNIT * radius / COMPASS_WORLD_RADIUS;
-  const a = mapUnitScale * directionY;
-  const b = -mapUnitScale * directionX;
-  const c = mapUnitScale * directionX;
-  const d = mapUnitScale * directionY;
+  const mapProjection = projectMapUnitsToCompass({
+    box,
+    playerMapX: anchor.playerMapX,
+    playerMapY: anchor.playerMapY,
+    directionX: compass.compassDirectionX,
+    directionY: compass.compassDirectionY,
+  });
+  if (mapProjection === null) return null;
   return Object.freeze({
     box,
-    transform: Object.freeze({
-      a,
-      b,
-      c,
-      d,
-      e: centerX - a * frame.playerMapX - c * frame.playerMapY,
-      f: centerY - b * frame.playerMapX - d * frame.playerMapY,
-    }),
-    clip: Object.freeze({ kind: "circle", centerX, centerY, radius }),
+    transform: mapProjection.transform,
+    clip: mapProjection.clip,
     firstCellX: currentCell.x - COMPASS_CELL_RADIUS,
     lastCellX: currentCell.x + COMPASS_CELL_RADIUS,
     firstCellY: currentCell.y - COMPASS_CELL_RADIUS,

@@ -2,8 +2,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { Page } from "playwright";
-import { PNG } from "pngjs";
-import { analyzeCheckerboardBounds, type CheckerboardBounds } from "./checkerboard-bounds.js";
 import { projectLiveResult } from "./result.js";
 
 export type GraphicsProbeSample = Readonly<{
@@ -26,7 +24,6 @@ export type GraphicsProbeSample = Readonly<{
   }>;
   wasmHeapBytes: number;
   textures: ReturnType<NonNullable<Window["gwTextureStats"]>> | null;
-  textureRecon: ReturnType<NonNullable<Window["gwTextureRecon"]>["checkpoint"]> | null;
   cartographyGrid: ReturnType<NonNullable<Window["gwCartographyGridStats"]>> | null;
   pathing: ReturnType<NonNullable<Window["gwPathingSpike"]>["snapshot"]> | null;
   pathingGeometry: Readonly<{
@@ -36,6 +33,7 @@ export type GraphicsProbeSample = Readonly<{
   }> | null;
   compassFrame: ReturnType<NonNullable<Window["gwCompassFrameSpike"]>["snapshot"]> | null;
   missionMapFrame: ReturnType<NonNullable<Window["gwMissionMapFrameSpike"]>["snapshot"]> | null;
+  worldMapAnchor: ReturnType<NonNullable<Window["gwWorldMapAnchorSpike"]>["snapshot"]> | null;
   exploration: Readonly<{
     snapshot: ReturnType<NonNullable<Window["gwExplorationSpike"]>["snapshot"]>;
     cellX: number | null;
@@ -61,15 +59,9 @@ export type GraphicsProbeEvidence = Readonly<{
   captures: ReadonlyArray<Readonly<{
     label: string;
     screenshot: string;
-    checkerboardBounds: readonly CheckerboardBounds[];
     sample: GraphicsProbeSample;
   }>>;
 }>;
-
-const MISSION_MAP_TILE_PROOFS = Object.freeze([
-  Object.freeze({ fingerprint: "fnv1a32:fcaade3f", palette: "magenta-cyan" as const }),
-  Object.freeze({ fingerprint: "fnv1a32:2f4cf29b", palette: "yellow-blue" as const }),
-]);
 
 type GraphicsProbeSession = Readonly<{
   evidence: GraphicsProbeEvidence;
@@ -133,7 +125,6 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
       },
       wasmHeapBytes: window.gwWasmHeapBytes?.() ?? 0,
       textures: window.gwTextureStats?.() ?? null,
-      textureRecon: window.gwTextureRecon?.checkpoint() ?? null,
       cartographyGrid: window.gwCartographyGridStats?.() ?? null,
       pathing: window.gwPathingSpike?.snapshot() ?? null,
       pathingGeometry: geometry === null ? null : {
@@ -143,6 +134,7 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
       },
       compassFrame: window.gwCompassFrameSpike?.snapshot() ?? null,
       missionMapFrame,
+      worldMapAnchor: window.gwWorldMapAnchorSpike?.snapshot() ?? null,
       exploration: explorationSnapshot === null ? null : {
         snapshot: explorationSnapshot,
         cellX: explorationCellX,
@@ -200,17 +192,11 @@ export async function runGraphicsProbeSession({
     runId,
   );
   let captureCount = 0;
-  const cartographyCalibration = process.env.GW_CARTOGRAPHY_SPIKE === "1";
-  const replacementArmed = cartographyCalibration
-    ? false
-    : await page.evaluate((candidates) => (
-        window.gwTextureRecon?.armExactReplacements(candidates) ?? false
-      ), MISSION_MAP_TILE_PROOFS);
+  const cartographyCalibration = process.env.GW_CARTOGRAPHY_LIVE === "1";
   const baseline = await readGraphicsProjection(page);
   const captures: Array<{
     label: string;
     screenshot: string;
-    checkerboardBounds: readonly CheckerboardBounds[];
     sample: GraphicsProbeSample;
   }> = [];
 
@@ -218,13 +204,6 @@ export async function runGraphicsProbeSession({
   console.log(JSON.stringify({
     checkpoint: "graphics-probe-ready",
     please: "follow the named Mission Map matrix; wait one second after each visual change before capture",
-    exactReplacements: cartographyCalibration
-      ? { armed: false, reason: "native Mission Map retained for projection calibration" }
-      : {
-          armed: replacementArmed,
-          candidates: MISSION_MAP_TILE_PROOFS,
-          expected: "two 512x512 Mission Map tiles use distinct magenta/cyan and yellow/blue checkerboards",
-        },
     suggestedSequence: cartographyCalibration
       ? [
           "capture maps-closed",
@@ -250,19 +229,8 @@ export async function runGraphicsProbeSession({
           "reset-context",
           "capture context-restored",
         ]
-      : [
-          "capture mission-map-closed",
-          "capture lions-arch-open-1",
-          "capture lions-arch-closed-1",
-          "capture lions-arch-open-2",
-          "capture lions-arch-closed-2",
-          "capture lions-arch-open-3",
-          "capture after-district-transition",
-          "capture different-map-open",
-          "reset-context",
-          "capture context-restored",
-        ],
-    privacy: "each capture saves the visible game window; JSON retains bounded fingerprints, activity rates, and scalar checkerboard bounds, never texture pixels or WASM pointers",
+      : ["capture baseline", "capture changed-state", "reset-context", "capture context-restored"],
+    privacy: "each capture saves the visible game window; JSON retains bounded scalar diagnostics, never texture pixels or WASM pointers",
   }));
 
   const input = createInterface({ input: process.stdin, output: process.stdout });
@@ -310,21 +278,11 @@ export async function runGraphicsProbeSession({
       const screenshot = `${stem}.png`;
       const screenshotBytes = await page.screenshot();
       await writeFile(path.join(outputDir, screenshot), screenshotBytes);
-      const decoded = PNG.sync.read(screenshotBytes);
-      const checkerboardBounds = analyzeCheckerboardBounds(decoded);
       await writeFile(
         path.join(outputDir, `${stem}.json`),
         JSON.stringify(sample, null, 2),
       );
-      captures.push({ label, screenshot, checkerboardBounds, sample });
-      const textureCandidates = sample.textureRecon?.records.slice(0, 12).map((record) => ({
-        texture: record.texture,
-        size: `${record.width}x${record.height}`,
-        fingerprint: record.fingerprint,
-        binds: record.intervalBinds,
-        bindsPerSecond: record.bindsPerSecond,
-        uploads: record.intervalUploads,
-      })) ?? [];
+      captures.push({ label, screenshot, sample });
       console.log(JSON.stringify({
         checkpoint: "graphics-captured",
         capture: captures.length,
@@ -334,13 +292,9 @@ export async function runGraphicsProbeSession({
         liveTextures: sample.textures?.liveTextures ?? null,
         wasmHeapBytes: sample.wasmHeapBytes,
         contextLost: sample.canvas.contextLost,
-        intervalDurationMs: sample.textureRecon?.intervalDurationMs ?? null,
-        exactReplacements: sample.textureRecon?.exactReplacements ?? [],
         cartographyGrid: sample.cartographyGrid,
         exploration: sample.exploration,
         pathing: sample.pathing,
-        checkerboardBounds,
-        textureCandidates,
       }));
     }
   } finally {
@@ -352,28 +306,6 @@ export async function runGraphicsProbeSession({
   await writeFile(
     path.join(outputDir, "evidence.json"),
     JSON.stringify(evidence, null, 2),
-  );
-  await writeFile(
-    path.join(outputDir, "texture-matrix.json"),
-    JSON.stringify(captures.map(({ label, checkerboardBounds, sample }) => ({
-      label,
-      contextLost: sample.canvas.contextLost,
-      intervalDurationMs: sample.textureRecon?.intervalDurationMs ?? null,
-      exactReplacements: sample.textureRecon?.exactReplacements ?? [],
-      cartographyGrid: sample.cartographyGrid,
-      checkerboardBounds,
-      candidates: sample.textureRecon?.records
-        .filter(({ fingerprint }) => MISSION_MAP_TILE_PROOFS.some((candidate) => candidate.fingerprint === fingerprint))
-        .map(({ fingerprint, uploadKind, width, height, intervalUploads, intervalBinds, bindsPerSecond }) => ({
-          fingerprint,
-          uploadKind,
-          width,
-          height,
-          intervalUploads,
-          intervalBinds,
-          bindsPerSecond,
-        })) ?? [],
-    })), null, 2),
   );
   const projection = await finalProjection(page, cadence);
   return {

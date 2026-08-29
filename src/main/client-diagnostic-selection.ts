@@ -53,6 +53,6 @@ export function selectOfficialDiagnosticClient(options: Readonly<{
     jsPath: clientArtifactPath(options.paths.artifacts, "Gw.jspi.js"),
     compatibility: null,
     extendedMemory,
-    transforms: { templateSave: false, nativeDoubleClick: false },
+    transforms: { templateSave: false, cartography: false, nativeDoubleClick: false },
   };
 }

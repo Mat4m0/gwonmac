@@ -315,7 +315,7 @@ export class ClientRuntime {
         jsPath: clientArtifactPath(this.options.paths.artifacts, "Gw.jspi.js"),
         compatibility: null,
         extendedMemory,
-        transforms: { templateSave: false, nativeDoubleClick: false },
+        transforms: { templateSave: false, cartography: false, nativeDoubleClick: false },
         enhancementVerification: {
           requestedProfile: enhancementCapabilityProfile(this.options.enhancementCapabilities),
           effectiveProfile: null,
@@ -538,14 +538,13 @@ export class ClientRuntime {
       extendedMemory,
       transforms: {
         templateSave: prepared.gameFileSaving.status === "available",
+        cartography: prepared.cartography,
         nativeDoubleClick: prepared.nativeDoubleClick,
       },
       enhancementVerification: {
         requestedProfile: enhancementCapabilityProfile(requested),
         effectiveProfile: enhancementCapabilityProfile(effective),
-        preparationFailureStage: prepared.failure?.stage === "cartography-spike"
-          ? null
-          : prepared.failure?.stage
+        preparationFailureStage: prepared.failure?.stage
           ?? (local?.status === "template-refused" ? "template-save"
             : local?.status === "enhancement-refused" ? "enhancement" : null),
         featureVerdicts: runtimeFeatureVerdicts(local?.featureVerdicts ?? null),

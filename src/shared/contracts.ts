@@ -499,7 +499,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cartographyOverlayEnabled: false,
   cartographyGridEnabled: false,
   cartographyRevealMode: "off",
-  cartographyOverlayStyle: "black",
+  cartographyOverlayStyle: "contrast",
   cartographyOverlayOpacity: 55,
   cartographyControlIdleOpacity: 35,
   cartographyOverlayCustomStyle: DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE,
@@ -733,6 +733,7 @@ export type ExtendedMemoryRuntimeStatus =
 
 export type ClientTransforms = Readonly<{
   templateSave: boolean;
+  cartography: boolean;
   nativeDoubleClick: boolean;
 }>;
 
@@ -746,7 +747,12 @@ export type RuntimeEnhancementFeatureVerdict = Readonly<{
 export type RuntimeEnhancementVerification = Readonly<{
   requestedProfile: EnhancementCapabilityProfile | null;
   effectiveProfile: EnhancementCapabilityProfile | null;
-  preparationFailureStage: "template-save" | "enhancement" | "native-double-click" | null;
+  preparationFailureStage:
+    | "template-save"
+    | "enhancement"
+    | "cartography"
+    | "native-double-click"
+    | null;
   featureVerdicts: Readonly<Record<
     EnhancementCapability,
     RuntimeEnhancementFeatureVerdict

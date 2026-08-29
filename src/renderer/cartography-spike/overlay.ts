@@ -9,6 +9,7 @@ import type {
   ExplorationSpikeController,
   MissionMapFrameSpikeController,
   PathingSpikeController,
+  WorldMapAnchorSpikeController,
 } from "../../shared/cartography-spike.js";
 import { cartographyOverlayStyle } from "../../shared/cartography-overlay.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
@@ -18,12 +19,9 @@ import {
   type CartographyGridLayerSnapshot,
 } from "./cartography-grid-layer.js";
 import {
-  advanceCartographyGridAnchor,
   cartographyCellAtScreenPoint,
-  createCartographyGridAnchor,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
-  type CartographyGridAnchor,
 } from "./cartography-grid-projection.js";
 import { projectMissionMapFrame, projectNativeFrame } from "./frame-placement.js";
 import { createInverseMaskLayer } from "./inverse-mask-layer.js";
@@ -31,11 +29,11 @@ import {
   projectMissionMapContentBox,
   projectWalkabilityToCompass,
   projectWalkabilityToMissionMap,
+  GAME_UNITS_PER_MAP_UNIT,
 } from "./map-projections.js";
 import { createCartographyOverlayControls } from "./overlay-controls.js";
 import {
-  advancePathingMapLifecycle,
-  INITIAL_PATHING_MAP_LIFECYCLE,
+  createPathingMapSession,
 } from "./pathing-lifecycle.js";
 import { createWalkabilityMask, type WalkabilityMask } from "./walkability-mask.js";
 
@@ -54,6 +52,7 @@ export function mountCartographyOverlay(options: Readonly<{
   missionMap: MissionMapFrameSpikeController;
   pathing: PathingSpikeController;
   exploration: ExplorationSpikeController | null;
+  worldMapAnchor: WorldMapAnchorSpikeController;
   companion(): PublishedCompanionState | null | undefined;
   settings(): AppSettings;
   persist(patch: RendererSettingsPatch): Promise<AppSettings>;
@@ -87,23 +86,30 @@ export function mountCartographyOverlay(options: Readonly<{
   let disposed = false;
   let geometryVersion = "";
   let mask: WalkabilityMask | null = null;
-  let lifecycle = INITIAL_PATHING_MAP_LIFECYCLE;
-  let gridAnchor: CartographyGridAnchor | null = null;
+  const pathingSession = createPathingMapSession(options.pathing);
   let explorationBitmap: ExplorationSpikeBitmap | null = null;
   let explorationFingerprint = "";
   let nextExplorationReadAt = 0;
   let pointerX = Number.NaN;
   let pointerY = Number.NaN;
+  let shiftHeld = false;
 
   const rememberPointer = (event: PointerEvent): void => {
     pointerX = event.clientX;
     pointerY = event.clientY;
+    shiftHeld = event.shiftKey;
+  };
+  const rememberShift = (event: KeyboardEvent): void => {
+    if (event.key === "Shift") shiftHeld = event.type === "keydown";
   };
   const forgetPointer = (): void => {
     pointerX = Number.NaN;
     pointerY = Number.NaN;
+    shiftHeld = false;
   };
   view.addEventListener("pointermove", rememberPointer, { capture: true, passive: true });
+  view.addEventListener("keydown", rememberShift, true);
+  view.addEventListener("keyup", rememberShift, true);
   view.addEventListener("blur", forgetPointer);
 
   const refreshExploration = (generation: number): void => {
@@ -169,6 +175,7 @@ export function mountCartographyOverlay(options: Readonly<{
     const compass = options.compass.snapshot();
     const missionMap = options.missionMap.snapshot();
     const pathing = options.pathing.snapshot();
+    const worldMapAnchor = options.worldMapAnchor.snapshot();
     const companion = options.companion();
     const canvasBox = options.canvas.getBoundingClientRect();
     const settings = options.settings();
@@ -181,14 +188,18 @@ export function mountCartographyOverlay(options: Readonly<{
 
     const companionReady = companion?.status === "ready"
       && companion.instanceName !== "Loading";
-    const transition = advancePathingMapLifecycle(
-      lifecycle,
-      companionReady ? companion.mapId : null,
+    const pathingCapture = pathing?.status === 1
+      ? `${pathing.generation}:${pathing.sequence}:${pathing.totalTrapezoids}`
+      : null;
+    const transition = pathingSession.advance(
+      companionReady ? { mapId: companion.mapId, capture: pathingCapture } : null,
     );
-    lifecycle = transition.lifecycle;
+    if (transition.mapChanged) {
+      explorationBitmap = null;
+      explorationFingerprint = "";
+      nextExplorationReadAt = 0;
+    }
     if (transition.reset) {
-      gridAnchor = null;
-      options.pathing.reset();
       withdrawAll();
       return;
     }
@@ -210,36 +221,25 @@ export function mountCartographyOverlay(options: Readonly<{
       ? projectMissionMapContentBox(missionMap, missionMapBox)
       : null;
 
-    let gridPresented = false;
     if (settings.cartographyGridEnabled && compassBox !== null) {
-      const liveCompassProjection = missionMap === null
+      const certifiedCompassAnchor = worldMapAnchor?.status === 1
+        && worldMapAnchor.generation > 0
+        && worldMapAnchor.generation === compass.generation
+        ? Object.freeze({
+            generation: worldMapAnchor.generation,
+            playerMapX: worldMapAnchor.worldAnchorX
+              + companion.playerX / GAME_UNITS_PER_MAP_UNIT,
+            playerMapY: worldMapAnchor.worldAnchorY
+              - companion.playerY / GAME_UNITS_PER_MAP_UNIT,
+          })
+        : null;
+      const compassProjection = certifiedCompassAnchor === null
         ? null
         : projectCartographyGridToCompass({
-            frame: missionMap,
+            frame: certifiedCompassAnchor,
             compass,
             box: compassBox,
           });
-      if (liveCompassProjection !== null && missionMap !== null) {
-        gridAnchor = createCartographyGridAnchor({
-          frame: missionMap,
-          playerX: companion.playerX,
-          playerY: companion.playerY,
-        });
-      }
-      const anchoredFrame = liveCompassProjection === null && gridAnchor !== null
-        ? advanceCartographyGridAnchor(gridAnchor, {
-            generation: compass.generation,
-            playerX: companion.playerX,
-            playerY: companion.playerY,
-          })
-        : null;
-      const compassProjection = liveCompassProjection ?? (anchoredFrame === null
-        ? null
-        : projectCartographyGridToCompass({
-            frame: anchoredFrame,
-            compass,
-            box: compassBox,
-          }));
       if (compassProjection === null) {
         compassGridLayer.hide();
       } else {
@@ -252,7 +252,6 @@ export function mountCartographyOverlay(options: Readonly<{
           hoveredCell: null,
           revealRadius,
         });
-        gridPresented = true;
       }
 
       const missionProjection = missionMap === null || missionContentBox === null
@@ -264,11 +263,9 @@ export function mountCartographyOverlay(options: Readonly<{
       if (missionProjection === null) {
         missionMapGridLayer.hide();
       } else {
-        const hoveredCell = cartographyCellAtScreenPoint(
-          missionProjection,
-          pointerX,
-          pointerY,
-        );
+        const hoveredCell = shiftHeld
+          ? cartographyCellAtScreenPoint(missionProjection, pointerX, pointerY)
+          : null;
         missionMapGridLayer.update({
           projection: missionProjection,
           style,
@@ -278,7 +275,6 @@ export function mountCartographyOverlay(options: Readonly<{
           hoveredCell,
           revealRadius,
         });
-        gridPresented = true;
       }
     } else {
       hideGrid();
@@ -290,7 +286,6 @@ export function mountCartographyOverlay(options: Readonly<{
       && pathing.totalTrapezoids > 0
       && pathing.totalTrapezoids <= MAX_RENDERED_TRAPEZOIDS
       && pathing.generation === compass.generation;
-    let walkabilityPresented = false;
     if (!walkabilityReady || pathing === null) {
       hideWalkability();
     } else {
@@ -329,7 +324,6 @@ export function mountCartographyOverlay(options: Readonly<{
             style,
             opacity,
           });
-          walkabilityPresented = true;
         }
 
         const missionProjection = missionMap !== null && missionContentBox !== null
@@ -355,7 +349,7 @@ export function mountCartographyOverlay(options: Readonly<{
       }
     }
 
-    if (compassBox !== null && (gridPresented || walkabilityPresented)) {
+    if (compassBox !== null) {
       controls.update(compassBox, settings);
     } else {
       controls.hide();
@@ -385,6 +379,8 @@ export function mountCartographyOverlay(options: Readonly<{
     if (startupTimer !== 0) view.clearTimeout(startupTimer);
     view.cancelAnimationFrame(animationFrame);
     view.removeEventListener("pointermove", rememberPointer, true);
+    view.removeEventListener("keydown", rememberShift, true);
+    view.removeEventListener("keyup", rememberShift, true);
     view.removeEventListener("blur", forgetPointer);
     compassMaskLayer.dispose();
     missionMapMaskLayer.dispose();

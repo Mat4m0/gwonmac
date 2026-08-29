@@ -4,10 +4,9 @@
  */
 
 export const CARTOGRAPHY_OVERLAY_STYLE_IDS = [
-  "black",
-  "white",
-  "green",
-  "pink",
+  "contrast",
+  "soft",
+  "monochrome",
   "custom",
 ] as const;
 
@@ -43,61 +42,50 @@ export const CARTOGRAPHY_OVERLAY_OUTLINE_MAX = 4;
 
 export const DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE: CartographyOverlayStyle =
   Object.freeze({
-    veilColor: "#171A1C",
-    outlineColor: "#D9E1DD",
-    outlineWidth: 1,
-    gridColor: "#D8E1DE",
-    missingColor: "#E2B85C",
-    currentColor: "#8ED8F8",
-    hoverColor: "#F4F1E7",
-    normalRangeColor: "#8ED8F8",
-    birdsEyeRangeColor: "#C2B8FF",
+    veilColor: "#080C10",
+    outlineColor: "#E69F00",
+    outlineWidth: 2,
+    gridColor: "#56B4E9",
+    missingColor: "#D55E00",
+    currentColor: "#FFFFFF",
+    hoverColor: "#F0E442",
+    normalRangeColor: "#00CFFF",
+    birdsEyeRangeColor: "#CC79A7",
   });
 
 export const CARTOGRAPHY_OVERLAY_BUILTIN_STYLES = Object.freeze({
-  black: Object.freeze({
-    veilColor: "#171A1C",
-    outlineColor: "#D9E1DD",
-    outlineWidth: 1,
-    gridColor: "#D8E1DE",
-    missingColor: "#E2B85C",
-    currentColor: "#8ED8F8",
-    hoverColor: "#F4F1E7",
-    normalRangeColor: "#8ED8F8",
-    birdsEyeRangeColor: "#C2B8FF",
+  contrast: Object.freeze({
+    veilColor: "#080C10",
+    outlineColor: "#E69F00",
+    outlineWidth: 2,
+    gridColor: "#56B4E9",
+    missingColor: "#D55E00",
+    currentColor: "#FFFFFF",
+    hoverColor: "#F0E442",
+    normalRangeColor: "#00CFFF",
+    birdsEyeRangeColor: "#CC79A7",
   }),
-  white: Object.freeze({
-    veilColor: "#F1F0E9",
-    outlineColor: "#313532",
+  soft: Object.freeze({
+    veilColor: "#10161A",
+    outlineColor: "#FFB86B",
     outlineWidth: 1,
-    gridColor: "#343A37",
-    missingColor: "#8A5A00",
-    currentColor: "#006F84",
-    hoverColor: "#6A3E8E",
-    normalRangeColor: "#007E94",
-    birdsEyeRangeColor: "#6750A4",
+    gridColor: "#79C7E3",
+    missingColor: "#FF6B6B",
+    currentColor: "#FFFFFF",
+    hoverColor: "#FFE082",
+    normalRangeColor: "#65D9E8",
+    birdsEyeRangeColor: "#C4A7E7",
   }),
-  green: Object.freeze({
-    veilColor: "#163A2B",
-    outlineColor: "#9CE2B1",
+  monochrome: Object.freeze({
+    veilColor: "#080808",
+    outlineColor: "#FFFFFF",
     outlineWidth: 1,
-    gridColor: "#B8D8C2",
-    missingColor: "#F2C45E",
-    currentColor: "#79DCE8",
-    hoverColor: "#F3F0D7",
-    normalRangeColor: "#83E3C2",
-    birdsEyeRangeColor: "#B9A7F7",
-  }),
-  pink: Object.freeze({
-    veilColor: "#582044",
-    outlineColor: "#FF9DDB",
-    outlineWidth: 1,
-    gridColor: "#E9D7E4",
-    missingColor: "#FFD166",
-    currentColor: "#63E6FF",
+    gridColor: "#A8B0B8",
+    missingColor: "#FFFFFF",
+    currentColor: "#FFFFFF",
     hoverColor: "#FFFFFF",
-    normalRangeColor: "#63E6FF",
-    birdsEyeRangeColor: "#FF8AD8",
+    normalRangeColor: "#D8DDE2",
+    birdsEyeRangeColor: "#8F99A3",
   }),
 });
 
@@ -120,25 +108,15 @@ export function normaliseCartographyOverlayStyle(
     return null;
   }
   const source = value as Record<string, unknown>;
-  // Development builds before semantic grid colors stored only the three
-  // walkability fields. Fill those new roles once when that exact shape loads.
-  const gridColor = source.gridColor ?? DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE.gridColor;
-  const missingColor = source.missingColor ?? DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE.missingColor;
-  const currentColor = source.currentColor ?? DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE.currentColor;
-  const hoverColor = source.hoverColor ?? DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE.hoverColor;
-  const normalRangeColor = source.normalRangeColor
-    ?? DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE.normalRangeColor;
-  const birdsEyeRangeColor = source.birdsEyeRangeColor
-    ?? DEFAULT_CARTOGRAPHY_OVERLAY_CUSTOM_STYLE.birdsEyeRangeColor;
   if (
     !isCartographyOverlayHex(source.veilColor)
     || !isCartographyOverlayHex(source.outlineColor)
-    || !isCartographyOverlayHex(gridColor)
-    || !isCartographyOverlayHex(missingColor)
-    || !isCartographyOverlayHex(currentColor)
-    || !isCartographyOverlayHex(hoverColor)
-    || !isCartographyOverlayHex(normalRangeColor)
-    || !isCartographyOverlayHex(birdsEyeRangeColor)
+    || !isCartographyOverlayHex(source.gridColor)
+    || !isCartographyOverlayHex(source.missingColor)
+    || !isCartographyOverlayHex(source.currentColor)
+    || !isCartographyOverlayHex(source.hoverColor)
+    || !isCartographyOverlayHex(source.normalRangeColor)
+    || !isCartographyOverlayHex(source.birdsEyeRangeColor)
     || typeof source.outlineWidth !== "number"
     || !Number.isSafeInteger(source.outlineWidth)
     || source.outlineWidth < CARTOGRAPHY_OVERLAY_OUTLINE_MIN
@@ -148,12 +126,12 @@ export function normaliseCartographyOverlayStyle(
     veilColor: source.veilColor,
     outlineColor: source.outlineColor,
     outlineWidth: source.outlineWidth,
-    gridColor,
-    missingColor,
-    currentColor,
-    hoverColor,
-    normalRangeColor,
-    birdsEyeRangeColor,
+    gridColor: source.gridColor,
+    missingColor: source.missingColor,
+    currentColor: source.currentColor,
+    hoverColor: source.hoverColor,
+    normalRangeColor: source.normalRangeColor,
+    birdsEyeRangeColor: source.birdsEyeRangeColor,
   });
 }
 

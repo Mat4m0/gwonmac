@@ -99,23 +99,35 @@ export function createInverseMaskLayer(
 
     const outlineRadius = Math.round(input.style.outlineWidth * dpr);
     if (outlineRadius > 0) {
-      expandedContext.setTransform(1, 0, 0, 1, 0, 0);
-      expandedContext.clearRect(0, 0, width, height);
-      for (let y = -outlineRadius; y <= outlineRadius; y += outlineRadius) {
-        for (let x = -outlineRadius; x <= outlineRadius; x += outlineRadius) {
-          if (x !== 0 || y !== 0) expandedContext.drawImage(walkable, x, y);
-        }
-      }
-      expandedContext.globalCompositeOperation = "destination-out";
-      expandedContext.drawImage(walkable, 0, 0);
-      expandedContext.globalCompositeOperation = "source-in";
-      expandedContext.fillStyle = input.style.outlineColor;
-      expandedContext.fillRect(0, 0, width, height);
-      expandedContext.globalCompositeOperation = "source-over";
-      context.save();
-      context.globalAlpha = input.opacity / 100;
-      context.drawImage(expanded, 0, 0);
-      context.restore();
+      const paintOutline = (radius: number, color: string, alpha: number): void => {
+        expandedContext.setTransform(1, 0, 0, 1, 0, 0);
+        expandedContext.clearRect(0, 0, width, height);
+        expandedContext.globalCompositeOperation = "source-over";
+        // One blurred alpha shadow replaces the old radius-squared loop of
+        // full-surface copies. The core is removed below, leaving only the rim.
+        expandedContext.shadowColor = color;
+        expandedContext.shadowBlur = Math.max(1, radius * 1.35);
+        expandedContext.drawImage(walkable, 0, 0);
+        expandedContext.shadowColor = "transparent";
+        expandedContext.shadowBlur = 0;
+        expandedContext.globalCompositeOperation = "destination-out";
+        expandedContext.drawImage(walkable, 0, 0);
+        expandedContext.globalCompositeOperation = "source-in";
+        expandedContext.fillStyle = color;
+        expandedContext.fillRect(0, 0, width, height);
+        expandedContext.globalCompositeOperation = "source-over";
+        context.save();
+        context.globalAlpha = alpha;
+        context.drawImage(expanded, 0, 0);
+        context.restore();
+      };
+      const strength = input.opacity / 100;
+      paintOutline(
+        outlineRadius + Math.max(1, Math.round(dpr)),
+        input.style.veilColor,
+        strength * 0.9,
+      );
+      paintOutline(outlineRadius, input.style.outlineColor, strength);
     }
     return true;
   };

@@ -172,6 +172,7 @@ function isEnhancementVerification(value: unknown): boolean {
     || !(failureStage === null
       || failureStage === "template-save"
       || failureStage === "enhancement"
+      || failureStage === "cartography"
       || failureStage === "native-double-click")
   ) return false;
   if (value.featureVerdicts === null) return true;

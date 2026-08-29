@@ -29,7 +29,7 @@ describe("settings", () => {
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyRevealMode: "off",
-      cartographyOverlayStyle: "black",
+      cartographyOverlayStyle: "contrast",
       cartographyOverlayOpacity: 55,
       cartographyControlIdleOpacity: 35,
       cartographyOverlayCustomStyle: DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
@@ -86,7 +86,7 @@ describe("settings", () => {
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyRevealMode: "off",
-      cartographyOverlayStyle: "black",
+      cartographyOverlayStyle: "contrast",
       cartographyOverlayOpacity: 55,
       cartographyControlIdleOpacity: 35,
       cartographyOverlayCustomStyle: DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
@@ -166,7 +166,7 @@ describe("settings", () => {
       cartographyOverlayEnabled: true,
       cartographyGridEnabled: true,
       cartographyRevealMode: "birds-eye",
-      cartographyOverlayStyle: "pink",
+      cartographyOverlayStyle: "soft",
       cartographyOverlayOpacity: 72,
       cartographyControlIdleOpacity: 44,
       cartographyOverlayCustomStyle: {
@@ -184,7 +184,7 @@ describe("settings", () => {
       cartographyOverlayEnabled: true,
       cartographyGridEnabled: true,
       cartographyRevealMode: "birds-eye",
-      cartographyOverlayStyle: "pink",
+      cartographyOverlayStyle: "soft",
       cartographyOverlayOpacity: 72,
       cartographyControlIdleOpacity: 44,
       cartographyOverlayCustomStyle: {
@@ -204,18 +204,13 @@ describe("settings", () => {
     assert.throws(() => parseSettingsPatch({ cartographyRevealMode: "wide" }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyOverlayOpacity: 101 }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyControlIdleOpacity: 14 }), AppError);
-    assert.deepEqual(parseSettingsPatch({
+    assert.throws(() => parseSettingsPatch({
       cartographyOverlayCustomStyle: {
         veilColor: "#102030",
         outlineColor: "#DDEEFF",
         outlineWidth: 2,
       },
-    }).cartographyOverlayCustomStyle, {
-      ...DEFAULT_SETTINGS.cartographyOverlayCustomStyle,
-      veilColor: "#102030",
-      outlineColor: "#DDEEFF",
-      outlineWidth: 2,
-    });
+    }), AppError);
     assert.throws(() => parseSettingsPatch({
       cartographyOverlayCustomStyle: {
         veilColor: "#10203",
@@ -591,7 +586,7 @@ describe("settings", () => {
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyRevealMode: "off",
-      cartographyOverlayStyle: "black",
+      cartographyOverlayStyle: "contrast",
       cartographyOverlayOpacity: 55,
       cartographyControlIdleOpacity: 35,
       cartographyOverlayCustomStyle: DEFAULT_SETTINGS.cartographyOverlayCustomStyle,

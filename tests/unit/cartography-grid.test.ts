@@ -5,11 +5,9 @@ import type {
   MissionMapFrameSpikeSnapshot,
 } from "../../src/shared/cartography-spike.js";
 import {
-  advanceCartographyGridAnchor,
   CARTOGRAPHY_CELL_MAP_UNITS,
   cartographyCellAt,
   cartographyCellAtScreenPoint,
-  createCartographyGridAnchor,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
 } from "../../src/renderer/cartography-spike/cartography-grid-projection.js";
@@ -186,42 +184,6 @@ test("updates the highlighted cell only after crossing a certified edge", () => 
   assert.ok(after);
   assert.equal(before.currentCell.x, 0);
   assert.equal(after.currentCell.x, 1);
-});
-
-test("keeps Compass grid phase while the Mission Map is closed", () => {
-  const anchor = createCartographyGridAnchor({
-    frame: missionFrame,
-    playerX: 9_600,
-    playerY: 19_200,
-  });
-  assert.ok(anchor);
-  const advanced = advanceCartographyGridAnchor(anchor, {
-    generation: missionFrame.generation,
-    playerX: 12_672,
-    playerY: 16_128,
-  });
-  assert.ok(advanced);
-  assert.equal(advanced.playerMapX, missionFrame.playerMapX + 32);
-  assert.equal(advanced.playerMapY, missionFrame.playerMapY + 32);
-  assert.ok(projectCartographyGridToCompass({
-    frame: advanced,
-    compass: compassFrame,
-    box: { left: 0, top: 0, width: 245, height: 260 },
-  }));
-});
-
-test("rejects a cached Compass grid anchor after a map transition", () => {
-  const anchor = createCartographyGridAnchor({
-    frame: missionFrame,
-    playerX: 9_600,
-    playerY: 19_200,
-  });
-  assert.ok(anchor);
-  assert.equal(advanceCartographyGridAnchor(anchor, {
-    generation: missionFrame.generation + 1,
-    playerX: 9_600,
-    playerY: 19_200,
-  }), null);
 });
 
 test("refuses stale, hidden, malformed, and excessive projections", () => {

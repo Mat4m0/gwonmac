@@ -8,9 +8,10 @@ GWonMac has two separate, optional native-map features:
 - **Walkability overlay** shades terrain outside certified pathing geometry
   while preserving the native map artwork.
 
-The features can be enabled independently. Cartography guidance uses fixed,
-quiet semantic colors so it remains distinct from the customizable walkability
-overlay.
+The features can be enabled independently. Their shared palette keeps the
+walkability boundary warm and the generated grid cool, with a dark under-stroke
+so both remain legible over bright snow and dark terrain. Contrast, Soft, and
+Monochrome presets are provided, and every semantic role remains customizable.
 
 ## Generated grid
 
@@ -25,9 +26,10 @@ or unsupported build hides the derived layer instead of guessing. Canvas
 layers are pointer-transparent and redraw only when their projection changes.
 
 The grid makes the game's exploration-cell boundaries visible beneath the
-smoothed fog. Amber dots mark cells that may still need attention. Persistent
-reveal guidance defaults to off; hovering a Mission Map cell previews its 3×3
-range, while optional normal and Bird's Eye modes show 3×3 and 7×7 footprints.
+smoothed fog. Warm dots mark cells that may still need attention. Persistent
+reveal guidance defaults to off; holding Shift while hovering a Mission Map
+cell previews its 3×3 range, while optional normal and Bird's Eye modes show
+3×3 and 7×7 footprints.
 Observed exploration state is advisory and resets or hides whenever the client
 cannot provide a complete current-generation snapshot.
 

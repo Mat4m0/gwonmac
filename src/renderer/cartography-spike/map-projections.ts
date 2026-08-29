@@ -33,6 +33,48 @@ export type InverseMaskProjection = Readonly<{
   }>;
 }>;
 
+export type MapUnitProjection = InverseMaskProjection;
+
+/** The one absolute world-map-unit projection used by every Compass layer. */
+export function projectMapUnitsToCompass(input: Readonly<{
+  box: ScreenBox;
+  playerMapX: number;
+  playerMapY: number;
+  directionX: number;
+  directionY: number;
+}>): MapUnitProjection | null {
+  const directionLength = Math.hypot(input.directionX, input.directionY);
+  if (
+    !Number.isFinite(directionLength)
+    || directionLength < 0.99
+    || directionLength > 1.01
+    || ![input.playerMapX, input.playerMapY, input.box.width, input.box.height]
+      .every(Number.isFinite)
+    || input.box.width <= 0
+    || input.box.height <= 0
+  ) return null;
+  const centerX = input.box.width / 2;
+  const centerY = input.box.width / 2;
+  const radius = input.box.width * COMPASS_MAP_RADIUS / COMPASS_FRAME_WIDTH;
+  if (radius <= 0 || centerY + radius > input.box.height) return null;
+  const directionX = input.directionX / directionLength;
+  const directionY = input.directionY / directionLength;
+  const scale = GAME_UNITS_PER_MAP_UNIT * radius / COMPASS_WORLD_RADIUS;
+  const a = scale * directionY;
+  const b = -scale * directionX;
+  const c = scale * directionX;
+  const d = scale * directionY;
+  return Object.freeze({
+    box: input.box,
+    transform: Object.freeze({
+      a, b, c, d,
+      e: centerX - a * input.playerMapX - c * input.playerMapY,
+      f: centerY - b * input.playerMapX - d * input.playerMapY,
+    }),
+    clip: Object.freeze({ kind: "circle", centerX, centerY, radius }),
+  });
+}
+
 export function projectWalkabilityToCompass(input: Readonly<{
   box: ScreenBox;
   mask: WalkabilityMask;
@@ -41,32 +83,29 @@ export function projectWalkabilityToCompass(input: Readonly<{
   directionX: number;
   directionY: number;
 }>): InverseMaskProjection | null {
-  const directionLength = Math.hypot(input.directionX, input.directionY);
-  if (!Number.isFinite(directionLength) || directionLength < 0.99 || directionLength > 1.01) {
-    return null;
-  }
-  const centerX = input.box.width / 2;
-  const centerY = input.box.width / 2;
-  const radius = input.box.width * COMPASS_MAP_RADIUS / COMPASS_FRAME_WIDTH;
-  if (radius <= 0 || centerY + radius > input.box.height) return null;
-
-  const directionX = input.directionX / directionLength;
-  const directionY = input.directionY / directionLength;
-  const scale = radius / COMPASS_WORLD_RADIUS;
-  const rasterScale = GAME_UNITS_PER_RASTER_PIXEL * scale;
-  const originX = input.mask.minX - input.playerX;
-  const originY = input.mask.maxY - input.playerY;
-  return Object.freeze({
+  const projection = projectMapUnitsToCompass({
     box: input.box,
+    playerMapX: 0,
+    playerMapY: 0,
+    directionX: input.directionX,
+    directionY: input.directionY,
+  });
+  if (projection === null) return null;
+  const sourceScale = GAME_UNITS_PER_RASTER_PIXEL / GAME_UNITS_PER_MAP_UNIT;
+  const originMapX = (input.mask.minX - input.playerX) / GAME_UNITS_PER_MAP_UNIT;
+  const originMapY = (input.playerY - input.mask.maxY) / GAME_UNITS_PER_MAP_UNIT;
+  const { a, b, c, d, e, f } = projection.transform;
+  return Object.freeze({
+    box: projection.box,
     transform: Object.freeze({
-      a: rasterScale * directionY,
-      b: -rasterScale * directionX,
-      c: rasterScale * directionX,
-      d: rasterScale * directionY,
-      e: centerX + (originX * directionY - originY * directionX) * scale,
-      f: centerY + (-originX * directionX - originY * directionY) * scale,
+      a: a * sourceScale,
+      b: b * sourceScale,
+      c: c * sourceScale,
+      d: d * sourceScale,
+      e: e + a * originMapX + c * originMapY,
+      f: f + b * originMapX + d * originMapY,
     }),
-    clip: Object.freeze({ kind: "circle", centerX, centerY, radius }),
+    clip: projection.clip,
   });
 }
 
@@ -121,6 +160,44 @@ export function projectGamePointToMissionMap(
   });
 }
 
+/** The one absolute world-map-unit projection used by every Mission Map layer. */
+export function projectMapUnitsToMissionMap(
+  frame: MissionMapFrameSpikeSnapshot,
+  box: ScreenBox,
+): MapUnitProjection | null {
+  if (
+    !frame.visible
+    || frame.status !== 1
+    || frame.projectionStatus !== 1
+    || frame.projectionGeneration !== frame.generation
+    || frame.generation <= 0
+    || ![
+      frame.zoom, frame.panX, frame.panY,
+      frame.drawableWidth, frame.drawableHeight,
+      box.left, box.top, box.width, box.height,
+    ].every(Number.isFinite)
+    || frame.zoom <= 0
+    || frame.drawableWidth <= 0
+    || frame.drawableHeight <= 0
+    || box.width <= 0
+    || box.height <= 0
+  ) return null;
+  const scaleX = frame.zoom * box.width / frame.drawableWidth;
+  const scaleY = frame.zoom * box.height / frame.drawableHeight;
+  return Object.freeze({
+    box,
+    transform: Object.freeze({
+      a: scaleX,
+      b: 0,
+      c: 0,
+      d: scaleY,
+      e: box.width / 2 - frame.panX * scaleX,
+      f: box.height / 2 - frame.panY * scaleY,
+    }),
+    clip: Object.freeze({ kind: "rectangle" }),
+  });
+}
+
 export function projectWalkabilityToMissionMap(input: Readonly<{
   frame: MissionMapFrameSpikeSnapshot;
   box: ScreenBox;
@@ -128,43 +205,24 @@ export function projectWalkabilityToMissionMap(input: Readonly<{
   playerX: number;
   playerY: number;
 }>): InverseMaskProjection | null {
-  const values = [
-    input.frame.zoom,
-    input.frame.panX,
-    input.frame.panY,
-    input.frame.playerMapX,
-    input.frame.playerMapY,
-    input.frame.drawableWidth,
-    input.frame.drawableHeight,
-    input.box.width,
-    input.box.height,
-  ];
-  if (
-    !values.every(Number.isFinite)
-    || input.frame.zoom <= 0
-    || input.frame.drawableWidth <= 0
-    || input.frame.drawableHeight <= 0
-    || input.box.width <= 0
-    || input.box.height <= 0
-  ) return null;
-  const scaleX = input.box.width / input.frame.drawableWidth;
-  const scaleY = input.box.height / input.frame.drawableHeight;
+  const projection = projectMapUnitsToMissionMap(input.frame, input.box);
+  if (projection === null) return null;
   const mapLeft = input.frame.playerMapX
     + (input.mask.minX - input.playerX) / GAME_UNITS_PER_MAP_UNIT;
   const mapTop = input.frame.playerMapY
     - (input.mask.maxY - input.playerY) / GAME_UNITS_PER_MAP_UNIT;
-  const unitX = input.frame.zoom * scaleX / GAME_UNITS_PER_MAP_UNIT;
-  const unitY = input.frame.zoom * scaleY / GAME_UNITS_PER_MAP_UNIT;
+  const sourceScale = GAME_UNITS_PER_RASTER_PIXEL / GAME_UNITS_PER_MAP_UNIT;
+  const { a, b, c, d, e, f } = projection.transform;
   return Object.freeze({
-    box: input.box,
+    box: projection.box,
     transform: Object.freeze({
-      a: GAME_UNITS_PER_RASTER_PIXEL * unitX,
-      b: 0,
-      c: 0,
-      d: GAME_UNITS_PER_RASTER_PIXEL * unitY,
-      e: input.box.width / 2 + (mapLeft - input.frame.panX) * input.frame.zoom * scaleX,
-      f: input.box.height / 2 + (mapTop - input.frame.panY) * input.frame.zoom * scaleY,
+      a: a * sourceScale,
+      b: b * sourceScale,
+      c: c * sourceScale,
+      d: d * sourceScale,
+      e: e + a * mapLeft + c * mapTop,
+      f: f + b * mapLeft + d * mapTop,
     }),
-    clip: Object.freeze({ kind: "rectangle" }),
+    clip: projection.clip,
   });
 }

@@ -1,5 +1,5 @@
 /**
- * Reads the bounded, pointer-free exploration bitmap spike contract.
+ * Reads the bounded, pointer-free exploration bitmap contract.
  * Invalid or partial native snapshots stay unavailable to renderer consumers.
  */
 import {

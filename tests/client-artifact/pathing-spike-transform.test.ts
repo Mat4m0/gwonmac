@@ -1,4 +1,4 @@
-/** Exact-client proof for the development-only converter wrapper transform. */
+/** Exact-client proof for the native Cartography observer transform. */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -10,6 +10,7 @@ import {
   COMPASS_FRAME_SPIKE_GLOBALS,
   EXPLORATION_SPIKE_GLOBALS,
   MISSION_MAP_PROJECTION_SPIKE_GLOBALS,
+  WORLD_MAP_ANCHOR_SPIKE_GLOBALS,
 } from
   "../../src/shared/cartography-spike.js";
 
@@ -24,7 +25,7 @@ test("the exact converter call is wrapped without moving existing functions", {
   const official = new Uint8Array(await readFile(artifact));
   assert.equal(sha256(official), "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb");
   const before = official.slice();
-  const transformed = transformCartographySpikeWasm(official);
+  const transformed = transformCartographySpikeWasm(official, "official");
   assert.deepEqual(official, before, "the predecessor module was mutated");
 
   const evidence = wasmEvidence(transformed);
@@ -44,6 +45,8 @@ test("the exact converter call is wrapped without moving existing functions", {
   assert.ok(Object.values(MISSION_MAP_PROJECTION_SPIKE_GLOBALS)
     .every((name) => exportNames.has(name)));
   assert.ok(Object.values(EXPLORATION_SPIKE_GLOBALS)
+    .every((name) => exportNames.has(name)));
+  assert.ok(Object.values(WORLD_MAP_ANCHOR_SPIKE_GLOBALS)
     .every((name) => exportNames.has(name)));
 
   const missionMapWrapper = decoded.find((candidate) =>

@@ -185,7 +185,7 @@ export function createCartographyGridLayer(
 
     if (effectiveRevealRadius > 0) {
       context.fillStyle = style.missingColor;
-      context.globalAlpha = strength * 0.08;
+      context.globalAlpha = strength * 0.22;
       for (let cellY = focusCell.y - 1; cellY <= focusCell.y + 1; cellY += 1) {
         for (let cellX = focusCell.x - 1; cellX <= focusCell.x + 1; cellX += 1) {
           if (isExplored(cellX, cellY) !== false) continue;
@@ -195,9 +195,6 @@ export function createCartographyGridLayer(
       }
     }
 
-    context.strokeStyle = style.gridColor;
-    context.lineWidth = 1;
-    context.globalAlpha = strength * (projection.surface === "compass" ? 0.2 : 0.26);
     context.beginPath();
     for (let cellX = projection.firstCellX; cellX <= projection.lastCellX + 1; cellX += 1) {
       const from = projectedPoint(
@@ -227,6 +224,15 @@ export function createCartographyGridLayer(
       context.moveTo(from.x, from.y);
       context.lineTo(to.x, to.y);
     }
+    // A dark under-stroke keeps the grid readable over snow and bright terrain
+    // without requiring an aggressive map-wide tint.
+    context.strokeStyle = style.veilColor;
+    context.lineWidth = 2.5;
+    context.globalAlpha = strength * (projection.surface === "compass" ? 0.42 : 0.48);
+    context.stroke();
+    context.strokeStyle = style.gridColor;
+    context.lineWidth = 1.1;
+    context.globalAlpha = strength * (projection.surface === "compass" ? 0.58 : 0.64);
     context.stroke();
 
     if (effectiveRevealRadius > 0) {
@@ -269,7 +275,7 @@ export function createCartographyGridLayer(
           context.beginPath();
           context.arc(center.x, center.y, radius * 0.65, 0, Math.PI * 2);
           context.fillStyle = style.missingColor;
-          context.globalAlpha = strength * 0.72;
+          context.globalAlpha = strength * 0.92;
           context.fill();
         }
       }
@@ -282,11 +288,11 @@ export function createCartographyGridLayer(
       projection.currentCell.y,
     );
     context.fillStyle = style.currentColor;
-    context.globalAlpha = strength * 0.08;
+    context.globalAlpha = strength * 0.11;
     context.fill();
     context.strokeStyle = style.currentColor;
     context.lineWidth = 1.5;
-    context.globalAlpha = strength * 0.72;
+    context.globalAlpha = strength * 0.84;
     context.stroke();
 
     if (hoveredCell !== null) {
