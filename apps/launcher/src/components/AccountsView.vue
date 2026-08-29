@@ -29,10 +29,11 @@ const profileIcons = { swords: Swords, archive: Archive, map: MapIcon, scroll: S
         <div class="account-actions">
           <button class="secondary" @click="emit('customize', profile)"><Settings />Customize</button>
           <button v-if="profile.state === 'running'" class="secondary" @click="emit('show', profile.id)">Show</button>
-          <template v-else>
+          <template v-else-if="profile.state === 'ready' || profile.state === 'failed'">
             <button v-if="index > 0" class="text-link" @click="emit('archive', profile.id)">Archive</button>
             <button class="secondary" @click="emit('play', profile.id)"><RotateCcw v-if="profile.state === 'failed'" /><Play v-else />{{ profile.state === 'failed' ? 'Try again' : 'Play' }}</button>
           </template>
+          <span v-else class="account-progress" role="status">{{ profileStatus(profile) }}</span>
         </div>
       </article>
     </div>

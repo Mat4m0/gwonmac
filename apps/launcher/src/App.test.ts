@@ -121,6 +121,13 @@ describe("unified launcher shell", () => {
         get: async () => ({
           ...fixtureSnapshot,
           experience: { ...fixtureSnapshot.experience, showMigrationNotice: false },
+          preferences: {
+            content: {
+              ...fixtureSnapshot.preferences.content,
+              news: false,
+              dailies: false,
+            },
+          },
           contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" },
         }),
         onChange: () => () => undefined,
@@ -129,6 +136,7 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await flushPromises();
     expect(wrapper.get(".hero-copy h1").text()).toBe("Your accounts. One launcher.");
+    expect(wrapper.get("main").classes()).toContain("artwork-only");
     expect(wrapper.text()).not.toContain("Wayfarer’s Reverie");
     await wrapper.findAll("nav button")[3]!.trigger("click");
     expect(wrapper.text()).toContain("Direct feedback is not connected yet.");
@@ -142,6 +150,29 @@ describe("unified launcher shell", () => {
     await flushPromises();
     expect(wrapper.get('[role="alert"] h1').text()).toBe("The launcher could not open");
     expect(wrapper.text()).toContain("accounts and game files were not changed");
+  });
+
+  it("persists dismissal of the recovered-preferences notice", async () => {
+    const dismissPreferencesReset = vi.fn(async () => undefined);
+    installNative({
+      state: {
+        get: async () => ({
+          ...fixtureSnapshot,
+          experience: {
+            ...fixtureSnapshot.experience,
+            preferencesReset: true,
+            showMigrationNotice: false,
+          },
+        }),
+        onChange: () => () => undefined,
+      },
+      experience: { dismissPreferencesReset },
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    expect(wrapper.text()).toContain("Launcher preferences were reset");
+    await wrapper.get('.toast button[aria-label="Dismiss"]').trigger("click");
+    expect(dismissPreferencesReset).toHaveBeenCalledOnce();
   });
 
   it("opens only selected accounts that are not already running", async () => {

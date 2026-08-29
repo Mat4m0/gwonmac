@@ -131,13 +131,21 @@ export class LauncherOrchestrator {
   async play(ids: readonly ProfileId[]): Promise<void> {
     this.options.accounts.validateOpenable(ids);
     await this.options.state.setSelection(ids);
-    const closed = ids.filter((id) => !this.options.accounts.isOpen(id));
-    if (closed.length === 0) {
+    const runtime = new Map(
+      this.options.accounts.state().profiles.map((profile) => [profile.id, profile]),
+    );
+    const launchable = ids.filter((id) => {
+      const profile = runtime.get(id);
+      if (!profile || profile.archived) return false;
+      if (profile.state === "failed") return true;
+      return profile.state === "ready" && !this.options.accounts.isOpen(id);
+    });
+    if (launchable.length === 0) {
       this.publish();
       return;
     }
     if (this.options.hasActiveClient() || this.options.allowUnreadyLaunch) {
-      await this.options.accounts.open(closed);
+      await this.options.accounts.open(launchable);
       this.publish();
       return;
     }
@@ -149,11 +157,11 @@ export class LauncherOrchestrator {
       return;
     }
     const pending = new Set(this.pending);
-    for (const id of closed) {
+    for (const id of launchable) {
       if (!pending.has(id)) this.pending.push(id);
       pending.add(id);
     }
-    this.options.accounts.queue(closed);
+    this.options.accounts.queue(launchable);
     this.publish();
   }
 
@@ -186,6 +194,11 @@ export class LauncherOrchestrator {
 
   async dismissMigrationNotice(): Promise<void> {
     await this.options.state.dismissMigrationNotice();
+    this.publish();
+  }
+
+  async dismissPreferencesReset(): Promise<void> {
+    await this.options.state.dismissPreferencesReset();
     this.publish();
   }
 
@@ -222,7 +235,20 @@ export class LauncherOrchestrator {
       }
       return {
         state: "playable",
-        backgroundDownload: progress.phase === "error" ? null : progress.fullDownload ?? null,
+        backgroundDownload: progress.phase === "error"
+          ? null
+          : progress.fullDownload?.status === "running"
+            ? {
+                ...progress.fullDownload,
+                received: progress.received,
+                total: progress.total,
+                bytesPerSecond: progress.bytesPerSecond,
+                secondsRemaining: progress.secondsRemaining,
+              }
+            : progress.fullDownload ?? null,
+        ...(progress.phase !== "error" && progress.noticeCode
+          ? { notice: progress.noticeCode }
+          : {}),
       };
     }
     if (progress.phase === "error") return { state: "repair-required", reason: progress.errorCode };

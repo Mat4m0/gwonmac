@@ -19,6 +19,12 @@ describe("launcher view model", () => {
     expect(launchLabel([profile("running")], { state: "playable", backgroundDownload: null })).toBe("Show");
   });
 
+  it("describes queued and in-progress launches without offering Play again", () => {
+    expect(launchLabel([profile("queued")], { state: "preparing", progress: { phase: "starting", label: "Checking", received: 0, total: 0, bytesPerSecond: 0, secondsRemaining: null } })).toBe("Cancel waiting");
+    expect(launchLabel([profile("opening")], { state: "playable", backgroundDownload: null })).toBe("Opening account…");
+    expect(launchLabel([profile("checking"), profile("running")], { state: "playable", backgroundDownload: null })).toBe("Checking game windows…");
+  });
+
   it("uses specific local failure copy", () => {
     expect(profileStatus(profile("failed", "renderer-crash"))).toBe("Game window closed unexpectedly");
     expect(profileStatus(profile("checking"))).toBe("Checking the game window");

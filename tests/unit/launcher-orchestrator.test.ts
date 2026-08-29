@@ -22,6 +22,7 @@ class AccountsFixture {
   opened: ProfileId[][] = [];
   openProfiles = new Set<ProfileId>();
   blocker: Promise<void> | null = null;
+  stateOverrides = new Map<ProfileId, AccountsState["profiles"][number]["state"]>();
 
   state(): AccountsState {
     return {
@@ -31,7 +32,7 @@ class AccountsFixture {
         templates: "private" as const,
         builds: "private" as const,
         archived: false,
-        state: this.openProfiles.has(id) ? "running" as const : this.queued.includes(id) ? "queued" as const : "ready" as const,
+        state: this.stateOverrides.get(id) ?? (this.openProfiles.has(id) ? "running" as const : this.queued.includes(id) ? "queued" as const : "ready" as const),
       })),
     };
   }
@@ -128,7 +129,35 @@ describe("main-owned launcher orchestration", () => {
     value.activate({ phase: "image", label: "Downloading", received: 5, total: 10, bytesPerSecond: 1, secondsRemaining: 5, fullDownload: { status: "running" } });
     await value.orchestrator.play([first]);
     assert.deepEqual(value.accounts.opened, [[first]]);
-    assert.equal(value.orchestrator.snapshot().readiness.state, "playable");
+    assert.deepEqual(value.orchestrator.snapshot().readiness, {
+      state: "playable",
+      backgroundDownload: {
+        status: "running",
+        received: 5,
+        total: 10,
+        bytesPerSecond: 1,
+        secondsRemaining: 5,
+      },
+    });
+  });
+
+  it("keeps a non-blocking client notice with playable readiness", async () => {
+    const value = await fixture();
+    value.activate({
+      phase: "ready",
+      label: "Starting Guild Wars",
+      received: 0,
+      total: 0,
+      bytesPerSecond: 0,
+      secondsRemaining: null,
+      noticeCode: "update-failed-previous-restored",
+    });
+
+    assert.deepEqual(value.orchestrator.snapshot().readiness, {
+      state: "playable",
+      backgroundDownload: null,
+      notice: "update-failed-previous-restored",
+    });
   });
 
   it("cancels exact waiting profiles and does not open them later", async () => {
@@ -166,6 +195,27 @@ describe("main-owned launcher orchestration", () => {
     await value.orchestrator.play([first, second]);
     assert.equal(showCalls, 0);
     assert.deepEqual(value.accounts.opened, [[second]]);
+  });
+
+  it("does not repeat Play while an account is queued or starting", async () => {
+    const value = await fixture({ allowUnreadyLaunch: true });
+    value.accounts.stateOverrides.set(first, "opening");
+    value.accounts.stateOverrides.set(second, "checking");
+
+    await value.orchestrator.play([first, second]);
+
+    assert.deepEqual(value.accounts.opened, []);
+    assert.deepEqual(value.accounts.queued, []);
+  });
+
+  it("retries a failed account even while its failed window is still registered", async () => {
+    const value = await fixture({ allowUnreadyLaunch: true });
+    value.accounts.stateOverrides.set(first, "failed");
+    value.accounts.openProfiles.add(first);
+
+    await value.orchestrator.play([first]);
+
+    assert.deepEqual(value.accounts.opened, [[first]]);
   });
 
   it("keeps global client failure out of profile-local failure state", async () => {

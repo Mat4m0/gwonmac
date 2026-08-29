@@ -11,7 +11,7 @@ type CacheStore = Pick<
   | "chunkByteLength"
   | "chunksDir"
   | "hashes"
-  | "residentIndices"
+  | "verifiedResidentIndices"
   | "size"
 >;
 
@@ -29,8 +29,8 @@ export async function projectClientCacheInfo(
       fullDownloadShortfall: 0,
     };
   }
-  const resident = await store.residentIndices();
-  const bytes = resident.reduce(
+  const verified = await store.verifiedResidentIndices();
+  const bytes = verified.reduce(
     (total, index) => total + store.chunkByteLength(index),
     0,
   );
@@ -42,7 +42,7 @@ export async function projectClientCacheInfo(
     : 0;
   return {
     bytes,
-    chunks: resident.length,
+    chunks: verified.length,
     totalBytes: store.size,
     totalChunks: store.hashes.length,
     freeBytes,

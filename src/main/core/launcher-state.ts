@@ -49,8 +49,12 @@ export interface LoadedLauncherState {
 
 export const DEFAULT_LAUNCHER_PREFERENCES: LauncherPreferences = Object.freeze({
   content: Object.freeze({
-    news: true,
-    dailies: true,
+    // Live feeds are not connected in the production cutover. Start with the
+    // useful launcher artwork instead of making two placeholder panels the
+    // default Home experience. Development fixtures carry their own sample
+    // preferences and remain fully interactive.
+    news: false,
+    dailies: false,
     first: "news" as const,
     officialNews: true,
     reforgedNews: true,
@@ -223,6 +227,12 @@ export class LauncherStateStore {
     await this.save((current) => ({
       ...current,
       migrationNoticeDismissed: true,
+    }));
+  }
+
+  async dismissPreferencesReset(): Promise<void> {
+    await this.save((current) => ({
+      ...current,
       preferencesResetPending: false,
     }));
   }

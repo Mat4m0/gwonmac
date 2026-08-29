@@ -52,6 +52,7 @@ export interface LauncherIpcContext {
   readonly restore: (id: ProfileId) => Promise<void>;
   readonly delete: (win: BrowserWindow, id: ProfileId) => Promise<void>;
   readonly dismissMigrationNotice: () => Promise<void>;
+  readonly dismissPreferencesReset: () => Promise<void>;
   readonly completeSetup: (enableTools: boolean) => Promise<void>;
   readonly completeIntroduction: () => Promise<void>;
   readonly replayIntroduction: () => Promise<void>;
@@ -67,7 +68,7 @@ export interface LauncherIpcContext {
   readonly cacheInfo: () => Promise<CacheInfo>;
   readonly retryPreparation: () => Promise<void>;
   readonly repairGameFiles: (win: BrowserWindow) => Promise<void>;
-  readonly pauseDownload: () => void;
+  readonly pauseDownload: () => Promise<void>;
   readonly resumeDownload: () => Promise<void>;
   readonly resetGameFiles: (win: BrowserWindow) => Promise<void>;
   readonly openExternal: (kind: LauncherExternalLink) => Promise<void>;
@@ -145,6 +146,7 @@ export function registerLauncherIpc(ctx: LauncherIpcContext): void {
     profilesRestore: channel(profileId, (_win, id) => ctx.restore(id), "launcher"),
     profilesDelete: channel(profileId, (win, id) => ctx.delete(win, id), "launcher"),
     experienceDismissMigration: channel(nothing, () => ctx.dismissMigrationNotice(), "launcher"),
+    experienceDismissPreferencesReset: channel(nothing, () => ctx.dismissPreferencesReset(), "launcher"),
     experienceCompleteSetup: channel(setup, (_win, enableTools) => ctx.completeSetup(enableTools), "launcher"),
     experienceCompleteIntroduction: channel(nothing, () => ctx.completeIntroduction(), "launcher"),
     experienceReplayIntroduction: channel(nothing, () => ctx.replayIntroduction(), "launcher"),

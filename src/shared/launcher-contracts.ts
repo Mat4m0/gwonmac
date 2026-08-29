@@ -9,8 +9,10 @@ import type {
   CacheInfo,
   DownloadActivity,
   FullDownloadState,
+  NoticeCode,
 } from "./contracts.js";
 import { RENDER_SCALES } from "./contracts.js";
+import type { ErrorCode } from "./errors.js";
 import {
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
@@ -35,6 +37,7 @@ export const LAUNCHER_IPC = Object.freeze({
   profilesRestore: "gw:launcher:profiles:restore",
   profilesDelete: "gw:launcher:profiles:delete",
   experienceDismissMigration: "gw:launcher:experience:dismissMigration",
+  experienceDismissPreferencesReset: "gw:launcher:experience:dismissPreferencesReset",
   experienceCompleteSetup: "gw:launcher:experience:completeSetup",
   experienceCompleteIntroduction: "gw:launcher:experience:completeIntroduction",
   experienceReplayIntroduction: "gw:launcher:experience:replayIntroduction",
@@ -96,7 +99,7 @@ export function parseLauncherProfileAppearance(value: unknown): LauncherProfileA
 
 export const GLOBAL_TOOLS = ["build-management", "quick-travel", "xunlai-storage"] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
-export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "donate"] as const;
+export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "donate", "releases"] as const;
 export type LauncherExternalLink = (typeof LAUNCHER_EXTERNAL_LINKS)[number];
 
 export interface GlobalToolSetting {
@@ -153,10 +156,21 @@ export interface LauncherProfileSummary {
   readonly failure?: "profile-preparation" | "window-startup" | "client-validation" | "renderer-crash" | "unknown";
 }
 
+export type LauncherBackgroundDownload =
+  | (Extract<FullDownloadState, { readonly status: "running" }> & Readonly<Pick<
+      DownloadActivity,
+      "received" | "total" | "bytesPerSecond" | "secondsRemaining"
+    >>)
+  | Exclude<FullDownloadState, { readonly status: "running" }>;
+
 export type LauncherReadiness =
   | { readonly state: "preparing"; readonly progress: DownloadActivity }
-  | { readonly state: "playable"; readonly backgroundDownload: FullDownloadState | null }
-  | { readonly state: "repair-required"; readonly reason: string }
+  | {
+      readonly state: "playable";
+      readonly backgroundDownload: LauncherBackgroundDownload | null;
+      readonly notice?: NoticeCode;
+    }
+  | { readonly state: "repair-required"; readonly reason: ErrorCode }
   | { readonly state: "offline-playable" };
 
 export interface LauncherSnapshot {
@@ -209,6 +223,7 @@ export interface LauncherNativeApi {
     completeIntroduction(): Promise<void>;
     replayIntroduction(): Promise<void>;
     dismissMigrationNotice(): Promise<void>;
+    dismissPreferencesReset(): Promise<void>;
     updatePreferences(patch: LauncherPreferencesPatch): Promise<void>;
   };
   readonly settings: {

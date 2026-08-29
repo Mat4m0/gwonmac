@@ -11,7 +11,16 @@ export const fixtureSnapshot: LauncherSnapshot = {
     showMigrationNotice: true,
     preferencesReset: false,
   },
-  readiness: { state: "playable", backgroundDownload: { status: "running" } },
+  readiness: {
+    state: "playable",
+    backgroundDownload: {
+      status: "running",
+      received: 8_400_000_000,
+      total: 9_100_000_000,
+      bytesPerSecond: 12_500_000,
+      secondsRemaining: 56,
+    },
+  },
   appUpdate: { phase: "idle", currentVersion: "2026.8.10" },
   tools: {
     configured: false,
@@ -73,7 +82,7 @@ export function fixtureSnapshotFor(search: string): LauncherSnapshot {
     case "preparing":
       return { ...fixtureSnapshot, readiness: { state: "preparing", progress: { phase: "client", label: "Downloading the playable client", received: 620_000_000, total: 1_100_000_000, bytesPerSecond: 12_500_000, secondsRemaining: 38 } } };
     case "repair":
-      return { ...fixtureSnapshot, readiness: { state: "repair-required", reason: "client-invalid" } };
+      return { ...fixtureSnapshot, readiness: { state: "repair-required", reason: "artifact_unverified" } };
     case "offline":
       return { ...fixtureSnapshot, readiness: { state: "offline-playable" } };
     case "update":
@@ -81,7 +90,19 @@ export function fixtureSnapshotFor(search: string): LauncherSnapshot {
     case "failed":
       return { ...fixtureSnapshot, profiles: fixtureSnapshot.profiles.map((profile, index) => index === 0 ? { ...profile, state: "failed", failure: "renderer-crash" } : profile) };
     case "production":
-      return { ...fixtureSnapshot, experience: { ...fixtureSnapshot.experience, showMigrationNotice: false }, readiness: { state: "playable", backgroundDownload: null }, contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" } };
+      return {
+        ...fixtureSnapshot,
+        experience: { ...fixtureSnapshot.experience, showMigrationNotice: false },
+        readiness: { state: "playable", backgroundDownload: null },
+        preferences: {
+          content: {
+            ...fixtureSnapshot.preferences.content,
+            news: false,
+            dailies: false,
+          },
+        },
+        contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" },
+      };
     default:
       return fixtureSnapshot;
   }

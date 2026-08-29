@@ -49,6 +49,7 @@ test.describe("client generation coordination", () => {
             resume: () => undefined,
             stop: () => undefined,
             residentIndices: async () => [0],
+            verifiedResidentIndices: async () => [0],
             chunkByteLength: () => 400,
             downloadAll: async ({ onProgress }: {
               onProgress: (value: {
@@ -91,6 +92,10 @@ test.describe("client generation coordination", () => {
               value.phase !== "error" && value.fullDownload
                 ? [value.fullDownload.status]
                 : []),
+            labels: progress.flatMap((value) =>
+              value.phase !== "error" && value.fullDownload
+                ? [value.label]
+                : []),
           };
         },
         { clientRuntime: clientRuntimeModule, paths: pathsModule },
@@ -98,6 +103,11 @@ test.describe("client generation coordination", () => {
       expect(result).toEqual({
         downloads: 1,
         states: ["running", "running", "complete"],
+        labels: [
+          "Checking game files",
+          "Checking game files",
+          "Game files verified",
+        ],
       });
     } finally {
       await closeOffline(fixture);
@@ -143,6 +153,7 @@ test.describe("client generation coordination", () => {
               chunkSize: 400,
               hashes: ["first", "second", "third"],
               residentIndices: async () => [0, 2],
+              verifiedResidentIndices: async () => [0, 2],
               residentBits: async () => Uint8Array.of(0b101),
               chunkByteLength: (index: number) => index === 2 ? 200 : 400,
               stop: () => undefined,

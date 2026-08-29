@@ -38,6 +38,7 @@ const launcherApi = {
     completeIntroduction: () => ipcRenderer.invoke(LAUNCHER_IPC.experienceCompleteIntroduction),
     replayIntroduction: () => ipcRenderer.invoke(LAUNCHER_IPC.experienceReplayIntroduction),
     dismissMigrationNotice: () => ipcRenderer.invoke(LAUNCHER_IPC.experienceDismissMigration),
+    dismissPreferencesReset: () => ipcRenderer.invoke(LAUNCHER_IPC.experienceDismissPreferencesReset),
     updatePreferences: (patch) => ipcRenderer.invoke(LAUNCHER_IPC.experienceUpdatePreferences, patch),
   },
   settings: {

@@ -212,6 +212,22 @@ export class MultipleAccountsController {
     }
   }
 
+  private refuseProfileRemovalWhileActive(
+    profileId: ProfileId,
+    action: "archiving" | "deleting",
+  ): void {
+    const state = this.profileRuntime.get(profileId).state;
+    if (state === "queued") {
+      throw new Error(`Cancel waiting before ${action} this account`);
+    }
+    if (state === "opening" || state === "checking") {
+      throw new Error(`Wait for this account to finish opening before ${action} it`);
+    }
+    if (state === "running" || windowRegistry.profileWindow(profileId)) {
+      throw new Error(`Close this account before ${action} it`);
+    }
+  }
+
   queue(profileIds: readonly ProfileId[]): void {
     this.profileRuntime.queue(
       profileIds,
@@ -353,9 +369,7 @@ export class MultipleAccountsController {
       if (profileId === workspace.legacyPrimaryProfileId) {
         throw new Error("The adopted Main account cannot be archived");
       }
-      if (windowRegistry.profileWindow(profileId)) {
-        throw new Error("Close this account before archiving it");
-      }
+      this.refuseProfileRemovalWhileActive(profileId, "archiving");
       const next = archiveMultiProfile(workspace, profileId);
       await saveMultiWorkspace(this.options.paths.multiWorkspace, next);
       this.workspace = next as AccountWorkspace;
@@ -381,6 +395,7 @@ export class MultipleAccountsController {
         (candidate) => candidate.id === profileId && candidate.archived,
       );
       if (!profile) throw new Error("Only an archived profile can be deleted");
+      this.refuseProfileRemovalWhileActive(profileId, "deleting");
       const { response } = await dialog.showMessageBox(parent, {
         type: "warning",
         buttons: ["Permanently Delete", "Cancel"],

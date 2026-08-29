@@ -25,6 +25,12 @@ function profileFailure(failure: LauncherProfileSummary["failure"]): string {
 export function launchLabel(profiles: readonly LauncherProfileSummary[], readiness: LauncherReadiness): string {
   if (readiness.state === "repair-required") return "Open Game Files";
   if (profiles.some((profile) => profile.state === "queued")) return "Cancel waiting";
+  if (profiles.some((profile) => profile.state === "checking")) {
+    return profiles.length === 1 ? "Checking game window…" : "Checking game windows…";
+  }
+  if (profiles.some((profile) => profile.state === "opening")) {
+    return profiles.length === 1 ? "Opening account…" : "Opening accounts…";
+  }
   const closed = profiles.filter((profile) => profile.state !== "running");
   if (closed.length === 0) return profiles.length === 1 ? "Show" : "Accounts are open";
   return closed.length === 1 ? "Play" : `Open ${closed.length} accounts`;

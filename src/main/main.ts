@@ -292,9 +292,17 @@ function setProgress(next: DownloadProgress): void {
     for (const win of windows) updateLongRunningTaskFeedback(next, win);
   }
   launcherOrchestrator?.clientChanged();
+  if (
+    next.phase === "ready"
+    && next.fullDownload?.status !== "running"
+    && next.fullDownload?.status !== "stopping"
+  ) {
+    scheduleAutomaticAppUpdateCheck?.();
+  }
 }
 
 let launcherOrchestrator: LauncherOrchestrator | null = null;
+let scheduleAutomaticAppUpdateCheck: (() => void) | null = null;
 
 function sendToRenderer(channel: string, value: unknown): void {
   for (const win of windowRegistry.windows()) {
@@ -683,10 +691,17 @@ if (primaryInstance) void app.whenReady().then(async () => {
   autoUpdater.on("update-not-available", () => {
     appUpdaterController?.updateNotAvailable();
   });
+  let resumeFullDownloadAfterWake = false;
   powerMonitor.on("suspend", () => {
     if (!clientRuntime.isDownloading) return;
+    resumeFullDownloadAfterWake = true;
     logEvent({ k: "fullDownload.stoppedForSleep" });
-    clientRuntime.stopDownload();
+    void clientRuntime.stopDownload();
+  });
+  powerMonitor.on("resume", () => {
+    if (!resumeFullDownloadAfterWake) return;
+    resumeFullDownloadAfterWake = false;
+    void clientRuntime.stopDownload().then(() => clientRuntime.downloadAll());
   });
   const protocolDeps = {
     getActiveClient: () => clientRuntime.active,
@@ -752,7 +767,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       if (windowRegistry.contextForWebContents(win.webContents.id)?.role === "game") {
         await resetGameInput(win);
       }
-      if (sockets.size() > 0) {
+      if (windowRegistry.gameWindows().length > 0) {
         const { response } = await dialog.showMessageBox(win, {
           type: "warning",
           buttons: ["Restart and Update", "Later"],
@@ -803,6 +818,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       await accounts.delete(win, id);
     },
     dismissMigrationNotice: () => launcherOrchestrator!.dismissMigrationNotice(),
+    dismissPreferencesReset: () => launcherOrchestrator!.dismissPreferencesReset(),
     completeSetup: async (enableTools) => {
       if (enableTools) await preferences.updateSettings(allGlobalToolsPatch(true));
       await launcherOrchestrator!.completeSetup();
@@ -986,39 +1002,51 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
 
   const win = createLauncherWindow(protocolDeps, windowCoordinator);
+  let automaticUpdateCheckInFlight = false;
+  const maybeCheckForAppUpdates = async (): Promise<void> => {
+    if (automaticUpdateCheckInFlight) return;
+    automaticUpdateCheckInFlight = true;
+    try {
+      const current = await preferences.getSettings();
+      if (
+        !clientRuntime.active
+        || clientRuntime.isDownloading
+        || !periodicCheckDue({
+          capable: distribution.automaticUpdates,
+          autoCheckUpdates: current.autoCheckUpdates,
+          activeSockets: sockets.size(),
+          lastUpdateCheckAt: current.lastUpdateCheckAt,
+          now: Date.now(),
+        })
+      ) return;
+      await checkForAppUpdates(current.updateTrack);
+    } finally {
+      automaticUpdateCheckInFlight = false;
+    }
+  };
+  scheduleAutomaticAppUpdateCheck = () => {
+    void maybeCheckForAppUpdates();
+  };
   // The same persisted due-time governs launch and background checks. A player
   // who restarts repeatedly therefore does not spend another network request
   // until the previous settled attempt is six hours old.
-  if (periodicCheckDue({
-    capable: distribution.automaticUpdates,
-    autoCheckUpdates: settings.autoCheckUpdates,
-    activeSockets: sockets.size(),
-    lastUpdateCheckAt: settings.lastUpdateCheckAt,
-    now: Date.now(),
-  })) {
-    void checkForAppUpdates(settings.updateTrack);
-  }
+  scheduleAutomaticAppUpdateCheck();
   // A 30-minute tick with a six-hour due-time instead of a six-hour timer:
   // a laptop waking past the boundary checks within half an hour, with no
   // resume handler and no new diagnostic event. check() already coalesces,
   // so a due tick during a download or a ready update is a no-op.
   const periodicCheckTick = setInterval(() => {
     void (async () => {
-      const current = await preferences.getSettings();
-      if (!periodicCheckDue({
-        capable: distribution.automaticUpdates,
-        autoCheckUpdates: current.autoCheckUpdates,
-        activeSockets: sockets.size(),
-        lastUpdateCheckAt: current.lastUpdateCheckAt,
-        now: Date.now(),
-      })) return;
-      void checkForAppUpdates(current.updateTrack);
+      await maybeCheckForAppUpdates();
     })().catch(() => {
       // A periodic check is silent by contract; an unreadable settings file
       // already surfaces on the next explicit settings read.
     });
   }, PERIODIC_CHECK_TICK_MS);
-  onAppQuit(() => clearInterval(periodicCheckTick));
+  onAppQuit(() => {
+    scheduleAutomaticAppUpdateCheck = null;
+    clearInterval(periodicCheckTick);
+  });
   if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);
   if (ENHANCEMENT_AUTOMATION_ENABLED) {
     process.on("message", (message) => {

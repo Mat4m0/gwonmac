@@ -52,6 +52,13 @@ describe("launcher presentation state", () => {
     const second = await loadOrCreateLauncherState(path, "migrated-single");
     assert.equal(first.document.installationKind, "fresh");
     assert.equal(first.document.setupVersion, 0);
+    assert.deepEqual(first.document.preferences.content, {
+      news: false,
+      dailies: false,
+      first: "news",
+      officialNews: true,
+      reforgedNews: true,
+    });
     assert.deepEqual(second.document, first.document);
   });
 
@@ -95,10 +102,10 @@ describe("launcher presentation state", () => {
       path,
       restarted.document,
     );
-    await store.dismissMigrationNotice();
+    await store.dismissPreferencesReset();
     const acknowledged = await loadOrCreateLauncherState(path, "fresh");
     assert.equal(acknowledged.document.preferencesResetPending, false);
-    assert.equal(acknowledged.document.migrationNoticeDismissed, true);
+    assert.equal(acknowledged.document.migrationNoticeDismissed, false);
   });
 
   it("normalizes remembered selection and Home order atomically", async () => {
@@ -107,7 +114,7 @@ describe("launcher presentation state", () => {
     const store = new LauncherStateStore(path, loaded.document);
     const id = parseProfileId("ba46cb0e-55c2-4c05-9808-5c35ce83b0b0");
     await store.setSelection([id, id]);
-    await store.updatePreferences({ content: { news: false, first: "news" } });
+    await store.updatePreferences({ content: { news: false, dailies: true, first: "news" } });
     assert.deepEqual(store.get().selectedProfileIds, [id]);
     assert.equal(store.get().preferences.content.first, "dailies");
   });

@@ -2,6 +2,7 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import LauncherHeader from "./LauncherHeader.vue";
 import LaunchBar from "./LaunchBar.vue";
+import AccountsView from "./AccountsView.vue";
 import { fixtureSnapshot } from "../fixtures";
 
 describe("launcher chrome", () => {
@@ -55,7 +56,7 @@ describe("launcher chrome", () => {
   it("keeps global repair reachable when several selected accounts are open", () => {
     const repair = {
       ...fixtureSnapshot,
-      readiness: { state: "repair-required" as const, reason: "client-invalid" },
+      readiness: { state: "repair-required" as const, reason: "artifact_unverified" as const },
       profiles: fixtureSnapshot.profiles.map((profile) => ({ ...profile, state: "running" as const })),
     };
     const wrapper = mount(LaunchBar, {
@@ -63,5 +64,52 @@ describe("launcher chrome", () => {
     });
     expect(wrapper.get<HTMLButtonElement>(".launch").element.disabled).toBe(false);
     expect(wrapper.get(".launch").text()).toContain("Open Game Files");
+  });
+
+  it("does not offer another launch while the selected account is starting", () => {
+    const opening = {
+      ...fixtureSnapshot,
+      profiles: fixtureSnapshot.profiles.map((profile, index) => ({
+        ...profile,
+        state: index === 0 ? "checking" as const : profile.state,
+      })),
+    };
+    const wrapper = mount(LaunchBar, {
+      props: { snapshot: opening, selected: [opening.profiles[0]!.id], busy: false },
+    });
+
+    expect(wrapper.get(".launch").text()).toContain("Checking game window");
+    expect(wrapper.get<HTMLButtonElement>(".launch").element.disabled).toBe(true);
+  });
+
+  it("keeps paused background work visible without implying Tools are enabled", () => {
+    const paused = {
+      ...fixtureSnapshot,
+      readiness: {
+        state: "playable" as const,
+        backgroundDownload: { status: "paused" as const },
+      },
+      tools: { ...fixtureSnapshot.tools, loaded: false },
+    };
+    const wrapper = mount(LaunchBar, {
+      props: { snapshot: paused, selected: paused.selectedProfileIds, busy: false },
+    });
+
+    expect(wrapper.get(".readiness").text()).toContain("Ready to play · Download paused");
+    expect(wrapper.get(".readiness").text()).toContain("Guild Wars is available.");
+    expect(wrapper.get(".readiness").text()).not.toContain("Tools are available");
+  });
+
+  it("keeps destructive and duplicate actions away from waiting accounts", () => {
+    const waiting = fixtureSnapshot.profiles.map((profile, index) => ({
+      ...profile,
+      state: index === 1 ? "queued" as const : profile.state,
+    }));
+    const wrapper = mount(AccountsView, { props: { profiles: waiting } });
+    const cards = wrapper.findAll(".account-card");
+
+    expect(cards[1]!.text()).toContain("Waiting for game files");
+    expect(cards[1]!.findAll("button").map((button) => button.text()))
+      .toEqual(["Customize"]);
   });
 });

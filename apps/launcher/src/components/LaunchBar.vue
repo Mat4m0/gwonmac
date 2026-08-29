@@ -24,9 +24,11 @@ const visibleProfiles = computed(() => props.snapshot.profiles.filter((profile) 
 const selectedProfiles = computed(() => visibleProfiles.value.filter((profile) => props.selected.includes(profile.id)));
 const closedSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state !== "running"));
 const waiting = computed(() => selectedProfiles.value.some((profile) => profile.state === "queued"));
+const starting = computed(() => selectedProfiles.value.some((profile) => profile.state === "opening" || profile.state === "checking"));
 const label = computed(() => launchLabel(selectedProfiles.value, props.snapshot.readiness));
 const disabled = computed(() => (
   props.busy
+  || starting.value
   || props.selected.length === 0
   || (
     props.snapshot.readiness.state !== "repair-required"
@@ -38,7 +40,13 @@ const readyText = computed(() => {
   if (props.snapshot.readiness.state === "preparing") return "Preparing Guild Wars";
   if (props.snapshot.readiness.state === "repair-required") return "Game files need repair";
   if (props.snapshot.readiness.state === "offline-playable") return "Ready to play offline";
-  return props.snapshot.readiness.backgroundDownload?.status === "running" ? "Ready to play · Downloading game files" : "Ready to play";
+  switch (props.snapshot.readiness.backgroundDownload?.status) {
+    case "running": return "Ready to play · Downloading game files";
+    case "paused": return "Ready to play · Download paused";
+    case "stopping": return "Ready to play · Pausing download";
+    case "failed": return "Ready to play · Download needs attention";
+    default: return "Ready to play";
+  }
 });
 
 function closePicker(restoreFocus = true) {
@@ -86,7 +94,7 @@ onBeforeUnmount(() => {
 
 <template>
   <footer class="launchbar">
-    <div class="readiness" role="status" aria-live="polite"><span class="ready-dot" :class="snapshot.readiness.state" /><div><strong>{{ readyText }}</strong><small v-if="snapshot.readiness.state === 'playable'">Guild Wars and your enabled Tools are available.</small></div></div>
+    <div class="readiness" role="status" aria-live="polite"><span class="ready-dot" :class="snapshot.readiness.state" /><div><strong>{{ readyText }}</strong><small v-if="snapshot.readiness.state === 'playable'">Guild Wars is available.</small></div></div>
     <div ref="pickerWrap" class="picker-wrap">
       <button ref="pickerButton" class="account-picker" :aria-label="`Choose accounts, ${selectedProfiles.length} selected`" aria-haspopup="true" :aria-expanded="pickerOpen" aria-controls="profile-picker" @click="pickerOpen = !pickerOpen"><Users /><span aria-hidden="true"><small>Accounts</small><strong>{{ selectedProfiles.length }} selected</strong></span><ChevronDown aria-hidden="true" /></button>
       <div v-if="pickerOpen" id="profile-picker" class="profile-picker" role="group" aria-label="Choose accounts">
