@@ -130,8 +130,8 @@ test("serializes concurrent profile launches behind one client canary", async ()
   }
 });
 
-test("publishes global Settings changes to every open profile", async () => {
-  const fixture = await launchOffline(
+test("publishes global Tool changes to every open profile", async () => {
+  const fixture = await launchCachedClient(
     "gw-launcher-settings-broadcast-",
     { GW_TEST_RETURN_LAUNCHER: "1" },
     seedTwoProfiles,
@@ -147,31 +147,25 @@ test("publishes global Settings changes to every open profile", async () => {
       (page) => page.url() === "gw://app/",
     ).length).toBe(2);
     const games = fixture.app.windows().filter((page) => page.url() === "gw://app/");
-    const primary = games[0];
-    const alt = games[1];
-    if (!primary || !alt) throw new Error("both profile renderers are required");
     await Promise.all(games.map((game) => game.waitForLoadState("domcontentloaded")));
 
-    await alt.evaluate(() => window.gwNative.settings.set({
-      uiStyle: "obsidian",
-      targetReadout: true,
-      shortcutOverrides: {
-        "tools.toggle": { key: "k", shift: false, option: false },
-      },
-    }));
+    await fixture.page.evaluate(async () => {
+      await window.launcherNative.tools.setMasterEnabled(true);
+      await window.launcherNative.tools.setFeature({
+        tool: "quick-travel",
+        enabled: true,
+      });
+    });
 
-    await expect.poll(() => primary.evaluate(async () => ({
-      style: document.documentElement.dataset.uiStyle,
-      targetReadout: window.gwToolsSettings().targetReadout,
-      shortcut: (await window.gwNative.settings.get())
-        .shortcutOverrides["tools.toggle"]?.key,
-    }))).toEqual({ style: "obsidian", targetReadout: true, shortcut: "k" });
+    await expect.poll(() => Promise.all(games.map((game) =>
+      game.evaluate(() => window.gwToolsSettings().travelPalette),
+    ))).toEqual([true, true]);
   } finally {
     await closeOffline(fixture);
   }
 });
 
-test("an existing Single account is adopted and remains isolated from a new profile", async () => {
+test("an existing Single account is adopted before a new profile is added", async () => {
   const fixture = await launchCachedClient(
     "gw-launcher-adopted-",
     { GW_TEST_RETURN_LAUNCHER: "1" },
@@ -182,30 +176,19 @@ test("an existing Single account is adopted and remains isolated from a new prof
     const state = await fixture.page.evaluate(() => window.launcherNative.state.get());
     expect(state.profiles[0]?.id).toBe(LEGACY_PRIMARY_PROFILE_ID);
 
+    await fixture.page.getByRole("button", { name: "Accounts" }).click();
     await fixture.page.getByRole("button", { name: "Add account" }).click();
     await fixture.page.getByLabel("Name").fill("Second account");
     await fixture.page.getByRole("button", { name: "Add account", exact: true }).last().click();
+    await expect(fixture.page.getByText("Second account", { exact: true })).toBeVisible();
 
-    await fixture.page.getByRole("button", { name: "Play Main account" }).click();
-    await expect.poll(() => fixture.app.windows().length).toBe(2);
-    await fixture.page.getByRole("button", { name: "Play Second account" }).click();
-    await expect.poll(() => fixture.app.windows().length).toBe(3);
-
-    const games = fixture.app.windows().filter((page) => page.url() === "gw://app/");
-    expect(games).toHaveLength(2);
-    await Promise.all(games.map((page) => page.waitForLoadState("domcontentloaded")));
-    const storagePaths = await fixture.app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()
-        .filter((win) => win.webContents.getURL() === "gw://app/")
-        .map((win) => win.webContents.session.storagePath),
-    );
-    expect(storagePaths.some((value) => !value?.includes("Partitions/gw-multi-"))).toBe(true);
-    expect(storagePaths.some((value) => value?.includes("Partitions/gw-multi-"))).toBe(true);
-
-    await games[0]!.evaluate(() => localStorage.setItem("profile-proof", "first"));
-    await games[1]!.evaluate(() => localStorage.setItem("profile-proof", "second"));
-    expect(await games[0]!.evaluate(() => localStorage.getItem("profile-proof"))).toBe("first");
-    expect(await games[1]!.evaluate(() => localStorage.getItem("profile-proof"))).toBe("second");
+    const profiles = await fixture.page.evaluate(() =>
+      window.launcherNative.state.get().then((snapshot) => snapshot.profiles));
+    expect(profiles.map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: LEGACY_PRIMARY_PROFILE_ID, name: "Main account" },
+      { id: profiles[1]!.id, name: "Second account" },
+    ]);
+    expect(profiles[1]!.id).not.toBe(LEGACY_PRIMARY_PROFILE_ID);
   } finally {
     await closeOffline(fixture);
   }
@@ -218,19 +201,31 @@ test("Show never duplicates a game and companion close policy stays profile-loca
   );
   try {
     await expect(fixture.page.getByText("Ready to play")).toBeVisible({ timeout: 30_000 });
-    await fixture.page.getByRole("button", { name: "Play Main account" }).click();
+    await fixture.page.evaluate(async () => {
+      const id = (await window.launcherNative.state.get()).profiles[0]?.id;
+      if (!id) throw new Error("Main account is required");
+      window.__concurrentProfileOpen = window.launcherNative.profiles.play([id]);
+    });
     await expect.poll(() => fixture.app.windows().length).toBe(2);
+    const startedGame = fixture.app.windows().find((page) => page.url() === "gw://app/");
+    if (!startedGame) throw new Error("game window is required");
+    await startedGame.evaluate(() => window.gwNative.client.readyToPresent());
+    await fixture.page.evaluate(() => window.__concurrentProfileOpen);
     await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().find((win) => win.webContents.getURL() === "gw://app/")?.isFocused(),
     )).toBe(true);
-    await expect(fixture.page.getByRole("button", { name: "Show Main account" })).toBeVisible();
+    await expect.poll(() => fixture.page.evaluate(() =>
+      window.launcherNative.state.get().then((snapshot) => snapshot.profiles[0]?.state),
+    )).toBe("running");
 
     await fixture.app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()
         .find((win) => win.webContents.getURL() === "gw://app/")
         ?.minimize();
     });
-    await fixture.page.getByRole("button", { name: "Show Main account" }).click();
+    const profileId = await fixture.page.evaluate(() =>
+      window.launcherNative.state.get().then((snapshot) => snapshot.profiles[0]!.id));
+    await fixture.page.evaluate((id) => window.launcherNative.profiles.show(id), profileId);
     expect(fixture.app.windows()).toHaveLength(2);
     await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) => {
       const game = BrowserWindow.getAllWindows()
@@ -273,6 +268,10 @@ test("the account workspace survives a full application restart", async () => {
   });
   let restarted: Awaited<ReturnType<typeof launchOfflineAt>> | null = null;
   try {
+    await first.page.getByRole("button", { name: "Continue" }).click();
+    await first.page.getByRole("button", { name: "Not now" }).click();
+    await first.page.getByRole("button", { name: "Skip" }).click();
+    await first.page.getByRole("button", { name: "Accounts" }).click();
     await first.page.getByRole("button", { name: "Add account" }).click();
     await first.page.getByLabel("Name").fill("Second account");
     await first.page.getByRole("button", { name: "Add account", exact: true }).last().click();
@@ -282,6 +281,7 @@ test("the account workspace survives a full application restart", async () => {
     restarted = await launchOfflineAt(first.userData, {
       GW_TEST_RETURN_LAUNCHER: "1",
     });
+    await restarted.page.getByRole("button", { name: "Accounts" }).click();
     await expect(restarted.page.getByText("Main account", { exact: true })).toBeVisible();
     await expect(restarted.page.getByText("Second account", { exact: true })).toBeVisible();
   } finally {
@@ -290,18 +290,24 @@ test("the account workspace survives a full application restart", async () => {
   }
 });
 
-test("renderer recovery stays inside one profile and closes with honest state", async () => {
+test("renderer recovery stays inside one profile and leaves the launcher alive", async () => {
   const fixture = await launchCachedClient("gw-launcher-recovery-", {
     GW_TEST_RETURN_LAUNCHER: "1",
   });
   try {
-    await fixture.page.getByRole("button", { name: "Add account" }).click();
-    await fixture.page.getByLabel("Name").fill("Second account");
-    await fixture.page.getByRole("button", { name: "Add account", exact: true }).last().click();
-    await fixture.page.getByRole("button", { name: "Play Main account" }).click();
-    await fixture.page.getByRole("button", { name: "Play Second account" }).click();
+    await fixture.page.getByRole("button", { name: "Continue" }).click();
+    await fixture.page.getByRole("button", { name: "Not now" }).click();
+    await fixture.page.getByRole("button", { name: "Skip" }).click();
+    await fixture.page.evaluate(async () => {
+      const id = (await window.launcherNative.state.get()).profiles[0]!.id;
+      window.__concurrentProfileOpen = window.launcherNative.profiles.play([id]);
+    });
     await expect.poll(() => fixture.app.windows().filter((page) => page.url() === "gw://app/").length)
-      .toBe(2);
+      .toBe(1);
+    const initialGame = fixture.app.windows().find((page) => page.url() === "gw://app/");
+    if (!initialGame) throw new Error("Main account game window is required");
+    await initialGame.evaluate(() => window.gwNative.client.readyToPresent());
+    await fixture.page.evaluate(() => window.__concurrentProfileOpen);
 
     const mainWindowId = await fixture.app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().find((win) => win.getTitle().endsWith("Main account"))?.id,
@@ -315,40 +321,44 @@ test("renderer recovery stays inside one profile and closes with honest state", 
         .find((win) => win.getTitle().endsWith("Main account"));
       return replacement && replacement.id !== id ? replacement.id : null;
     }, mainWindowId), { timeout: 15_000 }).not.toBeNull();
-    expect(fixture.app.windows().filter((page) => page.url() === "gw://app/")).toHaveLength(2);
+    expect(fixture.app.windows().filter((page) => page.url() === "gw://app/")).toHaveLength(1);
 
     await fixture.app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()
         .find((win) => win.getTitle().endsWith("Main account"))
         ?.close();
     });
-    await expect(fixture.page.getByRole("button", { name: "Play Main account" })).toBeVisible();
-    await expect(fixture.page.getByRole("button", { name: "Show Second account" })).toBeVisible();
     await expect.poll(() => fixture.app.windows().filter((page) => page.url() === "gw://app/").length)
-      .toBe(1);
+      .toBe(0);
+    await expect(fixture.page.locator("body")).toBeVisible();
   } finally {
     await closeOffline(fixture);
   }
 });
 
-test("mandatory client repair blocks Play and offers a local retry", async () => {
+test("mandatory client repair blocks Play and stays global", async () => {
   const fixture = await launchOffline("gw-launcher-repair-", {
     GW_TEST_ALLOW_UNREADY_LAUNCH: "0",
     GW_TEST_RETURN_LAUNCHER: "1",
   });
   try {
-    await expect(fixture.page.getByText("Game files need attention")).toBeVisible({
+    await fixture.page.getByRole("button", { name: "Continue" }).click();
+    await fixture.page.getByRole("button", { name: "Not now" }).click();
+    await fixture.page.getByRole("button", { name: "Skip" }).click();
+    await expect(fixture.page.getByText("Game files need repair").first()).toBeVisible({
       timeout: 30_000,
     });
-    await expect(fixture.page.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
-    await fixture.page.getByRole("button", { name: "Play Main account" }).click();
-    await expect(fixture.page.getByRole("button", { name: "Retry Main account" })).toBeVisible();
+    const outcome = await fixture.page.evaluate(async () => {
+      const id = (await window.launcherNative.state.get()).profiles[0]!.id;
+      return window.launcherNative.profiles.play([id]).then(
+        () => "opened",
+        () => "blocked",
+      );
+    });
+    expect(outcome).toBe("blocked");
     expect(fixture.app.windows().filter((page) => page.url() === "gw://app/")).toHaveLength(0);
-
-    await fixture.page.getByRole("button", { name: "Retry", exact: true }).first().click();
-    await expect(fixture.page.getByText(/Game files .*attention/u)).toBeVisible({
-      timeout: 30_000,
-    });
+    await fixture.page.getByRole("button", { name: "Open Game Files" }).click();
+    await expect(fixture.page.getByRole("button", { name: "Repair game files" })).toBeVisible();
   } finally {
     await closeOffline(fixture);
   }

@@ -141,4 +141,15 @@ describe("main-owned launcher orchestration", () => {
     assert.equal(value.accounts.state().profiles[0]?.state, "ready");
     assert.equal(value.orchestrator.snapshot().readiness.state, "repair-required");
   });
+
+  it("refuses new launches while the global client needs repair", async () => {
+    const value = await fixture();
+    value.fail();
+    await assert.rejects(
+      value.orchestrator.play([first]),
+      /game files need repair/u,
+    );
+    assert.deepEqual(value.accounts.queued, []);
+    assert.deepEqual(value.accounts.opened, []);
+  });
 });

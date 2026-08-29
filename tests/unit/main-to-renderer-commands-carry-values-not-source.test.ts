@@ -232,19 +232,17 @@ test("a renderer with no readable init argument gets the production posture", ()
   );
 });
 
-test("menu commands reach the renderer as events and are acknowledged", async () => {
+test("menu commands reach the game renderer as events", async () => {
   const fixture = harness(ARGV);
   fixture.deliver(1, { type: "input.reset" });
-  fixture.deliver(2, { type: "settings.open" });
-  fixture.deliver(3, { type: "diagnostics.toggle" });
+  fixture.deliver(2, { type: "diagnostics.toggle" });
   fixture.installToolbox();
-  fixture.deliver(4, { type: "tools.toggle" });
+  fixture.deliver(3, { type: "tools.toggle" });
   fixture.installStorage();
-  fixture.deliver(5, { type: "storage.open" });
+  fixture.deliver(4, { type: "storage.open" });
   await new Promise(setImmediate);
   assert.deepEqual(fixture.dispatched, [
     "gw:input-reset",
-    "gw:settings",
     "gw:diagnostics-toggle",
     "gw:tools-toggle",
     "gw:storage-open",
@@ -254,7 +252,6 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
     [2, "completed"],
     [3, "completed"],
     [4, "completed"],
-    [5, "completed"],
   ]);
 });
 

@@ -342,7 +342,7 @@ export async function rendererPage(
   browser: Browser,
   child: ChildProcess,
   output: string[],
-  expectedUrl: "gw://app/" | "gw://app/launcher.html",
+  expectedUrl: "gw://app/" | "gw://app/launcher/index.html",
 ) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline && child.exitCode === null) {
@@ -444,7 +444,7 @@ export async function launchPackaged(
       browser,
       child,
       output,
-      "gw://app/launcher.html",
+      "gw://app/launcher/index.html",
     );
     await launcher.getByRole("button", { name: /^Play /u }).click({
       timeout: 30_000,

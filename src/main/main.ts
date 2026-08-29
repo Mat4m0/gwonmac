@@ -458,6 +458,9 @@ function buildWindowHost(
     prepareRendererRecovery: async () => {
       await clientRuntime.recoverRendererCrash();
     },
+    revealLauncher: () => {
+      windowCoordinator.revealLauncher({ activateApp: true });
+    },
     gameWindowClosed: () => {
       windowCoordinator.afterGameClosed();
     },

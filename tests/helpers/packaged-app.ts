@@ -57,7 +57,7 @@ const allPages = (browser: Browser): Page[] =>
   browser.contexts().flatMap((context) => context.pages());
 
 async function isLauncherPage(page: Page): Promise<boolean> {
-  return page.evaluate(() => location.pathname.endsWith("/launcher.html"));
+  return page.evaluate(() => location.pathname.endsWith("/launcher/index.html"));
 }
 
 async function waitForGamePage(

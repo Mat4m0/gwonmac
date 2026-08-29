@@ -16,13 +16,12 @@ const index = readFileSync(path.join(renderer, "index.html"), "utf8");
 const classicEntries = [...index.matchAll(/<script\s+src="([^"]+\.js)"><\/script>/gu)]
   .map((match) => match[1]!);
 
-test("the built launcher entries stay classic scripts in their declared order", () => {
+test("the built game entries stay classic scripts in their declared order", () => {
   assert.deepEqual(classicEntries, [
     "diagnostics.js",
     "commands.js",
     "loading.js",
     "harness.js",
-    "settings.js",
   ]);
   for (const entry of classicEntries) {
     const source = ts.createSourceFile(
@@ -67,11 +66,10 @@ test("shared renderer runtime modules belong to the renderer output", () => {
   assert.equal(existsSync(path.join(root, "build/shared/contracts.js")), true);
 });
 
-test("the packaged renderer contains one launcher entry", () => {
-  assert.equal(existsSync(path.join(renderer, "launcher.html")), true);
-  assert.equal(existsSync(path.join(renderer, "launcher.css")), true);
-  assert.equal(existsSync(path.join(renderer, "launcher.js")), true);
-  assert.equal(existsSync(path.join(renderer, "accounts.html")), false);
-  assert.equal(existsSync(path.join(renderer, "accounts.css")), false);
-  assert.equal(existsSync(path.join(renderer, "accounts.js")), false);
+test("the packaged renderer contains only the Vue launcher surface", () => {
+  assert.equal(existsSync(path.join(renderer, "launcher", "index.html")), true);
+  assert.equal(existsSync(path.join(renderer, "launcher.html")), false);
+  assert.equal(existsSync(path.join(renderer, "launcher.css")), false);
+  assert.equal(existsSync(path.join(renderer, "launcher.js")), false);
+  assert.doesNotMatch(index, /client-compat-play|settings-dialog|Play Guild Wars/u);
 });

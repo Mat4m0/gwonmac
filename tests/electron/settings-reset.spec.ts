@@ -52,7 +52,7 @@ test("Tools reset promises and clears both Travel preference owners", async () =
       dialog.showMessageBox = record as typeof dialog.showMessageBox;
     });
 
-    expect(await page.evaluate(() => window.gwNative.settings.reset()))
+    expect(await page.evaluate(() => window.launcherNative.settings.reset()))
       .toMatchObject({ status: "complete" });
     expect(await app.evaluate(() => globalThis.__resetRestart.options?.detail))
       .toBe(

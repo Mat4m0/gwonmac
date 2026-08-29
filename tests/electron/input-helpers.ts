@@ -10,11 +10,5 @@ export const boxOf = async (locator: Locator) => {
 
 export async function startGameInput(page: Page) {
   const canvas = page.locator("#canvas");
-  const acceptCompatibility = page.locator("#client-compat-play");
-  await expect.poll(async () =>
-    (await canvas.getAttribute("data-input-ready")) === "true"
-    || await acceptCompatibility.isVisible(),
-  ).toBe(true);
-  if (await acceptCompatibility.isVisible()) await acceptCompatibility.click();
   await expect(canvas).toHaveAttribute("data-input-ready", "true");
 }

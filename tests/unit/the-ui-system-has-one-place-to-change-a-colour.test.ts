@@ -20,10 +20,9 @@ const TOKENS = "src/shared/ui/tokens.css";
 
 /** Every stylesheet that is downstream of the tokens, and so may not hold a
  *  literal. The Tools workbench is on the list for the same reason the
- *  Settings dialog is: two surfaces of one product cannot each own a palette. */
+ *  launcher is: two surfaces of one product cannot each own a palette. */
 const CONSUMERS = [
   "src/shared/ui/components.css",
-  "src/renderer/settings.css",
   "apps/tools/src/styles.css",
   "apps/tools/src/styles/base-shell.css",
   "apps/tools/src/styles/library.css",
@@ -52,19 +51,7 @@ const consumers = CONSUMERS.map(
 /** Strip comments, so prose about `oklch(20% …)` is not read as a declaration. */
 const code = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 
-/** Settings includes deliberately literal Guild Wars swatches and icon art.
- * Exempt only those marked fragments, never their surrounding layout. */
-const DOMAIN_ARTWORK =
-  /\/\* ui-policy-domain-artwork:start[^]*?ui-policy-domain-artwork:end \*\//gu;
-const paletteCode = (path: string, css: string): string => {
-  if (path !== "src/renderer/settings.css") return code(css);
-  const artwork = [...css.matchAll(DOMAIN_ARTWORK)];
-  if (artwork.length !== 2) {
-    throw new Error(`expected two Settings domain-artwork fragments, found ${artwork.length}`);
-  }
-  const withoutArtwork = css.replace(DOMAIN_ARTWORK, "");
-  return code(withoutArtwork);
-};
+const paletteCode = (_path: string, css: string): string => code(css);
 
 /** Every `--ui-…` declared on the left of a colon in tokens.css. */
 function declaredTokens(): Set<string> {

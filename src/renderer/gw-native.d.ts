@@ -259,7 +259,6 @@ declare global {
     gwControllerPromptTextureStats?(): ControllerPromptTextureStats;
     /** Unpackaged-development controller used to exercise Guild Wars' real gamepad UI. */
     gwVirtualGamepad?: VirtualGamepadController;
-    gwResolveClientCompatibility(): Promise<void>;
     gwLog(visible?: boolean): boolean;
     gwEvictMemory(): number;
     gwStats?(): Record<string, number | boolean>;

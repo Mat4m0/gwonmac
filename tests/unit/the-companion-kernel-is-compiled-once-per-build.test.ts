@@ -168,10 +168,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "images/logo.webp",
       "images/playstation-controller-prompts.png",
       "index.html",
-      "launcher.css",
-      "launcher.html",
       "loading.css",
-      "settings.css",
       // Copied out of src/shared, and flattened to `ui/` so the renderer and
       // the Tools bundle load the one design system by the same href.
       "ui/components.css",

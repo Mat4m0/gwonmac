@@ -12,8 +12,6 @@ import path from "node:path";
 // editor and OS files part of the build, so two clean checkouts could package
 // different applications. A new asset must be reviewed here.
 const ASSETS = [
-  "launcher.css",
-  "launcher.html",
   "favicon.ico",
   "favicon.png",
   "fonts/COPYING-QUALITYPE",
@@ -25,7 +23,6 @@ const ASSETS = [
   "images/playstation-controller-prompts.png",
   "index.html",
   "loading.css",
-  "settings.css",
 ];
 
 // The design system lives in src/shared because the Tools application consumes

@@ -130,6 +130,10 @@ export class LauncherOrchestrator {
       this.publish();
       return;
     }
+    if (this.options.getProgress().phase === "error") {
+      this.publish();
+      throw new Error("Guild Wars game files need repair before opening an account");
+    }
     const pending = new Set(this.pending);
     for (const id of closed) {
       if (!pending.has(id)) this.pending.push(id);

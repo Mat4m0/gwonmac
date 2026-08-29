@@ -1349,8 +1349,10 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
   });
 
-  if (!await window.gwLoading.waitForClient()) return;
-  window.gwLoading.set('Preparing…', null);
+  // Main creates this window only after the shared client is playable. The
+  // renderer starts its profile session directly; it never presents another
+  // update, repair, Settings, or Play decision.
+  window.gwLoading.set('Starting Guild Wars…', null);
 
   try {
     const [settings, session] = await Promise.all([
@@ -1432,7 +1434,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       else console.log(s);
       return s;
     };
-    await window.gwResolveClientCompatibility();
   } catch (e) {
     window.gwLoading?.fail('Game data could not be prepared.');
     return log(

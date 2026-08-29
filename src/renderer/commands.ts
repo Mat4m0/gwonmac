@@ -108,12 +108,6 @@
         if (result.error !== undefined) throw result.error;
         break;
       }
-      case 'settings.open':
-        dispatch('gw:settings', {
-          pane: command.pane,
-          checkForUpdates: command.checkForUpdates,
-        });
-        break;
       case 'filesystem.sync':
         await new Promise<void>((resolve, reject) => {
           // ArenaNet's generated glue publishes FS on the global object.

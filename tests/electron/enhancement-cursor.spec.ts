@@ -101,9 +101,9 @@ async function driveCursor(
     };
 
     const canvas = globalThis.document.getElementById("canvas");
-    const dialog = globalThis.document.getElementById("settings-dialog");
+    const dialog = globalThis.document.getElementById("loading");
     if (!canvas) throw new Error("the game canvas is missing");
-    if (!dialog) throw new Error("the settings dialog is missing");
+    if (!dialog) throw new Error("the game fallback is missing");
     const cursorOf = (element: Element) =>
       globalThis.getComputedStyle(element).cursor;
     const PNG_URL = /data:image\/png;base64,[A-Za-z0-9+/=]+/g;
@@ -427,7 +427,7 @@ test.describe("enhancement cursor presentation", () => {
         columns: [clear, clear, opaque, opaque, opaque, opaque],
       });
 
-      // (c) the game cursor is confined to the canvas: the settings dialog and
+      // (c) the game cursor is confined to the canvas: the fallback and
       // the rest of the chrome keep the plain pointer.
       expect(cursor.dialog).toBe(observed.resting);
       expect(cursor.root).toBe(observed.resting);

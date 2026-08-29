@@ -859,11 +859,6 @@ export type RendererCommand =
   | { type: "trade.toggle" }
   | { type: "storage.open" }
   | { type: "travel.toggle" }
-  | {
-      type: "settings.open";
-      pane?: SettingsPane;
-      checkForUpdates?: boolean;
-    }
   | { type: "filesystem.sync" }
   | { type: "input.trace"; enabled: boolean }
   | { type: "diagnostics.toggle" }

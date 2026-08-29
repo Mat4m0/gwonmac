@@ -136,18 +136,6 @@ test.describe("renderer Travel input", () => {
       });
       await expect(palette).toBeVisible();
 
-      // Native modal work is above non-modal surfaces. The first Escape closes
-      // Settings and restores Travel; the palette remains open underneath.
-      await page.evaluate(() => {
-        window.dispatchEvent(new CustomEvent("gw:settings", {
-          detail: { pane: "controls" },
-        }));
-      });
-      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
-      await page.keyboard.press("Escape");
-      await expect(page.locator("#settings-dialog")).not.toHaveAttribute("open", "");
-      await expect(palette).toBeVisible();
-
       await canvas.click({ position: { x: 20, y: 300 } });
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
       await expect(palette).toBeVisible();

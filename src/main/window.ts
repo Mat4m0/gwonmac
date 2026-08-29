@@ -81,6 +81,7 @@ export interface WindowHost {
   claimRelogIntent: (win: BrowserWindow) => boolean;
   requestQuit: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
+  revealLauncher: () => void;
   gameWindowClosed?: () => void;
 }
 
@@ -619,6 +620,7 @@ export function createMainWindow(
     installApplicationMenu({
       host,
       resetWindowState,
+      revealLauncher: host.revealLauncher,
     });
   };
   installWindowShortcuts(win, {

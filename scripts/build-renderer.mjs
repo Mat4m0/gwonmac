@@ -8,8 +8,6 @@ const inputs = [
   "commands",
   "loading",
   "harness",
-  "settings",
-  "launcher",
 ].map((name) => path.resolve(`src/renderer/${name}.ts`));
 
 /** @type {import("rollup").Plugin} */
