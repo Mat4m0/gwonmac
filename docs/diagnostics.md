@@ -86,7 +86,7 @@ It cannot prove an improvement.
 For a short hitch, record Level 2 for only the reproduction window. Stop soon
 after the problem. A trace that stops before the hitch cannot explain it.
 
-In Multiple Accounts mode, a capture belongs to the registered game window
+With account profiles, a capture belongs to the registered game window
 that started it for its complete lifetime. Focus changes cannot move its
 status, marker, export, or completion prompt to another profile. Closing or
 crashing the owner stops the capture without falling back to another game.
@@ -95,7 +95,7 @@ exists; it refuses an ambiguous set of unfocused games. Renderer events,
 metrics, graphics facts, frame records, completed capture evidence, and exports
 are filtered to that owner. A process-local owner token retains the account's
 evidence across renderer recovery without recording its profile ID. App-global
-lifecycle evidence remains shared. Multiple Accounts exports omit prior-process
+lifecycle evidence remains shared. Multi-profile exports omit prior-process
 events because those ephemeral owners cannot be correlated safely after restart.
 
 Level 2 is refused while more than one game window is open because Electron's

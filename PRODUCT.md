@@ -23,9 +23,9 @@ wants the official game without Windows, Wine, or a browser tab.
 Some returning players also want a small set of familiar tools. They do not
 need a plugin platform.
 
-Some players use more than one Guild Wars account. They can explicitly enable
-**Multiple Accounts** mode to open independently controlled accounts in
-separate windows. The normal Single Account mode stays the default.
+Some players use more than one Guild Wars account. Every installation has at
+least one account profile. A player can add more profiles at any time and open
+each in an independently controlled game window.
 
 ## Product promise
 
@@ -35,8 +35,8 @@ separate windows. The normal Single Account mode stays the default.
 - Keep host-owned Builds and Teams available without live Tools.
 - Give players clear Stable and Beta application-update behavior.
 - Keep local data and diagnostics under the player's control.
-- Keep Single Account data unchanged when a player enters or leaves Multiple
-  Accounts mode.
+- Adopt existing player data as the first profile without copying, moving, or
+  deleting it.
 - Keep the project understandable for one new contributor.
 
 ## Tools
@@ -99,7 +99,7 @@ See [Release verification](docs/release-verification.md).
   listing publication, trade execution, pricing manipulation, inventory
   automation, or chat automation.
 - No cloned application installations or duplicated ArenaNet game downloads
-  for Multiple Accounts mode.
+  for additional account profiles.
 - No generic memory, packet, command, or plugin API.
 - No port of the Windows plugin ABI.
 - No gwonmac telemetry from the Mac app.

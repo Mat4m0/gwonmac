@@ -14,7 +14,7 @@ those facts.
 ```text
 Electron main process
   application lifecycle
-  active Single or Multiple Accounts mode
+  account-profile workspace
   game-window registry
   ArenaNet client and content updates
   verified client generations and rollback
@@ -32,7 +32,7 @@ Sandboxed preload
           | frozen window.gwNative capabilities
           v
 Chromium renderer
-  account picker, launcher, and settings
+  launcher, game, and settings
   Guild Wars Module host
   input and presentation
   required Core features
@@ -49,27 +49,28 @@ routes.
 The preload exposes one frozen `window.gwNative` object. It transports
 capabilities. It does not own game rules or persistence rules.
 
-## Account modes
+## Account profiles
 
-The process captures one account mode at startup. It does not switch storage
-owners while it runs.
+Every game window has one `ProfileId`. The process bootstraps one account
+workspace before creating a window. Existing installations adopt their released
+storage as **Main account** in place. Added profiles use isolated persistent
+sessions and profile-scoped native stores.
 
-Single Account mode uses the existing default Electron session, saved-login
-items, build library, and window state. Multiple Accounts mode does not treat
-Single Account mode as a profile. Each Multiple Accounts profile uses a
-non-default persistent Electron session and profile-scoped native stores.
+One storage resolver maps a profile to its Electron session, saved-login slots,
+build and template libraries, reset marker, and window state. Other main-process
+modules do not branch on legacy storage.
 
-Both modes use the same verified client generation, chunk store, derived
-client artifacts, and application updater. These stores contain rebuildable
-client infrastructure. They do not contain player account state.
+All profiles use the same verified client generation, chunk store, derived
+client artifacts, application updater, general settings, and Tools installation.
+These shared stores contain infrastructure, not profile login state.
 
-The main-process window registry owns the Single game window, the Multiple
-Accounts Hub, and every profile game window. Native code resolves a renderer
-only through this registry. It does not infer ownership from Electron's global
-window list or from the current focus.
+The main-process window registry owns the launcher and every profile game
+window. The window coordinator owns show, hide, restore, focus, and Dock
+activation. Native code resolves a renderer only through the registry; it does
+not infer ownership from Electron's global window list or current focus.
 
-[Multiple Accounts](multiple-accounts.md) owns the complete data and transition
-contract.
+[Account profiles](multiple-accounts.md) owns the complete bootstrap, storage,
+and rollback contract.
 
 ## Client generation ownership
 
@@ -149,7 +150,7 @@ supplies the selected render scale and mirrors the requested backing size.
 Every game window remains scheduled when it is fully covered or minimized.
 Guild Wars uses animation frames for its main loop, so background throttling
 would delay network updates and enabled background audio until the window
-became visible again. The Account Picker keeps normal background throttling.
+became visible again. The launcher keeps normal background throttling.
 
 The renderer owns one input policy in `src/renderer/input.ts`. Mouse and
 trackpad actions go to Guild Wars without a selectable input mode. A real focus
@@ -301,7 +302,7 @@ The main process owns these native stores:
 - verified ArenaNet client generations;
 - the content-addressed chunk store;
 - bounded diagnostics files;
-- Single Account and profile-scoped saved-login items in Apple's Data
+- adopted and profile-scoped saved-login items in Apple's Data
   Protection Keychain.
 
 Each game window stores its normal bounds, mode, and display work area in its
@@ -325,7 +326,7 @@ published.
 
 Each account scope has one item for the ArenaNet user name and password and one
 item for the Steam access token and expiry. The existing fixed items belong
-only to Single Account mode. A read failure does not delete an item. The game
+only to the adopted Main account. A read failure does not delete an item. The game
 can continue to its login screen when an item is unavailable.
 
 Unpackaged, ordinary local, and ad-hoc developer builds use volatile storage.
@@ -365,16 +366,17 @@ rollback procedures.
 ## Application lifecycle
 
 The app acquires a single-instance lock before it reads or cleans profile-owned
-files. In Single Account mode, a second launch focuses the game. In Multiple
-Accounts mode, it opens or focuses the Account Picker.
+files. A second launch and a Dock activation reveal the launcher. They do not
+create another game window.
 
-Closing the Single Account game window quits the application. Closing one
-Multiple Accounts game window closes only that profile. Application quit saves
+Closing the launcher hides it while games run. Closing one game window closes
+only that profile. Closing the final game leaves the launcher available.
+Application quit saves
 all live renderer filesystems in parallel, closes sockets, stops background
 work, flushes diagnostics, and exits through one bounded cleanup path.
 
 Command-Q opens an account-owned native dialog while a game window is active.
-Reload and Quit Game affect that account only. The Account Picker keeps the
+Reload and Quit Game affect that account only. The launcher keeps the
 ordinary application Quit command because it has no game account to reload.
 The physical Q claim lasts only until that dialog settles; Cancel re-arms the
 shortcut even when AppKit consumed the original key-up.
