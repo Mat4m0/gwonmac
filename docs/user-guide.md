@@ -144,9 +144,10 @@ accounts with up to ten characters, choose with the arrow keys, Return, or
 1–9 and 0 for the tenth row. Larger accounts show a search field; an empty
 search lists the ten most-used characters, while typing searches the complete
 live account list. Number shortcuts pause while search text is present. Escape
-clears search first, then closes the palette. The details setting shows
-professions, level, and a location only when it matches Travel's reviewed
-catalogue. **Command-Shift-R** reloads Guild Wars.
+clears search first, then closes the palette. Its display settings control
+profession, level, and known location independently. A location appears only
+when it matches Travel's reviewed catalogue. **Command-Shift-R** reloads Guild
+Wars.
 
 Character names and search text are not saved. Successful switches update a
 small ranking document containing only opaque character keys, counts, and

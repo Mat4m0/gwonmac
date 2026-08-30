@@ -131,7 +131,7 @@ export function createCharacterSwitchPalette(
   const root = document.createElement("dialog");
   root.id = "character-switch-root";
   root.setAttribute("aria-labelledby", "character-switch-title");
-  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><section class="character-switch-settings" aria-label="Character Switch settings" hidden><label class="character-switch-setting" for="character-switch-show-details"><span><strong>Show character details</strong><small>Profession, level, and known location</small></span><input id="character-switch-show-details" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" class="ui-button character-switch-stay">Stay here</button><button type="button" class="ui-button character-switch-leave" data-variant="primary">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"><kbd class="ui-kbd">tab</kbd> or <kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> close</span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span></footer></div>`;
+  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><section class="character-switch-settings" aria-label="Character Switch settings" hidden><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" class="ui-button character-switch-stay">Stay here</button><button type="button" class="ui-button character-switch-leave" data-variant="primary">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"><kbd class="ui-kbd">tab</kbd> or <kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> close</span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span></footer></div>`;
   parent.append(root);
   const list = root.querySelector<HTMLUListElement>(".character-switch-list")!;
   list.classList.add("ui-scroll");
@@ -143,8 +143,6 @@ export function createCharacterSwitchPalette(
   search.innerHTML = `<span class="ui-sr-only">Search characters</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25"/><path d="m12.4 12.4 4.1 4.1"/></svg><input id="character-switch-query" class="ui-input" type="search" role="combobox" aria-controls="character-switch-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" maxlength="${CHARACTER_SEARCH_LIMIT}" placeholder="Search characters…">`;
   list.before(search);
   const queryInput = search.querySelector<HTMLInputElement>("#character-switch-query")!;
-  const settingDescription = root.querySelector<HTMLElement>(".character-switch-setting small");
-  if (settingDescription) settingDescription.textContent = "Professions, level, and known location";
   const status = root.querySelector<HTMLElement>(".character-switch-status")!;
   const title = root.querySelector<HTMLElement>("#character-switch-title")!;
   const count = root.querySelector<HTMLElement>(".character-switch-count")!;
@@ -153,7 +151,9 @@ export function createCharacterSwitchPalette(
   const stayButton = root.querySelector<HTMLButtonElement>(".character-switch-stay")!;
   const leaveButton = root.querySelector<HTMLButtonElement>(".character-switch-leave")!;
   const settingsToggle = root.querySelector<HTMLButtonElement>(".character-switch-settings-toggle")!;
-  const detailsCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-details")!;
+  const professionCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-profession")!;
+  const levelCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-level")!;
+  const locationCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-location")!;
   const listHints = root.querySelector<HTMLElement>(".character-switch-list-hints")!;
   const settingsHints = root.querySelector<HTMLElement>(".character-switch-settings-hints")!;
   const confirmHints = root.querySelector<HTMLElement>(".character-switch-confirm-hints")!;
@@ -167,7 +167,21 @@ export function createCharacterSwitchPalette(
   let view: ViewState = Object.freeze({ kind: "closed" });
   let selected = 0;
   let query = "";
-  let showDetails = true;
+  type DisplayPreferences = Readonly<{
+    characterSwitchProfession: boolean;
+    characterSwitchLevel: boolean;
+    characterSwitchLocation: boolean;
+  }>;
+  const displayPreferencesFrom = (settings: DisplayPreferences): DisplayPreferences => Object.freeze({
+    characterSwitchProfession: settings.characterSwitchProfession,
+    characterSwitchLevel: settings.characterSwitchLevel,
+    characterSwitchLocation: settings.characterSwitchLocation,
+  });
+  let displayPreferences = displayPreferencesFrom({
+    characterSwitchProfession: true,
+    characterSwitchLevel: true,
+    characterSwitchLocation: true,
+  });
   let preferencePending = false;
   let preferenceFailure = false;
   let rows: ReturnType<typeof orderCharacters> = [];
@@ -239,7 +253,7 @@ export function createCharacterSwitchPalette(
         const shortcut = !searching && rowIndex < 9 ? rowIndex + 1
           : !searching && rowIndex === 9 ? 0 : null;
         const secondaryProfession = professionPresentation(character.secondaryProfession);
-        const professionLabel = profession === null ? ""
+        const professionLabel = !displayPreferences.characterSwitchProfession || profession === null ? ""
           : `, ${profession.name}${secondaryProfession === null ? "" : ` and ${secondaryProfession.name}`}`;
         button.setAttribute("aria-label", current
           ? `${character.name}${professionLabel}, current character`
@@ -249,7 +263,7 @@ export function createCharacterSwitchPalette(
         key.className = "character-switch-key";
         key.textContent = shortcut === null ? "" : String(shortcut);
         button.append(key);
-        if (profession) {
+        if (displayPreferences.characterSwitchProfession && profession) {
           const image = document.createElement("img");
           image.src = profession.icon;
           image.alt = "";
@@ -271,17 +285,22 @@ export function createCharacterSwitchPalette(
           primary.append(marker);
         }
         copy.append(primary);
-        const destination = travelDestination(character.mapId);
-        if (showDetails && profession !== null) {
+        const destination = displayPreferences.characterSwitchLocation
+          ? travelDestination(character.mapId)
+          : undefined;
+        const metaParts = [
+          displayPreferences.characterSwitchProfession && profession !== null
+            ? secondaryProfession === null
+              ? profession.name
+              : `${profession.name} / ${secondaryProfession.name}`
+            : undefined,
+          displayPreferences.characterSwitchLevel ? `Level ${character.level}` : undefined,
+          destination?.name,
+        ].filter((value): value is string => value !== undefined);
+        if (metaParts.length > 0) {
           const meta = document.createElement("span");
           meta.className = "character-switch-meta";
-          meta.textContent = [
-            secondaryProfession === null
-              ? profession.name
-              : `${profession.name} / ${secondaryProfession.name}`,
-            `Level ${character.level}`,
-            destination?.name,
-          ].filter((value): value is string => value !== undefined).join(" · ");
+          meta.textContent = metaParts.join(" · ");
           meta.title = meta.textContent;
           copy.append(meta);
         }
@@ -309,8 +328,12 @@ export function createCharacterSwitchPalette(
     confirmHints.hidden = !confirming;
     settingsToggle.setAttribute("aria-pressed", String(settingsMode));
     settingsToggle.disabled = busy();
-    detailsCheckbox.checked = showDetails;
-    detailsCheckbox.disabled = preferencePending;
+    professionCheckbox.checked = displayPreferences.characterSwitchProfession;
+    levelCheckbox.checked = displayPreferences.characterSwitchLevel;
+    locationCheckbox.checked = displayPreferences.characterSwitchLocation;
+    for (const checkbox of [professionCheckbox, levelCheckbox, locationCheckbox]) {
+      checkbox.disabled = preferencePending;
+    }
     queryInput.setAttribute("aria-expanded", String(rows.length > 0));
     updateRowSelection();
     status.hidden = false;
@@ -455,25 +478,42 @@ export function createCharacterSwitchPalette(
     view = Object.freeze({ kind: view.kind === "settings" ? "characters" : "settings" });
     preferenceFailure = false;
     render();
-    if (view.kind === "settings") detailsCheckbox.focus({ preventScroll: true });
+    if (view.kind === "settings") professionCheckbox.focus({ preventScroll: true });
     else focusCharacters();
   });
-  detailsCheckbox.addEventListener("change", () => {
-    const next = detailsCheckbox.checked;
-    const previous = showDetails;
-    showDetails = next;
+  const preferenceFields = [
+    {
+      key: "characterSwitchProfession",
+      checkbox: professionCheckbox,
+      patch: (value: boolean) => ({ characterSwitchProfession: value }),
+    },
+    {
+      key: "characterSwitchLevel",
+      checkbox: levelCheckbox,
+      patch: (value: boolean) => ({ characterSwitchLevel: value }),
+    },
+    {
+      key: "characterSwitchLocation",
+      checkbox: locationCheckbox,
+      patch: (value: boolean) => ({ characterSwitchLocation: value }),
+    },
+  ] as const;
+  for (const field of preferenceFields) field.checkbox.addEventListener("change", () => {
+    const next = field.checkbox.checked;
+    const previous = displayPreferences[field.key];
+    displayPreferences = Object.freeze({ ...displayPreferences, [field.key]: next });
     preferencePending = true;
     preferenceFailure = false;
     render();
-    void window.gwNative.settings.set({ characterSwitchDetails: next }).then((settings) => {
-      showDetails = settings.characterSwitchDetails;
+    void window.gwNative.settings.set(field.patch(next)).then((settings) => {
+      displayPreferences = displayPreferencesFrom(settings);
     }).catch(() => {
-      showDetails = previous;
+      displayPreferences = Object.freeze({ ...displayPreferences, [field.key]: previous });
       preferenceFailure = true;
     }).finally(() => {
       preferencePending = false;
       render();
-      if (view.kind === "settings") detailsCheckbox.focus({ preventScroll: true });
+      if (view.kind === "settings") field.checkbox.focus({ preventScroll: true });
     });
   });
   stayButton.addEventListener("click", () => {
@@ -519,11 +559,11 @@ export function createCharacterSwitchPalette(
   };
   window.addEventListener("gw:character-toggle", onToggle);
   const unsubscribeSettings = window.gwNative.settings.onChange((settings) => {
-    showDetails = settings.characterSwitchDetails;
+    displayPreferences = displayPreferencesFrom(settings);
     render();
   });
   void window.gwNative.settings.get().then((settings) => {
-    showDetails = settings.characterSwitchDetails;
+    displayPreferences = displayPreferencesFrom(settings);
     render();
   }).catch(() => { /* The default remains usable; saving reports its own failure. */ });
   const unsubscribe = source.subscribe(render);

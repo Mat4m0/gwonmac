@@ -69,6 +69,45 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
     await expect(dialog).toBeVisible();
     await expect.poll(() => isDomActiveElement(search)).toBe(true);
     await expect(list.getByRole("option")).toHaveCount(10);
+    await expect(list.locator("img")).toHaveCount(10);
+    await expect(list.locator(".character-switch-meta").first()).toContainText("Level 20");
+    await expect(list.locator(".character-switch-meta").first()).toContainText("Lion's Arch");
+
+    await dialog.getByRole("button", { name: "Character Switch settings" }).click();
+    const professionSetting = dialog.getByRole("checkbox", { name: /Show profession/u });
+    const levelSetting = dialog.getByRole("checkbox", { name: /Show level/u });
+    const locationSetting = dialog.getByRole("checkbox", { name: /Show known location/u });
+    await expect(professionSetting).toBeChecked();
+    await expect(levelSetting).toBeChecked();
+    await expect(locationSetting).toBeChecked();
+
+    await professionSetting.uncheck();
+    await expect(professionSetting).toBeEnabled();
+    await page.keyboard.press("Escape");
+    await expect(list.locator("img")).toHaveCount(0);
+    await expect(list.locator(".character-switch-meta").first()).toHaveText(
+      "Level 20 · Lion's Arch",
+    );
+
+    await dialog.getByRole("button", { name: "Character Switch settings" }).click();
+    await levelSetting.uncheck();
+    await expect(levelSetting).toBeEnabled();
+    await page.keyboard.press("Escape");
+    await expect(list.locator(".character-switch-meta").first()).toHaveText("Lion's Arch");
+
+    await dialog.getByRole("button", { name: "Character Switch settings" }).click();
+    await locationSetting.uncheck();
+    await expect(locationSetting).toBeEnabled();
+    await page.keyboard.press("Escape");
+    await expect(list.locator(".character-switch-meta")).toHaveCount(0);
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await page.evaluate(() => window.dispatchEvent(
+      new CustomEvent("gw:character-toggle", { cancelable: true }),
+    ));
+    await expect(list.locator("img")).toHaveCount(0);
+    await expect(list.locator(".character-switch-meta")).toHaveCount(0);
 
     await search.fill("Character");
     await expect(list.getByRole("option")).toHaveCount(26);

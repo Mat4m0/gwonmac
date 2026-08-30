@@ -413,8 +413,12 @@ export interface AppSettings {
   xunlaiStorage: boolean;
   /** Allow the focused Travel palette and its explicit map command. */
   travelPalette: boolean;
-  /** Show profession, level, and canonically named location in Character Switch. */
-  characterSwitchDetails: boolean;
+  /** Show the canonical profession icon and profession names in Character Switch. */
+  characterSwitchProfession: boolean;
+  /** Show the character's certified level in Character Switch. */
+  characterSwitchLevel: boolean;
+  /** Show a location only when Travel's reviewed catalogue names its map. */
+  characterSwitchLocation: boolean;
   /** Ordered destinations for the palette's direct 1–9 shortcuts. */
   travelShortcuts: StoredTravelShortcuts;
   /** Experimental live target distance/range readout. */
@@ -534,7 +538,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tradeChat: true,
   xunlaiStorage: false,
   travelPalette: true,
-  characterSwitchDetails: true,
+  characterSwitchProfession: true,
+  characterSwitchLevel: true,
+  characterSwitchLocation: true,
   travelShortcuts: DEFAULT_STORED_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
