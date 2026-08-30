@@ -153,6 +153,24 @@ chunk directory.
 Demand reads take priority over prefetch. The scheduler keeps capacity for a
 cold demand read while a full download is active.
 
+## Storage responsibilities
+
+`ApplicationStorageRoots` names six responsibilities: configuration, durable
+data, cache, restart state, logs, and browser sessions. Domain owners receive
+resolved paths and do not choose an operating-system directory.
+
+macOS maps all six responsibilities to the released `Guild Wars` data root.
+This keeps every existing path unchanged. A target platform can split the
+roots before it creates data. The game generation and chunk store use the
+cache root. The profile registry and player-authored libraries use the data
+root. Browser partitions use the sessions root.
+
+Run `pnpm storage:probe` on a target filesystem. Pass `-- --base <directory>`
+to select a specific volume. The command creates and removes only its printed
+temporary fixture. It reports basic atomic replacement, exclusive creation,
+open-file replacement, case behavior, long Unicode paths, and orphan cleanup.
+It does not claim power-loss, disk-full, antivirus, or reboot durability.
+
 ## Download limits and progress
 
 The app uses a fixed maximum of eight concurrent ArenaNet requests. This limit

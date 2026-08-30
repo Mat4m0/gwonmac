@@ -1,7 +1,10 @@
 /** Disposable account-workspace shapes shared by Electron tests and developers. */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { gamePaths } from "../../src/main/core/paths.js";
+import {
+  colocatedStorageRoots,
+  gamePaths,
+} from "../../src/main/core/paths.js";
 
 export const LAUNCHER_FIXTURE_SCENARIOS = [
   "fresh",
@@ -37,7 +40,7 @@ export async function seedLauncherProfileFixture(
   userData: string,
   scenario: LauncherFixtureScenario,
 ): Promise<void> {
-  const paths = gamePaths(userData);
+  const paths = gamePaths(colocatedStorageRoots(userData));
   if (scenario === "fresh") return;
   if (scenario === "single") {
     await Promise.all([

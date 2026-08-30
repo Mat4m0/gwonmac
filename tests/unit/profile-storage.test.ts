@@ -5,7 +5,10 @@ import {
   resolveAdoptedProfileStorage,
   resolveProfileStorage,
 } from "../../src/main/core/profile-storage.js";
-import { gamePaths } from "../../src/main/core/paths.js";
+import {
+  colocatedStorageRoots,
+  gamePaths,
+} from "../../src/main/core/paths.js";
 import {
   LEGACY_PRIMARY_PROFILE_ID,
   parseMultiWorkspace,
@@ -17,7 +20,7 @@ import { AppError } from "../../src/shared/errors.js";
 const PRIVATE_ID = parseProfileId("00000000-0000-4000-8000-000000000001");
 const SHARED_ID = parseProfileId("00000000-0000-4000-8000-000000000002");
 const root = "/profile";
-const paths = gamePaths(root);
+const paths = gamePaths(colocatedStorageRoots(root));
 const workspace = parseMultiWorkspace({
   formatVersion: 1,
   legacyPrimaryProfileId: LEGACY_PRIMARY_PROFILE_ID,

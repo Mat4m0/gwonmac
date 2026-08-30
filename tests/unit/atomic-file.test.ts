@@ -25,7 +25,11 @@ import {
   writeAtomicInDir,
   writeAtomicJson,
 } from "../../src/main/core/atomic-file.js";
-import { documentDirectories, gamePaths } from "../../src/main/core/paths.js";
+import {
+  colocatedStorageRoots,
+  documentDirectories,
+  gamePaths,
+} from "../../src/main/core/paths.js";
 
 async function scratch(): Promise<string> {
   return mkdtemp(join(tmpdir(), "gw-atomic-"));
@@ -294,7 +298,7 @@ describe("atomic-file orphan sweep", () => {
     // the diagnostics log all publish through the same `writeAtomic` and so
     // leak the same temp files — they were collected by nothing at all.
     const root = await scratch();
-    const dirs = documentDirectories(gamePaths(root));
+    const dirs = documentDirectories(gamePaths(colocatedStorageRoots(root)));
     for (const dir of dirs) {
       await mkdir(dir, { recursive: true });
       await writeFile(join(dir, `doc.json.${process.pid + 1}.0badcafe.tmp`), "abandoned");

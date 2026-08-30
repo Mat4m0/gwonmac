@@ -24,9 +24,9 @@ test.describe("client generation coordination", () => {
           const path = process.getBuiltinModule("node:path");
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(path.join(os.tmpdir(), "gw-runtime-auto-download-"));
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           const progress: DownloadProgress[] = [];
           let downloads = 0;
           const runtime = new ClientRuntime({
@@ -126,11 +126,11 @@ test.describe("client generation coordination", () => {
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
           const { FREE_MARGIN } = require(modules.chunkStore);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-cache-policy-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           await fs.mkdir(paths.chunks, { recursive: true });
           const size = 10 ** 15;
           const runtime = new ClientRuntime({
@@ -256,11 +256,11 @@ test.describe("client generation coordination", () => {
           const path = process.getBuiltinModule("node:path");
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-ready-invariant-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           const readyObservations: boolean[] = [];
           const runtime: InstanceType<typeof ClientRuntime> = new ClientRuntime({
             paths,
@@ -365,11 +365,11 @@ test.describe("client generation coordination", () => {
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
           const { PatchClient } = require(modules.patchClient);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-abort-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           await fs.mkdir(paths.game, { recursive: true });
           const progress: DownloadProgress[] = [];
           const runtime = new ClientRuntime({
@@ -461,11 +461,11 @@ test.describe("client generation coordination", () => {
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
           const { PatchClient } = require(modules.patchClient);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-shutdown-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           await fs.mkdir(paths.game, { recursive: true });
           const runtime = new ClientRuntime({
             paths,
@@ -551,11 +551,11 @@ test.describe("client generation coordination", () => {
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
           const { PatchClient } = require(modules.patchClient);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-queued-abort-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           await fs.mkdir(paths.game, { recursive: true });
           const runtime = new ClientRuntime({
             paths,
@@ -625,11 +625,11 @@ test.describe("client generation coordination", () => {
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
           const { PatchClient } = require(modules.patchClient);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-active-update-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           await fs.mkdir(paths.artifacts, { recursive: true });
           const progress: DownloadProgress[] = [];
           const runtime = new ClientRuntime({
@@ -720,11 +720,11 @@ test.describe("client generation coordination", () => {
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
           const { PatchClient } = require(modules.patchClient);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-startup-rollback-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           await fs.mkdir(paths.artifacts, { recursive: true });
           await fs.mkdir(paths.previousArtifacts, { recursive: true });
           await fs.writeFile(
@@ -829,11 +829,11 @@ test.describe("client generation coordination", () => {
           const path = process.getBuiltinModule("node:path");
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-unpublished-facts-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           await fs.mkdir(paths.artifacts, { recursive: true });
           const runtime = new ClientRuntime({
             paths,
@@ -930,11 +930,11 @@ test.describe("client generation coordination", () => {
           const path = process.getBuiltinModule("node:path");
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-confirm-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           await fs.mkdir(paths.artifacts, { recursive: true });
           await fs.mkdir(paths.previousArtifacts, { recursive: true });
           await fs.writeFile(
@@ -1094,11 +1094,11 @@ test.describe("client generation coordination", () => {
           const path = process.getBuiltinModule("node:path");
           const require = createRequire(path.join(process.cwd(), "package.json"));
           const { ClientRuntime } = require(modules.clientRuntime);
-          const { gamePaths } = require(modules.paths);
+          const { colocatedStorageRoots, gamePaths } = require(modules.paths);
           const root = await fs.mkdtemp(
             path.join(os.tmpdir(), "gw-runtime-exact-token-probe-"),
           );
-          const paths = gamePaths(root);
+          const paths = gamePaths(colocatedStorageRoots(root));
           await fs.mkdir(paths.artifacts, { recursive: true });
           await fs.mkdir(paths.previousArtifacts, { recursive: true });
           await fs.writeFile(
