@@ -1,29 +1,25 @@
 /**
- * Defines the fixed scalar contract for Compass, Mission Map, and pathing research.
+ * Defines the fixed scalar contract for Cartography's certified native context
+ * and map surfaces.
  * Exposes no raw WebAssembly pointers across the renderer boundary.
  */
 
-export const PATHING_SPIKE_SAMPLE_TRAPEZOIDS = 3;
-export const PATHING_SPIKE_COORDINATES = 6;
-
-export const PATHING_SPIKE_GLOBALS = Object.freeze({
-  status: "gwonmac_pathing_spike_status",
-  sequence: "gwonmac_pathing_spike_sequence",
-  callCount: "gwonmac_pathing_spike_call_count",
-  totalTrapezoids: "gwonmac_pathing_spike_total_trapezoids",
-  sampledMapTrapezoids: "gwonmac_pathing_spike_sampled_map_trapezoids",
-  sampledMapZplane: "gwonmac_pathing_spike_sampled_map_zplane",
-  generation: "gwonmac_pathing_spike_generation",
-  readCoordinate: "gwonmac_pathing_spike_read_coordinate",
-  reset: "gwonmac_pathing_spike_reset",
-  samples: Object.freeze(Array.from(
-    { length: PATHING_SPIKE_SAMPLE_TRAPEZOIDS },
-    (_, trapezoid) => Object.freeze(Array.from(
-      { length: PATHING_SPIKE_COORDINATES },
-      (_, coordinate) => `gwonmac_pathing_spike_t${trapezoid}_c${coordinate}`,
-    )),
-  )),
+export const CARTOGRAPHY_CONTEXT_GLOBALS = Object.freeze({
+  status: "gwonmac_cartography_context_status",
+  sequence: "gwonmac_cartography_context_sequence",
+  areaEpoch: "gwonmac_cartography_context_area_epoch",
+  mapId: "gwonmac_cartography_context_map_id",
+  layoutId: "gwonmac_cartography_context_layout_id",
+  observe: "gwonmac_cartography_context_observe",
 });
+
+export const CARTOGRAPHY_CONTEXT_SCALARS = Object.freeze([
+  CARTOGRAPHY_CONTEXT_GLOBALS.status,
+  CARTOGRAPHY_CONTEXT_GLOBALS.sequence,
+  CARTOGRAPHY_CONTEXT_GLOBALS.areaEpoch,
+  CARTOGRAPHY_CONTEXT_GLOBALS.mapId,
+  CARTOGRAPHY_CONTEXT_GLOBALS.layoutId,
+]);
 
 export const EXPLORATION_SPIKE_GLOBALS = Object.freeze({
   status: "gwonmac_exploration_spike_status",
@@ -209,33 +205,18 @@ export type SpikeController<T> = Readonly<{
   snapshot(): T | null;
 }>;
 
-export type CompassFrameSpikeController = SpikeController<CompassFrameSpikeSnapshot>;
-export type MissionMapFrameSpikeController = SpikeController<MissionMapFrameSpikeSnapshot>;
-
-export type PathingSpikeSnapshot = Readonly<{
+export type CartographyContextSnapshot = Readonly<{
   status: number;
   sequence: number;
-  callCount: number;
-  totalTrapezoids: number;
-  sampledMapTrapezoids: number;
-  sampledMapZplane: number;
-  generation: number;
-  samples: readonly (readonly number[])[];
+  areaEpoch: number;
+  mapId: number;
+  layoutId: 1 | 2;
 }>;
 
-export type PathingSpikeTrapezoid = Readonly<{
-  topLeftX: number;
-  topRightX: number;
-  topY: number;
-  bottomLeftX: number;
-  bottomRightX: number;
-  bottomY: number;
-}>;
+export type CartographyContextController = SpikeController<CartographyContextSnapshot>;
 
-export type PathingSpikeController = SpikeController<PathingSpikeSnapshot> & Readonly<{
-  reset(): void;
-  readLargestGeometry(): readonly PathingSpikeTrapezoid[] | null;
-}>;
+export type CompassFrameSpikeController = SpikeController<CompassFrameSpikeSnapshot>;
+export type MissionMapFrameSpikeController = SpikeController<MissionMapFrameSpikeSnapshot>;
 
 export type ExplorationSpikeSnapshot = Readonly<{
   status: number;

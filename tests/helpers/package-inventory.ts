@@ -21,6 +21,7 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
   "/node_modules/ws/lib/websocket.js",
   "/build/native/host.node",
   "/build/renderer/companion-kernel.wasm",
+  "/build/renderer/cartography-reachability-kernel.wasm",
   "/build/renderer/enhancements.js",
   "/build/renderer/companion-snapshot.js",
   "/build/renderer/enhancement-cursor.js",

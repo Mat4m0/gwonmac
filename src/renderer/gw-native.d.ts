@@ -25,12 +25,14 @@ import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { PublishedCompanionState } from "./companion-snapshot.js";
 import type { VirtualGamepadController } from "./virtual-gamepad.js";
 import type { ControllerPromptTextureStats } from "./controller-prompt-texture.js";
-import type { CartographyGridStats } from "./cartography-spike/overlay.js";
+import type {
+  CartographyGridStats,
+  CartographyModelStats,
+} from "./cartography-spike/overlay.js";
 import type {
   CompassFrameSpikeController,
   ExplorationSpikeController,
   MissionMapFrameSpikeController,
-  PathingSpikeController,
   WorldMapAnchorSpikeController,
 } from "../shared/cartography-spike.js";
 import type { CompanionCharacterListState } from "./companion-character-list-snapshot.js";
@@ -271,6 +273,8 @@ declare global {
     };
     gwApplySettings?(settings: AppSettings): void;
     gwCartographyGridStats?(): CartographyGridStats;
+    /** Pointer-free atomic epoch and classification diagnostics; development only. */
+    gwCartographyModelStats?(): CartographyModelStats;
     gwSurfaces: GwonmacSurfaceController;
     gwToolsSettings(): Readonly<{
       gwonmacTools: boolean;
@@ -296,8 +300,6 @@ declare global {
     gwTextureStats?(): TextureMemorySnapshot;
     /** Bounded atlas-sized upload fingerprints; unpackaged development only. */
     gwControllerPromptTextureStats?(): ControllerPromptTextureStats;
-    /** Fixed scalar pathing sample; unpackaged development spike only. */
-    gwPathingSpike?: PathingSpikeController;
     /** Certified native Compass frame scalars; unpackaged development spike only. */
     gwCompassFrameSpike?: CompassFrameSpikeController;
     /** Certified native Mission Map frame scalars; unpackaged development spike only. */

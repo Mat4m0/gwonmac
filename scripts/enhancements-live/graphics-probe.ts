@@ -25,12 +25,7 @@ export type GraphicsProbeSample = Readonly<{
   wasmHeapBytes: number;
   textures: ReturnType<NonNullable<Window["gwTextureStats"]>> | null;
   cartographyGrid: ReturnType<NonNullable<Window["gwCartographyGridStats"]>> | null;
-  pathing: ReturnType<NonNullable<Window["gwPathingSpike"]>["snapshot"]> | null;
-  pathingGeometry: Readonly<{
-    count: number;
-    extrema: readonly [number, number, number, number];
-    sample: NonNullable<ReturnType<NonNullable<Window["gwPathingSpike"]>["readLargestGeometry"]>>;
-  }> | null;
+  cartographyModel: ReturnType<NonNullable<Window["gwCartographyModelStats"]>> | null;
   compassFrame: ReturnType<NonNullable<Window["gwCompassFrameSpike"]>["snapshot"]> | null;
   missionMapFrame: ReturnType<NonNullable<Window["gwMissionMapFrameSpike"]>["snapshot"]> | null;
   worldMapAnchor: ReturnType<NonNullable<Window["gwWorldMapAnchorSpike"]>["snapshot"]> | null;
@@ -79,16 +74,6 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
     const gl = offscreen?.getContext("webgl2")
       ?? offscreen?.getContext("webgl")
       ?? null;
-    const geometry = window.gwPathingSpike?.readLargestGeometry() ?? null;
-    const extrema = geometry?.reduce(
-      (bounds, trapezoid) => [
-        Math.min(bounds[0], trapezoid.topLeftX, trapezoid.bottomLeftX),
-        Math.max(bounds[1], trapezoid.topRightX, trapezoid.bottomRightX),
-        Math.min(bounds[2], trapezoid.bottomY),
-        Math.max(bounds[3], trapezoid.topY),
-      ] as const,
-      [Infinity, -Infinity, Infinity, -Infinity] as const,
-    ) ?? null;
     const companion = window.gwCompanionState;
     const missionMapFrame = window.gwMissionMapFrameSpike?.snapshot() ?? null;
     const explorationSnapshot = window.gwExplorationSpike?.snapshot() ?? null;
@@ -126,12 +111,7 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
       wasmHeapBytes: window.gwWasmHeapBytes?.() ?? 0,
       textures: window.gwTextureStats?.() ?? null,
       cartographyGrid: window.gwCartographyGridStats?.() ?? null,
-      pathing: window.gwPathingSpike?.snapshot() ?? null,
-      pathingGeometry: geometry === null ? null : {
-        count: geometry.length,
-        extrema: extrema!,
-        sample: geometry.slice(0, 3),
-      },
+      cartographyModel: window.gwCartographyModelStats?.() ?? null,
       compassFrame: window.gwCompassFrameSpike?.snapshot() ?? null,
       missionMapFrame,
       worldMapAnchor: window.gwWorldMapAnchorSpike?.snapshot() ?? null,
@@ -294,7 +274,7 @@ export async function runGraphicsProbeSession({
         contextLost: sample.canvas.contextLost,
         cartographyGrid: sample.cartographyGrid,
         exploration: sample.exploration,
-        pathing: sample.pathing,
+        cartographyModel: sample.cartographyModel,
       }));
     }
   } finally {

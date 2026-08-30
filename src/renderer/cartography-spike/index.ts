@@ -1,61 +1,72 @@
 /**
- * Installs and disposes the complete cartography observation and presentation feature.
- * Keeps the certified Cartography observers behind one lifecycle boundary.
+ * Owns Cartography installation behind one observer, model, kernel, and UI lifecycle.
+ * Partial installation is rolled back before control returns to the harness.
  */
-import { createCompassFrameSpikeReader, createMissionMapFrameSpikeReader } from
-  "./frame-observer.js";
-import { mountCartographyOverlay } from "./overlay.js";
-import { createPathingSpikeReader } from "./pathing-observer.js";
-import { createExplorationSpikeReader } from "./exploration-observer.js";
-import { createWorldMapAnchorSpikeReader } from "./world-map-anchor-observer.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
 import { readCartographyPlayerState } from "../cartography-player-state.js";
+import { createCartographyContextReader } from "./context-observer.js";
+import { createExplorationSpikeReader } from "./exploration-observer.js";
+import {
+  createCompassFrameSpikeReader,
+  createMissionMapFrameSpikeReader,
+} from "./frame-observer.js";
+import { mountCartographyOverlay } from "./overlay.js";
+import { installCartographyReachabilityKernel } from "./reachability-kernel.js";
+import { createWorldMapAnchorSpikeReader } from "./world-map-anchor-observer.js";
 
-/** Install the complete feature or do nothing; never mount a misleading subset. */
-export function installCartographySpike(options: Readonly<{
+/** Install the complete atomic feature or do nothing; never mount a subset. */
+export async function installCartographySpike(options: Readonly<{
   exports: WebAssembly.Exports;
   parent: HTMLElement;
   canvas: HTMLCanvasElement;
   settings(): AppSettings;
   persist(patch: RendererSettingsPatch): Promise<AppSettings>;
-}>): () => void {
-  const pathing = createPathingSpikeReader(options.exports);
+}>): Promise<() => void> {
+  const context = createCartographyContextReader(options.exports);
   const compass = createCompassFrameSpikeReader(options.exports);
   const missionMap = createMissionMapFrameSpikeReader(options.exports);
   const exploration = createExplorationSpikeReader(options.exports);
-  const worldMapAnchor = createWorldMapAnchorSpikeReader(options.exports);
+  const anchor = createWorldMapAnchorSpikeReader(options.exports);
   if (
-    pathing === null || compass === null || missionMap === null
-    || worldMapAnchor === null
+    context === null || compass === null || missionMap === null
+    || exploration === null || anchor === null
   ) return () => {};
 
-  pathing.reset();
-  window.gwPathingSpike = pathing;
+  let kernel;
+  try {
+    kernel = await installCartographyReachabilityKernel(options.exports);
+  } catch (cause) {
+    console.error("[cartography] reachability kernel unavailable", cause);
+    return () => {};
+  }
   window.gwCompassFrameSpike = compass;
   window.gwMissionMapFrameSpike = missionMap;
-  window.gwWorldMapAnchorSpike = worldMapAnchor;
-  if (exploration !== null) window.gwExplorationSpike = exploration;
+  window.gwWorldMapAnchorSpike = anchor;
+  window.gwExplorationSpike = exploration;
   const disposeOverlay = mountCartographyOverlay({
     parent: options.parent,
     canvas: options.canvas,
-    compass,
-    missionMap,
-    pathing,
-    exploration,
-    worldMapAnchor,
-    companion: readCartographyPlayerState,
+    modelSources: {
+      context,
+      compass,
+      missionMap,
+      exploration,
+      anchor,
+      kernel,
+      companion: readCartographyPlayerState,
+      revealRadius: () => options.settings().cartographyRevealMode === "birds-eye" ? 3 : 1,
+      correction: () => null,
+    },
     settings: options.settings,
     persist: options.persist,
   });
 
   return () => {
     disposeOverlay();
-    if (window.gwPathingSpike === pathing) delete window.gwPathingSpike;
+    kernel.dispose();
     if (window.gwCompassFrameSpike === compass) delete window.gwCompassFrameSpike;
     if (window.gwMissionMapFrameSpike === missionMap) delete window.gwMissionMapFrameSpike;
-    if (window.gwWorldMapAnchorSpike === worldMapAnchor) delete window.gwWorldMapAnchorSpike;
-    if (exploration !== null && window.gwExplorationSpike === exploration) {
-      delete window.gwExplorationSpike;
-    }
+    if (window.gwWorldMapAnchorSpike === anchor) delete window.gwWorldMapAnchorSpike;
+    if (window.gwExplorationSpike === exploration) delete window.gwExplorationSpike;
   };
 }

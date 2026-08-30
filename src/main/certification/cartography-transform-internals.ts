@@ -11,19 +11,6 @@ import {
   type FunctionType,
 } from "../core/wasm-binary.js";
 
-export const CERTIFICATE = Object.freeze({
-  loader: 3208,
-  loaderBodySha256: "ff5dcae4a3610a874609316758affe178eaf5ae698a0826c55dc96229796c1fd",
-  converter: 3216,
-  converterBodySha256: "fca90c6024da65a96f19461a85ece6547528cd10841a77a35f8719c13858ab66",
-  callSiteOffset: 0x1b9,
-  pathMapHolder: 0x00,
-  trapezoidCount: 0x14,
-  trapezoidPointer: 0x18,
-  trapezoidStride: 0x30,
-  coordinateOffsets: Object.freeze([0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c]),
-});
-
 const FRAME_LAYOUT = Object.freeze({
   frameBytes: 0x1c8,
   frameId: 0xbc,
@@ -122,9 +109,6 @@ export const CARTOGRAPHY_MEMORY_LAYOUTS = Object.freeze({
   }),
 } satisfies Readonly<Record<"official" | "relocated", CartographyMemoryLayout>>);
 
-const MAX_TRAPEZOIDS_PER_MAP = 65_536;
-const MAX_TOTAL_TRAPEZOIDS = 65_536;
-export const MAX_CAPTURED_PATH_MAPS = 64;
 export function fail(message: string): never {
   throw new Error(`pathing spike transform: ${message}`);
 }
@@ -167,18 +151,22 @@ function i32(value: number): Uint8Array {
   return concat(Uint8Array.of(0x41), sleb(value));
 }
 
-export type SamplerGlobals = Readonly<{
+export type CartographyContextGlobals = Readonly<{
   status: number;
   sequence: number;
-  callCount: number;
-  totalTrapezoids: number;
-  sampledMapTrapezoids: number;
-  sampledMapZplane: number;
-  generation: number;
-  sampledMapPointer: number;
-  mapPointers: readonly number[];
-  mapCounts: readonly number[];
-  samples: readonly (readonly number[])[];
+  areaEpoch: number;
+  mapId: number;
+  layoutId: number;
+  lastMapId: number;
+  wasReady: number;
+}>;
+
+export type CartographyContextCertificate = Readonly<{
+  contextRoot: number;
+  gameContextSlot: number;
+  mapContext: number;
+  mapId: number;
+  layoutId: 1 | 2;
 }>;
 
 export type FrameGlobals = Readonly<{
@@ -275,6 +263,72 @@ function f32(value: number): Uint8Array {
   bytes[0] = 0x43;
   new DataView(bytes.buffer).setFloat32(1, value, true);
   return bytes;
+}
+
+/**
+ * Publish the one certified identity for the currently loaded map. The two
+ * private globals make loading transitions edge-triggered: an unavailable
+ * poll withdraws the current epoch once, while repeated polls stay stable.
+ */
+export function cartographyContextObserver(
+  globals: CartographyContextGlobals,
+  certificate: CartographyContextCertificate,
+): Uint8Array {
+  const finish = (status: number) => concat(
+    i32(status), globalSet(globals.status),
+    globalGet(globals.sequence), i32(1), Uint8Array.of(0x6a),
+    globalSet(globals.sequence),
+    Uint8Array.of(0x0f),
+  );
+  const withdraw = (status: number) => concat(
+    globalGet(globals.wasReady), Uint8Array.of(0x04, 0x40),
+    globalGet(globals.areaEpoch), i32(1), Uint8Array.of(0x6a),
+    globalSet(globals.areaEpoch),
+    i32(0), globalSet(globals.wasReady),
+    Uint8Array.of(0x0b),
+    i32(0), globalSet(globals.mapId),
+    finish(status),
+  );
+  const requirePointer = (pointerLocal: number, bytes: number, status: number) => concat(
+    local(pointerLocal), Uint8Array.of(0x45, 0x04, 0x40),
+    withdraw(status), Uint8Array.of(0x0b),
+    local(pointerLocal), local(4), i32(bytes), Uint8Array.of(0x6b, 0x4b, 0x04, 0x40),
+    withdraw(status), Uint8Array.of(0x0b),
+  );
+  return concat(
+    // contexts, game context, map context, map id, memory bytes.
+    Uint8Array.of(0x01, 0x05, 0x7f),
+    // Odd sequence means publication is in progress.
+    globalGet(globals.sequence), i32(1), Uint8Array.of(0x6a),
+    globalSet(globals.sequence),
+    Uint8Array.of(0x3f, 0x00), i32(65_536), Uint8Array.of(0x6c, 0x21), uleb(4),
+    i32(certificate.contextRoot), i32Load(), Uint8Array.of(0x21), uleb(0),
+    requirePointer(0, certificate.gameContextSlot * 4 + 4, 2),
+    local(0), i32Load(certificate.gameContextSlot * 4),
+    Uint8Array.of(0x21), uleb(1),
+    requirePointer(1, certificate.mapContext + 4, 3),
+    local(1), i32Load(certificate.mapContext), Uint8Array.of(0x21), uleb(2),
+    requirePointer(2, certificate.mapId + 4, 4),
+    local(2), i32Load(certificate.mapId), Uint8Array.of(0x22), uleb(3),
+    Uint8Array.of(0x45, 0x04, 0x40), withdraw(5), Uint8Array.of(0x0b),
+    local(3), i32(2_000), Uint8Array.of(0x4b, 0x04, 0x40),
+    withdraw(5), Uint8Array.of(0x0b),
+    // Entering ready state or changing map creates one new area epoch.
+    globalGet(globals.wasReady), Uint8Array.of(0x45),
+    local(3), globalGet(globals.lastMapId), Uint8Array.of(0x47, 0x72, 0x04, 0x40),
+    globalGet(globals.areaEpoch), i32(1), Uint8Array.of(0x6a),
+    globalSet(globals.areaEpoch),
+    Uint8Array.of(0x0b),
+    local(3), globalSet(globals.lastMapId),
+    local(3), globalSet(globals.mapId),
+    i32(certificate.layoutId), globalSet(globals.layoutId),
+    i32(1), globalSet(globals.wasReady),
+    // Even sequence completes the seqlock publication.
+    i32(1), globalSet(globals.status),
+    globalGet(globals.sequence), i32(1), Uint8Array.of(0x6a),
+    globalSet(globals.sequence),
+    Uint8Array.of(0x0b),
+  );
 }
 
 export function rewriteExactTableSlot(
@@ -388,111 +442,6 @@ export function nativeFrameObserver(
     globalGet(pathingGeneration), globalSet(globals.generation),
     i32(1), globalSet(globals.status),
     Uint8Array.of(0x0b),
-  );
-}
-
-export function sampler(globals: SamplerGlobals): Uint8Array {
-  const sampleWrites = globals.samples.flatMap((coordinates, trapezoid) => {
-    const recordOffset = trapezoid * CERTIFICATE.trapezoidStride;
-    return [
-      local(4), i32(recordOffset), Uint8Array.of(0x6a),
-      ...coordinates.flatMap((target, coordinate) => [
-        Uint8Array.of(0x22), uleb(3),
-        Uint8Array.of(0x2a, 0x02), uleb(CERTIFICATE.coordinateOffsets[coordinate]!),
-        globalSet(target),
-        local(3),
-      ]),
-      Uint8Array.of(0x1a),
-    ];
-  });
-  return concat(
-    Uint8Array.of(0x01, 0x04, 0x7f),
-    globalGet(globals.status), i32(2), Uint8Array.of(0x4f, 0x04, 0x40, 0x0f, 0x0b),
-    local(0), Uint8Array.of(0x28, 0x02), uleb(CERTIFICATE.pathMapHolder),
-    Uint8Array.of(0x22), uleb(1), Uint8Array.of(0x45, 0x04, 0x40),
-    i32(2), globalSet(globals.status), Uint8Array.of(0x0f, 0x0b),
-    local(1), Uint8Array.of(0x28, 0x02), uleb(CERTIFICATE.trapezoidCount),
-    Uint8Array.of(0x22), uleb(2),
-    i32(MAX_TRAPEZOIDS_PER_MAP), Uint8Array.of(0x4b, 0x04, 0x40),
-    i32(3), globalSet(globals.status), Uint8Array.of(0x0f, 0x0b),
-    globalGet(globals.callCount), i32(MAX_CAPTURED_PATH_MAPS), Uint8Array.of(0x4f, 0x04, 0x40),
-    i32(7), globalSet(globals.status), Uint8Array.of(0x0f, 0x0b),
-    local(1), i32Load(CERTIFICATE.trapezoidPointer), Uint8Array.of(0x21), uleb(4),
-    local(2), Uint8Array.of(0x45, 0x45), local(4), Uint8Array.of(0x45, 0x71, 0x04, 0x40),
-    i32(4), globalSet(globals.status), Uint8Array.of(0x0f, 0x0b),
-    ...globals.mapPointers.flatMap((pointer, index) => [
-      globalGet(globals.callCount), i32(index), Uint8Array.of(0x46, 0x04, 0x40),
-      local(4), globalSet(pointer), local(2), globalSet(globals.mapCounts[index]!),
-      Uint8Array.of(0x0b),
-    ]),
-    globalGet(globals.callCount), i32(1), Uint8Array.of(0x6a),
-    globalSet(globals.callCount),
-    globalGet(globals.totalTrapezoids), local(2), Uint8Array.of(0x6a),
-    Uint8Array.of(0x22), uleb(3), i32(MAX_TOTAL_TRAPEZOIDS), Uint8Array.of(0x4b, 0x04, 0x40),
-    i32(6), globalSet(globals.status), i32(0), globalSet(globals.sampledMapPointer),
-    i32(0), globalSet(globals.sampledMapTrapezoids), Uint8Array.of(0x0f, 0x0b),
-    local(3), globalSet(globals.totalTrapezoids),
-    // The ground plane is authoritative. Before it arrives, retain the
-    // largest plane only as a bounded diagnostic fallback.
-    local(1), i32Load(), i32(-1), Uint8Array.of(0x46),
-    globalGet(globals.sampledMapZplane), i32(-1), Uint8Array.of(0x47),
-    local(2), globalGet(globals.sampledMapTrapezoids), Uint8Array.of(0x4b, 0x71, 0x72),
-    Uint8Array.of(0x04, 0x40),
-    local(2), globalSet(globals.sampledMapTrapezoids),
-    local(1), i32Load(), globalSet(globals.sampledMapZplane),
-    local(4), globalSet(globals.sampledMapPointer),
-    ...sampleWrites,
-    Uint8Array.of(0x0b),
-    globalGet(globals.sequence), i32(1), Uint8Array.of(0x6a),
-    globalSet(globals.sequence),
-    i32(1), globalSet(globals.status),
-    Uint8Array.of(0x0b),
-  );
-}
-
-export function reset(globals: SamplerGlobals): Uint8Array {
-  return concat(
-    Uint8Array.of(0x00),
-    globalGet(globals.generation), i32(1), Uint8Array.of(0x6a), globalSet(globals.generation),
-    ...[
-      globals.status, globals.sequence, globals.callCount,
-      globals.totalTrapezoids, globals.sampledMapTrapezoids,
-      globals.sampledMapZplane, globals.sampledMapPointer,
-      ...globals.mapPointers, ...globals.mapCounts,
-    ].flatMap((target) => [i32(0), globalSet(target)]),
-    Uint8Array.of(0x0b),
-  );
-}
-
-export function readCoordinate(globals: SamplerGlobals): Uint8Array {
-  const nan = Uint8Array.of(0x43, 0x00, 0x00, 0xc0, 0x7f);
-  const refuse = concat(nan, Uint8Array.of(0x0f));
-  return concat(
-    Uint8Array.of(0x01, 0x02, 0x7f),
-    globalGet(globals.status), i32(1), Uint8Array.of(0x47, 0x04, 0x40), refuse, Uint8Array.of(0x0b),
-    local(0), globalGet(globals.totalTrapezoids), i32(6), Uint8Array.of(0x6c, 0x4f, 0x04, 0x40),
-    refuse, Uint8Array.of(0x0b),
-    local(0), i32(6), Uint8Array.of(0x6e), Uint8Array.of(0x21), uleb(1),
-    ...globals.mapPointers.flatMap((pointer, index) => [
-      local(1), globalGet(globals.mapCounts[index]!), Uint8Array.of(0x49, 0x04, 0x40),
-      globalGet(pointer), Uint8Array.of(0x45, 0x04, 0x40), refuse, Uint8Array.of(0x0b),
-      globalGet(pointer), local(1), i32(CERTIFICATE.trapezoidStride), Uint8Array.of(0x6c, 0x6a),
-      i32(CERTIFICATE.coordinateOffsets[0]!), Uint8Array.of(0x6a),
-      local(0), i32(6), Uint8Array.of(0x70), i32(4), Uint8Array.of(0x6c, 0x6a),
-      Uint8Array.of(0x2a, 0x02, 0x00, 0x0f, 0x0b),
-      local(1), globalGet(globals.mapCounts[index]!), Uint8Array.of(0x6b, 0x21), uleb(1),
-    ]),
-    refuse, Uint8Array.of(0x0b),
-  );
-}
-
-export function wrapper(converter: number, samplerFunction: number): Uint8Array {
-  return concat(
-    Uint8Array.of(0x01, 0x01, 0x7f),
-    local(0), local(1), local(2), local(3), call(converter),
-    Uint8Array.of(0x22), uleb(4), Uint8Array.of(0x04, 0x40),
-    local(0), call(samplerFunction),
-    Uint8Array.of(0x0b), local(4), Uint8Array.of(0x0b),
   );
 }
 

@@ -1,74 +1,88 @@
 /**
- * Joins certified live observations and coordinates both native map overlays.
- * The fixed cartography grid and path-derived walkability mask remain
- * independent: uncertainty in either source hides only that derived layer.
+ * Owns presentation of immutable Cartography models through independent surfaces.
+ * Native observation and semantic classification never occur on animation frames.
  */
-import type {
-  CompassFrameSpikeController,
-  ExplorationSpikeBitmap,
-  ExplorationSpikeController,
-  MissionMapFrameSpikeController,
-  PathingSpikeController,
-  WorldMapAnchorSpikeController,
-} from "../../shared/cartography-spike.js";
 import { resolveCartographyPreset } from "../../shared/cartography-presets.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
-import type { PublishedCompanionState } from "../companion-snapshot.js";
+import {
+  bitsetHasCell,
+  readCartographyModel,
+  type CartographyModel,
+  type CartographyModelSources,
+} from "./cartography-model.js";
 import {
   createCartographyGridLayer,
   type CartographyGridLayerSnapshot,
 } from "./cartography-grid-layer.js";
 import {
-  createCartographyCellRevealability,
-  type CartographyCellRevealability,
-} from "./cell-revealability.js";
-import {
   cartographyCellAtScreenPoint,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
 } from "./cartography-grid-projection.js";
+import { cartographyHoverRevealRadius } from "./cartography-paint.js";
 import { projectMissionMapFrame, projectNativeFrame } from "./frame-placement.js";
 import { createInverseMaskLayer } from "./inverse-mask-layer.js";
-import { cartographyHoverRevealRadius } from "./cartography-paint.js";
 import {
-  projectMissionMapContentBox,
-  projectWalkabilityToCompass,
-  projectWalkabilityToMissionMap,
   GAME_UNITS_PER_MAP_UNIT,
+  projectMissionMapContentBox,
+  projectTerrainToCompass,
+  projectTerrainToMissionMap,
 } from "./map-projections.js";
 import { createCartographyOverlayControls } from "./overlay-controls.js";
 import {
-  createPathingMapSession,
-} from "./pathing-lifecycle.js";
-import { createWalkabilityMask, type WalkabilityMask } from "./walkability-mask.js";
+  createWalkableTerrainSurface,
+  type WalkableTerrainSurface,
+} from "./walkable-terrain-surface.js";
 
-const MAX_RENDERED_TRAPEZOIDS = 4_096;
-type CartographyRenderLane = "coordinator" | "grid" | "walkability" | "controls";
+const MODEL_POLL_MS = 200;
 
 export type CartographyGridStats = Readonly<{
   compass: CartographyGridLayerSnapshot | null;
   missionMap: CartographyGridLayerSnapshot | null;
 }>;
 
-/** Join independently certified observations only at the presentation edge. */
+export type CartographyModelStats =
+  | Readonly<{ status: "unavailable"; reason: string }>
+  | Readonly<{
+      status: "ready";
+      sequence: number;
+      mapId: number;
+      areaEpoch: number;
+      resourceGeneration: number;
+      terrain: Readonly<{ width: number; height: number; mapUnitsPerPixel: number }>;
+      reachableCells: number;
+      actionableCells: number;
+      compassReady: boolean;
+      missionMapReady: boolean;
+    }>;
+
+function countSetBits(words: Uint32Array): number {
+  let count = 0;
+  for (const source of words) {
+    let word = source;
+    while (word !== 0) {
+      word &= word - 1;
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export function mountCartographyOverlay(options: Readonly<{
   parent: HTMLElement;
   canvas: HTMLCanvasElement;
-  compass: CompassFrameSpikeController;
-  missionMap: MissionMapFrameSpikeController;
-  pathing: PathingSpikeController;
-  exploration: ExplorationSpikeController | null;
-  worldMapAnchor: WorldMapAnchorSpikeController;
-  companion(): PublishedCompanionState | null | undefined;
+  modelSources: CartographyModelSources;
   settings(): AppSettings;
   persist(patch: RendererSettingsPatch): Promise<AppSettings>;
 }>): () => void {
   const document = options.parent.ownerDocument;
-  const compassMaskLayer = createInverseMaskLayer(
+  const view = document.defaultView;
+  if (view === null) throw new Error("cartography overlay requires a live document");
+  const compassTerrainLayer = createInverseMaskLayer(
     options.parent,
     "cartography-compass-mask",
   );
-  const missionMapMaskLayer = createInverseMaskLayer(
+  const missionTerrainLayer = createInverseMaskLayer(
     options.parent,
     "cartography-mission-map-mask",
   );
@@ -76,7 +90,7 @@ export function mountCartographyOverlay(options: Readonly<{
     options.parent,
     "cartography-compass-grid",
   );
-  const missionMapGridLayer = createCartographyGridLayer(
+  const missionGridLayer = createCartographyGridLayer(
     options.parent,
     "cartography-mission-map-grid",
   );
@@ -85,27 +99,19 @@ export function mountCartographyOverlay(options: Readonly<{
   const controls = createCartographyOverlayControls({
     parent: options.parent,
     persist: options.persist,
-    previewOpacity: (layer, opacity) => {
+    previewOpacity(layer, opacity) {
       if (layer === "grid") previewGridOpacity = opacity;
       else previewWalkabilityOpacity = opacity;
     },
   });
-  const view = document.defaultView;
-  if (view === null) throw new Error("cartography overlay requires a live document");
+
   let animationFrame = 0;
   let startupTimer = 0;
   let disposed = false;
-  let geometryVersion = "";
-  let geometry: ReturnType<PathingSpikeController["readLargestGeometry"]> = null;
-  let maskGeometryVersion = "";
-  let mask: WalkabilityMask | null = null;
-  let revealabilitySourceVersion = "";
-  let revealabilityVersion = "";
-  let revealability: CartographyCellRevealability | null = null;
-  const pathingSession = createPathingMapSession(options.pathing);
-  let explorationBitmap: ExplorationSpikeBitmap | null = null;
-  let explorationFingerprint = "";
-  let nextExplorationReadAt = 0;
+  let model: CartographyModel = Object.freeze({ status: "unavailable", reason: "context" });
+  let nextModelPoll = 0;
+  let terrainKey = "";
+  let terrain: WalkableTerrainSurface | null = null;
   let pointerX = Number.NaN;
   let pointerY = Number.NaN;
   let shiftHeld = false;
@@ -127,363 +133,220 @@ export function mountCartographyOverlay(options: Readonly<{
     shiftHeld = false;
     optionHeld = false;
   };
-  const forgetHiddenModifiers = (): void => {
+  const forgetHiddenPointer = (): void => {
     if (document.visibilityState === "hidden") forgetPointer();
   };
   view.addEventListener("pointermove", rememberPointer, { capture: true, passive: true });
   view.addEventListener("keydown", rememberModifiers, true);
   view.addEventListener("keyup", rememberModifiers, true);
   view.addEventListener("blur", forgetPointer);
-  document.addEventListener("visibilitychange", forgetHiddenModifiers);
+  document.addEventListener("visibilitychange", forgetHiddenPointer);
 
-  const refreshExploration = (generation: number): void => {
-    if (
-      explorationBitmap !== null
-      && explorationBitmap.snapshot.generation !== generation
-    ) {
-      explorationBitmap = null;
-      explorationFingerprint = "";
-      nextExplorationReadAt = 0;
-    }
-    if (options.exploration === null || view.performance.now() < nextExplorationReadAt) return;
-    nextExplorationReadAt = view.performance.now() + 500;
-    const next = options.exploration.readBitmap();
-    if (next === null || next.snapshot.generation !== generation) {
-      explorationBitmap = null;
-      explorationFingerprint = "";
-      return;
-    }
-    let hash = 2_166_136_261;
-    for (const word of next.words) {
-      hash ^= word;
-      hash = Math.imul(hash, 16_777_619) >>> 0;
-    }
-    explorationBitmap = next;
-    explorationFingerprint = `${generation}:${hash.toString(16)}`;
-  };
-
-  const exploredCell = (cellX: number, cellY: number): boolean | null => {
-    const bitmap = explorationBitmap;
-    if (
-      bitmap === null
-      || cellX < 0 || cellX >= bitmap.snapshot.width
-      || cellY < 0 || cellY >= bitmap.snapshot.height
-    ) return null;
-    const bit = cellY * bitmap.snapshot.width + cellX;
-    return ((bitmap.words[bit >>> 5]! >>> (bit & 31)) & 1) === 1;
-  };
-
-  const hideWalkability = () => {
-    compassMaskLayer.hide();
-    missionMapMaskLayer.hide();
-  };
-  const resetPathingDerivedState = () => {
-    geometryVersion = "";
-    geometry = null;
-    maskGeometryVersion = "";
-    mask = null;
-    revealabilitySourceVersion = "";
-    revealabilityVersion = "";
-    revealability = null;
-    hideWalkability();
-  };
-  const hideGrid = () => {
+  const hideCompass = (): void => {
     compassGridLayer.hide();
-    missionMapGridLayer.hide();
-  };
-  const withdrawAll = () => {
-    resetPathingDerivedState();
-    hideGrid();
+    compassTerrainLayer.hide();
     controls.hide();
   };
-  const failedLanes = new Set<CartographyRenderLane>();
-  const runLane = (
-    lane: CartographyRenderLane,
-    renderLane: () => void,
-    withdrawLane: () => void,
-  ): void => {
+  const hideMission = (): void => {
+    missionGridLayer.hide();
+    missionTerrainLayer.hide();
+  };
+  const hideAll = (): void => {
+    hideCompass();
+    hideMission();
+  };
+  const gridStats = (): CartographyGridStats => Object.freeze({
+    compass: compassGridLayer.snapshot(),
+    missionMap: missionGridLayer.snapshot(),
+  });
+  view.gwCartographyGridStats = gridStats;
+  const modelStats = (): CartographyModelStats => model.status === "unavailable"
+    ? Object.freeze({ status: "unavailable", reason: model.reason })
+    : Object.freeze({
+        status: "ready",
+        sequence: model.sequence,
+        mapId: model.epoch.mapId,
+        areaEpoch: model.epoch.area,
+        resourceGeneration: model.epoch.resource,
+        terrain: Object.freeze({
+          width: model.walkableTerrain.width,
+          height: model.walkableTerrain.height,
+          mapUnitsPerPixel: model.walkableTerrain.mapUnitsPerPixel,
+        }),
+        reachableCells: countSetBits(model.reachableCells.words),
+        actionableCells: countSetBits(model.actionableCells.words),
+        compassReady: model.surfaces.compass !== null,
+        missionMapReady: model.surfaces.missionMap !== null,
+      });
+  view.gwCartographyModelStats = modelStats;
+
+  const safe = (surface: "compass" | "mission-map", render: () => void): void => {
     try {
-      renderLane();
-      failedLanes.delete(lane);
+      render();
     } catch (cause) {
-      withdrawLane();
-      if (!failedLanes.has(lane)) {
-        failedLanes.add(lane);
-        console.error(`[cartography] ${lane} rendering failed`, cause);
-      }
+      if (surface === "compass") hideCompass();
+      else hideMission();
+      console.error(`[cartography] ${surface} rendering failed`, cause);
     }
   };
 
-  const gridStats = (): CartographyGridStats => Object.freeze({
-    compass: compassGridLayer.snapshot(),
-    missionMap: missionMapGridLayer.snapshot(),
-  });
-  view.gwCartographyGridStats = gridStats;
-
-  const render = () => {
-    const compass = options.compass.snapshot();
-    const missionMap = options.missionMap.snapshot();
-    const pathing = options.pathing.snapshot();
-    const worldMapAnchor = options.worldMapAnchor.snapshot();
-    const companion = options.companion();
-    const canvasBox = options.canvas.getBoundingClientRect();
+  const render = (): void => {
+    const now = view.performance.now();
+    if (now >= nextModelPoll) {
+      model = readCartographyModel(options.modelSources);
+      nextModelPoll = now + MODEL_POLL_MS;
+    }
+    if (model.status !== "ready") {
+      terrainKey = "";
+      terrain = null;
+      hideAll();
+      return;
+    }
     const settings = options.settings();
-    const compassBox = compass === null
-      ? null
-      : projectNativeFrame(compass, canvasBox);
-    const missionMapBox = missionMap !== null && compass !== null
-      ? projectMissionMapFrame(missionMap, compass, canvasBox)
-      : null;
-
-    const companionReady = companion?.status === "ready"
-      && companion.instanceName !== "Loading";
-    const pathingCapture = pathing?.status === 1
-      ? `${pathing.generation}:${pathing.sequence}:${pathing.totalTrapezoids}`
-      : null;
-    const transition = pathingSession.advance(
-      companionReady ? { mapId: companion.mapId, capture: pathingCapture } : null,
-    );
-    if (transition.mapChanged) {
-      explorationBitmap = null;
-      explorationFingerprint = "";
-      nextExplorationReadAt = 0;
-    }
-    if (transition.reset) {
-      withdrawAll();
-      return;
-    }
-    if (!companionReady || compass === null || companion === null) {
-      withdrawAll();
-      return;
-    }
-
     const style = resolveCartographyPreset(settings.cartographyPresetLibrary);
     if (style === null) {
-      withdrawAll();
+      hideAll();
       return;
     }
     const gridOpacity = previewGridOpacity ?? settings.cartographyGridOpacity;
     const walkabilityOpacity = previewWalkabilityOpacity
       ?? settings.cartographyWalkabilityOpacity;
-    const revealRadius = settings.cartographyRevealMode === "birds-eye"
-      ? 3
-      : settings.cartographyRevealMode === "normal" ? 1 : 0;
-    refreshExploration(compass.generation);
-    const missionContentBox = missionMap !== null && missionMapBox !== null
-      ? projectMissionMapContentBox(missionMap, missionMapBox)
-      : null;
-    const certifiedCompassAnchor = worldMapAnchor?.status === 1
-      && worldMapAnchor.generation > 0
-      && worldMapAnchor.generation === compass.generation
-      ? Object.freeze({
-          generation: worldMapAnchor.generation,
-          continent: worldMapAnchor.continent,
-          worldAnchorX: worldMapAnchor.worldAnchorX,
-          worldAnchorY: worldMapAnchor.worldAnchorY,
-          mapMinX: worldMapAnchor.mapMinX,
-          mapMinY: worldMapAnchor.mapMinY,
-          mapMaxX: worldMapAnchor.mapMaxX,
-          mapMaxY: worldMapAnchor.mapMaxY,
-          playerMapX: worldMapAnchor.worldAnchorX
-            + companion.playerX / GAME_UNITS_PER_MAP_UNIT,
-          playerMapY: worldMapAnchor.worldAnchorY
-            - companion.playerY / GAME_UNITS_PER_MAP_UNIT,
-        })
-      : null;
-    const pathingNeeded = settings.cartographyGridEnabled
-      || settings.cartographyOverlayEnabled;
-    const pathingReady = pathingNeeded
-      && pathing?.status === 1
-      && pathing.totalTrapezoids > 0
-      && pathing.totalTrapezoids <= MAX_RENDERED_TRAPEZOIDS
-      && pathing.generation === compass.generation;
-    if (pathingReady && pathing !== null) {
-      const nextGeometryVersion = [
-        pathing.generation,
-        pathing.sequence,
-        pathing.totalTrapezoids,
-      ].join(":");
-      if (nextGeometryVersion !== geometryVersion) {
-        geometry = options.pathing.readLargestGeometry();
-        geometryVersion = geometry === null ? "" : nextGeometryVersion;
-        maskGeometryVersion = "";
-        mask = null;
-        revealabilitySourceVersion = "";
-        revealabilityVersion = "";
-        revealability = null;
-      }
-    } else {
-      resetPathingDerivedState();
+    const revealRadius = settings.cartographyRevealMode === "birds-eye" ? 3 : 1;
+    const version = [
+      model.epoch.mapId,
+      model.epoch.area,
+      model.epoch.resource,
+      model.sequence,
+    ].join(":");
+    const nextTerrainKey = `${model.epoch.area}:${model.epoch.resource}`;
+    if (nextTerrainKey !== terrainKey) {
+      terrain = createWalkableTerrainSurface(document, model.walkableTerrain);
+      terrainKey = terrain === null ? "" : nextTerrainKey;
     }
-    if (geometry !== null && certifiedCompassAnchor !== null) {
-      const classificationRevealRadius = revealRadius === 3 ? 3 : 1;
-      const nextRevealabilitySourceVersion = [
-        geometryVersion,
-        certifiedCompassAnchor.continent,
-        certifiedCompassAnchor.worldAnchorX,
-        certifiedCompassAnchor.worldAnchorY,
-        certifiedCompassAnchor.mapMinX,
-        certifiedCompassAnchor.mapMinY,
-        certifiedCompassAnchor.mapMaxX,
-        certifiedCompassAnchor.mapMaxY,
-        classificationRevealRadius,
-      ].join(":");
-      if (nextRevealabilitySourceVersion !== revealabilitySourceVersion) {
-        revealability = createCartographyCellRevealability({
-          geometry,
-          worldAnchorX: certifiedCompassAnchor.worldAnchorX,
-          worldAnchorY: certifiedCompassAnchor.worldAnchorY,
-          continent: certifiedCompassAnchor.continent,
-          mapMinX: certifiedCompassAnchor.mapMinX,
-          mapMinY: certifiedCompassAnchor.mapMinY,
-          mapMaxX: certifiedCompassAnchor.mapMaxX,
-          mapMaxY: certifiedCompassAnchor.mapMaxY,
-          revealRadius: classificationRevealRadius,
-        });
-        revealabilitySourceVersion = nextRevealabilitySourceVersion;
-      }
-      revealabilityVersion = revealability === null
-        ? ""
-        : revealabilitySourceVersion;
-    } else {
-      revealabilitySourceVersion = "";
-      revealabilityVersion = "";
-      revealability = null;
-    }
-    const canCurrentMapReveal = (cellX: number, cellY: number): boolean | null =>
-      revealability?.canCurrentMapReveal(cellX, cellY) ?? null;
+    const isExplored = (x: number, y: number): boolean | null => {
+      if (model.status !== "ready") return null;
+      return bitsetHasCell(model.exploration, { x, y });
+    };
+    const isActionable = (x: number, y: number): boolean | null => {
+      if (model.status !== "ready") return null;
+      return bitsetHasCell(model.actionableCells, { x, y }) === true ? true : null;
+    };
+    const canvasBox = options.canvas.getBoundingClientRect();
 
-    runLane("grid", () => {
-    if (settings.cartographyGridEnabled && compassBox !== null) {
-      const compassProjection = certifiedCompassAnchor === null
-        ? null
-        : projectCartographyGridToCompass({
-            frame: certifiedCompassAnchor,
-            compass,
-            box: compassBox,
-          });
-      if (compassProjection === null) {
-        compassGridLayer.hide();
-      } else {
-        compassGridLayer.update({
-          projection: compassProjection,
+    safe("compass", () => {
+      if (model.status !== "ready" || model.surfaces.compass === null) {
+        hideCompass();
+        return;
+      }
+      const compass = model.surfaces.compass;
+      const box = projectNativeFrame(compass, canvasBox);
+      if (box === null) {
+        hideCompass();
+        return;
+      }
+      const playerMapX = model.worldAnchor.x + model.player.x / GAME_UNITS_PER_MAP_UNIT;
+      const playerMapY = model.worldAnchor.y - model.player.y / GAME_UNITS_PER_MAP_UNIT;
+      if (settings.cartographyGridEnabled) {
+        const projection = projectCartographyGridToCompass({
+          frame: { generation: model.epoch.area, playerMapX, playerMapY },
+          compass,
+          box,
+        });
+        if (projection === null) compassGridLayer.hide();
+        else compassGridLayer.update({
+          projection,
           style: style.grid,
           opacity: gridOpacity,
-          explorationVersion: explorationFingerprint,
-          isExplored: exploredCell,
-          revealabilityVersion,
-          canCurrentMapReveal,
+          explorationVersion: version,
+          isExplored,
+          revealabilityVersion: version,
+          canCurrentMapReveal: isActionable,
           hoveredCell: null,
           revealRadius,
         });
-      }
-
-      const missionProjection = missionMap === null || missionContentBox === null
-        ? null
-        : projectCartographyGridToMissionMap({
-            frame: missionMap,
-            box: missionContentBox,
-          });
-      if (missionProjection === null) {
-        missionMapGridLayer.hide();
-      } else {
-        const hoveredCell = shiftHeld
-          ? cartographyCellAtScreenPoint(missionProjection, pointerX, pointerY)
-          : null;
-        const hoverRevealRadius = cartographyHoverRevealRadius(shiftHeld, optionHeld);
-        missionMapGridLayer.update({
-          projection: missionProjection,
-          style: style.grid,
-          opacity: gridOpacity,
-          explorationVersion: explorationFingerprint,
-          isExplored: exploredCell,
-          revealabilityVersion,
-          canCurrentMapReveal,
-          hoveredCell,
-          revealRadius: hoveredCell === null ? revealRadius : hoverRevealRadius,
-        });
-      }
-    } else {
-      hideGrid();
-    }
-    }, hideGrid);
-
-    runLane("walkability", () => {
-    const walkabilityReady = settings.cartographyOverlayEnabled
-      && compassBox !== null
-      && geometry !== null;
-    if (!walkabilityReady || geometry === null) {
-      hideWalkability();
-    } else {
-      if (maskGeometryVersion !== geometryVersion) {
-        mask = createWalkabilityMask(options.parent.ownerDocument, geometry);
-        maskGeometryVersion = geometryVersion;
-      }
-      if (mask === null) {
-        compassMaskLayer.hide();
-        missionMapMaskLayer.hide();
-      } else {
-        const compassProjection = projectWalkabilityToCompass({
-          box: compassBox,
-          mask,
-          playerX: companion.playerX,
-          playerY: companion.playerY,
+      } else compassGridLayer.hide();
+      if (settings.cartographyOverlayEnabled && terrain !== null) {
+        const projection = projectTerrainToCompass({
+          box,
+          terrain,
+          playerMapX,
+          playerMapY,
           directionX: compass.compassDirectionX,
           directionY: compass.compassDirectionY,
         });
-        if (compassProjection === null) {
-          compassMaskLayer.hide();
-        } else {
-          compassMaskLayer.update({
-            projection: compassProjection,
-            mask,
-            version: geometryVersion,
-            style: style.walkability,
-            opacity: walkabilityOpacity,
-          });
-        }
+        if (projection === null) compassTerrainLayer.hide();
+        else compassTerrainLayer.update({
+          projection,
+          terrain,
+          version: nextTerrainKey,
+          style: style.walkability,
+          opacity: walkabilityOpacity,
+        });
+      } else compassTerrainLayer.hide();
+      controls.update(box, settings);
+    });
 
-        const missionProjection = missionMap !== null && missionContentBox !== null
-          ? projectWalkabilityToMissionMap({
-              frame: missionMap,
-              box: missionContentBox,
-              mask,
-              playerX: companion.playerX,
-              playerY: companion.playerY,
-            })
-          : null;
-        if (missionProjection === null) {
-          missionMapMaskLayer.hide();
-        } else {
-          missionMapMaskLayer.update({
-            projection: missionProjection,
-            mask,
-            version: geometryVersion,
-            style: style.walkability,
-            opacity: walkabilityOpacity,
-          });
-        }
+    safe("mission-map", () => {
+      if (
+        model.status !== "ready"
+        || model.surfaces.compass === null
+        || model.surfaces.missionMap === null
+      ) {
+        hideMission();
+        return;
       }
-    }
-    }, hideWalkability);
-
-    runLane("controls", () => {
-    if (compassBox !== null) {
-      controls.update(compassBox, settings);
-    } else {
-      controls.hide();
-    }
-    }, controls.hide);
+      const mission = model.surfaces.missionMap;
+      const outerBox = projectMissionMapFrame(
+        mission,
+        model.surfaces.compass,
+        canvasBox,
+      );
+      const box = outerBox === null ? null : projectMissionMapContentBox(mission, outerBox);
+      if (box === null) {
+        hideMission();
+        return;
+      }
+      if (settings.cartographyGridEnabled) {
+        const projection = projectCartographyGridToMissionMap({ frame: mission, box });
+        if (projection === null) missionGridLayer.hide();
+        else {
+          const hoveredCell = shiftHeld
+            ? cartographyCellAtScreenPoint(projection, pointerX, pointerY)
+            : null;
+          missionGridLayer.update({
+            projection,
+            style: style.grid,
+            opacity: gridOpacity,
+            explorationVersion: version,
+            isExplored,
+            revealabilityVersion: version,
+            canCurrentMapReveal: isActionable,
+            hoveredCell,
+            revealRadius: hoveredCell === null
+              ? revealRadius
+              : cartographyHoverRevealRadius(shiftHeld, optionHeld),
+          });
+        }
+      } else missionGridLayer.hide();
+      if (settings.cartographyOverlayEnabled && terrain !== null) {
+        const projection = projectTerrainToMissionMap({ frame: mission, box, terrain });
+        if (projection === null) missionTerrainLayer.hide();
+        else missionTerrainLayer.update({
+          projection,
+          terrain,
+          version: nextTerrainKey,
+          style: style.walkability,
+          opacity: walkabilityOpacity,
+        });
+      } else missionTerrainLayer.hide();
+    });
   };
 
-  const update = () => {
+  const update = (): void => {
     if (disposed) return;
-    runLane("coordinator", render, withdrawAll);
+    render();
     if (!disposed) animationFrame = view.requestAnimationFrame(update);
   };
-  // The feature mounts while Emscripten is still completing startup. Deferring
-  // once lets Guild Wars register its frame first, so live frame scalars are
-  // consumed after the native map draw instead of one frame before it.
   startupTimer = view.setTimeout(() => {
     startupTimer = 0;
     if (!disposed) animationFrame = view.requestAnimationFrame(update);
@@ -497,14 +360,13 @@ export function mountCartographyOverlay(options: Readonly<{
     view.removeEventListener("keydown", rememberModifiers, true);
     view.removeEventListener("keyup", rememberModifiers, true);
     view.removeEventListener("blur", forgetPointer);
-    document.removeEventListener("visibilitychange", forgetHiddenModifiers);
-    compassMaskLayer.dispose();
-    missionMapMaskLayer.dispose();
+    document.removeEventListener("visibilitychange", forgetHiddenPointer);
+    compassTerrainLayer.dispose();
+    missionTerrainLayer.dispose();
     compassGridLayer.dispose();
-    missionMapGridLayer.dispose();
+    missionGridLayer.dispose();
     controls.dispose();
-    if (view.gwCartographyGridStats === gridStats) {
-      delete view.gwCartographyGridStats;
-    }
+    if (view.gwCartographyGridStats === gridStats) delete view.gwCartographyGridStats;
+    if (view.gwCartographyModelStats === modelStats) delete view.gwCartographyModelStats;
   };
 }

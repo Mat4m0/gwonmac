@@ -1,18 +1,18 @@
 /**
- * Certified Compass and Cartography client transform.
+ * Certified Cartography client transform.
  *
- * The exact loader-to-converter call is routed through an appended wrapper.
- * Guild Wars performs the complete conversion first; only after success does
- * an appended sampler read the already-validated live PathingMap and retain a
- * fixed scalar sample in exported globals. No address is exported, no game
- * memory is reserved, and every existing function index remains unchanged.
+ * This transform publishes only bounded scalar observations. It never reads,
+ * retains, or exports a native pathing graph; the sealed Rust kernel is the
+ * sole owner of that job. Every observer is stamped with one area epoch from
+ * the certified context observer, so consumers can assemble an atomic model.
  */
 import {
-  PATHING_SPIKE_GLOBALS,
-  EXPLORATION_SPIKE_GLOBALS,
-  EXPLORATION_SPIKE_SCALARS,
+  CARTOGRAPHY_CONTEXT_GLOBALS,
+  CARTOGRAPHY_CONTEXT_SCALARS,
   COMPASS_FRAME_SPIKE_GLOBALS,
   COMPASS_FRAME_SPIKE_SCALARS,
+  EXPLORATION_SPIKE_GLOBALS,
+  EXPLORATION_SPIKE_SCALARS,
   MISSION_MAP_FRAME_SPIKE_GLOBALS,
   MISSION_MAP_FRAME_SPIKE_SCALARS,
   MISSION_MAP_PROJECTION_SPIKE_SCALARS,
@@ -24,11 +24,11 @@ import {
   encodeCode,
   encodeIndexVector,
   encodeSection,
-  paddedIndex,
   parseCode,
   parseExports,
   parseIndexVector,
   parseTypes,
+  paddedIndex,
   sectionById,
   splitSections,
   uleb,
@@ -37,59 +37,160 @@ import {
   type Section,
 } from "../core/wasm-binary.js";
 import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
+import {
+  CARTOGRAPHY_MEMORY_LAYOUTS,
+  COMPASS_CERTIFICATE,
+  EXPLORATION_CERTIFICATE,
+  MISSION_MAP_CERTIFICATE,
+  WORLD_MAP_ANCHOR_CERTIFICATE,
+  cartographyContextObserver,
+  compassMapRenderWrapper,
+  encodeName,
+  encodeTypes,
+  explorationObserver,
+  explorationReadWord,
+  fail,
+  missionMapEventWrapper,
+  nativeFrameObserver,
+  rewriteExactTableSlot,
+  worldMapAnchorObserver,
+  type CartographyContextGlobals,
+  type CartographyMemoryLayout,
+  type CompassGlobals,
+  type ExplorationGlobals,
+  type FrameGlobals,
+  type MissionMapProjectionGlobals,
+  type WorldMapAnchorGlobals,
+} from "./cartography-transform-internals.js";
 
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
   Module: new (bytes: Uint8Array) => object;
 };
 
-export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 23;
-export { PATHING_SPIKE_GLOBALS } from "../../shared/cartography-spike.js";
-
-import {
-  CERTIFICATE,
-  COMPASS_CERTIFICATE,
-  MISSION_MAP_CERTIFICATE,
-  EXPLORATION_CERTIFICATE,
-  WORLD_MAP_ANCHOR_CERTIFICATE,
-  CARTOGRAPHY_MEMORY_LAYOUTS,
-  MAX_CAPTURED_PATH_MAPS,
-  fail,
-  encodeTypes,
-  encodeName,
-  rewriteExactTableSlot,
-  nativeFrameObserver,
-  sampler,
-  reset,
-  readCoordinate,
-  wrapper,
-  compassMapRenderWrapper,
-  missionMapEventWrapper,
-  worldMapAnchorObserver,
-  explorationObserver,
-  explorationReadWord,
-  type SamplerGlobals,
-  type FrameGlobals,
-  type CompassGlobals,
-  type MissionMapProjectionGlobals,
-  type ExplorationGlobals,
-  type WorldMapAnchorGlobals,
-  type CartographyMemoryLayout,
-} from "./cartography-transform-internals.js";
-
+export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 24;
 export type CartographyMemoryLayoutId = keyof typeof CARTOGRAPHY_MEMORY_LAYOUTS;
+
+const mutableI32 = () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b);
+const mutableF32 = () => Uint8Array.of(0x7d, 0x01, 0x43, 0, 0, 0, 0, 0x0b);
+
+function globalsFor(
+  firstGlobal: number,
+): Readonly<{
+  context: CartographyContextGlobals;
+  compass: CompassGlobals;
+  mission: FrameGlobals;
+  projection: MissionMapProjectionGlobals;
+  exploration: ExplorationGlobals;
+  anchor: WorldMapAnchorGlobals;
+  explorationBufferPointer: number;
+  firstCompass: number;
+  firstMission: number;
+  firstProjection: number;
+  firstExploration: number;
+  firstAnchor: number;
+  appendedCount: number;
+}> {
+  const firstCompass = firstGlobal + CARTOGRAPHY_CONTEXT_SCALARS.length + 2;
+  const firstMission = firstCompass + COMPASS_FRAME_SPIKE_SCALARS.length;
+  const firstProjection = firstMission + MISSION_MAP_FRAME_SPIKE_SCALARS.length;
+  const firstExploration = firstProjection + MISSION_MAP_PROJECTION_SPIKE_SCALARS.length;
+  const explorationBufferPointer = firstExploration + EXPLORATION_SPIKE_SCALARS.length;
+  const firstAnchor = explorationBufferPointer + 1;
+  const context: CartographyContextGlobals = Object.freeze({
+    status: firstGlobal,
+    sequence: firstGlobal + 1,
+    areaEpoch: firstGlobal + 2,
+    mapId: firstGlobal + 3,
+    layoutId: firstGlobal + 4,
+    lastMapId: firstGlobal + 5,
+    wasReady: firstGlobal + 6,
+  });
+  return Object.freeze({
+    context,
+    compass: Object.freeze({
+      status: firstCompass,
+      generation: firstCompass + 1,
+      frameId: firstCompass + 2,
+      visible: firstCompass + 3,
+      cameraSequence: firstCompass + 4,
+      viewportWidth: firstCompass + 5,
+      viewportHeight: firstCompass + 6,
+      left: firstCompass + 7,
+      bottom: firstCompass + 8,
+      right: firstCompass + 9,
+      top: firstCompass + 10,
+      compassDirectionX: firstCompass + 11,
+      compassDirectionY: firstCompass + 12,
+    }),
+    mission: Object.freeze({
+      status: firstMission,
+      generation: firstMission + 1,
+      frameId: firstMission + 2,
+      visible: firstMission + 3,
+      viewportWidth: firstMission + 4,
+      viewportHeight: firstMission + 5,
+      left: firstMission + 6,
+      bottom: firstMission + 7,
+      right: firstMission + 8,
+      top: firstMission + 9,
+    }),
+    projection: Object.freeze({
+      status: firstProjection,
+      sequence: firstProjection + 1,
+      generation: firstProjection + 2,
+      zoom: firstProjection + 3,
+      panX: firstProjection + 4,
+      panY: firstProjection + 5,
+      drawableWidth: firstProjection + 6,
+      drawableHeight: firstProjection + 7,
+      playerMapX: firstProjection + 8,
+      playerMapY: firstProjection + 9,
+      nativeMapWidth: firstProjection + 10,
+      nativeMapHeight: firstProjection + 11,
+    }),
+    exploration: Object.freeze({
+      status: firstExploration,
+      sequence: firstExploration + 1,
+      generation: firstExploration + 2,
+      width: firstExploration + 3,
+      height: firstExploration + 4,
+      dwordCount: firstExploration + 5,
+      bufferPointer: explorationBufferPointer,
+    }),
+    anchor: Object.freeze({
+      status: firstAnchor,
+      generation: firstAnchor + 1,
+      continent: firstAnchor + 2,
+      worldAnchorX: firstAnchor + 3,
+      worldAnchorY: firstAnchor + 4,
+      mapMinX: firstAnchor + 5,
+      mapMinY: firstAnchor + 6,
+      mapMaxX: firstAnchor + 7,
+      mapMaxY: firstAnchor + 8,
+    }),
+    explorationBufferPointer,
+    firstCompass,
+    firstMission,
+    firstProjection,
+    firstExploration,
+    firstAnchor,
+    appendedCount: firstAnchor + WORLD_MAP_ANCHOR_SPIKE_SCALARS.length - firstGlobal,
+  });
+}
 
 export function transformCartographySpikeWasm(
   input: Uint8Array,
   memoryLayoutId: CartographyMemoryLayoutId,
 ): Uint8Array {
   const memoryLayout: CartographyMemoryLayout = CARTOGRAPHY_MEMORY_LAYOUTS[memoryLayoutId];
+  const layoutId = memoryLayoutId === "official" ? 1 : 2;
   const compassCertificate = Object.freeze({
     ...COMPASS_CERTIFICATE,
     frameArray: memoryLayout.frameArray,
     frameCount: memoryLayout.frameCount,
   });
-  const missionMapCertificate = Object.freeze({
+  const missionCertificate = Object.freeze({
     ...MISSION_MAP_CERTIFICATE,
     frameArray: memoryLayout.frameArray,
     frameCount: memoryLayout.frameCount,
@@ -98,17 +199,22 @@ export function transformCartographySpikeWasm(
     ...EXPLORATION_CERTIFICATE,
     contextRoot: memoryLayout.contextRoot,
   });
-  const worldMapAnchorCertificate = Object.freeze({
+  const anchorCertificate = Object.freeze({
     ...WORLD_MAP_ANCHOR_CERTIFICATE,
     contextRoot: memoryLayout.contextRoot,
     areaInfo: memoryLayout.areaInfo,
   });
+  const contextCertificate = Object.freeze({
+    contextRoot: memoryLayout.contextRoot,
+    gameContextSlot: WORLD_MAP_ANCHOR_CERTIFICATE.gameContextSlot,
+    mapContext: WORLD_MAP_ANCHOR_CERTIFICATE.mapContext,
+    mapId: WORLD_MAP_ANCHOR_CERTIFICATE.mapId,
+    layoutId,
+  });
   const evidence = wasmEvidence(input) ?? fail("invalid WebAssembly input");
   const module = evidence.moduleView();
   if (
-    functionBodySha256(module, CERTIFICATE.loader) !== CERTIFICATE.loaderBodySha256
-    || functionBodySha256(module, CERTIFICATE.converter) !== CERTIFICATE.converterBodySha256
-    || functionBodySha256(module, COMPASS_CERTIFICATE.renderFunction)
+    functionBodySha256(module, COMPASS_CERTIFICATE.renderFunction)
       !== COMPASS_CERTIFICATE.renderBodySha256
     || functionBodySha256(module, COMPASS_CERTIFICATE.mapRenderFunction)
       !== COMPASS_CERTIFICATE.mapRenderBodySha256
@@ -116,7 +222,7 @@ export function transformCartographySpikeWasm(
       !== MISSION_MAP_CERTIFICATE.eventDispatcherBodySha256
     || functionBodySha256(module, MISSION_MAP_CERTIFICATE.gameplayContextFunction)
       !== MISSION_MAP_CERTIFICATE.gameplayContextBodySha256
-  ) fail("loader or converter certificate changed");
+  ) fail("Cartography surface certificate changed");
 
   const sections = splitSections(input);
   const types = parseTypes(sectionById(sections, 1));
@@ -126,331 +232,163 @@ export function transformCartographySpikeWasm(
   const exports = vectorPayload(sectionById(sections, 7));
   if (functionTypes.length !== bodies.length) fail("function and code sections disagree");
 
-  const existingExports = new Set(parseExports(sectionById(sections, 7)).map((entry) => entry.name));
-  const names = [
-    PATHING_SPIKE_GLOBALS.status,
-    PATHING_SPIKE_GLOBALS.sequence,
-    PATHING_SPIKE_GLOBALS.callCount,
-    PATHING_SPIKE_GLOBALS.totalTrapezoids,
-    PATHING_SPIKE_GLOBALS.sampledMapTrapezoids,
-    PATHING_SPIKE_GLOBALS.sampledMapZplane,
-    PATHING_SPIKE_GLOBALS.generation,
-    ...PATHING_SPIKE_GLOBALS.samples.flat(),
+  const scalarNames = [
+    ...CARTOGRAPHY_CONTEXT_SCALARS,
+    ...COMPASS_FRAME_SPIKE_SCALARS,
+    ...MISSION_MAP_FRAME_SPIKE_SCALARS,
+    ...MISSION_MAP_PROJECTION_SPIKE_SCALARS,
+    ...EXPLORATION_SPIKE_SCALARS,
+    ...WORLD_MAP_ANCHOR_SPIKE_SCALARS,
   ];
-  const functionNames = [PATHING_SPIKE_GLOBALS.readCoordinate, PATHING_SPIKE_GLOBALS.reset];
-  const compassNames = COMPASS_FRAME_SPIKE_SCALARS;
-  const missionMapNames = MISSION_MAP_FRAME_SPIKE_SCALARS;
-  const missionMapProjectionNames = MISSION_MAP_PROJECTION_SPIKE_SCALARS;
-  const explorationNames = EXPLORATION_SPIKE_SCALARS;
-  const worldMapAnchorNames = WORLD_MAP_ANCHOR_SPIKE_SCALARS;
-  const allFunctionNames = [
-    ...functionNames,
+  const functionNames = [
+    CARTOGRAPHY_CONTEXT_GLOBALS.observe,
     COMPASS_FRAME_SPIKE_GLOBALS.observe,
     MISSION_MAP_FRAME_SPIKE_GLOBALS.observe,
     EXPLORATION_SPIKE_GLOBALS.observe,
     EXPLORATION_SPIKE_GLOBALS.readWord,
     WORLD_MAP_ANCHOR_SPIKE_GLOBALS.observe,
   ];
-  if (
-    [
-      ...names, ...compassNames, ...missionMapNames,
-      ...missionMapProjectionNames, ...explorationNames, ...worldMapAnchorNames,
-      ...allFunctionNames,
-    ]
-      .some((name) => existingExports.has(name))
-  ) {
+  const existingExports = new Set(
+    parseExports(sectionById(sections, 7)).map((entry) => entry.name),
+  );
+  if ([...scalarNames, ...functionNames].some((name) => existingExports.has(name))) {
     fail("Cartography observer export already exists");
   }
 
-  const firstGlobal = globals.count;
-  const sampleGlobalBase = firstGlobal + 7;
-  const sampledMapPointer = firstGlobal + names.length;
-  const firstMapPointerGlobal = sampledMapPointer + 1;
-  const firstMapCountGlobal = firstMapPointerGlobal + MAX_CAPTURED_PATH_MAPS;
-  const firstCompassGlobal = firstMapCountGlobal + MAX_CAPTURED_PATH_MAPS;
-  const firstMissionMapGlobal = firstCompassGlobal + compassNames.length;
-  const firstMissionMapProjectionGlobal = firstMissionMapGlobal + missionMapNames.length;
-  const firstExplorationGlobal = firstMissionMapProjectionGlobal
-    + missionMapProjectionNames.length;
-  const explorationBufferPointer = firstExplorationGlobal + explorationNames.length;
-  const firstWorldMapAnchorGlobal = explorationBufferPointer + 1;
-  const samplerGlobals: SamplerGlobals = Object.freeze({
-    status: firstGlobal,
-    sequence: firstGlobal + 1,
-    callCount: firstGlobal + 2,
-    totalTrapezoids: firstGlobal + 3,
-    sampledMapTrapezoids: firstGlobal + 4,
-    sampledMapZplane: firstGlobal + 5,
-    generation: firstGlobal + 6,
-    sampledMapPointer,
-    mapPointers: Object.freeze(Array.from(
-      { length: MAX_CAPTURED_PATH_MAPS }, (_, index) => firstMapPointerGlobal + index,
-    )),
-    mapCounts: Object.freeze(Array.from(
-      { length: MAX_CAPTURED_PATH_MAPS }, (_, index) => firstMapCountGlobal + index,
-    )),
-    samples: Object.freeze(PATHING_SPIKE_GLOBALS.samples.map((row, trapezoid) =>
-      Object.freeze(row.map((_, coordinate) =>
-        sampleGlobalBase + trapezoid * CERTIFICATE.coordinateOffsets.length + coordinate
-      ))
-    )),
-  });
-  const compassGlobals: CompassGlobals = Object.freeze({
-    status: firstCompassGlobal,
-    generation: firstCompassGlobal + 1,
-    frameId: firstCompassGlobal + 2,
-    visible: firstCompassGlobal + 3,
-    cameraSequence: firstCompassGlobal + 4,
-    viewportWidth: firstCompassGlobal + 5,
-    viewportHeight: firstCompassGlobal + 6,
-    left: firstCompassGlobal + 7,
-    bottom: firstCompassGlobal + 8,
-    right: firstCompassGlobal + 9,
-    top: firstCompassGlobal + 10,
-    compassDirectionX: firstCompassGlobal + 11,
-    compassDirectionY: firstCompassGlobal + 12,
-  });
-  const missionMapGlobals: FrameGlobals = Object.freeze({
-    status: firstMissionMapGlobal,
-    generation: firstMissionMapGlobal + 1,
-    frameId: firstMissionMapGlobal + 2,
-    visible: firstMissionMapGlobal + 3,
-    viewportWidth: firstMissionMapGlobal + 4,
-    viewportHeight: firstMissionMapGlobal + 5,
-    left: firstMissionMapGlobal + 6,
-    bottom: firstMissionMapGlobal + 7,
-    right: firstMissionMapGlobal + 8,
-    top: firstMissionMapGlobal + 9,
-  });
-  const missionMapProjectionGlobals: MissionMapProjectionGlobals = Object.freeze({
-    status: firstMissionMapProjectionGlobal,
-    sequence: firstMissionMapProjectionGlobal + 1,
-    generation: firstMissionMapProjectionGlobal + 2,
-    zoom: firstMissionMapProjectionGlobal + 3,
-    panX: firstMissionMapProjectionGlobal + 4,
-    panY: firstMissionMapProjectionGlobal + 5,
-    drawableWidth: firstMissionMapProjectionGlobal + 6,
-    drawableHeight: firstMissionMapProjectionGlobal + 7,
-    playerMapX: firstMissionMapProjectionGlobal + 8,
-    playerMapY: firstMissionMapProjectionGlobal + 9,
-    nativeMapWidth: firstMissionMapProjectionGlobal + 10,
-    nativeMapHeight: firstMissionMapProjectionGlobal + 11,
-  });
-  const explorationGlobals: ExplorationGlobals = Object.freeze({
-    status: firstExplorationGlobal,
-    sequence: firstExplorationGlobal + 1,
-    generation: firstExplorationGlobal + 2,
-    width: firstExplorationGlobal + 3,
-    height: firstExplorationGlobal + 4,
-    dwordCount: firstExplorationGlobal + 5,
-    bufferPointer: explorationBufferPointer,
-  });
-  const worldMapAnchorGlobals: WorldMapAnchorGlobals = Object.freeze({
-    status: firstWorldMapAnchorGlobal,
-    generation: firstWorldMapAnchorGlobal + 1,
-    continent: firstWorldMapAnchorGlobal + 2,
-    worldAnchorX: firstWorldMapAnchorGlobal + 3,
-    worldAnchorY: firstWorldMapAnchorGlobal + 4,
-    mapMinX: firstWorldMapAnchorGlobal + 5,
-    mapMinY: firstWorldMapAnchorGlobal + 6,
-    mapMaxX: firstWorldMapAnchorGlobal + 7,
-    mapMaxY: firstWorldMapAnchorGlobal + 8,
-  });
-
-  const loaderLocal = CERTIFICATE.loader - module.functionImportCount;
-  const converterLocal = CERTIFICATE.converter - module.functionImportCount;
-  const compassRenderLocal = COMPASS_CERTIFICATE.renderFunction - module.functionImportCount;
-  const compassMapRenderLocal = COMPASS_CERTIFICATE.mapRenderFunction - module.functionImportCount;
-  const missionMapDispatcherLocal = MISSION_MAP_CERTIFICATE.eventDispatcherFunction
-    - module.functionImportCount;
-  const loader = bodies[loaderLocal]?.slice() ?? fail("loader body is missing");
-  const compassRender = bodies[compassRenderLocal]?.slice()
-    ?? fail("Compass render body is missing");
-  const converterType = functionTypes[converterLocal] ?? fail("converter type is missing");
-  const compassMapRenderType = functionTypes[compassMapRenderLocal]
-    ?? fail("CompassMap render type is missing");
-  const missionMapDispatcherType = functionTypes[missionMapDispatcherLocal]
-    ?? fail("Mission Map dispatcher type is missing");
-  const expectedCall = concat(Uint8Array.of(0x10), paddedIndex(CERTIFICATE.converter));
-  if (!expectedCall.every((byte, index) => loader[CERTIFICATE.callSiteOffset + index] === byte)) {
-    fail("loader call site changed");
-  }
-
+  const allocated = globalsFor(globals.count);
+  const voidType = types.length;
+  const readWordType = voidType + 1;
   const nextTypes = [
     ...types,
-    { params: [0x7f], results: [] },
     { params: [], results: [] },
-    { params: [0x7f], results: [0x7d] },
     { params: [0x7f], results: [0x7f] },
   ];
-  const resetType = nextTypes.length - 3;
-  const readWordType = nextTypes.length - 1;
-  const actualReadCoordinateType = nextTypes.length - 2;
-  // samplerType is the first of the four appended types.
-  const actualSamplerType = nextTypes.length - 4;
-  const samplerFunction = module.functionImportCount + bodies.length;
-  const wrapperFunction = samplerFunction + 1;
-  const resetFunction = wrapperFunction + 1;
-  const readCoordinateFunction = resetFunction + 1;
-  const compassMapRenderWrapperFunction = readCoordinateFunction + 1;
-  const compassObserverFunction = compassMapRenderWrapperFunction + 1;
-  const missionMapObserverFunction = compassObserverFunction + 1;
-  const missionMapEventWrapperFunction = missionMapObserverFunction + 1;
-  const explorationObserverFunction = missionMapEventWrapperFunction + 1;
-  const explorationReadWordFunction = explorationObserverFunction + 1;
-  const worldMapAnchorObserverFunction = explorationReadWordFunction + 1;
-  loader.set(concat(Uint8Array.of(0x10), paddedIndex(wrapperFunction)), CERTIFICATE.callSiteOffset);
-  const expectedCompassMapRenderCall = concat(
-    Uint8Array.of(0x10), paddedIndex(COMPASS_CERTIFICATE.mapRenderFunction),
+  const compassMapRenderLocal = COMPASS_CERTIFICATE.mapRenderFunction
+    - module.functionImportCount;
+  const compassRenderLocal = COMPASS_CERTIFICATE.renderFunction - module.functionImportCount;
+  const missionDispatcherLocal = MISSION_MAP_CERTIFICATE.eventDispatcherFunction
+    - module.functionImportCount;
+  const compassMapRenderType = functionTypes[compassMapRenderLocal]
+    ?? fail("CompassMap render type is missing");
+  const missionDispatcherType = functionTypes[missionDispatcherLocal]
+    ?? fail("Mission Map dispatcher type is missing");
+  const firstFunction = module.functionImportCount + bodies.length;
+  const contextObserverFunction = firstFunction;
+  const compassMapRenderWrapperFunction = firstFunction + 1;
+  const compassObserverFunction = firstFunction + 2;
+  const missionObserverFunction = firstFunction + 3;
+  const missionEventWrapperFunction = firstFunction + 4;
+  const explorationObserverFunction = firstFunction + 5;
+  const explorationReadWordFunction = firstFunction + 6;
+  const anchorObserverFunction = firstFunction + 7;
+
+  const compassRender = bodies[compassRenderLocal]?.slice()
+    ?? fail("Compass render body is missing");
+  const expectedCompassCall = concat(
+    Uint8Array.of(0x10),
+    paddedIndex(COMPASS_CERTIFICATE.mapRenderFunction),
   );
-  if (!expectedCompassMapRenderCall.every((byte, index) =>
-    compassRender[COMPASS_CERTIFICATE.mapRenderCallSiteOffset + index] === byte
-  )) fail("CompassMap render call site changed");
-  compassRender.set(
-    concat(Uint8Array.of(0x10), paddedIndex(compassMapRenderWrapperFunction)),
-    COMPASS_CERTIFICATE.mapRenderCallSiteOffset,
+  const callOffset = COMPASS_CERTIFICATE.mapRenderCallSiteOffset;
+  if (!expectedCompassCall.every((byte, index) => compassRender[callOffset + index] === byte)) {
+    fail("CompassMap render call site changed");
+  }
+  // Preserve the client's fixed-width call encoding.
+  const replacement = concat(
+    Uint8Array.of(0x10),
+    paddedIndex(compassMapRenderWrapperFunction),
   );
+  compassRender.set(replacement, callOffset);
+
   const nextBodies = [...bodies];
-  nextBodies[loaderLocal] = loader;
   nextBodies[compassRenderLocal] = compassRender;
   nextBodies.push(
-    sampler(samplerGlobals),
-    wrapper(CERTIFICATE.converter, samplerFunction),
-    reset(samplerGlobals),
-    readCoordinate(samplerGlobals),
-    compassMapRenderWrapper(COMPASS_CERTIFICATE.mapRenderFunction, compassGlobals),
+    cartographyContextObserver(allocated.context, contextCertificate),
+    compassMapRenderWrapper(COMPASS_CERTIFICATE.mapRenderFunction, allocated.compass),
     nativeFrameObserver(
       compassCertificate,
-      compassGlobals,
-      samplerGlobals.generation,
-      compassGlobals.cameraSequence,
+      allocated.compass,
+      allocated.context.areaEpoch,
+      allocated.compass.cameraSequence,
     ),
-    nativeFrameObserver(missionMapCertificate, missionMapGlobals, samplerGlobals.generation),
+    nativeFrameObserver(
+      missionCertificate,
+      allocated.mission,
+      allocated.context.areaEpoch,
+    ),
     missionMapEventWrapper(
       MISSION_MAP_CERTIFICATE.eventDispatcherFunction,
-      missionMapProjectionGlobals,
-      samplerGlobals.generation,
+      allocated.projection,
+      allocated.context.areaEpoch,
     ),
     explorationObserver(
-      explorationGlobals,
-      samplerGlobals.generation,
+      allocated.exploration,
+      allocated.context.areaEpoch,
       explorationCertificate,
     ),
-    explorationReadWord(explorationGlobals),
+    explorationReadWord(allocated.exploration),
     worldMapAnchorObserver(
-      worldMapAnchorGlobals,
-      samplerGlobals.generation,
-      worldMapAnchorCertificate,
+      allocated.anchor,
+      allocated.context.areaEpoch,
+      anchorCertificate,
     ),
   );
   const nextFunctionTypes = [
-    ...functionTypes, actualSamplerType, converterType, resetType, actualReadCoordinateType,
-    compassMapRenderType, resetType, resetType, missionMapDispatcherType,
-    resetType, readWordType, resetType,
+    ...functionTypes,
+    voidType,
+    compassMapRenderType,
+    voidType,
+    voidType,
+    missionDispatcherType,
+    voidType,
+    readWordType,
+    voidType,
   ];
-  const appendedGlobalCount = names.length + 1 + MAX_CAPTURED_PATH_MAPS * 2
-    + compassNames.length + missionMapNames.length
-    + missionMapProjectionNames.length + explorationNames.length + 1
-    + worldMapAnchorNames.length;
-  const appendedFunctionCount = nextBodies.length - bodies.length;
-  if (
-    nextFunctionTypes.length - functionTypes.length !== appendedFunctionCount
-    || worldMapAnchorObserverFunction + 1
-      !== module.functionImportCount + nextBodies.length
-    || firstWorldMapAnchorGlobal + worldMapAnchorNames.length
-      !== globals.count + appendedGlobalCount
-    || new Set(allFunctionNames).size !== allFunctionNames.length
-  ) {
-    fail("Cartography append plan is internally inconsistent");
-  }
+
+  const contextEntries = [
+    ...CARTOGRAPHY_CONTEXT_SCALARS.map(mutableI32),
+    mutableI32(),
+    mutableI32(),
+  ];
   const nextGlobals = concat(
-    uleb(globals.count + appendedGlobalCount),
+    uleb(globals.count + allocated.appendedCount),
     globals.entries,
-    ...names.map((_, index) => index < 7
-      ? Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b)
-      : Uint8Array.of(0x7d, 0x01, 0x43, 0, 0, 0, 0, 0x0b)),
-    Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
-    ...Array.from(
-      { length: MAX_CAPTURED_PATH_MAPS * 2 },
-      () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
+    ...contextEntries,
+    ...COMPASS_FRAME_SPIKE_SCALARS.map((_, index) => index < 5 ? mutableI32() : mutableF32()),
+    ...MISSION_MAP_FRAME_SPIKE_SCALARS.map((_, index) => index < 4 ? mutableI32() : mutableF32()),
+    ...MISSION_MAP_PROJECTION_SPIKE_SCALARS.map((_, index) =>
+      index < 3 ? mutableI32() : mutableF32()
     ),
-    ...compassNames.map((_, index) => index < 5
-      ? Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b)
-      : Uint8Array.of(0x7d, 0x01, 0x43, 0, 0, 0, 0, 0x0b)),
-    ...missionMapNames.map((_, index) => index < 4
-      ? Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b)
-      : Uint8Array.of(0x7d, 0x01, 0x43, 0, 0, 0, 0, 0x0b)),
-    ...missionMapProjectionNames.map((_, index) => index < 3
-      ? Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b)
-      : Uint8Array.of(0x7d, 0x01, 0x43, 0, 0, 0, 0, 0x0b)),
-    ...Array.from(
-      { length: explorationNames.length + 1 },
-      () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b),
+    ...EXPLORATION_SPIKE_SCALARS.map(mutableI32),
+    mutableI32(),
+    ...WORLD_MAP_ANCHOR_SPIKE_SCALARS.map((_, index) =>
+      index < 3 ? mutableI32() : mutableF32()
     ),
-    ...worldMapAnchorNames.map((_, index) => index < 3
-      ? Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b)
-      : Uint8Array.of(0x7d, 0x01, 0x43, 0, 0, 0, 0, 0x0b)),
   );
+  const scalarPlans = [
+    [CARTOGRAPHY_CONTEXT_SCALARS, globals.count],
+    [COMPASS_FRAME_SPIKE_SCALARS, allocated.firstCompass],
+    [MISSION_MAP_FRAME_SPIKE_SCALARS, allocated.firstMission],
+    [MISSION_MAP_PROJECTION_SPIKE_SCALARS, allocated.firstProjection],
+    [EXPLORATION_SPIKE_SCALARS, allocated.firstExploration],
+    [WORLD_MAP_ANCHOR_SPIKE_SCALARS, allocated.firstAnchor],
+  ] as const;
+  const functionPlans = [
+    [CARTOGRAPHY_CONTEXT_GLOBALS.observe, contextObserverFunction],
+    [COMPASS_FRAME_SPIKE_GLOBALS.observe, compassObserverFunction],
+    [MISSION_MAP_FRAME_SPIKE_GLOBALS.observe, missionObserverFunction],
+    [EXPLORATION_SPIKE_GLOBALS.observe, explorationObserverFunction],
+    [EXPLORATION_SPIKE_GLOBALS.readWord, explorationReadWordFunction],
+    [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.observe, anchorObserverFunction],
+  ] as const;
   const nextExports = concat(
-    uleb(
-      exports.count + names.length + compassNames.length
-      + missionMapNames.length + missionMapProjectionNames.length
-      + explorationNames.length
-      + worldMapAnchorNames.length
-      + allFunctionNames.length,
-    ),
+    uleb(exports.count + scalarNames.length + functionNames.length),
     exports.entries,
-    ...names.map((name, index) => concat(
-      encodeName(name), Uint8Array.of(0x03), uleb(firstGlobal + index),
+    ...scalarPlans.flatMap(([names, first]) => names.map((name, index) => concat(
+      encodeName(name), Uint8Array.of(0x03), uleb(first + index),
+    ))),
+    ...functionPlans.map(([name, index]) => concat(
+      encodeName(name), Uint8Array.of(0x00), uleb(index),
     )),
-    concat(encodeName(PATHING_SPIKE_GLOBALS.reset), Uint8Array.of(0x00), uleb(resetFunction)),
-    concat(
-      encodeName(PATHING_SPIKE_GLOBALS.readCoordinate),
-      Uint8Array.of(0x00),
-      uleb(readCoordinateFunction),
-    ),
-    ...compassNames.map((name, index) => concat(
-      encodeName(name), Uint8Array.of(0x03), uleb(firstCompassGlobal + index),
-    )),
-    concat(
-      encodeName(COMPASS_FRAME_SPIKE_GLOBALS.observe),
-      Uint8Array.of(0x00),
-      uleb(compassObserverFunction),
-    ),
-    ...missionMapNames.map((name, index) => concat(
-      encodeName(name), Uint8Array.of(0x03), uleb(firstMissionMapGlobal + index),
-    )),
-    ...missionMapProjectionNames.map((name, index) => concat(
-      encodeName(name),
-      Uint8Array.of(0x03),
-      uleb(firstMissionMapProjectionGlobal + index),
-    )),
-    concat(
-      encodeName(MISSION_MAP_FRAME_SPIKE_GLOBALS.observe),
-      Uint8Array.of(0x00),
-      uleb(missionMapObserverFunction),
-    ),
-    ...explorationNames.map((name, index) => concat(
-      encodeName(name), Uint8Array.of(0x03), uleb(firstExplorationGlobal + index),
-    )),
-    ...worldMapAnchorNames.map((name, index) => concat(
-      encodeName(name), Uint8Array.of(0x03), uleb(firstWorldMapAnchorGlobal + index),
-    )),
-    concat(
-      encodeName(EXPLORATION_SPIKE_GLOBALS.observe),
-      Uint8Array.of(0x00),
-      uleb(explorationObserverFunction),
-    ),
-    concat(
-      encodeName(EXPLORATION_SPIKE_GLOBALS.readWord),
-      Uint8Array.of(0x00),
-      uleb(explorationReadWordFunction),
-    ),
-    concat(
-      encodeName(WORLD_MAP_ANCHOR_SPIKE_GLOBALS.observe),
-      Uint8Array.of(0x00),
-      uleb(worldMapAnchorObserverFunction),
-    ),
   );
 
   const rewritten = sections.map((section): Section => {
@@ -464,27 +402,13 @@ export function transformCartographySpikeWasm(
         section.body,
         MISSION_MAP_CERTIFICATE.eventDispatcherTableSlot,
         MISSION_MAP_CERTIFICATE.eventDispatcherFunction,
-        missionMapEventWrapperFunction,
+        missionEventWrapperFunction,
       ),
     };
     if (section.id === 10) return { id: 10, body: encodeCode(nextBodies) };
     return section;
   });
   const output = concat(WASM_HEADER, ...rewritten.map(encodeSection));
-  const outputSections = splitSections(output);
-  const expectedExportCount = exports.count + names.length + compassNames.length
-    + missionMapNames.length + missionMapProjectionNames.length
-    + explorationNames.length + worldMapAnchorNames.length
-    + allFunctionNames.length;
-  if (
-    parseIndexVector(sectionById(outputSections, 3)).length !== nextFunctionTypes.length
-    || parseCode(sectionById(outputSections, 10)).length !== nextBodies.length
-    || vectorPayload(sectionById(outputSections, 6)).count
-      !== globals.count + appendedGlobalCount
-    || parseExports(sectionById(outputSections, 7)).length !== expectedExportCount
-  ) {
-    fail("Cartography append plan did not encode exactly");
-  }
   if (!WebAssembly.validate(output)) {
     try {
       new WebAssembly.Module(output);
