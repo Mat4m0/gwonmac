@@ -85,7 +85,7 @@ describe("window coordinator", () => {
     assert.deepEqual(launcher.calls, ["focus"]);
   });
 
-  it("restores the last focused live window from the Dock", () => {
+  it("restores the most recently focused live window from the Dock", () => {
     const { applicationCalls, coordinator, registry } = setup();
     const launcher = fakeWindow(1);
     const game = fakeWindow(2);
@@ -96,7 +96,7 @@ describe("window coordinator", () => {
 
     coordinator.recordFocused(launcher);
     coordinator.recordFocused(game);
-    assert.equal(coordinator.restoreLastFocusedWindow(), true);
+    assert.equal(coordinator.restoreMostRecentWindow(), true);
     assert.deepEqual(applicationCalls, ["dock.show"]);
     assert.deepEqual(game.calls, ["focus"]);
     assert.deepEqual(launcher.calls, []);
@@ -114,12 +114,39 @@ describe("window coordinator", () => {
     coordinator.recordFocused(game);
     coordinator.recordFocused(launcher);
     launcher.hide();
-    assert.equal(coordinator.restoreLastFocusedWindow(), true);
+    assert.equal(coordinator.restoreMostRecentWindow(), true);
     assert.deepEqual(launcher.calls, ["hide"]);
     assert.deepEqual(game.calls, ["focus"]);
   });
 
-  it("falls back to the launcher when no game window can be restored", () => {
+  it("falls back through the complete focus order when a newer game closes", () => {
+    const { coordinator, registry } = setup();
+    const launcher = fakeWindow(1);
+    const first = fakeWindow(2);
+    const second = fakeWindow(3);
+    launcher.setVisible(true);
+    first.setVisible(true);
+    second.setVisible(true);
+    registry.register(launcher, { role: "launcher" });
+    registry.register(first, { role: "game", profileId: FIRST }, 2);
+    registry.register(second, { role: "game", profileId: SECOND }, 3);
+
+    coordinator.recordFocused(launcher);
+    coordinator.recordFocused(first);
+    coordinator.recordFocused(second);
+    second.setDestroyed(true);
+    registry.unregister(second);
+    assert.equal(coordinator.restoreMostRecentWindow(), true);
+    assert.deepEqual(first.calls, ["focus"]);
+    assert.deepEqual(launcher.calls, []);
+
+    first.setDestroyed(true);
+    registry.unregister(first);
+    assert.equal(coordinator.restoreMostRecentWindow(), true);
+    assert.deepEqual(launcher.calls, ["focus"]);
+  });
+
+  it("restores the window captured on deactivation despite incidental focus", () => {
     const { coordinator, registry } = setup();
     const launcher = fakeWindow(1);
     const game = fakeWindow(2);
@@ -128,11 +155,16 @@ describe("window coordinator", () => {
     registry.register(launcher, { role: "launcher" });
     registry.register(game, { role: "game", profileId: FIRST }, 2);
 
+    coordinator.recordFocused(launcher);
     coordinator.recordFocused(game);
-    game.setDestroyed(true);
-    registry.unregister(game);
-    assert.equal(coordinator.restoreLastFocusedWindow(), true);
-    assert.deepEqual(launcher.calls, ["focus"]);
+    game.setFocused(true);
+    coordinator.captureActivationTarget();
+
+    game.setFocused(false);
+    coordinator.recordFocused(launcher);
+    assert.equal(coordinator.restoreMostRecentWindow(), true);
+    assert.deepEqual(game.calls, ["focus"]);
+    assert.deepEqual(launcher.calls, []);
   });
 
   it("restores and focuses an exact live game", () => {

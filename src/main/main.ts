@@ -1093,8 +1093,11 @@ if (primaryInstance) void app.whenReady().then(async () => {
     setProgress({ phase: "error", errorCode: "wrong_profile" });
   }
 
+  app.on("did-resign-active", () => {
+    windowCoordinator.captureActivationTarget();
+  });
   app.on("activate", () => {
-    if (!windowCoordinator.restoreLastFocusedWindow()) {
+    if (!windowCoordinator.restoreMostRecentWindow()) {
       createLauncherWindow(protocolDeps, windowCoordinator);
     }
   });

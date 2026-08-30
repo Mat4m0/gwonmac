@@ -379,7 +379,10 @@ test("Show never duplicates a game and companion close policy stays profile-loca
     await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().find((win) => win.webContents.getURL().endsWith("launcher/index.html"))?.isVisible(),
     )).toBe(false);
-    await fixture.app.evaluate(({ app }) => app.emit("activate"));
+    await fixture.app.evaluate(({ app }) => {
+      app.emit("did-resign-active");
+      app.emit("activate");
+    });
     await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) => {
       const launcher = BrowserWindow.getAllWindows()
         .find((win) => win.webContents.getURL().endsWith("launcher/index.html"));

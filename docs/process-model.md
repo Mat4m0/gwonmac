@@ -384,7 +384,9 @@ rollback procedures.
 
 The app acquires a single-instance lock before it reads or cleans profile-owned
 files. A second launch reveals the launcher. A Dock activation restores the
-most recently focused live window. Neither action creates another game window.
+most recently used live window. If that window has closed, the coordinator
+falls back through its recent-window order. Neither action creates another
+game window.
 
 Closing the launcher hides it while games run. Closing one game window closes
 only that profile. Closing the final game leaves the launcher available.

@@ -28,8 +28,8 @@ interface PreventableClose {
 export class WindowCoordinator<Window extends PresentableWindow> {
   readonly #application: ApplicationPresentation;
   readonly #registry: WindowRegistry<Window>;
-  #lastFocusedWindow: Window | null = null;
-  #lastFocusedGame: Window | null = null;
+  #focusOrder: Window[] = [];
+  #activationTarget: Window | null = null;
 
   constructor(
     application: ApplicationPresentation,
@@ -55,25 +55,40 @@ export class WindowCoordinator<Window extends PresentableWindow> {
     return true;
   }
 
-  /** Remember native focus so a later Dock activation restores that window. */
+  /** Keep a most-recently-used order for every launcher and game window. */
   recordFocused(win: Window): void {
     const context = this.#registry.contextForWebContents(win.webContents.id);
     if (!context || win.isDestroyed()) return;
-    this.#lastFocusedWindow = win;
-    if (context.role === "game") this.#lastFocusedGame = win;
+    this.#focusOrder = [
+      win,
+      ...this.#focusOrder.filter((candidate) => (
+        candidate !== win && !candidate.isDestroyed()
+      )),
+    ];
   }
 
   /**
-   * Restore normal macOS multi-window behavior when the app becomes active.
-   * A launcher hidden by its close button stays hidden while a game remains.
+   * Freeze the front window while the app resigns active. macOS may focus a
+   * different app window before Electron delivers `activate`; that incidental
+   * focus must not replace the window the player actually left in front.
    */
-  restoreLastFocusedWindow(): boolean {
-    const preferred = this.usable(this.#lastFocusedWindow)
-      ? this.#lastFocusedWindow
-      : this.usable(this.#lastFocusedGame)
-        ? this.#lastFocusedGame
-        : this.#registry.gameWindows().find((win) => this.usable(win))
-          ?? this.#registry.launcherWindow();
+  captureActivationTarget(): void {
+    this.#activationTarget = this.#registry.focusedWindow()
+      ?? this.#focusOrder.find((win) => this.usable(win))
+      ?? null;
+  }
+
+  /** Restore the newest live window, falling back through the complete order. */
+  restoreMostRecentWindow(): boolean {
+    this.#focusOrder = this.#focusOrder.filter((win) => !win.isDestroyed());
+    const candidates = [
+      this.#activationTarget,
+      ...this.#focusOrder,
+      ...this.#registry.gameWindows(),
+      this.#registry.launcherWindow(),
+    ];
+    this.#activationTarget = null;
+    const preferred = candidates.find((win) => this.usable(win));
     if (!preferred) return false;
     this.present(preferred, false);
     return true;
