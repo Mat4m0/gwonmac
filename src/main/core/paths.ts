@@ -219,3 +219,11 @@ export function unpackedPath(layout: BundleLayout, relative: string): string {
     ? path.join(layout.resourcesPath, "app.asar.unpacked", relative)
     : path.join(layout.appPath, relative);
 }
+
+/** Name one native helper without leaking the Windows suffix into its owner. */
+export function nativeExecutableName(
+  name: string,
+  platform: NodeJS.Platform,
+): string {
+  return platform === "win32" ? `${name}.exe` : name;
+}

@@ -18,7 +18,6 @@ const FUSES = {
   EnableCookieEncryption: false,
   EnableNodeOptionsEnvironmentVariable: false,
   EnableNodeCliInspectArguments: false,
-  EnableEmbeddedAsarIntegrityValidation: true,
   OnlyLoadAppFromAsar: true,
   LoadBrowserProcessSpecificV8Snapshot: false,
   GrantFileProtocolExtraPrivileges: false,
@@ -33,6 +32,10 @@ test("release fuses keep Node, inspection and file-protocol privileges disabled"
       `FuseV1Options.${name} must be ${value}`,
     );
   }
+  assert.match(
+    forge,
+    /\[FuseV1Options\.EnableEmbeddedAsarIntegrityValidation\]:\s+platform !== "linux"/u,
+  );
   assert.match(forge, /strictlyRequireAllFuses: true/);
 });
 
@@ -40,5 +43,13 @@ test("no fuse is left to its default", () => {
   const configured = [...forge.matchAll(/\[FuseV1Options\.(\w+)\]/g)].map(
     (match) => match[1],
   );
-  assert.deepEqual(configured.sort(), Object.keys(FUSES).sort());
+  assert.deepEqual(configured.sort(), [
+    ...Object.keys(FUSES),
+    "EnableEmbeddedAsarIntegrityValidation",
+  ].sort());
+});
+
+test("fuses are applied to every packaged platform executable", () => {
+  assert.match(forge, /packagedExecutablePath\(resourcesPath, platform\)/u);
+  assert.doesNotMatch(forge, /if \(platform !== "darwin"\) return/u);
 });

@@ -31,10 +31,155 @@ if (
   );
 }
 
-const nativeArchitecture =
-  process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "x86_64" : null;
-if (nativeArchitecture === null) {
-  throw new Error(`unsupported native build architecture: ${process.arch}`);
+/** @typedef {readonly [command: string, args: readonly string[]]} BuildStep */
+
+/**
+ * Invoke pnpm's JavaScript entry point through the current Node executable.
+ * This avoids both shell parsing and Windows command-shim behavior.
+ *
+ * @param {NodeJS.Platform} platform
+ * @param {string | undefined} npmExecPath
+ * @param {string} nodeExecutable
+ * @returns {BuildStep}
+ */
+export function packageManagerInvocation(
+  platform,
+  npmExecPath,
+  nodeExecutable = process.execPath,
+) {
+  if (npmExecPath) return [nodeExecutable, [npmExecPath]];
+  if (platform === "win32") {
+    throw new Error("Run the canonical Windows build through `pnpm build`.");
+  }
+  return ["pnpm", []];
+}
+
+const [pnpmCommand, pnpmPrefixArgs] = packageManagerInvocation(
+  process.platform,
+  process.env.npm_execpath,
+);
+
+const DECODER_SOURCES = [
+  "src/native/gw-dat/decoder-main.cpp",
+  "src/native/gw-dat/vendor/gwdat/xentax.cpp",
+  "src/native/gw-dat/vendor/gwdat/AtexReader.cpp",
+  "src/native/gw-dat/vendor/gwdat/AtexDecompress.cpp",
+  "src/native/gw-dat/vendor/gwdat/AtexAsm.cpp",
+];
+
+/**
+ * Native recipes selected by the build host. macOS keeps its exact released
+ * addon and decoder commands. Windows and Linux compile only the portable
+ * decoder until their credential implementations pass installed tests.
+ *
+ * @param {NodeJS.Platform} platform
+ * @param {NodeJS.Architecture} architecture
+ * @returns {readonly BuildStep[]}
+ */
+export function nativeBuildSteps(platform, architecture) {
+  if (platform === "darwin") {
+    const targetArchitecture = architecture === "arm64"
+      ? "arm64"
+      : architecture === "x64"
+        ? "x86_64"
+        : null;
+    if (targetArchitecture === null) {
+      throw new Error(`unsupported macOS build architecture: ${architecture}`);
+    }
+    return [
+      [
+        "xcrun",
+        [
+          "clang++",
+          "-std=c++20",
+          "-fobjc-arc",
+          "-bundle",
+          "-undefined",
+          "dynamic_lookup",
+          "-DNAPI_VERSION=8",
+          "-I",
+          "node_modules/node-api-headers/include",
+          "-mmacosx-version-min=12.0",
+          "-arch",
+          targetArchitecture,
+          "-O2",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-fvisibility=hidden",
+          "src/native/host/host.mm",
+          "-framework",
+          "AppKit",
+          "-framework",
+          "Foundation",
+          "-framework",
+          "LocalAuthentication",
+          "-framework",
+          "Security",
+          "-o",
+          "build/native/host.node",
+        ],
+      ],
+      [
+        "xcrun",
+        [
+          "clang++",
+          "-std=c++20",
+          "-mmacosx-version-min=12.0",
+          "-arch",
+          targetArchitecture,
+          "-O2",
+          '-D__int64=long long',
+          "-Wno-multichar",
+          "-Wno-constant-logical-operand",
+          "-Isrc/native/gw-dat",
+          ...DECODER_SOURCES,
+          "-o",
+          "build/native/gw-dat-decode",
+        ],
+      ],
+    ];
+  }
+
+  if (platform === "win32") {
+    if (architecture !== "x64") {
+      throw new Error(`unsupported Windows build architecture: ${architecture}`);
+    }
+    return [[
+      "cl.exe",
+      [
+        "/nologo",
+        "/std:c++20",
+        "/O2",
+        "/EHsc",
+        "/Isrc/native/gw-dat",
+        ...DECODER_SOURCES,
+        "/Fe:build/native/gw-dat-decode.exe",
+      ],
+    ]];
+  }
+
+  if (platform === "linux") {
+    if (architecture !== "x64") {
+      throw new Error(`unsupported Linux build architecture: ${architecture}`);
+    }
+    return [[
+      "c++",
+      [
+        "-std=c++20",
+        "-O2",
+        '-D__int64=long long',
+        "-Wno-multichar",
+        "-Wno-constant-logical-operand",
+        "-Isrc/native/gw-dat",
+        ...DECODER_SOURCES,
+        "-o",
+        "build/native/gw-dat-decode",
+      ],
+    ]];
+  }
+
+  throw new Error(`unsupported native build platform: ${platform}`);
 }
 
 /**
@@ -92,84 +237,22 @@ export const BUILD_STEPS = [
   [process.execPath, ["node_modules/typescript/bin/tsc"]],
   // The launcher is a standalone Vue document with its own narrow preload and
   // protocol subtree. Vite owns only build/renderer/launcher/.
-  ["pnpm", ["--filter", "@gwonmac/launcher-ui", "build"]],
+  [
+    pnpmCommand,
+    [...pnpmPrefixArgs, "--filter", "@gwonmac/launcher-ui", "build"],
+  ],
   // The Tools application, bundled once for the renderer. It is an independent
   // Vue workspace with its own tests, so this step only packages what already
   // passed them. Vite writes build/renderer/tools/ and empties only that
   // directory, so it cannot disturb the emits above and its position here is
   // for readability rather than correctness.
-  ["pnpm", ["--filter", "@gwonmac/tools-ui", "build:embedded"]],
-  // The only native addon. It uses raw Node-API version 8, whose ABI remains
-  // stable across the Node and Electron upgrades this project takes. The
-  // framework APIs resolve at runtime from the Electron host, so the bundle
-  // deliberately leaves Node-API symbols undefined here.
   [
-    "xcrun",
-    [
-      "clang++",
-      "-std=c++20",
-      "-fobjc-arc",
-      "-bundle",
-      "-undefined",
-      "dynamic_lookup",
-      "-DNAPI_VERSION=8",
-      "-I",
-      "node_modules/node-api-headers/include",
-      "-mmacosx-version-min=12.0",
-      "-arch",
-      nativeArchitecture,
-      "-O2",
-      "-Wall",
-      "-Wextra",
-      "-Werror",
-      "-fvisibility=hidden",
-      "src/native/host/host.mm",
-      "-framework",
-      "AppKit",
-      "-framework",
-      "Foundation",
-      "-framework",
-      "LocalAuthentication",
-      "-framework",
-      "Security",
-      "-o",
-      "build/native/host.node",
-    ],
+    pnpmCommand,
+    [...pnpmPrefixArgs, "--filter", "@gwonmac/tools-ui", "build:embedded"],
   ],
-  // The Guild Wars archive decoder. A separate executable rather than a second
-  // addon: it is hand-transcribed x86 (see src/native/gw-dat/vendor/README.md)
-  // parsing the player's own game files, and a malformed record should fail one
-  // decode rather than take the application down with it. It is spawned once
-  // per asset and the result is cached on disk, so the process boundary costs
-  // about four milliseconds, once, per icon that is ever looked at.
-  //
-  // -Wall/-Wextra/-Werror are deliberately not applied: this is vendored source
-  // carried unmodified, and the -D/-Wno flags stand in for MSVC builtins clang
-  // lacks rather than patching it. The third silences a warning about an `&&`
-  // that reads like a typo and is not one — src/native/gw-dat/vendor/README.md
-  // records why changing it would break the decode.
-  [
-    "xcrun",
-    [
-      "clang++",
-      "-std=c++20",
-      "-mmacosx-version-min=12.0",
-      "-arch",
-      nativeArchitecture,
-      "-O2",
-      '-D__int64=long long',
-      "-Wno-multichar",
-      "-Wno-constant-logical-operand",
-      "-Isrc/native/gw-dat",
-      "src/native/gw-dat/decoder-main.cpp",
-      "src/native/gw-dat/vendor/gwdat/xentax.cpp",
-      "src/native/gw-dat/vendor/gwdat/AtexReader.cpp",
-      "src/native/gw-dat/vendor/gwdat/AtexDecompress.cpp",
-      "src/native/gw-dat/vendor/gwdat/AtexAsm.cpp",
-      "-o",
-      "build/native/gw-dat-decode",
-    ],
-  ],
+  // Native compilation remains a direct per-platform recipe. macOS alone has
+  // the AppKit/Keychain addon; all three targets build the isolated decoder.
+  ...nativeBuildSteps(process.platform, process.arch),
   // Reads src/shared/contracts.ts and src/preload/preload.body.cjs and writes
   // the Core and Tools preload artifacts, which nothing else here produces — so its
   // position is free. It is TypeScript, so it is spawned the one way this
@@ -212,7 +295,13 @@ function build() {
       );
       process.exit(1);
     }
-    if (result.status !== 0) process.exit(result.status ?? 1);
+    if (result.status !== 0) {
+      console.error(
+        `Build step failed: ${command}`
+          + (result.error ? ` (${result.error.message})` : ""),
+      );
+      process.exit(result.status ?? 1);
+    }
   }
 }
 

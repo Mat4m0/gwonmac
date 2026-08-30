@@ -26,6 +26,25 @@ const packageVersion = (
 const macOSVersion = macOSBundleVersions(packageVersion);
 const packageMode = resolvePackageMode(process.env.GW_PACKAGE_INTENT);
 const channelConfig = DISTRIBUTION_CHANNEL_CONFIG[packageMode.productChannel];
+const buildingDarwin = process.platform === "darwin";
+
+function packagedExecutablePath(
+  resourcesPath: string,
+  platform: string,
+): string {
+  if (platform === "darwin") {
+    return path.resolve(resourcesPath, "../..", "MacOS", "Electron");
+  }
+  if (platform !== "win32" && platform !== "linux") {
+    throw new Error(`unsupported package platform: ${platform}`);
+  }
+  const suffix = platform === "win32" ? ".exe" : "";
+  return path.resolve(
+    resourcesPath,
+    "..",
+    `${channelConfig.productName}${suffix}`,
+  );
+}
 
 function requiredSigningEnvironment(name: string): string {
   const value = process.env[name];
@@ -33,7 +52,7 @@ function requiredSigningEnvironment(name: string): string {
   return value;
 }
 
-const distributionSigning = packageMode.kind === "signed"
+const distributionSigning = buildingDarwin && packageMode.kind === "signed"
   ? (() => {
       const { channel } = packageMode;
       const identity = requiredSigningEnvironment("APPLE_SIGNING_IDENTITY");
@@ -50,7 +69,7 @@ const distributionSigning = packageMode.kind === "signed"
     })()
   : undefined;
 
-const releaseNotarization = packageMode.intent === "release"
+const releaseNotarization = buildingDarwin && packageMode.intent === "release"
   ? {
       appleApiKey: requiredSigningEnvironment("APPLE_API_KEY_PATH"),
       appleApiKeyId: requiredSigningEnvironment("APPLE_API_KEY_ID"),
@@ -63,7 +82,9 @@ const config: ForgeConfig = {
     // Both are executable code that cannot run from inside the archive: a
     // `.node` addon cannot be dlopen'd from it, and a helper cannot be spawned
     // from it.
-    asar: { unpack: "**/build/native/{host.node,gw-dat-decode}" },
+    asar: {
+      unpack: "**/build/native/{host.node,gw-dat-decode,gw-dat-decode.exe}",
+    },
     name: channelConfig.productName,
     executableName: channelConfig.productName,
     appVersion: macOSVersion.appVersion,
@@ -99,7 +120,7 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerZIP({}, ["darwin"]),
-    ...(packageMode.intent === "release"
+    ...(buildingDarwin && packageMode.intent === "release"
       ? [
           new MakerDMG({
             // appdmg also uses this as the mounted volume name and rejects
@@ -137,8 +158,7 @@ const config: ForgeConfig = {
       platform,
       arch,
     ) => {
-      if (platform !== "darwin") return;
-      if (packageMode.kind === "signed") {
+      if (platform === "darwin" && packageMode.kind === "signed") {
         writeFileSync(
           path.resolve(resourcesPath, "..", "distribution-channel.json"),
           `${JSON.stringify(distributionMarker(packageMode.channel))}\n`,
@@ -146,12 +166,13 @@ const config: ForgeConfig = {
         );
       }
       await flipFuses(
-        path.resolve(resourcesPath, "../..", "MacOS", "Electron"),
+        packagedExecutablePath(resourcesPath, platform),
         {
           version: FuseVersion.V1,
           // Flipping a fuse edits the binary, which invalidates the signature
           // the prebuilt Electron carries and Apple Silicon insists on having.
-          resetAdHocDarwinSignature: arch === "arm64",
+          resetAdHocDarwinSignature:
+            platform === "darwin" && arch === "arm64",
           // A fuse this list has never heard of fails the package rather than
           // taking whichever default a new Electron shipped it with.
           strictlyRequireAllFuses: true,
@@ -169,7 +190,10 @@ const config: ForgeConfig = {
           [FuseV1Options.EnableNodeCliInspectArguments]: false,
           // Gatekeeper checks the bundle seal at first launch; this checks the
           // archive at every one.
-          [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+          // Electron embeds ASAR integrity on macOS and Windows. Linux relies
+          // on the signed Flatpak repository, sandbox, and ASAR-only loading.
+          [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]:
+            platform !== "linux",
           // Otherwise an app/ directory beside the archive is the fallback when
           // app.asar is missing or unreadable, so removing the archive replaces
           // it with code the check above never sees.

@@ -171,7 +171,10 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   assert.match(forge, /GW_PACKAGE_INTENT/);
   assert.doesNotMatch(forge, /GW_PACKAGE_CHANNEL|GW_SIGN_DISTRIBUTION/);
   assert.match(forge, /distribution-channel\.json/);
-  assert.match(forge, /if \(packageMode\.kind === "signed"\)/);
+  assert.match(
+    forge,
+    /if \(platform === "darwin" && packageMode\.kind === "signed"\)/,
+  );
   assert.doesNotMatch(forge, /official-update\.json|GW_OFFICIAL_RELEASE/);
   assert.match(forge, /appBundleId: channelConfig\.bundleId/);
   assert.match(signing, /provisioningProfile: input\.profile/);

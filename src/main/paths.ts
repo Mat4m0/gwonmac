@@ -12,6 +12,7 @@ import path from "node:path";
 import {
   colocatedStorageRoots,
   gamePaths as resolveGamePaths,
+  nativeExecutableName,
   unpackedPath,
 } from "./core/paths.js";
 import type { GamePaths } from "./core/paths.js";
@@ -53,13 +54,13 @@ export function launcherPreloadPath(): string {
  * The packaging rule itself lives in `./core/paths.ts` beside the keychain
  * addon's, because it is the same rule and a test can execute it there.
  */
-export function gwDatDecoderPath(): string {
+export function gwDatDecoderPath(platform = process.platform): string {
   return unpackedPath(
     {
       packaged: app.isPackaged,
       appPath: app.getAppPath(),
       resourcesPath: process.resourcesPath,
     },
-    "build/native/gw-dat-decode",
+    `build/native/${nativeExecutableName("gw-dat-decode", platform)}`,
   );
 }

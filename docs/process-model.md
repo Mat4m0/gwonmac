@@ -334,6 +334,24 @@ screenshots, and chat logs. Two renderers do not mount the same browser store.
 Derived WASM modules and caches are rebuildable. They are never certification
 authority.
 
+### Native package inputs
+
+The Guild Wars archive decoder is an isolated executable built for the package
+host. Windows x64 uses MSVC and an `.exe` suffix; Linux x86_64 uses the system
+C++ compiler; macOS keeps its released Xcode recipe. The decoder never owns a
+credential or an Electron process.
+
+`host.node` remains Darwin-only. It contains the existing AppKit key-release
+monitor and Apple Data Protection Keychain implementation. A Windows or Linux
+build does not load or package this addon. Until that platform has a qualified
+secure provider, persistent saved login fails closed and ordinary development
+uses only the in-memory provider.
+
+Forge applies the complete cross-platform fuse set to every packaged Electron
+executable. Embedded ASAR integrity is enabled on macOS and Windows. Electron
+does not provide that feature on Linux, where repository signatures, the
+Flatpak sandbox, and ASAR-only loading must form the installed package proof.
+
 ## Saved login
 
 The Release and signed Development identities use separate Keychain authority.
