@@ -138,6 +138,7 @@ import {
 } from "./accounts-window.js";
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { GameReloader } from "./game-reload.js";
+import { CharacterSwitchUsageStore } from "./core/character-switch-usage.js";
 import { updateToolsMenuItems } from "./window-menu.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
@@ -710,6 +711,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     : null;
   applyToolsSettings = toolsRuntime?.applySettings ?? null;
   await toolsRuntime?.applySettings(settings);
+  const characterSwitchUsage = new CharacterSwitchUsageStore(paths.characterSwitchUsage);
 
   const ipcCleanup = registerIpcHandlers({
     sockets,
@@ -722,6 +724,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getCacheInfo: () => clientRuntime.cacheInfo(),
     getSettings: () => preferences.getSettings(),
     updateSettings: (patch) => preferences.updateRendererSettings(patch),
+    getCharacterSwitchUsage: () => characterSwitchUsage.get(),
+    recordCharacterSwitchUsage: (characterKey) => characterSwitchUsage.record(characterKey),
     resetSettings: () => toolsRuntime?.resetSettings()
       ?? preferences.resetCoreSettings(),
     setDiagnosticProfile: async (profile) => {

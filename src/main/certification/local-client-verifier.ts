@@ -594,7 +594,8 @@ function deriveEnhancementBuild(
     || requestedCapabilities.teamApply
     || requestedCapabilities.travelAction
     || requestedCapabilities.xunlaiAction
-    || requestedCapabilities.chatAliases;
+    || requestedCapabilities.chatAliases
+    || requestedCapabilities.preGameControls;
   const locatedLocal = wantsLocal
     ? locateAutomaticLocalActions(
         templateOutput,
@@ -650,7 +651,7 @@ function deriveEnhancementBuild(
       : {}),
   });
   const localContributes = includeParty || includeTeam || includeTravel
-    || includeXunlai || includeAliases;
+    || includeXunlai || includeAliases || includePreGame;
   const source = includeCursor
     ? locatedCursor
     : includePlayRegion
@@ -767,7 +768,7 @@ function deriveEnhancementBuild(
       targetObservation: Object.freeze({ layout: locatedTarget.targetLayout }),
     } : {}),
     ...(localContributes ? { uiDispatcher: locatedLocal!.uiDispatcher! } : {}),
-    ...(includeTeam || includeTravel || includeXunlai
+    ...(includeTeam || includeTravel || includeXunlai || includePreGame
       ? { gameThread: locatedLocal!.gameThread! }
       : {}),
     ...(includeTravel ? { travelAction: locatedLocal!.travelAction! } : {}),

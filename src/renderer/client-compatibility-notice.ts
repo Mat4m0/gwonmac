@@ -48,6 +48,7 @@ const PROGRAM_NAMES: Readonly<Record<Exclude<EnhancementProgram, 'none'>, string
     'toolbox-commands': 'Toolbox Commands',
     'xunlai-storage': 'Xunlai Storage',
     'reconnect-probe': 'Reconnect Probe',
+    'character-list-probe': 'Character List Probe',
   });
 
 function unavailableFeatures(compatibility: ClientCompatibility): VisibleFeature[] {

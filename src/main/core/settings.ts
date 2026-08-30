@@ -249,6 +249,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "tradeChat",
     "xunlaiStorage",
     "travelPalette",
+    "characterSwitchDetails",
     "targetReadout",
     "skillKeyLabelsEnabled",
     "skillCooldownOverlayEnabled",

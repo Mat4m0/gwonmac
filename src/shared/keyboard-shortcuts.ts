@@ -3,6 +3,7 @@
  * Main and renderer consume this one model so interception and presentation agree.
  */
 export const SHORTCUT_ACTIONS = [
+  "character.switch",
   "tools.toggle",
   "trade.toggle",
   "storage.open",
@@ -29,6 +30,7 @@ export type ShortcutCaptureResult =
 
 export const DEFAULT_SHORTCUTS: Readonly<Record<ShortcutAction, ShortcutBinding>> =
   Object.freeze({
+    "character.switch": Object.freeze({ key: "r", shift: false, option: false }),
     "tools.toggle": Object.freeze({ key: "b", shift: false, option: false }),
     "trade.toggle": Object.freeze({ key: "k", shift: false, option: false }),
     "storage.open": Object.freeze({ key: "c", shift: true, option: false }),
@@ -37,6 +39,7 @@ export const DEFAULT_SHORTCUTS: Readonly<Record<ShortcutAction, ShortcutBinding>
 
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
+    "character.switch": "Switch Character",
     "tools.toggle": "Build Library",
     "trade.toggle": "Trade Chat",
     "storage.open": "Open Xunlai storage",
@@ -80,6 +83,9 @@ export function resolveShortcuts(
   overrides: ShortcutOverrides,
 ): Readonly<Record<ShortcutAction, ShortcutBinding | null>> {
   return Object.freeze({
+    "character.switch": overrides["character.switch"] === undefined
+      ? DEFAULT_SHORTCUTS["character.switch"]
+      : overrides["character.switch"],
     "tools.toggle": overrides["tools.toggle"] === undefined
       ? DEFAULT_SHORTCUTS["tools.toggle"]
       : overrides["tools.toggle"],
@@ -139,7 +145,7 @@ const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
     option: false,
   })),
   { key: "z", shift: true, option: false },
-  { key: "r", shift: false, option: false },
+  { key: "r", shift: true, option: false },
   // Travel owns Command+1…9 for quick-destination assignment.
   ..."123456789".split("").map((key) => ({
     key,

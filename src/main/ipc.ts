@@ -134,6 +134,10 @@ import {
   submitVisualCapture,
 } from "./visual-capture.js";
 import { parseDiagnosticProfile } from "./core/diagnostic-profile.js";
+import {
+  parseCharacterSwitchUsageRecord,
+  type CharacterSwitchUsageDocument,
+} from "../shared/character-switch-usage.js";
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -146,6 +150,8 @@ export interface IpcContext {
   getCacheInfo: () => Promise<CacheInfo>;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: RendererSettingsPatch) => Promise<AppSettings>;
+  getCharacterSwitchUsage: () => Promise<CharacterSwitchUsageDocument>;
+  recordCharacterSwitchUsage: (characterKey: string) => Promise<CharacterSwitchUsageDocument>;
   setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
   resetSettings: () => Promise<SettingsResetOutcome>;
   /** Whether this process started with every certified Tools capability prepared. */
@@ -516,6 +522,12 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     settingsRestartForTools: channel(nothing, (win) =>
       requestToolsUnloadRestart(win)),
+
+    characterSwitchUsageGet: channel(nothing, () => ctx.getCharacterSwitchUsage()),
+    characterSwitchUsageRecord: channel(
+      one(parseCharacterSwitchUsageRecord),
+      (_win, characterKey) => ctx.recordCharacterSwitchUsage(characterKey),
+    ),
 
     shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
     shortcutCaptureCancel: channel(nothing, (win) => {

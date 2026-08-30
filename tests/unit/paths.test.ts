@@ -27,6 +27,7 @@ describe("resolved profile paths", () => {
       diagnosticProfile: `${root}/diagnostic-profile.json`,
       travelPreferences: `${root}/travel-preferences.json`,
       travelHistory: `${root}/travel-history.json`,
+      characterSwitchUsage: `${root}/character-switch-usage.json`,
       tradeSaved: `${root}/trade-saved.json`,
       buildLibrary: `${root}/build-library.json`,
       windowState: `${root}/window-state.json`,

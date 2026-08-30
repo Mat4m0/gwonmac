@@ -22,6 +22,7 @@ export const ENHANCEMENT_PROGRAMS = [
   "toolbox-commands",
   "xunlai-storage",
   "reconnect-probe",
+  "character-list-probe",
 ] as const;
 
 export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
@@ -114,7 +115,7 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     id: "preGameControls",
     requiresAll: ["playRegionObservation"],
     requiresAny: [],
-    configOwners: [],
+    configOwners: ["character-list"],
     hooks: [],
   },
 ] as const);
@@ -286,7 +287,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 46;
+export const ENHANCEMENT_TRANSFORM_ABI = 48;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,
@@ -325,6 +326,10 @@ export function enhancementCapabilitiesFor(
     // The reload probe needs the same bounded pre-game and play-region readers
     // that required Core installs in production.
     case "reconnect-probe": return ENHANCEMENT_CAPABILITY_PRESETS.reconnect;
+    // The character-list probe adds no production capability. It reuses the
+    // smallest certified Core profile while its developer-only reader observes
+    // account state before and after the playable-world boundary.
+    case "character-list-probe": return ENHANCEMENT_CAPABILITY_PRESETS.reconnect;
   }
 }
 

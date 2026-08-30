@@ -30,6 +30,14 @@ import type {
   PrepareCompanionExtension,
   PreparedCompanionExtension,
 } from "./certified-companion-extension.js";
+import {
+  sameCharacterListPresentation,
+  type CompanionCharacterListState,
+} from "./companion-character-list-snapshot.js";
+import {
+  createCharacterSwitchController,
+  type CharacterSwitchController,
+} from "./character-switch-controller.js";
 
 let coreInstallations = 0;
 
@@ -60,6 +68,9 @@ export async function installCoreCertifiedCompanion(
     | (capabilities.playRegionObservation
       ? COMPANION_FEATURE_BITS.playRegionObservation
       : 0);
+  const characterListFeature = capabilities.preGameControls
+    ? COMPANION_FEATURE_BITS.characterList
+    : 0;
   const manifest = decodeEnhancementManifest(module, capabilities);
   const exports = instance.exports;
   if (
@@ -92,9 +103,18 @@ export async function installCoreCertifiedCompanion(
     && typeof exports.enhancement_pre_game_diagnostic === "function"
     ? exports.enhancement_pre_game_diagnostic as () => number
     : null;
+  const characterActionEnqueue = capabilities.preGameControls
+    && typeof exports.enhancement_character_action === "function"
+    ? exports.enhancement_character_action as (action: number, argument: number) => number
+    : null;
+  const characterActionConfigure = capabilities.preGameControls
+    && typeof exports.enhancement_configure_character_action === "function"
+    ? exports.enhancement_configure_character_action as (payload: number, enabled: number) => number
+    : null;
   if (
     capabilities.preGameControls
-    && (preGameStateReader === null || preGameDiagnosticReader === null)
+    && (preGameStateReader === null || preGameDiagnosticReader === null
+      || characterActionEnqueue === null || characterActionConfigure === null)
   ) {
     throw new Error("the pre-game profile derived a module with incomplete readers");
   }
@@ -113,7 +133,7 @@ export async function installCoreCertifiedCompanion(
   extension = prepareExtension === undefined
     ? null
     : await prepareExtension(exports, capabilities, program);
-  const featureFlags = coreFeatureFlags | (extension?.featureFlags ?? 0);
+  const featureFlags = coreFeatureFlags | characterListFeature | (extension?.featureFlags ?? 0);
   if (featureFlags === 0) return null;
 
   const playRegions = createPlayRegionObservationInstallation(
@@ -127,6 +147,11 @@ export async function installCoreCertifiedCompanion(
   let installedCursorState: NonNullable<typeof window.gwCursorState> | null = null;
   let installedRuntime: object | null = null;
   let installedPreGameControls: PreGameControls | null = null;
+  let installedCharacterListProbe: CharacterListProbe | null = null;
+  let installedCharacterList: CharacterListSource | null = null;
+  let installedCharacterSwitch: CharacterSwitchController | null = null;
+  let detachCharacterSwitch = () => {};
+  let characterActionPointer = 0;
   let cleaned = false;
   let telemetryInstalled = false;
 
@@ -149,6 +174,13 @@ export async function installCoreCertifiedCompanion(
       }
     };
     attempt("extension policy withdrawal", () => extensionSession?.withdrawPolicy());
+    attempt("character-switch withdrawal", () => {
+      detachCharacterSwitch();
+      installedCharacterSwitch?.dispose();
+      if (window.gwCharacterSwitch === installedCharacterSwitch) {
+        window.gwCharacterSwitch = null;
+      }
+    });
     const cursorStateWithdrawn = attempt("cursor state withdrawal", () => {
       if (window.gwCursorState === installedCursorState) delete window.gwCursorState;
     });
@@ -181,6 +213,10 @@ export async function installCoreCertifiedCompanion(
         if (extensionSession) extensionSession.releaseCallbackResources(free);
         else extension?.rollback(free);
       });
+      attempt("character action memory release", () => {
+        if (characterActionPointer !== 0) free(characterActionPointer);
+        characterActionPointer = 0;
+      });
       if (cursorRefreshDisposed) {
         attempt("callback memory release", () => coreMemory?.releaseCallbackMemory());
       }
@@ -194,6 +230,18 @@ export async function installCoreCertifiedCompanion(
       if (window.gwPreGameControls === installedPreGameControls) {
         window.gwPreGameControls = null;
       }
+    });
+    attempt("character-list probe withdrawal", () => {
+      if (window.gwCharacterListProbe === installedCharacterListProbe) {
+        window.gwCharacterListProbe = null;
+      }
+      installedCharacterListProbe?.dispose();
+    });
+    attempt("character-list withdrawal", () => {
+      if (window.gwCharacterList === installedCharacterList) {
+        window.gwCharacterList = null;
+      }
+      installedCharacterList?.dispose();
     });
     if (
       telemetryInstalled
@@ -218,6 +266,17 @@ export async function installCoreCertifiedCompanion(
   };
 
   try {
+    if (program === "character-list-probe") {
+      const { installCharacterListProbe } = await import("./character-list-probe.js");
+      installedCharacterListProbe = installCharacterListProbe(
+        memory,
+        manifest.buildId,
+      );
+      if (installedCharacterListProbe === null) {
+        throw new Error("the exact character-list probe is unavailable");
+      }
+      window.gwCharacterListProbe = installedCharacterListProbe;
+    }
     coreMemory = allocateCompanionCoreMemory({
       memory,
       malloc,
@@ -230,9 +289,16 @@ export async function installCoreCertifiedCompanion(
         commandPayloadBytes: extension?.memoryNeeds.commandPayloadBytes ?? 0,
         professionTrace: extension?.memoryNeeds.professionTrace ?? false,
         professionTraceBytes: extension?.memoryNeeds.professionTraceBytes ?? 0,
+        characterList: capabilities.preGameControls,
       },
     });
     const core = coreMemory;
+    if (capabilities.preGameControls) {
+      characterActionPointer = Number(malloc(40));
+      if (!Number.isInteger(characterActionPointer) || characterActionPointer <= 0) {
+        throw new Error("Character action allocation failed");
+      }
+    }
     playRegions.allocate(malloc);
     extension?.allocate(malloc);
     if (!playRegions.allocated) throw new Error("Companion allocation failed");
@@ -240,6 +306,12 @@ export async function installCoreCertifiedCompanion(
       ...core.regions,
       ...(extension?.ownedRegions() ?? []),
       ...(playRegions.region === null ? [] : [playRegions.region]),
+      ...(characterActionPointer === 0 ? [] : [{
+        name: "character action payload",
+        pointer: characterActionPointer,
+        size: 40,
+        align: 4 as const,
+      }]),
     ], memory.buffer.byteLength);
     core.initialize();
     extension?.initialize(memory);
@@ -257,6 +329,7 @@ export async function installCoreCertifiedCompanion(
         skillSlots: extension?.kernelRegions.skillSlots ?? { pointer: 0, bytes: 0 },
         skillCooldowns: extension?.kernelRegions.skillCooldowns ?? { pointer: 0, bytes: 0 },
         playRegion: { pointer: playRegions.pointer, bytes: playRegions.bytes },
+        characterList: core.characterList,
       },
     });
 
@@ -322,6 +395,7 @@ export async function installCoreCertifiedCompanion(
       skillSlotPointer: extensionSession?.observer.pointers.skillSlots ?? 0,
       skillCooldownPointer: extensionSession?.observer.pointers.skillCooldowns ?? 0,
       playRegionPointer: playRegions.pointer,
+      characterListPointer: core.characterList.pointer,
       hertz: 0,
       lastRenderUs: 0,
       renderSamples: [] as number[],
@@ -335,6 +409,28 @@ export async function installCoreCertifiedCompanion(
         if (cursor?.state.valid) firstObservation("cursor");
       },
     };
+    const characterListeners = new Set<(state: CompanionCharacterListState) => void>();
+    let characterState: CompanionCharacterListState = Object.freeze({
+      status: "waiting", reason: "memory",
+    });
+    installedCharacterList = Object.freeze({
+      get state() { return characterState; },
+      subscribe(listener: (state: CompanionCharacterListState) => void) {
+        characterListeners.add(listener);
+        listener(characterState);
+        return () => characterListeners.delete(listener);
+      },
+      dispose() { characterListeners.clear(); },
+    });
+    window.gwCharacterList = installedCharacterList;
+    const characterConsumer = capabilities.preGameControls ? {
+      update(state: CompanionCharacterListState) {
+        const previous = characterState;
+        characterState = state;
+        if (sameCharacterListPresentation(previous, state)) return;
+        for (const listener of characterListeners) listener(state);
+      },
+    } : null;
     stopObserver = observeCompanion(
       observerRuntime,
       [
@@ -350,6 +446,7 @@ export async function installCoreCertifiedCompanion(
       playRegions.sink,
       extensionSession?.observer.readers ?? null,
       firstObservation,
+      characterConsumer,
     );
 
     const installation = coreInstallations + 1;
@@ -407,6 +504,29 @@ export async function installCoreCertifiedCompanion(
         },
       });
       window.gwPreGameControls = installedPreGameControls;
+    }
+    if (
+      installedPreGameControls
+      && installedCharacterList
+      && characterActionEnqueue
+      && characterActionConfigure
+      && characterActionPointer !== 0
+    ) {
+      new Uint8Array(memory.buffer, characterActionPointer, 40).fill(0);
+      installedCharacterSwitch = createCharacterSwitchController({
+        memory,
+        payloadPointer: characterActionPointer,
+        enqueue: characterActionEnqueue,
+        configure: characterActionConfigure,
+        characters: installedCharacterList,
+        controls: installedPreGameControls,
+        buildId: manifest.buildId,
+        programId: manifest.programId,
+      });
+      window.gwCharacterSwitch = installedCharacterSwitch;
+      detachCharacterSwitch = window.gwCharacterSwitchHost?.attach(
+        installedCharacterSwitch,
+      ) ?? (() => {});
     }
 
     coreInstallations = installation;

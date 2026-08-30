@@ -27,6 +27,11 @@ import {
 } from "./enhancement-travel-command-transform.js";
 import type { EnhancementTransformResolution } from "./enhancement-transform.js";
 import { TRAVEL_DESTINATIONS } from "../../shared/travel-destinations.js";
+import {
+  characterActionConfigure,
+  characterActionDrain,
+  characterActionEnqueue,
+} from "./enhancement-character-switch-transform.js";
 
 const REVIEWED_TRAVEL_MAP_IDS = TRAVEL_DESTINATIONS.map(({ mapId }) => mapId);
 
@@ -49,6 +54,8 @@ export type TransformTypeIndices = Readonly<{
   travelToggle: number | null;
   tradeConfigure: number | null;
   tradeToggle: number | null;
+  characterEnqueue: number | null;
+  characterConfigure: number | null;
 }>;
 
 export type TransformGlobalIndices = Readonly<{
@@ -61,6 +68,10 @@ export type TransformGlobalIndices = Readonly<{
   travelToggle: number;
   tradeEnabled: number;
   tradeToggle: number;
+  characterPayload: number;
+  characterEnabled: number;
+  characterExpectedIndex: number;
+  characterConfirmationAttempts: number;
 }>;
 
 export type TransformRewriteWorkspace = Readonly<{
@@ -71,6 +82,7 @@ export type TransformRewriteWorkspace = Readonly<{
   globalIndices: TransformGlobalIndices;
   traceGlobals: ProfessionTraceGlobals | null;
   uiOriginalIndex: number | null;
+  characterExecuteIndex: number | null;
 }>;
 
 /** Apply only feature-owned rewrites and exports. The generic section assembly
@@ -101,6 +113,7 @@ export function applyFeatureContributions(
     globalIndices,
     traceGlobals,
     uiOriginalIndex,
+    characterExecuteIndex,
   } = workspace;
   const rewriteAliases = (parserOriginalIndex: number): void => {
     const parser = required(storageSlashParserHook, "storage slash parser");
@@ -199,6 +212,15 @@ export function applyFeatureContributions(
             payloadGlobalIndex: globalIndices.travelPayload,
             reviewedMapIds: REVIEWED_TRAVEL_MAP_IDS,
             },
+          )
+        : null,
+      capabilities.preGameControls
+        ? characterActionDrain(
+            globalIndices.commandPending,
+            globalIndices.commandArgumentBase,
+            globalIndices.characterPayload,
+            globalIndices.characterEnabled,
+            required(characterExecuteIndex, "character action executor"),
           )
         : null,
     ),
@@ -310,6 +332,40 @@ export function applyFeatureContributions(
         index: appendFunction(
           required(typeIndices.travelToggle, "travel toggle function type"),
           travelToggleTake(globalIndices.travelToggle),
+        ),
+      },
+    );
+  }
+  if (capabilities.preGameControls) {
+    const action = required(
+      resolution.preGameResolution,
+      "pre-game character action certificate",
+    ).certificate.characterSwitchAction;
+    addedFunctionExports.push(
+      {
+        name: action.enqueueExport,
+        index: appendFunction(
+          required(typeIndices.characterEnqueue, "character enqueue function type"),
+          characterActionEnqueue(
+            globalIndices.commandPending,
+            globalIndices.commandArgumentBase,
+            globalIndices.characterEnabled,
+            globalIndices.characterExpectedIndex,
+            globalIndices.characterConfirmationAttempts,
+          ),
+        ),
+      },
+      {
+        name: action.configureExport,
+        index: appendFunction(
+          required(typeIndices.characterConfigure, "character configure function type"),
+          characterActionConfigure(
+            globalIndices.commandPending,
+            globalIndices.characterPayload,
+            globalIndices.characterEnabled,
+            globalIndices.characterExpectedIndex,
+            globalIndices.characterConfirmationAttempts,
+          ),
         ),
       },
     );

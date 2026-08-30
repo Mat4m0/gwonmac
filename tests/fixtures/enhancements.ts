@@ -289,6 +289,11 @@ export const ADDRESSES = Object.freeze({
   skillSlots: 0xc000,
   skillCooldowns: 0xc100,
   playRegion: 0xc200,
+  characterList: 0xc300,
+  characterArrayPointer: 0xd600,
+  characterArrayCount: 0xd604,
+  selectedCharacterName: 0xd608,
+  characterRecordBuffer: 0x4_0000,
   partyContext: 0xa000,
   partyInfo: 0xa100,
   heroBuffer: 0xa200,
@@ -370,7 +375,7 @@ export const COOLDOWN_CONFIG_START = ENHANCEMENT_LAYOUT_FIELDS.indexOf(
   "skillSlotRecharge",
 );
 
-function setConfigField(
+export function setConfigField(
   config: Uint32Array,
   key: (typeof ENHANCEMENT_LAYOUT_FIELDS)[number],
   value: number,
@@ -437,6 +442,8 @@ export interface KernelOverrides {
   skillCooldownSize?: number;
   playRegionPointer?: number;
   playRegionSize?: number;
+  characterListPointer?: number;
+  characterListSize?: number;
   toolboxSize?: number;
 }
 
@@ -465,6 +472,8 @@ export type KernelInit = (
   skillCooldownSize: number,
   playRegionPointer: number,
   playRegionSize: number,
+  characterListPointer: number,
+  characterListSize: number,
   features: number,
 ) => number;
 export type KernelDispatch = (
@@ -645,6 +654,8 @@ export async function createKernel(
           ?? ((features & FEATURE_PLAY_REGION_OBSERVATION) !== 0
             ? COMPANION_PLAY_REGION_BYTES
             : 0),
+        overrides.characterListPointer ?? 0,
+        overrides.characterListSize ?? 0,
         features,
       );
     },

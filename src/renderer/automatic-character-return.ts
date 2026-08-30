@@ -31,6 +31,7 @@ export type AutomaticCharacterReturn = Readonly<{
   savedCredentialsUnavailable(): void;
   tokenRequested(request: XMLHttpRequest): void;
   clearStatus(): void;
+  cancelForCharacterSwitch(): void;
   dispose(): void;
 }>;
 
@@ -410,6 +411,15 @@ export function installAutomaticCharacterReturn(
     savedCredentialsUnavailable,
     tokenRequested,
     clearStatus,
+    cancelForCharacterSwitch() {
+      if (run && !run.ended) {
+        run.ended = true;
+        if (run.deadlineTimer !== null) clearTimeout(run.deadlineTimer);
+        run.deadlineTimer = null;
+        clearStatus();
+      }
+      dependencies.input()?.cancelAutomaticEnter();
+    },
     dispose() {
       disposed = true;
       cancelReveal();

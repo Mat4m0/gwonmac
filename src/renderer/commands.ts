@@ -108,6 +108,14 @@
         if (result.error !== undefined) throw result.error;
         break;
       }
+      case 'character.toggle': {
+        const result: { error?: unknown } = {};
+        if (!dispatch('gw:character-toggle', result)) {
+          throw new Error('Character switching is not available in this launch.');
+        }
+        if (result.error !== undefined) throw result.error;
+        break;
+      }
       case 'settings.open':
         dispatch('gw:settings', {
           pane: command.pane,

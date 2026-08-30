@@ -139,6 +139,19 @@ cannot be certified.
 
 ## Game integration and optional Tools
 
+Press **Command-R** to open **Switch Character** from a playable outpost. For
+accounts with up to ten characters, choose with the arrow keys, Return, or
+1–9 and 0 for the tenth row. Larger accounts show a search field; an empty
+search lists the ten most-used characters, while typing searches the complete
+live account list. Number shortcuts pause while search text is present. Escape
+clears search first, then closes the palette. The details setting shows
+professions, level, and a location only when it matches Travel's reviewed
+catalogue. **Command-Shift-R** reloads Guild Wars.
+
+Character names and search text are not saved. Successful switches update a
+small ranking document containing only opaque character keys, counts, and
+recency. Failed or cancelled attempts do not change the ranking.
+
 Open **Settings → Tools**.
 
 GWonMac checks each certified game-integration feature after a Guild Wars

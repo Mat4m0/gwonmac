@@ -33,6 +33,10 @@ import type {
   PathingSpikeController,
   WorldMapAnchorSpikeController,
 } from "../shared/cartography-spike.js";
+import type { CharacterListProbeProjection } from "./character-list-probe.js";
+import type { CompanionCharacterListState } from "./companion-character-list-snapshot.js";
+import type { CharacterSwitchHost } from "./character-switch-host.js";
+import type { CharacterSwitchSource } from "./character-switch-palette.js";
 import type {
   InputTrace as SharedInputTrace,
   InputTraceEntry as SharedInputTraceEntry,
@@ -215,6 +219,16 @@ declare global {
     diagnosticMask(): number;
   }
 
+  interface CharacterListProbe {
+    read(): CharacterListProbeProjection;
+    dispose(): void;
+  }
+  interface CharacterListSource {
+    readonly state: CompanionCharacterListState;
+    subscribe(listener: (state: CompanionCharacterListState) => void): () => boolean;
+    dispose(): void;
+  }
+
   interface EnhancementAutomation {
     set(stage: string): void;
     read(): Readonly<{
@@ -289,6 +303,11 @@ declare global {
     }>;
     gwCompanionRuntime?: CompanionDeveloperRuntime | CompanionObserverRuntime | null;
     gwPreGameControls?: PreGameControls | null;
+    gwCharacterList?: CharacterListSource | null;
+    gwCharacterSwitchHost?: CharacterSwitchHost | null;
+    gwCharacterSwitch?: CharacterSwitchSource | null;
+    /** Unpackaged, read-only account-character research projection. */
+    gwCharacterListProbe?: CharacterListProbe | null;
     gwCompanionState?: PublishedCompanionState;
     /** The cursor's bounded presentation state; present once the nativeCursor enhancement installs. */
     gwCursorState?(): Readonly<{

@@ -93,6 +93,7 @@ import type {
   TraderPriceHistoryResult,
   TraderQuoteSnapshot,
 } from "./trade-chat.js";
+import type { CharacterSwitchUsageDocument } from "./character-switch-usage.js";
 
 export { RELEASE_REPO } from "./project-identity.js";
 export { DEFAULT_UPDATE_TRACK, UPDATE_TRACKS };
@@ -412,6 +413,8 @@ export interface AppSettings {
   xunlaiStorage: boolean;
   /** Allow the focused Travel palette and its explicit map command. */
   travelPalette: boolean;
+  /** Show profession, level, and canonically named location in Character Switch. */
+  characterSwitchDetails: boolean;
   /** Ordered destinations for the palette's direct 1–9 shortcuts. */
   travelShortcuts: StoredTravelShortcuts;
   /** Experimental live target distance/range readout. */
@@ -531,6 +534,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tradeChat: true,
   xunlaiStorage: false,
   travelPalette: true,
+  characterSwitchDetails: true,
   travelShortcuts: DEFAULT_STORED_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
@@ -917,6 +921,7 @@ export type RendererCommand =
   | { type: "trade.toggle" }
   | { type: "storage.open" }
   | { type: "travel.toggle" }
+  | { type: "character.toggle" }
   | {
       type: "settings.open";
       pane?: SettingsPane;
@@ -993,6 +998,8 @@ export const CORE_IPC = {
   settingsReset: "gw:settings:reset",
   settingsRestartForTools: "gw:settings:restartForTools",
   settingsEvent: "gw:settings:event",
+  characterSwitchUsageGet: "gw:characterSwitchUsage:get",
+  characterSwitchUsageRecord: "gw:characterSwitchUsage:record",
   shortcutCapture: "gw:shortcuts:capture",
   shortcutCaptureCancel: "gw:shortcuts:captureCancel",
   skillKeyCapture: "gw:skillKeys:capture",
@@ -1179,6 +1186,10 @@ export interface CoreGwNativeApiBase {
     reset(): Promise<SettingsResetOutcome | null>;
     restartForTools(): Promise<boolean>;
     onChange(callback: (settings: AppSettings) => void): () => void;
+  };
+  characterSwitchUsage: {
+    get(): Promise<CharacterSwitchUsageDocument>;
+    record(value: { characterKey: string }): Promise<CharacterSwitchUsageDocument>;
   };
   shortcuts: {
     capture(): Promise<ShortcutCaptureResult>;

@@ -17,7 +17,14 @@ architecture.
 
 Core is required and has no player switch. Optional Tools are off by default.
 The first enable selects a Tools-capable module and requires a restart. The
-current optional features are:
+Current integrated features are:
+
+- **Character Switch** (Core): Command-R opens a compact account-character
+  palette independently of Tools. Accounts above ten characters get bounded
+  name search; smaller accounts retain direct 1–9 and 0 shortcuts. The exact
+  companion projection owns the live records, while a separate document stores
+  only opaque character keys and successful-switch statistics. Reload Guild
+  Wars uses Command-Shift-R.
 
 - **Build Library** (Beta): host-owned build and team authoring. Command-B
   opens it when both Tools Beta and Build Library are enabled, and its Apply

@@ -20,6 +20,7 @@ describe("keyboard shortcuts", () => {
       "tools.toggle": { key: "k", shift: true, option: false },
       "storage.open": null,
     }), {
+      "character.switch": DEFAULT_SHORTCUTS["character.switch"],
       "tools.toggle": { key: "k", shift: true, option: false },
       "trade.toggle": DEFAULT_SHORTCUTS["trade.toggle"],
       "storage.open": null,
@@ -74,6 +75,8 @@ describe("keyboard shortcuts", () => {
     assert.equal(shortcutReserved({ key: "c", shift: true, option: false }), false);
     assert.equal(shortcutReserved({ key: "1", shift: false, option: false }), true);
     assert.equal(shortcutReserved({ key: "0", shift: false, option: false }), false);
+    assert.equal(shortcutReserved({ key: "r", shift: false, option: false }), false);
+    assert.equal(shortcutReserved({ key: "r", shift: true, option: false }), true);
     assert.equal(shortcutConflict(
       "tools.toggle",
       DEFAULT_SHORTCUTS["storage.open"],

@@ -51,7 +51,10 @@ import type { ModuleShape } from "../../src/main/certification/enhancement-evide
 import {
   rewriteTemplateSaveWasm,
 } from "../../src/main/certification/template-save-compat.js";
-import { enhancementCapabilitiesForProfile } from "../../src/shared/enhancement-contracts.js";
+import {
+  ENHANCEMENT_CAPABILITY_PRESETS,
+  enhancementCapabilitiesForProfile,
+} from "../../src/shared/enhancement-contracts.js";
 import { inspectLocalActionRoleCandidates } from "../../src/main/certification/enhancement-local-actions-proof.js";
 import {
   inspectTargetRoleCandidates,
@@ -160,6 +163,12 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     const [profile] = enhancementProfilesForBuild(build);
     return profile ? enhancementCapabilitiesForProfile(profile) : null;
   };
+  const withoutCharacterSwitch = Object.freeze({
+    ...ENHANCEMENT_CAPABILITY_PRESETS.all,
+    preGameControls: false,
+  });
+  const verifyFeatureMutation = (candidate: Uint8Array) =>
+    verifyLocalClientBytes(candidate, withoutCharacterSwitch);
   assert.deepEqual(capabilitiesOf(local), {
     nativeCursor: true,
     targetObservation: true,
@@ -273,7 +282,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     status: "ambiguous",
     candidateCount: 2,
   });
-  const ambiguousTargetVerdict = verifyLocalClientBytes(ambiguousTarget)
+  const ambiguousTargetVerdict = verifyFeatureMutation(ambiguousTarget)
     .featureVerdicts?.targetObservation;
   assert.equal(ambiguousTargetVerdict?.status, "ambiguous");
   if (ambiguousTargetVerdict?.status === "ambiguous") {
@@ -288,7 +297,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     body[27] = body[27]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedAddressReference)), true);
-  const addressDecision = verifyLocalClientBytes(changedAddressReference);
+  const addressDecision = verifyFeatureMutation(changedAddressReference);
   assert.ok(addressDecision.templateSaveBuild);
   assert.ok(addressDecision.enhancementBuild?.cursorEvent);
   assert.equal(addressDecision.enhancementBuild.targetObservation, undefined);
@@ -300,7 +309,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
-    preGameControls: true,
+    preGameControls: false,
   });
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
@@ -320,7 +329,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
-    preGameControls: true,
+    preGameControls: false,
   });
 
   const areaInfo = playRegionLocation.playRegionLayout.areaInfo;
@@ -345,7 +354,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
       true,
       mutation.label,
     );
-    const refusal = verifyLocalClientBytes(changedTargetProof);
+    const refusal = verifyFeatureMutation(changedTargetProof);
     assert.ok(refusal.templateSaveBuild, mutation.label);
     assert.ok(refusal.enhancementBuild?.cursorEvent, mutation.label);
     assert.equal(refusal.enhancementBuild.targetObservation, undefined, mutation.label);
@@ -375,7 +384,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
       true,
       mutation.label,
     );
-    const refusal = verifyLocalClientBytes(changedCursorProof);
+    const refusal = verifyFeatureMutation(changedCursorProof);
     assert.ok(refusal.templateSaveBuild, mutation.label);
     if (mutation.shared) {
       assert.equal(refusal.enhancementBuild, null, mutation.label);
@@ -412,7 +421,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
       body[mutation.offset] = body[mutation.offset]! ^ 1;
     });
     assert.equal(WebAssembly.validate(new Uint8Array(changed)), true, mutation.label);
-    const refusal = verifyLocalClientBytes(changed);
+    const refusal = verifyFeatureMutation(changed);
     const capabilities = capabilitiesOf(refusal)!;
     assert.ok(refusal.enhancementBuild?.cursorEvent, mutation.label);
     assert.ok(refusal.enhancementBuild?.targetObservation, mutation.label);
@@ -427,7 +436,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
       = bodies[travelContext - derived.importCount]![14]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedTravelContext)), true);
-  const changedTravelContextDecision = verifyLocalClientBytes(changedTravelContext);
+  const changedTravelContextDecision = verifyFeatureMutation(changedTravelContext);
   const changedTravelContextCapabilities = capabilitiesOf(changedTravelContextDecision)!;
   assert.equal(changedTravelContextCapabilities.travelAction, false);
   assert.equal(changedTravelContextCapabilities.xunlaiAction, true);
@@ -443,7 +452,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     body[330] = body[330]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedDrain)), true);
-  const changedDrainDecision = verifyLocalClientBytes(changedDrain);
+  const changedDrainDecision = verifyFeatureMutation(changedDrain);
   const drainRefusal = capabilitiesOf(changedDrainDecision)!;
   assert.equal(drainRefusal.travelAction, false);
   assert.equal(drainRefusal.xunlaiAction, false);
@@ -508,7 +517,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     body[6] = body[6]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedDispatcher)), true);
-  const dispatcherRefusal = capabilitiesOf(verifyLocalClientBytes(changedDispatcher))!;
+  const dispatcherRefusal = capabilitiesOf(verifyFeatureMutation(changedDispatcher))!;
   assert.equal(dispatcherRefusal.nativeCursor, true);
   assert.equal(dispatcherRefusal.targetObservation, true);
   assert.equal(dispatcherRefusal.travelAction, false);
@@ -532,7 +541,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
       true,
       mutation.label,
     );
-    const refusal = capabilitiesOf(verifyLocalClientBytes(changedSkillbarProof))!;
+    const refusal = capabilitiesOf(verifyFeatureMutation(changedSkillbarProof))!;
     assert.equal(refusal.partyObservation, false, mutation.label);
     assert.equal(refusal.skillCooldownObservation, false, mutation.label);
     assert.equal(refusal.targetObservation, true, mutation.label);
@@ -545,7 +554,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
       = bodies[8701 - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousSkillbar)), true);
-  const ambiguousSkillbarVerification = verifyLocalClientBytes(ambiguousSkillbar);
+  const ambiguousSkillbarVerification = verifyFeatureMutation(ambiguousSkillbar);
   const ambiguousSkillbarVerdict = ambiguousSkillbarVerification
     .featureVerdicts?.skillCooldownObservation;
   assert.equal(ambiguousSkillbarVerdict?.status, "ambiguous");
@@ -569,7 +578,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedRechargeReader)), true);
   const rechargeRefusal = capabilitiesOf(
-    verifyLocalClientBytes(changedRechargeReader),
+    verifyFeatureMutation(changedRechargeReader),
   )!;
   assert.equal(rechargeRefusal.partyObservation, true);
   assert.equal(rechargeRefusal.skillSlotGeometry, true);
@@ -584,7 +593,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     body[opcode + 1] = body[opcode + 1]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedSkillTimer)), true);
-  const timerRefusal = capabilitiesOf(verifyLocalClientBytes(changedSkillTimer))!;
+  const timerRefusal = capabilitiesOf(verifyFeatureMutation(changedSkillTimer))!;
   assert.equal(timerRefusal.partyObservation, true);
   assert.equal(timerRefusal.skillCooldownObservation, false);
 
@@ -593,7 +602,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   });
   assert.equal(WebAssembly.validate(new Uint8Array(reindexedLocalActions)), true);
   const reindexedCapabilities = capabilitiesOf(
-    verifyLocalClientBytes(reindexedLocalActions),
+    verifyFeatureMutation(reindexedLocalActions),
   )!;
   assert.equal(reindexedCapabilities.travelAction, true);
   assert.equal(reindexedCapabilities.xunlaiAction, true);
@@ -622,7 +631,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   });
   assert.equal(WebAssembly.validate(new Uint8Array(reindexedTravelContext)), true);
   const reindexedTravelContextCapabilities = capabilitiesOf(
-    verifyLocalClientBytes(reindexedTravelContext),
+    verifyFeatureMutation(reindexedTravelContext),
   )!;
   assert.equal(reindexedTravelContextCapabilities.travelAction, true);
   assert.equal(reindexedTravelContextCapabilities.xunlaiAction, true);
@@ -650,7 +659,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
         .set(paddedIndex(destination), mutation.operand);
     });
     assert.equal(WebAssembly.validate(new Uint8Array(retargeted)), true);
-    const capabilities = capabilitiesOf(verifyLocalClientBytes(retargeted))!;
+    const capabilities = capabilitiesOf(verifyFeatureMutation(retargeted))!;
     assert.equal(capabilities.partyObservation, false, mutation.label);
     assert.equal(capabilities.teamApply, false, mutation.label);
     assert.equal(capabilities.travelAction, true, mutation.label);
@@ -661,7 +670,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     bodies[travelProducer - derived.importCount]!.set(paddedIndex(6840), 132);
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedTravelCall)), true);
-  const travelCallRefusal = capabilitiesOf(verifyLocalClientBytes(changedTravelCall))!;
+  const travelCallRefusal = capabilitiesOf(verifyFeatureMutation(changedTravelCall))!;
   assert.equal(travelCallRefusal.travelAction, false);
   assert.equal(travelCallRefusal.xunlaiAction, true);
   assert.equal(travelCallRefusal.chatAliases, true);
@@ -670,7 +679,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     bodies[xunlaiHandler - derived.importCount]!.set(paddedIndex(6840), 98);
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedXunlaiCall)), true);
-  const xunlaiCallRefusal = capabilitiesOf(verifyLocalClientBytes(changedXunlaiCall))!;
+  const xunlaiCallRefusal = capabilitiesOf(verifyFeatureMutation(changedXunlaiCall))!;
   assert.equal(xunlaiCallRefusal.travelAction, true);
   assert.equal(xunlaiCallRefusal.xunlaiAction, false);
   assert.equal(xunlaiCallRefusal.chatAliases, true);
@@ -679,7 +688,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     bodies[311 - derived.importCount] = bodies[travelProducer - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousTravel)), true);
-  const ambiguousTravelDecision = verifyLocalClientBytes(ambiguousTravel);
+  const ambiguousTravelDecision = verifyFeatureMutation(ambiguousTravel);
   const ambiguousTravelRefusal = capabilitiesOf(ambiguousTravelDecision)!;
   assert.deepEqual(inspectLocalActionRoleCandidates(ambiguousTravel)?.travelAction, {
     status: "ambiguous",
@@ -700,7 +709,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
       = bodies[travelContext - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousTravelContext)), true);
-  const ambiguousTravelContextDecision = verifyLocalClientBytes(ambiguousTravelContext);
+  const ambiguousTravelContextDecision = verifyFeatureMutation(ambiguousTravelContext);
   assert.deepEqual(
     inspectLocalActionRoleCandidates(ambiguousTravelContext)?.travelContext,
     { status: "ambiguous", candidateCount: 2 },
@@ -722,7 +731,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     bodies[6840 - derived.importCount] = bodies[uiDispatcher - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousDispatcher)), true);
-  const ambiguousDispatcherDecision = verifyLocalClientBytes(ambiguousDispatcher);
+  const ambiguousDispatcherDecision = verifyFeatureMutation(ambiguousDispatcher);
   const ambiguousDispatcherRefusal = capabilitiesOf(ambiguousDispatcherDecision)!;
   assert.deepEqual(inspectLocalActionRoleCandidates(ambiguousDispatcher)?.uiDispatcher, {
     status: "ambiguous",
@@ -751,7 +760,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     status: "ambiguous",
     candidateCount: 2,
   });
-  const ambiguousXunlaiVerdict = verifyLocalClientBytes(ambiguousXunlai)
+  const ambiguousXunlaiVerdict = verifyFeatureMutation(ambiguousXunlai)
     .featureVerdicts?.xunlaiAction;
   assert.equal(ambiguousXunlaiVerdict?.status, "ambiguous");
   if (ambiguousXunlaiVerdict?.status === "ambiguous") {
@@ -767,7 +776,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     status: "ambiguous",
     candidateCount: 2,
   });
-  const ambiguousAliasesVerdict = verifyLocalClientBytes(ambiguousAliases)
+  const ambiguousAliasesVerdict = verifyFeatureMutation(ambiguousAliases)
     .featureVerdicts?.chatAliases;
   assert.equal(ambiguousAliasesVerdict?.status, "ambiguous");
   if (ambiguousAliasesVerdict?.status === "ambiguous") {
@@ -792,7 +801,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     )?.partyObservation,
     { status: "ambiguous", candidateCount: 2 },
   );
-  const ambiguousPartyVerdict = verifyLocalClientBytes(ambiguousParty)
+  const ambiguousPartyVerdict = verifyFeatureMutation(ambiguousParty)
     .featureVerdicts?.partyObservation;
   assert.equal(ambiguousPartyVerdict?.status, "ambiguous");
   if (ambiguousPartyVerdict?.status === "ambiguous") {
@@ -819,7 +828,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     )?.teamApply,
     { status: "ambiguous", candidateCount: 2 },
   );
-  const ambiguousTeamVerdict = verifyLocalClientBytes(ambiguousTeam)
+  const ambiguousTeamVerdict = verifyFeatureMutation(ambiguousTeam)
     .featureVerdicts?.teamApply;
   assert.equal(ambiguousTeamVerdict?.status, "ambiguous");
   if (ambiguousTeamVerdict?.status === "ambiguous") {
@@ -832,7 +841,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     body[35] = body[35]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedPartyField)), true);
-  const partyRefusal = capabilitiesOf(verifyLocalClientBytes(changedPartyField))!;
+  const partyRefusal = capabilitiesOf(verifyFeatureMutation(changedPartyField))!;
   assert.equal(partyRefusal.nativeCursor, true);
   assert.equal(partyRefusal.targetObservation, true);
   assert.equal(partyRefusal.partyObservation, false);
@@ -846,7 +855,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     body[30] = body[30]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedTeamOpcode)), true);
-  const teamRefusal = capabilitiesOf(verifyLocalClientBytes(changedTeamOpcode))!;
+  const teamRefusal = capabilitiesOf(verifyFeatureMutation(changedTeamOpcode))!;
   assert.equal(teamRefusal.partyObservation, true);
   assert.equal(teamRefusal.teamApply, false);
   assert.equal(teamRefusal.travelAction, true);
@@ -859,7 +868,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedAliasPointer)), true);
   const aliasPointerRefusal = capabilitiesOf(
-    verifyLocalClientBytes(changedAliasPointer),
+    verifyFeatureMutation(changedAliasPointer),
   )!;
   assert.equal(aliasPointerRefusal.chatAliases, false);
   assert.equal(aliasPointerRefusal.travelAction, true);
@@ -885,7 +894,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedTeamConstructor)), true);
   const constructorRefusal = capabilitiesOf(
-    verifyLocalClientBytes(changedTeamConstructor),
+    verifyFeatureMutation(changedTeamConstructor),
   )!;
   assert.equal(constructorRefusal.partyObservation, true);
   assert.equal(constructorRefusal.teamApply, false);

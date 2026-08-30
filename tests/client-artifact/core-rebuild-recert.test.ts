@@ -75,6 +75,16 @@ test("Core proofs survive the retained client rebuild and fail locally", {
     build.preGameControls.layout.frameCount,
     build.preGameControls.layout.frameArray + 8,
   );
+  assert.notEqual(
+    build.preGameControls.characterSwitchAction.frameDispatch.functionIndex,
+    6841,
+    "low frame messages must not use the external API that rejects IDs below FRAME_MSG_EX",
+  );
+  assert.equal(
+    build.preGameControls.characterSwitchAction.frameResolver.functionIndex,
+    6534,
+    "native child and parent IDs must be checked through the client's own ID manager",
+  );
 
   const module = wasmEvidence(bytes)!.moduleView();
   const cursorProducer = build.cursorEvent.producerFunctions[0]!

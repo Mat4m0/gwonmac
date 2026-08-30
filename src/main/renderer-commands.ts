@@ -205,3 +205,9 @@ export async function toggleTravel(win: BrowserWindow): Promise<void> {
   }
   await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
 }
+
+/** Open or close the Core character-switch palette. */
+export async function toggleCharacterSwitch(win: BrowserWindow): Promise<void> {
+  await resetGameInput(win);
+  await sendRendererCommand(win, { type: "character.toggle" });
+}

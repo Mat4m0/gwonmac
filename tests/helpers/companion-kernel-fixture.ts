@@ -90,7 +90,7 @@ export function companionKernelFixture(
   );
   const startFunction = signatures.length;
   const types = [
-    functionType(17, true),
+    functionType(19, true),
     functionType(6, false),
     functionType(0, true),
     functionType(0, false),
@@ -130,8 +130,8 @@ export function companionKernelFixture(
       exportName === "companion_init"
       && options.expectedInitArguments !== undefined
     ) {
-      if (options.expectedInitArguments.length !== 17) {
-        throw new Error("companion fixture init expectation must have 17 words");
+      if (options.expectedInitArguments.length !== 19) {
+        throw new Error("companion fixture init expectation must have 19 words");
       }
       const comparisons = options.expectedInitArguments.flatMap(
         (value, index) => [

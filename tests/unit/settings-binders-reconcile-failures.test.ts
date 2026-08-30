@@ -97,7 +97,7 @@ test("a failed shortcut write reconciles through Settings and leaves capture mod
     await recovery;
     await new Promise<void>((resolve) => setImmediate(resolve));
 
-    assert.equal(row.valueElement.textContent, "⌘B");
+    assert.equal(row.valueElement.textContent, "⌘R");
     assert.equal(row.change.textContent, "Change");
     assert.equal(captureCancellations, 1);
   } finally {

@@ -188,6 +188,10 @@ const api = {
     restartForTools: () => ipcRenderer.invoke(IPC.settingsRestartForTools),
     onChange: (callback) => listen(IPC.settingsEvent, callback),
   },
+  characterSwitchUsage: {
+    get: () => ipcRenderer.invoke(IPC.characterSwitchUsageGet),
+    record: (value) => ipcRenderer.invoke(IPC.characterSwitchUsageRecord, value),
+  },
   shortcuts: {
     capture: () => ipcRenderer.invoke(IPC.shortcutCapture),
     cancelCapture: () => ipcRenderer.invoke(IPC.shortcutCaptureCancel),

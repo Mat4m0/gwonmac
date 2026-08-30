@@ -279,6 +279,7 @@ const candidateSettingsDomains = Array.from(
       tradeChat: cycle(booleanValues, index),
       xunlaiStorage: cycle(booleanValues, index),
       travelPalette: cycle(booleanValues, index + 1),
+      characterSwitchDetails: cycle(booleanValues, index),
       travelShortcuts: cycle(travelShortcutValues, index),
       targetReadout: cycle(booleanValues, index),
       shortcutOverrides: {},
