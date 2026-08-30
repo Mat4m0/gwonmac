@@ -33,6 +33,7 @@ const packageMode = resolvePackageMode(process.env.GW_PACKAGE_INTENT);
 const channelConfig = DISTRIBUTION_CHANNEL_CONFIG[packageMode.productChannel];
 const buildingDarwin = process.platform === "darwin";
 const buildingWindows = process.platform === "win32";
+const buildingLinux = process.platform === "linux";
 
 function packagedExecutablePath(
   resourcesPath: string,
@@ -108,7 +109,13 @@ const config: ForgeConfig = {
     executableName: channelConfig.productName,
     appVersion: macOSVersion.appVersion,
     buildVersion: macOSVersion.buildVersion,
-    icon: path.resolve(buildingWindows ? "assets/AppIcon.ico" : "assets/AppIcon.icns"),
+    icon: path.resolve(
+      buildingWindows
+        ? "assets/AppIcon.ico"
+        : buildingLinux
+          ? "assets/AppIcon.png"
+          : "assets/AppIcon.icns",
+    ),
     appBundleId: channelConfig.bundleId,
     appCategoryType: "public.app-category.games",
     darwinDarkModeSupport: true,
@@ -199,7 +206,7 @@ const config: ForgeConfig = {
       arch,
     ) => {
       if (
-        (platform === "darwin" || platform === "win32")
+        (platform === "darwin" || platform === "win32" || platform === "linux")
         && packageMode.kind === "signed"
       ) {
         writeFileSync(

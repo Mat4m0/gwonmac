@@ -1,0 +1,47 @@
+app-id: io.github.mat4m0.gwonmac
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: "24.08"
+command: gwonmac
+separate-locales: false
+
+# Native Wayland remains a separate qualification target. The first release
+# uses Xwayland because Electron's native Wayland path is still experimental.
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=pulseaudio
+  - --device=dri
+  - --talk-name=org.freedesktop.portal.Secret
+  - --env=ELECTRON_TRASH=gio
+  - --env=XCURSOR_PATH=/run/host/user-share/icons:/run/host/share/icons
+
+modules:
+  - name: gwonmac
+    buildsystem: simple
+    build-commands:
+      - install -d /app/gwonmac /app/bin /app/share/applications /app/share/icons/hicolor/128x128/apps /app/share/metainfo
+      - cp -a "Guild Wars Reforged-linux-x64/." /app/gwonmac/
+      - install -Dm755 packaging/linux/gwonmac /app/bin/gwonmac
+      - install -Dm644 packaging/linux/io.github.mat4m0.gwonmac.desktop /app/share/applications/io.github.mat4m0.gwonmac.desktop
+      - install -Dm644 packaging/linux/io.github.mat4m0.gwonmac.metainfo.xml /app/share/metainfo/io.github.mat4m0.gwonmac.metainfo.xml
+      - install -Dm644 packaging/linux/io.github.mat4m0.gwonmac.png /app/share/icons/hicolor/128x128/apps/io.github.mat4m0.gwonmac.png
+    sources:
+      - type: dir
+        path: ../../out/Guild Wars Reforged-linux-x64
+        dest: Guild Wars Reforged-linux-x64
+      - type: file
+        path: gwonmac
+        dest: packaging/linux
+      - type: file
+        path: io.github.mat4m0.gwonmac.desktop
+        dest: packaging/linux
+      - type: file
+        path: io.github.mat4m0.gwonmac.metainfo.xml
+        dest: packaging/linux
+      - type: file
+        path: io.github.mat4m0.gwonmac.png
+        dest: packaging/linux

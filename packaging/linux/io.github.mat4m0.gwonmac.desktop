@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Guild Wars Reforged
+Comment=Run Guild Wars with profiles and optional Tools
+Exec=gwonmac %U
+Icon=io.github.mat4m0.gwonmac
+Terminal=false
+Categories=Game;
+StartupWMClass=Guild Wars Reforged
+MimeType=x-scheme-handler/gwonmac;

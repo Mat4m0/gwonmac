@@ -1,6 +1,7 @@
 {
   "name": "guild-wars",
   "productName": "Guild Wars Reforged",
+  "desktopName": "io.github.mat4m0.gwonmac.desktop",
   "version": "2026.8.10",
   "private": true,
   "packageManager": "pnpm@11.13.1",

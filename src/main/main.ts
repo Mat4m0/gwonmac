@@ -175,6 +175,7 @@ import {
   WINDOWS_SQUIRREL_FIRST_RUN_GRACE_MS,
   windowsSquirrelFirstRun,
 } from "./windows-squirrel-startup.js";
+import { trustedFlatpakIdentity } from "./linux-flatpak.js";
 
 const windowsSquirrelStartupHandled = process.platform === "win32"
   && handleWindowsSquirrelStartup({
@@ -423,6 +424,14 @@ function packagedDistributionChannel(): DistributionChannel | null {
       process.platform === "win32"
       && windowsNativeHost !== null
       && windowsExecutableTrusted(windowsNativeHost)
+    ) return channel;
+    if (
+      process.platform === "linux"
+      && trustedFlatpakIdentity({
+        info: readFileSync("/.flatpak-info", "utf8"),
+        environmentId: process.env.FLATPAK_ID,
+        expectedId: DISTRIBUTION_CHANNEL_CONFIG[channel].bundleId,
+      })
     ) return channel;
     return null;
   } catch {

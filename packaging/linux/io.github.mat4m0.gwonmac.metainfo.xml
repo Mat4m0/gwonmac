@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.mat4m0.gwonmac</id>
+  <name>Guild Wars Reforged</name>
+  <summary>Run Guild Wars with profiles and optional Tools</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <description>
+    <p>
+      Guild Wars Reforged is an unofficial community launcher for Guild Wars.
+      It manages game files, account profiles, and optional Tools in one place.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.mat4m0.gwonmac.desktop</launchable>
+  <url type="homepage">https://gwonmac.com</url>
+  <url type="bugtracker">https://github.com/Mat4m0/gwonmac/issues</url>
+  <developer id="io.github.mat4m0">
+    <name>gwonmac contributors</name>
+  </developer>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="2026.8.10" date="2026-08-31" />
+  </releases>
+</component>
