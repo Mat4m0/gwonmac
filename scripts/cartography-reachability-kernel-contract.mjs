@@ -19,7 +19,9 @@ export function validateCartographyReachabilityKernelContract(binary) {
   assert.deepEqual(
     WebAssembly.Module.customSections(module, "dylink.0")
       .map((value) => [...new Uint8Array(value)]),
-    [[1, 4, 8, 2, 0, 0]],
+    // Two resource-generation words plus seven words that own the cached
+    // reachable component. The cache is private to the sealed kernel.
+    [[1, 4, 36, 2, 0, 0]],
     "reachability kernel private footprint changed",
   );
   assert.deepEqual(

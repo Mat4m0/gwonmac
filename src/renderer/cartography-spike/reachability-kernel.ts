@@ -43,6 +43,23 @@ export type CartographyReachabilitySnapshot = Readonly<{
   }>;
 }>;
 
+export type CartographyReachabilityDiagnostic = Readonly<{
+  status: number;
+  sequence: number;
+  mapId: number;
+  areaEpoch: number;
+  layoutId: number;
+  width: number;
+  height: number;
+  resourceGeneration: number;
+  totalTrapezoids: number;
+  reachableTrapezoids: number;
+  groundCells: number;
+  doorwayCount: number;
+  terrainWidth: number;
+  terrainHeight: number;
+}>;
+
 export type CartographyReachabilityController = Readonly<{
   classify(input: Readonly<{
     layoutId: CartographyMemoryLayoutId;
@@ -59,6 +76,7 @@ export type CartographyReachabilityController = Readonly<{
     mapMaxY: number;
     revealRadius: 1 | 3;
   }>): CartographyReachabilitySnapshot | null;
+  diagnostic(): CartographyReachabilityDiagnostic | null;
   dispose(): void;
 }>;
 
@@ -181,6 +199,39 @@ function decode(
   });
 }
 
+function diagnostic(
+  memory: WebAssembly.Memory,
+  region: number,
+): CartographyReachabilityDiagnostic | null {
+  if (region + HEADER_BYTES > memory.buffer.byteLength) return null;
+  const header = new DataView(memory.buffer, region, HEADER_BYTES);
+  const first = header.getUint32(12, true);
+  if (
+    (first & 1) !== 0
+    || header.getUint32(0, true) !== MAGIC
+    || header.getUint32(4, true) !== CARTOGRAPHY_REACHABILITY_ABI
+    || header.getUint32(8, true) !== CARTOGRAPHY_REACHABILITY_REGION_BYTES
+  ) return null;
+  const result = Object.freeze({
+    status: header.getUint32(16, true),
+    sequence: first,
+    mapId: header.getUint32(20, true),
+    areaEpoch: header.getUint32(24, true),
+    layoutId: header.getUint32(28, true),
+    width: header.getUint32(32, true),
+    height: header.getUint32(36, true),
+    resourceGeneration: header.getUint32(40, true),
+    totalTrapezoids: header.getUint32(44, true),
+    reachableTrapezoids: header.getUint32(48, true),
+    groundCells: header.getUint32(52, true),
+    doorwayCount: header.getUint32(56, true),
+    terrainWidth: header.getUint32(60, true),
+    terrainHeight: header.getUint32(64, true),
+  });
+  const second = new DataView(memory.buffer, region, HEADER_BYTES).getUint32(12, true);
+  return first === second && (second & 1) === 0 ? result : null;
+}
+
 export async function installCartographyReachabilityKernel(
   exports: WebAssembly.Exports,
 ): Promise<CartographyReachabilityController> {
@@ -253,6 +304,7 @@ export async function installCartographyReachabilityKernel(
       || bytes() !== CARTOGRAPHY_REACHABILITY_REGION_BYTES
     ) throw new Error("Cartography reachability kernel rejected its ABI");
     const classify = instance.exports.cartography_reachability_classify as Classify;
+    let lastDiagnostic: CartographyReachabilityDiagnostic | null = null;
     return Object.freeze({
       classify(input) {
         if (disposed) return null;
@@ -273,8 +325,10 @@ export async function installCartographyReachabilityKernel(
           input.mapMaxY,
           input.revealRadius,
         );
+        lastDiagnostic = diagnostic(memory, output.pointer);
         return decode(memory, output.pointer, input.mapMinX, input.mapMinY);
       },
+      diagnostic: () => lastDiagnostic,
       dispose() {
         if (disposed) return;
         disposed = true;

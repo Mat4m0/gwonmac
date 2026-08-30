@@ -9,6 +9,7 @@ import type { PublishedCompanionState } from "../../src/renderer/companion-snaps
 import {
   bitsetHasCell,
   readCartographyModel,
+  readCartographyPresentation,
   type CartographyModelSources,
   type GridCell,
 } from "../../src/renderer/cartography-spike/cartography-model.js";
@@ -123,6 +124,7 @@ function sources(
   };
   const kernel: CartographyReachabilityController = {
     classify: () => kernelResult,
+    diagnostic: () => null,
     dispose: () => undefined,
   };
   return {
@@ -194,4 +196,15 @@ test("semantic bitsets are not interchangeable", () => {
   // @ts-expect-error Reachable input cannot masquerade as derived actionability.
   const actionable: typeof model.actionableCells = model.reachableCells;
   assert.notEqual(actionable, model.actionableCells);
+});
+
+test("refreshes frame-sensitive presentation without rerunning classification", () => {
+  const model = readCartographyModel(sources());
+  assert.equal(model.status, "ready");
+  const current = {
+    ...sources(),
+    companion: () => Object.freeze({ ...COMPANION, playerX: 99 }),
+  };
+  const presentation = readCartographyPresentation(model, current);
+  assert.deepEqual(presentation.player, { x: 99, y: 20 });
 });

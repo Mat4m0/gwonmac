@@ -18,6 +18,7 @@ const A = Object.freeze({
   agents: 0x16_000,
   player: 0x17_000,
   traps: 0x18_000,
+  nodes: 0x18_800,
   blocked: 0x19_000,
   portals: 0x1a_000,
   portalPair: 0x1b_000,
@@ -120,6 +121,9 @@ async function createKernel(): Promise<Kernel> {
   trap(view, 0, 180, 25, [1]);
   trap(view, 1, 181, 25, [0]);
   trap(view, 2, 185, 25);
+  view.setUint32(A.maps + 0x44, A.nodes, true);
+  view.setUint32(A.nodes, 2, true);
+  view.setUint32(A.nodes + 0x08, A.traps, true);
   const classify = instance.exports.cartography_reachability_classify as (
     ...args: number[]
   ) => number;
@@ -172,6 +176,9 @@ function addPairedPortal(kernel: Kernel, flags = 0, blocked = false): void {
   view.setUint32(secondMap + 0x14, 1, true);
   view.setUint32(secondMap + 0x18, A.traps + 3 * 0x30, true);
   trap(view, 3, 184, 25);
+  view.setUint32(secondMap + 0x44, A.nodes + 0x10, true);
+  view.setUint32(A.nodes + 0x10, 2, true);
+  view.setUint32(A.nodes + 0x18, A.traps + 3 * 0x30, true);
 
   view.setUint32(A.maps + 0x3c, 1, true);
   view.setUint32(A.maps + 0x40, A.portals, true);
@@ -284,9 +291,37 @@ describe("Cartography reachability kernel", () => {
 
   it("fails closed when no certified player start trapezoid exists", async () => {
     const kernel = await createKernel();
-    kernel.view.setFloat32(A.player + 0x74, 10, true);
-    kernel.view.setFloat32(A.player + 0x78, 10, true);
+    kernel.view.setUint32(A.maps + 0x44, 0, true);
     assert.equal(kernel.classify(), 5);
     assert.equal([...kernel.words()].every((word) => word === 0), true);
+  });
+
+  it("retains one certified component through a transient missing start", async () => {
+    const kernel = await createKernel();
+    assert.equal(kernel.classify(), 1);
+    const before = kernel.words();
+    kernel.view.setUint32(A.maps + 0x44, 0, true);
+    assert.equal(kernel.classify(), 1);
+    assert.deepEqual(kernel.words(), before);
+  });
+
+  it("recomputes when the player reaches a different component", async () => {
+    const kernel = await createKernel();
+    assert.equal(kernel.classify(), 1);
+    kernel.view.setUint32(A.nodes + 0x08, A.traps + 2 * 0x30, true);
+    assert.equal(kernel.classify(), 1);
+    const words = kernel.words();
+    assert.equal(bit(words, 180, 25), false);
+    assert.equal(bit(words, 185, 25), true);
+  });
+
+  it("recomputes when blocked planes change", async () => {
+    const kernel = await createKernel();
+    addPairedPortal(kernel);
+    assert.equal(kernel.classify(), 1);
+    assert.equal(bit(kernel.words(), 184, 25), true);
+    kernel.view.setUint32(A.blocked + 4, 1, true);
+    assert.equal(kernel.classify(), 1);
+    assert.equal(bit(kernel.words(), 184, 25), false);
   });
 });

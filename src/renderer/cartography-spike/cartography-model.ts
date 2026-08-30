@@ -73,6 +73,12 @@ export type CartographyModel =
       }>;
     }>;
 
+export type CartographyPresentation = Readonly<{
+  player: GamePoint | null;
+  compass: ReturnType<CompassFrameSpikeController["snapshot"]>;
+  missionMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
+}>;
+
 export type CartographyCorrection = "include" | "exclude" | null;
 
 export type CartographyModelSources = Readonly<{
@@ -211,6 +217,31 @@ export function readCartographyModel(sources: CartographyModelSources): Cartogra
       compass: compass?.generation === contextA.areaEpoch ? compass : null,
       missionMap: missionMap?.generation === contextA.areaEpoch ? missionMap : null,
     }),
+  });
+}
+
+/**
+ * Read only the cheap, frame-sensitive presentation state. Classification is
+ * deliberately excluded so movement, rotation, pan, and zoom can follow the
+ * display refresh rate without rerunning the native kernel.
+ */
+export function readCartographyPresentation(
+  model: CartographyModel,
+  sources: CartographyModelSources,
+): CartographyPresentation {
+  if (model.status !== "ready") {
+    return Object.freeze({ player: null, compass: null, missionMap: null });
+  }
+  const companion = sources.companion();
+  const player = companion?.status === "ready" && companion.mapId === model.epoch.mapId
+    ? Object.freeze({ x: companion.playerX, y: companion.playerY })
+    : null;
+  const compass = sources.compass.snapshot();
+  const missionMap = sources.missionMap.snapshot();
+  return Object.freeze({
+    player,
+    compass: compass?.generation === model.epoch.area ? compass : null,
+    missionMap: missionMap?.generation === model.epoch.area ? missionMap : null,
   });
 }
 

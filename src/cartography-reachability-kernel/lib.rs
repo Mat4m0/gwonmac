@@ -57,6 +57,8 @@ const MAP_CONTEXT_MAP_ID: u32 = 0x8c;
 const PATHING_MAP_BYTES: u32 = 0x54;
 const TRAP_BYTES: u32 = 0x30;
 const PORTAL_BYTES: u32 = 0x14;
+const ROOT_NODE: u32 = 0x44;
+const MAX_NODE_STEPS: u32 = 50_000;
 const GAME_UNITS_PER_MAP_UNIT: f32 = 96.0;
 const MAP_UNITS_PER_CELL: f32 = 32.0;
 const GAME_UNITS_PER_CELL: f32 = GAME_UNITS_PER_MAP_UNIT * MAP_UNITS_PER_CELL;
@@ -202,7 +204,10 @@ unsafe fn resolve_layout(
     let player_x = unsafe { f32_at(add(agent, 0x74)?)? };
     let player_y = unsafe { f32_at(add(agent, 0x78)?)? };
     let player_plane = unsafe { u32_at(add(agent, 0x7c)?)? };
-    if !player_x.is_finite() || !player_y.is_finite() || player_plane >= map_count {
+    // The game may publish an out-of-range plane while the player stands in a
+    // portal seam. GWToolbox treats the plane as a hint and searches every
+    // valid map plane when that happens, so retain it for the bounded fallback.
+    if !player_x.is_finite() || !player_y.is_finite() {
         return None;
     }
     Some(Context {
@@ -289,19 +294,49 @@ unsafe fn trap_values(trap: u32) -> Option<[f32; 6]> {
     values.iter().all(|value| value.is_finite()).then_some(values)
 }
 
-unsafe fn contains_point(trap: u32, x: f32, y: f32) -> bool {
-    let Some([xtl, xtr, yt, xbl, xbr, yb]) = (unsafe { trap_values(trap) }) else {
-        return false;
-    };
-    let low_y = yt.min(yb);
-    let high_y = yt.max(yb);
-    if y < low_y || y > high_y || (yt - yb).abs() < 1e-6 {
-        return false;
+/**
+ * Resolve the game's pathing sink for one plane through its bounded BSP tree.
+ * This deliberately matches GWToolbox++ FindTrapezoid instead of testing the
+ * rendered polygon. Near map borders the game can assign the player to a sink
+ * whose polygon edge differs by floating-point noise from the agent position.
+ */
+unsafe fn find_trapezoid(map: u32, x: f32, y: f32) -> Option<u32> {
+    let mut node = unsafe { pointer_at(add(map, ROOT_NODE)?, 8)? };
+    for _ in 0..MAX_NODE_STEPS {
+        let kind = unsafe { u32_at(node)? };
+        node = match kind {
+            // XNode: choose a side of the directed partition line.
+            0 => {
+                if !contains(node, 0x20) { return None; }
+                let pos_x = unsafe { f32_at(add(node, 0x08)?)? };
+                let pos_y = unsafe { f32_at(add(node, 0x0c)?)? };
+                let dir_x = unsafe { f32_at(add(node, 0x10)?)? };
+                let dir_y = unsafe { f32_at(add(node, 0x14)?)? };
+                if ![pos_x, pos_y, dir_x, dir_y].iter().all(|value| value.is_finite()) {
+                    return None;
+                }
+                let child = if (y - pos_y) * dir_x - (x - pos_x) * dir_y >= 0.0 {
+                    add(node, 0x1c)?
+                } else {
+                    add(node, 0x18)?
+                };
+                unsafe { pointer_at(child, 8)? }
+            }
+            // YNode: equality is owned by the side selected from X.
+            1 => {
+                if !contains(node, 0x18) { return None; }
+                let pos_x = unsafe { f32_at(add(node, 0x08)?)? };
+                let pos_y = unsafe { f32_at(add(node, 0x0c)?)? };
+                if !pos_x.is_finite() || !pos_y.is_finite() { return None; }
+                let above = y > pos_y || (y == pos_y && x >= pos_x);
+                unsafe { pointer_at(add(node, if above { 0x10 } else { 0x14 })?, 8)? }
+            }
+            // SinkNode owns the exact trapezoid selected by the client.
+            2 => return unsafe { pointer_at(add(node, 0x08)?, TRAP_BYTES) },
+            _ => return None,
+        };
     }
-    let ratio = (y - yb) / (yt - yb);
-    let left = xbl + (xtl - xbl) * ratio;
-    let right = xbr + (xtr - xbr) * ratio;
-    x >= left.min(right) && x <= left.max(right)
+    None
 }
 
 fn locate(planes: &[Plane; MAX_PLANES], plane_count: u32, trap: u32) -> Option<(u32, u32)> {
@@ -746,6 +781,51 @@ unsafe fn rasterize_terrain(
 static mut RESOURCE_POINTER: u32 = 0;
 static mut RESOURCE_GENERATION: u32 = 0;
 
+#[derive(Clone, Copy)]
+struct ReachabilityCache {
+    resource: u32,
+    map_id: u32,
+    area_epoch: u32,
+    blocked_fingerprint: u32,
+    total_traps: u32,
+    reachable_traps: u32,
+    doorway_count: u32,
+}
+
+impl ReachabilityCache {
+    const EMPTY: Self = Self {
+        resource: 0,
+        map_id: 0,
+        area_epoch: 0,
+        blocked_fingerprint: 0,
+        total_traps: 0,
+        reachable_traps: 0,
+        doorway_count: 0,
+    };
+}
+
+static mut REACHABILITY_CACHE: ReachabilityCache = ReachabilityCache::EMPTY;
+
+unsafe fn blocked_fingerprint(context: Context) -> Result<u32, u32> {
+    let (buffer, count) = unsafe {
+        array(
+            add(context.path, BLOCKED_PLANES).ok_or(STATUS_UNAVAILABLE)?,
+            4,
+            MAX_PLANES as u32,
+        )
+        .ok_or(STATUS_UNAVAILABLE)?
+    };
+    let mut fingerprint = 0x811c_9dc5_u32;
+    for index in 0..count {
+        let value = unsafe {
+            u32_at(indexed(buffer, index, 4).ok_or(STATUS_UNAVAILABLE)?)
+                .ok_or(STATUS_UNAVAILABLE)?
+        };
+        fingerprint = fingerprint.wrapping_mul(0x0100_0193) ^ value;
+    }
+    Ok(fingerprint.wrapping_mul(0x0100_0193) ^ count)
+}
+
 unsafe fn publish(
     region: u32,
     status: u32,
@@ -790,7 +870,7 @@ unsafe fn classify(
     region: u32,
     layout_id: u32,
     map_id: u32,
-    _area_epoch: u32,
+    area_epoch: u32,
     player_id: u32,
     anchor_x: f32,
     anchor_y: f32,
@@ -810,51 +890,96 @@ unsafe fn classify(
         }
     }
     let (planes, total_traps) = unsafe { load_planes(context)? };
-    unsafe {
-        clear_words(region, VISITED_BITS, VISITED_WORDS);
-        clear_words(region, CELL_BITS, CELL_WORDS);
-    }
-    let doorway_count = unsafe { build_doorways(region, context)? };
+    let blocked_fingerprint = unsafe { blocked_fingerprint(context)? };
     let mut start = None;
-    for pass in 0..context.map_count + 1 {
-        let plane_index = if pass == 0 { context.player_plane } else { pass - 1 };
-        if pass > 0 && plane_index == context.player_plane { continue; }
-        let plane = unsafe { *planes.get_unchecked(plane_index as usize) };
-        for index in 0..plane.trap_count {
-            let trap = indexed(plane.traps, index, TRAP_BYTES).ok_or(STATUS_UNAVAILABLE)?;
-            if unsafe { contains_point(trap, context.player_x, context.player_y) } {
+    let has_player_plane = context.player_plane < context.map_count;
+    let passes = context.map_count + u32::from(has_player_plane);
+    for pass in 0..passes {
+        let plane_index = if has_player_plane && pass == 0 {
+            context.player_plane
+        } else if has_player_plane {
+            pass - 1
+        } else {
+            pass
+        };
+        if has_player_plane && pass > 0 && plane_index == context.player_plane { continue; }
+        let map = indexed(context.map_buffer, plane_index, PATHING_MAP_BYTES)
+            .ok_or(STATUS_UNAVAILABLE)?;
+        if let Some(trap) = unsafe {
+            find_trapezoid(map, context.player_x, context.player_y)
+        } {
+            // The sink must still belong to the certified plane array before
+            // it can enter the bounded flood queue.
+            if locate(&planes, context.map_count, trap)
+                .is_some_and(|(actual_plane, _)| actual_plane == plane_index)
+            {
                 start = Some((trap, plane_index));
                 break;
             }
         }
-        if start.is_some() { break; }
     }
-    let (start_trap, start_plane) = start.ok_or(STATUS_NO_START)?;
-    let mut tail = 0_u32;
-    unsafe { enqueue(region, &planes, context.map_count, start_trap, start_plane, &mut tail)? };
-    let mut head = 0_u32;
-    while head < tail {
-        let trap = unsafe { u32_at(add(region, QUEUE_POINTERS + head * 4).ok_or(STATUS_LIMIT)?).ok_or(STATUS_UNAVAILABLE)? };
-        let plane_index = unsafe { u32_at(add(region, QUEUE_PLANES + head * 4).ok_or(STATUS_LIMIT)?).ok_or(STATUS_UNAVAILABLE)? };
-        let from = unsafe { centre(trap).ok_or(STATUS_UNAVAILABLE)? };
-        for field in [0x04_u32, 0x08, 0x0c, 0x10] {
-            let Some(adjacent) = (unsafe { pointer_at(add(trap, field).ok_or(STATUS_UNAVAILABLE)?, TRAP_BYTES) }) else {
-                continue;
-            };
-            let to = unsafe { centre(adjacent).ok_or(STATUS_UNAVAILABLE)? };
-            if unsafe { crosses_doorway(region, doorway_count, from, to) } { continue; }
-            unsafe { enqueue(region, &planes, context.map_count, adjacent, plane_index, &mut tail)? };
-        }
-        let left = unsafe { u16_at(add(trap, 0x14).ok_or(STATUS_UNAVAILABLE)?).ok_or(STATUS_UNAVAILABLE)? };
-        let right = unsafe { u16_at(add(trap, 0x16).ok_or(STATUS_UNAVAILABLE)?).ok_or(STATUS_UNAVAILABLE)? };
+    let cache = unsafe { REACHABILITY_CACHE };
+    let cache_matches = cache.resource == context.resource
+        && cache.map_id == map_id
+        && cache.area_epoch == area_epoch
+        && cache.blocked_fingerprint == blocked_fingerprint
+        && cache.total_traps == total_traps
+        && cache.reachable_traps > 0;
+    // The client can briefly publish a position outside every pathing sink at
+    // terrain seams. Keep the already-certified component while every owner
+    // key is unchanged. A valid start outside it is a real component change.
+    let reuse = cache_matches && start.is_none_or(|(trap, _)| {
+        locate(&planes, context.map_count, trap)
+            .and_then(|(_, global_index)| unsafe { bit(region, VISITED_BITS, global_index) })
+            .unwrap_or(false)
+    });
+    let (tail, doorway_count) = if reuse {
+        (cache.reachable_traps, cache.doorway_count)
+    } else {
+        let (start_trap, start_plane) = start.ok_or(STATUS_NO_START)?;
         unsafe {
-            expand_portal(region, context, &planes, plane_index, left, from, doorway_count, &mut tail)?;
-            if right != left {
-                expand_portal(region, context, &planes, plane_index, right, from, doorway_count, &mut tail)?;
-            }
+            clear_words(region, VISITED_BITS, VISITED_WORDS);
         }
-        head += 1;
-    }
+        let doorway_count = unsafe { build_doorways(region, context)? };
+        let mut tail = 0_u32;
+        unsafe { enqueue(region, &planes, context.map_count, start_trap, start_plane, &mut tail)? };
+        let mut head = 0_u32;
+        while head < tail {
+            let trap = unsafe { u32_at(add(region, QUEUE_POINTERS + head * 4).ok_or(STATUS_LIMIT)?).ok_or(STATUS_UNAVAILABLE)? };
+            let plane_index = unsafe { u32_at(add(region, QUEUE_PLANES + head * 4).ok_or(STATUS_LIMIT)?).ok_or(STATUS_UNAVAILABLE)? };
+            let from = unsafe { centre(trap).ok_or(STATUS_UNAVAILABLE)? };
+            for field in [0x04_u32, 0x08, 0x0c, 0x10] {
+                let Some(adjacent) = (unsafe { pointer_at(add(trap, field).ok_or(STATUS_UNAVAILABLE)?, TRAP_BYTES) }) else {
+                    continue;
+                };
+                let to = unsafe { centre(adjacent).ok_or(STATUS_UNAVAILABLE)? };
+                if unsafe { crosses_doorway(region, doorway_count, from, to) } { continue; }
+                unsafe { enqueue(region, &planes, context.map_count, adjacent, plane_index, &mut tail)? };
+            }
+            let left = unsafe { u16_at(add(trap, 0x14).ok_or(STATUS_UNAVAILABLE)?).ok_or(STATUS_UNAVAILABLE)? };
+            let right = unsafe { u16_at(add(trap, 0x16).ok_or(STATUS_UNAVAILABLE)?).ok_or(STATUS_UNAVAILABLE)? };
+            unsafe {
+                expand_portal(region, context, &planes, plane_index, left, from, doorway_count, &mut tail)?;
+                if right != left {
+                    expand_portal(region, context, &planes, plane_index, right, from, doorway_count, &mut tail)?;
+                }
+            }
+            head += 1;
+        }
+        unsafe {
+            REACHABILITY_CACHE = ReachabilityCache {
+                resource: context.resource,
+                map_id,
+                area_epoch,
+                blocked_fingerprint,
+                total_traps,
+                reachable_traps: tail,
+                doorway_count,
+            };
+        }
+        (tail, doorway_count)
+    };
+    unsafe { clear_words(region, CELL_BITS, CELL_WORDS) };
     let ground_cells = unsafe {
         rasterize(region, tail, anchor_x, anchor_y, width, height, reveal_radius)?
     };
