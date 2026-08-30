@@ -12,6 +12,7 @@ on:
       - "scripts/platform-storage-probe.ts"
       - "scripts/windows-credential-probe.ts"
       - "scripts/windows-icon.ts"
+      - "scripts/windows-installed-qualification.ts"
       - "scripts/windows-package-probe.ts"
       - "forge.config.ts"
       - "src/**"
@@ -84,3 +85,6 @@ jobs:
           if ($signature.Status -ne "NotSigned") {
             throw "Local package unexpectedly has status $($signature.Status)"
           }
+      - name: Qualify the installed Windows package
+        if: runner.os == 'Windows'
+        run: pnpm test:windows-installed

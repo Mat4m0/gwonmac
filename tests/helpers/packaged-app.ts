@@ -7,6 +7,8 @@ import type { ProfileId } from "../../src/shared/multiple-accounts.ts";
 export interface RunningPackagedApp {
   readonly browser: Browser;
   readonly child: ChildProcess;
+  /** Bounded stdout/stderr retained for installed-package failure evidence. */
+  readonly output: () => string;
   /** Present only for the unified launcher-first application. */
   readonly launcherPage: Page | null;
   readonly page: Page;
@@ -15,9 +17,13 @@ export interface RunningPackagedApp {
 export interface PackagedAppLaunch {
   readonly appPath: string;
   readonly productName: string;
+  /** Exact executable for installed Windows/Linux packages. */
+  readonly executablePath?: string;
   readonly userData: string;
   readonly environment?: Readonly<Record<string, string>>;
   readonly arguments?: readonly string[];
+  /** Use the package's native platform roots instead of a user-data override. */
+  readonly useDefaultUserData?: boolean;
   /** Open the first active profile when the packaged app starts on the launcher. */
   readonly openFirstProfile?: boolean;
 }
@@ -120,16 +126,22 @@ export async function openPackagedProfile(
 export async function launchPackagedApp(
   options: PackagedAppLaunch,
 ): Promise<RunningPackagedApp> {
-  const executablePath = path.join(
+  const executablePath = options.executablePath ?? path.join(
     options.appPath,
     `Contents/MacOS/${options.productName}`,
   );
   const activePort = path.join(options.userData, "DevToolsActivePort");
   await rm(activePort, { force: true });
+  let capturedOutput = "";
+  const capture = (chunk: Buffer) => {
+    capturedOutput = `${capturedOutput}${chunk.toString("utf8")}`.slice(-65_536);
+  };
   const child = spawn(
     executablePath,
     [
-      `--user-data-dir=${options.userData}`,
+      ...(options.useDefaultUserData === true
+        ? []
+        : [`--user-data-dir=${options.userData}`]),
       "--remote-debugging-address=127.0.0.1",
       "--remote-debugging-port=0",
       ...(options.arguments ?? []),
@@ -144,13 +156,18 @@ export async function launchPackagedApp(
         GW_BACKGROUND_LAUNCH: "1",
         ...options.environment,
       },
-      stdio: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
     },
   );
+  child.stdout?.on("data", capture);
+  child.stderr?.on("data", capture);
   try {
     const port = await waitUntil("the packaged app DevTools port", async () => {
       if (child.exitCode !== null) {
-        throw new Error(`packaged app exited with code ${child.exitCode}`);
+        const detail = capturedOutput.trim();
+        throw new Error(
+          `packaged app exited with code ${child.exitCode}${detail ? `\n${detail}` : ""}`,
+        );
       }
       try {
         return (await readFile(activePort, "utf8")).split("\n", 1)[0] ?? null;
@@ -171,6 +188,7 @@ export async function launchPackagedApp(
     const running: RunningPackagedApp = {
       browser,
       child,
+      output: () => capturedOutput,
       launcherPage,
       page: firstPage,
     };
