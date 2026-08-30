@@ -30,6 +30,7 @@ export function ignorePackageFile(file: string): boolean {
   if (
     p === "/build/native"
     || p === "/build/native/host.node"
+    || p === "/build/native/windows-host.node"
     || p === "/build/native/gw-dat-decode"
     || p === "/build/native/gw-dat-decode.exe"
   ) {

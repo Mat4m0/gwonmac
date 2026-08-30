@@ -342,10 +342,12 @@ C++ compiler; macOS keeps its released Xcode recipe. The decoder never owns a
 credential or an Electron process.
 
 `host.node` remains Darwin-only. It contains the existing AppKit key-release
-monitor and Apple Data Protection Keychain implementation. A Windows or Linux
-build does not load or package this addon. Until that platform has a qualified
-secure provider, persistent saved login fails closed and ordinary development
-uses only the in-memory provider.
+monitor and Apple Data Protection Keychain implementation. Windows packages a
+separate `windows-host.node`: it obtains LocalAppData from the Windows known-
+folder API and stores only the closed saved-login slots in Windows Credential
+Manager. Linux does not load either addon. Until Linux has a qualified secure
+provider, persistent saved login fails closed and ordinary development uses
+only the in-memory provider.
 
 Forge applies the complete cross-platform fuse set to every packaged Electron
 executable. Embedded ASAR integrity is enabled on macOS and Windows. Electron
@@ -354,10 +356,13 @@ Flatpak sandbox, and ASAR-only loading must form the installed package proof.
 
 ## Saved login
 
-The Release and signed Development identities use separate Keychain authority.
-Historical signed Preview builds have their own retained identity too. Each
-identity can read only its own provisioned items; no new signed Preview is
-published.
+The Release and signed Development identities use separate secret namespaces.
+Historical signed Preview builds have their own retained namespace too; no new
+signed Preview is published. On macOS, code-signing entitlements enforce the
+Keychain identity. On Windows, the native host binds the closed application
+identity into each Credential Manager target. This prevents accidental
+cross-channel reads but is not a boundary against another process running as
+the same Windows user.
 
 Each account scope has one item for the ArenaNet user name and password and one
 item for the Steam access token and expiry. The existing fixed items belong
@@ -365,8 +370,8 @@ only to the adopted Main account. A read failure does not delete an item. The ga
 can continue to its login screen when an item is unavailable.
 
 Unpackaged, ordinary local, and ad-hoc developer builds use volatile storage.
-They do not claim a provisioned Keychain item. There is no file or
-`safeStorage` fallback.
+They do not claim a provisioned Keychain or Credential Manager item. There is
+no file or `safeStorage` fallback.
 
 The game proxy does not send or accept browser cookies. The Steam sign-in
 window uses a separate in-memory session. It destroys that session after

@@ -71,7 +71,14 @@ test("the public rename keeps the existing profile as its one data home", () => 
     main,
     /app\.setPath\("userData", path\.join\(app\.getPath\("appData"\), "Guild Wars"\)\)/,
   );
-  assert.match(main, /!app\.commandLine\.hasSwitch\("user-data-dir"\)/);
+  assert.match(
+    main,
+    /const explicitUserData = app\.commandLine\.hasSwitch\("user-data-dir"\)/,
+  );
+  assert.match(
+    main,
+    /if \(!explicitUserData && process\.platform === "darwin"\)/,
+  );
 });
 
 test("package metadata identifies the GPL project and canonical repository", () => {

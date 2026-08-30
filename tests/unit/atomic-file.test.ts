@@ -19,6 +19,7 @@ import {
   sweepOrphanDirectories,
   sweepOrphans,
   AtomicExclusiveWriteError,
+  directorySyncIsUnsupported,
   writeAll,
   writeAtomic,
   writeAtomicExclusive,
@@ -34,6 +35,23 @@ import {
 async function scratch(): Promise<string> {
   return mkdtemp(join(tmpdir(), "gw-atomic-"));
 }
+
+describe("atomic directory durability", () => {
+  it("accepts only Windows' unsupported directory fsync result", () => {
+    const unsupported = Object.assign(new Error("operation not permitted"), {
+      code: "EPERM",
+    });
+    assert.equal(directorySyncIsUnsupported("win32", unsupported), true);
+    assert.equal(directorySyncIsUnsupported("linux", unsupported), false);
+    assert.equal(
+      directorySyncIsUnsupported(
+        "win32",
+        Object.assign(new Error("I/O error"), { code: "EIO" }),
+      ),
+      false,
+    );
+  });
+});
 
 /** A sink that never consumes more than `limit` bytes per call, like a real short write. */
 function shortWriteSink(limit: number): {

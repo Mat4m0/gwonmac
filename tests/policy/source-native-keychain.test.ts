@@ -113,8 +113,15 @@ test("Windows and Linux build the decoder without the Darwin host", () => {
   const windows = nativeBuildSteps("win32", "x64");
   const linux = nativeBuildSteps("linux", "x64");
 
-  assert.deepEqual(windows.map(([command]) => command), ["cl.exe"]);
-  assert.ok(windows[0]?.[1].includes("/Fe:build/native/gw-dat-decode.exe"));
+  assert.deepEqual(windows.map(([command]) => command), [
+    "lib.exe",
+    "cl.exe",
+    "cl.exe",
+  ]);
+  assert.ok(windows[0]?.[1].includes("/out:build/native/node.lib"));
+  assert.ok(windows[1]?.[1].includes("build/native/node.lib"));
+  assert.ok(windows[1]?.[1].includes("/Fe:build/native/windows-host.node"));
+  assert.ok(windows[2]?.[1].includes("/Fe:build/native/gw-dat-decode.exe"));
   assert.deepEqual(linux.map(([command]) => command), ["c++"]);
   assert.deepEqual(linux[0]?.[1].slice(-2), [
     "-o",
@@ -146,19 +153,21 @@ test("the first target ports refuse unsupported CPU architectures", () => {
   assert.throws(() => nativeBuildSteps("linux", "arm64"));
 });
 
-// Each package contains the decoder for its own platform. macOS also contains
-// the native host. Every listed file is executable code that cannot run inside
-// the archive, and the allowlist remains exact rather than opening a directory.
+// Each package contains the decoder for its own platform. macOS and Windows
+// also contain their separate native host. Every listed file is executable
+// code that cannot run inside the archive, and the allowlist remains exact
+// rather than opening a directory.
 test("Forge unpacks only the platform-native executables from ASAR", () => {
   const forge = read("forge.config.ts");
   const packageIgnore = read("scripts/package-ignore.ts");
   assert.match(
     forge,
-    /unpack: "\*\*\/build\/native\/\{host\.node,gw-dat-decode,gw-dat-decode\.exe\}"/u,
+    /unpack: "\*\*\/build\/native\/\{host\.node,windows-host\.node,gw-dat-decode,gw-dat-decode\.exe\}"/u,
   );
   for (const kept of [
     /p === "\/build\/native"/u,
     /p === "\/build\/native\/host\.node"/u,
+    /p === "\/build\/native\/windows-host\.node"/u,
     /p === "\/build\/native\/gw-dat-decode"/u,
     /p === "\/build\/native\/gw-dat-decode\.exe"/u,
   ]) {

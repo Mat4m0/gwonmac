@@ -127,6 +127,8 @@ test("only public identifiers and explicit profile-id fixtures are UUID-shaped",
     "tests/unit/profile-storage.test.ts",
     "tests/unit/window-registry.test.ts",
     "tests/unit/window-coordinator.test.ts",
+    "scripts/windows-credential-probe.ts",
+    "tests/unit/windows-native-host.test.ts",
   ]);
   const hits = [];
   for (const file of tracked) {

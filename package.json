@@ -25,6 +25,7 @@
     "dev:signed": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts",
     "launcher:fixture": "pnpm build && node --import ./scripts/ts-hook.mjs scripts/launcher-fixture.ts",
     "storage:probe": "node --import ./scripts/ts-hook.mjs scripts/platform-storage-probe.ts",
+    "test:windows-credentials": "node --import ./scripts/ts-hook.mjs scripts/windows-credential-probe.ts",
     "test:signed-dev": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts --test-keychain",
     "tools:dev": "pnpm --filter @gwonmac/tools-ui dev",
     "tools:test": "pnpm --filter @gwonmac/tools-ui test",

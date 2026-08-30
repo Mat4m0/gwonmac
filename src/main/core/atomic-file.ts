@@ -67,10 +67,27 @@ export async function writeAll(handle: ByteSink, data: Uint8Array): Promise<void
  * does not expose. This is correct against process and OS crashes, which is the
  * failure mode we face; it is not a claim about sudden power loss.
  */
+export function directorySyncIsUnsupported(
+  platform: NodeJS.Platform,
+  error: unknown,
+): boolean {
+  return platform === "win32"
+    && error instanceof Error
+    && "code" in error
+    && error.code === "EPERM";
+}
+
 async function syncDirectory(dir: string): Promise<void> {
   const handle = await open(dir, "r");
   try {
-    await handle.sync();
+    try {
+      await handle.sync();
+    } catch (error) {
+      // Windows does not expose directory fsync through Node. The file itself
+      // was flushed before its atomic rename, which is the strongest portable
+      // guarantee available without adding another native storage host.
+      if (!directorySyncIsUnsupported(process.platform, error)) throw error;
+    }
   } finally {
     await handle.close();
   }
