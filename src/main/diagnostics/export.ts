@@ -113,6 +113,7 @@ export async function exportDiagnosticsZip(
     cartographyEvidence?: Readonly<{
       report: CartographyEvidenceReport;
       preview: Uint8Array | null;
+      summary: string;
     }>;
   },
 ): Promise<string> {
@@ -164,6 +165,7 @@ export async function exportDiagnosticsZip(
     if (extras.runtimeState) files.push("runtime-state.json");
     if (extras.cartographyEvidence) {
       files.push("cartography-report.json");
+      files.push("cartography-summary.txt");
       if (extras.cartographyEvidence.preview !== null) {
         files.push("cartography-preview.png");
       }
@@ -342,6 +344,7 @@ export async function exportDiagnosticsZip(
               null,
               2,
             ),
+            "cartography-summary.txt": extras.cartographyEvidence.summary,
           }
         : {}),
       ...(extras.visualProblem?.screenshotRequested
@@ -408,6 +411,7 @@ export async function exportDiagnosticsForWindow(
     cartographyEvidence?: Readonly<{
       report: CartographyEvidenceReport;
       preview: Uint8Array | null;
+      summary: string;
     }>;
   } = {},
 ): Promise<string> {

@@ -242,9 +242,22 @@ export function renderCartographyEvidencePreview(
   report: CartographyEvidenceReport,
 ): Uint8Array | null {
   if (report.continent.status !== "ready") return null;
+  const explored = decodeCartographyBitset(report.continent.explored);
+  const creditable = decodeCartographyBitset(report.continent.creditable);
+  const exploredCreditable = Uint32Array.from(
+    explored,
+    (word, index) => word & creditable[index]!,
+  );
   return renderCartographyBitsetPreview([
-    { cells: report.continent.creditable, color: [226, 174, 62, 255] },
-    { cells: report.continent.explored, color: [64, 125, 92, 255] },
+    { cells: report.continent.remainingEstimate, color: [226, 174, 62, 255] },
+    {
+      cells: encodeCartographyBitset(
+        report.continent.explored.width,
+        report.continent.explored.height,
+        exploredCreditable,
+      ),
+      color: [64, 125, 92, 255],
+    },
     ...(report.currentInstance?.status === "ready"
       ? [{
           cells: report.currentInstance.actionable,
@@ -252,4 +265,56 @@ export function renderCartographyEvidencePreview(
         }]
       : []),
   ]);
+}
+
+/** Human-readable companion to the strict machine report. */
+export function renderCartographyEvidenceSummary(
+  report: CartographyEvidenceReport,
+): string {
+  const continent = report.continent.status === "ready"
+    ? [
+        `Continent: ${report.continent.continentId}`,
+        `Bitmap: ${report.continent.explored.width} x ${report.continent.explored.height}`,
+        `Explored creditable cells: ${report.continent.creditable.setBits - report.continent.remainingEstimate.setBits}`,
+        `Estimated remaining cells: ${report.continent.remainingEstimate.setBits}`,
+      ]
+    : [
+        "Continent: unavailable",
+        `Continent reason: ${report.continent.reason}`,
+      ];
+  const current = report.currentInstance === null
+    ? ["Current map: unavailable", "Current-instance reason: not-observed"]
+    : report.currentInstance.status === "ready"
+      ? [
+          `Current map: ${report.currentInstance.mapId}`,
+          `Instance type: ${report.currentInstance.instanceType}`,
+          `Reachable cells: ${report.currentInstance.reachable.setBits}`,
+          `Actionable cells: ${report.currentInstance.actionable.setBits}`,
+          `Kernel status: ${report.currentInstance.kernel.status}`,
+          "Kernel unavailable reason: none",
+        ]
+      : [
+          `Current map: ${report.currentInstance.mapId ?? "unavailable"}`,
+          "Instance type: unknown",
+          "Reachable cells: unavailable",
+          "Actionable cells: unavailable",
+          `Kernel status: ${report.currentInstance.kernel?.status ?? "unavailable"}`,
+          `Kernel unavailable reason: ${report.currentInstance.reason}`,
+        ];
+  return [
+    "Guild Wars Cartography Evidence",
+    "",
+    ...continent,
+    "",
+    ...current,
+    "",
+    "Preview legend:",
+    "  Green  = explored and creditable",
+    "  Amber  = estimated remaining (not confirmed reachable here)",
+    "  Orange = actionable in the current instance",
+    "",
+    "Warning: Amber cells are continent-wide estimates from the current creditability mask.",
+    "They are not proof that a cell is reachable from the current instance.",
+    "",
+  ].join("\n");
 }

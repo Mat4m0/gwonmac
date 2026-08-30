@@ -17,6 +17,7 @@ import {
   buildCartographyEvidenceReport,
   parseCartographyEvidenceCapture,
   renderCartographyEvidencePreview,
+  renderCartographyEvidenceSummary,
 } from "../../src/tools/cartography-evidence/capture.ts";
 import {
   compareCartographyEvidence,
@@ -283,6 +284,15 @@ describe("Cartography evidence", () => {
     assert.equal(png.height, 8);
     assert.deepEqual([...png.data.subarray(0, 4)], [64, 125, 92, 255]);
     assert.deepEqual([...png.data.subarray(2 * 4, 3 * 4)], [226, 174, 62, 255]);
+  });
+
+  it("renders a plain-language summary with exact semantic counts", () => {
+    const value = buildCartographyEvidenceReport(capture(), SESSION);
+    const summary = renderCartographyEvidenceSummary(value);
+    assert.match(summary, /Explored creditable cells: 2/u);
+    assert.match(summary, /Estimated remaining cells: 2/u);
+    assert.match(summary, /Amber {2}= estimated remaining/u);
+    assert.doesNotMatch(summary, /character|account|path:/iu);
   });
 
   it("reads ZIP evidence and writes comparison and merge PNGs", async () => {

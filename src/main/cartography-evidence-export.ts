@@ -11,6 +11,7 @@ import {
   buildCartographyEvidenceReport,
   parseCartographyEvidenceCapture,
   renderCartographyEvidencePreview,
+  renderCartographyEvidenceSummary,
 } from "../tools/cartography-evidence/capture.js";
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import { exportDiagnosticsForWindow } from "./diagnostics.js";
@@ -26,10 +27,11 @@ export async function exportCartographyEvidence(
     session,
   );
   const preview = renderCartographyEvidencePreview(report);
+  const summary = renderCartographyEvidenceSummary(report);
   let written = false;
   await exportDiagnosticsReport(win, async () => {
     const path = await exportDiagnosticsForWindow(win, readSettings, {
-      cartographyEvidence: { report, preview },
+      cartographyEvidence: { report, preview, summary },
     });
     written = path !== "";
     return path;
