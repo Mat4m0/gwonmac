@@ -19,12 +19,36 @@ import {
   type CartographyRevealRadius,
 } from "./cartography-grid-projection.js";
 
-const MIN_CELL_PIXELS = 8;
+const MIN_GRID_CELL_PIXELS = 8;
+const MIN_PROGRESS_CELL_PIXELS = 1.5;
 const UNSEEN_MARKER_CELL_PIXELS = 18;
 const MAX_MARKED_CELLS = 4_096;
+const ESTIMATED_COLOR = "#E2AE3E";
+
+export type CartographyProgressClusterSize = 1 | 4 | 16;
+
+/** Stable level of detail for one projected cartography cell. */
+export function cartographyProgressClusterSize(
+  cellPixels: number,
+): CartographyProgressClusterSize {
+  if (cellPixels >= UNSEEN_MARKER_CELL_PIXELS) return 1;
+  if (cellPixels >= MIN_GRID_CELL_PIXELS) return 4;
+  return 16;
+}
+
+/** Global cluster origin; it never depends on the current viewport. */
+export function cartographyProgressClusterOrigin(
+  cell: CartographyCell,
+  size: CartographyProgressClusterSize,
+): CartographyCell {
+  return Object.freeze({
+    x: Math.floor(cell.x / size) * size,
+    y: Math.floor(cell.y / size) * size,
+  });
+}
 
 export type CartographyGridLayerSnapshot = Readonly<{
-  surface: "compass" | "mission-map";
+  surface: "compass" | "mission-map" | "world-map";
   currentCellX: number;
   currentCellY: number;
   cellWidthPixels: number;
@@ -47,6 +71,7 @@ export type CartographyGridLayer = Readonly<{
     opacity: number;
     explorationVersion: string;
     isExplored(cellX: number, cellY: number): boolean | null;
+    isRemaining(cellX: number, cellY: number): boolean | null;
     revealabilityVersion: string;
     canCurrentMapReveal(cellX: number, cellY: number): boolean | null;
     hoveredCell: CartographyCell | null;
@@ -69,6 +94,54 @@ export function cartographyCellPresentation(
 ): CartographyCellPresentation | null {
   if (explored !== false || canCurrentMapReveal !== true) return null;
   return Object.freeze({ marker: unseenMarker });
+}
+
+function drawClusterMarker(
+  context: CanvasRenderingContext2D,
+  projection: CartographyGridProjection,
+  firstX: number,
+  firstY: number,
+  size: number,
+  count: number,
+  actionable: boolean,
+  actionableColor: string,
+  casingColor: string,
+  opacity: number,
+): void {
+  const left = firstX * CARTOGRAPHY_CELL_MAP_UNITS;
+  const top = firstY * CARTOGRAPHY_CELL_MAP_UNITS;
+  const right = (firstX + size) * CARTOGRAPHY_CELL_MAP_UNITS;
+  const bottom = (firstY + size) * CARTOGRAPHY_CELL_MAP_UNITS;
+  const topLeft = projectedPoint(projection, left, top);
+  const bottomRight = projectedPoint(projection, right, bottom);
+  const centerX = (topLeft.x + bottomRight.x) / 2;
+  const centerY = (topLeft.y + bottomRight.y) / 2;
+  const radius = Math.max(10, Math.min(18, Math.min(
+    Math.abs(bottomRight.x - topLeft.x),
+    Math.abs(bottomRight.y - topLeft.y),
+  ) * 0.28));
+  context.save();
+  context.globalAlpha = Math.max(0, Math.min(1, opacity));
+  context.beginPath();
+  context.arc(centerX, centerY, radius + 2, 0, Math.PI * 2);
+  context.fillStyle = casingColor;
+  context.fill();
+  context.beginPath();
+  context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  if (actionable) {
+    context.fillStyle = actionableColor;
+    context.fill();
+  } else {
+    context.strokeStyle = ESTIMATED_COLOR;
+    context.lineWidth = 2;
+    context.stroke();
+  }
+  context.fillStyle = actionable ? casingColor : ESTIMATED_COLOR;
+  context.font = "600 11px system-ui, sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(String(count), centerX, centerY + 0.5);
+  context.restore();
 }
 
 function sizeCanvas(canvas: HTMLCanvasElement, width: number, height: number): void {
@@ -180,6 +253,7 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
     cellWidthPixels: number,
     cellHeightPixels: number,
     isExplored: (cellX: number, cellY: number) => boolean | null,
+    isRemaining: (cellX: number, cellY: number) => boolean | null,
     canCurrentMapReveal: (cellX: number, cellY: number) => boolean | null,
     hoveredCell: CartographyCell | null,
     revealRadius: CartographyRevealRadius,
@@ -201,31 +275,33 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
     const maxY = (projection.lastCellY + 1) * CARTOGRAPHY_CELL_MAP_UNITS;
     const focusCell = hoveredCell ?? projection.currentCell;
 
-    context.beginPath();
-    for (let cellX = projection.firstCellX; cellX <= projection.lastCellX + 1; cellX += 1) {
-      const from = projectedPoint(projection, cellX * CARTOGRAPHY_CELL_MAP_UNITS, minY);
-      const to = projectedPoint(projection, cellX * CARTOGRAPHY_CELL_MAP_UNITS, maxY);
-      context.moveTo(from.x, from.y);
-      context.lineTo(to.x, to.y);
+    if (Math.min(cellWidthPixels, cellHeightPixels) >= MIN_GRID_CELL_PIXELS) {
+      context.beginPath();
+      for (let cellX = projection.firstCellX; cellX <= projection.lastCellX + 1; cellX += 1) {
+        const from = projectedPoint(projection, cellX * CARTOGRAPHY_CELL_MAP_UNITS, minY);
+        const to = projectedPoint(projection, cellX * CARTOGRAPHY_CELL_MAP_UNITS, maxY);
+        context.moveTo(from.x, from.y);
+        context.lineTo(to.x, to.y);
+      }
+      for (let cellY = projection.firstCellY; cellY <= projection.lastCellY + 1; cellY += 1) {
+        const from = projectedPoint(projection, minX, cellY * CARTOGRAPHY_CELL_MAP_UNITS);
+        const to = projectedPoint(projection, maxX, cellY * CARTOGRAPHY_CELL_MAP_UNITS);
+        context.moveTo(from.x, from.y);
+        context.lineTo(to.x, to.y);
+      }
+      strokeCasedPath(
+        context,
+        style.lattice,
+        style.casingColor,
+        strength * (projection.surface === "compass" ? 0.72 : 0.82),
+      );
     }
-    for (let cellY = projection.firstCellY; cellY <= projection.lastCellY + 1; cellY += 1) {
-      const from = projectedPoint(projection, minX, cellY * CARTOGRAPHY_CELL_MAP_UNITS);
-      const to = projectedPoint(projection, maxX, cellY * CARTOGRAPHY_CELL_MAP_UNITS);
-      context.moveTo(from.x, from.y);
-      context.lineTo(to.x, to.y);
-    }
-    strokeCasedPath(
-      context,
-      style.lattice,
-      style.casingColor,
-      strength * (projection.surface === "compass" ? 0.72 : 0.82),
-    );
 
-    if (revealRadius > 0) {
+    if (revealRadius > 0 && Math.min(cellWidthPixels, cellHeightPixels) >= MIN_GRID_CELL_PIXELS) {
       cellRangePolygon(context, projection, focusCell, 1);
       strokeCasedPath(context, style.normalRange, style.casingColor, Math.min(1, strength * 1.2));
     }
-    if (revealRadius === 3) {
+    if (revealRadius === 3 && Math.min(cellWidthPixels, cellHeightPixels) >= MIN_GRID_CELL_PIXELS) {
       cellRangePolygon(context, projection, focusCell, 3);
       strokeCasedPath(context, style.birdsEyeRange, style.casingColor, Math.min(1, strength * 1.1));
     }
@@ -233,16 +309,28 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
     const visibleCellCount = (projection.lastCellX - projection.firstCellX + 1)
       * (projection.lastCellY - projection.firstCellY + 1);
     if (
-      projection.surface === "mission-map"
+      projection.surface !== "compass"
       && Math.min(cellWidthPixels, cellHeightPixels) >= UNSEEN_MARKER_CELL_PIXELS
       && visibleCellCount <= MAX_MARKED_CELLS
     ) {
       for (let cellY = projection.firstCellY; cellY <= projection.lastCellY; cellY += 1) {
         for (let cellX = projection.firstCellX; cellX <= projection.lastCellX; cellX += 1) {
           const explored = isExplored(cellX, cellY);
+          const remaining = isRemaining(cellX, cellY);
           const revealable = explored === null
             ? null
             : canCurrentMapReveal(cellX, cellY);
+          if (remaining === true && revealable !== true) {
+            drawUnseenCellMarker(
+              context,
+              "diamond",
+              cornersForCell(projection, cellX, cellY),
+              ESTIMATED_COLOR,
+              style.casingColor,
+              Math.min(1, strength),
+              Math.min(cellWidthPixels, cellHeightPixels),
+            );
+          }
           const presentation = cartographyCellPresentation(
             explored,
             revealable,
@@ -262,9 +350,53 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
       }
     }
 
-    polygon(context, cornersForCell(projection, projection.currentCell.x, projection.currentCell.y));
-    strokeCasedPath(context, style.current, style.casingColor, Math.min(1, strength * 1.25));
-    if (hoveredCell !== null) {
+    if (
+      projection.surface !== "compass"
+      && Math.min(cellWidthPixels, cellHeightPixels) < UNSEEN_MARKER_CELL_PIXELS
+    ) {
+      const groupSize = cartographyProgressClusterSize(
+        Math.min(cellWidthPixels, cellHeightPixels),
+      );
+      const firstGroup = cartographyProgressClusterOrigin(
+        { x: projection.firstCellX, y: projection.firstCellY },
+        groupSize,
+      );
+      const firstGroupX = firstGroup.x;
+      const firstGroupY = firstGroup.y;
+      for (let groupY = firstGroupY; groupY <= projection.lastCellY; groupY += groupSize) {
+        for (let groupX = firstGroupX; groupX <= projection.lastCellX; groupX += groupSize) {
+          let remainingCount = 0;
+          let actionableCount = 0;
+          for (let y = Math.max(groupY, projection.firstCellY);
+            y <= Math.min(groupY + groupSize - 1, projection.lastCellY); y += 1) {
+            for (let x = Math.max(groupX, projection.firstCellX);
+              x <= Math.min(groupX + groupSize - 1, projection.lastCellX); x += 1) {
+              if (isRemaining(x, y) === true) remainingCount += 1;
+              if (canCurrentMapReveal(x, y) === true) actionableCount += 1;
+            }
+          }
+          if (remainingCount === 0) continue;
+          drawClusterMarker(
+            context,
+            projection,
+            groupX,
+            groupY,
+            groupSize,
+            actionableCount > 0 ? actionableCount : remainingCount,
+            actionableCount > 0,
+            style.unseen.color,
+            style.casingColor,
+            Math.min(1, strength * 1.2),
+          );
+        }
+      }
+    }
+
+    if (Math.min(cellWidthPixels, cellHeightPixels) >= MIN_GRID_CELL_PIXELS) {
+      polygon(context, cornersForCell(projection, projection.currentCell.x, projection.currentCell.y));
+      strokeCasedPath(context, style.current, style.casingColor, Math.min(1, strength * 1.25));
+    }
+    if (hoveredCell !== null && Math.min(cellWidthPixels, cellHeightPixels) >= MIN_GRID_CELL_PIXELS) {
       polygon(context, cornersForCell(projection, hoveredCell.x, hoveredCell.y));
       strokeCasedPath(context, style.hover, style.casingColor, Math.min(1, strength * 1.25));
     }
@@ -280,6 +412,7 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
       opacity,
       explorationVersion,
       isExplored,
+      isRemaining,
       revealabilityVersion,
       canCurrentMapReveal,
       hoveredCell,
@@ -290,7 +423,9 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
       const cellHeightPixels = Math.hypot(transform.c, transform.d) * CARTOGRAPHY_CELL_MAP_UNITS;
       if (
         opacity <= 0 || !Number.isFinite(cellWidthPixels) || !Number.isFinite(cellHeightPixels)
-        || Math.min(cellWidthPixels, cellHeightPixels) < MIN_CELL_PIXELS
+        || Math.min(cellWidthPixels, cellHeightPixels) < (
+          projection.surface === "compass" ? MIN_GRID_CELL_PIXELS : MIN_PROGRESS_CELL_PIXELS
+        )
       ) {
         hide();
         return;
@@ -314,6 +449,7 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
           cellWidthPixels,
           cellHeightPixels,
           isExplored,
+          isRemaining,
           canCurrentMapReveal,
           hoveredCell,
           revealRadius,

@@ -8,7 +8,7 @@ import type {
 import type { PublishedCompanionState } from "../../src/renderer/companion-snapshot.js";
 import {
   bitsetHasCell,
-  readCartographyModel,
+  readCartographyState,
   readCartographyPresentation,
   type CartographyModelSources,
   type GridCell,
@@ -142,92 +142,125 @@ function sources(
     kernel,
     companion: () => COMPANION,
     revealRadius: () => 1,
-    correction: () => null,
   };
 }
 
-test("publishes one complete model for one unchanged epoch", () => {
-  const model = readCartographyModel(sources());
-  assert.equal(model.status, "ready");
-  if (model.status !== "ready") return;
-  assert.deepEqual(model.epoch, { mapId: MAP_ID, area: AREA_EPOCH, resource: 42 });
-  assert.equal(bitsetHasCell(model.reachableCells, CREDITABLE_CELL), true);
-  assert.equal(bitsetHasCell(model.actionableCells, CREDITABLE_CELL), true);
-  assert.equal(model.surfaces.compass, null);
-  assert.equal(model.surfaces.missionMap, null);
+test("publishes independent continent and current-instance state for one epoch", () => {
+  const state = readCartographyState(sources());
+  assert.equal(state.continent.status, "ready");
+  assert.equal(state.currentInstance.status, "ready");
+  if (state.continent.status !== "ready" || state.currentInstance.status !== "ready") return;
+  assert.deepEqual(state.currentInstance.epoch, {
+    mapId: MAP_ID, area: AREA_EPOCH, resource: 42,
+  });
+  assert.equal(bitsetHasCell(state.continent.remaining, CREDITABLE_CELL), true);
+  assert.equal(bitsetHasCell(state.currentInstance.reachableCells, CREDITABLE_CELL), true);
+  assert.equal(bitsetHasCell(state.currentInstance.actionableCells, CREDITABLE_CELL), true);
+  assert.equal(state.surfaces.compass, null);
+  assert.equal(state.surfaces.missionMap, null);
+  assert.equal(state.surfaces.worldMap, null);
+});
+
+test("partitions every creditable cell into explored or remaining exactly once", () => {
+  const state = readCartographyState(sources());
+  assert.equal(state.continent.status, "ready");
+  if (state.continent.status !== "ready") return;
+  for (let y = 0; y < state.continent.creditable.height; y += 1) {
+    for (let x = 0; x < state.continent.creditable.width; x += 1) {
+      const cell = { x, y };
+      const creditable: boolean = bitsetHasCell(state.continent.creditable, cell) === true;
+      const explored: boolean = bitsetHasCell(
+        state.continent.exploredCreditable,
+        cell,
+      ) === true;
+      const remaining: boolean = bitsetHasCell(state.continent.remaining, cell) === true;
+      assert.equal(explored && remaining, false);
+      assert.equal(explored || remaining, creditable);
+    }
+  }
 });
 
 test("rejects an interleaved map transition instead of publishing mixed data", () => {
   const next = Object.freeze({ ...READY_CONTEXT, sequence: 14, areaEpoch: 8, mapId: 651 });
   assert.deepEqual(
-    readCartographyModel(sources([READY_CONTEXT, next])),
-    { status: "unavailable", reason: "epoch-mismatch" },
+    readCartographyState(sources([READY_CONTEXT, next])),
+    {
+      context: null,
+      continent: { status: "unavailable", reason: "epoch-mismatch" },
+      currentInstance: { status: "unavailable", reason: "epoch-mismatch" },
+      surfaces: { compass: null, missionMap: null, worldMap: null },
+    },
   );
 });
 
 test("withdraws immediately while the certified context is loading", () => {
   const loading = Object.freeze({ ...READY_CONTEXT, status: 2, sequence: 14, areaEpoch: 8 });
   assert.deepEqual(
-    readCartographyModel(sources([loading])),
-    { status: "unavailable", reason: "loading" },
+    readCartographyState(sources([loading])),
+    {
+      context: null,
+      continent: { status: "unavailable", reason: "loading" },
+      currentInstance: { status: "unavailable", reason: "loading" },
+      surfaces: { compass: null, missionMap: null, worldMap: null },
+    },
   );
 });
 
 test("fails closed when the context cannot publish a fresh identity", () => {
   const failed = sources();
   assert.deepEqual(
-    readCartographyModel({
+    readCartographyState({
       ...failed,
       context: { ...failed.context, refresh: () => false },
     }),
-    { status: "unavailable", reason: "context" },
+    {
+      context: null,
+      continent: { status: "unavailable", reason: "context" },
+      currentInstance: { status: "unavailable", reason: "context" },
+      surfaces: { compass: null, missionMap: null, worldMap: null },
+    },
   );
 });
 
 test("rejects a kernel publication from another epoch", () => {
   const staleKernel = Object.freeze({ ...READY_KERNEL, areaEpoch: AREA_EPOCH - 1 });
-  assert.deepEqual(
-    readCartographyModel(sources(undefined, staleKernel)),
-    { status: "unavailable", reason: "kernel" },
-  );
+  const state = readCartographyState(sources(undefined, staleKernel));
+  assert.equal(state.continent.status, "ready");
+  assert.deepEqual(state.currentInstance, { status: "unavailable", reason: "kernel" });
 });
 
-test("evidence withdraws a cached current map after an observed transition", () => {
-  const next = Object.freeze({ ...READY_CONTEXT, sequence: 14, areaEpoch: 8, mapId: 651 });
-  const current = sources([READY_CONTEXT, READY_CONTEXT, next]);
-  const model = readCartographyModel(current);
-  assert.equal(model.status, "ready");
-  const evidence = captureCartographyEvidence(model, current);
-  assert.equal(evidence.continent.status, "unavailable");
-  assert.deepEqual(evidence.currentInstance, {
-    status: "unavailable",
-    reason: "epoch-mismatch",
-    mapId: 651,
-    areaEpoch: 8,
-    resourceGeneration: 42,
-    kernel: evidence.currentInstance.kernel,
-  });
+test("evidence remains exportable when only live classification is unavailable", () => {
+  const current = sources(undefined, null);
+  const state = readCartographyState(current);
+  assert.equal(state.continent.status, "ready");
+  assert.deepEqual(state.currentInstance, { status: "unavailable", reason: "kernel" });
+  const evidence = captureCartographyEvidence(state, current);
+  assert.equal(evidence.continent.status, "ready");
+  assert.equal(evidence.currentInstance.status, "unavailable");
+  if (evidence.currentInstance.status === "unavailable") {
+    assert.equal(evidence.currentInstance.reason, "kernel");
+  }
 });
 
 test("semantic bitsets are not interchangeable", () => {
-  const model = readCartographyModel(sources());
-  assert.equal(model.status, "ready");
-  if (model.status !== "ready") return;
+  const state = readCartographyState(sources());
+  assert.equal(state.currentInstance.status, "ready");
+  if (state.currentInstance.status !== "ready") return;
   // @ts-expect-error A cell bitset cannot be supplied as a terrain raster.
-  const terrain: typeof model.walkableTerrain = model.reachableCells;
-  assert.notEqual(terrain, model.walkableTerrain);
+  const terrain: typeof state.currentInstance.walkableTerrain = state.currentInstance.reachableCells;
+  assert.notEqual(terrain, state.currentInstance.walkableTerrain);
   // @ts-expect-error Reachable input cannot masquerade as derived actionability.
-  const actionable: typeof model.actionableCells = model.reachableCells;
-  assert.notEqual(actionable, model.actionableCells);
+  const actionable: typeof state.currentInstance.actionableCells = state.currentInstance.reachableCells;
+  assert.notEqual(actionable, state.currentInstance.actionableCells);
 });
 
 test("refreshes frame-sensitive presentation without rerunning classification", () => {
-  const model = readCartographyModel(sources());
-  assert.equal(model.status, "ready");
+  const state = readCartographyState(sources());
+  assert.equal(state.currentInstance.status, "ready");
   const current = {
     ...sources(),
     companion: () => Object.freeze({ ...COMPANION, playerX: 99 }),
   };
-  const presentation = readCartographyPresentation(model, current);
+  const presentation = readCartographyPresentation(state, current);
   assert.deepEqual(presentation.player, { x: 99, y: 20 });
 });

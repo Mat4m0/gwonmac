@@ -7,11 +7,8 @@ import type {
   CartographyKernelDiagnostic,
   CartographyUnavailableReason,
 } from "../../shared/cartography-evidence.js";
-import type { CartographyModel, CartographyModelSources } from "./cartography-model.js";
-import {
-  isToolboxCreditableCell,
-  TOOLBOX_CARTOGRAPHY_SOURCE,
-} from "./toolbox-cartography-data.js";
+import type { CartographyModelSources, CartographyState } from "./cartography-model.js";
+import { TOOLBOX_CARTOGRAPHY_SOURCE } from "./toolbox-cartography-data.js";
 import type { CartographyReachabilityDiagnostic } from "./reachability-kernel.js";
 
 const GRID_REVISION = 1;
@@ -81,114 +78,75 @@ function kernelEvidence(
   });
 }
 
-function creditableWords(
-  continent: number,
-  width: number,
-  height: number,
-): Uint32Array | null {
-  const words = new Uint32Array(Math.ceil(width * height / 32));
-  for (let index = 0; index < width * height; index += 1) {
-    const creditable = isToolboxCreditableCell(
-      continent,
-      index % width,
-      Math.floor(index / width),
-    );
-    if (creditable === null) return null;
-    if (creditable) words[index >>> 5] = words[index >>> 5]! | (1 << (index & 31));
-  }
-  return words;
-}
-
 export function captureCartographyEvidence(
-  model: CartographyModel,
+  state: CartographyState,
   sources: CartographyModelSources,
 ): CartographyEvidenceCapture {
-  sources.context.refresh();
-  const context = sources.context.snapshot();
-  const anchor = sources.anchor.snapshot();
-  const exploration = sources.exploration.readBitmap();
   const diagnostic = sources.kernel.diagnostic();
-  const sameGeneration = context?.status === 1
-    && anchor?.status === 1
-    && exploration?.snapshot.status === 1
-    && anchor.generation === context.areaEpoch
-    && exploration.snapshot.generation === context.areaEpoch;
-  const creditable = sameGeneration && anchor && exploration
-    ? creditableWords(
-        anchor.continent,
-        exploration.snapshot.width,
-        exploration.snapshot.height,
-      )
-    : null;
-  const continent = sameGeneration && anchor && exploration && creditable
+  const readyContinent = state.continent.status === "ready" ? state.continent : null;
+  const continent = readyContinent !== null
     ? Object.freeze({
         status: "ready" as const,
-        continentId: anchor.continent,
+        continentId: readyContinent.continent,
         explored: cloneBitset(
-          exploration.snapshot.width,
-          exploration.snapshot.height,
-          exploration.words,
+          readyContinent.explored.width,
+          readyContinent.explored.height,
+          readyContinent.explored.words,
         ),
         creditable: cloneBitset(
-          exploration.snapshot.width,
-          exploration.snapshot.height,
-          creditable,
+          readyContinent.creditable.width,
+          readyContinent.creditable.height,
+          readyContinent.creditable.words,
         ),
       })
     : Object.freeze({
         status: "unavailable" as const,
-        reason: context === null
-          ? "context" as const
-          : context.status !== 1
-          ? "loading" as const
-          : anchor?.status !== 1
-            ? "anchor" as const
-            : exploration?.snapshot.status !== 1
-              ? "exploration" as const
-              : "global-mask" as const,
+        reason: state.continent.status === "unavailable"
+          ? state.continent.reason
+          : "context" as const,
       });
   const kernel = kernelEvidence(diagnostic);
   const companion = sources.companion();
-  const currentReady = model.status === "ready"
-    && sameGeneration
-    && context?.status === 1
-    && context.mapId === model.epoch.mapId
-    && context.areaEpoch === model.epoch.area
+  const current = state.currentInstance;
+  const currentReady = current.status === "ready"
+    && state.context !== null
+    && state.context.mapId === current.epoch.mapId
+    && state.context.areaEpoch === current.epoch.area
     && diagnostic?.status === 1
-    && diagnostic.mapId === model.epoch.mapId
-    && diagnostic.areaEpoch === model.epoch.area
-    && diagnostic.resourceGeneration === model.epoch.resource
+    && diagnostic.mapId === current.epoch.mapId
+    && diagnostic.areaEpoch === current.epoch.area
+    && diagnostic.resourceGeneration === current.epoch.resource
     && kernel?.status === "ready";
-  const currentInstance = model.status === "ready" && currentReady
+  const currentInstance = current.status === "ready" && currentReady
     ? Object.freeze({
         status: "ready" as const,
-        mapId: model.epoch.mapId,
+        mapId: current.epoch.mapId,
         instanceType: companion?.status === "ready"
           ? companion.instanceType === 0 ? "outpost" as const : "explorable" as const
           : "unknown" as const,
-        areaEpoch: model.epoch.area,
-        resourceGeneration: model.epoch.resource,
+        areaEpoch: current.epoch.area,
+        resourceGeneration: current.epoch.resource,
         revealRadius: sources.revealRadius(),
-        worldAnchor: model.worldAnchor,
-        mapBounds: model.mapBounds,
+        worldAnchor: current.worldAnchor,
+        mapBounds: current.mapBounds,
         reachable: cloneBitset(
-          model.reachableCells.width,
-          model.reachableCells.height,
-          model.reachableCells.words,
+          current.reachableCells.width,
+          current.reachableCells.height,
+          current.reachableCells.words,
         ),
         actionable: cloneBitset(
-          model.actionableCells.width,
-          model.actionableCells.height,
-          model.actionableCells.words,
+          current.actionableCells.width,
+          current.actionableCells.height,
+          current.actionableCells.words,
         ),
         terrain: Object.freeze({
-          mapLeft: model.walkableTerrain.mapLeft,
-          mapTop: model.walkableTerrain.mapTop,
-          mapUnitsPerPixel: model.walkableTerrain.mapUnitsPerPixel,
+          mapLeft: current.walkableTerrain.mapLeft,
+          mapTop: current.walkableTerrain.mapTop,
+          mapUnitsPerPixel: current.walkableTerrain.mapUnitsPerPixel,
           cells: cloneBitset(
-            model.walkableTerrain.width,
-            model.walkableTerrain.height,
-            model.walkableTerrain.words,
+            current.walkableTerrain.width,
+            current.walkableTerrain.height,
+            current.walkableTerrain.words,
           ),
         }),
         kernel: kernel ?? Object.freeze({
@@ -209,24 +167,16 @@ export function captureCartographyEvidence(
       })
     : Object.freeze({
         status: "unavailable" as const,
-        reason: model.status === "unavailable"
-          ? model.reason
-          : context?.status !== 1
-            ? "loading" as const
-            : !sameGeneration
-                || context.mapId !== model.epoch.mapId
-                || context.areaEpoch !== model.epoch.area
-              ? "epoch-mismatch" as const
-              : "kernel" as const,
-        mapId: positiveOrNull(context?.mapId ?? diagnostic?.mapId),
-        areaEpoch: positiveOrNull(context?.areaEpoch ?? diagnostic?.areaEpoch),
+        reason: current.status === "unavailable" ? current.reason : "kernel" as const,
+        mapId: positiveOrNull(state.context?.mapId ?? diagnostic?.mapId),
+        areaEpoch: positiveOrNull(state.context?.areaEpoch ?? diagnostic?.areaEpoch),
         resourceGeneration: positiveOrNull(diagnostic?.resourceGeneration),
         kernel,
       });
   return Object.freeze({
     source: Object.freeze({
-      layoutId: context?.layoutId === 1 || context?.layoutId === 2
-        ? context.layoutId
+      layoutId: state.context?.layoutId === 1 || state.context?.layoutId === 2
+        ? state.context.layoutId
         : diagnostic?.layoutId === 1 || diagnostic?.layoutId === 2
           ? diagnostic.layoutId
           : null,

@@ -68,7 +68,6 @@ export async function installCartographySpike(options: Readonly<{
       kernel,
       companion: readCartographyPlayerState,
       revealRadius: () => options.settings().cartographyRevealMode === "birds-eye" ? 3 : 1,
-      correction: () => null,
     },
     settings: options.settings,
     persist: options.persist,

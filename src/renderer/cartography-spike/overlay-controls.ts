@@ -28,14 +28,23 @@ export type CartographyQaStatus =
     }>
   | Readonly<{
       status: "ready";
-      mapId: number;
-      areaEpoch: number;
-      resourceGeneration: number;
-      terrain: Readonly<{ width: number; height: number; mapUnitsPerPixel: number }>;
-      reachableCells: number;
-      actionableCells: number;
+      continentId: number;
+      exploredCreditableCells: number;
+      remainingCells: number;
       compassReady: boolean;
       missionMapReady: boolean;
+      worldMapReady: boolean;
+      currentInstance:
+        | Readonly<{ status: "unavailable"; reason: string }>
+        | Readonly<{
+            status: "ready";
+            mapId: number;
+            areaEpoch: number;
+            resourceGeneration: number;
+            terrain: Readonly<{ width: number; height: number; mapUnitsPerPixel: number }>;
+            reachableCells: number;
+            actionableCells: number;
+          }>;
       kernel: CartographyReachabilityDiagnostic | null;
     }>;
 
@@ -84,17 +93,29 @@ export function describeCartographyQaStatus(status: CartographyQaStatus): QaPres
       rows: Object.freeze(rows),
     });
   }
-  const rows: readonly (readonly [string, string])[] = Object.freeze([
-    ["Map", String(status.mapId)],
-    ["Epoch", `${status.areaEpoch} · resource ${status.resourceGeneration}`],
-    ["Cells", `${status.actionableCells} actionable · ${status.reachableCells} reachable`],
-    ["Terrain", `${status.terrain.width}×${status.terrain.height} @ ${status.terrain.mapUnitsPerPixel}`],
-    ["Surfaces", `Compass ${status.compassReady ? "ready" : "off"} · Mission ${status.missionMapReady ? "ready" : "off"}`],
+  const rows: (readonly [string, string])[] = [
+    ["Continent", `${status.continentId} · ${status.remainingCells} estimated remaining`],
+    ["Coverage", `${status.exploredCreditableCells} explored creditable`],
+  ];
+  if (status.currentInstance.status === "ready") {
+    const current = status.currentInstance;
+    rows.push(
+      ["Map", String(current.mapId)],
+      ["Epoch", `${current.areaEpoch} · resource ${current.resourceGeneration}`],
+      ["Cells", `${current.actionableCells} actionable · ${current.reachableCells} reachable`],
+      ["Terrain", `${current.terrain.width}×${current.terrain.height} @ ${current.terrain.mapUnitsPerPixel}`],
+    );
+  } else rows.push(["Current guidance", `Unavailable · ${status.currentInstance.reason}`]);
+  rows.push([
+    "Surfaces",
+    `Compass ${status.compassReady ? "ready" : "off"} · Mission ${status.missionMapReady ? "ready" : "off"} · World ${status.worldMapReady ? "ready" : "off"}`,
   ]);
   return Object.freeze({
     tone: "ready",
-    summary: `Ready · ${status.actionableCells} actionable`,
-    rows,
+    summary: status.currentInstance.status === "ready"
+      ? `Ready · ${status.currentInstance.actionableCells} actionable`
+      : `Continent ready · ${status.remainingCells} remaining`,
+    rows: Object.freeze(rows),
   });
 }
 

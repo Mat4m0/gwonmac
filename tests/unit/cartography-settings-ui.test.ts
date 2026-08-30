@@ -126,19 +126,44 @@ test("Cartography QA status distinguishes loading from exact kernel failures", (
 test("Cartography QA ready status reports the player-facing classification counts", () => {
   const ready = describeCartographyQaStatus({
     status: "ready",
-    mapId: 58,
-    areaEpoch: 3,
-    resourceGeneration: 2,
-    terrain: { width: 256, height: 272, mapUnitsPerPixel: 2 },
-    reachableCells: 228,
-    actionableCells: 92,
+    continentId: 1,
+    exploredCreditableCells: 4_500,
+    remainingCells: 120,
     compassReady: true,
     missionMapReady: false,
+    worldMapReady: false,
+    currentInstance: {
+      status: "ready",
+      mapId: 58,
+      areaEpoch: 3,
+      resourceGeneration: 2,
+      terrain: { width: 256, height: 272, mapUnitsPerPixel: 2 },
+      reachableCells: 228,
+      actionableCells: 92,
+    },
     kernel: null,
   });
   assert.equal(ready.summary, "Ready · 92 actionable");
   assert.ok(ready.rows.some(([label, value]) =>
     label === "Cells" && value === "92 actionable · 228 reachable"));
+});
+
+test("Cartography QA keeps continent progress visible without current guidance", () => {
+  const ready = describeCartographyQaStatus({
+    status: "ready",
+    continentId: 2,
+    exploredCreditableCells: 7_000,
+    remainingCells: 31,
+    compassReady: false,
+    missionMapReady: true,
+    worldMapReady: true,
+    currentInstance: { status: "unavailable", reason: "kernel" },
+    kernel: null,
+  });
+  assert.equal(ready.tone, "ready");
+  assert.equal(ready.summary, "Continent ready · 31 remaining");
+  assert.ok(ready.rows.some(([label, value]) =>
+    label === "Current guidance" && value === "Unavailable · kernel"));
 });
 
 test("Cartography settings disclose customization instead of showing a disabled editor", () => {

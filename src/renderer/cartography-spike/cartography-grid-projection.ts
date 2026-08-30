@@ -17,7 +17,7 @@ import {
 export const CARTOGRAPHY_CELL_MAP_UNITS = 32;
 const CELL_EPSILON = 1 / 64;
 const COMPASS_CELL_RADIUS = 3;
-const MAX_GRID_AXIS_CELLS = 128;
+const MAX_GRID_AXIS_CELLS = 512;
 
 export type CartographyCell = Readonly<{ x: number; y: number }>;
 export type CartographyRevealRadius = 0 | 1 | 3;
@@ -42,7 +42,7 @@ export type CartographyGridProjection = Readonly<{
   firstCellY: number;
   lastCellY: number;
   currentCell: CartographyCell;
-  surface: "compass" | "mission-map";
+  surface: "compass" | "mission-map" | "world-map";
 }>;
 
 /** Match the client's half-open X and north-up Y ownership at exact edges. */
@@ -63,7 +63,7 @@ export function cartographyCellAtScreenPoint(
 ): CartographyCell | null {
   const { box, transform } = projection;
   if (
-    projection.surface !== "mission-map"
+    projection.surface === "compass"
     || !Number.isFinite(clientX)
     || !Number.isFinite(clientY)
     || clientX < box.left
@@ -106,6 +106,7 @@ function validCellRange(first: number, last: number): boolean {
 export function projectCartographyGridToMissionMap(input: Readonly<{
   frame: MissionMapFrameSpikeSnapshot;
   box: ScreenBox;
+  surface?: "mission-map" | "world-map";
 }>): CartographyGridProjection | null {
   const { frame, box } = input;
   if (
@@ -137,8 +138,14 @@ export function projectCartographyGridToMissionMap(input: Readonly<{
     firstCellY,
     lastCellY,
     currentCell,
-    surface: "mission-map",
+    surface: input.surface ?? "mission-map",
   });
+}
+
+/** Conservative cell size used for stable level-of-detail selection. */
+export function cartographyCellPixelSize(projection: CartographyGridProjection): number {
+  const { a, b, c, d } = projection.transform;
+  return Math.min(Math.hypot(a, b), Math.hypot(c, d)) * CARTOGRAPHY_CELL_MAP_UNITS;
 }
 
 /**

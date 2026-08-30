@@ -1,6 +1,7 @@
 /**
- * The one atomic Cartography model. Native observations are accepted only when
- * they belong to one unchanged, even context sequence and area epoch.
+ * Owns Cartography's one canonical renderer state. Continent progress and
+ * current-instance guidance fail independently, while each accepted value is
+ * assembled from one unchanged certified context epoch.
  */
 import type {
   CartographyContextController,
@@ -14,6 +15,9 @@ import type { CartographyReachabilityController } from "./reachability-kernel.js
 import { isToolboxCreditableCell } from "./toolbox-cartography-data.js";
 
 declare const explorationBrand: unique symbol;
+declare const creditableBrand: unique symbol;
+declare const exploredCreditableBrand: unique symbol;
+declare const remainingBrand: unique symbol;
 declare const reachableBrand: unique symbol;
 declare const actionableBrand: unique symbol;
 declare const terrainBrand: unique symbol;
@@ -30,6 +34,11 @@ type FixedBitset = Readonly<{
 }>;
 
 export type ExplorationBitset = FixedBitset & { readonly [explorationBrand]: true };
+export type CreditableCellBitset = FixedBitset & { readonly [creditableBrand]: true };
+export type ExploredCreditableBitset = FixedBitset & {
+  readonly [exploredCreditableBrand]: true;
+};
+export type RemainingCellBitset = FixedBitset & { readonly [remainingBrand]: true };
 export type ReachableCellBitset = FixedBitset & { readonly [reachableBrand]: true };
 export type ActionableCellBitset = FixedBitset & { readonly [actionableBrand]: true };
 export type WalkableTerrainRaster = Readonly<{
@@ -53,7 +62,20 @@ export type CartographyUnavailableReason =
   | "epoch-mismatch"
   | "global-mask";
 
-export type CartographyModel =
+export type CartographyContinentState =
+  | Readonly<{ status: "unavailable"; reason: CartographyUnavailableReason }>
+  | Readonly<{
+      status: "ready";
+      continent: number;
+      generation: number;
+      explorationSequence: number;
+      explored: ExplorationBitset;
+      creditable: CreditableCellBitset;
+      exploredCreditable: ExploredCreditableBitset;
+      remaining: RemainingCellBitset;
+    }>;
+
+export type CartographyCurrentInstanceState =
   | Readonly<{ status: "unavailable"; reason: CartographyUnavailableReason }>
   | Readonly<{
       status: "ready";
@@ -63,23 +85,34 @@ export type CartographyModel =
       worldAnchor: MapPoint;
       mapBounds: Readonly<{ min: MapPoint; max: MapPoint }>;
       player: GamePoint;
-      exploration: ExplorationBitset;
       walkableTerrain: WalkableTerrainRaster;
       reachableCells: ReachableCellBitset;
       actionableCells: ActionableCellBitset;
-      surfaces: Readonly<{
-        compass: ReturnType<CompassFrameSpikeController["snapshot"]>;
-        missionMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
-      }>;
     }>;
+
+export type CartographyState = Readonly<{
+  context: Readonly<{
+    sequence: number;
+    mapId: number;
+    areaEpoch: number;
+    layoutId: 1 | 2;
+  }> | null;
+  continent: CartographyContinentState;
+  currentInstance: CartographyCurrentInstanceState;
+  surfaces: Readonly<{
+    compass: ReturnType<CompassFrameSpikeController["snapshot"]>;
+    missionMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
+    /** Guild Wars reuses its one certified MapWindow for the continent view. */
+    worldMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
+  }>;
+}>;
 
 export type CartographyPresentation = Readonly<{
   player: GamePoint | null;
   compass: ReturnType<CompassFrameSpikeController["snapshot"]>;
   missionMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
+  worldMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
 }>;
-
-export type CartographyCorrection = "include" | "exclude" | null;
 
 export type CartographyModelSources = Readonly<{
   context: CartographyContextController;
@@ -90,14 +123,29 @@ export type CartographyModelSources = Readonly<{
   kernel: CartographyReachabilityController;
   companion(): PublishedCompanionState | null | undefined;
   revealRadius(): 1 | 3;
-  correction(mapId: number, cell: GridCell): CartographyCorrection;
 }>;
 
-const unavailable = (reason: CartographyUnavailableReason): CartographyModel =>
-  Object.freeze({ status: "unavailable", reason });
+const unavailable = (reason: CartographyUnavailableReason) =>
+  Object.freeze({ status: "unavailable" as const, reason });
+
+const continentCache = new WeakMap<
+  ExplorationSpikeController,
+  Readonly<{
+    continent: number;
+    generation: number;
+    explorationSequence: number;
+    width: number;
+    height: number;
+    value: Extract<CartographyContinentState, { status: "ready" }>;
+  }>
+>();
 
 function bit(words: Uint32Array, index: number): boolean {
   return ((words[index >>> 5]! >>> (index & 31)) & 1) === 1;
+}
+
+function set(words: Uint32Array, index: number): void {
+  words[index >>> 5] = words[index >>> 5]! | (1 << (index & 31));
 }
 
 function contextEqual(
@@ -110,138 +158,259 @@ function contextEqual(
     && left.layoutId === right.layoutId;
 }
 
-/** Build one immutable model or fail closed. No partial observations escape. */
-export function readCartographyModel(sources: CartographyModelSources): CartographyModel {
-  if (!sources.context.refresh()) return unavailable("context");
+function emptyState(reason: CartographyUnavailableReason): CartographyState {
+  return Object.freeze({
+    context: null,
+    continent: unavailable(reason),
+    currentInstance: unavailable(reason),
+    surfaces: Object.freeze({ compass: null, missionMap: null, worldMap: null }),
+  });
+}
+
+/** Build one continent partition. Every creditable cell is exactly explored or remaining. */
+function deriveContinent(
+  continent: number,
+  generation: number,
+  explorationSequence: number,
+  width: number,
+  height: number,
+  explorationWords: Uint32Array,
+): CartographyContinentState {
+  const cells = width * height;
+  const creditableWords = new Uint32Array(Math.ceil(cells / 32));
+  const exploredCreditableWords = new Uint32Array(creditableWords.length);
+  const remainingWords = new Uint32Array(creditableWords.length);
+  for (let index = 0; index < cells; index += 1) {
+    const creditable = isToolboxCreditableCell(
+      continent,
+      index % width,
+      Math.floor(index / width),
+    );
+    if (creditable === null) return unavailable("global-mask");
+    if (!creditable) continue;
+    set(creditableWords, index);
+    if (bit(explorationWords, index)) set(exploredCreditableWords, index);
+    else set(remainingWords, index);
+  }
+  return Object.freeze({
+    status: "ready",
+    continent,
+    generation,
+    explorationSequence,
+    explored: Object.freeze({
+      width,
+      height,
+      words: explorationWords,
+    }) as ExplorationBitset,
+    creditable: Object.freeze({
+      width,
+      height,
+      words: creditableWords,
+    }) as CreditableCellBitset,
+    exploredCreditable: Object.freeze({
+      width,
+      height,
+      words: exploredCreditableWords,
+    }) as ExploredCreditableBitset,
+    remaining: Object.freeze({
+      width,
+      height,
+      words: remainingWords,
+    }) as RemainingCellBitset,
+  });
+}
+
+function deriveContinentCached(
+  source: ExplorationSpikeController,
+  continent: number,
+  generation: number,
+  explorationSequence: number,
+  width: number,
+  height: number,
+  explorationWords: Uint32Array,
+): CartographyContinentState {
+  const cached = continentCache.get(source);
+  if (
+    cached?.continent === continent
+    && cached.generation === generation
+    && cached.explorationSequence === explorationSequence
+    && cached.width === width
+    && cached.height === height
+  ) return cached.value;
+  const value = deriveContinent(
+    continent,
+    generation,
+    explorationSequence,
+    width,
+    height,
+    explorationWords,
+  );
+  if (value.status === "ready") {
+    continentCache.set(source, Object.freeze({
+      continent,
+      generation,
+      explorationSequence,
+      width,
+      height,
+      value,
+    }));
+  }
+  return value;
+}
+
+/**
+ * Read one immutable state or fail the affected evidence level closed. Native
+ * context, exploration, and anchor observations must share one even epoch.
+ */
+export function readCartographyState(sources: CartographyModelSources): CartographyState {
+  if (!sources.context.refresh()) return emptyState("context");
   const contextA = sources.context.snapshot();
-  if (contextA === null) return unavailable("context");
-  if (contextA.status !== 1) return unavailable("loading");
-  const companion = sources.companion();
-  if (companion?.status !== "ready") return unavailable("companion");
-  if (companion.mapId !== contextA.mapId) return unavailable("map-mismatch");
+  if (contextA === null) return emptyState("context");
+  if (contextA.status !== 1) return emptyState("loading");
 
   const anchor = sources.anchor.snapshot();
   if (
     anchor === null || anchor.status !== 1
     || anchor.generation !== contextA.areaEpoch
-  ) return unavailable("anchor");
+  ) return emptyState("anchor");
   const exploration = sources.exploration.readBitmap();
   if (
     exploration === null || exploration.snapshot.status !== 1
     || exploration.snapshot.generation !== contextA.areaEpoch
-  ) return unavailable("exploration");
+  ) return emptyState("exploration");
 
-  const kernel = sources.kernel.classify({
-    layoutId: contextA.layoutId,
-    mapId: contextA.mapId,
-    areaEpoch: contextA.areaEpoch,
-    playerId: companion.playerId,
-    worldAnchorX: anchor.worldAnchorX,
-    worldAnchorY: anchor.worldAnchorY,
-    width: exploration.snapshot.width,
-    height: exploration.snapshot.height,
-    mapMinX: anchor.mapMinX,
-    mapMinY: anchor.mapMinY,
-    mapMaxX: anchor.mapMaxX,
-    mapMaxY: anchor.mapMaxY,
-    revealRadius: sources.revealRadius(),
+  const continent = deriveContinentCached(
+    sources.exploration,
+    anchor.continent,
+    contextA.areaEpoch,
+    exploration.snapshot.sequence,
+    exploration.snapshot.width,
+    exploration.snapshot.height,
+    exploration.words,
+  );
+  if (continent.status === "unavailable") return Object.freeze({
+    context: Object.freeze({
+      sequence: contextA.sequence,
+      mapId: contextA.mapId,
+      areaEpoch: contextA.areaEpoch,
+      layoutId: contextA.layoutId,
+    }),
+    continent,
+    currentInstance: unavailable(continent.reason),
+    surfaces: Object.freeze({ compass: null, missionMap: null, worldMap: null }),
   });
-  if (
-    kernel === null || kernel.status !== 1
-    || kernel.mapId !== contextA.mapId
-    || kernel.areaEpoch !== contextA.areaEpoch
-    || kernel.layoutId !== contextA.layoutId
-    || kernel.width !== exploration.snapshot.width
-    || kernel.height !== exploration.snapshot.height
-  ) return unavailable("kernel");
 
-  const contextB = sources.context.snapshot();
-  if (contextB === null || contextB.status !== 1 || !contextEqual(contextA, contextB)) {
-    return unavailable("epoch-mismatch");
-  }
-
-  const cells = kernel.width * kernel.height;
-  const actionableWords = new Uint32Array(Math.ceil(cells / 32));
-  for (let index = 0; index < cells; index += 1) {
-    const x = index % kernel.width;
-    const y = Math.floor(index / kernel.width);
-    const correction = sources.correction(contextA.mapId, { x, y });
-    const creditable = isToolboxCreditableCell(anchor.continent, x, y);
-    if (creditable === null) return unavailable("global-mask");
-    const explored = bit(exploration.words, index);
-    const reachable = bit(kernel.reachableCells.words, index);
-    const actionable = !explored && (
-      correction === "include"
-      || (correction !== "exclude" && creditable && reachable)
-    );
-    if (actionable) {
-      const word = index >>> 5;
-      actionableWords[word] = actionableWords[word]! | (1 << (index & 31));
+  const companion = sources.companion();
+  let current: CartographyCurrentInstanceState = unavailable("companion");
+  if (companion?.status === "ready") {
+    if (companion.mapId !== contextA.mapId) current = unavailable("map-mismatch");
+    else {
+      const kernel = sources.kernel.classify({
+        layoutId: contextA.layoutId,
+        mapId: contextA.mapId,
+        areaEpoch: contextA.areaEpoch,
+        playerId: companion.playerId,
+        worldAnchorX: anchor.worldAnchorX,
+        worldAnchorY: anchor.worldAnchorY,
+        width: exploration.snapshot.width,
+        height: exploration.snapshot.height,
+        mapMinX: anchor.mapMinX,
+        mapMinY: anchor.mapMinY,
+        mapMaxX: anchor.mapMaxX,
+        mapMaxY: anchor.mapMaxY,
+        revealRadius: sources.revealRadius(),
+      });
+      if (
+        kernel === null || kernel.status !== 1
+        || kernel.mapId !== contextA.mapId
+        || kernel.areaEpoch !== contextA.areaEpoch
+        || kernel.layoutId !== contextA.layoutId
+        || kernel.width !== exploration.snapshot.width
+        || kernel.height !== exploration.snapshot.height
+      ) current = unavailable("kernel");
+      else {
+        const actionableWords = new Uint32Array(kernel.reachableCells.words.length);
+        for (let index = 0; index < kernel.width * kernel.height; index += 1) {
+          if (bit(continent.remaining.words, index) && bit(kernel.reachableCells.words, index)) {
+            set(actionableWords, index);
+          }
+        }
+        current = Object.freeze({
+          status: "ready",
+          sequence: contextA.sequence,
+          epoch: Object.freeze({
+            mapId: contextA.mapId,
+            area: contextA.areaEpoch,
+            resource: kernel.resourceGeneration,
+          }),
+          continent: anchor.continent,
+          worldAnchor: Object.freeze({ x: anchor.worldAnchorX, y: anchor.worldAnchorY }),
+          mapBounds: Object.freeze({
+            min: Object.freeze({ x: anchor.mapMinX, y: anchor.mapMinY }),
+            max: Object.freeze({ x: anchor.mapMaxX, y: anchor.mapMaxY }),
+          }),
+          player: Object.freeze({ x: companion.playerX, y: companion.playerY }),
+          walkableTerrain: Object.freeze(kernel.walkableTerrain) as WalkableTerrainRaster,
+          reachableCells: Object.freeze({
+            width: kernel.width,
+            height: kernel.height,
+            words: kernel.reachableCells.words,
+          }) as ReachableCellBitset,
+          actionableCells: Object.freeze({
+            width: kernel.width,
+            height: kernel.height,
+            words: actionableWords,
+          }) as ActionableCellBitset,
+        });
+      }
     }
   }
 
+  const contextB = sources.context.snapshot();
+  if (contextB === null || contextB.status !== 1 || !contextEqual(contextA, contextB)) {
+    return emptyState("epoch-mismatch");
+  }
   const compass = sources.compass.snapshot();
   const missionMap = sources.missionMap.snapshot();
   return Object.freeze({
-    status: "ready",
-    sequence: contextA.sequence,
-    epoch: Object.freeze({
+    context: Object.freeze({
+      sequence: contextA.sequence,
       mapId: contextA.mapId,
-      area: contextA.areaEpoch,
-      resource: kernel.resourceGeneration,
+      areaEpoch: contextA.areaEpoch,
+      layoutId: contextA.layoutId,
     }),
-    continent: anchor.continent,
-    worldAnchor: Object.freeze({ x: anchor.worldAnchorX, y: anchor.worldAnchorY }),
-    mapBounds: Object.freeze({
-      min: Object.freeze({ x: anchor.mapMinX, y: anchor.mapMinY }),
-      max: Object.freeze({ x: anchor.mapMaxX, y: anchor.mapMaxY }),
-    }),
-    player: Object.freeze({ x: companion.playerX, y: companion.playerY }),
-    exploration: Object.freeze({
-      width: exploration.snapshot.width,
-      height: exploration.snapshot.height,
-      words: exploration.words,
-    }) as ExplorationBitset,
-    walkableTerrain: Object.freeze(kernel.walkableTerrain) as WalkableTerrainRaster,
-    reachableCells: Object.freeze({
-      width: kernel.width,
-      height: kernel.height,
-      words: kernel.reachableCells.words,
-    }) as ReachableCellBitset,
-    actionableCells: Object.freeze({
-      width: kernel.width,
-      height: kernel.height,
-      words: actionableWords,
-    }) as ActionableCellBitset,
+    continent,
+    currentInstance: current,
     surfaces: Object.freeze({
       compass: compass?.generation === contextA.areaEpoch ? compass : null,
       missionMap: missionMap?.generation === contextA.areaEpoch ? missionMap : null,
+      worldMap: missionMap?.generation === contextA.areaEpoch ? missionMap : null,
     }),
   });
 }
 
-/**
- * Read only the cheap, frame-sensitive presentation state. Classification is
- * deliberately excluded so movement, rotation, pan, and zoom can follow the
- * display refresh rate without rerunning the native kernel.
- */
+/** Read cheap frame-sensitive presentation state without rerunning classification. */
 export function readCartographyPresentation(
-  model: CartographyModel,
+  state: CartographyState,
   sources: CartographyModelSources,
 ): CartographyPresentation {
-  if (model.status !== "ready") {
-    return Object.freeze({ player: null, compass: null, missionMap: null });
+  const current = state.currentInstance;
+  const context = state.context;
+  if (context === null) {
+    return Object.freeze({ player: null, compass: null, missionMap: null, worldMap: null });
   }
   const companion = sources.companion();
-  const player = companion?.status === "ready" && companion.mapId === model.epoch.mapId
+  const player = current.status === "ready"
+    && companion?.status === "ready" && companion.mapId === current.epoch.mapId
     ? Object.freeze({ x: companion.playerX, y: companion.playerY })
     : null;
   const compass = sources.compass.snapshot();
   const missionMap = sources.missionMap.snapshot();
   return Object.freeze({
     player,
-    compass: compass?.generation === model.epoch.area ? compass : null,
-    missionMap: missionMap?.generation === model.epoch.area ? missionMap : null,
+    compass: compass?.generation === context.areaEpoch ? compass : null,
+    missionMap: missionMap?.generation === context.areaEpoch ? missionMap : null,
+    worldMap: missionMap?.generation === context.areaEpoch ? missionMap : null,
   });
 }
 

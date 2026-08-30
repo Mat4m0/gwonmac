@@ -5,12 +5,17 @@ import type {
   MissionMapFrameSpikeSnapshot,
 } from "../../src/shared/cartography-spike.js";
 import {
+  cartographyCellPixelSize,
   CARTOGRAPHY_CELL_MAP_UNITS,
   cartographyCellAt,
   cartographyCellAtScreenPoint,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
 } from "../../src/renderer/cartography-spike/cartography-grid-projection.js";
+import {
+  cartographyProgressClusterOrigin,
+  cartographyProgressClusterSize,
+} from "../../src/renderer/cartography-spike/cartography-grid-layer.js";
 
 const missionFrame: MissionMapFrameSpikeSnapshot = Object.freeze({
   status: 1,
@@ -63,6 +68,21 @@ test("matches the client's half-open cartography cell ownership", () => {
   assert.equal(cartographyCellAt(Number.NaN, 0), null);
 });
 
+test("keeps progress cluster boundaries fixed through pan and zoom", () => {
+  assert.equal(cartographyProgressClusterSize(18), 1);
+  assert.equal(cartographyProgressClusterSize(17.99), 4);
+  assert.equal(cartographyProgressClusterSize(8), 4);
+  assert.equal(cartographyProgressClusterSize(7.99), 16);
+  assert.deepEqual(cartographyProgressClusterOrigin({ x: 17, y: -1 }, 16), {
+    x: 16,
+    y: -16,
+  });
+  assert.deepEqual(cartographyProgressClusterOrigin({ x: 31, y: -15 }, 16), {
+    x: 16,
+    y: -16,
+  });
+});
+
 test("projects a fixed Mission Map grid through pan and zoom", () => {
   const box = Object.freeze({ left: 100, top: 200, width: 640, height: 320 });
   const projection = projectCartographyGridToMissionMap({ frame: missionFrame, box });
@@ -90,6 +110,16 @@ test("projects a fixed Mission Map grid through pan and zoom", () => {
       * CARTOGRAPHY_CELL_MAP_UNITS,
     64,
   );
+  assert.equal(cartographyCellPixelSize(zoomed), 64);
+
+  const world = projectCartographyGridToMissionMap({
+    frame: missionFrame,
+    box,
+    surface: "world-map",
+  });
+  assert.ok(world);
+  assert.equal(world.surface, "world-map");
+  assert.deepEqual(world.transform, projection.transform);
 });
 
 test("rescales Mission Map cells from the current drawable rectangle", () => {
