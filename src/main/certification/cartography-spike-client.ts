@@ -49,7 +49,7 @@ const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuil
     "aca501484f766c95c27a47ffbd09bb5f5a162de7106500450295d4e61272efbb",
     {
       memoryLayout: "relocated",
-      outputSha256: "8a61e05c24f205d104e3f2950f5834667437a48ee080767080585b428bbc9f31",
+      outputSha256: "aad630368312cdcb30812c4c942d78b6041678105a6acf806d161a225a2a3b58",
     },
   ],
   [
