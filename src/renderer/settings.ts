@@ -17,6 +17,7 @@
     return element;
   };
   const dialog = byId('settings-dialog') as HTMLDialogElement;
+  const canvas = byId('canvas') as HTMLCanvasElement;
   const settingsResize = byId('settings-resize') as HTMLButtonElement;
   const form = byId('settings-form') as HTMLFormElement;
   const settingsReset = byId('settings-reset-launcher') as HTMLButtonElement;
@@ -106,11 +107,22 @@
   const idleFeedback = 'Changes save automatically.';
   let feedbackTimer: number | null = null;
   let activeSettingsPane = 'data';
-  // Settings is renderer UI, not game input. Keep its keys inside the modal;
-  // Escape still reaches the dialog's native cancel behavior because stopping
-  // propagation does not cancel the event.
-  dialog.addEventListener('keydown', (event) => event.stopPropagation());
-  dialog.addEventListener('keyup', (event) => event.stopPropagation());
+  let modal: GwonmacDialogHandle | null = null;
+  let modalReady: Promise<GwonmacDialogHandle> | null = null;
+  const settingsModal = () => modalReady ??= new Promise((resolve) => {
+    const install = () => {
+      modal = window.gwSurfaces.registerDialog({
+        root: dialog,
+        priority: 5,
+        transient: true,
+        dismiss: () => modal?.close(),
+        restoreFocus: () => canvas,
+      });
+      resolve(modal);
+    };
+    if (window.gwSurfaces) install();
+    else window.addEventListener('gw:surfaces-ready', install, { once: true });
+  });
 
   void import('../shared/ui/resize.js').then(({ installResizeGrip }) => {
     installResizeGrip(settingsResize, {
@@ -669,8 +681,7 @@
     form.setAttribute('aria-busy', String(needsSettings));
     settingsPanes.inert = needsSettings;
     if (!wasOpen) {
-      if (typeof dialog.showModal === 'function') dialog.showModal();
-      else dialog.setAttribute('open', '');
+      (await settingsModal()).show();
     }
     setFeedback(needsSettings ? 'Loading settings…' : idleFeedback, needsSettings ? 'progress' : 'neutral');
     selectPane(activeSettingsPane);

@@ -130,6 +130,7 @@ export function createCharacterSwitchPalette(
   if (!(canvas instanceof HTMLCanvasElement)) throw new Error("game canvas is missing");
   const root = document.createElement("dialog");
   root.id = "character-switch-root";
+  root.className = "ui-modal ui-modal-layer";
   root.setAttribute("aria-labelledby", "character-switch-title");
   root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><section class="character-switch-settings" aria-label="Character Switch settings" hidden><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" class="ui-button character-switch-stay">Stay here</button><button type="button" class="ui-button character-switch-leave" data-variant="primary">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"><kbd class="ui-kbd">tab</kbd> or <kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> close</span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span></footer></div>`;
   parent.append(root);
@@ -187,11 +188,12 @@ export function createCharacterSwitchPalette(
   let rows: ReturnType<typeof orderCharacters> = [];
   let allRows: ReturnType<typeof orderCharacters> = [];
   const busy = () => source.action.status === "switching";
-  const surface = window.gwSurfaces.register({
+  const modal = window.gwSurfaces.registerDialog({
     root,
     priority: 7,
     transient: true,
     dismiss: () => closePalette(true),
+    restoreFocus: () => canvas,
   });
   const updateRowSelection = () => {
     for (const button of list.querySelectorAll<HTMLButtonElement>("button[data-row]")) {
@@ -359,23 +361,19 @@ export function createCharacterSwitchPalette(
     if (view.kind === "closed") return;
     if (view.kind === "confirming") source.cancelConfirmation();
     view = Object.freeze({ kind: "closed" });
-    surface.setOpen(false);
-    if (root.open) root.close();
+    modal.close();
     if (resetFailure && source.action.status === "failed") source.reset();
-    canvas.focus({ preventScroll: true });
   };
   const openPalette = () => {
     if (source.action.status === "switching") return;
     if (source.action.status === "complete") source.reset();
     if (source.context === "character-select" && source.action.status !== "failed") return;
-    if (document.pointerLockElement !== null) void document.exitPointerLock();
     selected = 0;
     query = "";
     queryInput.value = "";
     preferenceFailure = false;
     view = Object.freeze({ kind: "characters" });
-    surface.setOpen(true);
-    if (!root.open) root.showModal();
+    modal.show();
     render();
     focusCharacters();
   };
@@ -536,21 +534,6 @@ export function createCharacterSwitchPalette(
   details.addEventListener("toggle", () => {
     if (details.open) diagnostic.textContent = JSON.stringify(source.diagnostics(), null, 2);
   });
-  root.addEventListener("cancel", (event) => {
-    event.preventDefault();
-    closePalette(true);
-  });
-  root.addEventListener("click", (event) => {
-    if (event.target !== root) return;
-    event.preventDefault();
-    event.stopPropagation();
-    closePalette(true);
-  });
-  const stop = (event: Event) => event.stopPropagation();
-  for (const name of [
-    "keydown", "keyup", "pointerdown", "pointerup", "pointermove",
-    "mousedown", "mouseup", "mousemove", "click", "wheel", "contextmenu",
-  ]) root.addEventListener(name, stop);
   const onToggle = (event: Event) => {
     event.preventDefault();
     if (source.action.status === "switching") return;
@@ -570,7 +553,7 @@ export function createCharacterSwitchPalette(
   return Object.freeze({ dispose() {
     unsubscribe();
     unsubscribeSettings();
-    surface.dispose();
+    modal.dispose();
     window.removeEventListener("gw:character-toggle", onToggle);
     root.remove();
   } });

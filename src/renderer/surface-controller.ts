@@ -1,11 +1,11 @@
 /**
- * Keyboard ownership for non-modal GWonMac surfaces above the game.
+ * Keyboard and modal ownership for GWonMac surfaces above the game.
  *
- * Tools and Travel deliberately stay open when a player clicks Guild Wars, so
- * DOM focus alone cannot decide which surface Escape or Tab belongs to. This
+ * Tools deliberately stays open when a player clicks Guild Wars, so DOM focus
+ * alone cannot decide which surface Escape or Tab belongs to. This
  * controller keeps one ordered list of visible host surfaces. Escape dismisses
- * the topmost one and Tab enters or wraps within it. Native modal dialogs stay
- * above this list and keep their browser-provided focus and Escape behavior.
+ * the topmost one and Tab enters or wraps within it. Dialogs use the platform's
+ * modal behavior, with one shared backdrop, dismissal, and focus lifecycle.
  */
 
 type Surface = Readonly<{
@@ -16,6 +16,14 @@ type Surface = Readonly<{
 }>;
 
 type OpenSurface = Surface & { order: number };
+
+type ModalDialog = Readonly<{
+  root: HTMLDialogElement;
+  priority: number;
+  transient?: boolean;
+  dismiss(): void;
+  restoreFocus(): HTMLElement | null;
+}>;
 
 const FOCUSABLE = [
   "button:not([disabled])",
@@ -124,33 +132,101 @@ export function installSurfaceController(
     if (document.visibilityState === "hidden") clearSuppressedKeyUps();
   });
 
+  const register = (surface: Surface): GwonmacSurfaceHandle => {
+    const id = Symbol("surface");
+    let open = false;
+    // Input diagnostics report only this coarse ownership category. The
+    // marker carries no UI text or selector, and lets a player distinguish
+    // "Guild Wars received the click" from "a GWonMac surface owned it".
+    surface.root.dataset.gwonmacSurface = "";
+    return Object.freeze({
+      setOpen(next: boolean) {
+        if (next === open) return;
+        open = next;
+        if (next) {
+          if (surface.transient) dismissTransient(id);
+          surfaces.set(id, { ...surface, order: order++ });
+        }
+        else surfaces.delete(id);
+      },
+      raise() {
+        const current = surfaces.get(id);
+        if (!current) return;
+        surfaces.set(id, { ...current, order: order++ });
+      },
+      dispose() {
+        open = false;
+        surfaces.delete(id);
+        delete surface.root.dataset.gwonmacSurface;
+      },
+    });
+  };
+
   return Object.freeze({
-    register(surface: Surface): GwonmacSurfaceHandle {
-      const id = Symbol("surface");
-      let open = false;
-      // Input diagnostics report only this coarse ownership category. The
-      // marker carries no UI text or selector, and lets a player distinguish
-      // "Guild Wars received the click" from "a GWonMac surface owned it".
-      surface.root.dataset.gwonmacSurface = "";
+    register,
+    registerDialog(dialog: ModalDialog): GwonmacDialogHandle {
+      const surface = register({
+        root: dialog.root,
+        priority: dialog.priority,
+        ...(dialog.transient === undefined ? {} : { transient: dialog.transient }),
+        dismiss: dialog.dismiss,
+      });
+      let disposed = false;
+
+      const restoreFocus = () => {
+        dialog.restoreFocus()?.focus({ preventScroll: true });
+      };
+      const onCancel = (event: Event) => {
+        event.preventDefault();
+        dialog.dismiss();
+      };
+      const onClick = (event: MouseEvent) => {
+        if (event.target !== dialog.root) return;
+        event.preventDefault();
+        event.stopPropagation();
+        dialog.dismiss();
+      };
+      const onClose = () => {
+        surface.setOpen(false);
+        // A transient replacement may already be modal by the time Chromium
+        // delivers the old dialog's close event. Never pull focus behind it.
+        if (document.querySelector("dialog:modal") === null) restoreFocus();
+      };
+      const stop = (event: Event) => event.stopPropagation();
+      const isolatedEvents = [
+        "keydown", "keyup", "pointerdown", "pointerup", "pointermove",
+        "mousedown", "mouseup", "mousemove", "click", "wheel", "contextmenu",
+      ] as const;
+      dialog.root.addEventListener("cancel", onCancel);
+      dialog.root.addEventListener("click", onClick);
+      dialog.root.addEventListener("close", onClose);
+      for (const name of isolatedEvents) dialog.root.addEventListener(name, stop);
+
       return Object.freeze({
-        setOpen(next: boolean) {
-          if (next === open) return;
-          open = next;
-          if (next) {
-            if (surface.transient) dismissTransient(id);
-            surfaces.set(id, { ...surface, order: order++ });
+        show() {
+          if (disposed || dialog.root.open) return;
+          if (document.pointerLockElement !== null) void document.exitPointerLock();
+          surface.setOpen(true);
+          try {
+            dialog.root.showModal();
+          } catch (error) {
+            surface.setOpen(false);
+            throw error;
           }
-          else surfaces.delete(id);
         },
-        raise() {
-          const current = surfaces.get(id);
-          if (!current) return;
-          surfaces.set(id, { ...current, order: order++ });
+        close() {
+          if (!dialog.root.open) return;
+          dialog.root.close();
         },
         dispose() {
-          open = false;
-          surfaces.delete(id);
-          delete surface.root.dataset.gwonmacSurface;
+          if (disposed) return;
+          disposed = true;
+          if (dialog.root.open) dialog.root.close();
+          surface.dispose();
+          dialog.root.removeEventListener("cancel", onCancel);
+          dialog.root.removeEventListener("click", onClick);
+          dialog.root.removeEventListener("close", onClose);
+          for (const name of isolatedEvents) dialog.root.removeEventListener(name, stop);
         },
       });
     },

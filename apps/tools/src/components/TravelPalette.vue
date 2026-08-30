@@ -405,7 +405,7 @@ function onKeydown(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <section ref="palette" v-show="visible" class="ui-frame travel-palette" role="dialog" aria-label="Quick Travel" :aria-busy="preferenceWritePending" @keydown="onKeydown">
+  <section ref="palette" v-show="visible" class="ui-frame travel-palette" :aria-busy="preferenceWritePending" @keydown="onKeydown">
     <div class="travel-search">
       <label for="travel-search-input"><svg class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination or search phrase" :aria-controls="hasQuery ? 'travel-results' : showingSmallCatalogue ? 'travel-available' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="activeDestination ? `travel-${activeDestination.mapId}` : undefined" :aria-expanded="selectableDestinations.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or phrases…"></label>
     </div>

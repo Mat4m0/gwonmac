@@ -275,13 +275,13 @@ navigating the native carousel.
    character starts one fresh request; technical details stay collapsed unless
    the player opens them.
 
-These rules match Quick Travel's current focus, toggle, pointer-lock, surface,
-and event-isolation owner
+These rules match Quick Travel's focus, toggle, pointer-lock, and modal owner
 ([`travel-palette.ts`, lines 16–119](../../src/renderer/travel-palette.ts#L16-L119))
 and its Return and Escape behavior
 ([`TravelPalette.vue`, lines 164–192 and 359–403](../../apps/tools/src/components/TravelPalette.vue#L164-L192)).
-The existing end-to-end test also proves that Travel stays open over game
-interaction, yields to Settings, contains Tab, and restores canvas focus
+The end-to-end test proves that Travel blocks game interaction, dismisses on an
+outside click without click-through, yields to other transient dialogs, traps
+Tab, and restores canvas focus
 ([`input-travel.spec.ts`, lines 63–175](../../tests/electron/input-travel.spec.ts#L63-L175)).
 
 ### Refusal and progress states

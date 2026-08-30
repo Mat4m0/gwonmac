@@ -18,7 +18,6 @@
   font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font);
 }
 
-#settings-dialog::backdrop { background: var(--ui-overlay-fill); }
 #settings-form { width: 100%; height: 100%; }
 #settings-form,
 #settings-form *,

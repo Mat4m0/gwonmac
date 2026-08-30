@@ -232,10 +232,12 @@ Use **Save offer** to keep an exact local copy of a useful listing. Use
 Open **Saved** to review Offers and Players in a right-side drawer. These saved
 items stay on this Mac; GWonMac does not send them to either public feed.
 
-Tools and Travel stay open when you click Guild Wars behind them. Press Tab to
-move the keyboard into the topmost GWonMac window. Press Escape to close that
-window and return the keyboard to Guild Wars. If a confirmation dialog is open,
-Escape closes the confirmation first.
+Tools stays open when you click Guild Wars behind it. Settings, Travel, and
+Character Switch are modal dialogs: they dim and block the game, keep Tab focus
+inside, and close when you click outside. Press Escape to close the current
+dialog and return the keyboard to Guild Wars. In Travel search, Character
+Switch search, settings, or confirmation, Escape first returns to the parent
+view when there is one.
 - **Target distance and range** (Test) shows the selected target's distance and
 range band.
 - **Skill Key Labels** must be enabled before you configure the eight labels.

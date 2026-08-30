@@ -90,6 +90,12 @@ declare global {
     dispose(): void;
   }
 
+  interface GwonmacDialogHandle {
+    show(): void;
+    close(): void;
+    dispose(): void;
+  }
+
   interface GwonmacSurfaceController {
     register(surface: Readonly<{
       root: HTMLElement;
@@ -97,6 +103,13 @@ declare global {
       transient?: boolean;
       dismiss(): void;
     }>): GwonmacSurfaceHandle;
+    registerDialog(dialog: Readonly<{
+      root: HTMLDialogElement;
+      priority: number;
+      transient?: boolean;
+      dismiss(): void;
+      restoreFocus(): HTMLElement | null;
+    }>): GwonmacDialogHandle;
     dismissTransient(): void;
   }
 

@@ -24,39 +24,27 @@ export function createTravelPalette(
   }
   const style = parent.ownerDocument.createElement("style");
   style.textContent = `
-    #travel-palette-root { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
     #travel-palette-host { position: absolute; inset: 0; pointer-events: none; }
   `;
-  const root = parent.ownerDocument.createElement("section");
+  const root = parent.ownerDocument.createElement("dialog");
   root.id = "travel-palette-root";
-  root.hidden = true;
+  root.className = "ui-modal ui-modal-layer";
+  root.setAttribute("aria-label", "Quick Travel");
   const host = parent.ownerDocument.createElement("div");
   host.id = "travel-palette-host";
   root.append(host);
   parent.append(style, root);
 
   let enabled = false;
-  let open = false;
   let requested = false;
   let disposed = false;
   let state: TravelGameState = { status: "waiting", reason: "game" };
   let app: TravelPaletteHandle | null = null;
-  const dismissable = window.gwSurfaces.register({
-    root,
-    priority: 6,
-    transient: true,
-    dismiss: () => setOpen(false),
-  });
-
-  const setOpen = (next: boolean) => {
+  function setOpen(next: boolean): void {
     if (!enabled && next) throw new Error(command.unavailable() ?? "Travel is turned off");
-    if (open === next) return;
-    open = next;
-    root.hidden = !next;
-    dismissable.setOpen(next);
-    if (next && parent.ownerDocument.pointerLockElement !== null) {
-      parent.ownerDocument.exitPointerLock();
-    }
+    if (root.open === next) return;
+    if (next) modal.show();
+    else modal.close();
     if (next && !requested) {
       requested = true;
       ensureToolsStylesheet(parent.ownerDocument);
@@ -67,44 +55,44 @@ export function createTravelPalette(
           nativeApi: native,
           command,
           development: window.gwNative.init.development,
-          initiallyVisible: open,
+          initiallyVisible: root.open,
           onVisibilityChange: (visible) => setOpen(visible),
         });
         app.update(state);
       }).catch((cause: unknown) => {
         console.error("[travel] the Travel palette failed to load", cause);
-        open = false;
-        root.hidden = true;
+        modal.close();
       });
     } else if (app) {
       if (next) app.show();
       else app.hide();
     }
-    if (!next) canvas.focus({ preventScroll: true });
-  };
+  }
+  const modal = window.gwSurfaces.registerDialog({
+    root,
+    priority: 6,
+    transient: true,
+    dismiss: () => setOpen(false),
+    restoreFocus: () => canvas,
+  });
 
   const onCommand = (event: Event) => {
     if (!(event instanceof CustomEvent)) return;
     event.preventDefault();
     try {
-      setOpen(!open);
+      setOpen(!root.open);
     } catch (error) {
       if (event.detail !== null && typeof event.detail === "object") {
         (event.detail as { error?: unknown }).error = error;
       }
     }
   };
-  const stop = (event: Event) => event.stopPropagation();
-  for (const name of [
-    "keydown", "keyup", "pointerdown", "pointerup", "pointermove",
-    "mousedown", "mouseup", "mousemove", "click", "wheel", "contextmenu",
-  ]) root.addEventListener(name, stop);
   window.addEventListener("gw:travel-toggle", onCommand);
 
   return Object.freeze({
     setEnabled(next: boolean) {
       enabled = next;
-      if (!next && open) setOpen(false);
+      if (!next && root.open) setOpen(false);
     },
     update(next: TravelGameState) {
       state = next;
@@ -114,10 +102,9 @@ export function createTravelPalette(
       disposed = true;
       window.removeEventListener("gw:travel-toggle", onCommand);
       app?.dispose();
-      dismissable.dispose();
+      modal.dispose();
       style.remove();
       root.remove();
-      canvas.focus({ preventScroll: true });
     },
   });
 }
