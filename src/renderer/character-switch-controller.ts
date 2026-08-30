@@ -6,18 +6,21 @@
 import type { CompanionCharacterListState } from "./companion-character-list-snapshot.js";
 import type {
   CharacterSwitchActionState,
+  CharacterSwitchDiagnosticTransition,
   CharacterSwitchFailureCode,
   CharacterSwitchSource,
-} from "./character-switch-palette.js";
+  CharacterSwitchTransitionStage,
+} from "./character-switch-model.js";
+import {
+  CHARACTER_SWITCH_ACTION_ABI,
+  type CharacterSwitchActionKind,
+} from "../shared/character-switch-action-abi.js";
 import {
   EMPTY_CHARACTER_SWITCH_USAGE,
   parseCharacterSwitchUsageDocument,
   type CharacterSwitchUsageDocument,
 } from "../shared/character-switch-usage.js";
 
-const ACTION = Object.freeze({ logout: 1, select: 2, play: 3 });
-const PAYLOAD_BYTES = 40;
-const RESULT_OFFSET = 20;
 const TRANSITION_LIMIT = 32;
 const SELECTOR_READY_BUDGET_MS = 8_000;
 const SELECTOR_READY_POLL_MS = 100;
@@ -32,7 +35,49 @@ type NativeSend = "sent" | "refused" | "invalid" | "timeout" | "focus"
   | "selector-parent" | "play-parent";
 type NativeEnqueue = NativeSend | "queued";
 
-type Transition = Readonly<{ sequence: number; stage: string; elapsedBucketMs: number }>;
+type SelectorReadiness = "frame" | "child" | "index" | "context" | "array" | "target";
+type SelectorOutcome =
+  | Readonly<{ kind: "sent" }>
+  | Readonly<{
+      kind: "retryable";
+      readiness: SelectorReadiness;
+      terminalCode: CharacterSwitchFailureCode;
+    }>
+  | Readonly<{ kind: "terminal"; code: CharacterSwitchFailureCode }>;
+
+function classifySelectorResult(result: NativeSend): SelectorOutcome {
+  switch (result) {
+    case "sent": return { kind: "sent" };
+    case "selector-frame": return {
+      kind: "retryable", readiness: "frame", terminalCode: "selector-timeout",
+    };
+    case "selector-child": return {
+      kind: "retryable", readiness: "child", terminalCode: "selector-timeout",
+    };
+    case "selector-index": return {
+      kind: "retryable", readiness: "index", terminalCode: "selector-timeout",
+    };
+    case "selector-context": return {
+      kind: "retryable", readiness: "context", terminalCode: "selector-context-invalid",
+    };
+    case "selector-array": return {
+      kind: "retryable", readiness: "array", terminalCode: "selector-array-invalid",
+    };
+    case "selector-target": return {
+      kind: "retryable", readiness: "target", terminalCode: "selector-target-missing",
+    };
+    case "focus": return { kind: "terminal", code: "focus-lost" };
+    case "refused": return { kind: "terminal", code: "selector-refused" };
+    case "invalid": return { kind: "terminal", code: "selector-invalid" };
+    case "selector-parent": return { kind: "terminal", code: "selector-parent-invalid" };
+    case "selection-unconfirmed": return {
+      kind: "terminal", code: "selection-not-confirmed",
+    };
+    case "timeout":
+    case "play-frame":
+    case "play-parent": return { kind: "terminal", code: "selection-not-confirmed" };
+  }
+}
 
 const delay = (milliseconds = 25) => new Promise<void>((resolve) => {
   setTimeout(resolve, milliseconds);
@@ -46,7 +91,7 @@ function accountSignature(state: Extract<CompanionCharacterListState, { status: 
 }
 
 export interface CharacterSwitchController extends CharacterSwitchSource {
-  readonly payloadBytes: typeof PAYLOAD_BYTES;
+  readonly payloadBytes: typeof CHARACTER_SWITCH_ACTION_ABI.bytes;
   dispose(): void;
 }
 
@@ -66,13 +111,14 @@ export function createCharacterSwitchController(options: Readonly<{
   let requestSequence = 0;
   let actionSequence = 0;
   let lastCode: CharacterSwitchFailureCode | null = null;
-  let lastSelectorReadiness: "frame" | "child" | "index" | "context" | "array" | "target" | null = null;
+  let lastSelectorReadiness: SelectorReadiness | null = null;
   let selectorReadinessRetries = 0;
   let lastSelectorProofMask = 0;
   let requestedListIndex: number | null = null;
   let started = 0;
   const counters = { logout: 0, select: 0, play: 0 };
-  const transitions: Transition[] = [];
+  const transitions: CharacterSwitchDiagnosticTransition[] = [];
+  let pendingCharacterKey: string | null = null;
   const listeners = new Set<() => void>();
 
   void window.gwNative.characterSwitchUsage.get().then((value) => {
@@ -82,7 +128,7 @@ export function createCharacterSwitchController(options: Readonly<{
   }).catch(() => { /* Ranking remains usable with an empty convenience store. */ });
 
   const emit = () => { for (const listener of listeners) listener(); };
-  const transition = (stage: string) => {
+  const transition = (stage: CharacterSwitchTransitionStage) => {
     transitions.push(Object.freeze({
       sequence: actionSequence,
       stage,
@@ -90,12 +136,13 @@ export function createCharacterSwitchController(options: Readonly<{
     }));
     if (transitions.length > TRANSITION_LIMIT) transitions.shift();
   };
-  const publish = (next: CharacterSwitchActionState, stage: string) => {
+  const publish = (next: CharacterSwitchActionState, stage: CharacterSwitchTransitionStage) => {
     action = Object.freeze(next);
     transition(stage);
     emit();
   };
   const fail = (code: CharacterSwitchFailureCode, retryable = false) => {
+    pendingCharacterKey = null;
     lastCode = code;
     publish({ status: "failed", code, retryable }, `failed:${code}`);
   };
@@ -107,7 +154,8 @@ export function createCharacterSwitchController(options: Readonly<{
   );
   const view = () => new DataView(options.memory.buffer);
   const validPayload = () => options.payloadPointer > 0
-    && options.payloadPointer + PAYLOAD_BYTES <= options.memory.buffer.byteLength;
+    && options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.bytes
+      <= options.memory.buffer.byteLength;
 
   const waitFor = async (
     accept: () => boolean,
@@ -124,52 +172,76 @@ export function createCharacterSwitchController(options: Readonly<{
   };
 
   const queue = (
-    kind: keyof typeof counters,
+    kind: CharacterSwitchActionKind,
     argument: number,
   ): NativeEnqueue => {
     if (!validPayload() || !focused()) return "focus";
     configure();
-    view().setUint32(options.payloadPointer + RESULT_OFFSET, 0, true);
-    if (options.enqueue(ACTION[kind], argument) !== 1) return "refused";
+    view().setUint32(
+      options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.fields.result,
+      0,
+      true,
+    );
+    if (options.enqueue(CHARACTER_SWITCH_ACTION_ABI.action[kind], argument) !== 1) {
+      return "refused";
+    }
     counters[kind] += 1;
     return "queued";
   };
 
   const settle = async (
-    kind: keyof typeof counters,
+    kind: CharacterSwitchActionKind,
     timeoutMs: number,
   ): Promise<NativeSend> => {
     const settled = await waitFor(
-      () => view().getUint32(options.payloadPointer + RESULT_OFFSET, true) !== 0,
+      () => view().getUint32(
+        options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.fields.result,
+        true,
+      ) !== 0,
       timeoutMs,
     );
     if (!settled) {
       options.configure(0, 0);
       return focused() ? "timeout" : "focus";
     }
-    const result = view().getUint32(options.payloadPointer + RESULT_OFFSET, true);
+    const result = view().getUint32(
+      options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.fields.result,
+      true,
+    );
     if (kind === "select") {
-      lastSelectorProofMask = view().getUint32(options.payloadPointer + 36, true) & 0x7fffff;
+      lastSelectorProofMask = view().getUint32(
+        options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.fields.proofMask,
+        true,
+      ) & 0x7fffff;
     }
-    if (result === 1) return "sent";
-    if (result === 2) return "refused";
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.sent) return "sent";
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.refused) return "refused";
     const clickAlreadySent = kind === "select"
-      && (lastSelectorProofMask & (1 << 10)) !== 0;
-    if (result === 4) return clickAlreadySent ? "selection-unconfirmed" : "selector-frame";
-    if (result === 5) return clickAlreadySent ? "selection-unconfirmed" : "selector-child";
-    if (result === 6) return clickAlreadySent ? "selection-unconfirmed" : "selector-index";
-    if (result === 7) return "selection-unconfirmed";
-    if (result === 8) return "play-frame";
-    if (result === 9) return "selector-parent";
-    if (result === 10) return "play-parent";
-    if (result === 11) return "selector-context";
-    if (result === 12) return "selector-target";
-    if (result === 13) return "selector-array";
+      && (lastSelectorProofMask
+        & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.clickSent)) !== 0;
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.selectorFrame) {
+      return clickAlreadySent ? "selection-unconfirmed" : "selector-frame";
+    }
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.selectorChild) {
+      return clickAlreadySent ? "selection-unconfirmed" : "selector-child";
+    }
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.selectorIndex) {
+      return clickAlreadySent ? "selection-unconfirmed" : "selector-index";
+    }
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.selectionUnconfirmed) {
+      return "selection-unconfirmed";
+    }
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.playFrame) return "play-frame";
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.selectorParent) return "selector-parent";
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.playParent) return "play-parent";
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.selectorContext) return "selector-context";
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.selectorTarget) return "selector-target";
+    if (result === CHARACTER_SWITCH_ACTION_ABI.result.selectorArray) return "selector-array";
     return "invalid";
   };
 
   const send = async (
-    kind: keyof typeof counters,
+    kind: CharacterSwitchActionKind,
     argument: number,
     timeoutMs: number,
   ): Promise<NativeSend> => {
@@ -179,7 +251,6 @@ export function createCharacterSwitchController(options: Readonly<{
 
   const run = async (
     snapshotSequence: number,
-    targetIndex: number,
     targetName: string,
     targetKey: string,
     initialSignature: string,
@@ -210,7 +281,7 @@ export function createCharacterSwitchController(options: Readonly<{
     const matches = fresh.characters
       .map(({ name }, index) => name === targetName ? index : -1)
       .filter((index) => index >= 0);
-    if (matches.length !== 1 || fresh.sequence === snapshotSequence && matches[0] !== targetIndex) {
+    if (matches.length !== 1) {
       fail("target-missing");
       return;
     }
@@ -220,7 +291,7 @@ export function createCharacterSwitchController(options: Readonly<{
     // an ambiguous click and must stop without another native action.
     publish({ status: "switching", stage: "selector" }, "selector:list-ready");
     const selectorDeadline = performance.now() + SELECTOR_READY_BUDGET_MS;
-    let selection: NativeSend = "selector-frame";
+    let selection: SelectorOutcome = classifySelectorResult("selector-frame");
     while (performance.now() < selectorDeadline) {
       const settledList = options.characters.state;
       if (!focused()) { fail("focus-lost"); return; }
@@ -228,45 +299,19 @@ export function createCharacterSwitchController(options: Readonly<{
         fail("target-missing");
         return;
       }
-      selection = await send("select", matches[0]!, 4_000);
-      if (selection !== "selector-frame"
-        && selection !== "selector-child"
-        && selection !== "selector-index"
-        && selection !== "selector-context"
-        && selection !== "selector-array"
-        && selection !== "selector-target") {
+      selection = classifySelectorResult(await send("select", matches[0]!, 4_000));
+      if (selection.kind !== "retryable") {
         lastSelectorReadiness = null;
         break;
       }
-      lastSelectorReadiness = selection === "selector-frame" ? "frame"
-        : selection === "selector-child" ? "child"
-          : selection === "selector-index" ? "index"
-            : selection === "selector-context" ? "context"
-              : selection === "selector-array" ? "array" : "target";
+      lastSelectorReadiness = selection.readiness;
       selectorReadinessRetries += 1;
       transition(`selector:waiting-${lastSelectorReadiness}`);
       emit();
       await delay(SELECTOR_READY_POLL_MS);
     }
-    if (selection !== "sent") {
-      const readinessTimedOut = selection === "selector-frame"
-        || selection === "selector-child"
-        || selection === "selector-index"
-        || selection === "selector-context"
-        || selection === "selector-array"
-        || selection === "selector-target";
-      fail(selection === "selector-context" ? "selector-context-invalid"
-        : selection === "selector-array" ? "selector-array-invalid"
-          : selection === "selector-target" ? "selector-target-missing"
-          : readinessTimedOut ? "selector-timeout"
-        : selection === "focus" ? "focus-lost"
-        : selection === "refused" ? "selector-refused"
-          : selection === "selector-frame" ? "selector-frame-missing"
-            : selection === "selector-child" ? "selector-child-missing"
-              : selection === "selector-index" ? "selector-index-invalid"
-                : selection === "selector-parent" ? "selector-parent-invalid"
-                : selection === "selection-unconfirmed" ? "selection-not-confirmed"
-          : selection === "invalid" ? "selector-invalid" : "selection-not-confirmed");
+    if (selection.kind !== "sent") {
+      fail(selection.kind === "retryable" ? selection.terminalCode : selection.code);
       return;
     }
     publish({ status: "switching", stage: "selection" }, "selection:confirmed");
@@ -306,6 +351,59 @@ export function createCharacterSwitchController(options: Readonly<{
     }).catch(() => { /* Switching succeeded; usage persistence is non-critical. */ });
   };
 
+  const start = (characterKey: string, confirmedExplorable: boolean) => {
+    if (action.status === "switching" || (action.status === "confirming" && !confirmedExplorable)) {
+      return;
+    }
+    const state = options.characters.state;
+    if (state.status !== "ready") { fail("list-unavailable", true); return; }
+    const matches = state.characters
+      .map((character, index) => character.characterKey === characterKey ? index : -1)
+      .filter((index) => index >= 0);
+    if (matches.length !== 1) { fail("target-missing", true); return; }
+    const targetIndex = matches[0]!;
+    if (state.selectedIndex === targetIndex) { fail("current-target"); return; }
+    const context = options.controls.switchContext();
+    if (context === "pvp-explorable") { fail("active-pvp"); return; }
+    if (context === "loading") { fail("game-loading", true); return; }
+    if (context === "character-select") { fail("character-select"); return; }
+    if (context === "unavailable") { fail("state-unavailable", true); return; }
+    if (context === "pve-explorable" && !confirmedExplorable) {
+      pendingCharacterKey = characterKey;
+      publish({ status: "confirming" }, "confirmation:required");
+      return;
+    }
+    if (!focused()) { fail("focus-lost", true); return; }
+    const targetName = state.characters[targetIndex]!.name;
+    started = performance.now();
+    requestSequence = state.sequence;
+    actionSequence += 1;
+    lastCode = null;
+    lastSelectorReadiness = null;
+    selectorReadinessRetries = 0;
+    lastSelectorProofMask = 0;
+    requestedListIndex = targetIndex;
+    pendingCharacterKey = null;
+    const drainContext = options.controls.switchContext();
+    if (drainContext !== "outpost"
+      && !(confirmedExplorable && drainContext === "pve-explorable")) {
+      fail(drainContext === "pvp-explorable" ? "active-pvp"
+        : drainContext === "loading" ? "game-loading" : "logout-refused");
+      return;
+    }
+    const logout = queue("logout", 0);
+    if (logout !== "queued") {
+      fail(logout === "focus" ? "focus-lost" : "logout-refused");
+      return;
+    }
+    void run(
+      state.sequence,
+      targetName,
+      characterKey,
+      accountSignature(state),
+    );
+  };
+
   const onFocusPolicyChanged = () => { configure(); };
   window.addEventListener("focus", onFocusPolicyChanged);
   window.addEventListener("blur", onFocusPolicyChanged);
@@ -313,61 +411,28 @@ export function createCharacterSwitchController(options: Readonly<{
   configure();
 
   return Object.freeze({
-    payloadBytes: PAYLOAD_BYTES,
+    payloadBytes: CHARACTER_SWITCH_ACTION_ABI.bytes,
     get characters() { return options.characters.state; },
     get action() { return action; },
     get usage() { return usage; },
     get context() { return options.controls.switchContext(); },
-    request(snapshotSequence: number, targetIndex: number, explorableConfirmed = false) {
-      if (action.status === "switching") return;
-      const state = options.characters.state;
-      if (state.status !== "ready") { fail("list-unavailable", true); return; }
-      if (state.sequence !== snapshotSequence) { fail("stale-snapshot", true); return; }
-      if (!Number.isInteger(targetIndex) || targetIndex < 0
-        || targetIndex >= state.characters.length) { fail("target-missing", true); return; }
-      if (state.selectedIndex === targetIndex) { fail("current-target"); return; }
-      const context = options.controls.switchContext();
-      if (context === "pvp-explorable") { fail("active-pvp"); return; }
-      if (context === "loading") { fail("game-loading", true); return; }
-      if (context === "character-select") { fail("character-select"); return; }
-      if (context === "unavailable") { fail("state-unavailable", true); return; }
-      if (context === "pve-explorable" && !explorableConfirmed) {
-        fail("explorable-confirmation-required", true);
-        return;
-      }
-      if (!focused()) { fail("focus-lost", true); return; }
-      const targetName = state.characters[targetIndex]!.name;
-      const targetKey = state.characters[targetIndex]!.characterKey;
-      started = performance.now();
-      requestSequence = snapshotSequence;
-      actionSequence += 1;
-      lastCode = null;
-      lastSelectorReadiness = null;
-      selectorReadinessRetries = 0;
-      lastSelectorProofMask = 0;
-      requestedListIndex = targetIndex;
-      const drainContext = options.controls.switchContext();
-      if (drainContext !== "outpost"
-        && !(explorableConfirmed && drainContext === "pve-explorable")) {
-        fail(drainContext === "pvp-explorable" ? "active-pvp"
-          : drainContext === "loading" ? "game-loading" : "logout-refused");
-        return;
-      }
-      const logout = queue("logout", 0);
-      if (logout !== "queued") {
-        fail(logout === "focus" ? "focus-lost" : "logout-refused");
-        return;
-      }
-      void run(
-        snapshotSequence,
-        targetIndex,
-        targetName,
-        targetKey,
-        accountSignature(state),
-      );
+    request(characterKey: string) { start(characterKey, false); },
+    confirm() {
+      if (action.status !== "confirming" || pendingCharacterKey === null) return;
+      const characterKey = pendingCharacterKey;
+      pendingCharacterKey = null;
+      start(characterKey, true);
+    },
+    cancelConfirmation() {
+      if (action.status !== "confirming") return;
+      pendingCharacterKey = null;
+      action = Object.freeze({ status: "idle" });
+      transition("confirmation:cancelled");
+      emit();
     },
     reset() {
       if (action.status === "switching") return;
+      pendingCharacterKey = null;
       action = Object.freeze({ status: "idle" });
       transition("idle:reset");
       emit();
@@ -376,11 +441,15 @@ export function createCharacterSwitchController(options: Readonly<{
       const state = options.characters.state;
       const characterCount = state.status === "ready" ? state.characters.length : 0;
       const observedIndex = validPayload()
-        && (lastSelectorProofMask & (1 << 8)) !== 0
-        ? view().getUint32(options.payloadPointer + 32, true)
+        && (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.selectedIndexRead)) !== 0
+        ? view().getUint32(
+            options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.fields.selectedIndex,
+            true,
+          )
         : null;
       return Object.freeze({
-        version: 6,
+        version: 7,
         buildId: options.buildId >>> 0,
         programId: options.programId >>> 0,
         readerState: state.status,
@@ -393,29 +462,43 @@ export function createCharacterSwitchController(options: Readonly<{
         actionSequence: actionSequence >>> 0,
         focused: focused(),
         policyEnabled: focused() && validPayload(),
-        stage: action.stage ?? action.status,
+        stage: "stage" in action ? action.stage : action.status,
         lastCode,
         elapsedBucketMs: started === 0 ? 0 : elapsedBucket(started),
         lastSelectorReadiness,
         selectorReadinessRetries: Math.min(selectorReadinessRetries, 100),
         lastSelectorProofMask,
-        selectorClickProved: (lastSelectorProofMask & (1 << 10)) !== 0,
-        selectorConfirmationProved: (lastSelectorProofMask & (1 << 11)) !== 0,
-        selectorParentResolverProved: (lastSelectorProofMask & (1 << 13)) !== 0,
-        selectorParentIdentityProved: (lastSelectorProofMask & (1 << 14)) !== 0,
-        selectorParentProved: (lastSelectorProofMask & (1 << 16)) !== 0,
-        selectorContextRowsProved: (lastSelectorProofMask & (1 << 17)) !== 0,
-        selectorContextProved: (lastSelectorProofMask & (1 << 18)) !== 0,
-        selectorContextIdentityProved: (lastSelectorProofMask & (1 << 19)) !== 0,
-        selectorCharacterArrayProved: (lastSelectorProofMask & (1 << 20)) !== 0,
-        selectorTargetProved: (lastSelectorProofMask & (1 << 21)) !== 0,
-        selectorTargetPointerProved: (lastSelectorProofMask & (1 << 22)) !== 0,
+        selectorClickProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.clickSent)) !== 0,
+        selectorConfirmationProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.selectionConfirmed)) !== 0,
+        selectorParentResolverProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.parentPointer)) !== 0,
+        selectorParentIdentityProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.parentIdentity)) !== 0,
+        selectorParentProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.parentValidated)) !== 0,
+        selectorContextRowsProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.contextRows)) !== 0,
+        selectorContextProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.contextFound)) !== 0,
+        selectorContextIdentityProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.contextIdentity)) !== 0,
+        selectorCharacterArrayProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.characterArray)) !== 0,
+        selectorTargetProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.targetResolved)) !== 0,
+        selectorTargetPointerProved: (lastSelectorProofMask
+          & (1 << CHARACTER_SWITCH_ACTION_ABI.proof.targetPointer)) !== 0,
         requestedListIndex,
         selectorObservedIndex: observedIndex !== null && observedIndex < characterCount
           ? observedIndex
           : null,
         lastFrameProofMask: validPayload()
-          ? view().getUint32(options.payloadPointer + 36, true) & 0x7fffff
+          ? view().getUint32(
+              options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.fields.proofMask,
+              true,
+            ) & 0x7fffff
           : 0,
         counters: Object.freeze({ ...counters }),
         transitions: Object.freeze([...transitions]),

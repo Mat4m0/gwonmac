@@ -495,6 +495,9 @@ export function supportedEnhancementCapabilities(
       && build.skillCooldownObservation !== undefined,
     playRegionObservation,
     preGameControls: build.preGameControls !== undefined,
+    characterSwitchAction: build.preGameControls?.characterSwitchAction !== undefined
+      && build.uiDispatcher !== undefined
+      && gameThread,
   });
   // Evidence locators decide only what they proved. The shared registry owns
   // every dependency and closes the available set in one canonical place.

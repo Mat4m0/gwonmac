@@ -26,7 +26,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         "26a71c3e2bf55ab992dce659c1192213858ee25799daa87841ed23a3ddbb601a",
       // Recomputed from the exact current JSPI artifact when the independent
       // play-region capability landed. The retained output is the complete
-      // product profile proved by semantic verifier ABI 6.
+      // product profiles proved by the current semantic verifier.
       //
       // `pnpm check` cannot catch a stale value here. The transform input is a
       // derived game binary this repository does not contain, so nothing in the
@@ -36,9 +36,11 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-601":
-          "af3dc189ae50ddacd9c2b0f7027235d80061d8da9308e685029846e0f284c66f",
-        "features-7ff":
-          "d2afd402fcee65e9b1db620d01e7c7b437127d77cb1ec638a812ab0682ee1275",
+          "9de0f92805a704052d5f0ee42a1405055f005d15a81355241a1c642e8ec76718",
+        "features-e01":
+          "62267d95b30752823aa364c289bdc84f2c025dac4caeda86a76a432001667acb",
+        "features-fff":
+          "e22c2c0876f1381a133fbb0c739f73f9fc6a7d8988da5ce0d9789481ab7f0c9e",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is

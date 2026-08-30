@@ -197,6 +197,7 @@ function enhancementCache(
     skillCooldownObservation: capabilities.skillCooldownObservation,
     playRegionObservation: capabilities.playRegionObservation,
     preGameControls: capabilities.preGameControls,
+    characterSwitchAction: capabilities.characterSwitchAction,
   };
   return {
     inputSha256: build.sha256,

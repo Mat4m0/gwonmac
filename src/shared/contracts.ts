@@ -724,6 +724,7 @@ export interface ClientCompatibility {
     skillCooldownObservation: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
+    characterSwitchAction: OptionalFeatureStatus;
   }>;
 }
 

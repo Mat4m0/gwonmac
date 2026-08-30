@@ -24,5 +24,7 @@ export function effectiveCapabilities(
     playRegionObservation:
       features.playRegionObservation.status === "available",
     preGameControls: features.preGameControls.status === "available",
+    characterSwitchAction:
+      features.characterSwitchAction.status === "available",
   });
 }

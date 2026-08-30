@@ -26,8 +26,8 @@ import {
 } from "./enhancements-live/acceptance.js";
 import { runGraphicsProbeSession } from "./enhancements-live/graphics-probe.js";
 import {
-  closedCharacterProbeFailureCode,
-  projectCharacterProbeLiveResult,
+  closedCharacterSwitchFailureCode,
+  projectCharacterSwitchLiveResult,
   projectLiveResult,
 } from "./enhancements-live/result.js";
 
@@ -62,6 +62,7 @@ if (!plan) {
   process.exit(2);
 }
 const selectedScenario = plan.scenario;
+const privacySensitive = plan.name === "character-switch";
 const preflight = await inspectEnhancementWorkspace(
   userData,
   plan.scenario.program,
@@ -113,7 +114,7 @@ const captureProcessOutput = (chunk: Buffer) => {
     -MAX_PROCESS_OUTPUT_BYTES,
   );
 };
-if (plan.scenario.program !== "character-list-probe") {
+if (!privacySensitive) {
   stdout.on("data", captureProcessOutput);
   stderr.on("data", captureProcessOutput);
 }
@@ -207,13 +208,13 @@ try {
     candidate.on("console", (message) => {
       if (message.type() !== "error") return;
       rendererErrorCount += 1;
-      if (plan.scenario.program !== "character-list-probe") {
+      if (!privacySensitive) {
         rendererErrors.push(message.text());
       }
     });
     candidate.on("pageerror", (error) => {
       rendererErrorCount += 1;
-      if (plan.scenario.program !== "character-list-probe") {
+      if (!privacySensitive) {
         rendererErrors.push(error.message);
       }
     });
@@ -272,10 +273,10 @@ try {
       snapshotComplete: preflight.snapshot?.complete === true,
       transformedCache: preflight.client.transformedCache,
     },
-    rendererErrors: plan.scenario.program === "character-list-probe"
+    rendererErrors: privacySensitive
       ? []
       : [...rendererErrors],
-    ...(plan.scenario.program === "character-list-probe"
+    ...(privacySensitive
       ? { rendererErrorCount }
       : {}),
   });
@@ -330,8 +331,8 @@ try {
     // privacy contract: publish only exact-build status, counts, and its closed
     // aggregate evidence. Keep the full projection in memory solely for the
     // existing common acceptance checks; never persist or print it.
-    result = plan.scenario.program === "character-list-probe"
-      ? projectCharacterProbeLiveResult(
+    result = privacySensitive
+      ? projectCharacterSwitchLiveResult(
           standardResult,
           scenarioEvidence,
           rendererErrorCount,
@@ -376,7 +377,7 @@ try {
   if (
     plan.scenario.program !== "toolbox-foundation"
     && plan.scenario.program !== "reconnect-probe"
-    && plan.scenario.program !== "character-list-probe"
+    && !privacySensitive
     && failurePage
     && !failurePage.isClosed()
   ) {
@@ -387,35 +388,26 @@ try {
   await writeFile(
     path.join(failureDir, "failure.json"),
     JSON.stringify({
-      message: plan.name === "character-switch"
+      message: privacySensitive
         ? "character-switch-failed"
-        : plan.name === "character-selector-trace"
-          ? "character-selector-trace-failed"
-        : plan.scenario.program === "character-list-probe"
-          ? "character-list-probe-failed"
-          : error instanceof Error
-            ? error.message
-            : String(error),
+        : error instanceof Error
+          ? error.message
+          : String(error),
       result: failureResult,
-      ...(plan.scenario.program === "character-list-probe" && failureResult === null
-        ? { startupCode: closedCharacterProbeFailureCode(error) }
+      ...(privacySensitive && failureResult === null
+        ? { startupCode: closedCharacterSwitchFailureCode(error) }
         : {}),
-      rendererErrors: plan.scenario.program === "character-list-probe"
+      rendererErrors: privacySensitive
         ? []
         : rendererErrors,
-      processOutput: plan.scenario.program === "character-list-probe"
+      processOutput: privacySensitive
         ? null
         : processOutput,
     }),
   );
-  if (plan.scenario.program === "character-list-probe") {
-    const label = plan.name === "character-switch"
-      ? "character switch"
-      : plan.name === "character-selector-trace"
-        ? "character Selector trace"
-        : "character-list probe";
+  if (privacySensitive) {
     console.error(
-      `${label} failed; inspect the privacy-safe failure.json`,
+      "character switch failed; inspect the privacy-safe failure.json",
     );
   } else {
     console.error(error);

@@ -4,7 +4,6 @@
  */
 import type {
   CharacterSummary,
-  CompanionCharacterListState,
 } from "./companion-character-list-snapshot.js";
 import { professionPresentation } from "../shared/profession-assets.js";
 import { travelDestination } from "../shared/travel-destinations.js";
@@ -12,58 +11,10 @@ import {
   EMPTY_CHARACTER_SWITCH_USAGE,
   type CharacterSwitchUsageDocument,
 } from "../shared/character-switch-usage.js";
-
-export type CharacterSwitchFailureCode =
-  | "play-path-unproved"
-  | "list-unavailable"
-  | "current-target"
-  | "busy"
-  | "active-pvp"
-  | "game-loading"
-  | "character-select"
-  | "state-unavailable"
-  | "explorable-confirmation-required"
-  | "focus-lost"
-  | "stale-snapshot"
-  | "target-missing"
-  | "logout-refused"
-  | "logout-invalid"
-  | "logout-timeout"
-  | "selector-timeout"
-  | "selector-refused"
-  | "selector-invalid"
-  | "selector-frame-missing"
-  | "selector-child-missing"
-  | "selector-index-invalid"
-  | "selector-context-invalid"
-  | "selector-array-invalid"
-  | "selector-target-missing"
-  | "selector-parent-invalid"
-  | "selection-not-confirmed"
-  | "play-refused"
-  | "play-invalid"
-  | "play-frame-missing"
-  | "play-parent-invalid"
-  | "play-timeout"
-  | "confirmation-timeout";
-
-export type CharacterSwitchActionState = Readonly<{
-  status: "idle" | "switching" | "failed" | "complete";
-  stage?: "logout" | "selector" | "selection" | "play" | "confirmation";
-  code?: CharacterSwitchFailureCode;
-  retryable?: boolean;
-}>;
-
-export interface CharacterSwitchSource {
-  readonly characters: CompanionCharacterListState;
-  readonly action: CharacterSwitchActionState;
-  readonly usage: CharacterSwitchUsageDocument;
-  readonly context: CharacterSwitchContext;
-  request(sequence: number, index: number, explorableConfirmed?: boolean): void;
-  reset(): void;
-  diagnostics(): Readonly<Record<string, unknown>>;
-  subscribe(listener: () => void): () => void;
-}
+import type {
+  CharacterSwitchFailureCode,
+  CharacterSwitchSource,
+} from "./character-switch-model.js";
 
 const failureMessage = (code: CharacterSwitchFailureCode): string => {
   switch (code) {
@@ -75,9 +26,7 @@ const failureMessage = (code: CharacterSwitchFailureCode): string => {
     case "game-loading": return "Wait until Guild Wars finishes loading, then try again.";
     case "character-select": return "Continue from the Guild Wars character selector.";
     case "state-unavailable": return "Guild Wars is not ready for character switching.";
-    case "explorable-confirmation-required": return "Confirm before leaving this explorable area.";
     case "focus-lost": return "Return focus to Guild Wars and try again.";
-    case "stale-snapshot": return "The character list changed. Reopen the palette.";
     case "logout-refused":
     case "logout-invalid":
     case "logout-timeout": return "Guild Wars could not leave this area. Return to an outpost and try again.";
@@ -179,29 +128,11 @@ export function createCharacterSwitchPalette(
   const document = parent.ownerDocument;
   const canvas = document.getElementById("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) throw new Error("game canvas is missing");
-  const style = document.createElement("style");
-  style.textContent = `
-    #character-switch-root{position:fixed;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:0;border:0;overflow:visible;background:transparent;color:var(--ui-text)}
-    #character-switch-root::backdrop{background:var(--ui-overlay-fill)}
-    .character-switch-panel{position:fixed;top:clamp(160px,23vh,280px);left:50%;width:min(430px,calc(100vw - 48px));max-height:min(620px,calc(77vh - 24px));display:flex;min-height:0;flex-direction:column;overflow:hidden;transform:translateX(-50%);color:var(--ui-text);background:var(--ui-panel-fill);box-shadow:var(--ui-shadow);font:var(--ui-font-size)/var(--ui-line-height) var(--ui-font);-webkit-font-smoothing:antialiased;animation:character-switch-enter calc(var(--ui-duration) * 1.5) var(--ui-ease-out)}
-    .character-switch-panel,.character-switch-panel *{box-sizing:border-box}
-    .character-switch-head{min-height:52px;display:flex;align-items:center;gap:var(--ui-space-2);padding:var(--ui-space-2) var(--ui-space-3);border-bottom:1px solid var(--ui-line)}.character-switch-head h2{margin:0;color:var(--ui-text-bright);font:inherit;font-size:var(--ui-font-size-lg);font-weight:var(--ui-font-weight-semibold)}.character-switch-count{margin-left:auto;color:var(--ui-text-faint);font-size:var(--ui-font-size-sm);font-variant-numeric:tabular-nums}.character-switch-head-action{width:34px;min-width:34px;min-height:34px;padding:0;border-color:transparent;background:transparent;box-shadow:none}.character-switch-head-action:hover:not(:disabled),.character-switch-head-action[aria-pressed=true]{background:var(--ui-hover)}.character-switch-head-action svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.75}
-    .character-switch-search{position:relative;padding:var(--ui-space-2) var(--ui-space-3);border-bottom:1px solid var(--ui-line-soft)}.character-switch-search svg{position:absolute;left:calc(var(--ui-space-3) + 10px);top:50%;width:16px;height:16px;transform:translateY(-50%);fill:none;stroke:currentColor;stroke-width:1.5;color:var(--ui-text-faint);pointer-events:none}.character-switch-search .ui-input{width:100%;padding-left:34px}
-    .character-switch-list{list-style:none;min-height:0;margin:0;padding:var(--ui-space-1);overflow:auto;overscroll-behavior:contain}.character-switch-row{width:100%;min-height:42px;display:flex;align-items:center;gap:var(--ui-space-2);padding:var(--ui-space-1) var(--ui-space-2);border:0;border-radius:var(--ui-radius-sm);background:transparent;color:inherit;text-align:left;font:inherit}.character-switch-row:hover:not(:disabled){background:var(--ui-hover)}.character-switch-row[data-selected=true]{background:var(--ui-selection-fill)}.character-switch-row:focus-visible{outline:2px solid var(--ui-focus);outline-offset:-2px;box-shadow:none}.character-switch-row:active:not(:disabled){transform:scale(.96)}.character-switch-row:disabled{cursor:default;opacity:.52}.character-switch-row img{width:28px;height:28px;flex:none;outline:1px solid oklch(1 0 0 / .1)}.character-switch-key{width:20px;flex:none;color:var(--ui-text-faint);font-size:var(--ui-font-size-sm);font-variant-numeric:tabular-nums;text-align:center}.character-switch-copyline{min-width:0;flex:1}.character-switch-primary,.character-switch-meta{display:flex;min-width:0;align-items:center;gap:var(--ui-space-2)}.character-switch-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.character-switch-current{font-size:var(--ui-font-size-sm);color:var(--ui-text-muted)}.character-switch-meta{min-width:0;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ui-text-faint);font-size:var(--ui-font-size-sm)}
-    .character-switch-settings{display:grid;gap:var(--ui-space-2);padding:var(--ui-space-4)}.character-switch-setting{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--ui-space-3);padding:var(--ui-space-2);border-radius:var(--ui-radius-sm)}.character-switch-setting:hover{background:var(--ui-hover)}.character-switch-setting strong,.character-switch-setting small{display:block}.character-switch-setting strong{color:var(--ui-text-bright);font-weight:var(--ui-font-weight-semibold)}.character-switch-setting small{margin-top:2px;color:var(--ui-text-faint);font-size:var(--ui-font-size-sm)}
-    .character-switch-confirm{display:grid;gap:var(--ui-space-2);padding:var(--ui-space-4)}.character-switch-confirm p{margin:0;color:var(--ui-text-muted)}.character-switch-confirm-actions{display:flex;justify-content:flex-end;gap:var(--ui-space-2);padding-top:var(--ui-space-2)}
-    .character-switch-status{margin:0;padding:var(--ui-space-2) var(--ui-space-3);border-top:1px solid var(--ui-line-soft);color:var(--ui-text-muted);font-size:var(--ui-font-size-sm)}.character-switch-status[data-level=warning]{color:var(--ui-warning)}.character-switch-details{padding:0 var(--ui-space-3) var(--ui-space-2);color:var(--ui-text-muted);font-size:var(--ui-font-size-sm)}.character-switch-details summary{padding-block:var(--ui-space-2);cursor:pointer}.character-switch-details pre{max-height:130px;margin:0;overflow:auto;white-space:pre-wrap;font-size:11px}.character-switch-copy{margin-top:var(--ui-space-2)}
-    .character-switch-footer{display:flex;align-items:center;justify-content:flex-end;gap:var(--ui-space-1);padding:var(--ui-space-2) var(--ui-space-3);border-top:1px solid var(--ui-line-soft);color:var(--ui-text-faint);font-size:var(--ui-font-size-sm)}.character-switch-details[hidden],.character-switch-status[hidden],.character-switch-list[hidden],.character-switch-search[hidden],.character-switch-settings[hidden],.character-switch-confirm[hidden],.character-switch-hints[hidden]{display:none}
-    .character-switch-panel ::selection{background:var(--ui-accent-strong);color:var(--ui-text-bright)}
-    @keyframes character-switch-enter{from{opacity:.72;transform:translateX(-50%) translateY(-5px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-    @media(prefers-reduced-motion:reduce){.character-switch-panel{animation:none}}
-    @media(max-height:560px){.character-switch-panel{top:clamp(96px,23vh,160px);max-height:calc(100vh - clamp(96px,23vh,160px) - 12px)}}
-  `;
   const root = document.createElement("dialog");
   root.id = "character-switch-root";
   root.setAttribute("aria-labelledby", "character-switch-title");
   root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><section class="character-switch-settings" aria-label="Character Switch settings" hidden><label class="character-switch-setting" for="character-switch-show-details"><span><strong>Show character details</strong><small>Profession, level, and known location</small></span><input id="character-switch-show-details" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" class="ui-button character-switch-stay">Stay here</button><button type="button" class="ui-button character-switch-leave" data-variant="primary">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"><kbd class="ui-kbd">tab</kbd> or <kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> close</span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span></footer></div>`;
-  parent.append(style, root);
+  parent.append(root);
   const list = root.querySelector<HTMLUListElement>(".character-switch-list")!;
   list.classList.add("ui-scroll");
   list.setAttribute("role", "listbox");
@@ -232,12 +163,7 @@ export function createCharacterSwitchPalette(
     | Readonly<{ kind: "closed" }>
     | Readonly<{ kind: "characters" }>
     | Readonly<{ kind: "settings" }>
-    | Readonly<{
-        kind: "confirming";
-        sequence: number;
-        index: number;
-        characterKey: string;
-      }>;
+    | Readonly<{ kind: "confirming" }>;
   let view: ViewState = Object.freeze({ kind: "closed" });
   let selected = 0;
   let query = "";
@@ -408,6 +334,7 @@ export function createCharacterSwitchPalette(
   };
   const closePalette = (resetFailure: boolean) => {
     if (view.kind === "closed") return;
+    if (view.kind === "confirming") source.cancelConfirmation();
     view = Object.freeze({ kind: "closed" });
     surface.setOpen(false);
     if (root.open) root.close();
@@ -429,34 +356,28 @@ export function createCharacterSwitchPalette(
     render();
     focusCharacters();
   };
-  const beginRequest = (sequence: number, index: number, explorableConfirmed = false) => {
+  const beginRequest = (characterKey: string) => {
     if (source.action.status === "failed") source.reset();
-    source.request(sequence, index, explorableConfirmed);
+    source.request(characterKey);
     if (source.action.status === "switching") closePalette(false);
+    else if (source.action.status === "confirming") {
+      view = Object.freeze({ kind: "confirming" });
+      render();
+      stayButton.focus({ preventScroll: true });
+    }
     else render();
   };
   const requestSelected = () => {
     const state = source.characters;
     const row = rows[selected];
     if (state.status !== "ready" || !row || row.index === state.selectedIndex) return;
-    if (source.action.status === "failed") source.reset();
-    if (source.context === "pve-explorable") {
-      view = Object.freeze({
-        kind: "confirming",
-        sequence: state.sequence,
-        index: row.index,
-        characterKey: row.character.characterKey,
-      });
-      render();
-      stayButton.focus({ preventScroll: true });
-      return;
-    }
-    beginRequest(state.sequence, row.index);
+    beginRequest(row.character.characterKey);
   };
   root.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
       if (view.kind === "confirming" || view.kind === "settings") {
+        if (view.kind === "confirming") source.cancelConfirmation();
         view = Object.freeze({ kind: "characters" });
         render();
         focusCharacters();
@@ -557,23 +478,17 @@ export function createCharacterSwitchPalette(
   });
   stayButton.addEventListener("click", () => {
     if (view.kind !== "confirming") return;
+    source.cancelConfirmation();
     view = Object.freeze({ kind: "characters" });
     render();
     focusCharacters();
   });
   leaveButton.addEventListener("click", () => {
     if (view.kind !== "confirming") return;
-    const confirmation = view;
-    const state = source.characters;
     view = Object.freeze({ kind: "characters" });
-    if (state.status !== "ready") {
-      beginRequest(confirmation.sequence, confirmation.index, true);
-      return;
-    }
-    const currentIndex = state.characters.findIndex(
-      ({ characterKey }) => characterKey === confirmation.characterKey,
-    );
-    beginRequest(state.sequence, currentIndex, true);
+    source.confirm();
+    if (source.action.status === "switching") closePalette(false);
+    else render();
   });
   root.querySelector(".character-switch-copy")!.addEventListener("click", () => {
     void navigator.clipboard.writeText(JSON.stringify(source.diagnostics()));
@@ -618,6 +533,5 @@ export function createCharacterSwitchPalette(
     surface.dispose();
     window.removeEventListener("gw:character-toggle", onToggle);
     root.remove();
-    style.remove();
   } });
 }

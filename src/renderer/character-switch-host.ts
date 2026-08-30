@@ -2,7 +2,7 @@
  * Keeps Command-R owned by Core even when the current game build is unsupported.
  * A certified installation may replace only the source, never shortcut ownership.
  */
-import type { CharacterSwitchSource } from "./character-switch-palette.js";
+import type { CharacterSwitchSource } from "./character-switch-model.js";
 import { createCharacterSwitchPalette } from "./character-switch-palette.js";
 import { EMPTY_CHARACTER_SWITCH_USAGE } from "../shared/character-switch-usage.js";
 
@@ -15,10 +15,16 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
   const listeners = new Set<() => void>();
   const unavailable: CharacterSwitchSource = Object.freeze({
     characters: Object.freeze({ status: "waiting", reason: "memory" }),
-    action: Object.freeze({ status: "failed", code: "play-path-unproved" }),
+    action: Object.freeze({
+      status: "failed",
+      code: "play-path-unproved",
+      retryable: false,
+    }),
     usage: EMPTY_CHARACTER_SWITCH_USAGE,
     context: "unavailable",
     request() {},
+    confirm() {},
+    cancelConfirmation() {},
     reset() {},
     diagnostics: () => Object.freeze({ version: 1, stage: "unavailable", lastCode: "play-path-unproved" }),
     subscribe() { return () => {}; },
@@ -30,9 +36,9 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
     get action() { return source.action; },
     get usage() { return source.usage; },
     get context() { return source.context; },
-    request(sequence: number, index: number, explorableConfirmed?: boolean) {
-      source.request(sequence, index, explorableConfirmed);
-    },
+    request(characterKey: string) { source.request(characterKey); },
+    confirm() { source.confirm(); },
+    cancelConfirmation() { source.cancelConfirmation(); },
     reset() { source.reset(); },
     diagnostics() { return source.diagnostics(); },
     subscribe(listener: () => void) { listeners.add(listener); listener(); return () => { listeners.delete(listener); }; },

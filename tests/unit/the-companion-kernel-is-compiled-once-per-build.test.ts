@@ -42,7 +42,8 @@ function rendererCheckout(): string {
   };
   write(
     "src/renderer/index.html",
-    "<!doctype html>\n        <!-- build-include:settings-cartography.html -->\n",
+    "<!doctype html>\n        <!-- build-include:settings-cartography.html -->\n"
+      + "        <!-- build-include:settings-character-switch.html -->\n",
   );
   write("src/renderer/accounts.html", "<!doctype html>\n");
   write("src/renderer/accounts.css", "css");
@@ -53,8 +54,10 @@ function rendererCheckout(): string {
   write("src/renderer/harness.css", "css");
   write("src/renderer/loading.css", "css");
   write("src/renderer/cartography-overlay-controls.css", "controls-css");
+  write("src/renderer/character-switch.css", "character-css");
   write("src/renderer/settings-cartography.css", "cartography-css");
   write("src/renderer/settings-cartography.html", "        <section>Cartography</section>\n");
+  write("src/renderer/settings-character-switch.html", "        <section>Characters</section>\n");
   write("src/renderer/settings.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
@@ -114,7 +117,8 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
   it("still produces the renderer tree and its static media", () => {
     assert.equal(
       readFileSync(path.join(root, "build/renderer/index.html"), "utf8"),
-      "<!doctype html>\n        <section>Cartography</section>\n",
+      "<!doctype html>\n        <section>Cartography</section>\n"
+        + "        <section>Characters</section>\n",
     );
     assert.equal(
       existsSync(path.join(root, "build/renderer/settings-cartography.html")),
@@ -164,6 +168,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "accounts.css",
       "accounts.html",
       "cartography-overlay-controls.css",
+      "character-switch.css",
       "favicon.ico",
       "favicon.png",
       "fonts/COPYING-INTER",

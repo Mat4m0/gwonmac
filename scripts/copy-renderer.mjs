@@ -15,6 +15,7 @@ const ASSETS = [
   "accounts.css",
   "accounts.html",
   "cartography-overlay-controls.css",
+  "character-switch.css",
   "favicon.ico",
   "favicon.png",
   "fonts/COPYING-QUALITYPE",
@@ -86,18 +87,19 @@ for (const relative of ASSETS) {
 
 // Keep the source settings shell reviewable without adding a runtime fetch or
 // shipping an internal fragment. The packaged renderer remains one document.
-const settingsPartialMarker = "        <!-- build-include:settings-cartography.html -->";
-const indexSource = fs.readFileSync(path.resolve("src/renderer/index.html"), "utf8");
-if (indexSource.split(settingsPartialMarker).length !== 2) {
-  throw new Error("index.html must contain exactly one Cartography settings include");
+const settingsPartials = ["settings-cartography.html", "settings-character-switch.html"];
+let indexSource = fs.readFileSync(path.resolve("src/renderer/index.html"), "utf8");
+for (const partial of settingsPartials) {
+  const marker = `        <!-- build-include:${partial} -->`;
+  if (indexSource.split(marker).length !== 2) {
+    throw new Error(`index.html must contain exactly one ${partial} include`);
+  }
+  const contents = fs.readFileSync(path.resolve("src/renderer", partial), "utf8").trimEnd();
+  indexSource = indexSource.replace(marker, contents);
 }
-const settingsPartial = fs.readFileSync(
-  path.resolve("src/renderer/settings-cartography.html"),
-  "utf8",
-).trimEnd();
 fs.writeFileSync(
   path.join(dest, "index.html"),
-  indexSource.replace(settingsPartialMarker, settingsPartial),
+  indexSource,
 );
 for (const [from, relative] of SHARED_ASSETS) {
   copy(path.resolve(from), relative);

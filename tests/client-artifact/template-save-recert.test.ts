@@ -166,6 +166,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   const withoutCharacterSwitch = Object.freeze({
     ...ENHANCEMENT_CAPABILITY_PRESETS.all,
     preGameControls: false,
+    characterSwitchAction: false,
   });
   const verifyFeatureMutation = (candidate: Uint8Array) =>
     verifyLocalClientBytes(candidate, withoutCharacterSwitch);
@@ -181,6 +182,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillCooldownObservation: true,
     playRegionObservation: true,
     preGameControls: true,
+    characterSwitchAction: true,
   });
 
   // If this is a statically shipped build, the shape locator must still
@@ -310,6 +312,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillCooldownObservation: false,
     playRegionObservation: true,
     preGameControls: false,
+    characterSwitchAction: false,
   });
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
@@ -330,6 +333,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     skillCooldownObservation: false,
     playRegionObservation: true,
     preGameControls: false,
+    characterSwitchAction: false,
   });
 
   const areaInfo = playRegionLocation.playRegionLayout.areaInfo;

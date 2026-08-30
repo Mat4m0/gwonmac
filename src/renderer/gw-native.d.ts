@@ -33,10 +33,12 @@ import type {
   PathingSpikeController,
   WorldMapAnchorSpikeController,
 } from "../shared/cartography-spike.js";
-import type { CharacterListProbeProjection } from "./character-list-probe.js";
 import type { CompanionCharacterListState } from "./companion-character-list-snapshot.js";
 import type { CharacterSwitchHost } from "./character-switch-host.js";
-import type { CharacterSwitchSource } from "./character-switch-palette.js";
+import type {
+  CharacterSwitchContext as SharedCharacterSwitchContext,
+  CharacterSwitchSource,
+} from "./character-switch-model.js";
 import type {
   InputTrace as SharedInputTrace,
   InputTraceEntry as SharedInputTraceEntry,
@@ -214,13 +216,7 @@ declare global {
   }
 
   type PreGameState = "unknown" | "character-select" | "reconnect" | "loading";
-  type CharacterSwitchContext =
-    | "outpost"
-    | "pve-explorable"
-    | "pvp-explorable"
-    | "loading"
-    | "character-select"
-    | "unavailable";
+  type CharacterSwitchContext = SharedCharacterSwitchContext;
 
   interface PreGameControls {
     state(): PreGameState;
@@ -228,10 +224,6 @@ declare global {
     diagnosticMask(): number;
   }
 
-  interface CharacterListProbe {
-    read(): CharacterListProbeProjection;
-    dispose(): void;
-  }
   interface CharacterListSource {
     readonly state: CompanionCharacterListState;
     subscribe(listener: (state: CompanionCharacterListState) => void): () => boolean;
@@ -316,7 +308,6 @@ declare global {
     gwCharacterSwitchHost?: CharacterSwitchHost | null;
     gwCharacterSwitch?: CharacterSwitchSource | null;
     /** Unpackaged, read-only account-character research projection. */
-    gwCharacterListProbe?: CharacterListProbe | null;
     gwCompanionState?: PublishedCompanionState;
     /** The cursor's bounded presentation state; present once the nativeCursor enhancement installs. */
     gwCursorState?(): Readonly<{

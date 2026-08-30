@@ -25,7 +25,10 @@ export type CompatibilityReport = {
 };
 
 type Feature = keyof ClientCompatibility['features'];
-type VisibleFeature = Exclude<Feature, 'playRegionObservation' | 'preGameControls'>;
+type VisibleFeature = Exclude<
+  Feature,
+  'playRegionObservation' | 'preGameControls' | 'characterSwitchAction'
+>;
 
 const FEATURE_NAMES: Readonly<Record<VisibleFeature, string>> = Object.freeze({
   gameFileSaving: 'Guild Wars file saving',
@@ -48,7 +51,6 @@ const PROGRAM_NAMES: Readonly<Record<Exclude<EnhancementProgram, 'none'>, string
     'toolbox-commands': 'Toolbox Commands',
     'xunlai-storage': 'Xunlai Storage',
     'reconnect-probe': 'Reconnect Probe',
-    'character-list-probe': 'Character List Probe',
   });
 
 function unavailableFeatures(compatibility: ClientCompatibility): VisibleFeature[] {

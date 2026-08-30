@@ -220,7 +220,6 @@ const developerProgramNames: Readonly<Record<
   'toolbox-commands': 'Toolbox Commands',
   'xunlai-storage': 'Xunlai Storage',
   'reconnect-probe': 'Reconnect Probe',
-  'character-list-probe': 'Character List Probe',
 });
 const developerProgram = native().init.enhancementProgram;
 if (developerProgram !== 'none') {

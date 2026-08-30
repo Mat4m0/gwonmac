@@ -23,10 +23,10 @@ test("retains bounded generation evidence without paths or raw addresses", async
   const jsDigest = sha256(js);
   const outputDigest = sha256("output");
   const fileOutputDigest = sha256("file-output");
-  const feature601Input = sha256("features-601-input");
-  const feature601DoubleClick = sha256("features-601-double-click");
-  const feature7ffInput = sha256("features-7ff-input");
-  const feature7ffDoubleClick = sha256("features-7ff-double-click");
+  const feature601Input = sha256("features-e01-input");
+  const feature601DoubleClick = sha256("features-e01-double-click");
+  const feature7ffInput = sha256("features-fff-input");
+  const feature7ffDoubleClick = sha256("features-fff-double-click");
   const generation = sha256("generation");
   const commit = "a".repeat(40);
   const files = {
@@ -46,12 +46,12 @@ test("retains bounded generation evidence without paths or raw addresses", async
       inputSha256: fileOutputDigest,
       outputSha256: outputDigest,
     }, {
-      profile: "features-601",
+      profile: "features-e01",
       inputSha256: feature601Input,
       outputSha256: feature601DoubleClick,
       enhancementInputSha256: fileOutputDigest,
     }, {
-      profile: "features-7ff",
+      profile: "features-fff",
       inputSha256: feature7ffInput,
       outputSha256: feature7ffDoubleClick,
       enhancementInputSha256: fileOutputDigest,
@@ -71,11 +71,11 @@ test("retains bounded generation evidence without paths or raw addresses", async
       outputSha256: outputDigest,
       pointerAddress: 0x1234,
     }, {
-      profile: "features-601",
+      profile: "features-e01",
       inputSha256: feature601DoubleClick,
       outputSha256: outputDigest,
     }, {
-      profile: "features-7ff",
+      profile: "features-fff",
       inputSha256: feature7ffDoubleClick,
       outputSha256: outputDigest,
     }],
@@ -173,7 +173,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
       extendedMemory: {
         ...extendedMemory,
         variants: extendedMemory.variants.map((variant) =>
-          variant.profile === "features-601"
+          variant.profile === "features-e01"
             ? { ...variant, inputSha256: sha256("wrong-chain") }
             : variant),
       },
@@ -182,7 +182,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
       doubleClick: {
         ...doubleClick,
         chains: doubleClick.chains.map((chain) =>
-          chain.profile === "features-601"
+          chain.profile === "features-e01"
             ? { ...chain, enhancementInputSha256: sha256("wrong-enhancement-input") }
             : chain),
       },
@@ -213,7 +213,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
     for (const invalidDoubleClick of [{
       ...doubleClick,
       chains: doubleClick.chains.map((chain) =>
-        chain.profile === "features-601"
+        chain.profile === "features-e01"
           ? {
               profile: chain.profile,
               inputSha256: chain.inputSha256,

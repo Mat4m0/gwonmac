@@ -154,6 +154,10 @@ function featureFailuresFromVerdicts(
     "preGameControls",
     verdicts.preGameControls,
   );
+  const characterSwitchAction = refusalForFeature(
+    "characterSwitchAction",
+    verdicts.characterSwitchAction,
+  );
   if (
     nativeCursor === null
     || playRegionObservation === null
@@ -166,6 +170,7 @@ function featureFailuresFromVerdicts(
     || skillSlotGeometry === null
     || skillCooldownObservation === null
     || preGameControls === null
+    || characterSwitchAction === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -179,6 +184,7 @@ function featureFailuresFromVerdicts(
     ...(skillSlotGeometry ? { skillSlotGeometry } : {}),
     ...(skillCooldownObservation ? { skillCooldownObservation } : {}),
     ...(preGameControls ? { preGameControls } : {}),
+    ...(characterSwitchAction ? { characterSwitchAction } : {}),
   });
 }
 

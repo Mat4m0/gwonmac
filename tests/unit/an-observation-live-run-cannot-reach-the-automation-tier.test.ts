@@ -9,10 +9,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { CDPSession, Page } from "playwright";
 import {
-  changedWasmCallCounts,
   liveRunPlan,
   liveRunRefusal,
-  projectWasmCallCounts,
   scenarioContext,
   SCENARIOS,
   waitForPlayable,
@@ -192,11 +190,8 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.deepEqual(
       Object.keys(observation).sort(),
       [
-        "captureWasmCallCounts",
-        "readCharacterListProjection",
         "readCharacterSwitchDiagnostics",
         "readCursorProjection",
-        "readRendererErrorCount",
         "wait",
       ],
     );
@@ -227,32 +222,6 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.equal("run" in graphics, false);
   });
 
-  it("projects only bounded numeric WASM samples and compares equal windows", () => {
-    const coverage = projectWasmCallCounts({
-      profile: {
-        nodes: [
-          { id: 1, callFrame: { functionName: "wasm-function[6508]" } },
-          { id: 2, callFrame: { functionName: "wasm-function[6797]" } },
-          { id: 3, callFrame: { functionName: "not-wasm" } },
-          { id: 4, callFrame: { functionName: "private value that must not survive" } },
-        ],
-        samples: [1, 1, 1, 2, 3, 4],
-      },
-    });
-    assert.deepEqual(coverage, [
-      { functionIndex: 6508, sampleCount: 3 },
-      { functionIndex: 6797, sampleCount: 1 },
-    ]);
-    assert.deepEqual(changedWasmCallCounts(
-      [{ functionIndex: 6508, sampleCount: 2 }],
-      coverage,
-    ), [
-      { functionIndex: 6508, sampleCount: 3, baselineCount: 2, excessCount: 1 },
-      { functionIndex: 6797, sampleCount: 1, baselineCount: 0, excessCount: 1 },
-    ]);
-    assert.doesNotMatch(JSON.stringify(coverage), /private|not-wasm/);
-  });
-
   it("lets an observation scenario read only its fixed projections", async () => {
     const context = scenarioContext("observation", {
       page: asPage({
@@ -263,64 +232,12 @@ describe("an observation live run cannot reach the automation tier", () => {
       sendAutomationCommand: async () => undefined,
     }) as {
       readCursorProjection: () => Promise<unknown>;
-      readCharacterListProjection: () => Promise<unknown>;
-      readRendererErrorCount: () => number;
+      readCharacterSwitchDiagnostics: () => Promise<unknown>;
       wait: (ms: number) => Promise<unknown>;
     };
     assert.equal(await context.readCursorProjection(), "read");
-    assert.equal(await context.readCharacterListProjection(), "read");
-    assert.equal(context.readRendererErrorCount(), 0);
+    assert.equal(await context.readCharacterSwitchDiagnostics(), "read");
     assert.equal(await context.wait(1), undefined);
-  });
-
-  it("attributes the one expected renderer teardown error only to reload", () => {
-    const phase = (name: string, start = 0, end = start) => ({
-      name,
-      sampleCount: 1,
-      missedSampleCount: 0,
-      rendererErrorCountStart: start,
-      rendererErrorCountEnd: end,
-      first: { reason: null },
-      last: { reason: null },
-      statuses: ["ready"],
-      counts: [1],
-      revisions: [1],
-      transitions: ["unchanged"],
-      maxStableRootReads: 3,
-    });
-    const names = [
-      "cold-before-login",
-      "login-to-character-select",
-      "settled-character-select",
-      "selection-changes",
-      "first-outpost",
-      "settled-in-world",
-      "logout-to-character-select",
-      "second-character",
-      "renderer-reload",
-      "post-reload",
-    ];
-    const scenario = scenarios["character-list"]!;
-    const accepted = names.map((name) =>
-      name === "renderer-reload" ? phase(name, 0, 1) : phase(name));
-    assert.doesNotThrow(() => scenario.validate({
-      rendererErrorCount: 1,
-      evidence: { phases: accepted },
-    }));
-    assert.throws(() => scenario.validate({
-      rendererErrorCount: 1,
-      evidence: {
-        phases: names.map((name) =>
-          name === "first-outpost" ? phase(name, 0, 1) : phase(name)),
-      },
-    }), /closed projection/);
-    assert.throws(() => scenario.validate({
-      rendererErrorCount: 2,
-      evidence: {
-        phases: names.map((name) =>
-          name === "renderer-reload" ? phase(name, 0, 2) : phase(name)),
-      },
-    }), /closed projection/);
   });
 
   it("synthesizes no bootstrap input when the client is not yet playable", async () => {

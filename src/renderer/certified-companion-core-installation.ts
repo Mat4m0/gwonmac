@@ -8,6 +8,7 @@ import {
   type EnhancementProgram,
 } from "../shared/enhancement-contracts.js";
 import { COMPANION_ABI, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
+import { CHARACTER_SWITCH_ACTION_ABI } from "../shared/character-switch-action-abi.js";
 import type {
   EnhancementObserverConsumer,
   RendererMilestone,
@@ -103,20 +104,21 @@ export async function installCoreCertifiedCompanion(
     && typeof exports.enhancement_pre_game_diagnostic === "function"
     ? exports.enhancement_pre_game_diagnostic as () => number
     : null;
-  const characterActionEnqueue = capabilities.preGameControls
+  const characterActionEnqueue = capabilities.characterSwitchAction
     && typeof exports.enhancement_character_action === "function"
     ? exports.enhancement_character_action as (action: number, argument: number) => number
     : null;
-  const characterActionConfigure = capabilities.preGameControls
+  const characterActionConfigure = capabilities.characterSwitchAction
     && typeof exports.enhancement_configure_character_action === "function"
     ? exports.enhancement_configure_character_action as (payload: number, enabled: number) => number
     : null;
-  if (
-    capabilities.preGameControls
-    && (preGameStateReader === null || preGameDiagnosticReader === null
-      || characterActionEnqueue === null || characterActionConfigure === null)
-  ) {
+  if (capabilities.preGameControls
+    && (preGameStateReader === null || preGameDiagnosticReader === null)) {
     throw new Error("the pre-game profile derived a module with incomplete readers");
+  }
+  if (capabilities.characterSwitchAction
+    && (characterActionEnqueue === null || characterActionConfigure === null)) {
+    throw new Error("the character-switch profile derived an incomplete action");
   }
   if (manifest.tableSlot >= table.length) {
     throw new Error(`Enhancement table slot ${manifest.tableSlot} is out of bounds`);
@@ -147,7 +149,6 @@ export async function installCoreCertifiedCompanion(
   let installedCursorState: NonNullable<typeof window.gwCursorState> | null = null;
   let installedRuntime: object | null = null;
   let installedPreGameControls: PreGameControls | null = null;
-  let installedCharacterListProbe: CharacterListProbe | null = null;
   let installedCharacterList: CharacterListSource | null = null;
   let installedCharacterSwitch: CharacterSwitchController | null = null;
   let detachCharacterSwitch = () => {};
@@ -231,12 +232,6 @@ export async function installCoreCertifiedCompanion(
         window.gwPreGameControls = null;
       }
     });
-    attempt("character-list probe withdrawal", () => {
-      if (window.gwCharacterListProbe === installedCharacterListProbe) {
-        window.gwCharacterListProbe = null;
-      }
-      installedCharacterListProbe?.dispose();
-    });
     attempt("character-list withdrawal", () => {
       if (window.gwCharacterList === installedCharacterList) {
         window.gwCharacterList = null;
@@ -266,17 +261,6 @@ export async function installCoreCertifiedCompanion(
   };
 
   try {
-    if (program === "character-list-probe") {
-      const { installCharacterListProbe } = await import("./character-list-probe.js");
-      installedCharacterListProbe = installCharacterListProbe(
-        memory,
-        manifest.buildId,
-      );
-      if (installedCharacterListProbe === null) {
-        throw new Error("the exact character-list probe is unavailable");
-      }
-      window.gwCharacterListProbe = installedCharacterListProbe;
-    }
     coreMemory = allocateCompanionCoreMemory({
       memory,
       malloc,
@@ -293,8 +277,8 @@ export async function installCoreCertifiedCompanion(
       },
     });
     const core = coreMemory;
-    if (capabilities.preGameControls) {
-      characterActionPointer = Number(malloc(40));
+    if (capabilities.characterSwitchAction) {
+      characterActionPointer = Number(malloc(CHARACTER_SWITCH_ACTION_ABI.bytes));
       if (!Number.isInteger(characterActionPointer) || characterActionPointer <= 0) {
         throw new Error("Character action allocation failed");
       }
@@ -518,7 +502,11 @@ export async function installCoreCertifiedCompanion(
       && characterActionConfigure
       && characterActionPointer !== 0
     ) {
-      new Uint8Array(memory.buffer, characterActionPointer, 40).fill(0);
+      new Uint8Array(
+        memory.buffer,
+        characterActionPointer,
+        CHARACTER_SWITCH_ACTION_ABI.bytes,
+      ).fill(0);
       installedCharacterSwitch = createCharacterSwitchController({
         memory,
         payloadPointer: characterActionPointer,

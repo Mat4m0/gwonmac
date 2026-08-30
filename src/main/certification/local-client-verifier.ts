@@ -180,6 +180,9 @@ function failuresForRequested(
     ...(requested.preGameControls
       ? { preGameControls: changedFeature("preGameControls", invariant) }
       : {}),
+    ...(requested.characterSwitchAction
+      ? { characterSwitchAction: changedFeature("characterSwitchAction", invariant) }
+      : {}),
   });
 }
 
@@ -595,7 +598,7 @@ function deriveEnhancementBuild(
     || requestedCapabilities.travelAction
     || requestedCapabilities.xunlaiAction
     || requestedCapabilities.chatAliases
-    || requestedCapabilities.preGameControls;
+    || requestedCapabilities.characterSwitchAction;
   const locatedLocal = wantsLocal
     ? locateAutomaticLocalActions(
         templateOutput,
@@ -629,6 +632,10 @@ function deriveEnhancementBuild(
   const includeAliases = requestedCapabilities.chatAliases
     && locatedLocal?.uiDispatcher != null
     && locatedLocal.chatAliases != null;
+  const includeCharacterSwitch = requestedCapabilities.characterSwitchAction
+    && includePreGame
+    && locatedLocal?.uiDispatcher != null
+    && locatedLocal.gameThread != null;
   const failures = diagnoseFeatureFailures(
     templateOutput,
     requestedCapabilities,
@@ -649,9 +656,17 @@ function deriveEnhancementBuild(
           ),
         }
       : {}),
+    ...(requestedCapabilities.characterSwitchAction && !includeCharacterSwitch
+      ? {
+          characterSwitchAction: changedFeature(
+            "characterSwitchAction",
+            "character-switch.exact-action-path",
+          ),
+        }
+      : {}),
   });
   const localContributes = includeParty || includeTeam || includeTravel
-    || includeXunlai || includeAliases || includePreGame;
+    || includeXunlai || includeAliases || includeCharacterSwitch;
   const source = includeCursor
     ? locatedCursor
     : includePlayRegion
@@ -768,7 +783,7 @@ function deriveEnhancementBuild(
       targetObservation: Object.freeze({ layout: locatedTarget.targetLayout }),
     } : {}),
     ...(localContributes ? { uiDispatcher: locatedLocal!.uiDispatcher! } : {}),
-    ...(includeTeam || includeTravel || includeXunlai || includePreGame
+    ...(includeTeam || includeTravel || includeXunlai || includeCharacterSwitch
       ? { gameThread: locatedLocal!.gameThread! }
       : {}),
     ...(includeTravel ? { travelAction: locatedLocal!.travelAction! } : {}),
@@ -794,6 +809,7 @@ function deriveEnhancementBuild(
     skillCooldownObservation: skillbar.includeCooldown,
     playRegionObservation: includePlayRegion,
     preGameControls: includePreGame,
+    characterSwitchAction: includeCharacterSwitch,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

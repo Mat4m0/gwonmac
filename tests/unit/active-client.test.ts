@@ -20,6 +20,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         nativeCursor: supported ? available : unavailable,
         playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },
+        characterSwitchAction: { status: "off" },
         targetObservation: { status: "off" },
         partyObservation: { status: "off" },
         teamApply: { status: "off" },

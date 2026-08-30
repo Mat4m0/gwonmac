@@ -25,6 +25,20 @@ interface CertifiedCartographyBuild {
  */
 const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuild> = new Map([
   [
+    "62267d95b30752823aa364c289bdc84f2c025dac4caeda86a76a432001667acb",
+    {
+      memoryLayout: "relocated",
+      outputSha256: "c932e214fef2faad7d63c6e58918b2b5b82ff08d771bb189e1950e3a6cb2139d",
+    },
+  ],
+  [
+    "e22c2c0876f1381a133fbb0c739f73f9fc6a7d8988da5ce0d9789481ab7f0c9e",
+    {
+      memoryLayout: "relocated",
+      outputSha256: "be783c4fdfb3ccd042adc719ebd97873ec0fe6216348c2f773109d4ee081f1d6",
+    },
+  ],
+  [
     "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb",
     {
       memoryLayout: "official",

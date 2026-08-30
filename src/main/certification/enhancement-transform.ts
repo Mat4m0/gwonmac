@@ -31,16 +31,18 @@ import {
   supportedEnhancementCapabilities,
   type KnownEnhancementBuild,
 } from "./enhancement-builds.js";
-import { applyFeatureContributions } from "./enhancement-transform-features.js";
-import { characterActionExecute } from "./enhancement-character-switch-transform.js";
+import {
+  applyFeatureContributions,
+  featureExportNames,
+} from "./enhancement-transform-features.js";
 import {
   resolveEnhancementSkillTransform,
   rewriteSkillBarConstructorCapture,
 } from "./enhancement-skill-transform.js";
 import {
-  preGameDiagnosticReader,
-  preGameStateReader,
+  appendPreGameReaders,
   resolveEnhancementPreGameTransform,
+  verifyCharacterSwitchActionCertificate,
 } from "./enhancement-pre-game-transform.js";
 import {
   PROFESSION_TRACE_WORDS,
@@ -79,8 +81,6 @@ declare const WebAssembly: {
 };
 
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
-export const ENHANCEMENT_PRE_GAME_STATE_EXPORT = "enhancement_pre_game_state";
-export const ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT = "enhancement_pre_game_diagnostic";
 export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
 
 const DISPATCH_PARAMS = 6;
@@ -271,7 +271,7 @@ function resolveEnhancementTransform(
   const hasActionQueue = capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction
-    || capabilities.preGameControls;
+    || capabilities.characterSwitchAction;
   const selectedHooks = enhancementHooksFor(capabilities);
   const hash = createHash("sha256").update(input).digest("hex");
   if (hash !== build.sha256) fail(`input hash ${hash} is unsupported`);
@@ -328,7 +328,7 @@ function resolveEnhancementTransform(
     });
   }
   const uiDispatcherHook = selectedHooks.ui || capabilities.travelAction
-      || capabilities.preGameControls
+      || capabilities.characterSwitchAction
     ? resolveHook(
         "UI dispatcher",
         uiDispatcher.functionIndex,
@@ -362,20 +362,13 @@ function resolveEnhancementTransform(
     bodyHash,
     fail,
   });
-  if (preGameResolution) {
-    const action = preGameResolution.certificate.characterSwitchAction;
-    for (const [label, functionProof] of Object.entries({
-      "character frame child": action.frameChild,
-      "character frame parent": action.frameParent,
-      "character frame resolver": action.frameResolver,
-      "character frame dispatch": action.frameDispatch,
-      "character logout producer": action.logoutProducer,
-    })) {
-      resolveHook(label, functionProof.functionIndex, functionProof.params, functionProof.results);
-      if (bodyHash(functionProof.functionIndex) !== functionProof.bodySha256) {
-        fail(`${label} body does not match its semantic fingerprint`);
-      }
-    }
+  if (capabilities.characterSwitchAction && preGameResolution) {
+    verifyCharacterSwitchActionCertificate({
+      resolution: preGameResolution,
+      resolveFunction: resolveHook,
+      bodyHash,
+      fail,
+    });
   }
   const skillInitializer = skillResolution.geometry?.initializer ?? null;
   const skillConstructor = skillResolution.geometry?.constructor ?? null;
@@ -638,7 +631,7 @@ function resolveEnhancementTransform(
       name: "Travel UI dispatcher",
       functionIndex: uiDispatcherHook!.localIndex + importCount,
     }] : []),
-    ...(capabilities.preGameControls && !selectedHooks.ui && !capabilities.travelAction ? [{
+    ...(capabilities.characterSwitchAction && !selectedHooks.ui && !capabilities.travelAction ? [{
       name: "Character Switch UI dispatcher",
       functionIndex: uiDispatcherHook!.localIndex + importCount,
     }] : []),
@@ -713,10 +706,10 @@ function resolveEnhancementTransform(
     selected,
     cursorEvent,
     uiDispatcher,
-    gameThread,
     teamApply,
     xunlaiAction,
     travelAction,
+    gameThread,
     chatAliases,
     skillResolution,
     preGameResolution,
@@ -750,9 +743,6 @@ function assembleEnhancementTransform(
     functionTypes,
     bodies,
     selected,
-    teamApply,
-    xunlaiAction,
-    travelAction,
     table,
     nextTableSize,
     hasActionQueue,
@@ -763,34 +753,7 @@ function assembleEnhancementTransform(
   const globals = vectorPayload(sectionById(sections, 6));
   const exports = vectorPayload(sectionById(sections, 7));
   const existingExports = parseExports(sectionById(sections, 7));
-  const addedExportNames = [
-    ENHANCEMENT_HOOK_EXPORT,
-    ...(capabilities.preGameControls
-      ? [
-          ENHANCEMENT_PRE_GAME_STATE_EXPORT,
-          ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT,
-          preGameResolution!.certificate.characterSwitchAction.enqueueExport,
-          preGameResolution!.certificate.characterSwitchAction.configureExport,
-        ]
-      : []),
-    ...(capabilities.teamApply
-      ? [teamApply.thunkExport, teamApply.professionTrace.readerExport]
-      : []),
-    ...(capabilities.xunlaiAction || capabilities.travelAction
-      ? [
-          ...(capabilities.xunlaiAction
-            ? [xunlaiAction.openExport, xunlaiAction.configureExport]
-            : []),
-          ...(capabilities.travelAction
-            ? [travelAction.enqueueExport, travelAction.configureExport,
-                travelAction.toggleExport]
-            : []),
-        ]
-      : []),
-    ...(capabilities.chatAliases
-      ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
-      : []),
-  ];
+  const addedExportNames = [ENHANCEMENT_HOOK_EXPORT, ...featureExportNames(resolution)];
   for (const name of addedExportNames) {
     if (existingExports.some((entry) => entry.name === name)) {
       fail(`export ${name} already exists`);
@@ -817,10 +780,10 @@ function assembleEnhancementTransform(
   const travelToggleGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
   const tradeEnabledGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
   const tradeToggleGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
-  const characterPayloadGlobalIndex = capabilities.preGameControls ? allocateGlobals(1) : 0;
-  const characterEnabledGlobalIndex = capabilities.preGameControls ? allocateGlobals(1) : 0;
-  const characterExpectedIndexGlobalIndex = capabilities.preGameControls ? allocateGlobals(1) : 0;
-  const characterConfirmationAttemptsGlobalIndex = capabilities.preGameControls ? allocateGlobals(1) : 0;
+  const characterPayloadGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
+  const characterEnabledGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
+  const characterExpectedIndexGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
+  const characterConfirmationAttemptsGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
   const traceGlobalBase = capabilities.teamApply
     ? allocateGlobals(PROFESSION_TRACE_WORDS)
     : 0;
@@ -870,13 +833,13 @@ function assembleEnhancementTransform(
   const preGameStateTypeIndex = capabilities.preGameControls
     ? appendType({ params: [], results: [0x7f] })
     : null;
-  const characterEnqueueTypeIndex = capabilities.preGameControls
+  const characterEnqueueTypeIndex = capabilities.characterSwitchAction
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
     : null;
-  const characterConfigureTypeIndex = capabilities.preGameControls
+  const characterConfigureTypeIndex = capabilities.characterSwitchAction
     ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
     : null;
-  const characterExecuteTypeIndex = capabilities.preGameControls
+  const characterExecuteTypeIndex = capabilities.characterSwitchAction
     ? appendType({ params: [0x7f, 0x7f, 0x7f], results: [] })
     : null;
 
@@ -924,55 +887,12 @@ function assembleEnhancementTransform(
 
   const addedFunctionExports: Array<Readonly<{ name: string; index: number }>> = [];
   if (preGameResolution) {
-    const diagnosticIndex = appendFunction(
-      preGameStateTypeIndex!,
-      preGameDiagnosticReader(preGameResolution.certificate),
-    );
-    const preGameStateFunctionIndex = appendFunction(
-      preGameStateTypeIndex!,
-      preGameStateReader(preGameResolution.certificate, diagnosticIndex),
-    );
-    addedFunctionExports.push({
-      name: ENHANCEMENT_PRE_GAME_STATE_EXPORT,
-      index: preGameStateFunctionIndex,
-    });
-    addedFunctionExports.push({
-      name: ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT,
-      index: diagnosticIndex,
-    });
+    addedFunctionExports.push(...appendPreGameReaders({
+      resolution: preGameResolution,
+      typeIndex: preGameStateTypeIndex!,
+      appendFunction,
+    }));
   }
-  const characterExecuteIndex = preGameResolution
-    ? appendFunction(
-        characterExecuteTypeIndex!,
-        characterActionExecute({
-          layout: {
-            ...preGameResolution.certificate.layout,
-            characterArrayPointer:
-              preGameResolution.certificate.characterListLayout.characterArrayPointer,
-            characterArrayCount:
-              preGameResolution.certificate.characterListLayout.characterArrayCount,
-          },
-          dispatcherFunctionIndex: uiOriginalIndex ?? resolution.uiDispatcher.functionIndex,
-          frameChildFunctionIndex:
-            preGameResolution.certificate.characterSwitchAction.frameChild.functionIndex,
-          frameParentFunctionIndex:
-            preGameResolution.certificate.characterSwitchAction.frameParent.functionIndex,
-          frameResolverFunctionIndex:
-            preGameResolution.certificate.characterSwitchAction.frameResolver.functionIndex,
-          frameDispatchFunctionIndex:
-            preGameResolution.certificate.characterSwitchAction.frameDispatch.functionIndex,
-          frameDispatchOffset:
-            preGameResolution.certificate.characterSwitchAction.frameDispatchOffset,
-          logoutMessageId:
-            preGameResolution.certificate.characterSwitchAction.logoutMessageId,
-          selectorHash: preGameResolution.certificate.labelHashes.selector,
-          playHash: preGameResolution.certificate.labelHashes.play,
-          pendingGlobalIndex: commandPendingGlobalIndex,
-          expectedIndexGlobalIndex: characterExpectedIndexGlobalIndex,
-          confirmationAttemptsGlobalIndex: characterConfirmationAttemptsGlobalIndex,
-        }),
-      )
-    : null;
   applyFeatureContributions(resolution, {
     nextBodies,
     appendFunction,
@@ -990,6 +910,7 @@ function assembleEnhancementTransform(
       tradeToggle: tradeToggleTypeIndex,
       characterEnqueue: characterEnqueueTypeIndex,
       characterConfigure: characterConfigureTypeIndex,
+      characterExecute: characterExecuteTypeIndex,
     },
     globalIndices: {
       commandPending: commandPendingGlobalIndex,
@@ -1008,7 +929,6 @@ function assembleEnhancementTransform(
     },
     traceGlobals,
     uiOriginalIndex,
-    characterExecuteIndex,
   });
   const addedGlobalCount = nextGlobalIndex - globals.count;
   const nextGlobals = concat(

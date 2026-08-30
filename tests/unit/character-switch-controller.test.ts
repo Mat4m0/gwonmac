@@ -91,7 +91,7 @@ describe("character switch controller", { concurrency: false }, () => {
         programId: 1,
       });
 
-      controller.request(2, 1);
+      controller.request("0000000000000002");
       await new Promise((resolve) => setTimeout(resolve, 1_000));
       assert.equal(controller.action.status, "complete");
       assert.deepEqual(calls, [1, 2, 3]);
@@ -104,7 +104,7 @@ describe("character switch controller", { concurrency: false }, () => {
     });
   });
 
-  it("refuses stale and current targets before a native action", async () => {
+  it("resolves stable keys and refuses missing or current targets before a native action", async () => {
     await withBrowserGlobals(async () => {
       const memory = new WebAssembly.Memory({ initial: 1 });
       let calls = 0;
@@ -128,12 +128,13 @@ describe("character switch controller", { concurrency: false }, () => {
         buildId: 7,
         programId: 1,
       });
-      controller.request(7, 1);
-      assert.equal(controller.action.code, "stale-snapshot");
-      controller.request(8, 0);
-      assert.equal(controller.action.code, "current-target");
+      controller.request("00000000000000ff");
+      assert.deepEqual(controller.action, { status: "failed", code: "target-missing", retryable: true });
+      controller.reset();
+      controller.request("0000000000000001");
+      assert.deepEqual(controller.action, { status: "failed", code: "current-target", retryable: false });
       assert.equal(calls, 0);
-      assert.equal(controller.diagnostics().version, 6);
+      assert.equal(controller.diagnostics().version, 7);
       assert.equal(stateReads, 0, "diagnostics must not trigger a frame scan");
       controller.dispose();
     });
@@ -171,19 +172,25 @@ describe("character switch controller", { concurrency: false }, () => {
         buildId: 7,
         programId: 1,
       });
-      controller.request(10, 1);
+      controller.request("0000000000000002");
       await new Promise((resolve) => setTimeout(resolve, 40));
       assert.deepEqual(controller.action, {
         status: "failed",
         code: "logout-refused",
         retryable: false,
       });
-      assert.equal(controller.diagnostics().lastCode, "logout-refused");
-      assert.equal(controller.diagnostics().lastFrameProofMask, 0xff);
+      const diagnostics = controller.diagnostics();
+      assert.equal(diagnostics.version, 7);
+      if (diagnostics.version !== 7) throw new Error("expected live diagnostics");
+      assert.equal(diagnostics.lastCode, "logout-refused");
+      assert.equal(diagnostics.lastFrameProofMask, 0xff);
       assert.equal(usageRecords, 0);
       controller.reset();
       assert.deepEqual(controller.action, { status: "idle" });
-      assert.equal(controller.diagnostics().lastCode, "logout-refused");
+      const resetDiagnostics = controller.diagnostics();
+      assert.equal(resetDiagnostics.version, 7);
+      if (resetDiagnostics.version !== 7) throw new Error("expected live diagnostics");
+      assert.equal(resetDiagnostics.lastCode, "logout-refused");
       controller.dispose();
     });
   });
@@ -210,7 +217,7 @@ describe("character switch controller", { concurrency: false }, () => {
         programId: 1,
       });
 
-      controller.request(11, 1);
+      controller.request("0000000000000002");
       assert.deepEqual(controller.action, {
         status: "failed",
         code: "logout-refused",
@@ -258,13 +265,15 @@ describe("character switch controller", { concurrency: false }, () => {
         programId: 1,
       });
 
-      controller.request(12, 1);
+      controller.request("0000000000000002");
       await new Promise((resolve) => setTimeout(resolve, 180));
       assert.deepEqual(calls, [1, 2, 2]);
-      assert.equal(controller.action.code, "selection-not-confirmed");
-      assert.equal(controller.diagnostics().selectorReadinessRetries, 1);
-      assert.equal(controller.diagnostics().lastSelectorReadiness, null);
-      assert.equal(controller.diagnostics().selectorClickProved, false);
+      assert.deepEqual(controller.action, { status: "failed", code: "selection-not-confirmed", retryable: false });
+      const diagnostics = controller.diagnostics();
+      if (diagnostics.version !== 7) throw new Error("expected live diagnostics");
+      assert.equal(diagnostics.selectorReadinessRetries, 1);
+      assert.equal(diagnostics.lastSelectorReadiness, null);
+      assert.equal(diagnostics.selectorClickProved, false);
       controller.dispose();
     });
   });
@@ -306,11 +315,13 @@ describe("character switch controller", { concurrency: false }, () => {
         programId: 1,
       });
 
-      controller.request(20, 1);
+      controller.request("0000000000000002");
       await new Promise((resolve) => setTimeout(resolve, 60));
       assert.deepEqual(calls, [1, 2]);
-      assert.equal(controller.action.code, "selection-not-confirmed");
-      assert.equal(controller.diagnostics().selectorClickProved, true);
+      assert.deepEqual(controller.action, { status: "failed", code: "selection-not-confirmed", retryable: false });
+      const diagnostics = controller.diagnostics();
+      if (diagnostics.version !== 7) throw new Error("expected live diagnostics");
+      assert.equal(diagnostics.selectorClickProved, true);
       controller.dispose();
     });
   });
@@ -348,21 +359,25 @@ describe("character switch controller", { concurrency: false }, () => {
       };
 
       const unconfirmed = create(["pve-explorable"]);
-      unconfirmed.controller.request(30, 1);
-      assert.equal(unconfirmed.controller.action.code, "explorable-confirmation-required");
+      unconfirmed.controller.request("0000000000000002");
+      assert.deepEqual(unconfirmed.controller.action, { status: "confirming" });
       assert.equal(unconfirmed.calls(), 0);
+      unconfirmed.controller.cancelConfirmation();
+      assert.deepEqual(unconfirmed.controller.action, { status: "idle" });
       unconfirmed.controller.dispose();
 
       const confirmed = create(["pve-explorable"]);
-      confirmed.controller.request(30, 1, true);
+      confirmed.controller.request("0000000000000002");
+      confirmed.controller.confirm();
       await new Promise((resolve) => setTimeout(resolve, 30));
       assert.equal(confirmed.calls(), 1);
-      assert.equal(confirmed.controller.action.code, "logout-refused");
+      assert.deepEqual(confirmed.controller.action, { status: "failed", code: "logout-refused", retryable: false });
       confirmed.controller.dispose();
 
       const raced = create(["pve-explorable", "pvp-explorable"]);
-      raced.controller.request(30, 1, true);
-      assert.equal(raced.controller.action.code, "active-pvp");
+      raced.controller.request("0000000000000002");
+      raced.controller.confirm();
+      assert.deepEqual(raced.controller.action, { status: "failed", code: "active-pvp", retryable: false });
       assert.equal(raced.calls(), 0);
       raced.controller.dispose();
     });
@@ -394,8 +409,12 @@ describe("character switch controller", { concurrency: false }, () => {
           buildId: 7,
           programId: 1,
         });
-        controller.request(40, 1, true);
-        assert.equal(controller.action.code, code);
+        controller.request("0000000000000002");
+        assert.deepEqual(controller.action, {
+          status: "failed",
+          code,
+          retryable: context === "loading",
+        });
         assert.equal(calls, 0);
         controller.dispose();
       }

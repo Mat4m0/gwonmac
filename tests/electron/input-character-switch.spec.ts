@@ -45,13 +45,16 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
         },
         usage: { formatVersion: 1, sequence: 0, entries: [] },
         context: "outpost",
-        request(_sequence, index) {
+        request(characterKey) {
+          const index = characters.findIndex((character) => character.characterKey === characterKey);
           document.body.dataset.characterSwitchRequest = String(index);
           switching = true;
           for (const listener of listeners) listener();
         },
+        confirm() {},
+        cancelConfirmation() {},
         reset() {},
-        diagnostics: () => ({ version: 1, stage: "test", lastCode: null }),
+        diagnostics: () => ({ version: 1, stage: "unavailable", lastCode: "play-path-unproved" }),
         subscribe(listener) {
           listeners.add(listener);
           return () => { listeners.delete(listener); };
@@ -123,7 +126,8 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
         { name: "Private Beta", characterKey: "0000000000000002", primaryProfession: 2, secondaryProfession: 3, characterType: "roleplaying" as const, campaign: 2, level: 20, mapId: 55 },
       ];
       let characterState = { status: "ready" as const, sequence: 12, selectedIndex: 0, characters };
-      let phase: "idle" | "switching" | "failed" = "idle";
+      let phase: "idle" | "confirming" | "switching" | "failed" = "idle";
+      let pendingKey: string | null = null;
       let context: CharacterSwitchContext = "pve-explorable";
       const listeners = new Set<() => void>();
       const emit = () => { for (const listener of listeners) listener(); };
@@ -131,18 +135,26 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
         get characters() { return characterState; },
         get action() {
           if (phase === "switching") return { status: "switching", stage: "logout" } as const;
-          if (phase === "failed") return { status: "failed", code: "selection-not-confirmed" } as const;
+          if (phase === "confirming") return { status: "confirming" } as const;
+          if (phase === "failed") return { status: "failed", code: "selection-not-confirmed", retryable: false } as const;
           return { status: "idle" } as const;
         },
         usage: { formatVersion: 1, sequence: 0, entries: [] },
         get context() { return context; },
-        request(sequence, index, confirmed) {
-          document.body.dataset.characterSwitchRequest = `${sequence}:${index}:${String(confirmed)}`;
+        request(characterKey) {
+          pendingKey = characterKey;
+          phase = context === "pve-explorable" ? "confirming" : "switching";
+          emit();
+        },
+        confirm() {
+          if (phase !== "confirming" || pendingKey === null) return;
+          document.body.dataset.characterSwitchRequest = pendingKey;
           phase = "switching";
           emit();
         },
-        reset() { phase = "idle"; emit(); },
-        diagnostics: () => ({ version: 1, stage: phase, lastCode: phase === "failed" ? "selection-not-confirmed" : null }),
+        cancelConfirmation() { pendingKey = null; phase = "idle"; emit(); },
+        reset() { pendingKey = null; phase = "idle"; emit(); },
+        diagnostics: () => ({ version: 1, stage: "unavailable", lastCode: "play-path-unproved" }),
         subscribe(listener) {
           listeners.add(listener);
           return () => { listeners.delete(listener); };
@@ -203,11 +215,11 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     });
     await page.getByRole("button", { name: "Leave and switch" }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "13:0:true");
+    await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "0000000000000002");
 
     await page.evaluate(() => {
       const target = window as typeof window & {
-        __characterSwitchTestSet(phase: "idle" | "switching" | "failed", context: CharacterSwitchContext): void;
+        __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
       };
       target.__characterSwitchTestSet("idle", "character-select");
       window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
@@ -215,7 +227,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await expect(dialog).toBeHidden();
     await page.evaluate(() => {
       const target = window as typeof window & {
-        __characterSwitchTestSet(phase: "idle" | "switching" | "failed", context: CharacterSwitchContext): void;
+        __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
       };
       target.__characterSwitchTestSet("failed", "character-select");
       window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
@@ -229,7 +241,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
 
     await page.evaluate(async () => {
       const target = window as typeof window & {
-        __characterSwitchTestSet(phase: "idle" | "switching" | "failed", context: CharacterSwitchContext): void;
+        __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
       };
       target.__characterSwitchTestSet("idle", "outpost");
       const specifier = "./travel-palette.js";

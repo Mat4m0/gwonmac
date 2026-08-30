@@ -959,57 +959,14 @@ logout message, Selector action, and native Play packet once each, and whether
 the production observer confirms the exact loaded identity. It does not test a
 second account, reconnect, explorable refusal, or optional metadata.
 
-### Read-only character-list qualification
+### Retired read-only qualification probe
 
-Before starting, disable **automatic character return** and leave the one
-account window at its normal login screen. Then run:
-
-```sh
-cd /Users/matthias/Git/games/guild-wars-mac/gwonmac-quick-character-switch
-GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario character-list
-```
-
-The runner performs no input. It samples while each checkpoint is open; press
-Return in the terminal only after completing the requested manual step:
-
-1. At the first login screen, wait a few seconds. Expect `absent`, then press
-   Return.
-2. Sign in normally and stop as soon as character selection is visible. Expect
-   the transition from absent/warming to ready, then press Return.
-3. Do nothing during the automatic six-second settled sample. Expect a stable
-   count and ready state.
-4. Select at least two different characters without entering the world. Verify
-   locally that the native screen still looks correct, then press Return.
-5. Enter the selected character and wait in a fully playable outpost. Press
-   Return. The next three-second sample tests whether the list remains ready
-   in-world.
-6. Log out manually to character selection, wait for the list, then press
-   Return.
-7. Enter a different character and wait in an outpost, then press Return.
-8. If safe, use the normal **Reload Guild Wars…** command while automatic
-   return remains disabled. Stop at login or character selection and press
-   Return. If reload is not safe, do nothing and press Return; the phase will
-   be an unchanged control observation.
-9. Let the final three-second sample finish. The runner then closes its own
-   Guild Wars window cleanly.
-
-The final line whose `scenario` is `character-list` is safe to paste back in
-full. It contains only exact-build status, counts, state transitions, field
-validity, numeric ranges, and the number of renderer errors. The following
-`{"shutdown":"clean"}` line is also safe. Do not paste other game logs,
-screenshots, account details, or character names. Alongside the JSON, report
-only these privacy-safe comparisons: whether the character count matched the
-native selector, whether changing the selected character caused a transition,
-and whether every requested field-validity flag stayed true. If the run fails
-before that line, paste only
-`test-results/enhancements-live/failure.json`; this program replaces the error
-message with a fixed code and leaves renderer text and process output empty.
-
-No second account is needed for this first run. Account-change invalidation
-requires a second account and should be a separately coordinated follow-up
-only if the first run leaves it necessary. To stop early, close the Guild Wars
-window normally and then press Control-C if the runner remains. The probe owns
-no game action and writes no game-owned memory.
+The temporary raw-memory character-list probe and its manual trace scenario
+were removed after the compiled companion kernel became the certified
+production reader. Keeping both would create two parsers and two sources of
+truth for the same private records. The remaining `character-switch` live
+scenario reads only the closed production diagnostic projection and never
+initiates an action itself.
 
 ## Implementation plan and acceptance criteria
 
@@ -1029,8 +986,9 @@ Acceptance:
 
 Acceptance:
 
-- The command accepts one snapshot revision and exact character name.
-- It refuses current, absent, stale, concurrent, explorable, unfocused,
+- The command accepts one opaque character key and resolves the live index and
+  bounded name inside the controller immediately before enqueue.
+- It refuses current, absent, concurrent, unconfirmed explorable, unfocused,
   reconnect, and unsupported states before consequential action.
 - It uses native logout, Selector, and Play behavior and verifies the loaded
   name before success.
@@ -1094,12 +1052,9 @@ Acceptance:
 | gwonmac | `src/shared/enhancement-contracts.ts`, `preGameControls` | 111–118 | Current closed pre-game boundary |
 | gwonmac | `src/main/certification/enhancement-builds.ts`, `preGameControls` | 512–546 | Current exact labels/layout only |
 | gwonmac | `src/main/certification/enhancement-pre-game-transform.ts`, readers | 1–5, 100–114, 234–264 | Privacy-safe closed observation and state mapping |
-| gwonmac | `src/renderer/character-list-probe.ts`, exact layout and `createCharacterListProbeReader` | 5–19, 166–351 | Current array/record facts, pure format-8 parsing, bounds, stability, identity, aggregate projection |
-| gwonmac | `src/renderer/character-list-probe.ts`, `installCharacterListProbe` | 354–388 | Exact-build-only closed reader lifecycle with no allocation or game call |
-| gwonmac | `scripts/enhancements-live/scenarios.ts`, `runCharacterListProbe` | 572–713, 940–957 | Fixed observation-only sampling and ordered operator sequence |
-| gwonmac | `scripts/enhancements-live/result.ts`, `projectCharacterProbeLiveResult` | 1–31 | Closed stdout/persistence projection drops generic gameplay and private diagnostics |
-| gwonmac | `scripts/enhancements-live.ts`, character-probe result and failure privacy branches | 297–317, 340–367 | Only closed aggregate output; no screenshot, renderer error text, or process-output persistence |
-| gwonmac | `tests/unit/character-list-probe.test.ts` | 66–208 | Parsing, field bounds, zero-write invariant, invalidation, selected identity, exact-build refusal, and both projection privacy boundaries |
+| gwonmac | `src/renderer/character-switch-model.ts`, closed domain and diagnostics | current | One typed boundary for controller, host, palette, and privacy-safe live observation |
+| gwonmac | `src/shared/character-switch-action-abi.ts`, fixed action contract | current | One source of truth for the private 40-byte action region, result codes, and proof bits |
+| gwonmac | `src/shared/enhancement-contracts.ts`, `characterSwitchAction` | current | Native action authority is separate from read-only `preGameControls` observation |
 | gwonmac | `src/renderer/automatic-character-return.ts`, `continueAfterToken` | 248–299 | Existing selected-character relog flow and verification |
 | gwonmac | `apps/tools/src/trader-assets.ts`, `PROFESSION_IDS` | 3–35 | Existing bundled profession asset mapping |
 | gwonmac | `THIRD-PARTY-NOTICES.md`, Trader assets | 56–65 | Existing asset provenance and terms |

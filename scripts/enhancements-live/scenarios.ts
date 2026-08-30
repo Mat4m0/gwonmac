@@ -22,11 +22,15 @@ import path from "node:path";
 import type { CDPSession, Page } from "playwright";
 import type { AutomationCommand } from "../../src/shared/automation.js";
 import type { EnhancementProgram } from "../../src/shared/enhancement-contracts.js";
-import type { CharacterListProbeProjection } from "../../src/renderer/character-list-probe.js";
+import type { CharacterSwitchDiagnostics } from "../../src/renderer/character-switch-model.js";
 import type { EnhancementDoctorReport } from "../../src/tools/enhancement-workspace.js";
 import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.js";
 import { runToolboxFoundation, runToolboxHeroPanel } from "./toolbox-scenarios.js";
 import { operatorCheckpoint } from "./scenario-checkpoint.js";
+import {
+  runCharacterSwitchScenario,
+  validateCharacterSwitchScenario,
+} from "./character-switch-scenario.js";
 
 export type LiveTier = "automation" | "observation" | "graphics-observation";
 export type LiveReadiness = "frontend" | "observer" | "toolbox" | "cursor" | "storage";
@@ -63,75 +67,9 @@ function liveReadinessSatisfied(required: LiveReadiness): boolean {
  */
 export type ObservationContext = Readonly<{
   readCursorProjection: () => Promise<CompanionDeveloperRuntime["cursor"]>;
-  readCharacterListProjection: () => Promise<CharacterListProbeProjection | null>;
-  readCharacterSwitchDiagnostics: () => Promise<Readonly<Record<string, unknown>> | null>;
-  captureWasmCallCounts: (milliseconds: number) => Promise<readonly WasmCallCount[]>;
-  readRendererErrorCount: () => number;
+  readCharacterSwitchDiagnostics: () => Promise<CharacterSwitchDiagnostics | null>;
   wait: (milliseconds: number) => Promise<void>;
 }>;
-
-export type WasmCallCount = Readonly<{
-  functionIndex: number;
-  sampleCount: number;
-}>;
-
-/** Reduce a CPU profile to bounded numeric WebAssembly sample counts. */
-export function projectWasmCallCounts(value: unknown): readonly WasmCallCount[] {
-  if (typeof value !== "object" || value === null || !("profile" in value)) return [];
-  const profile = (value as { profile?: unknown }).profile;
-  if (typeof profile !== "object" || profile === null || !("nodes" in profile)) return [];
-  const nodes = (profile as { nodes?: unknown }).nodes;
-  const samples = "samples" in profile ? profile.samples : null;
-  if (!Array.isArray(nodes) || !Array.isArray(samples)) return [];
-  const functionByNode = new Map<number, number>();
-  for (const node of nodes) {
-    if (typeof node !== "object" || node === null) continue;
-    const id = "id" in node ? node.id : null;
-    const callFrame = "callFrame" in node ? node.callFrame : null;
-    if (
-      typeof id !== "number"
-      || !Number.isSafeInteger(id)
-      || typeof callFrame !== "object"
-      || callFrame === null
-      || !("functionName" in callFrame)
-    ) continue;
-    const match = typeof callFrame.functionName === "string"
-      ? /^wasm-function\[(\d+)]$/.exec(callFrame.functionName)
-      : null;
-    const functionIndex = match ? Number(match[1]) : -1;
-    if (Number.isSafeInteger(functionIndex) && functionIndex >= 0) {
-      functionByNode.set(id, functionIndex);
-    }
-  }
-  const counts = new Map<number, number>();
-  for (const nodeId of samples) {
-    if (typeof nodeId !== "number") continue;
-    const functionIndex = functionByNode.get(nodeId);
-    if (functionIndex !== undefined) {
-      counts.set(functionIndex, (counts.get(functionIndex) ?? 0) + 1);
-    }
-  }
-  return Object.freeze([...counts]
-    .map(([functionIndex, sampleCount]) => Object.freeze({ functionIndex, sampleCount }))
-    .sort((left, right) => left.functionIndex - right.functionIndex)
-    .slice(0, 4096));
-}
-
-export function changedWasmCallCounts(
-  baseline: readonly WasmCallCount[],
-  action: readonly WasmCallCount[],
-): readonly Readonly<WasmCallCount & { baselineCount: number; excessCount: number }>[] {
-  const idle = new Map(baseline.map((entry) => [entry.functionIndex, entry.sampleCount]));
-  return Object.freeze(action.flatMap((entry) => {
-    const baselineCount = idle.get(entry.functionIndex) ?? 0;
-    const excessCount = entry.sampleCount - baselineCount;
-    return excessCount > 0
-      ? [Object.freeze({ ...entry, baselineCount, excessCount })]
-      : [];
-  }).sort((left, right) =>
-    right.excessCount - left.excessCount || left.functionIndex - right.functionIndex
-  ).slice(0, 512));
-}
 
 /**
  * The reading context plus the two capabilities that act on the player's
@@ -152,7 +90,6 @@ export type LiveCapabilities = Readonly<{
   page: Page;
   currentPage?: () => Promise<Page>;
   cdp: CDPSession;
-  readRendererErrorCount?: () => number;
   sendAutomationCommand: (command: AutomationCommand) => Promise<void>;
 }>;
 
@@ -637,170 +574,6 @@ async function runCursorCapture({ readCursorProjection, wait }: ObservationConte
   };
 }
 
-type CharacterProbePhase = Readonly<{
-  name: string;
-  sampleCount: number;
-  missedSampleCount: number;
-  rendererErrorCountStart: number;
-  rendererErrorCountEnd: number;
-  first: CharacterListProbeProjection | null;
-  last: CharacterListProbeProjection | null;
-  statuses: readonly CharacterListProbeProjection["status"][];
-  counts: readonly number[];
-  revisions: readonly number[];
-  transitions: readonly CharacterListProbeProjection["transition"][];
-  maxStableRootReads: number;
-}>;
-
-const CHARACTER_PROBE_SAMPLE_MS = 250;
-const CHARACTER_PROBE_MAX_SAMPLES = 240;
-
-function summarizeCharacterProbePhase(
-  name: string,
-  samples: readonly CharacterListProbeProjection[],
-  missedSampleCount = 0,
-  rendererErrorCountStart = 0,
-  rendererErrorCountEnd = rendererErrorCountStart,
-): CharacterProbePhase {
-  return Object.freeze({
-    name,
-    sampleCount: samples.length,
-    missedSampleCount,
-    rendererErrorCountStart,
-    rendererErrorCountEnd,
-    first: samples[0] ?? null,
-    last: samples.at(-1) ?? null,
-    statuses: Object.freeze([...new Set(samples.map((sample) => sample.status))]),
-    counts: Object.freeze([
-      ...new Set(samples.flatMap((sample) => sample.count === null ? [] : [sample.count])),
-    ]),
-    revisions: Object.freeze([...new Set(samples.map((sample) => sample.revision))]),
-    transitions: Object.freeze([
-      ...new Set(samples.map((sample) => sample.transition)),
-    ]),
-    maxStableRootReads: Math.max(0, ...samples.map((sample) => sample.stableRootReads)),
-  });
-}
-
-async function sampleCharacterProbe(
-  context: ObservationContext,
-  name: string,
-  milliseconds: number,
-): Promise<CharacterProbePhase> {
-  const samples: CharacterListProbeProjection[] = [];
-  let missedSampleCount = 0;
-  const rendererErrorCountStart = context.readRendererErrorCount();
-  const until = Date.now() + milliseconds;
-  while (Date.now() < until && samples.length < CHARACTER_PROBE_MAX_SAMPLES) {
-    try {
-      const projection = await context.readCharacterListProjection();
-      if (projection !== null) samples.push(projection);
-      else missedSampleCount += 1;
-    } catch {
-      // Login and logout can replace the renderer between two reads. A missed
-      // sample is safe evidence of that gap, not a reason to abort the probe.
-      // Never retain the exception because it may contain private page text.
-      missedSampleCount += 1;
-    }
-    await context.wait(CHARACTER_PROBE_SAMPLE_MS).catch(() => {
-      missedSampleCount += 1;
-    });
-  }
-  return summarizeCharacterProbePhase(
-    name,
-    samples,
-    missedSampleCount,
-    rendererErrorCountStart,
-    context.readRendererErrorCount(),
-  );
-}
-
-async function characterProbeCheckpoint(
-  context: ObservationContext,
-  name: string,
-  please: string,
-): Promise<CharacterProbePhase> {
-  let complete = false;
-  const samples: CharacterListProbeProjection[] = [];
-  let missedSampleCount = 0;
-  const rendererErrorCountStart = context.readRendererErrorCount();
-  const sampling = (async () => {
-    while (!complete && samples.length < CHARACTER_PROBE_MAX_SAMPLES) {
-      try {
-        const projection = await context.readCharacterListProjection();
-        if (projection !== null) samples.push(projection);
-      } catch {
-        // A renderer reload temporarily destroys the execution context. The
-        // next successful fixed projection read is the evidence that it came back.
-        missedSampleCount += 1;
-      }
-      await context.wait(CHARACTER_PROBE_SAMPLE_MS).catch(() => {
-        missedSampleCount += 1;
-      });
-    }
-  })();
-  try {
-    await operatorCheckpoint(please);
-  } finally {
-    complete = true;
-    await sampling;
-  }
-  return summarizeCharacterProbePhase(
-    name,
-    samples,
-    missedSampleCount,
-    rendererErrorCountStart,
-    context.readRendererErrorCount(),
-  );
-}
-
-async function runCharacterListProbe(context: ObservationContext) {
-  const phases: CharacterProbePhase[] = [];
-  phases.push(await characterProbeCheckpoint(
-    context,
-    "cold-before-login",
-    "Leave Guild Wars at the first login screen, before requesting an account token.",
-  ));
-  phases.push(await characterProbeCheckpoint(
-    context,
-    "login-to-character-select",
-    "Sign in normally. Stop at the first visible character-select screen; do not enter a character.",
-  ));
-  phases.push(await sampleCharacterProbe(context, "settled-character-select", 6_000));
-  phases.push(await characterProbeCheckpoint(
-    context,
-    "selection-changes",
-    "Select at least two different characters without entering the world.",
-  ));
-  phases.push(await characterProbeCheckpoint(
-    context,
-    "first-outpost",
-    "Enter the selected character and wait until an outpost is fully playable.",
-  ));
-  phases.push(await sampleCharacterProbe(context, "settled-in-world", 3_000));
-  phases.push(await characterProbeCheckpoint(
-    context,
-    "logout-to-character-select",
-    "Log out to character selection and wait until the character list is visible.",
-  ));
-  phases.push(await characterProbeCheckpoint(
-    context,
-    "second-character",
-    "Select a different character, enter it, and wait until an outpost is fully playable.",
-  ));
-  phases.push(await characterProbeCheckpoint(
-    context,
-    "renderer-reload",
-    "If safe, reload Guild Wars with automatic return disabled, then stop at login or character selection. Otherwise leave the client unchanged and press Return.",
-  ));
-  phases.push(await sampleCharacterProbe(context, "post-reload", 3_000));
-  return Object.freeze({
-    schema: 1,
-    sampleIntervalMs: CHARACTER_PROBE_SAMPLE_MS,
-    phases: Object.freeze(phases),
-  });
-}
-
 const noEvidence = async () => null;
 const acceptEvidence = () => {};
 
@@ -1038,222 +811,12 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       }
     },
   }),
-  "character-list": Object.freeze({
-    tier: "observation",
-    program: "character-list-probe",
-    readiness: "frontend",
-    run: runCharacterListProbe,
-    validate(result: {
-      rendererErrorCount?: number;
-      evidence?: Awaited<ReturnType<typeof runCharacterListProbe>>;
-    }) {
-      const phases = result.evidence?.phases ?? [];
-      const reload = phases.find((phase) => phase.name === "renderer-reload");
-      const reloadErrors = reload === undefined
-        ? 0
-        : reload.rendererErrorCountEnd - reload.rendererErrorCountStart;
-      if (
-        phases.length !== 10
-        || phases.every((phase) => phase.sampleCount === 0)
-        || phases.some((phase) =>
-          phase.first?.reason === "probe-unavailable"
-          || phase.last?.reason === "probe-unavailable")
-        || reloadErrors < 0
-        || reloadErrors > 1
-        || (result.rendererErrorCount ?? 0) !== reloadErrors
-        || phases.some((phase) =>
-          phase.name !== "renderer-reload"
-          && phase.rendererErrorCountEnd !== phase.rendererErrorCountStart)
-      ) {
-        throw new Error("character-list probe did not produce its closed projection");
-      }
-    },
-  }),
-  "character-selector-trace": Object.freeze({
-    tier: "observation",
-    program: "character-list-probe",
-    readiness: "frontend",
-    async run({ captureWasmCallCounts }: ObservationContext) {
-      await operatorCheckpoint(
-        "Sign in and stop at the native character-selection screen. Do not change the "
-        + "selected character during the first ten-second baseline.",
-      );
-      console.log(JSON.stringify({
-        checkpoint: "capture-baseline",
-        please: "Do not interact with the native character selector for ten seconds.",
-      }));
-      const baseline = await captureWasmCallCounts(10_000);
-      await operatorCheckpoint(
-        "Prepare one native Selector movement: highlight a different character once "
-        + "immediately after arming the capture. Do not press Play.",
-        "Press Return to arm the ten-second capture. ",
-      );
-      console.log(JSON.stringify({
-        checkpoint: "capture-action",
-        please: "Now highlight a different character once. Do not press Play.",
-      }));
-      const action = await captureWasmCallCounts(10_000);
-      return Object.freeze({
-        baselineFunctionCount: baseline.length,
-        actionFunctionCount: action.length,
-        changed: changedWasmCallCounts(baseline, action),
-      });
-    },
-    validate(result: {
-      rendererErrorCount?: number;
-      evidence?: Readonly<{ changed: readonly WasmCallCount[] }>;
-    }) {
-      if (
-        !result.evidence
-        || result.evidence.changed.length === 0
-        || result.evidence.changed.length > 512
-        || (result.rendererErrorCount ?? 0) !== 0
-      ) {
-        throw new Error("manual character-selector trace produced no closed call evidence");
-      }
-    },
-  }),
   "character-switch": Object.freeze({
     tier: "observation",
-    program: "character-list-probe",
+    program: "none",
     readiness: "frontend",
-    async run({ readCharacterSwitchDiagnostics, wait }: ObservationContext) {
-      const trace: Readonly<Record<string, unknown>>[] = [];
-      let traceStarted = 0;
-      let lastTrace = "";
-      let sampling = false;
-      const sample = async () => {
-        const value = await readCharacterSwitchDiagnostics();
-        if (!value) return;
-        const counters = value.counters as Record<string, unknown> | undefined;
-        const compact = Object.freeze({
-          atBucketMs: Math.min(60_000, Math.floor((performance.now() - traceStarted) / 100) * 100),
-          readerState: value.readerState,
-          characterCount: value.characterCount,
-          playability: value.playability,
-          actionSequence: value.actionSequence,
-          stage: value.stage,
-          lastCode: value.lastCode,
-          lastSelectorReadiness: value.lastSelectorReadiness,
-          selectorReadinessRetries: value.selectorReadinessRetries,
-          lastFrameProofMask: value.lastFrameProofMask,
-          lastSelectorProofMask: value.lastSelectorProofMask,
-          selectorClickProved: value.selectorClickProved,
-          selectorConfirmationProved: value.selectorConfirmationProved,
-          selectorParentResolverProved: value.selectorParentResolverProved,
-          selectorParentIdentityProved: value.selectorParentIdentityProved,
-          selectorParentProved: value.selectorParentProved,
-          selectorContextRowsProved: value.selectorContextRowsProved,
-          selectorContextProved: value.selectorContextProved,
-          selectorContextIdentityProved: value.selectorContextIdentityProved,
-          selectorCharacterArrayProved: value.selectorCharacterArrayProved,
-          selectorTargetProved: value.selectorTargetProved,
-          selectorTargetPointerProved: value.selectorTargetPointerProved,
-          requestedListIndex: value.requestedListIndex,
-          selectorObservedIndex: value.selectorObservedIndex,
-          counters: Object.freeze({
-            logout: counters?.logout,
-            select: counters?.select,
-            play: counters?.play,
-          }),
-        });
-        const signature = JSON.stringify({ ...compact, atBucketMs: 0 });
-        if (signature === lastTrace) return;
-        lastTrace = signature;
-        trace.push(compact);
-        if (trace.length > 64) trace.shift();
-      };
-      const startSampling = () => {
-        traceStarted = performance.now();
-        sampling = true;
-        return (async () => {
-          while (sampling) {
-            await sample();
-            await new Promise((resolve) => setTimeout(resolve, 100));
-          }
-          await sample();
-        })();
-      };
-      await operatorCheckpoint(
-        "Sign in with a safe character and enter an outpost. Open Command-R and verify "
-        + "the character count, names, profession icons, and Current marker against the "
-        + "native selector. Do not paste or report any names.",
-      );
-      const before = await readCharacterSwitchDiagnostics();
-      const sampler = startSampling();
-      console.log(JSON.stringify({
-        checkpoint: "operator-action",
-        please: "In Command-R, choose another character exactly once with Return or 1-9/0. "
-          + "Do not Retry. The runner will capture and stop automatically at success or failure.",
-      }));
-      const beforeSequence = typeof before?.actionSequence === "number"
-        ? before.actionSequence
-        : 0;
-      const actionDeadline = Date.now() + 5 * 60_000;
-      let after: Readonly<Record<string, unknown>> | null = null;
-      while (Date.now() < actionDeadline) {
-        const candidate = await readCharacterSwitchDiagnostics();
-        if (
-          typeof candidate?.actionSequence === "number"
-          && candidate.actionSequence > beforeSequence
-          && (candidate.stage === "complete" || candidate.stage === "failed")
-        ) {
-          after = candidate;
-          break;
-        }
-        await wait(100);
-      }
-      sampling = false;
-      await sampler;
-      after ??= await readCharacterSwitchDiagnostics();
-      if (after?.stage !== "complete") {
-        return Object.freeze({
-          before,
-          trace: Object.freeze(trace),
-          after,
-          final: after,
-          outcome: after?.stage === "failed" ? "failed" : "action-timeout",
-        });
-      }
-      await operatorCheckpoint(
-        "Open Command-R again. Confirm Current moved to the loaded character, then try the "
-        + "disabled Current row and confirm no game action occurs.",
-      );
-      const final = await readCharacterSwitchDiagnostics();
-      return Object.freeze({
-        before,
-        trace: Object.freeze(trace),
-        after,
-        final,
-        outcome: "complete",
-      });
-    },
-    validate(result: {
-      rendererErrorCount?: number;
-      evidence?: Readonly<{
-        before: Readonly<Record<string, unknown>> | null;
-        after: Readonly<Record<string, unknown>> | null;
-        final: Readonly<Record<string, unknown>> | null;
-      }>;
-    }) {
-      const after = result.evidence?.after;
-      const final = result.evidence?.final;
-      const counters = final?.counters as Record<string, unknown> | undefined;
-      if (
-        !result.evidence?.before
-        || !after
-        || !final
-        || after.stage !== "complete"
-        || final.stage !== "complete"
-        || counters?.logout !== 1
-        || typeof counters?.select !== "number"
-        || counters.select < 1
-        || counters?.play !== 1
-        || (result.rendererErrorCount ?? 0) !== 0
-      ) {
-        throw new Error("character switch did not reach its privacy-safe acceptance state");
-      }
-    },
+    run: runCharacterSwitchScenario,
+    validate: validateCharacterSwitchScenario,
   }),
   "map-transition": Object.freeze({
     tier: "automation",
@@ -1406,32 +969,13 @@ export function scenarioContext(
     page,
     currentPage = async () => page,
     cdp,
-    readRendererErrorCount = () => 0,
     sendAutomationCommand,
   } = capabilities;
   const observation: ObservationContext = {
     readCursorProjection: async () => (await currentPage()).evaluate(() =>
       window.gwCompanionRuntime?.cursor ?? null),
-    readCharacterListProjection: async () => (await currentPage()).evaluate(() =>
-      window.gwCharacterListProbe?.read() ?? null),
     readCharacterSwitchDiagnostics: async () => (await currentPage()).evaluate(() =>
       window.gwCharacterSwitch?.diagnostics() ?? null),
-    captureWasmCallCounts: async (milliseconds) => {
-      if (!Number.isInteger(milliseconds) || milliseconds < 100 || milliseconds > 15_000) {
-        throw new Error("WASM call capture duration is outside its fixed bounds");
-      }
-      await cdp.send("Profiler.enable");
-      try {
-        await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
-        await cdp.send("Profiler.start");
-        await page.waitForTimeout(milliseconds);
-        return projectWasmCallCounts(await cdp.send("Profiler.stop"));
-      } finally {
-        await cdp.send("Profiler.stop").catch(() => undefined);
-        await cdp.send("Profiler.disable").catch(() => undefined);
-      }
-    },
-    readRendererErrorCount,
     wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
   };
   return Object.freeze(

@@ -1,7 +1,7 @@
 import type { Page } from "playwright";
 
 /** Collapse startup failures before they enter the character-probe artifact. */
-export function closedCharacterProbeFailureCode(error: unknown): string {
+export function closedCharacterSwitchFailureCode(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
   if (message.startsWith("Electron exited before connection")) return "app-exited-before-debugger";
   if (message === "Electron did not expose its debugging endpoint") return "debugger-timeout";
@@ -21,7 +21,7 @@ export function closedCharacterProbeFailureCode(error: unknown): string {
  * Passing the generic live projection is intentional: this boundary proves
  * that map/player/target diagnostics cannot reach stdout or failure artifacts.
  */
-export function projectCharacterProbeLiveResult(
+export function projectCharacterSwitchLiveResult(
   result: Readonly<{
     scenario: string;
     supported: boolean;
