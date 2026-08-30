@@ -172,6 +172,7 @@ export function nativeBuildSteps(platform, architecture) {
           "Advapi32.lib",
           "Shell32.lib",
           "Ole32.lib",
+          "Wintrust.lib",
           "build/native/node.lib",
           "/Fe:build/native/windows-host.node",
         ],

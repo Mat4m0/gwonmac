@@ -11,15 +11,20 @@ import type {
   AppUpdateState,
 } from "../../src/shared/contracts.ts";
 import {
-  APP_UPDATE_FEED_URLS,
+  appUpdateFeedUrls,
   releaseAssetUrl,
+  releaseDownloadRoot,
+  releaseUpdateArtifactName,
+  type AppUpdateTarget,
 } from "../../src/shared/project-identity.ts";
 
-function manifest(version: string) {
+function manifest(
+  version: string,
+  target: AppUpdateTarget = "darwin-arm64",
+) {
   const tag = `v${version}`;
-  const zipName = `Guild-Wars-Reforged-${version}-macOS-arm64.zip`;
   return {
-    url: releaseAssetUrl(tag, zipName),
+    url: releaseAssetUrl(tag, releaseUpdateArtifactName(version, target)),
     name: `Guild Wars Reforged v${version}`,
     version,
     tag,
@@ -38,6 +43,7 @@ function response(body: unknown, status = 200, headers?: HeadersInit): Response 
 function fixture(options: {
   capable?: boolean;
   currentVersion?: string;
+  target?: AppUpdateTarget | null;
   fetch?: typeof fetch;
   timeoutMs?: number;
   native?: {
@@ -55,6 +61,7 @@ function fixture(options: {
   const updater = new AppUpdater({
     currentVersion: options.currentVersion ?? "2026.7.0-beta.1",
     capable: options.capable ?? true,
+    target: options.target === undefined ? "darwin-arm64" : options.target,
     fetch: options.fetch ?? (async () => response(manifest("2026.7.0-beta.2"))),
     now: () => 1234,
     ...(options.timeoutMs === undefined
@@ -104,10 +111,43 @@ describe("application updater", () => {
         },
       });
       await f.updater.check(track);
-      assert.deepEqual(requests, [APP_UPDATE_FEED_URLS[track]]);
+      assert.deepEqual(requests, [appUpdateFeedUrls("darwin-arm64")[track]]);
       assert.deepEqual(f.feeds, [releaseAssetUrl(`v${version}`, "RELEASES.json")]);
       assert.equal(f.nativeChecks(), 1);
     }
+  });
+
+  it("uses the Windows channel and immutable Squirrel release directory", async () => {
+    const requests: string[] = [];
+    const feeds: string[] = [];
+    const version = "2026.8.0";
+    const f = fixture({
+      currentVersion: "2026.7.0",
+      target: "win32-x64",
+      fetch: async (input) => {
+        requests.push(String(input));
+        return response(manifest(version, "win32-x64"));
+      },
+      native: { setFeedURL: (url) => feeds.push(url) },
+    });
+    await f.updater.check("stable");
+    assert.deepEqual(requests, [appUpdateFeedUrls("win32-x64").stable]);
+    assert.deepEqual(feeds, [releaseDownloadRoot(`v${version}`)]);
+    assert.equal(f.nativeChecks(), 1);
+  });
+
+  it("fails closed when no updater target exists", async () => {
+    let requests = 0;
+    const f = fixture({
+      target: null,
+      fetch: async () => {
+        requests += 1;
+        return response(manifest("2026.8.0"));
+      },
+    });
+    await f.updater.check("stable");
+    assert.equal(requests, 0);
+    assert.equal(f.updater.getState().phase, "failed");
   });
 
   it("makes no request and reports unavailable without the signed marker", async () => {

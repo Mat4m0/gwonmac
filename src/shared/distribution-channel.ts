@@ -29,6 +29,7 @@ export type DistributionChannel = (typeof DISTRIBUTION_CHANNELS)[number];
 export interface DistributionChannelConfig {
   readonly productName: string;
   readonly bundleId: string;
+  readonly windowsPackageId: string;
   readonly signingKind: "developer-id" | "development";
 }
 
@@ -38,16 +39,19 @@ export const DISTRIBUTION_CHANNEL_CONFIG: Readonly<
   release: {
     productName: "Guild Wars Reforged",
     bundleId: "io.github.mat4m0.gwonmac",
+    windowsPackageId: "GuildWarsReforged",
     signingKind: "developer-id",
   },
   preview: {
     productName: "Guild Wars Reforged Preview",
     bundleId: "io.github.mat4m0.gwonmac.preview",
+    windowsPackageId: "GuildWarsReforgedPreview",
     signingKind: "developer-id",
   },
   development: {
     productName: "Guild Wars Reforged Dev",
     bundleId: "io.github.mat4m0.gwonmac.dev",
+    windowsPackageId: "GuildWarsReforgedDev",
     signingKind: "development",
   },
 };

@@ -6,6 +6,7 @@ import { parseProfileId } from "../../src/shared/multiple-accounts.js";
 import { multiSecretSlot } from "../../src/main/core/native-keychain.js";
 import {
   WindowsCredentialKeychain,
+  windowsExecutableTrusted,
   windowsNativeHostPath,
 } from "../../src/main/windows-native-host.js";
 
@@ -36,6 +37,7 @@ describe("Windows native host boundary", () => {
     const calls: unknown[][] = [];
     const host = {
       localAppData: () => "unused",
+      currentExecutableTrusted: () => true,
       load: async (...args: unknown[]) => {
         calls.push(["load", ...args]);
         return Buffer.from("saved");
@@ -60,5 +62,6 @@ describe("Windows native host boundary", () => {
       ["save", "io.github.mat4m0.gwonmac.preview", slot, Buffer.from("replacement")],
       ["clear", "io.github.mat4m0.gwonmac.preview", slot],
     ]);
+    assert.equal(windowsExecutableTrusted(host), true);
   });
 });

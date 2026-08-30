@@ -1,4 +1,5 @@
 import { MakerDMG } from "@electron-forge/maker-dmg";
+import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { flipFuses, FuseV1Options, FuseVersion } from "@electron/fuses";
@@ -15,6 +16,10 @@ import {
   DISTRIBUTION_CHANNEL_CONFIG,
   distributionMarker,
 } from "./src/shared/distribution-channel.js";
+import {
+  releaseAssetUrl,
+  releaseUpdateArtifactName,
+} from "./src/shared/project-identity.js";
 
 const packageVersion = (
   JSON.parse(
@@ -27,6 +32,7 @@ const macOSVersion = macOSBundleVersions(packageVersion);
 const packageMode = resolvePackageMode(process.env.GW_PACKAGE_INTENT);
 const channelConfig = DISTRIBUTION_CHANNEL_CONFIG[packageMode.productChannel];
 const buildingDarwin = process.platform === "darwin";
+const buildingWindows = process.platform === "win32";
 
 function packagedExecutablePath(
   resourcesPath: string,
@@ -80,6 +86,16 @@ const releaseNotarization = buildingDarwin && packageMode.intent === "release"
     }
   : undefined;
 
+const windowsSigning = buildingWindows && packageMode.kind === "signed"
+  ? {
+      certificateFile: requiredSigningEnvironment("WINDOWS_CERTIFICATE_FILE"),
+      certificatePassword: requiredSigningEnvironment("WINDOWS_CERTIFICATE_PASSWORD"),
+      timestampServer: "https://timestamp.digicert.com",
+      description: channelConfig.productName,
+      website: "https://gwonmac.com",
+    }
+  : undefined;
+
 const config: ForgeConfig = {
   packagerConfig: {
     // Both are executable code that cannot run from inside the archive: a
@@ -92,7 +108,7 @@ const config: ForgeConfig = {
     executableName: channelConfig.productName,
     appVersion: macOSVersion.appVersion,
     buildVersion: macOSVersion.buildVersion,
-    icon: path.resolve("assets/AppIcon.icns"),
+    icon: path.resolve(buildingWindows ? "assets/AppIcon.ico" : "assets/AppIcon.icns"),
     appBundleId: channelConfig.bundleId,
     appCategoryType: "public.app-category.games",
     darwinDarkModeSupport: true,
@@ -123,6 +139,27 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerZIP({}, ["darwin"]),
+    ...(buildingWindows
+      ? [
+          new MakerSquirrel({
+            usePackageJson: false,
+            name: channelConfig.windowsPackageId,
+            title: channelConfig.productName,
+            exe: `${channelConfig.productName}.exe`,
+            version: packageVersion,
+            authors: "gwonmac contributors",
+            owners: "gwonmac contributors",
+            copyright: "© 2026 gwonmac contributors. Guild Wars © ArenaNet LLC.",
+            description: "Run Guild Wars with native profiles, updates, and optional Tools.",
+            setupExe: releaseUpdateArtifactName(packageVersion, "win32-x64"),
+            setupIcon: path.resolve("assets/AppIcon.ico"),
+            iconUrl: releaseAssetUrl(`v${packageVersion}`, "AppIcon.ico"),
+            noMsi: true,
+            noDelta: true,
+            ...(windowsSigning ? { windowsSign: windowsSigning } : {}),
+          }),
+        ]
+      : []),
     ...(buildingDarwin && packageMode.intent === "release"
       ? [
           new MakerDMG({
@@ -161,7 +198,10 @@ const config: ForgeConfig = {
       platform,
       arch,
     ) => {
-      if (platform === "darwin" && packageMode.kind === "signed") {
+      if (
+        (platform === "darwin" || platform === "win32")
+        && packageMode.kind === "signed"
+      ) {
         writeFileSync(
           path.resolve(resourcesPath, "..", "distribution-channel.json"),
           `${JSON.stringify(distributionMarker(packageMode.channel))}\n`,

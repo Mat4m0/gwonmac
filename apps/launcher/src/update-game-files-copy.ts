@@ -106,7 +106,7 @@ function failedApplicationUpdate(
 
 const DOWNLOAD_FAILURE: Partial<Record<ErrorCode, string>> = {
   disk_full: "There is not enough free space to finish downloading. Free some space, then try again.",
-  net_offline: "The download stopped because this Mac is offline. Reconnect, then try again.",
+  net_offline: "The download stopped because this computer is offline. Reconnect, then try again.",
   dns_timeout: "The download could not reach ArenaNet. Check your connection, then try again.",
   http_status: "ArenaNet could not serve a game file. This is usually temporary; try again in a few minutes.",
 };
@@ -118,7 +118,7 @@ export function backgroundDownloadFailure(reason: ErrorCode): string {
 
 const REPAIR_REASON: Partial<Record<ErrorCode, string>> = {
   disk_full: "There is not enough free space to prepare Guild Wars. Free some space, then repair the game files.",
-  net_offline: "This Mac is offline and no usable game client is available. Reconnect, then repair the game files.",
+  net_offline: "This computer is offline and no usable game client is available. Reconnect, then repair the game files.",
   dns_timeout: "ArenaNet could not be reached. Check your connection, then repair the game files.",
   http_status: "ArenaNet could not provide the required game files. Try the repair again in a few minutes.",
   artifact_unverified: "A downloaded game file did not pass verification. Repair will download a clean copy.",

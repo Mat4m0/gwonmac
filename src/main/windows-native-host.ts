@@ -14,6 +14,7 @@ import {
 
 interface WindowsNativeHost {
   localAppData(): string;
+  currentExecutableTrusted(): boolean;
   load(identity: string, slot: SecretSlot): Promise<Buffer | null>;
   save(identity: string, slot: SecretSlot, value: Buffer): Promise<void>;
   clear(identity: string, slot: SecretSlot): Promise<void>;
@@ -31,10 +32,15 @@ function isWindowsNativeHost(value: unknown): value is WindowsNativeHost {
   const candidate = value as Partial<Record<keyof WindowsNativeHost, unknown>>;
   return (
     typeof candidate.localAppData === "function"
+    && typeof candidate.currentExecutableTrusted === "function"
     && typeof candidate.load === "function"
     && typeof candidate.save === "function"
     && typeof candidate.clear === "function"
   );
+}
+
+export function windowsExecutableTrusted(host: WindowsNativeHost): boolean {
+  return host.currentExecutableTrusted();
 }
 
 export function loadWindowsNativeHost(layout: BundleLayout): WindowsNativeHost {

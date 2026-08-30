@@ -8,7 +8,9 @@
 #include <node_api.h>
 #include <windows.h>
 #include <wincred.h>
+#include <wintrust.h>
 #include <shlobj.h>
+#include <softpub.h>
 
 #include <cstdint>
 #include <exception>
@@ -295,6 +297,44 @@ napi_value LocalAppDataCallback(napi_env env, napi_callback_info info) {
   return value;
 }
 
+napi_value CurrentExecutableTrustedCallback(napi_env env,
+                                            napi_callback_info info) {
+  std::size_t argc = 0;
+  if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr) != napi_ok ||
+      argc != 0) {
+    napi_throw_type_error(env, nullptr,
+                          "currentExecutableTrusted takes no arguments");
+    return nullptr;
+  }
+  std::vector<wchar_t> executable(32768, L'\0');
+  const DWORD length = GetModuleFileNameW(
+      nullptr, executable.data(), static_cast<DWORD>(executable.size()));
+  bool trusted = false;
+  if (length > 0 && length < executable.size()) {
+    WINTRUST_FILE_INFO file{};
+    file.cbStruct = sizeof(file);
+    file.pcwszFilePath = executable.data();
+    GUID policy = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+    WINTRUST_DATA trust{};
+    trust.cbStruct = sizeof(trust);
+    trust.dwUIChoice = WTD_UI_NONE;
+    trust.fdwRevocationChecks = WTD_REVOKE_NONE;
+    trust.dwUnionChoice = WTD_CHOICE_FILE;
+    trust.pFile = &file;
+    trust.dwStateAction = WTD_STATEACTION_VERIFY;
+    trust.dwProvFlags = WTD_CACHE_ONLY_URL_RETRIEVAL;
+    trusted = WinVerifyTrust(nullptr, &policy, &trust) == ERROR_SUCCESS;
+    trust.dwStateAction = WTD_STATEACTION_CLOSE;
+    WinVerifyTrust(nullptr, &policy, &trust);
+  }
+  napi_value result;
+  if (napi_get_boolean(env, trusted, &result) != napi_ok) {
+    napi_throw_error(env, nullptr, "Authenticode verification unavailable");
+    return nullptr;
+  }
+  return result;
+}
+
 napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor properties[] = {
       {"load", nullptr, LoadCallback, nullptr, nullptr, nullptr, napi_default,
@@ -305,6 +345,8 @@ napi_value Init(napi_env env, napi_value exports) {
        nullptr},
       {"localAppData", nullptr, LocalAppDataCallback, nullptr, nullptr, nullptr,
        napi_default, nullptr},
+      {"currentExecutableTrusted", nullptr, CurrentExecutableTrustedCallback,
+       nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   if (napi_define_properties(env, exports,
                              sizeof(properties) / sizeof(properties[0]),

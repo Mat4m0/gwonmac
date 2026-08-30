@@ -12,9 +12,7 @@ import {
 export function windowsSquirrelPackageId(
   channel: DistributionChannel,
 ): string {
-  if (channel === "release") return "GuildWarsReforged";
-  if (channel === "preview") return "GuildWarsReforgedPreview";
-  return "GuildWarsReforgedDev";
+  return DISTRIBUTION_CHANNEL_CONFIG[channel].windowsPackageId;
 }
 
 export function windowsAppUserModelId(productName: string): string {

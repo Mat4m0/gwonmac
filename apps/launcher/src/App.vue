@@ -219,6 +219,9 @@ const toolLabels: Readonly<Record<GlobalTool, string>> = {
   "xunlai-storage": "Xunlai Storage",
 };
 const profileIcons = { swords: Swords, archive: Archive, map: MapIcon, scroll: ScrollText, shield: Shield, star: Star, crown: Crown, flame: Flame } as const;
+const primaryModifierName = computed(() =>
+  snapshot.value.platform === "macos" ? "Command" : "Ctrl"
+);
 
 function checked(event: Event): boolean {
   return (event.currentTarget as HTMLInputElement).checked;
@@ -301,12 +304,12 @@ async function captureToolShortcut(tool: GlobalTool) {
   if (!result) return;
   if (result.status === "captured") {
     if (await runAction("The shortcut could not be saved.", () => native?.tools.replaceShortcut({ tool, binding: result.binding }))) shortcutMessage.value = "Shortcut saved.";
-  } else if (result.status === "reserved") shortcutMessage.value = "That shortcut is used by macOS or this application.";
+  } else if (result.status === "reserved") shortcutMessage.value = "That shortcut is used by your system or this application.";
   else if (result.status === "conflict") {
     pendingShortcutReplacement.value = { tool, binding: result.binding };
     shortcutMessage.value = `That shortcut is already used by ${toolLabels[result.tool]}.`;
   }
-  else if (result.status === "invalid") shortcutMessage.value = "Use Command with a letter or number.";
+  else if (result.status === "invalid") shortcutMessage.value = `Use ${primaryModifierName.value} with a letter or number.`;
   else shortcutMessage.value = "Shortcut change cancelled.";
 }
 
@@ -342,7 +345,7 @@ async function replaceToolShortcut() {
       <AlertTriangle /><div><strong>{{ playableNotice.title }}</strong><span>{{ playableNotice.detail }}</span></div>
       <button @click="openSettings('game-files')">View game files</button>
     </section>
-    <section v-else-if="snapshot.readiness.state === 'offline-playable'" class="priority-banner"><AlertTriangle /><div><strong>You are offline</strong><span>You can play with the game files already on this Mac.</span></div></section>
+    <section v-else-if="snapshot.readiness.state === 'offline-playable'" class="priority-banner"><AlertTriangle /><div><strong>You are offline</strong><span>You can play with the game files already on this computer.</span></div></section>
     <section v-else-if="backgroundDownloadBanner" class="priority-banner"><Clock3 /><div><strong>{{ backgroundDownloadBanner.title }}</strong><span>{{ backgroundDownloadBanner.detail }}</span></div><button @click="openSettings('game-files')">View download</button></section>
     <section v-else class="funding-banner">
       <div><strong>Help cover the yearly costs</strong><span>Apple Developer Program, domain, and hosting</span></div>
@@ -395,7 +398,7 @@ async function replaceToolShortcut() {
               <div v-if="snapshot.tools.restartRequired" class="restart-row"><span><strong>Restart needed</strong><small>Your change is saved.</small></span><button v-if="!visibleProfiles.some(profile => profile.state === 'running')" class="primary" @click="runAction('The application could not restart.', () => native?.tools.restartToApply())">Restart application</button><span v-else>Applies after your next normal restart.</span></div>
             </div>
           </template>
-          <MapsSettings v-else-if="settingsRoute === 'maps'" :settings="snapshot.settings" :save="updateLauncherSettings" />
+          <MapsSettings v-else-if="settingsRoute === 'maps'" :settings="snapshot.settings" :platform="snapshot.platform" :save="updateLauncherSettings" />
           <GameFilesSettings
             v-else-if="settingsRoute === 'game-files'"
             :readiness="snapshot.readiness"
@@ -437,7 +440,7 @@ async function replaceToolShortcut() {
 
     <BaseModal v-if="snapshot.experience.setup === 'pending'" labelledby="setup-title" :dismissible="false" wide>
       <div class="setup-card">
-        <template v-if="setupStep === 1"><span class="eyebrow">Welcome</span><h2 id="setup-title">Welcome to Guild Wars Reforged</h2><p>Guild Wars Reforged runs Guild Wars on your Mac. It is an unofficial community project and is not affiliated with ArenaNet or NCSOFT.</p><div class="form-actions"><button class="primary" @click="setupStep = 2">Continue</button></div></template>
+        <template v-if="setupStep === 1"><span class="eyebrow">Welcome</span><h2 id="setup-title">Welcome to Guild Wars Reforged</h2><p>Guild Wars Reforged runs Guild Wars on your computer. It is an unofficial community project and is not affiliated with ArenaNet or NCSOFT.</p><div class="form-actions"><button class="primary" @click="setupStep = 2">Continue</button></div></template>
         <template v-else><span class="eyebrow">Optional</span><h2 id="setup-title">Optional Tools</h2><p>Build Management saves team builds. Quick Travel opens a map search. Xunlai Storage opens storage in supported outposts.</p><p><strong>Tools apply to every account.</strong></p><p class="setup-note">If you enable Tools, the app restarts once to finish setup.</p><div class="form-actions spread"><button class="secondary" @click="setupStep = 1">Back</button><span /><button class="secondary" @click="completeSetup(false)">Not now</button><button class="primary" @click="completeSetup(true)">Enable Tools</button></div></template>
       </div>
     </BaseModal>

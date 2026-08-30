@@ -5,7 +5,7 @@
   "private": true,
   "packageManager": "pnpm@11.13.1",
   "type": "module",
-  "description": "Guild Wars Reforged for macOS",
+  "description": "Guild Wars Reforged desktop launcher",
   "author": "gwonmac contributors",
   "license": "GPL-3.0-only",
   "repository": {
@@ -27,6 +27,7 @@
     "launcher:fixture": "pnpm build && node --import ./scripts/ts-hook.mjs scripts/launcher-fixture.ts",
     "storage:probe": "node --import ./scripts/ts-hook.mjs scripts/platform-storage-probe.ts",
     "test:windows-credentials": "node --import ./scripts/ts-hook.mjs scripts/windows-credential-probe.ts",
+    "test:windows-package": "node --import ./scripts/ts-hook.mjs scripts/windows-package-probe.ts",
     "test:signed-dev": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts --test-keychain",
     "tools:dev": "pnpm --filter @gwonmac/tools-ui dev",
     "tools:test": "pnpm --filter @gwonmac/tools-ui test",
@@ -76,6 +77,7 @@
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",
     "@electron-forge/maker-dmg": "^7.11.2",
+    "@electron-forge/maker-squirrel": "^7.11.2",
     "@electron-forge/maker-zip": "^7.11.2",
     "@electron-forge/shared-types": "^7.11.2",
     "@electron/asar": "^3.4.1",

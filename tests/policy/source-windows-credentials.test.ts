@@ -45,3 +45,15 @@ test("Credential Manager owns only closed application and profile slots", () => 
   assert.doesNotMatch(native, /system\s*\(|popen\s*\(|CreateProcess/u);
   assert.doesNotMatch(main, /safeStorage|encryptString|decryptString/u);
 });
+
+test("only an Authenticode-verified package marker enables Windows persistence", () => {
+  assert.match(native, /WINTRUST_ACTION_GENERIC_VERIFY_V2/u);
+  assert.match(native, /WinVerifyTrust/u);
+  assert.match(native, /WTD_UI_NONE/u);
+  assert.match(native, /WTD_CACHE_ONLY_URL_RETRIEVAL/u);
+  assert.match(main, /windowsExecutableTrusted\(windowsNativeHost\)/u);
+  assert.match(
+    main,
+    /DISTRIBUTION_CHANNEL_CONFIG\[channel\]\.productName !== app\.getName\(\)/u,
+  );
+});

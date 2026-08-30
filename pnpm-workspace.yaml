@@ -37,6 +37,9 @@ packageExtensions:
       "@nuxt/kit": 4.5.1
 allowBuilds:
   electron: true
+  # Selects the package-owned 7-Zip executable for the build host; it makes no
+  # network request and writes only inside electron-winstaller's vendor tree.
+  electron-winstaller: true
   esbuild: true
   fs-xattr: true
   macos-alias: true

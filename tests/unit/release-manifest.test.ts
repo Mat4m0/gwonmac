@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { releaseManifest } from "../../scripts/release-manifest.ts";
 import { parseReleaseManifest } from "../../src/shared/release-manifest.ts";
+import {
+  releaseAssetUrl,
+  releaseDownloadRoot,
+  releaseUpdateArtifactName,
+} from "../../src/shared/project-identity.ts";
 
-describe("Squirrel.Mac release manifest", () => {
+describe("native update release manifest", () => {
   it("contains exactly one immutable release asset", () => {
     const manifest = JSON.parse(releaseManifest({
       version: "2026.7.0-beta.2",
@@ -37,20 +42,44 @@ describe("Squirrel.Mac release manifest", () => {
       zipName: "Guild-Wars-Reforged-2026.7.0-macOS-arm64.zip",
       publishedAt: "2026-07-30T12:00:00Z",
     }));
-    assert.equal(parseReleaseManifest(generated)?.manifest.version, "2026.7.0");
+    assert.equal(
+      parseReleaseManifest(generated, "darwin-arm64")?.manifest.version,
+      "2026.7.0",
+    );
     assert.equal(
       parseReleaseManifest({
         ...(generated as Record<string, unknown>),
         url: "https://attacker.invalid/app.zip",
-      }),
+      }, "darwin-arm64"),
       null,
     );
     assert.equal(
       parseReleaseManifest({
         ...(generated as Record<string, unknown>),
         extra: true,
-      }),
+      }, "darwin-arm64"),
       null,
     );
+  });
+
+  it("binds Windows discovery to its Setup asset and Squirrel directory", () => {
+    const version = "2026.8.0";
+    const tag = `v${version}`;
+    const manifest = {
+      url: releaseAssetUrl(
+        tag,
+        releaseUpdateArtifactName(version, "win32-x64"),
+      ),
+      name: `Guild Wars Reforged v${version}`,
+      version,
+      tag,
+      pub_date: "2026-08-30T12:00:00.000Z",
+      notes: "",
+    };
+    assert.equal(
+      parseReleaseManifest(manifest, "win32-x64")?.immutableFeedUrl,
+      releaseDownloadRoot(tag),
+    );
+    assert.equal(parseReleaseManifest(manifest, "darwin-arm64"), null);
   });
 });
