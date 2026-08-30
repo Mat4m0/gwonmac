@@ -64,7 +64,7 @@
       || command.type === 'storage.open'
       || command.type === 'settings.open'
       || command.type === 'diagnostics.toggle'
-    ) window.gwSurfaces.dismissTransient();
+    ) window.gwSurfaces?.dismissTransient();
     switch (command.type) {
       case 'input.reset':
         dispatch('gw:input-reset');
