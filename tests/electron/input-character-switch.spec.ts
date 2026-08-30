@@ -122,12 +122,13 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
         { name: "Private Alpha", characterKey: "0000000000000001", primaryProfession: 1, secondaryProfession: 0, characterType: "roleplaying" as const, campaign: 1, level: 20, mapId: 55 },
         { name: "Private Beta", characterKey: "0000000000000002", primaryProfession: 2, secondaryProfession: 3, characterType: "roleplaying" as const, campaign: 2, level: 20, mapId: 55 },
       ];
+      let characterState = { status: "ready" as const, sequence: 12, selectedIndex: 0, characters };
       let phase: "idle" | "switching" | "failed" = "idle";
       let context: CharacterSwitchContext = "pve-explorable";
       const listeners = new Set<() => void>();
       const emit = () => { for (const listener of listeners) listener(); };
       window.gwCharacterSwitchHost?.attach({
-        characters: { status: "ready", sequence: 12, selectedIndex: 0, characters },
+        get characters() { return characterState; },
         get action() {
           if (phase === "switching") return { status: "switching", stage: "logout" } as const;
           if (phase === "failed") return { status: "failed", code: "selection-not-confirmed" } as const;
@@ -155,6 +156,15 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
         __characterSwitchTestSet(nextPhase: typeof phase, nextContext: CharacterSwitchContext) {
           phase = nextPhase;
           context = nextContext;
+          emit();
+        },
+        __characterSwitchTestRefreshCharacters() {
+          characterState = {
+            status: "ready",
+            sequence: 13,
+            selectedIndex: 1,
+            characters: [characters[1]!, characters[0]!],
+          };
           emit();
         },
       });
@@ -185,9 +195,15 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
     await page.getByRole("option", { name: /Switch to Private Beta/u }).click();
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        __characterSwitchTestRefreshCharacters(): void;
+      };
+      target.__characterSwitchTestRefreshCharacters();
+    });
     await page.getByRole("button", { name: "Leave and switch" }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "12:1:true");
+    await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "13:0:true");
 
     await page.evaluate(() => {
       const target = window as typeof window & {

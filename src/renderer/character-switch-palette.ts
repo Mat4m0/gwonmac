@@ -565,14 +565,15 @@ export function createCharacterSwitchPalette(
     if (view.kind !== "confirming") return;
     const confirmation = view;
     const state = source.characters;
-    const target = state.status === "ready" ? state.characters[confirmation.index] : undefined;
-    if (state.status !== "ready"
-      || state.sequence !== confirmation.sequence
-      || target?.characterKey !== confirmation.characterKey) {
+    view = Object.freeze({ kind: "characters" });
+    if (state.status !== "ready") {
       beginRequest(confirmation.sequence, confirmation.index, true);
       return;
     }
-    beginRequest(state.sequence, confirmation.index, true);
+    const currentIndex = state.characters.findIndex(
+      ({ characterKey }) => characterKey === confirmation.characterKey,
+    );
+    beginRequest(state.sequence, currentIndex, true);
   });
   root.querySelector(".character-switch-copy")!.addEventListener("click", () => {
     void navigator.clipboard.writeText(JSON.stringify(source.diagnostics()));
