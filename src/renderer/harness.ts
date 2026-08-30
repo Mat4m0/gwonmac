@@ -790,6 +790,7 @@ Module = {
           window.gwApplySettings?.(saved);
           return saved;
         },
+        exportEvidence: (capture) => native().cartography.exportEvidence(capture),
       });
       maybeInstallEnhancements();
       success(result.instance, result.module);

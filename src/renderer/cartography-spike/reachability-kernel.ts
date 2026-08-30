@@ -61,6 +61,7 @@ export type CartographyReachabilityDiagnostic = Readonly<{
 }>;
 
 export type CartographyReachabilityController = Readonly<{
+  sha256: string | null;
   classify(input: Readonly<{
     layoutId: CartographyMemoryLayoutId;
     mapId: number;
@@ -306,6 +307,7 @@ export async function installCartographyReachabilityKernel(
     const classify = instance.exports.cartography_reachability_classify as Classify;
     let lastDiagnostic: CartographyReachabilityDiagnostic | null = null;
     return Object.freeze({
+      sha256: kernelSha256,
       classify(input) {
         if (disposed) return null;
         classify(

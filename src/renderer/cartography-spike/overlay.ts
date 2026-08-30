@@ -3,6 +3,10 @@
  * Native observation and semantic classification never occur on animation frames.
  */
 import { resolveCartographyPreset } from "../../shared/cartography-presets.js";
+import type {
+  CartographyEvidenceCapture,
+  CartographyEvidenceExportResult,
+} from "../../shared/cartography-evidence.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
 import {
   bitsetHasCell,
@@ -30,6 +34,7 @@ import {
   projectTerrainToCompass,
   projectTerrainToMissionMap,
 } from "./map-projections.js";
+import { captureCartographyEvidence } from "./evidence-capture.js";
 import { createCartographyOverlayControls } from "./overlay-controls.js";
 import {
   createWalkableTerrainSurface,
@@ -91,6 +96,9 @@ export function mountCartographyOverlay(options: Readonly<{
   modelSources: CartographyModelSources;
   settings(): AppSettings;
   persist(patch: RendererSettingsPatch): Promise<AppSettings>;
+  exportEvidence(
+    capture: CartographyEvidenceCapture,
+  ): Promise<CartographyEvidenceExportResult>;
 }>): () => void {
   const document = options.parent.ownerDocument;
   const view = document.defaultView;
@@ -120,6 +128,9 @@ export function mountCartographyOverlay(options: Readonly<{
       if (layer === "grid") previewGridOpacity = opacity;
       else previewWalkabilityOpacity = opacity;
     },
+    exportEvidence: () => options.exportEvidence(
+      captureCartographyEvidence(model, options.modelSources),
+    ),
   });
 
   let animationFrame = 0;
@@ -166,17 +177,16 @@ export function mountCartographyOverlay(options: Readonly<{
   view.addEventListener("blur", forgetPointer);
   document.addEventListener("visibilitychange", forgetHiddenPointer);
 
-  const hideCompass = (): void => {
+  const hideCompassLayers = (): void => {
     compassGridLayer.hide();
     compassTerrainLayer.hide();
-    controls.hide();
   };
   const hideMission = (): void => {
     missionGridLayer.hide();
     missionTerrainLayer.hide();
   };
-  const hideAll = (): void => {
-    hideCompass();
+  const hideAllLayers = (): void => {
+    hideCompassLayers();
     hideMission();
   };
   const gridStats = (): CartographyGridStats => Object.freeze({
@@ -213,7 +223,7 @@ export function mountCartographyOverlay(options: Readonly<{
     try {
       render();
     } catch (cause) {
-      if (surface === "compass") hideCompass();
+      if (surface === "compass") hideCompassLayers();
       else hideMission();
       console.error(`[cartography] ${surface} rendering failed`, cause);
     }
@@ -235,19 +245,27 @@ export function mountCartographyOverlay(options: Readonly<{
         ) actionabilityVersion += 1;
       }
       model = next;
+      controls.updateQaStatus(modelStats());
       nextModelPoll = now + MODEL_POLL_MS;
     }
     presentation = readCartographyPresentation(model, options.modelSources);
     if (model.status !== "ready") {
       terrainKey = "";
       terrain = null;
-      hideAll();
+      hideAllLayers();
+      const compass = options.modelSources.compass.snapshot();
+      const box = compass === null
+        ? null
+        : projectNativeFrame(compass, options.canvas.getBoundingClientRect());
+      if (box === null) controls.hide();
+      else controls.update(box, options.settings());
       return;
     }
     const settings = options.settings();
     const style = resolveCartographyPreset(settings.cartographyPresetLibrary);
     if (style === null) {
-      hideAll();
+      hideAllLayers();
+      controls.hide();
       return;
     }
     const gridOpacity = previewGridOpacity ?? settings.cartographyGridOpacity;
@@ -282,13 +300,13 @@ export function mountCartographyOverlay(options: Readonly<{
         || presentation.compass === null
         || presentation.player === null
       ) {
-        hideCompass();
+        hideCompassLayers();
         return;
       }
       const compass = presentation.compass;
       const box = projectNativeFrame(compass, canvasBox);
       if (box === null) {
-        hideCompass();
+        hideCompassLayers();
         return;
       }
       const playerMapX = model.worldAnchor.x

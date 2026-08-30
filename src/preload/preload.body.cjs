@@ -242,6 +242,10 @@ const api = {
       ipcRenderer.invoke(IPC.diagnosticsVisualSubmit, value),
     setProfile: (value) => ipcRenderer.invoke(IPC.diagnosticsProfileSet, value),
   },
+  cartography: {
+    exportEvidence: (value) =>
+      ipcRenderer.invoke(IPC.cartographyEvidenceExport, value),
+  },
   app: {
     openExternal: (kind) => ipcRenderer.invoke(IPC.appOpenExternal, kind),
     reveal: (kind) => ipcRenderer.invoke(IPC.appRevealPath, kind),

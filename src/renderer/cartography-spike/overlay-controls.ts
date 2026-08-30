@@ -3,23 +3,104 @@
  * It persists layer settings and semantic preset selections without owning the library.
  */
 import { resolveCartographyPreset } from "../../shared/cartography-presets.js";
+import type { CartographyEvidenceExportResult } from "../../shared/cartography-evidence.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
 import {
   encodeCartographyPresetRef,
   parseCartographyPresetRef,
   renderCartographyPresetOptions,
 } from "../cartography-preset-select.js";
+import type { CartographyReachabilityDiagnostic } from "./reachability-kernel.js";
 import type { ScreenBox } from "./frame-placement.js";
 
 const COLLAPSE_DELAY_MS = 700;
 const CONTROL_SIZE = 30;
 const PANEL_WIDTH = 232;
-const PANEL_HEIGHT_ESTIMATE = 210;
+const PANEL_HEIGHT_ESTIMATE = 330;
 type OpenMode = "closed" | "transient" | "pinned";
 type Layer = "grid" | "walkability";
 
+export type CartographyQaStatus =
+  | Readonly<{
+      status: "unavailable";
+      reason: string;
+      kernel: CartographyReachabilityDiagnostic | null;
+    }>
+  | Readonly<{
+      status: "ready";
+      mapId: number;
+      areaEpoch: number;
+      resourceGeneration: number;
+      terrain: Readonly<{ width: number; height: number; mapUnitsPerPixel: number }>;
+      reachableCells: number;
+      actionableCells: number;
+      compassReady: boolean;
+      missionMapReady: boolean;
+      kernel: CartographyReachabilityDiagnostic | null;
+    }>;
+
+type QaPresentation = Readonly<{
+  tone: "ready" | "loading" | "unavailable";
+  summary: string;
+  rows: readonly (readonly [label: string, value: string])[];
+}>;
+
+const KERNEL_STATUS = Object.freeze({
+  0: "not-published",
+  1: "ready",
+  2: "invalid-input",
+  3: "native-unavailable",
+  4: "limit",
+  5: "no-start-trapezoid",
+  6: "ambiguous-layout",
+  7: "plane-limit",
+  8: "trapezoid-limit",
+  9: "doorway-limit",
+  10: "terrain-raster-limit",
+}) satisfies Readonly<Record<number, string>>;
+
+function kernelStatus(status: number): string {
+  return KERNEL_STATUS[status as keyof typeof KERNEL_STATUS] ?? `status-${status}`;
+}
+
+export function describeCartographyQaStatus(status: CartographyQaStatus): QaPresentation {
+  if (status.status === "unavailable") {
+    const loading = status.reason === "loading";
+    const kernel = status.kernel;
+    const exactReason = status.reason === "kernel" && kernel !== null
+      ? `kernel/${kernelStatus(kernel.status)}`
+      : status.reason;
+    const rows: (readonly [string, string])[] = [["Reason", exactReason]];
+    if (kernel !== null) {
+      rows.push(
+        ["Map", String(kernel.mapId)],
+        ["Epoch", `${kernel.areaEpoch} · resource ${kernel.resourceGeneration}`],
+        ["Geometry", `${kernel.reachableTrapezoids}/${kernel.totalTrapezoids} reachable`],
+      );
+    }
+    return Object.freeze({
+      tone: loading ? "loading" : "unavailable",
+      summary: loading ? "Loading" : `Unavailable · ${exactReason}`,
+      rows: Object.freeze(rows),
+    });
+  }
+  const rows: readonly (readonly [string, string])[] = Object.freeze([
+    ["Map", String(status.mapId)],
+    ["Epoch", `${status.areaEpoch} · resource ${status.resourceGeneration}`],
+    ["Cells", `${status.actionableCells} actionable · ${status.reachableCells} reachable`],
+    ["Terrain", `${status.terrain.width}×${status.terrain.height} @ ${status.terrain.mapUnitsPerPixel}`],
+    ["Surfaces", `Compass ${status.compassReady ? "ready" : "off"} · Mission ${status.missionMapReady ? "ready" : "off"}`],
+  ]);
+  return Object.freeze({
+    tone: "ready",
+    summary: `Ready · ${status.actionableCells} actionable`,
+    rows,
+  });
+}
+
 export type CartographyOverlayControls = Readonly<{
   update(box: ScreenBox, settings: AppSettings): void;
+  updateQaStatus(status: CartographyQaStatus): void;
   hide(): void;
   dispose(): void;
 }>;
@@ -44,6 +125,7 @@ export function createCartographyOverlayControls(options: Readonly<{
   parent: HTMLElement;
   persist(patch: RendererSettingsPatch): Promise<AppSettings>;
   previewOpacity(layer: Layer, opacity: number | null): void;
+  exportEvidence: (() => Promise<CartographyEvidenceExportResult>) | null;
 }>): CartographyOverlayControls {
   const document = options.parent.ownerDocument;
   const view = document.defaultView;
@@ -108,20 +190,42 @@ export function createCartographyOverlayControls(options: Readonly<{
   fields.append(presetRow);
   const hint = document.createElement("p");
   hint.className = "cartography-overlay-hint";
-  hint.innerHTML = [
-    "Hold <kbd>Shift</kbd> to inspect 3×3. Add <kbd>Option</kbd> for 7×7.",
-    "<br>Marker: reveal here. Hatch: another map or route.",
-  ].join("");
-  const status = document.createElement("p");
-  status.className = "cartography-overlay-status";
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
-  panel.append(heading, layers, fields, hint, status);
+  hint.innerHTML = "Hold <kbd>Shift</kbd> to inspect 3×3. Add <kbd>Option</kbd> for 7×7.";
+  const saveStatus = document.createElement("p");
+  saveStatus.className = "cartography-overlay-status";
+  saveStatus.setAttribute("role", "status");
+  saveStatus.setAttribute("aria-live", "polite");
+  const qa = document.createElement("details");
+  qa.className = "cartography-overlay-qa";
+  const qaSummary = document.createElement("summary");
+  const qaIndicator = document.createElement("span");
+  qaIndicator.className = "cartography-overlay-qa-indicator";
+  qaIndicator.setAttribute("aria-hidden", "true");
+  const qaLabel = document.createElement("span");
+  qaLabel.textContent = "Live evidence";
+  const qaValue = document.createElement("strong");
+  qaValue.textContent = "Waiting";
+  qaSummary.append(qaIndicator, qaLabel, qaValue);
+  const qaRows = document.createElement("dl");
+  qaRows.className = "cartography-overlay-qa-rows";
+  const exportButton = document.createElement("button");
+  const exportEvidence = options.exportEvidence;
+  exportButton.type = "button";
+  exportButton.className = "cartography-overlay-export";
+  exportButton.textContent = "Export Cartography Evidence";
+  exportButton.hidden = exportEvidence === null;
+  const exportStatus = document.createElement("p");
+  exportStatus.className = "cartography-overlay-export-status";
+  exportStatus.setAttribute("role", "status");
+  exportStatus.setAttribute("aria-live", "polite");
+  qa.append(qaSummary, qaRows, exportButton, exportStatus);
+  panel.append(heading, layers, fields, hint, saveStatus, qa);
   root.append(trigger, panel);
   options.parent.append(root);
 
   let canonical: AppSettings | null = null;
   let saving = false;
+  let exporting = false;
   let disposed = false;
   let mode: OpenMode = "closed";
   let collapseTimer = 0;
@@ -202,16 +306,16 @@ export function createCartographyOverlayControls(options: Readonly<{
     const current = currentSettings();
     if (current === null || saving) return;
     setSaving(true);
-    status.textContent = "Saving…";
+    saveStatus.textContent = "Saving…";
     void options.persist(patch).then((saved) => {
       if (disposed) return;
       canonical = saved;
-      status.textContent = "Saved";
+      saveStatus.textContent = "Saved";
       setSaving(false);
       sync(true);
     }, () => {
       if (disposed) return;
-      status.textContent = "Could not save";
+      saveStatus.textContent = "Could not save";
       setSaving(false);
       sync(true);
     });
@@ -268,6 +372,26 @@ export function createCartographyOverlayControls(options: Readonly<{
       apply({ cartographyPresetSelection: activePreset });
     }
   });
+  exportButton.addEventListener("click", () => {
+    if (exportEvidence === null || exporting) return;
+    exporting = true;
+    exportButton.disabled = true;
+    exportStatus.textContent = "Preparing evidence…";
+    void exportEvidence().then((result) => {
+      if (disposed) return;
+      exportStatus.textContent = result.status === "written"
+        ? "Evidence exported"
+        : result.status === "cancelled"
+          ? "Export cancelled"
+          : `Export unavailable · ${result.reason}`;
+    }, () => {
+      if (!disposed) exportStatus.textContent = "Could not export evidence";
+    }).finally(() => {
+      if (disposed) return;
+      exporting = false;
+      exportButton.disabled = false;
+    });
+  });
   const hide = (): void => {
     cancelCollapse();
     setMode("closed");
@@ -318,6 +442,18 @@ export function createCartographyOverlayControls(options: Readonly<{
       const becameVisible = root.hidden;
       root.hidden = false;
       if (boxChanged || becameVisible) positionRoot();
+    },
+    updateQaStatus(status) {
+      const presentation = describeCartographyQaStatus(status);
+      qa.dataset.tone = presentation.tone;
+      qaValue.textContent = presentation.summary;
+      qaRows.replaceChildren(...presentation.rows.flatMap(([label, value]) => {
+        const term = document.createElement("dt");
+        term.textContent = label;
+        const description = document.createElement("dd");
+        description.textContent = value;
+        return [term, description];
+      }));
     },
     hide,
     dispose() {

@@ -28,6 +28,9 @@ test.describe("Cartography settings", () => {
       await expect(
         customizer.locator('input[name="cartographyUnseenMarker"][value="diamond"]'),
       ).toBeChecked();
+      await expect(
+        customizer.locator('input[name="cartographyNoWalkableColor"]'),
+      ).toHaveCount(0);
       await expect.poll(() => page.evaluate(async () => {
         const settings = await window.gwNative.settings.get();
         return {
@@ -44,17 +47,15 @@ test.describe("Cartography settings", () => {
         return settings.cartographyPresetLibrary.customPresets
           .find((style) => style.id === active.id)?.style.grid.unseen.marker ?? null;
       })).toBe("cross");
-      const noRevealColor = customizer.locator(
-        'input[name="cartographyNoWalkableColor"]',
-      );
-      await noRevealColor.fill("#667788");
-      await noRevealColor.blur();
+      const markerColor = customizer.locator('input[name="cartographyUnseenColor"]');
+      await markerColor.fill("#667788");
+      await markerColor.blur();
       await expect.poll(() => page.evaluate(async () => {
         const settings = await window.gwNative.settings.get();
         const active = settings.cartographyPresetLibrary.activePreset;
         if (active.kind !== "custom") return null;
         return settings.cartographyPresetLibrary.customPresets
-          .find((style) => style.id === active.id)?.style.grid.noWalkableColor ?? null;
+          .find((style) => style.id === active.id)?.style.grid.unseen.color ?? null;
       })).toBe("#667788");
       await expect.poll(() => page.evaluate(async () => {
         const settings = await window.gwNative.settings.get();
@@ -64,11 +65,11 @@ test.describe("Cartography settings", () => {
           .find((style) => style.id === active.id)?.style.grid;
         return grid === undefined ? null : {
           marker: grid.unseen.marker,
-          noWalkableColor: grid.noWalkableColor,
+          color: grid.unseen.color,
         };
       })).toEqual({
         marker: "cross",
-        noWalkableColor: "#667788",
+        color: "#667788",
       });
 
       const done = customizer.getByRole("button", { name: "Done" });

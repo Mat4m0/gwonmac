@@ -17,6 +17,7 @@ import type {
   CartographyReachabilityController,
   CartographyReachabilitySnapshot,
 } from "../../src/renderer/cartography-spike/reachability-kernel.js";
+import { captureCartographyEvidence } from "../../src/renderer/cartography-spike/evidence-capture.js";
 import {
   TOOLBOX_CARTOGRAPHY_CONTINENTS,
   isToolboxCreditableCell,
@@ -123,8 +124,13 @@ function sources(
     }),
   };
   const kernel: CartographyReachabilityController = {
+    sha256: "0".repeat(64),
     classify: () => kernelResult,
-    diagnostic: () => null,
+    diagnostic: () => kernelResult === null ? null : ({
+      ...kernelResult,
+      terrainWidth: kernelResult.walkableTerrain.width,
+      terrainHeight: kernelResult.walkableTerrain.height,
+    }),
     dispose: () => undefined,
   };
   return {
@@ -184,6 +190,23 @@ test("rejects a kernel publication from another epoch", () => {
     readCartographyModel(sources(undefined, staleKernel)),
     { status: "unavailable", reason: "kernel" },
   );
+});
+
+test("evidence withdraws a cached current map after an observed transition", () => {
+  const next = Object.freeze({ ...READY_CONTEXT, sequence: 14, areaEpoch: 8, mapId: 651 });
+  const current = sources([READY_CONTEXT, READY_CONTEXT, next]);
+  const model = readCartographyModel(current);
+  assert.equal(model.status, "ready");
+  const evidence = captureCartographyEvidence(model, current);
+  assert.equal(evidence.continent.status, "unavailable");
+  assert.deepEqual(evidence.currentInstance, {
+    status: "unavailable",
+    reason: "epoch-mismatch",
+    mapId: 651,
+    areaEpoch: 8,
+    resourceGeneration: 42,
+    kernel: evidence.currentInstance.kernel,
+  });
 });
 
 test("semantic bitsets are not interchangeable", () => {

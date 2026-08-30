@@ -2,6 +2,10 @@
  * Owns Cartography installation behind one observer, model, kernel, and UI lifecycle.
  * Partial installation is rolled back before control returns to the harness.
  */
+import type {
+  CartographyEvidenceCapture,
+  CartographyEvidenceExportResult,
+} from "../../shared/cartography-evidence.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
 import { readCartographyPlayerState } from "../cartography-player-state.js";
 import { createCartographyContextReader } from "./context-observer.js";
@@ -21,6 +25,10 @@ export async function installCartographySpike(options: Readonly<{
   canvas: HTMLCanvasElement;
   settings(): AppSettings;
   persist(patch: RendererSettingsPatch): Promise<AppSettings>;
+  /** Main owns validation and saving; the renderer supplies bounded observations only. */
+  exportEvidence(
+    capture: CartographyEvidenceCapture,
+  ): Promise<CartographyEvidenceExportResult>;
 }>): Promise<() => void> {
   const context = createCartographyContextReader(options.exports);
   const compass = createCompassFrameSpikeReader(options.exports);
@@ -37,7 +45,12 @@ export async function installCartographySpike(options: Readonly<{
     kernel = await installCartographyReachabilityKernel(options.exports);
   } catch (cause) {
     console.error("[cartography] reachability kernel unavailable", cause);
-    return () => {};
+    kernel = Object.freeze({
+      sha256: null,
+      classify: () => null,
+      diagnostic: () => null,
+      dispose: () => undefined,
+    });
   }
   window.gwCompassFrameSpike = compass;
   window.gwMissionMapFrameSpike = missionMap;
@@ -59,6 +72,7 @@ export async function installCartographySpike(options: Readonly<{
     },
     settings: options.settings,
     persist: options.persist,
+    exportEvidence: options.exportEvidence,
   });
 
   return () => {

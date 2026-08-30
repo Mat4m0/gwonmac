@@ -92,12 +92,9 @@ test("mission-map hover range is dormant until Shift is held", () => {
 test("cell guidance never replaces the live exploration state", () => {
   assert.deepEqual(
     cartographyCellPresentation(false, true, "diamond"),
-    { marker: "diamond", tone: "unseen" },
+    { marker: "diamond" },
   );
-  assert.deepEqual(
-    cartographyCellPresentation(false, false, "diamond"),
-    { marker: "hatch", tone: "other-route" },
-  );
+  assert.equal(cartographyCellPresentation(false, false, "diamond"), null);
   assert.deepEqual(
     cartographyCellPresentation(true, false, "diamond"),
     null,
