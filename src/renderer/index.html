@@ -610,9 +610,27 @@
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
                  aria-labelledby="settings-tab-controls">
           <header class="settings-pane-header">
-            <h3 id="settings-controls-title" class="settings-pane-title">Tools</h3>
-            <p class="settings-pane-intro">Choose which optional GWonMac features are available while you play.</p>
+            <h3 id="settings-controls-title" class="settings-pane-title">Controls</h3>
+            <p class="settings-pane-intro">Manage GWonMac shortcuts and choose which optional features are available while you play.</p>
           </header>
+          <div class="settings-tools-list settings-core-controls">
+            <section class="settings-tool settings-core-shortcut" aria-labelledby="settings-character-switch-title">
+              <div class="settings-tool-heading">
+                <h4 id="settings-character-switch-title" class="settings-tool-name">Switch Character</h4>
+                <small class="settings-tool-stage">Core</small>
+              </div>
+              <p class="settings-tool-description">Open the character picker from anywhere switching is safe.</p>
+              <div class="settings-tool-config">
+                <div class="settings-shortcut-row" data-shortcut-action="character.switch">
+                  <span class="settings-shortcut-name">Shortcut</span>
+                  <kbd class="settings-shortcut-value">—</kbd>
+                  <button type="button" class="ui-button settings-shortcut-change">Change</button>
+                  <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+                  <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
+                </div>
+              </div>
+            </section>
+          </div>
           <section class="settings-feature-master" aria-labelledby="settings-tools-master-label">
             <label class="settings-check ui-check">
               <input type="checkbox" name="gwonmacTools" aria-describedby="settings-tools-help">
@@ -812,8 +830,8 @@
               </div>
               <p class="settings-tool-description">Show the selected target’s distance and range band.</p>
             </section>
-            <button type="button" id="settings-shortcuts-restore" class="ui-link settings-shortcuts-restore">Restore default shortcuts</button>
           </div>
+          <button type="button" id="settings-shortcuts-restore" class="ui-link settings-shortcuts-restore">Restore default shortcuts</button>
           <details id="settings-availability" class="settings-availability">
             <summary>Availability for this Guild Wars version</summary>
             <dl class="settings-feature-status">

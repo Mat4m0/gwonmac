@@ -187,6 +187,21 @@ test.describe("tools and update settings", () => {
     }
   });
 
+  test("keeps Switch Character shortcut settings available without Tools", async () => {
+    const fixture = await launchOffline("gw-settings-character-shortcut-e2e-");
+    try {
+      const { app, page } = fixture;
+      await openControls(app, page);
+
+      await expect(page.locator("#settings-tool-features")).toBeHidden();
+      await expect(page.locator('[data-shortcut-action="character.switch"]'))
+        .toContainText("⌘R");
+      await expect(page.locator("#settings-shortcuts-restore")).toBeVisible();
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("records, replaces, clears, and restores app shortcuts without firing them", async () => {
     test.setTimeout(60_000);
     const fixture = await launchOffline(
@@ -202,9 +217,11 @@ test.describe("tools and update settings", () => {
       const { app, page } = fixture;
       await openControls(app, page);
 
+      const characterRow = page.locator('[data-shortcut-action="character.switch"]');
       const toolsRow = page.locator('[data-shortcut-action="tools.toggle"]');
       const tradeRow = page.locator('[data-shortcut-action="trade.toggle"]');
       const storageRow = page.locator('[data-shortcut-action="storage.open"]');
+      await expect(characterRow.locator("kbd")).toHaveText("⌘R");
       await expect(toolsRow.locator("kbd")).toHaveText("⌘B");
       await expect(tradeRow.locator("kbd")).toHaveText("⌘K");
       await expect(storageRow.locator("kbd")).toHaveText("⌘⇧C");
