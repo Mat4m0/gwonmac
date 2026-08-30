@@ -95,6 +95,7 @@ function sources(
 ): CartographyModelSources {
   let contextIndex = 0;
   const context = {
+    refresh: () => true,
     snapshot: () => contexts[Math.min(contextIndex++, contexts.length - 1)] ?? null,
   };
   const exploration: ExplorationSpikeController = {
@@ -161,6 +162,17 @@ test("withdraws immediately while the certified context is loading", () => {
   assert.deepEqual(
     readCartographyModel(sources([loading])),
     { status: "unavailable", reason: "loading" },
+  );
+});
+
+test("fails closed when the context cannot publish a fresh identity", () => {
+  const failed = sources();
+  assert.deepEqual(
+    readCartographyModel({
+      ...failed,
+      context: { ...failed.context, refresh: () => false },
+    }),
+    { status: "unavailable", reason: "context" },
   );
 });
 

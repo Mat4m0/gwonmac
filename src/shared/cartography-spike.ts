@@ -213,7 +213,10 @@ export type CartographyContextSnapshot = Readonly<{
   layoutId: 1 | 2;
 }>;
 
-export type CartographyContextController = SpikeController<CartographyContextSnapshot>;
+export type CartographyContextController = SpikeController<CartographyContextSnapshot> & Readonly<{
+  /** Publish one fresh native identity before starting an atomic model read. */
+  refresh(): boolean;
+}>;
 
 export type CompassFrameSpikeController = SpikeController<CompassFrameSpikeSnapshot>;
 export type MissionMapFrameSpikeController = SpikeController<MissionMapFrameSpikeSnapshot>;

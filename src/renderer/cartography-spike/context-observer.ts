@@ -28,31 +28,35 @@ export function createCartographyContextReader(
     )
   ) return null;
 
+  const snapshot = (): CartographyContextSnapshot | null => {
+    const first = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.sequence);
+    if (first === null || (first & 1) !== 0) return null;
+    const status = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.status);
+    const areaEpoch = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.areaEpoch);
+    const mapId = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.mapId);
+    const layoutId = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.layoutId);
+    const second = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.sequence);
+    if (
+      first !== second || second === null || (second & 1) !== 0
+      || status === null || areaEpoch === null || mapId === null || layoutId === null
+      || status < 1 || status > 5
+      || areaEpoch < 0
+      || (layoutId !== 1 && layoutId !== 2 && status === 1)
+      || (status === 1 && (areaEpoch === 0 || mapId <= 0 || mapId > 2_000))
+    ) return null;
+    return Object.freeze({
+      status, sequence: second, areaEpoch, mapId, layoutId,
+    }) as CartographyContextSnapshot;
+  };
   return Object.freeze({
-    snapshot(): CartographyContextSnapshot | null {
+    refresh() {
       try {
         observe();
+        return true;
       } catch {
-        return null;
+        return false;
       }
-      const first = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.sequence);
-      if (first === null || (first & 1) !== 0) return null;
-      const status = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.status);
-      const areaEpoch = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.areaEpoch);
-      const mapId = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.mapId);
-      const layoutId = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.layoutId);
-      const second = integerGlobal(exports, CARTOGRAPHY_CONTEXT_GLOBALS.sequence);
-      if (
-        first !== second || second === null || (second & 1) !== 0
-        || status === null || areaEpoch === null || mapId === null || layoutId === null
-        || status < 1 || status > 5
-        || areaEpoch < 0
-        || (layoutId !== 1 && layoutId !== 2 && status === 1)
-        || (status === 1 && (areaEpoch === 0 || mapId <= 0 || mapId > 2_000))
-      ) return null;
-      return Object.freeze({
-        status, sequence: second, areaEpoch, mapId, layoutId,
-      }) as CartographyContextSnapshot;
     },
+    snapshot,
   });
 }

@@ -106,6 +106,7 @@ function contextEqual(
 
 /** Build one immutable model or fail closed. No partial observations escape. */
 export function readCartographyModel(sources: CartographyModelSources): CartographyModel {
+  if (!sources.context.refresh()) return unavailable("context");
   const contextA = sources.context.snapshot();
   if (contextA === null) return unavailable("context");
   if (contextA.status !== 1) return unavailable("loading");
