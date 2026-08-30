@@ -387,7 +387,7 @@ async function replaceToolShortcut() {
             <div class="setting-group">
               <label><span><strong>Enable Tools</strong><small>Build Management, Quick Travel, and Xunlai Storage.</small></span><input type="checkbox" :checked="snapshot.tools.configured" @change="runAction('The Tools setting could not be saved.', () => native?.tools.setMasterEnabled(checked($event)))" /></label>
               <div v-for="(setting, tool) in snapshot.tools.features" :key="tool" class="tool-row">
-                <label><span><strong>{{ toolLabels[tool] }}</strong><small>{{ shortcutDisplay(setting.shortcut) }}</small></span><input type="checkbox" :checked="setting.enabled" :disabled="!snapshot.tools.configured" @change="setTool(tool, checked($event))" /></label>
+                <label><span><strong>{{ toolLabels[tool] }}</strong><small>{{ shortcutDisplay(setting.shortcut, snapshot.platform) }}</small></span><input type="checkbox" :checked="setting.enabled" :disabled="!snapshot.tools.configured" @change="setTool(tool, checked($event))" /></label>
                 <div><button class="secondary" @click="captureToolShortcut(tool)">Change shortcut</button><button class="text-link" @click="runAction('The default shortcut could not be restored.', () => native?.tools.restoreDefaultShortcut(tool))">Restore default</button></div>
               </div>
               <p v-if="shortcutMessage" class="inline-message" aria-live="polite">{{ shortcutMessage }}</p>

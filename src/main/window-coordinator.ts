@@ -2,8 +2,8 @@
  * The one owner for presenting the launcher and profile game windows.
  *
  * The registry remains the source of window identity. This coordinator keeps
- * macOS reveal, focus, hide, and final-game-close policy in one place without
- * retaining another window map or changing normal BrowserWindow levels.
+ * reveal, focus, hide, attention, and final-game-close policy in one place
+ * without retaining another window map or changing normal BrowserWindow levels.
  */
 import type { WindowRegistry, RegisteredWindow } from "./window-registry.js";
 
@@ -16,9 +16,10 @@ interface PresentableWindow extends RegisteredWindow {
   focus(): void;
 }
 
-interface ApplicationPresentation {
+interface ApplicationPresentation<Window> {
   readonly dock?: { show(): void };
   focus(options: { steal: true }): void;
+  requestAttention?(win: Window): void;
 }
 
 interface PreventableClose {
@@ -26,13 +27,13 @@ interface PreventableClose {
 }
 
 export class WindowCoordinator<Window extends PresentableWindow> {
-  readonly #application: ApplicationPresentation;
+  readonly #application: ApplicationPresentation<Window>;
   readonly #registry: WindowRegistry<Window>;
   #focusOrder: Window[] = [];
   #activationTarget: Window | null = null;
 
   constructor(
-    application: ApplicationPresentation,
+    application: ApplicationPresentation<Window>,
     registry: WindowRegistry<Window>,
   ) {
     this.#application = application;
@@ -116,7 +117,10 @@ export class WindowCoordinator<Window extends PresentableWindow> {
    * then appear inactive before this explicit launch-owner check may focus one.
    */
   revealAsyncGameIfLauncherFocused(win: Window): boolean {
-    if (!this.#registry.launcherWindow()?.isFocused()) return false;
+    if (!this.#registry.launcherWindow()?.isFocused()) {
+      this.#application.requestAttention?.(win);
+      return false;
+    }
     return this.revealGame(win);
   }
 

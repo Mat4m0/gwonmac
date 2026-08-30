@@ -1,14 +1,19 @@
 /**
- * Captures one macOS application shortcut at the launcher boundary. Main owns
+ * Captures one platform-native application shortcut at the launcher boundary. Main owns
  * reserved keys and Tool conflicts, so renderer code cannot bypass the policy.
  */
 import type { BrowserWindow, Event, Input } from "electron";
 import type { AppSettings } from "../shared/contracts.js";
 import type { GlobalTool, LauncherShortcutCaptureResult } from "../shared/launcher-contracts.js";
-import { shortcutFromInput, shortcutReserved } from "../shared/keyboard-shortcuts.js";
+import {
+  shortcutFromInput,
+  shortcutPlatform,
+  shortcutReserved,
+} from "../shared/keyboard-shortcuts.js";
 import { shortcutOwner } from "./core/launcher-tools.js";
 
 const CAPTURE_TIMEOUT_MS = 30_000;
+const PLATFORM = shortcutPlatform(process.platform);
 
 export function captureLauncherShortcut(
   win: BrowserWindow,
@@ -31,7 +36,7 @@ export function captureLauncherShortcut(
         finish({ status: "cancelled" });
         return;
       }
-      const binding = shortcutFromInput(input);
+      const binding = shortcutFromInput(input, PLATFORM);
       if (!binding) {
         finish({ status: "invalid" });
         return;

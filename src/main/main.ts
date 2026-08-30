@@ -149,6 +149,7 @@ import { LAUNCHER_IPC } from "../shared/launcher-contracts.js";
 import type { GlobalTool, LauncherSettingsPatch, ShortcutReplacement } from "../shared/launcher-contracts.js";
 import {
   DEFAULT_SHORTCUTS,
+  shortcutPlatform,
   shortcutReserved,
   withShortcutOverride,
 } from "../shared/keyboard-shortcuts.js";
@@ -164,6 +165,7 @@ import {
   loadWindowsNativeHost,
   WindowsCredentialKeychain,
 } from "./windows-native-host.js";
+import { windowsAppUserModelId } from "./windows-shell.js";
 
 const nativeHostLayout = {
   packaged: app.isPackaged,
@@ -189,6 +191,9 @@ const applicationStorageRoots = explicitUserData
 if (!explicitUserData && process.platform === "win32") {
   app.setPath("userData", applicationStorageRoots.sessions);
   app.setPath("sessionData", applicationStorageRoots.sessions);
+}
+if (process.platform === "win32") {
+  app.setAppUserModelId(windowsAppUserModelId(app.getName()));
 }
 
 const primaryInstance = app.requestSingleInstanceLock();
@@ -241,6 +246,9 @@ const windowCoordinator = new WindowCoordinator(
   {
     ...(app.dock ? { dock: app.dock } : {}),
     focus: (options) => app.focus(options),
+    ...(process.platform === "win32"
+      ? { requestAttention: (win: BrowserWindow) => win.flashFrame(true) }
+      : {}),
   },
   windowRegistry,
 );
@@ -508,7 +516,12 @@ function buildWindowHost(
   };
 }
 
-if (primaryInstance) app.on("second-instance", revealMainWindow);
+if (primaryInstance) app.on("second-instance", () => {
+  if (
+    process.platform !== "win32"
+    || !windowCoordinator.restoreMostRecentWindow()
+  ) revealMainWindow();
+});
 
 if (primaryInstance) void app.whenReady().then(async () => {
   if (INJECT_STARTUP_FAILURE) {
@@ -801,6 +814,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSettings: () => currentSettings ?? settings,
     toolsLoaded: () => enhancementSelection.tools,
     developmentFixtures: !app.isPackaged || process.env.GW_LAUNCHER_FIXTURES === "1",
+    platform: shortcutPlatform(process.platform),
     allowUnreadyLaunch,
     publish: (snapshot) => {
       const launcher = windowRegistry.launcherWindow();

@@ -4,6 +4,7 @@ import { LEGACY_PRIMARY_PROFILE_ID, parseProfileId } from "@shared/multiple-acco
 
 export const fixtureSnapshot: LauncherSnapshot = {
   revision: 1,
+  platform: "macos",
   experience: {
     installationKind: "migrated-single",
     setup: "complete",

@@ -51,6 +51,16 @@ export interface ShortcutInput {
   alt: boolean;
 }
 
+export const SHORTCUT_PLATFORMS = ["macos", "windows", "linux"] as const;
+export type ShortcutPlatform = (typeof SHORTCUT_PLATFORMS)[number];
+
+export function shortcutPlatform(platform: string): ShortcutPlatform {
+  if (platform === "darwin") return "macos";
+  if (platform === "win32") return "windows";
+  if (platform === "linux") return "linux";
+  throw new Error(`unsupported shortcut platform: ${platform}`);
+}
+
 export function isShortcutBinding(value: unknown): value is ShortcutBinding {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -111,17 +121,26 @@ export function shortcutEquals(
 export function shortcutMatches(
   binding: ShortcutBinding,
   input: ShortcutInput,
+  platform: ShortcutPlatform,
 ): boolean {
-  return input.meta
-    && !input.control
+  const primary = platform === "macos"
+    ? input.meta && !input.control
+    : input.control && !input.meta && !input.alt;
+  return primary
     && shortcutKey(input.code) === binding.key
     && input.shift === binding.shift
     && input.alt === binding.option;
 }
 
-export function shortcutFromInput(input: ShortcutInput): ShortcutBinding | null {
+export function shortcutFromInput(
+  input: ShortcutInput,
+  platform: ShortcutPlatform,
+): ShortcutBinding | null {
   const key = shortcutKey(input.code);
-  if (!input.meta || input.control || key === null) return null;
+  const primary = platform === "macos"
+    ? input.meta && !input.control
+    : input.control && !input.meta && !input.alt;
+  if (!primary || key === null) return null;
   return { key, shift: input.shift, option: input.alt };
 }
 
@@ -140,7 +159,7 @@ const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
   })),
   { key: "z", shift: true, option: false },
   { key: "r", shift: false, option: false },
-  // Travel owns Command+1…9 for quick-destination assignment.
+  // Travel owns primary-modifier+1…9 for quick-destination assignment.
   ..."123456789".split("").map((key) => ({
     key,
     shift: false,
@@ -176,17 +195,26 @@ export function withShortcutOverride(
   return next;
 }
 
-export function shortcutAccelerator(binding: ShortcutBinding | null): string | undefined {
+export function shortcutAccelerator(
+  binding: ShortcutBinding | null,
+  platform: ShortcutPlatform,
+): string | undefined {
   if (!binding) return undefined;
   return [
-    "Command",
+    platform === "macos" ? "Command" : "Control",
     binding.option ? "Alt" : null,
     binding.shift ? "Shift" : null,
     binding.key.toUpperCase(),
   ].filter((part): part is string => part !== null).join("+");
 }
 
-export function shortcutDisplay(binding: ShortcutBinding | null): string {
+export function shortcutDisplay(
+  binding: ShortcutBinding | null,
+  platform: ShortcutPlatform,
+): string {
   if (!binding) return "Not set";
-  return `⌘${binding.option ? "⌥" : ""}${binding.shift ? "⇧" : ""}${binding.key.toUpperCase()}`;
+  if (platform === "macos") {
+    return `⌘${binding.option ? "⌥" : ""}${binding.shift ? "⇧" : ""}${binding.key.toUpperCase()}`;
+  }
+  return `Ctrl+${binding.shift ? "Shift+" : ""}${binding.key.toUpperCase()}`;
 }

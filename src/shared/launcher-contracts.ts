@@ -21,7 +21,7 @@ import {
   normaliseCartographyPresetLibrary,
   type CartographyPresetLibrary,
 } from "./cartography-overlay.js";
-import type { ShortcutBinding } from "./keyboard-shortcuts.js";
+import type { ShortcutBinding, ShortcutPlatform } from "./keyboard-shortcuts.js";
 import type { ProfileId } from "./multiple-accounts.js";
 
 export const LAUNCHER_IPC = Object.freeze({
@@ -175,6 +175,7 @@ export type LauncherReadiness =
 
 export interface LauncherSnapshot {
   readonly revision: number;
+  readonly platform: ShortcutPlatform;
   readonly experience: Readonly<{
     installationKind: LauncherInstallationKind;
     setup: "pending" | "complete";
