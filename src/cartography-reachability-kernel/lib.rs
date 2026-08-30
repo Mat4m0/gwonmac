@@ -24,15 +24,19 @@ const STATUS_UNAVAILABLE: u32 = 3;
 const STATUS_LIMIT: u32 = 4;
 const STATUS_NO_START: u32 = 5;
 const STATUS_AMBIGUOUS_LAYOUT: u32 = 6;
+const STATUS_PLANE_LIMIT: u32 = 7;
+const STATUS_TRAPEZOID_LIMIT: u32 = 8;
+const STATUS_DOORWAY_LIMIT: u32 = 9;
+const STATUS_VISUAL_RASTER_LIMIT: u32 = 10;
 
-const MAX_PLANES: usize = 64;
+const MAX_PLANES: usize = 256;
 const MAX_TRAPS: u32 = 65_536;
 // Guild Wars publishes a 256x512 exploration bitmap on Tyria.
 const MAX_CELLS: u32 = 131_072;
 const CELL_WORDS: u32 = MAX_CELLS / 32;
 const MAX_DOORWAYS: u32 = 256;
 const MAX_VISUAL_RASTER_CELLS: u32 = 262_144;
-const VISUAL_MAP_UNITS_PER_PIXEL: f32 = 2.0;
+const MIN_VISUAL_MAP_UNITS_PER_PIXEL: f32 = 2.0;
 
 const HEADER_BYTES: u32 = 72;
 const CELL_BITS: u32 = HEADER_BYTES;
@@ -129,7 +133,10 @@ unsafe fn array(address: u32, stride: u32, maximum: u32) -> Option<(u32, u32)> {
     let buffer = unsafe { u32_at(address)? };
     let capacity = unsafe { u32_at(add(address, 4)?)? };
     let size = unsafe { u32_at(add(address, 8)?)? };
-    if size > capacity || capacity > maximum {
+    // Capacity is allocator bookkeeping, not live pathing. Guild Wars may
+    // retain a large spare allocation while publishing a small valid array;
+    // only the actual size controls how much memory this kernel reads.
+    if size > capacity || size > maximum {
         return None;
     }
     if size == 0 {
@@ -175,42 +182,99 @@ unsafe fn resolve_layout(
     agent_array: u32,
     map_id: u32,
     player_id: u32,
-) -> Option<Context> {
-    let contexts = unsafe { pointer_at(context_root, (GAME_CONTEXT_SLOT + 1) * 4)? };
-    let game = unsafe {
-        pointer_at(indexed(contexts, GAME_CONTEXT_SLOT, 4)?, MAP_CONTEXT + 4)?
+) -> Result<Context, u32> {
+    let contexts = unsafe {
+        pointer_at(context_root, (GAME_CONTEXT_SLOT + 1) * 4)
+            .ok_or(STATUS_UNAVAILABLE)?
     };
-    let map_context = unsafe { pointer_at(add(game, MAP_CONTEXT)?, PROPS_CONTEXT + 4)? };
-    let path = unsafe { pointer_at(add(map_context, PATH_CONTEXT)?, 0x10)? };
-    if unsafe { u32_at(add(map_context, MAP_CONTEXT_MAP_ID)?)? } != map_id {
-        return None;
+    let game = unsafe {
+        pointer_at(
+            indexed(contexts, GAME_CONTEXT_SLOT, 4).ok_or(STATUS_UNAVAILABLE)?,
+            MAP_CONTEXT + 4,
+        )
+        .ok_or(STATUS_UNAVAILABLE)?
+    };
+    let map_context = unsafe {
+        pointer_at(
+            add(game, MAP_CONTEXT).ok_or(STATUS_UNAVAILABLE)?,
+            PROPS_CONTEXT + 4,
+        )
+        .ok_or(STATUS_UNAVAILABLE)?
+    };
+    let path = unsafe {
+        pointer_at(
+            add(map_context, PATH_CONTEXT).ok_or(STATUS_UNAVAILABLE)?,
+            0x10,
+        )
+        .ok_or(STATUS_UNAVAILABLE)?
+    };
+    if unsafe {
+        u32_at(add(map_context, MAP_CONTEXT_MAP_ID).ok_or(STATUS_UNAVAILABLE)?)
+            .ok_or(STATUS_UNAVAILABLE)?
+    } != map_id {
+        return Err(STATUS_UNAVAILABLE);
     }
-    let static_data = unsafe { pointer_at(add(path, STATIC_DATA)?, STATIC_MAP_ARRAY + 12)? };
+    let static_data = unsafe {
+        pointer_at(
+            add(path, STATIC_DATA).ok_or(STATUS_UNAVAILABLE)?,
+            STATIC_MAP_ARRAY + 12,
+        )
+        .ok_or(STATUS_UNAVAILABLE)?
+    };
+    let maps = add(static_data, STATIC_MAP_ARRAY).ok_or(STATUS_UNAVAILABLE)?;
+    let map_count = unsafe {
+        u32_at(add(maps, 8).ok_or(STATUS_UNAVAILABLE)?)
+            .ok_or(STATUS_UNAVAILABLE)?
+    };
+    if map_count > MAX_PLANES as u32 {
+        return Err(STATUS_PLANE_LIMIT);
+    }
     let (map_buffer, map_count) = unsafe {
-        array(add(static_data, STATIC_MAP_ARRAY)?, PATHING_MAP_BYTES, MAX_PLANES as u32)?
+        array(maps, PATHING_MAP_BYTES, MAX_PLANES as u32)
+            .ok_or(STATUS_UNAVAILABLE)?
     };
     if map_count == 0 {
-        return None;
+        return Err(STATUS_UNAVAILABLE);
     }
 
-    let (agent_buffer, agent_count) = unsafe { array(agent_array, 4, 4_096)? };
+    let (agent_buffer, agent_count) = unsafe {
+        array(agent_array, 4, 4_096).ok_or(STATUS_UNAVAILABLE)?
+    };
     if player_id == 0 || player_id >= agent_count {
-        return None;
+        return Err(STATUS_UNAVAILABLE);
     }
-    let agent = unsafe { pointer_at(indexed(agent_buffer, player_id, 4)?, 0x80)? };
-    if unsafe { u32_at(add(agent, 0x2c)?)? } != player_id {
-        return None;
+    let agent = unsafe {
+        pointer_at(
+            indexed(agent_buffer, player_id, 4).ok_or(STATUS_UNAVAILABLE)?,
+            0x80,
+        )
+        .ok_or(STATUS_UNAVAILABLE)?
+    };
+    if unsafe {
+        u32_at(add(agent, 0x2c).ok_or(STATUS_UNAVAILABLE)?)
+            .ok_or(STATUS_UNAVAILABLE)?
+    } != player_id {
+        return Err(STATUS_UNAVAILABLE);
     }
-    let player_x = unsafe { f32_at(add(agent, 0x74)?)? };
-    let player_y = unsafe { f32_at(add(agent, 0x78)?)? };
-    let player_plane = unsafe { u32_at(add(agent, 0x7c)?)? };
+    let player_x = unsafe {
+        f32_at(add(agent, 0x74).ok_or(STATUS_UNAVAILABLE)?)
+            .ok_or(STATUS_UNAVAILABLE)?
+    };
+    let player_y = unsafe {
+        f32_at(add(agent, 0x78).ok_or(STATUS_UNAVAILABLE)?)
+            .ok_or(STATUS_UNAVAILABLE)?
+    };
+    let player_plane = unsafe {
+        u32_at(add(agent, 0x7c).ok_or(STATUS_UNAVAILABLE)?)
+            .ok_or(STATUS_UNAVAILABLE)?
+    };
     // The game may publish an out-of-range plane while the player stands in a
     // portal seam. GWToolbox treats the plane as a hint and searches every
     // valid map plane when that happens, so retain it for the bounded fallback.
     if !player_x.is_finite() || !player_y.is_finite() {
-        return None;
+        return Err(STATUS_UNAVAILABLE);
     }
-    Some(Context {
+    Ok(Context {
         map_context,
         path,
         map_buffer,
@@ -223,16 +287,15 @@ unsafe fn resolve_layout(
 }
 
 unsafe fn context(layout_id: u32, map_id: u32, player_id: u32) -> Result<Context, u32> {
-    let candidate = match layout_id {
+    match layout_id {
         LAYOUT_OFFICIAL => unsafe {
             resolve_layout(OFFICIAL_CONTEXT_ROOT, OFFICIAL_AGENT_ARRAY, map_id, player_id)
         },
         LAYOUT_RELOCATED => unsafe {
             resolve_layout(RELOCATED_CONTEXT_ROOT, RELOCATED_AGENT_ARRAY, map_id, player_id)
         },
-        _ => return Err(STATUS_AMBIGUOUS_LAYOUT),
-    };
-    candidate.ok_or(STATUS_UNAVAILABLE)
+        _ => Err(STATUS_AMBIGUOUS_LAYOUT),
+    }
 }
 
 unsafe fn load_planes(context: Context) -> Result<([Plane; MAX_PLANES], u32), u32> {
@@ -253,7 +316,7 @@ unsafe fn load_planes(context: Context) -> Result<([Plane; MAX_PLANES], u32), u3
             unsafe { pointer_at(add(map, 0x40).ok_or(STATUS_UNAVAILABLE)?, portal_count.checked_mul(PORTAL_BYTES).ok_or(STATUS_LIMIT)?).ok_or(STATUS_UNAVAILABLE)? }
         };
         if total.checked_add(trap_count).is_none_or(|sum| sum > MAX_TRAPS) {
-            return Err(STATUS_LIMIT);
+            return Err(STATUS_TRAPEZOID_LIMIT);
         }
         // `index < MAX_PLANES` is proved by the loop bound. Avoid Rust's
         // bounds-panic formatting surface: this module must remain fully PIC.
@@ -417,7 +480,7 @@ unsafe fn build_doorways(region: u32, context: Context) -> Result<u32, u32> {
             continue;
         }
         if written >= MAX_DOORWAYS {
-            return Err(STATUS_LIMIT);
+            return Err(STATUS_DOORWAY_LIMIT);
         }
         let x = unsafe { f32_at(add(prop, 0x20).ok_or(STATUS_UNAVAILABLE)?).ok_or(STATUS_UNAVAILABLE)? };
         let y = unsafe { f32_at(add(prop, 0x24).ok_or(STATUS_UNAVAILABLE)?).ok_or(STATUS_UNAVAILABLE)? };
@@ -493,7 +556,7 @@ unsafe fn enqueue(
         return Ok(());
     }
     if *tail >= MAX_TRAPS {
-        return Err(STATUS_LIMIT);
+        return Err(STATUS_TRAPEZOID_LIMIT);
     }
     unsafe { set_bit(region, VISITED_BITS, global_index).ok_or(STATUS_UNAVAILABLE)? };
     unsafe {
@@ -542,7 +605,7 @@ unsafe fn expand_portal(
     };
     let count = unsafe { u32_at(add(pair, 0x0c).ok_or(STATUS_UNAVAILABLE)?).ok_or(STATUS_UNAVAILABLE)? };
     if count > MAX_TRAPS {
-        return Err(STATUS_LIMIT);
+        return Err(STATUS_TRAPEZOID_LIMIT);
     }
     let traps = if count == 0 {
         return Ok(());
@@ -676,13 +739,17 @@ unsafe fn rasterize(
             }
         }
     }
+    // VISITED_BITS and QUEUE_POINTERS own the cached connected component and
+    // must survive later classifications. VISUAL_BITS is large enough for the
+    // continent-cell scratch and is cleared by rasterize_terrain immediately
+    // after this dilation pass.
     for word in 0..words {
         let value = unsafe { u32_at(add(region, CELL_BITS + word * 4).ok_or(STATUS_LIMIT)?).ok_or(STATUS_UNAVAILABLE)? };
-        unsafe { store_u32(add(region, VISITED_BITS + word * 4).ok_or(STATUS_LIMIT)?, value) };
+        unsafe { store_u32(add(region, VISUAL_BITS + word * 4).ok_or(STATUS_LIMIT)?, value) };
     }
     unsafe { clear_words(region, CELL_BITS, words) };
     for index in 0..cells {
-        if !unsafe { bit(region, VISITED_BITS, index).ok_or(STATUS_UNAVAILABLE)? } {
+        if !unsafe { bit(region, VISUAL_BITS, index).ok_or(STATUS_UNAVAILABLE)? } {
             continue;
         }
         let x = index % width;
@@ -723,15 +790,27 @@ unsafe fn rasterize_terrain(
     map_min_y: f32,
     map_max_x: f32,
     map_max_y: f32,
-) -> Result<(u32, u32), u32> {
-    let width = positive_ceil((map_max_x - map_min_x) / VISUAL_MAP_UNITS_PER_PIXEL)
-        .ok_or(STATUS_INVALID_INPUT)?;
-    let height = positive_ceil((map_max_y - map_min_y) / VISUAL_MAP_UNITS_PER_PIXEL)
-        .ok_or(STATUS_INVALID_INPUT)?;
-    let cells = width.checked_mul(height).ok_or(STATUS_LIMIT)?;
-    if cells == 0 || cells > MAX_VISUAL_RASTER_CELLS {
-        return Err(STATUS_LIMIT);
-    }
+) -> Result<(u32, u32, f32), u32> {
+    let map_width = map_max_x - map_min_x;
+    let map_height = map_max_y - map_min_y;
+    let mut map_units_per_pixel = MIN_VISUAL_MAP_UNITS_PER_PIXEL;
+    let (width, height) = {
+        let mut fit = None;
+        for _ in 0..32 {
+            let width = positive_ceil(map_width / map_units_per_pixel)
+                .ok_or(STATUS_INVALID_INPUT)?;
+            let height = positive_ceil(map_height / map_units_per_pixel)
+                .ok_or(STATUS_INVALID_INPUT)?;
+            if width.checked_mul(height)
+                .is_some_and(|cells| cells > 0 && cells <= MAX_VISUAL_RASTER_CELLS)
+            {
+                fit = Some((width, height));
+                break;
+            }
+            map_units_per_pixel *= 2.0;
+        }
+        fit.ok_or(STATUS_VISUAL_RASTER_LIMIT)?
+    };
     unsafe { clear_words(region, VISUAL_BITS, VISUAL_WORDS) };
     for plane_index in 0..plane_count {
       let plane = unsafe { *planes.get_unchecked(plane_index as usize) };
@@ -744,23 +823,23 @@ unsafe fn rasterize_terrain(
         let max_x = map_x(values[0]).max(map_x(values[1])).max(map_x(values[3])).max(map_x(values[4]));
         let min_y = map_y(values[2]).min(map_y(values[5]));
         let max_y = map_y(values[2]).max(map_y(values[5]));
-        let first_x = floor_i32((min_x - map_min_x) / VISUAL_MAP_UNITS_PER_PIXEL)
+        let first_x = floor_i32((min_x - map_min_x) / map_units_per_pixel)
             .ok_or(STATUS_UNAVAILABLE)?;
-        let last_x = floor_i32((max_x - map_min_x - 1e-4) / VISUAL_MAP_UNITS_PER_PIXEL)
+        let last_x = floor_i32((max_x - map_min_x - 1e-4) / map_units_per_pixel)
             .ok_or(STATUS_UNAVAILABLE)?;
-        let first_y = floor_i32((min_y - map_min_y) / VISUAL_MAP_UNITS_PER_PIXEL)
+        let first_y = floor_i32((min_y - map_min_y) / map_units_per_pixel)
             .ok_or(STATUS_UNAVAILABLE)?;
-        let last_y = floor_i32((max_y - map_min_y - 1e-4) / VISUAL_MAP_UNITS_PER_PIXEL)
+        let last_y = floor_i32((max_y - map_min_y - 1e-4) / map_units_per_pixel)
             .ok_or(STATUS_UNAVAILABLE)?;
         for pixel_y in first_y..=last_y {
             for pixel_x in first_x..=last_x {
                 if pixel_x < 0 || pixel_y < 0 || pixel_x >= width as i32 || pixel_y >= height as i32 {
                     continue;
                 }
-                let map_left = map_min_x + pixel_x as f32 * VISUAL_MAP_UNITS_PER_PIXEL;
-                let map_right = map_left + VISUAL_MAP_UNITS_PER_PIXEL;
-                let map_top = map_min_y + pixel_y as f32 * VISUAL_MAP_UNITS_PER_PIXEL;
-                let map_bottom = map_top + VISUAL_MAP_UNITS_PER_PIXEL;
+                let map_left = map_min_x + pixel_x as f32 * map_units_per_pixel;
+                let map_right = map_left + map_units_per_pixel;
+                let map_top = map_min_y + pixel_y as f32 * map_units_per_pixel;
+                let map_bottom = map_top + map_units_per_pixel;
                 let game_left = (map_left - anchor_x) * GAME_UNITS_PER_MAP_UNIT;
                 let game_right = (map_right - anchor_x) * GAME_UNITS_PER_MAP_UNIT;
                 let game_top = (anchor_y - map_top) * GAME_UNITS_PER_MAP_UNIT;
@@ -775,7 +854,7 @@ unsafe fn rasterize_terrain(
         }
       }
     }
-    Ok((width, height))
+    Ok((width, height, map_units_per_pixel))
 }
 
 static mut RESOURCE_POINTER: u32 = 0;
@@ -840,6 +919,7 @@ unsafe fn publish(
     doorway_count: u32,
     visual_width: u32,
     visual_height: u32,
+    visual_map_units_per_pixel: f32,
 ) {
     let previous = unsafe { u32_at(add(region, 12).unwrap_or(0)).unwrap_or(0) };
     let writing = previous.wrapping_add(1) | 1;
@@ -861,7 +941,7 @@ unsafe fn publish(
         store_u32(add(region, 56).unwrap_or(0), doorway_count);
         store_u32(add(region, 60).unwrap_or(0), visual_width);
         store_u32(add(region, 64).unwrap_or(0), visual_height);
-        store_f32(add(region, 68).unwrap_or(0), VISUAL_MAP_UNITS_PER_PIXEL);
+        store_f32(add(region, 68).unwrap_or(0), visual_map_units_per_pixel);
         store_u32(add(region, 12).unwrap_or(0), writing.wrapping_add(1));
     }
 }
@@ -881,7 +961,7 @@ unsafe fn classify(
     map_max_x: f32,
     map_max_y: f32,
     reveal_radius: u32,
-) -> Result<(u32, u32, u32, u32, u32, u32), u32> {
+) -> Result<(u32, u32, u32, u32, u32, u32, f32), u32> {
     let context = unsafe { context(layout_id, map_id, player_id)? };
     if unsafe { RESOURCE_POINTER } != context.resource {
         unsafe {
@@ -983,13 +1063,21 @@ unsafe fn classify(
     let ground_cells = unsafe {
         rasterize(region, tail, anchor_x, anchor_y, width, height, reveal_radius)?
     };
-    let (visual_width, visual_height) = unsafe {
+    let (visual_width, visual_height, visual_map_units_per_pixel) = unsafe {
         rasterize_terrain(
             region, &planes, context.map_count, anchor_x, anchor_y,
             map_min_x, map_min_y, map_max_x, map_max_y,
         )?
     };
-    Ok((total_traps, tail, ground_cells, doorway_count, visual_width, visual_height))
+    Ok((
+        total_traps,
+        tail,
+        ground_cells,
+        doorway_count,
+        visual_width,
+        visual_height,
+        visual_map_units_per_pixel,
+    ))
 }
 
 #[no_mangle]
@@ -1023,7 +1111,12 @@ pub unsafe extern "C" fn cartography_reachability_classify(
         || !(reveal_radius == 1 || reveal_radius == 3)
     {
         if region != 0 && contains(region, HEADER_BYTES) {
-            unsafe { publish(region, STATUS_INVALID_INPUT, map_id, area_epoch, layout_id, width, height, 0, 0, 0, 0, 0, 0) };
+            unsafe {
+                publish(
+                    region, STATUS_INVALID_INPUT, map_id, area_epoch, layout_id,
+                    width, height, 0, 0, 0, 0, 0, 0, 0.0,
+                )
+            };
         }
         return STATUS_INVALID_INPUT;
     }
@@ -1033,11 +1126,20 @@ pub unsafe extern "C" fn cartography_reachability_classify(
             map_min_x, map_min_y, map_max_x, map_max_y, reveal_radius,
         )
     } {
-        Ok((total, reachable, ground, doorways, visual_width, visual_height)) => {
+        Ok((
+            total,
+            reachable,
+            ground,
+            doorways,
+            visual_width,
+            visual_height,
+            visual_map_units_per_pixel,
+        )) => {
             unsafe {
                 publish(
                     region, STATUS_READY, map_id, area_epoch, layout_id, width, height,
                     total, reachable, ground, doorways, visual_width, visual_height,
+                    visual_map_units_per_pixel,
                 )
             };
             STATUS_READY
@@ -1046,7 +1148,10 @@ pub unsafe extern "C" fn cartography_reachability_classify(
             unsafe {
                 clear_words(region, CELL_BITS, CELL_WORDS);
                 clear_words(region, VISUAL_BITS, VISUAL_WORDS);
-                publish(region, status, map_id, area_epoch, layout_id, width, height, 0, 0, 0, 0, 0, 0);
+                publish(
+                    region, status, map_id, area_epoch, layout_id, width, height,
+                    0, 0, 0, 0, 0, 0, 0.0,
+                );
             }
             status
         }

@@ -28,6 +28,7 @@ const A = Object.freeze({
   prop: 0x1f_000,
   model: 0x20_000,
   modelName: 0x21_000,
+  largeMaps: 0x30_0000,
   runtime: 0x60_0000,
   region: 0x62_0000,
 });
@@ -44,8 +45,14 @@ type Kernel = Readonly<{
   memory: WebAssembly.Memory;
   view: DataView;
   classify(radius?: 1 | 3): number;
-  classifyShape(width: number, height: number, radius?: 1 | 3): number;
+  classifyShape(
+    width: number,
+    height: number,
+    radius?: 1 | 3,
+    bounds?: readonly [number, number, number, number],
+  ): number;
   words(): Uint32Array;
+  wordsShape(width: number, height: number): Uint32Array;
   terrainWords(): Uint32Array;
 }>;
 
@@ -137,16 +144,24 @@ async function createKernel(): Promise<Kernel> {
         0, 0, WIDTH, HEIGHT, ...MAP_BOUNDS, radius,
       );
     },
-    classifyShape(width, height, radius = 1) {
+    classifyShape(width, height, radius = 1, bounds = MAP_BOUNDS) {
       return classify(
         A.region, CARTOGRAPHY_REACHABILITY_REGION_BYTES,
         LAYOUT_ID, MAP_ID, AREA_EPOCH, PLAYER_ID,
-        0, 0, width, height, ...MAP_BOUNDS, radius,
+        0, 0, width, height, ...bounds, radius,
       );
     },
     words() {
       return new Uint32Array(
         memory.buffer.slice(A.region + 72, A.region + 72 + WIDTH * HEIGHT / 8),
+      );
+    },
+    wordsShape(width, height) {
+      return new Uint32Array(
+        memory.buffer.slice(
+          A.region + 72,
+          A.region + 72 + Math.ceil(width * height / 32) * 4,
+        ),
       );
     },
     terrainWords() {
@@ -216,6 +231,25 @@ function addTravelDoorway(kernel: Kernel, fileId = 0xa825): void {
 }
 
 describe("Cartography reachability kernel", () => {
+  it("accepts spare native array capacity beyond the bounded live size", async () => {
+    const kernel = await createKernel();
+    kernel.view.setUint32(A.staticData + 0x18 + 4, 1_024, true);
+    assert.equal(kernel.classify(), 1);
+  });
+
+  it("accepts more than 64 live pathing planes and reports the real 256-plane bound", async () => {
+    const kernel = await createKernel();
+    new Uint8Array(kernel.memory.buffer, A.largeMaps, 0x54).set(
+      new Uint8Array(kernel.memory.buffer, A.maps, 0x54),
+    );
+    array(kernel.view, A.staticData + 0x18, A.largeMaps, 65);
+    assert.equal(kernel.classify(), 1);
+
+    array(kernel.view, A.staticData + 0x18, A.largeMaps, 257);
+    assert.equal(kernel.classify(), 7);
+    assert.equal(kernel.view.getUint32(A.region + 16, true), 7);
+  });
+
   it("accepts the real 256x512 Guild Wars exploration bitmap", async () => {
     const kernel = await createKernel();
     assert.equal(kernel.classifyShape(256, 512), 1);
@@ -303,6 +337,27 @@ describe("Cartography reachability kernel", () => {
     kernel.view.setUint32(A.maps + 0x44, 0, true);
     assert.equal(kernel.classify(), 1);
     assert.deepEqual(kernel.words(), before);
+  });
+
+  it("retains the component without corrupting its queue at 256x512", async () => {
+    const kernel = await createKernel();
+    assert.equal(kernel.classifyShape(256, 512), 1);
+    const before = kernel.wordsShape(256, 512);
+    kernel.view.setUint32(A.maps + 0x44, 0, true);
+    assert.equal(kernel.classifyShape(256, 512), 1);
+    assert.deepEqual(kernel.wordsShape(256, 512), before);
+  });
+
+  it("adapts complete terrain resolution instead of failing the semantic model", async () => {
+    const kernel = await createKernel();
+    assert.equal(
+      kernel.classifyShape(256, 512, 1, [5_000, 0, 7_048, 2_048]),
+      1,
+    );
+    const header = new DataView(kernel.memory.buffer, A.region, 72);
+    assert.equal(header.getUint32(60, true), 512);
+    assert.equal(header.getUint32(64, true), 512);
+    assert.equal(header.getFloat32(68, true), 4);
   });
 
   it("recomputes when the player reaches a different component", async () => {
