@@ -36,27 +36,36 @@ diagnostics. It must not store texture pixels or WASM pointers.
 Click, drag, scroll, and use keyboard controls through the overlay. Guild Wars
 must receive input unchanged. A stationary state must not redraw continuously.
 
-## Mission Map
+## Shared Mission/World Map window
 
 | Action | Capture | Pass condition |
 | --- | --- | --- |
 | Open default | `capture mission-default` | Grid fits the drawable map, not its frame, and highlights the player cell. |
 | Horizontal pan | `capture mission-pan-horizontal` | Lines remain attached to artwork without visible delay. |
 | Vertical pan | `capture mission-pan-vertical` | Absolute cell phase does not reset at an edge. |
-| Minimum zoom | `capture mission-zoom-min` | Grid hides before it becomes dense or ambiguous. |
+| Minimum zoom | `capture mission-zoom-min` | Individual cells become stable 4×4 and then 16×16 clusters; unreadable progress hides. |
 | Maximum zoom | `capture mission-zoom-max` | Cell size grows proportionally and guidance stays aligned. |
 | Move map window | `capture mission-window-moved` | Overlay follows the drawable region exactly. |
 | Resize map window | `capture mission-window-resized` | Bounds and scale update without an old-sized frame or vertical offset. |
 | Resize game window | `capture mission-game-resized` | Projection remains attached at the new global scale. |
 | Hold Shift and hover a cell | `capture mission-cell-hover` | Hover guidance identifies one cell and its normal 3×3 reveal neighborhood without intercepting map input; releasing Shift hides it. |
 | Hold Option+Shift and hover a cell | `capture mission-birds-eye-hover` | The same cell shows the Bird's Eye 7×7 footprint; releasing either modifier returns to the expected smaller or hidden state. |
-| Unseen cell revealable from this map | `capture mission-current-map-credit` | The configured unseen marker appears only where live current-map ground is within the active reveal range. |
-| Unseen cell requiring another route | `capture mission-other-map-credit` | Grey hatching marks a Toolbox++ creditable cell without current-map ground in range. |
-| Explored or out-of-map cell | `capture mission-non-actionable` | No unseen marker or hatching is drawn. |
+| Explored creditable cell | `capture mission-explored-credit` | Soft green coverage follows the artwork and never covers a remaining estimate. |
+| Continent remaining estimate | `capture mission-remaining-estimate` | Hollow amber cells or clusters appear across the visible continent, including when live pathing is unavailable. |
+| Unseen cell revealable from this map | `capture mission-current-map-credit` | Solid orange overrides amber only where the current live instance can reveal the cell. |
+| Current evidence boundary | `capture mission-live-boundary` | A thin neutral boundary encloses live evidence without hiding surrounding continent progress. |
+| Explored or non-creditable cell | `capture mission-non-actionable` | No amber or orange marker is drawn. |
 | Close and reopen | `capture mission-reopened` | Projection returns without a stale duplicate canvas. |
 
 Compare the reported cell pixel sizes with the visible result. Values must
 change proportionally with zoom and resizing.
+
+Open the continent-scale World Map through the game's normal control and repeat
+pan, zoom, resize, hover, close, and reopen. The same global grid phase, green
+coverage, and remaining bitset must remain attached. The detailed walkability
+veil must be absent at continent scale. Solid orange may appear only inside the
+thin current-instance boundary. Guild Wars reuses one certified `MapWindow`;
+a failure there must not affect the Compass.
 
 ## Layers and lifecycle
 
@@ -66,8 +75,7 @@ use the shared style coherently, and preserve native map detail. Repeat a
 combined capture at low, medium, and full opacity for each layer and with the
 Cartographer, Synthwave, and Monochrome styles. Select **Customize style…** and confirm
 that colors, line widths, line patterns, and all five unseen-cell markers change
-the same role on the Compass and Mission Map. Confirm the unseen and other-map-route
-colors can be changed independently. Copy that style, delete the local
+the same role on the Compass and shared map window. Copy that style, delete the local
 copy, import it again, and confirm the imported style remains selected after
 reopening Settings.
 

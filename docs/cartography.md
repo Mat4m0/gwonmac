@@ -1,68 +1,97 @@
 # Cartography
 
-GWonMac has two separate, optional native-map features:
+GWonMac has two independent native-map layers:
 
-- **Cartography grid** draws the game's fixed 32×32 map-unit exploration
-  cells over the native Compass and Mission Map. It highlights the player's
-  current cell and uses no external artwork.
-- **Walkability overlay** shades terrain outside certified pathing geometry
-  while preserving the native map artwork.
+- **Cartography grid** draws Guild Wars' fixed 32×32 map-unit exploration cells
+  over the Compass and the game's shared Mission/World Map window.
+- **Walkable terrain** shades terrain outside the current instance's certified
+  pathing geometry while preserving the native map artwork.
 
-The features can be enabled independently. Their shared appearance keeps the
-walkability boundary distinct from the generated grid. A dark casing beneath
-meaningful lines keeps them legible over bright snow and dark terrain.
-Cartographer, Synthwave, and Monochrome styles are included. Built-in styles
-cannot be changed; **Customize style…** creates and opens an editable version
-without showing a disabled editor first. Custom styles can change every color,
-line width, grid pattern, or unseen-cell marker. They can also be copied
-and imported as versioned text, so players can share them without adding files
-to the game installation.
+The layers can be enabled separately. Cartographer, Synthwave, and Monochrome
+styles are included. **Customize style…** creates an editable copy of a built-in
+style. Custom colors, line patterns, widths, and cell markers can be copied and
+imported as versioned text.
 
-## Generated grid
+## One evidence pipeline
 
-The grid is generated at runtime from certified map projections. There is no
-grid texture. Both map surfaces use one 32-map-unit cell definition and the
-client's half-open boundary rules. Compact continent masks imported from
-GWToolbox++ identify cells that Guild Wars can credit somewhere; exact current
-map bounds and live pathing decide whether this loaded map can reveal them.
+The client provides a continent-wide exploration bitmap. A compact GWToolbox++
+mask estimates which cells can award exploration somewhere. These form an
+independent continent partition:
 
-The Mission Map provides absolute map coordinates, pan, zoom, and drawable
-size. The Compass contributes its certified camera direction and circle. A
-generation mismatch, invalid scalar, excessive visible range, loading state,
-or unsupported build hides the derived layer instead of guessing. Canvas
-layers are pointer-transparent and redraw only when their projection changes.
+```text
+explored creditable = explored AND creditable
+remaining estimate  = NOT explored AND creditable
+```
 
-The grid makes the game's exploration-cell boundaries visible beneath the
-smoothed fog. An unseen-cell marker identifies cells that may still need
-attention without relying on color alone. A diamond is the readable default;
-corner brackets, crosses, stipple, and hatching remain available in custom
-styles. Persistent reveal guidance defaults to off. Hold Shift while hovering
-a Mission Map cell to preview its normal 3×3 range, or hold Option+Shift to
-preview the Bird's Eye 7×7 range. Optional persistent modes show the same
-footprints around the player on the Compass.
-Observed exploration state is advisory and resets or hides whenever the client
-cannot provide a complete current-generation snapshot.
+The current instance adds exact, live evidence:
 
-Current-map pathing adds conservative reveal guidance without replacing that
-observed state. The configured unseen marker means this map has ground within
-the active reveal range. Grey hatching means Toolbox++ identifies the unseen
-cell as globally creditable, but the loaded map has no known ground in range;
-another map, mission, arena, or special route may be required. Explored cells
-have no marker. Cells outside the exact current-map rectangle, or absent from
-the baked creditable mask, are left unmarked instead of being guessed at.
-Pathing can exist behind a gate or on disconnected terrain, so a candidate is
-not a routing promise. Both actionable colors are part of each shareable style.
+```text
+actionable now = remaining estimate AND currently reachable
+```
 
-## Walkability
+The default visual language is:
 
-The walkability layer uses certified pathing trapezoids from the current map
-generation. Raw WASM addresses never reach the renderer. Invalid coordinates,
-excessive geometry, stale generations, loading, or an uncertain projection
-hide the complete result.
+- soft green coverage: creditable progress already explored;
+- hollow amber: an unexplored continent candidate;
+- solid orange: confirmed actionable in the loaded instance; and
+- no grey marker.
+
+Continent progress remains visible if current pathing is unavailable. Missing
+Compass or map-window projection hides only that surface. Amber is an estimate,
+not proof that the current instance can reach a cell. A thin neutral boundary
+shows where live current-instance evidence applies.
+
+## Map presentation
+
+Guild Wars reuses one native `MapWindow` for close-up Mission Map and
+continent-scale World Map presentation. GWonMac uses one certified observer and
+one absolute map projection for both modes, rather than adding a second native
+reader.
+
+At 18 pixels or more per cell, the map draws individual amber diamonds and
+orange actionable markers. At 8–18 pixels it groups the global grid into 4×4
+clusters. Below 8 pixels it uses 16×16 clusters. Cluster origins are fixed to
+the global grid, so they do not jump during pan, resize, or travel. Unreadable
+progress hides below the minimum safe scale.
+
+The detailed walkability veil is shown only in close-up presentation. The
+continent-scale view keeps green coverage, remaining clusters, solid-orange
+current guidance, and the live-evidence boundary without the noisy terrain
+veil. Off-screen cells are culled; green coverage is cached by exploration
+generation.
+
+Hold Shift while hovering the map window to inspect the normal 3×3 reveal
+range. Hold Option+Shift for Bird's Eye 7×7 inspection. The diamond is the
+default marker; custom styles can select corner brackets, crosses, stipple, or
+hatching.
+
+The Compass stays local and precise. It uses the same fixed grid, live terrain,
+exploration, and actionable state, but does not draw continent clusters or the
+green continent tint. It works before the map window is opened.
+
+## Safety and lifecycle
+
+Raw WASM addresses never reach the renderer. A generation mismatch, loading,
+invalid scalar, excessive geometry, uncertain projection, or unsupported build
+fails the dependent evidence layer closed. Travel withdraws stale orange and
+terrain immediately without discarding a healthy continent snapshot.
+
+## Evidence export
+
+**Export Cartography Evidence** writes one strict report for the current
+continent, an optional current-instance record, a deterministic color preview,
+and `cartography-summary.txt`. The continent report remains exportable when the
+kernel is unavailable. The summary labels amber as an estimate and includes the
+exact current-instance failure reason.
+
+Reports contain no account name, character name, route, chat, pointer, free
+text, or raw memory. Use `pnpm cartography:validate`,
+`pnpm cartography:compare`, and `pnpm cartography:merge` to inspect reports.
+Merged evidence is review input and never becomes shipped truth automatically.
 
 ## Verification
 
 The operator matrix and capture labels are in
 [Live cartography certification](live-cartography-certification.md). Shipping
 requires stable projection through movement, rotation, pan, zoom, map-window
-move and resize, game-window resize, map transitions, and context restoration.
+move and resize, travel, loading, close/reopen, and context restoration.
