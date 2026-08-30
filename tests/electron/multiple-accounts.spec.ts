@@ -384,7 +384,12 @@ test("Show never duplicates a game and companion close policy stays profile-loca
       const launcher = BrowserWindow.getAllWindows()
         .find((win) => win.webContents.getURL().endsWith("launcher/index.html"));
       return launcher?.isVisible() ?? false;
-    })).toBe(true);
+    })).toBe(false);
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) => {
+      const game = BrowserWindow.getAllWindows()
+        .find((win) => win.webContents.getURL() === "gw://app/");
+      return game ? { visible: game.isVisible(), minimized: game.isMinimized() } : null;
+    })).toEqual({ visible: true, minimized: false });
 
     const game = fixture.app.windows().find((page) => page.url() === "gw://app/");
     if (!game) throw new Error("game window is required");

@@ -44,7 +44,7 @@ position in place. The cutover does not copy, move, or delete that data.
 
 Closing the launcher hides it while games run. Closing one game affects only
 that account. Closing the last game leaves the launcher available. Clicking the
-Dock icon brings the launcher forward.
+Dock icon restores the last launcher or game window that you used.
 
 ## Home content
 

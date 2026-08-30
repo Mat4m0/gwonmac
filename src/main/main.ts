@@ -1094,7 +1094,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   }
 
   app.on("activate", () => {
-    if (!windowCoordinator.revealLauncher({ activateApp: true })) {
+    if (!windowCoordinator.restoreLastFocusedWindow()) {
       createLauncherWindow(protocolDeps, windowCoordinator);
     }
   });

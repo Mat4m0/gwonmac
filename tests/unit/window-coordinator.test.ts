@@ -74,7 +74,7 @@ describe("window coordinator", () => {
     assert.deepEqual(launcher.calls, ["restore", "show", "focus"]);
   });
 
-  it("can activate the app for an explicit Dock or second-instance reveal", () => {
+  it("can activate the app for an explicit second-instance reveal", () => {
     const { applicationCalls, coordinator, registry } = setup();
     const launcher = fakeWindow(1);
     launcher.setVisible(true);
@@ -82,6 +82,56 @@ describe("window coordinator", () => {
 
     coordinator.revealLauncher({ activateApp: true });
     assert.deepEqual(applicationCalls, ["dock.show", "app.focus"]);
+    assert.deepEqual(launcher.calls, ["focus"]);
+  });
+
+  it("restores the last focused live window from the Dock", () => {
+    const { applicationCalls, coordinator, registry } = setup();
+    const launcher = fakeWindow(1);
+    const game = fakeWindow(2);
+    launcher.setVisible(true);
+    game.setVisible(true);
+    registry.register(launcher, { role: "launcher" });
+    registry.register(game, { role: "game", profileId: FIRST }, 2);
+
+    coordinator.recordFocused(launcher);
+    coordinator.recordFocused(game);
+    assert.equal(coordinator.restoreLastFocusedWindow(), true);
+    assert.deepEqual(applicationCalls, ["dock.show"]);
+    assert.deepEqual(game.calls, ["focus"]);
+    assert.deepEqual(launcher.calls, []);
+  });
+
+  it("keeps a deliberately hidden launcher behind a running game", () => {
+    const { coordinator, registry } = setup();
+    const launcher = fakeWindow(1);
+    const game = fakeWindow(2);
+    launcher.setVisible(true);
+    game.setVisible(true);
+    registry.register(launcher, { role: "launcher" });
+    registry.register(game, { role: "game", profileId: FIRST }, 2);
+
+    coordinator.recordFocused(game);
+    coordinator.recordFocused(launcher);
+    launcher.hide();
+    assert.equal(coordinator.restoreLastFocusedWindow(), true);
+    assert.deepEqual(launcher.calls, ["hide"]);
+    assert.deepEqual(game.calls, ["focus"]);
+  });
+
+  it("falls back to the launcher when no game window can be restored", () => {
+    const { coordinator, registry } = setup();
+    const launcher = fakeWindow(1);
+    const game = fakeWindow(2);
+    launcher.setVisible(true);
+    game.setVisible(true);
+    registry.register(launcher, { role: "launcher" });
+    registry.register(game, { role: "game", profileId: FIRST }, 2);
+
+    coordinator.recordFocused(game);
+    game.setDestroyed(true);
+    registry.unregister(game);
+    assert.equal(coordinator.restoreLastFocusedWindow(), true);
     assert.deepEqual(launcher.calls, ["focus"]);
   });
 

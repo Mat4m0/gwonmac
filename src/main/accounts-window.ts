@@ -93,7 +93,10 @@ export function createLauncherWindow(
   win.once("ready-to-show", () => {
     if (!BACKGROUND_LAUNCH) win.show();
   });
-  win.on("focus", installLauncherMenu);
+  win.on("focus", () => {
+    coordinator.recordFocused(win);
+    installLauncherMenu();
+  });
   installLauncherMenu();
   win.on("close", (event) => {
     if (!isQuitting()) coordinator.handleLauncherClose(event);

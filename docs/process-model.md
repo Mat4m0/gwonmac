@@ -383,8 +383,8 @@ rollback procedures.
 ## Application lifecycle
 
 The app acquires a single-instance lock before it reads or cleans profile-owned
-files. A second launch and a Dock activation reveal the launcher. They do not
-create another game window.
+files. A second launch reveals the launcher. A Dock activation restores the
+most recently focused live window. Neither action creates another game window.
 
 Closing the launcher hides it while games run. Closing one game window closes
 only that profile. Closing the final game leaves the launcher available.

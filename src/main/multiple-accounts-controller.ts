@@ -591,6 +591,7 @@ export class MultipleAccountsController {
           }
         },
       });
+      win.on("focus", () => this.options.windows.recordFocused(win));
       await Promise.all([
         this.waitForWindow(win),
         waitForGamePresentation(win),

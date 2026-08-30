@@ -82,9 +82,9 @@ storage.
 The launcher remains available while games run. Focusing a game naturally
 places it in front of the launcher. Closing the launcher hides it while a game
 is open. Closing one game affects only that profile; closing the final game
-reveals the launcher. A Dock activation or second app launch restores and
-focuses the launcher. An asynchronous Play completion does not steal focus if
-the player has already moved to another app.
+reveals the launcher. A Dock activation restores the last focused live window.
+A second app launch restores the launcher explicitly. An asynchronous Play
+completion does not steal focus if the player has already moved to another app.
 
 The policy uses normal `BrowserWindow` ordering. It does not use always-on-top,
 panels, parent-child windows, all-workspaces behavior, or an AppKit bridge.

@@ -28,6 +28,8 @@ interface PreventableClose {
 export class WindowCoordinator<Window extends PresentableWindow> {
   readonly #application: ApplicationPresentation;
   readonly #registry: WindowRegistry<Window>;
+  #lastFocusedWindow: Window | null = null;
+  #lastFocusedGame: Window | null = null;
 
   constructor(
     application: ApplicationPresentation,
@@ -50,6 +52,30 @@ export class WindowCoordinator<Window extends PresentableWindow> {
   ): boolean {
     if (win.isDestroyed()) return false;
     this.present(win, options.activateApp ?? false);
+    return true;
+  }
+
+  /** Remember native focus so a later Dock activation restores that window. */
+  recordFocused(win: Window): void {
+    const context = this.#registry.contextForWebContents(win.webContents.id);
+    if (!context || win.isDestroyed()) return;
+    this.#lastFocusedWindow = win;
+    if (context.role === "game") this.#lastFocusedGame = win;
+  }
+
+  /**
+   * Restore normal macOS multi-window behavior when the app becomes active.
+   * A launcher hidden by its close button stays hidden while a game remains.
+   */
+  restoreLastFocusedWindow(): boolean {
+    const preferred = this.usable(this.#lastFocusedWindow)
+      ? this.#lastFocusedWindow
+      : this.usable(this.#lastFocusedGame)
+        ? this.#lastFocusedGame
+        : this.#registry.gameWindows().find((win) => this.usable(win))
+          ?? this.#registry.launcherWindow();
+    if (!preferred) return false;
+    this.present(preferred, false);
     return true;
   }
 
@@ -85,5 +111,12 @@ export class WindowCoordinator<Window extends PresentableWindow> {
     if (!win.isVisible()) win.show();
     if (activateApp) this.#application.focus({ steal: true });
     win.focus();
+    this.recordFocused(win);
+  }
+
+  private usable(win: Window | null): win is Window {
+    return win !== null
+      && !win.isDestroyed()
+      && (win.isVisible() || win.isMinimized());
   }
 }
