@@ -61,7 +61,6 @@ export function bindShortcutSettings(options: Readonly<{
     for (const action of rows.keys()) {
       const { message, replace } = parts(action);
       message.textContent = '';
-      message.hidden = true;
       replace.hidden = true;
     }
   }
@@ -69,11 +68,19 @@ export function bindShortcutSettings(options: Readonly<{
   async function render(settings: AppSettings): Promise<void> {
     const resolved = resolveShortcuts(settings.shortcutOverrides);
     for (const action of rows.keys()) {
-      const { value, change } = parts(action);
+      const { value, change, replace } = parts(action);
       value.textContent = recording === action
         ? 'Listening…'
         : shortcutDisplay(resolved[action]);
       change.textContent = recording === action ? 'Cancel' : 'Change';
+      change.setAttribute(
+        'aria-label',
+        `${recording === action ? 'Cancel changing' : 'Change'} ${SHORTCUT_LABELS[action]} shortcut`,
+      );
+      replace.setAttribute(
+        'aria-label',
+        `Replace existing shortcut with ${SHORTCUT_LABELS[action]}`,
+      );
     }
   }
 
@@ -112,7 +119,6 @@ export function bindShortcutSettings(options: Readonly<{
     const row = parts(action);
     row.message.textContent =
       'Press Command with a letter or number · Delete clears · Escape cancels.';
-    row.message.hidden = false;
     const result = await window.gwNative.shortcuts.capture();
     if (recording !== action) return;
     recording = null;
@@ -126,7 +132,6 @@ export function bindShortcutSettings(options: Readonly<{
     }
     if (result.status === 'invalid') {
       row.message.textContent = 'Use Command with one letter or number.';
-      row.message.hidden = false;
       await render(latest);
       row.change.focus();
       return;
@@ -140,7 +145,6 @@ export function bindShortcutSettings(options: Readonly<{
     if (shortcutReserved(result.binding)) {
       row.message.textContent =
         `${shortcutDisplay(result.binding)} is reserved by macOS or GWonMac.`;
-      row.message.hidden = false;
       await render(latest);
       row.change.focus();
       return;
@@ -154,7 +158,6 @@ export function bindShortcutSettings(options: Readonly<{
       pendingReplacement = { action, conflict, binding: result.binding };
       row.message.textContent =
         `${shortcutDisplay(result.binding)} is used by ${SHORTCUT_LABELS[conflict]}.`;
-      row.message.hidden = false;
       row.replace.hidden = false;
       await render(latest);
       row.replace.focus();

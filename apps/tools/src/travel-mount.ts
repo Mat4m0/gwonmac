@@ -8,6 +8,7 @@ export function mountTravelPalette(
   target: HTMLElement,
   options: {
     host: TravelHost;
+    nativeDialog?: boolean;
     initiallyVisible?: boolean;
     onVisibilityChange?: (visible: boolean) => void;
   },
@@ -22,6 +23,7 @@ export function mountTravelPalette(
     setup: () => () => h(TravelPalette, {
       host: options.host,
       visible: visible.value,
+      ...(options.nativeDialog === undefined ? {} : { nativeDialog: options.nativeDialog }),
       onClose: () => setVisible(false),
     }),
   });

@@ -24,6 +24,7 @@ const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
   }),
   mountTravelPalette: (target, { nativeApi, ...options }) => mountTravel(target, {
     ...options,
+    nativeDialog: true,
     host: createNativeTravelHost(
       nativeApi,
       options.command,

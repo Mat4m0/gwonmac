@@ -174,7 +174,11 @@ export function installSurfaceController(
       let disposed = false;
 
       const restoreFocus = () => {
-        dialog.restoreFocus()?.focus({ preventScroll: true });
+        const target = dialog.restoreFocus();
+        const remainingModal = document.querySelector("dialog:modal");
+        if (target && (remainingModal === null || remainingModal.contains(target))) {
+          target.focus({ preventScroll: true });
+        }
       };
       const onCancel = (event: Event) => {
         event.preventDefault();
@@ -189,8 +193,9 @@ export function installSurfaceController(
       const onClose = () => {
         surface.setOpen(false);
         // A transient replacement may already be modal by the time Chromium
-        // delivers the old dialog's close event. Never pull focus behind it.
-        if (document.querySelector("dialog:modal") === null) restoreFocus();
+        // delivers the old dialog's close event. Restore only when the target
+        // belongs to the remaining parent modal or no modal replaced it.
+        restoreFocus();
       };
       const stop = (event: Event) => event.stopPropagation();
       const isolatedEvents = [

@@ -20,6 +20,7 @@
   const canvas = byId('canvas') as HTMLCanvasElement;
   const settingsResize = byId('settings-resize') as HTMLButtonElement;
   const form = byId('settings-form') as HTMLFormElement;
+  const settingsDone = byId('settings-done') as HTMLButtonElement;
   const settingsReset = byId('settings-reset-launcher') as HTMLButtonElement;
   const settingsCache = byId('settings-cache');
   const settingsPanes = form.querySelector('.settings-panes') as HTMLElement;
@@ -122,6 +123,11 @@
     };
     if (window.gwSurfaces) install();
     else window.addEventListener('gw:surfaces-ready', install, { once: true });
+  });
+  form.addEventListener('submit', (event) => event.preventDefault());
+  settingsDone.addEventListener('click', () => {
+    if (modal) modal.close();
+    else void settingsModal().then((handle) => handle.close());
   });
 
   void import('../shared/ui/resize.js').then(({ installResizeGrip }) => {

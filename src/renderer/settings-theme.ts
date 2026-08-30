@@ -43,12 +43,18 @@ export function bindThemeSettings(deps: ThemeSettingsDependencies) {
   const material = deps.form.elements.namedItem("uiThemeMaterial") as HTMLSelectElement;
   const reset = document.getElementById("settings-theme-reset") as HTMLButtonElement;
   const settingsDialog = deps.form.closest("dialog");
+  let importModal: GwonmacDialogHandle | null = null;
+  const themeImportModal = () => importModal ??= window.gwSurfaces.registerDialog({
+    root: importDialog,
+    priority: 6,
+    dismiss: () => importModal?.close(),
+    restoreFocus: () => openImport,
+  });
   let selectedTab = "settings-theme-tab-builtins";
   let rendered = false;
 
-  importDialog.addEventListener("keydown", (event) => event.stopPropagation());
-  importDialog.addEventListener("keyup", (event) => event.stopPropagation());
   settingsDialog?.addEventListener("close", () => {
+    importModal?.close();
     const settings = deps.settings();
     if (settings) applyAppearance(settings);
   });
@@ -215,8 +221,7 @@ export function bindThemeSettings(deps: ThemeSettingsDependencies) {
     importValue.removeAttribute("aria-invalid");
     importError.textContent = "";
     importError.hidden = true;
-    if (typeof importDialog.showModal === "function") importDialog.showModal();
-    else importDialog.setAttribute("open", "");
+    themeImportModal().show();
     importValue.focus();
   });
 
@@ -234,7 +239,7 @@ export function bindThemeSettings(deps: ThemeSettingsDependencies) {
     deps.feedback("Importing theme…", "progress");
     void deps.persist({ uiStyle: "custom", uiCustomTheme: theme })
       .then(() => {
-        importDialog.close();
+        importModal?.close();
         selectTab("settings-theme-tab-custom");
         deps.feedback("Theme imported and activated.", "success", 3000);
       })

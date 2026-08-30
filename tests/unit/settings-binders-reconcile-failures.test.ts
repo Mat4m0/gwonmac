@@ -9,6 +9,7 @@ type Listener = () => void;
 class FakeElement {
   readonly listeners = new Map<string, Listener[]>();
   readonly dataset: Record<string, string> = {};
+  readonly attributes = new Map<string, string>();
   textContent = "";
   value = "";
   selectedIndex = 0;
@@ -26,6 +27,10 @@ class FakeElement {
   }
 
   focus(): void {}
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
 }
 
 class FakeShortcutRow extends FakeElement {
@@ -99,6 +104,7 @@ test("a failed shortcut write reconciles through Settings and leaves capture mod
 
     assert.equal(row.valueElement.textContent, "⌘R");
     assert.equal(row.change.textContent, "Change");
+    assert.equal(row.change.attributes.get("aria-label"), "Change Switch Character shortcut");
     assert.equal(captureCancellations, 1);
   } finally {
     uninstall();

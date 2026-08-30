@@ -49,7 +49,7 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   const palette = page.getByRole("dialog", { name: "Quick Travel" });
   await expect(palette).toBeVisible();
   await expect(palette.locator('label[for="travel-search-input"] > span')).toHaveCount(0);
-  await expect(palette.getByRole("status")).toHaveCount(0);
+  await expect(palette.getByRole("status")).toHaveCount(2);
   await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(160);
   const search = page.getByRole("combobox", { name: "Destination or search phrase" });
   const header = palette.locator(".travel-search");
@@ -66,10 +66,14 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   await expect.poll(() => searchControl.evaluate((element) =>
     getComputedStyle(element).boxShadow
   )).not.toBe(focusedSearchShadow);
+  await search.fill("not a real destination");
+  await expect(palette.getByRole("status").nth(1)).toHaveText(
+    "No destinations match your search.",
+  );
   await search.fill("kama");
   await expect(page.getByRole("option", { name: /Kamadan, Jewel of Istan/ })).toBeVisible();
   await page.keyboard.press("Meta+9");
-  await expect(page.getByRole("status")).toContainText("shortcut 9");
+  await expect(palette.getByRole("status").first()).toContainText("shortcut 9");
   await page.getByRole("combobox", { name: "Destination or search phrase" }).fill("");
   await expect(page.getByRole("button", {
     name: /Travel to Kamadan, Jewel of Istan, shortcut 9/,
@@ -77,12 +81,12 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
 });
 
 test("keeps map-only Travel controls and status visible in a short window", async ({ page }) => {
-  await page.setViewportSize({ width: 480, height: 560 });
+  await page.setViewportSize({ width: 480, height: 256 });
   await page.goto("/?travel=1");
 
   const palette = page.getByRole("dialog", { name: "Quick Travel" });
   await expect(palette).toBeVisible();
-  await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(96);
+  await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(8);
   await expect(page.locator(".travel-footer")).toBeInViewport();
   await expect(page.getByRole("combobox", {
     name: "Destination or search phrase",

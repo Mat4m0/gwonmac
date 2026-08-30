@@ -18,7 +18,11 @@ import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-hist
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
-const props = defineProps<{ host: TravelHost; visible: boolean }>();
+const props = defineProps<{
+  host: TravelHost;
+  visible: boolean;
+  nativeDialog?: boolean;
+}>();
 const emit = defineEmits<{ close: [] }>();
 type PaletteMode = "travel" | "customize";
 const SMALL_TRAVEL_CATALOGUE_LIMIT = 10;
@@ -109,6 +113,11 @@ const statusLevel = computed(() => feedback.value
     ?? (props.host.unavailable === null ? undefined : "warning")
 );
 const urgentNoticeVisible = computed(() => statusLevel.value === "warning" || statusLevel.value === "danger");
+const searchStatusText = computed(() => {
+  if (!hasQuery.value) return "";
+  if (results.value.length === 0) return "No destinations match your search.";
+  return `${results.value.length} ${results.value.length === 1 ? "destination" : "destinations"} found.`;
+});
 
 function setFeedback(message: string, level: typeof feedbackLevel.value): void {
   feedback.value = message;
@@ -146,14 +155,14 @@ function wasRecentlyVisited(mapId: number): boolean {
 
 function browseDestinationLabel(destination: TravelDestination): string {
   if (destination.mapId === currentMapId.value) {
-    return `${destination.name}, current location`;
+    return `${destination.name}, ${destination.campaign}, current location`;
   }
   const shortcut = shortcutNumber(destination.mapId);
   const context = [
     shortcut === null ? null : `shortcut ${shortcut}`,
     wasRecentlyVisited(destination.mapId) ? "recent" : null,
   ].filter((value): value is string => value !== null);
-  return `Travel to ${destination.name}${context.length === 0 ? "" : `, ${context.join(", ")}`}`;
+  return `Travel to ${destination.name}, ${destination.campaign}${context.length === 0 ? "" : `, ${context.join(", ")}`}`;
 }
 
 function activateBrowseDestination(mapId: number): void {
@@ -178,6 +187,8 @@ watch(() => props.visible, async (visible) => {
   addingPhrase.value = false;
   feedback.value = "";
   phraseError.value = "";
+  await nextTick();
+  input.value?.focus({ preventScroll: true });
   try {
     const [preferencesLoaded] = await Promise.all([
       travelPreferences.load(),
@@ -187,8 +198,6 @@ watch(() => props.visible, async (visible) => {
   } catch {
     setFeedback("Travel preferences could not be loaded. Reopen Travel to try again.", "danger");
   }
-  await nextTick();
-  input.value?.focus({ preventScroll: true });
 }, { immediate: true, flush: "post" });
 
 async function selectMode(next: PaletteMode, focus: "search" | "settings" = "search"): Promise<void> {
@@ -405,12 +414,14 @@ function onKeydown(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <section ref="palette" v-show="visible" class="ui-frame travel-palette" :aria-busy="preferenceWritePending" @keydown="onKeydown">
+  <section ref="palette" v-show="visible" class="ui-frame travel-palette" :role="nativeDialog ? undefined : 'dialog'" :aria-label="nativeDialog ? undefined : 'Quick Travel'" :aria-busy="preferenceWritePending" @keydown="onKeydown">
     <div class="travel-search">
-      <label for="travel-search-input"><svg class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination or search phrase" :aria-controls="hasQuery ? 'travel-results' : showingSmallCatalogue ? 'travel-available' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="activeDestination ? `travel-${activeDestination.mapId}` : undefined" :aria-expanded="selectableDestinations.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or phrases…"></label>
+      <label for="travel-search-input"><svg class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination or search phrase" :aria-controls="hasQuery ? 'travel-results' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="hasQuery && activeDestination ? `travel-${activeDestination.mapId}` : undefined" :aria-expanded="hasQuery && selectableDestinations.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or phrases…"></label>
     </div>
 
-    <div v-if="urgentNoticeVisible" class="travel-notice" :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</div>
+    <span class="ui-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ statusText }}</span>
+    <span class="ui-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ searchStatusText }}</span>
+    <div v-if="urgentNoticeVisible" class="travel-notice" :data-level="statusLevel" aria-hidden="true">{{ statusText }}</div>
 
     <section v-if="hasQuery" id="travel-results-panel" class="ui-scroll travel-body" role="region" aria-label="Travel search results">
       <div v-if="results.length" class="travel-result-heading">{{ results.length === 1 ? 'Best match for' : 'Matches for' }} <strong>{{ query }}</strong></div>
@@ -423,14 +434,14 @@ function onKeydown(event: KeyboardEvent): void {
     <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="region" aria-label="Travel">
       <section v-if="showingSmallCatalogue" class="travel-section travel-available" aria-labelledby="travel-available-title">
         <header class="travel-section-head"><h2 id="travel-available-title">{{ browseUnlocksKnown ? 'Available destinations' : 'Destinations' }}</h2><span>{{ browseDestinations.length }} {{ browseUnlocksKnown ? 'unlocked' : 'nearby' }}</span></header>
-        <div id="travel-available" class="travel-recent-grid" role="listbox">
-          <button v-for="destination in browseDestinations" :id="`travel-${destination.mapId}`" :key="destination.mapId" type="button" class="travel-recent ui-row" role="option" :data-current="destination.mapId === currentMapId || undefined" :disabled="travelPending || host.unavailable !== null || destination.mapId === currentMapId" :aria-current="destination.mapId === currentMapId ? 'location' : undefined" :aria-selected="destination.mapId === activeDestination?.mapId" :aria-label="browseDestinationLabel(destination)" @mouseenter="activateBrowseDestination(destination.mapId)" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><span class="travel-destination-context"><span v-if="shortcutNumber(destination.mapId) !== null" class="travel-shortcut-context" :title="`Shortcut ${shortcutNumber(destination.mapId)}`" aria-hidden="true">{{ shortcutNumber(destination.mapId) }}</span><span v-if="destination.mapId === currentMapId" class="travel-current">Current</span><span v-else-if="wasRecentlyVisited(destination.mapId)" class="travel-current">Recent</span><svg v-else viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></span></button>
+        <div id="travel-available" class="travel-recent-grid">
+          <button v-for="destination in browseDestinations" :id="`travel-${destination.mapId}`" :key="destination.mapId" type="button" class="travel-recent ui-row" :data-current="destination.mapId === currentMapId || undefined" :disabled="travelPending || host.unavailable !== null || destination.mapId === currentMapId" :aria-current="destination.mapId === currentMapId ? 'location' : undefined" :aria-label="browseDestinationLabel(destination)" @mouseenter="activateBrowseDestination(destination.mapId)" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><span class="travel-destination-context"><span v-if="shortcutNumber(destination.mapId) !== null" class="travel-shortcut-context" :title="`Shortcut ${shortcutNumber(destination.mapId)}`" aria-hidden="true">{{ shortcutNumber(destination.mapId) }}</span><span v-if="destination.mapId === currentMapId" class="travel-current">Current</span><span v-else-if="wasRecentlyVisited(destination.mapId)" class="travel-current">Recent</span><svg v-else viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></span></button>
         </div>
       </section>
       <section v-else-if="recentDestinations.length" class="travel-section travel-history" aria-labelledby="travel-history-title">
         <header class="travel-section-head"><h2 id="travel-history-title">Recent</h2></header>
         <div class="travel-recent-grid">
-          <button v-for="destination in recentDestinations" :key="destination.mapId" type="button" class="travel-recent ui-row" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to recent destination ${destination.name}`" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></button>
+          <button v-for="destination in recentDestinations" :key="destination.mapId" type="button" class="travel-recent ui-row" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to recent destination ${destination.name}, ${destination.campaign}`" @click="travel({ mapId: destination.mapId })"><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></button>
         </div>
       </section>
       <section v-if="!showingSmallCatalogue" class="travel-section travel-favorites" aria-labelledby="travel-favorites-title">
@@ -459,7 +470,7 @@ function onKeydown(event: KeyboardEvent): void {
         <p v-if="phraseError" id="travel-phrase-error" class="ui-field-error travel-phrase-error">{{ phraseError }}</p>
       </section>
     </section>
-    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" role="status" aria-live="polite">{{ statusText }}</span><span v-if="hasQuery" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="showingSmallCatalogue" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="mode === 'travel'" class="travel-key-hints"><kbd class="ui-kbd">1–9</kbd> travel</span><span v-else class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span></footer>
+    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" aria-hidden="true">{{ statusText }}</span><span v-if="hasQuery" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="showingSmallCatalogue" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="mode === 'travel'" class="travel-key-hints"><kbd class="ui-kbd">1–9</kbd> travel</span><span v-else class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span></footer>
     <div class="travel-header-actions">
       <button ref="settingsButton" type="button" class="ui-button travel-close" data-icon aria-label="Customize Travel" title="Customize Travel" :aria-pressed="mode === 'customize'" aria-controls="travel-customize-panel" :disabled="preferenceControlsDisabled" @click="toggleCustomize"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg></button>
       <button type="button" class="ui-button travel-close" data-icon aria-label="Close Quick Travel" @click="emit('close')"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>
