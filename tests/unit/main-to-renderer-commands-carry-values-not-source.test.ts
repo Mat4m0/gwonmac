@@ -98,8 +98,12 @@ function harness(argv: string[]) {
   // capability.
   let toolboxListening = false;
   let storageListening = false;
+  let transientDismissals = 0;
   const window = {
     gwNative: api,
+    gwSurfaces: {
+      dismissTransient() { transientDismissals += 1; },
+    },
     gwDiagnostics: {
       resetForCapture: () => Promise.resolve(),
       captureStarted(level: unknown) {
@@ -178,6 +182,7 @@ function harness(argv: string[]) {
     installStorage: () => {
       storageListening = true;
     },
+    transientDismissals: () => transientDismissals,
   };
 }
 
@@ -256,6 +261,8 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
     [4, "completed"],
     [5, "completed"],
   ]);
+  assert.equal(fixture.transientDismissals(), 4,
+    "explicit interface commands dismiss transient palettes before dispatch");
 });
 
 test("one physical key release crosses preload and is acknowledged", async () => {

@@ -293,9 +293,10 @@ export function characterActionExecute(config: CharacterActionConfig): Uint8Arra
       getLocal(3), Uint8Array.of(0x45, 0x04, 0x40), result(2), Uint8Array.of(0x0b),
       getLocal(3), load(layout.characterContext), setLocal(3),
       getLocal(3), Uint8Array.of(0x45, 0x04, 0x40), result(2), Uint8Array.of(0x0b),
-      // Instance type 0 is an outpost. Refuse every nonzero value, including
-      // explorable (1) and loading (2).
-      getLocal(3), load(layout.currentInstanceType), Uint8Array.of(0x04, 0x40), result(2), Uint8Array.of(0x0b),
+      // Instance types 0 and 1 are outpost and explorable. Core separately
+      // proves that an explorable is PvE. Reject loading (2) and malformed
+      // values again on the game-thread boundary immediately before logout.
+      getLocal(3), load(layout.currentInstanceType), i32(1), Uint8Array.of(0x4b, 0x04, 0x40), result(2), Uint8Array.of(0x0b),
       // kLogout { unknown = 0, character_select = 1 }.
       getLocal(2), i32(0), store(0), getLocal(2), i32(1), store(4),
       i32(config.logoutMessageId), getLocal(2), i32(0), Uint8Array.of(0x10), uleb(config.dispatcherFunctionIndex),

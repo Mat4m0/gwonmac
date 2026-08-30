@@ -130,4 +130,12 @@ test("character switching uses only the certified internal frame dispatcher", ()
     "the historical symbol suffix is not the current numeric message ID");
   assert.equal(decoded.messageSites[85], undefined,
     "the action must not encode low messages through the external-frame guard");
+  assert.notEqual(body.findIndex((byte, index) =>
+    byte === 0x28
+    && body[index + 1] === 0x02
+    && body[index + 2] === 0x08
+    && body[index + 3] === 0x41
+    && body[index + 4] === 0x01
+    && body[index + 5] === 0x4b), -1,
+  "logout must accept only outpost/explorable instance values 0 and 1");
 });

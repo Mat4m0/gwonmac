@@ -317,7 +317,7 @@ test.describe("renderer keyboard input", () => {
         };
         testWindow.__relogEvents?.splice(0);
         testWindow.__relogCanvas?.focus();
-        window.gwPreGameControls = { state: () => 'character-select', playable: () => null, diagnosticMask: () => 0 };
+        window.gwPreGameControls = { state: () => 'character-select', switchContext: () => 'character-select', diagnosticMask: () => 0 };
         return testWindow.__relogInput?.playSelectedCharacter();
       });
       const restoration = await page.evaluate(() =>
@@ -337,7 +337,7 @@ test.describe("renderer keyboard input", () => {
           __relogEvents?: unknown[];
         };
         testWindow.__relogEvents?.splice(0);
-        window.gwPreGameControls = { state: () => 'unknown', playable: () => null, diagnosticMask: () => 0 };
+        window.gwPreGameControls = { state: () => 'unknown', switchContext: () => 'unavailable', diagnosticMask: () => 0 };
         const outcome = await testWindow.__relogInput
           ?.playSelectedCharacter();
         return { outcome, events: testWindow.__relogEvents };
@@ -349,7 +349,7 @@ test.describe("renderer keyboard input", () => {
           __relogEvents?: unknown[];
         };
         testWindow.__relogEvents?.splice(0);
-        window.gwPreGameControls = { state: () => 'reconnect', playable: () => null, diagnosticMask: () => 0 };
+        window.gwPreGameControls = { state: () => 'reconnect', switchContext: () => 'loading', diagnosticMask: () => 0 };
         const outcome = await testWindow.__relogInput?.acceptReconnect();
         return { outcome, events: testWindow.__relogEvents };
       })).toEqual({
@@ -366,7 +366,7 @@ test.describe("renderer keyboard input", () => {
           __relogEvents?: unknown[];
         };
         testWindow.__relogEvents?.splice(0);
-        window.gwPreGameControls = { state: () => 'loading', playable: () => null, diagnosticMask: () => 0 };
+        window.gwPreGameControls = { state: () => 'loading', switchContext: () => 'loading', diagnosticMask: () => 0 };
         const outcome = await testWindow.__relogInput?.acceptReconnect();
         return { outcome, events: testWindow.__relogEvents };
       })).toEqual({ outcome: 'progressed', events: [] });

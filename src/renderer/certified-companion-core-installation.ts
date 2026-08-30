@@ -477,23 +477,29 @@ export async function installCoreCertifiedCompanion(
     installedRuntime = runtime;
 
     if (preGameStateReader) {
-      installedPreGameControls = Object.freeze({
-        state(): PreGameState {
-          try {
-            switch (Number(preGameStateReader()) >>> 0) {
-              case 1: return "character-select";
-              case 2: return "reconnect";
-              case 3: return "loading";
-              default: return "unknown";
-            }
-          } catch {
-            return "unknown";
+      const readPreGameState = (): PreGameState => {
+        try {
+          switch (Number(preGameStateReader()) >>> 0) {
+            case 1: return "character-select";
+            case 2: return "reconnect";
+            case 3: return "loading";
+            default: return "unknown";
           }
-        },
-        playable() {
+        } catch {
+          return "unknown";
+        }
+      };
+      installedPreGameControls = Object.freeze({
+        state: readPreGameState,
+        switchContext() {
+          const preGame = readPreGameState();
+          if (preGame === "character-select") return "character-select";
+          if (preGame === "reconnect" || preGame === "loading") return "loading";
           const state = playRegions.state;
-          if (state.status !== "ready") return null;
-          return state.instanceType === 0 ? "outpost" : "explorable";
+          if (state.status !== "ready") return "unavailable";
+          if (state.instanceType === 0) return "outpost";
+          if (state.instanceType !== 1) return "unavailable";
+          return state.playRegion === "pve" ? "pve-explorable" : "pvp-explorable";
         },
         diagnosticMask() {
           try {

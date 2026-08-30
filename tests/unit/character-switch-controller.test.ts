@@ -84,7 +84,7 @@ describe("character switch controller", { concurrency: false }, () => {
         characters: source,
         controls: {
           state: () => preGame,
-          playable: () => "outpost",
+          switchContext: () => "outpost",
           diagnosticMask: () => 0,
         },
         buildId: 7,
@@ -122,7 +122,7 @@ describe("character switch controller", { concurrency: false }, () => {
         characters: source,
         controls: {
           state: () => { stateReads += 1; return "unknown"; },
-          playable: () => "outpost",
+          switchContext: () => "outpost",
           diagnosticMask: () => 0,
         },
         buildId: 7,
@@ -165,7 +165,7 @@ describe("character switch controller", { concurrency: false }, () => {
         characters: source,
         controls: {
           state: () => "unknown",
-          playable: () => "outpost",
+          switchContext: () => "outpost",
           diagnosticMask: () => 0,
         },
         buildId: 7,
@@ -184,6 +184,38 @@ describe("character switch controller", { concurrency: false }, () => {
       controller.reset();
       assert.deepEqual(controller.action, { status: "idle" });
       assert.equal(controller.diagnostics().lastCode, "logout-refused");
+      controller.dispose();
+    });
+  });
+
+  it("reports queue refusal synchronously so the palette can stay open", async () => {
+    await withBrowserGlobals(async () => {
+      const memory = new WebAssembly.Memory({ initial: 1 });
+      const controller = createCharacterSwitchController({
+        memory,
+        payloadPointer: 64,
+        configure: () => 1,
+        enqueue: () => 0,
+        characters: {
+          state: ready(11, 0),
+          subscribe() { return () => false; },
+          dispose() {},
+        },
+        controls: {
+          state: () => "unknown",
+          switchContext: () => "outpost",
+          diagnosticMask: () => 0,
+        },
+        buildId: 7,
+        programId: 1,
+      });
+
+      controller.request(11, 1);
+      assert.deepEqual(controller.action, {
+        status: "failed",
+        code: "logout-refused",
+        retryable: false,
+      });
       controller.dispose();
     });
   });
@@ -219,7 +251,7 @@ describe("character switch controller", { concurrency: false }, () => {
         characters: source,
         controls: {
           state: () => "character-select",
-          playable: () => "outpost",
+          switchContext: () => "outpost",
           diagnosticMask: () => 0,
         },
         buildId: 7,
@@ -267,7 +299,7 @@ describe("character switch controller", { concurrency: false }, () => {
         characters: source,
         controls: {
           state: () => "character-select",
-          playable: () => "outpost",
+          switchContext: () => "outpost",
           diagnosticMask: () => 0,
         },
         buildId: 7,
@@ -280,6 +312,93 @@ describe("character switch controller", { concurrency: false }, () => {
       assert.equal(controller.action.code, "selection-not-confirmed");
       assert.equal(controller.diagnostics().selectorClickProved, true);
       controller.dispose();
+    });
+  });
+
+  it("requires PvE confirmation and rechecks context before native logout", async () => {
+    await withBrowserGlobals(async () => {
+      const create = (contexts: CharacterSwitchContext[]) => {
+        const memory = new WebAssembly.Memory({ initial: 1 });
+        const pointer = 64;
+        let calls = 0;
+        let reads = 0;
+        const controller = createCharacterSwitchController({
+          memory,
+          payloadPointer: pointer,
+          configure: () => 1,
+          enqueue: () => {
+            calls += 1;
+            new DataView(memory.buffer).setUint32(pointer + 20, 2, true);
+            return 1;
+          },
+          characters: {
+            state: ready(30, 0),
+            subscribe() { return () => false; },
+            dispose() {},
+          },
+          controls: {
+            state: () => "unknown",
+            switchContext: () => contexts[Math.min(reads++, contexts.length - 1)]!,
+            diagnosticMask: () => 0,
+          },
+          buildId: 7,
+          programId: 1,
+        });
+        return { controller, calls: () => calls };
+      };
+
+      const unconfirmed = create(["pve-explorable"]);
+      unconfirmed.controller.request(30, 1);
+      assert.equal(unconfirmed.controller.action.code, "explorable-confirmation-required");
+      assert.equal(unconfirmed.calls(), 0);
+      unconfirmed.controller.dispose();
+
+      const confirmed = create(["pve-explorable"]);
+      confirmed.controller.request(30, 1, true);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      assert.equal(confirmed.calls(), 1);
+      assert.equal(confirmed.controller.action.code, "logout-refused");
+      confirmed.controller.dispose();
+
+      const raced = create(["pve-explorable", "pvp-explorable"]);
+      raced.controller.request(30, 1, true);
+      assert.equal(raced.controller.action.code, "active-pvp");
+      assert.equal(raced.calls(), 0);
+      raced.controller.dispose();
+    });
+  });
+
+  it("blocks PvP and loading before any native action", async () => {
+    await withBrowserGlobals(async () => {
+      for (const [context, code] of [
+        ["pvp-explorable", "active-pvp"],
+        ["loading", "game-loading"],
+      ] as const) {
+        const memory = new WebAssembly.Memory({ initial: 1 });
+        let calls = 0;
+        const controller = createCharacterSwitchController({
+          memory,
+          payloadPointer: 64,
+          configure: () => 1,
+          enqueue: () => { calls += 1; return 1; },
+          characters: {
+            state: ready(40, 0),
+            subscribe() { return () => false; },
+            dispose() {},
+          },
+          controls: {
+            state: () => "unknown",
+            switchContext: () => context,
+            diagnosticMask: () => 0,
+          },
+          buildId: 7,
+          programId: 1,
+        });
+        controller.request(40, 1, true);
+        assert.equal(controller.action.code, code);
+        assert.equal(calls, 0);
+        controller.dispose();
+      }
     });
   });
 });

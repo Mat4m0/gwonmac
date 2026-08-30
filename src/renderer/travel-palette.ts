@@ -44,6 +44,7 @@ export function createTravelPalette(
   const dismissable = window.gwSurfaces.register({
     root,
     priority: 6,
+    transient: true,
     dismiss: () => setOpen(false),
   });
 

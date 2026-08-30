@@ -92,8 +92,10 @@ declare global {
     register(surface: Readonly<{
       root: HTMLElement;
       priority: number;
+      transient?: boolean;
       dismiss(): void;
     }>): GwonmacSurfaceHandle;
+    dismissTransient(): void;
   }
 
   type InputTraceEntry = SharedInputTraceEntry;
@@ -212,10 +214,17 @@ declare global {
   }
 
   type PreGameState = "unknown" | "character-select" | "reconnect" | "loading";
+  type CharacterSwitchContext =
+    | "outpost"
+    | "pve-explorable"
+    | "pvp-explorable"
+    | "loading"
+    | "character-select"
+    | "unavailable";
 
   interface PreGameControls {
     state(): PreGameState;
-    playable(): "outpost" | "explorable" | null;
+    switchContext(): CharacterSwitchContext;
     diagnosticMask(): number;
   }
 

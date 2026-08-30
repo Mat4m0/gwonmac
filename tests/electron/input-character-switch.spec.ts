@@ -3,6 +3,8 @@
  * surface and focus controller without invoking any native game action.
  */
 import { expect, test } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   closeOffline,
   isDomActiveElement,
@@ -27,6 +29,8 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
         level: 20,
         mapId: index % 2 === 0 ? 55 : 999,
       }));
+      let switching = false;
+      const listeners = new Set<() => void>();
       window.gwCharacterSwitchHost?.attach({
         characters: {
           status: "ready",
@@ -34,14 +38,24 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
           selectedIndex: 0,
           characters,
         },
-        action: { status: "idle" },
+        get action() {
+          return switching
+            ? ({ status: "switching", stage: "logout" } as const)
+            : ({ status: "idle" } as const);
+        },
         usage: { formatVersion: 1, sequence: 0, entries: [] },
+        context: "outpost",
         request(_sequence, index) {
           document.body.dataset.characterSwitchRequest = String(index);
+          switching = true;
+          for (const listener of listeners) listener();
         },
         reset() {},
         diagnostics: () => ({ version: 1, stage: "test", lastCode: null }),
-        subscribe: () => () => {},
+        subscribe(listener) {
+          listeners.add(listener);
+          return () => { listeners.delete(listener); };
+        },
       });
       window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
     });
@@ -66,14 +80,164 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
     await expect(search).toHaveValue("");
     await expect(list.getByRole("option")).toHaveCount(10);
 
-    await search.press("0");
-    await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "9");
     await search.press("Tab");
     await expect.poll(() => page.evaluate(() =>
       document.activeElement?.getAttribute("role"))).toBe("option");
+    await page.keyboard.press("Shift+Tab");
+    await expect.poll(() => isDomActiveElement(search)).toBe(true);
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect.poll(() => isDomActiveElement(page.locator("#canvas"))).toBe(true);
+    await page.evaluate(() => window.dispatchEvent(
+      new CustomEvent("gw:character-toggle", { cancelable: true }),
+    ));
+    await expect.poll(() => isDomActiveElement(search)).toBe(true);
+    await search.press("0");
+    await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "9");
+    await expect(dialog).toBeHidden();
+    await page.evaluate(() => window.dispatchEvent(
+      new CustomEvent("gw:character-toggle", { cancelable: true }),
+    ));
+    await expect(dialog).toBeHidden();
+  } finally {
+    await closeOffline(fixture);
+  }
+});
+
+test("the modal confirms PvE departure, blocks click-through, and retains post-logout failure", async () => {
+  const fixture = await launchCachedClient(
+    "gw-character-switch-modal-e2e-",
+    {},
+    (userData) => writeFile(
+      path.join(userData, "settings.json"),
+      JSON.stringify({ gwonmacTools: true, travelPalette: true }),
+    ),
+  );
+  try {
+    const { page } = fixture;
+    await startGameInput(page);
+    await page.evaluate(() => {
+      document.getElementById("loading")?.classList.add("gone");
+      const characters = [
+        { name: "Private Alpha", characterKey: "0000000000000001", primaryProfession: 1, secondaryProfession: 0, characterType: "roleplaying" as const, campaign: 1, level: 20, mapId: 55 },
+        { name: "Private Beta", characterKey: "0000000000000002", primaryProfession: 2, secondaryProfession: 3, characterType: "roleplaying" as const, campaign: 2, level: 20, mapId: 55 },
+      ];
+      let phase: "idle" | "switching" | "failed" = "idle";
+      let context: CharacterSwitchContext = "pve-explorable";
+      const listeners = new Set<() => void>();
+      const emit = () => { for (const listener of listeners) listener(); };
+      window.gwCharacterSwitchHost?.attach({
+        characters: { status: "ready", sequence: 12, selectedIndex: 0, characters },
+        get action() {
+          if (phase === "switching") return { status: "switching", stage: "logout" } as const;
+          if (phase === "failed") return { status: "failed", code: "selection-not-confirmed" } as const;
+          return { status: "idle" } as const;
+        },
+        usage: { formatVersion: 1, sequence: 0, entries: [] },
+        get context() { return context; },
+        request(sequence, index, confirmed) {
+          document.body.dataset.characterSwitchRequest = `${sequence}:${index}:${String(confirmed)}`;
+          phase = "switching";
+          emit();
+        },
+        reset() { phase = "idle"; emit(); },
+        diagnostics: () => ({ version: 1, stage: phase, lastCode: phase === "failed" ? "selection-not-confirmed" : null }),
+        subscribe(listener) {
+          listeners.add(listener);
+          return () => { listeners.delete(listener); };
+        },
+      });
+      const canvas = document.getElementById("canvas")!;
+      canvas.addEventListener("click", () => {
+        document.body.dataset.gameClicks = String(Number(document.body.dataset.gameClicks ?? "0") + 1);
+      });
+      Object.assign(window, {
+        __characterSwitchTestSet(nextPhase: typeof phase, nextContext: CharacterSwitchContext) {
+          phase = nextPhase;
+          context = nextContext;
+          emit();
+        },
+      });
+    });
+
+    const dialog = page.getByRole("dialog", { name: "Switch Character" });
+    await page.evaluate(() => window.dispatchEvent(
+      new CustomEvent("gw:character-toggle", { cancelable: true }),
+    ));
+    await expect(dialog).toBeVisible();
+    await page.locator("#character-switch-root").click({ position: { x: 8, y: 8 } });
+    await expect(dialog).toBeHidden();
+    await expect(page.locator("body")).not.toHaveAttribute("data-game-clicks", /.*/u);
+
+    await page.evaluate(() => window.dispatchEvent(
+      new CustomEvent("gw:character-toggle", { cancelable: true }),
+    ));
+    await page.getByRole("option", { name: /Switch to Private Beta/u }).click();
+    await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
+    await expect.poll(() => isDomActiveElement(page.getByRole("button", { name: "Stay here" }))).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("heading", { name: "Switch Character" })).toBeVisible();
+    await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
+
+    await page.getByRole("option", { name: /Switch to Private Beta/u }).click();
+    await page.getByRole("button", { name: "Stay here" }).click();
+    await expect(dialog).toBeVisible();
+    await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
+
+    await page.getByRole("option", { name: /Switch to Private Beta/u }).click();
+    await page.getByRole("button", { name: "Leave and switch" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "12:1:true");
+
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        __characterSwitchTestSet(phase: "idle" | "switching" | "failed", context: CharacterSwitchContext): void;
+      };
+      target.__characterSwitchTestSet("idle", "character-select");
+      window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
+    });
+    await expect(dialog).toBeHidden();
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        __characterSwitchTestSet(phase: "idle" | "switching" | "failed", context: CharacterSwitchContext): void;
+      };
+      target.__characterSwitchTestSet("failed", "character-select");
+      window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
+    });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("status")).toContainText(
+      "Automatic switching stopped. Continue from the Guild Wars character selector.",
+    );
+    await dialog.getByRole("button", { name: "Close Switch Character" }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.evaluate(async () => {
+      const target = window as typeof window & {
+        __characterSwitchTestSet(phase: "idle" | "switching" | "failed", context: CharacterSwitchContext): void;
+      };
+      target.__characterSwitchTestSet("idle", "outpost");
+      const specifier = "./travel-palette.js";
+      const module = await import(specifier) as
+        typeof import("../../src/renderer/travel-palette.js");
+      const palette = module.createTravelPalette(document.body, {
+        travel: () => undefined,
+        unavailable: () => null,
+      });
+      palette.setEnabled(true);
+      window.dispatchEvent(new CustomEvent("gw:travel-toggle", { cancelable: true, detail: {} }));
+    });
+    const travel = page.getByRole("dialog", { name: "Quick Travel" });
+    await expect(travel).toBeVisible();
+    await page.evaluate(() => window.dispatchEvent(
+      new CustomEvent("gw:character-toggle", { cancelable: true }),
+    ));
+    await expect(travel).toBeHidden();
+    await expect(dialog).toBeVisible();
+    await page.evaluate(() => window.dispatchEvent(
+      new CustomEvent("gw:travel-toggle", { cancelable: true, detail: {} }),
+    ));
+    await expect(dialog).toBeHidden();
+    await expect(travel).toBeVisible();
   } finally {
     await closeOffline(fixture);
   }

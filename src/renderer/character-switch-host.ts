@@ -17,6 +17,7 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
     characters: Object.freeze({ status: "waiting", reason: "memory" }),
     action: Object.freeze({ status: "failed", code: "play-path-unproved" }),
     usage: EMPTY_CHARACTER_SWITCH_USAGE,
+    context: "unavailable",
     request() {},
     reset() {},
     diagnostics: () => Object.freeze({ version: 1, stage: "unavailable", lastCode: "play-path-unproved" }),
@@ -28,7 +29,10 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
     get characters() { return source.characters; },
     get action() { return source.action; },
     get usage() { return source.usage; },
-    request(sequence: number, index: number) { source.request(sequence, index); },
+    get context() { return source.context; },
+    request(sequence: number, index: number, explorableConfirmed?: boolean) {
+      source.request(sequence, index, explorableConfirmed);
+    },
     reset() { source.reset(); },
     diagnostics() { return source.diagnostics(); },
     subscribe(listener: () => void) { listeners.add(listener); listener(); return () => { listeners.delete(listener); }; },

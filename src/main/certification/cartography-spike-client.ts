@@ -59,6 +59,20 @@ const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuil
       outputSha256: "3016b231dc47236360598f58f5dc35066595028c2a3aae39e2a9ca9580a2a656",
     },
   ],
+  [
+    "87469f9cd8b93bd36e5b401bf0450d47b7856322de6e001c9c9d7dd996cd98d4",
+    {
+      memoryLayout: "official",
+      outputSha256: "393b23f080f10491d209031570fdfe7e80063dbb48f8fcb8c33fc662a2067a6b",
+    },
+  ],
+  [
+    "81a2ceb81db4e8ae35f561a20b3c76dbb0b692a1e5ab4de7ff2879e0e8720d53",
+    {
+      memoryLayout: "official",
+      outputSha256: "5ca898031b871a71f8ada41c81cfeb1150261998b866cbfb315fb4607c0fd594",
+    },
+  ],
 ]);
 
 export type CartographySpikePreparation = Readonly<{

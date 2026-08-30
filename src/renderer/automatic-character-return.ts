@@ -196,7 +196,10 @@ export function installAutomaticCharacterReturn(
   const observe = (candidate: ActiveRun) => {
     const controls = window.gwPreGameControls;
     const state = controls?.state() ?? "unknown";
-    const playable = controls?.playable() ?? null;
+    const context = controls?.switchContext() ?? "unavailable";
+    const playable: "outpost" | "explorable" | null = context === "outpost" ? "outpost"
+      : context === "pve-explorable" || context === "pvp-explorable" ? "explorable"
+        : null;
     if (state !== "unknown" || playable === null) {
       candidate.observedNonPlayable = true;
     }

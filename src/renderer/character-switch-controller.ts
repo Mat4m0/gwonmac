@@ -30,6 +30,7 @@ type NativeSend = "sent" | "refused" | "invalid" | "timeout" | "focus"
   | "selector-array"
   | "selection-unconfirmed" | "play-frame"
   | "selector-parent" | "play-parent";
+type NativeEnqueue = NativeSend | "queued";
 
 type Transition = Readonly<{ sequence: number; stage: string; elapsedBucketMs: number }>;
 
@@ -122,16 +123,22 @@ export function createCharacterSwitchController(options: Readonly<{
     return false;
   };
 
-  const send = async (
+  const queue = (
     kind: keyof typeof counters,
     argument: number,
-    timeoutMs: number,
-  ): Promise<NativeSend> => {
+  ): NativeEnqueue => {
     if (!validPayload() || !focused()) return "focus";
     configure();
     view().setUint32(options.payloadPointer + RESULT_OFFSET, 0, true);
     if (options.enqueue(ACTION[kind], argument) !== 1) return "refused";
     counters[kind] += 1;
+    return "queued";
+  };
+
+  const settle = async (
+    kind: keyof typeof counters,
+    timeoutMs: number,
+  ): Promise<NativeSend> => {
     const settled = await waitFor(
       () => view().getUint32(options.payloadPointer + RESULT_OFFSET, true) !== 0,
       timeoutMs,
@@ -161,6 +168,15 @@ export function createCharacterSwitchController(options: Readonly<{
     return "invalid";
   };
 
+  const send = async (
+    kind: keyof typeof counters,
+    argument: number,
+    timeoutMs: number,
+  ): Promise<NativeSend> => {
+    const queued = queue(kind, argument);
+    return queued === "queued" ? settle(kind, timeoutMs) : queued;
+  };
+
   const run = async (
     snapshotSequence: number,
     targetIndex: number,
@@ -170,7 +186,7 @@ export function createCharacterSwitchController(options: Readonly<{
   ) => {
     window.dispatchEvent(new Event("gw:character-switch-claim"));
     publish({ status: "switching", stage: "logout" }, "logout:queued");
-    const logout = await send("logout", 0, 2_000);
+    const logout = await settle("logout", 2_000);
     if (logout !== "sent") {
       fail(logout === "focus" ? "focus-lost"
         : logout === "refused" ? "logout-refused"
@@ -272,7 +288,7 @@ export function createCharacterSwitchController(options: Readonly<{
     publish({ status: "switching", stage: "confirmation" }, "play:sent");
     const confirmed = await waitFor(() => {
       const state = options.characters.state;
-      return options.controls.playable() === "outpost"
+      return options.controls.switchContext() === "outpost"
         && state.status === "ready"
         && state.selectedIndex !== null
         && state.characters[state.selectedIndex]?.name === targetName
@@ -301,7 +317,8 @@ export function createCharacterSwitchController(options: Readonly<{
     get characters() { return options.characters.state; },
     get action() { return action; },
     get usage() { return usage; },
-    request(snapshotSequence: number, targetIndex: number) {
+    get context() { return options.controls.switchContext(); },
+    request(snapshotSequence: number, targetIndex: number, explorableConfirmed = false) {
       if (action.status === "switching") return;
       const state = options.characters.state;
       if (state.status !== "ready") { fail("list-unavailable", true); return; }
@@ -309,7 +326,15 @@ export function createCharacterSwitchController(options: Readonly<{
       if (!Number.isInteger(targetIndex) || targetIndex < 0
         || targetIndex >= state.characters.length) { fail("target-missing", true); return; }
       if (state.selectedIndex === targetIndex) { fail("current-target"); return; }
-      if (options.controls.playable() !== "outpost") { fail("not-outpost", true); return; }
+      const context = options.controls.switchContext();
+      if (context === "pvp-explorable") { fail("active-pvp"); return; }
+      if (context === "loading") { fail("game-loading", true); return; }
+      if (context === "character-select") { fail("character-select"); return; }
+      if (context === "unavailable") { fail("state-unavailable", true); return; }
+      if (context === "pve-explorable" && !explorableConfirmed) {
+        fail("explorable-confirmation-required", true);
+        return;
+      }
       if (!focused()) { fail("focus-lost", true); return; }
       const targetName = state.characters[targetIndex]!.name;
       const targetKey = state.characters[targetIndex]!.characterKey;
@@ -321,7 +346,25 @@ export function createCharacterSwitchController(options: Readonly<{
       selectorReadinessRetries = 0;
       lastSelectorProofMask = 0;
       requestedListIndex = targetIndex;
-      void run(snapshotSequence, targetIndex, targetName, targetKey, accountSignature(state));
+      const drainContext = options.controls.switchContext();
+      if (drainContext !== "outpost"
+        && !(explorableConfirmed && drainContext === "pve-explorable")) {
+        fail(drainContext === "pvp-explorable" ? "active-pvp"
+          : drainContext === "loading" ? "game-loading" : "logout-refused");
+        return;
+      }
+      const logout = queue("logout", 0);
+      if (logout !== "queued") {
+        fail(logout === "focus" ? "focus-lost" : "logout-refused");
+        return;
+      }
+      void run(
+        snapshotSequence,
+        targetIndex,
+        targetName,
+        targetKey,
+        accountSignature(state),
+      );
     },
     reset() {
       if (action.status === "switching") return;
@@ -345,7 +388,7 @@ export function createCharacterSwitchController(options: Readonly<{
         preGameState: "not-read",
         preGameReadCount: 0,
         preGameReadBucketMs: 0,
-        playability: options.controls.playable(),
+        playability: options.controls.switchContext(),
         requestSequence: requestSequence >>> 0,
         actionSequence: actionSequence >>> 0,
         focused: focused(),

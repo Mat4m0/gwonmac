@@ -21,7 +21,7 @@ test("transient loading cannot skip character selection", async () => {
       : screen === "character"
         ? "character-select"
         : "unknown",
-    playable: () => screen === "playable" ? "outpost" : null,
+    switchContext: () => screen === "playable" ? "outpost" : "unavailable",
     diagnosticMask: () => 1,
   };
   Object.defineProperty(globalThis, "window", {
