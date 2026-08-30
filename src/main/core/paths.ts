@@ -96,6 +96,37 @@ export function windowsStorageRoots(
   };
 }
 
+export interface LinuxStorageHomes {
+  readonly config: string;
+  readonly data: string;
+  readonly cache: string;
+  readonly state: string;
+}
+
+/** Resolve the Flatpak layout beneath the sandbox-provided XDG homes. */
+export function linuxStorageRoots(
+  homes: LinuxStorageHomes,
+): ApplicationStorageRoots {
+  for (const [name, root] of Object.entries(homes)) {
+    if (!path.posix.isAbsolute(root)) {
+      throw new Error(`Linux ${name} home must be absolute`);
+    }
+  }
+
+  const config = path.posix.join(homes.config, "gwonmac");
+  const data = path.posix.join(homes.data, "gwonmac");
+  const cache = path.posix.join(homes.cache, "gwonmac");
+  const state = path.posix.join(homes.state, "gwonmac");
+  return {
+    config,
+    data,
+    cache,
+    state,
+    logs: path.posix.join(state, "logs"),
+    sessions: path.posix.join(data, "sessions"),
+  };
+}
+
 export function gamePaths(storage: ApplicationStorageRoots): GamePaths {
   const game = path.join(storage.cache, "game");
   const artifacts = path.join(game, "artifacts");
