@@ -75,14 +75,7 @@ export async function launchCachedClient(
   prepare: (userData: string) => Promise<void> = async () => {},
   client: CachedClientOptions = {},
 ): Promise<OfflineFixture> {
-  return launchOffline(prefix, {
-    // Cached-client tests exercise the production launch coordinator: Play
-    // queues until ClientRuntime has published the active snapshot. The
-    // unready seam belongs only to tests that deliberately open the shell
-    // without any playable client.
-    GW_TEST_ALLOW_UNREADY_LAUNCH: "0",
-    ...environment,
-  }, async (userData) => {
+  return launchOffline(prefix, environment, async (userData) => {
     await seedCachedClient({
       artifacts: path.join(userData, "game", "artifacts"),
       userData,
