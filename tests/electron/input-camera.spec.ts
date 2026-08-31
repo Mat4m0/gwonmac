@@ -28,6 +28,22 @@ test.describe("renderer camera input", () => {
     });
     try {
       const { app, page } = fixture;
+      await app.evaluate(async ({ app: electronApp, BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows().find(
+          (candidate) => candidate.webContents.getURL() === "gw://app/",
+        );
+        if (!win) throw new Error("game window is missing");
+        win.show();
+        electronApp.focus({ steal: true });
+        win.focus();
+        const deadline = Date.now() + 5_000;
+        while (!win.isFocused()) {
+          if (Date.now() >= deadline) {
+            throw new Error("game window did not receive focus");
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+      });
       await startGameInput(page);
       await page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
@@ -42,27 +58,6 @@ test.describe("renderer camera input", () => {
       });
       const canvas = page.locator("#canvas");
       const box = await boxOf(canvas);
-      await app.evaluate(async ({ app: electronApp, BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows()[0];
-        if (!win) throw new Error("game window is missing");
-        if (!win.isFocused()) {
-          const focused = new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              win.removeListener("focus", onFocus);
-              reject(new Error("game window did not receive focus"));
-            }, 5_000);
-            const onFocus = () => {
-              clearTimeout(timeout);
-              resolve();
-            };
-            win.once("focus", onFocus);
-          });
-          win.show();
-          electronApp.focus({ steal: true });
-          win.focus();
-          await focused;
-        }
-      });
       await canvas.focus();
       await expect.poll(() => page.evaluate(() => ({
         active: document.activeElement?.id,
