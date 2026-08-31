@@ -26,7 +26,7 @@ test("installed qualification is restricted to a disposable hosted runner", () =
   assert.match(script, /refusing to replace a pre-existing Windows fixture root/u);
   assert.match(script, /useDefaultUserData: true/u);
   assert.match(script, /"--disable-gpu"/u);
-  assert.match(script, /"--disable-crash-reporter"/u);
+  assert.doesNotMatch(script, /--disable-crash-reporter/u);
   assert.doesNotMatch(script, /--no-sandbox|--disable-setuid-sandbox/u);
 });
 

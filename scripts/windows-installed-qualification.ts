@@ -151,10 +151,10 @@ try {
     // GitHub's hosted Windows service session has no stable accelerated
     // graphics context. Keep the Chromium sandbox enabled, but render this
     // package qualification in software so a runner-only GPU crash cannot
-    // mask launcher, profile, storage, and uninstall behavior.
+    // mask launcher, profile, storage, and uninstall behavior. Crashpad stays
+    // on: this must exercise the same early local handler as production.
     arguments: [
       "--disable-gpu",
-      "--disable-crash-reporter",
       "--enable-logging=stderr",
       ...(signedQualification ? [] : ["--gw-volatile-secrets"]),
     ],
