@@ -121,6 +121,10 @@ test("Windows and Linux build only their target-native boundaries", () => {
   assert.ok(windows[1]?.[1].includes("build/native/node.lib"));
   assert.ok(windows[1]?.[1].includes("/Fe:build/native/windows-host.node"));
   assert.ok(windows[2]?.[1].includes("/Fe:build/native/gw-dat-decode.exe"));
+  for (const [, args] of windows.slice(1)) {
+    assert.ok(args.includes("/MT"), "packaged native code must carry its C++ runtime");
+    assert.equal(args.includes("/MD"), false);
+  }
   assert.deepEqual(linux.map(([command]) => command), [process.execPath, "c++"]);
   assert.deepEqual(linux[0]?.[1], ["scripts/build-linux-secret-portal.mjs"]);
   assert.deepEqual(linux[1]?.[1].slice(-2), [

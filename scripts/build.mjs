@@ -146,6 +146,9 @@ export function nativeBuildSteps(platform, architecture) {
     if (architecture !== "x64") {
       throw new Error(`unsupported Windows build architecture: ${architecture}`);
     }
+    // The installed package must not depend on a separately installed Visual
+    // C++ Redistributable. Both shipped binaries therefore carry the static
+    // runtime selected by /MT.
     return [
       [
         "lib.exe",
@@ -162,6 +165,7 @@ export function nativeBuildSteps(platform, architecture) {
           "/nologo",
           "/std:c++20",
           "/O2",
+          "/MT",
           "/EHsc",
           "/LD",
           "/DNAPI_VERSION=8",
@@ -183,6 +187,7 @@ export function nativeBuildSteps(platform, architecture) {
           "/nologo",
           "/std:c++20",
           "/O2",
+          "/MT",
           "/EHsc",
           "/Isrc/native/gw-dat",
           "/Fobuild\\native\\",
