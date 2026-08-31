@@ -95,6 +95,13 @@ watch([synchronized, () => snapshot.value.experience.introduction], async ([read
 }, { immediate: true });
 
 const visibleProfiles = computed(() => snapshot.value.profiles.filter((profile) => !profile.archived));
+const appearanceProfileDetails = computed(() => snapshot.value.profiles.find((profile) => profile.id === appearanceProfile.value) ?? null);
+const canArchiveAppearanceProfile = computed(() => {
+  const profile = appearanceProfileDetails.value;
+  return profile !== null
+    && profile.id !== visibleProfiles.value[0]?.id
+    && (profile.state === "ready" || profile.state === "failed");
+});
 const selectedProfiles = computed(() => visibleProfiles.value.filter((profile) => selected.value.includes(profile.id)));
 const openSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state === "running"));
 const closedSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state !== "running"));
@@ -169,6 +176,14 @@ async function saveAppearance() {
     await native?.profiles.updateAppearance({ id: appearanceProfile.value!, icon: appearanceIcon.value, color: appearanceColor.value });
     appearanceProfile.value = null;
   });
+}
+
+async function archiveAppearanceProfile() {
+  const profile = appearanceProfileDetails.value;
+  if (!profile || !canArchiveAppearanceProfile.value) return;
+  if (await runAction("The account could not be archived.", () => native?.profiles.archive(profile.id))) {
+    appearanceProfile.value = null;
+  }
 }
 
 function openSettings(section: SettingsRoute = "general") {
@@ -324,7 +339,7 @@ async function replaceToolShortcut() {
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
   <div v-else class="app-shell" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
-    <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @introduction="runAction('The introduction could not be opened.', () => native?.experience.replayIntroduction())" />
+    <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" />
 
     <section v-if="snapshot.readiness.state === 'repair-required'" class="priority-banner danger">
       <AlertTriangle /><div><strong>Game files need repair</strong><span>Guild Wars cannot start until the client is ready.</span></div>
@@ -360,7 +375,6 @@ async function replaceToolShortcut() {
         @customize="editAppearance"
         @show="showProfile"
         @play="id => runAction('This account could not be opened. Try again.', () => native?.profiles.play([id]))"
-        @archive="id => runAction('The account could not be archived.', () => native?.profiles.archive(id))"
         @restore="id => runAction('The account could not be restored.', () => native?.profiles.restore(id))"
         @delete="id => runAction('The account could not be deleted.', () => native?.profiles.delete(id))"
       />
@@ -429,7 +443,7 @@ async function replaceToolShortcut() {
     </BaseModal>
 
     <BaseModal v-if="appearanceProfile" labelledby="appearance-title" @close="appearanceProfile = null">
-      <form @submit.prevent="saveAppearance"><div class="modal-head"><h2 id="appearance-title">Account appearance</h2><button type="button" class="icon-button" aria-label="Close" @click="appearanceProfile = null"><X /></button></div><p>Choose a simple icon and color for this account.</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><label>Custom color<input v-model="appearanceColor" type="color" /></label></fieldset><div class="form-actions"><button type="button" class="secondary" @click="appearanceProfile = null">Cancel</button><button class="primary">Save</button></div></form>
+      <form @submit.prevent="saveAppearance"><div class="modal-head"><h2 id="appearance-title">Edit account</h2><button type="button" class="icon-button" aria-label="Close" @click="appearanceProfile = null"><X /></button></div><p>Choose how this account appears in the launcher.</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><label>Custom color<input v-model="appearanceColor" type="color" /></label></fieldset><div v-if="canArchiveAppearanceProfile" class="archive-account-row"><span><strong>Archive account</strong><small>Hide this account without deleting its data.</small></span><button type="button" class="archive-button" @click="archiveAppearanceProfile"><Archive />Archive</button></div><div class="form-actions"><button type="button" class="secondary" @click="appearanceProfile = null">Cancel</button><button class="primary">Save</button></div></form>
     </BaseModal>
 
     <div v-if="snapshot.experience.preferencesReset" class="toast"><AlertTriangle /><div><strong>Launcher preferences were reset.</strong><span>Your accounts, saved login, game files, builds, and templates were not changed.</span></div><button class="icon-button" aria-label="Dismiss" @click="dismissPreferencesReset"><X /></button></div>
@@ -437,8 +451,8 @@ async function replaceToolShortcut() {
 
     <BaseModal v-if="snapshot.experience.setup === 'pending'" labelledby="setup-title" :dismissible="false" wide>
       <div class="setup-card">
-        <template v-if="setupStep === 1"><span class="eyebrow">Welcome</span><h2 id="setup-title">Welcome to Guild Wars Reforged</h2><p>Guild Wars Reforged runs Guild Wars on your Mac. It is an unofficial community project and is not affiliated with ArenaNet or NCSOFT.</p><div class="form-actions"><button class="primary" @click="setupStep = 2">Continue</button></div></template>
-        <template v-else><span class="eyebrow">Optional</span><h2 id="setup-title">Optional Tools</h2><p>Build Management saves team builds. Quick Travel opens a map search. Xunlai Storage opens storage in supported outposts.</p><p><strong>Tools apply to every account.</strong></p><p class="setup-note">If you enable Tools, the app restarts once to finish setup.</p><div class="form-actions spread"><button class="secondary" @click="setupStep = 1">Back</button><span /><button class="secondary" @click="completeSetup(false)">Not now</button><button class="primary" @click="completeSetup(true)">Enable Tools</button></div></template>
+        <template v-if="setupStep === 1"><h2 id="setup-title">Welcome to Guild Wars Reforged</h2><p>Guild Wars Reforged runs Guild Wars on your Mac. It is an unofficial community project and is not affiliated with ArenaNet or NCSOFT.</p><div class="form-actions"><button class="primary" @click="setupStep = 2">Continue</button></div></template>
+        <template v-else><h2 id="setup-title">Optional Tools</h2><p>Build Management saves team builds. Quick Travel opens a map search. Xunlai Storage opens storage in supported outposts.</p><p><strong>Tools apply to every account.</strong></p><p class="setup-note">If you enable Tools, the app restarts once to finish setup.</p><div class="form-actions spread"><button class="secondary" @click="setupStep = 1">Back</button><span /><button class="secondary" @click="completeSetup(false)">Not now</button><button class="primary" @click="completeSetup(true)">Enable Tools</button></div></template>
       </div>
     </BaseModal>
 

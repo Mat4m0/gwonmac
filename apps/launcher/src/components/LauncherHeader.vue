@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, CircleHelp, Home, MessageSquareText, Settings, Users } from "lucide-vue-next";
+import { AlertTriangle, Home, MessageSquareText, Settings, Users } from "lucide-vue-next";
 import type { LauncherRoute } from "../routes";
 import logoUrl from "@site/reforged-logo.webp";
 
@@ -7,7 +7,6 @@ defineProps<{ route: LauncherRoute }>();
 const emit = defineEmits<{
   navigate: [route: LauncherRoute];
   settings: [];
-  introduction: [];
 }>();
 </script>
 
@@ -22,8 +21,6 @@ const emit = defineEmits<{
     </nav>
     <div class="title-actions">
       <button class="icon-button" aria-label="Settings" @click="emit('settings')"><Settings /></button>
-      <button class="help-button" @click="emit('introduction')"><CircleHelp />Show introduction</button>
-      <span class="unofficial">Unofficial client</span>
     </div>
   </header>
 </template>

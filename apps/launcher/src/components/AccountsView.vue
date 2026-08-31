@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Archive, Crown, Flame, Map as MapIcon, Play, Plus, RotateCcw, ScrollText, Settings, Shield, Star, Swords } from "lucide-vue-next";
+import { Archive, Crown, Flame, Map as MapIcon, Pencil, Play, Plus, RotateCcw, ScrollText, Shield, Star, Swords } from "lucide-vue-next";
 import type { LauncherProfileSummary } from "@shared/launcher-contracts";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { profileStatus } from "../launcher-view-model";
@@ -10,7 +10,6 @@ const emit = defineEmits<{
   customize: [profile: LauncherProfileSummary];
   show: [id: ProfileId];
   play: [id: ProfileId];
-  archive: [id: ProfileId];
   restore: [id: ProfileId];
   delete: [id: ProfileId];
 }>();
@@ -20,17 +19,15 @@ const profileIcons = { swords: Swords, archive: Archive, map: MapIcon, scroll: S
 
 <template>
   <section class="page accounts-page">
-    <div class="page-head"><div><span class="eyebrow">Accounts</span><h1>Game windows</h1><p>Add another account when you want another game window.</p></div><button class="secondary" @click="emit('add')"><Plus />Add account</button></div>
+    <div class="page-head"><div><h1>Game windows</h1><p>Add another account when you want another game window.</p></div><button class="secondary" @click="emit('add')"><Plus />Add account</button></div>
     <div class="account-cards">
-      <article v-for="(profile, index) in profiles.filter(candidate => !candidate.archived)" :key="profile.id" class="account-card">
+      <article v-for="profile in profiles.filter(candidate => !candidate.archived)" :key="profile.id" class="account-card">
         <div class="avatar" :style="{ background: profile.appearance.color }"><component :is="profileIcons[profile.appearance.icon as keyof typeof profileIcons] ?? Swords" /></div>
-        <div><h3>{{ profile.name }}</h3><p>{{ profileStatus(profile) }}</p></div>
-        <span class="status-dot" :class="profile.state" />
+        <div class="account-details"><div class="account-title"><h3>{{ profile.name }}</h3><span class="status-dot" :class="profile.state" aria-hidden="true" /></div><p>{{ profileStatus(profile) }}</p></div>
         <div class="account-actions">
-          <button class="secondary" @click="emit('customize', profile)"><Settings />Customize</button>
+          <button class="secondary account-appearance" @click="emit('customize', profile)"><Pencil />Edit</button>
           <button v-if="profile.state === 'running'" class="secondary" @click="emit('show', profile.id)">Show</button>
           <template v-else-if="profile.state === 'ready' || profile.state === 'failed'">
-            <button v-if="index > 0" class="text-link" @click="emit('archive', profile.id)">Archive</button>
             <button class="secondary" @click="emit('play', profile.id)"><RotateCcw v-if="profile.state === 'failed'" /><Play v-else />{{ profile.state === 'failed' ? 'Try again' : 'Play' }}</button>
           </template>
           <span v-else class="account-progress" role="status">{{ profileStatus(profile) }}</span>

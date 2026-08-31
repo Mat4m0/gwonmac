@@ -9,6 +9,8 @@ describe("launcher chrome", () => {
   it("announces the current navigation destination", async () => {
     const wrapper = mount(LauncherHeader, { props: { route: "accounts" } });
     expect(wrapper.get('button[aria-current="page"]').text()).toContain("Accounts");
+    expect(wrapper.text()).not.toContain("Show introduction");
+    expect(wrapper.text()).not.toContain("Unofficial client");
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
     expect(wrapper.emitted("settings")).toHaveLength(1);
   });
@@ -110,6 +112,17 @@ describe("launcher chrome", () => {
 
     expect(cards[1]!.text()).toContain("Waiting for game files");
     expect(cards[1]!.findAll("button").map((button) => button.text()))
-      .toEqual(["Customize"]);
+      .toEqual(["Edit"]);
+  });
+
+  it("keeps archive out of the primary account actions", () => {
+    const readyProfiles = fixtureSnapshot.profiles.map((profile) => ({
+      ...profile,
+      state: "ready" as const,
+    }));
+    const wrapper = mount(AccountsView, { props: { profiles: readyProfiles } });
+
+    expect(wrapper.text()).not.toContain("Archive");
+    expect(wrapper.findAll(".account-appearance")).toHaveLength(2);
   });
 });

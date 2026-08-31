@@ -29,11 +29,14 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).toContain("Main account");
   });
 
-  it("shows seven daily cards and a full-week disclosure", async () => {
+  it("shows a distinct daily schedule and a full-week disclosure", async () => {
     const wrapper = mount(App);
     await wrapper.findAll(".segmented button")[1]!.trigger("click");
-    expect(wrapper.findAll(".daily-grid article")).toHaveLength(7);
-    expect(wrapper.get(".load-more").text()).toBe("Show the next 7 days");
+    expect(wrapper.findAll(".daily-item")).toHaveLength(7);
+    expect(wrapper.text()).toContain("Zaishen Mission");
+    expect(wrapper.text()).toContain("Nicholas Sandford");
+    expect(wrapper.text()).not.toContain("Daily activity");
+    expect(wrapper.get(".load-more").text()).toBe("Show full week");
   });
 
   it("uses truthful production wording for feedback submission", async () => {
@@ -216,6 +219,32 @@ describe("unified launcher shell", () => {
     document.querySelector<HTMLFormElement>(".modal form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await flushPromises();
     expect(create).toHaveBeenCalledWith({ name: "PvP account", appearance: { icon: "map", color: "#46658a" } });
+  });
+
+  it("keeps reversible account archiving inside account appearance", async () => {
+    const archive = vi.fn(async () => undefined);
+    const readyProfiles = fixtureSnapshot.profiles.map((profile) => ({
+      ...profile,
+      state: "ready" as const,
+    }));
+    installNative({
+      state: {
+        get: async () => ({ ...fixtureSnapshot, profiles: readyProfiles }),
+        onChange: () => () => undefined,
+      },
+      profiles: { archive },
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.findAll("nav button")[1]!.trigger("click");
+
+    expect(wrapper.text()).not.toContain("Archive");
+    await wrapper.findAll(".account-appearance")[1]!.trigger("click");
+    expect(document.body.textContent).toContain("Hide this account without deleting its data");
+    document.querySelector<HTMLButtonElement>(".archive-account-row .archive-button")!.click();
+    await flushPromises();
+
+    expect(archive).toHaveBeenCalledWith(readyProfiles[1]!.id);
   });
 
   it("supports arrow-key navigation for Home tabs", async () => {
