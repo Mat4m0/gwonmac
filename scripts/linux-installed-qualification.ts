@@ -69,7 +69,10 @@ async function launch(): Promise<RunningPackagedApp> {
       ...(nativeWayland ? ["--ozone-platform=wayland"] : []),
     ],
     environment: {
-      GW_EXPECT_USER_DATA: "/var/data/gwonmac/sessions",
+      // Flatpak exposes the app-owned XDG directories at their canonical
+      // ~/.var/app path inside the sandbox. Assert the exact installed root;
+      // /var/data is a flatpak-builder build path, not the runtime data home.
+      GW_EXPECT_USER_DATA: storage.sessions,
       ELECTRON_ENABLE_LOGGING: "1",
       LIBGL_ALWAYS_SOFTWARE: "1",
     },
