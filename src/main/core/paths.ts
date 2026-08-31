@@ -1,11 +1,15 @@
 /**
- * Every filesystem path this application constructs, in one place.
+ * Every writable application path, rooted by its durability responsibility.
  *
  * Two of these values are load-bearing beyond the code that reads them:
  * `chunks` holds up to ~4 GB of downloaded game data and `userData` is the
  * root of a profile that already exists on alpha machines. Relocating either
  * costs a user a re-download or a reset, so `tests/unit/paths.test.ts` pins
  * every resolved value as a literal.
+ *
+ * macOS deliberately gives every responsibility the released `userData` root.
+ * Other platforms can provide distinct roots without teaching settings, game
+ * content, diagnostics, or profile owners about an operating system.
  *
  * This module is deliberately Electron-free so `src/main/core/**` can share it
  * and so the pinning test can execute it. The Electron-rooted entry point is
@@ -17,6 +21,7 @@ import type { ProfileId } from "../../shared/multiple-accounts.js";
 import { clientGenerationPaths } from "./client-compatibility.js";
 
 export interface GamePaths {
+  readonly storage: ApplicationStorageRoots;
   userData: string;
   settings: string;
   diagnosticProfile: string;
@@ -49,28 +54,56 @@ export interface GamePaths {
   gameStorageClearRequest: string;
 }
 
-export function gamePaths(userData: string): GamePaths {
-  const game = path.join(userData, "game");
-  const artifacts = path.join(game, "artifacts");
-  const multiRoot = path.join(userData, "multi");
+export interface ApplicationStorageRoots {
+  /** Settings and other player-selected application configuration. */
+  readonly config: string;
+  /** Durable player-authored data and the canonical profile registry. */
+  readonly data: string;
+  /** Verified or derived content that the application can reacquire. */
+  readonly cache: string;
+  /** Restart state, window state, and recovery markers. */
+  readonly state: string;
+  /** Diagnostics and bounded local logs. */
+  readonly logs: string;
+  /** Electron browser/session data, isolated from the global game cache. */
+  readonly sessions: string;
+}
+
+/** Preserve a released installation whose stores already share one root. */
+export function colocatedStorageRoots(root: string): ApplicationStorageRoots {
   return {
-    userData,
-    settings: path.join(userData, "settings.json"),
-    diagnosticProfile: path.join(userData, "diagnostic-profile.json"),
-    travelPreferences: path.join(userData, "travel-preferences.json"),
-    travelHistory: path.join(userData, "travel-history.json"),
-    tradeSaved: path.join(userData, "trade-saved.json"),
-    buildLibrary: path.join(userData, "build-library.json"),
-    windowState: path.join(userData, "window-state.json"),
-    launcherState: path.join(userData, "launcher-state.json"),
-    launcherMode: path.join(userData, "launcher-mode.json"),
+    config: root,
+    data: root,
+    cache: root,
+    state: root,
+    logs: root,
+    sessions: root,
+  };
+}
+
+export function gamePaths(storage: ApplicationStorageRoots): GamePaths {
+  const game = path.join(storage.cache, "game");
+  const artifacts = path.join(game, "artifacts");
+  const multiRoot = path.join(storage.data, "multi");
+  return {
+    storage,
+    userData: storage.sessions,
+    settings: path.join(storage.config, "settings.json"),
+    diagnosticProfile: path.join(storage.config, "diagnostic-profile.json"),
+    travelPreferences: path.join(storage.config, "travel-preferences.json"),
+    travelHistory: path.join(storage.data, "travel-history.json"),
+    tradeSaved: path.join(storage.data, "trade-saved.json"),
+    buildLibrary: path.join(storage.data, "build-library.json"),
+    windowState: path.join(storage.state, "window-state.json"),
+    launcherState: path.join(storage.config, "launcher-state.json"),
+    launcherMode: path.join(storage.config, "launcher-mode.json"),
     multiRoot,
     multiWorkspace: path.join(multiRoot, "workspace.json"),
     multiSingleTemplateImport: path.join(multiRoot, "single-template-import.json"),
     multiSharedBuildLibrary: path.join(multiRoot, "shared", "build-library.json"),
     multiSharedTemplates: path.join(multiRoot, "shared", "templates.json"),
     multiProfiles: path.join(multiRoot, "profiles"),
-    diagnostics: path.join(userData, "diagnostics"),
+    diagnostics: path.join(storage.logs, "diagnostics"),
     game,
     artifacts,
     previousArtifacts: clientGenerationPaths(artifacts).previous,
@@ -85,8 +118,8 @@ export function gamePaths(userData: string): GamePaths {
     // per-client-build directory so a new build starts a new cache rather than
     // serving last build's art. Discardable: deleting it costs a re-decode.
     skillAssets: path.join(game, "skill-assets"),
-    cacheClearRequest: path.join(userData, "clear-cache-on-start"),
-    gameStorageClearRequest: path.join(userData, "clear-game-storage-on-start"),
+    cacheClearRequest: path.join(storage.state, "clear-cache-on-start"),
+    gameStorageClearRequest: path.join(storage.state, "clear-game-storage-on-start"),
   };
 }
 
@@ -124,8 +157,11 @@ export function multiProfilePaths(
  * owner is validating it.
  */
 export function documentDirectories(paths: GamePaths): string[] {
-  return [
-    paths.userData,
+  return [...new Set([
+    paths.storage.sessions,
+    paths.storage.config,
+    paths.storage.data,
+    paths.storage.state,
     paths.game,
     paths.diagnostics,
     paths.chunks,
@@ -133,7 +169,7 @@ export function documentDirectories(paths: GamePaths): string[] {
     paths.previousArtifacts,
     paths.compatibility,
     paths.enhancements,
-  ];
+  ])];
 }
 
 /** The published manifest of one client generation (installed, previous or stage). */

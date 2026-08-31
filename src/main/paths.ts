@@ -9,14 +9,18 @@
  */
 import { app } from "electron";
 import path from "node:path";
-import { gamePaths as resolveGamePaths, unpackedPath } from "./core/paths.js";
+import {
+  colocatedStorageRoots,
+  gamePaths as resolveGamePaths,
+  unpackedPath,
+} from "./core/paths.js";
 import type { GamePaths } from "./core/paths.js";
 
 export type { GamePaths } from "./core/paths.js";
 
 /** The path table rooted at Electron's per-user data directory. */
 export function gamePaths(userData = app.getPath("userData")): GamePaths {
-  return resolveGamePaths(userData);
+  return resolveGamePaths(colocatedStorageRoots(userData));
 }
 
 export function rendererRoot(): string {

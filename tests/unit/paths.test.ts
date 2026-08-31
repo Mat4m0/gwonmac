@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   clientArtifactPath,
   clientManifestPath,
+  colocatedStorageRoots,
   diagnosticFramesPath,
   documentDirectories,
   gamePaths,
@@ -21,7 +22,15 @@ describe("resolved profile paths", () => {
   const root = "/Users/tester/Library/Application Support/Guild Wars";
 
   it("pins the whole profile layout as literals", () => {
-    assert.deepEqual(gamePaths(root), {
+    assert.deepEqual(gamePaths(colocatedStorageRoots(root)), {
+      storage: {
+        config: root,
+        data: root,
+        cache: root,
+        state: root,
+        logs: root,
+        sessions: root,
+      },
       userData: root,
       settings: `${root}/settings.json`,
       diagnosticProfile: `${root}/diagnostic-profile.json`,
@@ -61,7 +70,7 @@ describe("resolved profile paths", () => {
     // here and has to decide whether the new directory receives `writeAtomic`
     // writes. A directory left off this list leaks abandoned temp files forever
     // — nothing else collects them.
-    assert.deepEqual(documentDirectories(gamePaths(root)), [
+    assert.deepEqual(documentDirectories(gamePaths(colocatedStorageRoots(root))), [
       root,
       `${root}/game`,
       `${root}/diagnostics`,
@@ -79,7 +88,7 @@ describe("resolved profile paths", () => {
 
   it("derives profile paths only beneath the Multi namespace", () => {
     const id = parseProfileId("2d31e565-9fc8-4dde-9fd4-9d644f8283ae");
-    assert.deepEqual(multiProfilePaths(gamePaths(root), id), {
+    assert.deepEqual(multiProfilePaths(gamePaths(colocatedStorageRoots(root)), id), {
       root: `${root}/multi/profiles/${id}`,
       buildLibrary: `${root}/multi/profiles/${id}/build-library.json`,
       templates: `${root}/multi/profiles/${id}/templates.json`,
@@ -91,7 +100,10 @@ describe("resolved profile paths", () => {
   it("keeps the downloaded chunk cache exactly where the alpha put it", () => {
     // Called out separately because this is the expensive one: it is the only
     // path in the table whose relocation costs a full re-download.
-    assert.equal(gamePaths(root).chunks, `${root}/game/chunks`);
+    assert.equal(
+      gamePaths(colocatedStorageRoots(root)).chunks,
+      `${root}/game/chunks`,
+    );
   });
 
   it("pins the files published inside a client generation", () => {
@@ -149,9 +161,46 @@ describe("resolved profile paths", () => {
   });
 
   it("resolves a staged generation without escaping the game directory", () => {
-    const paths = gamePaths(root);
+    const paths = gamePaths(colocatedStorageRoots(root));
     assert.equal(clientManifestPath(`${paths.artifacts}.next`).startsWith(
       `${paths.game}/`,
     ), true);
+  });
+
+  it("routes split storage without giving domain owners a platform", () => {
+    const storage = {
+      config: "/roots/config",
+      data: "/roots/data",
+      cache: "/roots/cache",
+      state: "/roots/state",
+      logs: "/roots/logs",
+      sessions: "/roots/sessions",
+    };
+    const paths = gamePaths(storage);
+
+    assert.equal(paths.userData, "/roots/sessions");
+    assert.equal(paths.settings, "/roots/config/settings.json");
+    assert.equal(paths.launcherState, "/roots/config/launcher-state.json");
+    assert.equal(paths.buildLibrary, "/roots/data/build-library.json");
+    assert.equal(paths.multiWorkspace, "/roots/data/multi/workspace.json");
+    assert.equal(paths.travelHistory, "/roots/data/travel-history.json");
+    assert.equal(paths.game, "/roots/cache/game");
+    assert.equal(paths.chunks, "/roots/cache/game/chunks");
+    assert.equal(paths.windowState, "/roots/state/window-state.json");
+    assert.equal(paths.cacheClearRequest, "/roots/state/clear-cache-on-start");
+    assert.equal(paths.diagnostics, "/roots/logs/diagnostics");
+    assert.deepEqual(documentDirectories(paths), [
+      "/roots/sessions",
+      "/roots/config",
+      "/roots/data",
+      "/roots/state",
+      "/roots/cache/game",
+      "/roots/logs/diagnostics",
+      "/roots/cache/game/chunks",
+      "/roots/cache/game/artifacts",
+      "/roots/cache/game/artifacts.previous",
+      "/roots/cache/game/compatibility",
+      "/roots/cache/game/enhancements",
+    ]);
   });
 });

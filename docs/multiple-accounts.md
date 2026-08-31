@@ -64,6 +64,11 @@ rollback window and has no operational role in the candidate.
 
 Only `profile-storage.ts` knows about adopted storage.
 
+`ApplicationStorageRoots` decides which durability root owns each resolved
+path. It does not create another profile registry. macOS currently maps every
+root to the released `userData` directory, so adoption remains byte-for-byte
+in place.
+
 The adopted Main account resolves to the released default Electron session,
 fixed Keychain items, root build library, native template filesystem, root
 reset marker, and root window state. No file or credential is copied, moved,

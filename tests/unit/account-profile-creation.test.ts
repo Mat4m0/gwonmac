@@ -15,7 +15,11 @@ import {
   loadMultiWorkspace,
   saveMultiWorkspace,
 } from "../../src/main/core/multiple-accounts.js";
-import { gamePaths, multiProfilePaths } from "../../src/main/core/paths.js";
+import {
+  colocatedStorageRoots,
+  gamePaths,
+  multiProfilePaths,
+} from "../../src/main/core/paths.js";
 import { EMPTY_LIBRARY } from "../../src/shared/builds/parse-library.js";
 import { parseProfileId } from "../../src/shared/multiple-accounts.js";
 
@@ -41,7 +45,7 @@ async function absent(path: string): Promise<boolean> {
 
 async function setup() {
   const root = await mkdtemp(join(tmpdir(), "gw-account-create-"));
-  const paths = gamePaths(root);
+  const paths = gamePaths(colocatedStorageRoots(root));
   const workspace = createMultiWorkspace();
   await saveMultiWorkspace(paths.multiWorkspace, workspace);
   await writeFile(paths.buildLibrary, JSON.stringify(EMPTY_LIBRARY));
