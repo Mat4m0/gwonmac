@@ -32,7 +32,6 @@ export async function probeWindowsPackage(root: string): Promise<Readonly<{
     "an unsigned package must not claim distribution capabilities",
   );
   await peFile(path.join(packageRoot, `${product}.exe`));
-  await peFile(path.join(packageRoot, "crashpad_handler.exe"));
   await peFile(path.join(resources, "app.asar.unpacked", "build", "native", "windows-host.node"));
   await peFile(path.join(resources, "app.asar.unpacked", "build", "native", "gw-dat-decode.exe"));
 

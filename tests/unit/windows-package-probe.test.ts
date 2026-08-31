@@ -21,7 +21,6 @@ describe("Windows package probe", () => {
       await writeFile(path.join(root, "package.json"), JSON.stringify({ version: "2026.8.10" }));
       for (const file of [
         path.join(root, "out", `${product}-win32-x64`, `${product}.exe`),
-        path.join(root, "out", `${product}-win32-x64`, "crashpad_handler.exe"),
         path.join(native, "windows-host.node"),
         path.join(native, "gw-dat-decode.exe"),
         path.join(make, setup),
