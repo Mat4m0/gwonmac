@@ -29,6 +29,21 @@ The current instance adds exact, live evidence:
 actionable now = remaining estimate AND currently reachable
 ```
 
+GWonMac remembers the revealable-cell mask for each visited map. It does not
+store the number shown on the World Map. The current exploration bitmap always
+recalculates that number.
+
+For a grouped World Map number, evidence has this priority:
+
+1. Use live current-map cells when that map overlaps the group.
+2. Otherwise, use remembered visited-map cells when they overlap the group.
+3. Otherwise, use the continent-wide estimate.
+
+A proven zero hides the group. It does not fall back to a larger estimate. For
+example, live map evidence can replace an estimated `12` with actionable `2`.
+After both cells are explored, the number disappears. After travel or restart,
+the remembered `2` remains the basis for the lighter non-current number.
+
 The default visual language is:
 
 - soft green coverage: creditable progress already explored;
@@ -79,6 +94,13 @@ Raw WASM addresses never reach the renderer. A generation mismatch, loading,
 invalid scalar, excessive geometry, uncertain projection, or unsupported build
 fails the dependent evidence layer closed. Travel withdraws stale orange and
 terrain immediately without discarding a healthy continent snapshot.
+
+Main stores visited-map knowledge atomically in
+`cartography-map-knowledge.json`. The file contains global map geometry, not
+account or character progress. Normal and Bird's Eye reveal modes stay
+separate. Repeated visits only add proven cells. Corrupt data is quarantined,
+and a different installed Guild Wars content generation or reachability kernel
+starts an empty ledger.
 
 ## Evidence export
 

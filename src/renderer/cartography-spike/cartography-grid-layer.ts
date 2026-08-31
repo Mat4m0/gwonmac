@@ -27,6 +27,33 @@ const ESTIMATED_COLOR = "#E2AE3E";
 
 export type CartographyProgressClusterSize = 1 | 4 | 16;
 
+export type CartographyClusterPresentation = Readonly<{
+  count: number;
+  actionable: boolean;
+}>;
+
+/** Prefer exact live or remembered map knowledge over the continent estimate. */
+export function cartographyClusterPresentation(input: Readonly<{
+  estimatedRemaining: number;
+  currentKnown: number;
+  currentRemaining: number;
+  rememberedKnown: number;
+  rememberedRemaining: number;
+}>): CartographyClusterPresentation | null {
+  if (input.estimatedRemaining === 0) return null;
+  if (input.currentKnown > 0) {
+    return input.currentRemaining > 0
+      ? Object.freeze({ count: input.currentRemaining, actionable: true })
+      : null;
+  }
+  if (input.rememberedKnown > 0) {
+    return input.rememberedRemaining > 0
+      ? Object.freeze({ count: input.rememberedRemaining, actionable: false })
+      : null;
+  }
+  return Object.freeze({ count: input.estimatedRemaining, actionable: false });
+}
+
 /** Stable level of detail for one projected cartography cell. */
 export function cartographyProgressClusterSize(
   cellPixels: number,
@@ -74,6 +101,7 @@ export type CartographyGridLayer = Readonly<{
     isRemaining(cellX: number, cellY: number): boolean | null;
     revealabilityVersion: string;
     canCurrentMapReveal(cellX: number, cellY: number): boolean | null;
+    canVisitedMapReveal(cellX: number, cellY: number): boolean | null;
     hoveredCell: CartographyCell | null;
     revealRadius: CartographyRevealRadius;
   }>): void;
@@ -255,6 +283,7 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
     isExplored: (cellX: number, cellY: number) => boolean | null,
     isRemaining: (cellX: number, cellY: number) => boolean | null,
     canCurrentMapReveal: (cellX: number, cellY: number) => boolean | null,
+    canVisitedMapReveal: (cellX: number, cellY: number) => boolean | null,
     hoveredCell: CartographyCell | null,
     revealRadius: CartographyRevealRadius,
   ): boolean => {
@@ -366,24 +395,40 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
       for (let groupY = firstGroupY; groupY <= projection.lastCellY; groupY += groupSize) {
         for (let groupX = firstGroupX; groupX <= projection.lastCellX; groupX += groupSize) {
           let remainingCount = 0;
-          let actionableCount = 0;
+          let currentKnownCount = 0;
+          let currentRemainingCount = 0;
+          let rememberedKnownCount = 0;
+          let rememberedRemainingCount = 0;
           for (let y = Math.max(groupY, projection.firstCellY);
             y <= Math.min(groupY + groupSize - 1, projection.lastCellY); y += 1) {
             for (let x = Math.max(groupX, projection.firstCellX);
               x <= Math.min(groupX + groupSize - 1, projection.lastCellX); x += 1) {
-              if (isRemaining(x, y) === true) remainingCount += 1;
-              if (canCurrentMapReveal(x, y) === true) actionableCount += 1;
+              const remaining = isRemaining(x, y) === true;
+              const currentKnown = canCurrentMapReveal(x, y) === true;
+              const rememberedKnown = canVisitedMapReveal(x, y) === true;
+              if (remaining) remainingCount += 1;
+              if (currentKnown) currentKnownCount += 1;
+              if (remaining && currentKnown) currentRemainingCount += 1;
+              if (rememberedKnown) rememberedKnownCount += 1;
+              if (remaining && rememberedKnown) rememberedRemainingCount += 1;
             }
           }
-          if (remainingCount === 0) continue;
+          const cluster = cartographyClusterPresentation({
+            estimatedRemaining: remainingCount,
+            currentKnown: currentKnownCount,
+            currentRemaining: currentRemainingCount,
+            rememberedKnown: rememberedKnownCount,
+            rememberedRemaining: rememberedRemainingCount,
+          });
+          if (cluster === null) continue;
           drawClusterMarker(
             context,
             projection,
             groupX,
             groupY,
             groupSize,
-            actionableCount > 0 ? actionableCount : remainingCount,
-            actionableCount > 0,
+            cluster.count,
+            cluster.actionable,
             style.unseen.color,
             style.casingColor,
             Math.min(1, strength * 1.2),
@@ -418,6 +463,7 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
       isRemaining,
       revealabilityVersion,
       canCurrentMapReveal,
+      canVisitedMapReveal,
       hoveredCell,
       revealRadius,
     }) {
@@ -454,6 +500,7 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
           isExplored,
           isRemaining,
           canCurrentMapReveal,
+          canVisitedMapReveal,
           hoveredCell,
           revealRadius,
         );

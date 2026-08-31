@@ -9,6 +9,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
   const supported = size === 10;
   return {
     artifactsDir: `/client/${size}`,
+    clientFingerprint: String(size).padStart(64, "f"),
     store: { size } as ClientGeneration["store"],
     wasmPath,
     jsPath: wasmPath.replace(/\.wasm$/, ".js"),

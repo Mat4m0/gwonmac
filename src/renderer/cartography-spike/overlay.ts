@@ -8,6 +8,8 @@ import type {
   CartographyEvidenceExportResult,
 } from "../../shared/cartography-evidence.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
+import type { CartographyMapKnowledge } from
+  "../../shared/cartography-map-knowledge.js";
 import {
   bitsetHasCell,
   readCartographyState,
@@ -43,6 +45,10 @@ import {
   createWalkableTerrainSurface,
   type WalkableTerrainSurface,
 } from "./walkable-terrain-surface.js";
+import {
+  cartographyKnowledgeWordsFingerprint,
+  mergeCartographyMapKnowledge,
+} from "./map-knowledge.js";
 
 const MODEL_POLL_MS = 200;
 
@@ -114,6 +120,10 @@ export function mountCartographyOverlay(options: Readonly<{
   exportEvidence(
     capture: CartographyEvidenceCapture,
   ): Promise<CartographyEvidenceExportResult>;
+  initialMapKnowledge: readonly CartographyMapKnowledge[];
+  recordMapKnowledge(
+    value: CartographyMapKnowledge,
+  ): Promise<readonly CartographyMapKnowledge[]>;
 }>): () => void {
   const document = options.parent.ownerDocument;
   const view = document.defaultView;
@@ -186,6 +196,16 @@ export function mountCartographyOverlay(options: Readonly<{
   let nextModelPoll = 0;
   let explorationVersion = 0;
   let actionabilityVersion = 0;
+  let mapKnowledge = options.initialMapKnowledge;
+  let mapKnowledgeVersion = 0;
+  let mapKnowledgeProjectionKey = "";
+  let rememberedReachable: Readonly<{
+    width: number;
+    height: number;
+    words: Uint32Array;
+  }> | null = null;
+  let requestedKnowledgeKey = "";
+  let knowledgeWrites: Promise<void> = Promise.resolve();
   let terrainKey = "";
   let terrain: WalkableTerrainSurface | null = null;
   let pointerX = Number.NaN;
@@ -296,6 +316,42 @@ export function mountCartographyOverlay(options: Readonly<{
     }
   };
 
+  const rememberCurrentMap = (
+    current: Extract<CartographyState["currentInstance"], { status: "ready" }>,
+    revealRadius: 1 | 3,
+  ): void => {
+    const kernelSha256 = options.modelSources.kernel.sha256;
+    if (kernelSha256 === null) return;
+    const wordsFingerprint = cartographyKnowledgeWordsFingerprint(current.reachableCells.words);
+    const key = [
+      current.epoch.mapId,
+      current.continent,
+      current.reachableCells.width,
+      current.reachableCells.height,
+      revealRadius,
+      current.epoch.resource,
+      wordsFingerprint,
+    ].join(":");
+    if (key === requestedKnowledgeKey) return;
+    requestedKnowledgeKey = key;
+    const record = Object.freeze({
+      kernelSha256,
+      mapId: current.epoch.mapId,
+      continent: current.continent,
+      width: current.reachableCells.width,
+      height: current.reachableCells.height,
+      revealRadius,
+      words: Object.freeze(Array.from(current.reachableCells.words)),
+    });
+    knowledgeWrites = knowledgeWrites.then(async () => {
+      mapKnowledge = await options.recordMapKnowledge(record);
+      mapKnowledgeVersion += 1;
+    }).catch((cause) => {
+      if (requestedKnowledgeKey === key) requestedKnowledgeKey = "";
+      console.error("[cartography] could not remember current map knowledge", cause);
+    });
+  };
+
   const render = (): void => {
     const now = view.performance.now();
     if (now >= nextModelPoll) {
@@ -313,12 +369,18 @@ export function mountCartographyOverlay(options: Readonly<{
         if (
           previous.currentInstance.status !== "ready"
           || !bitsetsEqual(
-            previous.currentInstance.actionableCells,
-            next.currentInstance.actionableCells,
+            previous.currentInstance.reachableCells,
+            next.currentInstance.reachableCells,
           )
         ) actionabilityVersion += 1;
       }
       state = next;
+      if (state.currentInstance.status === "ready") {
+        rememberCurrentMap(
+          state.currentInstance,
+          options.settings().cartographyRevealMode === "birds-eye" ? 3 : 1,
+        );
+      }
       controls.updateQaStatus(modelStats());
       nextModelPoll = now + MODEL_POLL_MS;
     }
@@ -349,11 +411,41 @@ export function mountCartographyOverlay(options: Readonly<{
     const explorationKey = `${state.continent.status === "ready"
       ? `${state.continent.continent}:${state.continent.generation}:${state.continent.explorationSequence}`
       : "unavailable"}:${explorationVersion}`;
+    const nextMapKnowledgeProjectionKey = state.continent.status === "ready"
+      ? [
+          state.continent.continent,
+          state.continent.explored.width,
+          state.continent.explored.height,
+          revealRadius,
+          mapKnowledgeVersion,
+        ].join(":")
+      : "";
+    if (nextMapKnowledgeProjectionKey !== mapKnowledgeProjectionKey) {
+      const kernelSha256 = options.modelSources.kernel.sha256;
+      const words = state.continent.status === "ready" && kernelSha256 !== null
+        ? mergeCartographyMapKnowledge(mapKnowledge, {
+            kernelSha256,
+            continent: state.continent.continent,
+            width: state.continent.explored.width,
+            height: state.continent.explored.height,
+            revealRadius,
+          })
+        : null;
+      rememberedReachable = state.continent.status === "ready" && words !== null
+        ? Object.freeze({
+            width: state.continent.explored.width,
+            height: state.continent.explored.height,
+            words,
+          })
+        : null;
+      mapKnowledgeProjectionKey = nextMapKnowledgeProjectionKey;
+    }
     const actionabilityKey = [
       state.currentInstance.status === "ready" ? state.currentInstance.epoch.mapId : "-",
       state.currentInstance.status === "ready" ? state.currentInstance.epoch.area : "-",
       state.currentInstance.status === "ready" ? state.currentInstance.epoch.resource : "-",
       actionabilityVersion,
+      mapKnowledgeVersion,
     ].join(":");
     const nextTerrainKey = state.currentInstance.status === "ready"
       ? `${state.currentInstance.epoch.area}:${state.currentInstance.epoch.resource}`
@@ -372,9 +464,13 @@ export function mountCartographyOverlay(options: Readonly<{
       if (state.continent.status !== "ready") return null;
       return bitsetHasCell(state.continent.remaining, { x, y });
     };
-    const isActionable = (x: number, y: number): boolean | null => {
+    const canCurrentMapReveal = (x: number, y: number): boolean | null => {
       if (state.currentInstance.status !== "ready") return null;
-      return bitsetHasCell(state.currentInstance.actionableCells, { x, y }) === true ? true : null;
+      return bitsetHasCell(state.currentInstance.reachableCells, { x, y });
+    };
+    const canVisitedMapReveal = (x: number, y: number): boolean | null => {
+      if (rememberedReachable === null) return null;
+      return bitsetHasCell(rememberedReachable, { x, y });
     };
     const canvasBox = options.canvas.getBoundingClientRect();
 
@@ -412,7 +508,8 @@ export function mountCartographyOverlay(options: Readonly<{
           isExplored,
           isRemaining,
           revealabilityVersion: actionabilityKey,
-          canCurrentMapReveal: isActionable,
+          canCurrentMapReveal,
+          canVisitedMapReveal,
           hoveredCell: null,
           revealRadius,
         });
@@ -477,7 +574,8 @@ export function mountCartographyOverlay(options: Readonly<{
             isExplored,
             isRemaining,
             revealabilityVersion: actionabilityKey,
-            canCurrentMapReveal: isActionable,
+            canCurrentMapReveal,
+            canVisitedMapReveal,
             hoveredCell,
             revealRadius: hoveredCell === null
               ? revealRadius
@@ -548,7 +646,8 @@ export function mountCartographyOverlay(options: Readonly<{
         isExplored,
         isRemaining,
         revealabilityVersion: actionabilityKey,
-        canCurrentMapReveal: isActionable,
+        canCurrentMapReveal,
+        canVisitedMapReveal,
         hoveredCell,
         revealRadius: hoveredCell === null
           ? 0

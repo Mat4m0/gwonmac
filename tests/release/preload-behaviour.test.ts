@@ -347,6 +347,24 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.diagnosticsProfileSet,
   },
   {
+    path: "cartography.getMapKnowledge",
+    args: ["a".repeat(64)],
+    channel: IPC.cartographyMapKnowledgeGet,
+  },
+  {
+    path: "cartography.recordMapKnowledge",
+    args: [{
+      kernelSha256: "a".repeat(64),
+      mapId: 55,
+      continent: 0,
+      width: 4,
+      height: 4,
+      revealRadius: 1,
+      words: [3],
+    }],
+    channel: IPC.cartographyMapKnowledgeRecord,
+  },
+  {
     path: "cartography.exportEvidence",
     args: [CARTOGRAPHY_EVIDENCE_CAPTURE],
     channel: IPC.cartographyEvidenceExport,

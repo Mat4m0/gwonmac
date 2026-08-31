@@ -15,9 +15,48 @@ import {
   projectCartographyGridToWorldMap,
 } from "../../src/renderer/cartography-spike/cartography-grid-projection.js";
 import {
+  cartographyClusterPresentation,
   cartographyProgressClusterOrigin,
   cartographyProgressClusterSize,
 } from "../../src/renderer/cartography-spike/cartography-grid-layer.js";
+
+test("lets proven map knowledge replace a larger continent estimate", () => {
+  assert.deepEqual(cartographyClusterPresentation({
+    estimatedRemaining: 12,
+    currentKnown: 8,
+    currentRemaining: 2,
+    rememberedKnown: 0,
+    rememberedRemaining: 0,
+  }), { count: 2, actionable: true });
+  assert.equal(cartographyClusterPresentation({
+    estimatedRemaining: 10,
+    currentKnown: 8,
+    currentRemaining: 0,
+    rememberedKnown: 0,
+    rememberedRemaining: 0,
+  }), null);
+  assert.deepEqual(cartographyClusterPresentation({
+    estimatedRemaining: 12,
+    currentKnown: 0,
+    currentRemaining: 0,
+    rememberedKnown: 8,
+    rememberedRemaining: 2,
+  }), { count: 2, actionable: false });
+  assert.equal(cartographyClusterPresentation({
+    estimatedRemaining: 10,
+    currentKnown: 0,
+    currentRemaining: 0,
+    rememberedKnown: 8,
+    rememberedRemaining: 0,
+  }), null);
+  assert.deepEqual(cartographyClusterPresentation({
+    estimatedRemaining: 12,
+    currentKnown: 0,
+    currentRemaining: 0,
+    rememberedKnown: 0,
+    rememberedRemaining: 0,
+  }), { count: 12, actionable: false });
+});
 
 const missionFrame: MissionMapFrameSpikeSnapshot = Object.freeze({
   status: 1,

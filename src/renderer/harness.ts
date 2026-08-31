@@ -792,6 +792,9 @@ Module = {
           return saved;
         },
         exportEvidence: (capture) => native().cartography.exportEvidence(capture),
+        getMapKnowledge: (kernelSha256) =>
+          native().cartography.getMapKnowledge(kernelSha256),
+        recordMapKnowledge: (value) => native().cartography.recordMapKnowledge(value),
       });
       maybeInstallEnhancements();
       success(result.instance, result.module);

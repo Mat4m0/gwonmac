@@ -24,6 +24,7 @@ Failure in one profile does not close another profile.
 | Launcher and game-window identity | Main-process window registry |
 | Window presentation | Main-process window coordinator |
 | Application settings, client downloads, repair, updates, Tools install | Global main-process owners |
+| Cartography visited-map knowledge | Global `cartography-map-knowledge.json` |
 | Login, Steam session, game storage, private libraries, window state | Resolved profile storage |
 | Shared templates and builds | Existing shared Multi libraries |
 

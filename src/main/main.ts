@@ -132,6 +132,7 @@ import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { WindowCoordinator } from "./window-coordinator.js";
 import { GameReloader } from "./game-reload.js";
 import { CharacterSwitchUsageStore } from "./core/character-switch-usage.js";
+import { CartographyMapKnowledgeStore } from "./core/cartography-map-knowledge.js";
 import { updateToolsMenuItems } from "./window-menu.js";
 import { resolveAdoptedProfileStorage } from "./core/profile-storage.js";
 import {
@@ -744,6 +745,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
   applyToolsSettings = toolsRuntime?.applySettings ?? null;
   await toolsRuntime?.applySettings(settings);
   const characterSwitchUsage = new CharacterSwitchUsageStore(paths.characterSwitchUsage);
+  const cartographyMapKnowledge = new CartographyMapKnowledgeStore(
+    paths.cartographyMapKnowledge,
+  );
 
   launcherOrchestrator = new LauncherOrchestrator({
     accounts,
@@ -944,6 +948,18 @@ if (primaryInstance) void app.whenReady().then(async () => {
     updateSettings: (patch) => preferences.updateRendererSettings(patch),
     getCharacterSwitchUsage: () => characterSwitchUsage.get(),
     recordCharacterSwitchUsage: (characterKey) => characterSwitchUsage.record(characterKey),
+    getCartographyMapKnowledge: (kernelSha256) => {
+      const fingerprint = clientRuntime.active?.clientFingerprint;
+      return fingerprint
+        ? cartographyMapKnowledge.get(fingerprint, kernelSha256)
+        : Promise.resolve([]);
+    },
+    recordCartographyMapKnowledge: (value) => {
+      const fingerprint = clientRuntime.active?.clientFingerprint;
+      return fingerprint
+        ? cartographyMapKnowledge.record(fingerprint, value)
+        : Promise.resolve([]);
+    },
     setDiagnosticProfile: async (profile) => {
       diagnosticProfile = await saveDiagnosticProfile(
         paths.diagnosticProfile,
