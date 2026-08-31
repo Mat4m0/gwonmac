@@ -141,7 +141,7 @@ async function qualifyUpdateRecovery(): Promise<void> {
   );
   await assert.rejects(execFileAsync(
     "flatpak",
-    ["update", "--user", "-y", applicationId],
+    ["update", "--user", "-y", `--commit=${candidateCommit}`, applicationId],
     { timeout: 120_000 },
   ));
   assert.equal(
@@ -155,7 +155,7 @@ async function qualifyUpdateRecovery(): Promise<void> {
   );
   await execFileAsync(
     "flatpak",
-    ["update", "--user", "-y", applicationId],
+    ["update", "--user", "-y", `--commit=${candidateCommit}`, applicationId],
     { timeout: 120_000 },
   );
   assert.equal(await installedCommit(), candidateCommit);
