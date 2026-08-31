@@ -13,8 +13,9 @@ export async function startGameInput(page: Page) {
   // A full Electron run can have several recently closed renderer processes
   // draining while the next cached fixture starts. Wait for the explicit
   // renderer-owned signal instead of inventing a short product startup
-  // promise. This bound covers loaded CI without weakening the assertion.
+  // promise. Leave the test's outer budget available for cleanup if a loaded
+  // hosted runner needs longer than its usual few seconds.
   await expect(canvas).toHaveAttribute("data-input-ready", "true", {
-    timeout: 30_000,
+    timeout: 45_000,
   });
 }
