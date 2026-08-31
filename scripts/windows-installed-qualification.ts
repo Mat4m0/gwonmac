@@ -25,6 +25,8 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
 const release = DISTRIBUTION_CHANNEL_CONFIG.release;
 const signedQualification = process.env.GW_WINDOWS_SIGNED_QUALIFICATION === "1";
+const baselineFeed = process.env.GW_WINDOWS_BASELINE_FEED;
+const candidateFeed = process.env.GW_WINDOWS_CANDIDATE_FEED;
 
 const delay = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
@@ -145,6 +147,26 @@ async function oneInstalledExecutable(
   return candidates[0]!;
 }
 
+async function oneSetup(feed: string): Promise<string> {
+  const setups = (await readdir(feed))
+    .filter((entry) => entry.endsWith("-Setup.exe"));
+  assert.equal(setups.length, 1, `expected one Setup executable in ${feed}`);
+  return path.join(feed, setups[0]!);
+}
+
+function installedExecutableForVersion(
+  packageRoot: string,
+  version: string,
+): string {
+  const executable = path.join(
+    packageRoot,
+    `app-${version}`,
+    `${release.productName}.exe`,
+  );
+  assert.equal(existsSync(executable), true, `installed version ${version} is missing`);
+  return executable;
+}
+
 async function waitForRunning(
   running: RunningPackagedApp,
   profileId: ProfileId,
@@ -182,6 +204,9 @@ const setup = path.join(
   ),
 );
 assert.equal(existsSync(setup), true, "the Windows Setup executable is missing");
+if (signedQualification && (!baselineFeed || !candidateFeed)) {
+  throw new Error("signed qualification requires baseline and candidate feeds");
+}
 for (const candidate of [packageRoot, path.dirname(storage.config)]) {
   assert.equal(
     existsSync(candidate),
@@ -193,7 +218,8 @@ for (const candidate of [packageRoot, path.dirname(storage.config)]) {
 let running: RunningPackagedApp | null = null;
 let installedExecutable: string | null = null;
 try {
-  await execFileAsync(setup, ["--silent"], {
+  const initialSetup = baselineFeed ? await oneSetup(baselineFeed) : setup;
+  await execFileAsync(initialSetup, ["--silent"], {
     timeout: 120_000,
     windowsHide: true,
   });
@@ -352,12 +378,29 @@ try {
   await closePackagedApp(running);
   running = null;
 
-  if (signedQualification) {
-    await execFileAsync(setup, ["--silent"], {
+  if (signedQualification && baselineFeed && candidateFeed) {
+    const brokenFeed = path.join(process.env.RUNNER_TEMP!, "windows-broken-update");
+    await mkdir(brokenFeed, { recursive: true });
+    await assert.rejects(execFileAsync(
+      updateExecutable,
+      ["--update", brokenFeed, "--silent"],
+      { timeout: 120_000, windowsHide: true },
+    ));
+    assert.equal(
+      existsSync(installedExecutable),
+      true,
+      "a refused update removed the installed baseline",
+    );
+    await execFileAsync(updateExecutable, ["--update", candidateFeed, "--silent"], {
       timeout: 120_000,
       windowsHide: true,
     });
-    installedExecutable = await oneInstalledExecutable(packageRoot);
+    const candidateVersion = (
+      JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as {
+        version: string;
+      }
+    ).version;
+    installedExecutable = installedExecutableForVersion(packageRoot, candidateVersion);
   }
 
   running = await launchPackagedApp({
@@ -396,20 +439,63 @@ try {
       },
       "signed replacement lost the second profile credential",
     );
-    await restartedSecond.evaluate(() => window.gwNative.credentials.clear());
-    assert.deepEqual(
-      await restartedMain.evaluate(() => window.gwNative.credentials.load()),
-      {
-        username: "main-qualified@example.invalid",
-        password: "synthetic-main-password",
-      },
-      "clearing the second profile cleared Main",
-    );
-    await restartedMain.evaluate(() => window.gwNative.credentials.clear());
   }
   running = { ...running, page: restartedMain };
   await closePackagedApp(running);
   running = null;
+
+  if (signedQualification && baselineFeed) {
+    await uninstall(updateExecutable);
+    await execFileAsync(await oneSetup(baselineFeed), ["--silent"], {
+      timeout: 120_000,
+      windowsHide: true,
+    });
+    installedExecutable = await oneInstalledExecutable(packageRoot);
+    running = await launchPackagedApp({
+      appPath: packageRoot,
+      executablePath: installedExecutable,
+      productName: release.productName,
+      userData: storage.sessions,
+      useDefaultUserData: true,
+    });
+    const rollbackLauncher = running.launcherPage;
+    assert.ok(rollbackLauncher);
+    assert.deepEqual(
+      await rollbackLauncher.evaluate(async () =>
+        (await window.launcherNative.state.get()).profiles.map(({ name }) => name)
+      ),
+      ["Main account", "Second account"],
+      "the rollback install could not read the candidate workspace",
+    );
+    const rollbackMain = await openPackagedProfile(running, mainProfile.id);
+    assert.deepEqual(
+      await rollbackMain.evaluate(() => window.gwNative.credentials.load()),
+      {
+        username: "main-qualified@example.invalid",
+        password: "synthetic-main-password",
+      },
+      "rollback lost the Main credential",
+    );
+    const rollbackSecond = await openPackagedProfile(running, secondProfile.id);
+    assert.deepEqual(
+      await rollbackSecond.evaluate(() => window.gwNative.credentials.load()),
+      {
+        username: "second-qualified@example.invalid",
+        password: "synthetic-second-password",
+      },
+      "rollback lost the second credential",
+    );
+    await rollbackSecond.evaluate(() => window.gwNative.credentials.clear());
+    assert.notEqual(
+      await rollbackMain.evaluate(() => window.gwNative.credentials.load()),
+      null,
+      "clearing the second profile cleared Main",
+    );
+    await rollbackMain.evaluate(() => window.gwNative.credentials.clear());
+    running = { ...running, page: rollbackMain };
+    await closePackagedApp(running);
+    running = null;
+  }
 
   await uninstall(updateExecutable);
   assert.equal(
@@ -428,15 +514,19 @@ try {
     profiles: "isolated and restart-stable",
     tools: "loaded globally",
     credentials: signedQualification
-      ? "isolated, replacement-stable, and cleared"
+      ? "isolated, update- and rollback-stable, and cleared"
       : "qualified separately through the native synthetic probe",
+    updates: signedQualification
+      ? "refused feed preserved baseline; candidate update and rollback passed"
+      : "signed update round trip runs in the protected qualification",
     gpuProcess: "reported",
     uninstall: "application removed; player data preserved",
     unproven: [
-      "automatic update replacement and forward recovery",
       "native taskbar focus on physical Windows hardware",
       "hardware GPU performance and long-session memory",
-      ...(signedQualification ? [] : ["signed publisher identity"]),
+      ...(signedQualification
+        ? []
+        : ["signed publisher identity", "installed update and rollback"]),
     ],
   }, null, 2));
 } finally {

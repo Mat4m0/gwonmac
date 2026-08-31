@@ -52,4 +52,8 @@ test("signed qualification cannot publish and uses only synthetic credentials", 
   assert.match(script, /main-qualified@example\.invalid/u);
   assert.match(script, /second-qualified@example\.invalid/u);
   assert.match(script, /credentials\.clear\(\)/u);
+  assert.match(script, /GW_WINDOWS_BASELINE_FEED/u);
+  assert.match(script, /\["--update", brokenFeed/u);
+  assert.match(script, /\["--update", candidateFeed/u);
+  assert.match(script, /rollback install could not read the candidate workspace/u);
 });

@@ -41,7 +41,12 @@ jobs:
             [Convert]::FromBase64String($env:WINDOWS_SIGNING_PFX_BASE64)
           )
           "WINDOWS_CERTIFICATE_FILE=$certificate" | Out-File $env:GITHUB_ENV -Append
-      - name: Build the signed package
+      - name: Build the signed update baseline
+        env:
+          GW_PACKAGE_INTENT: release
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+        run: node --import ./scripts/ts-hook.mjs scripts/windows-update-fixture.ts "$env:RUNNER_TEMP/windows-update-baseline"
+      - name: Build the signed candidate package
         env:
           GW_PACKAGE_INTENT: release
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
@@ -58,6 +63,8 @@ jobs:
       - name: Qualify signed install, replacement, and credentials
         env:
           GW_WINDOWS_SIGNED_QUALIFICATION: "1"
+          GW_WINDOWS_BASELINE_FEED: ${{ runner.temp }}\windows-update-baseline
+          GW_WINDOWS_CANDIDATE_FEED: ${{ github.workspace }}\out\make\squirrel.windows\x64
         run: pnpm test:windows-installed
       - name: Remove the temporary signing certificate
         if: always()
