@@ -221,10 +221,13 @@ test("refuses incomplete, stale, and invalid Mission Map projection state", () =
 
 function worldMapExports(): WebAssembly.Exports {
   const values = [1, 12, 5, 200, 1, 1_920, 1_080, 0, 0, 1_920, 1_080, 0, 0, 0, 0, 8_192, 16_384];
-  return Object.fromEntries(WORLD_MAP_FRAME_SPIKE_SCALARS.map((name, index) => [
-    name,
-    scalar(values[index]!, index < 5 || index === 11 ? "i32" : "f32"),
-  ]));
+  return {
+    ...Object.fromEntries(WORLD_MAP_FRAME_SPIKE_SCALARS.map((name, index) => [
+      name,
+      scalar(values[index]!, index < 5 || index === 11 ? "i32" : "f32"),
+    ])),
+    [WORLD_MAP_FRAME_SPIKE_GLOBALS.observe]: () => undefined,
+  };
 }
 
 test("reads the dedicated World Map context atomically", () => {
@@ -250,4 +253,12 @@ test("reads the dedicated World Map context atomically", () => {
   const invalid = worldMapExports();
   invalid[WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightX] = scalar(0, "f32");
   assert.equal(createWorldMapFrameSpikeReader(invalid)?.snapshot(), null);
+});
+
+test("refreshes World Map visibility before every snapshot", () => {
+  const exports = worldMapExports();
+  exports[WORLD_MAP_FRAME_SPIKE_GLOBALS.observe] = () => {
+    (exports[WORLD_MAP_FRAME_SPIKE_GLOBALS.visible] as WebAssembly.Global).value = 0;
+  };
+  assert.equal(createWorldMapFrameSpikeReader(exports)?.snapshot(), null);
 });

@@ -472,6 +472,58 @@ export function nativeFrameObserver(
   );
 }
 
+/** Refresh the exact World Map frame retained by its certified event context. */
+export function worldMapFrameObserver(
+  certificate: typeof WORLD_MAP_CERTIFICATE & Pick<CartographyMemoryLayout, "frameArray" | "frameCount">,
+  globals: WorldMapGlobals,
+  areaEpoch: number,
+): Uint8Array {
+  const refuse = (status: number) => concat(
+    i32(0), globalSet(globals.visible),
+    i32(status), globalSet(globals.status), Uint8Array.of(0x0f),
+  );
+  const outsideMemory = (pointerLocal: number, bytes: Uint8Array) => concat(
+    local(4), Uint8Array.of(0x45, 0x45),
+    local(pointerLocal), local(4), bytes, Uint8Array.of(0x6b, 0x4b, 0x71),
+  );
+  return concat(
+    // count, array, frame id, frame, memory bytes.
+    Uint8Array.of(0x01, 0x05, 0x7f),
+    globalGet(globals.status), i32(1), Uint8Array.of(0x47, 0x04, 0x40),
+      i32(0), globalSet(globals.visible), Uint8Array.of(0x0f, 0x0b),
+    globalGet(globals.generation), globalGet(areaEpoch), Uint8Array.of(0x47, 0x04, 0x40),
+      refuse(11), Uint8Array.of(0x0b),
+    Uint8Array.of(0x3f, 0x00), i32(65_536), Uint8Array.of(0x6c, 0x21), uleb(4),
+    i32(certificate.frameCount), i32Load(), Uint8Array.of(0x22), uleb(0),
+    Uint8Array.of(0x45, 0x04, 0x40), refuse(2), Uint8Array.of(0x0b),
+    local(0), i32(16_384), Uint8Array.of(0x4b, 0x04, 0x40), refuse(3), Uint8Array.of(0x0b),
+    i32(certificate.frameArray), i32Load(), Uint8Array.of(0x22), uleb(1),
+    Uint8Array.of(0x45, 0x04, 0x40), refuse(4), Uint8Array.of(0x0b),
+    outsideMemory(1, concat(local(0), i32(4), Uint8Array.of(0x6c))),
+    Uint8Array.of(0x04, 0x40), refuse(5), Uint8Array.of(0x0b),
+    globalGet(globals.frameId), Uint8Array.of(0x22), uleb(2),
+    local(0), Uint8Array.of(0x4f, 0x04, 0x40), refuse(5), Uint8Array.of(0x0b),
+    local(1), local(2), i32(4), Uint8Array.of(0x6c, 0x6a), i32Load(),
+    Uint8Array.of(0x22), uleb(3),
+    Uint8Array.of(0x45, 0x04, 0x40), refuse(6), Uint8Array.of(0x0b),
+    outsideMemory(3, i32(certificate.frameBytes)),
+    Uint8Array.of(0x04, 0x40), refuse(6), Uint8Array.of(0x0b),
+    local(3), i32Load(certificate.frameId), local(2), Uint8Array.of(0x47, 0x04, 0x40),
+      refuse(6), Uint8Array.of(0x0b),
+    local(3), i32Load(certificate.frameState), Uint8Array.of(0x22), uleb(0),
+    i32(4), Uint8Array.of(0x71, 0x45, 0x45),
+    local(0), i32(0x200), Uint8Array.of(0x71, 0x45, 0x71), globalSet(globals.visible),
+    local(3), f32Load(certificate.frameViewportWidth), globalSet(globals.viewportWidth),
+    local(3), f32Load(certificate.frameViewportHeight), globalSet(globals.viewportHeight),
+    local(3), f32Load(certificate.frameScreenLeft), globalSet(globals.left),
+    local(3), f32Load(certificate.frameScreenBottom), globalSet(globals.bottom),
+    local(3), f32Load(certificate.frameScreenRight), globalSet(globals.right),
+    local(3), f32Load(certificate.frameScreenTop), globalSet(globals.top),
+    i32(1), globalSet(globals.status),
+    Uint8Array.of(0x0b),
+  );
+}
+
 /** Retain the exact direction argument consumed by the native CompassMap. */
 export function compassMapRenderWrapper(render: number, globals: CompassGlobals): Uint8Array {
   return concat(
