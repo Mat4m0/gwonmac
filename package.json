@@ -6,6 +6,7 @@
   "packageManager": "pnpm@11.13.1",
   "type": "module",
   "description": "Guild Wars Reforged for macOS",
+  "author": "gwonmac contributors",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",

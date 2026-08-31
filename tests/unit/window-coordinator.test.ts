@@ -45,7 +45,7 @@ function fakeWindow(id: number) {
   };
 }
 
-function setup() {
+function setup(options: { requestAttention?: boolean } = {}) {
   const registry = new WindowRegistry<ReturnType<typeof fakeWindow>>();
   const applicationCalls: string[] = [];
   const application = {
@@ -54,6 +54,9 @@ function setup() {
       assert.deepEqual(options, { steal: true });
       applicationCalls.push("app.focus");
     },
+    ...(options.requestAttention
+      ? { requestAttention: () => applicationCalls.push("request.attention") }
+      : {}),
   };
   return {
     applicationCalls,
@@ -237,5 +240,21 @@ describe("window coordinator", () => {
 
     registry.unregister(launcher);
     assert.equal(coordinator.revealAsyncGameIfLauncherFocused(game), false);
+  });
+
+  it("requests attention without focusing a delayed Windows game", () => {
+    const { applicationCalls, coordinator, registry } = setup({
+      requestAttention: true,
+    });
+    const launcher = fakeWindow(1);
+    const game = fakeWindow(2);
+    launcher.setVisible(true);
+    game.setVisible(true);
+    registry.register(launcher, { role: "launcher" });
+    registry.register(game, { role: "game", profileId: FIRST }, 2);
+
+    assert.equal(coordinator.revealAsyncGameIfLauncherFocused(game), false);
+    assert.deepEqual(applicationCalls, ["request.attention"]);
+    assert.deepEqual(game.calls, []);
   });
 });

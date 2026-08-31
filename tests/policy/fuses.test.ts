@@ -51,5 +51,10 @@ test("no fuse is left to its default", () => {
 
 test("fuses are applied to every packaged platform executable", () => {
   assert.match(forge, /packagedExecutablePath\(resourcesPath, platform\)/u);
+  assert.match(
+    forge,
+    /const executable = platform === "win32" \? "electron\.exe" : "electron"/u,
+  );
+  assert.match(forge, /resourcesPath,\s+"\.\.\/\.\.",\s+executable/u);
   assert.doesNotMatch(forge, /if \(platform !== "darwin"\) return/u);
 });

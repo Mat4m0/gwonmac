@@ -38,35 +38,50 @@ describe("keyboard shortcuts", () => {
     });
   });
 
-  it("matches only Command and keeps Control chords in the game", () => {
+  it("matches the platform primary modifier", () => {
     const binding = { key: "k", shift: true, option: false };
     assert.equal(shortcutMatches(binding, {
       code: "KeyK", meta: true, control: false, shift: true, alt: false,
-    }), true);
+    }, "macos"), true);
     assert.equal(shortcutMatches(binding, {
       code: "KeyK", meta: false, control: true, shift: true, alt: false,
-    }), false);
+    }, "macos"), false);
+    assert.equal(shortcutMatches(binding, {
+      code: "KeyK", meta: false, control: true, shift: true, alt: false,
+    }, "windows"), true);
     assert.equal(shortcutMatches(binding, {
       code: "KeyK", meta: true, control: true, shift: true, alt: false,
-    }), false);
+    }, "windows"), false);
     assert.equal(shortcutMatches(binding, {
       code: "KeyK", meta: true, control: false, shift: false, alt: false,
-    }), false);
+    }, "macos"), false);
   });
 
   it("normalizes physical Command chords across Option-modified layouts", () => {
     assert.deepEqual(shortcutFromInput({
       code: "KeyK", meta: true, control: false, shift: true, alt: true,
-    }), { key: "k", shift: true, option: true });
+    }, "macos"), { key: "k", shift: true, option: true });
     assert.equal(shortcutFromInput({
       code: "F1", meta: true, control: false, shift: false, alt: false,
-    }), null);
+    }, "macos"), null);
     assert.equal(shortcutFromInput({
       code: "KeyK", meta: false, control: false, shift: false, alt: false,
-    }), null);
+    }, "macos"), null);
     assert.equal(shortcutFromInput({
       code: "KeyK", meta: true, control: true, shift: false, alt: false,
-    }), null);
+    }, "macos"), null);
+  });
+
+  it("refuses Windows AltGr while accepting Ctrl and Ctrl-Shift", () => {
+    assert.deepEqual(shortcutFromInput({
+      code: "KeyT", meta: false, control: true, shift: false, alt: false,
+    }, "windows"), { key: "t", shift: false, option: false });
+    assert.deepEqual(shortcutFromInput({
+      code: "KeyT", meta: false, control: true, shift: true, alt: false,
+    }, "windows"), { key: "t", shift: true, option: false });
+    assert.equal(shortcutFromInput({
+      code: "KeyQ", meta: false, control: true, shift: false, alt: true,
+    }, "windows"), null);
   });
 
   it("protects editing and lifecycle shortcuts and finds action conflicts", () => {
@@ -83,9 +98,11 @@ describe("keyboard shortcuts", () => {
 
   it("formats the same binding for Electron and for players", () => {
     const binding = { key: "c", shift: true, option: false };
-    assert.equal(shortcutAccelerator(binding), "Command+Shift+C");
-    assert.equal(shortcutDisplay(binding), "⌘⇧C");
-    assert.equal(shortcutDisplay(null), "Not set");
+    assert.equal(shortcutAccelerator(binding, "macos"), "Command+Shift+C");
+    assert.equal(shortcutAccelerator(binding, "windows"), "Control+Shift+C");
+    assert.equal(shortcutDisplay(binding, "macos"), "⌘⇧C");
+    assert.equal(shortcutDisplay(binding, "windows"), "Ctrl+Shift+C");
+    assert.equal(shortcutDisplay(null, "windows"), "Not set");
   });
 
   it("refuses unknown actions, keys, fields, and modifier types", () => {

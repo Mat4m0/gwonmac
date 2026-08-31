@@ -9,6 +9,8 @@ import {
   resolveShortcuts,
   shortcutFromInput,
   shortcutMatches,
+  shortcutPlatform,
+  type ShortcutPlatform,
   type ShortcutAction,
   type ShortcutCaptureResult,
 } from "../shared/keyboard-shortcuts.js";
@@ -60,6 +62,7 @@ const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
 
 class WindowShortcuts {
   readonly #actions: ShortcutActions;
+  readonly #platform: ShortcutPlatform;
   #shortcuts = resolveShortcuts({
     "tools.toggle": null,
     "trade.toggle": null,
@@ -73,8 +76,10 @@ class WindowShortcuts {
   constructor(
     win: BrowserWindow,
     actions: ShortcutActions,
+    platform: ShortcutPlatform,
   ) {
     this.#actions = actions;
+    this.#platform = platform;
     win.webContents.on("before-input-event", (event, input) => {
       if (input.type === "keyUp") {
         const decision = this.#claimedCodes.get(input.code);
@@ -140,7 +145,7 @@ class WindowShortcuts {
           this.#finish({ status: "cleared" });
           return;
         }
-        const binding = shortcutFromInput(input);
+        const binding = shortcutFromInput(input, this.#platform);
         this.#finish(binding
           ? { status: "captured", binding }
           : { status: "invalid" });
@@ -223,7 +228,7 @@ class WindowShortcuts {
         return;
       }
       for (const [action, binding] of Object.entries(this.#shortcuts)) {
-        if (binding && shortcutMatches(binding, input)) {
+        if (binding && shortcutMatches(binding, input, this.#platform)) {
           recordMainInput(win, {
             source: 'main', kind: 'native-key', phase: 'down',
             key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'shortcut',
@@ -343,8 +348,9 @@ const controllers = new WeakMap<BrowserWindow, WindowShortcuts>();
 export function installWindowShortcuts(
   win: BrowserWindow,
   actions: ShortcutActions,
+  platform = shortcutPlatform(process.platform),
 ): void {
-  controllers.set(win, new WindowShortcuts(win, actions));
+  controllers.set(win, new WindowShortcuts(win, actions, platform));
 }
 
 export function updateWindowShortcuts(

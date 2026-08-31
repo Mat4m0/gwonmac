@@ -14,6 +14,7 @@ import type {
   LauncherSnapshot,
 } from "../shared/launcher-contracts.js";
 import type { ProfileId } from "../shared/multiple-accounts.js";
+import type { ShortcutPlatform } from "../shared/keyboard-shortcuts.js";
 import type { LauncherStateStore } from "./core/launcher-state.js";
 import { launcherToolSettings } from "./core/launcher-tools.js";
 
@@ -36,6 +37,7 @@ export interface LauncherOrchestratorOptions {
   readonly getSettings: () => AppSettings;
   readonly toolsLoaded: () => boolean;
   readonly developmentFixtures: boolean;
+  readonly platform?: ShortcutPlatform;
   /** Unpackaged Electron tests only: lets renderer-focused suites bypass client preparation. */
   readonly allowUnreadyLaunch?: boolean;
   readonly publish: (snapshot: LauncherSnapshot) => void;
@@ -66,6 +68,7 @@ export class LauncherOrchestrator {
     const fixture = this.options.developmentFixtures ? "fixture" as const : "placeholder" as const;
     return {
       revision: this.revision,
+      platform: this.options.platform ?? "macos",
       experience: {
         installationKind: document.installationKind,
         setup: document.setupVersion > 0 ? "complete" : "pending",

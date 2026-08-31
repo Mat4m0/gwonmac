@@ -46,7 +46,7 @@ describe("window shortcut input", () => {
         return new Promise<void>((resolve) => settleQuitDialogs.push(resolve));
       },
       recordCommandQ: (phase, reason) => commandQ.push(`${phase}:${reason}`),
-    });
+    }, "macos");
     updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true });
 
     const dispatch = (input: ShortcutInput) => {
@@ -234,6 +234,51 @@ describe("window shortcut input", () => {
       buildLibrary: false,
     });
     assert.equal(dispatch(keyDown("KeyB", "b")), false);
+    assert.deepEqual(actions, ["tools.toggle"]);
+  });
+
+  it("uses Control on Windows without claiming AltGr", () => {
+    let beforeInput: (
+      event: { preventDefault(): void },
+      input: ShortcutInput,
+    ) => void = () => undefined;
+    const win = {
+      webContents: {
+        on(name: string, listener: typeof beforeInput) {
+          if (name === "before-input-event") beforeInput = listener;
+        },
+      },
+      on() { return win; },
+    } as unknown as BrowserWindow;
+    const actions: string[] = [];
+    installWindowShortcuts(win, {
+      run: (action) => actions.push(action),
+      edit: () => undefined,
+      quitOrReload: () => undefined,
+    }, "windows");
+    updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true });
+
+    const dispatch = (overrides: Partial<ShortcutInput>): boolean => {
+      let prevented = false;
+      beforeInput({ preventDefault: () => { prevented = true; } }, {
+        type: "keyDown",
+        code: "KeyB",
+        key: "b",
+        meta: false,
+        control: true,
+        shift: false,
+        alt: false,
+        isAutoRepeat: false,
+        ...overrides,
+      });
+      return prevented;
+    };
+
+    assert.equal(dispatch({}), true);
+    assert.deepEqual(actions, ["tools.toggle"]);
+    releaseWindowShortcutKey(win, "KeyB");
+    assert.equal(dispatch({ control: true, alt: true }), false);
+    assert.equal(dispatch({ control: false, meta: true }), false);
     assert.deepEqual(actions, ["tools.toggle"]);
   });
 });

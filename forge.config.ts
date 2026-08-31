@@ -38,11 +38,14 @@ function packagedExecutablePath(
   if (platform !== "win32" && platform !== "linux") {
     throw new Error(`unsupported package platform: ${platform}`);
   }
-  const suffix = platform === "win32" ? ".exe" : "";
+  // packageAfterCopy runs before Electron Packager renames the executable.
+  // Its build path is resources/app, so both desktop targets reach the
+  // package root and flip the pre-rename Electron binary.
+  const executable = platform === "win32" ? "electron.exe" : "electron";
   return path.resolve(
     resourcesPath,
-    "..",
-    `${channelConfig.productName}${suffix}`,
+    "../..",
+    executable,
   );
 }
 
