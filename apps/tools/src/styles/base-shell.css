@@ -142,7 +142,7 @@ body[data-tools-standalone="true"] {
 
 .window-close { font-size: var(--ui-font-size-lg); }
 
-.ui-modal {
+.ui-dialog {
   position: fixed;
   z-index: var(--ui-z-toast);
   inset: 50% auto auto 50%;
@@ -159,7 +159,7 @@ body[data-tools-standalone="true"] {
   transform: translate(-50%, -50%);
 }
 
-.ui-modal-overlay {
+.ui-dialog-overlay {
   position: fixed;
   z-index: calc(var(--ui-z-toast) - 1);
   inset: 0;

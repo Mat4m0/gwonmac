@@ -85,6 +85,10 @@
   color: var(--ui-text);
 }
 
+/* This viewport-sized element is a backdrop hit area, not the visible dialog.
+ * Chromium can focus it briefly before lazy dialog content mounts. */
+.ui-modal-layer:focus { outline: none; }
+
 .ui-frame::before,
 .ui-frame::after {
   content: "";

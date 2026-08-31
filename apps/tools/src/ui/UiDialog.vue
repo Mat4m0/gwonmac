@@ -30,10 +30,10 @@ const focusInitial = (event: Event) => {
 <template>
   <DialogRoot :open="open" @update:open="!$event && emit('close')">
     <DialogPortal disabled>
-      <DialogOverlay class="ui-modal-overlay" />
+      <DialogOverlay class="ui-dialog-overlay" />
       <DialogContent
         v-bind="$attrs"
-        class="ui-modal"
+        class="ui-dialog"
         :aria-labelledby="labelledby"
         :aria-describedby="describedby"
         @open-auto-focus="focusInitial"

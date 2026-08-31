@@ -114,6 +114,20 @@ test.describe("renderer Travel input", () => {
       });
       await expect(palette).toBeVisible();
       await expect.poll(() => isDomActiveElement(search)).toBe(true);
+      const viewport = await page.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }));
+      const modalLayer = page.locator("#travel-palette-root");
+      const modalLayerBox = await modalLayer.boundingBox();
+      expect(modalLayerBox).toEqual({
+        x: 0,
+        y: 0,
+        width: viewport.width,
+        height: viewport.height,
+      });
+      await modalLayer.focus();
+      await expect(modalLayer).toHaveCSS("outline-style", "none");
       await expect(page.locator("body")).toHaveAttribute(
         "data-travel-canvas-blurs",
         "0",
