@@ -34,6 +34,7 @@ function projectPlayRegion(state: CompanionPlayRegionState): string {
     state.playRegion,
     state.mapId,
     state.instanceType,
+    state.travelContext,
     state.characterKey ?? "unknown-character",
     state.unlockedMapWords?.join(",") ?? "unknown-unlocks",
   ].join(":");

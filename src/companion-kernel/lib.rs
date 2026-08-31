@@ -156,6 +156,7 @@ pub(crate) enum GameState {
         instance_type: u32,
         player_number: u32,
         play_region: u32,
+        pre_searing: bool,
     },
 }
 
@@ -190,35 +191,43 @@ unsafe fn classify_play_region(
     layout: Layout,
     map_id: u32,
     instance_type: u32,
-) -> u32 {
+) -> (u32, bool) {
     if layout.area_info == 0
         || layout.area_info_count == 0
         || layout.area_info_stride < 20
         || layout.area_info_flags + 4 > layout.area_info_stride
         || map_id >= layout.area_info_count
     {
-        return PLAY_REGION_UNKNOWN;
+        return (PLAY_REGION_UNKNOWN, false);
     }
     let Some(record) = indexed(layout.area_info, map_id, layout.area_info_stride) else {
-        return PLAY_REGION_UNKNOWN;
+        return (PLAY_REGION_UNKNOWN, false);
     };
+    let mut area_region = 0;
     for (field, maximum) in [0_u32, 4, 8, 12].iter().zip([4_u32, 5, 27, 21].iter()) {
         let Some(value) = offset(record, *field).and_then(|at| unsafe { read_u32(at) }) else {
-            return PLAY_REGION_UNKNOWN;
+            return (PLAY_REGION_UNKNOWN, false);
         };
         if value > *maximum {
-            return PLAY_REGION_UNKNOWN;
+            return (PLAY_REGION_UNKNOWN, false);
+        }
+        if *field == 8 {
+            area_region = value;
         }
     }
     let Some(flags) = offset(record, layout.area_info_flags).and_then(|at| unsafe { read_u32(at) })
     else {
-        return PLAY_REGION_UNKNOWN;
+        return (PLAY_REGION_UNKNOWN, false);
     };
-    if flags & (0x0004_0001 | 0x0080_0000) != 0 && instance_type == 1 {
+    let play_region = if flags & (0x0004_0001 | 0x0080_0000) != 0 && instance_type == 1 {
         PLAY_REGION_PVP
     } else {
         PLAY_REGION_PVE
-    }
+    };
+    (
+        play_region,
+        area_region == 7 && play_region == PLAY_REGION_PVE,
+    )
 }
 
 /**
@@ -406,14 +415,16 @@ pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
         return GameState::Unavailable;
     }
 
+    let (play_region, pre_searing) = unsafe {
+        classify_play_region(layout, map_id, instance_type)
+    };
     GameState::Ready {
         game,
         map_id,
         instance_type,
         player_number,
-        play_region: unsafe {
-            classify_play_region(layout, map_id, instance_type)
-        },
+        play_region,
+        pre_searing,
     }
 }
 
@@ -432,6 +443,7 @@ unsafe fn collect(layout: Layout, observe_target: bool) -> State {
             instance_type,
             player_number,
             play_region,
+            ..
         } => (game, map_id, instance_type, player_number, play_region),
     };
 
@@ -916,7 +928,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    20
+    21
 }
 
 #[no_mangle]

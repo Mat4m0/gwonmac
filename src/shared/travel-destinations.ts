@@ -10,6 +10,8 @@ export type TravelDestination = Readonly<{
   aliases: readonly string[];
 }>;
 
+export type TravelContext = "pre-searing" | "world";
+
 const destination = (
   mapId: number,
   name: string,
@@ -248,21 +250,34 @@ const PRE_SEARING_MAP_IDS: readonly number[] = Object.freeze([
   148, 164, 165, 166, 163, 778,
 ]);
 
+export function isTravelDestinationInContext(
+  context: TravelContext,
+  mapId: number,
+): boolean {
+  return context === "pre-searing"
+    ? PRE_SEARING_MAP_IDS.includes(mapId)
+    : !PRE_SEARING_MAP_IDS.includes(mapId);
+}
+
 /**
  * Returns the destination group that is useful around the current outpost.
  * Cross-campaign unlocks (especially the Battle Isles) must not make a small
  * early-game catalogue look large. Pre-Searing is kept separate from the rest
  * of Prophecies because its characters cannot cross the Searing boundary.
  */
-export function travelBrowseScope(currentMapId: number): readonly TravelDestination[] {
+export function travelBrowseScope(
+  currentMapId: number,
+  context: TravelContext,
+): readonly TravelDestination[] {
+  if (context === "pre-searing") {
+    return TRAVEL_DESTINATIONS.filter(({ mapId }) =>
+      isTravelDestinationInContext(context, mapId));
+  }
   const current = travelDestination(currentMapId);
   if (current === null) return [];
-  const preSearing = PRE_SEARING_MAP_IDS.includes(currentMapId);
   return TRAVEL_DESTINATIONS.filter((candidate) =>
-    preSearing
-      ? PRE_SEARING_MAP_IDS.includes(candidate.mapId)
-      : candidate.campaign === current.campaign
-        && !PRE_SEARING_MAP_IDS.includes(candidate.mapId)
+    candidate.campaign === current.campaign
+    && isTravelDestinationInContext(context, candidate.mapId)
   );
 }
 

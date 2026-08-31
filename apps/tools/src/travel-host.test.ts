@@ -87,7 +87,7 @@ describe("native Travel host", () => {
 
     await host.travel({ mapId: 449 });
     host.updateGameState({
-      status: "ready", mapId: 449, characterKey: null, unlockedMapWords: null,
+      status: "ready", mapId: 449, travelContext: "world", characterKey: null, unlockedMapWords: null,
     });
     await vi.runAllTimersAsync();
 
@@ -110,7 +110,7 @@ describe("native Travel host", () => {
     expect(host.notice.value?.message).toContain("Travelling to");
 
     host.updateGameState({
-      status: "ready", mapId: 449, characterKey: null, unlockedMapWords: null,
+      status: "ready", mapId: 449, travelContext: "world", characterKey: null, unlockedMapWords: null,
     });
     expect(host.attempt.value).toEqual({ status: "queued", mapId: 55 });
     expect(host.notice.value?.message).toContain("Travelling to");
@@ -154,7 +154,7 @@ describe("native Travel host", () => {
     expect(interrupted.attempt.value).toEqual({ status: "idle" });
     expect(interrupted.notice.value?.message).toContain("interrupted");
     interrupted.updateGameState({
-      status: "ready", mapId: 449, characterKey: null, unlockedMapWords: null,
+      status: "ready", mapId: 449, travelContext: "world", characterKey: null, unlockedMapWords: null,
     });
     expect(interrupted.notice.value).toBeNull();
 
@@ -173,7 +173,7 @@ describe("native Travel host", () => {
     host.updateGameState({ status: "waiting", reason: "loading" });
 
     host.updateGameState({
-      status: "ready", mapId: 55, characterKey: null, unlockedMapWords: null,
+      status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords: null,
     });
 
     expect(host.attempt.value).toEqual({ status: "idle" });
@@ -183,7 +183,7 @@ describe("native Travel host", () => {
     expect(host.notice.value?.message).toContain("did not confirm arrival");
 
     host.updateGameState({
-      status: "ready", mapId: 449, characterKey: null, unlockedMapWords: null,
+      status: "ready", mapId: 449, travelContext: "world", characterKey: null, unlockedMapWords: null,
     });
     expect(host.notice.value).toBeNull();
   });
@@ -197,7 +197,7 @@ describe("native Travel host", () => {
     expect(host.notice.value?.message).toContain("did not confirm arrival");
 
     host.updateGameState({
-      status: "ready", mapId: 449, characterKey: null, unlockedMapWords: null,
+      status: "ready", mapId: 449, travelContext: "world", characterKey: null, unlockedMapWords: null,
     });
 
     expect(host.attempt.value).toEqual({ status: "idle" });
@@ -210,13 +210,13 @@ describe("native Travel host", () => {
     const characterA = travelCharacterKey("0123456789abcdef");
     const characterB = travelCharacterKey("fedcba9876543210");
     host.updateGameState({
-      status: "ready", mapId: 55, characterKey: characterA, unlockedMapWords,
+      status: "ready", mapId: 55, travelContext: "world", characterKey: characterA, unlockedMapWords,
     });
     host.updateGameState({
-      status: "ready", mapId: 449, characterKey: characterA, unlockedMapWords,
+      status: "ready", mapId: 449, travelContext: "world", characterKey: characterA, unlockedMapWords,
     });
     host.updateGameState({
-      status: "ready", mapId: 81, characterKey: characterB, unlockedMapWords,
+      status: "ready", mapId: 81, travelContext: "world", characterKey: characterB, unlockedMapWords,
     });
 
     await vi.waitFor(() => expect(recordHistory).toHaveBeenCalledTimes(3));
@@ -234,12 +234,12 @@ describe("native Travel host", () => {
     const characterKey = travelCharacterKey("0123456789abcdef");
     const unlockedMapWords = Array.from({ length: 28 }, () => 0xffff_ffff);
     host.updateGameState({
-      status: "ready", mapId: 55, characterKey: null, unlockedMapWords,
+      status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords,
     });
 
     await host.travel({ mapId: 449 });
     host.updateGameState({
-      status: "ready", mapId: 449, characterKey, unlockedMapWords,
+      status: "ready", mapId: 449, travelContext: "world", characterKey, unlockedMapWords,
     });
 
     await vi.waitFor(() => expect(recordHistory).toHaveBeenCalledTimes(2));
@@ -256,18 +256,18 @@ describe("native Travel host", () => {
     const characterB = travelCharacterKey("fedcba9876543210");
     const unlockedMapWords = Array.from({ length: 28 }, () => 0xffff_ffff);
     host.updateGameState({
-      status: "ready", mapId: 55, characterKey: characterA, unlockedMapWords,
+      status: "ready", mapId: 55, travelContext: "world", characterKey: characterA, unlockedMapWords,
     });
     await vi.waitFor(() => expect(host.history.value).toEqual([55]));
 
     host.updateGameState({ status: "waiting", reason: "loading" });
     expect(host.history.value).toEqual([]);
     host.updateGameState({
-      status: "ready", mapId: 55, characterKey: null, unlockedMapWords,
+      status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords,
     });
     expect(host.history.value).toEqual([]);
     host.updateGameState({
-      status: "ready", mapId: 55, characterKey: characterB, unlockedMapWords,
+      status: "ready", mapId: 55, travelContext: "world", characterKey: characterB, unlockedMapWords,
     });
 
     await vi.waitFor(() => expect(host.history.value).toEqual([55]));
@@ -284,6 +284,7 @@ describe("native Travel host", () => {
     test.host.updateGameState({
       status: "ready",
       mapId: 55,
+      travelContext: "world",
       characterKey,
       unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
     });
@@ -291,5 +292,26 @@ describe("native Travel host", () => {
 
     await expect(test.host.loadHistory()).resolves.toEqual([55]);
     expect(test.recordHistory).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses travel outside the active context before enqueueing", async () => {
+    vi.useFakeTimers();
+    const { host, command } = fixture();
+    host.updateGameState({
+      status: "ready",
+      mapId: 148,
+      travelContext: "pre-searing",
+      characterKey: null,
+      unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+    });
+
+    await expect(host.travel({ mapId: 330 })).rejects.toThrow("Only Pre-Searing");
+    expect(command.travel).not.toHaveBeenCalled();
+    expect(host.attempt.value).toEqual({ status: "idle" });
+    expect(host.notice.value).toEqual({
+      message: "Only Pre-Searing destinations are available to this character.",
+      level: "warning",
+    });
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

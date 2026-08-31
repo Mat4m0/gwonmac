@@ -14,6 +14,7 @@ import {
   travelDestination,
   travelShortcutsFromStored,
 } from "../../src/shared/travel.js";
+import { travelDestinationAvailability } from "../../src/shared/travel-command.js";
 
 describe("Travel", () => {
   it("contains the complete reviewed direct-travel catalogue", () => {
@@ -107,16 +108,45 @@ describe("Travel", () => {
 
   it("keeps early-game browse scopes local to the current campaign", () => {
     assert.deepEqual(
-      travelBrowseScope(148).map(({ mapId }) => mapId),
+      travelBrowseScope(148, "pre-searing").map(({ mapId }) => mapId),
       [148, 164, 165, 166, 163, 778],
     );
     assert.equal(
-      travelBrowseScope(242).every(({ campaign }) => campaign === "Factions"),
+      travelBrowseScope(242, "world").every(({ campaign }) => campaign === "Factions"),
       true,
     );
-    assert.equal(travelBrowseScope(242).some(({ mapId }) => mapId === 248), false);
-    assert.equal(travelBrowseScope(81).some(({ mapId }) => mapId === 148), false);
-    assert.deepEqual(travelBrowseScope(2_000), []);
+    assert.equal(travelBrowseScope(242, "world").some(({ mapId }) => mapId === 248), false);
+    assert.equal(travelBrowseScope(81, "world").some(({ mapId }) => mapId === 148), false);
+    assert.deepEqual(travelBrowseScope(2_000, "world"), []);
+    assert.deepEqual(
+      travelBrowseScope(2_000, "pre-searing").map(({ mapId }) => mapId),
+      [148, 164, 165, 166, 163, 778],
+    );
+  });
+
+  it("combines the active Travel context with character unlocks", () => {
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0);
+    for (const mapId of [148, 330]) {
+      unlockedMapWords[Math.floor(mapId / 32)]! |= 1 << (mapId % 32);
+    }
+    const preSearing = {
+      status: "ready" as const,
+      mapId: 148,
+      travelContext: "pre-searing" as const,
+      characterKey: null,
+      unlockedMapWords,
+    };
+    const world = { ...preSearing, mapId: 81, travelContext: "world" as const };
+
+    assert.equal(travelDestinationAvailability(preSearing, 148), "available");
+    assert.equal(travelDestinationAvailability(preSearing, 330), "outside-context");
+    assert.equal(travelDestinationAvailability(world, 148), "outside-context");
+    assert.equal(travelDestinationAvailability(world, 330), "available");
+    assert.equal(travelDestinationAvailability(preSearing, 164), "locked");
+    assert.equal(travelDestinationAvailability({
+      ...preSearing,
+      unlockedMapWords: null,
+    }, 164), "unknown");
   });
 
   it("rejects one request that would write both preference files", () => {

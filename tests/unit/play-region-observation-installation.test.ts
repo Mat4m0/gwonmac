@@ -8,6 +8,7 @@ const ready = (sequence: number, mapId = 81) => Object.freeze({
   mapId,
   instanceType: 0,
   playRegion: "pve" as const,
+  travelContext: "world" as const,
   characterKey: null,
   unlockedMapWords: null,
 });

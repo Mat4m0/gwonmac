@@ -54,11 +54,12 @@ pub(crate) const CHARACTER_NAME_UNITS: usize = 20;
 
 pub(crate) const PLAY_REGION_BYTES: u32 = size_of::<PlayRegionSnapshot>() as u32;
 pub(crate) const PLAY_REGION_MAGIC: u32 = 0x5250_5747;
-pub(crate) const PLAY_REGION_ABI_AND_SIZE: u32 = (PLAY_REGION_BYTES << 16) | 2;
+pub(crate) const PLAY_REGION_ABI_AND_SIZE: u32 = (PLAY_REGION_BYTES << 16) | 3;
 pub(crate) const FLAG_PLAY_REGION_READY: u32 = 1 << 0;
 pub(crate) const FLAG_PLAY_REGION_LOADING: u32 = 1 << 1;
 pub(crate) const FLAG_PLAY_REGION_CHARACTER: u32 = 1 << 2;
 pub(crate) const FLAG_PLAY_REGION_UNLOCKS: u32 = 1 << 3;
+pub(crate) const FLAG_PLAY_REGION_PRE_SEARING: u32 = 1 << 4;
 
 pub(crate) const SKILL_SLOT_BYTES: u32 = size_of::<SkillSlotSnapshot>() as u32;
 pub(crate) const SKILL_SLOT_MAGIC: u32 = 0x534b_5747;

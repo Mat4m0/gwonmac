@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+  COMPANION_ABI,
   COMPANION_DISPATCH_KINDS,
   COMPANION_FEATURE_BITS,
 } from "../../src/shared/companion-abi.ts";
@@ -11,6 +12,10 @@ import {
 
 const rustSource = readFileSync(
   new URL("../../src/companion-kernel/abi.rs", import.meta.url),
+  "utf8",
+);
+const rustKernelSource = readFileSync(
+  new URL("../../src/companion-kernel/lib.rs", import.meta.url),
   "utf8",
 );
 
@@ -152,6 +157,14 @@ function replaced(source: string, from: string, to: string): string {
 
 test("the independent TypeScript and Rust companion contracts match exactly", () => {
   assertExactContract(rustSource);
+  assert.equal(Number(captured(
+    rustKernelSource.match(/pub extern "C" fn companion_abi\(\) -> u32 \{\s*(\d+)\s*\}/u),
+    "Rust companion ABI",
+  )), COMPANION_ABI.kernel);
+  assert.equal(Number(captured(
+    rustSource.match(/const PLAY_REGION_ABI_AND_SIZE: u32 = \(PLAY_REGION_BYTES << 16\) \| (\d+);/u),
+    "Rust play-region ABI",
+  )), COMPANION_ABI.playRegion.abi);
   assert.equal(typescriptConfigSlots().length, 116);
 });
 

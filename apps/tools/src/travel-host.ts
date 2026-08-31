@@ -9,6 +9,7 @@ import type {
   TravelCommand,
   TravelGameState,
 } from "../../../src/shared/travel-command";
+import { travelContextRefusal } from "../../../src/shared/travel-command";
 import {
   DEFAULT_TRAVEL_SHORTCUTS,
   TRAVEL_DESTINATIONS,
@@ -116,6 +117,11 @@ export function createNativeTravelHost(
     loadHistory: historyObservation.load,
     async travel(request) {
       if (attempt.value.status !== "idle") return;
+      const contextRefusal = travelContextRefusal(state.value, request.mapId);
+      if (contextRefusal !== null) {
+        notice.value = { message: contextRefusal, level: "warning" };
+        throw new Error(contextRefusal);
+      }
       settledAttempt = null;
       unidentifiedOriginMapId = state.value.status === "ready"
         && state.value.characterKey === null
@@ -234,7 +240,7 @@ export function createDemoTravelHost(): TravelHost {
   const unlockedMapWords = Object.freeze(Array.from({ length: 28 }, () => 0xffff_ffff));
   const characterKey = travelCharacterKey("0123456789abcdef");
   const state = ref<TravelGameState>({
-    status: "ready", mapId: 55, characterKey, unlockedMapWords,
+    status: "ready", mapId: 55, travelContext: "world", characterKey, unlockedMapWords,
   });
   const attempt = ref<TravelAttempt>({ status: "idle" });
   const notice = ref<TravelNotice | null>(null);
@@ -270,7 +276,7 @@ export function createDemoTravelHost(): TravelHost {
       window.setTimeout(() => {
         history.value = recordVisitedTravel(history.value, request.mapId);
         state.value = {
-          status: "ready", mapId: request.mapId,
+          status: "ready", mapId: request.mapId, travelContext: "world",
           characterKey, unlockedMapWords,
         };
         attempt.value = { status: "idle" };

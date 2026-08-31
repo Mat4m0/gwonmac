@@ -144,8 +144,9 @@ character names, account data, chat, packet bytes, or Travel search text.
   result count, and bounded result map IDs. It never includes the query itself.
   `travel.queued` or `travel.refused` then identifies the named command result.
   Search covers the reviewed 199-destination direct-travel catalogue and omits
-  positively locked results. A zero result can mean no match or only locked
-  matches; passage-scroll locations
+  destinations outside the current Pre-Searing or world context and positively
+  locked results. A zero result can mean no match, only locked matches, or only
+  destinations outside the current context. Passage-scroll locations
   such as Urgoz's Warren and The Deep intentionally use their original UI.
 
 For a report, reproduce one operation at a time and copy the lines from its

@@ -300,13 +300,18 @@ remains usable; no party-state fallback is allowed.
 Travel accepts only one reviewed map ID from the renderer. The exact `/tp`
 command sets one named, one-shot palette toggle that the renderer takes and
 clears. Search text, aliases, destinations, and numbered shortcuts stay
-in the host-owned Vue interface. The play-region snapshot publishes a fixed
-28-word map-unlock bitset only after the certified `WorldContext` array is read
-completely; unknown evidence stays unknown instead of looking like every map is
-locked. At the certified frame drain, the transform rechecks the reviewed map
-list and live unlock bit, then invokes the independently proved client helper
-that resolves the player's current region and language, validates those values,
-and writes the four-word Travel payload with district Any. It then calls the
+in the host-owned Vue interface. The play-region snapshot publishes a closed
+Pre-Searing or world Travel context from the certified `AreaInfo` region. It
+also publishes a fixed 28-word map-unlock bitset only after the certified
+`WorldContext` array is read completely; unknown evidence stays unknown instead
+of looking like every map is locked. The host combines both facts before it
+offers or queues a destination. Pre-Searing characters can use only the six
+reviewed Pre-Searing outposts, and world characters cannot return across the
+Searing boundary. At the certified frame drain, the transform rechecks the
+reviewed map list and live unlock bit, then invokes the independently proved
+client helper that resolves the player's current region and language, validates
+those values, and writes the four-word Travel payload with district Any. It then
+calls the
 exact client Travel dispatcher with `kTravel`. An unknown or locked map,
 unreadable unlock array, unresolved live context, or changed helper stops only
 Travel without dispatching another client UI message.
