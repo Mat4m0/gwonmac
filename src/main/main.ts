@@ -11,6 +11,7 @@ import {
   app,
   autoUpdater,
   type BrowserWindow,
+  crashReporter,
   dialog,
   Notification,
   powerMonitor,
@@ -180,6 +181,28 @@ import {
   linuxPortalSecretProvider,
   linuxSecretPortalPath,
 } from "./linux-portal-keychain.js";
+
+const windowsQualificationPort = process.platform === "win32"
+  ? app.commandLine.getSwitchValue("gw-qualification-debugging")
+  : "";
+const windowsQualificationCrashDumps =
+  process.env.GW_WINDOWS_QUALIFICATION_CRASH_DUMPS;
+if (
+  /^\d{4,5}$/u.test(windowsQualificationPort)
+  && process.env.GITHUB_ACTIONS === "true"
+  && process.env.RUNNER_ENVIRONMENT === "github-hosted"
+  && windowsQualificationCrashDumps
+  && path.win32.isAbsolute(windowsQualificationCrashDumps)
+) {
+  // Hosted installed-package qualification must preserve the original child
+  // failure rather than Crashpad's secondary "not connected" termination.
+  // This path is unreachable during ordinary application startup and never
+  // uploads a report.
+  app.setPath("crashDumps", windowsQualificationCrashDumps);
+  crashReporter.start({ uploadToServer: false });
+  app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
+  app.commandLine.appendSwitch("remote-debugging-port", windowsQualificationPort);
+}
 
 const windowsSquirrelStartupHandled = process.platform === "win32"
   && handleWindowsSquirrelStartup({

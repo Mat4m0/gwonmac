@@ -154,9 +154,9 @@ export async function launchPackagedApp(
     `Contents/MacOS/${options.productName}`,
   );
   const activePort = path.join(options.userData, "DevToolsActivePort");
-  // Chromium's port-zero discovery path can terminate an installed Electron
-  // process before main JavaScript starts on hosted Windows. Reserve a normal
-  // loopback port there; macOS and Linux retain the proven port-file path.
+  // Windows qualification lets the app initialize local crash capture before
+  // it creates the DevTools child. Reserve a normal loopback port there;
+  // macOS and Linux retain the proven port-file path.
   const requestedPort = process.platform === "win32"
     ? await availableLoopbackPort()
     : 0;
@@ -172,8 +172,12 @@ export async function launchPackagedApp(
       ...(options.useDefaultUserData === true
         ? []
         : [`--user-data-dir=${options.userData}`]),
-      "--remote-debugging-address=127.0.0.1",
-      `--remote-debugging-port=${requestedPort}`,
+      ...(process.platform === "win32"
+        ? [`--gw-qualification-debugging=${requestedPort}`]
+        : [
+            "--remote-debugging-address=127.0.0.1",
+            "--remote-debugging-port=0",
+          ]),
       ...(options.arguments ?? []),
     ],
     {
@@ -184,6 +188,17 @@ export async function launchPackagedApp(
         // error state instead of granting a test-only ready lifecycle.
         GW_REQUIRE_CACHED_CLIENT: "1",
         GW_BACKGROUND_LAUNCH: "1",
+        ...(process.platform === "win32"
+          ? {
+              GW_WINDOWS_QUALIFICATION_CRASH_DUMPS: path.join(
+                options.userData,
+                "..",
+                "..",
+                "logs",
+                "crashpad",
+              ),
+            }
+          : {}),
         ...options.environment,
       },
       detached: options.desktopProcessShape === true,
