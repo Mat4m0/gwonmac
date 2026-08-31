@@ -7,6 +7,7 @@ import {
   diagnosticFramesPath,
   documentDirectories,
   gamePaths,
+  linuxStorageRoots,
   multiProfilePaths,
   nativeExecutableName,
   unpackedPath,
@@ -222,5 +223,30 @@ describe("resolved profile paths", () => {
       sessions:
         "C:\\Users\\Player\\AppData\\Local\\Guild Wars Reforged\\data\\sessions",
     });
+  });
+
+  it("pins the Flatpak layout beneath sandbox-provided XDG homes", () => {
+    assert.deepEqual(linuxStorageRoots({
+      config: "/var/config",
+      data: "/var/data",
+      cache: "/var/cache",
+      state: "/var/state",
+    }), {
+      config: "/var/config/gwonmac",
+      data: "/var/data/gwonmac",
+      cache: "/var/cache/gwonmac",
+      state: "/var/state/gwonmac",
+      logs: "/var/state/gwonmac/logs",
+      sessions: "/var/data/gwonmac/sessions",
+    });
+  });
+
+  it("refuses relative Linux XDG homes", () => {
+    assert.throws(() => linuxStorageRoots({
+      config: "config",
+      data: "/var/data",
+      cache: "/var/cache",
+      state: "/var/state",
+    }), /Linux config home must be absolute/);
   });
 });

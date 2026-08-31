@@ -81,6 +81,7 @@ import { sweepOrphanDirectories } from "./core/atomic-file.js";
 import {
   colocatedStorageRoots,
   documentDirectories,
+  linuxStorageRoots,
   windowsStorageRoots,
 } from "./core/paths.js";
 import { gamePaths } from "./paths.js";
@@ -200,12 +201,23 @@ const explicitUserData = app.commandLine.hasSwitch("user-data-dir");
 if (!explicitUserData && process.platform === "darwin") {
   app.setPath("userData", path.join(app.getPath("appData"), "Guild Wars"));
 }
+const linuxFlatpak = process.platform === "linux"
+  && process.env.FLATPAK_ID === DISTRIBUTION_CHANNEL_CONFIG.release.bundleId;
 const applicationStorageRoots = explicitUserData
   ? colocatedStorageRoots(app.getPath("userData"))
   : windowsNativeHost
     ? windowsStorageRoots(windowsNativeHost.localAppData())
+    : linuxFlatpak
+      ? linuxStorageRoots({
+        config: process.env.XDG_CONFIG_HOME ?? app.getPath("appData"),
+        data: process.env.XDG_DATA_HOME ?? app.getPath("appData"),
+        cache:
+          process.env.XDG_CACHE_HOME ?? path.join(app.getPath("home"), ".cache"),
+        state: process.env.XDG_STATE_HOME
+          ?? path.join(process.env.XDG_DATA_HOME ?? app.getPath("appData"), "state"),
+      })
     : colocatedStorageRoots(app.getPath("userData"));
-if (!explicitUserData && process.platform === "win32") {
+if (!explicitUserData && (process.platform === "win32" || linuxFlatpak)) {
   app.setPath("userData", applicationStorageRoots.sessions);
   app.setPath("sessionData", applicationStorageRoots.sessions);
 }
