@@ -41,6 +41,7 @@ describe("Linux Flatpak package", () => {
   });
 
   it("installs only GPG-verified repository output in qualification", () => {
+    assert.match(buildWorkflow, /workflow_dispatch:/u);
     for (const workflow of [buildWorkflow, signedWorkflow]) {
       assert.match(workflow, /--gpg-sign=/u);
       assert.match(workflow, /build-update-repo --gpg-sign=/u);
