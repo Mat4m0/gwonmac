@@ -417,9 +417,9 @@ export async function launchPackaged(
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_ENABLE_LOGGING: "1",
-    // This ad-hoc package has no distribution marker. Official signed builds
-    // ignore this seam and continue to block launch until repair succeeds.
-    GW_TEST_ALLOW_UNREADY_LAUNCH: "1",
+    // These are game-runtime tests, so enter through the same playable-client
+    // gate as a real launch instead of racing the cached snapshot publication.
+    GW_TEST_ALLOW_UNREADY_LAUNCH: "0",
   };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.GW_REQUIRE_CACHED_CLIENT;

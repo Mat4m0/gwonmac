@@ -186,6 +186,7 @@ test("fresh startup creates Main and adds an account without restart", async () 
     await fixture.page.getByRole("button", { name: "map" }).click();
     await fixture.page.getByRole("button", { name: "Use #46658a" }).click();
     await fixture.page.getByRole("button", { name: "Add account", exact: true }).last().click();
+    await expect(fixture.page.getByRole("dialog", { name: "Add account" })).toHaveCount(0);
     await expect(fixture.page.getByText("Second account", { exact: true })).toBeVisible();
     expect(fixture.app.process().pid).toBe(processId);
 
