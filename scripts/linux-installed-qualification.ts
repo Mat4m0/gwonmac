@@ -161,7 +161,22 @@ try {
   }
   await waitForRunning(running, mainProfile.id);
   await mainGame.evaluate(() => localStorage.setItem("profile-proof", "main"));
-  const secondGame = await openPackagedProfile(running, secondProfile.id);
+  let secondGame: Awaited<ReturnType<typeof openPackagedProfile>>;
+  try {
+    secondGame = await openPackagedProfile(running, secondProfile.id);
+  } catch (error) {
+    const evidence = await launcher.evaluate(async (id) => {
+      const snapshot = await window.launcherNative.state.get();
+      return {
+        profile: snapshot.profiles.find((profile) => profile.id === id) ?? null,
+        readiness: snapshot.readiness,
+      };
+    }, secondProfile.id);
+    throw new Error(
+      `the installed Flatpak did not open its second game window: ${JSON.stringify(evidence)}\n${running.output().trim()}`,
+      { cause: error },
+    );
+  }
   await waitForRunning(running, secondProfile.id);
   assert.equal(
     await secondGame.evaluate(() => localStorage.getItem("profile-proof")),
