@@ -1,6 +1,7 @@
 import { chromium, type Browser, type Page } from "playwright";
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
+import { createServer } from "node:net";
 import path from "node:path";
 import type { ProfileId } from "../../src/shared/multiple-accounts.ts";
 
@@ -47,6 +48,23 @@ async function waitUntil<T>(
     await delay(50);
   }
   throw new Error(`timed out waiting for ${description}`);
+}
+
+async function availableLoopbackPort(): Promise<number> {
+  const server = createServer();
+  server.unref();
+  return new Promise<number>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen({ host: "127.0.0.1", port: 0, exclusive: true }, () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close();
+        reject(new Error("Windows qualification could not reserve a loopback port"));
+        return;
+      }
+      server.close((error) => error ? reject(error) : resolve(address.port));
+    });
+  });
 }
 
 async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
@@ -136,6 +154,12 @@ export async function launchPackagedApp(
     `Contents/MacOS/${options.productName}`,
   );
   const activePort = path.join(options.userData, "DevToolsActivePort");
+  // Chromium's port-zero discovery path can terminate an installed Electron
+  // process before main JavaScript starts on hosted Windows. Reserve a normal
+  // loopback port there; macOS and Linux retain the proven port-file path.
+  const requestedPort = process.platform === "win32"
+    ? await availableLoopbackPort()
+    : 0;
   await rm(activePort, { force: true });
   let capturedOutput = "";
   const capture = (chunk: Buffer) => {
@@ -149,7 +173,7 @@ export async function launchPackagedApp(
         ? []
         : [`--user-data-dir=${options.userData}`]),
       "--remote-debugging-address=127.0.0.1",
-      "--remote-debugging-port=0",
+      `--remote-debugging-port=${requestedPort}`,
       ...(options.arguments ?? []),
     ],
     {
@@ -172,7 +196,22 @@ export async function launchPackagedApp(
   child.stdout?.on("data", capture);
   child.stderr?.on("data", capture);
   try {
-    const port = await waitUntil("the packaged app DevTools port", async () => {
+    const port = requestedPort === 0
+      ? await waitUntil("the packaged app DevTools port", async () => {
+          if (child.exitCode !== null) {
+            const detail = capturedOutput.trim();
+            throw new Error(
+              `packaged app exited with code ${child.exitCode}${detail ? `\n${detail}` : ""}`,
+            );
+          }
+          try {
+            return (await readFile(activePort, "utf8")).split("\n", 1)[0] ?? null;
+          } catch {
+            return null;
+          }
+        })
+      : String(requestedPort);
+    await waitUntil("the packaged app DevTools endpoint", async () => {
       if (child.exitCode !== null) {
         const detail = capturedOutput.trim();
         throw new Error(
@@ -180,7 +219,8 @@ export async function launchPackagedApp(
         );
       }
       try {
-        return (await readFile(activePort, "utf8")).split("\n", 1)[0] ?? null;
+        const response = await fetch(`http://127.0.0.1:${port}/json/version`);
+        return response.ok ? true : null;
       } catch {
         return null;
       }
