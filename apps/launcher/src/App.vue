@@ -6,9 +6,7 @@ import {
   Check,
   FileText,
   Flame,
-  Github,
   Map as MapIcon,
-  MessageCircle,
   ScrollText,
   Shield,
   Swords,
@@ -348,7 +346,7 @@ async function replaceToolShortcut() {
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
   <div v-else class="app-shell" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
-    <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" />
+    <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @external="openExternal" />
 
     <section class="funding-banner" aria-label="Project funding">
       <div><strong>Support gwonmac</strong></div>
@@ -382,10 +380,6 @@ async function replaceToolShortcut() {
           <div v-for="group in settingsGroups" :key="group.label" class="settings-nav-group" role="group" :aria-label="group.label">
             <h3>{{ group.label }}</h3>
             <button v-for="item in group.items" :key="item.id" :aria-current="settingsRoute === item.id ? 'page' : undefined" :class="{ active: settingsRoute === item.id }" @click="selectSettings(item.id)">{{ item.label }}</button>
-          </div>
-          <div class="settings-community-links" aria-label="Community links">
-            <button class="icon-button" aria-label="Open Discord" title="Discord" @click="openExternal('discord')"><MessageCircle /></button>
-            <button class="icon-button" aria-label="Open GitHub" title="GitHub" @click="openExternal('github')"><Github /></button>
           </div>
         </aside>
         <div class="settings-content">

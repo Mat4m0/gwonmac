@@ -69,12 +69,13 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).not.toContain("Trade Chat");
   });
 
-  it("keeps Discord and GitHub available from Settings", async () => {
+  it("keeps Discord and GitHub in the global header", async () => {
     const wrapper = mount(App);
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
 
-    expect(wrapper.get('button[aria-label="Open Discord"]').attributes("title")).toBe("Discord");
-    expect(wrapper.get('button[aria-label="Open GitHub"]').attributes("title")).toBe("GitHub");
+    expect(wrapper.get('.titlebar button[aria-label="Open Discord"]').attributes("title")).toBe("Discord");
+    expect(wrapper.get('.titlebar button[aria-label="Open GitHub"]').attributes("title")).toBe("GitHub");
+    await wrapper.get('button[aria-label="Settings"]').trigger("click");
+    expect(wrapper.find(".settings-community-links").exists()).toBe(false);
   });
 
   it("keeps Tools off unless a fresh player explicitly enables them", async () => {

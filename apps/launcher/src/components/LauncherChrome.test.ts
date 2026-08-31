@@ -13,6 +13,9 @@ describe("launcher chrome", () => {
     expect(wrapper.text()).not.toContain("Unofficial client");
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
     expect(wrapper.emitted("settings")).toHaveLength(1);
+    await wrapper.get('button[aria-label="Open Discord"]').trigger("click");
+    await wrapper.get('button[aria-label="Open GitHub"]').trigger("click");
+    expect(wrapper.emitted("external")).toEqual([["discord"], ["github"]]);
   });
 
   it("keeps the account picker accessible and restores focus on Escape", async () => {
