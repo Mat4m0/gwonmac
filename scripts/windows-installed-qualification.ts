@@ -137,12 +137,33 @@ async function oneSetup(feed: string): Promise<string> {
 async function stopSquirrelFirstRun(executable: string): Promise<void> {
   // Squirrel can launch the installed application once after Setup finishes.
   // The controlled qualification must own the next launch and its
-  // single-instance lock, so stop only a process whose executable path is the
-  // exact disposable package we just installed. A silent install may leave no
-  // first-run process, which is also safe.
+  // single-instance lock. Close its real top-level window and let Electron
+  // finish its own shutdown; force-killing the process tree can strand
+  // Crashpad state and make the next otherwise-valid launch terminate before
+  // JavaScript starts. A silent install may leave no first-run process, which
+  // is also safe.
   await delay(1_000);
-  const command =
-    "$target=[IO.Path]::GetFullPath($env:GW_QUALIFICATION_EXECUTABLE); Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -eq $target}";
+  const command = [
+    "$target=[IO.Path]::GetFullPath($env:GW_QUALIFICATION_EXECUTABLE)",
+    "$deadline=(Get-Date).AddSeconds(20)",
+    "$closeRequested=$false",
+    "while ((Get-Date) -lt $deadline) {",
+    "  $rows=@(Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -eq $target})",
+    "  if ($rows.Count -eq 0) { exit 0 }",
+    "  if (-not $closeRequested) {",
+    "    foreach ($row in $rows) {",
+    "      $candidate=Get-Process -Id $row.ProcessId -ErrorAction SilentlyContinue",
+    "      if ($candidate -and $candidate.MainWindowHandle -ne 0) {",
+    "        if (-not $candidate.CloseMainWindow()) { throw 'Squirrel first-run window refused to close' }",
+    "        $closeRequested=$true",
+    "        break",
+    "      }",
+    "    }",
+    "  }",
+    "  Start-Sleep -Milliseconds 250",
+    "}",
+    "throw 'Squirrel first-run processes did not exit cleanly'",
+  ].join("\n");
   const environment = {
     ...process.env,
     GW_QUALIFICATION_EXECUTABLE: executable,
@@ -153,17 +174,10 @@ async function stopSquirrelFirstRun(executable: string): Promise<void> {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      `${command} | ForEach-Object {$_.ProcessId; Stop-Process -Id $_.ProcessId -Force}`,
+      command,
     ],
     { encoding: "utf8", env: environment, timeout: 30_000, windowsHide: true },
   );
-  await delay(500);
-  const { stdout } = await execFileAsync(
-    "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-Command", `${command} | Select-Object -ExpandProperty ProcessId`],
-    { encoding: "utf8", env: environment, timeout: 30_000, windowsHide: true },
-  );
-  assert.equal(stdout.trim(), "", "Squirrel's automatic first run is still alive");
 }
 
 function installedExecutableForVersion(
@@ -287,7 +301,6 @@ try {
     // test-only renderer instrumentation; the final detached launch proves
     // ordinary desktop startup after these checks close gracefully.
     arguments: automationArguments,
-    appOwnedRemoteDebugging: true,
     // Keep the installed GUI process in the same detached, pipe-free shape as
     // an Explorer launch. CDP connects through DevToolsActivePort and does not
     // need to change the process' Windows console or Crashpad inheritance.
@@ -429,7 +442,6 @@ try {
     productName: release.productName,
     userData: storage.sessions,
     arguments: signedQualification ? [] : ["--gw-volatile-secrets"],
-    appOwnedRemoteDebugging: true,
     desktopProcessShape: true,
     useDefaultUserData: true,
   });
@@ -479,7 +491,6 @@ try {
       executablePath: installedExecutable,
       productName: release.productName,
       userData: storage.sessions,
-      appOwnedRemoteDebugging: true,
       desktopProcessShape: true,
       useDefaultUserData: true,
     });

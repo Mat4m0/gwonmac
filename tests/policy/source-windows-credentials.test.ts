@@ -18,12 +18,8 @@ test("Windows storage starts from the native LocalAppData known folder", () => {
   assert.match(main, /explicitUserData\s*\? colocatedStorageRoots/u);
 });
 
-test("Windows starts local crash reporting only for installed qualification", () => {
-  assert.match(
-    main,
-    /hasSwitch\("gw-qualification-debugging"\)[\s\S]*crashReporter\.start\(\{ uploadToServer: false \}\)/u,
-  );
-  assert.doesNotMatch(main, /crashReporter\.start\(\{[^}]*submitURL/u);
+test("Windows does not retain process-memory crash reports", () => {
+  assert.doesNotMatch(main, /crashReporter|crashDumps|\.dmp/u);
 });
 
 test("Credential Manager owns only closed application and profile slots", () => {

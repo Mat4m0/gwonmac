@@ -11,7 +11,6 @@ import {
   app,
   autoUpdater,
   type BrowserWindow,
-  crashReporter,
   dialog,
   Notification,
   powerMonitor,
@@ -230,21 +229,6 @@ if (!explicitUserData && (process.platform === "win32" || linuxFlatpak)) {
 if (process.platform === "win32") {
   app.setAppUserModelId(windowsAppUserModelId(app.getName()));
 }
-if (
-  process.platform === "win32"
-  && app.commandLine.hasSwitch("gw-qualification-debugging")
-) {
-  // The installed-package proof must inspect the exact fused executable.
-  // Starting Chromium's remote-debugging service from the original command
-  // line creates a Windows child before Electron's main JavaScript can connect
-  // Crashpad. Initialize that local, non-uploading handler first, then expose
-  // only an ephemeral loopback port. Ordinary application startup never
-  // enters this qualification-only path.
-  crashReporter.start({ uploadToServer: false });
-  app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
-  app.commandLine.appendSwitch("remote-debugging-port", "0");
-}
-
 const primaryInstance = !windowsSquirrelStartupHandled
   && app.requestSingleInstanceLock();
 if (!primaryInstance) {

@@ -28,8 +28,6 @@ export interface PackagedAppLaunch {
   readonly useDefaultUserData?: boolean;
   /** Launch as an OS desktop process while CDP connects through its port file. */
   readonly desktopProcessShape?: boolean;
-  /** Let the Windows app initialize Crashpad before its qualification CDP port. */
-  readonly appOwnedRemoteDebugging?: boolean;
   /** Open the first active profile when the packaged app starts on the launcher. */
   readonly openFirstProfile?: boolean;
 }
@@ -150,12 +148,8 @@ export async function launchPackagedApp(
       ...(options.useDefaultUserData === true
         ? []
         : [`--user-data-dir=${options.userData}`]),
-      ...(options.appOwnedRemoteDebugging === true
-        ? ["--gw-qualification-debugging"]
-        : [
-            "--remote-debugging-address=127.0.0.1",
-            "--remote-debugging-port=0",
-          ]),
+      "--remote-debugging-address=127.0.0.1",
+      "--remote-debugging-port=0",
       ...(options.arguments ?? []),
     ],
     {

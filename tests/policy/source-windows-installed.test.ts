@@ -23,6 +23,10 @@ const signedWorkflow = readFileSync(
 );
 
 test("installed qualification is restricted to a disposable hosted runner", () => {
+  const firstRunShutdown = script.match(
+    /async function stopSquirrelFirstRun[\s\S]*?^\}/mu,
+  )?.[0];
+  assert.ok(firstRunShutdown);
   assert.match(script, /process\.platform !== "win32"/u);
   assert.match(script, /process\.arch !== "x64"/u);
   assert.match(script, /GITHUB_ACTIONS !== "true"/u);
@@ -32,8 +36,8 @@ test("installed qualification is restricted to a disposable hosted runner", () =
   assert.match(script, /"--disable-gpu"/u);
   assert.match(script, /proveNormalWindowsStartup/u);
   assert.match(script, /desktopProcessShape: true/u);
-  assert.match(script, /appOwnedRemoteDebugging: true/u);
-  assert.match(packagedApp, /"--gw-qualification-debugging"/u);
+  assert.match(firstRunShutdown, /CloseMainWindow\(\)/u);
+  assert.doesNotMatch(firstRunShutdown, /Stop-Process|taskkill\.exe/u);
   assert.match(packagedApp, /detached: options\.desktopProcessShape === true/u);
   assert.match(packagedApp, /\? "ignore"[\s\S]*windowsHide: options\.desktopProcessShape === true/u);
   assert.doesNotMatch(script, /crashpad-handler|disable-crash-reporter/u);
