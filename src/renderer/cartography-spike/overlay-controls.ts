@@ -127,7 +127,7 @@ export function describeCartographyQaStatus(status: CartographyQaStatus): QaPres
     rows.push(
       ["Map", String(current.mapId)],
       ["Epoch", `${current.areaEpoch} · resource ${current.resourceGeneration}`],
-      ["Cells", `${current.actionableCells} actionable · ${current.reachableCells} reachable`],
+      ["Guidance", `${current.actionableCells} targets here · ${current.reachableCells} reachable cells`],
       ["Terrain", `${current.terrain.width}×${current.terrain.height} @ ${current.terrain.mapUnitsPerPixel}`],
     );
   } else rows.push(["Current guidance", `Unavailable · ${status.currentInstance.reason}`]);
@@ -139,7 +139,7 @@ export function describeCartographyQaStatus(status: CartographyQaStatus): QaPres
   return Object.freeze({
     tone: "ready",
     summary: status.currentInstance.status === "ready"
-      ? `Ready · ${status.currentInstance.actionableCells} actionable`
+      ? `Ready · ${status.currentInstance.actionableCells} targets here`
       : `Continent ready · ${status.remainingCells} remaining`,
     rows: Object.freeze(rows),
   });
@@ -239,6 +239,7 @@ export function createCartographyOverlayControls(options: Readonly<{
   hint.className = "cartography-overlay-hint";
   hint.innerHTML = [
     "Hold <kbd>Shift</kbd> to inspect 3×3. Add <kbd>Option</kbd> for 7×7.",
+    "Numbers: solid is reachable now, outline is remembered, and ≈ is estimated.",
     "Walkable terrain appears on Compass and Mission Map only.",
   ].join("<br>");
   const saveStatus = document.createElement("p");

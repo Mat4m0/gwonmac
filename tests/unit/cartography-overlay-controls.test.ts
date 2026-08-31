@@ -116,9 +116,9 @@ test("Cartography QA ready status reports player-facing classification counts", 
     },
     kernel: null,
   });
-  assert.equal(ready.summary, "Ready · 92 actionable");
+  assert.equal(ready.summary, "Ready · 92 targets here");
   assert.ok(ready.rows.some(([label, value]) =>
-    label === "Cells" && value === "92 actionable · 228 reachable"));
+    label === "Guidance" && value === "92 targets here · 228 reachable cells"));
 });
 
 test("Cartography QA keeps continent progress visible without current guidance", () => {
