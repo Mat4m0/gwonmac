@@ -42,6 +42,7 @@ function response(body: unknown, status = 200, headers?: HeadersInit): Response 
 
 function fixture(options: {
   capable?: boolean;
+  externallyManaged?: boolean;
   currentVersion?: string;
   target?: AppUpdateTarget | null;
   fetch?: typeof fetch;
@@ -61,6 +62,7 @@ function fixture(options: {
   const updater = new AppUpdater({
     currentVersion: options.currentVersion ?? "2026.7.0-beta.1",
     capable: options.capable ?? true,
+    externallyManaged: options.externallyManaged ?? false,
     target: options.target === undefined ? "darwin-arm64" : options.target,
     fetch: options.fetch ?? (async () => response(manifest("2026.7.0-beta.2"))),
     now: () => 1234,
@@ -99,6 +101,24 @@ function fixture(options: {
 }
 
 describe("application updater", () => {
+  it("defers installed Flatpak updates to the software center", async () => {
+    let requests = 0;
+    const f = fixture({
+      externallyManaged: true,
+      fetch: async () => {
+        requests += 1;
+        return response(manifest("2026.8.1"));
+      },
+    });
+    assert.deepEqual(f.updater.getState(), {
+      phase: "managed",
+      currentVersion: "2026.7.0-beta.1",
+    });
+    await f.updater.check("stable");
+    assert.equal(requests, 0);
+    assert.equal(f.nativeChecks(), 0);
+  });
+
   it("reads exactly one static manifest for the selected channel", async () => {
     for (const track of ["stable", "beta"] as const) {
       const requests: string[] = [];

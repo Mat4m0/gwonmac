@@ -197,9 +197,9 @@ export function nativeBuildSteps(platform, architecture) {
     if (architecture !== "x64") {
       throw new Error(`unsupported Linux build architecture: ${architecture}`);
     }
-    return [[
-      "c++",
-      [
+    return [
+      [process.execPath, ["scripts/build-linux-secret-portal.mjs"]],
+      ["c++", [
         "-std=c++20",
         "-O2",
         '-D__int64=long long',
@@ -209,8 +209,8 @@ export function nativeBuildSteps(platform, architecture) {
         ...DECODER_SOURCES,
         "-o",
         "build/native/gw-dat-decode",
-      ],
-    ]];
+      ]],
+    ];
   }
 
   throw new Error(`unsupported native build platform: ${platform}`);

@@ -72,7 +72,8 @@ test("only provisioned distribution channels enable persistent secrets", () => {
   );
   assert.match(profileStorage, /workspace\.legacyPrimaryProfileId/);
   assert.doesNotMatch(main, /accountWorkspace\.legacyPrimaryProfileId/);
-  assert.match(main, /capable: distribution\.automaticUpdates/);
+  assert.match(main, /const nativeApplicationUpdates = distribution\.automaticUpdates && !linuxFlatpak/);
+  assert.match(main, /capable: nativeApplicationUpdates/);
   assert.match(
     main,
     /if \(persistentSecrets\) \{[\s\S]{0,160}distributionChannel === null[\s\S]{0,120}persistent secret provider is unavailable/,
@@ -84,6 +85,10 @@ test("only provisioned distribution channels enable persistent secrets", () => {
   assert.match(
     main,
     /process\.platform === "win32" && windowsNativeHost !== null[\s\S]{0,160}keychain = new WindowsCredentialKeychain/,
+  );
+  assert.match(
+    main,
+    /process\.platform === "linux" && linuxFlatpak[\s\S]{0,500}keychain = new LinuxPortalKeychain/,
   );
   assert.match(
     main,

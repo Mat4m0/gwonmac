@@ -630,6 +630,11 @@ export type AppUpdateErrorCode =
  */
 export type AppUpdateState =
   | {
+      /** The installed package manager owns discovery and replacement. */
+      phase: "managed";
+      currentVersion: string;
+    }
+  | {
       phase: "idle";
       currentVersion: string;
       lastCheckedAt?: string;

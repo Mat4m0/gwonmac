@@ -22,7 +22,7 @@ describe("Linux Flatpak package", () => {
     assert.match(manifest, /--device=dri/u);
     assert.doesNotMatch(manifest, /--device=input/u);
     assert.doesNotMatch(manifest, /--device=all/u);
-    assert.match(manifest, /--talk-name=org\.freedesktop\.portal\.Secret/u);
+    assert.doesNotMatch(manifest, /--talk-name=org\.freedesktop\.secrets/u);
   });
 
   it("does not grant broad host filesystem access", () => {
