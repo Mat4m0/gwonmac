@@ -14,9 +14,8 @@
  * selected Stable/Beta track is read once per check. Stable admits only
  * stable releases; Beta additionally admits beta and RC releases. Alpha is
  * never eligible. Ad-hoc developer builds carry no release marker and cannot
- * reach this owner. This owner never chooses when to restart: the launch gate
- * may install a ready update before play, while later readiness waits for user
- * or ordinary restart orchestration.
+ * reach this owner. This owner never chooses when to restart: a ready update
+ * waits for the launcher's explicit Restart and update command.
  */
 import type {
   AppUpdateErrorCode,
