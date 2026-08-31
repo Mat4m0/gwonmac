@@ -6,8 +6,8 @@
  */
 #define WIN32_LEAN_AND_MEAN
 
-#include <delayimp.h>
 #include <windows.h>
+#include <delayimp.h>
 
 #include <cstring>
 
