@@ -74,4 +74,12 @@ describe("Linux Flatpak package", () => {
       assert.doesNotMatch(workflow, /dbus-run-session -- xvfb-run/u);
     }
   });
+
+  it("qualifies encrypted profile secrets on GNOME and KDE", () => {
+    assert.match(buildWorkflow, /desktop-secrets:/u);
+    assert.match(buildWorkflow, /desktop: \[gnome, kde\]/u);
+    assert.match(buildWorkflow, /GW_LINUX_SECRET_QUALIFICATION: "1"/u);
+    assert.match(buildWorkflow, /gnome-keyring-daemon --unlock/u);
+    assert.match(buildWorkflow, /xdg-desktop-portal-kde/u);
+  });
 });

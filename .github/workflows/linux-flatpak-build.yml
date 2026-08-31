@@ -114,3 +114,56 @@ jobs:
           done
           test -S "$XDG_RUNTIME_DIR/wayland-gwonmac"
           dbus-run-session -- env WAYLAND_DISPLAY=wayland-gwonmac XDG_SESSION_TYPE=wayland GW_LINUX_NATIVE_WAYLAND=1 pnpm test:linux-installed
+
+  desktop-secrets:
+    needs: installed-xwayland
+    strategy:
+      fail-fast: false
+      matrix:
+        desktop: [gnome, kde]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+        with:
+          version: 11.13.1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-flatpak-qualification-repo
+          path: flatpak-repo
+      - name: Install GNOME portal and secret service
+        if: matrix.desktop == 'gnome'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak xvfb dbus-x11 gnome-keyring xdg-desktop-portal xdg-desktop-portal-gnome
+      - name: Install KDE portal and secret service
+        if: matrix.desktop == 'kde'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak xvfb dbus-x11 plasma-workspace xdg-desktop-portal xdg-desktop-portal-kde kwalletmanager
+      - name: Install the exact GPG-verified package
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//25.08
+          flatpak remote-add --user --gpg-import=flatpak-repo/qualification-public.gpg gwonmac-desktop "file://$GITHUB_WORKSPACE/flatpak-repo"
+          flatpak install --user -y gwonmac-desktop io.github.mat4m0.gwonmac
+      - run: pnpm install --frozen-lockfile
+      - name: Qualify encrypted profile secrets on the desktop
+        shell: bash
+        env:
+          DESKTOP: ${{ matrix.desktop }}
+          GW_LINUX_SECRET_QUALIFICATION: "1"
+        run: |
+          xvfb-run -a dbus-run-session -- bash -euc '
+            export XDG_CURRENT_DESKTOP="${DESKTOP^^}"
+            export XDG_SESSION_TYPE=x11
+            if [ "$DESKTOP" = gnome ]; then
+              eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"
+            fi
+            pnpm test:linux-installed
+          '
