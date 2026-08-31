@@ -53,8 +53,8 @@ describe("launcher presentation state", () => {
     assert.equal(first.document.installationKind, "fresh");
     assert.equal(first.document.setupVersion, 0);
     assert.deepEqual(first.document.preferences.content, {
-      news: false,
-      dailies: false,
+      news: true,
+      dailies: true,
       first: "news",
       officialNews: true,
       reforgedNews: true,

@@ -14,6 +14,7 @@ function installNative(overrides: Record<string, unknown>): LauncherNativeApi {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   Object.defineProperty(window, "launcherNative", { configurable: true, value: undefined });
   document.querySelectorAll(".modal-backdrop").forEach((element) => element.remove());
 });
@@ -133,13 +134,6 @@ describe("unified launcher shell", () => {
         get: async () => ({
           ...fixtureSnapshot,
           experience: { ...fixtureSnapshot.experience, showMigrationNotice: false },
-          preferences: {
-            content: {
-              ...fixtureSnapshot.preferences.content,
-              news: false,
-              dailies: false,
-            },
-          },
           contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" },
         }),
         onChange: () => () => undefined,
@@ -148,12 +142,25 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await flushPromises();
     expect(wrapper.get(".hero-copy h1").text()).toBe("Your accounts. One launcher.");
-    expect(wrapper.get("main").classes()).toContain("artwork-only");
+    expect(wrapper.get("#news-panel").text()).toContain("News is not connected yet.");
+    expect(wrapper.get(".segmented").text()).toContain("Dailies");
     expect(wrapper.text()).not.toContain("Wayfarer’s Reverie");
     await wrapper.findAll("nav button")[3]!.trigger("click");
     expect(wrapper.text()).toContain("Direct feedback is not connected yet.");
     expect(wrapper.find("textarea").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("Add screenshot or file");
+  });
+
+  it("persists and clears the migrated-account notice after one short appearance", async () => {
+    vi.useFakeTimers();
+    const dismissMigrationNotice = vi.fn(async () => undefined);
+    installNative({ experience: { dismissMigrationNotice } });
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(wrapper.get(".toast").text()).toContain("Your existing account is ready");
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(dismissMigrationNotice).toHaveBeenCalledOnce();
   });
 
   it("shows a recoverable startup failure", async () => {

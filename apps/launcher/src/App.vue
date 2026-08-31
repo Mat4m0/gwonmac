@@ -63,7 +63,9 @@ const operationError = ref("");
 const startupError = ref(false);
 const gameFilesInfo = ref<CacheInfo | null>(null);
 const gameFilesLoading = ref(false);
+const MIGRATION_NOTICE_DURATION_MS = 8_000;
 let unsubscribe: (() => void) | undefined;
+let migrationNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 
 const native = window.launcherNative;
 const synchronized = ref(!native);
@@ -84,11 +86,20 @@ onMounted(async () => {
     startupError.value = true;
   }
 });
-onBeforeUnmount(() => unsubscribe?.());
+onBeforeUnmount(() => {
+  unsubscribe?.();
+  clearTimeout(migrationNoticeTimer);
+});
 watch([synchronized, () => snapshot.value.experience.introduction], async ([ready, introduction]) => {
   if (!ready || introduction !== "pending") return;
   await nextTick();
   introCallout.value?.focus();
+}, { immediate: true });
+watch([synchronized, () => snapshot.value.experience.showMigrationNotice], ([ready, show]) => {
+  clearTimeout(migrationNoticeTimer);
+  migrationNoticeTimer = undefined;
+  if (!ready || !show) return;
+  migrationNoticeTimer = setTimeout(() => void dismissMigrationNotice(), MIGRATION_NOTICE_DURATION_MS);
 }, { immediate: true });
 
 const visibleProfiles = computed(() => snapshot.value.profiles.filter((profile) => !profile.archived));
@@ -239,6 +250,8 @@ async function completeIntroduction() {
 }
 
 async function dismissMigrationNotice() {
+  clearTimeout(migrationNoticeTimer);
+  migrationNoticeTimer = undefined;
   if (native) await runAction("The notice could not be dismissed.", () => native.experience.dismissMigrationNotice());
   else snapshot.value = { ...snapshot.value, experience: { ...snapshot.value.experience, showMigrationNotice: false } };
 }

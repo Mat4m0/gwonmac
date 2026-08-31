@@ -49,12 +49,10 @@ export interface LoadedLauncherState {
 
 export const DEFAULT_LAUNCHER_PREFERENCES: LauncherPreferences = Object.freeze({
   content: Object.freeze({
-    // Live feeds are not connected in the production cutover. Start with the
-    // useful launcher artwork instead of making two placeholder panels the
-    // default Home experience. Development fixtures carry their own sample
-    // preferences and remain fully interactive.
-    news: false,
-    dailies: false,
+    // Keep both destinations discoverable from the first launch. Production
+    // uses honest placeholders until their feeds are connected.
+    news: true,
+    dailies: true,
     first: "news" as const,
     officialNews: true,
     reforgedNews: true,
