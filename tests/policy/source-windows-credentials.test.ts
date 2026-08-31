@@ -9,6 +9,10 @@ const native = readFileSync(
   path.join(root, "src/native/windows-host/host.cpp"),
   "utf8",
 );
+const delayLoadHook = readFileSync(
+  path.join(root, "src/native/windows-host/win-delay-load-hook.cpp"),
+  "utf8",
+);
 const main = readFileSync(path.join(root, "src/main/main.ts"), "utf8");
 
 test("Windows storage starts from the native LocalAppData known folder", () => {
@@ -24,6 +28,13 @@ test("Windows crash capture is restricted to hosted installed qualification", ()
     /getSwitchValue\("gw-qualification-debugging"\)[\s\S]*GITHUB_ACTIONS === "true"[\s\S]*RUNNER_ENVIRONMENT === "github-hosted"[\s\S]*crashReporter\.start\(\{ uploadToServer: false \}\)/u,
   );
   assert.doesNotMatch(main, /crashReporter\.start\(\{[^}]*submitURL/u);
+});
+
+test("the renamed Electron executable owns Node-API imports", () => {
+  assert.match(delayLoadHook, /dliNotePreLoadLibrary/u);
+  assert.match(delayLoadHook, /"NODE\.EXE"/u);
+  assert.match(delayLoadHook, /GetModuleHandleW\(nullptr\)/u);
+  assert.doesNotMatch(delayLoadHook, /\bLoadLibrary(?:A|W)?\s*\(/u);
 });
 
 test("Credential Manager owns only closed application and profile slots", () => {

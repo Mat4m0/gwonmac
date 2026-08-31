@@ -119,6 +119,9 @@ test("Windows and Linux build only their target-native boundaries", () => {
   ]);
   assert.ok(windows[0]?.[1].includes("/out:build/native/node.lib"));
   assert.ok(windows[1]?.[1].includes("build/native/node.lib"));
+  assert.ok(windows[1]?.[1].includes("src/native/windows-host/win-delay-load-hook.cpp"));
+  assert.ok(windows[1]?.[1].includes("/DELAYLOAD:NODE.EXE"));
+  assert.ok(windows[1]?.[1].includes("Delayimp.lib"));
   assert.ok(windows[1]?.[1].includes("/Fe:build/native/windows-host.node"));
   assert.ok(windows[2]?.[1].includes("/Fe:build/native/gw-dat-decode.exe"));
   for (const [, args] of windows.slice(1)) {
