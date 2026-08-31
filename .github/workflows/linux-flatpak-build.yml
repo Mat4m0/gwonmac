@@ -1,0 +1,100 @@
+name: Linux Flatpak build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  installed-xwayland:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+        with:
+          version: 11.13.1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - name: Install build and Flatpak dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder g++ libglib2.0-dev gnupg xvfb
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 org.electronjs.Electron2.BaseApp//25.08
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - name: Build the release-shaped Electron package
+        run: pnpm package
+        env:
+          GW_PACKAGE_INTENT: release
+      - name: Build and install a GPG-verified local repository
+        shell: bash
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/flatpak-ci-gpg"
+          mkdir -m 700 "$GNUPGHOME"
+          gpg --batch --passphrase '' --quick-generate-key 'gwonmac CI qualification <ci@example.invalid>' ed25519 sign 1d
+          key_id="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+          flatpak-builder --user --disable-rofiles-fuse --force-clean --repo=flatpak-repo --gpg-sign="$key_id" --gpg-homedir="$GNUPGHOME" flatpak-build packaging/linux/io.github.mat4m0.gwonmac.yml
+          flatpak build-update-repo --gpg-sign="$key_id" --gpg-homedir="$GNUPGHOME" flatpak-repo
+          gpg --batch --export "$key_id" > "$RUNNER_TEMP/flatpak-ci-public.gpg"
+          flatpak remote-add --user --gpg-import="$RUNNER_TEMP/flatpak-ci-public.gpg" gwonmac-ci "file://$GITHUB_WORKSPACE/flatpak-repo"
+          flatpak install --user -y gwonmac-ci io.github.mat4m0.gwonmac
+      - name: Qualify the installed Xwayland package
+        # Start the session bus inside the display so portal services activated
+        # by D-Bus inherit DISPLAY instead of starting headless.
+        run: xvfb-run -a dbus-run-session -- pnpm test:linux-installed
+      - name: Retain the exact signed repository for Wayland qualification
+        run: cp "$RUNNER_TEMP/flatpak-ci-public.gpg" flatpak-repo/qualification-public.gpg
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-flatpak-qualification-repo
+          path: flatpak-repo
+          retention-days: 1
+
+  native-wayland:
+    needs: installed-xwayland
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+        with:
+          version: 11.13.1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-flatpak-qualification-repo
+          path: flatpak-repo
+      - name: Install the exact signed package and Wayland compositor
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak weston
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//25.08
+          flatpak remote-add --user --gpg-import=flatpak-repo/qualification-public.gpg gwonmac-wayland "file://$GITHUB_WORKSPACE/flatpak-repo"
+          flatpak install --user -y gwonmac-wayland io.github.mat4m0.gwonmac
+          flatpak override --user --socket=wayland --nosocket=x11 io.github.mat4m0.gwonmac
+      - run: pnpm install --frozen-lockfile
+      - name: Qualify native Wayland separately
+        shell: bash
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/weston-runtime"
+          mkdir -m 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless-backend.so --socket=wayland-gwonmac --idle-time=0 >"$RUNNER_TEMP/weston.log" 2>&1 &
+          for attempt in $(seq 1 100); do
+            test -S "$XDG_RUNTIME_DIR/wayland-gwonmac" && break
+            sleep 0.1
+          done
+          test -S "$XDG_RUNTIME_DIR/wayland-gwonmac"
+          dbus-run-session -- env WAYLAND_DISPLAY=wayland-gwonmac XDG_SESSION_TYPE=wayland GW_LINUX_NATIVE_WAYLAND=1 pnpm test:linux-installed

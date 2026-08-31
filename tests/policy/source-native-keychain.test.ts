@@ -4,7 +4,6 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-  BUILD_STEPS,
   nativeBuildSteps,
   packageManagerInvocation,
 } from "../../scripts/build.mjs";
@@ -91,7 +90,7 @@ test("the native boundary owns two fixed Data Protection Keychain items", () => 
 });
 
 test("the canonical build emits one host-only Node-API 8 addon", () => {
-  const nativeSteps = BUILD_STEPS.filter(([, args]) =>
+  const nativeSteps = nativeBuildSteps("darwin", "arm64").filter(([, args]) =>
     args.includes("src/native/host/host.mm"),
   );
   assert.equal(nativeSteps.length, 1);

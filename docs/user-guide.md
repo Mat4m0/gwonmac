@@ -1,19 +1,20 @@
 # Guild Wars Reforged user guide
 
-Guild Wars Reforged runs Guild Wars on Apple Silicon Macs. It is an independent,
-unofficial community application. ArenaNet and NCSOFT do not make, sponsor,
-endorse, or support it.
+Guild Wars Reforged runs Guild Wars on supported macOS, Windows, and Linux
+systems. It is an independent, unofficial community application. ArenaNet and
+NCSOFT do not make, sponsor, endorse, or support it.
 
 ## Install and start
 
-Use a published DMG for normal play. Published releases use Developer ID signing
-and Apple notarization.
+Use the package published for your operating system. The macOS package uses
+Developer ID signing and Apple notarization. Windows uses the signed installer.
+Linux uses the signed Flatpak repository.
 
-1. Download the DMG from a `Mat4m0/gwonmac` GitHub release.
+1. Download the package for your system from a `Mat4m0/gwonmac` GitHub release.
 2. [Verify the assets](release-verification.md#verify-downloaded-assets) if you
    want to check their origin.
-3. Open the DMG and drag **Guild Wars Reforged** to Applications.
-4. Start it normally. Do not disable Gatekeeper.
+3. Install it through the normal system installer or Flatpak repository.
+4. Start it normally. Do not bypass the operating system's signature checks.
 
 The launcher prepares and verifies the official Guild Wars client. It does not
 ship ArenaNet game files. A fresh installation has one profile named **Main
@@ -45,7 +46,9 @@ position in place. The cutover does not copy, move, or delete that data.
 Closing the launcher hides it while games run. Closing one game affects only
 that account. Closing the last game leaves the launcher available. Clicking the
 Dock icon restores the most recent launcher or game window that you used. If
-that window has closed, the next most recent game window is restored.
+that window has closed, the next most recent game window is restored. On
+Windows and Linux, activating the application from the taskbar or desktop does
+the same job.
 
 ## Home content
 
@@ -87,10 +90,10 @@ Open **Settings → Tools** to configure them. Each Tool row contains its switch
 shortcut, **Change shortcut**, and **Restore default**. There is no separate
 Shortcuts page.
 
-Shortcuts use macOS Command combinations such as Command-T. Normal editing and
-application shortcuts such as Command-C, Command-V, Command-Q, and Command-W
-remain reserved. If a new shortcut conflicts with another Tool, the launcher
-asks before replacing it.
+Shortcuts use the platform modifier, such as Command-T on macOS or Control-T on
+Windows and Linux. Normal editing and application shortcuts remain reserved.
+If a new shortcut conflicts with another Tool, the launcher asks before
+replacing it.
 
 Enabling the Tools runtime can require a restart. With no games open, the
 launcher offers to restart. With games open, it saves the change for the next
@@ -113,16 +116,19 @@ Both layers hide when the current map projection or data cannot be certified.
 ## Saved login
 
 Guild Wars owns sign-in inside each game window. The launcher does not ask for
-credentials. Saved credentials use the macOS Data Protection Keychain and are
-isolated by profile. A local source build has a temporary identity and does not
-share saved-login access with the published application.
+credentials. Saved credentials use Apple Data Protection Keychain on macOS,
+Windows Credential Manager on Windows, and the Secret portal with encrypted
+per-profile files inside the Flatpak on Linux. They are isolated by profile.
+If the system secret service is unavailable, saved login is unavailable rather
+than written as plaintext. A local source build has a temporary identity and
+does not share saved-login access with the published application.
 
 ## Display, input, and memory
 
 Mouse, trackpad, keyboard, and controller input go directly to Guild Wars. The
 application does not broadcast input between profiles. Main letters, the number
-row, and ANSI punctuation keep the same physical game binding when the macOS
-input source changes. Text fields still use the active input source.
+row, and ANSI punctuation keep the same physical game binding when the input
+source changes. Text fields still use the active input source.
 
 Open **Settings → Advanced** to enable extended memory or local diagnostics and
 to reveal logs. The in-game memory warning remains available during long

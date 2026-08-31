@@ -77,7 +77,7 @@ client artifacts, application updater, general settings, and Tools installation.
 These shared stores contain infrastructure, not profile login state.
 
 The main-process window registry owns the launcher and every profile game
-window. The window coordinator owns show, hide, restore, focus, and Dock
+window. The window coordinator owns show, hide, restore, focus, and application
 activation. Native code resolves a renderer only through the registry; it does
 not infer ownership from Electron's global window list or current focus.
 
@@ -319,8 +319,9 @@ The main process owns these native stores:
 - verified ArenaNet client generations;
 - the content-addressed chunk store;
 - bounded diagnostics files;
-- adopted and profile-scoped saved-login items in Apple's Data
-  Protection Keychain.
+- adopted and profile-scoped saved-login items in the platform secret store:
+  Apple Data Protection Keychain, Windows Credential Manager, or the Flatpak
+  Secret portal.
 
 Each game window stores its normal bounds, mode, and display work area in its
 window-state document. Restore keeps the window's relative size and position
@@ -345,9 +346,13 @@ credential or an Electron process.
 monitor and Apple Data Protection Keychain implementation. Windows packages a
 separate `windows-host.node`: it obtains LocalAppData from the Windows known-
 folder API and stores only the closed saved-login slots in Windows Credential
-Manager. Linux does not load either addon. Until Linux has a qualified secure
-provider, persistent saved login fails closed and ordinary development uses
-only the in-memory provider.
+Manager. Linux packages the isolated `gw-secret-portal` executable instead of
+loading either addon. It obtains an application secret from
+`org.freedesktop.portal.Secret`, derives an application key, and stores each
+closed saved-login slot as authenticated encrypted bytes beneath the Flatpak
+data root. If the portal is unavailable or returns an invalid answer,
+persistent saved login fails closed. There is no plaintext or `safeStorage`
+fallback.
 
 Forge applies the complete cross-platform fuse set to every packaged Electron
 executable. Embedded ASAR integrity is enabled on macOS and Windows. Electron
@@ -360,9 +365,11 @@ The Release and signed Development identities use separate secret namespaces.
 Historical signed Preview builds have their own retained namespace too; no new
 signed Preview is published. On macOS, code-signing entitlements enforce the
 Keychain identity. On Windows, the native host binds the closed application
-identity into each Credential Manager target. This prevents accidental
-cross-channel reads but is not a boundary against another process running as
-the same Windows user.
+identity into each Credential Manager target. On Linux, the Flatpak identity,
+Secret portal token, and per-slot authenticated-encryption context bind the
+closed application and account scope. These boundaries prevent accidental
+cross-channel reads; Windows Credential Manager is not a boundary against
+another process running as the same Windows user.
 
 Each account scope has one item for the ArenaNet user name and password and one
 item for the Steam access token and expiry. The existing fixed items belong
@@ -370,8 +377,8 @@ only to the adopted Main account. A read failure does not delete an item. The ga
 can continue to its login screen when an item is unavailable.
 
 Unpackaged, ordinary local, and ad-hoc developer builds use volatile storage.
-They do not claim a provisioned Keychain or Credential Manager item. There is
-no file or `safeStorage` fallback.
+They do not claim a provisioned Keychain, Credential Manager item, or Flatpak
+Secret portal identity. There is no plaintext or `safeStorage` fallback.
 
 The game proxy does not send or accept browser cookies. The Steam sign-in
 window uses a separate in-memory session. It destroys that session after
