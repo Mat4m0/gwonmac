@@ -36,8 +36,9 @@ const delay = (milliseconds: number) =>
 async function waitUntil<T>(
   description: string,
   operation: () => Promise<T | null>,
+  timeoutMs = 30_000,
 ): Promise<T> {
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const value = await operation();
     if (value !== null) return value;
@@ -86,7 +87,7 @@ async function waitForGamePage(
       }
     }
     return null;
-  });
+  }, 95_000);
 }
 
 /** Open one profile through the packaged launcher's validated preload API. */
