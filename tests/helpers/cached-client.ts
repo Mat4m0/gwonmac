@@ -34,6 +34,12 @@ const MAX_TEST_CHUNK_SIZE = 16 * 1024 * 1024;
 export interface CachedClientPaths {
   readonly artifacts: string;
   readonly userData: string;
+  /**
+   * Global content-addressed chunk root. Released macOS fixtures can omit it
+   * because their stores remain colocated beneath `userData`; Windows and
+   * Flatpak fixtures must name the separate cache root explicitly.
+   */
+  readonly chunks?: string;
 }
 
 export interface CachedClientOptions {
@@ -51,17 +57,18 @@ export interface CachedClientOptions {
  * launcher tests need truthful totals, not fabricated game data.
  */
 export async function seedCachedClient(
-  { artifacts, userData }: CachedClientPaths,
+  paths: CachedClientPaths,
   {
     snapshotSize = TEST_SNAPSHOT.byteLength,
     glue = TEST_CLIENT_GLUE,
     beforeSeal = async () => undefined,
   }: CachedClientOptions = {},
 ): Promise<void> {
+  const { artifacts, userData } = paths;
   if (!Number.isSafeInteger(snapshotSize) || snapshotSize <= 0) {
     throw new TypeError("test snapshot size must be a positive safe integer");
   }
-  const chunks = path.join(userData, "game", "chunks");
+  const chunks = paths.chunks ?? path.join(userData, "game", "chunks");
   await Promise.all([
     mkdir(artifacts, { recursive: true }),
     mkdir(chunks, { recursive: true }),

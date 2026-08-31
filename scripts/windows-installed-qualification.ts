@@ -139,6 +139,7 @@ try {
   );
   await seedCachedClient({
     artifacts: path.join(storage.cache, "game", "artifacts"),
+    chunks: path.join(storage.cache, "game", "chunks"),
     userData: storage.sessions,
   });
 
