@@ -41,8 +41,9 @@ test("installed qualification is restricted to a disposable hosted runner", () =
   assert.match(packagedApp, /detached: options\.desktopProcessShape === true/u);
   assert.match(packagedApp, /\? "ignore"[\s\S]*windowsHide: options\.desktopProcessShape === true/u);
   assert.match(packagedApp, /process\.platform === "win32"[\s\S]*availableLoopbackPort\(\)/u);
-  assert.match(packagedApp, /gw-qualification-debugging=\$\{requestedPort\}/u);
-  assert.match(packagedApp, /GW_WINDOWS_QUALIFICATION_CRASH_DUMPS/u);
+  assert.match(packagedApp, /--remote-debugging-address=127\.0\.0\.1/u);
+  assert.match(packagedApp, /--remote-debugging-port=\$\{requestedPort\}/u);
+  assert.doesNotMatch(packagedApp, /gw-qualification-debugging|GW_WINDOWS_QUALIFICATION_CRASH_DUMPS/u);
   assert.doesNotMatch(script, /crashpad-handler|disable-crash-reporter/u);
   assert.match(script, /Retained failed Windows fixture/u);
   assert.match(workflow, /Retain installed Windows failure evidence/u);

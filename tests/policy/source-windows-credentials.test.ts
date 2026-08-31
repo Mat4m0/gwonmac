@@ -22,14 +22,6 @@ test("Windows storage starts from the native LocalAppData known folder", () => {
   assert.match(main, /explicitUserData\s*\? colocatedStorageRoots/u);
 });
 
-test("Windows crash capture is restricted to hosted installed qualification", () => {
-  assert.match(
-    main,
-    /getSwitchValue\("gw-qualification-debugging"\)[\s\S]*GITHUB_ACTIONS === "true"[\s\S]*RUNNER_ENVIRONMENT === "github-hosted"[\s\S]*crashReporter\.start\(\{ uploadToServer: false \}\)/u,
-  );
-  assert.doesNotMatch(main, /crashReporter\.start\(\{[^}]*submitURL/u);
-});
-
 test("the renamed Electron executable owns Node-API imports", () => {
   assert.match(delayLoadHook, /dliNotePreLoadLibrary/u);
   assert.match(delayLoadHook, /"NODE\.EXE"/u);
