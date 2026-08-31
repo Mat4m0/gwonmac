@@ -43,6 +43,17 @@ test("legacy lifecycle and generic visual-mask paths stay deleted", async () => 
   ]) assert.equal(entries.has(retired), false, retired);
 });
 
+test("one missing map surface cannot disable the other Cartography surfaces", async () => {
+  const installer = await readFile(path.join(RENDERER, "index.ts"), "utf8");
+  assert.doesNotMatch(
+    installer,
+    /compass\s*===\s*null[^;]+missionMap\s*===\s*null[^;]+worldMap\s*===\s*null/s,
+  );
+  assert.match(installer, /compassReader\s*\?\?\s*unavailableCompass/);
+  assert.match(installer, /missionMapReader\s*\?\?\s*unavailableMissionMap/);
+  assert.match(installer, /worldMapReader\s*\?\?\s*unavailableWorldMap/);
+});
+
 test("both native owners agree on the exact finite layout roots", async () => {
   const transform = await readFile(
     path.join(ROOT, "src/main/certification/cartography-transform-internals.ts"),

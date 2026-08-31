@@ -28,14 +28,14 @@ const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuil
     "62267d95b30752823aa364c289bdc84f2c025dac4caeda86a76a432001667acb",
     {
       memoryLayout: "relocated",
-      outputSha256: "c932e214fef2faad7d63c6e58918b2b5b82ff08d771bb189e1950e3a6cb2139d",
+      outputSha256: "181f06d7f9974b30978b5f211a3c449eccf85392e13822f87264b875faeb2eeb",
     },
   ],
   [
     "e22c2c0876f1381a133fbb0c739f73f9fc6a7d8988da5ce0d9789481ab7f0c9e",
     {
       memoryLayout: "relocated",
-      outputSha256: "be783c4fdfb3ccd042adc719ebd97873ec0fe6216348c2f773109d4ee081f1d6",
+      outputSha256: "28d0d1d5805288c4085d309f54c0a87c3c80b0067efeb15195f1e9291f9237e9",
     },
   ],
   [
