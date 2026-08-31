@@ -10,6 +10,7 @@ import {
 } from "../../src/main/core/launcher-state.ts";
 import { parseProfileId } from "../../src/shared/multiple-accounts.ts";
 import {
+  parseLauncherExternalLink,
   parseLauncherProfileAppearance,
   parseLauncherSettingsPatch,
 } from "../../src/shared/launcher-contracts.ts";
@@ -38,6 +39,10 @@ describe("launcher presentation state", () => {
       renderScale: 1.5,
     });
     assert.throws(() => parseLauncherSettingsPatch({ renderScale: 3 }));
+  });
+  it("accepts the official support destination on the launcher boundary", () => {
+    assert.equal(parseLauncherExternalLink("arenaNetSupport"), "arenaNetSupport");
+    assert.throws(() => parseLauncherExternalLink("https://example.com"));
   });
   it("classifies every supported starting state before account bootstrap", () => {
     assert.equal(classifyLauncherInstallation({ legacySingleData: false, existingWorkspace: false }), "fresh");

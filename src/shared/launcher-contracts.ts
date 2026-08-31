@@ -99,7 +99,7 @@ export function parseLauncherProfileAppearance(value: unknown): LauncherProfileA
 
 export const GLOBAL_TOOLS = ["build-management", "quick-travel", "xunlai-storage"] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
-export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "donate", "releases"] as const;
+export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "arenaNetSupport", "donate", "releases"] as const;
 export type LauncherExternalLink = (typeof LAUNCHER_EXTERNAL_LINKS)[number];
 
 export interface GlobalToolSetting {

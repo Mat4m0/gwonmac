@@ -6,7 +6,9 @@ import {
   Check,
   FileText,
   Flame,
+  Github,
   Map as MapIcon,
+  MessageCircle,
   ScrollText,
   Shield,
   Swords,
@@ -380,6 +382,10 @@ async function replaceToolShortcut() {
           <div v-for="group in settingsGroups" :key="group.label" class="settings-nav-group" role="group" :aria-label="group.label">
             <h3>{{ group.label }}</h3>
             <button v-for="item in group.items" :key="item.id" :aria-current="settingsRoute === item.id ? 'page' : undefined" :class="{ active: settingsRoute === item.id }" @click="selectSettings(item.id)">{{ item.label }}</button>
+          </div>
+          <div class="settings-community-links" aria-label="Community links">
+            <button class="icon-button" aria-label="Open Discord" title="Discord" @click="openExternal('discord')"><MessageCircle /></button>
+            <button class="icon-button" aria-label="Open GitHub" title="GitHub" @click="openExternal('github')"><Github /></button>
           </div>
         </aside>
         <div class="settings-content">
