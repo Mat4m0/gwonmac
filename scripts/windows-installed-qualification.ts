@@ -31,6 +31,29 @@ const candidateFeed = process.env.GW_WINDOWS_CANDIDATE_FEED;
 const delay = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 
+async function recentWindowsApplicationEvents(): Promise<string> {
+  return execFileAsync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "$since=(Get-Date).AddMinutes(-2); Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=$since} -ErrorAction SilentlyContinue | Where-Object {$_.Id -in 1000,1001,1026} | Select-Object -First 8 TimeCreated,Id,ProviderName,Message | ConvertTo-Json -Compress",
+    ],
+    { encoding: "utf8", timeout: 30_000, windowsHide: true },
+  ).then(({ stdout }) => stdout.trim() || "none")
+    // Get-WinEvent exits with 1 when its filter has no matching records.
+    .catch((error: unknown) => {
+      if (
+        typeof error === "object"
+        && error !== null
+        && "code" in error
+        && error.code === 1
+      ) return "none";
+      return `query failed: ${error instanceof Error ? error.message : String(error)}`;
+    });
+}
+
 async function proveNormalWindowsStartup(
   executable: string,
   arguments_: readonly string[],
@@ -51,28 +74,7 @@ async function proveNormalWindowsStartup(
   try {
     await delay(5_000);
     if (child.exitCode !== null) {
-      const eventLog = await execFileAsync(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          "$since=(Get-Date).AddMinutes(-2); Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=$since} -ErrorAction SilentlyContinue | Where-Object {$_.Id -in 1000,1001,1026} | Select-Object -First 8 TimeCreated,Id,ProviderName,Message | ConvertTo-Json -Compress",
-        ],
-        { encoding: "utf8", timeout: 30_000, windowsHide: true },
-      ).then(({ stdout }) => stdout.trim() || "none")
-        // Get-WinEvent exits with 1 when its filter has no matching records.
-        // That absence is useful evidence, not a reason to stop the remaining
-        // installed-package diagnostics.
-        .catch((error: unknown) => {
-          if (
-            typeof error === "object"
-            && error !== null
-            && "code" in error
-            && error.code === 1
-          ) return "none";
-          return `query failed: ${error instanceof Error ? error.message : String(error)}`;
-        });
+      const eventLog = await recentWindowsApplicationEvents();
       return `normal startup exited with ${child.exitCode}; Windows events: ${eventLog}`;
     }
     return null;
@@ -227,6 +229,7 @@ for (const candidate of [packageRoot, path.dirname(storage.config)]) {
 
 let running: RunningPackagedApp | null = null;
 let installedExecutable: string | null = null;
+let qualificationSucceeded = false;
 try {
   // Seed the released Single Account shape before Setup. Squirrel launches the
   // application automatically, so that first real execution must exercise the
@@ -265,8 +268,12 @@ try {
 
   const qualificationArguments = [
     "--disable-gpu",
-    "--enable-logging=stderr",
     ...(signedQualification ? [] : ["--gw-volatile-secrets"]),
+  ];
+  const automationArguments = [
+    ...qualificationArguments,
+    "--enable-logging=file",
+    `--log-file=${path.join(storage.logs, "electron.log")}`,
   ];
   running = await launchPackagedApp({
     appPath: packageRoot,
@@ -279,12 +286,11 @@ try {
     // mask launcher, profile, storage, and uninstall behavior. CDP is
     // test-only renderer instrumentation; the final detached launch proves
     // ordinary desktop startup after these checks close gracefully.
-    arguments: qualificationArguments,
+    arguments: automationArguments,
     // Keep the installed GUI process in the same detached, pipe-free shape as
     // an Explorer launch. CDP connects through DevToolsActivePort and does not
     // need to change the process' Windows console or Crashpad inheritance.
     desktopProcessShape: true,
-    environment: { ELECTRON_ENABLE_LOGGING: "1" },
     useDefaultUserData: true,
   });
   const launcher = running.launcherPage;
@@ -557,11 +563,23 @@ try {
         : ["signed publisher identity", "installed update and rollback"]),
     ],
   }, null, 2));
+  qualificationSucceeded = true;
+} catch (error) {
+  globalThis.console.error(
+    `Recent Windows Application events: ${await recentWindowsApplicationEvents()}`,
+  );
+  throw error;
 } finally {
   if (running) await closePackagedApp(running).catch(() => {});
   if (installedExecutable && existsSync(path.join(packageRoot, "Update.exe"))) {
     await uninstall(path.join(packageRoot, "Update.exe")).catch(() => {});
   }
-  await rm(path.dirname(storage.config), { recursive: true, force: true });
+  if (qualificationSucceeded) {
+    await rm(path.dirname(storage.config), { recursive: true, force: true });
+  } else {
+    globalThis.console.error(
+      `Retained failed Windows fixture: ${path.dirname(storage.config)}`,
+    );
+  }
   await rm(packageRoot, { recursive: true, force: true });
 }

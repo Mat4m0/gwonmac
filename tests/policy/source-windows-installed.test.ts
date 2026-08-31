@@ -35,6 +35,9 @@ test("installed qualification is restricted to a disposable hosted runner", () =
   assert.match(packagedApp, /detached: options\.desktopProcessShape === true/u);
   assert.match(packagedApp, /\? "ignore"[\s\S]*windowsHide: options\.desktopProcessShape === true/u);
   assert.doesNotMatch(script, /crashpad-handler|disable-crash-reporter/u);
+  assert.match(script, /Retained failed Windows fixture/u);
+  assert.match(workflow, /Retain installed Windows failure evidence/u);
+  assert.match(workflow, /windows-installed-failure/u);
   assert.doesNotMatch(script, /--no-sandbox|--disable-setuid-sandbox/u);
 });
 
