@@ -28,6 +28,7 @@ describe("resolved profile paths", () => {
       travelPreferences: `${root}/travel-preferences.json`,
       travelHistory: `${root}/travel-history.json`,
       characterSwitchUsage: `${root}/character-switch-usage.json`,
+      cartographyMapKnowledge: `${root}/cartography-map-knowledge.json`,
       tradeSaved: `${root}/trade-saved.json`,
       buildLibrary: `${root}/build-library.json`,
       windowState: `${root}/window-state.json`,

@@ -107,6 +107,10 @@ import {
 } from "../shared/character-switch-usage.js";
 import { exportCartographyEvidence } from "./cartography-evidence-export.js";
 import { parseCartographyEvidenceCapture } from "./cartography-evidence/capture.js";
+import {
+  parseCartographyMapKnowledge,
+  type CartographyMapKnowledge,
+} from "../shared/cartography-map-knowledge.js";
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -118,6 +122,12 @@ export interface IpcContext {
   updateSettings: (patch: RendererSettingsPatch) => Promise<AppSettings>;
   getCharacterSwitchUsage: () => Promise<CharacterSwitchUsageDocument>;
   recordCharacterSwitchUsage: (characterKey: string) => Promise<CharacterSwitchUsageDocument>;
+  getCartographyMapKnowledge: (
+    kernelSha256: string,
+  ) => Promise<readonly CartographyMapKnowledge[]>;
+  recordCartographyMapKnowledge: (
+    value: CartographyMapKnowledge,
+  ) => Promise<readonly CartographyMapKnowledge[]>;
   setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
   getClientSession: (win: BrowserWindow) => ClientSession;
@@ -225,6 +235,11 @@ const asFiniteNumber = (what: string) =>
     }
     return value;
   });
+
+const asDigestValue = one((value: unknown): string => {
+  if (!isDigest(value)) throw new ValidationError("invalid digest");
+  return value;
+});
 
 const asSocketPayload: Parser<{ socketId: number; bytes: Uint8Array }> = (args) => {
   exact(args, 2);
@@ -553,6 +568,16 @@ export function registerIpcHandlers(ctx: IpcContext): {
         ctx.getClientSession(win),
         ctx.getSettings,
       ),
+    ),
+
+    cartographyMapKnowledgeGet: channel(
+      asDigestValue,
+      (_win, kernelSha256) => ctx.getCartographyMapKnowledge(kernelSha256),
+    ),
+
+    cartographyMapKnowledgeRecord: channel(
+      one(parseCartographyMapKnowledge),
+      (_win, value) => ctx.recordCartographyMapKnowledge(value),
     ),
 
     appOpenExternal: channel(asExternalLinkKind, async (_win, kind) => {

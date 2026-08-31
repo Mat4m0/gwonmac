@@ -577,6 +577,7 @@ export class ClientRuntime {
 
   private async activateStore(
     store: ChunkStore,
+    clientFingerprint: string,
     candidateFingerprint: string | null = null,
   ): Promise<ActiveClient> {
     this.initialResidencyRecorded = false;
@@ -589,6 +590,7 @@ export class ClientRuntime {
     // or game update prepares a fresh session and must get a fresh attempt.
     const active: ActiveClient = this.activeSlot.publish({
       artifactsDir: this.options.paths.artifacts,
+      clientFingerprint,
       store,
       wasmPath: enhancement.wasmPath,
       jsPath: enhancement.jsPath,
@@ -611,6 +613,7 @@ export class ClientRuntime {
 
   private async activateManifest(
     manifest: Manifest,
+    clientFingerprint: string,
     candidateFingerprint: string | null = null,
   ): Promise<ActiveClient> {
     const entry = manifest.entry(SNAPSHOT);
@@ -622,6 +625,7 @@ export class ClientRuntime {
         entry.chunkHashes,
         manifest.compression,
       ),
+      clientFingerprint,
       candidateFingerprint,
     );
   }
@@ -634,6 +638,9 @@ export class ClientRuntime {
     // has a sentence for each, and "unknown" would have collapsed them into
     // the generic one.
     if (!value) throw new NotReadyError("no published client is available");
+    if (!value.clientFingerprint) {
+      throw new AppError("bad_manifest", "published client has no generation fingerprint");
+    }
     if (
       (await verifyPublishedClientArtifacts(
         this.options.paths.artifacts,
@@ -653,6 +660,7 @@ export class ClientRuntime {
         value.chunkHashes,
         value.compressionMode,
       ),
+      value.clientFingerprint,
       candidate.status === "pending" &&
         candidate.fingerprint === value.clientFingerprint
         ? candidate.fingerprint
@@ -789,6 +797,7 @@ export class ClientRuntime {
       }
       const active = await this.activateManifest(
         result.manifest,
+        result.fingerprint,
         result.candidate ? result.fingerprint : null,
       );
       await this.pruneChunkCache();

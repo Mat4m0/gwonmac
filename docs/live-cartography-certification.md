@@ -70,6 +70,15 @@ thin current-instance boundary. The World Map observer must report `ready` only
 while the surface is visible. Its failure must not affect the Compass or Mission
 Map.
 
+Close the World Map during its fade, reopen it immediately, and close it again.
+The grid must hide when the native frame finishes closing. Reopening must show
+one attached grid without a stale duplicate.
+
+Find one grouped estimate where the current map proves a smaller number. Record
+the estimate and proven number, travel away, and restart gwonmac. The remembered
+number must remain lighter outside the map. Explore every proven cell. The
+number must disappear and must not return to the larger estimate.
+
 ## Layers and lifecycle
 
 Capture `layers-grid-only`, `layers-walkability-only`, and `layers-all` from

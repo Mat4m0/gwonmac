@@ -69,6 +69,7 @@ import type {
   CartographyEvidenceCapture,
   CartographyEvidenceExportResult,
 } from "./cartography-evidence.js";
+import type { CartographyMapKnowledge } from "./cartography-map-knowledge.js";
 import type { EnhancementSelection } from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
 import {
@@ -1019,6 +1020,8 @@ export const CORE_IPC = {
   diagnosticsProfileSet: "gw:diagnostics:profileSet",
   diagnosticsCurrent: "gw:diagnostics:current",
   cartographyEvidenceExport: "gw:cartography:evidenceExport",
+  cartographyMapKnowledgeGet: "gw:cartography:mapKnowledgeGet",
+  cartographyMapKnowledgeRecord: "gw:cartography:mapKnowledgeRecord",
   appOpenExternal: "gw:app:openExternal",
   appRevealPath: "gw:app:revealPath",
   appRequestQuit: "gw:app:requestQuit",
@@ -1214,6 +1217,10 @@ export interface CoreGwNativeApiBase {
     setProfile(value: DiagnosticProfile): Promise<DiagnosticProfile>;
   };
   cartography: {
+    getMapKnowledge(kernelSha256: string): Promise<readonly CartographyMapKnowledge[]>;
+    recordMapKnowledge(
+      value: CartographyMapKnowledge,
+    ): Promise<readonly CartographyMapKnowledge[]>;
     exportEvidence(
       value: CartographyEvidenceCapture,
     ): Promise<CartographyEvidenceExportResult>;

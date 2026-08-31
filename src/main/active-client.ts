@@ -17,6 +17,7 @@ import type { ChunkStore } from "./core/chunk-store.js";
 
 export interface ActiveClient {
   readonly generation: number;
+  readonly clientFingerprint: string;
   readonly artifactsDir: string;
   readonly store: ChunkStore;
   readonly wasmPath: string;

@@ -148,6 +148,7 @@ export const WORLD_MAP_FRAME_SPIKE_GLOBALS = Object.freeze({
   topLeftY: "gwonmac_world_map_frame_spike_top_left_y",
   bottomRightX: "gwonmac_world_map_frame_spike_bottom_right_x",
   bottomRightY: "gwonmac_world_map_frame_spike_bottom_right_y",
+  observe: "gwonmac_world_map_frame_spike_observe",
 });
 
 export const COMPASS_FRAME_SPIKE_GLOBALS = Object.freeze({

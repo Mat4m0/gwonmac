@@ -7,6 +7,8 @@ import type {
   CartographyEvidenceExportResult,
 } from "../../shared/cartography-evidence.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
+import type { CartographyMapKnowledge } from
+  "../../shared/cartography-map-knowledge.js";
 import type {
   CompassFrameSpikeController,
   MissionMapFrameSpikeController,
@@ -63,6 +65,10 @@ export async function installCartographySpike(options: Readonly<{
   exportEvidence(
     capture: CartographyEvidenceCapture,
   ): Promise<CartographyEvidenceExportResult>;
+  getMapKnowledge(kernelSha256: string): Promise<readonly CartographyMapKnowledge[]>;
+  recordMapKnowledge(
+    value: CartographyMapKnowledge,
+  ): Promise<readonly CartographyMapKnowledge[]>;
 }>): Promise<() => void> {
   const context = createCartographyContextReader(options.exports);
   const compassReader = createCompassFrameSpikeReader(options.exports);
@@ -95,6 +101,14 @@ export async function installCartographySpike(options: Readonly<{
       dispose: () => undefined,
     });
   }
+  let initialMapKnowledge: readonly CartographyMapKnowledge[] = [];
+  if (kernel.sha256 !== null) {
+    try {
+      initialMapKnowledge = await options.getMapKnowledge(kernel.sha256);
+    } catch (cause) {
+      console.error("[cartography] remembered map knowledge unavailable", cause);
+    }
+  }
   if (compassReader !== null) window.gwCompassFrameSpike = compassReader;
   if (missionMapReader !== null) window.gwMissionMapFrameSpike = missionMapReader;
   if (worldMapReader !== null) window.gwWorldMapFrameSpike = worldMapReader;
@@ -117,6 +131,8 @@ export async function installCartographySpike(options: Readonly<{
     settings: options.settings,
     persist: options.persist,
     exportEvidence: options.exportEvidence,
+    initialMapKnowledge,
+    recordMapKnowledge: options.recordMapKnowledge,
   });
 
   return () => {
