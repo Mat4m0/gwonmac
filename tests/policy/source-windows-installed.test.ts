@@ -32,6 +32,8 @@ test("installed qualification is restricted to a disposable hosted runner", () =
   assert.match(script, /"--disable-gpu"/u);
   assert.match(script, /proveNormalWindowsStartup/u);
   assert.match(script, /desktopProcessShape: true/u);
+  assert.match(script, /appOwnedRemoteDebugging: true/u);
+  assert.match(packagedApp, /"--gw-qualification-debugging"/u);
   assert.match(packagedApp, /detached: options\.desktopProcessShape === true/u);
   assert.match(packagedApp, /\? "ignore"[\s\S]*windowsHide: options\.desktopProcessShape === true/u);
   assert.doesNotMatch(script, /crashpad-handler|disable-crash-reporter/u);

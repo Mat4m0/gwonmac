@@ -287,6 +287,7 @@ try {
     // test-only renderer instrumentation; the final detached launch proves
     // ordinary desktop startup after these checks close gracefully.
     arguments: automationArguments,
+    appOwnedRemoteDebugging: true,
     // Keep the installed GUI process in the same detached, pipe-free shape as
     // an Explorer launch. CDP connects through DevToolsActivePort and does not
     // need to change the process' Windows console or Crashpad inheritance.
@@ -428,6 +429,7 @@ try {
     productName: release.productName,
     userData: storage.sessions,
     arguments: signedQualification ? [] : ["--gw-volatile-secrets"],
+    appOwnedRemoteDebugging: true,
     desktopProcessShape: true,
     useDefaultUserData: true,
   });
@@ -477,6 +479,7 @@ try {
       executablePath: installedExecutable,
       productName: release.productName,
       userData: storage.sessions,
+      appOwnedRemoteDebugging: true,
       desktopProcessShape: true,
       useDefaultUserData: true,
     });
