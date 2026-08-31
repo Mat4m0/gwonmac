@@ -287,10 +287,14 @@ try {
       (await secondGame.evaluate(() => window.gwNative.credentials.load()))?.username,
       "second-linux-qualified@example.invalid",
     );
-    const encrypted = await readFile(
-      path.join(storage.data, "secrets", `multi.${mainProfile.id}.arenaNetCredentials.secret`),
+    const mainEncrypted = await readFile(
+      path.join(storage.data, "secrets", "arenaNetCredentials.secret"),
     );
-    assert.equal(encrypted.includes(Buffer.from("synthetic-main-password")), false);
+    const secondEncrypted = await readFile(
+      path.join(storage.data, "secrets", `multi.${secondProfile.id}.arenaNetCredentials.secret`),
+    );
+    assert.equal(mainEncrypted.includes(Buffer.from("synthetic-main-password")), false);
+    assert.equal(secondEncrypted.includes(Buffer.from("synthetic-second-password")), false);
   }
 
   const tools = await launcher.evaluate(async () =>

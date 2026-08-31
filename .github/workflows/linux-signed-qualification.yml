@@ -32,7 +32,10 @@ jobs:
         if: matrix.desktop == 'kde'
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder g++ libglib2.0-dev gnupg xvfb dbus-x11 plasma-workspace xdg-desktop-portal xdg-desktop-portal-kde kwalletmanager
+          # Noble's KWallet 5 predates its Secret portal backend. GNOME Keyring
+          # supplies that standard interface for this KDE integration gate;
+          # current KWallet 6 supplies the same interface on supported systems.
+          sudo apt-get install -y flatpak flatpak-builder g++ libglib2.0-dev gnupg xvfb dbus-x11 plasma-workspace xdg-desktop-portal xdg-desktop-portal-kde kwalletmanager gnome-keyring
       - name: Install Flatpak runtimes
         run: |
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -75,8 +78,6 @@ jobs:
             XDG_SESSION_DESKTOP="$desktop" \
             XDG_SESSION_TYPE=x11 \
             dbus-run-session -- bash -euc '
-            if [ "$DESKTOP" = gnome ]; then
-              eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"
-            fi
+            eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"
             pnpm test:linux-installed
           '
