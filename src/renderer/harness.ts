@@ -1099,6 +1099,26 @@ function appendGlue() {
   document.body.appendChild(s);
 }
 
+async function readSnapshotMetadata() {
+  const timeoutMs = 5_000;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const result = await Promise.race([
+      native().snapshot.metadata().then((value) => ({
+        state: 'ready' as const,
+        value,
+      })),
+      new Promise<{ state: 'timeout' }>((resolve) => {
+        timer = setTimeout(() => resolve({ state: 'timeout' }), timeoutMs);
+      }),
+    ]);
+    if (timer !== undefined) clearTimeout(timer);
+    if (result.state === 'ready') return result.value;
+    log(`[warn] snapshot metadata timed out (attempt ${attempt})`);
+  }
+  throw new Error('snapshot metadata did not respond');
+}
+
 function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   if (!appSettings) {
     window.gwLoading.fail('Settings were not ready.');
@@ -1290,35 +1310,51 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   milestone('renderer.loaded');
   let isProxyRouteLabel: (route: string) => boolean;
   try {
-    // Electron resolves these local modules through the custom `gw://`
-    // protocol. Load them in a fixed order: a large parallel import fan-out
-    // can leave one request unfinished during rapid renderer start/stop cycles,
-    // which strands the game before its input host is installed.
-    const { unavailablePlatformCapabilities } =
-      await import('./platform-capabilities.js');
-    const { createSocketHost } = await import('./socket-host.js');
-    const clientExit = await import('./client-exit.js');
-    const memoryAttribution = await import('./wasm-memory-attribution.js');
-    const graphics = await import('./graphics.js');
-    const glProgramCache = await import('./gl-program-cache.js');
-    const filesystem = await import('./filesystem.js');
-    const input = await import('./input.js');
-    const inputTraceModule = await import('./input-trace.js');
-    const surfaceController = await import('./surface-controller.js');
-    const nativeDoubleClickModule = await import('./native-double-click.js');
-    const textEditing = await import('./text-editing.js');
-    const gamepadTraceModule = await import('./gamepad-trace.js');
-    const templateSaveCompatibility =
-      await import('./template-save-compatibility.js');
-    const templateFilesystemTrace =
-      await import('./template-filesystem-trace.js');
-    const clientHealth = await import('./client-health.js');
-    const appearance = await import('./appearance.js');
-    const proxyRoutes = await import('../shared/proxy-routes.js');
-    const virtualGamepad = await import('./virtual-gamepad.js');
-    const controllerPromptTexture =
-      await import('./controller-prompt-texture.js');
-    const characterSwitch = await import('./character-switch-host.js');
+    const [
+      { unavailablePlatformCapabilities },
+      { createSocketHost },
+      clientExit,
+      memoryAttribution,
+      graphics,
+      glProgramCache,
+      filesystem,
+      input,
+      inputTraceModule,
+      surfaceController,
+      nativeDoubleClickModule,
+      textEditing,
+      gamepadTraceModule,
+      templateSaveCompatibility,
+      templateFilesystemTrace,
+      clientHealth,
+      appearance,
+      proxyRoutes,
+      virtualGamepad,
+      controllerPromptTexture,
+      characterSwitch,
+    ] = await Promise.all([
+      import('./platform-capabilities.js'),
+      import('./socket-host.js'),
+      import('./client-exit.js'),
+      import('./wasm-memory-attribution.js'),
+      import('./graphics.js'),
+      import('./gl-program-cache.js'),
+      import('./filesystem.js'),
+      import('./input.js'),
+      import('./input-trace.js'),
+      import('./surface-controller.js'),
+      import('./native-double-click.js'),
+      import('./text-editing.js'),
+      import('./gamepad-trace.js'),
+      import('./template-save-compatibility.js'),
+      import('./template-filesystem-trace.js'),
+      import('./client-health.js'),
+      import('./appearance.js'),
+      import('../shared/proxy-routes.js'),
+      import('./virtual-gamepad.js'),
+      import('./controller-prompt-texture.js'),
+      import('./character-switch-host.js'),
+    ]);
     host = {
       ...clientExit,
       ...memoryAttribution,
@@ -1430,7 +1466,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   try {
     const [{ createImageSource }, meta] = await Promise.all([
       import('./image-source.js'),
-      native().snapshot.metadata(),
+      readSnapshotMetadata(),
     ]);
     const source = createImageSource({
       metadata: meta,
