@@ -14,7 +14,18 @@ export async function startGameInput(page: Page) {
   // draining while the next cached fixture starts. Wait for the explicit
   // renderer-owned signal instead of inventing a short product startup
   // promise. This bound covers loaded CI without weakening the assertion.
-  await expect(canvas).toHaveAttribute("data-input-ready", "true", {
-    timeout: 30_000,
-  });
+  try {
+    await expect(canvas).toHaveAttribute("data-input-ready", "true", {
+      timeout: 20_000,
+    });
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      loading: document.getElementById("loading-label")?.textContent,
+      detail: document.getElementById("loading-detail")?.textContent,
+      log: document.getElementById("log")?.textContent,
+    }));
+    throw new Error(`game input did not start: ${JSON.stringify(state)}`, {
+      cause: error,
+    });
+  }
 }

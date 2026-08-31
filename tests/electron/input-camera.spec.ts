@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { CORE_IPC } from "../../src/shared/contracts.js";
 import { closeOffline, launchCachedClient } from "./fixtures.mjs";
 import { boxOf, startGameInput } from "./input-helpers.js";
 
@@ -22,43 +21,6 @@ type CameraInputWindow = typeof window & {
 };
 
 test.describe("renderer camera input", () => {
-  test("retries a lost snapshot metadata response before installing input", async () => {
-    const fixture = await launchCachedClient("gw-snapshot-metadata-retry-e2e-", {
-      GW_TEST_RETURN_LAUNCHER: "1",
-    });
-    try {
-      await fixture.app.evaluate(({ ipcMain }, channel) => {
-        ipcMain.removeHandler(channel);
-        let attempts = 0;
-        ipcMain.handle(channel, () => {
-          attempts += 1;
-          if (attempts === 1) return new Promise(() => undefined);
-          return {
-            size: 1,
-            chunkSize: 1,
-            chunkHashes: ["fixture"],
-            residentBits: Uint8Array.of(1),
-          };
-        });
-      }, CORE_IPC.snapshotMetadata);
-      const profileId = await fixture.page.evaluate(async () =>
-        (await window.launcherNative.state.get()).profiles.find(
-          (profile) => !profile.archived,
-        )?.id,
-      );
-      if (!profileId) throw new Error("launcher fixture has no active profile");
-      const gamePage = fixture.app.waitForEvent("window");
-      await fixture.page.evaluate(
-        (id) => window.launcherNative.profiles.play([id]),
-        profileId,
-      );
-      const game = await gamePage;
-      await startGameInput(game);
-    } finally {
-      await closeOffline(fixture);
-    }
-  });
-
   test("allows pointer lock only for the owned game canvas", async () => {
     // Real pointer lock needs a focused widget, so this launch takes focus.
     const fixture = await launchCachedClient("gw-pointer-permission-e2e-", {

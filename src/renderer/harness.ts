@@ -1099,26 +1099,6 @@ function appendGlue() {
   document.body.appendChild(s);
 }
 
-async function readSnapshotMetadata() {
-  const timeoutMs = 5_000;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const result = await Promise.race([
-      native().snapshot.metadata().then((value) => ({
-        state: 'ready' as const,
-        value,
-      })),
-      new Promise<{ state: 'timeout' }>((resolve) => {
-        timer = setTimeout(() => resolve({ state: 'timeout' }), timeoutMs);
-      }),
-    ]);
-    if (timer !== undefined) clearTimeout(timer);
-    if (result.state === 'ready') return result.value;
-    log(`[warn] snapshot metadata timed out (attempt ${attempt})`);
-  }
-  throw new Error('snapshot metadata did not respond');
-}
-
 function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   if (!appSettings) {
     window.gwLoading.fail('Settings were not ready.');
@@ -1466,7 +1446,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   try {
     const [{ createImageSource }, meta] = await Promise.all([
       import('./image-source.js'),
-      readSnapshotMetadata(),
+      native().snapshot.metadata(),
     ]);
     const source = createImageSource({
       metadata: meta,
