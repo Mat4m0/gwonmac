@@ -24,29 +24,45 @@ jobs:
       - name: Install build and Flatpak dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder g++ libglib2.0-dev gnupg xvfb
+          sudo apt-get install -y flatpak flatpak-builder g++ libglib2.0-dev gnupg ostree xvfb
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 org.electronjs.Electron2.BaseApp//25.08
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check
+      - name: Build the immediate prior package for update qualification
+        run: node --import ./scripts/ts-hook.mjs scripts/linux-update-fixture.ts "$RUNNER_TEMP/linux-baseline-package"
       - name: Build the release-shaped Electron package
         run: pnpm package
         env:
           GW_PACKAGE_INTENT: release
-      - name: Build and install a GPG-verified local repository
+      - name: Build two GPG-verified repository commits and install the baseline
         shell: bash
         run: |
           export GNUPGHOME="$RUNNER_TEMP/flatpak-ci-gpg"
           mkdir -m 700 "$GNUPGHOME"
           gpg --batch --passphrase '' --quick-generate-key 'gwonmac CI qualification <ci@example.invalid>' ed25519 sign 1d
           key_id="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
+          mv "out/Guild Wars Reforged-linux-x64" "$RUNNER_TEMP/linux-candidate-package"
+          cp -a "$RUNNER_TEMP/linux-baseline-package" "out/Guild Wars Reforged-linux-x64"
+          flatpak-builder --user --disable-rofiles-fuse --force-clean --repo=flatpak-baseline-repo --gpg-sign="$key_id" --gpg-homedir="$GNUPGHOME" flatpak-build packaging/linux/io.github.mat4m0.gwonmac.yml
+          flatpak build-update-repo --gpg-sign="$key_id" --gpg-homedir="$GNUPGHOME" flatpak-baseline-repo
+          baseline_commit="$(ostree --repo=flatpak-baseline-repo rev-parse app/io.github.mat4m0.gwonmac/x86_64/master)"
+          cp -a flatpak-baseline-repo flatpak-repo
+          rm -rf "out/Guild Wars Reforged-linux-x64"
+          mv "$RUNNER_TEMP/linux-candidate-package" "out/Guild Wars Reforged-linux-x64"
           flatpak-builder --user --disable-rofiles-fuse --force-clean --repo=flatpak-repo --gpg-sign="$key_id" --gpg-homedir="$GNUPGHOME" flatpak-build packaging/linux/io.github.mat4m0.gwonmac.yml
           flatpak build-update-repo --gpg-sign="$key_id" --gpg-homedir="$GNUPGHOME" flatpak-repo
+          candidate_commit="$(ostree --repo=flatpak-repo rev-parse app/io.github.mat4m0.gwonmac/x86_64/master)"
+          test "$baseline_commit" != "$candidate_commit"
           gpg --batch --export "$key_id" > "$RUNNER_TEMP/flatpak-ci-public.gpg"
-          flatpak remote-add --user --gpg-import="$RUNNER_TEMP/flatpak-ci-public.gpg" gwonmac-ci "file://$GITHUB_WORKSPACE/flatpak-repo"
+          flatpak remote-add --user --gpg-import="$RUNNER_TEMP/flatpak-ci-public.gpg" gwonmac-ci "file://$GITHUB_WORKSPACE/flatpak-baseline-repo"
           flatpak install --user -y gwonmac-ci io.github.mat4m0.gwonmac
+          echo "GW_LINUX_BASELINE_COMMIT=$baseline_commit" >> "$GITHUB_ENV"
+          echo "GW_LINUX_CANDIDATE_COMMIT=$candidate_commit" >> "$GITHUB_ENV"
+          echo "GW_LINUX_QUALIFICATION_REMOTE=gwonmac-ci" >> "$GITHUB_ENV"
+          echo "GW_LINUX_QUALIFICATION_REMOTE_URL=file://$GITHUB_WORKSPACE/flatpak-repo" >> "$GITHUB_ENV"
       - name: Qualify the installed Xwayland package
         # Start the session bus inside the display so portal services activated
         # by D-Bus inherit DISPLAY instead of starting headless.

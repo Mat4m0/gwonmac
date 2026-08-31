@@ -50,6 +50,17 @@ describe("Linux Flatpak package", () => {
     }
   });
 
+  it("qualifies failed update recovery, upgrade, and rollback", () => {
+    assert.match(buildWorkflow, /linux-update-fixture\.ts/u);
+    assert.match(buildWorkflow, /file:\/\/\$GITHUB_WORKSPACE\/flatpak-baseline-repo/u);
+    assert.match(buildWorkflow, /GW_LINUX_QUALIFICATION_REMOTE_URL=file:\/\/\$GITHUB_WORKSPACE\/flatpak-repo/u);
+    assert.match(buildWorkflow, /GW_LINUX_CANDIDATE_COMMIT/u);
+    const installed = readFileSync("scripts/linux-installed-qualification.ts", "utf8");
+    assert.match(installed, /a failed Flatpak update changed the installed deployment/u);
+    assert.match(installed, /--commit=\$\{baselineCommit\}/u);
+    assert.match(installed, /the prior package could not read the candidate-preserved workspace/u);
+  });
+
   it("keeps native Wayland out of the default package gate", () => {
     const defaultGate = buildWorkflow.split("\n  native-wayland:", 1)[0] ?? "";
     assert.match(defaultGate, /installed-xwayland/u);

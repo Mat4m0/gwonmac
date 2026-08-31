@@ -20,6 +20,21 @@ const execFileAsync = promisify(execFile);
 const applicationId = DISTRIBUTION_CHANNEL_CONFIG.release.bundleId;
 const secretQualification = process.env.GW_LINUX_SECRET_QUALIFICATION === "1";
 const nativeWayland = process.env.GW_LINUX_NATIVE_WAYLAND === "1";
+const baselineCommit = process.env.GW_LINUX_BASELINE_COMMIT;
+const candidateCommit = process.env.GW_LINUX_CANDIDATE_COMMIT;
+const qualificationRemote = process.env.GW_LINUX_QUALIFICATION_REMOTE;
+const qualificationRemoteUrl = process.env.GW_LINUX_QUALIFICATION_REMOTE_URL;
+const updateQualification = baselineCommit !== undefined
+  || candidateCommit !== undefined
+  || qualificationRemote !== undefined
+  || qualificationRemoteUrl !== undefined;
+
+if (
+  updateQualification
+  && (!baselineCommit || !candidateCommit || !qualificationRemote || !qualificationRemoteUrl)
+) {
+  throw new Error("Linux update qualification requires both commits, remote, and remote URL");
+}
 
 if (
   process.platform !== "linux"
@@ -107,7 +122,57 @@ async function waitForFlatpakExit(): Promise<void> {
   }
 }
 
+async function installedCommit(): Promise<string> {
+  const { stdout } = await execFileAsync(
+    "flatpak",
+    ["info", "--user", "--show-commit", applicationId],
+    { encoding: "utf8" },
+  );
+  return stdout.trim();
+}
+
+async function qualifyUpdateRecovery(): Promise<void> {
+  assert.ok(baselineCommit && candidateCommit && qualificationRemote && qualificationRemoteUrl);
+  assert.equal(await installedCommit(), baselineCommit);
+  const brokenUrl = `file://${path.join(os.tmpdir(), "missing-gwonmac-flatpak-repository")}`;
+  await execFileAsync(
+    "flatpak",
+    ["remote-modify", "--user", `--url=${brokenUrl}`, qualificationRemote],
+  );
+  await assert.rejects(execFileAsync(
+    "flatpak",
+    ["update", "--user", "-y", applicationId],
+    { timeout: 120_000 },
+  ));
+  assert.equal(
+    await installedCommit(),
+    baselineCommit,
+    "a failed Flatpak update changed the installed deployment",
+  );
+  await execFileAsync(
+    "flatpak",
+    ["remote-modify", "--user", `--url=${qualificationRemoteUrl}`, qualificationRemote],
+  );
+  await execFileAsync(
+    "flatpak",
+    ["update", "--user", "-y", applicationId],
+    { timeout: 120_000 },
+  );
+  assert.equal(await installedCommit(), candidateCommit);
+}
+
+async function rollBackInstalledPackage(): Promise<void> {
+  assert.ok(baselineCommit);
+  await execFileAsync(
+    "flatpak",
+    ["update", "--user", "-y", `--commit=${baselineCommit}`, applicationId],
+    { timeout: 120_000 },
+  );
+  assert.equal(await installedCommit(), baselineCommit);
+}
+
 assert.equal(await installed(), true, "the signed Flatpak is not installed");
+if (updateQualification) assert.equal(await installedCommit(), baselineCommit);
 assert.equal(
   existsSync(appRoot),
   false,
@@ -246,6 +311,8 @@ try {
   running = null;
   await waitForFlatpakExit();
 
+  if (updateQualification) await qualifyUpdateRecovery();
+
   running = await launch();
   const restartedLauncher = running.launcherPage;
   assert.ok(restartedLauncher);
@@ -268,6 +335,23 @@ try {
   running = null;
   await waitForFlatpakExit();
 
+  if (updateQualification) {
+    await rollBackInstalledPackage();
+    running = await launch();
+    const rollbackLauncher = running.launcherPage;
+    assert.ok(rollbackLauncher);
+    assert.deepEqual(
+      await rollbackLauncher.evaluate(async () =>
+        (await window.launcherNative.state.get()).profiles.map(({ name }) => name)
+      ),
+      ["Main account", "Second account"],
+      "the prior package could not read the candidate-preserved workspace",
+    );
+    await closePackagedApp(running);
+    running = null;
+    await waitForFlatpakExit();
+  }
+
   await execFileAsync("flatpak", ["uninstall", "--user", "-y", applicationId]);
   assert.equal(await installed(), false);
   assert.equal(
@@ -284,7 +368,9 @@ try {
     credentials: secretQualification
       ? "portal-encrypted, isolated, and restart-stable"
       : "volatile in this smoke; portal runs in the signed desktop gate",
-    updates: "software-center managed",
+    updates: updateQualification
+      ? "failed update recovered; upgraded and rolled back with data preserved"
+      : "software-center managed",
     uninstall: "application removed; player data preserved",
   }, null, 2));
 } finally {
