@@ -159,9 +159,12 @@ jobs:
           DESKTOP: ${{ matrix.desktop }}
           GW_LINUX_SECRET_QUALIFICATION: "1"
         run: |
-          xvfb-run -a dbus-run-session -- bash -euc '
-            export XDG_CURRENT_DESKTOP="${DESKTOP^^}"
-            export XDG_SESSION_TYPE=x11
+          desktop="${DESKTOP^^}"
+          xvfb-run -a env \
+            XDG_CURRENT_DESKTOP="$desktop" \
+            XDG_SESSION_DESKTOP="$desktop" \
+            XDG_SESSION_TYPE=x11 \
+            dbus-run-session -- bash -euc '
             if [ "$DESKTOP" = gnome ]; then
               eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"
             fi
