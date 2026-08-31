@@ -558,6 +558,25 @@ test.describe("tools and update settings", () => {
       );
       await expect.poll(() => page.evaluate(() => document.activeElement?.id))
         .toBe("settings-tab-data");
+      await page.evaluate(() => {
+        document.getElementById("canvas")?.addEventListener("click", () => {
+          document.body.dataset.settingsGameClick = "true";
+        });
+      });
+      await page.mouse.click(8, 8);
+      await expect(page.locator("#settings-dialog")).not.toHaveAttribute("open", "");
+      await expect(page.locator("body")).not.toHaveAttribute(
+        "data-settings-game-click",
+        /.*/u,
+      );
+      await app.evaluate(({ Menu }) => {
+        Menu.getApplicationMenu()
+          ?.items[0]?.submenu?.items.find(
+            (candidate) => candidate.label === "Settings…",
+          )
+          ?.click();
+      });
+      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
       await page.keyboard.press("Escape");
       await expect(page.locator("#settings-dialog")).not.toHaveAttribute("open", "");
       await app.evaluate(({ Menu }) => {

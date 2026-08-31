@@ -190,13 +190,13 @@
 <!-- Settings: one contained panel with a section rail. The active pane owns
      scrolling when it needs it; the header and one canonical save status stay
      visible. Danger actions are quiet, separated, and confirmed natively. -->
-<dialog id="settings-dialog" class="ui-frame" aria-labelledby="settings-title">
-  <form method="dialog" id="settings-form" class="ui-panel">
+<dialog id="settings-dialog" class="ui-frame ui-modal" aria-labelledby="settings-title">
+  <form id="settings-form" class="ui-panel">
     <header class="settings-header ui-panel-head">
       <div class="settings-title-group">
         <h2 id="settings-title" class="ui-panel-title">Settings</h2>
       </div>
-      <button value="done" id="settings-done" class="ui-button" data-icon aria-label="Close settings">
+      <button type="button" id="settings-done" class="ui-button" data-icon aria-label="Close settings">
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m3 3 10 10M13 3 3 13"/></svg>
       </button>
     </header>
@@ -644,7 +644,7 @@
                     <span class="settings-shortcut-name">Shortcut</span>
                 <kbd class="settings-shortcut-value">—</kbd>
                 <button type="button" class="ui-button settings-shortcut-change">Change</button>
-                <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+                <p class="settings-shortcut-message" role="status" aria-live="polite" aria-atomic="true"></p>
                 <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
               </div>
               </div>
@@ -663,7 +663,7 @@
                     <span class="settings-shortcut-name">Shortcut</span>
                 <kbd class="settings-shortcut-value">—</kbd>
                 <button type="button" class="ui-button settings-shortcut-change">Change</button>
-                <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+                <p class="settings-shortcut-message" role="status" aria-live="polite" aria-atomic="true"></p>
                 <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
               </div>
                 <p class="settings-tool-command">Chat command <code>/trade</code></p>
@@ -683,7 +683,7 @@
                   <span class="settings-shortcut-name">Shortcut</span>
                   <kbd class="settings-shortcut-value">—</kbd>
                   <button type="button" class="ui-button settings-shortcut-change">Change</button>
-                  <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+                  <p class="settings-shortcut-message" role="status" aria-live="polite" aria-atomic="true"></p>
                   <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
                 </div>
                 <p class="settings-tool-command">Chat command <code>/tp</code></p>
@@ -703,7 +703,7 @@
                     <span class="settings-shortcut-name">Shortcut</span>
                 <kbd class="settings-shortcut-value">—</kbd>
                 <button type="button" class="ui-button settings-shortcut-change">Change</button>
-                <p class="settings-shortcut-message" role="status" aria-live="polite" hidden></p>
+                <p class="settings-shortcut-message" role="status" aria-live="polite" aria-atomic="true"></p>
                 <button type="button" class="ui-link settings-shortcut-replace" hidden>Replace existing shortcut</button>
               </div>
                 <p class="settings-tool-command">Chat commands <code>/chest</code> and <code>/xunlai</code></p>
@@ -967,7 +967,7 @@
     <button type="button" id="settings-resize" class="ui-resize-grip" aria-label="Resize Settings"></button>
   </form>
 </dialog>
-<dialog id="settings-theme-import-dialog" class="ui-frame settings-theme-import-dialog"
+<dialog id="settings-theme-import-dialog" class="ui-frame ui-modal settings-theme-import-dialog"
         aria-labelledby="settings-theme-import-title">
   <form method="dialog" class="settings-theme-import-form">
     <h2 id="settings-theme-import-title" class="ui-titlebar">Import custom theme</h2>

@@ -175,6 +175,10 @@ test.describe("data and display settings", () => {
       // change the active interface underneath the player.
       await page.locator("#settings-theme-tab-custom").click();
       await expect(page.locator("#settings-theme-custom")).toBeVisible();
+      const themeHex = page.locator('[data-theme-hex="window"]');
+      await themeHex.focus();
+      await themeHex.press("Enter");
+      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
       await expect(root).not.toHaveAttribute("data-ui-style");
       await expect.poll(() => page.evaluate(async () =>
         (await window.gwNative.settings.get()).uiStyle,
@@ -203,6 +207,8 @@ test.describe("data and display settings", () => {
       });
 
       await page.locator("#settings-theme-import").click();
+      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
+      await expect(page.locator("#settings-theme-import-dialog")).toHaveAttribute("open", "");
       await page.locator("#settings-theme-import-value").fill("not-a-theme");
       await page.locator("#settings-theme-import-apply").click();
       await expect(page.locator("#settings-theme-import-error")).toBeVisible();
@@ -215,6 +221,7 @@ test.describe("data and display settings", () => {
       );
       await page.locator("#settings-theme-import-apply").click();
       await expect(page.locator("#settings-theme-import-dialog")).not.toHaveAttribute("open", "");
+      await expect(page.locator("#settings-theme-import")).toBeFocused();
       await expect.poll(() => page.evaluate(async () =>
         (await window.gwNative.settings.get()).uiCustomTheme,
       )).toMatchObject({
@@ -322,7 +329,6 @@ test.describe("data and display settings", () => {
       await expect(page.locator("#settings-pane-display")).toContainText(
         "Choose a lower scale if Guild Wars feels slow",
       );
-
       // Segment radios intentionally cover their visible labels at zero
       // opacity. Skip Chromium's paint-based actionability check, then wait
       // for this save before starting the independent Diagnostics update.
@@ -345,7 +351,10 @@ test.describe("data and display settings", () => {
             .showDiagnostics,
         )
         .toBe(true);
-      await page.locator("#settings-tab-controls").click();
+      await expect(page.locator("#settings-dialog")).not.toHaveAttribute("open", "");
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent("gw:settings", {
+        detail: { pane: "controls" },
+      })));
       await expect(page.locator("#settings-pane-controls")).toContainText(
         "Guild Wars cursor",
       );
@@ -651,9 +660,7 @@ test.describe("data and display settings", () => {
         compactGeometry.dialog.bottom,
       );
       expect(compactGeometry.paneWidth[1]).toBe(compactGeometry.paneWidth[0]);
-      expect(compactGeometry.railWidth[1]!).toBeGreaterThan(
-        compactGeometry.railWidth[0]!,
-      );
+      expect(compactGeometry.railWidth[1]).toBe(compactGeometry.railWidth[0]);
 
       const firstCompactTab = page.locator(`#settings-tab-${first}`);
       await firstCompactTab.focus();

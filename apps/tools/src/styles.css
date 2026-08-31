@@ -146,6 +146,7 @@
 .travel-notice[data-level="danger"] { color: var(--ui-danger); }
 
 .travel-body {
+  flex: 1;
   min-height: 0;
   max-height: max(120px, min(430px, calc(100vh - 210px)));
   padding: var(--ui-space-4);
@@ -493,8 +494,15 @@
 
 @media (max-height: 560px) {
   .travel-palette {
-    top: clamp(96px, 23vh, 160px);
-    max-height: calc(100vh - clamp(96px, 23vh, 160px) - 12px);
+    top: 8px;
+    max-height: calc(100vh - 16px);
   }
-  .travel-body { min-height: 120px; }
+  .travel-body { max-height: none; }
+}
+
+@media (forced-colors: active) {
+  .travel-search label:has(input:focus-visible) {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
 }

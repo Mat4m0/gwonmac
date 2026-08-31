@@ -60,7 +60,7 @@ test.describe("renderer Travel input", () => {
     }
   });
 
-  test("stays open over game interaction and closes from every focus state", async () => {
+  test("is modal, dismisses without click-through, and shares transient ownership", async () => {
     const fixture = await launchCachedClient(
       "gw-travel-input-e2e-",
       {},
@@ -99,6 +99,10 @@ test.describe("renderer Travel input", () => {
           const count = Number(document.body.dataset.travelCanvasBlurs ?? "0");
           document.body.dataset.travelCanvasBlurs = String(count + 1);
         });
+        gameCanvas.addEventListener("click", () => {
+          const count = Number(document.body.dataset.travelGameClicks ?? "0");
+          document.body.dataset.travelGameClicks = String(count + 1);
+        });
       });
 
       await page.evaluate(() => {
@@ -136,23 +140,29 @@ test.describe("renderer Travel input", () => {
       });
       await expect(palette).toBeVisible();
 
-      // Native modal work is above non-modal surfaces. The first Escape closes
-      // Settings and restores Travel; the palette remains open underneath.
+      // Top-level dialogs have one transient owner. Opening Settings dismisses
+      // Travel instead of leaving one modal hidden behind another.
       await page.evaluate(() => {
         window.dispatchEvent(new CustomEvent("gw:settings", {
           detail: { pane: "controls" },
         }));
       });
       await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
-      await page.keyboard.press("Escape");
+      await expect(palette).toBeHidden();
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:travel-toggle", {
+          cancelable: true,
+          detail: {},
+        }));
+      });
       await expect(page.locator("#settings-dialog")).not.toHaveAttribute("open", "");
       await expect(palette).toBeVisible();
-
-      await canvas.click({ position: { x: 20, y: 300 } });
-      await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
-      await expect(palette).toBeVisible();
-      await page.keyboard.press("Escape");
+      await page.mouse.click(8, 8);
       await expect(palette).toBeHidden();
+      await expect(page.locator("body")).not.toHaveAttribute(
+        "data-travel-game-clicks",
+        /.*/u,
+      );
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
 
       await page.evaluate(() => {
@@ -162,13 +172,39 @@ test.describe("renderer Travel input", () => {
         }));
       });
       await expect.poll(() => isDomActiveElement(search)).toBe(true);
-      await canvas.click({ position: { x: 20, y: 300 } });
       await page.keyboard.press("Tab");
-      await expect.poll(() => isDomActiveElement(search)).toBe(true);
+      await expect.poll(() => page.evaluate(() =>
+        document.querySelector("#travel-palette-root")?.contains(document.activeElement),
+      )).toBe(true);
 
       await page.getByRole("button", { name: "Close Quick Travel" }).click();
       await expect(palette).toBeHidden();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
+
+      // The shared owner closes the native modal even if a feature's local
+      // dismissal callback fails to do so. Otherwise Chromium refuses to show
+      // the replacement and leaves the previous interface blocking the game.
+      await page.evaluate(() => {
+        const stubborn = document.createElement("dialog");
+        stubborn.id = "stubborn-transient-dialog";
+        document.body.append(stubborn);
+        window.gwSurfaces.registerDialog({
+          root: stubborn,
+          priority: 5,
+          transient: true,
+          dismiss: () => undefined,
+          restoreFocus: () => document.getElementById("canvas"),
+        }).show();
+      });
+      await expect(page.locator("#stubborn-transient-dialog")).toHaveAttribute("open", "");
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:travel-toggle", {
+          cancelable: true,
+          detail: {},
+        }));
+      });
+      await expect(page.locator("#stubborn-transient-dialog")).not.toHaveAttribute("open", "");
+      await expect(palette).toBeVisible();
     } finally {
       await closeOffline(fixture);
     }

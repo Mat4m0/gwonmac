@@ -1177,9 +1177,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     () => inputHost?.traceState(),
   );
   gamepadTrace = host.installGamepadTrace(inputTrace);
-  // Install before game input so a key claimed by the topmost GWonMac surface
-  // cannot also reach the official client's window-capture listener.
-  window.gwSurfaces = host.installSurfaceController(document);
   characterSwitchHost = installCharacterSwitchHost(document.body);
   window.gwCharacterSwitchHost = characterSwitchHost;
   native().inputTrace.onEntry((entry) => inputTrace?.record(entry));
@@ -1353,6 +1350,11 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       ...templateFilesystemTrace,
       ...controllerPromptTexture,
     };
+    // Dialogs belong to the application shell and must work before a game
+    // artifact is available. Installing their owner here also still precedes
+    // the official client's input hooks when a verified client does load.
+    window.gwSurfaces = host.installSurfaceController(document);
+    window.dispatchEvent(new Event('gw:surfaces-ready'));
     installCharacterSwitchHost = characterSwitch.installCharacterSwitchHost;
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
