@@ -338,9 +338,15 @@ try {
   assert.ok(mainProfile && secondProfile);
 
   const mainGame = await openPackagedProfile(running, mainProfile.id);
+  // The disposable cached client is a one-byte module with no EGL imports, so
+  // it cannot submit a graphical frame. Acknowledge the synthetic frame here
+  // just as the focused Electron first-frame tests do; production renderers
+  // still own this signal through the first real submitted frame.
+  await mainGame.evaluate(() => window.gwNative.client.readyToPresent());
   await waitForRunning(running, mainProfile.id);
   await mainGame.evaluate(() => localStorage.setItem("profile-proof", "main"));
   const secondGame = await openPackagedProfile(running, secondProfile.id);
+  await secondGame.evaluate(() => window.gwNative.client.readyToPresent());
   await waitForRunning(running, secondProfile.id);
   assert.equal(
     await secondGame.evaluate(() => localStorage.getItem("profile-proof")),
