@@ -5,8 +5,8 @@
 <h1 align="center">gwonmac</h1>
 
 <p align="center">
-  <strong>Guild Wars Reforged for macOS</strong><br>
-  Play ArenaNet's official Guild Wars client finally on an Apple Silicon Mac in high resolution and FPS.
+  <strong>Guild Wars Reforged for macOS, Windows, and Linux</strong><br>
+  Run ArenaNet's official Guild Wars client through one profile-based desktop launcher.
 </p>
 
 <p align="center">
@@ -24,21 +24,22 @@
 
 ## What gwonmac does
 
-gwonmac hosts ArenaNet's official WebAssembly client (what is used in the mobile app) in a sandboxed macOS app.
-You do not need Windows, Wine, VMWare or Crossover.
+gwonmac hosts ArenaNet's official WebAssembly client in a sandboxed desktop
+application. Windows and Linux run the client natively; macOS does not need
+Wine, a virtual machine, or CrossOver.
 
 The app provides:
 
-- native Apple Silicon packaging;
-- high FPS on full retina resolutions;
-- notarized by Apple (checked for Malware);
+- native Apple Silicon, Windows x64, and Linux x86_64 packaging;
+- high-resolution rendering;
+- platform-native package verification and saved-login storage;
 - verified downloads from ArenaNet;
 - ArenaNet and Steam sign-in;
-- build and team management;
+- optional Build Management, Quick Travel, and Xunlai Storage Tools;
 
 ## Requirements
 
-- An Apple Silicon Mac.
+- Apple Silicon macOS, Windows x64, or Linux x86_64 with Flatpak.
 - A Guild Wars account.
 - An internet connection for the first download and online play.
 
@@ -46,28 +47,30 @@ You can buy Guild Wars from the [official store](https://store.guildwars.com/en-
 
 ## Install
 
-1. Open the [Releases page](https://github.com/Mat4m0/gwonmac/releases) or go to https://gwonmac.com/download
-2. Download the latest Stable `.dmg` file.
-3. Open the file.
-4. Move **Guild Wars Reforged.app** to **Applications**.
-5. Open the app from **Applications**.
+1. Open the [Releases page](https://github.com/Mat4m0/gwonmac/releases) or go to https://gwonmac.com/download.
+2. Choose the package published for your platform: macOS DMG, Windows Setup,
+   or the Linux Flatpak repository instructions.
+3. Install it through the normal system installer or Flatpak software center.
+4. Open **Guild Wars Reforged**.
 
-Stable releases are signed with Developer ID and notarized by Apple. The
-Releases page also provides checksums, an SBOM, and build attestations. See
-[Verify a release](docs/release-verification.md) if you want to inspect them.
+Published Stable packages use the platform's verification path: Developer ID
+and Apple notarization, Windows Authenticode, or a signed Flatpak repository.
+Release availability can differ by platform while qualification is in progress.
+The Releases page also provides checksums, an SBOM, and build attestations. See
+[Verify a release](docs/release-verification.md) for the exact checks.
 
 ## Start the game
 
 Guild Wars starts as soon as the required data is ready, then downloads the
 rest of the game in the background while you play. You can see progress or
-pause the download in **Settings → Game Data**. The
+pause the download in **Settings → Game files**. The
 [user guide](docs/user-guide.md) explains sign-in, updates, Tools, recovery,
 and local data.
 
 ## Privacy and safety
 
-- The Mac app sends no gwonmac telemetry.
-- Diagnostics stay on your Mac until you attach an export to a report.
+- The app sends no gwonmac telemetry.
+- Diagnostics stay on your device until you attach an export to a report.
 - The diagnostics system does not record credentials, packet contents,
   cookies, request bodies, or local paths.
 - Provisioned builds can store saved login in Apple's device-only Data
@@ -85,8 +88,8 @@ Stable is the default update track. You can choose Beta in Settings. Stable,
 Beta, and release-candidate builds use the same app identity and local profile.
 Alpha builds are not public update candidates.
 
-An update found during the launch check installs before play unless you choose
-**Play Without Updating**. An update downloaded later waits for a restart.
+Application updates never block Play. The launcher offers a restart after an
+update is ready, so running game windows remain under the player's control.
 The app never performs an automatic downgrade.
 
 Application updates and ArenaNet game updates are separate systems. See the
@@ -94,11 +97,13 @@ Application updates and ArenaNet game updates are separate systems. See the
 
 ## Build from source
 
-You need macOS on Apple Silicon, Xcode Command Line Tools, Node.js 22.19 or
-newer, pnpm 11, and Rust through rustup.
+You need Node.js 22.19 or newer, pnpm 11, Rust through rustup, and the native
+compiler toolchain for the target platform. macOS builds require Apple Silicon
+and Xcode Command Line Tools; Windows builds require x64 MSVC; Linux builds
+require the x86_64 GLib development headers. The supported commands and exact
+CI toolchains are in the [development workflow](docs/development-workflow.md).
 
 ```bash
-xcode-select --install
 corepack enable
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
