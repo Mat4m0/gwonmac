@@ -70,7 +70,15 @@ describe("Linux Flatpak package", () => {
 
   it("starts desktop session buses inside their X display", () => {
     for (const workflow of [buildWorkflow, signedWorkflow]) {
-      assert.match(workflow, /xvfb-run -a dbus-run-session --/u);
+      const display = workflow.indexOf("xvfb-run -a env");
+      const desktop = workflow.indexOf("XDG_CURRENT_DESKTOP=", display);
+      const sessionDesktop = workflow.indexOf("XDG_SESSION_DESKTOP=", desktop);
+      const sessionBus = workflow.indexOf("dbus-run-session --", sessionDesktop);
+      assert.ok(display >= 0, "the desktop qualification does not start Xvfb");
+      assert.ok(
+        display < desktop && desktop < sessionDesktop && sessionDesktop < sessionBus,
+        "the D-Bus activation environment does not inherit the selected desktop",
+      );
       assert.doesNotMatch(workflow, /dbus-run-session -- xvfb-run/u);
     }
   });
