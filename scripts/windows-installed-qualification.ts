@@ -41,7 +41,6 @@ async function proveNormalCrashpadStartup(
   executable: string,
   arguments_: readonly string[],
 ): Promise<void> {
-  let output = "";
   const child = spawn(executable, arguments_, {
     env: {
       ...process.env,
@@ -49,20 +48,19 @@ async function proveNormalCrashpadStartup(
       GW_REQUIRE_CACHED_CLIENT: "1",
       GW_BACKGROUND_LAUNCH: "1",
     },
-    stdio: ["ignore", "pipe", "pipe"],
+    // Match an Explorer or Start-menu launch. Piping a GUI process' standard
+    // handles through Node changes the handle inheritance seen by Crashpad and
+    // is not a production-shaped startup boundary.
+    detached: true,
+    stdio: "ignore",
     windowsHide: true,
   });
-  const capture = (chunk: Buffer) => {
-    output = `${output}${chunk.toString("utf8")}`.slice(-65_536);
-  };
-  child.stdout.on("data", capture);
-  child.stderr.on("data", capture);
   try {
     await delay(5_000);
     assert.equal(
       child.exitCode,
       null,
-      `the normal installed application exited before qualification\n${output.trim()}`,
+      "the normal installed application exited before qualification",
     );
     assert.ok(child.pid, "the normal installed application has no process ID");
     const { stdout } = await execFileAsync(
