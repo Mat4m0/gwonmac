@@ -89,6 +89,19 @@ export async function launchCachedClient(
   });
 }
 
+/** Launch a cached client through the same readiness queue as production. */
+export async function launchPlayableClient(
+  prefix: string,
+  environment: Record<string, string> = {},
+  prepare: (userData: string) => Promise<void> = async () => {},
+  client: CachedClientOptions = {},
+): Promise<OfflineFixture> {
+  return launchCachedClient(prefix, {
+    GW_TEST_ALLOW_UNREADY_LAUNCH: "0",
+    ...environment,
+  }, prepare, client);
+}
+
 export async function launchOfflineAt(
   userData: string,
   environment: Record<string, string> = {},

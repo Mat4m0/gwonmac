@@ -4,13 +4,13 @@ import path from "node:path";
 import {
   closeOffline,
   isDomActiveElement,
-  launchCachedClient,
+  launchPlayableClient,
 } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 test.describe("renderer Travel input", () => {
   test("opens from the certified one-shot chat request", async () => {
-    const fixture = await launchCachedClient(
+    const fixture = await launchPlayableClient(
       "gw-travel-chat-e2e-",
       {},
       (userData) => writeFile(
@@ -61,7 +61,7 @@ test.describe("renderer Travel input", () => {
   });
 
   test("is modal, dismisses without click-through, and shares transient ownership", async () => {
-    const fixture = await launchCachedClient(
+    const fixture = await launchPlayableClient(
       "gw-travel-input-e2e-",
       {},
       (userData) => writeFile(

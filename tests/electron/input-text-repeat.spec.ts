@@ -7,7 +7,7 @@
  * glue.
  */
 import { expect, test } from '@playwright/test';
-import { closeOffline, launchCachedClient } from './fixtures.mjs';
+import { closeOffline, launchPlayableClient } from './fixtures.mjs';
 import { startGameInput } from './input-helpers.js';
 
 type KeyboardObservation = {
@@ -32,7 +32,7 @@ type RepeatProbe = {
 };
 
 test('native repeat edits text and retriggers hidden-proxy arrows', async () => {
-  const fixture = await launchCachedClient('gw-text-repeat-contract-');
+  const fixture = await launchPlayableClient('gw-text-repeat-contract-');
   try {
     const { app, page } = fixture;
     expect(await app.evaluate(({ systemPreferences }) =>

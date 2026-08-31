@@ -4,7 +4,7 @@ import path from "node:path";
 import {
   closeOffline,
   isDomActiveElement,
-  launchCachedClient,
+  launchPlayableClient,
   launchOffline,
 } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
@@ -49,7 +49,7 @@ const GAME_POINT = {
 
 test.describe("renderer Tools input", () => {
   test("floats over the game without stealing it", async () => {
-    const fixture = await launchCachedClient("gw-toolbox-input-e2e-");
+    const fixture = await launchPlayableClient("gw-toolbox-input-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -447,7 +447,7 @@ test.describe("renderer Tools input", () => {
 
   test("mounts the shipped embedded Tools window and persists one library change", async () => {
     test.setTimeout(60_000);
-    const fixture = await launchCachedClient(
+    const fixture = await launchPlayableClient(
       "gw-toolbox-embedded-e2e-",
       {},
       (userData) => writeFile(

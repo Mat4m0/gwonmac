@@ -17,7 +17,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   closeOffline,
-  launchCachedClient,
+  launchPlayableClient,
   launchOffline,
   launchOfflineAt,
   root,
@@ -329,7 +329,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("makes the provider chooser operable from the keyboard", async () => {
-    fixture = await launchCachedClient("gw-steam-provider-keyboard-");
+    fixture = await launchPlayableClient("gw-steam-provider-keyboard-");
     await startGameInput(fixture.page);
     expect(await getAuthToken(fixture, "Steam", true)).toEqual({
       settled: "rejected",

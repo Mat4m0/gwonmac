@@ -8,12 +8,12 @@ import path from "node:path";
 import {
   closeOffline,
   isDomActiveElement,
-  launchCachedClient,
+  launchPlayableClient,
 } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 test("a 27-character account searches, scrolls, and keeps the ten-key default", async () => {
-  const fixture = await launchCachedClient("gw-character-switch-e2e-");
+  const fixture = await launchPlayableClient("gw-character-switch-e2e-");
   try {
     const { page } = fixture;
     await startGameInput(page);
@@ -182,7 +182,7 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
 });
 
 test("the modal confirms PvE departure, blocks click-through, and retains post-logout failure", async () => {
-  const fixture = await launchCachedClient(
+  const fixture = await launchPlayableClient(
     "gw-character-switch-modal-e2e-",
     {},
     (userData) => writeFile(
