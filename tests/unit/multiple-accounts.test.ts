@@ -19,6 +19,7 @@ import {
   updateMultiProfile,
 } from "../../src/main/core/multiple-accounts.js";
 import {
+  LEGACY_PRIMARY_PROFILE_ID,
   parseMultiWorkspace,
   parseProfileId,
   profileNameKey,
@@ -140,6 +141,27 @@ describe("Multiple Accounts documents", () => {
       }),
       AppError,
     );
+  });
+
+  it("accepts the additive rollback-safe legacy marker", () => {
+    assert.deepEqual(parseMultiWorkspace({
+      formatVersion: 1,
+      profiles: [],
+      deletingProfileIds: [],
+      legacyPrimaryProfileId: LEGACY_PRIMARY_PROFILE_ID,
+      ignoredByCandidateAndStable: true,
+    }), {
+      formatVersion: 1,
+      profiles: [],
+      deletingProfileIds: [],
+      legacyPrimaryProfileId: LEGACY_PRIMARY_PROFILE_ID,
+    });
+    assert.throws(() => parseMultiWorkspace({
+      formatVersion: 1,
+      profiles: [],
+      deletingProfileIds: [],
+      legacyPrimaryProfileId: ID,
+    }), AppError);
   });
 
   it("adds, updates, and archives profiles without changing stable IDs", () => {

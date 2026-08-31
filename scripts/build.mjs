@@ -110,6 +110,9 @@ export const BUILD_STEPS = [
   [process.execPath, ["scripts/build-renderer.mjs"]],
   // The main program, and the owner of build/shared.
   [process.execPath, ["node_modules/typescript/bin/tsc"]],
+  // The launcher is a standalone Vue document with its own narrow preload and
+  // protocol subtree. Vite owns only build/renderer/launcher/.
+  ["pnpm", ["--filter", "@gwonmac/launcher-ui", "build"]],
   // The Tools application, bundled once for the renderer. It is an independent
   // Vue workspace with its own tests, so this step only packages what already
   // passed them. Vite writes build/renderer/tools/ and empties only that

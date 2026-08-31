@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
@@ -18,7 +17,13 @@ import {
   PRELOAD_ENTRIES,
   relativeEsmClosure,
 } from "./helpers/package-inventory.ts";
-import { stopChildProcess } from "./helpers/child-process.ts";
+import {
+  closePackagedApp,
+  launchPackagedApp,
+  openPackagedProfile,
+  type RunningPackagedApp,
+} from "./helpers/packaged-app.ts";
+import { seedCachedClient } from "./helpers/cached-client.ts";
 import {
   DISTRIBUTION_CHANNEL_CONFIG,
   distributionMarker,
@@ -100,6 +105,7 @@ const asarText = (file: string) =>
   extractFile(asarPath, file.slice(1)).toString("utf8");
 const packagedManifest = JSON.parse(asarText("/package.json"));
 const packagedRendererIndex = "/build/renderer/index.html";
+const packagedLauncherIndex = "/build/renderer/launcher/index.html";
 const packagedClosure = relativeEsmClosure({
   entryPoints: [
     packagedManifest.main,
@@ -108,12 +114,22 @@ const packagedClosure = relativeEsmClosure({
       packagedRendererIndex,
       asarText(packagedRendererIndex),
     ),
+    ...htmlScriptEntryPoints(
+      packagedLauncherIndex,
+      asarText(packagedLauncherIndex),
+    ),
   ],
   inventory: actualPackageFiles,
   readText: asarText,
 });
 assert.ok(packagedClosure.has("/build/main/certification/enhancement-builds.js"));
 assert.ok(packagedClosure.has("/build/renderer/enhancement-readout.js"));
+assert.ok(
+  [...packagedClosure].some((file) =>
+    file.startsWith("/build/renderer/launcher/assets/") && file.endsWith(".js")
+  ),
+  "the packaged dependency walk did not reach the Vue launcher",
+);
 
 const { stdout: bundleInfo } = await execFileAsync("plutil", [
   "-p",
@@ -194,25 +210,10 @@ await writeFile(path.join(userData, "credentials.bin"), "retired-credentials");
 await writeFile(path.join(userData, "steam-session.bin"), "retired-steam");
 await writeFile(path.join(userData, "preserved.txt"), "preserved");
 const diagnostics = path.join(userData, "diagnostics");
-const output: string[] = [];
-const child = spawn(
-  executable,
-  [`--user-data-dir=${userData}`, "--gw-volatile-secrets"],
-  {
-    cwd: root,
-    env: {
-      ...process.env,
-      // The smoke only needs the pre-ready renderer/IPC path. Cached-only keeps
-      // it network-independent and reaches a real `not_ready` failure when this
-      // disposable profile contains no client generation.
-      GW_REQUIRE_CACHED_CLIENT: "1",
-      ELECTRON_ENABLE_LOGGING: "1",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  },
-);
-child.stdout.on("data", (data) => output.push(data.toString()));
-child.stderr.on("data", (data) => output.push(data.toString()));
+await seedCachedClient({
+  artifacts: path.join(userData, "game/artifacts"),
+  userData,
+});
 
 // A parsed `events.jsonl` line, described by what this file reads out of it and
 // no wider. `JSON.parse` cannot prove membership of the closed union in
@@ -249,22 +250,91 @@ async function recordedEvents(): Promise<RecordedLine[]> {
   return events;
 }
 
-let events: RecordedLine[] = [];
+let running: RunningPackagedApp | undefined;
 try {
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    events = await recordedEvents();
-    if (events.some((event) => event.name === "clock.synchronized")) break;
-    if (child.exitCode !== null) break;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  if (!events.some((event) => event.name === "clock.synchronized")) {
-    throw new Error(
-      `packaged renderer did not synchronize with main\n${output.join("").slice(-4_000)}`,
+  running = await launchPackagedApp({
+    appPath: appBundle,
+    productName: channelConfig.productName,
+    userData,
+    arguments: ["--gw-volatile-secrets"],
+    environment: { ELECTRON_ENABLE_LOGGING: "1" },
+  });
+  const launcher = running.launcherPage;
+  assert.ok(launcher, "the packaged app did not open the Vue launcher");
+  await launcher.locator('nav[aria-label="Main navigation"]').waitFor();
+
+  const initial = await launcher.evaluate(async () => {
+    const snapshot = await window.launcherNative.state.get();
+    return {
+      bridgeFrozen: Object.isFrozen(window.launcherNative),
+      gameBridge: typeof (window as Window & { gwNative?: unknown }).gwNative,
+      revision: snapshot.revision,
+      setup: snapshot.experience.setup,
+      introduction: snapshot.experience.introduction,
+      profiles: snapshot.profiles.map(({ id, name, state }) => ({ id, name, state })),
+    };
+  });
+  assert.equal(initial.bridgeFrozen, true, "the packaged launcher bridge is mutable");
+  assert.equal(initial.gameBridge, "undefined", "the packaged launcher received the game bridge");
+  assert.equal(initial.profiles.length, 1, "the packaged launcher did not bootstrap one profile");
+  assert.equal(initial.profiles[0]?.name, "Main account");
+  assert.ok(
+    Number.isSafeInteger(initial.revision) && initial.revision >= 0,
+    "the packaged launcher received an invalid state revision",
+  );
+
+  if (initial.setup === "pending") {
+    await launcher.evaluate(() =>
+      window.launcherNative.experience.completeSetup({ enableTools: false })
     );
   }
+  if (initial.introduction === "pending") {
+    await launcher.evaluate(() =>
+      window.launcherNative.experience.completeIntroduction()
+    );
+  }
+  await launcher.waitForFunction(() =>
+    !document.querySelector(".modal-backdrop, .intro-callout")
+  );
+
+  const synchronizedName = "Packaged smoke account";
+  await launcher.evaluate((name) =>
+    window.launcherNative.profiles.create({ name })
+  , synchronizedName);
+  await launcher.getByRole("button", { name: "Accounts", exact: true }).click();
+  await launcher.getByText(synchronizedName, { exact: true }).first().waitFor();
+  const synchronized = await launcher.evaluate(async (name) => {
+    const snapshot = await window.launcherNative.state.get();
+    return {
+      profile: snapshot.profiles.find((candidate) => candidate.name === name) ?? null,
+      revision: snapshot.revision,
+    };
+  }, synchronizedName);
+  assert.ok(synchronized.profile, "the packaged launcher did not publish the added profile");
+  assert.ok(
+    synchronized.revision > initial.revision,
+    "the packaged launcher did not advance its state revision",
+  );
+
+  const game = await openPackagedProfile(running, synchronized.profile.id);
+  running = { ...running, page: game };
+  await game.waitForFunction(() => "gwNative" in globalThis);
+  assert.equal(game.url(), "gw://app/", "the packaged profile did not open the game document");
+  assert.equal(
+    await game.evaluate(() => typeof window.gwNative.client.session),
+    "function",
+    "the packaged game preload did not connect",
+  );
+
+  let events: RecordedLine[] = [];
+  const diagnosticsDeadline = Date.now() + 5_000;
+  while (Date.now() < diagnosticsDeadline) {
+    events = await recordedEvents();
+    if (events.some((event) => event.name === "diagnostics.started")) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
   console.log(
-    "packaged app started main, protocol, preload, renderer, and diagnostics IPC",
+    "packaged Vue launcher synchronized state and opened a cached profile",
   );
   // The release check compares app.getVersion() against a release tag, so the
   // running bundle has to report the whole release version. CFBundleShortVersion
@@ -287,6 +357,6 @@ try {
     "preserved",
   );
 } finally {
-  await stopChildProcess(child);
+  if (running) await closePackagedApp(running);
   await rm(userData, { recursive: true, force: true });
 }

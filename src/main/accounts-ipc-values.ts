@@ -1,12 +1,11 @@
 /**
- * Pure validation for the Multiple Accounts IPC surface.
+ * Pure validation for the account-profile IPC surface.
  * The Electron boundary owns argument counts; this module owns account values.
  */
 import type {
   AccountProfileCreateRequest,
   AccountProfileRequest,
   AccountProfileUpdateRequest,
-  AccountsSetupRequest,
 } from "../shared/contracts.js";
 import {
   MULTI_PROFILE_MAX_COUNT,
@@ -16,21 +15,12 @@ import {
   type ProfileId,
 } from "../shared/multiple-accounts.js";
 import { ValidationError } from "../shared/errors.js";
-import { parseExportEntries } from "./template-export.js";
 
 function parseLibraryScope(value: unknown, field: string): LibraryScope {
   if (value !== "shared" && value !== "private") {
     throw new ValidationError(`${field} must be shared or private`);
   }
   return value;
-}
-
-export function parseAccountsSetup(value: unknown): AccountsSetupRequest {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new ValidationError("account setup must be an object");
-  }
-  const input = value as Record<string, unknown>;
-  return { templateEntries: parseExportEntries(input.templateEntries) };
 }
 
 function parseAccountProfile(value: unknown): AccountProfileRequest {
@@ -46,19 +36,10 @@ function parseAccountProfile(value: unknown): AccountProfileRequest {
 }
 
 export function parseAccountProfileCreate(value: unknown): AccountProfileCreateRequest {
-  const profile = parseAccountProfile(value);
-  const input = value as Record<string, unknown>;
-  if (
-    typeof input.copySingleBuilds !== "boolean"
-    || typeof input.copySingleTemplates !== "boolean"
-  ) {
-    throw new ValidationError("account copy choices must be booleans");
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("account profile must be an object");
   }
-  return {
-    ...profile,
-    copySingleBuilds: input.copySingleBuilds,
-    copySingleTemplates: input.copySingleTemplates,
-  };
+  return { name: parseProfileName((value as Record<string, unknown>).name) };
 }
 
 export function parseAccountProfileUpdate(value: unknown): AccountProfileUpdateRequest {
@@ -70,13 +51,14 @@ export function parseAccountProfileUpdate(value: unknown): AccountProfileUpdateR
 }
 
 export function parseProfileIds(value: unknown): readonly ProfileId[] {
+  const maximumWorkspaceProfiles = MULTI_PROFILE_MAX_COUNT + 1;
   if (
     !Array.isArray(value)
     || value.length === 0
-    || value.length > MULTI_PROFILE_MAX_COUNT
+    || value.length > maximumWorkspaceProfiles
   ) {
     throw new ValidationError(
-      `select between 1 and ${MULTI_PROFILE_MAX_COUNT} account profiles`,
+      `select between 1 and ${maximumWorkspaceProfiles} account profiles`,
     );
   }
   const ids = value.map(parseProfileId);

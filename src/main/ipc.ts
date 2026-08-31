@@ -20,20 +20,12 @@ import {
   EXTERNAL_URLS,
   IPC,
   type AppSettings,
-  type AccountsSetupRequest,
-  type AccountProfileCreateRequest,
-  type AccountProfileUpdateRequest,
   type AccountTemplateLibrary,
-  type AccountsState,
-  type AppUpdateState,
-  type CacheInfo,
   type ClientHealthToken,
   type ClientSession,
-  type DownloadProgress,
   type DiagnosticProfile,
   type EnhancementRuntimeFeature,
   type ExternalLinkKind,
-  type FullDownloadOutcome,
   GAME_RELOAD_CAUSES,
   type GameReloadCause,
   type GraphicsDiagnostics,
@@ -42,14 +34,12 @@ import {
   type RevealKind,
   type RendererSettingsPatch,
   type SocketEvent,
-  type SettingsResetOutcome,
   type SnapshotMetadata,
   type SteamTokenResult,
   type StoredCredentials,
   type TemplateExportEntry,
   type ToolsInvokeChannel,
 } from "../shared/contracts.js";
-import { parseProfileId, type ProfileId } from "../shared/multiple-accounts.js";
 import type {
   RendererFrameBatch,
   RendererMetrics,
@@ -59,10 +49,6 @@ import {
   isRendererMetrics,
 } from "../shared/diagnostics.js";
 import { isDigest } from "../shared/digest.js";
-import {
-  isSkillKeyBinding,
-  type SkillKeyBinding,
-} from "../shared/skill-key-bindings.js";
 import { errorCode, ValidationError } from "../shared/errors.js";
 import { parseCredentials, type CredentialsStore } from "./core/credentials.js";
 import {
@@ -70,12 +56,6 @@ import {
   parseRendererMilestoneArgs,
   toWireSocketEvent,
 } from "./ipc-values.js";
-import {
-  parseAccountProfileCreate,
-  parseAccountProfileUpdate,
-  parseAccountsSetup,
-  parseProfileIds,
-} from "./accounts-ipc-values.js";
 import { resolveDns } from "./core/dns.js";
 import { exportTemplates, parseExportEntries } from "./template-export.js";
 import {
@@ -107,20 +87,7 @@ import { gamePaths } from "./paths.js";
 import { MAX_QUEUED_BYTES_PER_SOCKET } from "./core/sockets.js";
 import { isQuitting } from "./lifecycle.js";
 import { windowRegistry, type WindowRegistry } from "./window-registry.js";
-import {
-  cancelWindowShortcutCapture,
-  cancelWindowSkillKeyCapture,
-  captureWindowShortcut,
-  captureWindowSkillKey,
-  captureWindowSkillKeyPointer,
-} from "./window-shortcuts.js";
-import {
-  applySettingsChange,
-  confirmSettingsReset,
-  requestCacheClear,
-  requestGameStorageReset,
-  requestToolsUnloadRestart,
-} from "./settings-actions.js";
+import { applySettingsChange } from "./settings-actions.js";
 import { editGameText } from './game-text-editing.js';
 import {
   channel,
@@ -146,46 +113,23 @@ export interface IpcContext {
   windows: WindowRegistry;
   credentialsStoreFor: (win: BrowserWindow) => CredentialsStore;
   steamSessionStoreFor: (win: BrowserWindow) => SteamSessionStore;
-  gameStorageResetMarkerFor: (win: BrowserWindow) => string;
-  getProgress: () => DownloadProgress;
   getSnapshotMetadata: () => Promise<SnapshotMetadata>;
-  getCacheInfo: () => Promise<CacheInfo>;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: RendererSettingsPatch) => Promise<AppSettings>;
   getCharacterSwitchUsage: () => Promise<CharacterSwitchUsageDocument>;
   recordCharacterSwitchUsage: (characterKey: string) => Promise<CharacterSwitchUsageDocument>;
   setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
-  resetSettings: () => Promise<SettingsResetOutcome>;
-  /** Whether this process started with every certified Tools capability prepared. */
-  toolsEnabledAtLaunch: boolean;
-  downloadFullGame: () => Promise<FullDownloadOutcome>;
-  stopFullDownload: () => void;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
-  retryClient: () => Promise<void>;
-  getAppUpdateState: () => AppUpdateState;
-  checkAppUpdates: () => Promise<void>;
-  restartAndInstallUpdate: (win: BrowserWindow) => Promise<void>;
   getClientSession: (win: BrowserWindow) => ClientSession;
   recordClientFeatureFailure: (
     win: BrowserWindow,
     features: readonly EnhancementRuntimeFeature[],
   ) => void;
+  gameReadyToPresent: (win: BrowserWindow) => void;
   acquireSteamToken: (
     parent: BrowserWindow,
     record: (event: SteamAcquireEvent) => void,
   ) => Promise<SteamAcquireResult>;
-  getAccountsState: () => AccountsState;
-  setupAccounts: (request: AccountsSetupRequest) => Promise<void>;
-  openAccounts: (profileIds: readonly ProfileId[]) => Promise<void>;
-  createAccount: (request: AccountProfileCreateRequest) => Promise<AccountsState>;
-  updateAccount: (request: AccountProfileUpdateRequest) => Promise<AccountsState>;
-  archiveAccount: (profileId: ProfileId) => Promise<AccountsState>;
-  restoreAccount: (profileId: ProfileId) => Promise<AccountsState>;
-  deleteAccount: (
-    parent: BrowserWindow,
-    profileId: ProfileId,
-  ) => Promise<AccountsState>;
-  useSingleAccountMode: () => Promise<void>;
   requestQuit: (win: BrowserWindow) => void;
   reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
   claimRelogIntent: (win: BrowserWindow) => boolean;
@@ -235,12 +179,6 @@ const parseSocketId = (value: unknown): number => {
   return value as number;
 };
 const asSocketId = one(parseSocketId);
-const asSkillKeyPointerBinding = one((value: unknown): SkillKeyBinding => {
-  if (!isSkillKeyBinding(value) || value.input.kind === "keyboard") {
-    throw new ValidationError("skill key pointer binding is invalid");
-  }
-  return value;
-});
 
 const asClientHealthToken = one((value: unknown): ClientHealthToken => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -428,11 +366,6 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
   return value;
 });
 
-const asAccountsSetup = one(parseAccountsSetup);
-const asAccountProfileCreate = one(parseAccountProfileCreate);
-const asAccountProfileUpdate = one(parseAccountProfileUpdate);
-const asProfileId = one(parseProfileId);
-const asProfileIds = one(parseProfileIds);
 const asMilestone = parseRendererMilestoneArgs;
 
 export function registerIpcHandlers(ctx: IpcContext): {
@@ -459,8 +392,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
    * `channel()` cannot be called without a parser.
    */
   const handlers = {
-    progressCurrent: channel(nothing, () => ctx.getProgress()),
-
     snapshotMetadata: channel(nothing, () => ctx.getSnapshotMetadata()),
 
     dnsResolve: channel(asString("dns name"), async (win, name) => {
@@ -502,46 +433,19 @@ export function registerIpcHandlers(ctx: IpcContext): {
       }
     }),
 
-    settingsSet: channel(one(parseRendererSettingsPatch), async (win, patch) => {
+    settingsSet: channel(one(parseRendererSettingsPatch), async (_win, patch) => {
       const saved = await applySettingsChange(
-        win,
         patch,
-        ctx.toolsEnabledAtLaunch,
-        ctx.getSettings,
         ctx.updateSettings,
       );
       return saved;
     }),
-
-    settingsReset: channel(nothing, async (win) => {
-      const outcome = await confirmSettingsReset(
-        win,
-        ctx.toolsEnabledAtLaunch,
-        ctx.resetSettings,
-      );
-      return outcome;
-    }),
-
-    settingsRestartForTools: channel(nothing, (win) =>
-      requestToolsUnloadRestart(win)),
 
     characterSwitchUsageGet: channel(nothing, () => ctx.getCharacterSwitchUsage()),
     characterSwitchUsageRecord: channel(
       one(parseCharacterSwitchUsageRecord),
       (_win, characterKey) => ctx.recordCharacterSwitchUsage(characterKey),
     ),
-
-    shortcutCapture: channel(nothing, (win) => captureWindowShortcut(win)),
-    shortcutCaptureCancel: channel(nothing, (win) => {
-      cancelWindowShortcutCapture(win);
-    }),
-    skillKeyCapture: channel(nothing, (win) => captureWindowSkillKey(win)),
-    skillKeyCapturePointer: channel(asSkillKeyPointerBinding, (win, binding) =>
-      captureWindowSkillKeyPointer(win, binding)),
-    skillKeyCaptureCancel: channel(nothing, (win) => {
-      cancelWindowSkillKeyCapture(win);
-    }),
-
     credentialsLoad: channel(nothing, async (win) => {
       const ownerId = ctx.windows.requireDiagnosticOwnerForWindow(win);
       try {
@@ -585,27 +489,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
         throw error;
       }
     }),
-
-    cacheInfo: channel(nothing, async () => {
-      try {
-        return await ctx.getCacheInfo();
-      } catch (error) {
-        logEvent({ k: "cache.infoFailed", code: errorCode(error) });
-        throw error;
-      }
-    }),
-
-    cacheClear: channel(nothing, (win) =>
-      requestCacheClear(win, paths.cacheClearRequest),
-    ),
-
-    cacheDownloadAll: channel(nothing, () => ctx.downloadFullGame()),
-
-    cacheStopDownload: channel(nothing, () => ctx.stopFullDownload()),
-
-    gameStorageReset: channel(nothing, (win) =>
-      requestGameStorageReset(win, ctx.gameStorageResetMarkerFor(win)),
-    ),
 
     diagnosticsGraphics: channel(asGraphics, (win, value) => {
       recordGraphics(ctx.windows.requireDiagnosticOwnerForWindow(win), value);
@@ -720,11 +603,13 @@ export function registerIpcHandlers(ctx: IpcContext): {
       return result;
     }),
 
-    clientRetry: channel(nothing, () => ctx.retryClient()),
-
     clientHealthy: channel(asClientHealthToken, (_win, token) =>
       ctx.confirmClientHealthy(token),
     ),
+
+    gameReadyToPresent: channel(nothing, (win) => {
+      ctx.gameReadyToPresent(win);
+    }),
 
     clientSession: channel(nothing, (win) => ctx.getClientSession(win)),
 
@@ -732,61 +617,11 @@ export function registerIpcHandlers(ctx: IpcContext): {
       ctx.recordClientFeatureFailure(win, features),
     ),
 
-    appUpdatesGetState: channel(nothing, () => ctx.getAppUpdateState()),
-    appUpdatesCheck: channel(nothing, () => ctx.checkAppUpdates()),
-    appUpdatesRestartAndInstall: channel(
-      nothing,
-      (win) => ctx.restartAndInstallUpdate(win),
-    ),
-    accountsGet: channel(
-      nothing,
-      () => ctx.getAccountsState(),
-      "any",
-    ),
-    accountsSetup: channel(
-      asAccountsSetup,
-      (_win, request) => ctx.setupAccounts(request),
-    ),
-    accountsOpen: channel(
-      asProfileIds,
-      (_win, profileIds) => ctx.openAccounts(profileIds),
-      "hub",
-    ),
-    accountsCreate: channel(
-      asAccountProfileCreate,
-      (_win, request) => ctx.createAccount(request),
-      "hub",
-    ),
-    accountsUpdate: channel(
-      asAccountProfileUpdate,
-      (_win, request) => ctx.updateAccount(request),
-      "hub",
-    ),
-    accountsArchive: channel(
-      asProfileId,
-      (_win, profileId) => ctx.archiveAccount(profileId),
-      "hub",
-    ),
-    accountsRestore: channel(
-      asProfileId,
-      (_win, profileId) => ctx.restoreAccount(profileId),
-      "hub",
-    ),
-    accountsDelete: channel(
-      asProfileId,
-      (win, profileId) => ctx.deleteAccount(win, profileId),
-      "hub",
-    ),
-    accountsUseSingle: channel(
-      nothing,
-      () => ctx.useSingleAccountMode(),
-      "any",
-    ),
-    accountsTemplatesLoad: channel(
+    profileTemplatesLoad: channel(
       nothing,
       (win) => ctx.loadAccountTemplates(win),
     ),
-    accountsTemplatesSave: channel(
+    profileTemplatesSave: channel(
       one(parseExportEntries),
       (win, entries) => ctx.saveAccountTemplates(win, entries),
     ),

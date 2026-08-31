@@ -11,7 +11,9 @@ import {
 import {
   closePackagedApp,
   launchPackagedApp,
+  openPackagedProfile,
 } from "./helpers/packaged-app.ts";
+import { seedCachedClient } from "./helpers/cached-client.ts";
 
 const execFileAsync = promisify(execFile);
 const sourceApp = process.env.GW_SIGNED_APP_PATH;
@@ -46,6 +48,10 @@ const credentials = {
   username: "signed-runtime@example.invalid",
   password: "synthetic-signed-runtime-secret",
 };
+const secondCredentials = {
+  username: "signed-runtime-second@example.invalid",
+  password: "synthetic-signed-runtime-second-secret",
+};
 // The only Steam-token writer is the main process's own interactive OAuth
 // flow. The renderer's `steam.store` is the client's expiry storeback, and
 // against an empty keychain it must be ignored — so this synthetic session is
@@ -67,6 +73,10 @@ await writeFile(path.join(profile, "credentials.bin"), "retired");
 await writeFile(path.join(profile, "steam-session.bin"), "retired");
 await mkdir(path.join(profile, "game/chunks"), { recursive: true });
 await writeFile(path.join(profile, "game/chunks/preserved"), "chunk-sentinel");
+await seedCachedClient({
+  artifacts: path.join(profile, "game/artifacts"),
+  userData: profile,
+});
 
 type SecretAction =
   | "save-and-load"
@@ -77,16 +87,36 @@ type SecretAction =
 async function useSecrets(
   appPath: string,
   action: SecretAction,
+  accountName = "Main account",
+  accountCredentials = credentials,
 ): Promise<unknown> {
-  console.log(`signed keychain: ${action}: launching`);
+  console.log(`signed keychain: ${accountName}: ${action}: launching`);
   const running = await launchPackagedApp({
     appPath,
     productName: channelConfig.productName,
     userData: profile,
+    openFirstProfile: true,
   });
   try {
-    console.log(`signed keychain: ${action}: invoking`);
-    const result = await running.page.evaluate(
+    let gamePage = running.page;
+    if (accountName !== "Main account") {
+      const launcher = running.launcherPage;
+      if (!launcher) throw new Error("the signed app did not expose the unified launcher");
+      let target = (await launcher.evaluate(() => window.launcherNative.state.get()))
+        .profiles.find((candidate) => candidate.name === accountName);
+      if (!target) {
+        await launcher.evaluate(
+          (name) => window.launcherNative.profiles.create({ name }),
+          accountName,
+        );
+        target = (await launcher.evaluate(() => window.launcherNative.state.get()))
+          .profiles.find((candidate) => candidate.name === accountName);
+      }
+      if (!target) throw new Error(`could not create signed test account ${accountName}`);
+      gamePage = await openPackagedProfile(running, target.id);
+    }
+    console.log(`signed keychain: ${accountName}: ${action}: invoking`);
+    const result = await gamePage.evaluate(
       async ({ action: next, value }) => {
         const api = (
           globalThis as unknown as {
@@ -118,25 +148,26 @@ async function useSecrets(
           steam: await api.steam.getToken(true),
         };
       },
-      { action, value: { credentials, steam: steamSession } },
+      { action, value: { credentials: accountCredentials, steam: steamSession } },
     );
-    console.log(`signed keychain: ${action}: completed`);
+    console.log(`signed keychain: ${accountName}: ${action}: completed`);
     return result;
   } finally {
-    console.log(`signed keychain: ${action}: closing`);
+    console.log(`signed keychain: ${accountName}: ${action}: closing`);
     await closePackagedApp(running);
-    console.log(`signed keychain: ${action}: closed`);
+    console.log(`signed keychain: ${accountName}: ${action}: closed`);
   }
 }
 
-let createdSyntheticItem = false;
+let createdSyntheticMain = false;
+let createdSyntheticSecond = false;
 try {
   assert.deepEqual(
     await useSecrets(sourceApp, "load"),
     { credentials: null, steam: { token: null } },
     "refusing to overwrite an existing production credential",
   );
-  createdSyntheticItem = true;
+  createdSyntheticMain = true;
   assert.deepEqual(
     await useSecrets(sourceApp, "save-and-load"),
     { credentials, steam: { token: null } },
@@ -146,6 +177,22 @@ try {
     await useSecrets(sourceApp, "load"),
     { credentials, steam: { token: null } },
     "the signed app did not retain the credentials across relaunch",
+  );
+  assert.deepEqual(
+    await useSecrets(sourceApp, "load", "Second account", secondCredentials),
+    { credentials: null, steam: { token: null } },
+    "a new profile inherited the adopted Main account credentials",
+  );
+  createdSyntheticSecond = true;
+  assert.deepEqual(
+    await useSecrets(sourceApp, "save-and-load", "Second account", secondCredentials),
+    { credentials: secondCredentials, steam: { token: null } },
+    "the second profile could not retain its isolated credentials",
+  );
+  assert.deepEqual(
+    await useSecrets(sourceApp, "load"),
+    { credentials, steam: { token: null } },
+    "writing the second profile changed the adopted Main account credentials",
   );
 
   const movedApp = path.join(
@@ -188,6 +235,23 @@ try {
     { credentials, steam: { token: null } },
     "a newly signed build could not read the existing Keychain item",
   );
+  assert.deepEqual(
+    await useSecrets(upgradedApp, "load", "Second account", secondCredentials),
+    { credentials: secondCredentials, steam: { token: null } },
+    "a newly signed build could not read the isolated profile Keychain item",
+  );
+
+  assert.deepEqual(
+    await useSecrets(upgradedApp, "clear-and-load", "Second account", secondCredentials),
+    { credentials: null, steam: { token: null } },
+    "the isolated profile Keychain item was not cleared",
+  );
+  createdSyntheticSecond = false;
+  assert.deepEqual(
+    await useSecrets(upgradedApp, "load"),
+    { credentials, steam: { token: null } },
+    "clearing one profile also cleared the adopted Main account",
+  );
 
   assert.deepEqual(
     await useSecrets(upgradedApp, "clear-steam-and-load"),
@@ -198,7 +262,7 @@ try {
     await useSecrets(upgradedApp, "clear-and-load"),
     { credentials: null, steam: { token: null } },
   );
-  createdSyntheticItem = false;
+  createdSyntheticMain = false;
   if (channel === "release") {
     await assert.rejects(readFile(path.join(profile, "credentials.bin")));
     await assert.rejects(readFile(path.join(profile, "steam-session.bin")));
@@ -224,7 +288,15 @@ try {
     `signed ${channel} Data Protection Keychain survived relaunch, move, and upgrade; the renderer storeback never planted a Steam token`,
   );
 } finally {
-  if (createdSyntheticItem) {
+  if (createdSyntheticSecond) {
+    await useSecrets(
+      sourceApp,
+      "clear-and-load",
+      "Second account",
+      secondCredentials,
+    ).catch(() => {});
+  }
+  if (createdSyntheticMain) {
     await useSecrets(sourceApp, "clear-and-load").catch(() => {});
   }
   await rm(profile, { recursive: true, force: true });

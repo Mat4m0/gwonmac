@@ -41,31 +41,19 @@ function rendererCheckout(): string {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, contents);
   };
-  write(
-    "src/renderer/index.html",
-    "<!doctype html>\n        <!-- build-include:settings-cartography.html -->\n"
-      + "        <!-- build-include:settings-character-switch.html -->\n",
-  );
-  write("src/renderer/accounts.html", "<!doctype html>\n");
-  write("src/renderer/accounts.css", "css");
+  write("src/renderer/index.html", "<!doctype html>\n");
   write("src/renderer/loading.js", "export {};\n");
   write("src/renderer/gw-native.d.ts", "export {};\n");
   write("src/renderer/favicon.ico", "ico");
   write("src/renderer/favicon.png", "png");
   write("src/renderer/harness.css", "css");
-  write("src/renderer/loading.css", "css");
   write("src/renderer/cartography-overlay-controls.css", "controls-css");
   write("src/renderer/character-switch.css", "character-css");
-  write("src/renderer/settings-cartography.css", "cartography-css");
-  write("src/renderer/settings-cartography.html", "        <section>Cartography</section>\n");
-  write("src/renderer/settings-character-switch.html", "        <section>Characters</section>\n");
-  write("src/renderer/settings.css", "css");
+  write("src/renderer/loading.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
   write("src/renderer/images/logo.webp", "webp");
   write("src/renderer/images/playstation-controller-prompts.png", "controller-png");
-  write("src/renderer/images/hero-poster.jpg", "jpeg");
-  write("src/renderer/images/hero-video.webm", "webm");
   write("apps/website/public/bg-reforged.jpg", "landscape");
   write("src/renderer/.DS_Store", "local metadata");
   write("src/renderer/images/local-note.txt", "untracked");
@@ -118,24 +106,11 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
   it("still produces the renderer tree and its static media", () => {
     assert.equal(
       readFileSync(path.join(root, "build/renderer/index.html"), "utf8"),
-      "<!doctype html>\n        <section>Cartography</section>\n"
-        + "        <section>Characters</section>\n",
-    );
-    assert.equal(
-      existsSync(path.join(root, "build/renderer/settings-cartography.html")),
-      false,
+      "<!doctype html>\n",
     );
     assert.equal(
       readFileSync(path.join(root, "build/renderer/fonts/COPYING-QUALITYPE"), "utf8"),
       "licence",
-    );
-    assert.equal(
-      readFileSync(path.join(root, "build/renderer/images/hero-poster.jpg"), "utf8"),
-      "jpeg",
-    );
-    assert.equal(
-      readFileSync(path.join(root, "build/renderer/images/hero-video.webm"), "utf8"),
-      "webm",
     );
     assert.equal(
       readFileSync(
@@ -166,8 +141,6 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       .map((file) => path.relative(path.join(root, "build/renderer"), file))
       .sort();
     assert.deepEqual(relative, [
-      "accounts.css",
-      "accounts.html",
       "cartography-overlay-controls.css",
       "character-switch.css",
       "favicon.ico",
@@ -185,14 +158,10 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "fonts/inter.css",
       "harness.css",
       "images/bg-reforged.jpg",
-      "images/hero-poster.jpg",
-      "images/hero-video.webm",
       "images/logo.webp",
       "images/playstation-controller-prompts.png",
       "index.html",
       "loading.css",
-      "settings-cartography.css",
-      "settings.css",
       "shared/images/professions/1.png",
       "shared/images/professions/10.png",
       "shared/images/professions/2.png",

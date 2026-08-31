@@ -9,7 +9,7 @@
  * from having to know what any individual setting means.
  */
 const TRUSTED_PATHS = new Set(["/", "/index.html"]);
-const ACCOUNTS_PATH = "/accounts.html";
+const LAUNCHER_PATH = "/launcher/index.html";
 
 function trustedUrl(raw: string, paths: ReadonlySet<string>): boolean {
   try {
@@ -39,7 +39,7 @@ export function isCanonicalRendererUrl(raw: string): boolean {
   return trustedUrl(raw, TRUSTED_PATHS);
 }
 
-/** The Hub document is separate so a game window can never navigate to it. */
-export function isAccountsRendererUrl(raw: string): boolean {
-  return trustedUrl(raw, new Set([ACCOUNTS_PATH]));
+/** The launcher document is separate so a game window can never navigate to it. */
+export function isLauncherRendererUrl(raw: string): boolean {
+  return trustedUrl(raw, new Set([LAUNCHER_PATH]));
 }

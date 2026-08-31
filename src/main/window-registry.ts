@@ -2,20 +2,21 @@
  * The authority that binds every native window to one immutable app context.
  *
  * IPC and lifecycle code resolve context from `webContents.id`; renderers do
- * not submit profile identifiers. The registry also enforces the one-window
- * per Multi profile invariant and keeps transient launch state out of disk.
+ * not submit profile identifiers. The registry also enforces one launcher and
+ * one game window per profile while keeping transient launch state out of disk.
  */
 import type { BrowserWindow } from "electron";
 import type { ProfileId } from "../shared/multiple-accounts.js";
 import { AppError } from "../shared/errors.js";
 
-export type GameWindowContext =
-  | Readonly<{ mode: "single"; role: "game" }>
-  | Readonly<{ mode: "multi"; role: "game"; profileId: ProfileId }>;
-export type HubWindowContext = Readonly<{ mode: "multi"; role: "hub" }>;
-export type WindowContext = GameWindowContext | HubWindowContext;
+export type GameWindowContext = Readonly<{
+  role: "game";
+  profileId: ProfileId;
+}>;
+export type LauncherWindowContext = Readonly<{ role: "launcher" }>;
+export type WindowContext = GameWindowContext | LauncherWindowContext;
 
-interface RegisteredWindow {
+export interface RegisteredWindow {
   readonly webContents: {
     readonly id: number;
     getOSProcessId?(): number;
@@ -34,10 +35,9 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
   readonly #byWebContents = new Map<number, Entry<Window>>();
   readonly #profileWindows = new Map<ProfileId, Window>();
   readonly #webContentsIds = new WeakMap<Window, number>();
-  #singleGameWindow: Window | null = null;
-  #hubWindow: Window | null = null;
+  #launcherWindow: Window | null = null;
 
-  register(win: Window, context: HubWindowContext): void;
+  register(win: Window, context: LauncherWindowContext): void;
   register(
     win: Window,
     context: GameWindowContext,
@@ -56,16 +56,11 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
     if (ownerId === undefined) {
       throw new AppError("validation", "game window requires a diagnostics owner");
     }
-    if (context.mode === "single") {
-      if (this.#singleGameWindow && !this.#singleGameWindow.isDestroyed()) {
-        throw new AppError("validation", "Single Account already has a game window");
+    if (context.role === "launcher") {
+      if (this.#launcherWindow && !this.#launcherWindow.isDestroyed()) {
+        throw new AppError("validation", "launcher already has a window");
       }
-      this.#singleGameWindow = win;
-    } else if (context.role === "hub") {
-      if (this.#hubWindow && !this.#hubWindow.isDestroyed()) {
-        throw new AppError("validation", "Multiple Accounts already has a Hub window");
-      }
-      this.#hubWindow = win;
+      this.#launcherWindow = win;
     } else {
       const existing = this.#profileWindows.get(context.profileId);
       if (existing && !existing.isDestroyed()) {
@@ -88,10 +83,8 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
     if (!entry || entry.win !== win) return;
     this.#byWebContents.delete(id);
     this.#webContentsIds.delete(win);
-    if (entry.context.mode === "single") {
-      if (this.#singleGameWindow === win) this.#singleGameWindow = null;
-    } else if (entry.context.role === "hub") {
-      if (this.#hubWindow === win) this.#hubWindow = null;
+    if (entry.context.role === "launcher") {
+      if (this.#launcherWindow === win) this.#launcherWindow = null;
     } else {
       if (this.#profileWindows.get(entry.context.profileId) === win) {
         this.#profileWindows.delete(entry.context.profileId);
@@ -154,15 +147,9 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
     return ownerId;
   }
 
-  singleGameWindow(): Window | null {
-    return this.#singleGameWindow && !this.#singleGameWindow.isDestroyed()
-      ? this.#singleGameWindow
-      : null;
-  }
-
-  hubWindow(): Window | null {
-    return this.#hubWindow && !this.#hubWindow.isDestroyed()
-      ? this.#hubWindow
+  launcherWindow(): Window | null {
+    return this.#launcherWindow && !this.#launcherWindow.isDestroyed()
+      ? this.#launcherWindow
       : null;
   }
 

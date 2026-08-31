@@ -1,9 +1,8 @@
 /**
- * Renderer/main value contracts owned by the Multiple Accounts feature.
+ * Renderer/main value contracts owned by the account-profile launcher.
  * Durable workspace documents remain in `multiple-accounts.ts`.
  */
 import type {
-  AccountMode,
   LibraryScope,
   ProfileId,
 } from "./multiple-accounts.js";
@@ -35,12 +34,7 @@ export interface AccountProfileSummary {
 }
 
 export interface AccountsState {
-  readonly mode: AccountMode;
   readonly profiles: readonly AccountProfileSummary[];
-}
-
-export interface AccountsSetupRequest {
-  readonly templateEntries: readonly TemplateExportEntry[];
 }
 
 export interface AccountTemplateLibrary {
@@ -54,9 +48,8 @@ export interface AccountProfileRequest {
   readonly builds: LibraryScope;
 }
 
-export interface AccountProfileCreateRequest extends AccountProfileRequest {
-  readonly copySingleBuilds: boolean;
-  readonly copySingleTemplates: boolean;
+export interface AccountProfileCreateRequest {
+  readonly name: string;
 }
 
 export interface AccountProfileUpdateRequest extends AccountProfileRequest {

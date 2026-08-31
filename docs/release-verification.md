@@ -267,6 +267,15 @@ or chunk-directory reset can occur. The candidate must use only settings keys
 and values already owned by Stable. Returning Stable must preserve untouched
 values.
 
+For the unified-launcher cutover, the disposable cohort also contains a
+released Single Account mode document and a dormant Multiple Accounts
+workspace. The candidate must leave `launcher-mode.json` byte-for-byte intact,
+adopt Main without changing the dormant profiles, and create only its
+presentation-owned `launcher-state.json`. Returning to the exact same Stable
+must leave all three documents byte-for-byte as the candidate left them. This
+is filesystem evidence only; the separate signed Keychain gate proves saved
+login continuity.
+
 This proof prevents a hidden compatibility store. A public candidate cannot be
 the first release that introduces a durable settings key that it writes.
 

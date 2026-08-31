@@ -1,6 +1,6 @@
 /**
- * Process-local launch status for Multiple Accounts. This is the one owner of
- * the transient state projected into the Hub; nothing here is persisted.
+ * Process-local profile launch status. This is the one owner of the transient
+ * state projected into the launcher; nothing here is persisted.
  */
 import type {
   AccountLaunchIssue,

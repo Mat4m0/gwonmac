@@ -89,6 +89,19 @@ export async function launchCachedClient(
   });
 }
 
+/** Launch a cached client through the same readiness queue as production. */
+export async function launchPlayableClient(
+  prefix: string,
+  environment: Record<string, string> = {},
+  prepare: (userData: string) => Promise<void> = async () => {},
+  client: CachedClientOptions = {},
+): Promise<OfflineFixture> {
+  return launchCachedClient(prefix, {
+    GW_TEST_ALLOW_UNREADY_LAUNCH: "0",
+    ...environment,
+  }, prepare, client);
+}
+
 export async function launchOfflineAt(
   userData: string,
   environment: Record<string, string> = {},
@@ -105,6 +118,9 @@ export async function launchOfflineAt(
     // assert on native visibility, OS focus, pointer lock, or fullscreen pass
     // GW_BACKGROUND_LAUNCH: "0".
     GW_BACKGROUND_LAUNCH: "1",
+    // Existing game-renderer tests can still exercise the shell's pre-ready
+    // states. Production never reads this unpackaged-only launch seam.
+    GW_TEST_ALLOW_UNREADY_LAUNCH: "1",
     ...environment,
     // Every default launch is offline by policy. With no seeded generation the
     // runtime publishes a normal `not_ready` failure; it never fabricates a
@@ -122,7 +138,20 @@ export async function launchOfflineAt(
     });
     const page = await app.firstWindow({ timeout: 30_000 });
     await page.waitForLoadState("domcontentloaded");
-    return { app, page, userData };
+    if (environment.GW_TEST_RETURN_LAUNCHER === "1") {
+      return { app, page, userData };
+    }
+    const profileId = await page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles.find(
+        (profile) => !profile.archived,
+      )?.id,
+    );
+    if (!profileId) throw new Error("launcher fixture has no active profile");
+    const gamePage = app.waitForEvent("window", { timeout: 30_000 });
+    await page.evaluate((id) => window.launcherNative.profiles.play([id]), profileId);
+    const game = await gamePage;
+    await game.waitForLoadState("domcontentloaded");
+    return { app, page: game, userData };
   } catch (error) {
     if (!app) throw error;
     try {

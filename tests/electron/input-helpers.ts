@@ -10,11 +10,22 @@ export const boxOf = async (locator: Locator) => {
 
 export async function startGameInput(page: Page) {
   const canvas = page.locator("#canvas");
-  const acceptCompatibility = page.locator("#client-compat-play");
-  await expect.poll(async () =>
-    (await canvas.getAttribute("data-input-ready")) === "true"
-    || await acceptCompatibility.isVisible(),
-  ).toBe(true);
-  if (await acceptCompatibility.isVisible()) await acceptCompatibility.click();
-  await expect(canvas).toHaveAttribute("data-input-ready", "true");
+  // A full Electron run can have several recently closed renderer processes
+  // draining while the next cached fixture starts. Wait for the explicit
+  // renderer-owned signal instead of inventing a short product startup
+  // promise. This bound covers loaded CI without weakening the assertion.
+  try {
+    await expect(canvas).toHaveAttribute("data-input-ready", "true", {
+      timeout: 20_000,
+    });
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      loading: document.getElementById("loading-label")?.textContent,
+      detail: document.getElementById("loading-detail")?.textContent,
+      log: document.getElementById("log")?.textContent,
+    }));
+    throw new Error(`game input did not start: ${JSON.stringify(state)}`, {
+      cause: error,
+    });
+  }
 }

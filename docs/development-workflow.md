@@ -54,6 +54,26 @@ reduce branch drift. Do not add a hidden feature flag for unfinished code.
 A merge to `main` does not require an application release. Several completed
 changes can wait for one planned release.
 
+## Disposable launcher fixtures
+
+Use `pnpm launcher:fixture` to open a fresh launcher against a temporary
+user-data directory and the offline cached client. The command prints that
+directory, removes it after a clean exit, and retains it after a failure.
+
+Pass a scenario when testing migration or recovery:
+
+```text
+pnpm launcher:fixture fresh
+pnpm launcher:fixture single
+pnpm launcher:fixture multi
+pnpm launcher:fixture mixed
+pnpm launcher:fixture interrupted
+pnpm launcher:fixture corrupt
+```
+
+Add `--keep` to retain a successful fixture for inspection. These commands do
+not read the installed player's profile, saved login, or game directory.
+
 ## Merge and commit movement
 
 The repository allows squash merges only. GitHub creates one canonical commit

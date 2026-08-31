@@ -62,7 +62,6 @@
       || command.type === 'tools.toggle'
       || command.type === 'trade.toggle'
       || command.type === 'storage.open'
-      || command.type === 'settings.open'
       || command.type === 'diagnostics.toggle'
     ) window.gwSurfaces?.dismissTransient();
     switch (command.type) {
@@ -124,12 +123,6 @@
         if (result.error !== undefined) throw result.error;
         break;
       }
-      case 'settings.open':
-        dispatch('gw:settings', {
-          pane: command.pane,
-          checkForUpdates: command.checkForUpdates,
-        });
-        break;
       case 'filesystem.sync':
         await new Promise<void>((resolve, reject) => {
           // ArenaNet's generated glue publishes FS on the global object.
@@ -146,7 +139,7 @@
               void import('./template-store.js').then(async ({ exportEntries, templateFilesystem }) => {
                 const templates = templateFilesystem();
                 if (templates) {
-                  await window.gwNative.accounts.saveTemplates(exportEntries(templates));
+                  await window.gwNative.profileTemplates.saveTemplates(exportEntries(templates));
                 }
                 resolve();
               }).catch(reject);

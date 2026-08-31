@@ -50,6 +50,7 @@ export interface ApplicationMenuActions {
   host: WindowHost;
   /** Window state stays window.ts's; the menu only asks for the reset. */
   resetWindowState: (win: BrowserWindow) => Promise<void>;
+  revealLauncher: () => void;
 }
 
 /** Keep optional commands visible while removing every disabled action. */
@@ -305,6 +306,7 @@ async function showQuitOrReloadGameOnce(
 export function installApplicationMenu({
   host,
   resetWindowState,
+  revealLauncher,
 }: ApplicationMenuActions): void {
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
@@ -319,22 +321,12 @@ export function installApplicationMenu({
               { type: "separator" as const },
               {
                 label: "Check for Updates…",
-                click: withGameOwner(async (win) => {
-                  await resetGameInput(win);
-                  await sendRendererCommand(win, {
-                    type: "settings.open",
-                    pane: "updates",
-                    checkForUpdates: true,
-                  });
-                }),
+                click: revealLauncher,
               },
               {
                 label: "Settings…",
                 accelerator: "CmdOrCtrl+,",
-                click: withGameOwner(async (win) => {
-                  await resetGameInput(win);
-                  await sendRendererCommand(win, { type: "settings.open" });
-                }),
+                click: revealLauncher,
               },
               { type: "separator" as const },
               { role: "hide" as const },

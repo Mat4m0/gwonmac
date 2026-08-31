@@ -9,7 +9,6 @@ const rendererSources = [
   "src/renderer/skill-cooldown-state-installation.ts",
   "src/renderer/skill-overlays-installation.ts",
   "src/renderer/skill-slot-projection.ts",
-  "src/renderer/settings-skill-cooldowns.ts",
 ] as const;
 
 test("cooldown presentation has no gameplay input or command dependency", async () => {

@@ -105,17 +105,28 @@ test("only public identifiers and explicit profile-id fixtures are UUID-shaped",
   // One entry, the public client access key. The RFC 6455 WebSocket GUID used
   // to sit beside it; it belonged to the retired Python runtime's relay and
   // matches nothing in the tree, so it is gone.
-  const allowed = new Set(["2043FE79-F32D-4FD7-8C27-0D47231C4F03"]);
+  const allowed = new Set([
+    "2043FE79-F32D-4FD7-8C27-0D47231C4F03",
+    // Public reserved identity for the released default-session owner.
+    "9E1BD41C-CFC0-4CA8-A57F-2F0CA159C72D",
+  ]);
   const profileIdFixtures = new Set([
+    "apps/launcher/src/fixtures.ts",
     "tests/electron/multiple-accounts.spec.ts",
     "tests/electron/profile-close.spec.ts",
+    "tests/helpers/launcher-profile-fixtures.ts",
     "tests/release/preload-behaviour.test.ts",
     "tests/unit/account-profile-creation.test.ts",
+    "tests/unit/account-workspace-bootstrap.test.ts",
     "tests/unit/credentials.test.ts",
+    "tests/unit/launcher-orchestrator.test.ts",
+    "tests/unit/launcher-state.test.ts",
     "tests/unit/multiple-accounts.test.ts",
     "tests/unit/native-keychain.test.ts",
     "tests/unit/paths.test.ts",
+    "tests/unit/profile-storage.test.ts",
     "tests/unit/window-registry.test.ts",
+    "tests/unit/window-coordinator.test.ts",
   ]);
   const hits = [];
   for (const file of tracked) {

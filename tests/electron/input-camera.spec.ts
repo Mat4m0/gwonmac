@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { closeOffline, launchCachedClient } from "./fixtures.mjs";
+import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
 import { boxOf, startGameInput } from "./input-helpers.js";
 
 interface CameraEvent {
@@ -23,7 +23,7 @@ type CameraInputWindow = typeof window & {
 test.describe("renderer camera input", () => {
   test("allows pointer lock only for the owned game canvas", async () => {
     // Real pointer lock needs a focused widget, so this launch takes focus.
-    const fixture = await launchCachedClient("gw-pointer-permission-e2e-", {
+    const fixture = await launchPlayableClient("gw-pointer-permission-e2e-", {
       GW_BACKGROUND_LAUNCH: "0",
     });
     try {
@@ -162,7 +162,7 @@ test.describe("renderer camera input", () => {
   };
 
   test("carries a held camera drag past the edge of the canvas", async () => {
-    const fixture = await launchCachedClient("gw-pointer-edge-e2e-");
+    const fixture = await launchPlayableClient("gw-pointer-edge-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -203,7 +203,7 @@ test.describe("renderer camera input", () => {
   });
 
   test("recycles a held camera drag once it roams past its budget", async () => {
-    const fixture = await launchCachedClient("gw-pointer-roam-e2e-");
+    const fixture = await launchPlayableClient("gw-pointer-roam-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -262,7 +262,7 @@ test.describe("renderer camera input", () => {
   });
 
   test("ends a camera drag without dispatching any position reconciliation", async () => {
-    const fixture = await launchCachedClient("gw-pointer-release-e2e-");
+    const fixture = await launchPlayableClient("gw-pointer-release-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -322,7 +322,7 @@ test.describe("renderer camera input", () => {
   };
 
   test("keeps a right-drag unlocked while the client cursor stays visible", async () => {
-    const fixture = await launchCachedClient("gw-pointer-map-pan-e2e-");
+    const fixture = await launchPlayableClient("gw-pointer-map-pan-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -345,7 +345,7 @@ test.describe("renderer camera input", () => {
   });
 
   test("locks the pointer once the client hides its cursor", async () => {
-    const fixture = await launchCachedClient("gw-pointer-mouselook-e2e-");
+    const fixture = await launchPlayableClient("gw-pointer-mouselook-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -380,7 +380,7 @@ test.describe("renderer camera input", () => {
   });
 
   test("releases only held mouse buttons when pointer lock is lost", async () => {
-    const fixture = await launchCachedClient("gw-pointer-loss-e2e-");
+    const fixture = await launchPlayableClient("gw-pointer-loss-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);

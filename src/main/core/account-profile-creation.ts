@@ -7,7 +7,7 @@ import { lstat, mkdir, readFile, rm } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import type { BuildLibrary } from "../../shared/builds/library.js";
 import { parseBuildLibrary } from "../../shared/builds/parse-library.js";
-import type { AccountProfileCreateRequest } from "../../shared/contracts.js";
+import type { AccountProfileRequest } from "../../shared/contracts.js";
 import type { MultiWorkspace } from "../../shared/multiple-accounts.js";
 import {
   loadAccountTemplateLibrary,
@@ -80,6 +80,11 @@ export class AmbiguousAccountCreationError extends Error {
   }
 }
 
+export interface AccountProfileCreationRequest extends AccountProfileRequest {
+  readonly copySingleBuilds: boolean;
+  readonly copySingleTemplates: boolean;
+}
+
 async function rollback(
   owned: readonly OwnedPath[],
   primary: unknown,
@@ -106,7 +111,7 @@ async function rollback(
 /** Create one profile without ever replacing an unowned destination. */
 export async function createAccountProfile(
   workspace: MultiWorkspace,
-  request: AccountProfileCreateRequest,
+  request: AccountProfileCreationRequest,
   paths: GamePaths,
   dependencies: AccountProfileCreationDependencies = nodeAccountProfileCreationDependencies,
 ): Promise<MultiWorkspace> {

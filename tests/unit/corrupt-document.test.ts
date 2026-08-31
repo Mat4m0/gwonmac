@@ -1,12 +1,30 @@
 /** Corrupt player documents are preserved without accumulating forever. */
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, it } from "node:test";
-import { quarantineCorruptDocument } from "../../src/main/core/corrupt-document.js";
+import {
+  preserveCorruptDocument,
+  quarantineCorruptDocument,
+} from "../../src/main/core/corrupt-document.js";
 
 describe("corrupt document quarantine", () => {
+  it("can preserve bytes without creating an absent-document crash window", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "gw-corrupt-document-"));
+    const documentPath = join(directory, "launcher-state.json");
+    await writeFile(documentPath, "current corrupt bytes");
+
+    const backupPath = await preserveCorruptDocument(
+      documentPath,
+      "current corrupt bytes",
+    );
+
+    assert.equal(await readFile(documentPath, "utf8"), "current corrupt bytes");
+    assert.equal(await readFile(backupPath, "utf8"), "current corrupt bytes");
+    await rm(directory, { recursive: true, force: true });
+  });
+
   it("preserves the new bytes, retains three backups, and touches no neighbour", async () => {
     const directory = await mkdtemp(join(tmpdir(), "gw-corrupt-document-"));
     const documentPath = join(directory, "player.json");

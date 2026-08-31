@@ -346,12 +346,13 @@ export async function rendererPage(
   browser: Browser,
   child: ChildProcess,
   output: string[],
+  expectedUrl: "gw://app/" | "gw://app/launcher/index.html",
 ) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline && child.exitCode === null) {
     for (const context of browser.contexts()) {
       const page = context.pages().find((candidate) =>
-        candidate.url().startsWith("gw://app/"));
+        candidate.url() === expectedUrl);
       if (page) {
         await page.waitForLoadState("domcontentloaded");
         return page;
@@ -379,7 +380,7 @@ export async function launchPackaged(
   prefix: string,
   settings: AppSettingsPatch,
   {
-    cachedClient = false,
+    cachedClient = true,
     prepare = async () => undefined,
   }: LaunchOptions = {},
 ) {
@@ -416,6 +417,9 @@ export async function launchPackaged(
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_ENABLE_LOGGING: "1",
+    // These are game-runtime tests, so enter through the same playable-client
+    // gate as a real launch instead of racing the cached snapshot publication.
+    GW_TEST_ALLOW_UNREADY_LAUNCH: "0",
   };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.GW_REQUIRE_CACHED_CLIENT;
@@ -440,8 +444,17 @@ export async function launchPackaged(
   let browser: Browser | undefined;
   try {
     browser = await connectCdp(port, child, output);
-    const page = await rendererPage(browser, child, output);
-    return { artifacts, browser, child, output, page, userData };
+    const launcher = await rendererPage(
+      browser,
+      child,
+      output,
+      "gw://app/launcher/index.html",
+    );
+    await launcher.getByRole("button", { name: "Play", exact: true }).click({
+      timeout: 30_000,
+    });
+    const page = await rendererPage(browser, child, output, "gw://app/");
+    return { artifacts, browser, child, launcher, output, page, userData };
   } catch (error) {
     await stopChildProcess(child);
     await rm(userData, { recursive: true, force: true });
@@ -552,13 +565,6 @@ export async function assertPackagedOffSession() {
   try {
     const resources: string[] = [];
     fixture.page.on("request", (request) => resources.push(request.url()));
-    await fixture.page.waitForFunction(async () => {
-      const progress = await window.gwNative.progress.current();
-      if (progress.phase === "error") {
-        throw new Error(`cached client failed: ${progress.errorCode}`);
-      }
-      return progress.phase === "ready";
-    });
     await fixture.page.waitForFunction(
       () =>
         performance.getEntriesByName("gw.runtime.initialized").length > 0,
@@ -718,13 +724,6 @@ export async function assertPackagedHostOnlyToolsSession() {
       if (enhancementResource(request.url())) enhancementRequests.push(request.url());
     });
     const waitForRuntime = async () => {
-      await fixture.page.waitForFunction(async () => {
-        const progress = await window.gwNative.progress.current();
-        if (progress.phase === "error") {
-          throw new Error(`cached client failed: ${progress.errorCode}`);
-        }
-        return progress.phase === "ready";
-      });
       await fixture.page.waitForFunction(
         () => performance.getEntriesByName("gw.runtime.initialized").length > 0,
       );
@@ -732,11 +731,15 @@ export async function assertPackagedHostOnlyToolsSession() {
       await fixture.page.waitForSelector("#toolbox-foundation");
     };
     const openTools = async () => {
-      const claimed = await fixture.page.evaluate(() =>
-        !window.dispatchEvent(new CustomEvent("gw:tools-toggle", {
-          cancelable: true,
-        })));
-      assert.equal(claimed, true, "the production Tools command was not claimed");
+      const alreadyOpen = await fixture.page.locator("#toolbox-foundation")
+        .getAttribute("data-open") === "true";
+      if (!alreadyOpen) {
+        const claimed = await fixture.page.evaluate(() =>
+          !window.dispatchEvent(new CustomEvent("gw:tools-toggle", {
+            cancelable: true,
+          })));
+        assert.equal(claimed, true, "the production Tools command was not claimed");
+      }
       await fixture.page.waitForSelector('#toolbox-foundation[data-open="true"]');
       await fixture.page.waitForSelector('#toolbox-builds[data-ready="true"]', {
         state: "attached",
@@ -799,23 +802,30 @@ export async function assertPackagedHostOnlyToolsSession() {
     assert.deepEqual(enhancementRequests, []);
 
     const setToolsEnabled = async (enabled: boolean) => {
-      await fixture.page.evaluate(async (next) => {
-        const saved = await window.gwNative.settings.set({ gwonmacTools: next });
-        window.gwApplySettings?.(saved);
-      }, enabled);
+      await fixture.launcher.evaluate((next) =>
+        window.launcherNative.tools.setMasterEnabled(next), enabled);
     };
     await setToolsEnabled(false);
-    await fixture.page.waitForSelector("#toolbox-foundation", { state: "detached" });
-    assert.equal(
-      await fixture.page.evaluate(() =>
-        !window.dispatchEvent(new CustomEvent("gw:tools-toggle", {
-          cancelable: true,
-        }))),
-      false,
-      "disabled host-only Tools still claimed its command",
+    assert.deepEqual(
+      await fixture.launcher.evaluate(async () => {
+        const { tools } = await window.launcherNative.state.get();
+        return {
+          configured: tools.configured,
+          loaded: tools.loaded,
+          restartRequired: tools.restartRequired,
+        };
+      }),
+      { configured: false, loaded: true, restartRequired: true },
+      "disabling Tools while a game is open did not defer the change safely",
     );
-    await setToolsEnabled(true);
     await fixture.page.waitForSelector("#toolbox-foundation");
+    await setToolsEnabled(true);
+    assert.equal(
+      await fixture.launcher.evaluate(async () =>
+        (await window.launcherNative.state.get()).tools.restartRequired),
+      false,
+      "restoring the loaded Tools setting still requested a restart",
+    );
     await openTools();
     await fixture.page.getByText("Patch-day team", { exact: true }).waitFor();
 
@@ -855,13 +865,6 @@ export async function assertPackagedHostOnlyToolsAfterSoftRefusal() {
     },
   );
   try {
-    await fixture.page.waitForFunction(async () => {
-      const progress = await window.gwNative.progress.current();
-      if (progress.phase === "error") {
-        throw new Error(`cached client failed: ${progress.errorCode}`);
-      }
-      return progress.phase === "ready";
-    });
     await fixture.page.waitForFunction(
       () => performance.getEntriesByName("gw.runtime.initialized").length > 0,
     );

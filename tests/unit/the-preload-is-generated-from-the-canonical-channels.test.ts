@@ -16,8 +16,11 @@ import * as enhancementContracts from "../../src/shared/enhancement-contracts.ts
 import type { GwNativeApi } from "../../src/shared/contracts.ts";
 import {
   PRELOAD_CONSTANTS,
+  launcherPreloadSource,
   preloadSource,
 } from "../../scripts/generate-preload.js";
+import type { LauncherNativeApi } from "../../src/shared/launcher-contracts.ts";
+import { LAUNCHER_IPC } from "../../src/shared/launcher-contracts.ts";
 
 const allContracts = { ...contracts, ...enhancementContracts };
 
@@ -64,11 +67,11 @@ const plainInit = (value: GwNativeApi["init"]): GwNativeApi["init"] => ({
 
 test("the exposed method invokes the channel the contracts name", async () => {
   const { api, invoked, listened } = run(preloadSource(allContracts, root));
-  await api.progress.current();
+  await api.credentials.load();
   await api.credentials.save({ username: "u", password: "p" });
   api.sockets.onEvent(() => {});
   assert.deepEqual(invoked, [
-    { channel: contracts.IPC.progressCurrent, args: [] },
+    { channel: contracts.IPC.credentialsLoad, args: [] },
     {
       channel: contracts.IPC.credentialsSave,
       args: [{ username: "u", password: "p" }],
@@ -83,12 +86,12 @@ test("the exposed method invokes the channel the contracts name", async () => {
 test("renaming a canonical channel moves the call, with no edit to the body", async () => {
   const renamed = {
     ...allContracts,
-    IPC: { ...contracts.IPC, progressCurrent: "gw:progress:renamedByThisTest" },
+    IPC: { ...contracts.IPC, credentialsLoad: "gw:credentials:renamedByThisTest" },
   };
   const { api, invoked } = run(preloadSource(renamed, root));
-  await api.progress.current();
+  await api.credentials.load();
   assert.deepEqual(invoked, [
-    { channel: "gw:progress:renamedByThisTest", args: [] },
+    { channel: "gw:credentials:renamedByThisTest", args: [] },
   ]);
 });
 
@@ -217,4 +220,48 @@ test("a contracts export the body needs but does not have fails the build", () =
     "DIAGNOSTIC_PROFILES",
     "WASM_BRIDGE_MARKERS",
   ]);
+});
+
+test("the launcher preload exposes only its frozen launcher bridge", async () => {
+  const invoked: string[] = [];
+  let exposedName = "";
+  let launcher: LauncherNativeApi | undefined;
+  vm.runInNewContext(launcherPreloadSource(root), {
+    require(name: string) {
+      assert.equal(name, "electron");
+      return {
+        contextBridge: {
+          exposeInMainWorld(name: string, value: LauncherNativeApi) {
+            exposedName = name;
+            launcher = value;
+          },
+        },
+        ipcRenderer: {
+          invoke(channel: string) {
+            invoked.push(channel);
+            return Promise.resolve();
+          },
+          on() {},
+          removeListener() {},
+        },
+      };
+    },
+  });
+  assert.equal(exposedName, "launcherNative");
+  assert.ok(launcher);
+  assert.deepEqual(Object.keys(launcher).sort(), [
+    "experience",
+    "external",
+    "gameFiles",
+    "profiles",
+    "settings",
+    "state",
+    "tools",
+    "updates",
+  ]);
+  assert.equal(Object.isFrozen(launcher), true);
+  assert.equal(Object.values(launcher).every(Object.isFrozen), true);
+  await launcher.state.get();
+  await launcher.profiles.play([]);
+  assert.deepEqual(invoked, [LAUNCHER_IPC.stateGet, LAUNCHER_IPC.profilesPlay]);
 });

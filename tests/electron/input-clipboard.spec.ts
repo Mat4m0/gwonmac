@@ -1,5 +1,5 @@
 import { expect, test, type ElectronApplication } from "@playwright/test";
-import { closeOffline, launchCachedClient } from "./fixtures.mjs";
+import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 type InputObservation = {
@@ -36,6 +36,19 @@ async function clickEdit(
   app: ElectronApplication,
   id: (typeof EDIT_ITEMS)[keyof typeof EDIT_ITEMS],
 ): Promise<void> {
+  await app.evaluate(({ app: electronApp, BrowserWindow }) => {
+    const game = BrowserWindow.getAllWindows().find(
+      (win) => win.webContents.getURL() === "gw://app/",
+    );
+    if (!game) throw new Error("game window is unavailable");
+    game.show();
+    electronApp.focus({ steal: true });
+    game.focus();
+  });
+  await expect.poll(() => app.evaluate(({ Menu }, itemId) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+    return typeof item?.click === "function";
+  }, id)).toBe(true);
   await app.evaluate(({ BrowserWindow, Menu }, itemId) => {
     const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
     const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
@@ -46,7 +59,7 @@ async function clickEdit(
 
 test.describe("renderer text editing", () => {
   test("uses custom Edit items and keeps app shortcuts off the native menu", async () => {
-    const fixture = await launchCachedClient("gw-edit-menu-contract-");
+    const fixture = await launchPlayableClient("gw-edit-menu-contract-");
     try {
       expect(await fixture.app.evaluate(({ Menu }) => {
         const menu = Menu.getApplicationMenu();
@@ -85,7 +98,7 @@ test.describe("renderer text editing", () => {
   });
 
   test("copies, cuts, pastes Unicode, and selects through one game route", async () => {
-    const fixture = await launchCachedClient("gw-clipboard-e2e-", {
+    const fixture = await launchPlayableClient("gw-clipboard-e2e-", {
       GW_BACKGROUND_LAUNCH: "0",
     });
     try {
@@ -242,7 +255,7 @@ test.describe("renderer text editing", () => {
   });
 
   test("keeps password exports private and falls back for a Settings input", async () => {
-    const fixture = await launchCachedClient("gw-private-editing-e2e-");
+    const fixture = await launchPlayableClient("gw-private-editing-e2e-");
     try {
       const { app, page } = fixture;
       await startGameInput(page);
@@ -281,43 +294,26 @@ test.describe("renderer text editing", () => {
             { phase: "input", inputType: "insertFromPaste", trusted: true },
           ]);
 
-        await app.evaluate(({ BrowserWindow, Menu }) => {
-          const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-          const item = Menu.getApplicationMenu()?.items[0]?.submenu?.items
-            .find((candidate) => candidate.label === "Settings…");
-          if (!win || !item?.click) throw new Error("Settings menu is unavailable");
-          item.click(item, win, {} as Electron.KeyboardEvent);
-        });
-        await page.locator("#settings-tab-templates").click();
         await page.evaluate(() => {
-          const label = document.getElementById("templates-name-field");
-          const preview = document.getElementById("templates-preview");
-          const input = document.getElementById("templates-name");
-          if (
-            !(label instanceof HTMLElement)
-            || !(preview instanceof HTMLElement)
-            || !(input instanceof HTMLInputElement)
-          ) {
-            throw new Error("Settings input is missing");
-          }
-          preview.hidden = false;
-          label.hidden = false;
+          const input = document.createElement("input");
+          input.id = "ordinary-chromium-input";
+          document.body.append(input);
           input.value = "ordinary Chromium";
           (window as OskWindow).Module.oskActiveInput = null;
           input.focus();
           input.setSelectionRange(0, 8);
         });
         expect(await page.evaluate(() => document.activeElement?.id))
-          .toBe("templates-name");
+          .toBe("ordinary-chromium-input");
         await clickEdit(app, EDIT_ITEMS.copy);
         await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
           .toBe("ordinary");
         await app.evaluate(({ clipboard }) => clipboard.writeText("normal"));
         await clickEdit(app, EDIT_ITEMS.paste);
-        await expect(page.locator("#templates-name")).toHaveValue("normal Chromium");
+        await expect(page.locator("#ordinary-chromium-input")).toHaveValue("normal Chromium");
         await clickEdit(app, EDIT_ITEMS.selectAll);
         await clickEdit(app, EDIT_ITEMS.cut);
-        await expect(page.locator("#templates-name")).toHaveValue("");
+        await expect(page.locator("#ordinary-chromium-input")).toHaveValue("");
         expect(await app.evaluate(({ clipboard }) => clipboard.readText()))
           .toBe("normal Chromium");
       } finally {
@@ -329,7 +325,7 @@ test.describe("renderer text editing", () => {
   });
 
   test("rejects every malformed game-edit request at IPC", async () => {
-    const fixture = await launchCachedClient("gw-edit-contract-e2e-");
+    const fixture = await launchPlayableClient("gw-edit-contract-e2e-");
     try {
       const rejected = await fixture.page.evaluate(async () => {
         const edit = window.gwNative.clipboard.edit as unknown as (

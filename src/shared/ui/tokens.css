@@ -172,7 +172,6 @@
   --ui-danger-ring: 0 0 0 1px color-mix(in srgb, var(--ui-danger) 16%, transparent);
   --ui-warning-border: color-mix(in srgb, var(--ui-warning) 34%, var(--ui-edge));
   --ui-danger-glow: 0 0 7px color-mix(in srgb, var(--ui-danger) 80%, transparent);
-  --ui-status-halo: 0 0 0 2px color-mix(in srgb, currentColor 16%, transparent);
 
   /* Surfaces. */
   --ui-panel-opacity: 0.94;

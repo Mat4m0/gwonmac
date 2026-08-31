@@ -4,13 +4,13 @@ import path from "node:path";
 import {
   closeOffline,
   isDomActiveElement,
-  launchCachedClient,
+  launchPlayableClient,
 } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 test.describe("renderer Travel input", () => {
   test("opens from the certified one-shot chat request", async () => {
-    const fixture = await launchCachedClient(
+    const fixture = await launchPlayableClient(
       "gw-travel-chat-e2e-",
       {},
       (userData) => writeFile(
@@ -61,7 +61,7 @@ test.describe("renderer Travel input", () => {
   });
 
   test("is modal, dismisses without click-through, and shares transient ownership", async () => {
-    const fixture = await launchCachedClient(
+    const fixture = await launchPlayableClient(
       "gw-travel-input-e2e-",
       {},
       (userData) => writeFile(
@@ -140,23 +140,7 @@ test.describe("renderer Travel input", () => {
       });
       await expect(palette).toBeVisible();
 
-      // Top-level dialogs have one transient owner. Opening Settings dismisses
-      // Travel instead of leaving one modal hidden behind another.
-      await page.evaluate(() => {
-        window.dispatchEvent(new CustomEvent("gw:settings", {
-          detail: { pane: "controls" },
-        }));
-      });
-      await expect(page.locator("#settings-dialog")).toHaveAttribute("open", "");
-      await expect(palette).toBeHidden();
-      await page.evaluate(() => {
-        window.dispatchEvent(new CustomEvent("gw:travel-toggle", {
-          cancelable: true,
-          detail: {},
-        }));
-      });
-      await expect(page.locator("#settings-dialog")).not.toHaveAttribute("open", "");
-      await expect(palette).toBeVisible();
+      // Travel is the one transient game surface and closes on an outside click.
       await page.mouse.click(8, 8);
       await expect(palette).toBeHidden();
       await expect(page.locator("body")).not.toHaveAttribute(

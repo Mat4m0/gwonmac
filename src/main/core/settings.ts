@@ -19,6 +19,7 @@ import {
   DEFAULT_SETTINGS,
   CONTROLLER_PROMPT_STYLES,
   LAST_UPDATE_CHECK_AT_MAX,
+  RENDERER_WRITABLE_SETTINGS,
   RENDER_SCALES,
   UPDATE_TRACKS,
   UI_PANEL_OPACITY_MAX,
@@ -338,39 +339,38 @@ export function parseRendererSettingsPatch(raw: unknown): RendererSettingsPatch 
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     throw new AppError("bad_settings", "settings patch must be an object");
   }
-  if (Object.hasOwn(raw, "travelShortcuts")) {
-    throw new AppError(
-      "bad_settings",
-      "settings.travelShortcuts must use the Travel preference capability",
-    );
-  }
   const src = raw as Record<string, unknown>;
-  const hasSelection = Object.hasOwn(src, "cartographyPresetSelection");
-  if (hasSelection && Object.hasOwn(src, "cartographyPresetLibrary")) {
+  const allowed = new Set<string>([
+    ...RENDERER_WRITABLE_SETTINGS,
+    "cartographyPresetSelection",
+  ]);
+  const unknownKey = Object.keys(src).find((key) => !allowed.has(key));
+  if (unknownKey) {
     throw new AppError(
       "bad_settings",
-      "settings preset selection and library replacement are mutually exclusive",
+      `game renderer cannot update ${JSON.stringify(unknownKey)}`,
     );
   }
-  const {
-    travelShortcuts: _travelShortcuts,
-    cartographyPresetSelection: selectionValue,
-    ...storedPatch
-  } = src;
-  const {
-    travelShortcuts: _parsedTravelShortcuts,
-    ...patch
-  } = parseSettingsPatch(storedPatch);
-  if (!hasSelection) return patch;
-  const selection = normaliseCartographyPresetRef(selectionValue);
-  if (selection === null) {
-    throw new AppError("bad_settings", "settings.cartographyPresetSelection is invalid");
+  const hasSelection = Object.hasOwn(src, "cartographyPresetSelection");
+  if (hasSelection && Object.keys(src).length !== 1) {
+    throw new AppError(
+      "bad_settings",
+      "settings preset selection must be one atomic operation",
+    );
   }
-  const {
-    cartographyPresetLibrary: _cartographyPresetLibrary,
-    ...selectionPatch
-  } = patch;
-  return { ...selectionPatch, cartographyPresetSelection: selection };
+  if (hasSelection) {
+    const selection = normaliseCartographyPresetRef(src.cartographyPresetSelection);
+    if (selection === null) {
+      throw new AppError("bad_settings", "settings.cartographyPresetSelection is invalid");
+    }
+    return { cartographyPresetSelection: selection };
+  }
+  const parsed = parseSettingsPatch(src);
+  const patch: Partial<Pick<AppSettings, (typeof RENDERER_WRITABLE_SETTINGS)[number]>> = {};
+  for (const key of RENDERER_WRITABLE_SETTINGS) {
+    if (Object.hasOwn(src, key)) Object.assign(patch, { [key]: parsed[key] });
+  }
+  return patch;
 }
 
 export async function loadSettings(

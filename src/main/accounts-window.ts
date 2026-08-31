@@ -1,39 +1,29 @@
 /**
- * The Multiple Accounts picker window and its non-game security boundary.
+ * The launcher BrowserWindow and its non-game security boundary.
  *
- * The Hub uses a dedicated session and is registered with role `hub`, so game
- * IPC refuses it. Closing it does not close running accounts; a later app
- * activation can reveal the same window again.
+ * Window identity stays in the registry and presentation policy stays in the
+ * coordinator. This module owns only construction, trust, and local renderer
+ * recovery so a launcher failure never closes a running game.
  */
 import { app, BrowserWindow, Menu, session } from "electron";
 import { BACKGROUND_LAUNCH } from "./background-launch.js";
+import { isQuitting } from "./lifecycle.js";
+import { launcherPreloadPath } from "./paths.js";
 import type { ProtocolDeps } from "./protocol.js";
-import { installGwProtocolHandlerForSession } from "./protocol.js";
-import { preloadPath } from "./paths.js";
-import { sendRendererCommand } from "./renderer-commands.js";
+import { installLauncherProtocolHandlerForSession } from "./protocol.js";
+import type { WindowCoordinator } from "./window-coordinator.js";
 import { windowRegistry } from "./window-registry.js";
 
-const HUB_URL = "gw://app/accounts.html";
+const LAUNCHER_URL = "gw://app/launcher/index.html";
 let protocolInstalled = false;
 
-function installAccountsMenu(): void {
+function installLauncherMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === "darwin"
       ? [{
           label: app.name,
           submenu: [
             { role: "about" as const },
-            { type: "separator" as const },
-            {
-              id: "accounts-settings-menu",
-              label: "Settings…",
-              accelerator: "CommandOrControl+,",
-              click: () => {
-                void sendRendererCommand(windowRegistry.hubWindow(), {
-                  type: "accounts.settings.open",
-                });
-              },
-            },
             { type: "separator" as const },
             { role: "hide" as const },
             { role: "hideOthers" as const },
@@ -55,41 +45,35 @@ function installAccountsMenu(): void {
   ]));
 }
 
-export function revealAccountsWindow(): boolean {
-  const win = windowRegistry.hubWindow();
-  if (!win) return false;
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
-  return true;
-}
-
-export function createAccountsWindow(deps: ProtocolDeps): BrowserWindow {
-  const existing = windowRegistry.hubWindow();
+export function createLauncherWindow(
+  deps: ProtocolDeps,
+  coordinator: WindowCoordinator<BrowserWindow>,
+): BrowserWindow {
+  const existing = windowRegistry.launcherWindow();
   if (existing) {
-    revealAccountsWindow();
+    coordinator.revealLauncher({ activateApp: true });
     return existing;
   }
-  const owner = session.fromPartition("persist:gw-multi-hub", { cache: false });
+  const owner = session.fromPartition("persist:gw-launcher", { cache: false });
   if (BACKGROUND_LAUNCH) app.dock?.hide();
   if (!protocolInstalled) {
-    installGwProtocolHandlerForSession(owner, deps);
+    installLauncherProtocolHandlerForSession(owner);
     protocolInstalled = true;
   }
   owner.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   owner.setPermissionCheckHandler(() => false);
   const win = new BrowserWindow({
-    width: 960,
-    height: 700,
-    minWidth: 640,
-    minHeight: 560,
-    title: "Guild Wars Reforged — Accounts",
+    width: 1180,
+    height: 760,
+    minWidth: 900,
+    minHeight: 640,
+    title: "Guild Wars Reforged",
     titleBarStyle: "hiddenInset",
     backgroundColor: "#0a0806",
     show: false,
     webPreferences: {
       session: owner,
-      preload: preloadPath(),
+      preload: launcherPreloadPath(),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -100,26 +84,41 @@ export function createAccountsWindow(deps: ProtocolDeps): BrowserWindow {
       experimentalFeatures: false,
     },
   });
-  windowRegistry.register(win, { mode: "multi", role: "hub" });
+  windowRegistry.register(win, { role: "launcher" });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event, url) => {
-    if (url !== HUB_URL) event.preventDefault();
+    if (url !== LAUNCHER_URL) event.preventDefault();
   });
   win.webContents.on("will-attach-webview", (event) => event.preventDefault());
   win.once("ready-to-show", () => {
     if (!BACKGROUND_LAUNCH) win.show();
   });
-  win.on("focus", installAccountsMenu);
-  installAccountsMenu();
+  win.on("focus", () => {
+    coordinator.recordFocused(win);
+    installLauncherMenu();
+  });
+  installLauncherMenu();
   win.on("close", (event) => {
-    if (windowRegistry.gameWindows().length > 0) {
-      event.preventDefault();
-      win.hide();
+    if (!isQuitting()) coordinator.handleLauncherClose(event);
+  });
+  win.on("closed", () => windowRegistry.unregister(win));
+
+  let recoveryUsed = false;
+  win.webContents.on("render-process-gone", (_event, details) => {
+    if (isQuitting() || details.reason === "clean-exit") return;
+    if (!recoveryUsed) {
+      recoveryUsed = true;
+      setTimeout(() => {
+        if (!isQuitting() && !win.isDestroyed()) win.reload();
+      }, 250);
+      return;
     }
-  });
-  win.on("closed", () => {
     windowRegistry.unregister(win);
+    const replacement = createLauncherWindow(deps, coordinator);
+    if (!win.isDestroyed()) win.destroy();
+    coordinator.revealLauncher();
+    replacement.focus();
   });
-  void win.loadURL(HUB_URL);
+  void win.loadURL(LAUNCHER_URL);
   return win;
 }

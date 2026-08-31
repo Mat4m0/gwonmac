@@ -17,6 +17,17 @@ export type LibraryScope = (typeof LIBRARY_SCOPES)[number];
 declare const PROFILE_ID: unique symbol;
 export type ProfileId = string & { readonly [PROFILE_ID]: true };
 
+/**
+ * The one stable identity that adopts the released Single Account stores.
+ *
+ * It is not part of `profiles`: older Stable builds would otherwise present it
+ * as an isolated Multi profile and could count it against their 16-profile
+ * limit. The workspace marker below is an additive v1 field that those builds
+ * safely ignore.
+ */
+export const LEGACY_PRIMARY_PROFILE_ID =
+  "9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d" as ProfileId;
+
 export interface LauncherModeDocument {
   readonly formatVersion: 1;
   readonly mode: AccountMode;
@@ -35,7 +46,16 @@ export interface MultiWorkspace {
   readonly profiles: readonly MultiProfile[];
   /** Archived profiles whose idempotent native cleanup must finish on startup. */
   readonly deletingProfileIds: readonly ProfileId[];
+  /**
+   * Missing means a released workspace that unified-profile bootstrap has not
+   * classified. `null` means this installation started with isolated profiles.
+   */
+  readonly legacyPrimaryProfileId?: ProfileId | null;
 }
+
+export type AccountWorkspace = MultiWorkspace & Readonly<{
+  legacyPrimaryProfileId: ProfileId | null;
+}>;
 
 const PROFILE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -145,5 +165,35 @@ export function parseMultiWorkspace(value: unknown): MultiWorkspace {
       );
     }
   }
-  return { formatVersion: 1, profiles, deletingProfileIds };
+  let legacyPrimaryProfileId: ProfileId | null | undefined;
+  if ("legacyPrimaryProfileId" in source) {
+    if (source.legacyPrimaryProfileId === null) {
+      legacyPrimaryProfileId = null;
+    } else {
+      legacyPrimaryProfileId = parseProfileId(source.legacyPrimaryProfileId);
+      if (legacyPrimaryProfileId !== LEGACY_PRIMARY_PROFILE_ID) {
+        throw new AppError(
+          "bad_multi_workspace",
+          "legacy primary profile id is not supported",
+        );
+      }
+      if (
+        ids.has(legacyPrimaryProfileId)
+        || deletingProfileIds.includes(legacyPrimaryProfileId)
+      ) {
+        throw new AppError(
+          "bad_multi_workspace",
+          "legacy primary profile id conflicts with an isolated profile",
+        );
+      }
+    }
+  }
+  return {
+    formatVersion: 1,
+    profiles,
+    deletingProfileIds,
+    ...(legacyPrimaryProfileId === undefined
+      ? {}
+      : { legacyPrimaryProfileId }),
+  };
 }

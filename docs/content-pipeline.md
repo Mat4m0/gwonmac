@@ -166,6 +166,9 @@ power assertion. The renderer does not create a second download state.
 
 Cache residency is the download truth. A saved counter is not download proof.
 Progress, transfer rate, and estimated time come from the native operation.
+Cache information shown to the player counts only chunks whose content hashes
+were verified in the current process. A filename alone is not reported as
+verified data.
 
 ## Automatic game-data download
 
@@ -176,6 +179,10 @@ bulk download.
 
 The background operation verifies content hashes at startup, including when
 all expected chunk names are present. Corrupt data re-enters the repair path.
+The operation records the number of resident bytes it hashes so startup cost
+can be measured without weakening this check. A durable "already verified"
+flag is intentionally not used: another process or disk fault can change a
+same-named file after such a flag is written.
 
 Pausing stops speculative work for the current session. It does not remove
 verified chunks. A later launch resumes automatically from verified residency.
@@ -191,6 +198,22 @@ launcher shows a retry action.
 
 Corrupt cached chunks are removed and fetched again. Insufficient disk space
 stops work before more data is requested. The player can free space and resume.
+
+### Cached-client startup boundary
+
+The current generation owner checks ArenaNet and stages any changed client
+before it publishes the active client. Publishing the cached client first is
+not a safe local optimization: active artifact aliases cannot be replaced, so
+the update could not become active in the same session.
+
+A future cached-first path therefore needs immutable, generation-scoped
+artifact directories. The verified cached generation could become active while
+an update is checked and staged in a different directory, but only
+`ClientRuntime` may publish that staged generation after all artifact checks
+pass and no game is using the current generation (or on the next restart).
+Until that architecture exists, startup keeps the update check before client
+activation rather than adding a second generation owner or replacing active
+artifacts.
 
 ## Application update boundary
 

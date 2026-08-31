@@ -136,6 +136,7 @@ export const APP_AND_UPDATE_EVENT_SCHEMA = {
     fields: { outcome: incompleteCommandOutcome },
   },
   "electron.ready": { scope: "app", subsystem: "app", level: "info", fields: none },
+  "launcher.connected": { scope: "app", subsystem: "app", level: "info", fields: none },
   "appUpdate.failed": {
     scope: "app",
     subsystem: "app",

@@ -39,6 +39,8 @@ export interface CachedClientPaths {
 export interface CachedClientOptions {
   /** Total advertised game-data size; omit for the one-byte runtime fixture. */
   readonly snapshotSize?: number;
+  /** Deterministic generated-client glue for renderer lifecycle tests. */
+  readonly glue?: string;
   /** Customize the generation or sibling profile data before it is sealed. */
   readonly beforeSeal?: () => Promise<void>;
 }
@@ -52,6 +54,7 @@ export async function seedCachedClient(
   { artifacts, userData }: CachedClientPaths,
   {
     snapshotSize = TEST_SNAPSHOT.byteLength,
+    glue = TEST_CLIENT_GLUE,
     beforeSeal = async () => undefined,
   }: CachedClientOptions = {},
 ): Promise<void> {
@@ -78,7 +81,7 @@ export async function seedCachedClient(
   );
 
   await Promise.all([
-    writeFile(path.join(artifacts, "Gw.jspi.js"), TEST_CLIENT_GLUE),
+    writeFile(path.join(artifacts, "Gw.jspi.js"), glue),
     writeFile(path.join(artifacts, "Gw.jspi.wasm"), TEST_CLIENT_WASM),
     writeFile(path.join(artifacts, "version.json"), "{}"),
     writeFile(

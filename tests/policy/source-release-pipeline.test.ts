@@ -124,13 +124,16 @@ test("the host has one native automatic application replacement path", () => {
   assert.match(main, /packagedDistributionChannel\(\)/);
   assert.match(main, /capable: distribution\.automaticUpdates/);
   assert.match(main, /autoUpdater\.quitAndInstall\(\)/);
-  // The periodic re-check must run through the one audited predicate; a
-  // deleted tick or a bypassed gate stays green in unit tests, not here.
-  assert.match(main, /setInterval\([\s\S]{0,600}periodicCheckDue\(/);
+  // Startup, client-ready events, and the periodic tick share one scheduler.
+  // That scheduler owns the audited due-time and client-readiness gates, so a
+  // timer cannot bypass them and an initial client preparation does not race
+  // a launcher update request.
+  assert.match(main, /const maybeCheckForAppUpdates = async[\s\S]{0,800}periodicCheckDue\(/);
+  assert.match(main, /setInterval\([\s\S]{0,300}maybeCheckForAppUpdates\(/);
   assert.equal(
     [...main.matchAll(/periodicCheckDue\(/g)].length,
-    2,
-    "launch and periodic checks must share the persisted due-time",
+    1,
+    "all automatic checks must use one persisted due-time gate",
   );
   assert.match(main, /PERIODIC_CHECK_TICK_MS/);
   assert.doesNotMatch(updater, /electron-updater|update-electron-app|Sparkle/);
@@ -302,7 +305,7 @@ test("the Stable rollback proof respects the Build Library feature gate", () => 
     candidatePhase,
   );
   const candidateOptOut = roundTrip.indexOf(
-    "buildLibrary: false",
+    'tool: "build-management"',
     candidateLibraryWrite,
   );
   const rollbackPhase = roundTrip.indexOf(
@@ -310,7 +313,7 @@ test("the Stable rollback proof respects the Build Library feature gate", () => 
   );
   const rollbackOptOut = roundTrip.indexOf("returnedSettings.buildLibrary", rollbackPhase);
   const rollbackEnable = roundTrip.indexOf(
-    "settings.set({ buildLibrary: true })",
+    "updateStableSettings(running, { buildLibrary: true })",
     rollbackOptOut,
   );
   const rollbackLibraryRead = roundTrip.indexOf(
@@ -351,6 +354,28 @@ test("the Stable domain proof writes through the candidate rollback serializer",
   assert.doesNotMatch(
     domainProof,
     /JSON\.stringify\(\{ formatVersion: 1, \.\.\.settings \}\)/,
+  );
+});
+
+test("the Stable rollback proof preserves unified-launcher cutover documents", () => {
+  const roundTrip = read("scripts/verify-stable-beta-roundtrip.ts");
+
+  assert.match(roundTrip, /launcher-mode\.json/);
+  assert.match(roundTrip, /multi\/workspace\.json/);
+  assert.match(roundTrip, /launcher-state\.json/);
+  assert.match(roundTrip, /assertCandidateAdoptedWithoutChangingStableOwners/);
+  assert.match(roundTrip, /assertRollbackIgnoredCandidateLauncherDocuments/);
+  assert.match(
+    roundTrip,
+    /returned\.launcherMode,[\s\S]*candidateDocuments\.launcherMode/,
+  );
+  assert.match(
+    roundTrip,
+    /returned\.workspace,[\s\S]*candidateDocuments\.workspace/,
+  );
+  assert.match(
+    roundTrip,
+    /returned\.launcherState,[\s\S]*candidateDocuments\.launcherState/,
   );
 });
 

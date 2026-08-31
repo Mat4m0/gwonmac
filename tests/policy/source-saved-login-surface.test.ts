@@ -28,6 +28,7 @@ const legacyFilenameOwners = shippedSources().filter((file) =>
   /credentials\.bin|steam-session\.bin/u.test(read(file)),
 );
 const main = read("src/main/main.ts");
+const profileStorage = read("src/main/core/profile-storage.ts");
 const native = read("src/native/host/host.mm");
 const legacyCleanup = read("src/main/core/legacy-secret-cleanup.ts");
 
@@ -63,8 +64,14 @@ test("only provisioned distribution channels enable persistent secrets", () => {
   );
   assert.match(
     main,
-    /if \(\s*activeAccountMode === "single"\s*&& persistentSecrets\s*&& distribution\.cleanupLegacySecrets\s*\) \{[\s\S]{0,200}cleanupLegacySecretFiles/,
+    /const adoptedStorage = resolveAdoptedProfileStorage\(accountWorkspace, paths\)/,
   );
+  assert.match(
+    main,
+    /if \(\s*adoptedStorage\s*&& persistentSecrets\s*&& distribution\.cleanupLegacySecrets\s*\) \{[\s\S]{0,200}cleanupLegacySecretFiles/,
+  );
+  assert.match(profileStorage, /workspace\.legacyPrimaryProfileId/);
+  assert.doesNotMatch(main, /accountWorkspace\.legacyPrimaryProfileId/);
   assert.match(main, /capable: distribution\.automaticUpdates/);
   assert.match(main, /persistentSecrets\s*\? nativeHost/);
   assert.match(main, /: new VolatileNativeKeychain\(\)/);

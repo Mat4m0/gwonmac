@@ -29,9 +29,9 @@ describe("settings", () => {
     assert.deepEqual(accepts({ cartographyPresetSelection: selection }), {
       cartographyPresetSelection: selection,
     });
-    // @ts-expect-error A semantic selection cannot carry a stale library snapshot.
     const invalid: RendererSettingsPatch = {
       cartographyPresetSelection: selection,
+      // @ts-expect-error A semantic selection cannot carry a stale library snapshot.
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
     };
     assert.ok(invalid);
@@ -428,9 +428,9 @@ describe("settings", () => {
     });
   });
 
-  it("keeps Travel shortcuts off the generic renderer settings channel", () => {
-    assert.deepEqual(parseRendererSettingsPatch({ renderScale: 1.5 }), {
-      renderScale: 1.5,
+  it("keeps launcher policy off the game renderer settings channel", () => {
+    assert.deepEqual(parseRendererSettingsPatch({ autoRelogAfterReload: true }), {
+      autoRelogAfterReload: true,
     });
     assert.deepEqual(parseRendererSettingsPatch({
       cartographyPresetSelection: { kind: "builtin", id: "synthwave" },
@@ -441,7 +441,15 @@ describe("settings", () => {
       () => parseRendererSettingsPatch({
         travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       }),
-      /Travel preference capability/u,
+      /cannot update "travelShortcuts"/u,
+    );
+    assert.throws(
+      () => parseRendererSettingsPatch({ renderScale: 1.5 }),
+      /cannot update "renderScale"/u,
+    );
+    assert.throws(
+      () => parseRendererSettingsPatch({ gwonmacTools: true }),
+      /cannot update "gwonmacTools"/u,
     );
     assert.throws(
       () => parseRendererSettingsPatch({
@@ -454,7 +462,7 @@ describe("settings", () => {
         cartographyPresetSelection: { kind: "builtin", id: "synthwave" },
         cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       }),
-      /mutually exclusive/u,
+      /cannot update "cartographyPresetLibrary"/u,
     );
   });
 

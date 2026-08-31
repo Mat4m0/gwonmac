@@ -45,10 +45,7 @@ test.describe("sandbox boundary", () => {
         // if a member is added there without a call — the two files change
         // together.
         keys: [
-          "accounts",
           "app",
-          "appUpdates",
-          "cache",
           "cartography",
           "characterSwitchUsage",
           "client",
@@ -57,13 +54,10 @@ test.describe("sandbox boundary", () => {
           "credentials",
           "diagnostics",
           "dns",
-          "gameStorage",
           "init",
           "inputTrace",
-          "progress",
+          "profileTemplates",
           "settings",
-          "shortcuts",
-          "skillKeys",
           "snapshot",
           "sockets",
           "steam",
@@ -267,8 +261,7 @@ test.describe("sandbox boundary", () => {
           // persisted launch selection; the profile test pins it to features-270.
           enhancementSelection: { nativeCursor: true, tools: false },
         });
-      await expect(fixture.page.locator("#developer-program-banner"))
-        .toHaveText("Live test: Xunlai Storage — restricted capabilities");
+      await expect(fixture.page.locator("#developer-program-banner")).toHaveCount(0);
       await expect(fixture.page).toHaveTitle(
         "[Live test: Xunlai Storage] Guild Wars Reforged",
       );

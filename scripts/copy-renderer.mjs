@@ -12,8 +12,6 @@ import path from "node:path";
 // editor and OS files part of the build, so two clean checkouts could package
 // different applications. A new asset must be reviewed here.
 const ASSETS = [
-  "accounts.css",
-  "accounts.html",
   "cartography-overlay-controls.css",
   "character-switch.css",
   "favicon.ico",
@@ -21,13 +19,10 @@ const ASSETS = [
   "fonts/COPYING-QUALITYPE",
   "fonts/QTFrizQuad.otf",
   "harness.css",
-  "images/hero-poster.jpg",
-  "images/hero-video.webm",
   "images/logo.webp",
   "images/playstation-controller-prompts.png",
+  "index.html",
   "loading.css",
-  "settings-cartography.css",
-  "settings.css",
 ];
 
 // The design system lives in src/shared because the Tools application consumes
@@ -85,22 +80,6 @@ for (const relative of ASSETS) {
   copy(path.resolve("src/renderer", relative), relative);
 }
 
-// Keep the source settings shell reviewable without adding a runtime fetch or
-// shipping an internal fragment. The packaged renderer remains one document.
-const settingsPartials = ["settings-cartography.html", "settings-character-switch.html"];
-let indexSource = fs.readFileSync(path.resolve("src/renderer/index.html"), "utf8");
-for (const partial of settingsPartials) {
-  const marker = `        <!-- build-include:${partial} -->`;
-  if (indexSource.split(marker).length !== 2) {
-    throw new Error(`index.html must contain exactly one ${partial} include`);
-  }
-  const contents = fs.readFileSync(path.resolve("src/renderer", partial), "utf8").trimEnd();
-  indexSource = indexSource.replace(marker, contents);
-}
-fs.writeFileSync(
-  path.join(dest, "index.html"),
-  indexSource,
-);
 for (const [from, relative] of SHARED_ASSETS) {
   copy(path.resolve(from), relative);
 }

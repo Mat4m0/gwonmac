@@ -730,6 +730,7 @@ Module = {
         performance.mark('gw.frame.first-submit');
         milestone('frame.firstSubmit');
         clientHealthConfirmation?.firstFramePresented();
+        void window.gwNative.client.readyToPresent();
         log('first frame presented');
         // The client is now running and has installed its resize handling.
         // Give it one settled-layout signal so the initial backing buffer
@@ -1069,7 +1070,7 @@ function mountGameFilesystem() {
     module: clientRuntime(),
     log,
     async restoreTemplates(fs) {
-      const library = await native().accounts.loadTemplates();
+      const library = await native().profileTemplates.loadTemplates();
       if (!library) return;
       const { replaceTemplateProjection } = await import('./template-store.js');
       await replaceTemplateProjection(fs, library.entries);
@@ -1392,8 +1393,10 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     window.gwDiagnostics?.setVisible(!!appSettings.showDiagnostics);
   });
 
-  if (!await window.gwLoading.waitForClient()) return;
-  window.gwLoading.set('Preparing…', null);
+  // Main creates this window only after the shared client is playable. The
+  // renderer starts its profile session directly; it never presents another
+  // update, repair, Settings, or Play decision.
+  window.gwLoading.set('Starting Guild Wars…', null);
 
   try {
     const [settings, session] = await Promise.all([
@@ -1475,7 +1478,6 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       else console.log(s);
       return s;
     };
-    await window.gwResolveClientCompatibility();
   } catch (e) {
     window.gwLoading?.fail('Game data could not be prepared.');
     return log(

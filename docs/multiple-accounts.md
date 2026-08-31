@@ -1,181 +1,121 @@
-# Multiple Accounts
+# Account profiles
 
-This document owns the player-data boundary between Single Account mode and
-Multiple Accounts mode.
+This document owns the account-profile data and launch boundary.
 
-## Product boundary
+## Product model
 
-Single Account mode is the default. It starts Guild Wars directly and keeps
-the existing saved login, Guild Wars files, builds, settings, and window state.
+Every installation has at least one profile. There is no Single or Multiple
+Accounts mode. The launcher always opens first, lists profiles, and lets the
+player add another account without a restart.
 
-Multiple Accounts mode is an explicit opt-in workspace. It starts at the
-Account Picker. The player can open one or more independently controlled Guild
-Wars accounts. The app does not broadcast input or automate gameplay.
+One profile ID owns at most one live game window. **Play** opens a closed
+profile. **Show** restores and focuses its existing window. Profiles open
+sequentially and the first new window remains the client-generation canary.
+Failure in one profile does not close another profile.
 
-The active mode is fixed for the lifetime of the app process. A mode change
-takes effect after a restart.
+## Canonical owners
 
-## Canonical data owners
+| State | Owner |
+|---|---|
+| Profile registry and deletion journal | `multi/workspace.json` |
+| Launcher setup, content order, remembered selection, profile appearance | `launcher-state.json` |
+| Live profile state | Main-process profile runtime |
+| Queued launch intent and launcher snapshot | Main-process launcher orchestrator |
+| Launcher and game-window identity | Main-process window registry |
+| Window presentation | Main-process window coordinator |
+| Application settings, client downloads, repair, updates, Tools install | Global main-process owners |
+| Login, Steam session, game storage, private libraries, window state | Resolved profile storage |
+| Shared templates and builds | Existing shared Multi libraries |
 
-| Data | Owner |
-| --- | --- |
-| Verified client, chunks, compatibility artifacts, and skill assets | Shared app infrastructure |
-| Application updater and update preferences | Shared app infrastructure |
-| Application settings and shortcuts | Shared settings document, published to every live game window |
-| Active account mode | Launcher-mode document |
-| Single saved login | Existing fixed Keychain items |
-| Single Guild Wars files and templates | Default Electron session |
-| Single builds and teams | Existing root build library |
-| Single window state | Existing root window state |
-| Multiple Accounts profile registry | Multiple Accounts workspace |
-| Profile saved login | Profile-scoped Keychain items |
-| Profile Guild Wars files | Profile persistent Electron session |
-| Profile window state | Profile window-state document |
-| Shared Multiple Accounts templates | Multiple Accounts shared template library |
-| Private Multiple Accounts templates | Profile template library |
-| Shared Multiple Accounts builds | Multiple Accounts shared build library |
-| Private Multiple Accounts builds | Profile build library |
-| Ready, queued, opening, checking, running, and failed status | Main-process runtime store and live window registry |
+The renderer displays validated snapshots and sends narrow commands. It never
+chooses storage, migrates data, owns update state, or identifies its profile.
+Main resolves the immutable profile from the registered native sender.
 
-Single Account mode is not a Multiple Accounts profile. No Multiple Accounts
-game window uses the default Electron session or the fixed Single Account
-Keychain items.
+`launcher-state.json` contains presentation state only. It is created
+atomically before account bootstrap and is not another profile or settings
+store. Corrupt JSON is copied to a durable diagnostic backup while the source
+remains in place, then conservative defaults atomically replace it. A crash at
+any point therefore retries corruption recovery instead of looking like a
+fresh installation. Recovery skips forced setup and keeps **Launcher
+preferences were reset** pending across restarts until the player dismisses
+the recovery notices. Ordinary read failures remain fatal and are never
+treated as corruption.
 
-## Setup and mode transitions
+## Existing installation adoption
 
-Settings shows one Multiple Accounts enable action in the Accounts pane until
-the player enables the mode. Settings never creates or edits accounts.
+The first unified launch publishes the workspace atomically and idempotently:
 
-Enabling publishes an empty Multiple Accounts workspace and restarts into the
-Account Picker. Its empty state owns **Create First Account**. The player signs
-in separately for every account. Creating the first account can copy templates,
-builds, and teams from Single Account mode. This import reads a stable snapshot
-and writes a new Multiple Accounts destination. It never moves, links, mirrors,
-or later synchronizes the Single Account source. Later accounts cannot import
-from Single Account mode.
+- A fresh installation gets one isolated profile named **Main account**.
+- Released Single Account data is adopted as **Main account** in place.
+- An existing Multiple Accounts workspace keeps all profile IDs and data.
+- Dormant Multiple Accounts profiles remain beside an adopted Main account.
+- An interrupted publish reloads the durable candidate before deciding whether
+  it committed. A retry cannot create duplicate profiles.
+- A corrupt, future, or impossible workspace is never quarantined or replaced.
+  Startup offers Retry or Quit and leaves source bytes untouched.
 
-The app publishes the workspace before it publishes the selected mode. A
-cancelled or failed enable action leaves Single Account mode selected. A failed
-first-account import never changes its source or overwrites existing Multiple
-Accounts data. When Main confirms that the workspace was not published, it
-attempts to remove only destinations created by that attempt. If publication
-cannot be confirmed, it preserves those destinations and requires a restart.
+The adopted Main account is a virtual profile with one reserved public ID. It
+does not consume the 16 isolated-profile limit and is not inserted into the
+old `profiles` array. Its additive format-1 marker is ignored by supported
+Stable builds. `launcher-mode.json` remains byte-for-byte untouched during the
+rollback window and has no operational role in the candidate.
 
-Returning to Single Account mode preserves the complete Multiple Accounts
-workspace. Re-enabling it restores the profiles and libraries. Neither
-transition copies data automatically.
+## Storage resolver
 
-## Multiple Accounts sharing
+Only `profile-storage.ts` knows about adopted storage.
 
-Sharing applies only among Multiple Accounts profiles. Each profile selects
-**Shared** or **Private** independently for templates and for builds and teams.
+The adopted Main account resolves to the released default Electron session,
+fixed Keychain items, root build library, native template filesystem, root
+reset marker, and root window state. No file or credential is copied, moved,
+linked, or deleted during cutover.
 
-Build libraries remain main-process documents. Main serializes writes per
-library and refuses a save whose last-read baseline is stale, so one profile
-cannot silently replace another profile's newer shared library.
+A normal profile resolves to `persist:gw-multi-<profileId>`, profile-scoped
+Keychain items, profile game storage, private window state, and the selected
+existing shared or private template/build library.
 
-Every profile keeps an isolated IDBFS mount. A profile that uses Shared
-templates receives a working projection of the canonical Multiple Accounts
-template library. The app reconciles that projection before launch and after a
-clean close or reload. It does not mutate another running renderer's filesystem.
+Deleting a normal archived profile is journaled before native cleanup. The
+adopted Main account cannot be archived or deleted while it owns released
+storage.
 
-Template reconciliation preserves both contents when two different templates
-use the same normalized path. A deletion cannot silently discard a concurrent
-edit. The canonical library is the only durable shared commit. Each live game
-window keeps its reconciliation baseline in memory and rebuilds it from the
-canonical library on load or reload; there is no second checkpoint file that
-can partially commit. Private template libraries use the same revisioned
-snapshot format but never reconcile with another profile.
+## Companion window policy
 
-## Lifecycle and recovery
+The launcher remains available while games run. Focusing a game naturally
+places it in front of the launcher. Closing the launcher hides it while a game
+is open. Closing one game affects only that profile; closing the final game
+reveals the launcher. A Dock activation restores the most recently used live
+window. If that window has closed, it falls back through the previous game
+windows before revealing the launcher.
+A second app launch restores the launcher explicitly. An asynchronous Play
+completion does not steal focus if the player has already moved to another app.
 
-Every cold Multiple Accounts launch opens the Account Picker with no account
-selected. One profile ID maps to at most one live game window. The Hub shows
-only bounded runtime language: **Ready**, **Waiting**, **Starting**, **Checking
-updated client**, **Open**, and **Needs Attention**. It never describes a loaded
-renderer as game-ready.
+The policy uses normal `BrowserWindow` ordering. It does not use always-on-top,
+panels, parent-child windows, all-workspaces behavior, or an AppKit bridge.
+Physical Dock, Command-Tab, Spaces, Stage Manager, and multi-display ordering
+remain packaged macOS qualification boundaries.
 
-The app starts selected accounts in a bounded queue and presents every new game
-window inactive. It confirms a new client generation with one canary renderer
-before it starts the remaining accounts. A canary failure stops the unopened
-queue and returns those rows to Ready. An ordinary account failure does not
-close or stop another account.
+## Launch queue and first frame
 
-After complete success, the Hub hides and focuses the first selected account
-once. Selecting an already-open account shows its existing window. If any
-account fails, the Hub stays visible for recovery and successful accounts stay
-open. Brand-new windows cascade by 32 pixels where display space permits;
-saved window positions take precedence after the first launch.
+The main process owns one queue of requested profile IDs. A healthy installed
+client opens immediately. During first preparation, Play records the requested
+profiles and preparation continues independently; Cancel waiting removes only
+profiles that have not started. Once the client is playable, the queue drains
+one profile at a time so the first candidate window can complete the existing
+client canary before another profile starts. A global client failure moves the
+launcher to one repair state without marking every profile as failed.
 
-A renderer gets one automatic recovery per deliberate launch. Recovery keeps
-the same profile ownership and does not affect other accounts. A second crash
-becomes a persistent Needs Attention row with Retry. The Hub remains
-recoverable from Dock activation, and Settings is available with Command-,.
+A game window is created only after a playable client exists. Electron keeps it
+hidden after `ready-to-show`; the game renderer then submits the dedicated
+`gameReadyToPresent` event with its owning profile. Main accepts that event once,
+restores maximize or fullscreen state, and presents the window only if the
+launch still owns focus. A crash or 90-second timeout destroys only that
+profile window and returns a local retry state. Diagnostics are not used as
+presentation control flow.
 
-Closing a profile flushes its filesystem and closes only its sockets. Quitting
-the app flushes all live profile filesystems in parallel. After an application
-update or process crash, Multiple Accounts mode returns to the Account Picker.
-It does not reopen profiles automatically.
+## Security boundary
 
-If the selected mode or profile registry is missing, corrupt, or from an
-unsupported future format, startup does not guess at its contents. It offers to
-preserve the unreadable document and restart in Single Account mode. This
-recovery quarantines the unreadable document and changes the launcher-mode
-document only; it does not open, copy, or clear either mode's player data or
-Keychain items.
-
-Archive is the normal account-removal action. It preserves the profile session,
-private libraries, and Keychain items. Permanent deletion is a separate,
-confirmed action in Hub Settings. It never removes a shared library or Single
-Account data.
-
-## Hub interaction
-
-The Hub is a focused chooser, not an account dashboard. Rows use native
-checkbox semantics and the entire non-action area is clickable. The primary
-action reflects the selection: Open, Open _Account_, Show _Account_, Retry
-_Account_, or Open _n_ Accounts. Edit and Archive live in each row's More menu.
-
-The Account Picker is the only account-management surface. New and Edit Account
-are modal sheets. Player-facing sharing choices are
-**Builds and teams** and **In-game templates**, each either **Shared between
-Multiple Accounts** or **Separate for this account**. Shared is the default.
-The sheet states that login, game settings, screenshots, chat logs, and Single
-Account data are never shared.
-
-Mode switching, archived-account restoration, and permanent deletion live in
-Settings rather than the launch surface. Game Settings → Accounts carries the
-same mode explanation and Return to Single Account action.
-
-Reset actions name their scope. A Single Account saved-files reset clears only
-the default session. A profile reset clears only the selected persistent
-session. Clearing downloaded game data affects the shared app infrastructure
-and does not clear player files or saved login.
-
-## Security and privacy
-
-The window registry owns every live Hub and game window. It derives profile
-authority from the trusted sender and resolves socket delivery to that exact
-registered window. A renderer cannot choose a profile ID, native path,
-Electron partition, Keychain item, or socket owner.
-
-Warnings, native dialogs, renderer commands, input state, and diagnostics stay
-with the game window that initiated them. Application updates and shared game
-downloads remain application-wide and report progress to every game window.
-
-The verified client's compatibility result is shared and immutable for its
-generation. A renderer-side Enhancement installation failure affects only that
-renderer document and generation; it cannot disable another open account.
-
-A performance capture keeps its initiating game window as its owner until it
-stops. Mark, stop, export, and completion feedback cannot move to whichever
-profile gains focus later. Closing or crashing that owner performs bounded
-cleanup and never selects another account as a fallback.
-Level 2 Chromium tracing is available only when exactly one game window is
-open, because Chromium exposes one process-wide tracing session.
-
-The Account Picker cannot access game sockets, saved login, player files, or
-build writes. Diagnostics use process-local account tokens that survive one
-renderer recovery but not an app restart. They do not record
-profile names, stable profile IDs, account identifiers, credentials, template
-contents, or game traffic.
+The launcher uses the isolated `persist:gw-launcher` session and exact
+`gw://app/launcher/index.html` main-frame URL. Its reduced preload can read the
+revisioned launcher snapshot and request validated profile, setup, settings,
+Tools, game-file, update, and external-link actions. It cannot access game
+sockets, credentials, Steam tokens, player files, templates, snapshots, or game
+diagnostics. Game windows cannot invoke launcher mutation channels.

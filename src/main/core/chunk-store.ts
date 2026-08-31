@@ -73,6 +73,11 @@ export interface DownloadAllProgress {
   secondsRemaining: number | null;
 }
 
+export interface DownloadAllActivity {
+  readonly received: number;
+  readonly total: number;
+}
+
 function errorCode(error: unknown): string {
   return error instanceof Error && "code" in error
     ? String(error.code)
@@ -166,12 +171,21 @@ export class ChunkStore {
     return packResidentBits(this.hashes.length, await this.residentIndices());
   }
 
+  /** Bytes whose content hashes were verified in this process. */
+  async verifiedResidentIndices(): Promise<number[]> {
+    await this.initializeResidency();
+    return this.hashes.flatMap((hash, index) =>
+      this.verifiedHashes.has(hash) ? [index] : [],
+    );
+  }
+
   private async verifyResident(index: number): Promise<boolean> {
     const hash = this.hashes[index];
     if (!hash || !this.residentHashes.has(hash)) return false;
     const path = this.chunkPath(hash);
     try {
       const data = await readFile(path);
+      this.metrics?.count("cache.fullVerificationBytes", data.byteLength);
       if (data.byteLength !== this.chunkByteLength(index)) {
         throw new AppError("chunk_length", `cached chunk ${hash} has invalid length`);
       }
@@ -189,11 +203,13 @@ export class ChunkStore {
 
   async initializeResidency(): Promise<void> {
     if (!this.residentReady) {
-      this.residentReady = readdir(this.chunksDir)
-        .then((names) => {
+      this.residentReady = readdir(this.chunksDir, { withFileTypes: true })
+        .then((entries) => {
           const wanted = new Set(this.hashes);
-          for (const name of names) {
-            if (wanted.has(name)) this.markResident(name);
+          for (const entry of entries) {
+            if (entry.isFile() && wanted.has(entry.name)) {
+              this.markResident(entry.name);
+            }
           }
         })
         .catch((err: NodeJS.ErrnoException) => {
@@ -476,6 +492,7 @@ export class ChunkStore {
 
   async downloadAll(opts: {
     onProgress?: (p: DownloadAllProgress) => void;
+    onDownloadStart?: (activity: DownloadAllActivity) => void;
     jobs?: number;
     freeBytes?: () => Promise<number>;
   } = {}): Promise<boolean> {
@@ -536,6 +553,7 @@ export class ChunkStore {
         `Not enough disk space: ${diskNeed} bytes needed, ${free} free.`,
       );
     }
+    opts.onDownloadStart?.({ received: got, total });
 
     const started = Date.now();
     const baseline = got;

@@ -12,6 +12,7 @@
  * supported Stable baseline no longer needs them.
  */
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -54,6 +55,8 @@ import {
   compareReleaseVersions,
   parseReleaseVersion,
 } from "../src/shared/release.ts";
+import type { LauncherSettingsPatch } from "../src/shared/launcher-contracts.ts";
+import { LEGACY_PRIMARY_PROFILE_ID } from "../src/shared/multiple-accounts.ts";
 import {
   DEFAULT_STORED_TRAVEL_SHORTCUTS,
   type StoredTravelShortcuts,
@@ -63,6 +66,7 @@ import {
   launchPackagedApp,
   type RunningPackagedApp,
 } from "../tests/helpers/packaged-app.ts";
+import { seedCachedClient } from "../tests/helpers/cached-client.ts";
 import {
   canonicalizeStableSettings,
   validateCandidateSettings,
@@ -108,6 +112,15 @@ const productName = DISTRIBUTION_CHANNEL_CONFIG.release.productName;
 const proofRoot = await mkdtemp(path.join(tmpdir(), "gwonmac-stable-beta-"));
 type Cohort = Readonly<{ userData: string; windowStatePath: string }>;
 
+const rollbackProfile = Object.freeze({
+  id: randomUUID(),
+  name: "Dormant rollback profile",
+  archived: false,
+  templates: "private",
+  builds: "private",
+});
+const launcherModeBytes = Buffer.from('{"formatVersion":1,"mode":"single"}\n');
+
 async function createCohort(
   name: "core" | "tools",
   settings: Readonly<Record<string, unknown>>,
@@ -127,7 +140,87 @@ async function createCohort(
     path.join(userData, "game/chunks/chunk-directory-reset-sentinel"),
     "chunk directory was not wholesale reset",
   );
+  await writeFile(path.join(userData, "launcher-mode.json"), launcherModeBytes, {
+    mode: 0o600,
+  });
+  await mkdir(path.join(userData, "multi"), { recursive: true });
+  await writeFile(
+    path.join(userData, "multi/workspace.json"),
+    JSON.stringify({
+      formatVersion: 1,
+      profiles: [rollbackProfile],
+      deletingProfileIds: [],
+    }),
+    { mode: 0o600 },
+  );
+  await seedCachedClient({
+    artifacts: path.join(userData, "game/artifacts"),
+    userData,
+  });
   return cohort;
+}
+
+type LauncherCompatibilityDocuments = Readonly<{
+  launcherMode: Buffer;
+  launcherState: Buffer;
+  workspace: Buffer;
+}>;
+
+async function readLauncherCompatibilityDocuments(
+  cohort: Cohort,
+): Promise<LauncherCompatibilityDocuments> {
+  const [launcherMode, launcherState, workspace] = await Promise.all([
+    readFile(path.join(cohort.userData, "launcher-mode.json")),
+    readFile(path.join(cohort.userData, "launcher-state.json")),
+    readFile(path.join(cohort.userData, "multi/workspace.json")),
+  ]);
+  return { launcherMode, launcherState, workspace };
+}
+
+function assertCandidateAdoptedWithoutChangingStableOwners(
+  documents: LauncherCompatibilityDocuments,
+): void {
+  assert.deepEqual(
+    documents.launcherMode,
+    launcherModeBytes,
+    "candidate changed Stable-owned launcher-mode.json",
+  );
+  const workspace = JSON.parse(documents.workspace.toString("utf8")) as {
+    legacyPrimaryProfileId?: unknown;
+    profiles?: unknown;
+  };
+  assert.equal(
+    workspace.legacyPrimaryProfileId,
+    LEGACY_PRIMARY_PROFILE_ID,
+    "candidate did not adopt released Single storage as Main",
+  );
+  assert.deepEqual(
+    workspace.profiles,
+    [rollbackProfile],
+    "candidate changed the dormant profile registry during adoption",
+  );
+}
+
+async function assertRollbackIgnoredCandidateLauncherDocuments(
+  cohort: Cohort,
+  candidateDocuments: LauncherCompatibilityDocuments,
+): Promise<void> {
+  const returned = await readLauncherCompatibilityDocuments(cohort);
+  assert.deepEqual(
+    returned.launcherMode,
+    candidateDocuments.launcherMode,
+    "rollback Stable changed launcher-mode.json after candidate bootstrap",
+  );
+  assert.deepEqual(
+    returned.workspace,
+    candidateDocuments.workspace,
+    "rollback Stable changed the candidate-bootstrap workspace",
+  );
+  assert.deepEqual(
+    returned.launcherState,
+    candidateDocuments.launcherState,
+    "rollback Stable changed candidate-owned launcher-state.json",
+  );
 }
 
 const cloneLibrary = (library: BuildLibrary): BuildLibrary =>
@@ -139,6 +232,7 @@ async function launch(cohort: Cohort, appPath: string): Promise<RunningPackagedA
     productName,
     userData: cohort.userData,
     arguments: ["--gw-volatile-secrets"],
+    openFirstProfile: true,
   });
   await running.page.waitForFunction(() => "gwNative" in globalThis);
   return running;
@@ -159,6 +253,59 @@ async function withPackagedApp<T>(
     if (completed) await closePackagedApp(running);
     else await closePackagedApp(running).catch(() => undefined);
   }
+}
+
+/** Read the version through the owning surface in each side of the cutover. */
+async function launchedAppVersion(running: RunningPackagedApp): Promise<string> {
+  if (running.launcherPage) {
+    return running.launcherPage.evaluate(async () =>
+      (await window.launcherNative.state.get()).appUpdate.currentVersion
+    );
+  }
+  // The supported Stable baseline predates the dedicated Vue launcher. Keep
+  // its old bridge description local to this rollback proof instead of
+  // restoring that retired namespace to the candidate's current game API.
+  return running.page.evaluate(async () => {
+    const stable = globalThis as unknown as {
+      gwNative: {
+        appUpdates: {
+          getState(): Promise<{ readonly currentVersion: string }>;
+        };
+      };
+    };
+    return (await stable.gwNative.appUpdates.getState()).currentVersion;
+  });
+}
+
+/** Exercise the previous Stable's writer without restoring it to the candidate game API. */
+async function updateStableSettings(
+  running: RunningPackagedApp,
+  patch: Partial<AppSettings>,
+): Promise<unknown> {
+  return running.page.evaluate(async (value) => {
+    const stable = globalThis as unknown as {
+      gwNative: {
+        settings: {
+          set(input: unknown): Promise<unknown>;
+        };
+      };
+    };
+    return stable.gwNative.settings.set(value);
+  }, patch);
+}
+
+/** Write candidate-owned global settings through the dedicated launcher. */
+async function updateCandidateSettings(
+  running: RunningPackagedApp,
+  patch: LauncherSettingsPatch,
+): Promise<unknown> {
+  const launcher = running.launcherPage;
+  if (!launcher) throw new Error("the candidate did not expose the unified launcher");
+  await launcher.evaluate(
+    (value) => window.launcherNative.settings.update(value),
+    patch,
+  );
+  return running.page.evaluate(() => window.gwNative.settings.get());
 }
 
 async function readToolsCanonical(page: Page): Promise<{
@@ -360,11 +507,11 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
   console.log("stable/beta compatibility: Core preload round-trip");
   const stableWindowState = await readPersistedWindowState(cohort);
   const stableSettings = await withPackagedApp(cohort, stableApp!, async (core) => {
-    const settings = await core.page.evaluate(() => window.gwNative.settings.set({
+    const settings = await updateStableSettings(core, {
       autoCheckUpdates: false,
       gwonmacTools: false,
       showDiagnostics: false,
-    }));
+    });
     await roundTripProfileStore(core.page, null, "stable-core-template");
     await assertWindowMatchesPersistedState(stableWindowState, core.page);
     return canonicalizeStableSettings(settings, { disk: false });
@@ -377,13 +524,15 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
     assert.deepEqual(initial.settings, stableSettings, "candidate changed Stable-owned Core settings");
     assert.equal(initial.settings.buildLibrary, false, "candidate lost the legacy Apply-Team opt-out");
     const changed = validateCandidateSettings(
-      await core.page.evaluate(() => window.gwNative.settings.set({ showDiagnostics: true })),
+      await updateCandidateSettings(core, { showDiagnostics: true }),
       { disk: false },
     );
     assert.deepEqual(changed, { ...stableSettings, showDiagnostics: true });
     await roundTripProfileStore(core.page, "stable-core-template", "candidate-core-template");
     await assertWindowMatchesPersistedState(candidateWindowState, core.page);
   });
+  const candidateLauncherDocuments = await readLauncherCompatibilityDocuments(cohort);
+  assertCandidateAdoptedWithoutChangingStableOwners(candidateLauncherDocuments);
   await assertDiskSentinel(cohort);
   const rollbackWindowState = await readPersistedWindowState(cohort);
   await withPackagedApp(cohort, stableApp!, async (core) => {
@@ -396,6 +545,10 @@ async function proveCoreRoundTrip(cohort: Cohort): Promise<void> {
     await roundTripProfileStore(core.page, "candidate-core-template", "stable-return-core-template");
     await assertWindowMatchesPersistedState(rollbackWindowState, core.page);
   });
+  await assertRollbackIgnoredCandidateLauncherDocuments(
+    cohort,
+    candidateLauncherDocuments,
+  );
   await assertDiskSentinel(cohort);
 }
 
@@ -570,16 +723,14 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       false,
       "latest Stable lost the legacy Apply-Team opt-out before upgrade",
     );
-    const launchedStableVersion = (await running.page.evaluate(
-      () => window.gwNative.appUpdates.getState(),
-    )).currentVersion;
+    const launchedStableVersion = await launchedAppVersion(running);
     assert.equal(
       launchedStableVersion,
       stableVersion,
       "the downloaded latest-Stable ZIP launched a different version",
     );
-    const stableSettings = canonicalizeStableSettings(await running.page.evaluate(() =>
-      window.gwNative.settings.set({
+    const stableSettings = canonicalizeStableSettings(
+      await updateStableSettings(running, {
         autoCheckUpdates: false,
         gwonmacTools: true,
         renderScale: 1.5,
@@ -587,8 +738,9 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
         uiPanelOpacity: 88,
         updateTrack: "beta",
         buildLibrary: true,
-      })
-    ), { disk: false });
+      }),
+      { disk: false },
+    );
     assert.equal(stableSettings.updateTrack, "beta", "latest Stable lacks the Beta enabler");
     assert.equal(stableSettings.buildLibrary, true, "latest Stable did not enable Build Library");
     const stableTools = await readToolsCanonical(running.page);
@@ -613,9 +765,7 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   const candidateWindowState = await readPersistedWindowState(toolsCohort);
   await withPackagedApp(toolsCohort, candidatePath, async (running) => {
     assert.equal(
-      (await running.page.evaluate(
-        () => window.gwNative.appUpdates.getState(),
-      )).currentVersion,
+      await launchedAppVersion(running),
       candidateVersion,
       "the signed candidate app launched a different version",
     );
@@ -631,23 +781,25 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
     assert.deepEqual(candidateInitial.library, initialLibrary);
     await assertWindowMatchesPersistedState(candidateWindowState, running.page);
     await roundTripProfileStore(running.page, "stable-template", "candidate-template");
-    await running.page.evaluate(
-      async ({ settings, library }) => {
-        const api = window.gwNative;
-        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
-        await api.buildLibrary.set(library);
-        await api.settings.set(settings);
-      },
-      {
-        settings: {
-          showDiagnostics: true,
-          uiPanelOpacity: 87,
-          buildLibrary: false,
-        } satisfies Partial<AppSettings>,
-        library: candidateLibrary,
-      },
-    );
+    const launcher = running.launcherPage;
+    if (!launcher) throw new Error("the candidate did not expose the unified launcher");
+    await running.page.evaluate(async (library) => {
+      const api = window.gwNative;
+      if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+      await api.buildLibrary.set(library);
+    }, candidateLibrary);
+    await launcher.evaluate(async () => {
+      await window.launcherNative.settings.update({ showDiagnostics: true });
+      await window.launcherNative.tools.setFeature({
+        tool: "build-management",
+        enabled: false,
+      });
+    });
   });
+  const candidateLauncherDocuments = await readLauncherCompatibilityDocuments(
+    toolsCohort,
+  );
+  assertCandidateAdoptedWithoutChangingStableOwners(candidateLauncherDocuments);
   await publishWindowSize(toolsCohort, 960, 680);
   const candidateSettingsDocument = await readSettingsDocument(toolsCohort);
   assert.deepEqual(
@@ -665,9 +817,7 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
   };
   await withPackagedApp(toolsCohort, stablePath, async (running) => {
     assert.equal(
-      (await running.page.evaluate(
-        () => window.gwNative.appUpdates.getState(),
-      )).currentVersion,
+      await launchedAppVersion(running),
       stableVersion,
       "the return launch did not use the exact Stable baseline",
     );
@@ -681,28 +831,22 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       validateCandidateSettings(candidateSettingsDocument, { disk: true }),
       "Stable did not read every candidate-written settings value",
     );
-    await running.page.evaluate(() => window.gwNative.settings.set({ buildLibrary: true }));
+    await updateStableSettings(running, { buildLibrary: true });
     const returned = await readToolsCanonical(running.page);
     assert.equal(returned.recovered, false);
     assert.deepEqual(returned.library, candidateLibrary);
     await assertWindowMatchesPersistedState(rollbackWindowState, running.page);
     await roundTripProfileStore(running.page, "candidate-template", "stable-return-template");
-    await running.page.evaluate(
-      async ({ settings, library }) => {
-        const api = window.gwNative;
-        if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
-        await api.buildLibrary.set(library);
-        await api.settings.set(settings);
-      },
-      {
-        settings: {
-          showDiagnostics: false,
-          updateTrack: "stable",
-          buildLibrary: false,
-        } satisfies Partial<AppSettings>,
-        library: finalLibrary,
-      },
-    );
+    await running.page.evaluate(async (library) => {
+      const api = window.gwNative;
+      if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
+      await api.buildLibrary.set(library);
+    }, finalLibrary);
+    await updateStableSettings(running, {
+      showDiagnostics: false,
+      updateTrack: "stable",
+      buildLibrary: false,
+    });
     const finalSettings = canonicalizeStableSettings(
       await running.page.evaluate(() => window.gwNative.settings.get()),
       { disk: false },
@@ -714,6 +858,10 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
       "Stable lost candidate-written settings while saving its own patch",
     );
   });
+  await assertRollbackIgnoredCandidateLauncherDocuments(
+    toolsCohort,
+    candidateLauncherDocuments,
+  );
 
   const names = await readdir(toolsCohort.userData);
   assert.equal(

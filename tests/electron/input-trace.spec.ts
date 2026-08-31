@@ -3,7 +3,7 @@ import {
   CLIPBOARD_TEXT_CEILING,
   IPC,
 } from '../../src/shared/contracts.js';
-import { closeOffline, launchCachedClient } from "./fixtures.mjs";
+import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
 import { boxOf, startGameInput } from "./input-helpers.js";
 
 type OskModuleHost = NonNullable<Window["Module"]> & {
@@ -54,7 +54,7 @@ const announceLock = (page: import("@playwright/test").Page, locked: boolean) =>
 
 test.describe("input trace", () => {
   test("keeps a real release after a normalized text-to-canvas release", async () => {
-    const fixture = await launchCachedClient("gw-input-trace-held-keys-");
+    const fixture = await launchPlayableClient("gw-input-trace-held-keys-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -122,7 +122,7 @@ test.describe("input trace", () => {
   });
 
   test("stays dormant, names double-click decisions, and copies no coordinates", async () => {
-    const fixture = await launchCachedClient("gw-input-trace-on-");
+    const fixture = await launchPlayableClient("gw-input-trace-on-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -229,7 +229,7 @@ test.describe("input trace", () => {
   });
 
   test("reports each pointer lock once, however it was announced", async () => {
-    const fixture = await launchCachedClient("gw-input-trace-lock-");
+    const fixture = await launchPlayableClient("gw-input-trace-lock-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -256,7 +256,7 @@ test.describe("input trace", () => {
 
   test("joins redacted main and text events, pauses, bounds, copies, and clears", async () => {
     test.setTimeout(60_000);
-    const fixture = await launchCachedClient("gw-input-trace-timeline-");
+    const fixture = await launchPlayableClient("gw-input-trace-timeline-");
     try {
       const { app, page } = fixture;
       await startGameInput(page);
@@ -336,7 +336,7 @@ test.describe("input trace", () => {
   });
 
   test("records thresholded gamepad transitions without a device identity", async () => {
-    const fixture = await launchCachedClient("gw-input-trace-gamepad-");
+    const fixture = await launchPlayableClient("gw-input-trace-gamepad-");
     try {
       const { page } = fixture;
       await startGameInput(page);

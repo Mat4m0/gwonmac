@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closeOffline, launchCachedClient } from "./fixtures.mjs";
+import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 type KeyboardInputWindow = typeof window & {
@@ -18,7 +18,7 @@ type OskModuleHost = NonNullable<Window["Module"]> & {
 
 test.describe("renderer keyboard input", () => {
   test("keeps game text entry native-assistance free without blurring the game", async () => {
-    const fixture = await launchCachedClient("gw-text-input-e2e-");
+    const fixture = await launchPlayableClient("gw-text-input-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -69,7 +69,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("keeps same-window controls inside the game focus lifecycle", async () => {
-    const fixture = await launchCachedClient("gw-internal-focus-e2e-");
+    const fixture = await launchPlayableClient("gw-internal-focus-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -107,7 +107,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("lets the client own Tab focus between login fields", async () => {
-    const fixture = await launchCachedClient("gw-tab-focus-e2e-");
+    const fixture = await launchPlayableClient("gw-tab-focus-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -160,7 +160,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("keeps the memory warning passive until a player clicks it", async () => {
-    const fixture = await launchCachedClient("gw-memory-warning-input-e2e-");
+    const fixture = await launchPlayableClient("gw-memory-warning-input-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -216,7 +216,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("buffers only the first immediate character-selection Enter", async () => {
-    const fixture = await launchCachedClient("gw-character-enter-e2e-");
+    const fixture = await launchPlayableClient("gw-character-enter-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -256,7 +256,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("submits login and certified pre-game input through the intended routes", async () => {
-    const fixture = await launchCachedClient("gw-character-relog-e2e-");
+    const fixture = await launchPlayableClient("gw-character-relog-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -416,7 +416,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("uses physical main-block keys without changing typed text", async () => {
-    const fixture = await launchCachedClient("gw-physical-key-e2e-");
+    const fixture = await launchPlayableClient("gw-physical-key-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -568,7 +568,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("releases only the Command-held physical key named by macOS", async () => {
-    const fixture = await launchCachedClient("gw-command-key-release-e2e-");
+    const fixture = await launchPlayableClient("gw-command-key-release-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -644,7 +644,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("does not interrupt a held game key when Command changes", async () => {
-    const fixture = await launchCachedClient("gw-command-transition-e2e-");
+    const fixture = await launchPlayableClient("gw-command-transition-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -694,7 +694,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("ends canvas movement when Guild Wars opens a text proxy", async () => {
-    const fixture = await launchCachedClient("gw-chat-movement-release-e2e-");
+    const fixture = await launchPlayableClient("gw-chat-movement-release-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
@@ -748,7 +748,7 @@ test.describe("renderer keyboard input", () => {
   });
 
   test("forgets a surface-claimed key after its Command-held release", async () => {
-    const fixture = await launchCachedClient("gw-command-surface-release-e2e-");
+    const fixture = await launchPlayableClient("gw-command-surface-release-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);

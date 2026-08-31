@@ -42,7 +42,7 @@ describe("the macOS input policy", () => {
     );
     const ready = main.indexOf("app.whenReady().then");
     const repeatPolicy = main.indexOf("systemPreferences.setUserDefault");
-    const firstWindow = main.indexOf("createAccountsWindow(", repeatPolicy);
+    const firstWindow = main.indexOf("createLauncherWindow(", repeatPolicy);
     assert.ok(ready >= 0 && repeatPolicy > ready);
     assert.ok(firstWindow > repeatPolicy);
   });

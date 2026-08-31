@@ -7,7 +7,7 @@ import { IPC, type InvokeChannel } from "../shared/contracts.js";
 import { AllowlistError, errorCode } from "../shared/errors.js";
 import { logEvent } from "./diagnostics.js";
 import {
-  isAccountsRendererUrl,
+  isLauncherRendererUrl,
   isCanonicalRendererUrl,
 } from "./core/renderer-trust.js";
 import type { WindowRegistry } from "./window-registry.js";
@@ -18,20 +18,20 @@ type Run<In, Out> = (win: BrowserWindow, input: In) => Out | Promise<Out>;
 interface ChannelDef<In, Out> {
   readonly parse: Parser<In>;
   readonly run: Run<In, Out>;
-  readonly role: "game" | "hub" | "any";
+  readonly role: "game" | "launcher" | "any";
 }
 
 /** Erases the invariant input type only after `channel()` checked the pair. */
 export interface AnyChannelDef {
   readonly parse: Parser<unknown>;
   readonly run: Run<never, unknown>;
-  readonly role: "game" | "hub" | "any";
+  readonly role: "game" | "launcher" | "any";
 }
 
 export function channel<In, Out>(
   parse: Parser<In>,
   run: Run<In, Out>,
-  role: "game" | "hub" | "any" = "game",
+  role: "game" | "launcher" | "any" = "game",
 ): ChannelDef<In, Out> {
   return { parse, run, role };
 }
@@ -63,6 +63,21 @@ export function registerChannelDefinitions(
   }
 }
 
+export function registerNamedChannelDefinitions<Key extends string>(
+  windows: WindowRegistry,
+  channels: Readonly<Record<Key, string>>,
+  handlers: Readonly<Partial<Record<Key, AnyChannelDef>>>,
+): void {
+  for (const [key, definition] of Object.entries(handlers) as [Key, AnyChannelDef][]) {
+    const def = definition as ChannelDef<unknown, unknown>;
+    ipcMain.handle(channels[key], async (event, ...args: unknown[]) => {
+      const win = assertSender(windows, event, def.role);
+      const input = def.parse(args);
+      return def.run(win, input);
+    });
+  }
+}
+
 export function sendIfLive(
   win: BrowserWindow,
   channelName: string,
@@ -80,7 +95,7 @@ export function sendIfLive(
 function assertSender(
   registry: WindowRegistry,
   event: Electron.IpcMainInvokeEvent,
-  role: "game" | "hub" | "any",
+  role: "game" | "launcher" | "any",
 ): BrowserWindow {
   const win = registry.windowForWebContents(event.sender.id);
   const context = registry.contextForWebContents(event.sender.id);
@@ -90,8 +105,8 @@ function assertSender(
   if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
     throw new AllowlistError("ipc sender is not the main frame");
   }
-  const trusted = context.role === "hub"
-    ? isAccountsRendererUrl(event.senderFrame.url)
+  const trusted = context.role === "launcher"
+    ? isLauncherRendererUrl(event.senderFrame.url)
     : isCanonicalRendererUrl(event.senderFrame.url);
   if (!trusted) throw new AllowlistError("invalid ipc origin");
   return win;

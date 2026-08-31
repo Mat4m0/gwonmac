@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { readdir, rename, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { writeAtomicExclusive } from "./atomic-file.js";
 
 const CORRUPT_BACKUPS_KEPT = 3;
 
@@ -64,6 +65,23 @@ export async function quarantineCorruptDocument(
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
+  await pruneCorruptBackups(documentPath, backupPath);
+  return backupPath;
+}
+
+/**
+ * Preserve bytes without first removing the source document. Recovery owners
+ * use this when an absent source has different semantics from a corrupt one:
+ * a crash between preservation and replacement must leave the corrupt source
+ * available for the next retry, never look like a first launch.
+ */
+export async function preserveCorruptDocument(
+  documentPath: string,
+  bytes: string | Uint8Array,
+  mode = 0o600,
+): Promise<string> {
+  const backupPath = `${documentPath}.corrupt-${Date.now()}-${randomUUID()}`;
+  await writeAtomicExclusive(backupPath, bytes, mode);
   await pruneCorruptBackups(documentPath, backupPath);
   return backupPath;
 }

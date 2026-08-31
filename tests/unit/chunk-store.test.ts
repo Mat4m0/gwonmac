@@ -146,6 +146,56 @@ describe("chunk-store", () => {
     assert.deepEqual(await readFile(join(root, hash)), good);
   });
 
+  it("rehashes every resident chunk after a process restart", async () => {
+    const root = await freshDir();
+    const payloads = [Buffer.alloc(CHUNK, 5), Buffer.alloc(100, 6)];
+    const hashes = payloads.map(hashOf);
+    await Promise.all(
+      payloads.map((payload, index) =>
+        writeFile(join(root, hashes[index]!), payload),
+      ),
+    );
+
+    async function verifyWithFreshStore() {
+      let verifiedBytes = 0;
+      let downloadStarted = false;
+      const store = new ChunkStore({
+        chunksDir: root,
+        size: CHUNK + 100,
+        chunkSize: CHUNK,
+        chunkHashes: hashes,
+        fetch: async () => {
+          throw new Error("valid resident data must not be fetched");
+        },
+        metrics: {
+          count: (name, delta = 1) => {
+            if (name === "cache.fullVerificationBytes") {
+              verifiedBytes += delta;
+            }
+          },
+          observe: () => undefined,
+        },
+      });
+
+      assert.deepEqual(await store.verifiedResidentIndices(), []);
+      assert.equal(
+        await store.downloadAll({
+          freeBytes: async () => 2 * 1024 ** 3,
+          onDownloadStart: () => {
+            downloadStarted = true;
+          },
+        }),
+        true,
+      );
+      assert.equal(verifiedBytes, CHUNK + 100);
+      assert.deepEqual(await store.verifiedResidentIndices(), [0, 1]);
+      assert.equal(downloadStarted, false);
+    }
+
+    await verifyWithFreshStore();
+    await verifyWithFreshStore();
+  });
+
   it("allows pause and sleep to interrupt resident-cache verification", async () => {
     const root = await freshDir();
     const payloads = Array.from({ length: 4 }, (_, index) =>
@@ -193,8 +243,18 @@ describe("chunk-store", () => {
     });
     await store.ensureChunk(0);
     fetched.clear();
-    const ok = await store.downloadAll({ freeBytes: async () => 10 * 1024 * 1024 * 1024 });
+    let downloadStart: { received: number; total: number } | null = null;
+    const ok = await store.downloadAll({
+      freeBytes: async () => 10 * 1024 * 1024 * 1024,
+      onDownloadStart: (activity) => {
+        downloadStart = activity;
+      },
+    });
     assert.equal(ok, true);
+    assert.deepEqual(downloadStart, {
+      received: CHUNK,
+      total: CHUNK * 2 + 100,
+    });
     assert.equal(fetched.has(hashes[0]!), false);
     assert.equal(fetched.has(hashes[1]!), true);
     assert.equal(fetched.has(hashes[2]!), true);

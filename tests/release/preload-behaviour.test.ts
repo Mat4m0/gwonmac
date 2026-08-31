@@ -163,8 +163,9 @@ function call(api: GwNativeApi, dotted: string): Capability {
 }
 
 const PACKET = new Uint8Array([1, 2, 3, 4]);
-const PROFILE_ID = "00000000-0000-4000-8000-000000000001";
-const RENDERER_SETTINGS_PATCH = { renderScale: 2 } satisfies RendererSettingsPatch;
+const RENDERER_SETTINGS_PATCH = {
+  autoRelogAfterReload: true,
+} satisfies RendererSettingsPatch;
 const CARTOGRAPHY_EVIDENCE_CAPTURE = {
   source: {
     layoutId: null,
@@ -194,7 +195,6 @@ interface Invocation {
 // Nothing here is optional: the coverage assertion below fails if a method the
 // preload exposes is missing from this table or from SUBSCRIPTIONS.
 const INVOCATIONS: Invocation[] = [
-  { path: "progress.current", args: [], channel: IPC.progressCurrent },
   { path: "snapshot.metadata", args: [], channel: IPC.snapshotMetadata },
   { path: "dns.resolve", args: ["geodc.arenanetworks.com"], channel: IPC.dnsResolve },
   { path: "sockets.connect", args: ["10.0.0.1:6112"], channel: IPC.socketConnect },
@@ -202,12 +202,6 @@ const INVOCATIONS: Invocation[] = [
   { path: "sockets.close", args: [7], channel: IPC.socketClose },
   { path: "settings.get", args: [], channel: IPC.settingsGet },
   { path: "settings.set", args: [RENDERER_SETTINGS_PATCH], channel: IPC.settingsSet },
-  { path: "settings.reset", args: [], channel: IPC.settingsReset },
-  {
-    path: "settings.restartForTools",
-    args: [],
-    channel: IPC.settingsRestartForTools,
-  },
   {
     path: "travelPreferences.get",
     args: [],
@@ -268,71 +262,15 @@ const INVOCATIONS: Invocation[] = [
     }],
     channel: IPC.traderPriceHistoryGet,
   },
-  { path: "accounts.get", args: [], channel: IPC.accountsGet },
   {
-    path: "accounts.setup",
-    args: [{ templateEntries: [] }],
-    channel: IPC.accountsSetup,
-  },
-  {
-    path: "accounts.create",
-    args: [{
-      name: "Alt",
-      templates: "private",
-      builds: "private",
-      copySingleBuilds: false,
-      copySingleTemplates: false,
-    }],
-    channel: IPC.accountsCreate,
-  },
-  {
-    path: "accounts.update",
-    args: [{
-      id: PROFILE_ID,
-      name: "Alt",
-      templates: "shared",
-      builds: "private",
-    }],
-    channel: IPC.accountsUpdate,
-  },
-  { path: "accounts.archive", args: [PROFILE_ID], channel: IPC.accountsArchive },
-  { path: "accounts.restore", args: [PROFILE_ID], channel: IPC.accountsRestore },
-  { path: "accounts.delete", args: [PROFILE_ID], channel: IPC.accountsDelete },
-  { path: "accounts.open", args: [[PROFILE_ID]], channel: IPC.accountsOpen },
-  { path: "accounts.useSingle", args: [], channel: IPC.accountsUseSingle },
-  {
-    path: "accounts.loadTemplates",
+    path: "profileTemplates.loadTemplates",
     args: [],
-    channel: IPC.accountsTemplatesLoad,
+    channel: IPC.profileTemplatesLoad,
   },
   {
-    path: "accounts.saveTemplates",
+    path: "profileTemplates.saveTemplates",
     args: [[{ path: "Skills/Alt.txt", contents: "OQCiUyo8AkVwR4KMMGAAAEAA" }]],
-    channel: IPC.accountsTemplatesSave,
-  },
-  { path: "shortcuts.capture", args: [], channel: IPC.shortcutCapture },
-  {
-    path: "shortcuts.cancelCapture",
-    args: [],
-    channel: IPC.shortcutCaptureCancel,
-  },
-  {
-    path: "skillKeys.capture",
-    args: [],
-    channel: IPC.skillKeyCapture,
-  },
-  {
-    path: "skillKeys.submitPointer",
-    args: [{
-      input: { kind: "mouse-button", button: 2 },
-      modifiers: { control: false, option: false, shift: false, command: false },
-    }],
-    channel: IPC.skillKeyCapturePointer,
-  },
-  {
-    path: "skillKeys.cancelCapture",
-    args: [],
-    channel: IPC.skillKeyCaptureCancel,
+    channel: IPC.profileTemplatesSave,
   },
   { path: "buildLibrary.get", args: [], channel: IPC.buildLibraryGet },
   {
@@ -354,11 +292,6 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.steamStore,
   },
   { path: "steam.clear", args: [], channel: IPC.steamClear },
-  { path: "cache.info", args: [], channel: IPC.cacheInfo },
-  { path: "cache.clearAndRestart", args: [], channel: IPC.cacheClear },
-  { path: "cache.downloadAll", args: [], channel: IPC.cacheDownloadAll },
-  { path: "cache.stopDownload", args: [], channel: IPC.cacheStopDownload },
-  { path: "gameStorage.resetAndRestart", args: [], channel: IPC.gameStorageReset },
   { path: "diagnostics.clockSync", args: [1_234], channel: IPC.diagnosticsClockSync },
   {
     path: "diagnostics.recordClockOffset",
@@ -451,7 +384,6 @@ const INVOCATIONS: Invocation[] = [
     args: [[{ path: "Skills/Shockaxe.txt", contents: "OQCiUyo8AkVwR4KMMGAAAEAA" }]],
     channel: IPC.templatesExport,
   },
-  { path: "client.retry", args: [], channel: IPC.clientRetry },
   {
     path: "client.featureFailure",
     args: [["nativeCursor"]],
@@ -462,14 +394,8 @@ const INVOCATIONS: Invocation[] = [
     args: [{ generation: 7, fingerprint: "a".repeat(64) }],
     channel: IPC.clientHealthy,
   },
+  { path: "client.readyToPresent", args: [], channel: IPC.gameReadyToPresent },
   { path: "client.session", args: [], channel: IPC.clientSession },
-  { path: "appUpdates.getState", args: [], channel: IPC.appUpdatesGetState },
-  { path: "appUpdates.check", args: [], channel: IPC.appUpdatesCheck },
-  {
-    path: "appUpdates.restartAndInstall",
-    args: [],
-    channel: IPC.appUpdatesRestartAndInstall,
-  },
 ];
 
 /** The main→renderer streams, which subscribe instead of invoking. */
@@ -489,11 +415,6 @@ interface Subscription {
 
 const SUBSCRIPTIONS: Subscription[] = [
   {
-    path: "progress.onChange",
-    channel: IPC.progressEvent,
-    subscribe: (api, listener) => api.progress.onChange(listener),
-  },
-  {
     path: "sockets.onEvent",
     channel: IPC.socketEvent,
     subscribe: (api, listener) => api.sockets.onEvent(listener),
@@ -507,11 +428,6 @@ const SUBSCRIPTIONS: Subscription[] = [
     path: "inputTrace.onEntry",
     channel: IPC.inputTraceEvent,
     subscribe: (api, listener) => api.inputTrace.onEntry(listener),
-  },
-  {
-    path: "appUpdates.onState",
-    channel: IPC.appUpdatesState,
-    subscribe: (api, listener) => api.appUpdates.onState(listener),
   },
   {
     path: "trade.onEvent",
@@ -552,6 +468,27 @@ test("the Core preload exposes no optional Tools namespace or channel", () => {
   )) {
     assert.doesNotMatch(coreSource, new RegExp(channel.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
   }
+});
+
+test("game preloads expose no launcher management capability", () => {
+  const { api } = load();
+  for (const namespace of [
+    "progress",
+    "shortcuts",
+    "skillKeys",
+    "cache",
+    "gameStorage",
+    "appUpdates",
+  ]) {
+    assert.equal(
+      Reflect.has(api, namespace),
+      false,
+      `${namespace} leaked from the launcher into the game bridge`,
+    );
+  }
+  assert.equal(Reflect.has(api.client, "retry"), false);
+  assert.equal(Reflect.has(api.settings, "reset"), false);
+  assert.equal(Reflect.has(api.settings, "restartForTools"), false);
 });
 
 test("each capability invokes the channel the contracts name, with its arguments", async () => {
@@ -668,12 +605,12 @@ test("the sender event never reaches the subscriber", () => {
   // the page a live ipcRenderer through the frozen bridge.
   const { api, handlers } = load();
   const seen: unknown[][] = [];
-  api.progress.onChange((...args: unknown[]) => seen.push(args));
+  api.settings.onChange((...args: unknown[]) => seen.push(args));
   const event = { sender: "the whole ipcRenderer", ports: [] };
-  const [deliver] = handlers(IPC.progressEvent);
-  assert.ok(deliver, "the preload subscribed to no progress channel");
-  deliver(event, { phase: "image", received: 1 });
-  assert.deepEqual(seen, [[{ phase: "image", received: 1 }]]);
+  const [deliver] = handlers(IPC.settingsEvent);
+  assert.ok(deliver, "the preload subscribed to no settings channel");
+  deliver(event, { renderScale: 2 });
+  assert.deepEqual(seen, [[{ renderScale: 2 }]]);
 });
 
 test("a renderer command is acknowledged once its handler has settled", async () => {

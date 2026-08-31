@@ -164,7 +164,6 @@ export async function toggleTools(win: BrowserWindow): Promise<void> {
       { k: "tools.toggleRefused", outcome },
       ownerId,
     );
-    await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
   }
 }
 
@@ -173,7 +172,6 @@ export async function toggleTrade(win: BrowserWindow): Promise<void> {
   if (await sendRendererCommand(win, { type: "trade.toggle" }) === "completed") {
     return;
   }
-  await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
 }
 
 /**
@@ -194,7 +192,6 @@ export async function openStorage(win: BrowserWindow): Promise<void> {
   if (await sendRendererCommand(win, { type: "storage.open" }) === "completed") {
     return;
   }
-  await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
 }
 
 /** Open the focused Travel palette, with Settings as the truthful fallback. */
@@ -203,7 +200,6 @@ export async function toggleTravel(win: BrowserWindow): Promise<void> {
   if (await sendRendererCommand(win, { type: "travel.toggle" }) === "completed") {
     return;
   }
-  await sendRendererCommand(win, { type: "settings.open", pane: "controls" });
 }
 
 /** Open or close the Core character-switch palette. */

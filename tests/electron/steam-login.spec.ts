@@ -17,7 +17,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   closeOffline,
-  launchCachedClient,
+  launchPlayableClient,
   launchOffline,
   launchOfflineAt,
   root,
@@ -329,7 +329,7 @@ test.describe("the Steam credential seam", () => {
   });
 
   test("makes the provider chooser operable from the keyboard", async () => {
-    fixture = await launchCachedClient("gw-steam-provider-keyboard-");
+    fixture = await launchPlayableClient("gw-steam-provider-keyboard-");
     await startGameInput(fixture.page);
     expect(await getAuthToken(fixture, "Steam", true)).toEqual({
       settled: "rejected",
@@ -473,6 +473,7 @@ test.describe("the Steam credential seam", () => {
     // `authCode` into <PasswordToken> for login.xml.
     fixture = await launchOffline("gw-steam-stored-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
+    const before = await windowCount(fixture.app);
 
     const result = await getAuthToken(fixture, "Steam", true);
 
@@ -480,7 +481,7 @@ test.describe("the Steam credential seam", () => {
       settled: "resolved",
       value: { userId: "1", authCode: TOKEN, refreshToken: "" },
     });
-    expect(await windowCount(fixture.app)).toBe(1);
+    expect(await windowCount(fixture.app)).toBe(before);
   });
 
   test("refuses a provider it does not offer", async () => {

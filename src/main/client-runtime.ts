@@ -897,17 +897,31 @@ export class ClientRuntime {
     this.publishProgress({
       ...INITIAL_PROGRESS,
       phase: "image",
-      label: "Downloading full game",
+      label: "Checking game files",
       fullDownload: { status: "running" },
     });
     let lastProgressLogAt = 0;
+    let downloadStarted = false;
     const promise = active.store
       .downloadAll({
-        onProgress: (value) => {
+        onDownloadStart: ({ received, total }) => {
+          downloadStarted = true;
           if (this.activeSlot.current?.generation !== active.generation) return;
           this.publishProgress({
             phase: "image",
             label: "Downloading full game",
+            received,
+            total,
+            bytesPerSecond: 0,
+            secondsRemaining: null,
+            fullDownload: { status: "running" },
+          });
+        },
+        onProgress: (value) => {
+          if (this.activeSlot.current?.generation !== active.generation) return;
+          this.publishProgress({
+            phase: "image",
+            label: downloadStarted ? "Downloading full game" : "Checking game files",
             received: value.received,
             total: value.total,
             bytesPerSecond: value.bytesPerSecond,
@@ -934,9 +948,14 @@ export class ClientRuntime {
           k: complete ? "fullDownload.completed" : "fullDownload.stopped",
         });
         if (this.activeSlot.current?.generation === active.generation) {
+          const label = !complete
+            ? "Download stopped"
+            : downloadStarted
+              ? "Full game downloaded"
+              : "Game files verified";
           this.publishReadyProgress(
             active,
-            complete ? "Full game downloaded" : "Download stopped",
+            label,
             undefined,
             { status: complete ? "complete" : "paused" },
           );
@@ -963,7 +982,7 @@ export class ClientRuntime {
     return promise;
   }
 
-  stopDownload(): void {
+  async stopDownload(): Promise<void> {
     const download = this.fullDownload;
     if (!download) return;
     logEvent({ k: "fullDownload.stopRequested" });
@@ -974,6 +993,7 @@ export class ClientRuntime {
       });
     }
     download.store.stop();
+    await download.promise;
   }
 
   confirmCandidateHealthy(token: ClientHealthToken): Promise<void> {

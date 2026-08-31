@@ -112,6 +112,15 @@ describe("Cartography preset domain", () => {
     assert.equal(replaceCartographyPresetStyle(library, "first", invalidStyle), null);
   });
 
+  it("avoids built-in name collisions and keeps generated names within the limit", () => {
+    const library = add(DEFAULT_CARTOGRAPHY_PRESET_LIBRARY, "night", "Night route");
+    assert.equal(uniqueCartographyPresetName("Cartographer", library), "Cartographer 2");
+    assert.equal(uniqueCartographyPresetName("night route", library), "night route 2");
+    const longName = uniqueCartographyPresetName("Night route".padEnd(80, "x"), library);
+    assert.ok(longName);
+    assert.ok(longName.length <= 40);
+  });
+
   it("deletes atomically and falls back only when the active custom preset is deleted", () => {
     const first = add(DEFAULT_CARTOGRAPHY_PRESET_LIBRARY, "first", "First");
     const library = add(first, "second", "Second");

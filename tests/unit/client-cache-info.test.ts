@@ -22,7 +22,7 @@ describe("client cache projection", () => {
       chunksDir: "/cache",
       size: 1_000,
       hashes: ["a", "b", "c"],
-      residentIndices: async () => [0, 2],
+      verifiedResidentIndices: async () => [0, 2],
       chunkByteLength: (index) => index === 2 ? 200 : 400,
     }, 300);
 
@@ -41,7 +41,7 @@ describe("client cache projection", () => {
       chunksDir: "/cache",
       size: 1_000,
       hashes: ["a"],
-      residentIndices: async () => [],
+      verifiedResidentIndices: async () => [],
       chunkByteLength: () => 1_000,
     }, -1);
 

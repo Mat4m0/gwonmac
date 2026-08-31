@@ -632,62 +632,27 @@ test.describe("diagnostics", () => {
     }
   });
 
-  test("a crashed client offers reporting and recovers a sandboxed renderer", async () => {
+  test("a crashed game keeps only the diagnostic fallback and recovers its sandbox", async () => {
     const fixture = await launchOffline("gw-crash-panel-e2e-");
     try {
       const { app, page } = fixture;
-      // Offline boot settles into its own generic failure first; the crash
-      // panel is driven on top of that settled state, as a real mid-game
-      // abort would be.
-      await expect(page.locator("#loading-retry")).toBeVisible();
       await page.evaluate(() => window.gwLoading.failCrash(1));
-      await expect(page.locator("#loading-label")).toHaveText(
-        /stopped unexpectedly/,
-      );
-      await expect(page.locator("#loading-retry")).toBeVisible();
-      await expect(page.locator("#loading-report")).toBeVisible();
-
-      // The second crash of the run escalates the copy, not the actions.
-      await page.evaluate(() => window.gwLoading.failCrash(2));
-      await expect(page.locator("#loading-label")).toHaveText(/keeps stopping/);
-      await expect(page.locator("#loading-report")).toBeVisible();
-
-      await app.evaluate(({ dialog, shell }) => {
-        delete (globalThis as { __openedExternalUrl?: string }).__openedExternalUrl;
-        shell.openExternal = async (url) => {
-          (globalThis as { __openedExternalUrl?: string }).__openedExternalUrl = url;
-        };
-        dialog.showSaveDialog = async () => {
-          throw new Error("crash reporting must not open a save dialog");
-        };
-      });
-      await page.click("#loading-report");
-      await expect
-        .poll(() => app.evaluate(() =>
-          (globalThis as { __openedExternalUrl?: string }).__openedExternalUrl,
-        ))
-        .toBe("https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml");
-
-      // A subsequent progress state clears the crash actions.
-      await page.evaluate(() => {
-        window.gwLoading.set("Checking the game client", null);
-      });
-      await expect(page.locator("#loading-report")).toBeHidden();
+      await expect(page.locator("#loading-label")).toBeVisible();
+      await expect(page.locator("#loading-retry, #loading-report")).toHaveCount(0);
 
       await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
+        BrowserWindow.getAllWindows()
+          .find((win) => win.webContents.getURL() === "gw://app/")
+          ?.webContents.forcefullyCrashRenderer();
       });
       await expect
         .poll(
           async () => {
-            const [firstWindow] = app.windows();
-            if (!firstWindow) return false;
+            const game = app.windows().find((candidate) => candidate.url() === "gw://app/");
+            if (!game) return false;
             try {
-              return await firstWindow.evaluate(
-                () =>
-                  globalThis.location.protocol === "gw:" &&
-                  typeof window.gwNative === "object",
-              );
+              return await game.evaluate(() =>
+                globalThis.location.protocol === "gw:" && typeof window.gwNative === "object");
             } catch {
               return false;
             }
