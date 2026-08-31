@@ -636,6 +636,12 @@ test.describe("diagnostics", () => {
     const fixture = await launchOffline("gw-crash-panel-e2e-");
     try {
       const { app, page } = fixture;
+      // The default fixture intentionally has no cached client. Let its
+      // asynchronous preparation reach the stable offline failure before this
+      // test takes ownership of the fallback label.
+      await expect(page.locator("#loading-label")).toHaveText(
+        "Game data could not be prepared.",
+      );
       await page.evaluate(() => window.gwLoading.failCrash(1));
       await expect(page.locator("#loading-label")).toBeVisible();
       await expect(page.locator("#loading-retry, #loading-report")).toHaveCount(0);
