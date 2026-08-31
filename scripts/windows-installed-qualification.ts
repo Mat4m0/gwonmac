@@ -513,6 +513,7 @@ try {
       windowsHide: true,
     });
     installedExecutable = await oneInstalledExecutable(packageRoot);
+    await stopSquirrelFirstRun(installedExecutable);
     running = await launchPackagedApp({
       appPath: packageRoot,
       executablePath: installedExecutable,
