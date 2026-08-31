@@ -1,15 +1,35 @@
 /** Inspect the exact unsigned Squirrel.Windows package produced by target CI. */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { getRawHeader } from "@electron/asar";
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.js";
 import { releaseUpdateArtifactName } from "../src/shared/project-identity.js";
 
 async function peFile(file: string): Promise<void> {
   const bytes = await readFile(file);
   assert.equal(bytes.subarray(0, 2).toString("ascii"), "MZ", `${file} is not a PE file`);
+}
+
+async function embeddedAsarIntegrity(
+  executable: string,
+  archive: string,
+): Promise<void> {
+  const { headerString } = getRawHeader(archive);
+  const hash = createHash("sha256").update(headerString).digest("hex");
+  const expected = JSON.stringify([{
+    file: "resources\\app.asar",
+    alg: "SHA256",
+    value: hash,
+  }]);
+  assert.equal(
+    (await readFile(executable)).includes(Buffer.from(expected, "utf8")),
+    true,
+    "the Windows executable does not embed the exact app.asar header hash",
+  );
 }
 
 export async function probeWindowsPackage(root: string): Promise<Readonly<{
@@ -31,7 +51,9 @@ export async function probeWindowsPackage(root: string): Promise<Readonly<{
     false,
     "an unsigned package must not claim distribution capabilities",
   );
-  await peFile(path.join(packageRoot, `${product}.exe`));
+  const executable = path.join(packageRoot, `${product}.exe`);
+  await peFile(executable);
+  await embeddedAsarIntegrity(executable, path.join(resources, "app.asar"));
   await peFile(path.join(resources, "app.asar.unpacked", "build", "native", "windows-host.node"));
   await peFile(path.join(resources, "app.asar.unpacked", "build", "native", "gw-dat-decode.exe"));
 
