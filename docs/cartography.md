@@ -63,9 +63,9 @@ the continent-scale World Map. GWonMac certifies each context independently.
 Both surfaces consume the same continent state and global grid phase. A failure
 on either map hides only that surface.
 
-The World Map projection comes from its native event context. Each presentation
-read also refreshes the retained frame visibility. This hides the overlay when
-the native close fade finishes without another World Map event.
+The World Map projection and visibility come from one complete native event
+context. Unrelated or incomplete events leave the last complete reading intact,
+while a validated close event hides the overlay.
 
 At 18 pixels or more per cell, the map draws individual amber diamonds and
 orange actionable markers. At 8–18 pixels it groups the global grid into 4×4

@@ -472,58 +472,6 @@ export function nativeFrameObserver(
   );
 }
 
-/** Refresh the exact World Map frame retained by its certified event context. */
-export function worldMapFrameObserver(
-  certificate: typeof WORLD_MAP_CERTIFICATE & Pick<CartographyMemoryLayout, "frameArray" | "frameCount">,
-  globals: WorldMapGlobals,
-  areaEpoch: number,
-): Uint8Array {
-  const refuse = (status: number) => concat(
-    i32(0), globalSet(globals.visible),
-    i32(status), globalSet(globals.status), Uint8Array.of(0x0f),
-  );
-  const outsideMemory = (pointerLocal: number, bytes: Uint8Array) => concat(
-    local(4), Uint8Array.of(0x45, 0x45),
-    local(pointerLocal), local(4), bytes, Uint8Array.of(0x6b, 0x4b, 0x71),
-  );
-  return concat(
-    // count, array, frame id, frame, memory bytes.
-    Uint8Array.of(0x01, 0x05, 0x7f),
-    globalGet(globals.status), i32(1), Uint8Array.of(0x47, 0x04, 0x40),
-      i32(0), globalSet(globals.visible), Uint8Array.of(0x0f, 0x0b),
-    globalGet(globals.generation), globalGet(areaEpoch), Uint8Array.of(0x47, 0x04, 0x40),
-      refuse(11), Uint8Array.of(0x0b),
-    Uint8Array.of(0x3f, 0x00), i32(65_536), Uint8Array.of(0x6c, 0x21), uleb(4),
-    i32(certificate.frameCount), i32Load(), Uint8Array.of(0x22), uleb(0),
-    Uint8Array.of(0x45, 0x04, 0x40), refuse(2), Uint8Array.of(0x0b),
-    local(0), i32(16_384), Uint8Array.of(0x4b, 0x04, 0x40), refuse(3), Uint8Array.of(0x0b),
-    i32(certificate.frameArray), i32Load(), Uint8Array.of(0x22), uleb(1),
-    Uint8Array.of(0x45, 0x04, 0x40), refuse(4), Uint8Array.of(0x0b),
-    outsideMemory(1, concat(local(0), i32(4), Uint8Array.of(0x6c))),
-    Uint8Array.of(0x04, 0x40), refuse(5), Uint8Array.of(0x0b),
-    globalGet(globals.frameId), Uint8Array.of(0x22), uleb(2),
-    local(0), Uint8Array.of(0x4f, 0x04, 0x40), refuse(5), Uint8Array.of(0x0b),
-    local(1), local(2), i32(4), Uint8Array.of(0x6c, 0x6a), i32Load(),
-    Uint8Array.of(0x22), uleb(3),
-    Uint8Array.of(0x45, 0x04, 0x40), refuse(6), Uint8Array.of(0x0b),
-    outsideMemory(3, i32(certificate.frameBytes)),
-    Uint8Array.of(0x04, 0x40), refuse(6), Uint8Array.of(0x0b),
-    local(3), i32Load(certificate.frameId), local(2), Uint8Array.of(0x47, 0x04, 0x40),
-      refuse(6), Uint8Array.of(0x0b),
-    local(3), i32Load(certificate.frameState), Uint8Array.of(0x22), uleb(0),
-    i32(4), Uint8Array.of(0x71, 0x45, 0x45),
-    local(0), i32(0x200), Uint8Array.of(0x71, 0x45, 0x71), globalSet(globals.visible),
-    local(3), f32Load(certificate.frameViewportWidth), globalSet(globals.viewportWidth),
-    local(3), f32Load(certificate.frameViewportHeight), globalSet(globals.viewportHeight),
-    local(3), f32Load(certificate.frameScreenLeft), globalSet(globals.left),
-    local(3), f32Load(certificate.frameScreenBottom), globalSet(globals.bottom),
-    local(3), f32Load(certificate.frameScreenRight), globalSet(globals.right),
-    local(3), f32Load(certificate.frameScreenTop), globalSet(globals.top),
-    i32(1), globalSet(globals.status),
-    Uint8Array.of(0x0b),
-  );
-}
-
 /** Retain the exact direction argument consumed by the native CompassMap. */
 export function compassMapRenderWrapper(render: number, globals: CompassGlobals): Uint8Array {
   return concat(
@@ -606,19 +554,19 @@ export function worldMapEventWrapper(
   areaEpoch: number,
   certificate: typeof WORLD_MAP_CERTIFICATE & Pick<CartographyMemoryLayout, "frameArray" | "frameCount">,
 ): Uint8Array {
-  const refuse = (status: number) => concat(
-    i32(0), globalSet(globals.visible),
-    i32(status), globalSet(globals.status), Uint8Array.of(0x0f),
-  );
-  const requirePointer = (pointerLocal: number, bytes: Uint8Array, status: number) => concat(
+  // The dispatcher carries events that do not all contain a usable World Map
+  // context. Publish only a complete reading; a rejected event must not replace
+  // the last certified frame with a partial or unrelated event.
+  const refuse = () => Uint8Array.of(0x0f);
+  const requirePointer = (pointerLocal: number, bytes: Uint8Array) => concat(
     local(pointerLocal), Uint8Array.of(0x45, 0x04, 0x40),
-    refuse(status), Uint8Array.of(0x0b),
+    refuse(), Uint8Array.of(0x0b),
     local(pointerLocal), local(7), bytes, Uint8Array.of(0x6b, 0x4b, 0x04, 0x40),
-    refuse(status), Uint8Array.of(0x0b),
+    refuse(), Uint8Array.of(0x0b),
   );
-  const finite = (valueLocal: number, status: number) => concat(
+  const finite = (valueLocal: number) => concat(
     local(valueLocal), Uint8Array.of(0x8b), f32(1_000_000),
-    Uint8Array.of(0x5f, 0x45, 0x04, 0x40), refuse(status), Uint8Array.of(0x0b),
+    Uint8Array.of(0x5f, 0x45, 0x04, 0x40), refuse(), Uint8Array.of(0x0b),
   );
   return concat(
     // locals 3..7: owner window, context, frame id/index, frame, memory bytes.
@@ -626,41 +574,41 @@ export function worldMapEventWrapper(
     Uint8Array.of(0x02, 0x05, 0x7f, 0x05, 0x7d),
     local(0), local(1), local(2), call(dispatcher),
     Uint8Array.of(0x3f, 0x00), i32(65_536), Uint8Array.of(0x6c, 0x21), uleb(7),
-    requirePointer(0, i32(certificate.ownerWindow + 4), 2),
+    requirePointer(0, i32(certificate.ownerWindow + 4)),
     local(0), i32Load(certificate.ownerWindow), Uint8Array.of(0x21), uleb(3),
-    requirePointer(3, i32(certificate.ownerMap + 4), 3),
+    requirePointer(3, i32(certificate.ownerMap + 4)),
     local(3), i32Load(certificate.ownerMap), Uint8Array.of(0x21), uleb(4),
-    requirePointer(4, i32(certificate.contextBytes), 4),
-    local(4), i32Load(certificate.frameId), Uint8Array.of(0x22), uleb(5),
-    globalSet(globals.frameId), local(5),
+    requirePointer(4, i32(certificate.contextBytes)),
+    local(4), i32Load(certificate.frameId), Uint8Array.of(0x21), uleb(5),
+    local(5),
     i32(certificate.frameCount), i32Load(), Uint8Array.of(0x4f, 0x04, 0x40),
-    refuse(5), Uint8Array.of(0x0b),
+    refuse(), Uint8Array.of(0x0b),
     i32(certificate.frameArray), i32Load(), Uint8Array.of(0x21), uleb(6),
-    requirePointer(6, concat(local(5), i32(4), Uint8Array.of(0x6c)), 5),
+    requirePointer(6, concat(local(5), i32(4), Uint8Array.of(0x6c))),
     local(6), local(5), i32(4), Uint8Array.of(0x6c, 0x6a), i32Load(),
     Uint8Array.of(0x21), uleb(6),
-    requirePointer(6, i32(certificate.frameBytes), 10),
+    requirePointer(6, i32(certificate.frameBytes)),
     local(4), i32Load(certificate.continent), Uint8Array.of(0x22), uleb(3),
-    i32(5), Uint8Array.of(0x4b, 0x04, 0x40), refuse(7), Uint8Array.of(0x0b),
+    i32(5), Uint8Array.of(0x4b, 0x04, 0x40), refuse(), Uint8Array.of(0x0b),
     local(4), f32Load(certificate.zoom), Uint8Array.of(0x21), uleb(8),
     local(4), f32Load(certificate.topLeftX), Uint8Array.of(0x21), uleb(9),
     local(4), f32Load(certificate.topLeftY), Uint8Array.of(0x21), uleb(10),
     local(4), f32Load(certificate.bottomRightX), Uint8Array.of(0x21), uleb(11),
     local(4), f32Load(certificate.bottomRightY), Uint8Array.of(0x21), uleb(12),
-    finite(8, 8), finite(9, 8), finite(10, 8), finite(11, 8), finite(12, 8),
+    finite(8), finite(9), finite(10), finite(11), finite(12),
     local(11), local(9), Uint8Array.of(0x5e, 0x45, 0x04, 0x40),
-    refuse(9), Uint8Array.of(0x0b),
+    refuse(), Uint8Array.of(0x0b),
     local(12), local(10), Uint8Array.of(0x5e, 0x45, 0x04, 0x40),
-    refuse(9), Uint8Array.of(0x0b),
-    local(6), i32Load(certificate.frameState), Uint8Array.of(0x22), uleb(4),
-    i32(4), Uint8Array.of(0x71, 0x45, 0x45),
-    local(4), i32(0x200), Uint8Array.of(0x71, 0x45, 0x71), globalSet(globals.visible),
+    refuse(), Uint8Array.of(0x0b),
+    local(6), i32Load(certificate.frameState), i32(0x08),
+    Uint8Array.of(0x71, 0x45), globalSet(globals.visible),
     local(6), f32Load(certificate.frameViewportWidth), globalSet(globals.viewportWidth),
     local(6), f32Load(certificate.frameViewportHeight), globalSet(globals.viewportHeight),
     local(6), f32Load(certificate.frameScreenLeft), globalSet(globals.left),
     local(6), f32Load(certificate.frameScreenBottom), globalSet(globals.bottom),
     local(6), f32Load(certificate.frameScreenRight), globalSet(globals.right),
     local(6), f32Load(certificate.frameScreenTop), globalSet(globals.top),
+    local(5), globalSet(globals.frameId),
     local(3), globalSet(globals.continent),
     local(8), globalSet(globals.zoom),
     local(9), globalSet(globals.topLeftX),

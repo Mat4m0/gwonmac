@@ -189,22 +189,10 @@ export function createCompassFrameSpikeReader(
 export function createWorldMapFrameSpikeReader(
   exports: WebAssembly.Exports,
 ): WorldMapFrameSpikeController | null {
-  if (typeof exports[WORLD_MAP_FRAME_SPIKE_GLOBALS.observe] !== "function"
-    || !WORLD_MAP_FRAME_SPIKE_SCALARS.every(
+  if (!WORLD_MAP_FRAME_SPIKE_SCALARS.every(
     (name) => exports[name] instanceof WebAssembly.Global,
   )) return null;
-  const refresh = (): boolean => {
-    const observe = exports[WORLD_MAP_FRAME_SPIKE_GLOBALS.observe];
-    if (typeof observe !== "function") return false;
-    try {
-      observe();
-      return true;
-    } catch {
-      return false;
-    }
-  };
   const diagnostics = (): WorldMapFrameSpikeDiagnostic => {
-    refresh();
     return Object.freeze({
     status: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.status),
     sequence: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.sequence),
@@ -222,7 +210,6 @@ export function createWorldMapFrameSpikeReader(
   return Object.freeze({
     diagnostics,
     snapshot() {
-      if (!refresh()) return null;
       const firstSequence = numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.sequence);
       const values = Object.fromEntries(WORLD_MAP_FRAME_SPIKE_SCALARS.map(
         (name) => [name, numberGlobal(exports, name)],

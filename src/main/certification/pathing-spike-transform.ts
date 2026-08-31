@@ -16,7 +16,6 @@ import {
   MISSION_MAP_FRAME_SPIKE_GLOBALS,
   MISSION_MAP_FRAME_SPIKE_SCALARS,
   MISSION_MAP_PROJECTION_SPIKE_SCALARS,
-  WORLD_MAP_FRAME_SPIKE_GLOBALS,
   WORLD_MAP_FRAME_SPIKE_SCALARS,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS,
   WORLD_MAP_ANCHOR_SPIKE_SCALARS,
@@ -58,7 +57,6 @@ import {
   rewriteExactTableSlot,
   worldMapAnchorObserver,
   worldMapEventWrapper,
-  worldMapFrameObserver,
   type CartographyContextGlobals,
   type CartographyMemoryLayout,
   type CompassGlobals,
@@ -74,7 +72,7 @@ declare const WebAssembly: {
   Module: new (bytes: Uint8Array) => object;
 };
 
-export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 28;
+export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 30;
 export type CartographyMemoryLayoutId = keyof typeof CARTOGRAPHY_MEMORY_LAYOUTS;
 
 const mutableI32 = () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b);
@@ -284,7 +282,6 @@ export function transformCartographySpikeWasm(
     EXPLORATION_SPIKE_GLOBALS.observe,
     EXPLORATION_SPIKE_GLOBALS.readWord,
     WORLD_MAP_ANCHOR_SPIKE_GLOBALS.observe,
-    WORLD_MAP_FRAME_SPIKE_GLOBALS.observe,
   ];
   const existingExports = new Set(
     parseExports(sectionById(sections, 7)).map((entry) => entry.name),
@@ -324,7 +321,6 @@ export function transformCartographySpikeWasm(
   const explorationReadWordFunction = firstFunction + 6;
   const anchorObserverFunction = firstFunction + 7;
   const worldEventWrapperFunction = firstFunction + 8;
-  const worldObserverFunction = firstFunction + 9;
 
   const compassRender = bodies[compassRenderLocal]?.slice()
     ?? fail("Compass render body is missing");
@@ -381,11 +377,6 @@ export function transformCartographySpikeWasm(
       allocated.context.areaEpoch,
       worldCertificate,
     ),
-    worldMapFrameObserver(
-      worldCertificate,
-      allocated.world,
-      allocated.context.areaEpoch,
-    ),
   );
   const nextFunctionTypes = [
     ...functionTypes,
@@ -398,7 +389,6 @@ export function transformCartographySpikeWasm(
     readWordType,
     voidType,
     worldDispatcherType,
-    voidType,
   ];
 
   const contextEntries = [
@@ -440,7 +430,6 @@ export function transformCartographySpikeWasm(
     [EXPLORATION_SPIKE_GLOBALS.observe, explorationObserverFunction],
     [EXPLORATION_SPIKE_GLOBALS.readWord, explorationReadWordFunction],
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.observe, anchorObserverFunction],
-    [WORLD_MAP_FRAME_SPIKE_GLOBALS.observe, worldObserverFunction],
   ] as const;
   const nextExports = concat(
     uleb(exports.count + scalarNames.length + functionNames.length),
