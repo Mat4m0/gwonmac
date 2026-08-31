@@ -26,7 +26,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder g++ libglib2.0-dev gnupg xvfb
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.electronjs.Electron2.BaseApp//24.08
+          flatpak install --user -y flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 org.electronjs.Electron2.BaseApp//25.08
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
@@ -81,7 +81,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y flatpak weston
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y flathub org.freedesktop.Platform//24.08
+          flatpak install --user -y flathub org.freedesktop.Platform//25.08
           flatpak remote-add --user --gpg-import=flatpak-repo/qualification-public.gpg gwonmac-wayland "file://$GITHUB_WORKSPACE/flatpak-repo"
           flatpak install --user -y gwonmac-wayland io.github.mat4m0.gwonmac
           flatpak override --user --socket=wayland --nosocket=x11 io.github.mat4m0.gwonmac

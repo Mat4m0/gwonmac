@@ -20,6 +20,8 @@ describe("Linux Flatpak package", () => {
   it("uses the exact release identity and Electron sandbox wrapper", () => {
     assert.match(manifest, /^app-id: io\.github\.mat4m0\.gwonmac$/mu);
     assert.match(manifest, /^base: org\.electronjs\.Electron2\.BaseApp$/mu);
+    assert.match(manifest, /^runtime-version: "25\.08"$/mu);
+    assert.match(manifest, /^base-version: "25\.08"$/mu);
     assert.match(wrapper, /exec zypak-wrapper/u);
     assert.doesNotMatch(wrapper, /--no-sandbox/u);
   });

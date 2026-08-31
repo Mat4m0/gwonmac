@@ -1,9 +1,9 @@
 app-id: io.github.mat4m0.gwonmac
 runtime: org.freedesktop.Platform
-runtime-version: "24.08"
+runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
 base: org.electronjs.Electron2.BaseApp
-base-version: "24.08"
+base-version: "25.08"
 command: gwonmac
 separate-locales: false
 
