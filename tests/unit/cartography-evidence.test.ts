@@ -18,7 +18,7 @@ import {
   parseCartographyEvidenceCapture,
   renderCartographyEvidencePreview,
   renderCartographyEvidenceSummary,
-} from "../../src/tools/cartography-evidence/capture.ts";
+} from "../../src/main/cartography-evidence/capture.ts";
 import {
   compareCartographyEvidence,
   decodeCartographyBitset,
@@ -27,7 +27,7 @@ import {
   parseCartographyEvidence,
   sealCartographyEvidence,
   validateCartographyEvidence,
-} from "../../src/tools/cartography-evidence/report.ts";
+} from "../../src/main/cartography-evidence/report.ts";
 import {
   readCartographyEvidence,
 } from "../../src/tools/cartography-evidence/io.ts";

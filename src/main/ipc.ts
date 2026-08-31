@@ -139,7 +139,7 @@ import {
   type CharacterSwitchUsageDocument,
 } from "../shared/character-switch-usage.js";
 import { exportCartographyEvidence } from "./cartography-evidence-export.js";
-import { parseCartographyEvidenceCapture } from "../tools/cartography-evidence/capture.js";
+import { parseCartographyEvidenceCapture } from "./cartography-evidence/capture.js";
 
 export interface IpcContext {
   sockets: SocketManager;

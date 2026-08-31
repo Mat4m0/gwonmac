@@ -6,7 +6,10 @@ import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import type { CartographyEvidenceReport } from "../../shared/cartography-evidence.js";
-import { canonicalCartographyJson, parseCartographyEvidence } from "./report.js";
+import {
+  canonicalCartographyJson,
+  parseCartographyEvidence,
+} from "../../main/cartography-evidence/report.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_REPORT_BYTES = 4 * 1024 * 1024;

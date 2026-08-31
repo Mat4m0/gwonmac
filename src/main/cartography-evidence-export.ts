@@ -4,26 +4,26 @@
  */
 import type { BrowserWindow } from "electron";
 import {
+  type CartographyEvidenceCapture,
   type CartographyEvidenceExportResult,
 } from "../shared/cartography-evidence.js";
 import type { AppSettings, ClientSession } from "../shared/contracts.js";
 import {
   buildCartographyEvidenceReport,
-  parseCartographyEvidenceCapture,
   renderCartographyEvidencePreview,
   renderCartographyEvidenceSummary,
-} from "../tools/cartography-evidence/capture.js";
+} from "./cartography-evidence/capture.js";
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import { exportDiagnosticsForWindow } from "./diagnostics.js";
 
 export async function exportCartographyEvidence(
   win: BrowserWindow,
-  input: unknown,
+  capture: CartographyEvidenceCapture,
   session: ClientSession,
   readSettings: () => Promise<AppSettings>,
 ): Promise<CartographyEvidenceExportResult> {
   const report = buildCartographyEvidenceReport(
-    parseCartographyEvidenceCapture(input),
+    capture,
     session,
   );
   const preview = renderCartographyEvidencePreview(report);

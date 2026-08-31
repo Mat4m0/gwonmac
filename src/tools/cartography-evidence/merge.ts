@@ -3,13 +3,13 @@
  * writes deterministic JSON and optional human-readable PNG output.
  */
 import { resolve } from "node:path";
-import { renderCartographyBitsetPreview } from "./capture.js";
+import { renderCartographyBitsetPreview } from "../../main/cartography-evidence/capture.js";
 import {
   readCartographyEvidence,
   writeCartographyJson,
   writeCartographyPng,
 } from "./io.js";
-import { mergeCartographyEvidence } from "./report.js";
+import { mergeCartographyEvidence } from "../../main/cartography-evidence/report.js";
 
 const args = process.argv.slice(2);
 const inputs: string[] = [];
