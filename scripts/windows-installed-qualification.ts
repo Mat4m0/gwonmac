@@ -40,7 +40,7 @@ interface WindowsProcess {
 async function proveNormalCrashpadStartup(
   executable: string,
   arguments_: readonly string[],
-): Promise<void> {
+): Promise<string | null> {
   const child = spawn(executable, arguments_, {
     env: {
       ...process.env,
@@ -57,11 +57,19 @@ async function proveNormalCrashpadStartup(
   });
   try {
     await delay(5_000);
-    assert.equal(
-      child.exitCode,
-      null,
-      "the normal installed application exited before qualification",
-    );
+    if (child.exitCode !== null) {
+      const { stdout } = await execFileAsync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "$since=(Get-Date).AddMinutes(-2); Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=$since} -ErrorAction SilentlyContinue | Where-Object {$_.Id -in 1000,1001,1026} | Select-Object -First 8 TimeCreated,Id,ProviderName,Message | ConvertTo-Json -Compress",
+        ],
+        { encoding: "utf8", timeout: 30_000, windowsHide: true },
+      );
+      return `normal startup exited with ${child.exitCode}; Windows events: ${stdout.trim() || "none"}`;
+    }
     assert.ok(child.pid, "the normal installed application has no process ID");
     const { stdout } = await execFileAsync(
       "powershell.exe",
@@ -96,6 +104,7 @@ async function proveNormalCrashpadStartup(
       ),
       "the normal installed application did not keep a Crashpad handler alive",
     );
+    return null;
   } finally {
     if (child.exitCode === null && child.pid) {
       await execFileAsync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
@@ -252,7 +261,10 @@ try {
     "--enable-logging=stderr",
     ...(signedQualification ? [] : ["--gw-volatile-secrets"]),
   ];
-  await proveNormalCrashpadStartup(installedExecutable, qualificationArguments);
+  const normalStartupFailure = await proveNormalCrashpadStartup(
+    installedExecutable,
+    qualificationArguments,
+  );
 
   running = await launchPackagedApp({
     appPath: packageRoot,
@@ -505,6 +517,11 @@ try {
     existsSync(path.join(storage.config, "settings.json")),
     true,
     "uninstall removed player settings",
+  );
+  assert.equal(
+    normalStartupFailure,
+    null,
+    normalStartupFailure ?? "normal Windows startup failed",
   );
   globalThis.console.log(JSON.stringify({
     platform: "win32-x64",
