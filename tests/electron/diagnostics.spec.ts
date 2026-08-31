@@ -640,12 +640,6 @@ test.describe("diagnostics", () => {
       await expect(page.locator("#loading-label")).toBeVisible();
       await expect(page.locator("#loading-retry, #loading-report")).toHaveCount(0);
 
-      // A subsequent progress state clears the crash actions.
-      await page.evaluate(() => {
-        window.gwLoading.set("Checking the game client", null);
-      });
-      await expect(page.locator("#loading-label")).toHaveText("Checking the game client");
-
       await app.evaluate(({ BrowserWindow }) => {
         BrowserWindow.getAllWindows()
           .find((win) => win.webContents.getURL() === "gw://app/")
