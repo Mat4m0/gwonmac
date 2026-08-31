@@ -113,14 +113,6 @@ export function createCartographyPresetEditor(options: Readonly<{
   const gridCasing = byName<HTMLInputElement>(options.form, "cartographyGridCasingColor");
   const unseenPicker = byName<HTMLInputElement>(options.form, "cartographyUnseenColorPicker");
   const unseenColor = byName<HTMLInputElement>(options.form, "cartographyUnseenColor");
-  const noWalkablePicker = byName<HTMLInputElement>(
-    options.form,
-    "cartographyNoWalkableColorPicker",
-  );
-  const noWalkableColor = byName<HTMLInputElement>(
-    options.form,
-    "cartographyNoWalkableColor",
-  );
   const markerList = element<HTMLElement>(options.form, ".settings-cartography-marker-list");
   for (const marker of CARTOGRAPHY_UNSEEN_MARKERS) {
     const label = options.form.ownerDocument.createElement("label");
@@ -243,9 +235,6 @@ export function createCartographyPresetEditor(options: Readonly<{
   bindColor(unseenPicker, unseenColor, (color, commit) => {
     if (draft !== null) updateGrid({ unseen: { ...draft.grid.unseen, color } }, commit);
   });
-  bindColor(noWalkablePicker, noWalkableColor, (noWalkableColor, commit) => {
-    updateGrid({ noWalkableColor }, commit);
-  });
   bindColor(veilPicker, veil, (veilColor, commit) => updateWalkability({ veilColor }, commit));
   bindColor(boundaryPicker, boundary, (boundaryColor, commit) => {
     updateWalkability({ boundaryColor }, commit);
@@ -285,11 +274,6 @@ export function createCartographyPresetEditor(options: Readonly<{
       }
       renderColor(gridCasingPicker, gridCasing, style.grid.casingColor);
       renderColor(unseenPicker, unseenColor, style.grid.unseen.color);
-      renderColor(
-        noWalkablePicker,
-        noWalkableColor,
-        style.grid.noWalkableColor,
-      );
       markerChoices.forEach((choice) => {
         choice.checked = choice.value === style.grid.unseen.marker;
       });

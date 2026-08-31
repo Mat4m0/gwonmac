@@ -68,6 +68,26 @@ export function companionKernelRustcArgs(output) {
   ];
 }
 
+/** The private Cartography classifier uses the same relocatable Wasm policy.
+ * @param {string} output
+ */
+export function cartographyReachabilityKernelRustcArgs(output) {
+  return [
+    "src/cartography-reachability-kernel/lib.rs",
+    "--edition=2021",
+    "--target", "wasm32-unknown-unknown",
+    "--crate-type", "cdylib",
+    "-C", "opt-level=s",
+    "-C", "panic=abort",
+    "-C", "relocation-model=pic",
+    "-C", "link-arg=--import-memory",
+    "-C", "link-arg=--experimental-pic",
+    "-C", "link-arg=--shared",
+    "-C", "link-arg=--strip-all",
+    "-o", output,
+  ];
+}
+
 /**
  * Every command that produces a package input, in order. Exported so the step
  * list itself is assertable: the kernel is compiled by exactly one of them.
@@ -188,6 +208,13 @@ export const BUILD_STEPS = [
     companionKernelRustcArgs("build/.companion-kernel.unsealed.wasm"),
   ],
   [process.execPath, ["scripts/seal-companion-kernel.mjs"]],
+  [
+    "rustc",
+    cartographyReachabilityKernelRustcArgs(
+      "build/.cartography-reachability-kernel.unsealed.wasm",
+    ),
+  ],
+  [process.execPath, ["scripts/seal-cartography-reachability-kernel.mjs"]],
 ];
 
 function build() {

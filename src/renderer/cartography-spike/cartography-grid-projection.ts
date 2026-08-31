@@ -6,18 +6,20 @@
 import type {
   CompassFrameSpikeSnapshot,
   MissionMapFrameSpikeSnapshot,
+  WorldMapFrameSpikeSnapshot,
 } from "../../shared/cartography-spike.js";
 import type { ScreenBox } from "./frame-placement.js";
 import {
   projectMapUnitsToCompass,
   projectMapUnitsToMissionMap,
+  projectMapUnitsToWorldMap,
   type MaskTransform,
 } from "./map-projections.js";
 
 export const CARTOGRAPHY_CELL_MAP_UNITS = 32;
 const CELL_EPSILON = 1 / 64;
 const COMPASS_CELL_RADIUS = 3;
-const MAX_GRID_AXIS_CELLS = 128;
+const MAX_GRID_AXIS_CELLS = 1_024;
 
 export type CartographyCell = Readonly<{ x: number; y: number }>;
 export type CartographyRevealRadius = 0 | 1 | 3;
@@ -42,7 +44,7 @@ export type CartographyGridProjection = Readonly<{
   firstCellY: number;
   lastCellY: number;
   currentCell: CartographyCell;
-  surface: "compass" | "mission-map";
+  surface: "compass" | "mission-map" | "world-map";
 }>;
 
 /** Match the client's half-open X and north-up Y ownership at exact edges. */
@@ -63,7 +65,7 @@ export function cartographyCellAtScreenPoint(
 ): CartographyCell | null {
   const { box, transform } = projection;
   if (
-    projection.surface !== "mission-map"
+    projection.surface === "compass"
     || !Number.isFinite(clientX)
     || !Number.isFinite(clientY)
     || clientX < box.left
@@ -139,6 +141,46 @@ export function projectCartographyGridToMissionMap(input: Readonly<{
     currentCell,
     surface: "mission-map",
   });
+}
+
+/** Project the visible dedicated World Map viewport on the global cell phase. */
+export function projectCartographyGridToWorldMap(input: Readonly<{
+  frame: WorldMapFrameSpikeSnapshot;
+  box: ScreenBox;
+}>): CartographyGridProjection | null {
+  const { frame, box } = input;
+  const firstCellX = Math.floor(frame.topLeftX / CARTOGRAPHY_CELL_MAP_UNITS) - 1;
+  const lastCellX = Math.floor(frame.bottomRightX / CARTOGRAPHY_CELL_MAP_UNITS) + 1;
+  const firstCellY = Math.floor(frame.topLeftY / CARTOGRAPHY_CELL_MAP_UNITS) - 1;
+  const lastCellY = Math.floor(frame.bottomRightY / CARTOGRAPHY_CELL_MAP_UNITS) + 1;
+  const currentCell = cartographyCellAt(
+    (frame.topLeftX + frame.bottomRightX) / 2,
+    (frame.topLeftY + frame.bottomRightY) / 2,
+  );
+  if (
+    currentCell === null
+    || !validCellRange(firstCellX, lastCellX)
+    || !validCellRange(firstCellY, lastCellY)
+  ) return null;
+  const mapProjection = projectMapUnitsToWorldMap(frame, box);
+  if (mapProjection === null) return null;
+  return Object.freeze({
+    box,
+    transform: mapProjection.transform,
+    clip: mapProjection.clip,
+    firstCellX,
+    lastCellX,
+    firstCellY,
+    lastCellY,
+    currentCell,
+    surface: "world-map",
+  });
+}
+
+/** Conservative cell size used for stable level-of-detail selection. */
+export function cartographyCellPixelSize(projection: CartographyGridProjection): number {
+  const { a, b, c, d } = projection.transform;
+  return Math.min(Math.hypot(a, b), Math.hypot(c, d)) * CARTOGRAPHY_CELL_MAP_UNITS;
 }
 
 /**

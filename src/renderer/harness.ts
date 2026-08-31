@@ -777,7 +777,7 @@ Module = {
       gameWasmModule = result.module;
       const { installCartographySpike } = await import('./cartography-spike/index.js');
       disposeCartographySpike();
-      disposeCartographySpike = installCartographySpike({
+      disposeCartographySpike = await installCartographySpike({
         exports: result.instance.exports,
         parent: document.body,
         canvas: Module.canvas,
@@ -790,6 +790,7 @@ Module = {
           window.gwApplySettings?.(saved);
           return saved;
         },
+        exportEvidence: (capture) => native().cartography.exportEvidence(capture),
       });
       maybeInstallEnhancements();
       success(result.instance, result.module);

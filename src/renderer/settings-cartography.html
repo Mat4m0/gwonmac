@@ -8,7 +8,7 @@
             <legend>Map layers</legend>
             <div class="settings-cartography-layer-card">
               <label class="settings-cartography-layer-row">
-                <span><strong>Exploration grid</strong><small>Shows cartography cells and marks cells you have not explored.</small></span>
+                <span><strong>Exploration grid</strong><small>Shows cartography cells and marks unexplored cells reachable in this instance.</small></span>
                 <span class="settings-check ui-check"><input type="checkbox" name="cartographyGridEnabled"><span class="sr-only">Show exploration grid</span></span>
               </label>
               <div class="settings-cartography-opacity">
@@ -77,8 +77,7 @@
                     <legend>Unseen cell marker</legend>
                     <div class="settings-cartography-marker-list"></div>
                     <label class="settings-cartography-color-row">Marker color <span><input type="color" name="cartographyUnseenColorPicker"><input class="ui-input" type="text" name="cartographyUnseenColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
-                    <label class="settings-cartography-color-row">Other-map route <span><input type="color" name="cartographyNoWalkableColorPicker"><input class="ui-input" type="text" name="cartographyNoWalkableColor" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="settings-cartography-color-help"></span></label>
-                    <p class="settings-note">The main marker means this map can reveal the unseen cell. Hatching means the cell is creditable, but not from known ground in this map.</p>
+                    <p class="settings-note">Markers identify unexplored cells reachable in the current instance.</p>
                   </fieldset>
                 </div>
               </details>

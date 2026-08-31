@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createCompassFrameSpikeReader,
   createMissionMapFrameSpikeReader,
+  createWorldMapFrameSpikeReader,
 } from "../../src/renderer/cartography-spike/frame-observer.js";
 import {
   COMPASS_FRAME_SPIKE_GLOBALS,
@@ -11,6 +12,8 @@ import {
   MISSION_MAP_FRAME_SPIKE_SCALARS,
   MISSION_MAP_PROJECTION_SPIKE_GLOBALS,
   MISSION_MAP_PROJECTION_SPIKE_SCALARS,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS,
+  WORLD_MAP_FRAME_SPIKE_SCALARS,
 } from "../../src/shared/cartography-spike.js";
 
 function scalar(value: number, type: WebAssembly.ValueType = "i32"): WebAssembly.Global {
@@ -214,4 +217,37 @@ test("refuses incomplete, stale, and invalid Mission Map projection state", () =
   const invalidPan = projectionExports();
   invalidPan[MISSION_MAP_PROJECTION_SPIKE_GLOBALS.panX] = scalar(Number.NaN, "f32");
   assert.equal(createMissionMapFrameSpikeReader(invalidPan)?.snapshot(), null);
+});
+
+function worldMapExports(): WebAssembly.Exports {
+  const values = [1, 12, 5, 200, 1, 1_920, 1_080, 0, 0, 1_920, 1_080, 0, 0, 0, 0, 8_192, 16_384];
+  return Object.fromEntries(WORLD_MAP_FRAME_SPIKE_SCALARS.map((name, index) => [
+    name,
+    scalar(values[index]!, index < 5 || index === 11 ? "i32" : "f32"),
+  ]));
+}
+
+test("reads the dedicated World Map context atomically", () => {
+  assert.deepEqual(createWorldMapFrameSpikeReader(worldMapExports())?.snapshot(), {
+    status: 1,
+    sequence: 12,
+    generation: 5,
+    frameId: 200,
+    visible: true,
+    viewportWidth: 1_920,
+    viewportHeight: 1_080,
+    left: 0,
+    bottom: 0,
+    right: 1_920,
+    top: 1_080,
+    continent: 0,
+    zoom: 0,
+    topLeftX: 0,
+    topLeftY: 0,
+    bottomRightX: 8_192,
+    bottomRightY: 16_384,
+  });
+  const invalid = worldMapExports();
+  invalid[WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightX] = scalar(0, "f32");
+  assert.equal(createWorldMapFrameSpikeReader(invalid)?.snapshot(), null);
 });

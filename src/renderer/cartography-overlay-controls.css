@@ -137,7 +137,9 @@
 }
 
 .cartography-overlay-hint,
-.cartography-overlay-status {
+.cartography-overlay-status,
+.cartography-overlay-export-status,
+.cartography-overlay-qa {
   font: var(--ui-font-weight-medium) 10px / 1.4 var(--ui-font-readable);
 }
 
@@ -155,4 +157,90 @@
   min-height: 14px;
   margin: var(--ui-space-1) 0 0;
   color: var(--ui-warning);
+}
+
+.cartography-overlay-qa {
+  margin-top: var(--ui-space-2);
+  padding-top: var(--ui-space-2);
+  border-top: var(--ui-border-width) solid var(--ui-edge);
+}
+
+.cartography-overlay-qa summary {
+  display: grid;
+  grid-template-columns: 8px auto 1fr;
+  align-items: center;
+  gap: var(--ui-space-1);
+  color: var(--ui-text-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.cartography-overlay-qa summary::-webkit-details-marker {
+  display: none;
+}
+
+.cartography-overlay-qa summary strong {
+  overflow: hidden;
+  color: var(--ui-text-bright);
+  font-weight: var(--ui-font-weight-semibold);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cartography-overlay-qa-indicator {
+  width: 7px;
+  height: 7px;
+  background: var(--ui-danger);
+  border-radius: var(--ui-radius-pill);
+}
+
+.cartography-overlay-qa[data-tone="ready"] .cartography-overlay-qa-indicator {
+  background: var(--ui-success);
+}
+
+.cartography-overlay-qa[data-tone="loading"] .cartography-overlay-qa-indicator {
+  background: var(--ui-warning);
+}
+
+.cartography-overlay-qa-rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--ui-space-2);
+  margin: var(--ui-space-2) 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.cartography-overlay-qa-rows dt {
+  color: var(--ui-text-faint);
+}
+
+.cartography-overlay-qa-rows dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ui-text-muted);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.cartography-overlay-export {
+  width: 100%;
+  min-height: var(--ui-control-height-compact);
+  padding: 0 var(--ui-space-2);
+  color: var(--ui-text-bright);
+  background: var(--ui-well-strong-fill);
+  border: var(--ui-frame-width) solid var(--ui-edge-strong);
+  border-radius: var(--ui-radius);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cartography-overlay-export:hover {
+  border-color: var(--ui-accent);
+}
+
+.cartography-overlay-export-status {
+  min-height: 14px;
+  margin: var(--ui-space-1) 0 0;
+  color: var(--ui-text-faint);
 }

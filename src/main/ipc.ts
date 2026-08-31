@@ -138,6 +138,8 @@ import {
   parseCharacterSwitchUsageRecord,
   type CharacterSwitchUsageDocument,
 } from "../shared/character-switch-usage.js";
+import { exportCartographyEvidence } from "./cartography-evidence-export.js";
+import { parseCartographyEvidenceCapture } from "./cartography-evidence/capture.js";
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -658,6 +660,16 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     diagnosticsProfileSet: channel(one(parseDiagnosticProfile), (_win, value) =>
       ctx.setDiagnosticProfile(value)),
+
+    cartographyEvidenceExport: channel(
+      one(parseCartographyEvidenceCapture),
+      (win, value) => exportCartographyEvidence(
+        win,
+        value,
+        ctx.getClientSession(win),
+        ctx.getSettings,
+      ),
+    ),
 
     appOpenExternal: channel(asExternalLinkKind, async (_win, kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);

@@ -5,12 +5,12 @@
 import type { CartographyWalkabilityStyle } from "../../shared/cartography-overlay.js";
 import { cartographyWalkabilityStyleFingerprint } from "./cartography-paint.js";
 import type { InverseMaskProjection } from "./map-projections.js";
-import type { WalkabilityMask } from "./walkability-mask.js";
+import type { WalkableTerrainSurface } from "./walkable-terrain-surface.js";
 
 export type InverseMaskLayer = Readonly<{
   update(input: Readonly<{
     projection: InverseMaskProjection;
-    mask: WalkabilityMask;
+    terrain: WalkableTerrainSurface;
     version: string;
     style: CartographyWalkabilityStyle;
     opacity: number;
@@ -82,7 +82,7 @@ export function createInverseMaskLayer(
     clipProjection(walkableContext, input.projection);
     walkableContext.setTransform(a * dpr, b * dpr, c * dpr, d * dpr, e * dpr, f * dpr);
     walkableContext.imageSmoothingEnabled = true;
-    walkableContext.drawImage(input.mask.canvas, 0, 0);
+    walkableContext.drawImage(input.terrain.canvas, 0, 0);
     walkableContext.restore();
 
     context.setTransform(1, 0, 0, 1, 0, 0);
