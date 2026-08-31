@@ -27,7 +27,11 @@ test("installed qualification is restricted to a disposable hosted runner", () =
   assert.match(script, /useDefaultUserData: true/u);
   assert.match(script, /"--disable-gpu"/u);
   assert.match(script, /proveNormalWindowsStartup/u);
-  assert.doesNotMatch(script, /crashpad-handler|disable-crash-reporter/u);
+  assert.match(
+    script,
+    /const instrumentedArguments = \[[\s\S]*"--disable-crash-reporter"[\s\S]*arguments: instrumentedArguments/u,
+  );
+  assert.doesNotMatch(script, /crashpad-handler/u);
   assert.doesNotMatch(script, /--no-sandbox|--disable-setuid-sandbox/u);
 });
 

@@ -272,6 +272,14 @@ try {
     installedExecutable,
     qualificationArguments,
   );
+  const instrumentedArguments = [
+    ...qualificationArguments,
+    // CDP qualification pipes the GUI process' output into this harness.
+    // Electron's built-in Windows Crashpad process cannot inherit that
+    // test-only process shape reliably. The detached launch above proves the
+    // ordinary production path before renderer instrumentation begins.
+    "--disable-crash-reporter",
+  ];
 
   running = await launchPackagedApp({
     appPath: packageRoot,
@@ -284,7 +292,7 @@ try {
     // mask launcher, profile, storage, and uninstall behavior. The preceding
     // launch already proves ordinary desktop startup; CDP is test-only
     // renderer instrumentation.
-    arguments: qualificationArguments,
+    arguments: instrumentedArguments,
     environment: { ELECTRON_ENABLE_LOGGING: "1" },
     useDefaultUserData: true,
   });
