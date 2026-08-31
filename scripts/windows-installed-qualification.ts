@@ -173,6 +173,34 @@ async function oneSetup(feed: string): Promise<string> {
   return path.join(feed, setups[0]!);
 }
 
+async function stopSquirrelFirstRun(executable: string): Promise<void> {
+  // Squirrel always launches the installed application once after Setup
+  // finishes. The controlled qualification needs to own the next launch and
+  // its single-instance lock, so stop only processes whose executable path is
+  // the exact disposable package we just installed.
+  await delay(1_000);
+  const command =
+    "$target=[IO.Path]::GetFullPath($args[0]); Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -eq $target}";
+  await execFileAsync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `${command} | ForEach-Object {Stop-Process -Id $_.ProcessId -Force}`,
+      executable,
+    ],
+    { timeout: 30_000, windowsHide: true },
+  );
+  await delay(500);
+  const { stdout } = await execFileAsync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", `${command} | Select-Object -ExpandProperty ProcessId`, executable],
+    { encoding: "utf8", timeout: 30_000, windowsHide: true },
+  );
+  assert.equal(stdout.trim(), "", "Squirrel's automatic first run is still alive");
+}
+
 function installedExecutableForVersion(
   packageRoot: string,
   version: string,
@@ -243,6 +271,7 @@ try {
     windowsHide: true,
   });
   installedExecutable = await oneInstalledExecutable(packageRoot);
+  await stopSquirrelFirstRun(installedExecutable);
   const updateExecutable = path.join(packageRoot, "Update.exe");
   assert.equal(existsSync(updateExecutable), true, "Squirrel Update.exe is missing");
 
