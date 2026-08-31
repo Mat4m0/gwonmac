@@ -20,6 +20,7 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import type { CartographyEvidenceCapture } from "../../src/shared/cartography-evidence.ts";
 import type {
   GwNativeApi,
   RendererSettingsPatch,
@@ -165,6 +166,23 @@ const PACKET = new Uint8Array([1, 2, 3, 4]);
 const RENDERER_SETTINGS_PATCH = {
   autoRelogAfterReload: true,
 } satisfies RendererSettingsPatch;
+const CARTOGRAPHY_EVIDENCE_CAPTURE = {
+  source: {
+    layoutId: null,
+    gridRevision: 1,
+    toolboxSha256: "a".repeat(64),
+    kernelSha256: null,
+  },
+  continent: { status: "unavailable", reason: "not-observed" },
+  currentInstance: {
+    status: "unavailable",
+    reason: "not-observed",
+    mapId: null,
+    areaEpoch: null,
+    resourceGeneration: null,
+    kernel: null,
+  },
+} satisfies CartographyEvidenceCapture;
 
 /** A request/response capability, with the arguments a caller really passes. */
 interface Invocation {
@@ -327,6 +345,11 @@ const INVOCATIONS: Invocation[] = [
     path: "diagnostics.setProfile",
     args: ["official-baseline"],
     channel: IPC.diagnosticsProfileSet,
+  },
+  {
+    path: "cartography.exportEvidence",
+    args: [CARTOGRAPHY_EVIDENCE_CAPTURE],
+    channel: IPC.cartographyEvidenceExport,
   },
   { path: "app.openExternal", args: ["bugReport"], channel: IPC.appOpenExternal },
   { path: "app.reveal", args: ["gameData"], channel: IPC.appRevealPath },

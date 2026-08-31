@@ -28,49 +28,42 @@ const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuil
     "62267d95b30752823aa364c289bdc84f2c025dac4caeda86a76a432001667acb",
     {
       memoryLayout: "relocated",
-      outputSha256: "c932e214fef2faad7d63c6e58918b2b5b82ff08d771bb189e1950e3a6cb2139d",
+      outputSha256: "181f06d7f9974b30978b5f211a3c449eccf85392e13822f87264b875faeb2eeb",
     },
   ],
   [
     "e22c2c0876f1381a133fbb0c739f73f9fc6a7d8988da5ce0d9789481ab7f0c9e",
     {
       memoryLayout: "relocated",
-      outputSha256: "be783c4fdfb3ccd042adc719ebd97873ec0fe6216348c2f773109d4ee081f1d6",
+      outputSha256: "28d0d1d5805288c4085d309f54c0a87c3c80b0067efeb15195f1e9291f9237e9",
     },
   ],
   [
     "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb",
     {
       memoryLayout: "official",
-      outputSha256: "4018c8a174fffa626c4fb02d26e605d19d161dd7ed1079bb160d41360953f9d9",
+      outputSha256: "579b1b3a60821f32fb43899d606b994b6aca531b913a36cd1a91379107dd3de9",
     },
   ],
   [
     "7db72c8d5b4864fb4526e1455edfee3755887a242f68ec1c2f8447cfb38ad281",
     {
       memoryLayout: "relocated",
-      outputSha256: "82d44183288d531fd09598b89e95bffd4dbcd843d5d0803d2ed6f0dfd8baac8a",
+      outputSha256: "d8f98b51482f722a8154600e2e61ff72c468c11e043dbf44c0b75d8f3a5d4232",
     },
   ],
   [
     "9d3383ad41e767570a0b2b8d8e2fec2e52cdcbd25d9c1680b8eb979f4eef6991",
     {
       memoryLayout: "relocated",
-      outputSha256: "af80daa05c1886c451b3cb5a707508bb81cedc68dac18663c92498019319efaa",
-    },
-  ],
-  [
-    "aca501484f766c95c27a47ffbd09bb5f5a162de7106500450295d4e61272efbb",
-    {
-      memoryLayout: "relocated",
-      outputSha256: "8a61e05c24f205d104e3f2950f5834667437a48ee080767080585b428bbc9f31",
+      outputSha256: "379139b3490aac7007c65a984d5717ae626e15593394b2f3d692a482e873244b",
     },
   ],
   [
     "1f4a199ea902f839abb3b71861759f956db2aa4e7f31fcabd1970d12d24ca3a0",
     {
       memoryLayout: "relocated",
-      outputSha256: "3016b231dc47236360598f58f5dc35066595028c2a3aae39e2a9ca9580a2a656",
+      outputSha256: "53a4bdff835b46ac8741301e2f37fcf23ccd73716381d0851f0947bd328335e5",
     },
   ],
   [
@@ -119,6 +112,8 @@ export async function prepareCartographySpike(
       converter: 3216,
       callSiteOffset: 0x1b9,
       missionMapLabelHash: 3_378_147_614,
+      worldMapDispatcher: 16_223,
+      worldMapTableSlot: 4_152,
     }),
     expectedOutputSha256: build.outputSha256,
   };

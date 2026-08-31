@@ -11,6 +11,14 @@ export function ignorePackageFile(file: string): boolean {
     || p === "/node_modules/ws"
     || p.startsWith("/node_modules/ws/")
   ) return false;
+  // Cartography evidence previews are encoded in the main process. pngjs is a
+  // dependency-free production module; admit only its manifest and runtime.
+  if (
+    p === "/node_modules/pngjs"
+    || p === "/node_modules/pngjs/package.json"
+    || p === "/node_modules/pngjs/lib"
+    || p.startsWith("/node_modules/pngjs/lib/")
+  ) return false;
   if (p === "/build" || p === "/build/main" || p === "/build/shared") {
     return false;
   }

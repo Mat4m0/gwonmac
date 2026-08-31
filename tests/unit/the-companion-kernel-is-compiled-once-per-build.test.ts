@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import {
   BUILD_STEPS,
+  cartographyReachabilityKernelRustcArgs,
   companionKernelRustcArgs,
 } from "../../scripts/build.mjs";
 
@@ -220,15 +221,23 @@ function stepPosition(needle: string): number {
  * Where the main program is compiled. It is the `tsc` step that names no
  * project file, so it is found by what it lacks rather than by an index.
  */
-describe("scripts/build.mjs is the one caller of rustc", () => {
+describe("scripts/build.mjs owns both sealed kernel builds", () => {
   const rustc = BUILD_STEPS.filter(([command]) => command === "rustc");
+  const companion = rustc.filter((step) =>
+    stepArgs(step).includes("src/companion-kernel/lib.rs")
+  );
+  const reachability = rustc.filter((step) =>
+    stepArgs(step).includes("src/cartography-reachability-kernel/lib.rs")
+  );
 
-  it("compiles the kernel exactly once per build", () => {
-    assert.equal(rustc.length, 1);
+  it("compiles each kernel exactly once per build", () => {
+    assert.equal(rustc.length, 2);
+    assert.equal(companion.length, 1);
+    assert.equal(reachability.length, 1);
   });
 
-  it("writes only an unserved candidate", () => {
-    const kernel = rustc[0];
+  it("writes the companion kernel only as an unserved candidate", () => {
+    const kernel = companion[0];
     assert.ok(kernel, "no rustc step to inspect");
     const args = stepArgs(kernel);
     assert.deepEqual(args.slice(-2), [
@@ -242,20 +251,40 @@ describe("scripts/build.mjs is the one caller of rustc", () => {
     );
   });
 
-  it("publishes it through one immediate build-time sealing step", () => {
-    const kernel = BUILD_STEPS.findIndex(([command]) => command === "rustc");
-    const sealers = BUILD_STEPS.map((step, index) => ({ step, index })).filter(
-      ({ step }) => stepArgs(step).includes("scripts/seal-companion-kernel.mjs"),
+  it("writes the reachability kernel only as an unserved candidate", () => {
+    const kernel = reachability[0];
+    assert.ok(kernel, "no reachability rustc step to inspect");
+    const args = stepArgs(kernel);
+    assert.deepEqual(args.slice(-2), [
+      "-o",
+      "build/.cartography-reachability-kernel.unsealed.wasm",
+    ]);
+    assert.deepEqual(
+      args,
+      cartographyReachabilityKernelRustcArgs(
+        "build/.cartography-reachability-kernel.unsealed.wasm",
+      ),
     );
-    assert.equal(sealers.length, 1);
-    assert.equal(sealers[0]!.index, kernel + 1);
+  });
+
+  it("publishes each through its immediate build-time sealing step", () => {
+    for (const [source, sealer] of [
+      ["src/companion-kernel/lib.rs", "scripts/seal-companion-kernel.mjs"],
+      [
+        "src/cartography-reachability-kernel/lib.rs",
+        "scripts/seal-cartography-reachability-kernel.mjs",
+      ],
+    ] as const) {
+      const kernel = stepPosition(source);
+      assert.equal(stepPosition(sealer), kernel + 1);
+    }
   });
 });
 
 describe("scripts/build.mjs orders the producers of build/renderer", () => {
   const assets = stepPosition("scripts/copy-renderer.mjs");
   const renderer = stepPosition("scripts/build-renderer.mjs");
-  const kernel = BUILD_STEPS.findIndex(([command]) => command === "rustc");
+  const kernel = stepPosition("src/companion-kernel/lib.rs");
   const sealer = stepPosition("scripts/seal-companion-kernel.mjs");
 
   it("copies the assets before the renderer is compiled into the same directory", () => {

@@ -71,3 +71,27 @@ export const TOOLBOX_CARTOGRAPHY_CONTINENTS: readonly ToolboxCartographyContinen
     creditable: mask(3, 68, 60, 25, "AAAAAADA3w8AAIAHAP7/AAD4/wPg/w8AwP8/AP7/AAD//wPg/w8A8P8/AP7/AAD//wPg/w8A8P8/AP7/AAD8/wPg/w8AwP8fAP7/AAD8/wHg/w8AwP8fAP7/AACAPwDg/w8AAPgDAP7/AACAPwDg/w8AAAAAAP7/AAAAAAAA/AEAAAAAAMAPPwAAAAAA4PADAAAAAAAAfwAAAAAAAPAHAAAAAAAAfwAAAAAAAPADAAAAAAAAHgAAAAAAAAA="),
   }),
 ]);
+
+/** Global creditability only; this data never represents live walkability. */
+export function isToolboxCreditableCell(
+  continentId: number,
+  cellX: number,
+  cellY: number,
+): boolean | null {
+  if (
+    !Number.isSafeInteger(continentId)
+    || !Number.isSafeInteger(cellX)
+    || !Number.isSafeInteger(cellY)
+  ) return null;
+  const continent = TOOLBOX_CARTOGRAPHY_CONTINENTS.find(({ id }) => id === continentId);
+  if (continent === undefined) return null;
+  const { creditable } = continent;
+  const localX = cellX - creditable.x0;
+  const localY = cellY - creditable.y0;
+  if (
+    localX < 0 || localY < 0
+    || localX >= creditable.width || localY >= creditable.height
+  ) return false;
+  const bit = localY * creditable.width + localX;
+  return ((creditable.bits[bit >>> 3]! >>> (bit & 7)) & 1) === 1;
+}

@@ -65,6 +65,10 @@ import {
   type CartographyPresetLibrary,
   type CartographyPresetRef,
 } from "./cartography-overlay.js";
+import type {
+  CartographyEvidenceCapture,
+  CartographyEvidenceExportResult,
+} from "./cartography-evidence.js";
 import type { EnhancementSelection } from "./enhancement-contracts.js";
 import { RELEASE_REPO } from "./project-identity.js";
 import {
@@ -1012,6 +1016,7 @@ export const CORE_IPC = {
   diagnosticsVisualSubmit: "gw:diagnostics:visualSubmit",
   diagnosticsProfileSet: "gw:diagnostics:profileSet",
   diagnosticsCurrent: "gw:diagnostics:current",
+  cartographyEvidenceExport: "gw:cartography:evidenceExport",
   appOpenExternal: "gw:app:openExternal",
   appRevealPath: "gw:app:revealPath",
   appRequestQuit: "gw:app:requestQuit",
@@ -1205,6 +1210,11 @@ export interface CoreGwNativeApiBase {
     current(): Promise<DiagnosticSummary>;
     submitVisualCapture(value: VisualCaptureSubmission): Promise<void>;
     setProfile(value: DiagnosticProfile): Promise<DiagnosticProfile>;
+  };
+  cartography: {
+    exportEvidence(
+      value: CartographyEvidenceCapture,
+    ): Promise<CartographyEvidenceExportResult>;
   };
   app: {
     openExternal(kind: ExternalLinkKind): Promise<void>;

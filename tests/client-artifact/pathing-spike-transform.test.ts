@@ -7,17 +7,19 @@ import { transformCartographySpikeWasm } from
   "../../src/main/certification/pathing-spike-transform.js";
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
 import {
+  CARTOGRAPHY_CONTEXT_GLOBALS,
   COMPASS_FRAME_SPIKE_GLOBALS,
   EXPLORATION_SPIKE_GLOBALS,
   MISSION_MAP_PROJECTION_SPIKE_GLOBALS,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS,
 } from
   "../../src/shared/cartography-spike.js";
 
 const sha256 = (bytes: Uint8Array): string =>
   createHash("sha256").update(bytes).digest("hex");
 
-test("the exact converter call is wrapped without moving existing functions", {
+test("the certified context is added without intercepting native pathing", {
   timeout: 120_000,
 }, async () => {
   const artifact = process.env.GW_CLIENT_WASM;
@@ -33,13 +35,11 @@ test("the exact converter call is wrapped without moving existing functions", {
   const decoded = evidence.decodeFunctions([]);
   const loader = decoded.find((candidate) => candidate.functionIndex === 3208);
   assert.ok(loader);
-  assert.equal(loader.calls.get(3216) ?? 0, 0);
-  const wrapper = decoded.find((candidate) => candidate.calls.get(3216) === 1);
-  assert.ok(wrapper);
-  assert.ok(wrapper.functionIndex > 3216);
-  assert.equal(loader.calls.get(wrapper.functionIndex), 1);
+  assert.equal(loader.calls.get(3216), 1, "the client's converter call must remain intact");
   const exportNames = new Set(WebAssembly.Module.exports(new WebAssembly.Module(Uint8Array.from(transformed)))
     .map(({ name }) => name));
+  assert.ok(Object.values(CARTOGRAPHY_CONTEXT_GLOBALS)
+    .every((name) => exportNames.has(name)));
   assert.ok(Object.values(COMPASS_FRAME_SPIKE_GLOBALS)
     .every((name) => exportNames.has(name)));
   assert.ok(Object.values(MISSION_MAP_PROJECTION_SPIKE_GLOBALS)
@@ -48,6 +48,13 @@ test("the exact converter call is wrapped without moving existing functions", {
     .every((name) => exportNames.has(name)));
   assert.ok(Object.values(WORLD_MAP_ANCHOR_SPIKE_GLOBALS)
     .every((name) => exportNames.has(name)));
+  assert.ok(Object.values(WORLD_MAP_FRAME_SPIKE_GLOBALS)
+    .every((name) => exportNames.has(name)));
+  assert.equal(
+    [...exportNames].some((name) => name.includes("pathing")),
+    false,
+    "native pathing data must never be exported to the renderer",
+  );
 
   const missionMapWrapper = decoded.find((candidate) =>
     candidate.calls.get(16_136) === 1 && candidate.calls.get(13_562) === 1
@@ -55,4 +62,8 @@ test("the exact converter call is wrapped without moving existing functions", {
   assert.ok(missionMapWrapper);
   assert.deepEqual(evidence.tableRelations.get(missionMapWrapper.functionIndex), [4_006]);
   assert.equal(evidence.tableRelations.get(16_136), undefined);
+  const worldMapWrapper = decoded.find((candidate) => candidate.calls.get(16_223) === 1);
+  assert.ok(worldMapWrapper);
+  assert.deepEqual(evidence.tableRelations.get(worldMapWrapper.functionIndex), [4_152]);
+  assert.equal(evidence.tableRelations.get(16_223), undefined);
 });

@@ -1,29 +1,25 @@
 /**
- * Defines the fixed scalar contract for Compass, Mission Map, and pathing research.
+ * Defines the fixed scalar contract for Cartography's certified native context
+ * and map surfaces.
  * Exposes no raw WebAssembly pointers across the renderer boundary.
  */
 
-export const PATHING_SPIKE_SAMPLE_TRAPEZOIDS = 3;
-export const PATHING_SPIKE_COORDINATES = 6;
-
-export const PATHING_SPIKE_GLOBALS = Object.freeze({
-  status: "gwonmac_pathing_spike_status",
-  sequence: "gwonmac_pathing_spike_sequence",
-  callCount: "gwonmac_pathing_spike_call_count",
-  totalTrapezoids: "gwonmac_pathing_spike_total_trapezoids",
-  sampledMapTrapezoids: "gwonmac_pathing_spike_sampled_map_trapezoids",
-  sampledMapZplane: "gwonmac_pathing_spike_sampled_map_zplane",
-  generation: "gwonmac_pathing_spike_generation",
-  readCoordinate: "gwonmac_pathing_spike_read_coordinate",
-  reset: "gwonmac_pathing_spike_reset",
-  samples: Object.freeze(Array.from(
-    { length: PATHING_SPIKE_SAMPLE_TRAPEZOIDS },
-    (_, trapezoid) => Object.freeze(Array.from(
-      { length: PATHING_SPIKE_COORDINATES },
-      (_, coordinate) => `gwonmac_pathing_spike_t${trapezoid}_c${coordinate}`,
-    )),
-  )),
+export const CARTOGRAPHY_CONTEXT_GLOBALS = Object.freeze({
+  status: "gwonmac_cartography_context_status",
+  sequence: "gwonmac_cartography_context_sequence",
+  areaEpoch: "gwonmac_cartography_context_area_epoch",
+  mapId: "gwonmac_cartography_context_map_id",
+  layoutId: "gwonmac_cartography_context_layout_id",
+  observe: "gwonmac_cartography_context_observe",
 });
+
+export const CARTOGRAPHY_CONTEXT_SCALARS = Object.freeze([
+  CARTOGRAPHY_CONTEXT_GLOBALS.status,
+  CARTOGRAPHY_CONTEXT_GLOBALS.sequence,
+  CARTOGRAPHY_CONTEXT_GLOBALS.areaEpoch,
+  CARTOGRAPHY_CONTEXT_GLOBALS.mapId,
+  CARTOGRAPHY_CONTEXT_GLOBALS.layoutId,
+]);
 
 export const EXPLORATION_SPIKE_GLOBALS = Object.freeze({
   status: "gwonmac_exploration_spike_status",
@@ -134,6 +130,26 @@ export const MISSION_MAP_PROJECTION_SPIKE_SCALARS = Object.freeze([
   MISSION_MAP_PROJECTION_SPIKE_GLOBALS.nativeMapHeight,
 ]);
 
+export const WORLD_MAP_FRAME_SPIKE_GLOBALS = Object.freeze({
+  status: "gwonmac_world_map_frame_spike_status",
+  sequence: "gwonmac_world_map_frame_spike_sequence",
+  generation: "gwonmac_world_map_frame_spike_generation",
+  frameId: "gwonmac_world_map_frame_spike_frame_id",
+  visible: "gwonmac_world_map_frame_spike_visible",
+  viewportWidth: "gwonmac_world_map_frame_spike_viewport_width",
+  viewportHeight: "gwonmac_world_map_frame_spike_viewport_height",
+  left: "gwonmac_world_map_frame_spike_left",
+  bottom: "gwonmac_world_map_frame_spike_bottom",
+  right: "gwonmac_world_map_frame_spike_right",
+  top: "gwonmac_world_map_frame_spike_top",
+  continent: "gwonmac_world_map_frame_spike_continent",
+  zoom: "gwonmac_world_map_frame_spike_zoom",
+  topLeftX: "gwonmac_world_map_frame_spike_top_left_x",
+  topLeftY: "gwonmac_world_map_frame_spike_top_left_y",
+  bottomRightX: "gwonmac_world_map_frame_spike_bottom_right_x",
+  bottomRightY: "gwonmac_world_map_frame_spike_bottom_right_y",
+});
+
 export const COMPASS_FRAME_SPIKE_GLOBALS = Object.freeze({
   ...nativeFrameGlobals("gwonmac_compass_frame_spike"),
   cameraSequence: "gwonmac_compass_frame_spike_camera_sequence",
@@ -171,6 +187,26 @@ export const COMPASS_FRAME_SPIKE_SCALARS = Object.freeze([
   COMPASS_FRAME_SPIKE_GLOBALS.compassDirectionY,
 ]);
 
+export const WORLD_MAP_FRAME_SPIKE_SCALARS = Object.freeze([
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.status,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.sequence,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.generation,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.frameId,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.visible,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.viewportWidth,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.viewportHeight,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.left,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.bottom,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.right,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.top,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.continent,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.zoom,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.topLeftX,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.topLeftY,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightX,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightY,
+]);
+
 export type NativeFrameSpikeSnapshot = Readonly<{
   status: number;
   generation: number;
@@ -205,36 +241,52 @@ export type MissionMapFrameSpikeSnapshot = NativeFrameSpikeSnapshot & Readonly<{
   nativeMapHeight: number;
 }>;
 
+export type WorldMapFrameSpikeSnapshot = NativeFrameSpikeSnapshot & Readonly<{
+  sequence: number;
+  continent: number;
+  zoom: number;
+  topLeftX: number;
+  topLeftY: number;
+  bottomRightX: number;
+  bottomRightY: number;
+}>;
+
 export type SpikeController<T> = Readonly<{
   snapshot(): T | null;
 }>;
 
-export type CompassFrameSpikeController = SpikeController<CompassFrameSpikeSnapshot>;
-export type MissionMapFrameSpikeController = SpikeController<MissionMapFrameSpikeSnapshot>;
-
-export type PathingSpikeSnapshot = Readonly<{
+export type CartographyContextSnapshot = Readonly<{
   status: number;
   sequence: number;
-  callCount: number;
-  totalTrapezoids: number;
-  sampledMapTrapezoids: number;
-  sampledMapZplane: number;
-  generation: number;
-  samples: readonly (readonly number[])[];
+  areaEpoch: number;
+  mapId: number;
+  layoutId: 1 | 2;
 }>;
 
-export type PathingSpikeTrapezoid = Readonly<{
-  topLeftX: number;
-  topRightX: number;
-  topY: number;
-  bottomLeftX: number;
-  bottomRightX: number;
-  bottomY: number;
+export type CartographyContextController = SpikeController<CartographyContextSnapshot> & Readonly<{
+  /** Publish one fresh native identity before starting an atomic model read. */
+  refresh(): boolean;
 }>;
 
-export type PathingSpikeController = SpikeController<PathingSpikeSnapshot> & Readonly<{
-  reset(): void;
-  readLargestGeometry(): readonly PathingSpikeTrapezoid[] | null;
+export type CompassFrameSpikeController = SpikeController<CompassFrameSpikeSnapshot>;
+export type MissionMapFrameSpikeController = SpikeController<MissionMapFrameSpikeSnapshot>;
+export type WorldMapFrameSpikeDiagnostic = Readonly<{
+  status: number | null;
+  sequence: number | null;
+  generation: number | null;
+  frameId: number | null;
+  visible: number | null;
+  continent: number | null;
+  zoom: number | null;
+  topLeftX: number | null;
+  topLeftY: number | null;
+  bottomRightX: number | null;
+  bottomRightY: number | null;
+}>;
+
+export type WorldMapFrameSpikeController = SpikeController<WorldMapFrameSpikeSnapshot> & Readonly<{
+  /** Closed scalar readout for live certification; contains no native pointers. */
+  diagnostics(): WorldMapFrameSpikeDiagnostic;
 }>;
 
 export type ExplorationSpikeSnapshot = Readonly<{

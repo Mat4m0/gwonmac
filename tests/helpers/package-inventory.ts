@@ -21,8 +21,12 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
   "/node_modules/ws/package.json",
   "/node_modules/ws/wrapper.mjs",
   "/node_modules/ws/lib/websocket.js",
+  "/node_modules/pngjs/package.json",
+  "/node_modules/pngjs/lib/png.js",
+  "/node_modules/pngjs/lib/png-sync.js",
   "/build/native/host.node",
   "/build/renderer/companion-kernel.wasm",
+  "/build/renderer/cartography-reachability-kernel.wasm",
   "/build/renderer/enhancements.js",
   "/build/renderer/companion-snapshot.js",
   "/build/renderer/enhancement-cursor.js",
@@ -77,7 +81,7 @@ export function assertNoDeveloperPackageFiles(inventory: PackageInventory): void
 
   for (const file of inventory) {
     if (
-      !/^\/(?:build\/(?:main|shared|renderer|preload|native)\/|node_modules\/ws\/|package\.json$)/u.test(
+      !/^\/(?:build\/(?:main|shared|renderer|preload|native)\/|node_modules\/(?:ws|pngjs)\/|package\.json$)/u.test(
         file,
       )
     ) {

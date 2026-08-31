@@ -26,6 +26,7 @@ import type {
   RuntimeDiagnosticState,
   VisualProblemManifest,
 } from "../../shared/contracts.js";
+import type { CartographyEvidenceReport } from "../../shared/cartography-evidence.js";
 import {
   VISUAL_CAPTURE_STAGES,
   type VisualCaptureFailure,
@@ -110,6 +111,11 @@ export async function exportDiagnosticsZip(
     settings: AppSettings;
     runtimeState?: RuntimeDiagnosticState;
     visualProblem?: VisualProblemExport;
+    cartographyEvidence?: Readonly<{
+      report: CartographyEvidenceReport;
+      preview: Uint8Array | null;
+      summary: string;
+    }>;
   },
 ): Promise<string> {
   if (
@@ -158,6 +164,13 @@ export async function exportDiagnosticsZip(
       "settings-redacted.json",
     ];
     if (extras.runtimeState) files.push("runtime-state.json");
+    if (extras.cartographyEvidence) {
+      files.push("cartography-report.json");
+      files.push("cartography-summary.txt");
+      if (extras.cartographyEvidence.preview !== null) {
+        files.push("cartography-preview.png");
+      }
+    }
     if (previous) files.push("previous-events.jsonl");
     if (capture) files.push("capture-summary.json");
     const visualEvidence = extras.visualProblem?.screenshotRequested
@@ -221,6 +234,15 @@ export async function exportDiagnosticsZip(
               missingStages: missingVisualStages,
               screenshotPrivacy: "player-consented-unscanned",
             } satisfies VisualProblemManifest,
+          }
+        : {}),
+      ...(extras.cartographyEvidence
+        ? {
+            cartographyEvidence: {
+              formatVersion: extras.cartographyEvidence.report.formatVersion,
+              contentSha256: extras.cartographyEvidence.report.contentSha256,
+              previewIncluded: extras.cartographyEvidence.preview !== null,
+            },
           }
         : {}),
       eventLog: {
@@ -316,6 +338,16 @@ export async function exportDiagnosticsZip(
       ...(extras.runtimeState
         ? { "runtime-state.json": JSON.stringify(extras.runtimeState, null, 2) }
         : {}),
+      ...(extras.cartographyEvidence
+        ? {
+            "cartography-report.json": JSON.stringify(
+              extras.cartographyEvidence.report,
+              null,
+              2,
+            ),
+            "cartography-summary.txt": extras.cartographyEvidence.summary,
+          }
+        : {}),
       ...(extras.visualProblem?.screenshotRequested
         ? {
             "visual-capture.json": JSON.stringify({
@@ -351,6 +383,12 @@ export async function exportDiagnosticsZip(
       await writeFile(file, image, { mode: 0o600 });
       await chmod(file, 0o600);
     }
+    if (extras.cartographyEvidence?.preview !== null
+      && extras.cartographyEvidence?.preview.byteLength) {
+      const file = path.join(staging, "cartography-preview.png");
+      await writeFile(file, extras.cartographyEvidence.preview, { mode: 0o600 });
+      await chmod(file, 0o600);
+    }
     await execFileAsync("ditto", ["-c", "-k", "--sequesterRsrc", staging, zipPart]);
     await chmod(zipPart, 0o600);
     await rename(zipPart, zipPath);
@@ -371,6 +409,11 @@ export async function exportDiagnosticsForWindow(
   options: {
     visualProblem?: VisualProblemExport;
     runtimeState?: RuntimeDiagnosticState;
+    cartographyEvidence?: Readonly<{
+      report: CartographyEvidenceReport;
+      preview: Uint8Array | null;
+      summary: string;
+    }>;
   } = {},
 ): Promise<string> {
   // `captureLevel` remains zero while reset and recorder setup are in flight.
@@ -380,9 +423,15 @@ export async function exportDiagnosticsForWindow(
   // The report has always been a PKZIP archive; `.zip` is the name that lets
   // GitHub accept it as an attachment without a Finder round-trip.
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
-    title: options.visualProblem ? "Save Visual Corruption Report" : "Export Diagnostics",
+    title: options.visualProblem
+      ? "Save Visual Corruption Report"
+      : options.cartographyEvidence
+        ? "Export Cartography Evidence"
+        : "Export Diagnostics",
     defaultPath: options.visualProblem
       ? "guild-wars-visual-corruption.zip"
+      : options.cartographyEvidence
+        ? "guild-wars-cartography-evidence.zip"
       : "guild-wars-diagnostics.zip",
     filters: [{ name: "Guild Wars diagnostics", extensions: ["zip"] }],
   });

@@ -157,9 +157,9 @@ async function updateUnseen(field: "color" | "marker", value: string) {
 
 <template>
   <h1>Maps</h1>
-  <p>Optional guidance on the native Compass and Mission Map. These settings apply to every account.</p>
+  <p>Optional guidance on the native Compass, Mission Map, and World Map. These settings apply to every account.</p>
   <div class="setting-group">
-    <label><span><strong>Exploration grid</strong><small>Show the game’s fixed exploration cells.</small></span><input type="checkbox" :checked="settings.cartographyGridEnabled" @change="persist({ cartographyGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <label><span><strong>Exploration grid</strong><small>Show cartography cells and mark unexplored cells reachable in this instance.</small></span><input type="checkbox" :checked="settings.cartographyGridEnabled" @change="persist({ cartographyGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
     <label><span><strong>Walkable terrain</strong><small>Shade terrain outside certified pathing geometry.</small></span><input type="checkbox" :checked="settings.cartographyOverlayEnabled" @change="persist({ cartographyOverlayEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
     <label><span><strong>Style</strong><small>Used by both map layers.</small></span><select :value="`${settings.cartographyPresetLibrary.activePreset.kind}:${settings.cartographyPresetLibrary.activePreset.id}`" @change="selectPreset(($event.currentTarget as HTMLSelectElement).value)"><optgroup label="Built in"><option v-for="(preset, id) in CARTOGRAPHY_BUILTIN_PRESETS" :key="id" :value="`builtin:${id}`">{{ preset.name }}</option></optgroup><optgroup v-if="settings.cartographyPresetLibrary.customPresets.length" label="My styles"><option v-for="preset in settings.cartographyPresetLibrary.customPresets" :key="preset.id" :value="`custom:${preset.id}`">{{ preset.name }}</option></optgroup></select></label>
     <label><span><strong>Grid opacity</strong><small>{{ settings.cartographyGridOpacity }}%</small></span><input type="range" min="0" max="100" :value="settings.cartographyGridOpacity" @change="persist({ cartographyGridOpacity: Number(($event.currentTarget as HTMLInputElement).value) })" /></label>

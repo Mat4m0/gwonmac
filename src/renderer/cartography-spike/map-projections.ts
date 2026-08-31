@@ -2,10 +2,12 @@
  * Converts the shared world-space mask into Compass and Mission Map transforms.
  * Keeps surface-specific pan, zoom, rotation, and content bounds in one place.
  */
-import type { MissionMapFrameSpikeSnapshot } from "../../shared/cartography-spike.js";
+import type {
+  MissionMapFrameSpikeSnapshot,
+  WorldMapFrameSpikeSnapshot,
+} from "../../shared/cartography-spike.js";
 import type { ScreenBox } from "./frame-placement.js";
-import type { WalkabilityMask } from "./walkability-mask.js";
-import { GAME_UNITS_PER_RASTER_PIXEL } from "./walkability-mask.js";
+import type { WalkableTerrainSurface } from "./walkable-terrain-surface.js";
 
 export const COMPASS_WORLD_RADIUS = 5_000;
 export const COMPASS_MAP_RADIUS = 96;
@@ -72,40 +74,6 @@ export function projectMapUnitsToCompass(input: Readonly<{
       f: centerY - b * input.playerMapX - d * input.playerMapY,
     }),
     clip: Object.freeze({ kind: "circle", centerX, centerY, radius }),
-  });
-}
-
-export function projectWalkabilityToCompass(input: Readonly<{
-  box: ScreenBox;
-  mask: WalkabilityMask;
-  playerX: number;
-  playerY: number;
-  directionX: number;
-  directionY: number;
-}>): InverseMaskProjection | null {
-  const projection = projectMapUnitsToCompass({
-    box: input.box,
-    playerMapX: 0,
-    playerMapY: 0,
-    directionX: input.directionX,
-    directionY: input.directionY,
-  });
-  if (projection === null) return null;
-  const sourceScale = GAME_UNITS_PER_RASTER_PIXEL / GAME_UNITS_PER_MAP_UNIT;
-  const originMapX = (input.mask.minX - input.playerX) / GAME_UNITS_PER_MAP_UNIT;
-  const originMapY = (input.playerY - input.mask.maxY) / GAME_UNITS_PER_MAP_UNIT;
-  const { a, b, c, d, e, f } = projection.transform;
-  return Object.freeze({
-    box: projection.box,
-    transform: Object.freeze({
-      a: a * sourceScale,
-      b: b * sourceScale,
-      c: c * sourceScale,
-      d: d * sourceScale,
-      e: e + a * originMapX + c * originMapY,
-      f: f + b * originMapX + d * originMapY,
-    }),
-    clip: projection.clip,
   });
 }
 
@@ -198,31 +166,74 @@ export function projectMapUnitsToMissionMap(
   });
 }
 
-export function projectWalkabilityToMissionMap(input: Readonly<{
-  frame: MissionMapFrameSpikeSnapshot;
-  box: ScreenBox;
-  mask: WalkabilityMask;
-  playerX: number;
-  playerY: number;
-}>): InverseMaskProjection | null {
-  const projection = projectMapUnitsToMissionMap(input.frame, input.box);
-  if (projection === null) return null;
-  const mapLeft = input.frame.playerMapX
-    + (input.mask.minX - input.playerX) / GAME_UNITS_PER_MAP_UNIT;
-  const mapTop = input.frame.playerMapY
-    - (input.mask.maxY - input.playerY) / GAME_UNITS_PER_MAP_UNIT;
-  const sourceScale = GAME_UNITS_PER_RASTER_PIXEL / GAME_UNITS_PER_MAP_UNIT;
+/** Toolbox-compatible projection from the dedicated World Map viewport. */
+export function projectMapUnitsToWorldMap(
+  frame: WorldMapFrameSpikeSnapshot,
+  box: ScreenBox,
+): MapUnitProjection | null {
+  const spanX = frame.bottomRightX - frame.topLeftX;
+  const spanY = frame.bottomRightY - frame.topLeftY;
+  if (
+    frame.status !== 1 || !frame.visible || frame.generation <= 0
+    || ![
+      spanX, spanY, frame.topLeftX, frame.topLeftY,
+      box.left, box.top, box.width, box.height,
+    ].every(Number.isFinite)
+    || spanX <= 0 || spanY <= 0 || box.width <= 0 || box.height <= 0
+  ) return null;
+  const scaleX = box.width / spanX;
+  const scaleY = box.height / spanY;
+  return Object.freeze({
+    box,
+    transform: Object.freeze({
+      a: scaleX,
+      b: 0,
+      c: 0,
+      d: scaleY,
+      e: -frame.topLeftX * scaleX,
+      f: -frame.topLeftY * scaleY,
+    }),
+    clip: Object.freeze({ kind: "rectangle" }),
+  });
+}
+
+function projectTerrain(
+  projection: MapUnitProjection,
+  terrain: WalkableTerrainSurface,
+): InverseMaskProjection {
   const { a, b, c, d, e, f } = projection.transform;
+  const scale = terrain.mapUnitsPerPixel;
   return Object.freeze({
     box: projection.box,
     transform: Object.freeze({
-      a: a * sourceScale,
-      b: b * sourceScale,
-      c: c * sourceScale,
-      d: d * sourceScale,
-      e: e + a * mapLeft + c * mapTop,
-      f: f + b * mapLeft + d * mapTop,
+      a: a * scale,
+      b: b * scale,
+      c: c * scale,
+      d: d * scale,
+      e: e + a * terrain.mapLeft + c * terrain.mapTop,
+      f: f + b * terrain.mapLeft + d * terrain.mapTop,
     }),
     clip: projection.clip,
   });
+}
+
+export function projectTerrainToCompass(input: Readonly<{
+  box: ScreenBox;
+  terrain: WalkableTerrainSurface;
+  playerMapX: number;
+  playerMapY: number;
+  directionX: number;
+  directionY: number;
+}>): InverseMaskProjection | null {
+  const projection = projectMapUnitsToCompass(input);
+  return projection === null ? null : projectTerrain(projection, input.terrain);
+}
+
+export function projectTerrainToMissionMap(input: Readonly<{
+  frame: MissionMapFrameSpikeSnapshot;
+  box: ScreenBox;
+  terrain: WalkableTerrainSurface;
+}>): InverseMaskProjection | null {
+  const projection = projectMapUnitsToMissionMap(input.frame, input.box);
+  return projection === null ? null : projectTerrain(projection, input.terrain);
 }
