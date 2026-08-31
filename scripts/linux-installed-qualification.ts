@@ -243,6 +243,7 @@ try {
       { cause: error },
     );
   }
+  await mainGame.evaluate(() => window.gwNative.client.readyToPresent());
   await waitForRunning(running, mainProfile.id);
   await mainGame.evaluate(() => localStorage.setItem("profile-proof", "main"));
   let secondGame: Awaited<ReturnType<typeof openPackagedProfile>>;
@@ -261,6 +262,7 @@ try {
       { cause: error },
     );
   }
+  await secondGame.evaluate(() => window.gwNative.client.readyToPresent());
   await waitForRunning(running, secondProfile.id);
   assert.equal(
     await secondGame.evaluate(() => localStorage.getItem("profile-proof")),
@@ -323,6 +325,7 @@ try {
     ["Main account", "Second account"],
   );
   const restartedMain = await openPackagedProfile(running, mainProfile.id);
+  await restartedMain.evaluate(() => window.gwNative.client.readyToPresent());
   if (secretQualification) {
     assert.equal(
       (await restartedMain.evaluate(() => window.gwNative.credentials.load()))?.username,
