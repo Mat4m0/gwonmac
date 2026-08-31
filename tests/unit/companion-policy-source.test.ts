@@ -96,6 +96,7 @@ describe("companion policy source", () => {
       mapId: 42,
       instanceType: 0,
       playRegion: "pve" as const,
+      travelContext: "world" as const,
       characterKey: null,
       unlockedMapWords: null,
     });
@@ -124,6 +125,7 @@ describe("companion policy source", () => {
       mapId: 55,
       instanceType: 0,
       playRegion: "pve" as const,
+      travelContext: "world" as const,
     };
     test.publishRegion(Object.freeze({
       ...ready,
@@ -161,6 +163,7 @@ describe("companion policy source", () => {
       mapId: 188,
       instanceType: 0,
       playRegion: "pvp",
+      travelContext: "world",
       characterKey: null,
       unlockedMapWords: null,
     }));
@@ -183,6 +186,7 @@ describe("companion policy source", () => {
       mapId: 42,
       instanceType: 0,
       playRegion: "pve",
+      travelContext: "world",
       characterKey: null,
       unlockedMapWords: null,
     }));

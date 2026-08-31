@@ -8,7 +8,13 @@ export const COMPANION_PLAY_REGION_ABI = COMPANION_ABI.playRegion.abi;
 export const COMPANION_PLAY_REGION_BYTES = COMPANION_ABI.playRegion.bytes;
 
 const MAGIC = 0x5250_5747;
-const FLAGS = Object.freeze({ ready: 1, loading: 2, character: 4, unlocks: 8 });
+const FLAGS = Object.freeze({
+  ready: 1,
+  loading: 2,
+  character: 4,
+  unlocks: 8,
+  preSearing: 16,
+});
 const UNLOCK_WORDS = COMPANION_ABI.travelUnlockWords;
 
 export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
@@ -44,9 +50,12 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
     || bytes !== COMPANION_PLAY_REGION_BYTES
     || firstSequence !== secondSequence
     || (secondSequence & 1) !== 0
-    || (flags & ~(FLAGS.ready | FLAGS.loading | FLAGS.character | FLAGS.unlocks)) !== 0
+    || (flags & ~(
+      FLAGS.ready | FLAGS.loading | FLAGS.character | FLAGS.unlocks | FLAGS.preSearing
+    )) !== 0
     || (flags & FLAGS.loading) !== 0 && flags !== FLAGS.loading
-    || (flags & (FLAGS.character | FLAGS.unlocks)) !== 0 && (flags & FLAGS.ready) === 0
+    || (flags & (FLAGS.character | FLAGS.unlocks | FLAGS.preSearing)) !== 0
+      && (flags & FLAGS.ready) === 0
   ) return Object.freeze({ status: "waiting", reason: "snapshot" } as const);
 
   if ((flags & FLAGS.loading) !== 0) {
@@ -71,9 +80,11 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
   ) return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
   const hasCharacter = (flags & FLAGS.character) !== 0;
   const hasUnlocks = (flags & FLAGS.unlocks) !== 0;
+  const preSearing = (flags & FLAGS.preSearing) !== 0;
   if (
     hasCharacter !== (characterLow !== 0 || characterHigh !== 0)
     || (!hasUnlocks && unlockedMapWords.some((word) => word !== 0))
+    || (preSearing && encodedRegion !== 1)
   ) return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
 
   return Object.freeze({
@@ -82,6 +93,7 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
     mapId,
     instanceType,
     playRegion: encodedRegion === 1 ? "pve" as const : "pvp" as const,
+    travelContext: preSearing ? "pre-searing" as const : "world" as const,
     characterKey: hasCharacter
       ? `${characterHigh.toString(16).padStart(8, "0")}${characterLow.toString(16).padStart(8, "0")}`
       : null,

@@ -47,6 +47,7 @@ test.describe("renderer Travel input", () => {
           state: {
             status: "ready",
             mapId: 133,
+            travelContext: "world",
             characterKey: null,
             unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
           },

@@ -106,6 +106,7 @@ pub(crate) unsafe fn tick(layout: Layout) {
             map_id,
             instance_type,
             play_region,
+            pre_searing,
             ..
         } if play_region == PLAY_REGION_PVE || play_region == PLAY_REGION_PVP => unsafe {
             let key = current_character_key(layout, game);
@@ -118,6 +119,11 @@ pub(crate) unsafe fn tick(layout: Layout) {
                 }
                 | if unlocks.is_some() {
                     FLAG_PLAY_REGION_UNLOCKS
+                } else {
+                    0
+                }
+                | if pre_searing {
+                    FLAG_PLAY_REGION_PRE_SEARING
                 } else {
                     0
                 };

@@ -13,7 +13,10 @@ import {
   type TravelRequest,
 } from "../../../../src/shared/travel";
 import type { TravelHost } from "../travel-host";
-import { isTravelMapUnlocked } from "../../../../src/shared/travel-command";
+import {
+  travelContextRefusal,
+  travelDestinationAvailability,
+} from "../../../../src/shared/travel-command";
 import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-history";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
@@ -61,10 +64,17 @@ const catalogueResults = computed(() => hasQuery.value
   ? searchTravelDestinations(query.value, synonyms.value)
   : []
 );
-const isAvailable = (mapId: number) =>
-  isTravelMapUnlocked(props.host.state.value, mapId) !== false;
+const availability = (mapId: number) =>
+  travelDestinationAvailability(props.host.state.value, mapId);
+const isAvailable = (mapId: number) => {
+  const result = availability(mapId);
+  return result === "available" || result === "unknown";
+};
 const results = computed(() => catalogueResults.value.filter(
   (destination) => isAvailable(destination.mapId),
+));
+const contextExcludedResults = computed(() => catalogueResults.value.filter(
+  (destination) => availability(destination.mapId) === "outside-context",
 ));
 const shortcutRows = computed(() => Array.from({ length: TRAVEL_SHORTCUT_LIMIT }, (_, index) => {
   const request = shortcuts.value[index] ?? null;
@@ -88,7 +98,8 @@ const recentDestinations = computed(() => props.host.history.value
 const browseDestinations = computed(() => {
   const state = props.host.state.value;
   if (state.status !== "ready") return [];
-  const destinations = travelBrowseScope(state.mapId).filter(({ mapId }) => isAvailable(mapId));
+  const destinations = travelBrowseScope(state.mapId, state.travelContext)
+    .filter(({ mapId }) => isAvailable(mapId));
   return destinations.length <= SMALL_TRAVEL_CATALOGUE_LIMIT
     ? [...destinations].sort((left, right) => left.name.localeCompare(right.name, "en"))
     : [];
@@ -115,8 +126,27 @@ const statusLevel = computed(() => feedback.value
 const urgentNoticeVisible = computed(() => statusLevel.value === "warning" || statusLevel.value === "danger");
 const searchStatusText = computed(() => {
   if (!hasQuery.value) return "";
+  if (results.value.length === 0 && contextExcludedResults.value.length > 0) {
+    return props.host.state.value.status === "ready"
+      && props.host.state.value.travelContext === "pre-searing"
+      ? "No destinations are available outside Pre-Searing."
+      : "Pre-Searing destinations are unavailable after the Searing.";
+  }
   if (results.value.length === 0) return "No destinations match your search.";
   return `${results.value.length} ${results.value.length === 1 ? "destination" : "destinations"} found.`;
+});
+const emptySearchTitle = computed(() =>
+  contextExcludedResults.value.length > 0
+    ? "Destination unavailable here"
+    : `No destinations for “${query.value}”`
+);
+const emptySearchHelp = computed(() => {
+  const excluded = contextExcludedResults.value[0];
+  if (excluded !== undefined) {
+    return travelContextRefusal(props.host.state.value, excluded.mapId)
+      ?? "This destination is unavailable from the current location.";
+  }
+  return "Try a destination, campaign, official shortcut, or your own search phrase.";
 });
 
 function setFeedback(message: string, level: typeof feedbackLevel.value): void {
@@ -407,6 +437,10 @@ function onKeydown(event: KeyboardEvent): void {
     const slot = Number(event.code.slice(5)) - 1;
     const shortcut = shortcuts.value[slot];
     if (shortcut && isAvailable(shortcut.mapId)) void travel(shortcut);
+    else if (shortcut && availability(shortcut.mapId) === "outside-context") {
+      const message = travelContextRefusal(props.host.state.value, shortcut.mapId);
+      if (message !== null) setFeedback(message, "warning");
+    }
     else void openShortcutManager(slot);
   }
 }
@@ -428,7 +462,7 @@ function onKeydown(event: KeyboardEvent): void {
       <div v-if="results.length" id="travel-results" class="travel-results" role="listbox">
         <button v-for="(destination, index) in results" :id="`travel-${destination.mapId}`" :key="destination.mapId" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :disabled="travelPending || host.unavailable !== null" @mouseenter="active = index" @click="active = index; travel({ mapId: destination.mapId })"><span><strong><template v-for="(part, partIndex) in highlightTravelDestinationName(destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ destination.campaign }}</small></span><span class="travel-match">{{ queryMatchLabel(destination) }}</span></button>
       </div>
-      <div v-else class="ui-empty travel-empty"><strong>No destinations for “{{ query }}”</strong><p>Try a destination, campaign, official shortcut, or your own search phrase.</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>
+      <div v-else class="ui-empty travel-empty"><strong>{{ emptySearchTitle }}</strong><p>{{ emptySearchHelp }}</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>
     </section>
 
     <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" role="region" aria-label="Travel">

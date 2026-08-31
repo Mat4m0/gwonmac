@@ -44,6 +44,7 @@ describe("play-region snapshot ABI", () => {
       mapId: 133,
       instanceType: 0,
       playRegion: "pve",
+      travelContext: "world",
       characterKey: null,
       unlockedMapWords: null,
     });
@@ -57,9 +58,32 @@ describe("play-region snapshot ABI", () => {
       mapId: 248,
       instanceType: 1,
       playRegion: "pvp",
+      travelContext: "world",
       characterKey: null,
       unlockedMapWords: null,
     });
+  });
+
+  it("publishes Pre-Searing only beside a ready PvE record", () => {
+    assert.deepEqual(readCompanionPlayRegion(snapshot({ flags: 17, mapId: 148 }), 0), {
+      status: "ready",
+      sequence: 2,
+      mapId: 148,
+      instanceType: 0,
+      playRegion: "pve",
+      travelContext: "pre-searing",
+      characterKey: null,
+      unlockedMapWords: null,
+    });
+    assert.deepEqual(readCompanionPlayRegion(snapshot({
+      flags: 17,
+      mapId: 148,
+      instanceType: 1,
+      playRegion: 2,
+    }), 0), { status: "waiting", reason: "corrupt" });
+    assert.deepEqual(readCompanionPlayRegion(snapshot({
+      flags: 16, mapId: 0, instanceType: 0, playRegion: 0,
+    }), 0), { status: "waiting", reason: "snapshot" });
   });
 
   it("fails closed for memory, torn headers, contradictory flags, and values", () => {

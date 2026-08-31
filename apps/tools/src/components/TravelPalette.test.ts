@@ -24,7 +24,7 @@ function fixture(options: Readonly<{
   history?: readonly number[];
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({
-    status: "ready", mapId: 55, characterKey: null, unlockedMapWords: null,
+    status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords: null,
   });
   let preferences: TravelPreferences = Object.freeze({
     shortcuts: options.shortcuts ?? DEFAULT_TRAVEL_SHORTCUTS,
@@ -208,6 +208,7 @@ describe("TravelPalette", () => {
     state.value = {
       status: "ready",
       mapId: 55,
+      travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
     };
@@ -233,6 +234,7 @@ describe("TravelPalette", () => {
     state.value = {
       status: "ready",
       mapId: 148,
+      travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
     };
@@ -276,6 +278,7 @@ describe("TravelPalette", () => {
     state.value = {
       status: "ready",
       mapId: 242,
+      travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
     };
@@ -292,6 +295,7 @@ describe("TravelPalette", () => {
     state.value = {
       status: "ready",
       mapId: 148,
+      travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords: null,
     };
@@ -313,6 +317,7 @@ describe("TravelPalette", () => {
     state.value = {
       status: "ready",
       mapId: 55,
+      travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
     };
@@ -321,6 +326,77 @@ describe("TravelPalette", () => {
     expect(wrapper.find(".travel-available").exists()).toBe(false);
     expect(wrapper.find(".travel-history").exists()).toBe(true);
     expect(wrapper.find(".travel-favorites").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("keeps typed search inside Pre-Searing and explains excluded matches", async () => {
+    const { wrapper, state } = fixture();
+    state.value = {
+      status: "ready",
+      mapId: 148,
+      travelContext: "pre-searing",
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+    };
+
+    await wrapper.get("#travel-search-input").setValue("asc");
+    expect(wrapper.get("#travel-results-panel").text()).toContain("Ascalon City (pre-Searing)");
+    expect(wrapper.get("#travel-results-panel").text()).not.toContain("Heroes' Ascent");
+
+    await wrapper.get("#travel-search-input").setValue("heroes ascent");
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
+    expect(wrapper.get(".travel-empty").text()).toContain("Destination unavailable here");
+    expect(wrapper.get(".travel-empty").text()).toContain(
+      "Only Pre-Searing destinations are available to this character.",
+    );
+    wrapper.unmount();
+  });
+
+  it("shows the Pre-Searing browse scope from an explorable map", async () => {
+    const { wrapper, state } = fixture();
+    state.value = {
+      status: "ready",
+      mapId: 149,
+      travelContext: "pre-searing",
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+    };
+    await flushPromises();
+
+    expect(wrapper.findAll(".travel-available .travel-recent")).toHaveLength(6);
+    expect(wrapper.get(".travel-available").text()).toContain("Ascalon City (pre-Searing)");
+    wrapper.unmount();
+  });
+
+  it("hides incompatible favorites and recents and blocks their numbered shortcuts", async () => {
+    const shortcuts: TravelShortcuts = [
+      { mapId: 330 }, null, null, null, null, null, null, null, null,
+    ];
+    const { wrapper, state, travel } = fixture({ history: [330], shortcuts });
+    state.value = {
+      status: "ready",
+      mapId: 148,
+      travelContext: "pre-searing",
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+    };
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("Heroes' Ascent");
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "1", code: "Digit1" });
+    expect(travel).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("Only Pre-Searing destinations are available");
+    wrapper.unmount();
+  });
+
+  it("does not offer irreversible Pre-Searing destinations after the Searing", async () => {
+    const { wrapper } = fixture();
+    await wrapper.get("#travel-search-input").setValue("pre ascalon");
+
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
+    expect(wrapper.get(".travel-empty").text()).toContain(
+      "Pre-Searing destinations are unavailable after the Searing.",
+    );
     wrapper.unmount();
   });
 

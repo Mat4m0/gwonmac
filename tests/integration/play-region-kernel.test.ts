@@ -34,6 +34,7 @@ describe("play-region kernel", () => {
       mapId: 133,
       instanceType: 0,
       playRegion: "pve",
+      travelContext: "world",
       ...OBSERVED_CHARACTER,
     });
 
@@ -47,6 +48,7 @@ describe("play-region kernel", () => {
       mapId: 133,
       instanceType: 0,
       playRegion: "pve",
+      travelContext: "world",
       ...OBSERVED_CHARACTER,
     });
 
@@ -59,8 +61,29 @@ describe("play-region kernel", () => {
       mapId: 133,
       instanceType: 1,
       playRegion: "pvp",
+      travelContext: "world",
       ...OBSERVED_CHARACTER,
     });
+  });
+
+  it("derives the closed Travel context from the certified area region", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    kernel.view.setUint32(AREA_133 + 0x08, 7, true);
+    assert.equal(kernel.init({ features: FEATURE_PLAY_REGION_OBSERVATION }), 1);
+
+    kernel.tick();
+    const preSearing = kernel.playRegion();
+    assert.equal(preSearing.status, "ready");
+    if (preSearing.status !== "ready") return;
+    assert.equal(preSearing.travelContext, "pre-searing");
+
+    kernel.view.setUint32(AREA_133 + 0x08, 2, true);
+    kernel.tick();
+    const world = kernel.playRegion();
+    assert.equal(world.status, "ready");
+    if (world.status !== "ready") return;
+    assert.equal(world.travelContext, "world");
   });
 
   it("publishes loading and withdraws malformed area data", async () => {
