@@ -58,7 +58,7 @@ async function proveNormalCrashpadStartup(
   try {
     await delay(5_000);
     if (child.exitCode !== null) {
-      const { stdout } = await execFileAsync(
+      const eventLog = await execFileAsync(
         "powershell.exe",
         [
           "-NoProfile",
@@ -67,8 +67,20 @@ async function proveNormalCrashpadStartup(
           "$since=(Get-Date).AddMinutes(-2); Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=$since} -ErrorAction SilentlyContinue | Where-Object {$_.Id -in 1000,1001,1026} | Select-Object -First 8 TimeCreated,Id,ProviderName,Message | ConvertTo-Json -Compress",
         ],
         { encoding: "utf8", timeout: 30_000, windowsHide: true },
-      );
-      return `normal startup exited with ${child.exitCode}; Windows events: ${stdout.trim() || "none"}`;
+      ).then(({ stdout }) => stdout.trim() || "none")
+        // Get-WinEvent exits with 1 when its filter has no matching records.
+        // That absence is useful evidence, not a reason to stop the remaining
+        // installed-package diagnostics.
+        .catch((error: unknown) => {
+          if (
+            typeof error === "object"
+            && error !== null
+            && "code" in error
+            && error.code === 1
+          ) return "none";
+          return `query failed: ${error instanceof Error ? error.message : String(error)}`;
+        });
+      return `normal startup exited with ${child.exitCode}; Windows events: ${eventLog}`;
     }
     assert.ok(child.pid, "the normal installed application has no process ID");
     const { stdout } = await execFileAsync(
