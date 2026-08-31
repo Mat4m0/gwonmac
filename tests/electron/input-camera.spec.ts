@@ -28,6 +28,11 @@ test.describe("renderer camera input", () => {
     });
     try {
       const { app, page } = fixture;
+      // Let the hidden renderer finish installing the game input host before
+      // changing native window activation. Pointer lock needs focus only for
+      // the gesture itself; focusing a half-started window adds an unrelated
+      // AppKit presentation race to this capability test.
+      await startGameInput(page);
       await app.evaluate(async ({ app: electronApp, BrowserWindow }) => {
         const win = BrowserWindow.getAllWindows().find(
           (candidate) => candidate.webContents.getURL() === "gw://app/",
@@ -44,7 +49,6 @@ test.describe("renderer camera input", () => {
           await new Promise((resolve) => setTimeout(resolve, 25));
         }
       });
-      await startGameInput(page);
       await page.evaluate(() => {
         const canvas = globalThis.document.getElementById("canvas");
         const loading = globalThis.document.getElementById("loading");
