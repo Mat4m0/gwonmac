@@ -137,6 +137,14 @@ function sources(
     context,
     compass: { snapshot: () => null },
     missionMap: { snapshot: () => null },
+    worldMap: {
+      snapshot: () => null,
+      diagnostics: () => ({
+        status: 0, sequence: 0, generation: 0, frameId: 0, visible: 0,
+        continent: 0, zoom: 0,
+        topLeftX: 0, topLeftY: 0, bottomRightX: 0, bottomRightY: 0,
+      }),
+    },
     exploration,
     anchor,
     kernel,

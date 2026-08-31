@@ -9,9 +9,13 @@ import {
   MISSION_MAP_FRAME_SPIKE_SCALARS,
   MISSION_MAP_PROJECTION_SPIKE_GLOBALS,
   MISSION_MAP_PROJECTION_SPIKE_SCALARS,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS,
+  WORLD_MAP_FRAME_SPIKE_SCALARS,
   type CompassFrameSpikeController,
   type MissionMapFrameSpikeController,
   type NativeFrameSpikeSnapshot,
+  type WorldMapFrameSpikeController,
+  type WorldMapFrameSpikeDiagnostic,
 } from "../../shared/cartography-spike.js";
 
 type FrameGlobals = typeof MISSION_MAP_FRAME_SPIKE_GLOBALS;
@@ -177,6 +181,78 @@ export function createCompassFrameSpikeReader(
         cameraSequence,
         compassDirectionX,
         compassDirectionY,
+      });
+    },
+  });
+}
+
+export function createWorldMapFrameSpikeReader(
+  exports: WebAssembly.Exports,
+): WorldMapFrameSpikeController | null {
+  if (!WORLD_MAP_FRAME_SPIKE_SCALARS.every(
+    (name) => exports[name] instanceof WebAssembly.Global,
+  )) return null;
+  const diagnostics = (): WorldMapFrameSpikeDiagnostic => Object.freeze({
+    status: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.status),
+    sequence: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.sequence),
+    generation: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.generation),
+    frameId: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.frameId),
+    visible: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.visible),
+    continent: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.continent),
+    zoom: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.zoom),
+    topLeftX: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.topLeftX),
+    topLeftY: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.topLeftY),
+    bottomRightX: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightX),
+    bottomRightY: numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightY),
+  });
+  return Object.freeze({
+    diagnostics,
+    snapshot() {
+      const firstSequence = numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.sequence);
+      const values = Object.fromEntries(WORLD_MAP_FRAME_SPIKE_SCALARS.map(
+        (name) => [name, numberGlobal(exports, name)],
+      ));
+      const secondSequence = numberGlobal(exports, WORLD_MAP_FRAME_SPIKE_GLOBALS.sequence);
+      if (
+        firstSequence === null || secondSequence === null
+        || firstSequence !== secondSequence || !Number.isSafeInteger(firstSequence)
+        || Object.values(values).some((value) => value === null)
+      ) return null;
+      const read = (name: string) => values[name] as number;
+      const status = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.status);
+      const generation = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.generation);
+      const frameId = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.frameId);
+      const visible = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.visible);
+      const continent = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.continent);
+      const zoom = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.zoom);
+      const topLeftX = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.topLeftX);
+      const topLeftY = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.topLeftY);
+      const bottomRightX = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightX);
+      const bottomRightY = read(WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightY);
+      if (
+        status !== 1 || visible !== 1
+        || ![status, generation, frameId, visible, continent].every(Number.isSafeInteger)
+        || continent < 0 || continent > 5 || zoom < 0 || zoom > 1
+        || bottomRightX <= topLeftX || bottomRightY <= topLeftY
+      ) return null;
+      return Object.freeze({
+        status,
+        sequence: firstSequence,
+        generation,
+        frameId,
+        visible: true,
+        viewportWidth: read(WORLD_MAP_FRAME_SPIKE_GLOBALS.viewportWidth),
+        viewportHeight: read(WORLD_MAP_FRAME_SPIKE_GLOBALS.viewportHeight),
+        left: read(WORLD_MAP_FRAME_SPIKE_GLOBALS.left),
+        bottom: read(WORLD_MAP_FRAME_SPIKE_GLOBALS.bottom),
+        right: read(WORLD_MAP_FRAME_SPIKE_GLOBALS.right),
+        top: read(WORLD_MAP_FRAME_SPIKE_GLOBALS.top),
+        continent,
+        zoom,
+        topLeftX,
+        topLeftY,
+        bottomRightX,
+        bottomRightY,
       });
     },
   });

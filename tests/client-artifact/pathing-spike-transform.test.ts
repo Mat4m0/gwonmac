@@ -12,6 +12,7 @@ import {
   EXPLORATION_SPIKE_GLOBALS,
   MISSION_MAP_PROJECTION_SPIKE_GLOBALS,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS,
 } from
   "../../src/shared/cartography-spike.js";
 
@@ -47,6 +48,8 @@ test("the certified context is added without intercepting native pathing", {
     .every((name) => exportNames.has(name)));
   assert.ok(Object.values(WORLD_MAP_ANCHOR_SPIKE_GLOBALS)
     .every((name) => exportNames.has(name)));
+  assert.ok(Object.values(WORLD_MAP_FRAME_SPIKE_GLOBALS)
+    .every((name) => exportNames.has(name)));
   assert.equal(
     [...exportNames].some((name) => name.includes("pathing")),
     false,
@@ -59,4 +62,8 @@ test("the certified context is added without intercepting native pathing", {
   assert.ok(missionMapWrapper);
   assert.deepEqual(evidence.tableRelations.get(missionMapWrapper.functionIndex), [4_006]);
   assert.equal(evidence.tableRelations.get(16_136), undefined);
+  const worldMapWrapper = decoded.find((candidate) => candidate.calls.get(16_223) === 1);
+  assert.ok(worldMapWrapper);
+  assert.deepEqual(evidence.tableRelations.get(worldMapWrapper.functionIndex), [4_152]);
+  assert.equal(evidence.tableRelations.get(16_223), undefined);
 });

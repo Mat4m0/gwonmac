@@ -16,6 +16,7 @@ import {
   MISSION_MAP_FRAME_SPIKE_GLOBALS,
   MISSION_MAP_FRAME_SPIKE_SCALARS,
   MISSION_MAP_PROJECTION_SPIKE_SCALARS,
+  WORLD_MAP_FRAME_SPIKE_SCALARS,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS,
   WORLD_MAP_ANCHOR_SPIKE_SCALARS,
 } from "../../shared/cartography-spike.js";
@@ -42,6 +43,7 @@ import {
   COMPASS_CERTIFICATE,
   EXPLORATION_CERTIFICATE,
   MISSION_MAP_CERTIFICATE,
+  WORLD_MAP_CERTIFICATE,
   WORLD_MAP_ANCHOR_CERTIFICATE,
   cartographyContextObserver,
   compassMapRenderWrapper,
@@ -54,6 +56,7 @@ import {
   nativeFrameObserver,
   rewriteExactTableSlot,
   worldMapAnchorObserver,
+  worldMapEventWrapper,
   type CartographyContextGlobals,
   type CartographyMemoryLayout,
   type CompassGlobals,
@@ -61,6 +64,7 @@ import {
   type FrameGlobals,
   type MissionMapProjectionGlobals,
   type WorldMapAnchorGlobals,
+  type WorldMapGlobals,
 } from "./cartography-transform-internals.js";
 
 declare const WebAssembly: {
@@ -68,7 +72,7 @@ declare const WebAssembly: {
   Module: new (bytes: Uint8Array) => object;
 };
 
-export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 24;
+export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 27;
 export type CartographyMemoryLayoutId = keyof typeof CARTOGRAPHY_MEMORY_LAYOUTS;
 
 const mutableI32 = () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b);
@@ -83,12 +87,14 @@ function globalsFor(
   projection: MissionMapProjectionGlobals;
   exploration: ExplorationGlobals;
   anchor: WorldMapAnchorGlobals;
+  world: WorldMapGlobals;
   explorationBufferPointer: number;
   firstCompass: number;
   firstMission: number;
   firstProjection: number;
   firstExploration: number;
   firstAnchor: number;
+  firstWorld: number;
   appendedCount: number;
 }> {
   const firstCompass = firstGlobal + CARTOGRAPHY_CONTEXT_SCALARS.length + 2;
@@ -97,6 +103,7 @@ function globalsFor(
   const firstExploration = firstProjection + MISSION_MAP_PROJECTION_SPIKE_SCALARS.length;
   const explorationBufferPointer = firstExploration + EXPLORATION_SPIKE_SCALARS.length;
   const firstAnchor = explorationBufferPointer + 1;
+  const firstWorld = firstAnchor + WORLD_MAP_ANCHOR_SPIKE_SCALARS.length;
   const context: CartographyContextGlobals = Object.freeze({
     status: firstGlobal,
     sequence: firstGlobal + 1,
@@ -169,13 +176,33 @@ function globalsFor(
       mapMaxX: firstAnchor + 7,
       mapMaxY: firstAnchor + 8,
     }),
+    world: Object.freeze({
+      status: firstWorld,
+      sequence: firstWorld + 1,
+      generation: firstWorld + 2,
+      frameId: firstWorld + 3,
+      visible: firstWorld + 4,
+      viewportWidth: firstWorld + 5,
+      viewportHeight: firstWorld + 6,
+      left: firstWorld + 7,
+      bottom: firstWorld + 8,
+      right: firstWorld + 9,
+      top: firstWorld + 10,
+      continent: firstWorld + 11,
+      zoom: firstWorld + 12,
+      topLeftX: firstWorld + 13,
+      topLeftY: firstWorld + 14,
+      bottomRightX: firstWorld + 15,
+      bottomRightY: firstWorld + 16,
+    }),
     explorationBufferPointer,
     firstCompass,
     firstMission,
     firstProjection,
     firstExploration,
     firstAnchor,
-    appendedCount: firstAnchor + WORLD_MAP_ANCHOR_SPIKE_SCALARS.length - firstGlobal,
+    firstWorld,
+    appendedCount: firstWorld + WORLD_MAP_FRAME_SPIKE_SCALARS.length - firstGlobal,
   });
 }
 
@@ -192,6 +219,11 @@ export function transformCartographySpikeWasm(
   });
   const missionCertificate = Object.freeze({
     ...MISSION_MAP_CERTIFICATE,
+    frameArray: memoryLayout.frameArray,
+    frameCount: memoryLayout.frameCount,
+  });
+  const worldCertificate = Object.freeze({
+    ...WORLD_MAP_CERTIFICATE,
     frameArray: memoryLayout.frameArray,
     frameCount: memoryLayout.frameCount,
   });
@@ -222,6 +254,8 @@ export function transformCartographySpikeWasm(
       !== MISSION_MAP_CERTIFICATE.eventDispatcherBodySha256
     || functionBodySha256(module, MISSION_MAP_CERTIFICATE.gameplayContextFunction)
       !== MISSION_MAP_CERTIFICATE.gameplayContextBodySha256
+    || functionBodySha256(module, WORLD_MAP_CERTIFICATE.eventDispatcherFunction)
+      !== WORLD_MAP_CERTIFICATE.eventDispatcherBodySha256
   ) fail("Cartography surface certificate changed");
 
   const sections = splitSections(input);
@@ -239,6 +273,7 @@ export function transformCartographySpikeWasm(
     ...MISSION_MAP_PROJECTION_SPIKE_SCALARS,
     ...EXPLORATION_SPIKE_SCALARS,
     ...WORLD_MAP_ANCHOR_SPIKE_SCALARS,
+    ...WORLD_MAP_FRAME_SPIKE_SCALARS,
   ];
   const functionNames = [
     CARTOGRAPHY_CONTEXT_GLOBALS.observe,
@@ -268,10 +303,14 @@ export function transformCartographySpikeWasm(
   const compassRenderLocal = COMPASS_CERTIFICATE.renderFunction - module.functionImportCount;
   const missionDispatcherLocal = MISSION_MAP_CERTIFICATE.eventDispatcherFunction
     - module.functionImportCount;
+  const worldDispatcherLocal = WORLD_MAP_CERTIFICATE.eventDispatcherFunction
+    - module.functionImportCount;
   const compassMapRenderType = functionTypes[compassMapRenderLocal]
     ?? fail("CompassMap render type is missing");
   const missionDispatcherType = functionTypes[missionDispatcherLocal]
     ?? fail("Mission Map dispatcher type is missing");
+  const worldDispatcherType = functionTypes[worldDispatcherLocal]
+    ?? fail("World Map dispatcher type is missing");
   const firstFunction = module.functionImportCount + bodies.length;
   const contextObserverFunction = firstFunction;
   const compassMapRenderWrapperFunction = firstFunction + 1;
@@ -281,6 +320,7 @@ export function transformCartographySpikeWasm(
   const explorationObserverFunction = firstFunction + 5;
   const explorationReadWordFunction = firstFunction + 6;
   const anchorObserverFunction = firstFunction + 7;
+  const worldEventWrapperFunction = firstFunction + 8;
 
   const compassRender = bodies[compassRenderLocal]?.slice()
     ?? fail("Compass render body is missing");
@@ -331,6 +371,12 @@ export function transformCartographySpikeWasm(
       allocated.context.areaEpoch,
       anchorCertificate,
     ),
+    worldMapEventWrapper(
+      WORLD_MAP_CERTIFICATE.eventDispatcherFunction,
+      allocated.world,
+      allocated.context.areaEpoch,
+      worldCertificate,
+    ),
   );
   const nextFunctionTypes = [
     ...functionTypes,
@@ -342,6 +388,7 @@ export function transformCartographySpikeWasm(
     voidType,
     readWordType,
     voidType,
+    worldDispatcherType,
   ];
 
   const contextEntries = [
@@ -363,6 +410,9 @@ export function transformCartographySpikeWasm(
     ...WORLD_MAP_ANCHOR_SPIKE_SCALARS.map((_, index) =>
       index < 3 ? mutableI32() : mutableF32()
     ),
+    ...WORLD_MAP_FRAME_SPIKE_SCALARS.map((_, index) =>
+      index < 5 || index === 11 ? mutableI32() : mutableF32()
+    ),
   );
   const scalarPlans = [
     [CARTOGRAPHY_CONTEXT_SCALARS, globals.count],
@@ -371,6 +421,7 @@ export function transformCartographySpikeWasm(
     [MISSION_MAP_PROJECTION_SPIKE_SCALARS, allocated.firstProjection],
     [EXPLORATION_SPIKE_SCALARS, allocated.firstExploration],
     [WORLD_MAP_ANCHOR_SPIKE_SCALARS, allocated.firstAnchor],
+    [WORLD_MAP_FRAME_SPIKE_SCALARS, allocated.firstWorld],
   ] as const;
   const functionPlans = [
     [CARTOGRAPHY_CONTEXT_GLOBALS.observe, contextObserverFunction],
@@ -399,10 +450,15 @@ export function transformCartographySpikeWasm(
     if (section.id === 9) return {
       id: 9,
       body: rewriteExactTableSlot(
-        section.body,
-        MISSION_MAP_CERTIFICATE.eventDispatcherTableSlot,
-        MISSION_MAP_CERTIFICATE.eventDispatcherFunction,
-        missionEventWrapperFunction,
+        rewriteExactTableSlot(
+          section.body,
+          MISSION_MAP_CERTIFICATE.eventDispatcherTableSlot,
+          MISSION_MAP_CERTIFICATE.eventDispatcherFunction,
+          missionEventWrapperFunction,
+        ),
+        WORLD_MAP_CERTIFICATE.eventDispatcherTableSlot,
+        WORLD_MAP_CERTIFICATE.eventDispatcherFunction,
+        worldEventWrapperFunction,
       ),
     };
     if (section.id === 10) return { id: 10, body: encodeCode(nextBodies) };

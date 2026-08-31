@@ -3,6 +3,7 @@ import test from "node:test";
 import type {
   CompassFrameSpikeSnapshot,
   MissionMapFrameSpikeSnapshot,
+  WorldMapFrameSpikeSnapshot,
 } from "../../src/shared/cartography-spike.js";
 import {
   cartographyCellPixelSize,
@@ -11,6 +12,7 @@ import {
   cartographyCellAtScreenPoint,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
+  projectCartographyGridToWorldMap,
 } from "../../src/renderer/cartography-spike/cartography-grid-projection.js";
 import {
   cartographyProgressClusterOrigin,
@@ -56,6 +58,26 @@ const compassFrame: CompassFrameSpikeSnapshot = Object.freeze({
   top: 760,
   compassDirectionX: 0,
   compassDirectionY: 1,
+});
+
+const worldFrame: WorldMapFrameSpikeSnapshot = Object.freeze({
+  status: 1,
+  sequence: 11,
+  generation: 7,
+  frameId: 200,
+  visible: true,
+  viewportWidth: 1_200,
+  viewportHeight: 800,
+  left: 0,
+  bottom: 0,
+  right: 1_200,
+  top: 800,
+  continent: 0,
+  zoom: 0,
+  topLeftX: 0,
+  topLeftY: 0,
+  bottomRightX: 8_192,
+  bottomRightY: 16_384,
 });
 
 test("matches the client's half-open cartography cell ownership", () => {
@@ -112,14 +134,28 @@ test("projects a fixed Mission Map grid through pan and zoom", () => {
   );
   assert.equal(cartographyCellPixelSize(zoomed), 64);
 
-  const world = projectCartographyGridToMissionMap({
-    frame: missionFrame,
+});
+
+test("projects the dedicated World Map context across the full continent", () => {
+  const box = Object.freeze({ left: 0, top: 0, width: 800, height: 800 });
+  const projection = projectCartographyGridToWorldMap({ frame: worldFrame, box });
+  assert.ok(projection);
+  assert.equal(projection.surface, "world-map");
+  assert.equal(projection.firstCellX, -1);
+  assert.equal(projection.lastCellX, 257);
+  assert.equal(projection.firstCellY, -1);
+  assert.equal(projection.lastCellY, 513);
+  assert.deepEqual(
+    cartographyCellAtScreenPoint(projection, 400, 400),
+    cartographyCellAt(4_096, 8_192),
+  );
+  const panned = projectCartographyGridToWorldMap({
+    frame: { ...worldFrame, zoom: 1, topLeftX: 2_048, bottomRightX: 6_144 },
     box,
-    surface: "world-map",
   });
-  assert.ok(world);
-  assert.equal(world.surface, "world-map");
-  assert.deepEqual(world.transform, projection.transform);
+  assert.ok(panned);
+  assert.equal(panned.transform.a, projection.transform.a * 2);
+  assert.notEqual(panned.transform.e, projection.transform.e);
 });
 
 test("rescales Mission Map cells from the current drawable rectangle", () => {

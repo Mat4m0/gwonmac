@@ -9,6 +9,7 @@ import type {
   ExplorationSpikeController,
   MissionMapFrameSpikeController,
   WorldMapAnchorSpikeController,
+  WorldMapFrameSpikeController,
 } from "../../shared/cartography-spike.js";
 import type { PublishedCompanionState } from "../companion-snapshot.js";
 import type { CartographyReachabilityController } from "./reachability-kernel.js";
@@ -102,8 +103,7 @@ export type CartographyState = Readonly<{
   surfaces: Readonly<{
     compass: ReturnType<CompassFrameSpikeController["snapshot"]>;
     missionMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
-    /** Guild Wars reuses its one certified MapWindow for the continent view. */
-    worldMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
+    worldMap: ReturnType<WorldMapFrameSpikeController["snapshot"]>;
   }>;
 }>;
 
@@ -111,13 +111,14 @@ export type CartographyPresentation = Readonly<{
   player: GamePoint | null;
   compass: ReturnType<CompassFrameSpikeController["snapshot"]>;
   missionMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
-  worldMap: ReturnType<MissionMapFrameSpikeController["snapshot"]>;
+  worldMap: ReturnType<WorldMapFrameSpikeController["snapshot"]>;
 }>;
 
 export type CartographyModelSources = Readonly<{
   context: CartographyContextController;
   compass: CompassFrameSpikeController;
   missionMap: MissionMapFrameSpikeController;
+  worldMap: WorldMapFrameSpikeController;
   exploration: ExplorationSpikeController;
   anchor: WorldMapAnchorSpikeController;
   kernel: CartographyReachabilityController;
@@ -372,6 +373,7 @@ export function readCartographyState(sources: CartographyModelSources): Cartogra
   }
   const compass = sources.compass.snapshot();
   const missionMap = sources.missionMap.snapshot();
+  const worldMap = sources.worldMap.snapshot();
   return Object.freeze({
     context: Object.freeze({
       sequence: contextA.sequence,
@@ -384,7 +386,7 @@ export function readCartographyState(sources: CartographyModelSources): Cartogra
     surfaces: Object.freeze({
       compass: compass?.generation === contextA.areaEpoch ? compass : null,
       missionMap: missionMap?.generation === contextA.areaEpoch ? missionMap : null,
-      worldMap: missionMap?.generation === contextA.areaEpoch ? missionMap : null,
+      worldMap: worldMap?.generation === contextA.areaEpoch ? worldMap : null,
     }),
   });
 }
@@ -406,11 +408,12 @@ export function readCartographyPresentation(
     : null;
   const compass = sources.compass.snapshot();
   const missionMap = sources.missionMap.snapshot();
+  const worldMap = sources.worldMap.snapshot();
   return Object.freeze({
     player,
     compass: compass?.generation === context.areaEpoch ? compass : null,
     missionMap: missionMap?.generation === context.areaEpoch ? missionMap : null,
-    worldMap: missionMap?.generation === context.areaEpoch ? missionMap : null,
+    worldMap: worldMap?.generation === context.areaEpoch ? worldMap : null,
   });
 }
 

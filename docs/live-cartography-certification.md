@@ -36,7 +36,7 @@ diagnostics. It must not store texture pixels or WASM pointers.
 Click, drag, scroll, and use keyboard controls through the overlay. Guild Wars
 must receive input unchanged. A stationary state must not redraw continuously.
 
-## Shared Mission/World Map window
+## Mission Map
 
 | Action | Capture | Pass condition |
 | --- | --- | --- |
@@ -60,12 +60,15 @@ must receive input unchanged. A stationary state must not redraw continuously.
 Compare the reported cell pixel sizes with the visible result. Values must
 change proportionally with zoom and resizing.
 
+## World Map
+
 Open the continent-scale World Map through the game's normal control and repeat
 pan, zoom, resize, hover, close, and reopen. The same global grid phase, green
 coverage, and remaining bitset must remain attached. The detailed walkability
 veil must be absent at continent scale. Solid orange may appear only inside the
-thin current-instance boundary. Guild Wars reuses one certified `MapWindow`;
-a failure there must not affect the Compass.
+thin current-instance boundary. The World Map observer must report `ready` only
+while the surface is visible. Its failure must not affect the Compass or Mission
+Map.
 
 ## Layers and lifecycle
 

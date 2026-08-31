@@ -22,6 +22,12 @@ const library: CartographyPresetLibrary = {
   }],
 };
 
+const worldObserver = {
+  status: 0, sequence: 0, generation: 0, frameId: 0, visible: 0,
+  continent: 0, zoom: 0,
+  topLeftX: 0, topLeftY: 0, bottomRightX: 0, bottomRightY: 0,
+} as const;
+
 test("Cartography preset names avoid built-in and custom collisions", () => {
   assert.equal(uniqueCartographyPresetName("Cartographer", library), "Cartographer 2");
   assert.equal(uniqueCartographyPresetName("night route", library), "night route 2");
@@ -92,15 +98,20 @@ test("Cartography QA status distinguishes loading from exact kernel failures", (
   assert.deepEqual(describeCartographyQaStatus({
     status: "unavailable",
     reason: "loading",
+    worldMapObserver: worldObserver,
     kernel: null,
   }), {
     tone: "loading",
     summary: "Loading",
-    rows: [["Reason", "loading"]],
+    rows: [
+      ["Reason", "loading"],
+      ["World observer", "not-published · frame 0 · generation 0"],
+    ],
   });
   const failed = describeCartographyQaStatus({
     status: "unavailable",
     reason: "kernel",
+    worldMapObserver: worldObserver,
     kernel: {
       status: 7,
       sequence: 2,
@@ -132,6 +143,7 @@ test("Cartography QA ready status reports the player-facing classification count
     compassReady: true,
     missionMapReady: false,
     worldMapReady: false,
+    worldMapObserver: worldObserver,
     currentInstance: {
       status: "ready",
       mapId: 58,
@@ -157,6 +169,7 @@ test("Cartography QA keeps continent progress visible without current guidance",
     compassReady: false,
     missionMapReady: true,
     worldMapReady: true,
+    worldMapObserver: worldObserver,
     currentInstance: { status: "unavailable", reason: "kernel" },
     kernel: null,
   });

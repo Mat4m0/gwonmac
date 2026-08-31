@@ -5,6 +5,7 @@
 import { resolveCartographyPreset } from "../../shared/cartography-presets.js";
 import type { CartographyEvidenceExportResult } from "../../shared/cartography-evidence.js";
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
+import type { WorldMapFrameSpikeDiagnostic } from "../../shared/cartography-spike.js";
 import {
   encodeCartographyPresetRef,
   parseCartographyPresetRef,
@@ -24,6 +25,7 @@ export type CartographyQaStatus =
   | Readonly<{
       status: "unavailable";
       reason: string;
+      worldMapObserver: WorldMapFrameSpikeDiagnostic;
       kernel: CartographyReachabilityDiagnostic | null;
     }>
   | Readonly<{
@@ -34,6 +36,7 @@ export type CartographyQaStatus =
       compassReady: boolean;
       missionMapReady: boolean;
       worldMapReady: boolean;
+      worldMapObserver: WorldMapFrameSpikeDiagnostic;
       currentInstance:
         | Readonly<{ status: "unavailable"; reason: string }>
         | Readonly<{
@@ -72,6 +75,25 @@ function kernelStatus(status: number): string {
   return KERNEL_STATUS[status as keyof typeof KERNEL_STATUS] ?? `status-${status}`;
 }
 
+const WORLD_MAP_STATUS = Object.freeze({
+  0: "not-published",
+  1: "ready",
+  2: "event-owner",
+  3: "context-owner",
+  4: "world-context",
+  5: "frame-index",
+  7: "continent",
+  8: "viewport-values",
+  9: "viewport-span",
+  10: "frame-pointer",
+}) satisfies Readonly<Record<number, string>>;
+
+function worldMapStatus(value: WorldMapFrameSpikeDiagnostic): string {
+  const reason = WORLD_MAP_STATUS[value.status as keyof typeof WORLD_MAP_STATUS]
+    ?? `status-${value.status ?? "missing"}`;
+  return `${reason} · frame ${value.frameId ?? "?"} · generation ${value.generation ?? "?"}`;
+}
+
 export function describeCartographyQaStatus(status: CartographyQaStatus): QaPresentation {
   if (status.status === "unavailable") {
     const loading = status.reason === "loading";
@@ -79,7 +101,10 @@ export function describeCartographyQaStatus(status: CartographyQaStatus): QaPres
     const exactReason = status.reason === "kernel" && kernel !== null
       ? `kernel/${kernelStatus(kernel.status)}`
       : status.reason;
-    const rows: (readonly [string, string])[] = [["Reason", exactReason]];
+    const rows: (readonly [string, string])[] = [
+      ["Reason", exactReason],
+      ["World observer", worldMapStatus(status.worldMapObserver)],
+    ];
     if (kernel !== null) {
       rows.push(
         ["Map", String(kernel.mapId)],
@@ -110,6 +135,7 @@ export function describeCartographyQaStatus(status: CartographyQaStatus): QaPres
     "Surfaces",
     `Compass ${status.compassReady ? "ready" : "off"} · Mission ${status.missionMapReady ? "ready" : "off"} · World ${status.worldMapReady ? "ready" : "off"}`,
   ]);
+  rows.push(["World observer", worldMapStatus(status.worldMapObserver)]);
   return Object.freeze({
     tone: "ready",
     summary: status.currentInstance.status === "ready"
@@ -211,7 +237,10 @@ export function createCartographyOverlayControls(options: Readonly<{
   fields.append(presetRow);
   const hint = document.createElement("p");
   hint.className = "cartography-overlay-hint";
-  hint.innerHTML = "Hold <kbd>Shift</kbd> to inspect 3×3. Add <kbd>Option</kbd> for 7×7.";
+  hint.innerHTML = [
+    "Hold <kbd>Shift</kbd> to inspect 3×3. Add <kbd>Option</kbd> for 7×7.",
+    "Walkable terrain appears on Compass and Mission Map only.",
+  ].join("<br>");
   const saveStatus = document.createElement("p");
   saveStatus.className = "cartography-overlay-status";
   saveStatus.setAttribute("role", "status");

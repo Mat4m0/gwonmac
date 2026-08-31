@@ -33,6 +33,7 @@ import type {
   CompassFrameSpikeController,
   ExplorationSpikeController,
   MissionMapFrameSpikeController,
+  WorldMapFrameSpikeController,
   WorldMapAnchorSpikeController,
 } from "../shared/cartography-spike.js";
 import type { CompanionCharacterListState } from "./companion-character-list-snapshot.js";
@@ -304,6 +305,7 @@ declare global {
     gwCompassFrameSpike?: CompassFrameSpikeController;
     /** Certified native Mission Map frame scalars; unpackaged development spike only. */
     gwMissionMapFrameSpike?: MissionMapFrameSpikeController;
+    gwWorldMapFrameSpike?: WorldMapFrameSpikeController;
     gwWorldMapAnchorSpike?: WorldMapAnchorSpikeController;
     /** Certified exploration bitmap dimensions and bounded bit reader; development only. */
     gwExplorationSpike?: ExplorationSpikeController;

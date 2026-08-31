@@ -3,9 +3,9 @@
 GWonMac has two independent native-map layers:
 
 - **Cartography grid** draws Guild Wars' fixed 32×32 map-unit exploration cells
-  over the Compass and the game's shared Mission/World Map window.
-- **Walkable terrain** shades terrain outside the current instance's certified
-  pathing geometry while preserving the native map artwork.
+  over the Compass, Mission Map, and World Map.
+- **Walkable terrain** shades the current instance's certified pathing geometry
+  on the Compass and Mission Map while preserving the native map artwork.
 
 The layers can be enabled separately. Cartographer, Synthwave, and Monochrome
 styles are included. **Customize style…** creates an editable copy of a built-in
@@ -43,10 +43,10 @@ shows where live current-instance evidence applies.
 
 ## Map presentation
 
-Guild Wars reuses one native `MapWindow` for close-up Mission Map and
-continent-scale World Map presentation. GWonMac uses one certified observer and
-one absolute map projection for both modes, rather than adding a second native
-reader.
+Guild Wars exposes separate native contexts for the close-up Mission Map and
+the continent-scale World Map. GWonMac certifies each context independently.
+Both surfaces consume the same continent state and global grid phase. A failure
+on either map hides only that surface.
 
 At 18 pixels or more per cell, the map draws individual amber diamonds and
 orange actionable markers. At 8–18 pixels it groups the global grid into 4×4

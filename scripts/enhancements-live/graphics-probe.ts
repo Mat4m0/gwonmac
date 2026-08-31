@@ -28,6 +28,7 @@ export type GraphicsProbeSample = Readonly<{
   cartographyModel: ReturnType<NonNullable<Window["gwCartographyModelStats"]>> | null;
   compassFrame: ReturnType<NonNullable<Window["gwCompassFrameSpike"]>["snapshot"]> | null;
   missionMapFrame: ReturnType<NonNullable<Window["gwMissionMapFrameSpike"]>["snapshot"]> | null;
+  worldMapFrame: ReturnType<NonNullable<Window["gwWorldMapFrameSpike"]>["diagnostics"]> | null;
   worldMapAnchor: ReturnType<NonNullable<Window["gwWorldMapAnchorSpike"]>["snapshot"]> | null;
   exploration: Readonly<{
     snapshot: ReturnType<NonNullable<Window["gwExplorationSpike"]>["snapshot"]>;
@@ -114,6 +115,7 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
       cartographyModel: window.gwCartographyModelStats?.() ?? null,
       compassFrame: window.gwCompassFrameSpike?.snapshot() ?? null,
       missionMapFrame,
+      worldMapFrame: window.gwWorldMapFrameSpike?.diagnostics() ?? null,
       worldMapAnchor: window.gwWorldMapAnchorSpike?.snapshot() ?? null,
       exploration: explorationSnapshot === null ? null : {
         snapshot: explorationSnapshot,

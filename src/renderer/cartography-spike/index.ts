@@ -13,6 +13,7 @@ import { createExplorationSpikeReader } from "./exploration-observer.js";
 import {
   createCompassFrameSpikeReader,
   createMissionMapFrameSpikeReader,
+  createWorldMapFrameSpikeReader,
 } from "./frame-observer.js";
 import { mountCartographyOverlay } from "./overlay.js";
 import { installCartographyReachabilityKernel } from "./reachability-kernel.js";
@@ -33,10 +34,11 @@ export async function installCartographySpike(options: Readonly<{
   const context = createCartographyContextReader(options.exports);
   const compass = createCompassFrameSpikeReader(options.exports);
   const missionMap = createMissionMapFrameSpikeReader(options.exports);
+  const worldMap = createWorldMapFrameSpikeReader(options.exports);
   const exploration = createExplorationSpikeReader(options.exports);
   const anchor = createWorldMapAnchorSpikeReader(options.exports);
   if (
-    context === null || compass === null || missionMap === null
+    context === null || compass === null || missionMap === null || worldMap === null
     || exploration === null || anchor === null
   ) return () => {};
 
@@ -54,6 +56,7 @@ export async function installCartographySpike(options: Readonly<{
   }
   window.gwCompassFrameSpike = compass;
   window.gwMissionMapFrameSpike = missionMap;
+  window.gwWorldMapFrameSpike = worldMap;
   window.gwWorldMapAnchorSpike = anchor;
   window.gwExplorationSpike = exploration;
   const disposeOverlay = mountCartographyOverlay({
@@ -63,6 +66,7 @@ export async function installCartographySpike(options: Readonly<{
       context,
       compass,
       missionMap,
+      worldMap,
       exploration,
       anchor,
       kernel,
@@ -79,6 +83,7 @@ export async function installCartographySpike(options: Readonly<{
     kernel.dispose();
     if (window.gwCompassFrameSpike === compass) delete window.gwCompassFrameSpike;
     if (window.gwMissionMapFrameSpike === missionMap) delete window.gwMissionMapFrameSpike;
+    if (window.gwWorldMapFrameSpike === worldMap) delete window.gwWorldMapFrameSpike;
     if (window.gwWorldMapAnchorSpike === anchor) delete window.gwWorldMapAnchorSpike;
     if (window.gwExplorationSpike === exploration) delete window.gwExplorationSpike;
   };

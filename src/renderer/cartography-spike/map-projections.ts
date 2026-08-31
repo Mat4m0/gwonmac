@@ -2,7 +2,10 @@
  * Converts the shared world-space mask into Compass and Mission Map transforms.
  * Keeps surface-specific pan, zoom, rotation, and content bounds in one place.
  */
-import type { MissionMapFrameSpikeSnapshot } from "../../shared/cartography-spike.js";
+import type {
+  MissionMapFrameSpikeSnapshot,
+  WorldMapFrameSpikeSnapshot,
+} from "../../shared/cartography-spike.js";
 import type { ScreenBox } from "./frame-placement.js";
 import type { WalkableTerrainSurface } from "./walkable-terrain-surface.js";
 
@@ -158,6 +161,37 @@ export function projectMapUnitsToMissionMap(
       d: scaleY,
       e: box.width / 2 - frame.panX * scaleX,
       f: box.height / 2 - frame.panY * scaleY,
+    }),
+    clip: Object.freeze({ kind: "rectangle" }),
+  });
+}
+
+/** Toolbox-compatible projection from the dedicated World Map viewport. */
+export function projectMapUnitsToWorldMap(
+  frame: WorldMapFrameSpikeSnapshot,
+  box: ScreenBox,
+): MapUnitProjection | null {
+  const spanX = frame.bottomRightX - frame.topLeftX;
+  const spanY = frame.bottomRightY - frame.topLeftY;
+  if (
+    frame.status !== 1 || !frame.visible || frame.generation <= 0
+    || ![
+      spanX, spanY, frame.topLeftX, frame.topLeftY,
+      box.left, box.top, box.width, box.height,
+    ].every(Number.isFinite)
+    || spanX <= 0 || spanY <= 0 || box.width <= 0 || box.height <= 0
+  ) return null;
+  const scaleX = box.width / spanX;
+  const scaleY = box.height / spanY;
+  return Object.freeze({
+    box,
+    transform: Object.freeze({
+      a: scaleX,
+      b: 0,
+      c: 0,
+      d: scaleY,
+      e: -frame.topLeftX * scaleX,
+      f: -frame.topLeftY * scaleY,
     }),
     clip: Object.freeze({ kind: "rectangle" }),
   });

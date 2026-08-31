@@ -392,7 +392,10 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
       }
     }
 
-    if (Math.min(cellWidthPixels, cellHeightPixels) >= MIN_GRID_CELL_PIXELS) {
+    if (
+      revealRadius > 0
+      && Math.min(cellWidthPixels, cellHeightPixels) >= MIN_GRID_CELL_PIXELS
+    ) {
       polygon(context, cornersForCell(projection, projection.currentCell.x, projection.currentCell.y));
       strokeCasedPath(context, style.current, style.casingColor, Math.min(1, strength * 1.25));
     }

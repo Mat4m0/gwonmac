@@ -22,9 +22,9 @@ import {
 } from "./cartography-grid-layer.js";
 import {
   cartographyCellAtScreenPoint,
-  cartographyCellPixelSize,
   projectCartographyGridToCompass,
   projectCartographyGridToMissionMap,
+  projectCartographyGridToWorldMap,
 } from "./cartography-grid-projection.js";
 import { cartographyHoverRevealRadius } from "./cartography-paint.js";
 import { projectMissionMapFrame, projectNativeFrame } from "./frame-placement.js";
@@ -56,6 +56,7 @@ export type CartographyModelStats =
   | Readonly<{
       status: "unavailable";
       reason: string;
+      worldMapObserver: ReturnType<CartographyModelSources["worldMap"]["diagnostics"]>;
       kernel: ReturnType<CartographyModelSources["kernel"]["diagnostic"]>;
     }>
   | Readonly<{
@@ -66,6 +67,7 @@ export type CartographyModelStats =
       compassReady: boolean;
       missionMapReady: boolean;
       worldMapReady: boolean;
+      worldMapObserver: ReturnType<CartographyModelSources["worldMap"]["diagnostics"]>;
       currentInstance:
         | Readonly<{ status: "unavailable"; reason: string }>
         | Readonly<{
@@ -139,6 +141,18 @@ export function mountCartographyOverlay(options: Readonly<{
   const missionBoundaryLayer = createCurrentInstanceBoundaryLayer(
     options.parent,
     "cartography-mission-map-current-instance-boundary",
+  );
+  const worldGridLayer = createCartographyGridLayer(
+    options.parent,
+    "cartography-world-map-grid",
+  );
+  const worldCoverageLayer = createContinentCoverageLayer(
+    options.parent,
+    "cartography-world-map-coverage",
+  );
+  const worldBoundaryLayer = createCurrentInstanceBoundaryLayer(
+    options.parent,
+    "cartography-world-map-current-instance-boundary",
   );
   let previewGridOpacity: number | null = null;
   let previewWalkabilityOpacity: number | null = null;
@@ -214,16 +228,21 @@ export function mountCartographyOverlay(options: Readonly<{
     missionCoverageLayer.hide();
     missionBoundaryLayer.hide();
   };
+  const hideWorld = (): void => {
+    worldGridLayer.hide();
+    worldCoverageLayer.hide();
+    worldBoundaryLayer.hide();
+  };
   const hideAllLayers = (): void => {
     hideCompassLayers();
     hideMission();
+    hideWorld();
   };
   const gridStats = (): CartographyGridStats => {
-    const map = missionGridLayer.snapshot();
     return Object.freeze({
       compass: compassGridLayer.snapshot(),
-      missionMap: map?.surface === "mission-map" ? map : null,
-      worldMap: map?.surface === "world-map" ? map : null,
+      missionMap: missionGridLayer.snapshot(),
+      worldMap: worldGridLayer.snapshot(),
     });
   };
   view.gwCartographyGridStats = gridStats;
@@ -231,6 +250,7 @@ export function mountCartographyOverlay(options: Readonly<{
     ? Object.freeze({
         status: "unavailable",
         reason: state.continent.reason,
+        worldMapObserver: options.modelSources.worldMap.diagnostics(),
         kernel: options.modelSources.kernel.diagnostic(),
       })
     : Object.freeze({
@@ -239,8 +259,9 @@ export function mountCartographyOverlay(options: Readonly<{
         exploredCreditableCells: countSetBits(state.continent.exploredCreditable.words),
         remainingCells: countSetBits(state.continent.remaining.words),
         compassReady: presentation.compass !== null,
-        missionMapReady: missionGridLayer.snapshot()?.surface === "mission-map",
-        worldMapReady: missionGridLayer.snapshot()?.surface === "world-map",
+        missionMapReady: missionGridLayer.snapshot() !== null,
+        worldMapReady: worldGridLayer.snapshot() !== null,
+        worldMapObserver: options.modelSources.worldMap.diagnostics(),
         currentInstance: state.currentInstance.status === "ready"
           ? Object.freeze({
               status: "ready" as const,
@@ -264,12 +285,13 @@ export function mountCartographyOverlay(options: Readonly<{
       });
   view.gwCartographyModelStats = modelStats;
 
-  const safe = (surface: "compass" | "mission-map", render: () => void): void => {
+  const safe = (surface: "compass" | "mission-map" | "world-map", render: () => void): void => {
     try {
       render();
     } catch (cause) {
       if (surface === "compass") hideCompassLayers();
-      else hideMission();
+      else if (surface === "mission-map") hideMission();
+      else hideWorld();
       console.error(`[cartography] ${surface} rendering failed`, cause);
     }
   };
@@ -436,16 +458,7 @@ export function mountCartographyOverlay(options: Readonly<{
         hideMission();
         return;
       }
-      const localProjection = projectCartographyGridToMissionMap({ frame: mission, box });
-      const mapProjection = localProjection === null
-        ? null
-        : projectCartographyGridToMissionMap({
-            frame: mission,
-            box,
-            surface: cartographyCellPixelSize(localProjection) < 18
-              ? "world-map"
-              : "mission-map",
-          });
+      const mapProjection = projectCartographyGridToMissionMap({ frame: mission, box });
       if (settings.cartographyGridEnabled) {
         if (mapProjection === null) {
           missionGridLayer.hide();
@@ -490,7 +503,6 @@ export function mountCartographyOverlay(options: Readonly<{
       }
       if (
         settings.cartographyOverlayEnabled
-        && mapProjection?.surface !== "world-map"
         && state.currentInstance.status === "ready"
         && terrain !== null
       ) {
@@ -504,6 +516,56 @@ export function mountCartographyOverlay(options: Readonly<{
           opacity: walkabilityOpacity,
         });
       } else missionTerrainLayer.hide();
+    });
+
+    safe("world-map", () => {
+      if (
+        presentation.compass === null
+        || presentation.worldMap === null
+        || state.continent.status !== "ready"
+        || presentation.worldMap.continent !== state.continent.continent
+      ) {
+        hideWorld();
+        return;
+      }
+      const world = presentation.worldMap;
+      const box = projectMissionMapFrame(world, presentation.compass, canvasBox);
+      const mapProjection = box === null
+        ? null
+        : projectCartographyGridToWorldMap({ frame: world, box });
+      if (!settings.cartographyGridEnabled || mapProjection === null) {
+        hideWorld();
+        return;
+      }
+      const hoveredCell = shiftHeld
+        ? cartographyCellAtScreenPoint(mapProjection, pointerX, pointerY)
+        : null;
+      worldGridLayer.update({
+        projection: mapProjection,
+        style: style.grid,
+        opacity: gridOpacity,
+        explorationVersion: explorationKey,
+        isExplored,
+        isRemaining,
+        revealabilityVersion: actionabilityKey,
+        canCurrentMapReveal: isActionable,
+        hoveredCell,
+        revealRadius: hoveredCell === null
+          ? 0
+          : cartographyHoverRevealRadius(shiftHeld, optionHeld),
+      });
+      worldCoverageLayer.update({
+        projection: mapProjection,
+        explored: state.continent.exploredCreditable,
+        version: explorationKey,
+      });
+      if (state.currentInstance.status === "ready") {
+        worldBoundaryLayer.update({
+          projection: mapProjection,
+          bounds: state.currentInstance.mapBounds,
+          version: actionabilityKey,
+        });
+      } else worldBoundaryLayer.hide();
     });
   };
 
@@ -530,8 +592,11 @@ export function mountCartographyOverlay(options: Readonly<{
     missionTerrainLayer.dispose();
     missionCoverageLayer.dispose();
     missionBoundaryLayer.dispose();
+    worldCoverageLayer.dispose();
+    worldBoundaryLayer.dispose();
     compassGridLayer.dispose();
     missionGridLayer.dispose();
+    worldGridLayer.dispose();
     controls.dispose();
     if (view.gwCartographyGridStats === gridStats) delete view.gwCartographyGridStats;
     if (view.gwCartographyModelStats === modelStats) delete view.gwCartographyModelStats;

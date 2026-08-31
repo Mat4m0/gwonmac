@@ -58,6 +58,23 @@ export const MISSION_MAP_CERTIFICATE = Object.freeze({
   panY: 0x20,
 });
 
+export const WORLD_MAP_CERTIFICATE = Object.freeze({
+  ...FRAME_LAYOUT,
+  eventDispatcherFunction: 16_223,
+  eventDispatcherBodySha256: "8802b503fe9c637e4e7aee6381357e224f861d34081a1c9539dd919909f3a5e7",
+  eventDispatcherTableSlot: 4_152,
+  ownerWindow: 0x08,
+  ownerMap: 0x00,
+  contextBytes: 0x224,
+  frameId: 0x00,
+  continent: 0x04,
+  zoom: 0x38,
+  topLeftX: 0x3c,
+  topLeftY: 0x40,
+  bottomRightX: 0x44,
+  bottomRightY: 0x48,
+});
+
 export const EXPLORATION_CERTIFICATE = Object.freeze({
   gameContextSlot: 6,
   worldContext: 0x2c,
@@ -201,6 +218,16 @@ export type MissionMapProjectionGlobals = Readonly<{
   playerMapY: number;
   nativeMapWidth: number;
   nativeMapHeight: number;
+}>;
+
+export type WorldMapGlobals = FrameGlobals & Readonly<{
+  sequence: number;
+  continent: number;
+  zoom: number;
+  topLeftX: number;
+  topLeftY: number;
+  bottomRightX: number;
+  bottomRightY: number;
 }>;
 
 export type ExplorationGlobals = Readonly<{
@@ -514,6 +541,81 @@ export function missionMapEventWrapper(
     local(6), globalSet(globals.panX),
     local(7), globalSet(globals.panY),
     globalGet(pathingGeneration), globalSet(globals.generation),
+    globalGet(globals.sequence), i32(1), Uint8Array.of(0x6a), globalSet(globals.sequence),
+    i32(1), globalSet(globals.status),
+    Uint8Array.of(0x0b),
+  );
+}
+
+/** Observe the dedicated native World Map context after its exact event handler. */
+export function worldMapEventWrapper(
+  dispatcher: number,
+  globals: WorldMapGlobals,
+  areaEpoch: number,
+  certificate: typeof WORLD_MAP_CERTIFICATE & Pick<CartographyMemoryLayout, "frameArray" | "frameCount">,
+): Uint8Array {
+  const refuse = (status: number) => concat(
+    i32(0), globalSet(globals.visible),
+    i32(status), globalSet(globals.status), Uint8Array.of(0x0f),
+  );
+  const requirePointer = (pointerLocal: number, bytes: Uint8Array, status: number) => concat(
+    local(pointerLocal), Uint8Array.of(0x45, 0x04, 0x40),
+    refuse(status), Uint8Array.of(0x0b),
+    local(pointerLocal), local(7), bytes, Uint8Array.of(0x6b, 0x4b, 0x04, 0x40),
+    refuse(status), Uint8Array.of(0x0b),
+  );
+  const finite = (valueLocal: number, status: number) => concat(
+    local(valueLocal), Uint8Array.of(0x8b), f32(1_000_000),
+    Uint8Array.of(0x5f, 0x45, 0x04, 0x40), refuse(status), Uint8Array.of(0x0b),
+  );
+  return concat(
+    // locals 3..7: owner window, context, frame id/index, frame, memory bytes.
+    // locals 8..12: zoom and viewport bounds.
+    Uint8Array.of(0x02, 0x05, 0x7f, 0x05, 0x7d),
+    local(0), local(1), local(2), call(dispatcher),
+    Uint8Array.of(0x3f, 0x00), i32(65_536), Uint8Array.of(0x6c, 0x21), uleb(7),
+    requirePointer(0, i32(certificate.ownerWindow + 4), 2),
+    local(0), i32Load(certificate.ownerWindow), Uint8Array.of(0x21), uleb(3),
+    requirePointer(3, i32(certificate.ownerMap + 4), 3),
+    local(3), i32Load(certificate.ownerMap), Uint8Array.of(0x21), uleb(4),
+    requirePointer(4, i32(certificate.contextBytes), 4),
+    local(4), i32Load(certificate.frameId), Uint8Array.of(0x22), uleb(5),
+    globalSet(globals.frameId), local(5),
+    i32(certificate.frameCount), i32Load(), Uint8Array.of(0x4f, 0x04, 0x40),
+    refuse(5), Uint8Array.of(0x0b),
+    i32(certificate.frameArray), i32Load(), Uint8Array.of(0x21), uleb(6),
+    requirePointer(6, concat(local(5), i32(4), Uint8Array.of(0x6c)), 5),
+    local(6), local(5), i32(4), Uint8Array.of(0x6c, 0x6a), i32Load(),
+    Uint8Array.of(0x21), uleb(6),
+    requirePointer(6, i32(certificate.frameBytes), 10),
+    local(4), i32Load(certificate.continent), Uint8Array.of(0x22), uleb(3),
+    i32(5), Uint8Array.of(0x4b, 0x04, 0x40), refuse(7), Uint8Array.of(0x0b),
+    local(4), f32Load(certificate.zoom), Uint8Array.of(0x21), uleb(8),
+    local(4), f32Load(certificate.topLeftX), Uint8Array.of(0x21), uleb(9),
+    local(4), f32Load(certificate.topLeftY), Uint8Array.of(0x21), uleb(10),
+    local(4), f32Load(certificate.bottomRightX), Uint8Array.of(0x21), uleb(11),
+    local(4), f32Load(certificate.bottomRightY), Uint8Array.of(0x21), uleb(12),
+    finite(8, 8), finite(9, 8), finite(10, 8), finite(11, 8), finite(12, 8),
+    local(11), local(9), Uint8Array.of(0x5e, 0x45, 0x04, 0x40),
+    refuse(9), Uint8Array.of(0x0b),
+    local(12), local(10), Uint8Array.of(0x5e, 0x45, 0x04, 0x40),
+    refuse(9), Uint8Array.of(0x0b),
+    local(6), i32Load(certificate.frameState), Uint8Array.of(0x22), uleb(4),
+    i32(4), Uint8Array.of(0x71, 0x45, 0x45),
+    local(4), i32(0x200), Uint8Array.of(0x71, 0x45, 0x71), globalSet(globals.visible),
+    local(6), f32Load(certificate.frameViewportWidth), globalSet(globals.viewportWidth),
+    local(6), f32Load(certificate.frameViewportHeight), globalSet(globals.viewportHeight),
+    local(6), f32Load(certificate.frameScreenLeft), globalSet(globals.left),
+    local(6), f32Load(certificate.frameScreenBottom), globalSet(globals.bottom),
+    local(6), f32Load(certificate.frameScreenRight), globalSet(globals.right),
+    local(6), f32Load(certificate.frameScreenTop), globalSet(globals.top),
+    local(3), globalSet(globals.continent),
+    local(8), globalSet(globals.zoom),
+    local(9), globalSet(globals.topLeftX),
+    local(10), globalSet(globals.topLeftY),
+    local(11), globalSet(globals.bottomRightX),
+    local(12), globalSet(globals.bottomRightY),
+    globalGet(areaEpoch), globalSet(globals.generation),
     globalGet(globals.sequence), i32(1), Uint8Array.of(0x6a), globalSet(globals.sequence),
     i32(1), globalSet(globals.status),
     Uint8Array.of(0x0b),

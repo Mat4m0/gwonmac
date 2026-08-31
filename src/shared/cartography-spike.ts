@@ -130,6 +130,26 @@ export const MISSION_MAP_PROJECTION_SPIKE_SCALARS = Object.freeze([
   MISSION_MAP_PROJECTION_SPIKE_GLOBALS.nativeMapHeight,
 ]);
 
+export const WORLD_MAP_FRAME_SPIKE_GLOBALS = Object.freeze({
+  status: "gwonmac_world_map_frame_spike_status",
+  sequence: "gwonmac_world_map_frame_spike_sequence",
+  generation: "gwonmac_world_map_frame_spike_generation",
+  frameId: "gwonmac_world_map_frame_spike_frame_id",
+  visible: "gwonmac_world_map_frame_spike_visible",
+  viewportWidth: "gwonmac_world_map_frame_spike_viewport_width",
+  viewportHeight: "gwonmac_world_map_frame_spike_viewport_height",
+  left: "gwonmac_world_map_frame_spike_left",
+  bottom: "gwonmac_world_map_frame_spike_bottom",
+  right: "gwonmac_world_map_frame_spike_right",
+  top: "gwonmac_world_map_frame_spike_top",
+  continent: "gwonmac_world_map_frame_spike_continent",
+  zoom: "gwonmac_world_map_frame_spike_zoom",
+  topLeftX: "gwonmac_world_map_frame_spike_top_left_x",
+  topLeftY: "gwonmac_world_map_frame_spike_top_left_y",
+  bottomRightX: "gwonmac_world_map_frame_spike_bottom_right_x",
+  bottomRightY: "gwonmac_world_map_frame_spike_bottom_right_y",
+});
+
 export const COMPASS_FRAME_SPIKE_GLOBALS = Object.freeze({
   ...nativeFrameGlobals("gwonmac_compass_frame_spike"),
   cameraSequence: "gwonmac_compass_frame_spike_camera_sequence",
@@ -167,6 +187,26 @@ export const COMPASS_FRAME_SPIKE_SCALARS = Object.freeze([
   COMPASS_FRAME_SPIKE_GLOBALS.compassDirectionY,
 ]);
 
+export const WORLD_MAP_FRAME_SPIKE_SCALARS = Object.freeze([
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.status,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.sequence,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.generation,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.frameId,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.visible,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.viewportWidth,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.viewportHeight,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.left,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.bottom,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.right,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.top,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.continent,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.zoom,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.topLeftX,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.topLeftY,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightX,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightY,
+]);
+
 export type NativeFrameSpikeSnapshot = Readonly<{
   status: number;
   generation: number;
@@ -201,6 +241,16 @@ export type MissionMapFrameSpikeSnapshot = NativeFrameSpikeSnapshot & Readonly<{
   nativeMapHeight: number;
 }>;
 
+export type WorldMapFrameSpikeSnapshot = NativeFrameSpikeSnapshot & Readonly<{
+  sequence: number;
+  continent: number;
+  zoom: number;
+  topLeftX: number;
+  topLeftY: number;
+  bottomRightX: number;
+  bottomRightY: number;
+}>;
+
 export type SpikeController<T> = Readonly<{
   snapshot(): T | null;
 }>;
@@ -220,6 +270,24 @@ export type CartographyContextController = SpikeController<CartographyContextSna
 
 export type CompassFrameSpikeController = SpikeController<CompassFrameSpikeSnapshot>;
 export type MissionMapFrameSpikeController = SpikeController<MissionMapFrameSpikeSnapshot>;
+export type WorldMapFrameSpikeDiagnostic = Readonly<{
+  status: number | null;
+  sequence: number | null;
+  generation: number | null;
+  frameId: number | null;
+  visible: number | null;
+  continent: number | null;
+  zoom: number | null;
+  topLeftX: number | null;
+  topLeftY: number | null;
+  bottomRightX: number | null;
+  bottomRightY: number | null;
+}>;
+
+export type WorldMapFrameSpikeController = SpikeController<WorldMapFrameSpikeSnapshot> & Readonly<{
+  /** Closed scalar readout for live certification; contains no native pointers. */
+  diagnostics(): WorldMapFrameSpikeDiagnostic;
+}>;
 
 export type ExplorationSpikeSnapshot = Readonly<{
   status: number;
