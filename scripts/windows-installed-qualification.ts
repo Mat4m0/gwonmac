@@ -181,16 +181,21 @@ async function stopSquirrelFirstRun(executable: string): Promise<void> {
   await delay(1_000);
   const command =
     "$target=[IO.Path]::GetFullPath($args[0]); Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -eq $target}";
-  await execFileAsync(
+  const { stdout: stopped } = await execFileAsync(
     "powershell.exe",
     [
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      `${command} | ForEach-Object {Stop-Process -Id $_.ProcessId -Force}`,
+      `${command} | ForEach-Object {$_.ProcessId; Stop-Process -Id $_.ProcessId -Force}`,
       executable,
     ],
-    { timeout: 30_000, windowsHide: true },
+    { encoding: "utf8", timeout: 30_000, windowsHide: true },
+  );
+  assert.notEqual(
+    stopped.trim(),
+    "",
+    "Squirrel did not keep its automatic first application run alive",
   );
   await delay(500);
   const { stdout } = await execFileAsync(
@@ -265,16 +270,9 @@ for (const candidate of [packageRoot, path.dirname(storage.config)]) {
 let running: RunningPackagedApp | null = null;
 let installedExecutable: string | null = null;
 try {
-  const initialSetup = baselineFeed ? await oneSetup(baselineFeed) : setup;
-  await execFileAsync(initialSetup, ["--silent"], {
-    timeout: 120_000,
-    windowsHide: true,
-  });
-  installedExecutable = await oneInstalledExecutable(packageRoot);
-  await stopSquirrelFirstRun(installedExecutable);
-  const updateExecutable = path.join(packageRoot, "Update.exe");
-  assert.equal(existsSync(updateExecutable), true, "Squirrel Update.exe is missing");
-
+  // Seed the released Single Account shape before Setup. Squirrel launches the
+  // application automatically, so that first real execution must exercise the
+  // same adoption and cached-client path as the controlled launch below.
   await Promise.all([
     mkdir(storage.config, { recursive: true }),
     mkdir(storage.data, { recursive: true }),
@@ -296,6 +294,16 @@ try {
     chunks: path.join(storage.cache, "game", "chunks"),
     userData: storage.sessions,
   });
+
+  const initialSetup = baselineFeed ? await oneSetup(baselineFeed) : setup;
+  await execFileAsync(initialSetup, ["--silent"], {
+    timeout: 120_000,
+    windowsHide: true,
+  });
+  installedExecutable = await oneInstalledExecutable(packageRoot);
+  await stopSquirrelFirstRun(installedExecutable);
+  const updateExecutable = path.join(packageRoot, "Update.exe");
+  assert.equal(existsSync(updateExecutable), true, "Squirrel Update.exe is missing");
 
   const qualificationArguments = [
     "--disable-gpu",
